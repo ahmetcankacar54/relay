@@ -83,6 +83,7 @@ export interface Snapshot {
   usageStatistics?: Record<string, AccountUsageStatistics>;
   workdayPlan?: WorkdayPlan;
   routines?: RoutineSnapshot;
+  planning?: KeeperSnapshot;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   accounts: Account[];
@@ -174,6 +175,9 @@ export interface RelayAPI {
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   onTraySwitch(callback: () => void): () => void;
   updateSettings(input: Partial<RelaySettings>): Promise<RelaySettings>;
+  updatePlanning(
+    patch: Partial<PlanningSettings>,
+  ): Promise<PlanningSettings>;
   refreshUsage(
     accountId: string,
     allowKeychainPrompt?: boolean,

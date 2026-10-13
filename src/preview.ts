@@ -243,6 +243,12 @@ if (scenario === "planning") {
   state.settings.workday.accountIds = ids.slice(0, 3);
   state.settings.workday.start = "09:00";
   state.settings.workday.end = "09:00";
+  state.settings.planning = {
+    ...state.settings.planning,
+    autoStart: true,
+    weekday: { enabled: true, start: "09:00", end: "21:00" },
+    accounts: ids.slice(0, 3).map((id) => ({ id })),
+  };
   state.usageStatistics = Object.fromEntries(
     accounts.map((a, index) => {
       const samples = Array.from({ length: 14 }, (_, i) =>
@@ -306,6 +312,10 @@ export const previewApi: RelayAPI = {
   consumeTraySwitchRequest: async () => null,
   setTrayLanguage: async () => {},
   onTraySwitch: () => () => {},
+  updatePlanning: async (patch) => {
+    state.settings.planning = { ...state.settings.planning, ...patch };
+    return structuredClone(state.settings.planning);
+  },
   updateSettings: async (patch) => {
     Object.assign(state.settings, patch);
     state.autoSwitch =

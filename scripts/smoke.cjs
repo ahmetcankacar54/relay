@@ -147,6 +147,17 @@ app.whenReady().then(async () => {
         capacityWeight: 1,
       }),
     );
+    const planning = await call("updatePlanning", {
+      accounts: [{ id: a.id }, { id: b.id, firstStart: "07:00" }],
+    });
+    assert.deepEqual(planning.accounts, [
+      { id: a.id },
+      { id: b.id, firstStart: "07:00" },
+    ]);
+    await assert.rejects(
+      call("updatePlanning", { accounts: [{ id: randomUUID() }] }),
+    );
+    await assert.rejects(call("updatePlanning", { timeZone: "invalid" }));
     const customizedWorkday = {
       ...initialWorkday,
       start: "22:00",
@@ -163,7 +174,7 @@ app.whenReady().then(async () => {
       planningSnapshot.usageStatistics[a.id].periods.sevenDay.samples,
       0,
     );
-    assert.deepEqual(planningSnapshot.routines.entries, []);
+    assert.equal(planningSnapshot.planning.enabled, false);
     await assert.rejects(
       call("updateSettings", {
         workday: { ...customizedWorkday, timeZone: "invalid" },

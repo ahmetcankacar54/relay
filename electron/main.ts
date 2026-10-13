@@ -17,13 +17,18 @@ import { Service } from "./core/service";
 import { UsageManager } from "./core/usage";
 import { AutoSwitchManager } from "./core/auto-switch";
 import { readCredential } from "./core/usage-credentials";
-import { createAccountSchema, settingsPatchSchema } from "./core/store";
+import {
+  createAccountSchema,
+  planningPatchSchema,
+  planningSchema,
+  settingsPatchSchema,
+} from "./core/store";
 import { accountPlanningSchema } from "./core/store";
 import { RelayTray } from "./tray";
 import { UsageHistory } from "./core/usage-history";
 import { workdayPlan } from "../shared/planning";
 import { planningIdentity } from "../shared/planning";
-import { RoutineLedger, RoutineManager } from "./core/routines";
+import { WindowKeeper } from "./core/window-keeper";
 import { runQuotaStarter } from "./core/routine-runner";
 import { readProfileIdentity } from "./core/profile-identity";
 import type { Account, DesktopState } from "../shared/types";
@@ -60,7 +65,7 @@ let usageHistory: UsageHistory;
 let trayTimer: ReturnType<typeof setInterval> | undefined;
 let trayLanguage: "tr" | "en" = "tr";
 let traySwitchRequest: string | null = null;
-let routines: RoutineManager;
+let keeper: WindowKeeper;
 let observedDesktop: DesktopState | undefined;
 let initialized = false;
 let continuation: DesktopContinuationManager;
@@ -115,7 +120,7 @@ function displayUsage() {
   }
   return current;
 }
-const routineAbort = new AbortController();
+const keeperAbort = new AbortController();
 let quitting = false;
 app.setName("Relay");
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -396,46 +401,56 @@ else {
         changed: () => window?.webContents.send("relay:changed"),
       });
       observedDesktop = await desktop.snapshot();
-      routines = new RoutineManager(
-        {
-          state: routineState,
-          refresh: async (id, afterRequest) => {
-            observedDesktop = await desktop.snapshot();
-            return afterRequest
-              ? usage.refreshAfterRequest(id)
-              : usage.refresh(id);
-          },
-          verify: async (account) => {
-            const metadata = await readProfileIdentity(
-              service.store.profile(account.id),
-            );
-            return (
-              !!metadata &&
-              metadata.accountUuid === account.auth?.accountUuid &&
-              metadata.orgId === account.auth?.orgId
-            );
-          },
-          run: async (account) => {
-            const fingerprint = routineFingerprint(account);
-            await runQuotaStarter(service.store, account, readUsageCredential, {
-              signal: routineAbort.signal,
-              guard: async () => {
-                observedDesktop = await desktop.snapshot();
-                const current = service.store.account(account.id);
-                const state = routineState();
-                return (
-                  state.workday.routineEnabled &&
-                  !state.blocked &&
-                  !state.blockedAccountIds.includes(account.id) &&
-                  routineFingerprint(current) === fingerprint
-                );
-              },
-            });
-          },
-          changed: () => window?.webContents.send("relay:changed"),
+      const keeperBlocked = () =>
+        !observedDesktop ||
+        desktopTransactionActive ||
+        observedDesktop.busy ||
+        observedDesktop.recoveryRequired ||
+        !!observedDesktop.pendingProfileId ||
+        pendingAuth() ||
+        ["switching", "continuing"].includes(fleet.snapshot().status) ||
+        continuation.snapshot().status === "executing";
+      keeper = new WindowKeeper({
+        directory: path.join(app.getPath("userData"), "window-keeper"),
+        state: () => ({
+          settings: service.store.state.settings.planning,
+          accounts: service.store.state.accounts,
+          usage: usage.snapshot(),
+          blocked: keeperBlocked(),
+          busyAccountIds: service.runner
+            .list()
+            .filter((run) => run.status === "running")
+            .map((run) => run.accountId),
+        }),
+        refresh: (id) => usage.refresh(id),
+        refreshAfterStart: (id) => usage.refreshAfterRequest(id),
+        start: async (account) => {
+          observedDesktop = await desktop.snapshot();
+          const identity = planningIdentity(account);
+          await runQuotaStarter(service.store, account, readUsageCredential, {
+            signal: keeperAbort.signal,
+            guard: async () => {
+              observedDesktop = await desktop.snapshot();
+              return (
+                service.store.state.settings.planning.autoStart &&
+                !keeperBlocked() &&
+                planningIdentity(service.store.account(account.id)) === identity
+              );
+            },
+          });
         },
-        new RoutineLedger(path.join(app.getPath("userData"), "routine-ledger")),
-      );
+        notify: (account, reason) => {
+          if (!Notification.isSupported()) return;
+          new Notification({
+            title: "Relay",
+            body:
+              trayLanguage === "en"
+                ? `Could not start ${account.name}'s usage window (${reason}).`
+                : `${account.name} kullanım penceresi başlatılamadı (${reason}).`,
+          }).show();
+        },
+        changed: () => window?.webContents.send("relay:changed"),
+      });
       bindIPC();
       initialized = true;
       createWindow();
@@ -467,7 +482,7 @@ else {
           // updated identity fields can hide that request behind its old cooldown.
           usage.start();
           autoSwitch.start();
-          routines.start();
+          keeper.start();
           continuation.start();
           fleet.start();
           window?.webContents.send("relay:changed");
@@ -536,51 +551,6 @@ async function traySwitch(profileId: string) {
     if (window && !window.isDestroyed())
       window.webContents.send("relay:changed");
   }
-}
-function routineFingerprint(account: Account) {
-  return JSON.stringify([
-    service.store.state.settings.workday,
-    planningIdentity(account),
-    account.planning,
-    account.auth?.subscription,
-    account.kind,
-    account.cooldownUntil,
-  ]);
-}
-function routineState() {
-  const accounts = service.store.state.accounts;
-  const active = accounts.find(
-    (a) => a.id === observedDesktop?.activeProfileId,
-  );
-  const inUse = new Set(
-    service.runner
-      .list()
-      .filter((r) => r.status === "running")
-      .map((r) => r.accountId),
-  );
-  if (observedDesktop?.running && active) inUse.add(active.id);
-  const identities = new Set(
-    accounts
-      .filter((a) => inUse.has(a.id))
-      .map(planningIdentity)
-      .filter(Boolean),
-  );
-  return {
-    accounts,
-    usage: usage.snapshot(),
-    workday: service.store.state.settings.workday,
-    blockedAccountIds: accounts
-      .filter((a) => inUse.has(a.id) || identities.has(planningIdentity(a)))
-      .map((a) => a.id),
-    blocked:
-      !observedDesktop ||
-      desktopTransactionActive ||
-      observedDesktop.busy ||
-      observedDesktop.recoveryRequired ||
-      !!observedDesktop.pendingProfileId ||
-      (observedDesktop.running && !active) ||
-      pendingAuth(),
-  };
 }
 function createWindow() {
   window = new BrowserWindow({
@@ -797,6 +767,28 @@ function bindIPC() {
     void autoSwitch.tick();
     return service.store.state.settings;
   });
+  handle("update-planning", (input) => {
+    if (desktop.isBusy || desktopTransactionActive)
+      throw new Error(
+        "Finish the Desktop operation before changing preferences.",
+      );
+    const patch = planningPatchSchema.parse(input);
+    const next = planningSchema.parse({
+      ...service.store.state.settings.planning,
+      ...patch,
+    });
+    if (
+      next.accounts.some(
+        ({ id }) => !service.store.state.accounts.some((a) => a.id === id),
+      )
+    )
+      throw new Error("Select existing Relay accounts once each.");
+    service.store.update((s) => {
+      s.settings.planning = next;
+    });
+    void keeper.tick();
+    return next;
+  });
   handle("refresh-usage", (accountId, allowPrompt) =>
     usage.refresh(
       id.parse(accountId),
@@ -815,7 +807,7 @@ function bindIPC() {
       usage.snapshot(),
       service.store.state.settings.workday,
     ),
-    routines: routines.snapshot(),
+    planning: keeper.snapshot(),
   }));
   handle("snapshot", () =>
     service.transaction(async () => ({
@@ -830,7 +822,7 @@ function bindIPC() {
         usage.snapshot(),
         service.store.state.settings.workday,
       ),
-      routines: routines.snapshot(),
+      planning: keeper.snapshot(),
     })),
   );
   handle("create-account", (input) =>
@@ -1005,12 +997,12 @@ app.on("before-quit", (event) => {
 });
 
 app.on("will-quit", () => {
-  routineAbort.abort();
+  keeperAbort.abort();
   if (trayTimer) clearInterval(trayTimer);
   tray?.destroy();
   usage?.stop();
   autoSwitch?.stop();
-  routines?.stop();
+  keeper?.stop();
   continuation?.stop();
   fleet?.stop();
 });

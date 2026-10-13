@@ -24,6 +24,8 @@ const api: RelayAPI = {
     return () => ipcRenderer.removeListener("relay:tray-switch", listener);
   },
   updateSettings: (input) => ipcRenderer.invoke("relay:update-settings", input),
+  updatePlanning: (patch: unknown) =>
+    ipcRenderer.invoke("relay:update-planning", patch),
   refreshUsage: (id, allowPrompt) =>
     ipcRenderer.invoke("relay:refresh-usage", id, allowPrompt),
   desktopSnapshot: () => ipcRenderer.invoke("relay:desktop-snapshot"),
