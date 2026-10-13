@@ -94,6 +94,14 @@ export function UsageCard({
     key: "fiveHour" | "sevenDay",
   ) => {
     const left = remaining(window);
+    // A window with no usage yet has no reset; it starts with the next request.
+    const unused =
+      !!window &&
+      window.usedPercent === 0 &&
+      !window.resetsAt &&
+      usage?.status === "ready" &&
+      !usage.stale &&
+      !usage.issue;
     // Team and Enterprise seats can return a five-hour window without a weekly one.
     const notReported =
       key === "sevenDay" &&
@@ -171,6 +179,8 @@ export function UsageCard({
                 {clock(currentReset!)}
               </time>
             </>
+          ) : unused ? (
+            t("İlk mesajla başlar", "Starts with the next message")
           ) : historical ? (
             <>
               {Date.parse(historical.resetsAt) <= now

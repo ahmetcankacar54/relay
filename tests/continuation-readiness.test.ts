@@ -309,5 +309,5 @@ test("a frozen watch does not show newly connected accounts as current authorize
   const html = render(true, true);
   assert.doesNotMatch(html, /have verified target capacity/);
   assert.match(html, /Turn off watching/);
-  assert.match(html, /Enable watching again to include accounts added later/);
+  assert.match(html, /enable watching again to include accounts added later/);
 });

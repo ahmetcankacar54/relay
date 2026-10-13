@@ -41,8 +41,10 @@ import {
 import { historySources } from "../shared/history-policy";
 import { AutoSwitchStatus } from "./AutoSwitchStatus";
 import { HistorySummary } from "./HistorySummary";
+import packageInfo from "../package.json";
 
 const api = window.relay ?? previewApi;
+const APP_VERSION = packageInfo.version;
 const preview = !window.relay;
 const pending = (f?: AuthFlow) =>
   !!f && ["starting", "waiting", "verifying"].includes(f.status);
@@ -386,25 +388,6 @@ export default function App() {
             )}
           </div>
         )}
-        <div className="heading">
-          <div>
-            <div className="eyebrow">
-              {t(
-                "HESABINI DEĞİŞTİR. ÇALIŞMANA DEVAM ET.",
-                "SWITCH ACCOUNTS. KEEP YOUR PLACE.",
-              )}
-            </div>
-            <h1>{t("Çalışma yerin Claude.", "Your workspace is Claude.")}</h1>
-          </div>
-          <button
-            className="secondary"
-            disabled={desktopBusy}
-            onClick={() => void action("open", () => api.openDesktop())}
-          >
-            <ArrowUpRight size={15} />
-            {t("Claude’u aç", "Open Claude")}
-          </button>
-        </div>
         {(error || desktop?.error) && (
           <div className="banner error" role="alert">
             <span>
@@ -487,8 +470,8 @@ export default function App() {
             <p>
               {active
                 ? t(
-                    "Bu hesap Desktop’ta seçili. Geçiş yapmak için aşağıdan bir hesap seç.",
-                    "Selected in Desktop. Choose an account below to switch.",
+                    "Desktop’ta açık hesap. Geçiş Claude’u yeniden başlatır.",
+                    "Active in Desktop. Switching restarts Claude.",
                   )
                 : hasUnclaimedDesktop
                   ? t(
@@ -502,10 +485,22 @@ export default function App() {
             </p>
           </div>
           {active ? (
-            <span className="pill green">
-              <i />
-              {desktop?.running ? t("Açık", "Open") : t("Kapalı", "Closed")}
-            </span>
+            <div className="active-actions">
+              <span className={`pill ${desktop?.running ? "green" : ""}`}>
+                <i />
+                {desktop?.running
+                  ? t("Açık", "Running")
+                  : t("Kapalı", "Closed")}
+              </span>
+              <button
+                className="secondary"
+                disabled={desktopBusy}
+                onClick={() => void action("open", () => api.openDesktop())}
+              >
+                <ArrowUpRight size={14} />
+                {t("Claude’u aç", "Open Claude")}
+              </button>
+            </div>
           ) : (
             <button
               className="primary"
@@ -529,13 +524,6 @@ export default function App() {
             </button>
           )}
         </section>
-        <p className="switch-note">
-          <RefreshCw size={13} />
-          {t(
-            "Geçiş Claude’u yeniden başlatır. Açık yanıtı bitirdikten sonra geçiş yap.",
-            "Switching restarts Claude. Finish the current response before switching.",
-          )}
-        </p>
         {setupId === "" && !pendingDesktop && (
           <DesktopSetup
             accounts={accounts}
@@ -983,486 +971,497 @@ export default function App() {
             </div>
           </form>
         )}
-        <section className="accounts-section">
-          <div className="section-title">
-            <h2>
-              {t("Hesaplar", "Accounts")} <span>{accounts.length}</span>
-            </h2>
-            <button
-              className="text-button"
-              disabled={
-                desktopBusy || !!pendingDesktop || accounts.length >= 50
-              }
-              onClick={() => {
-                setAdding(!adding);
-                setSetupId(undefined);
-              }}
-            >
-              <Plus size={15} />
-              {t("Hesap ekle", "Add account")}
-            </button>
-          </div>
-          <div className="filters">
-            <label className="search">
-              <Search size={16} />
-              <input
-                ref={search}
-                aria-label={t("Hesap ara", "Search accounts")}
-                placeholder={t(
-                  "Hesap, e-posta veya grup ara…",
-                  "Search accounts, email or group…",
-                )}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-              <kbd>⌘ K</kbd>
-            </label>
-            <select
-              aria-label={t("Hesap filtresi", "Filter accounts")}
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            >
-              <option value="all">{t("Tümü", "All accounts")}</option>
-              <option value="connected">
-                {t("Desktop bağlı", "Desktop connected")}
-              </option>
-              <option value="personal">{t("Kişisel", "Personal")}</option>
-              <option value="work">{t("Şirket", "Work")}</option>
-            </select>
-          </div>
-          {suggestion && (
-            <aside className="usage-suggestion">
-              <div>
-                <strong>
-                  {t("Limit yaklaşıyor", "Approaching the limit")} ·{" "}
-                  {active?.name}
-                </strong>
-                <p>
-                  {t(
-                    `${suggestion.name} hesabının iki limitinde de yer var. Görevlerin bitince geçebilirsin.`,
-                    `${suggestion.name} has room in both usage windows. Switch when your tasks finish.`,
-                  )}
-                </p>
-              </div>
+        {!settings && (
+          <section className="accounts-section">
+            <div className="section-title">
+              <h2>
+                {t("Hesaplar", "Accounts")} <span>{accounts.length}</span>
+              </h2>
               <button
-                className="secondary"
+                className="text-button"
+                disabled={
+                  desktopBusy || !!pendingDesktop || accounts.length >= 50
+                }
                 onClick={() => {
-                  setQuery(suggestion.name);
-                  setFilter("all");
+                  setAdding(!adding);
+                  setSetupId(undefined);
                 }}
               >
-                {t("Hesabı göster", "Show account")}
+                <Plus size={15} />
+                {t("Hesap ekle", "Add account")}
               </button>
-            </aside>
-          )}
-          <div className="account-rows">
-            {visible.map((a) => {
-              const isActive = a.id === active?.id;
-              const authFlow = data?.authFlows.find(
-                (f) => f.accountId === a.id,
-              );
-              const usage = data?.usage[a.id];
-              const reconnect = cliNeedsReconnect(a, usage);
-              const mismatch = desktopCliMismatch(a);
-              const duplicate = duplicateCliAccount(a, accounts);
-              return (
-                <article
-                  key={a.id}
-                  className={`account-row ${isActive ? "is-active" : ""}`}
-                >
-                  <div className="row-main">
-                    <span className={`avatar ${a.color}`}>
-                      {a.name.slice(0, 1).toLocaleUpperCase(language)}
-                    </span>
-                    <div className="row-info">
-                      <h3>
-                        {a.name}
-                        {isActive && (
-                          <span className="pill green">
-                            {t("Aktif", "Active")}
-                          </span>
-                        )}
-                      </h3>
-                      <p className="account-email">
-                        {a.desktop?.email ??
-                          a.auth?.email ??
-                          t(
-                            "Henüz hesap bağlanmadı",
-                            "No account connected yet",
-                          )}
-                      </p>
-                      <p className="account-meta">
-                        {groupName(a)}
-                        {a.auth?.subscription
-                          ? ` · ${a.auth.subscription === "max" ? "Max" : a.auth.subscription === "team" ? "Team" : a.auth.subscription}`
-                          : ""}
-                      </p>
-                      <div className="connection-badges">
-                        <span
-                          className={`connection-badge ${a.desktop ? "connected" : "not-connected"}`}
-                        >
-                          {a.desktop ? (
-                            <Check size={12} />
-                          ) : (
-                            <Monitor size={12} />
-                          )}
-                          {a.desktop
-                            ? t("Desktop bağlı", "Desktop connected")
-                            : t(
-                                "Desktop ilk kurulumu gerekli",
-                                "Desktop setup required",
-                              )}
-                        </span>
-                        {!pending(authFlow) && (
-                          <span
-                            className={`connection-badge ${reconnect ? "not-connected" : "connected"}`}
-                          >
-                            {reconnect ? (
-                              <RefreshCw size={12} />
-                            ) : (
-                              <Check size={12} />
-                            )}
-                            {reconnect
-                              ? t(
-                                  "Limitler için giriş gerekli",
-                                  "Sign-in needed for usage",
-                                )
-                              : t("Limit bağlantısı hazır", "Usage connected")}
-                          </span>
-                        )}
-                        {pending(authFlow) && (
-                          <span className="connection-badge">
-                            <LoaderCircle size={12} className="spin" />
-                            {t(
-                              "Tarayıcı onayı bekleniyor",
-                              "Waiting for browser approval",
-                            )}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {a.desktop ? (
-                      <button
-                        className={isActive ? "secondary" : "primary"}
-                        disabled={
-                          desktopBusy ||
-                          !!pendingDesktop ||
-                          desktop?.recoveryRequired
-                        }
-                        onClick={() =>
-                          isActive
-                            ? void action(`open:${a.id}`, () =>
-                                api.openDesktop(),
-                              )
-                            : requestDesktop(a, "switch")
-                        }
-                        aria-expanded={
-                          !isActive && desktopRequest?.accountId === a.id
-                        }
-                      >
-                        {busy === `switch:${a.id}` ? (
-                          <LoaderCircle className="spin" size={14} />
-                        ) : isActive ? (
-                          <ArrowUpRight size={14} />
-                        ) : (
-                          <ArrowLeftRight size={14} />
-                        )}{" "}
-                        {isActive ? t("Aç", "Open") : t("Geçiş yap", "Switch")}
-                      </button>
-                    ) : (
-                      <button
-                        className="secondary"
-                        disabled={
-                          desktopBusy ||
-                          !desktop?.available ||
-                          !!pendingDesktop ||
-                          desktop?.recoveryRequired
-                        }
-                        aria-expanded={setupId === a.id}
-                        onClick={() => {
-                          setSetupId(a.id);
-                          setExpanded(a.id);
-                          setDesktopRequest(undefined);
-                          setAdding(false);
-                        }}
-                      >
-                        {t("Desktop’a bağla", "Connect Desktop")}
-                      </button>
+            </div>
+            {accounts.length > 4 && (
+              <div className="filters">
+                <label className="search">
+                  <Search size={16} />
+                  <input
+                    ref={search}
+                    aria-label={t("Hesap ara", "Search accounts")}
+                    placeholder={t(
+                      "Hesap, e-posta veya grup ara…",
+                      "Search accounts, email or group…",
                     )}
-                    <button
-                      className={`details-button ${expanded === a.id ? "selected" : ""}`}
-                      aria-label={t(
-                        `${a.name} ayrıntıları`,
-                        `${a.name} details`,
-                      )}
-                      aria-expanded={expanded === a.id}
-                      aria-controls={`details-${a.id}`}
-                      onClick={() => {
-                        setExpanded(expanded === a.id ? undefined : a.id);
-                        setDesktopRequest(undefined);
-                        setSetupId(undefined);
-                      }}
-                    >
-                      {t("Ayrıntılar", "Details")} <ChevronDown size={15} />
-                    </button>
-                  </div>
-                  <UsageCard
-                    usage={usage}
-                    busy={usageBusy.has(a.id)}
-                    connectBusy={!!busy || pending(authFlow)}
-                    settings={preferences}
-                    t={t}
-                    language={language}
-                    refresh={(allowPrompt) => void refreshUsage(a, allowPrompt)}
-                    connect={() => void startCli(a)}
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
                   />
-                  {expanded === a.id && (
-                    <div id={`details-${a.id}`} className="row-details">
-                      <dl className="identity-details">
-                        <div>
-                          <dt>{t("Bağlı e-posta", "Connected email")}</dt>
-                          <dd>
-                            {a.desktop?.email ??
-                              a.auth?.email ??
-                              t("Giriş bekleniyor", "Waiting for sign-in")}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>{t("Plan", "Plan")}</dt>
-                          <dd>
-                            {a.auth?.subscription ?? t("Bilinmiyor", "Unknown")}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>{t("Paylaşım grubu", "Sharing group")}</dt>
-                          <dd>{groupName(a)}</dd>
-                        </div>
-                        {a.auth?.orgName && (
-                          <div>
-                            <dt>
-                              {t("Bağlı kuruluş", "Connected organization")}
-                            </dt>
-                            <dd>{a.auth.orgName}</dd>
-                          </div>
-                        )}
-                      </dl>
-                      {duplicate && (
-                        <p className="account-warning" role="status">
-                          {t(
-                            `Bu hesap ${duplicate.name} profiline de bağlı. İki profil aynı kullanım limitlerini paylaşır.`,
-                            `This account is also connected to ${duplicate.name}. Both profiles share the same usage limits.`,
+                  <kbd>⌘ K</kbd>
+                </label>
+                <select
+                  aria-label={t("Hesap filtresi", "Filter accounts")}
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                >
+                  <option value="all">{t("Tümü", "All accounts")}</option>
+                  <option value="connected">
+                    {t("Desktop bağlı", "Desktop connected")}
+                  </option>
+                  <option value="personal">{t("Kişisel", "Personal")}</option>
+                  <option value="work">{t("Şirket", "Work")}</option>
+                </select>
+              </div>
+            )}
+            {suggestion && (
+              <aside className="usage-suggestion">
+                <div>
+                  <strong>
+                    {t("Limit yaklaşıyor", "Approaching the limit")} ·{" "}
+                    {active?.name}
+                  </strong>
+                  <p>
+                    {t(
+                      `${suggestion.name} hesabında yer var. Görevlerin bitince geçebilirsin.`,
+                      `${suggestion.name} has quota left. Switch when your tasks finish.`,
+                    )}
+                  </p>
+                </div>
+                <button
+                  className="secondary"
+                  onClick={() => requestDesktop(suggestion, "switch")}
+                >
+                  {t("Geçişi incele", "Review switch")}
+                </button>
+              </aside>
+            )}
+            <div className="account-rows">
+              {visible.map((a) => {
+                const isActive = a.id === active?.id;
+                const authFlow = data?.authFlows.find(
+                  (f) => f.accountId === a.id,
+                );
+                const usage = data?.usage[a.id];
+                const reconnect = cliNeedsReconnect(a, usage);
+                const mismatch = desktopCliMismatch(a);
+                const duplicate = duplicateCliAccount(a, accounts);
+                return (
+                  <article
+                    key={a.id}
+                    className={`account-row ${isActive ? "is-active" : ""}`}
+                  >
+                    <div className="row-main">
+                      <span className={`avatar ${a.color}`}>
+                        {a.name.slice(0, 1).toLocaleUpperCase(language)}
+                      </span>
+                      <div className="row-info">
+                        <h3>
+                          {a.name}
+                          {isActive && (
+                            <span className="pill green">
+                              {t("Aktif", "Active")}
+                            </span>
                           )}
+                        </h3>
+                        <p className="account-email">
+                          {a.desktop?.email ??
+                            a.auth?.email ??
+                            t(
+                              "Henüz hesap bağlanmadı",
+                              "No account connected yet",
+                            )}
                         </p>
-                      )}
-                      {mismatch && (
-                        <p className="account-warning" role="alert">
-                          {t(
-                            "Desktop ve limit bağlantısı farklı hesaplara ait. Bu profilin doğru hesabıyla tarayıcı girişini yenile.",
-                            "Desktop and usage are connected to different accounts. Reconnect browser sign-in with the correct account for this profile.",
-                          )}
+                        <p className="account-meta">
+                          {groupName(a)}
+                          {a.auth?.subscription
+                            ? ` · ${a.auth.subscription === "max" ? "Max" : a.auth.subscription === "team" ? "Team" : a.auth.subscription}`
+                            : ""}
                         </p>
-                      )}
-                      <div className="connection-detail">
-                        <div className="connection-detail-copy">
-                          <Monitor size={17} />
-                          <span>
-                            <strong>Claude Desktop</strong>
-                            <small>
-                              {a.desktop
+                        <div className="connection-badges">
+                          <span
+                            className={`connection-badge ${a.desktop ? "connected" : "not-connected"}`}
+                          >
+                            {a.desktop ? (
+                              <Check size={12} />
+                            ) : (
+                              <Monitor size={12} />
+                            )}
+                            {a.desktop
+                              ? t("Desktop bağlı", "Desktop connected")
+                              : t(
+                                  "Desktop ilk kurulumu gerekli",
+                                  "Desktop setup required",
+                                )}
+                          </span>
+                          {!pending(authFlow) && (
+                            <span
+                              className={`connection-badge ${reconnect ? "not-connected" : "connected"}`}
+                            >
+                              {reconnect ? (
+                                <RefreshCw size={12} />
+                              ) : (
+                                <Check size={12} />
+                              )}
+                              {reconnect
                                 ? t(
-                                    "Kaydedildi · hesap geçişine hazır",
-                                    "Saved · ready to switch",
+                                    "Limitler için giriş gerekli",
+                                    "Sign-in needed for usage",
                                   )
                                 : t(
-                                    "İlk kurulum gerekli · henüz geçiş yapılamaz",
-                                    "Setup required · switching is not ready yet",
+                                    "Limit bağlantısı hazır",
+                                    "Usage connected",
                                   )}
-                            </small>
-                          </span>
-                        </div>
-                        {a.desktop ? (
-                          <button
-                            className="secondary"
-                            disabled={!!desktopBusy || !!pendingDesktop}
-                            onClick={() => requestDesktop(a, "reconnect")}
-                          >
-                            {t(
-                              "Desktop girişini yenile…",
-                              "Reconnect Desktop…",
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            className="secondary"
-                            disabled={
-                              !!desktopBusy ||
-                              !desktop?.available ||
-                              !!pendingDesktop ||
-                              desktop?.recoveryRequired
-                            }
-                            onClick={() => {
-                              setSetupId(a.id);
-                              setDesktopRequest(undefined);
-                            }}
-                          >
-                            {t("Desktop’a bağla", "Connect Desktop")}
-                          </button>
-                        )}
-                      </div>
-                      {a.desktop && (
-                        <HistorySummary
-                          key={`${a.id}:${historyRevision}`}
-                          account={a}
-                          sources={historySources(a, accounts, preferences)}
-                          api={api}
-                          t={t}
-                        />
-                      )}
-                      <div className="connection-detail">
-                        <div className="connection-detail-copy">
-                          <Globe2 size={17} />
-                          <span>
-                            <strong>
+                            </span>
+                          )}
+                          {pending(authFlow) && (
+                            <span className="connection-badge">
+                              <LoaderCircle size={12} className="spin" />
                               {t(
-                                "Kullanım limitleri · tarayıcı girişi",
-                                "Usage limits · browser sign-in",
+                                "Tarayıcı onayı bekleniyor",
+                                "Waiting for browser approval",
                               )}
-                            </strong>
-                            <small>
-                              {pending(authFlow)
-                                ? t(
-                                    "Tarayıcı onayı bekleniyor",
-                                    "Waiting for browser approval",
-                                  )
-                                : reconnect
-                                  ? t(
-                                      "Giriş yenilenmeli",
-                                      "Sign-in needs renewal",
-                                    )
-                                  : t("Bağlı", "Connected")}
-                              {a.auth?.email ? ` · ${a.auth.email}` : ""}
-                            </small>
-                          </span>
-                        </div>
-                        <div className="connection-detail-actions">
-                          <button
-                            className="secondary"
-                            disabled={!!busy || pending(authFlow)}
-                            onClick={() => void startCli(a)}
-                          >
-                            {pending(authFlow)
-                              ? t("Bağlanıyor…", "Connecting…")
-                              : a.auth?.email
-                                ? t("Girişi yenile", "Reconnect")
-                                : t("Tarayıcıda bağla", "Connect in browser")}
-                          </button>
-                          <button
-                            className="icon"
-                            aria-label={t(
-                              "CLI bağlantısını doğrula",
-                              "Verify CLI connection",
-                            )}
-                            title={t(
-                              "Bağlantıyı kontrol et",
-                              "Check connection",
-                            )}
-                            disabled={!!busy || pending(authFlow)}
-                            onClick={() =>
-                              void action(`verify:${a.id}`, async () => {
-                                const checked = await api.checkAuth(a.id);
-                                setNotice(
-                                  checked.auth?.loggedIn
-                                    ? t(
-                                        `${a.name} · ${checked.auth.email ?? ""} bağlantısı doğrulandı.`,
-                                        `${a.name} · ${checked.auth.email ?? ""} connection verified.`,
-                                      )
-                                    : t(
-                                        "Giriş doğrulanamadı. Tarayıcı girişini yenile.",
-                                        "Could not verify sign-in. Reconnect in the browser.",
-                                      ),
-                                );
-                              })
-                            }
-                          >
-                            <RefreshCw size={14} />
-                          </button>
+                            </span>
+                          )}
                         </div>
                       </div>
-                      {setupId === a.id &&
-                        !pendingDesktop &&
-                        !desktopRequest && (
-                          <DesktopSetup
+                      {a.desktop ? (
+                        <button
+                          className={isActive ? "secondary" : "primary"}
+                          disabled={
+                            desktopBusy ||
+                            !!pendingDesktop ||
+                            desktop?.recoveryRequired
+                          }
+                          onClick={() =>
+                            isActive
+                              ? void action(`open:${a.id}`, () =>
+                                  api.openDesktop(),
+                                )
+                              : requestDesktop(a, "switch")
+                          }
+                          aria-expanded={
+                            !isActive && desktopRequest?.accountId === a.id
+                          }
+                        >
+                          {busy === `switch:${a.id}` ? (
+                            <LoaderCircle className="spin" size={14} />
+                          ) : isActive ? (
+                            <ArrowUpRight size={14} />
+                          ) : (
+                            <ArrowLeftRight size={14} />
+                          )}{" "}
+                          {isActive
+                            ? t("Aç", "Open")
+                            : t("Geçiş yap", "Switch")}
+                        </button>
+                      ) : (
+                        <button
+                          className="secondary"
+                          disabled={
+                            desktopBusy ||
+                            !desktop?.available ||
+                            !!pendingDesktop ||
+                            desktop?.recoveryRequired
+                          }
+                          aria-expanded={setupId === a.id}
+                          onClick={() => {
+                            setSetupId(a.id);
+                            setExpanded(a.id);
+                            setDesktopRequest(undefined);
+                            setAdding(false);
+                          }}
+                        >
+                          {t("Desktop’a bağla", "Connect Desktop")}
+                        </button>
+                      )}
+                      <button
+                        className={`details-button ${expanded === a.id ? "selected" : ""}`}
+                        aria-label={t(
+                          `${a.name} ayrıntıları`,
+                          `${a.name} details`,
+                        )}
+                        aria-expanded={expanded === a.id}
+                        aria-controls={`details-${a.id}`}
+                        onClick={() => {
+                          setExpanded(expanded === a.id ? undefined : a.id);
+                          setDesktopRequest(undefined);
+                          setSetupId(undefined);
+                        }}
+                      >
+                        {t("Ayrıntılar", "Details")} <ChevronDown size={15} />
+                      </button>
+                    </div>
+                    <UsageCard
+                      usage={usage}
+                      busy={usageBusy.has(a.id)}
+                      connectBusy={!!busy || pending(authFlow)}
+                      settings={preferences}
+                      t={t}
+                      language={language}
+                      refresh={(allowPrompt) =>
+                        void refreshUsage(a, allowPrompt)
+                      }
+                      connect={() => void startCli(a)}
+                    />
+                    {expanded === a.id && (
+                      <div id={`details-${a.id}`} className="row-details">
+                        <dl className="identity-details">
+                          <div>
+                            <dt>{t("Bağlı e-posta", "Connected email")}</dt>
+                            <dd>
+                              {a.desktop?.email ??
+                                a.auth?.email ??
+                                t("Giriş bekleniyor", "Waiting for sign-in")}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>{t("Plan", "Plan")}</dt>
+                            <dd>
+                              {a.auth?.subscription ??
+                                t("Bilinmiyor", "Unknown")}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt>{t("Paylaşım grubu", "Sharing group")}</dt>
+                            <dd>{groupName(a)}</dd>
+                          </div>
+                          {a.auth?.orgName && (
+                            <div>
+                              <dt>
+                                {t("Bağlı kuruluş", "Connected organization")}
+                              </dt>
+                              <dd>{a.auth.orgName}</dd>
+                            </div>
+                          )}
+                        </dl>
+                        {duplicate && (
+                          <p className="account-warning" role="status">
+                            {t(
+                              `Bu hesap ${duplicate.name} profiline de bağlı. İki profil aynı kullanım limitlerini paylaşır.`,
+                              `This account is also connected to ${duplicate.name}. Both profiles share the same usage limits.`,
+                            )}
+                          </p>
+                        )}
+                        {mismatch && (
+                          <p className="account-warning" role="alert">
+                            {t(
+                              "Desktop ve limit bağlantısı farklı hesaplara ait. Bu profilin doğru hesabıyla tarayıcı girişini yenile.",
+                              "Desktop and usage are connected to different accounts. Reconnect browser sign-in with the correct account for this profile.",
+                            )}
+                          </p>
+                        )}
+                        <div className="connection-detail">
+                          <div className="connection-detail-copy">
+                            <Monitor size={17} />
+                            <span>
+                              <strong>Claude Desktop</strong>
+                              <small>
+                                {a.desktop
+                                  ? t(
+                                      "Kaydedildi · hesap geçişine hazır",
+                                      "Saved · ready to switch",
+                                    )
+                                  : t(
+                                      "İlk kurulum gerekli · henüz geçiş yapılamaz",
+                                      "Setup required · switching is not ready yet",
+                                    )}
+                              </small>
+                            </span>
+                          </div>
+                          {a.desktop ? (
+                            <button
+                              className="secondary"
+                              disabled={!!desktopBusy || !!pendingDesktop}
+                              onClick={() => requestDesktop(a, "reconnect")}
+                            >
+                              {t(
+                                "Desktop girişini yenile…",
+                                "Reconnect Desktop…",
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              className="secondary"
+                              disabled={
+                                !!desktopBusy ||
+                                !desktop?.available ||
+                                !!pendingDesktop ||
+                                desktop?.recoveryRequired
+                              }
+                              onClick={() => {
+                                setSetupId(a.id);
+                                setDesktopRequest(undefined);
+                              }}
+                            >
+                              {t("Desktop’a bağla", "Connect Desktop")}
+                            </button>
+                          )}
+                        </div>
+                        {a.desktop && (
+                          <HistorySummary
+                            key={`${a.id}:${historyRevision}`}
                             account={a}
-                            accounts={accounts}
-                            desktop={desktop}
-                            unclaimed={hasUnclaimedDesktop}
-                            org={targetOrg}
-                            busy={!!desktopBusy}
+                            sources={historySources(a, accounts, preferences)}
+                            api={api}
                             t={t}
-                            selectAccount={setSetupId}
-                            selectOrg={setOrg}
-                            close={() => setSetupId(undefined)}
-                            connect={() =>
-                              requestDesktop(
-                                a,
-                                hasUnclaimedDesktop ? "capture" : "login",
-                              )
-                            }
                           />
                         )}
-                      {desktopRequest?.accountId === a.id && (
-                        <DesktopActionReview
-                          key={`${a.id}:${desktopRequest.kind}`}
-                          account={a}
-                          active={active}
-                          kind={desktopRequest.kind}
-                          historyAccounts={historySources(
-                            a,
-                            accounts,
-                            preferences,
+                        <div className="connection-detail">
+                          <div className="connection-detail-copy">
+                            <Globe2 size={17} />
+                            <span>
+                              <strong>
+                                {t(
+                                  "Kullanım limitleri · tarayıcı girişi",
+                                  "Usage limits · browser sign-in",
+                                )}
+                              </strong>
+                              <small>
+                                {pending(authFlow)
+                                  ? t(
+                                      "Tarayıcı onayı bekleniyor",
+                                      "Waiting for browser approval",
+                                    )
+                                  : reconnect
+                                    ? t(
+                                        "Giriş yenilenmeli",
+                                        "Sign-in needs renewal",
+                                      )
+                                    : t("Bağlı", "Connected")}
+                                {a.auth?.email ? ` · ${a.auth.email}` : ""}
+                              </small>
+                            </span>
+                          </div>
+                          <div className="connection-detail-actions">
+                            <button
+                              className="secondary"
+                              disabled={!!busy || pending(authFlow)}
+                              onClick={() => void startCli(a)}
+                            >
+                              {pending(authFlow)
+                                ? t("Bağlanıyor…", "Connecting…")
+                                : a.auth?.email
+                                  ? t("Girişi yenile", "Reconnect")
+                                  : t("Tarayıcıda bağla", "Connect in browser")}
+                            </button>
+                            <button
+                              className="icon"
+                              aria-label={t(
+                                "CLI bağlantısını doğrula",
+                                "Verify CLI connection",
+                              )}
+                              title={t(
+                                "Bağlantıyı kontrol et",
+                                "Check connection",
+                              )}
+                              disabled={!!busy || pending(authFlow)}
+                              onClick={() =>
+                                void action(`verify:${a.id}`, async () => {
+                                  const checked = await api.checkAuth(a.id);
+                                  setNotice(
+                                    checked.auth?.loggedIn
+                                      ? t(
+                                          `${a.name} · ${checked.auth.email ?? ""} bağlantısı doğrulandı.`,
+                                          `${a.name} · ${checked.auth.email ?? ""} connection verified.`,
+                                        )
+                                      : t(
+                                          "Giriş doğrulanamadı. Tarayıcı girişini yenile.",
+                                          "Could not verify sign-in. Reconnect in the browser.",
+                                        ),
+                                  );
+                                })
+                              }
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          </div>
+                        </div>
+                        {setupId === a.id &&
+                          !pendingDesktop &&
+                          !desktopRequest && (
+                            <DesktopSetup
+                              account={a}
+                              accounts={accounts}
+                              desktop={desktop}
+                              unclaimed={hasUnclaimedDesktop}
+                              org={targetOrg}
+                              busy={!!desktopBusy}
+                              t={t}
+                              selectAccount={setSetupId}
+                              selectOrg={setOrg}
+                              close={() => setSetupId(undefined)}
+                              connect={() =>
+                                requestDesktop(
+                                  a,
+                                  hasUnclaimedDesktop ? "capture" : "login",
+                                )
+                              }
+                            />
                           )}
-                          busy={!!desktopBusy}
-                          t={t}
-                          cancel={() => setDesktopRequest(undefined)}
-                          confirm={confirmDesktopAction}
-                        />
-                      )}
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-          {!visible.length && (
-            <div className="empty">
-              <Monitor size={26} />
-              <h3>
-                {accounts.length
-                  ? t("Eşleşen hesap yok", "No matching accounts")
-                  : t(
-                      "Tek panel. Tüm hesapların.",
-                      "One panel. All your accounts.",
+                        {desktopRequest?.accountId === a.id && (
+                          <DesktopActionReview
+                            key={`${a.id}:${desktopRequest.kind}`}
+                            account={a}
+                            active={active}
+                            kind={desktopRequest.kind}
+                            historyAccounts={historySources(
+                              a,
+                              accounts,
+                              preferences,
+                            )}
+                            busy={!!desktopBusy}
+                            t={t}
+                            cancel={() => setDesktopRequest(undefined)}
+                            confirm={confirmDesktopAction}
+                          />
+                        )}
+                      </div>
                     )}
-              </h3>
-              <p>
-                {accounts.length
-                  ? t(
-                      "Aramayı veya filtreyi değiştir.",
-                      "Try a different search or filter.",
-                    )
-                  : t(
-                      "Önce Claude’da açık hesabını kaydet; ardından diğerlerini ekle.",
-                      "Save the account open in Claude, then add your other accounts.",
-                    )}
-              </p>
+                  </article>
+                );
+              })}
             </div>
-          )}
-        </section>
+            {!visible.length && (
+              <div className="empty">
+                <Monitor size={26} />
+                <h3>
+                  {accounts.length
+                    ? t("Eşleşen hesap yok", "No matching accounts")
+                    : t(
+                        "Tek panel. Tüm hesapların.",
+                        "One panel. All your accounts.",
+                      )}
+                </h3>
+                <p>
+                  {accounts.length
+                    ? t(
+                        "Aramayı veya filtreyi değiştir.",
+                        "Try a different search or filter.",
+                      )
+                    : t(
+                        "Önce Claude’da açık hesabını kaydet; ardından diğerlerini ekle.",
+                        "Save the account open in Claude, then add your other accounts.",
+                      )}
+                </p>
+              </div>
+            )}
+          </section>
+        )}
         {settings && (
           <section className="settings-panel">
             <div className="form-title">
-              <h3>{t("Tercihler", "Preferences")}</h3>
-              <span className="pill">0.9.0</span>
+              <h3>{t("Ayarlar", "Settings")}</h3>
+              <button className="secondary" onClick={() => setSettings(false)}>
+                {t("Hesaplara dön", "Back to accounts")}
+              </button>
             </div>
             <Preferences
               value={preferences}
@@ -1583,7 +1582,9 @@ export default function App() {
               "Stored locally. You’re in control.",
             )}
           </span>
-          <span>{t("Bağımsız araç", "Independent tool")} · 0.9.0</span>
+          <span>
+            {t("Bağımsız araç", "Independent tool")} · {APP_VERSION}
+          </span>
         </footer>
       </main>
     </div>

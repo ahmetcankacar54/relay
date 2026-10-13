@@ -123,8 +123,8 @@ export function SwitchPreferences({
         <h4>{t("Ortak Code geçmişi", "Shared Code history")}</h4>
         <p>
           {t(
-            "Konuşmalarını Claude’un Code sekmesinde kullanmaya devam et.",
-            "Keep working with your conversations in Claude’s Code tab.",
+            "Geçişten sonra Code konuşmaların diğer hesapta da görünür.",
+            "After a switch, your Code conversations appear in the other account too.",
           )}
         </p>
       </div>
@@ -135,8 +135,8 @@ export function SwitchPreferences({
           </label>
           <p>
             {t(
-              "Seçilen kapsam, bağlantı ve hesap geçişlerinde birleştirilir. Kapatmak önceki kopyaları silmez.",
-              "Your chosen scope is merged on connections and account switches. Turning it off keeps existing copies.",
+              "Her hesap geçişinde birleştirilir.",
+              "Merged on every account switch.",
             )}
           </p>
         </div>
@@ -164,8 +164,8 @@ export function SwitchPreferences({
         <>
           <p className="sharing-scope-note">
             {t(
-              "Bu hesaplar, farklı şirket veya kuruluşlara ait olsalar da birbirlerinin yerel Code oturumlarını ve proje kayıtlarını alır. Paylaşım için en az iki hesap seç.",
-              "These accounts receive each other’s local Code sessions and project records, including across companies or organizations. Select at least two accounts.",
+              "Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır.",
+              "Selected accounts share Code history, even across companies.",
             )}
           </p>
           <AccountSelection
@@ -205,8 +205,8 @@ export function SwitchPreferences({
       </div>
       <p className="preference-footnote">
         {t(
-          "Yerel Code geçmişi içindir. Claude Chat, bulut oturumları ve sunucudaki Projects eşitlenmez. Eksik konuşma dosyaları otomatik oluşturulmaz.",
-          "For local Code history. Claude Chat, cloud sessions and server Projects are not synchronized. Missing conversation files are not recreated.",
+          "Yalnızca yerel Code geçmişi; Chat ve bulut oturumları eşitlenmez.",
+          "Local Code history only; Chat and cloud sessions are not synced.",
         )}
       </p>
       <div className="preference-section-heading">
@@ -230,8 +230,8 @@ export function SwitchPreferences({
           </label>
           <p>
             {t(
-              "Relay açıkken çalışır. Kullanım %100’e ulaşırsa ve Claude tamamen kapandıysa kayıtlı hesaba geçer. Claude’u kapatmaz veya açmaz.",
-              "Runs while Relay is open. Switches to a saved account when usage reaches 100% and Claude has fully exited. Does not close or open Claude.",
+              "Kota dolup Claude kapandığında sıradaki hesabı hazırlar. Claude’u kendisi açıp kapatmaz.",
+              "When quota runs out and Claude has exited, prepares the next account. Never opens or quits Claude.",
             )}
           </p>
         </div>
@@ -274,15 +274,15 @@ export function SwitchPreferences({
           />
           <p className="preference-footnote">
             {t(
-              "Hem açık hem hedef hesabı seç. Hedefin Desktop ve limit bağlantıları hazır olmalı; iki limitinde de %10’dan fazla kalmalı. Farklı şirketler arasında geçiş için ortak geçmiş kapsamına da ikisini ekle.",
-              "Select both the current and target account. The target needs Desktop and usage connections, with more than 10% remaining in both limits. For a switch across companies, include both in the shared history scope too.",
+              "Açık ve hedef hesapları seç. Hedefte en az %10 limit kalmalı.",
+              "Select the current and target accounts. The target needs at least 10% quota left.",
             )}
           </p>
           {value.usageRefreshMinutes === 0 && (
             <p className="sharing-scope-note">
               {t(
-                "Limit yenileme elle seçili. Otomasyon güncel kota olmadan geçiş yapmaz; düzenli yenileme aç.",
-                "Usage refresh is manual. Automation cannot switch without fresh quota data; enable regular refresh.",
+                "Otomatik geçiş için düzenli limit yenilemeyi aç.",
+                "Enable regular usage refresh for automatic switching.",
               )}
             </p>
           )}
@@ -298,8 +298,8 @@ export function SwitchPreferences({
         </strong>
         <p>
           {t(
-            "Aşağıdaki otomatik devam, kota nedeniyle durmuş yerel Code konuşması içindir. Başka bir yanıt, alt görev veya bekleyen onay varsa Claude yeniden başlatılmaz. Bulut ve SSH işleri bu kapsamda değildir.",
-            "Automatic continuation below applies to a local Code conversation stopped at quota. Claude does not restart while another response, subtask or approval is pending. Cloud and SSH work are outside this scope.",
+            "Başka iş çalışırken Claude yeniden başlatılmaz.",
+            "Claude is not restarted while other work runs.",
           )}
         </p>
       </div>

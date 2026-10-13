@@ -471,8 +471,8 @@ export function ContinuationSettings({
           </h4>
           <p>
             {t(
-              "Relay, güncel limiti olan uygun hesabı otomatik seçer ve bu Code konuşmasında devam eder. İzin modu korunur; çalışan görevler varsa geçiş bekler.",
-              "Relay automatically chooses an eligible account with current quota and continues this Code conversation. Preserve its permission mode; wait while tasks are running.",
+              "Kota dolunca uygun hesaba geçer ve bu Code konuşmasında devam eder. İzin modu korunur.",
+              "When quota runs out, switches to an eligible account and continues this Code conversation. Its permission mode is kept.",
             )}
           </p>
         </div>
@@ -653,8 +653,8 @@ export function ContinuationSettings({
           />
           <span>
             {t(
-              "Kota nedeniyle yanıt durunca ve diğer işler bitince, bu konuşmanın kota yenilenmesinde otomatik devamını devral; Claude’u yeniden başlat, şu an bağlı hesaplarımdan limiti uygun olana otomatik geç ve aynı konuşmaya tek devam mesajı gönder.",
-              "When this response stops at quota and other work finishes, take over this conversation’s scheduled quota resume; restart Claude, automatically switch to an eligible account connected now and send one continuation message in the same conversation.",
+              "Kota dolunca ve diğer işler bitince Claude’u yeniden başlat, uygun hesaba geç ve bu konuşmaya bir devam mesajı gönder.",
+              "When quota runs out and other work finishes, restart Claude, switch to an eligible account and send one continuation message to this conversation.",
             )}
           </span>
         </label>
@@ -704,20 +704,8 @@ export function ContinuationSettings({
       )}
       <p className="continuation-footnote">
         {t(
-          "Seçim, güncel 5 saatlik ve haftalık kalan limit ile plan kapasitesine göre yapılır. Yalnızca ortak geçmiş kapsamındaki hesaplar kullanılır. Sonradan eklenen hesaplar için izlemeyi yeniden aç.",
-          "Selection uses fresh remaining 5-hour and weekly quota, weighted by plan capacity. Only accounts in the shared history scope are used. Enable watching again to include accounts added later.",
-        )}
-      </p>
-      <p className="continuation-footnote">
-        {t(
-          "Relay açıkken bu konuşma için bir kez çalışır. Çalışan yanıt veya alt görevler taşınmaz. Geçiş, bütün işler durduktan sonra Claude’un yeniden başlatılmasıyla yapılır.",
-          "Runs once for this conversation while Relay is open. Running responses and subtasks are not transferred. Switching restarts Claude after all work has stopped.",
-        )}
-      </p>
-      <p className="continuation-footnote">
-        {t(
-          "Deneysel arayüz kontrolü: geçiş sırasında Claude’da yeni iş başlatma veya açık konuşmayı değiştirme. Mesajın ulaştığı kesinleşmezse Relay tekrar göndermez.",
-          "Experimental interface control: do not start new work or change the open conversation in Claude during a handoff. Relay does not resend a message whose delivery is uncertain.",
+          "Relay açıkken bu konuşma için bir kez çalışır. Hesap, güncel limit ve plan kapasitesine göre seçilir; sonradan eklenen hesaplar için izlemeyi yeniden aç. Geçiş sırasında Claude’da yeni iş başlatma.",
+          "Runs once for this conversation while Relay is open. The account is chosen by current quota and plan capacity; enable watching again to include accounts added later. Don’t start new work in Claude during a handoff.",
         )}
       </p>
     </section>

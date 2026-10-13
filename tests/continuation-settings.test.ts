@@ -146,13 +146,9 @@ test("automatic watching presents capacity selection without a fixed target cont
   assert.doesNotMatch(html, /<select/);
   assert.match(html, /Automatic · by remaining capacity/);
   assert.match(html, /1 connected accounts · checked at handoff/);
-  assert.match(
-    html,
-    /automatically switch to an eligible account connected now/,
-  );
-  assert.match(html, /fresh remaining 5-hour and weekly quota/);
-  assert.match(html, /Only accounts in the shared history scope/);
-  assert.match(html, /Enable watching again to include accounts added later/);
+  assert.match(html, /switch to an eligible account and send one continuation/);
+  assert.match(html, /chosen by current quota and plan capacity/);
+  assert.match(html, /enable watching again to include accounts added later/);
 });
 
 test("an automatic watch explains missing live quota and reveals a frozen target only after selection", () => {
