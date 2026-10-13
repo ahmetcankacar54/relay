@@ -586,7 +586,26 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       uiLabel &&
       uiLabel.endsWith(organizationLabel) &&
       scopes.includes(account.desktop!.orgId);
-    if (!uniqueScope && !labeledScope)
+    // An account often has empty folders for other organizations it belongs to,
+    // and its UI label is usually a name, not the organization. The open
+    // conversation's own record identifies the organization when it exists only
+    // under the registered one.
+    let sessionScope =
+      !uniqueScope &&
+      !labeledScope &&
+      scopes.some(
+        (org) => org.toLowerCase() === account.desktop!.orgId.toLowerCase(),
+      );
+    for (const org of sessionScope ? scopes : [])
+      if (
+        org.toLowerCase() !== account.desktop!.orgId.toLowerCase() &&
+        (await readBytes(
+          this.options.claudeRoot,
+          `${scopePath("claude-code-sessions", { accountUuid: account.desktop!.accountUuid, orgId: org })}/${snapshot.localSessionId}.json`,
+        ))
+      )
+        sessionScope = false;
+    if (!uniqueScope && !labeledScope && !sessionScope)
       throw new DesktopAutomationError("desktop-observation-incomplete");
     if (
       !UUID.test(metadata.cliSessionId ?? "") ||

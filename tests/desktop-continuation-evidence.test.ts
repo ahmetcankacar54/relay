@@ -655,3 +655,36 @@ test("a conversation whose tools changed directory is still observed; another un
     await fs.rm(f.root, { recursive: true, force: true });
   }
 });
+test("other, empty organization folders of the account do not hide the open conversation's organization", async () => {
+  const f = await fixture();
+  try {
+    const other = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const desktop = (
+      f.evidence as unknown as {
+        options: { desktop: { snapshot: () => Promise<any> } };
+      }
+    ).options.desktop;
+    const original = desktop.snapshot;
+    desktop.snapshot = async () => ({
+      ...(await original()),
+      organizations: [other, f.org],
+    });
+    const ui = { ...f.ui, accountLabel: "Ahmet" };
+    const state = await f.evidence.read(ui);
+    assert.equal(state.identity.profileId, f.source.id);
+    // The same record under another organization makes the scope ambiguous.
+    const duplicate = path.join(
+      f.root,
+      "desktop",
+      "claude-code-sessions",
+      f.source.id,
+      other,
+      `local_${uuid}.json`,
+    );
+    await fs.mkdir(path.dirname(duplicate), { recursive: true });
+    await fs.writeFile(duplicate, "{}");
+    await assert.rejects(f.evidence.read(ui), /desktop-observation-incomplete/);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
