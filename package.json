@@ -20,6 +20,7 @@
     "test:desktop": "node scripts/smoke.mjs",
     "check:mac-signing": "node scripts/check-macos-signing.mjs",
     "dist:mac:local": "node scripts/stable-signing.mjs",
+    "install:mac": "node scripts/stable-signing.mjs --install",
     "dist": "node scripts/dist.mjs",
     "postinstall": "electron-builder install-app-deps",
     "format": "prettier --write src electron shared tests scripts"

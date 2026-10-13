@@ -106,8 +106,8 @@ export function Preferences({
         <>
           <p className="preference-footnote">
             {t(
-              "Menü çubuğundan hesap seçerek geçiş onayını açabilirsin. Pencere kapanınca Relay menü çubuğunda çalışmaya devam eder.",
-              "Choose an account in the menu bar to open its switch review. Relay keeps running in the tray when its window closes.",
+              "Menü çubuğundan bir hesap seçip tek onayla geçebilirsin. Pencere kapanınca Relay menü çubuğunda çalışmaya devam eder.",
+              "Pick an account in the menu bar to switch after one confirmation. Relay keeps running there when its window closes.",
             )}
           </p>
           <SwitchPreferences

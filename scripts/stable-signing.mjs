@@ -336,10 +336,12 @@ function parseArguments(args) {
     arch: process.arch,
     output: "release/stable",
     skipBuild: false,
+    install: false,
   };
   for (let index = 0; index < args.length; index++) {
     const flag = args[index];
     if (flag === "--skip-build") options.skipBuild = true;
+    else if (flag === "--install") options.install = true;
     else if (
       ["--identity", "--arch", "--output", "--previous", "--verify"].includes(
         flag,
@@ -473,7 +475,9 @@ async function main() {
       mac: {
         identity: identity.fingerprint,
         sign: pinnedSigner(identity.fingerprint, signAsync),
-        hardenedRuntime: true,
+        // A local, non-notarized build: the hardened runtime adds library
+        // validation rules that a self-signed certificate cannot satisfy.
+        hardenedRuntime: false,
         strictVerify: true,
         ...(timestampPolicy.timestamp
           ? { timestamp: timestampPolicy.timestamp }
@@ -489,6 +493,26 @@ async function main() {
     : "library-default";
   if (prior) report.continuity = verifySigningContinuity(prior, report);
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  if (options.install) installBundle(bundle);
+}
+
+/**
+ * Replace /Applications/Relay.app with the verified bundle. Keeping one install
+ * location and one certificate keeps macOS permissions across updates.
+ */
+function installBundle(bundle) {
+  const target = "/Applications/Relay.app";
+  try {
+    execFileSync("/usr/bin/osascript", [
+      "-e",
+      'if application id "dev.relay.workspace" is running then tell application id "dev.relay.workspace" to quit',
+    ]);
+  } catch {
+    // Not running, or it refused to quit; the copy below still replaces files.
+  }
+  execFileSync("/bin/rm", ["-rf", target]);
+  execFileSync("/usr/bin/ditto", [bundle, target]);
+  process.stdout.write(`Installed ${target}\n`);
 }
 
 if (

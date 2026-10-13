@@ -227,7 +227,10 @@ export class UsageManager {
       if (
         a.auth?.loggedIn &&
         (!cached?.checkedAt ||
-          this.now() - Date.parse(cached.checkedAt) >= minutes * 60_000 ||
+          // Poll a little early: automation accepts data up to five minutes old
+          // and this timer only ticks every 30 seconds.
+          this.now() - Date.parse(cached.checkedAt) >=
+            minutes * 60_000 - 45_000 ||
           this.view(a).stale) &&
         this.now() >= (this.nextAttempt.get(a.id) ?? 0)
       )
