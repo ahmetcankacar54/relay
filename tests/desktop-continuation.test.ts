@@ -16,6 +16,7 @@ import type {
   ContinuationResult,
 } from "../electron/core/continuation";
 import { ContinuationEngine } from "../electron/core/continuation";
+import { DesktopAutomationError } from "../electron/core/desktop-continuation-host";
 import { FileContinuationJournal } from "../electron/core/continuation-journal";
 import {
   DEFAULT_SETTINGS,
@@ -1443,4 +1444,20 @@ test("application manager runs the real guarded engine and durable journal throu
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+test("a wakeup takeover refused before any click withdraws its intent and keeps watching", async () => {
+  const f = wakeupSetup();
+  f.deps.prepareQuotaStop = async () => {
+    throw new DesktopAutomationError("context-changed", true);
+  };
+  await f.manager.arm({
+    targetAccountId: f.target.id,
+    executionPolicy: "guarded-native-at-most-once",
+  });
+  const armed = f.persisted().arm;
+  const result = await f.manager.tick();
+  assert.notEqual(result.status, "reconciliation-required");
+  assert.equal(f.persisted().pending, undefined);
+  assert.deepEqual(f.persisted().arm, armed);
+  assert.equal(f.requests.length, 0);
 });

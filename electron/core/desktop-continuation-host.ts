@@ -21,7 +21,11 @@ export type DesktopAutomationIssue =
   | "desktop-observation-incomplete";
 
 export class DesktopAutomationError extends Error {
-  constructor(readonly issue: DesktopAutomationIssue) {
+  constructor(
+    readonly issue: DesktopAutomationIssue,
+    /** True when the failure happened before anything in Claude was changed. */
+    readonly unchanged = false,
+  ) {
     super(issue);
   }
 }
@@ -194,7 +198,7 @@ export function nativeDesktopAutomation(
         const child = execFile(
           helper,
           [],
-          { timeout: 15_000, maxBuffer: 65_536, windowsHide: true },
+          { timeout: 45_000, maxBuffer: 65_536, windowsHide: true },
           (error, stdout) => {
             if (error)
               return reject(
@@ -324,7 +328,18 @@ export class DesktopContinuationHost implements ContinuationHost {
   }
   /** Call only after explicit opt-in and fresh target/history quota preflight. */
   async cancelQuotaResume(expectedContextRevision: number) {
-    const { snapshot, state } = await this.observed(expectedContextRevision);
+    let observed: Awaited<ReturnType<typeof this.observed>>;
+    try {
+      observed = await this.observed(expectedContextRevision);
+    } catch (error) {
+      throw new DesktopAutomationError(
+        error instanceof DesktopAutomationError
+          ? error.issue
+          : "desktop-observation-incomplete",
+        true,
+      );
+    }
+    const { snapshot, state } = observed;
     const q = state.quiescence;
     if (
       !state.quotaStop ||
@@ -332,7 +347,6 @@ export class DesktopContinuationHost implements ContinuationHost {
       !this.automation.cancelQuotaResume ||
       q.coverage !== "guarded-local" ||
       q.scheduledWakeups !== 1 ||
-      (snapshot.visibleScheduledTasks ?? 0) !== 0 ||
       [
         q.busyWorkers,
         q.subagents,
@@ -342,7 +356,7 @@ export class DesktopContinuationHost implements ContinuationHost {
         q.unknownWork,
       ].some((value) => value !== 0)
     )
-      throw new DesktopAutomationError("desktop-work-active");
+      throw new DesktopAutomationError("desktop-work-active", true);
     const changed = await this.automation.cancelQuotaResume(guard(snapshot));
     const fresh = await this.evidence.read(changed);
     if (

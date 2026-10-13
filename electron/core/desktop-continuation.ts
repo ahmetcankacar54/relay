@@ -796,14 +796,31 @@ export class DesktopContinuationManager {
     // Cancellation itself changes Desktop. Record its exact source binding before
     // the UI mutation, so a crash or failed reread cannot silently lose its timer.
     provisional.ownQuotaWakeup = "cancellation-intent";
+    const savedArm = this.saved.arm;
     this.commit((state) => {
       state.pending = provisional;
       state.arm = undefined;
     });
-    const after = await this.deps.prepareQuotaStop(
-      before,
-      this.request(provisional),
-    );
+    let after: DesktopContinuationObservation;
+    try {
+      after = await this.deps.prepareQuotaStop(
+        before,
+        this.request(provisional),
+      );
+    } catch (error) {
+      // Nothing was clicked: withdraw the intent and keep watching.
+      if (
+        error instanceof Error &&
+        (error as { unchanged?: boolean }).unchanged === true
+      ) {
+        this.commit((state) => {
+          state.pending = undefined;
+          state.arm = savedArm;
+        });
+        return { observation: before, reason: observationErrorReason(error) };
+      }
+      throw error;
+    }
     const changed =
       this.observationReason(after) ??
       this.armReason(arm, after) ??

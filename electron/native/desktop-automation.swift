@@ -92,7 +92,7 @@ func nodes(_ root: AXUIElement) throws -> [Node] {
     var result: [Node] = []
     var visited = Set<CFHashCode>()
     func walk(_ element: AXUIElement, _ depth: Int, _ path: String) throws {
-        guard depth <= 48 && result.count < 12000 else { try fail("desktop-ui-unsupported") }
+        guard depth <= 64 && result.count < 60000 else { try fail("desktop-ui-unsupported") }
         let hash = CFHash(element)
         if visited.contains(hash) { return }
         visited.insert(hash)
