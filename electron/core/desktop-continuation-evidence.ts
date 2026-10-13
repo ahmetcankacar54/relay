@@ -118,11 +118,31 @@ function collectProcessesSync() {
   );
 }
 
+/** Inputs measured outside the process table. */
+export interface QuiescenceInputs {
+  /** Recently written Claude Code transcripts, other than the selected one, whose turn is unfinished. */
+  busyTranscripts?: number;
+  /** Processes whose CPU time advanced since the previous observation. Undefined: not measured yet. */
+  activePids?: ReadonlySet<number>;
+}
+
+/**
+ * Decide whether restarting Claude would interrupt work.
+ *
+ * Desktop keeps one Claude Code engine alive per open conversation, wrapped in a
+ * `disclaimer` helper, even when the conversation is idle. Engine activity is
+ * therefore judged from transcripts (an unfinished turn is busy), not from the
+ * mere presence of a process. Any other process Claude started (a tool, a
+ * background job, an MCP server) blocks only while it is using CPU. Processes
+ * outside Claude's tree, such as a terminal Claude Code CLI or the browser
+ * extension's native host, are unaffected by a Desktop restart and are ignored.
+ */
 export function desktopProcessQuiescence(
   raw: string,
   appPid: number,
   sessionId: string,
   selectedStopped: boolean,
+  inputs: QuiescenceInputs = {},
 ) {
   const result = {
     coverage: "unknown" as "unknown" | "guarded-local",
@@ -171,36 +191,81 @@ export function desktopProcessQuiescence(
     for (const row of rows)
       if (descendants.has(row.ppid)) descendants.add(row.pid);
   }
-  let allowedSource = 0;
+  // The selected conversation itself must have finished its turn.
+  if (!selectedStopped) result.busyWorkers++;
+  result.busyWorkers += inputs.busyTranscripts ?? 0;
   for (const row of rows) {
-    if (row.pid === appPid) continue;
-    const engine = isDesktopClaudeEngine(row);
-    const descendant = descendants.has(row.pid);
-    if (!engine && !descendant) continue;
-    const chromium =
-      row.executable.startsWith(`${bundle}Contents/Frameworks/Claude Helper`) &&
-      /\.app\/Contents\/MacOS\/Claude Helper(?: \((?:Renderer|GPU|Plugin)\))?$/.test(
-        row.executable,
-      );
-    if (chromium && !engine) continue;
-    // Exactly one exhausted source engine is permitted. Its child tools/shells
-    // are separate descendants and must still be absent. Unknown engines block.
-    const resume = /(?:^|\s)--resume(?:\s+|=)([0-9a-f-]{36})(?=\s|$)/i.exec(
-      row.args,
-    )?.[1];
-    if (
-      engine &&
-      descendant &&
-      selectedStopped &&
-      resume?.toLowerCase() === sessionId.toLowerCase() &&
-      ++allowedSource === 1
-    )
-      continue;
-    if (engine) result.busyWorkers++;
-    else result.unknownWork++;
+    if (row.pid === appPid || !descendants.has(row.pid)) continue;
+    // Claude's own helpers (Chromium processes, engine wrappers, crash reporter).
+    if (row.executable.startsWith(`${bundle}Contents/`)) continue;
+    if (isDesktopClaudeEngine(row)) continue;
+    if (!inputs.activePids || inputs.activePids.has(row.pid))
+      result.unknownWork++;
   }
   result.coverage = "guarded-local";
   return result;
+}
+
+/** Turn state of a transcript's main chain: an unfinished turn means work is in progress. */
+export function transcriptTurnState(rows: Row[]): "idle" | "busy" {
+  const tail = rows
+    .filter(
+      (r) =>
+        !r.isSidechain && !r.isMeta && ["user", "assistant"].includes(r.type),
+    )
+    .at(-1);
+  if (!tail) return "idle";
+  if (tail.type === "user")
+    return /^\[Request interrupted/.test(transcriptMessageText(tail).trim())
+      ? "idle"
+      : "busy";
+  if (transcriptError(tail)) return "idle";
+  const content = tail.message?.content;
+  if (Array.isArray(content) && content.some((c) => c?.type === "tool_use"))
+    return "busy";
+  return ["end_turn", "stop_sequence", "max_tokens", "refusal"].includes(
+    tail.message?.stop_reason,
+  )
+    ? "idle"
+    : "busy";
+}
+
+/** Parse `ps -o pid=,time=` cumulative CPU times ([dd-][hh:]mm:ss.ss) in seconds. */
+export function parseCpuTimes(output: string) {
+  const times = new Map<number, number>();
+  for (const line of output.split("\n")) {
+    const m = /^\s*(\d+)\s+(?:(\d+)-)?([\d:.]+)\s*$/.exec(line);
+    if (!m) continue;
+    const parts = m[3].split(":").map(Number);
+    if (parts.some((part) => !Number.isFinite(part))) continue;
+    const seconds = parts.reduce((total, part) => total * 60 + part, 0);
+    times.set(Number(m[1]), seconds + Number(m[2] ?? 0) * 86_400);
+  }
+  return times;
+}
+/** Transcripts written within this window are considered possibly live. */
+const LIVE_TRANSCRIPT_MS = 2 * 60 * 60_000;
+/** CPU seconds a process may use between observations and still count as idle. */
+const IDLE_CPU_SECONDS = 0.3;
+const TAIL_BYTES = 512 * 1024;
+
+function transcriptTail(data: Buffer) {
+  const start = Math.max(0, data.length - TAIL_BYTES);
+  const rows: Row[] = [];
+  for (const line of data
+    .subarray(start)
+    .toString("utf8")
+    .split("\n")
+    .slice(start ? 1 : 0)) {
+    if (!line) continue;
+    try {
+      const row = JSON.parse(line);
+      if (row && typeof row === "object" && !Array.isArray(row)) rows.push(row);
+    } catch {
+      // A line Claude is still appending; the next observation reads it.
+    }
+  }
+  return rows;
 }
 
 interface CheckpointRecord {
@@ -223,6 +288,8 @@ export interface DesktopEvidenceOptions {
   transcriptRoot: string;
   processes?: () => Promise<string>;
   processesSync?: () => string;
+  /** `ps -axo pid=,time=` output; injectable for tests. */
+  cpuTimes?: () => string;
   now?: () => number;
 }
 export function transcriptMessageText(row: Row) {
@@ -350,6 +417,98 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     this.now = options.now ?? Date.now;
     privateJournalDirectory(this.recordsRoot);
   }
+  private cpu?: { at: number; times: Map<number, number> };
+  private family = new Set<number>();
+  /** Count other recently written transcripts whose turn is unfinished. */
+  private busyTranscripts(selectedRelative: string) {
+    const root = path.join(this.options.transcriptRoot, "projects");
+    const cutoff = this.now() - LIVE_TRANSCRIPT_MS;
+    let busy = 0;
+    let folders: fsSync.Dirent[];
+    try {
+      folders = fsSync.readdirSync(root, { withFileTypes: true });
+    } catch {
+      return 0;
+    }
+    for (const folder of folders) {
+      if (!folder.isDirectory()) continue;
+      let names: string[];
+      try {
+        names = fsSync.readdirSync(path.join(root, folder.name));
+      } catch {
+        continue;
+      }
+      for (const name of names) {
+        if (!name.endsWith(".jsonl")) continue;
+        const relative = `projects/${folder.name}/${name}`;
+        if (relative === selectedRelative) continue;
+        const file = path.join(root, folder.name, name);
+        try {
+          const stat = fsSync.lstatSync(file);
+          if (!stat.isFile() || stat.mtimeMs < cutoff) continue;
+          const length = Math.min(stat.size, TAIL_BYTES);
+          const buffer = Buffer.alloc(length);
+          const fd = fsSync.openSync(file, "r");
+          try {
+            fsSync.readSync(fd, buffer, 0, length, stat.size - length);
+          } finally {
+            fsSync.closeSync(fd);
+          }
+          const data =
+            stat.size > length
+              ? Buffer.concat([Buffer.from("\n"), buffer])
+              : buffer;
+          if (transcriptTurnState(transcriptTail(data)) === "busy") busy++;
+        } catch {
+          busy++;
+        }
+      }
+    }
+    return busy;
+  }
+  /** Processes whose CPU time advanced since the previous sample (undefined on the first). */
+  private activePids() {
+    const output = this.options.cpuTimes
+      ? this.options.cpuTimes()
+      : execFileSync("/bin/ps", ["-axo", "pid=,time="], {
+          timeout: 3000,
+          maxBuffer: 2_097_152,
+          encoding: "utf8",
+        });
+    const times = parseCpuTimes(output);
+    const now = this.now();
+    const previous = this.cpu;
+    this.cpu = { at: now, times };
+    if (!previous || now - previous.at > 120_000) return undefined;
+    const active = new Set<number>();
+    for (const [pid, seconds] of times) {
+      const before = previous.times.get(pid);
+      if (before === undefined || seconds - before > IDLE_CPU_SECONDS)
+        active.add(pid);
+    }
+    return active;
+  }
+  private measure(selectedRelative: string): QuiescenceInputs {
+    return {
+      busyTranscripts: this.busyTranscripts(selectedRelative),
+      activePids: this.activePids(),
+    };
+  }
+  /** Remember Claude's process tree so engines orphaned by a quit are noticed. */
+  private remember(raw: string, appPid: number) {
+    try {
+      const rows = JSON.parse(raw) as DesktopProcess[];
+      const family = new Set<number>([appPid]);
+      let size = -1;
+      while (size !== family.size) {
+        size = family.size;
+        for (const row of rows) if (family.has(row.ppid)) family.add(row.pid);
+      }
+      this.family = family;
+    } catch {
+      // Keep the previous family; an unreadable census already blocks.
+    }
+  }
   private async transcript(cliId: string, cwd: string) {
     const folders = await fs.readdir(
       path.join(this.options.transcriptRoot, "projects"),
@@ -362,10 +521,12 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       const data = await readBytes(this.options.transcriptRoot, relative);
       if (!data) continue;
       const rows = parseDesktopTranscript(data);
+      // Rows record the shell's working directory, which moves as tools `cd`.
+      // The session belongs to the project if any row was written from it.
       const paths = rows
         .filter((row) => typeof row.cwd === "string")
         .map((row) => path.resolve(row.cwd));
-      if (!paths.length || paths.some((value) => value !== path.resolve(cwd)))
+      if (!paths.includes(path.resolve(cwd)))
         throw new DesktopAutomationError("exact-session-not-observed");
       found.push({ relative, data, rows });
     }
@@ -454,11 +615,14 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
         ["end_turn", "max_tokens", "stop_sequence"].includes(
           tail.message?.stop_reason,
         ));
+    const processes = await (this.options.processes ?? collectProcesses)();
+    this.remember(processes, snapshot.pid);
     const quiescence = desktopProcessQuiescence(
-      await (this.options.processes ?? collectProcesses)(),
+      processes,
       snapshot.pid,
       metadata.cliSessionId,
       selectedEnded,
+      this.measure(transcript.relative),
     );
     if (
       metadata.remoteSessionId ||
@@ -471,11 +635,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     }
     if (!snapshot.composerEmpty) quiescence.queuedPrompts++;
     if (snapshot.status === "waiting") quiescence.waiting++;
-    quiescence.busyWorkers += snapshot.visibleActiveTasks ?? 0;
-    quiescence.waiting += snapshot.visibleWaitingTasks ?? 0;
-    quiescence.scheduledWakeups +=
-      (snapshot.visibleScheduledTasks ?? 0) +
-      (snapshot.quotaAutoResume ? 1 : 0);
+    // Work in other conversations is measured from transcripts and processes.
+    // Labels such as "Running" or "Scheduled" also appear in ordinary rows, so
+    // only the selected conversation's own quota-resume timer counts here.
+    if (snapshot.quotaAutoResume) quiescence.scheduledWakeups++;
     const session: ContinuationSession = {
       id: metadata.cliSessionId.toLowerCase(),
       projectKey: path.resolve(metadata.cwd),
@@ -634,18 +797,21 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
         const raw = (this.options.processesSync ?? collectProcessesSync)();
         const parsed = JSON.parse(raw) as DesktopProcess[];
         if (!parsed.some((p) => p.pid === currentSnapshot.pid)) {
-          // After graceful quit, any surviving engine/tool related to the old
-          // process tree blocks the write; a newly running Claude also blocks it.
+          // After graceful quit, an engine of the old Claude that is still alive
+          // could still write; a newly started Claude also blocks the write.
           return !parsed.some(
             (p) =>
-              isDesktopClaudeEngine(p) || p.executable.includes("/Claude.app/"),
+              (this.family.has(p.pid) && isDesktopClaudeEngine(p)) ||
+              /\/Claude\.app\/Contents\/MacOS\/Claude$/.test(p.executable),
           );
         }
+        this.remember(raw, currentSnapshot.pid);
         const q = desktopProcessQuiescence(
           raw,
           currentSnapshot.pid,
           current.session.id,
           true,
+          this.measure(record.transcriptRelative),
         );
         const config = JSON.parse(
           fsSync.readFileSync(

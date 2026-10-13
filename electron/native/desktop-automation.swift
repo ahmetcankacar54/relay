@@ -9,6 +9,18 @@ import CryptoKit
 let bundleID = "com.anthropic.claudefordesktop"
 let localPattern = "^local_[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 let allowedModes = ["Manual", "Auto", "Plan", "Accept edits"]
+// Compact layouts show "Accept" for Accept edits.
+func modeLabel(_ text: String) -> String? {
+    if allowedModes.contains(text) { return text }
+    if text == "Accept" { return "Accept edits" }
+    if text.hasPrefix("PermissionMode ") { return modeLabel(String(text.dropFirst("PermissionMode ".count))) }
+    return nil
+}
+// Menu items are named "<mode> <description>", e.g. "Accept edits Automatically accept all file edits".
+func menuItemMatches(_ text: String, _ mode: String) -> Bool {
+    text == mode || text.hasPrefix(mode + " ") ||
+        (mode == "Accept edits" && (text == "Accept" || text.hasPrefix("Accept ")))
+}
 
 struct BridgeError: Error { let issue: String }
 func fail(_ issue: String) throws -> Never { throw BridgeError(issue: issue) }
@@ -134,14 +146,17 @@ func observe() throws -> Observation {
     let composer = composers.count == 1 ? composers.first : nil
     let sends = tree.filter { $0.role == "AXButton" && ($0.title == "Send" || $0.description == "Send") }
     let send = sends.count == 1 ? sends.first : nil
-    let permissionNodes = tree.filter {
-        ["AXPopUpButton", "AXButton"].contains($0.role) &&
-        ($0.title.contains("PermissionMode") || $0.description.contains("PermissionMode") || allowedModes.contains(where: $0.strings.contains))
+    // The selector carries the "Permission mode" label. Scheduled task rows also
+    // show "Auto"/"Manual", so a bare mode label is only a fallback.
+    let buttons = tree.filter { ["AXPopUpButton", "AXButton"].contains($0.role) }
+    let labeled = buttons.filter { node in
+        node.strings.contains { $0.contains("PermissionMode") || $0.contains("Permission mode") }
     }
+    let permissionNodes = labeled.isEmpty
+        ? buttons.filter { node in node.strings.contains { modeLabel($0) != nil } }
+        : labeled
     let permission = permissionNodes.count == 1 ? permissionNodes.first : nil
-    let mode = permission.flatMap { node in
-        allowedModes.first { candidate in node.strings.contains(candidate) || node.strings.contains("PermissionMode \(candidate)") }
-    }
+    let mode = permission.flatMap { node in node.strings.lazy.compactMap(modeLabel).first }
     // Account selection is scoped to the one named Sidebar container. Session
     // actions and project/model/usage menus elsewhere cannot become an account.
     let accountPath = accountPopupPath(tree.map { $0.selectorNode })
@@ -151,7 +166,8 @@ func observe() throws -> Observation {
         }.joined(separator: " ")
     }
     let finished = tree.contains { $0.strings.contains("Claude finished the response") }
-    let quota = tree.contains { $0.strings.contains("Session limit reached") }
+    // "Session", "Weekly", "Usage", "<model>" and "Monthly spend limit reached".
+    let quota = tree.contains { $0.strings.contains { $0.hasSuffix(" limit reached") } }
     let working = tree.contains { $0.role == "AXButton" && ["Stop", "Stop response", "Stop Claude"].contains(where: $0.strings.contains) }
     let waiting = tree.contains { node in
         node.role == "AXDialog" || ["Approve", "Allow once", "Allow always", "Reject"].contains(where: node.strings.contains)
@@ -286,7 +302,9 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         guard current.fields["pid"] as? Int == expected["pid"] as? Int,
               current.fields["localSessionId"] as? String == expected["localSessionId"] as? String,
               current.fields["accountLabel"] as? String == expected["accountLabel"] as? String else { try fail("context-changed") }
-        let items = current.tree.filter { $0.role == "AXMenuItem" && ($0.title == mode || $0.value == mode || $0.description == mode) }
+        let items = current.tree.filter { node in
+            node.role == "AXMenuItem" && (node.strings.contains { menuItemMatches($0, mode) } || menuItemMatches(node.label, mode))
+        }
         guard items.count == 1, let item = items.first else { try fail("permission-mode-mismatch") }
         try press(item)
         current = try observe()

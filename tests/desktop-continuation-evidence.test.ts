@@ -10,7 +10,9 @@ import {
   desktopProcessQuiescence,
   isDesktopClaudeEngine,
   latestQuotaEndedTurn,
+  parseCpuTimes,
   parseDesktopTranscript,
+  transcriptTurnState,
   continuationTurn,
   NativeDesktopContinuationEvidence,
   type DesktopProcess,
@@ -66,40 +68,61 @@ test("one exact selected engine with terminal transcript may remain alive", () =
     1,
   );
 });
-test("an idle sibling, source shell, unknown descendant or duplicate worker blocks", () => {
+test("idle sibling engines do not block; unfinished transcripts and active tools do", () => {
   const sibling = {
     ...sourceEngine,
     pid: 458,
     args: "claude --resume eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
   };
-  assert.equal(
-    desktopProcessQuiescence(roster(sourceEngine, sibling), 456, uuid, true)
-      .busyWorkers,
-    1,
-  );
-  assert.equal(
+  const wrapper = {
+    pid: 460,
+    ppid: 456,
+    executable: "/Applications/Claude.app/Contents/Helpers/disclaimer",
+    args: "disclaimer --pgroup -- claude",
+  };
+  assert.deepEqual(
     desktopProcessQuiescence(
-      roster(sourceEngine, {
-        pid: 458,
-        ppid: 457,
-        executable: "/bin/bash",
-        args: "bash",
-      }),
+      roster(sourceEngine, sibling, wrapper),
       456,
       uuid,
       true,
-    ).unknownWork,
-    1,
+      { busyTranscripts: 0, activePids: new Set() },
+    ),
+    {
+      coverage: "guarded-local",
+      busyWorkers: 0,
+      subagents: 0,
+      pendingTasks: 0,
+      waiting: 0,
+      queuedPrompts: 0,
+      scheduledWakeups: 0,
+      unknownWork: 0,
+    },
   );
   assert.equal(
-    desktopProcessQuiescence(
-      roster(sourceEngine, { ...sourceEngine, pid: 458 }),
-      456,
-      uuid,
-      true,
-    ).busyWorkers,
+    desktopProcessQuiescence(roster(sourceEngine, sibling), 456, uuid, true, {
+      busyTranscripts: 1,
+      activePids: new Set(),
+    }).busyWorkers,
     1,
   );
+  const shell = { pid: 459, ppid: 457, executable: "/bin/bash", args: "bash" };
+  // A tool process blocks until CPU has been measured, and while it is busy.
+  for (const [inputs, expected] of [
+    [{}, 1],
+    [{ activePids: new Set([459]) }, 1],
+    [{ activePids: new Set<number>() }, 0],
+  ] as const)
+    assert.equal(
+      desktopProcessQuiescence(
+        roster(sourceEngine, shell),
+        456,
+        uuid,
+        true,
+        inputs,
+      ).unknownWork,
+      expected,
+    );
 });
 test("normal Chromium helpers are allowed but their arbitrary child is not", () => {
   const helper = {
@@ -141,7 +164,7 @@ test("bad or missing app census remains unknown", () => {
     );
   }
 });
-test("global native version executables and npm Node engines are never skipped", () => {
+test("Claude Code engines are recognized, but those outside Claude's tree do not block", () => {
   const versioned = {
     pid: 900,
     ppid: 1,
@@ -164,12 +187,22 @@ test("global native version executables and npm Node engines are never skipped",
     pid: 903,
     args: "node /Users/Test User/node_modules/@anthropic-ai/claude-code/cli.js --resume different",
   };
+  const nativeHost = {
+    pid: 904,
+    ppid: 1,
+    executable: "/Applications/Claude.app/Contents/Helpers/chrome-native-host",
+    args: "chrome-native-host",
+  };
   for (const worker of [versioned, npm, npmBin, npmSpaces]) {
     assert.equal(isDesktopClaudeEngine(worker), true);
-    assert.equal(
-      desktopProcessQuiescence(roster(worker), 456, uuid, true).busyWorkers,
-      1,
+    const census = desktopProcessQuiescence(
+      roster(worker, nativeHost),
+      456,
+      uuid,
+      true,
+      { busyTranscripts: 0, activePids: new Set() },
     );
+    assert.equal(census.busyWorkers + census.unknownWork, 0);
   }
   assert.equal(
     isDesktopClaudeEngine({
@@ -178,6 +211,51 @@ test("global native version executables and npm Node engines are never skipped",
     }),
     false,
   );
+});
+test("transcript turn state: finished, interrupted and errored turns are idle; tools and prompts are busy", () => {
+  const user = (content: unknown, extra = {}) => ({
+    type: "user",
+    message: { content },
+    ...extra,
+  });
+  const assistant = (content: unknown, stop_reason: string | null) => ({
+    type: "assistant",
+    message: { content, stop_reason },
+  });
+  const cases: [Record<string, unknown>[], "idle" | "busy"][] = [
+    [
+      [user("hi"), assistant([{ type: "text", text: "done" }], "end_turn")],
+      "idle",
+    ],
+    [[user("hi")], "busy"],
+    [[user([{ type: "tool_result", content: "ok" }])], "busy"],
+    [[assistant([{ type: "tool_use", name: "Bash" }], "tool_use")], "busy"],
+    [[user("[Request interrupted by user]")], "idle"],
+    [
+      [user("hi"), { ...assistant("limited", null), error: "rate_limit" }],
+      "idle",
+    ],
+    [
+      [
+        assistant([{ type: "text", text: "x" }], "end_turn"),
+        user("note", { isMeta: true }),
+      ],
+      "idle",
+    ],
+    [[assistant([{ type: "text", text: "x" }], null)], "busy"],
+    [[], "idle"],
+  ];
+  for (const [rows, expected] of cases)
+    assert.equal(transcriptTurnState(rows), expected, JSON.stringify(rows));
+});
+test("cumulative CPU times parse minutes, hours and days", () => {
+  const times = parseCpuTimes(
+    "  1 161:55.53\n 295   0:00.96\n 7 1-02:03:04.50\nbad line\n",
+  );
+  assert.equal(times.get(1), 161 * 60 + 55.53);
+  assert.equal(times.get(295), 0.96);
+  assert.equal(times.get(7), 86_400 + 2 * 3600 + 3 * 60 + 4.5);
+  assert.equal(times.size, 3);
 });
 test("only the latest main assistant structured rate error is a quota-ended turn", () => {
   assert.equal(latestQuotaEndedTurn([terminal])?.turnId, assistantId);
@@ -390,6 +468,7 @@ async function fixture() {
     transcriptRoot,
     processes: async () => roster(),
     processesSync: () => roster(),
+    cpuTimes: () => "456 0:01.00\n",
     now: () => ui.observedAt,
   });
   return { root, evidence, ui, source, target, org, transcriptFile };
@@ -511,6 +590,42 @@ test("durable receipt progresses absent→accepted→started with exact assistan
     assert.deepEqual(await f.evidence.lookupDelivery("request"), {
       status: "unknown",
     });
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
+test("a conversation whose tools changed directory is still observed; another unfinished turn blocks", async () => {
+  const f = await fixture();
+  try {
+    const cwd = path.join(f.root, "project");
+    await fs.writeFile(
+      f.transcriptFile,
+      [
+        { type: "user", uuid: userId, cwd, message: { content: "go" } },
+        {
+          type: "attachment",
+          cwd: path.join(cwd, "app", "Models"),
+        },
+        { ...terminal, parentUuid: userId, cwd: path.join(cwd, "app") },
+      ]
+        .map((row) => JSON.stringify(row))
+        .join("\n") + "\n",
+    );
+    const quiet = await f.evidence.read(f.ui);
+    assert.equal(quiet.quotaStop?.turnId, assistantId);
+    assert.equal(quiet.quiescence.busyWorkers, 0);
+    const other = path.join(path.dirname(f.transcriptFile), `${userId}.jsonl`);
+    await fs.writeFile(
+      other,
+      JSON.stringify({ type: "user", message: { content: "still working" } }) +
+        "\n",
+    );
+    const busy = await f.evidence.read(f.ui);
+    assert.equal(busy.quiescence.busyWorkers, 1);
+    // A transcript last written long ago is not a live conversation.
+    const old = new Date(Date.parse("2026-10-13T10:00:00.000Z"));
+    await fs.utimes(other, old, old);
+    assert.equal((await f.evidence.read(f.ui)).quiescence.busyWorkers, 0);
   } finally {
     await fs.rm(f.root, { recursive: true, force: true });
   }
