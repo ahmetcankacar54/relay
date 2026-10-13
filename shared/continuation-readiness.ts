@@ -91,8 +91,7 @@ export function continuationTargetReadinessReason(
     return "quota-not-fresh";
   const windows = quotaWindows(usage);
   if (!windows) return "five-hour-unavailable";
-  if (!windows.every((w) => validWindow(w, now)))
-    return "quota-window-invalid";
+  if (!windows.every((w) => validWindow(w, now))) return "quota-window-invalid";
   if (windows.some((w) => w.usedPercent >= 90))
     return "target-quota-unavailable";
   if (

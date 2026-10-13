@@ -293,25 +293,20 @@ else {
           },
           run: async (account) => {
             const fingerprint = routineFingerprint(account);
-            await runQuotaStarter(
-              service.store,
-              account,
-              readUsageCredential,
-              {
-                signal: routineAbort.signal,
-                guard: async () => {
-                  observedDesktop = await desktop.snapshot();
-                  const current = service.store.account(account.id);
-                  const state = routineState();
-                  return (
-                    state.workday.routineEnabled &&
-                    !state.blocked &&
-                    !state.blockedAccountIds.includes(account.id) &&
-                    routineFingerprint(current) === fingerprint
-                  );
-                },
+            await runQuotaStarter(service.store, account, readUsageCredential, {
+              signal: routineAbort.signal,
+              guard: async () => {
+                observedDesktop = await desktop.snapshot();
+                const current = service.store.account(account.id);
+                const state = routineState();
+                return (
+                  state.workday.routineEnabled &&
+                  !state.blocked &&
+                  !state.blockedAccountIds.includes(account.id) &&
+                  routineFingerprint(current) === fingerprint
+                );
               },
-            );
+            });
           },
           changed: () => window?.webContents.send("relay:changed"),
         },

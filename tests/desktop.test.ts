@@ -1030,7 +1030,10 @@ test("the same conversation under different aliases produces one card per accoun
     lastActivityAt: 100,
     permissionMode: "auto",
   });
-  await session(f.root, a, cli, { lastActivityAt: 300, permissionMode: "auto" });
+  await session(f.root, a, cli, {
+    lastActivityAt: 300,
+    permissionMode: "auto",
+  });
   await session(f.root, b, cli, {
     lastActivityAt: 200,
     permissionMode: "default",

@@ -262,8 +262,7 @@ export async function planHistory(
     const relative = `${targetDir}/${keep?.name ?? winner.name}`;
     // Destination choices come from its record of this alias, otherwise from its
     // most recent card of the same conversation that is being replaced.
-    const own = (keep ?? (existing.length ? newest(existing) : undefined))
-      ?.obj;
+    const own = (keep ?? (existing.length ? newest(existing) : undefined))?.obj;
     const obj = { ...winner.obj };
     for (const [key, fallback] of Object.entries({
       remoteMcpServersConfig: [],

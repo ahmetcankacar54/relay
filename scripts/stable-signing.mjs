@@ -44,14 +44,8 @@ function knownResourcePath(relative) {
 }
 
 const machOMagic = new Set([
-  0xfeedface,
-  0xcefaedfe,
-  0xfeedfacf,
-  0xcffaedfe,
-  0xcafebabe,
-  0xbebafeca,
-  0xcafebabf,
-  0xbfbafeca,
+  0xfeedface, 0xcefaedfe, 0xfeedfacf, 0xcffaedfe, 0xcafebabe, 0xbebafeca,
+  0xcafebabf, 0xbfbafeca,
 ]);
 
 /** Fail closed: a resource name must never hide native or script executable code. */
