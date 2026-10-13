@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { allowedHistoryPair } from "../../shared/history-policy";
+import { quotaWindows } from "../../shared/usage";
 import type { Account, AccountUsage, RelaySettings } from "../../shared/types";
 
 /** Stopped-session orchestration with durable at-most-one submission. */
@@ -268,7 +269,7 @@ export function continuationPolicyReason(
     [source?.fiveHour, source?.sevenDay].some(
       (w) => w !== undefined && !validWindow(w, now),
     ) ||
-    ![target?.fiveHour, target?.sevenDay].every((w) => validWindow(w, now))
+    !quotaWindows(target)?.every((w) => validWindow(w, now))
   )
     return "quota-not-fresh";
   if (
@@ -277,7 +278,7 @@ export function continuationPolicyReason(
     )
   )
     return "source-quota-available";
-  if ([target.fiveHour!, target.sevenDay!].some((w) => w.usedPercent >= 90))
+  if (quotaWindows(target)!.some((w) => w.usedPercent >= 90))
     return "target-quota-unavailable";
   const cooldown = request.target.cooldownUntil;
   if (

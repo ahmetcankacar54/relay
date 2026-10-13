@@ -48,10 +48,17 @@ test("manual Team and unknown capacity reuse the planner's bounded weights", () 
 test("unknown or invalid live quotas score zero rather than inferring capacity", () => {
   const account = planningAccount("max", "max20");
   assert.equal(continuationTargetScore(account, undefined), 0);
+  const withoutFiveHour = usageFor(account, 0, 0);
+  delete withoutFiveHour.fiveHour;
+  assert.equal(continuationTargetScore(account, withoutFiveHour), 0);
+  // A seat that reports no weekly window is scored by its five-hour window alone.
+  const withoutWeekly = usageFor(account, 40, 0);
+  delete withoutWeekly.sevenDay;
+  assert.equal(
+    continuationTargetScore(account, withoutWeekly),
+    continuationTargetScore(account, usageFor(account, 40, 40)),
+  );
   for (const window of ["fiveHour", "sevenDay"] as const) {
-    const missing = usageFor(account, 0, 0);
-    delete missing[window];
-    assert.equal(continuationTargetScore(account, missing), 0);
     for (const invalid of [NaN, Infinity, -1, 100.1]) {
       const usage = usageFor(account, 0, 0);
       usage[window]!.usedPercent = invalid;

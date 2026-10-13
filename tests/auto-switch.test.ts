@@ -139,7 +139,7 @@ test("target requires known matching identities, both windows below 90%, and no 
     f.b.auth!.orgId = randomUUID();
   });
   reject((f) => {
-    f.usage[f.b.id].sevenDay = undefined;
+    f.usage[f.b.id].fiveHour = undefined;
   });
   reject((f) => {
     f.usage[f.b.id].fiveHour!.usedPercent = 90;

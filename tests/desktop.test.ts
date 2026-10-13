@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { Store } from "../electron/core/store";
 import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
 import {
+  duplicateSessions,
   readObject,
   writeBytes,
   jsonBytes,
@@ -306,7 +307,7 @@ test("project merge preserves target organization bindings and rejects symlink p
     }),
   );
   const plan = await planHistory(f.root, b.desktop!, [a.desktop!]);
-  const copied = JSON.parse([...plan.values()][0].toString());
+  const copied = JSON.parse([...plan.values()][0]!.toString());
   assert.equal(copied.spaces[0].projects, undefined);
   assert.equal(copied.spaces[0].migration, undefined);
   await fs.symlink(
@@ -364,23 +365,24 @@ test("reconnecting an existing Desktop profile keeps its identity and refuses a 
   await f.manager.cancelLogin();
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
 });
-test("malformed history blocks switching before any account files are replaced", async (t) => {
+test("an unreadable history record is skipped and left untouched instead of blocking every switch", async (t) => {
   const f = await fixture(t),
     a = await f.account("A"),
     b = await f.account("B");
   const id = randomUUID();
-  await writeBytes(
-    f.root,
-    `claude-code-sessions/${a.desktop!.accountUuid}/${a.desktop!.orgId}/local_${id}.json`,
-    Buffer.from("{incomplete"),
-  );
-  const before = await fs.readFile(path.join(f.root, "config.json"));
-  await assert.rejects(f.manager.switchTo(a.id));
-  assert.equal(
-    (await fs.readFile(path.join(f.root, "config.json"))).toString(),
-    before.toString(),
-  );
+  const broken = `claude-code-sessions/${a.desktop!.accountUuid}/${a.desktop!.orgId}/local_${id}.json`;
+  await writeBytes(f.root, broken, Buffer.from("{incomplete"));
+  const good = await session(f.root, a);
+  await f.manager.switchTo(a.id);
+  await f.manager.switchTo(b.id);
   assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(
+    (await fs.readFile(path.join(f.root, broken))).toString(),
+    "{incomplete",
+  );
+  const dest = `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}`;
+  assert.equal(await readObject(f.root, `${dest}/local_${id}.json`), null);
+  assert(await readObject(f.root, `${dest}/local_${good.id}.json`));
 });
 
 test("dismissed Desktop errors stay dismissed across polls; a new attempt remains visible", async (t) => {
@@ -1014,4 +1016,83 @@ test("a cancelled closed-app switch rolls back both merged history and deletion 
   );
   assert.equal((await f.manager.snapshot()).recoveryRequired, false);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+});
+
+test("the same conversation under different aliases produces one card per account", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A"),
+    b = await f.account("B");
+  const cli = randomUUID(),
+    older = randomUUID();
+  // A's original alias, later adopted by B's Desktop as local_<cli> and copied back.
+  await session(f.root, a, older, {
+    cliSessionId: cli,
+    lastActivityAt: 100,
+    permissionMode: "auto",
+  });
+  await session(f.root, a, cli, { lastActivityAt: 300, permissionMode: "auto" });
+  await session(f.root, b, cli, {
+    lastActivityAt: 200,
+    permissionMode: "default",
+    lastFocusedAt: 77,
+  });
+  await session(f.root, b, older, { cliSessionId: cli, lastActivityAt: 100 });
+  assert.deepEqual(await duplicateSessions(f.root, b.desktop!), [
+    [`local_${cli}.json`, `local_${older}.json`].sort(),
+  ]);
+  const plan = await planHistory(f.root, b.desktop!, [a.desktop!]);
+  const dest = `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}`;
+  assert.equal(plan.get(`${dest}/local_${older}.json`), null);
+  const kept = JSON.parse(plan.get(`${dest}/local_${cli}.json`)!.toString());
+  assert.equal(kept.lastActivityAt, 300);
+  assert.equal(kept.lastFocusedAt, 77);
+  // The conversation keeps its Auto mode on the other account.
+  assert.equal(kept.permissionMode, "auto");
+  assert.equal(plan.size, 2);
+});
+
+test("a stale alias superseded by a resumed lineage collapses into the live conversation", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A"),
+    b = await f.account("B");
+  const stale = randomUUID(),
+    live = randomUUID(),
+    first = randomUUID(),
+    rotated = randomUUID();
+  await session(f.root, a, stale, { cliSessionId: first, lastActivityAt: 10 });
+  await session(f.root, a, live, {
+    cliSessionId: rotated,
+    priorCliSessionIds: [first],
+    lastActivityAt: 50,
+  });
+  const plan = await planHistory(f.root, b.desktop!, [a.desktop!]);
+  const dest = `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}`;
+  assert.deepEqual([...plan.keys()], [`${dest}/local_${live}.json`]);
+  // Unrelated conversations in the same folder stay separate.
+  const other = await session(f.root, a, randomUUID(), { lastActivityAt: 5 });
+  const again = await planHistory(f.root, b.desktop!, [a.desktop!]);
+  assert(again.get(`${dest}/local_${other.id}.json`));
+  assert.equal(again.size, 2);
+});
+
+test("bypass mode never travels and a conversation deleted under any alias stays deleted", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A"),
+    b = await f.account("B");
+  const bypass = await session(f.root, a, randomUUID(), {
+    permissionMode: "bypassPermissions",
+  });
+  const cli = randomUUID(),
+    alias = randomUUID();
+  await session(f.root, a, alias, { cliSessionId: cli, lastActivityAt: 90 });
+  const dest = `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}`;
+  await writeBytes(f.root, `${dest}/deleted_${cli}`, Buffer.from(""));
+  await session(f.root, b, cli, { lastActivityAt: 10 });
+  const plan = await planHistory(f.root, b.desktop!, [a.desktop!]);
+  assert.equal(plan.has(`${dest}/local_${alias}.json`), false);
+  assert.equal(plan.has(`${dest}/local_${cli}.json`), false);
+  const copied = JSON.parse(
+    plan.get(`${dest}/local_${bypass.id}.json`)!.toString(),
+  );
+  assert.equal(copied.permissionMode, "default");
 });

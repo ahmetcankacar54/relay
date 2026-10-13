@@ -610,7 +610,7 @@ test("automatic mode rejects unusable live quota, cooldown and changed identitie
       f.usage[f.target.id].accountId = f.source.id;
     },
     (f) => {
-      f.usage[f.target.id].sevenDay = undefined;
+      f.usage[f.target.id].fiveHour = undefined;
     },
     (f) => {
       f.usage[f.target.id].fiveHour = undefined;

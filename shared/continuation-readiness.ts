@@ -1,4 +1,5 @@
 import { allowedHistoryPair } from "./history-policy";
+import { quotaWindows } from "./usage";
 import type {
   Account,
   AccountUsage,
@@ -13,7 +14,6 @@ export type ContinuationTargetReadinessReason =
   | "history-boundary"
   | "quota-not-fresh"
   | "five-hour-unavailable"
-  | "weekly-unavailable"
   | "quota-window-invalid"
   | "target-quota-unavailable"
   | "target-cooldown";
@@ -89,11 +89,11 @@ export function continuationTargetReadinessReason(
     now - checkedAt > 300_000
   )
     return "quota-not-fresh";
-  if (!usage.fiveHour) return "five-hour-unavailable";
-  if (!usage.sevenDay) return "weekly-unavailable";
-  if (![usage.fiveHour, usage.sevenDay].every((w) => validWindow(w, now)))
+  const windows = quotaWindows(usage);
+  if (!windows) return "five-hour-unavailable";
+  if (!windows.every((w) => validWindow(w, now)))
     return "quota-window-invalid";
-  if ([usage.fiveHour, usage.sevenDay].some((w) => w.usedPercent >= 90))
+  if (windows.some((w) => w.usedPercent >= 90))
     return "target-quota-unavailable";
   if (
     target.cooldownUntil &&

@@ -484,10 +484,10 @@ test("cross-company history needs both selected endpoints and off never grants s
     "history-boundary",
   );
 });
-test("source and target require both known fresh quota windows; source recovered quota and target 90% block", async () => {
+test("source and target require known fresh quota; source recovered quota and target 90% block", async () => {
   for (const change of [
     (f: ReturnType<typeof fixture>) => {
-      f.request.usage[f.target.id].sevenDay = undefined;
+      f.request.usage[f.target.id].fiveHour = undefined;
     },
     (f: ReturnType<typeof fixture>) => {
       f.request.usage[f.target.id].stale = true;

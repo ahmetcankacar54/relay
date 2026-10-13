@@ -453,7 +453,7 @@ test("legacy preferences migrate without losing accounts and updates survive rel
   );
   assert.throws(() => settingsSchema.partial().parse({ autoSwitch: true }));
 });
-test("suggestions require fresh data for both windows and stay in the same sharing group", async (t) => {
+test("suggestions require fresh five-hour data, use weekly data when reported and stay in the same sharing group", async (t) => {
   const f = await fixture(t),
     now = Date.parse("2026-10-13T12:00:00Z");
   const active = {
@@ -499,11 +499,21 @@ test("suggestions require fresh data for both windows and stay in the same shari
     suggestedAccount(
       active,
       [active, personal],
-      { ...usage, b: { ...usage.b, sevenDay: undefined } },
+      { ...usage, b: { ...usage.b, fiveHour: undefined } },
       DEFAULT_SETTINGS,
       now,
     ),
     undefined,
+  );
+  assert.equal(
+    suggestedAccount(
+      active,
+      [active, personal],
+      { ...usage, b: { ...usage.b, sevenDay: undefined } },
+      DEFAULT_SETTINGS,
+      now,
+    )?.id,
+    "b",
   );
   assert.equal(
     suggestedAccount(

@@ -175,7 +175,8 @@ function fixtureRun(
     const identifier = `dev.relay.workspace${name}`;
     if (args.includes("--verbose=4"))
       return `Identifier=${identifier}\n${overrides.adHoc ? "Signature=adhoc" : "Authority=Relay Local Development"}\nCDHash=1234\nSealed Resources version=2\n`;
-    if (args.includes("--extract-certificates")) return "";
+    if (args.some((arg) => arg.startsWith("--extract-certificates")))
+      return "";
     if (args.includes("--requirements"))
       return `designated => identifier "${identifier}" and certificate leaf = H"${fingerprint}"`;
     throw new Error(`Unexpected fixture signing call: ${args}`);
@@ -214,8 +215,9 @@ test("final artifact verification checks the actual public signing certificate o
     ],
   );
   assert.equal(
-    fixture.calls.filter((call) => call.args.includes("--extract-certificates"))
-      .length,
+    fixture.calls.filter((call) =>
+      call.args.some((arg) => arg.startsWith("--extract-certificates")),
+    ).length,
     3,
   );
 });

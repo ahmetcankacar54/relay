@@ -1,4 +1,5 @@
 import type { Account, AccountUsage, WorkdaySettings } from "./types";
+import { maxUsedPercent, quotaWindows } from "./usage";
 
 export type PlanningReason =
   | "not-selected"
@@ -177,32 +178,27 @@ export function quotaPlanningReason(
     now - Date.parse(u.checkedAt) >= 5 * 60_000
   )
     return "usage-not-fresh";
+  const windows = quotaWindows(u);
   if (
-    ![u.fiveHour, u.sevenDay].every(
+    !windows?.every(
       (window) =>
-        window &&
         Number.isFinite(window.usedPercent) &&
         window.usedPercent >= 0 &&
         window.usedPercent <= 100,
     )
   )
     return "usage-incomplete";
-  if (
-    !u.sevenDay?.resetsAt ||
-    !Number.isFinite(Date.parse(u.sevenDay.resetsAt)) ||
-    Date.parse(u.sevenDay.resetsAt) <= now ||
-    (u.fiveHour?.resetsAt &&
-      (!Number.isFinite(Date.parse(u.fiveHour.resetsAt)) ||
-        Date.parse(u.fiveHour.resetsAt) <= now))
-  )
-    return "usage-not-fresh";
-  if (!u.fiveHour?.resetsAt && u.fiveHour!.usedPercent > 0)
-    return "usage-incomplete";
-  if (
-    Math.min(100 - u.fiveHour!.usedPercent, 100 - u.sevenDay!.usedPercent) <=
-    reserve
-  )
-    return "reserve";
+  // A started window must expose its future reset; an unused one may omit it.
+  for (const window of windows) {
+    if (window.resetsAt === undefined) {
+      if (window.usedPercent > 0) return "usage-incomplete";
+    } else if (
+      !Number.isFinite(Date.parse(window.resetsAt)) ||
+      Date.parse(window.resetsAt) <= now
+    )
+      return "usage-not-fresh";
+  }
+  if (100 - maxUsedPercent(u)! <= reserve) return "reserve";
 }
 export function workdayPlan(
   accounts: Account[],
@@ -228,13 +224,15 @@ export function workdayPlan(
       }
       const capacity = planCapacity(a);
       const remainingPercent = !reason
-        ? Math.min(
-            100 - usage[a.id].fiveHour!.usedPercent,
-            100 - usage[a.id].sevenDay!.usedPercent,
-          )
+        ? 100 - maxUsedPercent(usage[a.id])!
         : undefined;
+      // Without a reported weekly reset there is no expiring weekly allowance to
+      // prefer; a full week keeps the boost neutral.
+      const weeklyReset = usage[a.id]?.sevenDay?.resetsAt;
       const daysToReset = !reason
-        ? (Date.parse(usage[a.id].sevenDay!.resetsAt!) - now) / DAY
+        ? weeklyReset
+          ? (Date.parse(weeklyReset) - now) / DAY
+          : 7
         : 0;
       // Heuristic units: capacity ratio × usable fraction with a bounded boost
       // for weekly capacity that expires soon. These are not tokens or dollars.

@@ -1,4 +1,5 @@
 import { planCapacity } from "./planning";
+import { quotaWindows } from "./usage";
 import type { Account, AccountUsage } from "./types";
 
 export interface ContinuationTargetCandidate {
@@ -23,20 +24,19 @@ function remainingQuotaPercent(
     usage.stale
   )
     return 0;
-  const fiveHour = usage.fiveHour?.usedPercent;
-  const sevenDay = usage.sevenDay?.usedPercent;
+  const windows = quotaWindows(usage);
   if (
-    typeof fiveHour !== "number" ||
-    typeof sevenDay !== "number" ||
-    !Number.isFinite(fiveHour) ||
-    !Number.isFinite(sevenDay) ||
-    fiveHour < 0 ||
-    fiveHour > 100 ||
-    sevenDay < 0 ||
-    sevenDay > 100
+    !windows ||
+    windows.some(
+      (w) =>
+        typeof w.usedPercent !== "number" ||
+        !Number.isFinite(w.usedPercent) ||
+        w.usedPercent < 0 ||
+        w.usedPercent > 100,
+    )
   )
     return 0;
-  return Math.min(100 - fiveHour, 100 - sevenDay);
+  return Math.min(...windows.map((w) => 100 - w.usedPercent));
 }
 
 /**

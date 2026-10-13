@@ -292,10 +292,6 @@ const readinessExplanations: Record<
     "5 saatlik limit verisi yok; otomatik geçiş hedefi olamaz.",
     "5-hour quota is unavailable; cannot be an automatic target.",
   ],
-  "weekly-unavailable": [
-    "Haftalık limit verisi yok; otomatik geçiş hedefi olamaz.",
-    "Weekly quota is unavailable; cannot be an automatic target.",
-  ],
   "quota-window-invalid": [
     "Limitin yenilenme zamanı güncel değil. Hesap kartından limitleri yenile.",
     "The quota reset time is not current. Refresh usage on the account card.",
@@ -559,10 +555,15 @@ export function ContinuationSettings({
                 <span>
                   {reason
                     ? t(...readinessExplanations[reason])
-                    : t(
-                        "5 saatlik ve haftalık limit uygun.",
-                        "5-hour and weekly quota are available.",
-                      )}
+                    : usage?.[account.id]?.sevenDay
+                      ? t(
+                          "5 saatlik ve haftalık limit uygun.",
+                          "5-hour and weekly quota are available.",
+                        )
+                      : t(
+                          "5 saatlik limit uygun; haftalık limit bildirilmiyor.",
+                          "5-hour quota is available; no weekly limit reported.",
+                        )}
                 </span>
               </li>
             ))}

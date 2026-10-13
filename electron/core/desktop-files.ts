@@ -116,6 +116,112 @@ export interface Scope {
 export const scopePath = (kind: string, s: Scope) =>
   `${kind}/${uuid.parse(s.accountUuid)}/${uuid.parse(s.orgId)}`;
 
+interface SessionRecord {
+  name: string;
+  alias: string;
+  obj: JsonObject;
+  scope: Scope;
+  isTarget: boolean;
+}
+const sessionKey = (cliSessionId: string, cwd: string) =>
+  `${cliSessionId.toLowerCase()}|${path.resolve(cwd).normalize("NFC")}`;
+/**
+ * Desktop gives every account its own `local_<uuid>` alias for a conversation, and
+ * it adopts transcripts started under another account as `local_<cliSessionId>`.
+ * The same conversation therefore appears under different file names in different
+ * accounts. Group records by file name, current CLI session and resumed lineage
+ * (a stale alias whose current CLI id was later rotated into another record's
+ * `priorCliSessionIds`). Each group must produce exactly one card per account.
+ */
+function groupSessions(records: SessionRecord[]) {
+  const parent = new Map<string, string>();
+  const find = (key: string): string => {
+    let root = key;
+    while (parent.get(root) !== root) root = parent.get(root)!;
+    parent.set(key, root);
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    for (const key of [a, b]) if (!parent.has(key)) parent.set(key, key);
+    const ra = find(a),
+      rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  for (const record of records) {
+    const file = `file:${record.alias}`;
+    union(file, `cli:${sessionKey(record.obj.cliSessionId, record.obj.cwd)}`);
+    for (const prior of record.obj.priorCliSessionIds ?? [])
+      if (uuid.safeParse(prior).success)
+        union(file, `cli:${sessionKey(prior, record.obj.cwd)}`);
+  }
+  const groups = new Map<string, SessionRecord[]>();
+  for (const record of records) {
+    const key = find(`file:${record.alias}`);
+    groups.set(key, [...(groups.get(key) ?? []), record]);
+  }
+  return [...groups.values()];
+}
+/** The most recently active record is the live conversation; ties prefer the target. */
+function newest(records: SessionRecord[]) {
+  return [...records].sort(
+    (a, b) =>
+      b.obj.lastActivityAt - a.obj.lastActivityAt ||
+      Number(b.isTarget) - Number(a.isTarget) ||
+      Number(b.alias === b.obj.cliSessionId.toLowerCase()) -
+        Number(a.alias === a.obj.cliSessionId.toLowerCase()) ||
+      a.alias.localeCompare(b.alias),
+  )[0];
+}
+async function readSessions(root: string, scope: Scope, isTarget: boolean) {
+  const relative = scopePath("claude-code-sessions", scope);
+  const records: SessionRecord[] = [];
+  const deleted: string[] = [];
+  let names: string[];
+  try {
+    names = await fs.readdir(await safeFile(root, relative));
+  } catch (e: any) {
+    if (e.code === "ENOENT") return { records, deleted };
+    throw e;
+  }
+  for (const name of names) {
+    const deletion = /^deleted_([a-f0-9-]{36})(?:\.json)?$/i.exec(name);
+    if (deletion) deleted.push(deletion[1].toLowerCase());
+    const local = /^local_([a-f0-9-]{36})\.json$/i.exec(name);
+    if (!local) continue;
+    let obj: JsonObject | null;
+    try {
+      obj = await readObject(root, `${relative}/${name}`);
+    } catch {
+      // A record Desktop is rewriting, or a format Relay does not understand, is
+      // left exactly as it is. It must not block switching for every other one.
+      continue;
+    }
+    if (
+      !obj ||
+      !uuid.safeParse(obj.cliSessionId).success ||
+      typeof obj.cwd !== "string" ||
+      !path.isAbsolute(obj.cwd) ||
+      !Number.isFinite(obj.lastActivityAt)
+    )
+      continue;
+    records.push({
+      name,
+      alias: local[1].toLowerCase(),
+      obj,
+      scope,
+      isTarget,
+    });
+  }
+  return { records, deleted };
+}
+/** Read-only duplicate report for one account's Code index (same conversation, several cards). */
+export async function duplicateSessions(root: string, scope: Scope) {
+  const { records } = await readSessions(root, scope, true);
+  return groupSessions(records)
+    .filter((group) => group.length > 1)
+    .map((group) => group.map((record) => record.name).sort());
+}
+
 // Only local Code records travel. Remote connectors, permission grants, browser access,
 // and server-owned project bindings must be established by the destination account.
 export async function planHistory(
@@ -123,64 +229,63 @@ export async function planHistory(
   target: Scope,
   sources: Scope[],
   options: { seenSpaceIds?: string[] } = {},
-): Promise<Map<string, Buffer>> {
-  const writes = new Map<string, Buffer>();
+): Promise<Map<string, Buffer | null>> {
+  const writes = new Map<string, Buffer | null>();
   const targetDir = scopePath("claude-code-sessions", target);
-  const scopes = [
-    target,
-    ...sources.filter(
-      (s) => s.accountUuid !== target.accountUuid || s.orgId !== target.orgId,
-    ),
-  ];
   const deleted = new Set<string>();
-  const records = new Map<string, { obj: JsonObject; scope: Scope }>();
-  for (const scope of scopes) {
-    const relative = scopePath("claude-code-sessions", scope);
-    let names: string[];
-    try {
-      names = await fs.readdir(await safeFile(root, relative));
-    } catch (e: any) {
-      if (e.code === "ENOENT") continue;
-      throw e;
-    }
-    for (const name of names) {
-      const deletion = /^deleted_([a-f0-9-]{36})(?:\.json)?$/i.exec(name);
-      if (deletion) deleted.add(deletion[1].toLowerCase());
-      if (!/^local_[a-f0-9-]{36}\.json$/i.test(name)) continue;
-      const obj = await readObject(root, `${relative}/${name}`);
-      if (
-        !obj ||
-        !uuid.safeParse(obj.cliSessionId).success ||
-        typeof obj.cwd !== "string" ||
-        !path.isAbsolute(obj.cwd) ||
-        !Number.isFinite(obj.lastActivityAt)
-      )
-        throw new Error(
-          "Unrecognized Code session format. No Desktop files changed.",
-        );
-      const current = records.get(name);
-      if (!current || obj.lastActivityAt > current.obj.lastActivityAt)
-        records.set(name, { obj, scope });
-    }
-  }
-  for (const [name, record] of records) {
-    if (deleted.has(name.slice(6, -5).toLowerCase()) || record.scope === target)
+  const all: SessionRecord[] = [];
+  const destination = await readSessions(root, target, true);
+  all.push(...destination.records);
+  destination.deleted.forEach((id) => deleted.add(id));
+  for (const source of sources) {
+    if (
+      source.accountUuid === target.accountUuid &&
+      source.orgId === target.orgId
+    )
       continue;
-    const relative = `${targetDir}/${name}`;
-    const own = await readObject(root, relative);
-    const obj = { ...record.obj };
+    const found = await readSessions(root, source, false);
+    all.push(...found.records);
+    found.deleted.forEach((id) => deleted.add(id));
+  }
+  for (const group of groupSessions(all)) {
+    // A conversation deleted under any of its aliases stays deleted; Relay does not
+    // resurrect it through another alias and leaves the destination's files alone.
+    if (group.some((record) => deleted.has(record.alias))) continue;
+    const winner = newest(group);
+    const existing = group.filter((record) => record.isTarget);
+    const keep = existing.find((record) => record.alias === winner.alias);
+    // Remove every other destination card of the same conversation. The kept
+    // alias matches the most recent one, so a continuation reopens the same URL.
+    for (const record of existing)
+      if (record !== keep) writes.set(`${targetDir}/${record.name}`, null);
+    if (winner.isTarget) continue;
+    const relative = `${targetDir}/${keep?.name ?? winner.name}`;
+    // Destination choices come from its record of this alias, otherwise from its
+    // most recent card of the same conversation that is being replaced.
+    const own = (keep ?? (existing.length ? newest(existing) : undefined))
+      ?.obj;
+    const obj = { ...winner.obj };
     for (const [key, fallback] of Object.entries({
       remoteMcpServersConfig: [],
       enabledMcpTools: {},
       bridgeSessionIds: [],
       sessionPermissionUpdates: [],
       alwaysAllowedReasons: [],
-      permissionMode: "default",
       chromePermissionMode: "always_ask",
       bypassChosenInApp: false,
       remoteControlAutoEligible: false,
     }))
       obj[key] = own?.[key] ?? fallback;
+    // The conversation keeps its mode (Manual, Auto, Plan, Accept edits) on the
+    // other account. Bypass is an account-local decision and is never carried over.
+    if (
+      typeof obj.permissionMode !== "string" ||
+      obj.permissionMode === "bypassPermissions"
+    )
+      obj.permissionMode =
+        own?.permissionMode && own.permissionMode !== "bypassPermissions"
+          ? own.permissionMode
+          : "default";
     // Context can include account-specific instructions; regenerate it in Claude.
     delete obj.promptAppendSnapshot;
     delete obj.pendingSystemReminder;

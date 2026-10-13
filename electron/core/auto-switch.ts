@@ -10,6 +10,7 @@ import {
   allowedHistoryPair,
   historySources,
 } from "../../shared/history-policy";
+import { maxUsedPercent, quotaWindows } from "../../shared/usage";
 import type { Store } from "./store";
 import type { DesktopManager } from "./desktop";
 
@@ -92,11 +93,15 @@ function usableTarget(
     const cooldown = Date.parse(account.cooldownUntil);
     if (!Number.isFinite(cooldown) || cooldown > now) return false;
   }
-  return [usage!.fiveHour, usage!.sevenDay].every(
-    (window) =>
-      validWindow(window) &&
-      window!.usedPercent < 90 &&
-      (!window!.resetsAt || !!futureReset(window!, now)),
+  const windows = quotaWindows(usage);
+  return (
+    !!windows &&
+    windows.every(
+      (window) =>
+        validWindow(window) &&
+        window.usedPercent < 90 &&
+        (!window.resetsAt || !!futureReset(window, now)),
+    )
   );
 }
 
@@ -177,10 +182,7 @@ export function autoSwitchDecision(
     )
     .sort((a, b) => {
       const utilization = (account: Account) =>
-        Math.max(
-          usage[account.id].fiveHour!.usedPercent,
-          usage[account.id].sevenDay!.usedPercent,
-        );
+        maxUsedPercent(usage[account.id])!;
       return utilization(a) - utilization(b) || a.id.localeCompare(b.id);
     })[0];
   if (!target)

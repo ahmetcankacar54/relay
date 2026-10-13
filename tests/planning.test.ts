@@ -84,7 +84,7 @@ test("stale, incomplete, expired, future-dated and mismatched quotas cannot rank
     [
       "usage-incomplete",
       (_, u) => {
-        u.sevenDay = undefined;
+        u.fiveHour = undefined;
       },
     ],
     [

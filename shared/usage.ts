@@ -23,6 +23,24 @@ export function freshUsage(
 export function remaining(w?: UsageWindow) {
   return w ? Math.max(0, 100 - w.usedPercent) : undefined;
 }
+/**
+ * Quota windows the provider reported. Team and Enterprise seats can omit the
+ * weekly window: that means no weekly limit was reported, never an invented 0% or
+ * 100%. The five-hour window is required before an account can be judged.
+ */
+export function quotaWindows(
+  u: Pick<AccountUsage, "fiveHour" | "sevenDay"> | undefined,
+): UsageWindow[] | undefined {
+  if (!u?.fiveHour) return;
+  return u.sevenDay ? [u.fiveHour, u.sevenDay] : [u.fiveHour];
+}
+/** Highest utilization across the reported windows (the binding limit). */
+export function maxUsedPercent(
+  u: Pick<AccountUsage, "fiveHour" | "sevenDay"> | undefined,
+) {
+  const windows = quotaWindows(u);
+  return windows && Math.max(...windows.map((w) => w.usedPercent));
+}
 export function suggestedAccount(
   active: Account | undefined,
   accounts: Account[],
@@ -52,22 +70,9 @@ export function suggestedAccount(
         a.desktop &&
         (!a.cooldownUntil || Date.parse(a.cooldownUntil) <= now) &&
         freshUsage(usage[a.id], now) &&
-        usage[a.id].fiveHour &&
-        usage[a.id].sevenDay &&
-        Math.max(
-          usage[a.id].fiveHour!.usedPercent,
-          usage[a.id].sevenDay!.usedPercent,
-        ) < settings.usageWarningPercent,
+        (maxUsedPercent(usage[a.id]) ?? 100) < settings.usageWarningPercent,
     )
     .sort(
-      (a, b) =>
-        Math.max(
-          usage[a.id].fiveHour!.usedPercent,
-          usage[a.id].sevenDay!.usedPercent,
-        ) -
-        Math.max(
-          usage[b.id].fiveHour!.usedPercent,
-          usage[b.id].sevenDay!.usedPercent,
-        ),
+      (a, b) => maxUsedPercent(usage[a.id])! - maxUsedPercent(usage[b.id])!,
     )[0];
 }

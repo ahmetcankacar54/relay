@@ -125,9 +125,6 @@ test("target preparation agrees with the runtime policy across quota freshness, 
       delete usage.fiveHour;
     },
     (_a, usage) => {
-      delete usage.sevenDay;
-    },
-    (_a, usage) => {
       usage.fiveHour!.resetsAt = new Date(NOW).toISOString();
     },
     (_a, usage) => {
@@ -214,7 +211,7 @@ test("target preparation agrees with the runtime policy across quota freshness, 
   }
 });
 
-test("missing weekly quota is explicit and historical reset metadata is never counted as live capacity", () => {
+test("a seat without a reported weekly window is judged by its five-hour window; historical resets never count", () => {
   const usage = quota(target);
   delete usage.sevenDay;
   usage.lastKnownResets = {
@@ -225,7 +222,12 @@ test("missing weekly quota is explicit and historical reset metadata is never co
   };
   assert.equal(
     continuationTargetReadinessReason(source, target, usage, settings, NOW),
-    "weekly-unavailable",
+    undefined,
+  );
+  usage.fiveHour = { ...usage.fiveHour!, usedPercent: 95 };
+  assert.equal(
+    continuationTargetReadinessReason(source, target, usage, settings, NOW),
+    "target-quota-unavailable",
   );
   usage.fiveHour = undefined;
   assert.equal(
@@ -295,15 +297,12 @@ function render(
   );
 }
 test("preparation distinguishes connected enrollment from fresh target capacity without authorizing a watch", () => {
-  const missing = render(false);
-  assert.match(missing, /1 connected accounts · checked at handoff/);
-  assert.match(missing, /0 accounts have verified target capacity/);
-  assert.match(
-    missing,
-    /Weekly quota is unavailable; cannot be an automatic target/,
-  );
-  assert.match(missing, /class="primary" disabled=""/);
+  const teamSeat = render(false);
+  assert.match(teamSeat, /1 connected accounts · checked at handoff/);
+  assert.match(teamSeat, /1 accounts have verified target capacity/);
+  assert.match(teamSeat, /5-hour quota is available; no weekly limit reported/);
   assert.match(render(), /1 accounts have verified target capacity/);
+  assert.match(render(), /5-hour and weekly quota are available/);
   assert.match(render(true, false, 15), /Choose 5-minute refresh/);
 });
 test("a frozen watch does not show newly connected accounts as current authorized targets", () => {
