@@ -8,6 +8,7 @@ export function allowedHistoryPair(
   settings: RelaySettings,
 ): boolean {
   if (source.id === target.id) return false;
+  if (settings.desktopHistoryTransfer === "all") return true;
   return settings.desktopHistoryTransfer === "selected"
     ? settings.desktopHistoryAccounts.includes(source.id) &&
         settings.desktopHistoryAccounts.includes(target.id)

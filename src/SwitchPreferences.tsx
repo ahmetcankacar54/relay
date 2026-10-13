@@ -151,6 +151,9 @@ export function SwitchPreferences({
             })
           }
         >
+          <option value="all">
+            {t("Tüm hesaplar arasında", "Between all accounts")}
+          </option>
           <option value="same-group">
             {t("Aynı paylaşım grubunda", "Within sharing group")}
           </option>
@@ -160,6 +163,14 @@ export function SwitchPreferences({
           <option value="off">{t("Paylaşma", "Do not share")}</option>
         </select>
       </div>
+      {value.desktopHistoryTransfer === "all" && (
+        <p className="sharing-scope-note">
+          {t(
+            "Desktop’a bağlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
+            "All Desktop-connected accounts, personal or work, share Code history.",
+          )}
+        </p>
+      )}
       {value.desktopHistoryTransfer === "selected" && (
         <>
           <p className="sharing-scope-note">

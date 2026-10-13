@@ -194,6 +194,9 @@ test("Desktop sign-in is idempotent; cancelling restores previous account even a
 });
 test("work histories cross only the selected sharing group, tombstones prevent resurrection", async (t) => {
   const f = await fixture(t);
+  f.store.update((s) => {
+    s.settings.desktopHistoryTransfer = "same-group";
+  });
   const a = await f.account("A", "team"),
     b = await f.account("B", "team"),
     c = await f.account("C", "other");

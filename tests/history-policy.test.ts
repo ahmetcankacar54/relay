@@ -19,7 +19,7 @@ const account = (group: string): Account => ({
   },
 });
 
-test("history defaults preserve group boundaries and automation stays off for legacy settings", () => {
+test("history is shared between all connected accounts by default; groups apply only when chosen", () => {
   const {
     desktopHistoryAccounts,
     autoSwitchMode,
@@ -32,7 +32,15 @@ test("history defaults preserve group boundaries and automation stays off for le
   const a = account("personal"),
     b = account("personal"),
     c = account("work:client");
-  assert.deepEqual(historySources(a, [a, b, c], settings), [b]);
+  assert.equal(settings.desktopHistoryTransfer, "all");
+  assert.deepEqual(historySources(a, [a, b, c], settings), [b, c]);
+  assert.deepEqual(
+    historySources(a, [a, b, c], {
+      ...settings,
+      desktopHistoryTransfer: "same-group",
+    }),
+    [b],
+  );
   assert.deepEqual(
     historySources(a, [a, b, c], {
       ...settings,
@@ -71,4 +79,44 @@ test("selected history requires both endpoints and excludes every unselected or 
       desktopHistoryAccounts: ["../anything"],
     }),
   );
+});
+test("a registry from before shared-by-default moves from the old group default once; explicit choices stay", async () => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { Store } = await import("../electron/core/store");
+  for (const [saved, expected] of [
+    ["same-group", "all"],
+    ["selected", "selected"],
+    ["off", "off"],
+  ] as const) {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-history-"));
+    try {
+      const { historyPolicyVersion, ...old } = DEFAULT_SETTINGS;
+      await fs.writeFile(
+        path.join(root, "state.json"),
+        JSON.stringify({
+          version: 1,
+          settings: { ...old, desktopHistoryTransfer: saved },
+          accounts: [],
+          pinned: [],
+          importEnabled: false,
+          lineage: {},
+        }),
+      );
+      const store = new Store(root);
+      assert.equal(store.state.settings.desktopHistoryTransfer, expected);
+      assert.equal(store.state.settings.historyPolicyVersion, 2);
+      // A later deliberate group choice is not migrated again.
+      store.update((s) => {
+        s.settings.desktopHistoryTransfer = "same-group";
+      });
+      assert.equal(
+        new Store(root).state.settings.desktopHistoryTransfer,
+        "same-group",
+      );
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  }
 });

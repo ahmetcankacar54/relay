@@ -517,19 +517,17 @@ test("suggestions require fresh five-hour data, use weekly data when reported an
     fiveHour: { usedPercent: 95 },
     sevenDay: { usedPercent: 40 },
   };
+  const grouped = {
+    ...DEFAULT_SETTINGS,
+    desktopHistoryTransfer: "same-group" as const,
+  };
   const usage = {
     [active.id]: u,
     b: { ...u, accountId: "b", fiveHour: { usedPercent: 10 } },
     c: { ...u, accountId: "c", fiveHour: { usedPercent: 1 } },
   };
   assert.equal(
-    suggestedAccount(
-      active,
-      [active, personal, work],
-      usage,
-      DEFAULT_SETTINGS,
-      now,
-    )?.id,
+    suggestedAccount(active, [active, personal, work], usage, grouped, now)?.id,
     "b",
   );
   assert.equal(
@@ -537,7 +535,7 @@ test("suggestions require fresh five-hour data, use weekly data when reported an
       active,
       [active, personal, work],
       { ...usage, b: { ...usage.b, stale: true } },
-      DEFAULT_SETTINGS,
+      grouped,
       now,
     ),
     undefined,
@@ -547,7 +545,7 @@ test("suggestions require fresh five-hour data, use weekly data when reported an
       active,
       [active, personal],
       { ...usage, b: { ...usage.b, fiveHour: undefined } },
-      DEFAULT_SETTINGS,
+      grouped,
       now,
     ),
     undefined,
@@ -557,7 +555,7 @@ test("suggestions require fresh five-hour data, use weekly data when reported an
       active,
       [active, personal],
       { ...usage, b: { ...usage.b, sevenDay: undefined } },
-      DEFAULT_SETTINGS,
+      grouped,
       now,
     )?.id,
     "b",

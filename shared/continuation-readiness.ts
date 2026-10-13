@@ -69,7 +69,9 @@ export function continuationTargetReadinessReason(
   )
     return "duplicate-identity";
   if (
-    !["same-group", "selected"].includes(settings.desktopHistoryTransfer) ||
+    !["all", "same-group", "selected"].includes(
+      settings.desktopHistoryTransfer,
+    ) ||
     !Array.isArray(settings.desktopHistoryAccounts) ||
     !settings.desktopHistoryAccounts.every(
       (id) => typeof id === "string" && /^[A-Za-z0-9._:-]{1,128}$/.test(id),

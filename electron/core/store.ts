@@ -95,10 +95,11 @@ export const settingsSchema = z
     usageWarningPercent: z.union([z.literal(80), z.literal(90), z.literal(95)]),
     usageWarnings: z.boolean(),
     suggestAccounts: z.boolean(),
-    desktopHistoryTransfer: z.enum(["same-group", "selected", "off"]),
+    desktopHistoryTransfer: z.enum(["all", "same-group", "selected", "off"]),
     desktopHistoryAccounts: z.array(z.uuid()).max(50).default([]),
     autoSwitchMode: z.enum(["off", "after-exit"]).default("off"),
     autoSwitchAccounts: z.array(z.uuid()).max(50).default([]),
+    historyPolicyVersion: z.literal(2).optional(),
   })
   .strict();
 // Migration defaults belong to a complete saved registry, never to an IPC patch.
@@ -155,6 +156,15 @@ export class Store {
         JSON.parse(fs.readFileSync(this.file, "utf8")),
       );
       this.backup();
+      // History used to stay inside a sharing group unless accounts were picked.
+      // Sharing across all connected accounts is now the default; an explicit
+      // "selected" or "off" choice is kept.
+      if (this.state.settings.historyPolicyVersion !== 2)
+        this.update((state) => {
+          if (state.settings.desktopHistoryTransfer === "same-group")
+            state.settings.desktopHistoryTransfer = "all";
+          state.settings.historyPolicyVersion = 2;
+        });
     } else {
       this.state = {
         version: 1,

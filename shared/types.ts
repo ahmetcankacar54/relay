@@ -203,10 +203,13 @@ export interface RelaySettings {
   usageWarningPercent: 80 | 90 | 95;
   usageWarnings: boolean;
   suggestAccounts: boolean;
-  desktopHistoryTransfer: "same-group" | "selected" | "off";
+  /** "all": every Desktop-connected account shares local Code history. */
+  desktopHistoryTransfer: "all" | "same-group" | "selected" | "off";
   desktopHistoryAccounts: string[];
   autoSwitchMode: "off" | "after-exit";
   autoSwitchAccounts: string[];
+  /** 2: registries before "all" existed were migrated from the old default. */
+  historyPolicyVersion?: 2;
 }
 export interface WorkdaySettings {
   timeZone: string;
@@ -249,10 +252,11 @@ export const DEFAULT_SETTINGS: RelaySettings = {
   usageWarningPercent: 90,
   usageWarnings: true,
   suggestAccounts: true,
-  desktopHistoryTransfer: "same-group",
+  desktopHistoryTransfer: "all",
   desktopHistoryAccounts: [],
   autoSwitchMode: "off",
   autoSwitchAccounts: [],
+  historyPolicyVersion: 2,
 };
 export type AutoSwitchReason =
   | "ledger-unavailable"

@@ -248,7 +248,7 @@ export function continuationPolicyReason(
     return "identity-not-enrolled";
   if (
     !request.settings ||
-    !["off", "same-group", "selected"].includes(
+    !["off", "all", "same-group", "selected"].includes(
       request.settings.desktopHistoryTransfer,
     ) ||
     !Array.isArray(request.settings.desktopHistoryAccounts) ||

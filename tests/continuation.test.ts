@@ -473,6 +473,7 @@ test("cross-company history needs both selected endpoints and off never grants s
   const f = fixture();
   f.target.kind = "work";
   f.target.group = "fixture-work";
+  f.request.settings.desktopHistoryTransfer = "same-group";
   assert.equal((await f.engine.execute(f.request)).reason, "history-boundary");
   f.request.settings.desktopHistoryTransfer = "selected";
   f.request.settings.desktopHistoryAccounts = [f.target.id];

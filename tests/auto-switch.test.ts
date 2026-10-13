@@ -172,7 +172,10 @@ test("automatic account selection cannot cross an ungranted history boundary", (
   assert.equal(f.decide().state.reason, "not-selected");
   f.settings.autoSwitchAccounts = [f.a.id, f.b.id];
   f.b.group = "work:private";
+  f.settings.desktopHistoryTransfer = "same-group";
   assert.equal(f.decide().state.reason, "no-ready-target");
+  f.settings.desktopHistoryTransfer = "all";
+  assert.equal(f.decide().state.reason, "quota-exhausted");
   f.settings.desktopHistoryTransfer = "off";
   assert.equal(f.decide().state.reason, "no-ready-target");
   f.settings.desktopHistoryTransfer = "selected";
