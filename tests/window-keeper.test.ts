@@ -263,3 +263,26 @@ test("a deleted planned account takes no slot in the staggering or today's count
   assert.equal(status.nextStartAt, new Date(at("06:30")).toISOString());
   assert.equal(keeper.snapshot().plannedToday, 3);
 });
+
+test("local administrator policy stops the account until the plan changes", async () => {
+  const f = setup();
+  f.calls.fail = new Error("routine-policy-unverified");
+  const keeper = new WindowKeeper(f.deps);
+  for (let i = 0; i < 5; i++) {
+    await keeper.tick();
+    f.clock.now += KEEPER_COOLDOWN_MS + 1000;
+  }
+  assert.equal(f.calls.starts.length, 1);
+  assert.equal(f.calls.notes.length, 1);
+  const status = keeper.snapshot().accounts[0];
+  assert.equal(status.state, "blocked");
+  assert.equal(status.reason, "routine-policy-unverified");
+  // A restart keeps the stop; changing the plan lets it try again.
+  const restarted = new WindowKeeper(f.deps);
+  await restarted.tick();
+  assert.equal(f.calls.starts.length, 1);
+  f.calls.fail = undefined;
+  restarted.resume();
+  await restarted.tick();
+  assert.equal(f.calls.starts.length, 2);
+});

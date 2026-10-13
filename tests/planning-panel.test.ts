@@ -132,3 +132,24 @@ test("a day whose midnight is skipped by DST renders", () => {
   );
   assert.match(html, /Bugün/);
 });
+
+test("a stopped account says why and offers to try again", () => {
+  const html = render(
+    { autoStart: true, accounts: [{ id: a.id }] },
+    {
+      enabled: true,
+      running: false,
+      plannedToday: 3,
+      attempts: [],
+      accounts: [
+        {
+          accountId: a.id,
+          state: "blocked",
+          reason: "routine-policy-unverified",
+        },
+      ],
+    },
+  );
+  assert.match(html, /Durdu: yönetici politikası/);
+  assert.match(html, /Yeniden dene/);
+});

@@ -47,6 +47,16 @@ const failure: Record<string, [string, string]> = {
 const failureText = (reason: string | undefined, t: T) =>
   t(...(failure[reason ?? ""] ?? ["istek başarısız", "request failed"]));
 
+/** Refusals that stop an account until the plan changes (see the keeper). */
+const stopReason = (status?: KeeperAccountStatus) =>
+  status?.state === "blocked" &&
+  [
+    "routine-policy-unverified",
+    "routine-platform-unsupported",
+    "routine-cli-unavailable",
+    "routine-cli-unsupported",
+  ].includes(status.reason ?? "");
+
 function clock(time: number | string, zone: string) {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: zone,
@@ -95,6 +105,11 @@ function statusText(
         );
       return t("Limit verisi yenileniyor", "Refreshing usage");
     case "blocked":
+      if (stopReason(status))
+        return t(
+          `Durdu: ${failureText(status.reason, t)}`,
+          `Stopped: ${failureText(status.reason, t)}`,
+        );
       if (status.reason === "weekly-limit")
         return t("Haftalık limit dolu", "Weekly limit reached");
       if (status.reason === "daily-limit")
@@ -565,6 +580,16 @@ export function PlanningPanel({
                 <small className={`planning-state ${status?.state ?? ""}`}>
                   {statusText(status, lastFailure, zone, t)}
                 </small>
+                {stopReason(status) && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    disabled={disabled}
+                    onClick={() => update({})}
+                  >
+                    {t("Yeniden dene", "Try again")}
+                  </button>
+                )}
               </span>
               <PlanEditor
                 account={account}

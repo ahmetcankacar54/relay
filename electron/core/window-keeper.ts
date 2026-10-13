@@ -25,6 +25,16 @@ export const KEEPER_COOLDOWN_MS = 15 * 60_000;
 export const KEEPER_DAILY_LIMIT = 8;
 const FRESH_MS = 5 * 60_000;
 const NOTIFY_MS = 60 * 60_000;
+/**
+ * Refusals that repeat on every attempt (administrator policy, an unsupported
+ * system or CLI). They stop the account until the plan changes.
+ */
+export const KEEPER_STOP_REASONS = new Set([
+  "routine-policy-unverified",
+  "routine-platform-unsupported",
+  "routine-cli-unavailable",
+  "routine-cli-unsupported",
+]);
 
 export interface KeeperState {
   settings: PlanningSettings;
@@ -75,11 +85,13 @@ export function keeperDecision(
   attempts: WindowAttempt[],
   now: number,
   busy: boolean,
+  stopped?: string,
 ): Decision {
   const base = { accountId: account.id };
   if (!settings.autoStart) return { ...base, state: "off" };
   const identity = planningIdentity(account);
   if (!identity) return { ...base, state: "blocked", reason: "identity" };
+  if (stopped) return { ...base, state: "blocked", reason: stopped };
   if (!shouldHaveWindow(account.id, now, settings)) {
     const next = nextPlannedStart(account.id, now, settings);
     return {
@@ -126,6 +138,8 @@ export class WindowKeeper {
   private running = false;
   private timer?: ReturnType<typeof setInterval>;
   private notified = new Map<string, number>();
+  /** Identity → the refusal that stopped it; cleared when the plan changes. */
+  private stopped = new Map<string, string>();
   private readonly file: string;
   private readonly now: () => number;
   constructor(private readonly deps: KeeperDeps) {
@@ -151,6 +165,14 @@ export class WindowKeeper {
         interrupted = true;
       }
     if (interrupted) this.persist();
+    // A stop survives restarts: the newest attempt per identity decides.
+    for (const attempt of this.attempts)
+      if (
+        attempt.status === "failed" &&
+        KEEPER_STOP_REASONS.has(attempt.reason ?? "")
+      )
+        this.stopped.set(attempt.identityKey, attempt.reason!);
+      else this.stopped.delete(attempt.identityKey);
   }
   private persist() {
     this.attempts = this.attempts.slice(-200);
@@ -161,6 +183,10 @@ export class WindowKeeper {
     this.timer = setInterval(() => void this.tick(), KEEPER_TICK_MS);
     this.timer.unref();
     void this.tick();
+  }
+  /** The plan changed: try stopped accounts again. */
+  resume() {
+    this.stopped.clear();
   }
   stop() {
     if (this.timer) clearInterval(this.timer);
@@ -196,6 +222,7 @@ export class WindowKeeper {
           this.attempts,
           now,
           state.busyAccountIds.includes(account.id),
+          this.stopped.get(planningIdentity(account) ?? ""),
         ),
       );
   }
@@ -256,6 +283,8 @@ export class WindowKeeper {
       attempt.status = "failed";
       attempt.reason =
         error instanceof Error ? error.message : "routine-request-failed";
+      if (KEEPER_STOP_REASONS.has(attempt.reason))
+        this.stopped.set(attempt.identityKey, attempt.reason);
       const last = this.notified.get(account.id) ?? -Infinity;
       if (this.now() - last >= NOTIFY_MS) {
         this.notified.set(account.id, this.now());

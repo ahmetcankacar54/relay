@@ -783,6 +783,7 @@ function bindIPC() {
     service.store.update((s) => {
       s.settings.planning = next;
     });
+    keeper.resume();
     void keeper.tick();
     return next;
   });
