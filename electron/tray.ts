@@ -13,7 +13,7 @@ import { TrayMenuLifecycle } from "./core/tray-menu-lifecycle";
 export interface RelayTrayOptions {
   getSnapshot(): TraySnapshot | Promise<TraySnapshot>;
   showWindow(): void;
-  /** Open the existing account-switch review in Relay. Never switch directly. */
+  /** Confirm natively, then switch Claude Desktop to this saved account. */
   requestSwitch(profileId: string): void;
   quit(): void;
   language?(): TrayLanguage;
@@ -140,9 +140,9 @@ export class RelayTray {
     try {
       const snapshot = await this.options.getSnapshot();
       if (this.destroyed) return;
-      this.options.showWindow();
       if (canRequestTraySwitch(snapshot, command.profileId))
         this.options.requestSwitch(command.profileId);
+      else this.options.showWindow();
     } catch {
       if (!this.destroyed) this.options.showWindow();
     }

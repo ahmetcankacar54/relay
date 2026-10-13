@@ -4,6 +4,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  Notification,
   shell,
   systemPreferences,
 } from "electron";
@@ -334,11 +335,7 @@ else {
             ),
         }),
         showWindow,
-        requestSwitch: (profileId) => {
-          traySwitchRequest = profileId;
-          showWindow();
-          window?.webContents.send("relay:tray-switch");
-        },
+        requestSwitch: (profileId) => void traySwitch(profileId),
         quit: () => app.quit(),
         language: () => trayLanguage,
       });
@@ -369,6 +366,47 @@ function showWindow() {
     if (window.isMinimized()) window.restore();
     window.show();
     window.focus();
+  }
+}
+/** Menu-bar switch: one native confirmation, then the normal saved-login switch. */
+async function traySwitch(profileId: string) {
+  const account = service.store.state.accounts.find((a) => a.id === profileId);
+  if (!account) return;
+  const en = trayLanguage === "en";
+  const { response } = await dialog.showMessageBox({
+    type: "question",
+    buttons: [
+      en ? "Switch and restart Claude" : "Geç ve Claude’u yeniden başlat",
+      en ? "Cancel" : "Vazgeç",
+    ],
+    defaultId: 0,
+    cancelId: 1,
+    message: en
+      ? `Switch Claude to ${account.name}?`
+      : `Claude, ${account.name} hesabına geçsin mi?`,
+    detail: en
+      ? "Claude quits and reopens with this account. Let running replies finish first; your conversations stay in Claude."
+      : "Claude kapanıp bu hesapla yeniden açılır. Çalışan yanıtlar varsa önce bitmelerini bekle; konuşmaların Claude’da kalır.",
+  });
+  if (response !== 0) return;
+  try {
+    await manualDesktopLock(() => desktop.switchTo(profileId));
+    if (Notification.isSupported())
+      new Notification({
+        title: "Relay",
+        body: en
+          ? `Claude switched to ${account.name}.`
+          : `Claude, ${account.name} hesabına geçti.`,
+      }).show();
+  } catch (error) {
+    dialog.showErrorBox(
+      en ? "Switch failed" : "Geçiş yapılamadı",
+      error instanceof Error ? error.message : String(error),
+    );
+  } finally {
+    void tray?.update();
+    if (window && !window.isDestroyed())
+      window.webContents.send("relay:changed");
   }
 }
 function routineFingerprint(account: Account) {

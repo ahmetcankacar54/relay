@@ -35,11 +35,12 @@ test("connection renewal is an explicit action and preserves verified current qu
   };
   const en = render(usage);
   assert.match(en, /80%/);
-  assert.match(en, /Background checks will not open permission dialogs/);
+  assert.match(en, /The connection needs to be renewed/);
+  assert.match(en, /No limit reported/);
   assert.match(en, />Renew connection<\/button>/);
   assert.doesNotMatch(en, /Allow Keychain access|Reconnect|Stale data/);
   const tr = render(usage, "tr");
-  assert.match(tr, /Arka planda izin penceresi açılmaz/);
+  assert.match(tr, /Bağlantının yenilenmesi gerekiyor/);
   assert.match(tr, />Bağlantıyı yenile<\/button>/);
 });
 

@@ -21,12 +21,12 @@ const issues: Record<UsageIssue, [string, string]> = {
     "Keychain access is needed to read usage limits.",
   ],
   "renewal-required": [
-    "Bağlantı yenilenmeyi bekliyor. Arka planda izin penceresi açılmaz.",
-    "Connection renewal needs your action. Background checks will not open permission dialogs.",
+    "Bağlantının yenilenmesi gerekiyor.",
+    "The connection needs to be renewed.",
   ],
   expired: [
-    "Limit bağlantısının süresi doldu. Tarayıcı girişini yenile.",
-    "Usage sign-in expired. Reconnect in the browser.",
+    "Limit bağlantısı yenilenemedi. Tarayıcıdan yeniden bağlan.",
+    "The usage connection could not be renewed. Reconnect in the browser.",
   ],
   scope: [
     "Bu giriş kullanım verisine erişemiyor. Tarayıcı girişini yenile.",
@@ -94,6 +94,13 @@ export function UsageCard({
     key: "fiveHour" | "sevenDay",
   ) => {
     const left = remaining(window);
+    // Team and Enterprise seats can return a five-hour window without a weekly one.
+    const notReported =
+      key === "sevenDay" &&
+      !window &&
+      usage?.status === "ready" &&
+      !usage.issue &&
+      !!usage.fiveHour;
     const warning =
       settings.usageWarnings &&
       usage?.status === "ready" &&
@@ -138,9 +145,11 @@ export function UsageCard({
               ? "—"
               : `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(left)}%`}{" "}
             <small>
-              {left === undefined
-                ? t("Veri yok", "No data")
-                : t("kaldı", "left")}
+              {left !== undefined
+                ? t("kaldı", "left")
+                : notReported
+                  ? t("Limit bildirilmiyor", "No limit reported")
+                  : t("Veri yok", "No data")}
             </small>
           </strong>
         </div>
@@ -180,7 +189,7 @@ export function UsageCard({
                 </time>
               </div>
             </>
-          ) : (
+          ) : notReported ? null : (
             t("Yenilenme zamanı yok", "Reset time unavailable")
           )}
           {warning && (
