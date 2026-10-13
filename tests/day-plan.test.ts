@@ -81,7 +81,10 @@ test("a manual first start keeps its time and the others move around it", () => 
   // A resets at 12:00 (phase 3 h); B goes half a cycle away (phase 0.5 h).
   assert.equal(plan.accounts[1].firstStart, at(TUESDAY, "04:30"));
   // A clock later than one window after work start means the evening before.
-  const late = dayPlan(TUESDAY, settings({ accounts: [{ id: A, firstStart: "22:30" }] }));
+  const late = dayPlan(
+    TUESDAY,
+    settings({ accounts: [{ id: A, firstStart: "22:30" }] }),
+  );
   assert.equal(late.accounts[0].firstStart, at("2026-10-12", "22:30"));
 });
 
@@ -102,9 +105,13 @@ test("weekend hours apply on Saturday; disabled days and empty plans have no int
 });
 
 test("overnight and full-day intervals", () => {
-  const night = settings({ weekday: { enabled: true, start: "22:00", end: "04:00" } });
+  const night = settings({
+    weekday: { enabled: true, start: "22:00", end: "04:00" },
+  });
   assert.equal(workInterval(TUESDAY, night)?.end, at("2026-10-14", "04:00"));
-  const full = settings({ weekday: { enabled: true, start: "00:00", end: "00:00" } });
+  const full = settings({
+    weekday: { enabled: true, start: "00:00", end: "00:00" },
+  });
   const interval = workInterval(TUESDAY, full)!;
   assert.equal(interval.end - interval.start, 24 * H);
 });
@@ -116,7 +123,9 @@ test("a window should run from the first warm-up until work ends, including afte
   assert.equal(shouldHaveWindow(A, at(TUESDAY, "20:59"), s), true);
   assert.equal(shouldHaveWindow(A, at(TUESDAY, "21:00"), s), false);
   assert.equal(shouldHaveWindow(C, at(TUESDAY, "12:00"), s), false);
-  const night = settings({ weekday: { enabled: true, start: "22:00", end: "04:00" } });
+  const night = settings({
+    weekday: { enabled: true, start: "22:00", end: "04:00" },
+  });
   assert.equal(shouldHaveWindow(A, at("2026-10-14", "02:00"), night), true);
 });
 

@@ -215,7 +215,9 @@ export class WindowKeeper {
         }
         const due = decisions.find((d) => d.state === "due");
         if (due && !state.blocked) {
-          await this.startOne(state.accounts.find((a) => a.id === due.accountId)!);
+          await this.startOne(
+            state.accounts.find((a) => a.id === due.accountId)!,
+          );
           state = this.deps.state();
           decisions = this.evaluate(state);
         }

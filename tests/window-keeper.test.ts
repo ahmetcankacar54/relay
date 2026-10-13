@@ -83,7 +83,10 @@ function setup(accounts = [account("A")]) {
       calls.refreshes.push(id);
       if (calls.refreshFails) throw new Error("offline");
       const a = accounts.find((x) => x.id === id)!;
-      usage[id] = fresh(a, Date.parse(usage[id]?.fiveHour?.resetsAt ?? "") || undefined);
+      usage[id] = fresh(
+        a,
+        Date.parse(usage[id]?.fiveHour?.resetsAt ?? "") || undefined,
+      );
       return usage[id];
     },
     refreshAfterStart: async (id) => {
@@ -131,7 +134,10 @@ test("a due account is started once and verified; an active window is left alone
 test("stale usage is refreshed before deciding; a failing refresh waits without starting", async () => {
   const f = setup();
   const a = f.accounts[0];
-  f.usage[a.id] = { ...f.usage[a.id], checkedAt: new Date(f.clock.now - 10 * 60_000).toISOString() };
+  f.usage[a.id] = {
+    ...f.usage[a.id],
+    checkedAt: new Date(f.clock.now - 10 * 60_000).toISOString(),
+  };
   f.calls.refreshFails = true;
   const keeper = new WindowKeeper(f.deps);
   await keeper.tick();

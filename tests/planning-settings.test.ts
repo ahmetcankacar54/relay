@@ -73,7 +73,10 @@ test("planning settings reject duplicates, bad clocks, bad zones and unknown key
   assert.equal(planningSchema.safeParse(DEFAULT_PLANNING).success, true);
   for (const bad of [
     { ...DEFAULT_PLANNING, accounts: [{ id }, { id }] },
-    { ...DEFAULT_PLANNING, weekday: { enabled: true, start: "9:00", end: "18:00" } },
+    {
+      ...DEFAULT_PLANNING,
+      weekday: { enabled: true, start: "9:00", end: "18:00" },
+    },
     { ...DEFAULT_PLANNING, timeZone: "Mars/Olympus" },
     { ...DEFAULT_PLANNING, accounts: [{ id, firstStart: "24:00" }] },
     { ...DEFAULT_PLANNING, extra: true },

@@ -57,8 +57,7 @@ export function workInterval(
   if (start === undefined || end === undefined || end <= start) return;
   return { date, start, end, weekend };
 }
-const cycle = (value: number) =>
-  ((value % WINDOW_MS) + WINDOW_MS) % WINDOW_MS;
+const cycle = (value: number) => ((value % WINDOW_MS) + WINDOW_MS) % WINDOW_MS;
 /**
  * Reset phases within the five-hour cycle. Without fixed phases they are spread
  * evenly; otherwise each free account takes the middle of the widest gap.
@@ -78,7 +77,8 @@ export function cyclePhases(fixed: (number | undefined)[]): number[] {
     let gapStart = 0,
       gap = -1;
     for (const [k, point] of placed.entries()) {
-      const next = k + 1 < placed.length ? placed[k + 1] : placed[0] + WINDOW_MS;
+      const next =
+        k + 1 < placed.length ? placed[k + 1] : placed[0] + WINDOW_MS;
       if (next - point > gap) {
         gap = next - point;
         gapStart = point;
@@ -92,7 +92,12 @@ export function cyclePhases(fixed: (number | undefined)[]): number[] {
   return phases as number[];
 }
 /** A manual clock later than one window after work start means the evening before. */
-function manualStart(date: string, clock: string, interval: WorkInterval, zone: string) {
+function manualStart(
+  date: string,
+  clock: string,
+  interval: WorkInterval,
+  zone: string,
+) {
   const same = wallTime(date, clock, zone);
   if (same !== undefined && same <= interval.start + WINDOW_MS) return same;
   return wallTime(shiftDate(date, -1), clock, zone);
@@ -124,7 +129,11 @@ export function dayPlan(
       const windows: PlannedWindow[] = [];
       let cursor = firstStart;
       const live = liveResets[account.id];
-      if (live !== undefined && live > firstStart && live - WINDOW_MS < interval.end) {
+      if (
+        live !== undefined &&
+        live > firstStart &&
+        live - WINDOW_MS < interval.end
+      ) {
         for (; cursor + WINDOW_MS <= live - WINDOW_MS; cursor += WINDOW_MS)
           windows.push({ start: cursor, end: cursor + WINDOW_MS });
         cursor = live - WINDOW_MS;
@@ -142,7 +151,11 @@ export function dayPlan(
     }),
   };
 }
-function plansAround(now: number, settings: PlanningSettings, deltas: number[]) {
+function plansAround(
+  now: number,
+  settings: PlanningSettings,
+  deltas: number[],
+) {
   const today = localDate(now, settings.timeZone);
   return deltas.map((delta) => dayPlan(shiftDate(today, delta), settings));
 }
