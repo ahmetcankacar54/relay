@@ -5,7 +5,6 @@ import { z } from "zod";
 import {
   DEFAULT_PLANNING,
   DEFAULT_SETTINGS,
-  DEFAULT_WORKDAY,
   type Account,
   type CreateAccount,
   type PlanningSettings,
@@ -30,33 +29,6 @@ export const timeZoneSchema = z
     }
   }, "Choose a valid time zone.");
 const clockSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
-export const workdaySchema = z
-  .object({
-    timeZone: timeZoneSchema,
-    start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
-    end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
-    weekdays: z
-      .array(z.number().int().min(0).max(6))
-      .min(1)
-      .max(7)
-      .refine((ids) => new Set(ids).size === ids.length),
-    accountIds: z
-      .array(z.uuid())
-      .max(50)
-      .refine((ids) => new Set(ids).size === ids.length),
-    reservePercent: z.number().int().min(0).max(50),
-    staggerMinutes: z.number().int().min(0).max(300),
-    warmupLeadMinutes: z.number().int().min(0).max(300),
-    routineEnabled: z.boolean(),
-  })
-  .strict()
-  .refine(
-    (w) =>
-      !w.routineEnabled ||
-      (w.accountIds.length > 0 &&
-        (w.accountIds.length <= 1 || w.staggerMinutes >= 1)),
-    "Choose routine accounts and use at least one minute of spacing for multiple accounts.",
-  );
 const hoursSchema = z
   .object({ enabled: z.boolean(), start: clockSchema, end: clockSchema })
   .strict();
@@ -149,7 +121,6 @@ const accountSchema = z.object({
 });
 export const settingsSchema = z
   .object({
-    workday: workdaySchema.default(DEFAULT_WORKDAY),
     planning: planningSchema,
     usageRefreshMinutes: z.union([
       z.literal(0),
@@ -172,7 +143,6 @@ export const settingsSchema = z
 // selected accounts whenever an unrelated preference is changed.
 export const settingsPatchSchema = settingsSchema
   .extend({
-    workday: settingsSchema.shape.workday.removeDefault(),
     desktopHistoryAccounts:
       settingsSchema.shape.desktopHistoryAccounts.removeDefault(),
     autoSwitchMode: settingsSchema.shape.autoSwitchMode.removeDefault(),
@@ -183,12 +153,12 @@ const stateSchema = z.object({
   version: z.literal(1),
   settings: z
     .preprocess((value) => {
-      if (value && typeof value === "object" && !("planning" in value))
-        return {
-          ...value,
-          planning: planningFromWorkday((value as { workday?: unknown }).workday),
-        };
-      return value;
+      if (!value || typeof value !== "object") return value;
+      // Registries before 0.11 kept a workday block; it becomes planning once.
+      const { workday, ...rest } = value as Record<string, unknown>;
+      return "planning" in rest
+        ? rest
+        : { ...rest, planning: planningFromWorkday(workday) };
     }, settingsSchema)
     .default(DEFAULT_SETTINGS),
   accounts: z.array(accountSchema).max(50),

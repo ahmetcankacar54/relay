@@ -1,5 +1,4 @@
 import { DEFAULT_SETTINGS } from "../shared/types";
-import { workdayPlan } from "../shared/planning";
 import { summarizeUsageSamples, usageSample } from "../shared/usage-statistics";
 import type {
   Account,
@@ -240,9 +239,6 @@ if (scenario === "planning") {
   accounts[0].planning = { plan: "max5", capacityWeight: 5 };
   accounts[1].planning = { plan: "pro", capacityWeight: 1 };
   accounts[2].planning = { plan: "team", capacityWeight: 8 };
-  state.settings.workday.accountIds = ids.slice(0, 3);
-  state.settings.workday.start = "09:00";
-  state.settings.workday.end = "09:00";
   state.settings.planning = {
     ...state.settings.planning,
     autoStart: true,
@@ -391,16 +387,8 @@ export const previewApi: RelayAPI = {
   }),
   openDesktop: desktopOnly,
   recoverDesktop: desktopOnly,
-  panelSnapshot: async () =>
-    structuredClone({
-      ...state,
-      workdayPlan: workdayPlan(accounts, state.usage, state.settings.workday),
-    }),
-  snapshot: async () =>
-    structuredClone({
-      ...state,
-      workdayPlan: workdayPlan(accounts, state.usage, state.settings.workday),
-    }),
+  panelSnapshot: async () => structuredClone(state),
+  snapshot: async () => structuredClone(state),
   createAccount: async (input) => {
     if (scenario !== "unlinked-no-code" && scenario !== "mixed-connections")
       return desktopOnly();

@@ -130,9 +130,9 @@ app.whenReady().then(async () => {
     await call("setTrayLanguage", "en");
     assert.equal(await call("consumeTraySwitchRequest"), null);
     await assert.rejects(call("setTrayLanguage", "invalid"));
-    const initialWorkday = (await call("panelSnapshot")).settings.workday;
-    assert.equal(initialWorkday.routineEnabled, false);
-    assert.deepEqual(initialWorkday.accountIds, []);
+    const initialPlanning = (await call("panelSnapshot")).settings.planning;
+    assert.equal(initialPlanning.autoStart, false);
+    assert.deepEqual(initialPlanning.accounts, []);
     const planAccount = await call("updateAccountPlanning", a.id, {
       plan: "max5",
       capacityWeight: 5,
@@ -148,51 +148,25 @@ app.whenReady().then(async () => {
       }),
     );
     const planning = await call("updatePlanning", {
+      weekday: { enabled: true, start: "22:00", end: "06:00" },
       accounts: [{ id: a.id }, { id: b.id, firstStart: "07:00" }],
     });
+    assert.equal(planning.weekday.end, "06:00");
     assert.deepEqual(planning.accounts, [
       { id: a.id },
       { id: b.id, firstStart: "07:00" },
     ]);
-    await assert.rejects(
-      call("updatePlanning", { accounts: [{ id: randomUUID() }] }),
-    );
-    await assert.rejects(call("updatePlanning", { timeZone: "invalid" }));
-    const customizedWorkday = {
-      ...initialWorkday,
-      start: "22:00",
-      end: "06:00",
-      accountIds: [a.id, b.id],
-      warmupLeadMinutes: 120,
-    };
-    await call("updateSettings", { workday: customizedWorkday });
     await call("updateSettings", { usageWarnings: false });
-    let planningSnapshot = await call("panelSnapshot");
-    assert.deepEqual(planningSnapshot.settings.workday, customizedWorkday);
-    assert.equal(planningSnapshot.workdayPlan.approximate, true);
+    const planningSnapshot = await call("panelSnapshot");
+    assert.deepEqual(planningSnapshot.settings.planning, planning);
+    assert.equal(planningSnapshot.planning.enabled, false);
     assert.equal(
       planningSnapshot.usageStatistics[a.id].periods.sevenDay.samples,
       0,
     );
-    assert.equal(planningSnapshot.planning.enabled, false);
+    await assert.rejects(call("updatePlanning", { timeZone: "invalid" }));
     await assert.rejects(
-      call("updateSettings", {
-        workday: { ...customizedWorkday, timeZone: "invalid" },
-      }),
-    );
-    await assert.rejects(
-      call("updateSettings", {
-        workday: { ...customizedWorkday, accountIds: [randomUUID()] },
-      }),
-    );
-    await assert.rejects(
-      call("updateSettings", {
-        workday: {
-          ...customizedWorkday,
-          routineEnabled: true,
-          staggerMinutes: 0,
-        },
-      }),
+      call("updatePlanning", { accounts: [{ id: randomUUID() }] }),
     );
     win.close();
     assert.equal(
@@ -357,8 +331,8 @@ app.whenReady().then(async () => {
             "persistent settings IPC and validation",
             "tray language and queued review IPC",
             "close-to-tray and same-window reopen",
-            "plan-aware account metadata and workday IPC",
-            "default-off routine snapshot and empty usage statistics",
+            "plan-aware account metadata and planning IPC",
+            "default-off window keeper and empty usage statistics",
             "quota IPC with disconnected account",
             "packaged native helper execution without Keychain access",
             "profile creation",

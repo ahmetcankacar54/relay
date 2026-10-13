@@ -9,7 +9,8 @@ import {
   shouldHaveWindow,
   workInterval,
 } from "../shared/day-plan";
-import { wallTime } from "../shared/planning";
+import { planCapacity, wallTime } from "../shared/planning";
+import { planningAccount } from "./planning-fixtures";
 import { DEFAULT_PLANNING, type PlanningSettings } from "../shared/types";
 
 const ZONE = "Europe/Istanbul";
@@ -146,4 +147,21 @@ test("a live reset continues the chain from the actual window", () => {
       [at(TUESDAY, "17:00"), at(TUESDAY, "17:00") + WINDOW_MS],
     ],
   );
+});
+test("plan weights are ratios, Team and unknown need their explicit manual capacity", () => {
+  for (const [plan, expected] of [
+    ["pro", 1],
+    ["max5", 5],
+    ["max20", 20],
+  ] as const) {
+    const a = planningAccount("a", plan);
+    a.planning!.capacityWeight = 99;
+    assert.equal(planCapacity(a), expected);
+  }
+  const a = planningAccount("a", "team");
+  assert.equal(planCapacity(a), 1);
+  a.planning!.capacityWeight = 12;
+  assert.equal(planCapacity(a), 12);
+  a.planning!.capacityWeight = NaN;
+  assert.equal(planCapacity(a), 1);
 });

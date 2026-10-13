@@ -22,9 +22,10 @@ Independent tool, not an Anthropic product.
 - **Usage limits** — remaining five-hour and weekly quota with reset times for
   every account, refreshed in the background. Team/Enterprise seats that report no
   weekly window show "no limit reported" and are judged by their five-hour window.
-- **Statistics and planning** — 7/30-day observed usage, a 24-hour work plan with
-  time zone, plan capacities (Pro, Max 5×, Max 20×, custom Team weight) and optional
-  routines that open a five-hour window ahead of your work day (off by default).
+- **Statistics and planning** — 7/30-day observed usage; weekday and weekend work
+  hours; Relay staggers each account's first window so resets spread over the
+  day, lets you override any account's start time, and (optional) starts and
+  keeps every planned account's five-hour window running during work hours.
 - **Switch and continue at quota** (experimental, macOS, off by default) — once
   turned on it stays on for every local Code conversation. When the active
   account runs out of quota and nothing else is running, Relay picks the eligible

@@ -26,7 +26,6 @@ import {
 import { accountPlanningSchema } from "./core/store";
 import { RelayTray } from "./tray";
 import { UsageHistory } from "./core/usage-history";
-import { workdayPlan } from "../shared/planning";
 import { planningIdentity } from "../shared/planning";
 import { WindowKeeper } from "./core/window-keeper";
 import { runQuotaStarter } from "./core/routine-runner";
@@ -331,8 +330,7 @@ else {
             automationGuard(snapshot),
             stop.permissionMode,
           );
-          if (snapshot.permissionMode !== stop.permissionMode)
-            return "skipped";
+          if (snapshot.permissionMode !== stop.permissionMode) return "skipped";
         }
         // Claude's own "continue when limits reset" would send a second prompt.
         if (snapshot.quotaAutoResume && automation.cancelQuotaResume)
@@ -746,7 +744,6 @@ function bindIPC() {
     for (const selected of [
       patch.desktopHistoryAccounts,
       patch.autoSwitchAccounts,
-      patch.workday?.accountIds,
     ]) {
       if (
         selected &&
@@ -802,11 +799,6 @@ function bindIPC() {
     fleet: fleet.snapshot(),
     autoSwitch: autoSwitch.snapshot(),
     usageStatistics: usageHistory.snapshot(service.store.state.accounts),
-    workdayPlan: workdayPlan(
-      service.store.state.accounts,
-      usage.snapshot(),
-      service.store.state.settings.workday,
-    ),
     planning: keeper.snapshot(),
   }));
   handle("snapshot", () =>
@@ -817,11 +809,6 @@ function bindIPC() {
       fleet: fleet.snapshot(),
       autoSwitch: autoSwitch.snapshot(),
       usageStatistics: usageHistory.snapshot(service.store.state.accounts),
-      workdayPlan: workdayPlan(
-        service.store.state.accounts,
-        usage.snapshot(),
-        service.store.state.settings.workday,
-      ),
       planning: keeper.snapshot(),
     })),
   );

@@ -44,7 +44,11 @@ test("a registry without planning settings is migrated on load", async () => {
         settings: {
           ...settings,
           workday: {
-            ...settings.workday,
+            timeZone: "Europe/Istanbul",
+            reservePercent: 10,
+            staggerMinutes: 60,
+            warmupLeadMinutes: 0,
+            routineEnabled: false,
             start: "00:00",
             end: "00:00",
             weekdays: [0, 1, 2, 3, 4, 5, 6],
@@ -82,4 +86,35 @@ test("planning settings reject duplicates, bad clocks, bad zones and unknown key
     { ...DEFAULT_PLANNING, extra: true },
   ])
     assert.equal(planningSchema.safeParse(bad).success, false);
+});
+
+test("a registry that has both planning and a legacy workday keeps planning", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-planning-"));
+  try {
+    const id = randomUUID();
+    const planning = {
+      ...DEFAULT_PLANNING,
+      accounts: [{ id, firstStart: "07:00" }],
+    };
+    await fs.writeFile(
+      path.join(root, "state.json"),
+      JSON.stringify({
+        version: 1,
+        settings: {
+          ...DEFAULT_SETTINGS,
+          planning,
+          workday: { start: "09:00" },
+        },
+        accounts: [],
+        pinned: [],
+        importEnabled: false,
+        lineage: {},
+      }),
+    );
+    const store = new Store(root);
+    assert.deepEqual(store.state.settings.planning, planning);
+    assert.equal("workday" in store.state.settings, false);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });

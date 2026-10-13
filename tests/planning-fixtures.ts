@@ -1,9 +1,4 @@
-import {
-  DEFAULT_WORKDAY,
-  type Account,
-  type AccountUsage,
-  type WorkdaySettings,
-} from "../shared/types";
+import { type Account, type AccountUsage } from "../shared/types";
 const NOW = Date.parse("2026-10-13T05:59:45Z");
 export function planningAccount(
   id = "a",
@@ -37,19 +32,5 @@ export function planningUsage(account: Account, now = NOW): AccountUsage {
       usedPercent: 20,
       resetsAt: new Date(now + 3 * 86_400_000).toISOString(),
     },
-  };
-}
-export function planningSettings(ids = ["a"]): WorkdaySettings {
-  return {
-    ...DEFAULT_WORKDAY,
-    start: "09:00",
-    end: "18:00",
-    timeZone: "Europe/Istanbul",
-    weekdays: [0, 1, 2, 3, 4, 5, 6],
-    accountIds: ids,
-    routineEnabled: true,
-    staggerMinutes: 60,
-    warmupLeadMinutes: 0,
-    reservePercent: 10,
   };
 }

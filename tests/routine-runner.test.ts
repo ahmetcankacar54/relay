@@ -6,7 +6,10 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { Store } from "../electron/core/store";
 import {
+  quotaStarterArgs,
+  routineEnvironment,
   runQuotaStarter,
+  windowStartEligible,
   type QuotaStarterOptions,
 } from "../electron/core/routine-runner";
 import { planningAccount } from "./planning-fixtures";
@@ -186,4 +189,43 @@ test("aborting Relay-owned routine startup never touches other process IDs", asy
     /routine-settings-changed/,
   );
   assert.equal(f.commands.length, 0);
+});
+test("isolated starter disables every tool, MCP, customization and persistence without resume or bypass", () => {
+  const args = quotaStarterArgs();
+  for (const flag of [
+    "--safe-mode",
+    "--strict-mcp-config",
+    "--no-session-persistence",
+    "--disable-slash-commands",
+  ])
+    assert.ok(args.includes(flag));
+  assert.equal(args[args.indexOf("--tools") + 1], "");
+  assert.equal(args[args.indexOf("--disallowedTools") + 1], "*");
+  assert.equal(args[args.indexOf("--max-turns") + 1], "1");
+  for (const flag of [
+    "--resume",
+    "--continue",
+    "--desktop",
+    "--bare",
+    "--dangerously-skip-permissions",
+  ])
+    assert.ok(!args.includes(flag));
+  const env = routineEnvironment("/fixture/profile", "fake-token", {
+    PATH: "/bin",
+    ANTHROPIC_API_KEY: "unexpected",
+    CLAUDE_CONFIG_DIR: "wrong",
+    OTEL_EXPORTER_OTLP_HEADERS: "secret",
+    DEBUG: "1",
+  });
+  assert.equal(env.ANTHROPIC_API_KEY, undefined);
+  assert.equal(env.CLAUDE_CONFIG_DIR, "/fixture/profile");
+  assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, "fake-token");
+  assert.equal(env.OTEL_EXPORTER_OTLP_HEADERS, undefined);
+  assert.equal(env.DEBUG, undefined);
+  const a = planningAccount();
+  assert.equal(windowStartEligible(a), true);
+  a.auth!.subscription = "team";
+  assert.equal(windowStartEligible(a), true);
+  a.auth!.accountUuid = undefined;
+  assert.equal(windowStartEligible(a), false);
 });

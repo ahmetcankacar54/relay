@@ -1,6 +1,4 @@
 import type { AccountUsageStatistics } from "./usage-statistics";
-import type { WorkdayPlan } from "./planning";
-import type { RoutineSnapshot } from "../electron/core/routines";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
@@ -81,8 +79,6 @@ export interface Snapshot {
   continuation?: DesktopContinuationSnapshot;
   fleet?: FleetContinuationState;
   usageStatistics?: Record<string, AccountUsageStatistics>;
-  workdayPlan?: WorkdayPlan;
-  routines?: RoutineSnapshot;
   planning?: KeeperSnapshot;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
@@ -119,12 +115,7 @@ export interface TranscriptMessage {
 export interface FleetContinuationState {
   enabled: boolean;
   status:
-    | "off"
-    | "watching"
-    | "waiting"
-    | "switching"
-    | "continuing"
-    | "attention";
+    "off" | "watching" | "waiting" | "switching" | "continuing" | "attention";
   /** Machine-readable reason, localized by the UI. */
   reason?: string;
   sourceId?: string;
@@ -175,9 +166,7 @@ export interface RelayAPI {
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   onTraySwitch(callback: () => void): () => void;
   updateSettings(input: Partial<RelaySettings>): Promise<RelaySettings>;
-  updatePlanning(
-    patch: Partial<PlanningSettings>,
-  ): Promise<PlanningSettings>;
+  updatePlanning(patch: Partial<PlanningSettings>): Promise<PlanningSettings>;
   refreshUsage(
     accountId: string,
     allowKeychainPrompt?: boolean,
@@ -231,7 +220,6 @@ declare global {
 }
 
 export interface RelaySettings {
-  workday: WorkdaySettings;
   planning: PlanningSettings;
   usageRefreshMinutes: 0 | 5 | 15 | 30;
   usageWarningPercent: 80 | 90 | 95;
@@ -245,28 +233,6 @@ export interface RelaySettings {
   /** 2: registries before "all" existed were migrated from the old default. */
   historyPolicyVersion?: 2;
 }
-export interface WorkdaySettings {
-  timeZone: string;
-  start: string;
-  end: string;
-  weekdays: number[];
-  accountIds: string[];
-  reservePercent: number;
-  staggerMinutes: number;
-  warmupLeadMinutes: number;
-  routineEnabled: boolean;
-}
-export const DEFAULT_WORKDAY: WorkdaySettings = {
-  timeZone: "Europe/Istanbul",
-  start: "00:00",
-  end: "00:00",
-  weekdays: [0, 1, 2, 3, 4, 5, 6],
-  accountIds: [],
-  reservePercent: 10,
-  staggerMinutes: 60,
-  warmupLeadMinutes: 0,
-  routineEnabled: false,
-};
 export interface PlanningHours {
   enabled: boolean;
   start: string;
@@ -296,10 +262,7 @@ export const DEFAULT_PLANNING: PlanningSettings = {
   accounts: [],
 };
 export type WindowAttemptStatus =
-  | "started"
-  | "verified"
-  | "sent-unverified"
-  | "failed";
+  "started" | "verified" | "sent-unverified" | "failed";
 export interface WindowAttempt {
   id: string;
   accountId: string;
@@ -310,12 +273,7 @@ export interface WindowAttempt {
   resetAt?: string;
 }
 export type KeeperAccountState =
-  | "off"
-  | "outside"
-  | "active"
-  | "due"
-  | "waiting"
-  | "blocked";
+  "off" | "outside" | "active" | "due" | "waiting" | "blocked";
 export interface KeeperAccountStatus {
   accountId: string;
   state: KeeperAccountState;
@@ -347,7 +305,6 @@ export interface DesktopHistorySummary {
   checkedAt: string;
 }
 export const DEFAULT_SETTINGS: RelaySettings = {
-  workday: DEFAULT_WORKDAY,
   planning: DEFAULT_PLANNING,
   usageRefreshMinutes: 5,
   usageWarningPercent: 90,

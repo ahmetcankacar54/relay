@@ -306,7 +306,7 @@ async function fixture() {
     state.settings.desktopHistoryTransfer = "selected";
     state.settings.desktopHistoryAccounts = [a.id, b.id];
     state.settings.autoSwitchMode = "off";
-    state.settings.workday.routineEnabled = false;
+    state.settings.planning.autoStart = false;
   });
   await atomic(
     path.join(temporary, "lab.json"),
