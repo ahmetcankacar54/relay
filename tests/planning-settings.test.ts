@@ -118,3 +118,21 @@ test("a registry that has both planning and a legacy workday keeps planning", as
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("an untouched legacy workday becomes the new default hours, not a 24-hour day", () => {
+  const planning = planningFromWorkday({
+    timeZone: "Europe/Berlin",
+    start: "00:00",
+    end: "00:00",
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    accountIds: [],
+    reservePercent: 10,
+    staggerMinutes: 60,
+    warmupLeadMinutes: 0,
+    routineEnabled: false,
+  });
+  assert.deepEqual(planning, {
+    ...DEFAULT_PLANNING,
+    timeZone: "Europe/Berlin",
+  });
+});

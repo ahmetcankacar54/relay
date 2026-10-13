@@ -62,6 +62,19 @@ export function planningFromWorkday(raw: unknown): PlanningSettings {
   if (!Object.keys(w).length) return structuredClone(DEFAULT_PLANNING);
   const start = clock(w.start, DEFAULT_PLANNING.weekday.start);
   const end = clock(w.end, DEFAULT_PLANNING.weekday.end);
+  const timeZone = timeZoneSchema.safeParse(w.timeZone).success
+    ? (w.timeZone as string)
+    : DEFAULT_PLANNING.timeZone;
+  // The old screen saved its 00:00–00:00 every-day default even when unused;
+  // that is not a request for 24-hour work days.
+  if (
+    start === "00:00" &&
+    end === "00:00" &&
+    new Set(days).size === 7 &&
+    !(Array.isArray(w.accountIds) && w.accountIds.length) &&
+    w.routineEnabled !== true
+  )
+    return { ...structuredClone(DEFAULT_PLANNING), timeZone };
   const ids = Array.isArray(w.accountIds)
     ? [
         ...new Set(
@@ -73,9 +86,7 @@ export function planningFromWorkday(raw: unknown): PlanningSettings {
     : [];
   return {
     autoStart: w.routineEnabled === true,
-    timeZone: timeZoneSchema.safeParse(w.timeZone).success
-      ? (w.timeZone as string)
-      : DEFAULT_PLANNING.timeZone,
+    timeZone,
     weekday: {
       enabled: days.some((d) => typeof d === "number" && d >= 1 && d <= 5),
       start,
