@@ -111,3 +111,24 @@ test("without a keeper view the summary is drawn from the plan", () => {
   assert.match(html, /Pzt–Cum/);
   assert.match(html, /12 sa/);
 });
+
+test("a day whose midnight is skipped by DST renders", () => {
+  const zone = "Africa/Cairo";
+  const html = renderToStaticMarkup(
+    createElement(PlanningPanel, {
+      settings: {
+        ...DEFAULT_PLANNING,
+        timeZone: zone,
+        accounts: [{ id: a.id }],
+      },
+      accounts: [a, b],
+      usage: {},
+      disabled: false,
+      t: (tr: string) => tr,
+      now: wallTime("2026-04-24", "12:00", zone)!,
+      update: () => {},
+      updateAccount: () => {},
+    }),
+  );
+  assert.match(html, /Bugün/);
+});

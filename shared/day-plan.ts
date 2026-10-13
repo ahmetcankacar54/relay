@@ -91,16 +91,42 @@ export function cyclePhases(fixed: (number | undefined)[]): number[] {
   }
   return phases as number[];
 }
-/** A manual clock later than one window after work start means the evening before. */
+const clockMinutes = (clock: string) =>
+  Number(clock.slice(0, 2)) * 60 + Number(clock.slice(3, 5));
+/**
+ * A manual first start is the occurrence of its clock between five hours
+ * before work and the end of work (earliest first), so a night shift's 00:30 is
+ * that night. A clock with no useful occurrence — or one skipped by DST — keeps
+ * its five-hour rhythm and warms up in the five hours before work.
+ */
 function manualStart(
   date: string,
   clock: string,
   interval: WorkInterval,
+  startClock: string,
   zone: string,
 ) {
-  const same = wallTime(date, clock, zone);
-  if (same !== undefined && same <= interval.start + WINDOW_MS) return same;
-  return wallTime(shiftDate(date, -1), clock, zone);
+  const useful = [-1, 0, 1]
+    .map((delta) => wallTime(shiftDate(date, delta), clock, zone))
+    .filter(
+      (time): time is number =>
+        time !== undefined &&
+        time > interval.start - WINDOW_MS &&
+        time < interval.end,
+    );
+  if (useful.length) return Math.min(...useful);
+  const phase = cycle(
+    (clockMinutes(clock) - clockMinutes(startClock)) * 60_000,
+  );
+  return interval.start + phase - WINDOW_MS;
+}
+/** The first existing instant of a calendar day; DST can skip midnight. */
+export function dayStart(date: string, zone: string) {
+  for (const clock of ["00:00", "00:30", "01:00"]) {
+    const time = wallTime(date, clock, zone);
+    if (time !== undefined) return time;
+  }
+  return Date.parse(`${date}T00:00:00Z`);
 }
 export function dayPlan(
   date: string,
@@ -112,7 +138,13 @@ export function dayPlan(
     return { date, interval, accounts: [] };
   const manual = settings.accounts.map((account) =>
     account.firstStart
-      ? manualStart(date, account.firstStart, interval, settings.timeZone)
+      ? manualStart(
+          date,
+          account.firstStart,
+          interval,
+          (interval.weekend ? settings.weekend : settings.weekday).start,
+          settings.timeZone,
+        )
       : undefined,
   );
   const phases = cyclePhases(

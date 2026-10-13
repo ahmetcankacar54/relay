@@ -5,6 +5,7 @@ import {
   WINDOW_MS,
   cyclePhases,
   dayPlan,
+  dayStart,
   nextPlannedStart,
   shouldHaveWindow,
   workInterval,
@@ -81,12 +82,58 @@ test("a manual first start keeps its time and the others move around it", () => 
   assert.equal(plan.accounts[0].manual, true);
   // A resets at 12:00 (phase 3 h); B goes half a cycle away (phase 0.5 h).
   assert.equal(plan.accounts[1].firstStart, at(TUESDAY, "04:30"));
-  // A clock later than one window after work start means the evening before.
+  // A clock outside (start − 5 h, end) keeps its rhythm and warms up before
+  // work: 22:30 with 09:00–21:00 → 07:30 (07:30, 12:30, 17:30, 22:30 …).
   const late = dayPlan(
     TUESDAY,
     settings({ accounts: [{ id: A, firstStart: "22:30" }] }),
   );
-  assert.equal(late.accounts[0].firstStart, at("2026-10-12", "22:30"));
+  assert.equal(late.accounts[0].firstStart, at(TUESDAY, "07:30"));
+  assert.equal(late.accounts[0].manual, true);
+});
+
+test("night shifts take a manual time after midnight as the same night", () => {
+  const night = settings({
+    weekday: { enabled: true, start: "22:00", end: "06:00" },
+    accounts: [{ id: A, firstStart: "00:30" }],
+  });
+  const plan = dayPlan(TUESDAY, night);
+  assert.equal(plan.accounts[0].firstStart, at("2026-10-14", "00:30"));
+  assert.equal(shouldHaveWindow(A, at(TUESDAY, "12:00"), night), false);
+  assert.equal(shouldHaveWindow(A, at("2026-10-14", "01:00"), night), true);
+  // A clock that is useless for the shift keeps its rhythm before work.
+  const noon = dayPlan(
+    TUESDAY,
+    settings({
+      weekday: { enabled: true, start: "22:00", end: "06:00" },
+      accounts: [{ id: A, firstStart: "12:00" }],
+    }),
+  );
+  assert.equal(noon.accounts[0].firstStart, at(TUESDAY, "17:00"));
+});
+
+test("a manual clock that does not exist on a DST day is skipped, keeping the rhythm", () => {
+  const zone = "Europe/Berlin";
+  const plan = dayPlan("2026-03-29", {
+    ...DEFAULT_PLANNING,
+    timeZone: zone,
+    weekend: { enabled: true, start: "06:00", end: "14:00" },
+    accounts: [{ id: A, firstStart: "02:30" }],
+  });
+  assert.equal(
+    plan.accounts[0].firstStart,
+    wallTime("2026-03-29", "01:30", zone),
+  );
+});
+
+test("a day starts at its first existing minute when midnight is skipped", () => {
+  const zone = "Africa/Cairo";
+  assert.equal(wallTime("2026-04-24", "00:00", zone), undefined);
+  assert.equal(
+    dayStart("2026-04-24", zone),
+    wallTime("2026-04-24", "01:00", zone),
+  );
+  assert.equal(dayStart(TUESDAY, ZONE), at(TUESDAY, "00:00"));
 });
 
 test("weekend hours apply on Saturday; disabled days and empty plans have no interval", () => {

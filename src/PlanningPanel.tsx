@@ -16,8 +16,8 @@ import type {
   PlanningHours,
   PlanningSettings,
 } from "../shared/types";
-import { dayPlan, shiftDate, WINDOW_MS } from "../shared/day-plan";
-import { localDate, wallTime } from "../shared/planning";
+import { dayPlan, dayStart, shiftDate, WINDOW_MS } from "../shared/day-plan";
+import { localDate } from "../shared/planning";
 import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { PlanEditor } from "./PlanEditor";
@@ -214,10 +214,10 @@ function Timeline({
   const [offset, setOffset] = useState(0);
   const zone = settings.timeZone;
   const date = shiftDate(localDate(now, zone), offset);
-  const dayStart = wallTime(date, "00:00", zone)!;
-  const dayEnd = wallTime(shiftDate(date, 1), "00:00", zone)!;
+  const dayBegin = dayStart(date, zone);
+  const dayEnd = dayStart(shiftDate(date, 1), zone);
   const pct = (time: number) =>
-    Math.min(100, Math.max(0, ((time - dayStart) / (dayEnd - dayStart)) * 100));
+    Math.min(100, Math.max(0, ((time - dayBegin) / (dayEnd - dayBegin)) * 100));
   const live = Object.fromEntries(
     Object.entries(usage).map(([id, u]) => [
       id,
@@ -231,7 +231,7 @@ function Timeline({
     .map((p) => p.interval)
     .filter(
       (i): i is NonNullable<typeof i> =>
-        !!i && i.end > dayStart && i.start < dayEnd,
+        !!i && i.end > dayBegin && i.start < dayEnd,
     );
   const planned = settings.accounts
     .map(({ id }) => accounts.find((a) => a.id === id))
@@ -241,7 +241,7 @@ function Timeline({
     weekday: "long",
     day: "numeric",
     month: "long",
-  }).format(new Date(dayStart + 12 * 3_600_000));
+  }).format(new Date(dayBegin + 12 * 3_600_000));
   const title =
     offset === 0
       ? t("Bugün", "Today")
@@ -307,7 +307,7 @@ function Timeline({
                 }}
               />
             ))}
-            {offset === 0 && now >= dayStart && now < dayEnd && (
+            {offset === 0 && now >= dayBegin && now < dayEnd && (
               <div className="timeline-now" style={{ left: `${pct(now)}%` }} />
             )}
           </div>
@@ -321,7 +321,7 @@ function Timeline({
             )
             .filter(
               (w, i, all) =>
-                w.end > dayStart &&
+                w.end > dayBegin &&
                 w.start < dayEnd &&
                 all.findIndex((x) => x.start === w.start) === i,
             );
@@ -343,7 +343,7 @@ function Timeline({
                     }}
                   />
                 ))}
-                {offset === 0 && now >= dayStart && now < dayEnd && (
+                {offset === 0 && now >= dayBegin && now < dayEnd && (
                   <div
                     className="timeline-now"
                     style={{ left: `${pct(now)}%` }}
