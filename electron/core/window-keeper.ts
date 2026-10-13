@@ -29,6 +29,7 @@ const NOTIFY_MS = 60 * 60_000;
  * Refusals that repeat on every attempt (administrator policy, an unsupported
  * system or CLI). They stop the account until the plan changes.
  */
+const TRANSIENT_ISSUES = new Set(["rate-limited", "unavailable"]);
 export const KEEPER_STOP_REASONS = new Set([
   "routine-policy-unverified",
   "routine-platform-unsupported",
@@ -101,7 +102,11 @@ export function keeperDecision(
     };
   }
   if (!fresh(usage, now))
-    return { ...base, state: "waiting", reason: "usage-stale", refresh: true };
+    // A connection that needs the user is reported, not shown as refreshing.
+    return usage?.connectionRenewalRequired ||
+      (usage?.issue && !TRANSIENT_ISSUES.has(usage.issue))
+      ? { ...base, state: "blocked", reason: "usage-connection", refresh: true }
+      : { ...base, state: "waiting", reason: "usage-stale", refresh: true };
   const reset = Date.parse(usage!.fiveHour?.resetsAt ?? "");
   if (Number.isFinite(reset) && reset > now)
     return {
@@ -250,7 +255,9 @@ export class WindowKeeper {
         }
       }
       this.statuses = decisions.map(({ refresh, ...status }) =>
-        state.blocked && status.state === "due"
+        // Nothing is refreshed or started while Relay is busy.
+        state.blocked &&
+        (status.state === "due" || status.reason === "usage-stale")
           ? { ...status, state: "waiting" as const, reason: "relay-busy" }
           : status,
       );

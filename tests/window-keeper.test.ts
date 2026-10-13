@@ -286,3 +286,35 @@ test("local administrator policy stops the account until the plan changes", asyn
   await restarted.tick();
   assert.equal(f.calls.starts.length, 2);
 });
+
+test("an expired usage connection is reported, still refreshed, and never starts", async () => {
+  const f = setup();
+  const a = f.accounts[0];
+  f.usage[a.id] = {
+    accountId: a.id,
+    status: "error",
+    stale: true,
+    issue: "expired",
+  };
+  f.calls.refreshFails = true;
+  const keeper = new WindowKeeper(f.deps);
+  await keeper.tick();
+  assert.deepEqual(f.calls.starts, []);
+  assert.deepEqual(f.calls.refreshes, [a.id]);
+  const status = keeper.snapshot().accounts[0];
+  assert.equal(status.state, "blocked");
+  assert.equal(status.reason, "usage-connection");
+});
+
+test("while Relay is busy a stale account waits for Relay, not for usage", async () => {
+  const f = setup();
+  const a = f.accounts[0];
+  f.usage[a.id] = {
+    ...f.usage[a.id],
+    checkedAt: new Date(f.clock.now - 10 * 60_000).toISOString(),
+  };
+  f.calls.blocked = true;
+  const keeper = new WindowKeeper(f.deps);
+  await keeper.tick();
+  assert.equal(keeper.snapshot().accounts[0].reason, "relay-busy");
+});
