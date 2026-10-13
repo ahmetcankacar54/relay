@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
+  duplicateSessions,
   readObject,
   safeFile,
   scopePath,
@@ -74,6 +75,7 @@ export async function summarizeHistory(
     transcriptsFound: 0,
     missingTranscripts: 0,
     unknownTranscripts: 0,
+    duplicates: 0,
     sourceProfiles,
     checkedAt: new Date().toISOString(),
   };
@@ -114,5 +116,9 @@ export async function summarizeHistory(
   if (spaces && !Array.isArray(spaces.spaces))
     throw new Error("Unrecognized project format.");
   summary.projects = spaces?.spaces.length ?? 0;
+  summary.duplicates = (await duplicateSessions(desktopRoot, scope)).reduce(
+    (count, group) => count + group.length - 1,
+    0,
+  );
   return summary;
 }

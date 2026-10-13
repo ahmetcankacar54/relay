@@ -62,6 +62,14 @@ export function HistorySummary({
           )}
         </p>
       )}
+      {value && value.duplicates > 0 && (
+        <p>
+          {t(
+            `${value.duplicates} yinelenen kart sonraki geçiş veya birleştirmede temizlenecek.`,
+            `${value.duplicates} duplicate cards will be removed on the next switch or merge.`,
+          )}
+        </p>
+      )}
       <small>
         {sources.length
           ? t(

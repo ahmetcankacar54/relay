@@ -238,6 +238,8 @@ export interface DesktopHistorySummary {
   transcriptsFound: number;
   missingTranscripts: number;
   unknownTranscripts: number;
+  /** Extra cards of conversations that appear more than once; removed on the next switch or merge. */
+  duplicates: number;
   sourceProfiles: number;
   checkedAt: string;
 }

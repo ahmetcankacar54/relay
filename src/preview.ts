@@ -338,6 +338,7 @@ export const previewApi: RelayAPI = {
     transcriptsFound: 10,
     missingTranscripts: 1,
     unknownTranscripts: 1,
+    duplicates: 0,
     sourceProfiles: 0,
     checkedAt: new Date().toISOString(),
   }),
