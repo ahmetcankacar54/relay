@@ -374,6 +374,15 @@ export class DesktopManager {
   async open() {
     await this.host.launch();
   }
+  /**
+   * Decrypt every saved Desktop sign-in once without changing anything. After an
+   * app identity change macOS asks before releasing the encryption key; doing it
+   * while the user is present keeps an unattended switch from waiting on it.
+   */
+  async verifySavedLogins() {
+    for (const account of this.store.state.accounts)
+      if (account.desktop) await this.readLogin(account.desktop.accountUuid);
+  }
   async historySummary(profileId: string) {
     const account = this.store.account(profileId);
     if (!account.desktop)

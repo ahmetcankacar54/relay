@@ -1102,3 +1102,28 @@ test("bypass mode never travels and a conversation deleted under any alias stays
   );
   assert.equal(copied.permissionMode, "default");
 });
+test("verifying saved sign-ins decrypts each one without touching Claude", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A"),
+    b = await f.account("B");
+  const quits = f.quits(),
+    starts = f.starts();
+  const config = await fs.readFile(path.join(f.root, "config.json"));
+  await f.manager.verifySavedLogins();
+  assert.equal(f.quits(), quits);
+  assert.equal(f.starts(), starts);
+  assert.deepEqual(await fs.readFile(path.join(f.root, "config.json")), config);
+  await fs.rm(
+    path.join(
+      f.store.root,
+      "desktop-vault",
+      "accounts",
+      `${b.desktop!.accountUuid}.bin`,
+    ),
+  );
+  await assert.rejects(
+    f.manager.verifySavedLogins(),
+    /Connect this account again/,
+  );
+  assert.ok(a.desktop);
+});

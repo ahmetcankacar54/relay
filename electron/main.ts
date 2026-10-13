@@ -346,6 +346,13 @@ else {
           routines.start();
           continuation.start();
           window?.webContents.send("relay:changed");
+          // An unattended switch must not wait on a Keychain consent; ask now,
+          // while Relay was just opened by the user.
+          if (
+            continuation.snapshot().enabled ||
+            service.store.state.settings.autoSwitchMode !== "off"
+          )
+            void desktop.verifySavedLogins().catch(() => {});
         })
         .catch(() => {});
     })
@@ -541,12 +548,17 @@ function bindIPC() {
   const id = z.uuid();
   const key = z.string().min(1).max(100);
   handle("inspect-continuation", () => continuation.inspect());
-  handle("arm-continuation", (targetId, policy) =>
-    continuation.arm({
-      targetAccountId: z.union([z.literal("automatic"), id]).parse(targetId),
-      executionPolicy: z.literal("guarded-native-at-most-once").parse(policy),
-    }),
-  );
+  handle("arm-continuation", async (targetId, policy) => {
+    const targetAccountId = z
+      .union([z.literal("automatic"), id])
+      .parse(targetId);
+    const executionPolicy = z
+      .literal("guarded-native-at-most-once")
+      .parse(policy);
+    // Ask for the saved sign-ins' Keychain consent now, not during the handoff.
+    await desktop.verifySavedLogins();
+    return continuation.arm({ targetAccountId, executionPolicy });
+  });
   handle("disarm-continuation", () => continuation.disarm());
   handle("reconcile-continuation", () => continuation.resumePending());
   handle("abandon-continuation", () => continuation.abandonPending());
