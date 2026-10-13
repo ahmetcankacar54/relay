@@ -154,6 +154,7 @@ export class Store {
       this.state = stateSchema.parse(
         JSON.parse(fs.readFileSync(this.file, "utf8")),
       );
+      this.backup();
     } else {
       this.state = {
         version: 1,
@@ -166,6 +167,25 @@ export class Store {
       };
     }
     privateDir(path.join(root, "profiles"));
+  }
+  /**
+   * Keep the registry as it was at each start (last 20). Another Relay build can
+   * rewrite it with its own schema, and the single `.bak` rotates on every write.
+   */
+  private backup() {
+    try {
+      const dir = path.join(this.root, "state-backups");
+      privateDir(dir);
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      fs.copyFileSync(this.file, path.join(dir, `state-${stamp}.json`));
+      const saved = fs
+        .readdirSync(dir)
+        .filter((name) => /^state-[0-9TZ-]+\.json$/.test(name))
+        .sort();
+      for (const old of saved.slice(0, -20)) fs.unlinkSync(path.join(dir, old));
+    } catch {
+      // A backup must never prevent Relay from starting.
+    }
   }
   update(fn: (state: State) => void) {
     const next = structuredClone(this.state);

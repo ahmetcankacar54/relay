@@ -1,6 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash, X509Certificate } from "node:crypto";
 import fs from "node:fs/promises";
+import fsSync from "node:fs";
 import {
   closeSync,
   fstatSync,
@@ -496,16 +497,31 @@ async function main() {
  */
 function installBundle(bundle) {
   const target = "/Applications/Relay.app";
+  const staged = "/Applications/.Relay.app.installing";
+  const previous = "/Applications/.Relay.app.previous";
+  // Copy first, then swap in place: /Applications/Relay.app is never missing,
+  // so macOS cannot launch another registered Relay build in the meantime.
+  execFileSync("/bin/rm", ["-rf", staged, previous]);
+  execFileSync("/usr/bin/ditto", [bundle, staged]);
   try {
     execFileSync("/usr/bin/osascript", [
       "-e",
       'if application id "dev.relay.workspace" is running then tell application id "dev.relay.workspace" to quit',
     ]);
   } catch {
-    // Not running, or it refused to quit; the copy below still replaces files.
+    // Not running, or it refused to quit.
   }
-  execFileSync("/bin/rm", ["-rf", target]);
-  execFileSync("/usr/bin/ditto", [bundle, target]);
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      execFileSync("/usr/bin/pgrep", ["-f", `${target}/Contents/MacOS/Relay`]);
+    } catch {
+      break; // pgrep exits non-zero when nothing matches.
+    }
+    execFileSync("/bin/sleep", ["0.25"]);
+  }
+  if (fsSync.existsSync(target)) fsSync.renameSync(target, previous);
+  fsSync.renameSync(staged, target);
+  execFileSync("/bin/rm", ["-rf", previous]);
   process.stdout.write(`Installed ${target}\n`);
 }
 

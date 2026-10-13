@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
+import { randomUUID } from "node:crypto";
 import { Store, settingsSchema } from "../electron/core/store";
 import {
+  missingIdentity,
   parseUsage,
   retryTime,
   UsageManager,
@@ -666,6 +668,44 @@ test("a model-specific weekly window at its limit is reported without becoming a
       five_hour: { utilization: 10 },
       seven_day_opus: { utilization: 20 },
     }).otherLimitReached,
+    undefined,
+  );
+});
+test("a verified read restores identity fields an older registry lost, never changing existing ones", async (t) => {
+  const f = await fixture(t);
+  const accountUuid = "11111111-1111-4111-8111-111111111111",
+    orgId = "22222222-2222-4222-8222-222222222222";
+  f.store.update((s) => {
+    s.accounts[0].desktop = {
+      accountUuid,
+      orgId,
+      savedAt: "2026-10-13T00:00:00.000Z",
+    };
+  });
+  const verified = {
+    account: { email_address: "a@example.test", uuid: accountUuid },
+    organization: { uuid: orgId, name: "Example Org" },
+  };
+  const manager = new UsageManager(
+    f.store,
+    async () => credential,
+    async (endpoint) => (endpoint === "profile" ? verified : limits),
+    () => Date.parse("2026-10-13T12:00:00Z"),
+  );
+  const result = await manager.refresh(f.a.id);
+  assert.equal(result.status, "ready");
+  const repaired = f.store.account(f.a.id);
+  assert.equal(repaired.auth?.accountUuid, accountUuid);
+  assert.equal(repaired.auth?.orgId, orgId);
+  assert.equal(repaired.auth?.orgName, "Example Org");
+  assert.equal(repaired.desktop?.email, "a@example.test");
+  assert.equal(manager.snapshot()[f.a.id].status, "ready");
+  // A response for a different organization repairs nothing.
+  assert.equal(
+    missingIdentity(
+      { ...repaired, auth: { ...repaired.auth!, orgId: undefined } },
+      { ...verified, organization: { uuid: randomUUID() } },
+    ),
     undefined,
   );
 });

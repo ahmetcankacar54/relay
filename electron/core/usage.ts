@@ -126,6 +126,53 @@ export function verifyIdentity(account: Account, value: unknown) {
   )
     throw new UsageError("identity-mismatch");
 }
+/**
+ * Identity fields a verified profile response can supply when the registry lacks
+ * them (for example after an older Relay rewrote it with its own schema). Only
+ * missing fields are returned, and only when the response matches the account's
+ * saved Desktop binding, so a verified read never changes an existing identity.
+ */
+export function missingIdentity(account: Account, value: unknown) {
+  const v = value as Json | null;
+  const uuid = v?.account?.uuid ?? v?.account?.account_uuid;
+  const org = v?.organization?.uuid ?? v?.organization?.organization_uuid;
+  const orgName = v?.organization?.name;
+  const email =
+    v?.account?.email_address ?? v?.account?.emailAddress ?? v?.account?.email;
+  if (
+    !account.auth?.loggedIn ||
+    !account.desktop ||
+    typeof uuid !== "string" ||
+    typeof org !== "string" ||
+    uuid.toLowerCase() !== account.desktop.accountUuid.toLowerCase() ||
+    org.toLowerCase() !== account.desktop.orgId.toLowerCase()
+  )
+    return;
+  const repair: {
+    accountUuid?: string;
+    orgId?: string;
+    orgName?: string;
+    desktopEmail?: string;
+  } = {};
+  if (!account.auth.accountUuid) repair.accountUuid = uuid.toLowerCase();
+  if (!account.auth.orgId) repair.orgId = org.toLowerCase();
+  if (
+    !account.auth.orgName &&
+    typeof orgName === "string" &&
+    orgName.trim() &&
+    orgName.trim().length <= 150
+  )
+    repair.orgName = orgName.trim();
+  if (
+    !account.desktop.email &&
+    typeof email === "string" &&
+    email.trim() &&
+    email.trim().length <= 254 &&
+    email.trim().toLowerCase() === account.auth.email?.trim().toLowerCase()
+  )
+    repair.desktopEmail = email.trim();
+  return Object.keys(repair).length ? repair : undefined;
+}
 function identityKey(a: Account) {
   return JSON.stringify([
     a.auth?.loggedIn,
@@ -406,6 +453,22 @@ export class UsageManager {
       try {
         this.onSample(latest, structuredClone(this.cache.get(account.id)!));
       } catch {}
+      const repair = missingIdentity(latest, profile);
+      if (repair) {
+        this.store.update((state) => {
+          const stored = state.accounts.find((a) => a.id === account.id);
+          if (!stored?.auth || !stored.desktop) return;
+          stored.auth.accountUuid ??= repair.accountUuid;
+          stored.auth.orgId ??= repair.orgId;
+          stored.auth.orgName ??= repair.orgName;
+          stored.desktop.email ??= repair.desktopEmail;
+        });
+        // The repaired identity is the one this verified result belongs to.
+        this.identities.set(
+          account.id,
+          identityKey(this.store.account(account.id)),
+        );
+      }
     } catch (e) {
       if (!current()) return this.view(this.store.account(account.id));
       const error = e instanceof UsageError ? e : new UsageError("unavailable");
