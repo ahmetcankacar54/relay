@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { readObject, readBytes, scopePath } from "./desktop-files";
+import type { Account } from "../../shared/types";
 import type { Store } from "./store";
 import type { DesktopManager } from "./desktop";
 import {
@@ -118,6 +119,30 @@ function collectProcessesSync() {
   );
 }
 
+/** A local Code conversation whose latest turn ended with a usage limit. */
+export interface QuotaStop {
+  localSessionId: string;
+  cliSessionId: string;
+  projectKey: string;
+  /** Claude's UI label for the conversation's mode, when it is one Relay restores. */
+  permissionMode?: string;
+  turnId: string;
+  stoppedAt: number;
+  transcriptRelative: string;
+  transcriptBytes: number;
+  transcriptSha256: string;
+}
+/** Index values to the labels Claude shows; bypass and others are left alone. */
+export function uiPermissionMode(value: unknown) {
+  return (
+    {
+      default: "Manual",
+      auto: "Auto",
+      plan: "Plan",
+      acceptEdits: "Accept edits",
+    } as Record<string, string>
+  )[typeof value === "string" ? value : ""];
+}
 /** Inputs measured outside the process table. */
 export interface QuiescenceInputs {
   /** Recently written Claude Code transcripts, other than the selected one, whose turn is unfinished. */
@@ -428,7 +453,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   private cpu?: { at: number; times: Map<number, number> };
   private family = new Set<number>();
   /** Count other recently written transcripts whose turn is unfinished. */
-  private busyTranscripts(selectedRelative: string) {
+  private busyTranscripts(excluded: ReadonlySet<string>) {
     const root = path.join(this.options.transcriptRoot, "projects");
     const cutoff = this.now() - LIVE_TRANSCRIPT_MS;
     let busy = 0;
@@ -449,7 +474,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       for (const name of names) {
         if (!name.endsWith(".jsonl")) continue;
         const relative = `projects/${folder.name}/${name}`;
-        if (relative === selectedRelative) continue;
+        if (excluded.has(relative)) continue;
         const file = path.join(root, folder.name, name);
         try {
           const stat = fsSync.lstatSync(file);
@@ -496,9 +521,11 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     }
     return active;
   }
-  private measure(selectedRelative: string): QuiescenceInputs {
+  private measure(excluded: string | ReadonlySet<string>): QuiescenceInputs {
     return {
-      busyTranscripts: this.busyTranscripts(selectedRelative),
+      busyTranscripts: this.busyTranscripts(
+        typeof excluded === "string" ? new Set([excluded]) : excluded,
+      ),
       activePids: this.activePids(),
     };
   }
@@ -541,6 +568,175 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     if (found.length !== 1)
       throw new DesktopAutomationError("exact-session-not-observed");
     return found[0];
+  }
+  /**
+   * Local Code conversations of `account` whose latest turn ended with a usage
+   * limit within `withinMs`, most recent first. Read from Claude's index and
+   * transcripts only; nothing in Claude is touched.
+   */
+  async quotaStops(
+    account: Account,
+    withinMs = 6 * 60 * 60_000,
+  ): Promise<QuotaStop[]> {
+    if (!account.desktop) return [];
+    const relative = scopePath("claude-code-sessions", account.desktop);
+    let names: string[];
+    try {
+      names = await fs.readdir(path.join(this.options.claudeRoot, relative));
+    } catch {
+      return [];
+    }
+    const cutoff = this.now() - withinMs;
+    const stops: QuotaStop[] = [];
+    for (const name of names) {
+      const local = /^(local_[0-9a-f-]{36})\.json$/i.exec(name);
+      if (!local) continue;
+      // Polled every few seconds: skip records untouched since the window.
+      try {
+        const stat = await fs.stat(
+          path.join(this.options.claudeRoot, relative, name),
+        );
+        if (stat.mtimeMs < cutoff) continue;
+      } catch {
+        continue;
+      }
+      let metadata;
+      try {
+        metadata = await readObject(
+          this.options.claudeRoot,
+          `${relative}/${name}`,
+        );
+      } catch {
+        continue;
+      }
+      if (
+        !metadata ||
+        metadata.archived ||
+        metadata.isArchived ||
+        !UUID.test(metadata.cliSessionId ?? "") ||
+        typeof metadata.cwd !== "string" ||
+        !path.isAbsolute(metadata.cwd) ||
+        !(Number(metadata.lastActivityAt) >= cutoff)
+      )
+        continue;
+      let transcript;
+      try {
+        transcript = await this.transcript(metadata.cliSessionId, metadata.cwd);
+      } catch {
+        continue;
+      }
+      const ended = latestQuotaEndedTurn(transcript.rows);
+      if (
+        !ended ||
+        !Number.isFinite(ended.timestamp) ||
+        ended.timestamp < cutoff ||
+        ended.timestamp > this.now()
+      )
+        continue;
+      stops.push({
+        localSessionId: local[1],
+        cliSessionId: metadata.cliSessionId.toLowerCase(),
+        projectKey: path.resolve(metadata.cwd),
+        permissionMode: uiPermissionMode(metadata.permissionMode),
+        turnId: ended.turnId,
+        stoppedAt: ended.timestamp,
+        transcriptRelative: transcript.relative,
+        transcriptBytes: transcript.data.length,
+        transcriptSha256: sha(transcript.data),
+      });
+    }
+    return stops.sort((a, b) => b.stoppedAt - a.stoppedAt);
+  }
+  /**
+   * Why restarting Claude would interrupt work other than these stopped
+   * conversations, or undefined when nothing else is running.
+   */
+  async quietExcept(stops: QuotaStop[]) {
+    return this.quietReason(
+      await (this.options.processes ?? collectProcesses)(),
+      stops,
+    );
+  }
+  /** Synchronous variant for the checks immediately before quit and writes. */
+  quietExceptSync(stops: QuotaStop[]) {
+    return this.quietReason(
+      (this.options.processesSync ?? collectProcessesSync)(),
+      stops,
+    );
+  }
+  private quietReason(raw: string, stops: QuotaStop[]) {
+    let rows: DesktopProcess[];
+    try {
+      rows = JSON.parse(raw);
+    } catch {
+      return "quiescence-unverified";
+    }
+    const app = rows.find((row) =>
+      /\/Claude\.app\/Contents\/MacOS\/Claude$/.test(row.executable),
+    );
+    // A closed Claude cannot be interrupted.
+    if (!app) return undefined;
+    this.remember(raw, app.pid);
+    const q = desktopProcessQuiescence(
+      raw,
+      app.pid,
+      "",
+      true,
+      this.measure(new Set(stops.map((stop) => stop.transcriptRelative))),
+    );
+    if (q.coverage !== "guarded-local") return "quiescence-unverified";
+    for (const [key, value] of Object.entries(q))
+      if (key !== "coverage" && value !== 0) return `not-quiescent:${key}`;
+    return undefined;
+  }
+  /** The stopped transcript still ends where it was observed. */
+  unchanged(stop: QuotaStop) {
+    try {
+      const data = fsSync.readFileSync(
+        path.join(this.options.transcriptRoot, stop.transcriptRelative),
+      );
+      return (
+        data.length === stop.transcriptBytes &&
+        sha(data) === stop.transcriptSha256
+      );
+    } catch {
+      return false;
+    }
+  }
+  /** Delivery of one continuation marker appended after the observed stop. */
+  async deliveryAfter(
+    stop: QuotaStop,
+    requestId: string,
+  ): Promise<"absent" | "accepted" | "started" | "unknown"> {
+    const data = await readBytes(
+      this.options.transcriptRoot,
+      stop.transcriptRelative,
+    );
+    if (
+      !data ||
+      data.length < stop.transcriptBytes ||
+      sha(data.subarray(0, stop.transcriptBytes)) !== stop.transcriptSha256
+    )
+      return "unknown";
+    let appended: Row[];
+    try {
+      appended = parseDesktopTranscript(data.subarray(stop.transcriptBytes));
+    } catch {
+      return "unknown";
+    }
+    const marker = `[Relay continuation: ${requestId}]`;
+    const users = appended.filter(
+      (r) =>
+        r.type === "user" &&
+        !r.isMeta &&
+        !r.isSidechain &&
+        transcriptMessageText(r).includes(marker),
+    );
+    if (!users.length) return "absent";
+    if (users.length !== 1) return "unknown";
+    const turn = continuationTurn(appended, requestId);
+    if (!turn || turn.user.uuid !== users[0].uuid) return "unknown";
+    return turn.assistant ? "started" : "accepted";
   }
   async read(
     snapshot: DesktopAutomationSnapshot,

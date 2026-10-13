@@ -4,6 +4,7 @@ import type {
   AccountPlanning,
   AccountUsage,
   AutoSwitchState,
+  FleetContinuationState,
   RelaySettings,
 } from "../shared/types";
 import type { AccountUsageStatistics } from "../shared/usage-statistics";
@@ -12,6 +13,7 @@ import { SwitchPreferences } from "./SwitchPreferences";
 import { UsageStatistics } from "./UsageStatistics";
 import { WorkdayPreferences } from "./WorkdayPreferences";
 import { ContinuationSettings } from "./ContinuationSettings";
+import { FleetSettings } from "./FleetSettings";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 export function Preferences({
   value,
@@ -35,6 +37,8 @@ export function Preferences({
   requestAccessibility,
   reconcileContinuation,
   abandonContinuation,
+  fleet,
+  setFleet,
 }: {
   value: RelaySettings;
   accounts: Account[];
@@ -54,6 +58,8 @@ export function Preferences({
   requestAccessibility: () => void;
   reconcileContinuation: () => void;
   abandonContinuation: () => void;
+  fleet?: FleetContinuationState;
+  setFleet: (enabled: boolean) => void;
   update: (patch: Partial<RelaySettings>) => void;
   disabled: boolean;
   t: (tr: string, en: string) => string;
@@ -122,34 +128,47 @@ export function Preferences({
             syncDisabled={syncDisabled}
             t={t}
           />
-          <ContinuationSettings
+          <FleetSettings
+            value={fleet}
             accounts={accounts}
-            active={active}
-            value={continuation}
             busy={disabled}
-            canArm={continuation?.canArm}
-            blockingReason={continuation?.observationReason}
-            onRefresh={inspectContinuation}
-            onArm={armContinuation}
-            onDisable={disarmContinuation}
             t={t}
-            usage={usage}
-            settings={value}
+            onToggle={setFleet}
+            requestAccessibility={requestAccessibility}
           />
-          {(continuation?.observationReason ===
-            "accessibility-permission-required" ||
-            continuation?.reason === "accessibility-permission-required") && (
-            <button
-              className="secondary"
-              disabled={disabled}
-              onClick={requestAccessibility}
-            >
-              {t(
-                "macOS Erişilebilirlik iznini aç",
-                "Open macOS Accessibility permission",
-              )}
-            </button>
+          {/* A single-conversation watch from earlier versions stays visible until it is off. */}
+          {(continuation?.enabled ||
+            continuation?.status === "reconciliation-required") && (
+            <ContinuationSettings
+              accounts={accounts}
+              active={active}
+              value={continuation}
+              busy={disabled}
+              canArm={continuation?.canArm}
+              blockingReason={continuation?.observationReason}
+              onRefresh={inspectContinuation}
+              onArm={armContinuation}
+              onDisable={disarmContinuation}
+              t={t}
+              usage={usage}
+              settings={value}
+            />
           )}
+          {continuation?.enabled &&
+            (continuation?.observationReason ===
+              "accessibility-permission-required" ||
+              continuation?.reason === "accessibility-permission-required") && (
+              <button
+                className="secondary"
+                disabled={disabled}
+                onClick={requestAccessibility}
+              >
+                {t(
+                  "macOS Erişilebilirlik iznini aç",
+                  "Open macOS Accessibility permission",
+                )}
+              </button>
+            )}
           {continuation?.status === "reconciliation-required" && (
             <>
               <div className="continuation-actions">

@@ -186,6 +186,8 @@ function guard(snapshot: DesktopAutomationSnapshot): DesktopAutomationGuard {
   };
 }
 
+export const automationGuard = guard;
+
 /** The helper never starts Claude, reads credentials or invokes a CLI. */
 export function nativeDesktopAutomation(
   helper: string,

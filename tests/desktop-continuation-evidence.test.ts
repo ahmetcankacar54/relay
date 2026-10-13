@@ -495,7 +495,7 @@ async function fixture() {
     cpuTimes: () => "456 0:01.00\n",
     now: () => ui.observedAt,
   });
-  return { root, evidence, ui, source, target, org, transcriptFile };
+  return { root, evidence, ui, source, target, org, transcriptFile, store };
 }
 test("real metadata adapter binds alias, account, project, transcript and quota turn", async () => {
   const f = await fixture();
@@ -684,6 +684,62 @@ test("other, empty organization folders of the account do not hide the open conv
     await fs.mkdir(path.dirname(duplicate), { recursive: true });
     await fs.writeFile(duplicate, "{}");
     await assert.rejects(f.evidence.read(ui), /desktop-observation-incomplete/);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
+test("every quota-stopped conversation of an account is found from files, and its continuation is verified", async () => {
+  const f = await fixture();
+  try {
+    const metadataFile = path.join(
+      f.root,
+      "desktop",
+      "claude-code-sessions",
+      f.source.id,
+      f.org,
+      `local_${uuid}.json`,
+    );
+    const metadata = JSON.parse(await fs.readFile(metadataFile, "utf8"));
+    metadata.lastActivityAt = Date.parse("2026-10-13T14:00:00.000Z");
+    await fs.writeFile(metadataFile, JSON.stringify(metadata));
+    const stops = await f.evidence.quotaStops(f.store.account(f.source.id));
+    assert.equal(stops.length, 1);
+    assert.equal(stops[0].localSessionId, `local_${uuid}`);
+    assert.equal(stops[0].cliSessionId, uuid);
+    assert.equal(stops[0].turnId, assistantId);
+    assert.equal(stops[0].permissionMode, "Auto");
+    assert.equal(f.evidence.unchanged(stops[0]), true);
+    assert.equal(await f.evidence.quietExcept(stops), undefined);
+    assert.equal(await f.evidence.deliveryAfter(stops[0], "r1"), "absent");
+    await fs.appendFile(
+      f.transcriptFile,
+      JSON.stringify({
+        type: "user",
+        uuid: userId,
+        parentUuid: assistantId,
+        message: { content: "Continue\n[Relay continuation: r1]" },
+      }) + "\n",
+    );
+    assert.equal(f.evidence.unchanged(stops[0]), false);
+    assert.equal(await f.evidence.deliveryAfter(stops[0], "r1"), "accepted");
+    await fs.appendFile(
+      f.transcriptFile,
+      JSON.stringify({
+        type: "assistant",
+        uuid: nextAssistant,
+        parentUuid: userId,
+        message: {
+          content: [{ type: "text", text: "ok" }],
+          stop_reason: "end_turn",
+        },
+      }) + "\n",
+    );
+    assert.equal(await f.evidence.deliveryAfter(stops[0], "r1"), "started");
+    // The conversation no longer ends at its limit.
+    assert.equal(
+      (await f.evidence.quotaStops(f.store.account(f.source.id))).length,
+      0,
+    );
   } finally {
     await fs.rm(f.root, { recursive: true, force: true });
   }

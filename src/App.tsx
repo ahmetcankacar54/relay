@@ -1500,6 +1500,10 @@ export default function App() {
                   api.abandonContinuation(),
                 )
               }
+              fleet={data?.fleet}
+              setFleet={(enabled) =>
+                void action("fleet", () => api.setFleetContinuation(enabled))
+              }
               requestAccessibility={() =>
                 void action("continuation-permission", () =>
                   api.requestDesktopAccessibility(),

@@ -5,6 +5,8 @@ const api: RelayAPI = {
   armContinuation: (id, policy) =>
     ipcRenderer.invoke("relay:arm-continuation", id, policy),
   disarmContinuation: () => ipcRenderer.invoke("relay:disarm-continuation"),
+  setFleetContinuation: (enabled: boolean) =>
+    ipcRenderer.invoke("relay:set-fleet-continuation", enabled),
   reconcileContinuation: () =>
     ipcRenderer.invoke("relay:reconcile-continuation"),
   abandonContinuation: () => ipcRenderer.invoke("relay:abandon-continuation"),

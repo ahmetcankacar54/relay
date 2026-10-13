@@ -34,11 +34,18 @@ import {
   FileDesktopContinuationPersistence,
 } from "./core/desktop-continuation";
 import {
+  automationGuard,
   DesktopAutomationError,
   DesktopContinuationHost,
   nativeDesktopAutomation,
+  type DesktopAutomationSnapshot,
 } from "./core/desktop-continuation-host";
-import { NativeDesktopContinuationEvidence } from "./core/desktop-continuation-evidence";
+import {
+  NativeDesktopContinuationEvidence,
+  type QuotaStop,
+} from "./core/desktop-continuation-evidence";
+import { CONTINUATION_TEXT } from "./core/continuation";
+import { FleetContinuation, type FleetResult } from "./core/fleet-continuation";
 import { UsageCredentialRefresher } from "./core/usage-refresh";
 import { UsageError } from "./core/usage-credentials";
 
@@ -57,6 +64,7 @@ let routines: RoutineManager;
 let observedDesktop: DesktopState | undefined;
 let initialized = false;
 let continuation: DesktopContinuationManager;
+let fleet: FleetContinuation;
 let automation: ReturnType<typeof nativeDesktopAutomation>;
 let desktopTail: Promise<void> = Promise.resolve();
 let desktopTransactionActive = false;
@@ -262,6 +270,7 @@ else {
       autoSwitch = new AutoSwitchManager(service.store, desktop, usage, {
         withDesktopLock,
         pendingAuth: () =>
+          fleet?.enabled ||
           continuation.snapshot().enabled ||
           continuation.snapshot().status === "reconciliation-required" ||
           continuation.snapshot().reason === "continuation-state-unreadable" ||
@@ -270,6 +279,121 @@ else {
           if (window && !window.isDestroyed())
             window.webContents.send("relay:changed");
         },
+      });
+      /** Reopen one stopped conversation on the target, verify it and send once. */
+      const continueConversation = async (
+        stop: QuotaStop,
+        target: Account,
+        requestId: string,
+        beforeSend: () => void,
+      ): Promise<FleetResult> => {
+        const sleep = (ms: number) =>
+          new Promise((resolve) => setTimeout(resolve, ms));
+        let snapshot: DesktopAutomationSnapshot | undefined;
+        let openedAt = -Infinity;
+        // Claude may still be starting; resend the link until the view loads.
+        for (let attempt = 0; attempt < 120 && !snapshot; attempt++) {
+          try {
+            const view = await automation.inspect();
+            if (
+              view.localSessionId === stop.localSessionId &&
+              view.permissionMode
+            )
+              snapshot = view;
+            else if (Date.now() - openedAt >= 5_000) {
+              openedAt = Date.now();
+              await automation.openSession(stop.localSessionId);
+            }
+          } catch {
+            // Not ready yet.
+          }
+          if (!snapshot) await sleep(500);
+        }
+        if (!snapshot) return "skipped";
+        const state = await evidence.read(snapshot);
+        if (
+          state.identity.profileId !== target.id ||
+          state.session.id !== stop.cliSessionId ||
+          snapshot.status !== "stopped" ||
+          !evidence.unchanged(stop)
+        )
+          return "skipped";
+        if (
+          stop.permissionMode &&
+          snapshot.permissionMode !== stop.permissionMode
+        ) {
+          snapshot = await automation.setPermission(
+            automationGuard(snapshot),
+            stop.permissionMode,
+          );
+          if (snapshot.permissionMode !== stop.permissionMode)
+            return "skipped";
+        }
+        // Claude's own "continue when limits reset" would send a second prompt.
+        if (snapshot.quotaAutoResume && automation.cancelQuotaResume)
+          try {
+            snapshot = await automation.cancelQuotaResume(
+              automationGuard(snapshot),
+            );
+          } catch {
+            // The banner may be gone on the new account; nothing to cancel.
+          }
+        if (!snapshot.composerEmpty || snapshot.status !== "stopped")
+          return "skipped";
+        if ((await evidence.deliveryAfter(stop, requestId)) !== "absent")
+          return "unknown";
+        beforeSend();
+        await automation.send(
+          automationGuard(snapshot),
+          requestId,
+          CONTINUATION_TEXT,
+        );
+        for (let attempt = 0; attempt < 110; attempt++) {
+          const delivery = await evidence.deliveryAfter(stop, requestId);
+          if (delivery === "started" || delivery === "unknown") return delivery;
+          await sleep(attempt < 10 ? 500 : 2_000);
+        }
+        const final = await evidence.deliveryAfter(stop, requestId);
+        return final === "started" || final === "accepted" ? final : "unknown";
+      };
+      fleet = new FleetContinuation({
+        directory: path.join(app.getPath("userData"), "fleet-continuation"),
+        snapshot: () => ({
+          accounts: service.store.state.accounts,
+          settings: service.store.state.settings,
+          usage: usage.snapshot(),
+        }),
+        desktop: async () => ({
+          ...(observedDesktop = await desktop.snapshot()),
+          busy: desktop.isBusy || desktopTransactionActive,
+        }),
+        busy: () =>
+          pendingAuth() ||
+          continuation.snapshot().enabled ||
+          continuation.snapshot().status === "executing" ||
+          continuation.snapshot().status === "reconciliation-required",
+        stops: (account) => evidence.quotaStops(account),
+        quiet: (stops) => evidence.quietExcept(stops),
+        quietSync: (stops) => evidence.quietExceptSync(stops),
+        unchanged: (stop) => evidence.unchanged(stop),
+        automationReady: async () => {
+          if (process.platform !== "darwin") return "desktop-ui-unsupported";
+          try {
+            await automation.inspect();
+            return undefined;
+          } catch (error) {
+            const issue =
+              error instanceof DesktopAutomationError
+                ? error.issue
+                : "desktop-ui-unsupported";
+            // Claude being closed is fine: the switch launches it.
+            return issue === "claude-not-running" ? undefined : issue;
+          }
+        },
+        switchTo: (targetId, guards) => desktop.switchTo(targetId, guards),
+        continueOne: continueConversation,
+        withDesktopLock,
+        changed: () => window?.webContents.send("relay:changed"),
       });
       observedDesktop = await desktop.snapshot();
       routines = new RoutineManager(
@@ -345,10 +469,12 @@ else {
           autoSwitch.start();
           routines.start();
           continuation.start();
+          fleet.start();
           window?.webContents.send("relay:changed");
           // An unattended switch must not wait on a Keychain consent; ask now,
           // while Relay was just opened by the user.
           if (
+            fleet.enabled ||
             continuation.snapshot().enabled ||
             service.store.state.settings.autoSwitchMode !== "off"
           )
@@ -560,6 +686,18 @@ function bindIPC() {
     return continuation.arm({ targetAccountId, executionPolicy });
   });
   handle("disarm-continuation", () => continuation.disarm());
+  handle("set-fleet-continuation", async (enabled) => {
+    const on = z.boolean().parse(enabled);
+    if (on) {
+      // Ask for the saved sign-ins' Keychain consent now, not during a handoff.
+      await desktop.verifySavedLogins();
+      // One monitor at a time: the all-conversations mode replaces a single watch.
+      if (continuation.snapshot().enabled) await continuation.disarm();
+    }
+    const state = fleet.setEnabled(on);
+    if (on) void fleet.tick();
+    return state;
+  });
   handle("reconcile-continuation", () => continuation.resumePending());
   handle("abandon-continuation", () => continuation.abandonPending());
   handle("request-desktop-accessibility", async () => {
@@ -669,6 +807,7 @@ function bindIPC() {
     ...(await service.panelSnapshot()),
     usage: displayUsage(),
     continuation: continuation.snapshot(),
+    fleet: fleet.snapshot(),
     autoSwitch: autoSwitch.snapshot(),
     usageStatistics: usageHistory.snapshot(service.store.state.accounts),
     workdayPlan: workdayPlan(
@@ -683,6 +822,7 @@ function bindIPC() {
       ...(await service.snapshot()),
       usage: displayUsage(),
       continuation: continuation.snapshot(),
+      fleet: fleet.snapshot(),
       autoSwitch: autoSwitch.snapshot(),
       usageStatistics: usageHistory.snapshot(service.store.state.accounts),
       workdayPlan: workdayPlan(
@@ -872,4 +1012,5 @@ app.on("will-quit", () => {
   autoSwitch?.stop();
   routines?.stop();
   continuation?.stop();
+  fleet?.stop();
 });

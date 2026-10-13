@@ -79,6 +79,7 @@ export interface Snapshot {
   settings: RelaySettings;
   autoSwitch?: AutoSwitchState;
   continuation?: DesktopContinuationSnapshot;
+  fleet?: FleetContinuationState;
   usageStatistics?: Record<string, AccountUsageStatistics>;
   workdayPlan?: WorkdayPlan;
   routines?: RoutineSnapshot;
@@ -113,6 +114,33 @@ export interface TranscriptMessage {
   role: "user" | "assistant";
   text: string;
 }
+/** "Switch and continue" for every local Code conversation, kept on until turned off. */
+export interface FleetContinuationState {
+  enabled: boolean;
+  status:
+    | "off"
+    | "watching"
+    | "waiting"
+    | "switching"
+    | "continuing"
+    | "attention";
+  /** Machine-readable reason, localized by the UI. */
+  reason?: string;
+  sourceId?: string;
+  targetId?: string;
+  /** Quota-stopped conversations found in the active account. */
+  stopped?: number;
+  checkedAt?: string;
+  last?: {
+    at: string;
+    sourceId: string;
+    targetId: string;
+    conversations: number;
+    started: number;
+    uncertain: number;
+    skipped: number;
+  };
+}
 export interface DesktopState {
   available: boolean;
   running: boolean;
@@ -134,6 +162,7 @@ export interface RelayAPI {
     executionPolicy: "guarded-native-at-most-once",
   ): Promise<DesktopContinuationSnapshot>;
   disarmContinuation(): Promise<DesktopContinuationSnapshot>;
+  setFleetContinuation(enabled: boolean): Promise<FleetContinuationState>;
   reconcileContinuation(): Promise<DesktopContinuationSnapshot>;
   abandonContinuation(): Promise<DesktopContinuationSnapshot>;
   requestDesktopAccessibility(): Promise<boolean>;

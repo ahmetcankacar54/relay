@@ -25,12 +25,14 @@ Independent tool, not an Anthropic product.
 - **Statistics and planning** — 7/30-day observed usage, a 24-hour work plan with
   time zone, plan capacities (Pro, Max 5×, Max 20×, custom Team weight) and optional
   routines that open a five-hour window ahead of your work day (off by default).
-- **Switch and continue at quota** (experimental, macOS, off by default) — when the
-  watched Code conversation stops at its usage limit and nothing else is running,
-  Relay picks the eligible account with the most usable quota, restarts Claude on
-  it, reopens the same conversation with the same permission mode and sends one
-  continuation message. Needs Accessibility permission. Never interrupts running
-  work and never sends a message twice.
+- **Switch and continue at quota** (experimental, macOS, off by default) — once
+  turned on it stays on for every local Code conversation. When the active
+  account runs out of quota and nothing else is running, Relay picks the eligible
+  account with the most usable quota, restarts Claude on it once and sends one
+  continuation message to each conversation that stopped at the limit, keeping
+  its permission mode. Later limits rotate again (A → B → A) but never back to an
+  account that is still out of quota. Needs Accessibility permission. Never
+  interrupts running work and never sends a message twice.
 
 ## Install and run
 

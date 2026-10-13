@@ -293,6 +293,7 @@ export const previewApi: RelayAPI = {
   }),
   armContinuation: desktopOnly,
   disarmContinuation: desktopOnly,
+  setFleetContinuation: desktopOnly,
   reconcileContinuation: desktopOnly,
   abandonContinuation: desktopOnly,
   requestDesktopAccessibility: desktopOnly,
