@@ -1,0 +1,1031 @@
+/* Relay's planning workspace: neutral surfaces, readable type and teal actions. */
+:root {
+  --ink: #19232f;
+  --muted: #526173;
+  --line: #dce4eb;
+  --olive: #0f766e;
+  --surface: #ffffff;
+  --canvas: #f3f6f8;
+  --accent-soft: #e7f4f1;
+  --popover-z: 50;
+  color: var(--ink);
+  background: var(--canvas);
+  font-size: 15px;
+}
+body {
+  background: var(--canvas);
+}
+button,
+input,
+select,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  transition:
+    background-color 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #0f766e;
+  outline-offset: 3px;
+}
+.app-header {
+  background: #f3f6f8f5;
+  border-color: var(--line);
+}
+.logo > span {
+  background: #0f766e;
+  color: #fff;
+}
+.logo small,
+.eyebrow,
+.overline {
+  color: #526173;
+}
+.icon {
+  min-width: 44px;
+  min-height: 44px;
+  color: #526173;
+  border-radius: 10px;
+}
+.icon:hover,
+.icon.selected {
+  color: #0f766e;
+  background: #e7f4f1;
+}
+.header-actions select {
+  min-height: 44px;
+}
+.primary,
+.secondary,
+.text-button {
+  min-height: 44px;
+  font-size: 13px;
+}
+.secondary {
+  color: #334155;
+  border-color: var(--line);
+  background: #fff;
+  border-radius: 9px;
+}
+.secondary:hover:not(:disabled) {
+  background: #f0f5f7;
+}
+.active-account {
+  background: #eaf5f2;
+  border-color: #cfe4dd;
+  border-radius: 16px;
+}
+.desktop-symbol {
+  background: #d8ece5;
+  border-color: #c0dcd2;
+}
+.active-copy p,
+.switch-note {
+  color: #526173;
+}
+.row-main {
+  background: #fff;
+}
+.pill {
+  font-size: 12px;
+  padding: 6px 10px;
+  color: #40566b;
+  background: #edf2f6;
+  border-radius: 7px;
+}
+.preview-note {
+  color: #695224;
+  background: #faf3df;
+}
+.settings-panel {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.settings-panel > .form-title {
+  margin: 0 0 18px;
+}
+.settings-panel > .form-title h3 {
+  font-size: 20px;
+  letter-spacing: -0.4px;
+}
+.preferences-tabs {
+  background: #e9eef2;
+  border: 1px solid #dce4eb;
+  border-radius: 13px;
+  padding: 5px;
+  gap: 4px;
+  margin-bottom: 28px;
+}
+.preferences-tabs button {
+  border-radius: 9px;
+  min-height: 62px;
+  padding: 11px 16px;
+  color: #405268;
+}
+.preferences-tabs strong {
+  font-size: 14px;
+}
+.preferences-tabs small {
+  font-size: 12px;
+  color: #526173;
+}
+.preferences-tabs button:hover {
+  background: #f3f6f8;
+}
+.preferences-tabs button[aria-pressed="true"] {
+  background: #fff;
+  color: #0f766e;
+  box-shadow: 0 1px 3px #162b4010;
+}
+.planning-section-title {
+  margin: 0 0 22px;
+  align-items: center;
+}
+.planning-section-title h4 {
+  font-size: 22px;
+  gap: 10px;
+  color: #19232f;
+  letter-spacing: -0.5px;
+}
+.planning-section-title h4 svg {
+  width: 21px;
+  height: 21px;
+  color: #0f766e;
+}
+.settings-panel .planning-section-title p {
+  font-size: 14px;
+  color: #526173;
+  margin-top: 7px;
+}
+.planning-section-title > .pill {
+  background: #e7f4f1;
+  color: #0f615b;
+}
+.day-schedule {
+  background: #fff;
+  border: 1px solid #dce4eb;
+  border-radius: 17px;
+  padding: 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 5px #182d4210;
+}
+.day-schedule-caption {
+  margin-bottom: 26px;
+  gap: 12px;
+  align-items: center;
+}
+.day-schedule-date strong {
+  color: #26364a;
+  font-size: 16px;
+}
+.day-schedule-date > span {
+  color: #526173;
+  font-size: 12px;
+}
+.day-schedule-state {
+  color: #526173;
+  font-size: 12px;
+  background: #f1f5f8;
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+.day-schedule-navigation {
+  margin-left: 0;
+  gap: 5px;
+}
+.day-schedule-navigation button {
+  min-width: 44px;
+  min-height: 44px;
+  background: #f1f5f8;
+  color: #34465c;
+  border: 1px solid #dfe7ed;
+  border-radius: 9px;
+}
+.day-schedule-navigation button:hover {
+  background: #e3f1ed;
+  border-color: #c2dcd4;
+}
+.day-schedule-navigation .day-schedule-navigation-reset {
+  font-size: 12px;
+  padding: 0 11px;
+}
+.day-schedule-grid {
+  grid-template-columns: 185px minmax(0, 1fr);
+  column-gap: 22px;
+}
+.day-schedule-axis-label {
+  font-size: 13px;
+  color: #34465b;
+}
+.day-schedule-axis-label > span {
+  font-size: 12px;
+  color: #526173;
+}
+.day-schedule-working-track {
+  height: 12px;
+  background: #eaf0f4;
+  border-radius: 4px;
+}
+.day-schedule-working-band {
+  background: #bdded2;
+  border-radius: 4px;
+}
+.day-schedule-hours {
+  color: #526173;
+  font-size: 12px;
+  height: 28px;
+  margin-top: 10px;
+}
+.day-schedule-account {
+  padding: 16px 0;
+}
+.day-schedule-account > strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #233449;
+}
+.day-schedule-account-dot {
+  width: 8px;
+  height: 8px;
+  margin-right: 7px;
+}
+.day-schedule-time-range {
+  font-size: 13px;
+  color: #405267;
+  margin-top: 6px;
+}
+.day-schedule-slot-status {
+  font-size: 12px;
+  color: #7a4c17;
+  margin-top: 4px;
+}
+.day-schedule-reset-label {
+  font-size: 12px;
+  color: #0f615b;
+  margin-top: 4px;
+}
+.day-schedule-track {
+  min-height: 114px;
+  border-color: #e8edf1;
+  background: repeating-linear-gradient(
+    to right,
+    #e5ebf0 0,
+    #e5ebf0 1px,
+    transparent 1px,
+    transparent 12.5%
+  );
+}
+.day-schedule-window {
+  top: 40px;
+  height: 30px;
+  font-size: 12px;
+  color: #334155;
+  border-width: 1.5px;
+  border-radius: 6px;
+}
+.day-schedule-reset {
+  top: 28px;
+  bottom: 29px;
+  background: #0f766e;
+  width: 2px;
+}
+.day-schedule-reset::before {
+  background: #0f766e;
+  width: 9px;
+  height: 9px;
+  left: -3.5px;
+}
+.day-schedule-now {
+  background: #bd643f;
+  width: 1.5px;
+}
+.day-schedule-legend {
+  margin-top: 20px;
+  gap: 12px 20px;
+}
+.day-schedule-legend > span {
+  font-size: 12px;
+  color: #405267;
+}
+.day-schedule-legend-working {
+  background: #bdded2;
+}
+.day-schedule-legend-window {
+  border-color: #405267;
+}
+.day-schedule-legend-reset {
+  background: #0f766e;
+}
+.settings-panel .day-schedule-note {
+  font-size: 12px;
+  color: #526173;
+  margin-top: 15px;
+  line-height: 1.6;
+}
+.settings-panel .day-schedule-no-accounts,
+.day-schedule-empty {
+  font-size: 14px;
+  color: #405267;
+}
+.day-schedule-empty {
+  background: #fff;
+  padding: 24px;
+  border: 1px dashed #c9d5de;
+  border-radius: 12px;
+}
+.planning-recommendation {
+  margin: 0 0 24px;
+  border: 0;
+  border-radius: 11px;
+  padding: 14px 17px;
+  background: #e7f4f1;
+  gap: 6px 12px;
+  font-size: 13px;
+}
+.planning-recommendation span {
+  color: #365f59;
+}
+.planning-recommendation strong {
+  color: #0f615b;
+}
+.planning-recommendation small {
+  color: #365f59;
+  font-size: 12px;
+}
+.planning-schedule-panel,
+.planning-account-panel {
+  background: #fff;
+  border: 1px solid #dce4eb;
+  border-radius: 15px;
+  padding: 22px;
+  margin-bottom: 22px;
+}
+.planning-group-heading {
+  margin: 0 0 16px;
+  align-items: center;
+}
+.planning-group-heading h5 {
+  font-size: 16px;
+  color: #26364a;
+}
+.planning-group-heading > span {
+  font-size: 12px;
+  color: #526173;
+  padding: 6px 9px;
+  background: #f1f5f8;
+  border-radius: 6px;
+}
+.workday-grid {
+  gap: 14px;
+  margin-top: 0;
+}
+.workday-days {
+  margin: 22px 0 0;
+  gap: 8px;
+}
+.workday-days legend {
+  font-size: 13px;
+  color: #405267;
+  margin-bottom: 12px;
+}
+.workday-days label {
+  min-width: 64px;
+  min-height: 44px;
+  justify-content: center;
+  border-radius: 9px;
+  border-color: #dce4eb;
+  color: #405267;
+  font-size: 13px;
+  padding: 9px 11px;
+  background: #f8fafc;
+}
+.workday-days label:hover {
+  border-color: #8ebfb0;
+}
+.workday-days label:has(input:checked) {
+  border-color: #b5d6ca;
+  background: #e7f4f1;
+  color: #0f615b;
+}
+.workday-days input,
+.planning-account input,
+.routine-toggle input {
+  accent-color: #0f766e;
+  width: 17px;
+  height: 17px;
+}
+.settings-panel .planning-inline-note {
+  font-size: 12px;
+  color: #526173;
+  margin-bottom: 14px;
+}
+.planning-table {
+  font-size: 14px;
+}
+.planning-table th,
+.planning-table td {
+  padding: 17px 9px;
+  border-color: #e3eaf0;
+}
+.planning-table thead th {
+  font-size: 11px;
+  color: #526173;
+}
+.planning-table strong {
+  font-size: 14px;
+  color: #26364a;
+}
+.planning-table small {
+  font-size: 12px;
+  color: #526173;
+  margin-top: 5px;
+}
+.planning-account {
+  gap: 11px;
+  min-height: 44px;
+}
+.planning-muted {
+  color: #526173;
+  font-size: 12px;
+}
+.planning-manual-tag {
+  color: #665223;
+  background: #faf3df;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+.plan-editor select {
+  font-size: 13px;
+  border-radius: 9px;
+  border-color: #dce4eb;
+  min-height: 44px;
+  color: #334155;
+}
+.capacity-input {
+  font-size: 12px;
+  color: #526173;
+}
+.capacity-input input {
+  min-height: 36px;
+  min-width: 64px;
+  font-size: 13px;
+  border-color: #dce4eb;
+  border-radius: 6px;
+}
+.planning-advanced {
+  background: #fff;
+  border: 1px solid #dce4eb;
+  border-radius: 13px;
+  padding: 0 20px;
+  margin-top: 0;
+}
+.planning-advanced > summary {
+  min-height: 72px;
+}
+.planning-advanced summary strong {
+  font-size: 14px;
+  color: #26364a;
+}
+.planning-advanced summary small {
+  font-size: 12px;
+  color: #526173;
+}
+.planning-advanced .workday-grid {
+  margin-top: 8px;
+}
+.planning-advanced .workday-grid label {
+  font-size: 13px;
+  color: #405267;
+}
+.planning-advanced .workday-grid input {
+  min-height: 44px;
+  font-size: 14px;
+  border-color: #dce4eb;
+  background: #fff;
+  border-radius: 9px;
+}
+.settings-panel .preference-footnote {
+  font-size: 12px;
+  color: #526173;
+}
+.routine-toggle {
+  background: #fff;
+  border: 1px solid #dce4eb;
+  border-radius: 13px;
+  padding: 18px 20px;
+  margin-top: 22px;
+}
+.routine-toggle label {
+  min-height: 44px;
+  font-size: 14px;
+  color: #26364a;
+  gap: 13px;
+}
+.routine-toggle input {
+  margin-top: 3px;
+}
+.routine-toggle small {
+  font-size: 13px;
+  color: #526173;
+}
+.planning-help {
+  padding: 4px 0;
+}
+.planning-help summary {
+  font-size: 13px;
+  color: #405267;
+  min-height: 44px;
+  display: list-item;
+  align-content: center;
+}
+.planning-help p {
+  color: #526173;
+}
+.planning-save {
+  background: #eaf0f4;
+  border: 1px solid #dce4eb;
+  border-radius: 13px;
+  padding: 15px 17px;
+  margin-top: 24px;
+}
+.planning-save > span {
+  font-size: 13px;
+  color: #405267;
+}
+.planning-save .secondary {
+  background: #0f766e;
+  color: #fff;
+  border-color: #0f766e;
+  padding: 10px 16px;
+}
+.planning-save .secondary:hover:not(:disabled) {
+  background: #115e59;
+}
+.routine-confirm {
+  color: #26364a;
+  background: #fff7e9;
+  border: 1px solid #ead6ad;
+  border-radius: 12px;
+}
+.preferences .preference-row label {
+  font-size: 14px;
+}
+.settings-panel .preferences .preference-row p {
+  color: #526173;
+  font-size: 13px;
+}
+.preferences .preference-row select {
+  min-height: 44px;
+}
+
+/* Portaled controls share surfaces and focus treatment with the planner. */
+.time-picker-field,
+.zone-picker {
+  min-width: 0;
+}
+.time-picker-label,
+.zone-picker-label {
+  color: #405267;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 9px;
+  display: block;
+}
+.planning-schedule-panel .time-picker-label {
+  display: block;
+  color: #405267;
+  font-size: 13px;
+  font-weight: 500;
+}
+.time-picker-trigger,
+.zone-picker-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 68px;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #dce4eb;
+  border-radius: 11px;
+  padding: 12px 14px;
+  text-align: left;
+  color: #405267;
+}
+.time-picker-trigger:hover:not(:disabled),
+.zone-picker-trigger:hover:not(:disabled) {
+  background: #f0f7f5;
+  border-color: #a8c9be;
+}
+.time-picker-trigger[aria-expanded="true"],
+.zone-picker-trigger[aria-expanded="true"] {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px #0f766e12;
+}
+.time-picker-value {
+  color: #1e3346;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.time-picker-suffix {
+  font-size: 12px;
+  margin-left: auto;
+  color: #526173;
+}
+.zone-picker-icon {
+  color: #0f766e;
+  flex-shrink: 0;
+}
+.zone-picker-value {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+.zone-picker-city {
+  font-size: 15px;
+  font-weight: 600;
+  color: #26364a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.zone-picker-zone {
+  font-size: 11px;
+  color: #526173;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.zone-picker-offset {
+  color: #0f615b;
+  background: #e3f1ec;
+  font-size: 11px;
+  padding: 5px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.zone-picker-chevron {
+  color: #526173;
+  flex-shrink: 0;
+}
+.time-picker-popover,
+.zone-picker-popover {
+  box-sizing: border-box;
+  z-index: var(--popover-z);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cbd8e1;
+  border-radius: 15px;
+  background: #fff;
+  color: #26364a;
+  box-shadow:
+    0 16px 48px #1a314025,
+    0 3px 12px #1a314014;
+  animation: picker-enter 160ms ease-out;
+}
+.time-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 17px 10px;
+  font-size: 15px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.time-picker-heading > span:last-child {
+  font-size: 11px;
+  color: #526173;
+  font-weight: 400;
+}
+.time-picker-manual {
+  padding: 0 17px 14px;
+  flex-shrink: 0;
+}
+.time-picker-manual label {
+  font-size: 12px;
+  color: #405267;
+  margin-bottom: 7px;
+}
+.time-picker-manual input {
+  width: 100%;
+  min-height: 44px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+  border: 1px solid #cbd8e1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #f8fafc;
+}
+.time-picker-manual small {
+  display: block;
+  margin-top: 7px;
+  font-size: 11px;
+  color: #526173;
+  line-height: 1.5;
+}
+.time-picker-error {
+  color: #a33524;
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.time-picker-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 14px 14px;
+  overscroll-behavior: contain;
+}
+.time-picker-section + .time-picker-section {
+  margin-top: 15px;
+}
+.time-picker-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0 3px 8px;
+  font-size: 12px;
+  color: #405267;
+  font-weight: 600;
+}
+.time-picker-custom-minute {
+  font-weight: 400;
+  font-size: 11px;
+  color: #0f615b;
+}
+.time-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--time-picker-columns, 6), minmax(0, 1fr));
+  gap: 4px;
+}
+.time-picker-option {
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 7px;
+  background: #f1f5f8;
+  color: #334155;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.time-picker-option:hover {
+  background: #e5f1ec;
+}
+.time-picker-option[data-selected="true"] {
+  background: #0f766e;
+  color: #fff;
+}
+.time-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #e1e8ed;
+  padding: 12px 14px;
+  flex-shrink: 0;
+  background: #fff;
+}
+.time-picker-actions button {
+  min-height: 44px;
+  padding: 9px 17px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.time-picker-cancel {
+  background: #f1f5f8;
+  color: #405267;
+}
+.time-picker-apply {
+  background: #0f766e;
+  color: #fff;
+}
+.time-picker-apply:hover {
+  background: #115e59;
+}
+.zone-picker-search {
+  position: relative;
+  padding: 14px;
+  border-bottom: 1px solid #e1e8ed;
+  flex-shrink: 0;
+}
+.zone-picker-search > svg {
+  position: absolute;
+  top: 28px;
+  left: 27px;
+  color: #526173;
+}
+.zone-picker-search input {
+  padding: 10px 12px 10px 36px;
+  min-height: 44px;
+  font-size: 14px;
+  border-color: #cbd8e1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.zone-picker-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 7px;
+  overscroll-behavior: contain;
+}
+.zone-picker-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 58px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #26364a;
+  text-align: left;
+}
+.zone-picker-option:hover,
+.zone-picker-option.is-active {
+  background: #f0f6f8;
+}
+.zone-picker-option.is-selected {
+  background: #e7f4f1;
+}
+.zone-picker-option-copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 5px;
+}
+.zone-picker-option-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.zone-picker-option-copy small {
+  font-size: 11px;
+  color: #526173;
+  overflow-wrap: anywhere;
+}
+.zone-picker-check {
+  color: #0f766e;
+  flex-shrink: 0;
+}
+.zone-picker-empty {
+  color: #526173;
+  padding: 24px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.zone-picker-footer {
+  border-top: 1px solid #e1e8ed;
+  background: #f8fafc;
+  padding: 9px;
+  flex-shrink: 0;
+}
+.zone-picker-system {
+  width: 100%;
+  min-height: 44px;
+  justify-content: flex-start;
+  padding: 10px 12px;
+  background: transparent;
+  color: #0f615b;
+  font-size: 12px;
+  border-radius: 7px;
+}
+.zone-picker-system:hover:not(:disabled) {
+  background: #e7f4f1;
+}
+@keyframes picker-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 760px) {
+  .day-schedule {
+    padding: 19px;
+  }
+  .day-schedule-grid {
+    grid-template-columns: 155px minmax(0, 1fr);
+    column-gap: 16px;
+  }
+  .day-schedule-caption {
+    align-items: flex-start;
+  }
+  .workday-grid > .zone-picker {
+    grid-column: 1 / -1;
+  }
+  .preferences-tabs button {
+    padding: 10px 12px;
+  }
+  .preferences-tabs small {
+    font-size: 11px;
+  }
+  .planning-schedule-panel,
+  .planning-account-panel {
+    padding: 19px;
+  }
+}
+@media (max-width: 520px) {
+  :root {
+    font-size: 16px;
+  }
+  .settings-panel .planning-section-title p {
+    font-size: 14px;
+  }
+  .planning-section-title h4 {
+    font-size: 20px;
+  }
+  .preferences-tabs strong {
+    font-size: 12px;
+  }
+  .day-schedule {
+    padding: 16px;
+    border-radius: 13px;
+  }
+  .day-schedule-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .day-schedule-account {
+    padding-bottom: 10px;
+  }
+  .day-schedule-track {
+    min-height: 60px;
+  }
+  .day-schedule-window {
+    top: 14px;
+  }
+  .day-schedule-reset {
+    top: 8px;
+    bottom: 10px;
+  }
+  .day-schedule-date > span {
+    font-size: 12px;
+  }
+  .planning-schedule-panel,
+  .planning-account-panel {
+    padding: 16px;
+  }
+  .planning-group-heading {
+    flex-wrap: wrap;
+  }
+  .time-picker-trigger {
+    padding: 12px 9px;
+    gap: 7px;
+  }
+  .time-picker-trigger > svg:last-child,
+  .time-picker-suffix {
+    display: none;
+  }
+  .time-picker-value {
+    font-size: 22px;
+  }
+  .zone-picker-trigger {
+    padding: 12px;
+    gap: 8px;
+  }
+  .zone-picker-offset {
+    font-size: 11px;
+    padding: 5px;
+  }
+  .workday-days label {
+    min-width: 55px;
+    padding: 8px;
+  }
+  .planning-table strong {
+    font-size: 13px;
+  }
+  .plan-editor select {
+    font-size: 12px;
+    padding: 9px 7px;
+  }
+  .capacity-input {
+    flex-wrap: wrap;
+  }
+  .planning-save {
+    flex-wrap: wrap;
+  }
+  .zone-picker-search input {
+    font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition: none;
+  }
+  .time-picker-popover,
+  .zone-picker-popover {
+    animation: none;
+  }
+}

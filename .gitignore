@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-electron/
+release/
+output/
+.relay-dev/
+*.log
+.DS_Store
+.playwright-cli/
+config/local-signing.json

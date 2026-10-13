@@ -1,0 +1,517 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { Store } from "../electron/core/store";
+import type { DesktopManager } from "../electron/core/desktop";
+import {
+  combineDesktopProcesses,
+  desktopProcessQuiescence,
+  isDesktopClaudeEngine,
+  latestQuotaEndedTurn,
+  parseDesktopTranscript,
+  continuationTurn,
+  NativeDesktopContinuationEvidence,
+  type DesktopProcess,
+} from "../electron/core/desktop-continuation-evidence";
+import type {
+  DesktopAutomation,
+  DesktopAutomationSnapshot,
+} from "../electron/core/desktop-continuation-host";
+
+const uuid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const userId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+const assistantId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+const nextAssistant = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+const app: DesktopProcess = {
+  pid: 456,
+  ppid: 1,
+  executable: "/Applications/Claude.app/Contents/MacOS/Claude",
+  args: "Claude",
+};
+const sourceEngine: DesktopProcess = {
+  pid: 457,
+  ppid: 456,
+  executable: "/test/claude",
+  args: `claude --resume ${uuid}`,
+};
+const roster = (...extra: DesktopProcess[]) => JSON.stringify([app, ...extra]);
+const terminal = {
+  type: "assistant",
+  uuid: assistantId,
+  timestamp: "2026-10-13T14:00:00.000Z",
+  error: "rate_limit",
+  message: { content: "limited" },
+};
+
+test("process census preserves paths with spaces and pairs args by PID", () => {
+  const combined = JSON.parse(
+    combineDesktopProcesses(
+      "456 1 /Applications/Claude.app/Contents/MacOS/Claude\n457 456 /path with spaces/claude\n",
+      "457 claude --resume id\n456 Claude\n",
+    ),
+  );
+  assert.equal(combined[1].executable, "/path with spaces/claude");
+  assert.equal(combined[1].args, "claude --resume id");
+});
+test("one exact selected engine with terminal transcript may remain alive", () => {
+  assert.equal(
+    desktopProcessQuiescence(roster(sourceEngine), 456, uuid, true).busyWorkers,
+    0,
+  );
+  assert.equal(
+    desktopProcessQuiescence(roster(sourceEngine), 456, uuid, false)
+      .busyWorkers,
+    1,
+  );
+});
+test("an idle sibling, source shell, unknown descendant or duplicate worker blocks", () => {
+  const sibling = {
+    ...sourceEngine,
+    pid: 458,
+    args: "claude --resume eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+  };
+  assert.equal(
+    desktopProcessQuiescence(roster(sourceEngine, sibling), 456, uuid, true)
+      .busyWorkers,
+    1,
+  );
+  assert.equal(
+    desktopProcessQuiescence(
+      roster(sourceEngine, {
+        pid: 458,
+        ppid: 457,
+        executable: "/bin/bash",
+        args: "bash",
+      }),
+      456,
+      uuid,
+      true,
+    ).unknownWork,
+    1,
+  );
+  assert.equal(
+    desktopProcessQuiescence(
+      roster(sourceEngine, { ...sourceEngine, pid: 458 }),
+      456,
+      uuid,
+      true,
+    ).busyWorkers,
+    1,
+  );
+});
+test("normal Chromium helpers are allowed but their arbitrary child is not", () => {
+  const helper = {
+    pid: 458,
+    ppid: 456,
+    executable:
+      "/Applications/Claude.app/Contents/Frameworks/Claude Helper (Renderer).app/Contents/MacOS/Claude Helper (Renderer)",
+    args: "helper",
+  };
+  assert.equal(
+    desktopProcessQuiescence(roster(helper), 456, uuid, false).unknownWork,
+    0,
+  );
+  assert.equal(
+    desktopProcessQuiescence(
+      roster(helper, {
+        pid: 459,
+        ppid: 458,
+        executable: "/bin/python",
+        args: "python task",
+      }),
+      456,
+      uuid,
+      false,
+    ).unknownWork,
+    1,
+  );
+});
+test("bad or missing app census remains unknown", () => {
+  for (const raw of [
+    "not json",
+    "[]",
+    JSON.stringify([app, app]),
+    JSON.stringify([{ ...app, args: undefined }]),
+  ]) {
+    assert.equal(
+      desktopProcessQuiescence(raw, 456, uuid, true).coverage,
+      "unknown",
+    );
+  }
+});
+test("global native version executables and npm Node engines are never skipped", () => {
+  const versioned = {
+    pid: 900,
+    ppid: 1,
+    executable: "/Users/test/.local/share/claude/versions/2.1.296",
+    args: "claude --resume different",
+  };
+  const npm = {
+    pid: 901,
+    ppid: 1,
+    executable: "/opt/homebrew/bin/node",
+    args: "node /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js --resume different",
+  };
+  const npmBin = {
+    ...npm,
+    pid: 902,
+    args: "node /opt/homebrew/bin/claude --resume different",
+  };
+  const npmSpaces = {
+    ...npm,
+    pid: 903,
+    args: "node /Users/Test User/node_modules/@anthropic-ai/claude-code/cli.js --resume different",
+  };
+  for (const worker of [versioned, npm, npmBin, npmSpaces]) {
+    assert.equal(isDesktopClaudeEngine(worker), true);
+    assert.equal(
+      desktopProcessQuiescence(roster(worker), 456, uuid, true).busyWorkers,
+      1,
+    );
+  }
+  assert.equal(
+    isDesktopClaudeEngine({
+      ...npm,
+      args: "node /test/unrelated.js --prompt @anthropic-ai/claude-code",
+    }),
+    false,
+  );
+});
+test("only the latest main assistant structured rate error is a quota-ended turn", () => {
+  assert.equal(latestQuotaEndedTurn([terminal])?.turnId, assistantId);
+  assert.equal(
+    latestQuotaEndedTurn([
+      terminal,
+      { type: "user", uuid: userId, message: { content: "new task" } },
+    ]),
+    undefined,
+  );
+  assert.equal(
+    latestQuotaEndedTurn([{ ...terminal, error: "network_error" }]),
+    undefined,
+  );
+  assert.equal(
+    latestQuotaEndedTurn([{ ...terminal, isSidechain: true }]),
+    undefined,
+  );
+});
+test("partial or malformed transcript records cannot become a safe checkpoint", () => {
+  assert.throws(() =>
+    parseDesktopTranscript(Buffer.from('{"type":"assistant"}')),
+  );
+  assert.throws(() => parseDesktopTranscript(Buffer.from("invalid\n")));
+  assert.equal(
+    parseDesktopTranscript(Buffer.from('{"type":"assistant"}\n')).length,
+    1,
+  );
+});
+test("continuation receipt binds the latest assistant chain to the nonce user turn", () => {
+  const user = {
+    type: "user",
+    uuid: userId,
+    message: { content: "Continue\n[Relay continuation: request]" },
+  };
+  const assistant = {
+    type: "assistant",
+    uuid: assistantId,
+    parentUuid: userId,
+    message: { content: "started" },
+  };
+  const final = { ...assistant, uuid: nextAssistant, parentUuid: assistantId };
+  assert.equal(continuationTurn([user])?.assistant, undefined);
+  assert.equal(
+    continuationTurn([user, assistant, final], "request")?.assistant?.uuid,
+    nextAssistant,
+  );
+  assert.equal(
+    continuationTurn([user, { ...assistant, parentUuid: uuid }], "request"),
+    undefined,
+  );
+  assert.equal(
+    continuationTurn(
+      [
+        user,
+        assistant,
+        { type: "user", uuid, message: { content: "human changed the task" } },
+      ],
+      "request",
+    ),
+    undefined,
+  );
+});
+
+test("every supported quota error form acknowledges the user turn without claiming resumed work", () => {
+  const user = {
+    type: "user",
+    uuid: userId,
+    message: { content: "Continue\n[Relay continuation: request]" },
+  };
+  for (const reason of [
+    "rate_limit",
+    "rate_limit_error",
+    "rate-limit",
+    "usage_limit",
+  ]) {
+    for (const error of [
+      { error: reason },
+      { error: { type: reason } },
+      { errorType: reason },
+      { apiError: { type: reason } },
+      { message: { content: "limited", stop_reason: reason } },
+    ]) {
+      const assistant = {
+        type: "assistant",
+        uuid: assistantId,
+        parentUuid: userId,
+        timestamp: "2026-10-13T14:00:00.000Z",
+        message: { content: "limited" },
+        ...error,
+      };
+      const rows = [user, assistant];
+      assert.equal(latestQuotaEndedTurn(rows)?.turnId, assistantId);
+      assert.equal(continuationTurn(rows, "request")?.user.uuid, userId);
+      assert.equal(continuationTurn(rows, "request")?.assistant, undefined);
+    }
+  }
+  for (const error of [
+    { errorType: "network_error" },
+    { errorType: "overloaded_error" },
+    { isApiErrorMessage: true },
+  ]) {
+    const rows = [
+      user,
+      {
+        type: "assistant",
+        uuid: assistantId,
+        parentUuid: userId,
+        message: { content: "request failed" },
+        ...error,
+      },
+    ];
+    assert.equal(latestQuotaEndedTurn(rows), undefined);
+    assert.equal(continuationTurn(rows, "request")?.assistant, undefined);
+  }
+});
+
+async function fixture() {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-evidence-test-"));
+  const store = new Store(path.join(root, "relay"));
+  const source = store.create({ name: "source", kind: "personal" });
+  const target = store.create({ name: "target", kind: "personal" });
+  const org = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+  store.update((s) => {
+    for (const account of s.accounts)
+      account.desktop = {
+        accountUuid: account.id,
+        orgId: org,
+        savedAt: "2026-10-13T14:00:00.000Z",
+      };
+  });
+  const claudeRoot = path.join(root, "desktop");
+  const transcriptRoot = path.join(root, "transcripts");
+  const cwd = path.join(root, "project");
+  const relative = `projects/-test/${uuid}.jsonl`;
+  const transcriptFile = path.join(transcriptRoot, relative);
+  const metadata = {
+    cliSessionId: uuid,
+    cwd,
+    lastActivityAt: 1,
+    permissionMode: "auto",
+  };
+  const metadataFile = (accountId: string) =>
+    path.join(
+      claudeRoot,
+      "claude-code-sessions",
+      accountId,
+      org,
+      `local_${uuid}.json`,
+    );
+  for (const account of [source, target]) {
+    await fs.mkdir(path.dirname(metadataFile(account.id)), { recursive: true });
+    await fs.writeFile(metadataFile(account.id), JSON.stringify(metadata));
+  }
+  await fs.mkdir(path.dirname(transcriptFile), { recursive: true });
+  await fs.writeFile(
+    transcriptFile,
+    JSON.stringify({ ...terminal, cwd }) + "\n",
+  );
+  let active = source.id;
+  await fs.writeFile(
+    path.join(claudeRoot, "config.json"),
+    JSON.stringify({ lastKnownAccountUuid: active }),
+  );
+  const ui: DesktopAutomationSnapshot = {
+    observedAt: Date.parse("2026-10-13T14:01:00.000Z"),
+    pid: 456,
+    localSessionId: `local_${uuid}`,
+    accountLabel: "Test account",
+    permissionMode: "Auto",
+    status: "stopped",
+    quotaStopped: true,
+    composerEmpty: true,
+    sendEnabled: true,
+    contextFingerprint: "a".repeat(64),
+    coverage: "active-conversation-only",
+  };
+  const automation: DesktopAutomation = {
+    inspect: async () => ({ ...ui }),
+    openSession: async () => {},
+    setPermission: async (_g, mode) => ({ ...ui, permissionMode: mode }),
+    send: async () => ({ acceptedVisible: false }),
+    hasRequestMarker: async () => false,
+  };
+  const desktop = {
+    snapshot: async () => ({
+      currentAccountUuid: active,
+      organizations: [org],
+      recoveryRequired: false,
+      pendingProfileId: undefined,
+    }),
+    switchTo: async (
+      accountId: string,
+      options: { beforeQuit?: () => Promise<void>; canProceed?: () => boolean },
+    ) => {
+      await options.beforeQuit?.();
+      assert.equal(options.canProceed?.(), true);
+      active = accountId;
+      await fs.writeFile(
+        path.join(claudeRoot, "config.json"),
+        JSON.stringify({ lastKnownAccountUuid: active }),
+      );
+    },
+  } as unknown as DesktopManager;
+  const evidence = new NativeDesktopContinuationEvidence({
+    store,
+    desktop,
+    automation,
+    claudeRoot,
+    transcriptRoot,
+    processes: async () => roster(),
+    processesSync: () => roster(),
+    now: () => ui.observedAt,
+  });
+  return { root, evidence, ui, source, target, org, transcriptFile };
+}
+test("real metadata adapter binds alias, account, project, transcript and quota turn", async () => {
+  const f = await fixture();
+  try {
+    const state = await f.evidence.read(f.ui);
+    assert.equal(state.session.id, uuid);
+    assert.equal(state.identity.profileId, f.source.id);
+    assert.equal(state.quotaStop?.turnId, assistantId);
+    assert.equal(state.quiescence.coverage, "guarded-local");
+    assert.equal(state.session.projectKey, path.join(f.root, "project"));
+    assert.equal(
+      state.contextRevision,
+      (await f.evidence.read(f.ui)).contextRevision,
+    );
+    f.ui.quotaAutoResume = true;
+    const wake = await f.evidence.read(f.ui);
+    assert.equal(wake.quiescence.scheduledWakeups, 1);
+    assert.equal(wake.ownQuotaWakeup, true);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
+test("durable receipt progresses absent→accepted→started with exact assistant turn ID", async () => {
+  const f = await fixture();
+  try {
+    const state = await f.evidence.read(f.ui);
+    await f.evidence.checkpoint({
+      requestId: "request",
+      session: state.session,
+      expectedContextRevision: state.contextRevision,
+    });
+    await f.evidence.switchAccount({
+      requestId: "request",
+      target: {
+        profileId: f.target.id,
+        accountUuid: f.target.id,
+        orgId: f.org,
+      },
+      expectedContextRevision: state.contextRevision,
+    });
+    assert.deepEqual(await f.evidence.lookupDelivery("request"), {
+      status: "absent",
+    });
+    const user = {
+      type: "user",
+      uuid: userId,
+      parentUuid: assistantId,
+      message: { content: "Continue\n[Relay continuation: request]" },
+    };
+    await fs.appendFile(f.transcriptFile, JSON.stringify(user) + "\n");
+    assert.deepEqual(await f.evidence.lookupDelivery("request"), {
+      status: "accepted",
+    });
+    for (const [index, error] of [
+      { errorType: "rate_limit" },
+      { message: { content: "quota exhausted", stop_reason: "usage_limit" } },
+    ].entries()) {
+      await fs.appendFile(
+        f.transcriptFile,
+        JSON.stringify({
+          type: "assistant",
+          uuid: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+          parentUuid: userId,
+          timestamp: "2026-10-13T14:01:00.000Z",
+          message: { content: "quota exhausted" },
+          ...error,
+        }) + "\n",
+      );
+      assert.deepEqual(await f.evidence.lookupDelivery("request"), {
+        status: "accepted",
+      });
+    }
+    await fs.appendFile(
+      f.transcriptFile,
+      JSON.stringify({
+        type: "assistant",
+        uuid: nextAssistant,
+        parentUuid: userId,
+        message: { content: "continuing", stop_reason: "end_turn" },
+      }) + "\n",
+    );
+    const receipt = await f.evidence.lookupDelivery("request");
+    assert.equal(receipt.status, "started");
+    assert.equal(receipt.receipt?.turnId, nextAssistant);
+    const read = await f.evidence.read(f.ui);
+    assert.equal(read.session.lastRequestId, "request");
+    assert.equal(read.session.lastTurnId, nextAssistant);
+    assert.equal(
+      read.session.transcriptRevision,
+      receipt.receipt?.afterRevision,
+    );
+    await fs.appendFile(
+      f.transcriptFile,
+      JSON.stringify({
+        type: "assistant",
+        uuid: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+        parentUuid: nextAssistant,
+        isApiErrorMessage: true,
+        error: "rate_limit",
+        apiError: { type: "rate_limit_error" },
+        timestamp: "2026-10-13T14:01:00.000Z",
+        message: { content: "rate limit", stop_reason: "stop_sequence" },
+      }) + "\n",
+    );
+    assert.deepEqual(await f.evidence.lookupDelivery("request"), {
+      status: "accepted",
+    });
+    await fs.appendFile(
+      f.transcriptFile,
+      JSON.stringify({
+        type: "user",
+        uuid,
+        message: { content: "new manual prompt" },
+      }) + "\n",
+    );
+    assert.deepEqual(await f.evidence.lookupDelivery("request"), {
+      status: "unknown",
+    });
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});

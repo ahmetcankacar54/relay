@@ -1,0 +1,572 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
+import os from "node:os";
+import { randomUUID } from "node:crypto";
+import type { Account } from "../shared/types";
+import {
+  parseCredential,
+  type UsageCredential,
+} from "../electron/core/usage-credentials";
+import {
+  needsUsageCredentialRefresh,
+  UsageCredentialRefresher,
+  type UsageRefreshCommand,
+} from "../electron/core/usage-refresh";
+
+const now = Date.parse("2026-10-13T18:00:00Z");
+async function fixture(t: any) {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "relay-refresh-"));
+  const profile = await fs.realpath(temporary);
+  t.after(() => fs.rm(profile, { recursive: true, force: true }));
+  const account: Account = {
+    id: randomUUID(),
+    name: "Fixture",
+    kind: "personal",
+    group: "personal",
+    color: "blue",
+    createdAt: new Date(now).toISOString(),
+    auth: {
+      loggedIn: true,
+      checkedAt: new Date(now).toISOString(),
+      accountUuid: randomUUID(),
+      orgId: randomUUID(),
+      email: "a@example.test",
+    },
+  };
+  const old: UsageCredential = {
+    accessToken: "fixture-old-access",
+    refreshToken: "fixture-old-refresh",
+    expiresAt: now - 1,
+    scopes: ["user:profile", "user:inference", "user:sessions:claude_code"],
+    clientId: "fixture-client",
+  };
+  const replacement: UsageCredential = {
+    ...old,
+    accessToken: "fixture-new-access",
+    refreshToken: "fixture-new-refresh",
+    expiresAt: now + 3_600_000,
+  };
+  let saved = old;
+  const calls: UsageRefreshCommand[] = [];
+  let run: (command: UsageRefreshCommand) => Promise<void> = async () => {
+    saved = replacement;
+  };
+  let serverProfile: unknown = {
+    account: {
+      uuid: account.auth!.accountUuid,
+      email_address: account.auth!.email,
+    },
+    organization: { uuid: account.auth!.orgId },
+  };
+  let allowed = true;
+  const requests: string[] = [];
+  const deps = {
+    executable: async () => path.join(profile, "fake-claude"),
+    read: async (directory: string, prompt: boolean) => {
+      assert.equal(directory, profile);
+      assert.equal(prompt, false);
+      return saved;
+    },
+    run: async (command: UsageRefreshCommand) => {
+      calls.push(command);
+      await run(command);
+    },
+    request: async (endpoint: "profile" | "usage", token: string) => {
+      requests.push(endpoint);
+      assert.equal(token, saved.accessToken);
+      return serverProfile;
+    },
+    canProceed: () => allowed,
+    now: () => now,
+    platform: "linux" as const,
+    environment: {
+      ANTHROPIC_API_KEY: "foreign-secret",
+      CLAUDE_CONFIG_DIR: "/foreign",
+      CLAUDE_CODE_OAUTH_TOKEN: "foreign-access",
+      CLAUDECODE: "nested",
+      ELECTRON_RUN_AS_NODE: "1",
+      NODE_OPTIONS: "--require foreign",
+      PATH: "/fixture/bin",
+    },
+  };
+  return {
+    profile,
+    account,
+    old,
+    replacement,
+    calls,
+    requests,
+    deps,
+    save: (value: UsageCredential) => {
+      saved = value;
+    },
+    run: (value: typeof run) => {
+      run = value;
+    },
+    server: (value: unknown) => {
+      serverProfile = value;
+    },
+    allow: (value: boolean) => {
+      allowed = value;
+    },
+    refresher: new UsageCredentialRefresher(deps),
+  };
+}
+
+test("refresh token parser retains bounded main-process refresh fields and excludes malformed values", () => {
+  const base = { accessToken: "fixture", scopes: ["user:profile"] };
+  const value = parseCredential(
+    JSON.stringify({
+      claudeAiOauth: {
+        ...base,
+        refreshToken: "refresh",
+        refreshTokenExpiresAt: now,
+        clientId: "client",
+        secret: "do-not-return",
+      },
+    }),
+  );
+  assert.equal(value.refreshToken, "refresh");
+  assert.equal(value.clientId, "client");
+  assert.equal(value.refreshTokenExpiresAt, now);
+  assert.equal("secret" in value, false);
+  for (const refreshToken of ["bad\nvalue", "x".repeat(16_385), 123])
+    assert.equal(
+      parseCredential(
+        JSON.stringify({ claudeAiOauth: { ...base, refreshToken } }),
+      ).refreshToken,
+      undefined,
+    );
+  assert.throws(() =>
+    parseCredential(
+      JSON.stringify({ claudeAiOauth: { ...base, accessToken: "bad\0value" } }),
+    ),
+  );
+  assert.throws(() =>
+    parseCredential(
+      '{"claudeAiOauth":{"accessToken":"fixture","expiresAt":1e999,"scopes":[]}}',
+    ),
+  );
+});
+test("credential refresh runs five minutes before expiry and does not invent expiry for unknown tokens", () => {
+  assert.equal(
+    needsUsageCredentialRefresh(
+      { accessToken: "x", scopes: [], expiresAt: now + 300_000 },
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    needsUsageCredentialRefresh(
+      { accessToken: "x", scopes: [], expiresAt: now + 300_001 },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    needsUsageCredentialRefresh({ accessToken: "x", scopes: [] }, now),
+    false,
+  );
+});
+test("supported refresh exchanges once in an isolated hidden auth command, preserves scopes and verifies server identity", async (t) => {
+  const f = await fixture(t);
+  assert.deepEqual(
+    await f.refresher.refresh(f.account, f.profile, f.old),
+    f.replacement,
+  );
+  assert.equal(f.calls.length, 1);
+  const c = f.calls[0];
+  assert.deepEqual(c.args, [
+    "--safe-mode",
+    "--settings",
+    '{"disableAllHooks":true}',
+    "auth",
+    "login",
+    "--claudeai",
+  ]);
+  assert.equal(c.cwd, f.profile);
+  assert.equal(c.env.CLAUDE_CONFIG_DIR, f.profile);
+  assert.equal(c.env.CLAUDE_CODE_OAUTH_REFRESH_TOKEN, f.old.refreshToken);
+  assert.equal(c.env.CLAUDE_CODE_OAUTH_SCOPES, f.old.scopes.join(" "));
+  assert.equal(c.env.CLAUDE_CODE_OAUTH_TOKEN, f.old.accessToken);
+  assert.equal(c.env.CLAUDE_CODE_OAUTH_CLIENT_ID, f.old.clientId);
+  for (const key of [
+    "ANTHROPIC_API_KEY",
+    "CLAUDECODE",
+    "ELECTRON_RUN_AS_NODE",
+    "NODE_OPTIONS",
+  ])
+    assert.equal(c.env[key], undefined);
+  assert.deepEqual(f.requests, ["profile"]);
+  assert.equal(f.refresher.anyActive, false);
+  assert.deepEqual(await fs.readdir(f.profile), []);
+});
+test("simultaneous refreshes and separate refresher instances share one profile exchange", async (t) => {
+  const f = await fixture(t);
+  let release!: () => void;
+  const wait = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  f.run(async () => {
+    await wait;
+    f.save(f.replacement);
+  });
+  const first = f.refresher.refresh(f.account, f.profile, f.old);
+  const other = new UsageCredentialRefresher(f.deps);
+  assert.equal(f.refresher.anyActive, true);
+  assert.equal(other.isRefreshing(f.account.id), true);
+  assert.equal(other.isRefreshing(f.profile), true);
+  const second = other.refresh(f.account, f.profile, f.old);
+  assert.equal(first, second);
+  await assert.rejects(
+    other.refresh(
+      { ...f.account, auth: { ...f.account.auth!, orgId: randomUUID() } },
+      f.profile,
+      f.old,
+    ),
+    /identity-mismatch/,
+  );
+  release();
+  await Promise.all([first, second]);
+  assert.equal(f.calls.length, 1);
+});
+test("timeout or uncertain rotation persists a nonsecret barrier across app restart and never exchanges the same pair twice", async (t) => {
+  const f = await fixture(t);
+  f.run(async () => {
+    throw new Error("timeout fixture-secret-must-not-propagate");
+  });
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, f.old),
+    /expired/,
+  );
+  const journal = await fs.readFile(
+    path.join(f.profile, ".relay-usage-refresh.json"),
+    "utf8",
+  );
+  assert.equal(journal.includes("fixture-old-access"), false);
+  assert.equal(journal.includes("fixture-old-refresh"), false);
+  const restarted = new UsageCredentialRefresher(f.deps);
+  await assert.rejects(
+    restarted.refresh(f.account, f.profile, f.old),
+    /expired/,
+  );
+  assert.equal(f.calls.length, 1);
+  f.save(f.replacement);
+  assert.deepEqual(
+    await restarted.refresh(f.account, f.profile, f.replacement),
+    f.replacement,
+  );
+  assert.equal(f.calls.length, 1);
+  assert.deepEqual(await fs.readdir(f.profile), []);
+});
+test("a command error after saved replacement is reconciled without a second exchange", async (t) => {
+  const f = await fixture(t);
+  f.run(async () => {
+    f.save(f.replacement);
+    throw new Error("post-save exit");
+  });
+  assert.deepEqual(
+    await f.refresher.refresh(f.account, f.profile, f.old),
+    f.replacement,
+  );
+  assert.equal(f.calls.length, 1);
+});
+test("successful CLI exit without persisted replacement never becomes fresh usage", async (t) => {
+  const f = await fixture(t);
+  f.run(async () => {});
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, f.old),
+    /expired/,
+  );
+  assert.deepEqual(f.requests, []);
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, f.old),
+    /expired/,
+  );
+  assert.equal(f.calls.length, 1);
+});
+test("saved credentials from a different account or organization fail identity verification and retain the attempt", async (t) => {
+  for (const kind of ["account", "organization"]) {
+    const f = await fixture(t);
+    f.server({
+      account: {
+        uuid: kind === "account" ? randomUUID() : f.account.auth!.accountUuid,
+        email_address: f.account.auth!.email,
+      },
+      organization: {
+        uuid: kind === "organization" ? randomUUID() : f.account.auth!.orgId,
+      },
+    });
+    await assert.rejects(
+      f.refresher.refresh(f.account, f.profile, f.old),
+      /identity-mismatch/,
+    );
+    assert.ok(await fs.stat(path.join(f.profile, ".relay-usage-refresh.json")));
+    assert.equal(f.calls.length, 1);
+  }
+});
+test("existing official refresh lock, denied profile guard and inference-less credentials block before any exchange", async (t) => {
+  const f = await fixture(t);
+  const lock = path.join(f.profile, ".oauth_refresh.lock");
+  await fs.mkdir(lock);
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, f.old),
+    /unavailable/,
+  );
+  assert.ok((await fs.stat(lock)).isDirectory());
+  assert.equal(f.calls.length, 0);
+  await fs.rmdir(lock);
+  f.allow(false);
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, f.old),
+    /unavailable/,
+  );
+  assert.equal(f.calls.length, 0);
+  f.allow(true);
+  f.save({ ...f.old, scopes: ["user:profile"] });
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, {
+      ...f.old,
+      scopes: ["user:profile"],
+    }),
+    /expired/,
+  );
+  assert.equal(f.calls.length, 0);
+});
+test("missing/expired refresh token and unknown enrolled identity require browser reconnection", async (t) => {
+  for (const missing of [true, false]) {
+    const f = await fixture(t);
+    const credential = missing
+      ? { ...f.old, refreshToken: undefined }
+      : { ...f.old, refreshTokenExpiresAt: now - 1 };
+    f.save(credential);
+    await assert.rejects(
+      f.refresher.refresh(f.account, f.profile, credential),
+      /expired/,
+    );
+    assert.equal(f.calls.length, 0);
+  }
+  const f = await fixture(t);
+  await assert.rejects(
+    f.refresher.refresh(
+      { ...f.account, auth: { ...f.account.auth!, accountUuid: undefined } },
+      f.profile,
+      f.old,
+    ),
+    /identity-mismatch/,
+  );
+  assert.equal(f.calls.length, 0);
+});
+test("server 401 can force refresh before local expiry, while an already replaced fresh pair skips exchange", async (t) => {
+  const f = await fixture(t);
+  const stillValid = { ...f.old, expiresAt: now + 3_600_000 };
+  f.save(stillValid);
+  assert.deepEqual(
+    await f.refresher.refresh(f.account, f.profile, stillValid, true),
+    f.replacement,
+  );
+  assert.equal(f.calls.length, 1);
+  const g = await fixture(t);
+  g.save(g.replacement);
+  assert.deepEqual(
+    await g.refresher.refresh(g.account, g.profile, g.old),
+    g.replacement,
+  );
+  assert.equal(g.calls.length, 0);
+});
+test("dropped credential scopes or corrupt uncertainty journal cannot silently restart rotation", async (t) => {
+  const f = await fixture(t);
+  f.run(async () => {
+    f.save({ ...f.replacement, scopes: ["user:profile"] });
+  });
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, f.old),
+    /scope/,
+  );
+  assert.ok(await fs.stat(path.join(f.profile, ".relay-usage-refresh.json")));
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, {
+      ...f.replacement,
+      scopes: ["user:profile"],
+    }),
+    /scope/,
+  );
+  assert.equal(f.calls.length, 1);
+  const g = await fixture(t);
+  await fs.writeFile(
+    path.join(g.profile, ".relay-usage-refresh.json"),
+    "{broken",
+  );
+  await assert.rejects(
+    g.refresher.refresh(g.account, g.profile, g.old),
+    /expired/,
+  );
+  assert.equal(g.calls.length, 0);
+});
+test("symlinked profiles, global default profile and symlinked journals are refused", async (t) => {
+  const f = await fixture(t);
+  const alias = path.join(f.profile, "alias");
+  await fs.symlink(f.profile, alias);
+  await assert.rejects(
+    f.refresher.refresh(f.account, alias, f.old),
+    /credentials-missing/,
+  );
+  await assert.rejects(
+    f.refresher.refresh(f.account, "relative-profile", f.old),
+    /credentials-missing/,
+  );
+  await assert.rejects(
+    f.refresher.refresh(f.account, path.join(os.homedir(), ".claude"), f.old),
+    /credentials-missing/,
+  );
+  await fs.writeFile(path.join(f.profile, "other"), "{}");
+  await fs.symlink(
+    path.join(f.profile, "other"),
+    path.join(f.profile, ".relay-usage-refresh.json"),
+  );
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, f.old),
+    /expired/,
+  );
+  assert.equal(f.calls.length, 0);
+});
+test("lost official lock ownership preserves the rotation barrier and never removes the replacement lock", async (t) => {
+  const f = await fixture(t);
+  const vendorLock = path.join(f.profile, ".oauth_refresh.lock");
+  f.run(async () => {
+    f.save(f.replacement);
+    await fs.rename(vendorLock, path.join(f.profile, "old-vendor-lock"));
+    await fs.mkdir(vendorLock);
+  });
+  await assert.rejects(
+    f.refresher.refresh(f.account, f.profile, f.old),
+    /expired/,
+  );
+  assert.ok((await fs.stat(vendorLock)).isDirectory());
+  assert.ok(await fs.stat(path.join(f.profile, ".relay-usage-refresh.json")));
+  assert.equal(f.calls.length, 1);
+});
+test("a credential replaced by another process before acquiring the vendor lock is re-read and never rotated again", async (t) => {
+  const f = await fixture(t);
+  let checks = 0;
+  const deps = {
+    ...f.deps,
+    canProceed: () => {
+      if (++checks === 3) f.save(f.replacement);
+      return true;
+    },
+  };
+  const refresher = new UsageCredentialRefresher(deps);
+  assert.deepEqual(
+    await refresher.refresh(f.account, f.profile, f.old),
+    f.replacement,
+  );
+  assert.equal(f.calls.length, 0);
+  assert.deepEqual(f.requests, ["profile"]);
+});
+test("a concurrent replacement cannot drop requested scopes before the vendor lock is acquired", async (t) => {
+  const f = await fixture(t);
+  let checks = 0;
+  const deps = {
+    ...f.deps,
+    canProceed: () => {
+      if (++checks === 3)
+        f.save({ ...f.replacement, scopes: ["user:profile"] });
+      return true;
+    },
+  };
+  await assert.rejects(
+    new UsageCredentialRefresher(deps).refresh(f.account, f.profile, f.old),
+    /scope/,
+  );
+  assert.equal(f.calls.length, 0);
+  assert.deepEqual(f.requests, []);
+});
+test("a saved replacement whose identity proof failed transiently reconciles while fresh without another exchange", async (t) => {
+  const f = await fixture(t);
+  let proofFails = true;
+  const deps = {
+    ...f.deps,
+    request: async (endpoint: "profile" | "usage", token: string) => {
+      if (proofFails) throw new Error("temporary network failure");
+      return f.deps.request(endpoint, token);
+    },
+  };
+  const refresher = new UsageCredentialRefresher(deps);
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, f.old),
+    /temporary network failure/,
+  );
+  assert.equal(refresher.hasPending(f.profile), true);
+  proofFails = false;
+  assert.deepEqual(
+    await refresher.refresh(f.account, f.profile, f.replacement),
+    f.replacement,
+  );
+  assert.equal(refresher.hasPending(f.profile), false);
+  assert.equal(f.calls.length, 1);
+});
+test("macOS background renewal and forced 401 renewal never execute the Keychain-writing CLI", async (t) => {
+  const f = await fixture(t);
+  const refresher = new UsageCredentialRefresher({
+    ...f.deps,
+    platform: "darwin",
+  });
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, f.old),
+    /renewal-required/,
+  );
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, f.old, true),
+    /renewal-required/,
+  );
+  assert.equal(f.calls.length, 0);
+  assert.equal(refresher.hasPending(f.profile), false);
+  assert.deepEqual(await fs.readdir(f.profile), []);
+});
+test("macOS explicit renewal permits exactly one isolated exchange and does not authorize subsequent background calls", async (t) => {
+  const f = await fixture(t);
+  const refresher = new UsageCredentialRefresher({
+    ...f.deps,
+    platform: "darwin",
+  });
+  assert.deepEqual(
+    await refresher.refresh(f.account, f.profile, f.old, false, true),
+    f.replacement,
+  );
+  assert.equal(f.calls.length, 1);
+  f.save({ ...f.replacement, expiresAt: now - 1 });
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, {
+      ...f.replacement,
+      expiresAt: now - 1,
+    }),
+    /renewal-required/,
+  );
+  assert.equal(f.calls.length, 1);
+});
+test("macOS background pending reconciliation verifies an already saved replacement without interactive permission or exchange", async (t) => {
+  const f = await fixture(t);
+  const refresher = new UsageCredentialRefresher({
+    ...f.deps,
+    platform: "darwin",
+  });
+  f.run(async () => {
+    throw new Error("uncertain fixture");
+  });
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, f.old, false, true),
+    /expired/,
+  );
+  assert.equal(refresher.hasPending(f.profile), true);
+  f.save(f.replacement);
+  assert.deepEqual(
+    await refresher.refresh(f.account, f.profile, f.replacement),
+    f.replacement,
+  );
+  assert.equal(f.calls.length, 1);
+  assert.equal(refresher.hasPending(f.profile), false);
+  assert.deepEqual(f.requests, ["profile"]);
+});
