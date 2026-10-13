@@ -109,15 +109,13 @@ export function routinePolicyPaths(
   }
   return paths;
 }
-export function personalRoutineEligible(account: Account) {
-  // The manual capacity label is not proof of server policy eligibility.
-  // Team and unknown subscriptions stay disabled because a freshly delivered
-  // managed hook cannot be suppressed by any supported ordinary CLI flag.
-  return (
-    account.kind === "personal" &&
-    !!planningIdentity(account) &&
-    /^(pro|max|max5|max20)$/i.test(account.auth?.subscription ?? "")
-  );
+/**
+ * Any account whose usage identity matches its Desktop binding may start a
+ * window, including company seats. Local administrator policy is still refused
+ * in runQuotaStarter; server-delivered policy cannot be detected locally.
+ */
+export function windowStartEligible(account: Account) {
+  return !!planningIdentity(account);
 }
 export interface QuotaStarterOptions {
   execute?: typeof execute;
@@ -137,7 +135,7 @@ export async function runQuotaStarter(
 ) {
   if (options.signal?.aborted || !options.guard || !(await options.guard()))
     throw new Error("routine-settings-changed");
-  if (!personalRoutineEligible(account))
+  if (!windowStartEligible(account))
     throw new Error("routine-policy-unverified");
   // Windows registry and WSL host policy aren't safely checked by this beta.
   // No attempt to circumvent or disable any administrator policy is made.

@@ -14,7 +14,7 @@ import {
 import {
   quotaStarterArgs,
   routineEnvironment,
-  personalRoutineEligible,
+  windowStartEligible,
 } from "../electron/core/routine-runner";
 import {
   planningAccount,
@@ -329,8 +329,9 @@ test("isolated starter disables every tool, MCP, customization and persistence w
   assert.equal(env.OTEL_EXPORTER_OTLP_HEADERS, undefined);
   assert.equal(env.DEBUG, undefined);
   const a = planningAccount();
-  assert.equal(personalRoutineEligible(a), true);
+  assert.equal(windowStartEligible(a), true);
   a.auth!.subscription = "team";
-  a.planning!.plan = "max20";
-  assert.equal(personalRoutineEligible(a), false);
+  assert.equal(windowStartEligible(a), true);
+  a.auth!.accountUuid = undefined;
+  assert.equal(windowStartEligible(a), false);
 });

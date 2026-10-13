@@ -122,22 +122,26 @@ test("unsupported CLI refuses before credentials and never attempts a model fall
     false,
   );
 });
-test("Team, unknown and endpoint-managed policy refuse automatic execution", async (t) => {
-  for (const mode of ["team", "unknown", "policy"] as const) {
+test("company and unknown subscriptions may start a window; local administrator policy still refuses", async (t) => {
+  for (const subscription of ["team", "unknown"]) {
     const f = await fixture(t);
-    if (mode !== "policy") f.account.auth!.subscription = mode;
-    else {
-      const file = path.join(f.store.root, "fixture-policy.json");
-      await fs.writeFile(file, "{}");
-      f.options.policyPaths = [file];
-    }
-    await assert.rejects(
-      runQuotaStarter(f.store, f.account, f.credentials, f.options),
-      /routine-policy-unverified/,
+    f.account.auth!.subscription = subscription;
+    await runQuotaStarter(f.store, f.account, f.credentials, f.options);
+    assert.equal(
+      f.commands.some((c) => c.args[0] === "--print"),
+      true,
     );
-    assert.equal(f.commands.length, 0);
-    assert.equal(f.credentialCalls(), 0);
   }
+  const f = await fixture(t);
+  const file = path.join(f.store.root, "fixture-policy.json");
+  await fs.writeFile(file, "{}");
+  f.options.policyPaths = [file];
+  await assert.rejects(
+    runQuotaStarter(f.store, f.account, f.credentials, f.options),
+    /routine-policy-unverified/,
+  );
+  assert.equal(f.commands.length, 0);
+  assert.equal(f.credentialCalls(), 0);
 });
 test("revoked settings before or during credential acquisition never send a prompt", async (t) => {
   for (const phase of ["before", "during"] as const) {
