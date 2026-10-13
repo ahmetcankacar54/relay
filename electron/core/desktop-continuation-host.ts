@@ -421,14 +421,15 @@ export class DesktopContinuationHost implements ContinuationHost {
     // Never fabricate a receipt from a button click or visible text. A durable
     // receiver transcript must establish the new user turn under this identity.
     let delivery = await this.evidence.lookupDelivery(input.requestId);
-    // Read-only polling allows the receiver's first assistant turn to arrive.
-    // There is never another send attempt, even after an ambiguous outcome.
+    // Read-only polling allows the receiver's first assistant row to arrive;
+    // with high effort the first thinking block can take minutes. There is
+    // never another send attempt, even after an ambiguous outcome.
     for (
       let attempt = 0;
-      attempt < 20 && ["absent", "accepted"].includes(delivery.status);
+      attempt < 110 && ["absent", "accepted"].includes(delivery.status);
       attempt++
     ) {
-      await this.deliveryWait(250 + Math.min(attempt, 5) * 150);
+      await this.deliveryWait(attempt < 10 ? 500 : 2_000);
       delivery = await this.evidence.lookupDelivery(input.requestId);
     }
     return delivery.status === "absent"

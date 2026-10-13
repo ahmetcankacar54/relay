@@ -214,8 +214,10 @@ class FixtureHost implements ContinuationHost {
       return { ...delivery, status: "accepted" };
     if (this.faults.has("receipt-wrong-account"))
       delivery.receipt!.identity.accountUuid = randomUUID();
+    // Later turn IDs are expected while the resumed work continues; a different
+    // conversation in the target is not the confirmed continuation.
     if (this.faults.has("receipt-not-observed"))
-      this.state.session.lastTurnId = randomUUID();
+      this.state.session.id = randomUUID();
     return delivery;
   }
   async lookupDelivery(id: string) {

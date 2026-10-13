@@ -652,3 +652,20 @@ test("cached quota disappears when CLI UUID or organization changes with the sam
     });
   }
 });
+test("a model-specific weekly window at its limit is reported without becoming a main window", () => {
+  const parsed = parseUsage({
+    five_hour: { utilization: 40, resets_at: "2026-10-13T20:00:00Z" },
+    seven_day: { utilization: 70, resets_at: "2026-10-18T05:00:00Z" },
+    seven_day_opus: { utilization: 100, resets_at: "2026-10-18T05:00:00Z" },
+    seven_day_oauth_apps: null,
+  });
+  assert.equal(parsed.otherLimitReached, true);
+  assert.equal(parsed.fiveHour?.usedPercent, 40);
+  assert.equal(
+    parseUsage({
+      five_hour: { utilization: 10 },
+      seven_day_opus: { utilization: 20 },
+    }).otherLimitReached,
+    undefined,
+  );
+});

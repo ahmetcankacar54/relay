@@ -6,7 +6,7 @@ import type { RefreshUsageCredential } from "./usage-refresh";
 type Json = Record<string, any>;
 export function parseUsage(
   value: unknown,
-): Pick<AccountUsage, "fiveHour" | "sevenDay"> {
+): Pick<AccountUsage, "fiveHour" | "sevenDay" | "otherLimitReached"> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new UsageError("unsupported");
   const root = value as Json;
@@ -36,7 +36,18 @@ export function parseUsage(
   const fiveHour = parse(root.five_hour),
     sevenDay = parse(root.seven_day);
   if (!fiveHour && !sevenDay) throw new UsageError("unsupported");
-  return { fiveHour, sevenDay };
+  // Model-specific windows such as `seven_day_opus` stop work on that model.
+  const otherLimitReached = Object.entries(root).some(
+    ([key, window]) =>
+      /^(?:five_hour|seven_day)_[a-z0-9_]+$/.test(key) &&
+      typeof (window as Json | null)?.utilization === "number" &&
+      (window as Json).utilization >= 100,
+  );
+  return {
+    fiveHour,
+    sevenDay,
+    ...(otherLimitReached ? { otherLimitReached } : {}),
+  };
 }
 export function retryTime(header: string | null, now: number) {
   const seconds = header && /^\d+(\.\d+)?$/.test(header) ? Number(header) : NaN;

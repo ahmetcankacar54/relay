@@ -278,6 +278,15 @@ export class FileDesktopContinuationPersistence implements DesktopContinuationPe
 }
 
 /** One explicit, persisted handoff for the selected current conversation. */
+/** Reasons that resolve on their own; the monitor keeps waiting rather than blocking. */
+function waitingReason(reason: string) {
+  return (
+    reason === "awaiting-quota-stop" ||
+    reason === "automatic-target-unavailable" ||
+    reason === "session-not-stopped" ||
+    reason.startsWith("not-quiescent:")
+  );
+}
 export class DesktopContinuationManager {
   private saved: DesktopContinuationPersistentState;
   private view: DesktopContinuationSnapshot;
@@ -917,6 +926,39 @@ export class DesktopContinuationManager {
       const savedArm = this.saved.arm;
       if (!savedArm) return this.snapshot();
       let arm = savedArm;
+      // Most polls only wait. Decide that read-only, outside the shared Desktop
+      // lock, so manual switches and usage renewals are not refused meanwhile.
+      try {
+        if (!this.deps.pendingAuth?.()) {
+          const preview = await this.deps.observe();
+          let reason =
+            this.observationReason(preview) ??
+            this.contractReason(arm.executionPolicy, true) ??
+            this.armReason(arm, preview);
+          if (!reason && arm.targetSelection === "automatic") {
+            reason = this.quotaReason(
+              preview,
+              this.deps.capabilities.kind === "guarded-native" &&
+                arm.executionPolicy === "guarded-native-at-most-once" &&
+                preview.ownQuotaWakeup === true,
+            );
+            if (!reason && !this.automaticTarget(arm, preview))
+              reason = "automatic-target-unavailable";
+          }
+          if (reason)
+            return this.publish(
+              this.fields(
+                waitingReason(reason) ? "waiting" : "blocked",
+                reason,
+                arm,
+              ),
+            );
+        }
+      } catch (error) {
+        return this.publish(
+          this.fields("blocked", observationErrorReason(error), arm),
+        );
+      }
       try {
         return await this.deps.withDesktopLock(async () => {
           try {
@@ -960,12 +1002,7 @@ export class DesktopContinuationManager {
             if (reason)
               return this.publish(
                 this.fields(
-                  reason === "awaiting-quota-stop" ||
-                    reason === "automatic-target-unavailable" ||
-                    reason === "session-not-stopped" ||
-                    reason.startsWith("not-quiescent:")
-                    ? "waiting"
-                    : "blocked",
+                  waitingReason(reason) ? "waiting" : "blocked",
                   reason,
                   arm,
                 ),

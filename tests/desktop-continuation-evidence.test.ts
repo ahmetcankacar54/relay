@@ -286,6 +286,30 @@ test("partial or malformed transcript records cannot become a safe checkpoint", 
   );
 });
 test("continuation receipt binds the latest assistant chain to the nonce user turn", () => {
+  const working = [
+    {
+      type: "user",
+      uuid: userId,
+      message: { content: "Continue\n[Relay continuation: request]" },
+    },
+    {
+      type: "assistant",
+      uuid: assistantId,
+      parentUuid: userId,
+      message: { content: [{ type: "tool_use" }], stop_reason: "tool_use" },
+    },
+    {
+      type: "user",
+      uuid: nextAssistant.replace(/d/g, "e"),
+      parentUuid: assistantId,
+      message: { content: [{ type: "tool_result", content: "ok" }] },
+    },
+  ];
+  // A tool result as the latest row still proves the resumed turn started.
+  assert.equal(
+    continuationTurn(working, "request")?.assistant?.uuid,
+    assistantId,
+  );
   const user = {
     type: "user",
     uuid: userId,
@@ -576,9 +600,10 @@ test("durable receipt progresses absent→accepted→started with exact assistan
         message: { content: "rate limit", stop_reason: "stop_sequence" },
       }) + "\n",
     );
-    assert.deepEqual(await f.evidence.lookupDelivery("request"), {
-      status: "accepted",
-    });
+    // The handoff succeeded: work resumed on the target before its own limit.
+    const later = await f.evidence.lookupDelivery("request");
+    assert.equal(later.status, "started");
+    assert.equal(later.receipt?.turnId, nextAssistant);
     await fs.appendFile(
       f.transcriptFile,
       JSON.stringify({

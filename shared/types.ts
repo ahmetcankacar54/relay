@@ -306,6 +306,8 @@ export interface AccountUsage {
   status: "idle" | "loading" | "ready" | "error";
   fiveHour?: UsageWindow;
   sevenDay?: UsageWindow;
+  /** A model-specific window (e.g. weekly Opus) is exhausted. */
+  otherLimitReached?: boolean;
   checkedAt?: string;
   stale: boolean;
   issue?: UsageIssue;

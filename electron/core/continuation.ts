@@ -240,6 +240,8 @@ function validWindow(window: AccountUsage["fiveHour"], now: number) {
 export function continuationPolicyReason(
   request: ContinuationRequest,
   now: number,
+  /** False once Claude has switched: the quota decision was already made. */
+  checkQuota = true,
 ) {
   if (!request.authorized) return "not-authorized";
   if (!enrolled(request.source) || !enrolled(request.target))
@@ -258,21 +260,27 @@ export function continuationPolicyReason(
     !allowedHistoryPair(request.source, request.target, request.settings)
   )
     return "history-boundary";
+  if (!checkQuota) return undefined;
   const source = request.usage[request.source.id];
   const target = request.usage[request.target.id];
   if (
-    !freshQuota(source, request.source.id, now) ||
     !freshQuota(target, request.target.id, now) ||
+    !quotaWindows(target)?.every((w) => validWindow(w, now))
+  )
+    return "quota-not-fresh";
+  if (
+    !freshQuota(source, request.source.id, now) ||
     ![source?.fiveHour, source?.sevenDay].some(
       (window) => window !== undefined,
     ) ||
     [source?.fiveHour, source?.sevenDay].some(
       (w) => w !== undefined && !validWindow(w, now),
-    ) ||
-    !quotaWindows(target)?.every((w) => validWindow(w, now))
+    )
   )
     return "quota-not-fresh";
+  // A model-specific weekly limit (e.g. Opus) also stops the conversation.
   if (
+    !source.otherLimitReached &&
     ![source.fiveHour, source.sevenDay].some(
       (w) => validWindow(w, now) && w!.usedPercent === 100,
     )
@@ -757,7 +765,7 @@ export class ContinuationEngine {
       // A resumed journal never guesses the active identity, task coverage or
       // history. The exact checkpoint is reopened; a conditional adapter must
       // refuse to overwrite a conversation whose transcript changed meanwhile.
-      this.assertReady(request, state, target);
+      this.assertReady(request, state, target, undefined, false);
       if (
         typeof state.session.id === "string" &&
         state.session.id.toLowerCase() === session.id &&
@@ -778,14 +786,14 @@ export class ContinuationEngine {
         expectedContextRevision: state.contextRevision,
       });
       state = await this.host.readState();
-      this.assertReady(request, state, target, session);
+      this.assertReady(request, state, target, session, false);
       await persist("session-verified");
       // Persist before submission. Any restart with this bit queries receipts;
       // an absent/ambiguous acknowledgement must NEVER cause a blind resend.
       record.sendRecorded = true;
       await persist("send-intent");
       state = await this.host.readState();
-      this.assertReady(request, state, target, session);
+      this.assertReady(request, state, target, session, false);
       const delivery = await this.host.sendContinuation({
         requestId: request.id,
         target,
@@ -812,9 +820,10 @@ export class ContinuationEngine {
     state: ContinuationState,
     expectedIdentity: ContinuationIdentity,
     session?: ContinuationSession,
+    checkQuota = true,
   ) {
     const reason =
-      continuationPolicyReason(request, this.now()) ??
+      continuationPolicyReason(request, this.now(), checkQuota) ??
       this.stateReason(state, expectedIdentity, session);
     if (reason) throw new Error(reason);
   }
@@ -863,10 +872,9 @@ export class ContinuationEngine {
           sameIdentity(state.identity, identity(request.target)) &&
           state.session.id.toLowerCase() === request.sessionId.toLowerCase() &&
           state.session.projectKey === request.projectKey &&
-          state.session.permissionMode === request.permissionMode &&
-          state.session.transcriptRevision === receipt.afterRevision &&
-          state.session.lastRequestId === request.id &&
-          state.session.lastTurnId === receipt.turnId
+          state.session.permissionMode === request.permissionMode
+          // The resumed turn keeps appending to the transcript, so its revision
+          // and latest row move on; the receipt already bound them to the nonce.
         ) {
           record.stage = "delivery-confirmed";
           record.receipt = receipt;

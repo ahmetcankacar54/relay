@@ -379,28 +379,36 @@ export function continuationTurn(rows: Row[], requestId?: string) {
     transcriptMessageText(user),
   );
   if (!marker || (requestId && marker[1] !== requestId)) return;
-  const turns = rows.filter(
-    (r) =>
-      ["user", "assistant"].includes(r.type) && !r.isMeta && !r.isSidechain,
-  );
-  const tail = turns.at(-1);
-  if (!tail || tail.type !== "assistant" || !UUID.test(tail.uuid ?? ""))
-    return { requestId: marker[1], user };
-  // A persisted API error acknowledges the user input, not productive resumed
-  // work. In particular a second quota failure must never report "continued".
-  if (transcriptError(tail)) return { requestId: marker[1], user };
   const byId = new Map(
     rows.filter((r) => UUID.test(r.uuid ?? "")).map((r) => [r.uuid, r]),
   );
-  let cursor: Row | undefined = tail;
-  const seen = new Set<string>();
-  while (cursor && !seen.has(cursor.uuid)) {
-    if (cursor.uuid === user.uuid)
-      return { requestId: marker[1], user, assistant: tail };
-    seen.add(cursor.uuid);
-    cursor = byId.get(cursor.parentUuid);
-  }
-  return;
+  const descends = (row: Row) => {
+    let cursor: Row | undefined = row;
+    const seen = new Set<string>();
+    while (cursor && !seen.has(cursor.uuid)) {
+      if (cursor.uuid === user.uuid) return true;
+      seen.add(cursor.uuid);
+      cursor = byId.get(cursor.parentUuid);
+    }
+    return false;
+  };
+  // The resumed turn alternates assistant and tool-result rows while it works.
+  // Its latest successful assistant row in the marker's chain proves it started.
+  // A persisted API error alone (for example another quota stop) only proves
+  // the input was accepted, never that work resumed.
+  const assistants = rows.filter(
+    (r) =>
+      r.type === "assistant" &&
+      !r.isMeta &&
+      !r.isSidechain &&
+      UUID.test(r.uuid ?? ""),
+  );
+  const chained = assistants.filter(descends);
+  if (assistants.length && !chained.length) return;
+  const started = chained.filter((r) => !transcriptError(r)).at(-1);
+  return started
+    ? { requestId: marker[1], user, assistant: started }
+    : { requestId: marker[1], user };
 }
 
 export class NativeDesktopContinuationEvidence implements DesktopContinuationEvidence {
@@ -864,8 +872,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     // Graceful launch is asynchronous and can land on a homepage. Establish the
     // exact target alias before the engine's post-switch identity/session read.
     let lastIssue: unknown;
-    let opened = false;
-    for (let attempt = 0; attempt < 60; attempt++) {
+    // Claude may need a while after a cold launch, and a link delivered before
+    // its Code view is ready can be dropped: resend it every five seconds.
+    let openedAt = -Infinity;
+    for (let attempt = 0; attempt < 120; attempt++) {
       try {
         const desktop = await this.options.desktop.snapshot();
         if (
@@ -875,9 +885,9 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
           throw new DesktopAutomationError("context-changed");
         const view = await this.options.automation.inspect();
         if (view.localSessionId !== record.localSessionId) {
-          if (!opened) {
+          if (Date.now() - openedAt >= 5_000) {
+            openedAt = Date.now();
             await this.options.automation.openSession(record.localSessionId);
-            opened = true;
           }
         } else {
           const targetState = await this.read(view);
@@ -895,7 +905,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       } catch (error) {
         lastIssue = error;
       }
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
     throw lastIssue ?? new DesktopAutomationError("exact-session-not-observed");
   }
