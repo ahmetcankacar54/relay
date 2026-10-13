@@ -291,6 +291,44 @@ export const DEFAULT_PLANNING: PlanningSettings = {
   weekend: { enabled: false, start: "11:00", end: "17:00" },
   accounts: [],
 };
+export type WindowAttemptStatus =
+  | "started"
+  | "verified"
+  | "sent-unverified"
+  | "failed";
+export interface WindowAttempt {
+  id: string;
+  accountId: string;
+  identityKey: string;
+  at: string;
+  status: WindowAttemptStatus;
+  reason?: string;
+  resetAt?: string;
+}
+export type KeeperAccountState =
+  | "off"
+  | "outside"
+  | "active"
+  | "due"
+  | "waiting"
+  | "blocked";
+export interface KeeperAccountStatus {
+  accountId: string;
+  state: KeeperAccountState;
+  reason?: string;
+  resetsAt?: string;
+  nextStartAt?: string;
+}
+export interface KeeperSnapshot {
+  enabled: boolean;
+  running: boolean;
+  accounts: KeeperAccountStatus[];
+  /** Most recent first, at most 20. */
+  attempts: WindowAttempt[];
+  /** Planned window starts on today's plan. */
+  plannedToday: number;
+  next?: { accountId: string; at: string };
+}
 export interface DesktopHistorySummary {
   profileId: string;
   indexed: number;
