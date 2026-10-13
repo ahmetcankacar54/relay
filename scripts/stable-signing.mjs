@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const appIdentifier = "dev.relay.workspace";
 const permissionTargets = [
   { relative: "", identifier: appIdentifier },
-  ...["desktop-automation", "usage-keychain"].map((name) => ({
+  ...["desktop-automation"].map((name) => ({
     relative: `Contents/Resources/app.asar.unpacked/dist-electron/${name}`,
     identifier: `${appIdentifier}.${name}`,
   })),

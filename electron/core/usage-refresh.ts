@@ -56,7 +56,12 @@ interface Attempt {
   generation: string;
   attemptedAt: number;
   scopes: string[];
+  /** Exchanges tried for this unchanged credential pair. */
+  attempts?: number;
 }
+/** An unconfirmed exchange is retried only after this delay, at most MAX times. */
+export const USAGE_REFRESH_RETRY_MS = 30 * 60_000;
+export const USAGE_REFRESH_MAX_ATTEMPTS = 3;
 interface Owner {
   pid: number;
   token: string;
@@ -237,8 +242,22 @@ export class UsageCredentialRefresher {
       }
       // A replacement saved by a prior CLI/browser login can reconcile an
       // uncertain attempt. Presence alone never clears the rotation barrier.
+      let previousAttempts = 0;
+      if (attempt?.generation === generation) {
+        // Nothing new was saved. The old pair may already be consumed, in which
+        // case another exchange simply fails; it cannot cost a saved login. Retry
+        // after a delay (or when the user asks), then require browser reconnect.
+        previousAttempts = attempt.attempts ?? 1;
+        if (
+          previousAttempts >= USAGE_REFRESH_MAX_ATTEMPTS ||
+          (!allowInteraction &&
+            this.now() - attempt.attemptedAt < USAGE_REFRESH_RETRY_MS)
+        )
+          throw new UsageError("expired");
+        attempt = undefined;
+        force = true;
+      }
       if (attempt) {
-        if (attempt.generation === generation) throw new UsageError("expired");
         if (
           attempt.accountUuid !== account.auth!.accountUuid ||
           attempt.orgId !== account.auth!.orgId
@@ -268,15 +287,9 @@ export class UsageCredentialRefresher {
         current.scopes.some((scope) => !/^[A-Za-z0-9:._/-]{1,150}$/.test(scope))
       )
         throw new UsageError("expired");
-      // The vendor CLI invokes `security` to read/update Keychain. Its child
-      // processes have no documented no-UI mode, and granting this read-only
-      // helper permission does not authorize those separate writers. Only a
-      // user-initiated renewal may start that command on macOS.
-      if (
-        (this.deps.platform ?? process.platform) === "darwin" &&
-        !allowInteraction
-      )
-        throw new UsageError("renewal-required");
+      // The vendor CLI updates its own Keychain item through `/usr/bin/security`,
+      // the item's trusted application, exactly as it does during normal use, so
+      // a background renewal does not need a consent dialog.
       const executable = await this.deps.executable();
       if (!path.isAbsolute(executable)) throw new UsageError("unavailable");
       await this.allowed(account, profile);
@@ -309,6 +322,7 @@ export class UsageCredentialRefresher {
           generation,
           attemptedAt: this.now(),
           scopes: current.scopes,
+          attempts: previousAttempts + 1,
         } satisfies Attempt);
         assertOwned();
         try {

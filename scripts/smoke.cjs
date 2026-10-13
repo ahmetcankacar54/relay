@@ -97,26 +97,6 @@ app.whenReady().then(async () => {
     await assert.rejects(
       call("armContinuation", randomUUID(), "implicit-consent"),
     );
-    if (process.platform === "darwin") {
-      const mainPath =
-        process.env.RELAY_SMOKE_MAIN || path.resolve("dist-electron/main.cjs");
-      const helper = path.join(path.dirname(mainPath), "usage-keychain");
-      const code = await new Promise((resolve) => {
-        const child = require("node:child_process").execFile(
-          helper,
-          [],
-          { timeout: 5000 },
-          (error) => resolve(error?.code ?? 0),
-        );
-        child.stdin.on("error", () => {});
-        child.stdin.end("invalid-fixture-service");
-      });
-      assert.equal(
-        code,
-        2,
-        "native helper must execute and reject invalid service before accessing Keychain",
-      );
-    }
     await call(
       "dismissDesktopError",
       (await call("desktopSnapshot")).errorRevision,

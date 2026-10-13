@@ -211,14 +211,13 @@ test("final artifact verification checks the actual public signing certificate o
     [
       "dev.relay.workspace",
       "dev.relay.workspace.desktop-automation",
-      "dev.relay.workspace.usage-keychain",
     ],
   );
   assert.equal(
     fixture.calls.filter((call) =>
       call.args.some((arg) => arg.startsWith("--extract-certificates")),
     ).length,
-    3,
+    2,
   );
 });
 
@@ -267,7 +266,7 @@ test("update continuity verifies old and new requirements against separately ret
     true,
   );
   const checks = fixture.calls.slice(countBefore);
-  assert.equal(checks.length, 6);
+  assert.equal(checks.length, 4);
   assert.ok(checks.every((call) => call.args.includes("--test-requirement")));
   assert.ok(
     checks.every((call) =>

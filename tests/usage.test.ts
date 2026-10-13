@@ -100,6 +100,51 @@ test("usage credentials are profile-scoped, read-only and never use a global fal
     /credentials-missing/,
   );
 });
+test("macOS reads the CLI credential through the security tool, falls back to the CLI file and bounds a consent wait", async (t) => {
+  const f = await fixture(t);
+  const profileDir = f.store.profile(f.a.id);
+  const tool = path.join(f.root, "fake-security");
+  const credential = {
+    accessToken: "fixture-access",
+    expiresAt: 4_102_444_800_000,
+    scopes: ["user:profile"],
+  };
+  const script = (body: string) =>
+    fs.writeFile(tool, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+  await script(
+    `[ "$1" = find-generic-password ] && [ "$2" = -s ] && [ "$3" = "${credentialService(profileDir)}" ] && [ "$4" = -w ] || exit 9\necho '${JSON.stringify({ claudeAiOauth: credential })}'`,
+  );
+  assert.deepEqual(
+    await readCredential(profileDir, false, tool, "darwin"),
+    credential,
+  );
+  const hex = Buffer.from(
+    JSON.stringify({ claudeAiOauth: credential }),
+  ).toString("hex");
+  await script(`echo ${hex}`);
+  assert.deepEqual(
+    await readCredential(profileDir, false, tool, "darwin"),
+    credential,
+  );
+  await script("exit 44");
+  await assert.rejects(
+    readCredential(profileDir, false, tool, "darwin"),
+    /credentials-missing/,
+  );
+  await fs.writeFile(
+    path.join(profileDir, ".credentials.json"),
+    JSON.stringify({ claudeAiOauth: credential }),
+  );
+  assert.deepEqual(
+    await readCredential(profileDir, false, tool, "darwin"),
+    credential,
+  );
+  await script("exit 51");
+  await assert.rejects(
+    readCredential(profileDir, false, tool, "darwin"),
+    /keychain-locked/,
+  );
+});
 test("profile verification rejects a wrong account and wrong Desktop organization", async (t) => {
   const f = await fixture(t);
   verifyIdentity(f.a, profile);

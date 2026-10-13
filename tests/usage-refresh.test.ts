@@ -12,6 +12,8 @@ import {
 import {
   needsUsageCredentialRefresh,
   UsageCredentialRefresher,
+  USAGE_REFRESH_MAX_ATTEMPTS,
+  USAGE_REFRESH_RETRY_MS,
   type UsageRefreshCommand,
 } from "../electron/core/usage-refresh";
 
@@ -508,44 +510,68 @@ test("a saved replacement whose identity proof failed transiently reconciles whi
   assert.equal(refresher.hasPending(f.profile), false);
   assert.equal(f.calls.length, 1);
 });
-test("macOS background renewal and forced 401 renewal never execute the Keychain-writing CLI", async (t) => {
-  const f = await fixture(t);
-  const refresher = new UsageCredentialRefresher({
-    ...f.deps,
-    platform: "darwin",
-  });
-  await assert.rejects(
-    refresher.refresh(f.account, f.profile, f.old),
-    /renewal-required/,
-  );
-  await assert.rejects(
-    refresher.refresh(f.account, f.profile, f.old, true),
-    /renewal-required/,
-  );
-  assert.equal(f.calls.length, 0);
-  assert.equal(refresher.hasPending(f.profile), false);
-  assert.deepEqual(await fs.readdir(f.profile), []);
-});
-test("macOS explicit renewal permits exactly one isolated exchange and does not authorize subsequent background calls", async (t) => {
+test("macOS background renewal runs one isolated exchange like other platforms", async (t) => {
   const f = await fixture(t);
   const refresher = new UsageCredentialRefresher({
     ...f.deps,
     platform: "darwin",
   });
   assert.deepEqual(
-    await refresher.refresh(f.account, f.profile, f.old, false, true),
+    await refresher.refresh(f.account, f.profile, f.old),
     f.replacement,
   );
   assert.equal(f.calls.length, 1);
-  f.save({ ...f.replacement, expiresAt: now - 1 });
+  assert.equal(refresher.hasPending(f.profile), false);
+});
+test("an unconfirmed exchange is retried after a delay or on request, then requires reconnecting", async (t) => {
+  const f = await fixture(t);
+  let clock = now;
+  const refresher = new UsageCredentialRefresher({
+    ...f.deps,
+    now: () => clock,
+  });
+  f.run(async () => {
+    throw new Error("network");
+  });
   await assert.rejects(
-    refresher.refresh(f.account, f.profile, {
-      ...f.replacement,
-      expiresAt: now - 1,
-    }),
-    /renewal-required/,
+    refresher.refresh(f.account, f.profile, f.old),
+    /expired/,
   );
   assert.equal(f.calls.length, 1);
+  assert.equal(refresher.hasPending(f.profile), true);
+  // The unchanged pair is not exchanged again in the background right away.
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, f.old),
+    /expired/,
+  );
+  assert.equal(f.calls.length, 1);
+  // An explicit renewal may retry immediately.
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, f.old, false, true),
+    /expired/,
+  );
+  assert.equal(f.calls.length, 2);
+  // After the delay, a background read retries once more and then stops.
+  clock += USAGE_REFRESH_RETRY_MS;
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, f.old),
+    /expired/,
+  );
+  assert.equal(f.calls.length, USAGE_REFRESH_MAX_ATTEMPTS);
+  clock += USAGE_REFRESH_RETRY_MS;
+  await assert.rejects(
+    refresher.refresh(f.account, f.profile, f.old, false, true),
+    /expired/,
+  );
+  assert.equal(f.calls.length, USAGE_REFRESH_MAX_ATTEMPTS);
+  // A browser reconnect saves a new pair, which reconciles the barrier.
+  const reconnected = { ...f.replacement, expiresAt: clock + 3_600_000 };
+  f.save(reconnected);
+  assert.deepEqual(
+    await refresher.refresh(f.account, f.profile, f.old),
+    reconnected,
+  );
+  assert.equal(refresher.hasPending(f.profile), false);
 });
 test("macOS background pending reconciliation verifies an already saved replacement without interactive permission or exchange", async (t) => {
   const f = await fixture(t);

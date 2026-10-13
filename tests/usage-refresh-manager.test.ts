@@ -779,13 +779,11 @@ test("usage forwards explicit interaction consent to both proactive and forced c
   }
 });
 
-test("macOS background renewal keeps still-valid verified quotas and explicit renewal replaces the connection without waiting for cache expiry", async (t) => {
+test("macOS background polling renews a near-expiry connection without user interaction", async (t) => {
   const f = await fixture(t);
   let saved = old,
-    executions = 0,
-    executableLookups = 0;
+    executions = 0;
   const requests: [string, string][] = [];
-  const interactions: (boolean | undefined)[] = [];
   const prompts: boolean[] = [];
   const samples: AccountUsage[] = [];
   const request = async (endpoint: "profile" | "usage", token: string) => {
@@ -794,10 +792,7 @@ test("macOS background renewal keeps still-valid verified quotas and explicit re
   };
   const refresher = new UsageCredentialRefresher({
     platform: "darwin",
-    executable: async () => {
-      executableLookups++;
-      return path.join(f.directory, "mock-cli");
-    },
+    executable: async () => path.join(f.directory, "mock-cli"),
     read: async (_profile, allowPrompt) => {
       assert.equal(allowPrompt, false);
       return saved;
@@ -820,57 +815,28 @@ test("macOS background renewal keeps still-valid verified quotas and explicit re
     (_account, usage) => {
       samples.push(usage);
     },
-    (account, credential, force, allowInteraction) => {
-      interactions.push(allowInteraction);
-      return refresher.refresh(
+    (account, credential, force, allowInteraction) =>
+      refresher.refresh(
         account,
         f.directory,
         credential,
         force,
         allowInteraction,
-      );
-    },
+      ),
     () => refresher.hasPending(f.directory),
   );
   const background = await manager.refresh(f.account.id);
   assert.equal(background.status, "ready");
   assert.equal(background.stale, false);
   assert.equal(background.issue, undefined);
-  assert.equal(background.connectionRenewalRequired, true);
+  assert.equal(background.connectionRenewalRequired, undefined);
   assert.equal(background.fiveHour!.usedPercent, 24);
-  assert.equal(background.sevenDay!.usedPercent, 48);
-  assert.equal(executions, 0);
-  assert.equal(
-    executableLookups,
-    0,
-    "background reads must not even resolve a command that can open Keychain",
-  );
-  assert.equal(
-    refresher.hasPending(f.directory),
-    false,
-    "read-only refusal must not create an uncertain rotation journal",
-  );
-  assert.deepEqual(requests, [
-    ["profile", old.accessToken],
-    ["usage", old.accessToken],
-  ]);
-  // The user approves connection renewal immediately, within the normal
-  // one-minute read cache. This explicit action must run rather than no-op.
-  const foreground = await manager.refresh(f.account.id, true);
-  assert.equal(foreground.status, "ready");
-  assert.equal(foreground.connectionRenewalRequired, undefined);
   assert.equal(executions, 1);
-  assert.equal(executableLookups, 1);
   assert.equal(refresher.hasPending(f.directory), false);
-  assert.deepEqual(prompts, [false, true]);
-  assert.deepEqual(interactions, [false, true]);
-  assert.deepEqual(requests.slice(2), [
-    ["profile", replacement.accessToken],
-    ["profile", replacement.accessToken],
-    ["usage", replacement.accessToken],
-  ]);
-  assert.equal(samples.length, 2);
-  assertNoSecrets([background, foreground, manager.snapshot(), samples]);
+  assert.deepEqual(prompts, [false]);
+  assert.deepEqual(requests.at(-1), ["usage", replacement.accessToken]);
+  assert.equal(samples.length, 1);
+  assertNoSecrets([background, manager.snapshot(), samples]);
 });
 
 test("renewal refusal falls back only for a still-valid token with no pending attempt, and other errors never read quotas", async (t) => {

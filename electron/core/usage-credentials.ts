@@ -24,6 +24,15 @@ export function credentialService(profile: string) {
   // Relay always uses an absolute, isolated CLAUDE_CONFIG_DIR. Never fall back to the default service.
   return `Claude Code-credentials-${createHash("sha256").update(path.resolve(profile).normalize("NFC")).digest("hex").slice(0, 8)}`;
 }
+/** `security -w` prints non-printable secrets as hex; the CLI stores JSON text. */
+function decodeSecret(output: string) {
+  const text = output.trim();
+  if (/^[0-9a-f]+$/i.test(text) && text.length % 2 === 0) {
+    const decoded = Buffer.from(text, "hex").toString("utf8");
+    if (decoded.trimStart().startsWith("{")) return decoded;
+  }
+  return text;
+}
 export function parseCredential(raw: string): UsageCredential {
   try {
     const value = JSON.parse(raw)?.claudeAiOauth;
@@ -62,43 +71,55 @@ export function parseCredential(raw: string): UsageCredential {
     throw new UsageError("credentials-missing");
   }
 }
+/** Exit status of `security find-generic-password` when no item matches. */
+const SECURITY_ITEM_NOT_FOUND = 44;
+/**
+ * Reads the official CLI's credential for one isolated profile.
+ *
+ * On macOS the CLI stores it in the login Keychain through `/usr/bin/security`,
+ * and that tool is the item's trusted application. Reading it through the same
+ * Apple-signed tool therefore needs no consent dialog and does not depend on
+ * Relay's own code signature, so rebuilding or updating Relay never re-prompts.
+ * A background read is bounded: if macOS unexpectedly asks for consent, the
+ * child is terminated (closing its dialog) and the account reports
+ * `keychain-locked` until the user explicitly allows access.
+ */
 export async function readCredential(
   profile: string,
   allowPrompt: boolean,
-  helper: string,
+  tool = "/usr/bin/security",
   platform = process.platform,
 ): Promise<UsageCredential> {
   if ((await fs.lstat(profile)).isSymbolicLink())
     throw new UsageError("credentials-missing");
   if (platform === "darwin") {
-    // Security.framework can explicitly forbid prompts, unlike the `security -w` CLI.
     return new Promise((resolve, reject) => {
-      const child = execFile(
-        helper,
-        allowPrompt ? ["--allow-prompt"] : [],
+      execFile(
+        tool,
+        ["find-generic-password", "-s", credentialService(profile), "-w"],
         {
-          timeout: allowPrompt ? 120_000 : 20_000,
+          timeout: allowPrompt ? 120_000 : 15_000,
+          killSignal: "SIGKILL",
           maxBuffer: 65_536,
           windowsHide: true,
         },
         (error, stdout) => {
-          if (error)
-            return reject(
-              new UsageError(
-                error.code === 4 ? "credentials-missing" : "keychain-locked",
-              ),
-            );
+          // The CLI falls back to a private file when Keychain rejects its write.
+          if (error?.code === SECURITY_ITEM_NOT_FOUND)
+            return readCredentialFile(profile).then(resolve, reject);
+          if (error) return reject(new UsageError("keychain-locked"));
           try {
-            resolve(parseCredential(stdout));
+            resolve(parseCredential(decodeSecret(stdout)));
           } catch (e) {
             reject(e);
           }
         },
       );
-      child.stdin?.on("error", () => {});
-      child.stdin?.end(credentialService(profile));
     });
   }
+  return readCredentialFile(profile);
+}
+async function readCredentialFile(profile: string) {
   try {
     const file = path.join(profile, ".credentials.json");
     const stat = await fs.lstat(file);

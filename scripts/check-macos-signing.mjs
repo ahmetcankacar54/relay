@@ -55,7 +55,7 @@ if (
     "The app signature does not bind Info.plist and bundled resources.",
   );
 
-const helpers = ["desktop-automation", "usage-keychain"].map((name) => {
+const helpers = ["desktop-automation"].map((name) => {
   const file = path.join(
     contents,
     "Resources/app.asar.unpacked/dist-electron",

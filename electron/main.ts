@@ -142,11 +142,7 @@ else {
       await desktop.initialize();
       usageHistory = new UsageHistory(app.getPath("userData"));
       const readUsageCredential = (profile: string, allowPrompt: boolean) =>
-        readCredential(
-          profile,
-          allowPrompt,
-          path.join(__dirname, "usage-keychain"),
-        );
+        readCredential(profile, allowPrompt);
       usageCredentialRefresher = new UsageCredentialRefresher({
         read: readUsageCredential,
         executable: async () => {
@@ -299,12 +295,7 @@ else {
             await runQuotaStarter(
               service.store,
               account,
-              (profile, prompt) =>
-                readCredential(
-                  profile,
-                  prompt,
-                  path.join(__dirname, "usage-keychain"),
-                ),
+              readUsageCredential,
               {
                 signal: routineAbort.signal,
                 guard: async () => {

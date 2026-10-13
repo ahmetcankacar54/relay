@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
-const helpers = ["usage-keychain", "desktop-automation"];
+const helpers = ["desktop-automation"];
 
 function helperPlist(name) {
   // The helper version is independent of Relay's marketing version. Changing it

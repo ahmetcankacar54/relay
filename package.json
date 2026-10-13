@@ -64,7 +64,6 @@
     ],
     "asarUnpack": [
       "node_modules/node-pty/**/*",
-      "dist-electron/usage-keychain",
       "dist-electron/desktop-automation"
     ],
     "mac": {
