@@ -3,10 +3,12 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
+  DEFAULT_PLANNING,
   DEFAULT_SETTINGS,
   DEFAULT_WORKDAY,
   type Account,
   type CreateAccount,
+  type PlanningSettings,
 } from "../../shared/types";
 
 export const accountPlanningSchema = z
@@ -15,20 +17,22 @@ export const accountPlanningSchema = z
     capacityWeight: z.number().finite().min(1).max(100),
   })
   .strict();
+export const timeZoneSchema = z
+  .string()
+  .min(1)
+  .max(100)
+  .refine((value) => {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: value });
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Choose a valid time zone.");
+const clockSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 export const workdaySchema = z
   .object({
-    timeZone: z
-      .string()
-      .min(1)
-      .max(100)
-      .refine((value) => {
-        try {
-          new Intl.DateTimeFormat("en", { timeZone: value });
-          return true;
-        } catch {
-          return false;
-        }
-      }, "Choose a valid time zone."),
+    timeZone: timeZoneSchema,
     start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
     end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
     weekdays: z
@@ -53,6 +57,66 @@ export const workdaySchema = z
         (w.accountIds.length <= 1 || w.staggerMinutes >= 1)),
     "Choose routine accounts and use at least one minute of spacing for multiple accounts.",
   );
+const hoursSchema = z
+  .object({ enabled: z.boolean(), start: clockSchema, end: clockSchema })
+  .strict();
+export const planningSchema = z
+  .object({
+    autoStart: z.boolean(),
+    timeZone: timeZoneSchema,
+    weekday: hoursSchema,
+    weekend: hoursSchema,
+    accounts: z
+      .array(
+        z.object({ id: z.uuid(), firstStart: clockSchema.optional() }).strict(),
+      )
+      .max(50)
+      .refine(
+        (list) => new Set(list.map((a) => a.id)).size === list.length,
+        "Select each account once.",
+      ),
+  })
+  .strict();
+export const planningPatchSchema = planningSchema.partial();
+/** One-time conversion of the pre-0.11 workday settings. */
+export function planningFromWorkday(raw: unknown): PlanningSettings {
+  const w = (raw && typeof raw === "object" ? raw : {}) as Record<
+    string,
+    unknown
+  >;
+  const clock = (value: unknown, fallback: string) =>
+    clockSchema.safeParse(value).success ? (value as string) : fallback;
+  const days = Array.isArray(w.weekdays) ? w.weekdays : [];
+  if (!Object.keys(w).length) return structuredClone(DEFAULT_PLANNING);
+  const start = clock(w.start, DEFAULT_PLANNING.weekday.start);
+  const end = clock(w.end, DEFAULT_PLANNING.weekday.end);
+  const ids = Array.isArray(w.accountIds)
+    ? [
+        ...new Set(
+          w.accountIds.filter(
+            (id): id is string => z.uuid().safeParse(id).success,
+          ),
+        ),
+      ]
+    : [];
+  return {
+    autoStart: w.routineEnabled === true,
+    timeZone: timeZoneSchema.safeParse(w.timeZone).success
+      ? (w.timeZone as string)
+      : DEFAULT_PLANNING.timeZone,
+    weekday: {
+      enabled: days.some((d) => typeof d === "number" && d >= 1 && d <= 5),
+      start,
+      end,
+    },
+    weekend: {
+      enabled: days.some((d) => d === 0 || d === 6),
+      start,
+      end,
+    },
+    accounts: ids.map((id) => ({ id })),
+  };
+}
 const accountSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(64),
@@ -86,6 +150,7 @@ const accountSchema = z.object({
 export const settingsSchema = z
   .object({
     workday: workdaySchema.default(DEFAULT_WORKDAY),
+    planning: planningSchema,
     usageRefreshMinutes: z.union([
       z.literal(0),
       z.literal(5),
@@ -116,7 +181,16 @@ export const settingsPatchSchema = settingsSchema
   .partial();
 const stateSchema = z.object({
   version: z.literal(1),
-  settings: settingsSchema.default(DEFAULT_SETTINGS),
+  settings: z
+    .preprocess((value) => {
+      if (value && typeof value === "object" && !("planning" in value))
+        return {
+          ...value,
+          planning: planningFromWorkday((value as { workday?: unknown }).workday),
+        };
+      return value;
+    }, settingsSchema)
+    .default(DEFAULT_SETTINGS),
   accounts: z.array(accountSchema).max(50),
   pinned: z.array(z.string()),
   importEnabled: z.boolean(),

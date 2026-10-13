@@ -228,6 +228,7 @@ declare global {
 
 export interface RelaySettings {
   workday: WorkdaySettings;
+  planning: PlanningSettings;
   usageRefreshMinutes: 0 | 5 | 15 | 30;
   usageWarningPercent: 80 | 90 | 95;
   usageWarnings: boolean;
@@ -262,6 +263,34 @@ export const DEFAULT_WORKDAY: WorkdaySettings = {
   warmupLeadMinutes: 0,
   routineEnabled: false,
 };
+export interface PlanningHours {
+  enabled: boolean;
+  start: string;
+  end: string;
+}
+export interface PlanningAccount {
+  id: string;
+  /** Manual first warm-up clock (HH:mm), applied on every planned day. */
+  firstStart?: string;
+}
+export interface PlanningSettings {
+  /** Start and keep usage windows running automatically. */
+  autoStart: boolean;
+  timeZone: string;
+  /** Monday–Friday, by the interval's start date. */
+  weekday: PlanningHours;
+  /** Saturday and Sunday, by the interval's start date. */
+  weekend: PlanningHours;
+  /** Planned accounts in priority order. */
+  accounts: PlanningAccount[];
+}
+export const DEFAULT_PLANNING: PlanningSettings = {
+  autoStart: false,
+  timeZone: "Europe/Istanbul",
+  weekday: { enabled: true, start: "09:00", end: "18:00" },
+  weekend: { enabled: false, start: "11:00", end: "17:00" },
+  accounts: [],
+};
 export interface DesktopHistorySummary {
   profileId: string;
   indexed: number;
@@ -277,6 +306,7 @@ export interface DesktopHistorySummary {
 }
 export const DEFAULT_SETTINGS: RelaySettings = {
   workday: DEFAULT_WORKDAY,
+  planning: DEFAULT_PLANNING,
   usageRefreshMinutes: 5,
   usageWarningPercent: 90,
   usageWarnings: true,
