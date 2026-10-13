@@ -5,13 +5,14 @@ import type {
   AccountUsage,
   AutoSwitchState,
   FleetContinuationState,
+  KeeperSnapshot,
+  PlanningSettings,
   RelaySettings,
 } from "../shared/types";
 import type { AccountUsageStatistics } from "../shared/usage-statistics";
-import type { RoutineSnapshot } from "../electron/core/routines";
 import { SwitchPreferences } from "./SwitchPreferences";
 import { UsageStatistics } from "./UsageStatistics";
-import { WorkdayPreferences } from "./WorkdayPreferences";
+import { PlanningPanel } from "./PlanningPanel";
 import { ContinuationSettings } from "./ContinuationSettings";
 import { FleetSettings } from "./FleetSettings";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
@@ -28,7 +29,8 @@ export function Preferences({
   syncDisabled,
   usage,
   statistics,
-  routines,
+  keeper,
+  updatePlanning,
   updateAccount,
   continuation,
   inspectContinuation,
@@ -49,7 +51,8 @@ export function Preferences({
   syncDisabled: boolean;
   usage: Record<string, AccountUsage>;
   statistics: Record<string, AccountUsageStatistics>;
-  routines?: RoutineSnapshot;
+  keeper?: KeeperSnapshot;
+  updatePlanning: (patch: Partial<PlanningSettings>) => void;
   updateAccount: (id: string, input: AccountPlanning) => void;
   continuation?: DesktopContinuationSnapshot;
   inspectContinuation: () => void;
@@ -90,22 +93,21 @@ export function Preferences({
                 ? t("Desktop ve ortak geçmiş", "Desktop and shared history")
                 : key === "usage"
                   ? t("İstatistikler ve uyarılar", "Statistics and warnings")
-                  : t("24 saatlik çizelge", "24-hour schedule")}
+                  : t("Otomatik başlatma", "Automatic start")}
             </small>
           </button>
         ))}
       </nav>
       {tab === "planning" && (
-        <WorkdayPreferences
-          value={value.workday}
+        <PlanningPanel
+          settings={value.planning}
+          keeper={keeper}
           accounts={accounts}
           usage={usage}
-          routines={routines}
-          platform={platform}
-          update={(workday) => update({ workday })}
-          updateAccount={updateAccount}
           disabled={disabled}
           t={t}
+          update={updatePlanning}
+          updateAccount={updateAccount}
         />
       )}
       {tab === "switch" && (

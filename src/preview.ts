@@ -249,6 +249,42 @@ if (scenario === "planning") {
     weekday: { enabled: true, start: "09:00", end: "21:00" },
     accounts: ids.slice(0, 3).map((id) => ({ id })),
   };
+  const hour = 3_600_000;
+  state.planning = {
+    enabled: true,
+    running: false,
+    plannedToday: 0,
+    accounts: [
+      {
+        accountId: ids[0],
+        state: "active",
+        resetsAt: new Date(Date.now() + 2 * hour).toISOString(),
+      },
+      {
+        accountId: ids[1],
+        state: "outside",
+        nextStartAt: new Date(Date.now() + 5 * hour).toISOString(),
+      },
+      { accountId: ids[2], state: "waiting", reason: "cooldown" },
+    ],
+    attempts: [
+      {
+        id: "preview-2",
+        accountId: ids[2],
+        identityKey: "preview",
+        at: new Date(Date.now() - 6 * 60_000).toISOString(),
+        status: "failed",
+        reason: "routine-credentials-unavailable",
+      },
+      {
+        id: "preview-1",
+        accountId: ids[0],
+        identityKey: "preview",
+        at: new Date(Date.now() - 3 * hour).toISOString(),
+        status: "verified",
+      },
+    ],
+  };
   state.usageStatistics = Object.fromEntries(
     accounts.map((a, index) => {
       const samples = Array.from({ length: 14 }, (_, i) =>

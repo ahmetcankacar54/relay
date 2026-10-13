@@ -1511,7 +1511,10 @@ export default function App() {
               }
               usage={data?.usage ?? {}}
               statistics={data?.usageStatistics ?? {}}
-              routines={data?.routines}
+              keeper={data?.planning}
+              updatePlanning={(patch) =>
+                void action("planning", () => api.updatePlanning(patch))
+              }
               updateAccount={(id, input) =>
                 void action(`plan:${id}`, () =>
                   api.updateAccountPlanning(id, input),
