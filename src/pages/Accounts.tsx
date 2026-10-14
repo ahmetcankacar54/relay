@@ -39,7 +39,7 @@ export function Accounts() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, []);
-  // Arriving with a setup target (e.g. "Desktop'a bağla" on Overview) opens that account.
+  // Arriving with a setup target (e.g. "Desktop’a bağla" on Overview) opens that account.
   useEffect(() => {
     if (setupId) setSelected(setupId);
   }, [setupId]);
@@ -55,7 +55,7 @@ export function Accounts() {
     <PageFrame
       title={t("Hesaplar", "Accounts")}
       description={t(
-        `${accounts.length} hesap · ${linked}'i Desktop'a bağlı`,
+        `${accounts.length} hesap · ${linked}’i Desktop’a bağlı`,
         `${accounts.length} accounts · ${linked} linked to Desktop`,
       )}
       actions={

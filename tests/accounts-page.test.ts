@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts } from "../src/pages/Accounts";
 import { AccountSheetBody } from "../src/pages/accounts/AccountSheet";
+import { rowActions } from "../src/pages/accounts/AccountsTable";
 import { filterAccounts, groupName, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -74,7 +75,7 @@ test("planLabel and groupName describe an account", () => {
 test("the accounts page lists accounts with their connection states", () => {
   const html = wrap(relayFor(), createElement(Accounts));
   assert.match(html, /<h1[^>]*>Hesaplar/);
-  assert.match(html, /3 hesap · 1&#x27;i Desktop&#x27;a bağlı/);
+  assert.match(html, /3 hesap · 1’i Desktop’a bağlı/);
   assert.match(html, /Hesap ekle/);
   assert.match(html, /placeholder="Hesap, e-posta veya grup ara…"/);
   for (const name of ["Kişisel · Max", "Studio", "Şirket"]) assert.match(html, new RegExp(name));
@@ -107,7 +108,7 @@ test("the account sheet shows Desktop setup for the account being linked", () =>
   const relay = relayFor({ setupId: "b" });
   const sheetHtml = wrap(relay, createElement(AccountSheetBody, { account: b, now: NOW }));
   assert.match(sheetHtml, /Desktop ilk kurulumu/);
-  assert.match(sheetHtml, /Desktop&#x27;a bağla|Desktop’a bağla/);
+  assert.match(sheetHtml, /Desktop’a bağla/);
   assert.doesNotMatch(sheetHtml, /Yerel Code geçmişi/);
   const warnings = wrap(
     relayFor(),
@@ -117,4 +118,30 @@ test("the account sheet shows Desktop setup for the account being linked", () =>
     }),
   );
   assert.match(warnings, /Desktop ve limit bağlantısı farklı hesaplara ait/);
+});
+
+test("row actions follow the Desktop link state and the switch lock", () => {
+  const t = (tr: string) => tr;
+  const labels = (acct: Account, relay: Relay) => rowActions(acct, relay, t).map((x) => x.label);
+  const relay = relayFor();
+  assert.deepEqual(labels(a, relay), ["Claude’u aç", "Girişi yenile", "Desktop girişini yenile…", "Limitleri yenile"]);
+  assert.deepEqual(labels(b, relay), ["Girişi yenile", "Desktop’a bağla", "Limitleri yenile"]);
+  const unlinkedActive = { ...a, desktop: undefined };
+  const labelsUnlinked = labels(unlinkedActive, relayFor({ active: unlinkedActive }));
+  assert.ok(!labelsUnlinked.includes("Claude’u aç"));
+  assert.ok(labelsUnlinked.includes("Desktop’a bağla"));
+  const linked = { ...b, id: "c", desktop };
+  assert.ok(labels(linked, relay).includes("Geçiş yap"));
+  for (const extra of [
+    { desktopBusy: true },
+    { pendingDesktop: b },
+    { desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: true, errorRevision: 0, activeProfileId: "a" } },
+  ] as Partial<Relay>[]) {
+    const r = relayFor(extra);
+    const open = rowActions(a, r, t).find((x) => x.label === "Claude’u aç");
+    const sw = rowActions(linked, r, t).find((x) => x.label === "Geçiş yap");
+    assert.equal(open?.disabled, true, JSON.stringify(Object.keys(extra)));
+    assert.equal(sw?.disabled, true);
+  }
+  assert.equal(rowActions(a, relay, t).find((x) => x.label === "Claude’u aç")?.disabled, false);
 });

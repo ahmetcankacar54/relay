@@ -42,10 +42,10 @@ export function filterAccounts(
   );
 }
 
-/** Avatar colours keyed by `Account.color`. */
+/** Avatar colours keyed by `Account.color`, with dark-mode variants. */
 export const avatarClass: Record<string, string> = {
-  terra: "bg-[#efded2] text-[#9e5f40]",
-  olive: "bg-[#e2e8ce] text-[#6b7950]",
-  blue: "bg-[#dce7e8] text-[#597886]",
-  plum: "bg-[#e8dfeb] text-[#87638a]",
+  terra: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200",
+  olive: "bg-lime-100 text-lime-800 dark:bg-lime-950 dark:text-lime-200",
+  blue: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
+  plum: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200",
 };

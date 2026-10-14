@@ -1,5 +1,7 @@
+import { Fragment } from "react";
 import {
   ArrowLeftRight,
+  type LucideIcon,
   ArrowUpRight,
   Globe2,
   Monitor,
@@ -7,6 +9,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { Account } from "../../../shared/types";
+import type { Relay } from "@/data/relay-context";
 import { cliNeedsReconnect } from "../../../shared/account-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +38,81 @@ import { avatarClass, planLabel } from "./accountLabels";
 const percent = (value?: number) =>
   value === undefined ? "—" : `%${Math.round(value)}`;
 
+export interface RowAction {
+  key: "switch" | "open" | "cli" | "desktop-reconnect" | "desktop-link" | "refresh";
+  label: string;
+  icon: LucideIcon;
+  disabled: boolean;
+  run: () => void;
+}
+
+/** Menu items for an account row, in display order. Pure so it can be tested. */
+export function rowActions(
+  a: Account,
+  relay: Relay,
+  t: (tr: string, en: string) => string,
+  link: (id: string) => void = () => {},
+): RowAction[] {
+  const { desktop, desktopBusy, pendingDesktop } = relay;
+  const isActive = a.id === relay.active?.id;
+  const switchBlocked =
+    desktopBusy || !!pendingDesktop || !!desktop?.recoveryRequired;
+  const authFlow = relay.data?.authFlows.find((f) => f.accountId === a.id);
+  const items: RowAction[] = [];
+  if (a.desktop && !isActive)
+    items.push({
+      key: "switch",
+      label: t("Geçiş yap", "Switch"),
+      icon: ArrowLeftRight,
+      disabled: switchBlocked,
+      run: () => relay.requestDesktop(a, "switch"),
+    });
+  if (a.desktop && isActive)
+    items.push({
+      key: "open",
+      label: t("Claude’u aç", "Open Claude"),
+      icon: ArrowUpRight,
+      disabled: switchBlocked,
+      run: () => void relay.action(`open:${a.id}`, () => relay.api.openDesktop()),
+    });
+  items.push({
+    key: "cli",
+    label: t("Girişi yenile", "Reconnect"),
+    icon: Globe2,
+    disabled: !!relay.busy || pendingFlow(authFlow),
+    run: () => void relay.startCli(a),
+  });
+  items.push(
+    a.desktop
+      ? {
+          key: "desktop-reconnect",
+          label: t("Desktop girişini yenile…", "Reconnect Desktop…"),
+          icon: Monitor,
+          disabled: desktopBusy || !!pendingDesktop,
+          run: () => relay.requestDesktop(a, "reconnect"),
+        }
+      : {
+          key: "desktop-link",
+          label: t("Desktop’a bağla", "Connect Desktop"),
+          icon: Monitor,
+          disabled:
+            desktopBusy ||
+            !desktop?.available ||
+            !!pendingDesktop ||
+            !!desktop?.recoveryRequired,
+          run: () => link(a.id),
+        },
+  );
+  items.push({
+    key: "refresh",
+    label: t("Limitleri yenile", "Refresh limits"),
+    icon: RefreshCw,
+    disabled: relay.usageBusy.has(a.id),
+    run: () => void relay.refreshUsage(a),
+  });
+  return items;
+}
+
 export function AccountsTable({
   accounts,
   selected,
@@ -50,10 +128,7 @@ export function AccountsTable({
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
-  const { api, data, desktop, active, busy, desktopBusy, pendingDesktop } =
-    relay;
-  const switchBlocked =
-    desktopBusy || !!pendingDesktop || !!desktop?.recoveryRequired;
+  const { data, desktop, active } = relay;
   return (
     <Table>
       <TableHeader>
@@ -172,65 +247,17 @@ export function AccountsTable({
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   >
-                    {!isActive && a.desktop && (
-                      <DropdownMenuItem
-                        disabled={switchBlocked}
-                        onSelect={() => relay.requestDesktop(a, "switch")}
-                      >
-                        <ArrowLeftRight />
-                        {t("Geçiş yap", "Switch")}
-                      </DropdownMenuItem>
+                    {rowActions(a, relay, t, link).map(
+                      ({ key, label, icon: Icon, disabled, run }) => (
+                        <Fragment key={key}>
+                          {key === "refresh" && <DropdownMenuSeparator />}
+                          <DropdownMenuItem disabled={disabled} onSelect={run}>
+                            <Icon />
+                            {label}
+                          </DropdownMenuItem>
+                        </Fragment>
+                      ),
                     )}
-                    {isActive && (
-                      <DropdownMenuItem
-                        disabled={desktopBusy}
-                        onSelect={() =>
-                          void relay.action(`open:${a.id}`, () =>
-                            api.openDesktop(),
-                          )
-                        }
-                      >
-                        <ArrowUpRight />
-                        {t("Claude’u aç", "Open Claude")}
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      disabled={!!busy || waiting}
-                      onSelect={() => void relay.startCli(a)}
-                    >
-                      <Globe2 />
-                      {t("Girişi yenile", "Reconnect")}
-                    </DropdownMenuItem>
-                    {a.desktop ? (
-                      <DropdownMenuItem
-                        disabled={desktopBusy || !!pendingDesktop}
-                        onSelect={() => relay.requestDesktop(a, "reconnect")}
-                      >
-                        <Monitor />
-                        {t("Desktop girişini yenile…", "Reconnect Desktop…")}
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem
-                        disabled={
-                          desktopBusy ||
-                          !desktop?.available ||
-                          !!pendingDesktop ||
-                          !!desktop?.recoveryRequired
-                        }
-                        onSelect={() => link(a.id)}
-                      >
-                        <Monitor />
-                        {t("Desktop'a bağla", "Link to Desktop")}
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={relay.usageBusy.has(a.id)}
-                      onSelect={() => void relay.refreshUsage(a)}
-                    >
-                      <RefreshCw />
-                      {t("Limitleri yenile", "Refresh limits")}
-                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
