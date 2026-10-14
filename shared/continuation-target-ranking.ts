@@ -1,5 +1,5 @@
 import { planCapacity } from "./planning";
-import { quotaWindows } from "./usage";
+import { quotaWindows } from "./quota-windows";
 import type { Account, AccountUsage } from "./types";
 
 export interface ContinuationTargetCandidate {

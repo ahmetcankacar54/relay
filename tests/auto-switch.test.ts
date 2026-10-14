@@ -690,3 +690,62 @@ test("history grant changes after planning revoke every source in the automatic 
     assert.equal(f.quits(), 0);
   }
 });
+
+test("the target is the soonest reset that holds half an hour at the tempo", async (t) => {
+  const f = scenario();
+  const c = account("C");
+  f.b.planning = { plan: "max5", capacityWeight: 5 };
+  c.planning = { plan: "pro", capacityWeight: 1 };
+  f.settings.autoSwitchAccounts.push(c.id);
+  // B: 80% of a Max 5× window (400 Pro units) until its reset in an hour.
+  // C: 50 Pro units until its reset in 30 minutes; the old lowest-use rule
+  // picked B.
+  f.usage[f.b.id] = quota(f.b, 20, 20);
+  f.usage[c.id] = {
+    ...quota(c, 50, 20),
+    fiveHour: {
+      usedPercent: 50,
+      resetsAt: new Date(NOW + 30 * 60_000).toISOString(),
+    },
+  };
+  const decide = (rate?: number) =>
+    autoSwitchDecision(
+      f.settings,
+      [f.a, f.b, c],
+      f.desktop,
+      f.usage,
+      NOW,
+      false,
+      true,
+      rate,
+    ).state.targetId;
+  assert.equal(decide(), c.id);
+  // 50 Pro units cover half an hour at 60/h, not at 200/h.
+  assert.equal(decide(60), c.id);
+  assert.equal(decide(200), f.b.id);
+  // The manager reads the rate from its dependency on every decision.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-auto-switch-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const store = new Store(root);
+  store.update((state) => {
+    state.accounts = [f.a, f.b, c];
+    state.settings = f.settings;
+  });
+  f.desktop.running = true;
+  let rate: number | undefined;
+  const manager = new AutoSwitchManager(
+    store,
+    {
+      snapshot: async () => structuredClone(f.desktop),
+      switchTo: async () => assert.fail("Claude is still running"),
+    },
+    { snapshot: () => f.usage },
+    { now: () => NOW, platformSupported: true, tempoRate: () => rate },
+  );
+  await manager.tick();
+  assert.equal(manager.snapshot().reason, "claude-running");
+  assert.equal(manager.snapshot().targetId, c.id);
+  rate = 200;
+  await manager.tick();
+  assert.equal(manager.snapshot().targetId, f.b.id);
+});

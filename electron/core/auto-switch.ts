@@ -10,7 +10,8 @@ import {
   allowedHistoryPair,
   historySources,
 } from "../../shared/history-policy";
-import { maxUsedPercent, quotaWindows } from "../../shared/usage";
+import { quotaWindows } from "../../shared/usage";
+import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
 import type { Store } from "./store";
 import type { DesktopManager } from "./desktop";
 
@@ -33,6 +34,8 @@ interface Dependencies {
   changed?: () => void;
   platformSupported?: boolean;
   withDesktopLock?: <T>(action: () => Promise<T>) => Promise<T>;
+  /** Pro units per hour now (the tempo); undefined when unknown. */
+  tempoRate?: () => number | undefined;
 }
 function identityReady(account: Account) {
   return (
@@ -115,6 +118,8 @@ export function autoSwitchDecision(
   now: number,
   pendingAuth = false,
   platformSupported = process.platform === "darwin",
+  /** Pro units per hour now (the tempo), for the switch rule's threshold. */
+  rate?: number,
 ): Decision {
   const state = (
     status: AutoSwitchState["status"],
@@ -167,24 +172,24 @@ export function autoSwitchDecision(
       source.id,
     );
   }
-  const target = accounts
-    .filter(
-      (account) =>
-        settings.autoSwitchAccounts.includes(account.id) &&
-        allowedHistoryPair(source, account, settings) &&
-        usableTarget(account, usage[account.id], now) &&
-        !(
-          account.desktop!.accountUuid.toLowerCase() ===
-            source.desktop!.accountUuid.toLowerCase() &&
-          account.desktop!.orgId.toLowerCase() ===
-            source.desktop!.orgId.toLowerCase()
-        ),
-    )
-    .sort((a, b) => {
-      const utilization = (account: Account) =>
-        maxUsedPercent(usage[account.id])!;
-      return utilization(a) - utilization(b) || a.id.localeCompare(b.id);
-    })[0];
+  const eligible = accounts.filter(
+    (account) =>
+      settings.autoSwitchAccounts.includes(account.id) &&
+      allowedHistoryPair(source, account, settings) &&
+      usableTarget(account, usage[account.id], now) &&
+      !(
+        account.desktop!.accountUuid.toLowerCase() ===
+          source.desktop!.accountUuid.toLowerCase() &&
+        account.desktop!.orgId.toLowerCase() ===
+          source.desktop!.orgId.toLowerCase()
+      ),
+  );
+  // The same rule as the other automatic switches: soonest reset among the
+  // accounts with enough quota at the tempo, else capacity × remaining.
+  const target = rankContinuationTargets(
+    eligible.map((account) => ({ account, usage: usage[account.id] })),
+    { now, rate },
+  )[0]?.account;
   if (!target)
     return { ...state("blocked", "no-ready-target", source.id), exhausted };
   return {
@@ -259,6 +264,7 @@ export class AutoSwitchManager {
       this.now(),
       this.dependencies.pendingAuth?.() ?? false,
       this.platformSupported,
+      this.dependencies.tempoRate?.(),
     );
   }
   private prune(now: number) {

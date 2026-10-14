@@ -13,8 +13,9 @@ import { freshUsage } from "./usage";
  * The rest of today's work from live usage: what happens if work goes on at
  * the planned tempo. Accounts with fresh usage start from their open window
  * (weekly limit used up: out of reach); the others from the plan's window
- * chain with a full quota. Closed windows warm up as planned when Relay keeps
- * them running (`autoStart`), else at first use.
+ * chain with a full quota. With `autoStart` a closed window starts when the
+ * keeper would start it (now, or when the account's active range begins),
+ * else at first use.
  */
 export function liveForecast({
   plan,
@@ -38,10 +39,13 @@ export function liveForecast({
   const keepAlive = settings.autoStart;
   const accounts: SimAccount[] = plan.accounts.map((p) => {
     const capacity = context.capacities[p.accountId] ?? 1;
-    const next = keepAlive
-      ? p.windows.find((w) => w.start >= from)?.start
-      : undefined;
-    const closed = { warmUp: next };
+    // The keeper starts a due window right away (inside its active range).
+    const closed = {
+      warmUp:
+        keepAlive && from < p.activeUntil
+          ? Math.max(from, p.activeFrom)
+          : undefined,
+    };
     const u = usage[p.accountId];
     if (freshUsage(u, now)) {
       const reset = Date.parse(u.fiveHour?.resetsAt ?? "");

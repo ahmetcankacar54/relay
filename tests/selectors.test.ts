@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { overviewAccounts, sidebarStatus, usageWindowRows } from "../src/data/selectors";
+import { overviewAccounts, sidebarStatus, tempoRateNow, usageWindowRows } from "../src/data/selectors";
+import { presetTempo } from "../shared/tempo";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
@@ -27,6 +28,26 @@ test("overview lists other accounts best first and recommends one usable account
   assert.deepEqual(rows.map((r) => r.state), ["window-open", "ready", "exhausted", "not-linked"]);
   assert.deepEqual(rows.map((r) => r.recommended), [true, false, false, false]);
   assert.equal(rows[2].availableAt, iso(NOW + 7_200_000));
+});
+
+test("overview orders like switching: the soonest reset that holds half an hour at the tempo", () => {
+  const [active, soon, max] = [acct("active", "max5"), acct("soon", "pro"), acct("max", "max5")];
+  // soon: 50 Pro units until its reset in 30 minutes; max: 400 until its reset in an hour.
+  const usage = { soon: use("soon", 50, 10, NOW + 1_800_000), max: use("max", 20, 10, NOW + 3_600_000) };
+  const order = (rate?: number) =>
+    overviewAccounts(active, [active, soon, max], usage, NOW, rate).map((r) => [r.account.id, r.recommended]);
+  assert.deepEqual(order(), [["soon", true], ["max", false]]);
+  assert.deepEqual(order(200), [["max", true], ["soon", false]]);
+});
+
+test("the tempo rate is read from the keeper's tempo when the main process reported one", () => {
+  const tempo = { ...presetTempo("heavy"), weekday: Array.from({ length: 24 }, (_, hour) => hour) };
+  const settings = { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_SETTINGS.planning, timeZone: "UTC" } };
+  const data = { planning: { tempo } } as unknown as Snapshot;
+  // 2026-10-14 is a Wednesday; 10:00 UTC reads the weekday profile's hour 10.
+  assert.equal(tempoRateNow(data, settings, NOW), 10);
+  assert.equal(tempoRateNow({ planning: {} } as unknown as Snapshot, settings, NOW), undefined);
+  assert.equal(tempoRateNow(undefined, settings, NOW), undefined);
 });
 
 test("stale usage is never recommended", () => {

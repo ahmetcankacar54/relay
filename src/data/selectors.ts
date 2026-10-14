@@ -1,6 +1,7 @@
-import type { Account, AccountUsage, AuthFlow, Snapshot } from "../../shared/types";
+import type { Account, AccountUsage, AuthFlow, RelaySettings, Snapshot } from "../../shared/types";
 import { freshUsage, quotaWindows } from "../../shared/usage";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
+import { tempoAt } from "../../shared/tempo";
 
 export const pendingFlow = (f?: AuthFlow) =>
   !!f && ["starting", "waiting", "verifying"].includes(f.status);
@@ -13,14 +14,24 @@ export interface OverviewRow {
   availableAt?: string;
   recommended: boolean;
 }
+/** Pro units per hour at `now` under the keeper's tempo, once the main process reported one. */
+export function tempoRateNow(data: Snapshot | undefined, settings: RelaySettings, now: number) {
+  return data?.planning?.tempo ? tempoAt(data.planning.tempo, settings.planning, now) : undefined;
+}
+
+/** Other accounts best first, by the switch rule (`rate`: the tempo, Pro units per hour). */
 export function overviewAccounts(
   active: Account | undefined,
   accounts: Account[],
   usage: Record<string, AccountUsage>,
   now = Date.now(),
+  rate?: number,
 ): OverviewRow[] {
   const others = accounts.filter((a) => a.id !== active?.id);
-  const ranked = rankContinuationTargets(others.map((account) => ({ account, usage: usage[account.id] })));
+  const ranked = rankContinuationTargets(
+    others.map((account) => ({ account, usage: usage[account.id] })),
+    { now, rate },
+  );
   const order = [...ranked.filter((r) => r.account.desktop), ...ranked.filter((r) => !r.account.desktop)];
   let recommended = false;
   return order.map(({ account }) => {

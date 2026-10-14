@@ -14,14 +14,13 @@ import type {
 } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { suggestedAccount } from "../../shared/usage";
-import { tempoAt } from "../../shared/tempo";
 import { desktopCliMismatch } from "../../shared/account-state";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
 import { previewApi } from "../preview";
 import packageInfo from "../../package.json";
 import { errorMessage } from "./error-message";
 import { useI18n } from "./i18n";
-import { pendingFlow } from "./selectors";
+import { pendingFlow, tempoRateNow } from "./selectors";
 import {
   relayAction,
   shouldConsumeTraySwitch,
@@ -145,9 +144,7 @@ function useRelayState(
     data?.usage ?? {},
     settings,
     now,
-    data?.planning?.tempo
-      ? tempoAt(data.planning.tempo, settings.planning, now)
-      : undefined,
+    tempoRateNow(data, settings, now),
   );
   const flow =
     data?.authFlows.find((f) => f.accountId === authId) ??

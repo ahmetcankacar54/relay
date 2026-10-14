@@ -6,7 +6,11 @@ import { LimitMeter } from "@/components/LimitMeter";
 import { useI18n } from "@/data/i18n";
 import type { Relay } from "@/data/relay-context";
 import { useRelay } from "@/data/relay-context";
-import { overviewAccounts, type OverviewRow } from "@/data/selectors";
+import {
+  overviewAccounts,
+  tempoRateNow,
+  type OverviewRow,
+} from "@/data/selectors";
 import { accountRowSubtitle, panelRowState } from "@/lib/account-row";
 import { planLabel } from "../pages/accounts/accountLabels";
 import { panelCard, panelEyebrow } from "./PanelActiveCard";
@@ -20,6 +24,7 @@ export function panelRows(relay: Relay, now: number): OverviewRow[] {
     relay.accounts,
     relay.data?.usage ?? {},
     now,
+    tempoRateNow(relay.data, relay.settings, now),
   ).map((row) =>
     relay.suggestion
       ? { ...row, recommended: row.account.id === relay.suggestion.id }

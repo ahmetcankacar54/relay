@@ -315,3 +315,34 @@ test("fleet switching and the suggestion pick the account the ranking puts first
   // 10% left; 30 Pro units at 60/h; 200 Pro units at 400/h.
   assert.deepEqual(firsts, ["short", "pro", "max5"]);
 });
+
+test("the weekly window binds the threshold when it has less left", () => {
+  const max5 = planningAccount("max5", "max5");
+  const pro = planningAccount("pro", "pro");
+  // 80% of the five-hour window but only 5% of the week: 25 Pro units.
+  const weeklyShort = {
+    ...windowUsage(max5, 80, 10 * MINUTE),
+    sevenDay: {
+      usedPercent: 95,
+      resetsAt: new Date(NOW + 86_400_000).toISOString(),
+    },
+  };
+  const candidates = [
+    { account: max5, usage: weeklyShort },
+    { account: pro, usage: windowUsage(pro, 50, 4 * HOUR) },
+  ];
+  for (const rate of [undefined, 60])
+    assert.deepEqual(
+      order(rankContinuationTargets(candidates, { now: NOW, rate })),
+      ["pro", "max5"],
+    );
+  // Its five-hour window alone would have led.
+  const fiveHourOnly = [
+    { account: max5, usage: { ...weeklyShort, sevenDay: undefined } },
+    candidates[1],
+  ];
+  assert.deepEqual(
+    order(rankContinuationTargets(fiveHourOnly, { now: NOW, rate: 60 })),
+    ["max5", "pro"],
+  );
+});

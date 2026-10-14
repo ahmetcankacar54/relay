@@ -6,6 +6,8 @@ import type {
 } from "./types";
 import { allowedHistoryPair } from "./history-policy";
 import { rankContinuationTargets } from "./continuation-target-ranking";
+import { maxUsedPercent } from "./quota-windows";
+export { maxUsedPercent, quotaWindows } from "./quota-windows";
 export function freshUsage(
   u: AccountUsage | undefined,
   now = Date.now(),
@@ -23,24 +25,6 @@ export function freshUsage(
 }
 export function remaining(w?: UsageWindow) {
   return w ? Math.max(0, 100 - w.usedPercent) : undefined;
-}
-/**
- * Quota windows the provider reported. Team and Enterprise seats can omit the
- * weekly window: that means no weekly limit was reported, never an invented 0% or
- * 100%. The five-hour window is required before an account can be judged.
- */
-export function quotaWindows(
-  u: Pick<AccountUsage, "fiveHour" | "sevenDay"> | undefined,
-): UsageWindow[] | undefined {
-  if (!u?.fiveHour) return;
-  return u.sevenDay ? [u.fiveHour, u.sevenDay] : [u.fiveHour];
-}
-/** Highest utilization across the reported windows (the binding limit). */
-export function maxUsedPercent(
-  u: Pick<AccountUsage, "fiveHour" | "sevenDay"> | undefined,
-) {
-  const windows = quotaWindows(u);
-  return windows && Math.max(...windows.map((w) => w.usedPercent));
 }
 /**
  * The account to suggest once the active one passes the warning threshold,

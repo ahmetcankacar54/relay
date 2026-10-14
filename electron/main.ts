@@ -171,6 +171,14 @@ else {
         accounts: () => service.store.state.accounts,
         settings: () => service.store.state.settings.planning,
       });
+      /** The tempo now for the switch rule; a failure falls back to its 10% threshold. */
+      const currentTempoRate = () => {
+        try {
+          return tempo.rateAt();
+        } catch {
+          return undefined;
+        }
+      };
       const readUsageCredential = (profile: string, allowPrompt: boolean) =>
         readCredential(profile, allowPrompt);
       usageCredentialRefresher = new UsageCredentialRefresher({
@@ -283,7 +291,7 @@ else {
           accounts: service.store.state.accounts,
           settings: service.store.state.settings,
           usage: usage.snapshot(),
-          tempoRate: tempo.rateAt(),
+          tempoRate: currentTempoRate(),
         }),
         withDesktopLock,
         pendingAuth: () => pendingAuth() || !!observedDesktop?.pendingProfileId,
@@ -291,6 +299,7 @@ else {
       });
       autoSwitch = new AutoSwitchManager(service.store, desktop, usage, {
         withDesktopLock,
+        tempoRate: currentTempoRate,
         pendingAuth: () =>
           fleet?.enabled ||
           continuation.snapshot().enabled ||
@@ -380,7 +389,7 @@ else {
           accounts: service.store.state.accounts,
           settings: service.store.state.settings,
           usage: usage.snapshot(),
-          tempoRate: tempo.rateAt(),
+          tempoRate: currentTempoRate(),
         }),
         desktop: async () => ({
           ...(observedDesktop = await desktop.snapshot()),

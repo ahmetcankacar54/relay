@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { LimitMeter } from "@/components/LimitMeter";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { overviewAccounts } from "@/data/selectors";
+import { overviewAccounts, tempoRateNow } from "@/data/selectors";
 import { accountRowSubtitle } from "@/lib/account-row";
 import type { PageId } from "@/app/routes";
 import { planLabel } from "../accounts/accountLabels";
@@ -25,6 +25,7 @@ export function AccountsCard({
     relay.accounts,
     relay.data?.usage ?? {},
     now,
+    tempoRateNow(relay.data, relay.settings, now),
   ).map((row) =>
     relay.suggestion
       ? { ...row, recommended: row.account.id === relay.suggestion.id }

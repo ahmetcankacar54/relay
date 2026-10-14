@@ -230,12 +230,79 @@ test("without auto start a closed window opens at first use, not at its planned 
     "- 14:00-17:00",
     "pro 17:00-18:00",
   ]);
-  // With auto start Relay warms it up at 11:30, so it resets at 16:30.
+  assert.equal(firstUse.outageMinutes, 180);
+  // With auto start the keeper starts it right away (its planned window is
+  // due), so it resets at 15:00 and again at 20:00; max is back at 17:30.
   const warmed = liveForecast({ ...input, settings: settings() })!;
   assert.deepEqual(lane(warmed), [
     "max 10:00-12:00",
     "pro 12:00-14:00",
-    "- 14:00-16:30",
-    "pro 16:30-18:00",
+    "- 14:00-15:00",
+    "pro 15:00-17:00",
+    "- 17:00-17:30",
+    "max 17:30-18:00",
   ]);
+  assert.equal(warmed.outageMinutes, 90);
+});
+
+test("with auto start a closed window warms now, as the keeper starts a due window", () => {
+  const now = at("10:00");
+  const usage = {
+    max: fresh("max", now, 80, "17:30"),
+    vertex: fresh("vertex", now, 0, "12:00", 100),
+  };
+  const input = {
+    plan,
+    settings: settings(),
+    context: context(),
+    activeId: "max",
+    now,
+  };
+  // No window open forecasts like a window opened right now.
+  const opened = liveForecast({
+    ...input,
+    usage: { ...usage, pro: fresh("pro", now, 0, "15:00") },
+  });
+  assert.deepEqual(
+    liveForecast({ ...input, usage: { ...usage, pro: fresh("pro", now, 0) } }),
+    opened,
+  );
+});
+
+test("a window that resets between now and the work start counts as closed and full", () => {
+  const now = at("08:00");
+  const blocked = (id: string) => fresh(id, now, 0, undefined, 100);
+  const input = {
+    plan,
+    settings: settings(),
+    context: context(presetTempo("heavy")),
+    now,
+  };
+  // 90% used, but the window resets at 08:30, before work starts at 09:00.
+  const reset = liveForecast({
+    ...input,
+    usage: {
+      max: fresh("max", now, 90, "08:30"),
+      vertex: blocked("vertex"),
+      pro: blocked("pro"),
+    },
+  })!;
+  // A full Max 5× window from 09:00 (500 Pro units at 120/h) lasts until
+  // 13:10 and comes back at 14:00, five hours after the work start.
+  assert.deepEqual(lane(reset), [
+    "max 09:00-13:10",
+    "- 13:10-14:00",
+    "max 14:00-18:00",
+  ]);
+  assert.deepEqual(
+    liveForecast({
+      ...input,
+      usage: {
+        max: fresh("max", now, 0),
+        vertex: blocked("vertex"),
+        pro: blocked("pro"),
+      },
+    }),
+    reset,
+  );
 });
