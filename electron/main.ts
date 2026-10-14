@@ -562,7 +562,7 @@ function createWindow() {
     minHeight: 560,
     title: "Relay",
     icon: path.join(__dirname, "icon.png"),
-    backgroundColor: "#f8f7f3",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1d1916" : "#fbf8f3",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 22, y: 22 },
     webPreferences: {

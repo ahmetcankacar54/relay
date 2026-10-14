@@ -41,6 +41,7 @@ export function Preferences({
   abandonContinuation,
   fleet,
   setFleet,
+  only,
 }: {
   value: RelaySettings;
   accounts: Account[];
@@ -66,38 +67,45 @@ export function Preferences({
   update: (patch: Partial<RelaySettings>) => void;
   disabled: boolean;
   t: (tr: string, en: string) => string;
+  /** Render just this section without the tab bar (used by the sidebar pages). */
+  only?: "switch" | "usage" | "planning";
 }) {
-  const [tab, setTab] = useState<"switch" | "usage" | "planning">("switch");
+  const [selected, setTab] = useState<"switch" | "usage" | "planning">(
+    "switch",
+  );
+  const tab = only ?? selected;
   return (
     <div className="preferences">
-      <nav
-        className="preferences-tabs"
-        aria-label={t("Tercih bölümleri", "Preference sections")}
-      >
-        {(["switch", "usage", "planning"] as const).map((key) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={tab === key}
-            onClick={() => setTab(key)}
-          >
-            <strong>
-              {key === "switch"
-                ? t("Hesap geçişi", "Account switching")
-                : key === "usage"
-                  ? t("Kullanım", "Usage")
-                  : t("Planlama", "Planning")}
-            </strong>
-            <small>
-              {key === "switch"
-                ? t("Desktop ve ortak geçmiş", "Desktop and shared history")
-                : key === "usage"
-                  ? t("İstatistikler ve uyarılar", "Statistics and warnings")
-                  : t("Otomatik başlatma", "Automatic start")}
-            </small>
-          </button>
-        ))}
-      </nav>
+      {!only && (
+        <nav
+          className="preferences-tabs"
+          aria-label={t("Tercih bölümleri", "Preference sections")}
+        >
+          {(["switch", "usage", "planning"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={tab === key}
+              onClick={() => setTab(key)}
+            >
+              <strong>
+                {key === "switch"
+                  ? t("Hesap geçişi", "Account switching")
+                  : key === "usage"
+                    ? t("Kullanım", "Usage")
+                    : t("Planlama", "Planning")}
+              </strong>
+              <small>
+                {key === "switch"
+                  ? t("Desktop ve ortak geçmiş", "Desktop and shared history")
+                  : key === "usage"
+                    ? t("İstatistikler ve uyarılar", "Statistics and warnings")
+                    : t("Otomatik başlatma", "Automatic start")}
+              </small>
+            </button>
+          ))}
+        </nav>
+      )}
       {tab === "planning" && (
         <PlanningPanel
           settings={value.planning}

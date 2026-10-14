@@ -1,17 +1,15 @@
 import {
+  createElement,
   useCallback,
   useEffect,
   useRef,
   useState,
-  type Dispatch,
-  type SetStateAction,
+  type ReactNode,
 } from "react";
 import type {
   Account,
-  AuthFlow,
   DesktopState,
   RelayAPI,
-  RelaySettings,
   Snapshot,
 } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
@@ -23,58 +21,16 @@ import packageInfo from "../../package.json";
 import { useI18n } from "./i18n";
 import { pendingFlow } from "./selectors";
 import { relayAction } from "./relay-action";
+import { RelayContext, useRelay, type Relay } from "./relay-context";
 
-export { relayAction };
+export { relayAction, RelayContext, useRelay, type Relay };
 
 const injected = typeof window === "undefined" ? undefined : window.relay;
 export const api: RelayAPI = injected ?? previewApi;
 export const preview = !injected;
 export const APP_VERSION: string = packageInfo.version;
 
-export interface Relay {
-  api: RelayAPI;
-  preview: boolean;
-  version: string;
-  data?: Snapshot;
-  desktop?: DesktopState;
-  accounts: Account[];
-  active?: Account;
-  settings: RelaySettings;
-  busy: string;
-  error: string;
-  notice: string;
-  usageBusy: Set<string>;
-  desktopBusy: boolean;
-  pendingDesktop?: Account;
-  hasUnclaimedDesktop: boolean;
-  targetOrg: string;
-  setOrg(id: string): void;
-  refresh(): Promise<unknown>;
-  action(key: string, fn: () => Promise<unknown>): Promise<void>;
-  setNotice(text: string): void;
-  dismissError(): Promise<void>;
-  refreshUsage(account: Account, allowPrompt?: boolean): Promise<void>;
-  desktopRequest?: DesktopActionRequest;
-  requestDesktop(
-    account: Account | undefined,
-    kind: DesktopActionRequest["kind"],
-  ): void;
-  cancelDesktopRequest(): void;
-  confirmDesktopAction(): void;
-  setupId?: string;
-  setSetupId(id: string | undefined): void;
-  flow?: AuthFlow;
-  flowAccount?: Account;
-  startCli(account: Account): Promise<void>;
-  dismissFlow(): void;
-  submitCode(code: string): void;
-  historyRevision: number;
-  suggestion?: Account;
-  /** Legacy-only escape hatch: replaces the snapshot with a locally derived one. */
-  setData: Dispatch<SetStateAction<Snapshot | undefined>>;
-}
-
-export function useRelay(): Relay {
+function useRelayState(): Relay {
   const { t } = useI18n();
   const [data, setData] = useState<Snapshot>();
   const [desktop, setDesktop] = useState<DesktopState>();
@@ -331,4 +287,10 @@ export function useRelay(): Relay {
     suggestion,
     setData,
   };
+}
+
+/** Owns the app state once and shares it with every page through context. */
+export function RelayProvider({ children }: { children: ReactNode }) {
+  const relay = useRelayState();
+  return createElement(RelayContext.Provider, { value: relay }, children);
 }
