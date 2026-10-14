@@ -130,6 +130,7 @@ else {
   app
     .whenReady()
     .then(async () => {
+      app.dock?.setIcon(path.join(__dirname, "icon.png"));
       service = new Service(
         app.getPath("userData"),
         (event) => {
@@ -557,6 +558,7 @@ function createWindow() {
     minWidth: 720,
     minHeight: 560,
     title: "Relay",
+    icon: path.join(__dirname, "icon.png"),
     backgroundColor: "#f8f7f3",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 22, y: 22 },

@@ -51,6 +51,14 @@ across updates. One-time setup: [docs/macos-local-signing.md](docs/macos-local-s
 Development: `npm run dev` (Electron + Vite), `npm run dev:ui` (browser preview
 with sample data, `?demo=50` for 50 accounts), `npm test`, `npm run typecheck`.
 
+Icon sources: `assets/icon-artwork.png` (Imagegen ribbon R artwork),
+`assets/icon.svg` (vector companion), `assets/relay-mark.svg` (standalone mark)
+and `assets/trayTemplate.svg` (menu-bar silhouette). Run `npm run icons` to
+regenerate 16–1024px PNGs, `assets/icon.icns`, 1×/2×/3× template and color tray
+PNGs, the bundled tray representations and `assets/icons/preview.png`.
+The Electron build regenerates these assets automatically; macOS template mode
+adapts the menu-bar icon to light and dark appearances.
+
 ## First use
 
 1. Open Claude Desktop, sign in, open the **Code** tab once.

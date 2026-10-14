@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:ui": "vite --host 127.0.0.1",
+    "icons": "node scripts/icon.mjs",
     "build": "tsc --noEmit && vite build && node scripts/build.mjs",
     "start": "electron .",
     "typecheck": "tsc --noEmit",
@@ -69,7 +70,7 @@
     ],
     "mac": {
       "identity": "-",
-      "icon": "assets/icon.png",
+      "icon": "assets/icon.icns",
       "target": [
         "dmg",
         "zip"

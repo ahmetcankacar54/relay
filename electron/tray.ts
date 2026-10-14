@@ -9,6 +9,7 @@ import {
   type TraySnapshot,
 } from "../shared/tray";
 import { TrayMenuLifecycle } from "./core/tray-menu-lifecycle";
+import { trayIcons } from "./tray-icons";
 
 export interface RelayTrayOptions {
   getSnapshot(): TraySnapshot | Promise<TraySnapshot>;
@@ -18,17 +19,6 @@ export interface RelayTrayOptions {
   quit(): void;
   language?(): TrayLanguage;
 }
-
-// Small, antialiased opposing arrows. PNGs work on Electron's three supported
-// platforms; macOS applies its own menu-bar foreground via template mode.
-const icon20 =
-  "iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAV0lEQVR4nGOQkJFloCamqmHkGHgeigWoaeB/fIaSaqAAIUNxuYBYfJ7uBlLdy3SPFIqSjQCSARQnbPSwoshAggFPqoEUJR26GEh1L1M9UmiSbMjGVDcQAE2pzT0CBP3nAAAAAElFTkSuQmCC";
-const icon40 =
-  "iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAsUlEQVR4nO3WQQ6AIAwEQJ7hQf/G/z+BHjQxRBRaul0Jhz0RyCSbkoZl3QJz3AET+GdgPJLOREZgyiJCIoEiJKpiMdIS2AVpDVQjJQ/3zCfy7dAad2VcIH3F9EPijrMGqnHWQDUODWzGISsW4bTALgAr4B1X9eEigU84GmAJR1ExHNcCdMHVAks4yNJQA3Rdu4YA0ldMPySuyNYLcKTkUglJAywhqYA5kqpiaNwBE2idHVysOz7T5+oJAAAAAElFTkSuQmCC";
-const colorIcon20 =
-  "iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAV0lEQVR4nGPQ6tvPQE1MVcPIMfA8FAtQ08D/+Awl1UABQobicgGx+DzdDaS6l+keKRQlGwEkAyhO2OhhRZGBBAOeVAMpSjp0MZDqXqZ6pNAk2ZCNqW4gACVLmLsMaz5lAAAAAElFTkSuQmCC";
-const colorIcon40 =
-  "iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAAsUlEQVR4nO3W0Q2AIAwEUOZxKiZyJUdDPzQxxCoUej0JH/dFIC+5lDQs6xaY4w6YwD8D45F0JjICUxYVEglUIVEVq5GWwC5Ia2AzUvNwz3wi3w6tcVfGBdJXTD8k7jhrYDPOGtiMQwOrcciKVbhWYBeAFfCOK/pwkcAnHA1QwlFUDMfVAF1wpUAJB1kaSoCua9cQQPqK6YfEFVl7AY7UXJKQNEAJSQXMkVQVQ+MOmEDr7Af+aSed4ODfAAAAAElFTkSuQmCC";
 
 export class RelayTray {
   private readonly tray: Tray;
@@ -43,13 +33,14 @@ export class RelayTray {
 
   constructor(private readonly options: RelayTrayOptions) {
     const template = process.platform === "darwin";
-    const icon = nativeImage.createFromBuffer(
-      Buffer.from(template ? icon20 : colorIcon20, "base64"),
-    );
-    icon.addRepresentation({
-      scaleFactor: 2,
-      buffer: Buffer.from(template ? icon40 : colorIcon40, "base64"),
-    });
+    const representations = template ? trayIcons.template : trayIcons.color;
+    const icon = nativeImage.createEmpty();
+    for (const representation of representations) {
+      icon.addRepresentation({
+        scaleFactor: representation.scaleFactor,
+        buffer: Buffer.from(representation.png, "base64"),
+      });
+    }
     icon.setTemplateImage(template);
     this.tray = new Tray(icon);
     this.tray.setToolTip("Relay");

@@ -42,6 +42,7 @@ import { historySources } from "../shared/history-policy";
 import { AutoSwitchStatus } from "./AutoSwitchStatus";
 import { HistorySummary } from "./HistorySummary";
 import packageInfo from "../package.json";
+import relayIcon from "../assets/icon.png";
 
 const api = window.relay ?? previewApi;
 const APP_VERSION = packageInfo.version;
@@ -354,9 +355,13 @@ export default function App() {
     <div className="switcher">
       <header className="app-header">
         <div className="logo">
-          <span>
-            <ArrowLeftRight size={19} />
-          </span>
+          <img
+            className="relay-logo"
+            src={relayIcon}
+            width="36"
+            height="36"
+            alt=""
+          />
           <b>relay</b>
           <small>DESKTOP SWITCHER</small>
         </div>

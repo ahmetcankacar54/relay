@@ -38,9 +38,11 @@ summary:focus-visible {
   background: #f3f6f8f5;
   border-color: var(--line);
 }
-.logo > span {
-  background: #0f766e;
-  color: #fff;
+.relay-logo {
+  display: block;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
 }
 .logo small,
 .eyebrow,
