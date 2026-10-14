@@ -15,13 +15,15 @@ export function clampPanelHeight(height: number, workAreaHeight: number) {
 }
 /**
  * Clicking the tray icon while the panel is open first blurs (and hides) the
- * panel, then delivers the click. Ignore opens that land within 250 ms of a hide
- * so that click closes the panel instead of reopening it.
+ * panel, then delivers the click. Ignore opens that land within 400 ms of a hide
+ * so that click closes the panel instead of reopening it; 400 ms (not 250) also
+ * covers a slow, long-press click whose mouse-up arrives late.
  */
+export const TOGGLE_GUARD_MS = 400;
 export class ToggleGuard {
   private hiddenAt = -Infinity;
   shouldOpen(now: number) {
-    return now - this.hiddenAt > 250;
+    return now - this.hiddenAt > TOGGLE_GUARD_MS;
   }
   hidden(now: number) {
     this.hiddenAt = now;
@@ -30,4 +32,35 @@ export class ToggleGuard {
 /** Left tray click: the popover once it has loaded, else today's native menu. */
 export function trayClickAction(panelUsable: boolean): "toggle" | "menu" {
   return panelUsable ? "toggle" : "menu";
+}
+
+/**
+ * Panel renderer lifecycle. `painted` is the first `relay:panel-size` message,
+ * which the renderer sends only after its first layout, so did-finish-load alone
+ * never makes the panel usable. One renderer crash reloads it; a second crash
+ * keeps it unusable (native menu) for the rest of the session.
+ */
+export interface PanelLoadState {
+  phase: "loading" | "ready" | "failed" | "reloading";
+  crashes: number;
+}
+export type PanelLoadEvent = "start" | "finish" | "painted" | "fail" | "gone";
+export const INITIAL_PANEL_LOAD: PanelLoadState = { phase: "loading", crashes: 0 };
+export const MAX_PANEL_CRASHES = 2;
+export function panelLoadState(prev: PanelLoadState, event: PanelLoadEvent): PanelLoadState {
+  if (prev.crashes >= MAX_PANEL_CRASHES) return prev;
+  switch (event) {
+    case "start":
+      return { ...prev, phase: "loading" };
+    case "finish":
+      return prev;
+    case "painted":
+      return prev.phase === "loading" || prev.phase === "ready" ? { ...prev, phase: "ready" } : prev;
+    case "fail":
+      return { ...prev, phase: "failed" };
+    case "gone": {
+      const crashes = prev.crashes + 1;
+      return { phase: crashes >= MAX_PANEL_CRASHES ? "failed" : "reloading", crashes };
+    }
+  }
 }

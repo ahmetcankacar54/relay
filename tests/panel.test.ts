@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Panel } from "../src/panel/Panel";
-import { PanelAccounts } from "../src/panel/PanelAccounts";
+import { PanelAccounts, confirmSwitch } from "../src/panel/PanelAccounts";
+import { relayAction } from "../src/data/relay-action";
 import { panelRowState, accountRowSubtitle } from "../src/lib/account-row";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -166,4 +167,50 @@ test("a running switch replaces the confirm box with progress", () => {
   assert.match(html, /Vertex hesabına geçiliyor…/);
   assert.doesNotMatch(html, /Onayla/);
   assert.equal((html.match(/>Geç</g) ?? []).length, (html.match(/disabled=""[^>]*>Geç</g) ?? []).length);
+});
+
+test("the active name keeps a tooltip when truncated", () => {
+  const html = render(relayFor(active, [active, vertex], baseUsage));
+  assert.match(html, /title="Kişisel · Max"[^>]*>Kişisel · Max</);
+});
+
+test("a pending Desktop connection explains itself and links to accounts", () => {
+  const html = render(relayFor(active, [active, vertex], baseUsage, { pendingDesktop: vertex }));
+  assert.match(html, /Desktop bağlantısı tamamlanmayı bekliyor/);
+  const opened: string[] = [];
+  const relay = relayFor(active, [active, vertex], baseUsage, {
+    pendingDesktop: vertex,
+    api: { openPage: async (page: string) => void opened.push(page) } as unknown as Relay["api"],
+  });
+  // The link target is checked through the exported handler.
+  return import("../src/panel/PanelActiveCard").then(({ openPendingDesktop }) => {
+    openPendingDesktop(relay);
+    assert.deepEqual(opened, ["hesaplar"]);
+  });
+});
+
+test("a rejected switch clears the confirmation and shows the error", async () => {
+  const errors: unknown[] = [];
+  let busy = "";
+  let refreshed = false;
+  const lock = { current: false };
+  const action = relayAction(lock, {
+    setBusy: (k) => (busy = k),
+    setError() {},
+    setNotice() {},
+    refresh: async () => void (refreshed = true),
+    showError: (e) => void errors.push(e),
+  });
+  const relay = relayFor(active, [active, vertex], baseUsage, {
+    action,
+    api: { switchDesktop: async () => { throw new Error("Claude did not quit."); } } as unknown as Relay["api"],
+  });
+  let cleared = false;
+  await new Promise<void>((resolve) => confirmSwitch(relay, "vertex", () => { cleared = true; resolve(); }));
+  assert.equal(cleared, true);
+  assert.equal(errors.length, 1);
+  assert.match(String(errors[0]), /Claude did not quit/);
+  assert.equal(refreshed, false);
+  assert.equal(busy, "");
+  assert.equal(lock.current, false);
 });

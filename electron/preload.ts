@@ -32,6 +32,11 @@ const api: RelayAPI = {
     ipcRenderer.on("relay:tray-switch", listener);
     return () => ipcRenderer.removeListener("relay:tray-switch", listener);
   },
+  onChanged: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("relay:changed", listener);
+    return () => ipcRenderer.removeListener("relay:changed", listener);
+  },
   updateSettings: (input) => ipcRenderer.invoke("relay:update-settings", input),
   updatePlanning: (patch: unknown) =>
     ipcRenderer.invoke("relay:update-planning", patch),

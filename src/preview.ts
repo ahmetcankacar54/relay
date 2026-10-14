@@ -350,6 +350,7 @@ export const previewApi: RelayAPI = {
   },
   setTrayLanguage: async () => {},
   onTraySwitch: () => () => {},
+  onChanged: () => () => {},
   openPage: async (page) => {
     location.hash = "#/" + page;
   },

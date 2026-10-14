@@ -29,3 +29,17 @@ test("a language change in another Relay window is picked up", () => {
   assert.equal(languageFromStorage({ key: "relay-language", newValue: null }), "tr");
   assert.equal(languageFromStorage({ key: "other", newValue: "en" }), undefined);
 });
+
+test("both windows refresh when main broadcasts relay:changed", () => {
+  const preview = readFileSync(new URL("../src/preview.ts", import.meta.url), "utf8");
+  assert.match(preview, /onChanged: \(\) => \(\) => \{\}/);
+  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
+  assert.match(preload, /onChanged:[\s\S]*?"relay:changed"/);
+  const hook = readFileSync(new URL("../src/data/useRelay.ts", import.meta.url), "utf8");
+  assert.match(hook, /api\.onChanged\(/);
+});
+
+test("the panel entry does not add an unused root class", () => {
+  const entry = readFileSync(new URL("../src/panel/main.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(entry, /classList\.add\("panel"\)/);
+});

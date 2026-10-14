@@ -14,7 +14,6 @@ import { Panel } from "./Panel";
 import "../styles/theme.css";
 
 // The panel window is transparent so macOS vibrancy shows through.
-document.documentElement.classList.add("panel");
 document.body.style.background = "transparent";
 
 createRoot(document.getElementById("root")!).render(

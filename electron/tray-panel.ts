@@ -1,9 +1,12 @@
 import { BrowserWindow, screen } from "electron";
 import {
   clampPanelHeight,
+  INITIAL_PANEL_LOAD,
   PANEL_WIDTH,
+  panelLoadState,
   panelPosition,
   ToggleGuard,
+  type PanelLoadEvent,
   type Rect,
 } from "../shared/tray-panel";
 
@@ -18,8 +21,8 @@ export interface TrayPanelOptions {
 export class TrayPanel {
   private win?: BrowserWindow;
   private anchor?: Rect;
-  /** True only after panel.html finished loading and its renderer is alive. */
-  private loaded = false;
+  /** Ready only once the renderer has painted (sent its first size). */
+  private load = INITIAL_PANEL_LOAD;
   private readonly guard = new ToggleGuard();
   private readonly now: () => number;
 
@@ -33,6 +36,10 @@ export class TrayPanel {
       show: false,
       skipTaskbar: true,
       fullscreenable: false,
+      // NSWindowStyleMaskNonactivatingPanel: the panel can become key (blur and
+      // Esc keep working) without activating Relay, so opening it never raises
+      // the main window or pulls focus away from the app the user is in.
+      type: "panel",
       transparent: true,
       backgroundColor: "#00000000",
       vibrancy: "popover",
@@ -47,27 +54,23 @@ export class TrayPanel {
     });
     this.win = win;
     win.setAlwaysOnTop(true, "pop-up-menu");
-    win.setVisibleOnAllWorkspaces(true);
+    // Also over full-screen Spaces; skipTransformProcessType keeps Relay from
+    // being turned into a UIElement app (which would hide its Dock icon).
+    win.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true,
+    });
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     win.webContents.on("will-navigate", (event) => event.preventDefault());
-    // A failed main-frame load wins over a later did-finish-load (error page).
-    let failed = false;
-    win.webContents.on("did-start-loading", () => {
-      failed = false;
-      this.loaded = false;
-    });
-    win.webContents.on("did-finish-load", () => {
-      this.loaded = !failed;
-    });
+    win.webContents.on("did-start-loading", () => this.dispatch("start"));
+    win.webContents.on("did-finish-load", () => this.dispatch("finish"));
     win.webContents.on(
       "did-fail-load",
       (_event, _code, _description, _url, mainFrame) => {
-        if (!mainFrame) return;
-        failed = true;
-        this.unusable();
+        if (mainFrame) this.dispatch("fail");
       },
     );
-    win.webContents.on("render-process-gone", () => this.unusable());
+    win.webContents.on("render-process-gone", () => this.dispatch("gone"));
     win.on("blur", () => this.hide());
     win.on("closed", () => {
       this.win = undefined;
@@ -77,7 +80,7 @@ export class TrayPanel {
 
   /** Whether a tray click may open the panel; otherwise the native menu is used. */
   usable() {
-    return this.loaded && !!this.live();
+    return this.load.phase === "ready" && !!this.live();
   }
 
   toggle(trayBounds: Rect) {
@@ -87,20 +90,27 @@ export class TrayPanel {
     if (!this.guard.shouldOpen(this.now())) return;
     this.anchor = trayBounds;
     this.place(win);
-    win.show();
+    // showInactive + focus on a non-activating panel makes it key without
+    // activating the app (plain show() would bring Relay and its main window
+    // forward).
+    win.showInactive();
     win.focus();
   }
 
   hide() {
     const win = this.live();
     if (!win || !win.isVisible()) return;
+    // Only the panel hides; never app.hide(), which would also hide the main
+    // window. Focus returns to the previous app because Relay never activated.
     win.hide();
     this.guard.hidden(this.now());
   }
 
+  /** The renderer's size report; the first one marks the panel as painted. */
   setHeight(height: number) {
     const win = this.live();
     if (!win) return;
+    this.dispatch("painted");
     const { workArea } = screen.getDisplayMatching(
       this.anchor ?? win.getBounds(),
     );
@@ -118,9 +128,13 @@ export class TrayPanel {
     if (win) win.destroy();
   }
 
-  private unusable() {
-    this.loaded = false;
+  private dispatch(event: PanelLoadEvent) {
+    const before = this.load;
+    this.load = panelLoadState(before, event);
+    if (this.load.phase === "ready") return;
     this.hide();
+    if (this.load.phase === "reloading" && before.phase !== "reloading")
+      this.live()?.webContents.reload();
   }
 
   private place(win: BrowserWindow) {

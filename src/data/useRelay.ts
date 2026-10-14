@@ -110,6 +110,9 @@ function useRelayState(
     const offTray = api.onTraySwitch(() => {
       void refresh().catch(showError);
     });
+    const offChanged = api.onChanged(() => {
+      void refresh().catch(showError);
+    });
     const timer = setInterval(() => {
       if (shouldPoll({ pollWhenHidden }, document.visibilityState))
         void refresh().catch(showError);
@@ -126,6 +129,7 @@ function useRelayState(
     return () => {
       off();
       offTray();
+      offChanged();
       clearInterval(timer);
       window.removeEventListener("focus", focus);
       document.removeEventListener("visibilitychange", visible);

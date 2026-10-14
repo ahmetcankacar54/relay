@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { LimitMeter } from "@/components/LimitMeter";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
-import { useRelay } from "@/data/relay-context";
+import { useRelay, type Relay } from "@/data/relay-context";
 import { usageWindowRows } from "@/data/selectors";
 import { formatReset } from "@/lib/time";
 import { planLabel } from "../pages/accounts/accountLabels";
@@ -13,6 +13,10 @@ import { planLabel } from "../pages/accounts/accountLabels";
 export const panelEyebrow =
   "mb-1.5 flex items-center justify-between gap-2 text-[10.5px] font-semibold tracking-wider text-muted-foreground uppercase";
 export const panelCard = "rounded-[10px] border bg-card px-3 py-2.5";
+
+/** The pending-Desktop hint links to the accounts page, where it is completed. */
+export const openPendingDesktop = (relay: Pick<Relay, "api">) =>
+  void relay.api.openPage("hesaplar");
 
 /** The account open in Claude Desktop, with its limits. */
 export function PanelActiveCard({ now }: { now: number }) {
@@ -52,7 +56,9 @@ export function PanelActiveCard({ now }: { now: number }) {
         ) : (
           <>
             <div className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-bold">
-              <span className="truncate">{active.name}</span>
+              <span className="truncate" title={active.name}>
+                {active.name}
+              </span>
               {plan && <Badge variant="secondary">{plan}</Badge>}
             </div>
             {freshUsage(usage, now) ? (
@@ -108,6 +114,22 @@ export function PanelActiveCard({ now }: { now: number }) {
             size="sm"
             className="h-auto px-0 text-[11.5px]"
             onClick={openRelay}
+          >
+            {t("Relay’i aç", "Open Relay")}
+          </Button>
+        </p>
+      ) : relay.pendingDesktop ? (
+        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11.5px] text-muted-foreground">
+          {t(
+            "Desktop bağlantısı tamamlanmayı bekliyor",
+            "Desktop connection is waiting to be completed",
+          )}{" "}
+          ·
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto px-0 text-[11.5px]"
+            onClick={() => openPendingDesktop(relay)}
           >
             {t("Relay’i aç", "Open Relay")}
           </Button>
