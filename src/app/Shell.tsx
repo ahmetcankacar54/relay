@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { sidebarStatus } from "@/data/selectors";
+import { Usage } from "@/pages/Usage";
 import { LegacySettings } from "@/pages/Legacy";
 import { Switching } from "@/pages/Switching";
 import { Accounts } from "@/pages/Accounts";
@@ -82,17 +83,7 @@ export function Shell() {
           {/* Legacy content is temporary; Tasks 8–13 replace the remaining pages. */}
           {page === "genel" && <Overview go={go} />}
           {page === "hesaplar" && <Accounts />}
-          {page === "kullanim" && (
-            <PageFrame
-              title={t("Kullanım", "Usage")}
-              description={t(
-                "İstatistikler ve uyarılar",
-                "Statistics and warnings",
-              )}
-            >
-              <LegacySettings section="usage" />
-            </PageFrame>
-          )}
+          {page === "kullanim" && <Usage />}
           {page === "planlama" && (
             <PageFrame
               title={t("Planlama", "Planning")}
