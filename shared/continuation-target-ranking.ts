@@ -72,17 +72,21 @@ const byScore = (
       ? 1
       : 0);
 
+const upcomingReset = (resetsAt: string | undefined, now: number) => {
+  const reset = Date.parse(resetsAt ?? "");
+  return Number.isFinite(reset) && reset > now ? reset : Infinity;
+};
 /**
- * When the binding window resets: the weekly one when it has less left (its
- * quota is not lost at the five-hour reset), else the open five-hour window.
- * A closed window or an unknown reset is Infinity.
+ * When an open window's binding quota resets: the weekly window's when it has
+ * less left (that quota is not lost at the five-hour reset), else the
+ * five-hour window's. A closed window or an unknown reset is Infinity.
  */
 function bindingReset(usage: AccountUsage | undefined, now: number) {
+  const open = upcomingReset(usage?.fiveHour?.resetsAt, now);
   const [fiveHour, weekly] = quotaWindows(usage) ?? [];
-  const binding =
-    weekly && weekly.usedPercent > fiveHour.usedPercent ? weekly : fiveHour;
-  const reset = Date.parse(binding?.resetsAt ?? "");
-  return Number.isFinite(reset) && reset > now ? reset : Infinity;
+  return open < Infinity && weekly && weekly.usedPercent > fiveHour.usedPercent
+    ? upcomingReset(weekly.resetsAt, now)
+    : open;
 }
 
 /**

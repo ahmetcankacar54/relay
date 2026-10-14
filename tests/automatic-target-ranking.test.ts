@@ -386,6 +386,22 @@ test("a weekly-bound account is ordered by its weekly reset, not its five-hour o
     ),
     ["pro", "max5", "max20"],
   );
+  // A closed five-hour window stays with the closed ones, even when its
+  // weekly window has less left: by capacity × remaining.
+  const closedPro = {
+    account: pro,
+    usage: {
+      ...windowUsage(pro, 100),
+      sevenDay: {
+        usedPercent: 50,
+        resetsAt: new Date(NOW + 1 * HOUR).toISOString(),
+      },
+    },
+  };
+  assert.deepEqual(
+    order(rankContinuationTargets([closedPro, full], { now: NOW, rate: 60 })),
+    ["max20", "pro"],
+  );
   // When the five-hour window has less left, it binds as before.
   assert.deepEqual(
     order(
