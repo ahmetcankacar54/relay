@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ROLLUP_DAYS,
+  catchUp,
   emptyRollups,
   foldSample,
   foldSamples,
@@ -216,6 +217,64 @@ test("records older than 90 days relative to now are pruned", () => {
   ]);
   assert.deepEqual(pruned.hits, []);
   assert.ok(pruned.hours.z[h(91 * 24 * 60)]);
+  assert.equal(pruned.last.x, undefined);
+  assert.equal(pruned.last.z.checkedAt, iso(91 * 24 * 60));
+});
+
+test("monotonic reset drift within ±2 minutes per step stays one window", () => {
+  const R = 200;
+  const drift = (sample: UsageSample, seconds: number) => {
+    sample.fiveHour!.resetsAt = new Date(
+      T0 + R * minute + seconds * 1000,
+    ).toISOString();
+    return sample;
+  };
+  const r = fold([
+    drift(s("x", 0, 10, R), 0),
+    drift(s("x", 5, 20, R), 90),
+    drift(s("x", 10, 30, R), 180),
+    drift(s("x", 15, 40, R), 180),
+  ]);
+  const hours = Object.values(r.hours.x);
+  assert.equal(
+    hours.reduce((sum, v) => sum + v.points, 0),
+    30,
+  );
+  assert.equal(
+    hours.reduce((sum, v) => sum + v.windows, 0),
+    1,
+  );
+  assert.equal(r.windows.x.length, 1);
+  assert.equal(r.windows.x[0].maxPercent, 40);
+});
+
+test("an open hit closes at its reset even when the sample lacks that window", () => {
+  let r = fold([s("x", 0, 90, 200), s("x", 60, 100, 200)]);
+  r = foldSample(r, s("x", 210, undefined, 0, 50), now);
+  assert.deepEqual(r.hits, [
+    {
+      identity: "x",
+      kind: "five-hour",
+      at: iso(60),
+      until: iso(200),
+      resetAt: iso(200),
+    },
+  ]);
+});
+
+test("catchUp folds only samples newer than each identity's last", () => {
+  const all = [
+    s("x", 0, 10, 200),
+    s("x", 5, 14, 200),
+    s("y", 1, 5, 200),
+    s("x", 10, 20, 200),
+    s("y", 6, 9, 200),
+  ];
+  const stale = foldSamples(all.slice(0, 2), now);
+  assert.deepEqual(catchUp(stale, all, now), foldSamples(all, now));
+  const current = foldSamples(all, now);
+  assert.equal(catchUp(current, all, now), current);
+  assert.deepEqual(stale, foldSamples(all.slice(0, 2), now));
 });
 
 test("foldSamples over shuffled input equals folding in order", () => {

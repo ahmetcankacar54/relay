@@ -13,6 +13,7 @@ import {
   type UsageSample,
 } from "../../shared/usage-statistics";
 import {
+  catchUp,
   foldSample,
   foldSamples,
   type UsageRollups,
@@ -81,13 +82,19 @@ const MAX_ROLLUPS_BYTES = 16 * 1024 * 1024;
 // An unreadable ledger stays unavailable rather than silently overwriting it.
 // Rollups keep 90 days of hourly aggregates beside the 14-day raw ledger; an
 // unreadable rollups file is likewise never overwritten and never affects the
-// raw ledger or live limits.
+// raw ledger or live limits. A failed rollups write keeps the folded state in
+// memory and is retried on the next record; only an unsafe target (symlink or
+// non-file) makes the rollups unavailable.
+class UnsafeUsageFileError extends Error {}
+
 export class UsageHistory {
   readonly file: string;
   readonly rollupsFile: string;
   private samples: UsageSample[] = [];
   private available = true;
   private rollupsState: UsageRollups | undefined;
+  /** In-memory rollups differ from usage-rollups.json. */
+  private rollupsDirty = false;
   rollupsAvailable = true;
   constructor(
     readonly root: string,
@@ -107,17 +114,35 @@ export class UsageHistory {
         this.rollupsFile,
         MAX_ROLLUPS_BYTES,
       );
-      if (value !== undefined) this.rollupsState = rollupsSchema.parse(value);
-      else if (!this.available)
+      if (value !== undefined) {
+        const loaded: UsageRollups = rollupsSchema.parse(value);
+        // Catch up samples recorded after the last successful rollups write.
+        this.rollupsState = this.available
+          ? catchUp(loaded, this.samples, this.now())
+          : loaded;
+        this.rollupsDirty = this.rollupsState !== loaded;
+      } else if (!this.available)
         throw new Error("No readable usage history to backfill from.");
       else {
-        const backfilled = foldSamples(this.samples, this.now());
-        this.writePrivateJsonFile(this.rollupsFile, backfilled);
-        this.rollupsState = backfilled;
+        this.rollupsState = foldSamples(this.samples, this.now());
+        this.rollupsDirty = true;
       }
     } catch {
       this.rollupsAvailable = false;
       this.rollupsState = undefined;
+    }
+    if (this.rollupsDirty) this.persistRollups();
+  }
+  private persistRollups(): void {
+    if (!this.rollupsAvailable || !this.rollupsState) return;
+    try {
+      this.writePrivateJsonFile(this.rollupsFile, this.rollupsState);
+      this.rollupsDirty = false;
+    } catch (error) {
+      if (error instanceof UnsafeUsageFileError) {
+        this.rollupsAvailable = false;
+        this.rollupsState = undefined;
+      } else this.rollupsDirty = true;
     }
   }
   /** Parsed JSON, or undefined when the file does not exist. */
@@ -162,7 +187,7 @@ export class UsageHistory {
       try {
         const target = fs.lstatSync(file);
         if (!target.isFile() || target.isSymbolicLink())
-          throw new Error("Invalid usage file.");
+          throw new UnsafeUsageFileError("Invalid usage file.");
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
@@ -224,15 +249,10 @@ export class UsageHistory {
       return;
     }
     if (!this.rollupsAvailable || !this.rollupsState) return;
-    try {
-      const folded = foldSample(this.rollupsState, sample, this.now());
-      if (folded === this.rollupsState) return;
-      this.writePrivateJsonFile(this.rollupsFile, folded);
-      this.rollupsState = folded;
-    } catch {
-      this.rollupsAvailable = false;
-      this.rollupsState = undefined;
-    }
+    const folded = foldSample(this.rollupsState, sample, this.now());
+    if (folded === this.rollupsState && !this.rollupsDirty) return;
+    this.rollupsState = folded;
+    this.persistRollups();
   }
   /** 90-day hourly rollups; undefined when the rollups file is unavailable. */
   rollups(): UsageRollups | undefined {

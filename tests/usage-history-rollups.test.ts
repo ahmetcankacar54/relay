@@ -184,3 +184,52 @@ test("a symlinked rollups file is unavailable and not followed", (t) => {
   assert.equal(fs.readFileSync(foreign, "utf8"), foreignContent);
   assert.equal(substituted.snapshot([account])[account.id].status, "available");
 });
+
+test("a stale rollups file is caught up with newer raw samples on load", (t) => {
+  const root = directory(t);
+  const now = start + 60 * minute;
+  const samples: UsageSample[] = [0, 5, 10, 15].map((m, index) =>
+    usageSample(account, usage(start + m * minute, 10 + index * 3))!,
+  );
+  fs.writeFileSync(
+    path.join(root, "usage-history.json"),
+    JSON.stringify({ version: 1, samples }),
+  );
+  fs.writeFileSync(
+    rollupsFile(root),
+    JSON.stringify(foldSamples(samples.slice(0, 2), now)),
+  );
+  const history = new UsageHistory(root, () => now);
+  assert.equal(history.rollupsAvailable, true);
+  assert.deepEqual(history.rollups(), foldSamples(samples, now));
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")),
+    foldSamples(samples, now),
+  );
+});
+
+test("a transient rollups write failure is retried on the next record", (t) => {
+  const root = directory(t);
+  let now = start;
+  const history = new UsageHistory(root, () => now);
+  const rename = fs.renameSync;
+  let failures = 1;
+  t.mock.method(fs, "renameSync", (from: fs.PathLike, to: fs.PathLike) => {
+    if (String(to) === rollupsFile(root) && failures-- > 0)
+      throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+    return rename(from, to);
+  });
+  history.record(account, usage(now, 10));
+  assert.equal(history.rollupsAvailable, true);
+  now += 5 * minute;
+  history.record(account, usage(now, 17));
+  assert.equal(history.rollupsAvailable, true);
+  const persisted = JSON.parse(fs.readFileSync(rollupsFile(root), "utf8"));
+  assert.equal(persisted.last[identity].checkedAt, new Date(now).toISOString());
+  assert.deepEqual(persisted.hours[identity][hourKey(start)], {
+    points: 7,
+    windows: 1,
+    coveredMinutes: 5,
+  });
+  assert.deepEqual(persisted, history.rollups());
+});

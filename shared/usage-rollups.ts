@@ -68,19 +68,20 @@ function foldHits(r: UsageRollups, s: UsageSample, t: number): void {
     ["weekly", s.sevenDay],
   ];
   for (const [kind, window] of kinds) {
-    if (!window) continue;
-    const pct = window.usedPercent;
     let open: LimitHit | undefined;
     for (const hit of r.hits)
       if (hit.identity === s.identity && hit.kind === kind) open = hit;
     let isOpen = !!open && open.until === undefined;
     if (isOpen) {
       const resetAt = open!.resetAt ? Date.parse(open!.resetAt) : Infinity;
-      if (pct < 100 || t >= resetAt) {
+      // A passed reset closes the hit even if this poll lacks that window.
+      if ((window && window.usedPercent < 100) || t >= resetAt) {
         open!.until = new Date(Math.min(t, resetAt)).toISOString();
         isOpen = false;
       }
     }
+    if (!window) continue;
+    const pct = window.usedPercent;
     // A window whose reset has already passed reports stale quota.
     const expired =
       window.resetsAt !== undefined && Date.parse(window.resetsAt) <= t;
@@ -107,6 +108,8 @@ function prune(r: UsageRollups, now: number): void {
     else delete r.windows[identity];
   }
   r.hits = r.hits.filter((hit) => Date.parse(hit.at) >= cutoff);
+  for (const [identity, sample] of Object.entries(r.last))
+    if (Date.parse(sample.checkedAt) < cutoff) delete r.last[identity];
 }
 
 /**
@@ -158,6 +161,8 @@ function foldInto(next: UsageRollups, s: UsageSample): void {
       windows.push(record);
       hour.windows += 1;
     }
+    // Follow the latest reported reset so monotonic drift stays one window.
+    record.resetAt = reset;
     const high = record.maxPercent;
     const gap = prev ? t - Date.parse(prev.checkedAt) : Infinity;
     if (
@@ -176,16 +181,26 @@ function foldInto(next: UsageRollups, s: UsageSample): void {
   next.last[s.identity] = structuredClone(s);
 }
 
-/**
- * Backfill: folds samples per identity in time order into one accumulator
- * (cloning per sample would be quadratic) and prunes once at the end.
- */
+/** Backfill: folds samples per identity in time order from empty rollups. */
 export function foldSamples(
   samples: readonly UsageSample[],
   now: number,
 ): UsageRollups {
-  const sorted = samples
-    .slice()
+  return catchUp(emptyRollups(), samples, now);
+}
+
+/**
+ * Folds every sample newer than its identity's last folded sample, in
+ * identity and time order, into one clone (cloning per sample would be
+ * quadratic) and prunes once. Returns `r` itself when nothing was folded.
+ */
+export function catchUp(
+  r: UsageRollups,
+  samples: readonly UsageSample[],
+  now: number,
+): UsageRollups {
+  const pending = samples
+    .filter((sample) => accepts(r, sample))
     .sort((a, b) =>
       a.identity === b.identity
         ? Date.parse(a.checkedAt) - Date.parse(b.checkedAt)
@@ -193,8 +208,10 @@ export function foldSamples(
           ? -1
           : 1,
     );
-  const r = emptyRollups();
-  for (const sample of sorted) if (accepts(r, sample)) foldInto(r, sample);
-  prune(r, now);
-  return r;
+  if (!pending.length) return r;
+  const next = structuredClone(r);
+  for (const sample of pending)
+    if (accepts(next, sample)) foldInto(next, sample);
+  prune(next, now);
+  return next;
 }
