@@ -14,11 +14,34 @@ const MONDAY = Date.parse("2026-10-12T12:00:00Z");
 export const locale = (language: Language) =>
   language === "tr" ? "tr-TR" : "en-GB";
 
+// Building an Intl formatter is costly and a heatmap formats hundreds of
+// cells, so formatters are kept per language and options.
+const numberFormats = new Map<string, Intl.NumberFormat>();
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+function numberFormat(language: Language, fractionDigits: number) {
+  const key = `${language}:${fractionDigits}`;
+  let f = numberFormats.get(key);
+  if (!f) {
+    f = new Intl.NumberFormat(locale(language), {
+      maximumFractionDigits: fractionDigits,
+    });
+    numberFormats.set(key, f);
+  }
+  return f;
+}
+function dateFormat(language: Language, options: Intl.DateTimeFormatOptions) {
+  const key = `${language}:${JSON.stringify(options)}`;
+  let f = dateFormats.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale(language), options);
+    dateFormats.set(key, f);
+  }
+  return f;
+}
+
 /** Pro units with thousands separators; one decimal below 10. */
 export function formatNumber(value: number, language: Language) {
-  return new Intl.NumberFormat(locale(language), {
-    maximumFractionDigits: Math.abs(value) < 10 ? 1 : 0,
-  }).format(value);
+  return numberFormat(language, Math.abs(value) < 10 ? 1 : 0).format(value);
 }
 
 /** "1.840 Pro birimi" / "1,840 Pro units". */
@@ -27,7 +50,7 @@ export const formatUnits = (value: number, language: Language, t: T) =>
 
 /** "14 Eki" / "14 Oct" for a YYYY-MM-DD calendar date. */
 export function formatDay(date: string, language: Language) {
-  return new Intl.DateTimeFormat(locale(language), {
+  return dateFormat(language, {
     day: "numeric",
     month: "short",
     timeZone: "UTC",
@@ -40,10 +63,9 @@ export function weekdayName(
   language: Language,
   width: "long" | "short" = "long",
 ) {
-  return new Intl.DateTimeFormat(locale(language), {
-    weekday: width,
-    timeZone: "UTC",
-  }).format(new Date(MONDAY + weekday * 24 * 60 * MINUTE));
+  return dateFormat(language, { weekday: width, timeZone: "UTC" }).format(
+    new Date(MONDAY + weekday * 24 * 60 * MINUTE),
+  );
 }
 
 export const hourLabel = (hour: number) =>

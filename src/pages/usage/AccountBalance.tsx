@@ -39,14 +39,15 @@ export function AccountBalance({
           )}
         </span>
       </div>
-      <div>
+      {/* Rows share these columns (subgrid), so every share bar ends at the same x. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 sm:grid-cols-[minmax(0,9rem)_1fr_auto_auto]">
         {view.accounts.map((row) => {
           const badge = planBadge(row, accounts);
           const share = Math.max(0, Math.min(100, row.share));
           return (
             <div
               key={rowKey(row)}
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-t py-2 first:border-t-0 sm:grid-cols-[minmax(0,9rem)_1fr_auto_auto]"
+              className="col-span-full grid grid-cols-subgrid items-center gap-y-1.5 border-t py-2 first:border-t-0"
             >
               <div className="min-w-0">
                 <div

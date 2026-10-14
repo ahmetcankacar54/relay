@@ -18,10 +18,19 @@ import {
 // viewBox units; the chart scales with the card width (about 420–700 px), so
 // its 9-unit labels stay readable at both ends.
 const WIDTH = 440;
-const LEFT = 28;
 const TOP = 14;
 const BASE = 128;
 const HEIGHT = 146;
+/** Narrowest y-label gutter, and the width a 9-unit label character takes. */
+const MIN_LEFT = 28;
+const LABEL_CHAR = 5.5;
+/** Hit markers are as wide as their bar, at most this wide. */
+const MARK = 6;
+
+const r2 = (v: number) => Math.round(v * 100) / 100;
+/** An upward triangle `width` wide, centred on `cx`, standing on `base`. */
+const triangle = (cx: number, base: number, width: number) =>
+  `M ${r2(cx - width / 2)} ${r2(base)} L ${r2(cx + width / 2)} ${r2(base)} L ${r2(cx)} ${r2(base - width * 0.85)} Z`;
 
 /** Stacked Pro units per local day, coloured by account, ▲ on days with a limit hit. */
 export function DailyChart({
@@ -49,8 +58,15 @@ export function DailyChart({
   );
   const max = Math.max(0, ...days.map((d) => d.total));
   const scale = max > 0 ? (BASE - TOP) / max : 0;
-  const step = (WIDTH - LEFT) / Math.max(1, days.length);
+  const labels = [formatNumber(max, language), formatNumber(max / 2, language)];
+  // The gutter grows with the longest y label ("12.345").
+  const left = Math.max(
+    MIN_LEFT,
+    Math.ceil(Math.max(...labels.map((l) => l.length)) * LABEL_CHAR) + 8,
+  );
+  const step = (WIDTH - left) / Math.max(1, days.length);
   const bar = Math.max(1, step * 0.72);
+  const mark = Math.min(bar, MARK);
   const busiest = days.reduce<(typeof days)[number] | undefined>(
     (best, day) => (day.total > (best?.total ?? 0) ? day : best),
     undefined,
@@ -85,7 +101,7 @@ export function DailyChart({
       >
         <g aria-hidden className="stroke-border" strokeWidth={1}>
           {[TOP, (TOP + BASE) / 2, BASE].map((y) => (
-            <line key={y} x1={LEFT} x2={WIDTH} y1={y} y2={y} />
+            <line key={y} x1={left} x2={WIDTH} y1={y} y2={y} />
           ))}
         </g>
         {max > 0 && (
@@ -95,16 +111,16 @@ export function DailyChart({
             fontSize={9}
             textAnchor="end"
           >
-            <text x={LEFT - 4} y={TOP + 3}>
-              {formatNumber(max, language)}
+            <text x={left - 4} y={TOP + 3}>
+              {labels[0]}
             </text>
-            <text x={LEFT - 4} y={(TOP + BASE) / 2 + 3}>
-              {formatNumber(max / 2, language)}
+            <text x={left - 4} y={(TOP + BASE) / 2 + 3}>
+              {labels[1]}
             </text>
           </g>
         )}
         {days.map((day, i) => {
-          const x = LEFT + i * step + (step - bar) / 2;
+          const x = left + i * step + (step - bar) / 2;
           const hit = hitDays.has(day.date);
           const label = formatDay(day.date, language);
           let y = BASE;
@@ -126,7 +142,7 @@ export function DailyChart({
                 ].join(" · ")}
               </title>
               <rect
-                x={LEFT + i * step}
+                x={left + i * step}
                 y={TOP}
                 width={step}
                 height={BASE - TOP}
@@ -148,15 +164,10 @@ export function DailyChart({
                 );
               })}
               {hit && (
-                <text
-                  x={x + bar / 2}
-                  y={Math.max(TOP - 3, y - 3)}
-                  fontSize={8}
-                  textAnchor="middle"
+                <path
+                  d={triangle(x + bar / 2, Math.max(TOP - 2, y - 2), mark)}
                   fill="var(--crit)"
-                >
-                  ▲
-                </text>
+                />
               )}
             </g>
           );
@@ -172,7 +183,7 @@ export function DailyChart({
               key={i}
               x={Math.min(
                 WIDTH - 14,
-                Math.max(LEFT + 14, LEFT + i * step + step / 2),
+                Math.max(left + 14, left + i * step + step / 2),
               )}
               y={HEIGHT - 4}
             >

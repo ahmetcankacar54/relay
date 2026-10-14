@@ -130,6 +130,9 @@ test("summary tiles format totals, change, windows, hits and the busiest time", 
   assert.match(html, /Salı 14:00/);
   assert.match(html, /hafta içi 10–18 arası %71/);
 
+  // The unit stays on one line in smaller type beside the large number.
+  assert.match(render(createElement(SummaryTiles, { view })), /1\.840 <span class="[^"]*whitespace-nowrap[^"]*">Pro birimi<\/span>/);
+
   const en = text(render(createElement(SummaryTiles, { view }), "en"));
   assert.match(en, /1,840 Pro units/);
   assert.match(en, /\+12% vs the previous 30 days/);
@@ -166,6 +169,9 @@ test("account balance lists names, plan badges, share, fill, idle days and the i
   assert.match(html, /bg-tone-1[^"]*" style="width:58%"/);
   assert.match(html, /bg-tone-2[^"]*" style="width:27%"/);
   assert.match(html, /bg-tone-4[^"]*" style="width:15%"/);
+  // Rows share the parent's columns, so every share bar ends at the same x.
+  assert.match(html, /sm:grid-cols-\[minmax\(0,9rem\)_1fr_auto_auto\]/);
+  assert.equal((html.match(/class="[^"]*col-span-full[^"]*grid-cols-subgrid|class="[^"]*grid-cols-subgrid[^"]*col-span-full/g) ?? []).length, 3);
   // A filtered view keeps each account's colour.
   const filtered = render(createElement(AccountBalance, { view: { ...view, accounts: [view.accounts[1]] }, accounts }));
   assert.match(filtered, /bg-tone-2[^"]*" style="width:27%"/);
@@ -186,7 +192,8 @@ test("the daily chart draws one labelled bar group per day and marks hit days", 
   assert.match(html, /aria-label="14 Eki: 120 Pro birimi, limite takıldı"/);
   assert.match(html, /aria-label="9 Eki: 240 Pro birimi, limite takıldı"/);
   assert.match(html, /aria-label="15 Eyl: 0 Pro birimi"/);
-  assert.equal((html.match(/▲<\/text>/g) ?? []).length, 3);
+  assert.equal((html.match(/<path d="[^"]+" fill="var\(--crit\)"/g) ?? []).length, 3);
+  assert.doesNotMatch(html, /▲<\/text>/);
   // Tones follow the account list; former rows come after every account.
   assert.match(html, /fill="var\(--tone-1\)"/);
   assert.match(html, /fill="var\(--tone-2\)"/);
@@ -238,7 +245,7 @@ test("the statistics section shows the full layout with the footnote", () => {
   const plain = text(html);
   for (const part of ["Toplam kullanım", "Hesap dengesi", "Günlük kullanım", "Ne zaman çalışıyorum?", "Limite takılmalar"])
     assert.match(plain, new RegExp(part.replace("?", "\\?")));
-  assert.match(html, /sm:grid-cols-4/);
+  assert.match(html, /grid-cols-2[^"]* lg:grid-cols-4/);
   assert.match(html, /lg:grid-cols-\[1\.5fr_1fr\]/);
   assert.match(plain, /token, mesaj ya da maliyet değildir/);
   assert.match(plain, /Gözlem kapsamı: %83/);
@@ -340,4 +347,45 @@ test("statistics state keeps the last view while loading and after a failure", (
   // The error stays until the next response settles.
   assert.deepEqual(statisticsLoading(failed), { view, loading: true, error: "boom" });
   assert.deepEqual(statisticsFailed({ loading: true }, "down"), { loading: false, error: "down" });
+});
+
+const ninetyDays = Array.from({ length: 90 }, (_, i) =>
+  new Date(Date.parse("2026-07-17T00:00:00Z") + i * 86_400_000).toISOString().slice(0, 10),
+);
+const ninety: UsageStatisticsView = {
+  ...view,
+  range: 90,
+  daily: ninetyDays.map((date, i): UsageStatisticsView["daily"][number] => ({ date, byAccount: i >= 80 ? { a: 12_345 - i } : {} })),
+  // Hits on three adjacent days.
+  hits: ["2026-10-10T09:00:00.000Z", "2026-10-11T09:00:00.000Z", "2026-10-12T09:00:00.000Z"].map((at) => ({
+    accountId: "a", name: "Kişisel · Max", kind: "five-hour" as const, at,
+  })),
+};
+
+test("hit markers on a 90-day chart fit their day and never overlap", () => {
+  const html = render(createElement(DailyChart, { view: ninety, accounts, zone: ZONE }));
+  const marks = [...html.matchAll(/<path d="M ([\d.]+) [\d.]+ L ([\d.]+) /g)].map((m) => [Number(m[1]), Number(m[2])]);
+  assert.equal(marks.length, 3);
+  for (const [left, right] of marks) assert.ok(right - left > 0 && right - left <= 4, `${left}–${right}`);
+  for (let i = 1; i < marks.length; i++) assert.ok(marks[i][0] > marks[i - 1][1], JSON.stringify(marks));
+  const month = render(createElement(DailyChart, { view, accounts, zone: ZONE }));
+  for (const m of month.matchAll(/<path d="M ([\d.]+) [\d.]+ L ([\d.]+) /g))
+    assert.ok(Number(m[2]) - Number(m[1]) <= 6);
+});
+
+test("the daily chart's y labels fit five-digit maxima", () => {
+  const html = render(createElement(DailyChart, { view: ninety, accounts, zone: ZONE }));
+  const label = html.match(/<text x="([\d.]+)"[^>]*>12\.265<\/text>/);
+  assert.ok(label, html.slice(0, 600));
+  // End-anchored at x: six characters of about 5 units each fit left of it.
+  assert.ok(Number(label[1]) >= 6 * 5, label[1]);
+});
+
+test("statistics cards reuse their number and date formatters", (t) => {
+  render(createElement(UsageHeatmap, { view }));
+  const numbers = t.mock.method(Intl, "NumberFormat");
+  const dates = t.mock.method(Intl, "DateTimeFormat");
+  render(createElement(UsageHeatmap, { view }));
+  assert.equal(numbers.mock.callCount(), 0);
+  assert.equal(dates.mock.callCount(), 0);
 });

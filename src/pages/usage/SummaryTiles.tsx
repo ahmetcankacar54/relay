@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { useI18n } from "@/data/i18n";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
-import { formatNumber, formatUnits, hourLabel, weekdayName } from "./format";
+import { formatNumber, hourLabel, weekdayName } from "./format";
 
 function Tile({
   label,
@@ -62,10 +62,18 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
   const hits = totals.hits.fiveHour + totals.hits.weekly;
   const busiest = totals.busiest;
   return (
-    <Card className="grid gap-4 px-5 py-4 sm:grid-cols-4">
+    <Card className="grid grid-cols-2 gap-4 px-5 py-4 lg:grid-cols-4">
       <Tile
         label={t("Toplam kullanım", "Total usage")}
-        value={formatUnits(totals.proUnits, language, t)}
+        value={
+          <>
+            {formatNumber(totals.proUnits, language)}{" "}
+            {/* The unit wraps as a whole, in smaller type than the number. */}
+            <span className="text-sm font-semibold whitespace-nowrap text-muted-foreground">
+              {t("Pro birimi", "Pro units")}
+            </span>
+          </>
+        }
         detail={versus}
       />
       <Tile
