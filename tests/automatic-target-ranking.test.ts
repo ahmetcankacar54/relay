@@ -347,7 +347,7 @@ test("the weekly window binds the threshold when it has less left", () => {
   );
 });
 
-test("a weekly-bound account is ordered by its weekly reset, not its five-hour one", () => {
+test("a weekly-bound account is not urgent: it ranks with the closed windows", () => {
   const max5 = planningAccount("max5", "max5");
   const max20 = planningAccount("max20", "max20");
   const pro = planningAccount("pro", "pro");
@@ -363,29 +363,21 @@ test("a weekly-bound account is ordered by its weekly reset, not its five-hour o
     },
   });
   const full = { account: max20, usage: windowUsage(max20, 100) };
-  // Its quota is not lost in an hour: without a known weekly reset it ranks
-  // like a closed window, after the full Max 20× by capacity × remaining.
-  assert.deepEqual(
-    order(
-      rankContinuationTargets([{ account: max5, usage: weeklyBound() }, full], {
-        now: NOW,
-        rate: 60,
-      }),
-    ),
-    ["max20", "max5"],
-  );
-  // A known weekly reset in three days comes after every open five-hour
-  // window and before the closed ones.
   const open = { account: pro, usage: windowUsage(pro, 80, 4 * HOUR) };
-  assert.deepEqual(
-    order(
-      rankContinuationTargets(
-        [full, { account: max5, usage: weeklyBound(3 * 86_400_000) }, open],
-        { now: NOW, rate: 60 },
+  // Its quota is not lost for days, whether or not the weekly reset is known:
+  // after every open window, then capacity × remaining against the closed
+  // ones, so the full Max 20× goes first.
+  for (const weeklyReset of [undefined, 3 * 86_400_000])
+    assert.deepEqual(
+      order(
+        rankContinuationTargets(
+          [{ account: max5, usage: weeklyBound(weeklyReset) }, full, open],
+          { now: NOW, rate: 60 },
+        ),
       ),
-    ),
-    ["pro", "max5", "max20"],
-  );
+      ["pro", "max20", "max5"],
+      `weekly reset in ${weeklyReset}`,
+    );
   // A closed five-hour window stays with the closed ones, even when its
   // weekly window has less left: by capacity × remaining.
   const closedPro = {

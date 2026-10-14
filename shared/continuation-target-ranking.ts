@@ -72,30 +72,25 @@ const byScore = (
       ? 1
       : 0);
 
-const upcomingReset = (resetsAt: string | undefined, now: number) => {
-  const reset = Date.parse(resetsAt ?? "");
-  return Number.isFinite(reset) && reset > now ? reset : Infinity;
-};
 /**
- * When an open window's binding quota resets: the weekly window's when it has
- * less left (that quota is not lost at the five-hour reset), else the
- * five-hour window's. A closed window or an unknown reset is Infinity.
+ * The open five-hour window's reset, when its quota is lost then. A weekly
+ * window with less left binds instead: that quota is not lost for days, so
+ * the account is not urgent, like a closed window (Infinity).
  */
-function bindingReset(usage: AccountUsage | undefined, now: number) {
-  const open = upcomingReset(usage?.fiveHour?.resetsAt, now);
+function openReset(usage: AccountUsage | undefined, now: number) {
   const [fiveHour, weekly] = quotaWindows(usage) ?? [];
-  return open < Infinity && weekly && weekly.usedPercent > fiveHour.usedPercent
-    ? upcomingReset(weekly.resetsAt, now)
-    : open;
+  if (weekly && weekly.usedPercent > fiveHour.usedPercent) return Infinity;
+  const reset = Date.parse(usage?.fiveHour?.resetsAt ?? "");
+  return Number.isFinite(reset) && reset > now ? reset : Infinity;
 }
 
 /**
  * Rank policy-eligible candidates without mutating the caller's collection.
  * With a context: accounts with enough quota for half an hour at the current
- * tempo (else 10% left) first, by the reset of the window that binds them,
- * soonest first (their quota is lost at the reset), closed windows after
- * them. Without one, or when nobody has enough: plan capacity × remaining
- * quota.
+ * tempo (else 10% left) first, open windows resetting soonest first (their
+ * quota is lost at the reset), then closed windows and accounts bound by
+ * their weekly window. Without one, or when nobody has enough: plan
+ * capacity × remaining quota.
  */
 export function rankContinuationTargets(
   candidates: readonly ContinuationTargetCandidate[],
@@ -123,8 +118,8 @@ export function rankContinuationTargets(
   // Two closed windows give Infinity − Infinity = NaN, which falls through to byScore.
   passing.sort(
     (left, right) =>
-      bindingReset(left.usage, context.now) -
-        bindingReset(right.usage, context.now) || byScore(left, right),
+      openReset(left.usage, context.now) -
+        openReset(right.usage, context.now) || byScore(left, right),
   );
   return [
     ...passing,
