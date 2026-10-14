@@ -149,8 +149,8 @@ const noteClass = "text-xs text-muted-foreground";
 /** Account status colour by keeper state. */
 const stateTone: Partial<Record<KeeperAccountStatus["state"], string>> = {
   active: "text-ok",
-  waiting: "text-warn",
-  due: "text-warn",
+  waiting: "text-warn-foreground",
+  due: "text-warn-foreground",
   blocked: "text-crit",
 };
 
@@ -743,7 +743,7 @@ export function PlanningPanel({
       {!!keeper?.attempts.length && (
         <Card className={cn(cardClass, "@container")}>
           <details>
-            <summary className="cursor-pointer text-sm font-semibold">
+            <summary className="cursor-pointer rounded-sm text-sm font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
               {t(
                 `Son başlatmalar (${keeper.attempts.length})`,
                 `Recent starts (${keeper.attempts.length})`,

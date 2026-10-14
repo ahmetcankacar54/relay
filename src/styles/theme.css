@@ -33,6 +33,7 @@
   --track: #f0e9df;
   --ok: #3f9d5a;
   --warn: #d99a00;
+  --warn-foreground: #8a5a00;
   --crit: #d4380d;
   /* Timeline window tones, one per planned account (cycled). */
   --tone-1: #f58a52;
@@ -66,6 +67,7 @@
     --track: #3a332d;
     --ok: #5cc27a;
     --warn: #e0a100;
+    --warn-foreground: #f2c14e;
     --crit: #ff5a36;
     --tone-1: #ff9a66;
     --tone-2: #6fd0b6;
@@ -104,6 +106,7 @@
   --color-track: var(--track);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
+  --color-warn-foreground: var(--warn-foreground);
   --color-crit: var(--crit);
   --color-tone-1: var(--tone-1);
   --color-tone-2: var(--tone-2);
