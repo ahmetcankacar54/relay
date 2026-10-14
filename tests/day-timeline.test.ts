@@ -249,3 +249,36 @@ test("inside yesterday's overnight interval the live part comes from yesterday's
   const tonight = view.lane.filter((x) => x.from >= at("2026-10-14", "22:00"));
   assert.ok(tonight.length && tonight.every((x) => !x.live));
 });
+
+test("a hole after a gap inside one forecast hides no switch; breaks and the seam at now start afresh", () => {
+  const t = (clock: string) => at(WEDNESDAY, clock);
+  const piece = (first: boolean, live: boolean, accountId: string | undefined, from: string, to: string) => ({
+    ...(accountId ? { accountId } : {}),
+    from: t(from),
+    to: t(to),
+    live,
+    ...(first ? { first } : {}),
+  });
+  // No demand from 12:20, b refills at 12:40: the forecast counts max → b.
+  assert.deepEqual(
+    switchTimes([piece(true, false, "max", "09:00", "12:10"), piece(false, false, undefined, "12:10", "12:20"), piece(false, false, "b", "12:40", "18:00")]).map(clockOf),
+    ["12:40"],
+  );
+  // Tonight's interval and the live part from now begin their own forecasts.
+  assert.deepEqual(switchTimes([piece(true, false, "max", "09:00", "18:00"), piece(true, false, "b", "20:00", "23:00")]), []);
+  assert.deepEqual(switchTimes([piece(true, false, "max", "09:00", "12:00"), piece(true, true, "b", "12:00", "18:00")]), []);
+});
+
+test("during lunch after a gap the live part starts at the refill, not at now", () => {
+  // Nothing in the lunch hour; a ran dry and refills at 12:40.
+  const lunch: Tempo = { ...busyTempo, weekday: Array.from({ length: 24 }, (_, hour) => (hour === 12 ? 0 : 60)) };
+  const accounts = [planningAccount("a")];
+  const s = settings({ accounts: [{ id: "a" }] });
+  const now = at(WEDNESDAY, "12:25");
+  const usage = { a: { ...planningUsage(accounts[0], now), fiveHour: { usedPercent: 100, resetsAt: new Date(at(WEDNESDAY, "12:40")).toISOString() } } };
+  const view = dayTimeline({ settings: s, accounts, usage, now, tempo: lunch, activeId: "a" });
+  const live = view.lane.filter((x) => x.live);
+  assert.equal(live[0].from, at(WEDNESDAY, "12:40"));
+  assert.equal(live[0].accountId, "a");
+  assert.ok(view.lane.every((x) => x.to <= now || x.from >= at(WEDNESDAY, "12:40")));
+});

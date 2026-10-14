@@ -351,6 +351,72 @@ test("time without demand is never an outage", () => {
   assert.equal(forecast.switches, 0);
 });
 
+test("a gap covers only unmet demand, and a refill over lunch takes over at its reset", () => {
+  // 60 an hour from 11:00 with lunch from 12:20 to 13:00; everything runs out
+  // at 12:10 and `a` refills at 12:40, in the middle of lunch.
+  const lunch = (time: number) =>
+    time >= base + 12 * H + 20 * MIN && time < base + 13 * H ? 0 : 60;
+  const day = (list: SimAccount[]) =>
+    simulateDay({
+      from: base + 11 * H,
+      to: base + 15 * H,
+      rate: lunch,
+      accounts: list,
+    });
+  const gapMinutes = (forecast: Forecast) =>
+    forecast.segments
+      .filter((s) => !s.accountId)
+      .reduce((sum, s) => sum + (s.to - s.from) / MIN, 0);
+  const a = (reset: number): SimAccount => ({
+    id: "a",
+    capacity: 2,
+    firstReset: reset,
+    keepAlive: false,
+    remaining: 70,
+  });
+
+  const refilled = day([a(base + 12 * H + 40 * MIN)]);
+  assert.deepEqual(view(refilled), [
+    "a 11:00-12:10",
+    "outage 12:10-12:20",
+    "a 12:40-15:00",
+  ]);
+  assert.equal(refilled.outageMinutes, 10);
+  assert.equal(gapMinutes(refilled), refilled.outageMinutes);
+  assert.equal(refilled.unmet, 10);
+  assert.equal(refilled.switches, 0);
+
+  // Still nothing when work resumes: a second gap until the refill.
+  const late = day([a(base + 13 * H + 10 * MIN)]);
+  assert.deepEqual(view(late), [
+    "a 11:00-12:10",
+    "outage 12:10-12:20",
+    "outage 13:00-13:10",
+    "a 13:10-15:00",
+  ]);
+  assert.equal(late.outageMinutes, 20);
+  assert.equal(gapMinutes(late), late.outageMinutes);
+
+  // Another account refilling over lunch is the switch, at its reset.
+  const other = day([
+    { ...a(base + 18 * H), remaining: 70 },
+    {
+      id: "b",
+      capacity: 2,
+      firstReset: base + 12 * H + 40 * MIN,
+      keepAlive: false,
+      remaining: 0,
+    },
+  ]);
+  assert.deepEqual(view(other), [
+    "a 11:00-12:10",
+    "outage 12:10-12:20",
+    "b 12:40-15:00",
+  ]);
+  assert.equal(other.switches, 1);
+  assert.equal(gapMinutes(other), other.outageMinutes);
+});
+
 test("a blocked account is never chosen", () => {
   const forecast = sim(
     [

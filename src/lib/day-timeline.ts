@@ -53,9 +53,11 @@ export interface LaneSegment {
   from: number;
   to: number;
   live: boolean;
+  /** Begins its forecast's part of the lane (a work interval's, or the live one). */
+  first?: boolean;
 }
 
-/** Segments clipped to `[from, to)`. */
+/** Segments clipped to `[from, to)`; the first one is marked. */
 const clip = (
   segments: ForecastSegment[],
   from: number,
@@ -64,18 +66,20 @@ const clip = (
 ): LaneSegment[] =>
   segments
     .filter((s) => s.to > from && s.from < to)
-    .map((s) => ({
+    .map((s, index) => ({
       ...(s.accountId ? { accountId: s.accountId } : {}),
       from: Math.max(s.from, from),
       to: Math.min(s.to, to),
       live,
+      ...(index ? {} : { first: true }),
     }));
 
 /**
  * Where work moves to another account, counted as the forecast counts
- * switches: a gap without quota in between does not hide one. A break between
- * work intervals and the seam where the live forecast takes over from the
- * plan start afresh (the plan's account there is no switch anyone makes).
+ * switches: a gap without quota, or the time without demand after it, does
+ * not hide one. A break between work intervals and the seam where the live
+ * forecast takes over from the plan start afresh (the plan's account there is
+ * no switch anyone makes).
  */
 export function switchTimes(lane: LaneSegment[]): number[] {
   const times: number[] = [];
@@ -83,6 +87,7 @@ export function switchTimes(lane: LaneSegment[]): number[] {
   for (const [index, segment] of lane.entries()) {
     const previous = lane[index - 1];
     if (
+      segment.first &&
       previous &&
       (previous.to !== segment.from || previous.live !== segment.live)
     )
@@ -202,12 +207,15 @@ export function dayTimeline({
     if (plan !== current || !rest)
       return clip(segments, dayBegin, dayEnd, false);
     // The live part starts exactly where the plan part ends; the simulation
-    // rounds its first time to the minute.
+    // rounds its first time to the minute. (Without demand and quota at now
+    // it starts later, at a refill.)
     const start = Math.max(now, plan.interval?.start ?? now);
     return [
       ...clip(segments, dayBegin, Math.min(now, dayEnd), false),
       ...clip(
-        rest.segments.map((s, i) => (i ? s : { ...s, from: start })),
+        rest.segments.map((s, i) =>
+          i || Math.abs(s.from - start) >= 60_000 ? s : { ...s, from: start },
+        ),
         dayBegin,
         dayEnd,
         true,

@@ -116,14 +116,16 @@ export function simulateDay(input: SimInput): Forecast {
     outageMs = 0,
     switches = 0;
   let lastUsed: string | undefined;
+  /** The segment still running; none after a gap closes with the demand. */
+  let open: ForecastSegment | undefined;
   const mark = (accountId: string | undefined, at: number) => {
     const time = minute(at);
-    const open = segments[segments.length - 1];
     if (open && open.accountId === accountId) return;
     if (open) open.to = time;
     if (accountId && lastUsed && accountId !== lastUsed) switches++;
     if (accountId) lastUsed = accountId;
-    segments.push({ accountId, from: time, to: time });
+    open = { accountId, from: time, to: time };
+    segments.push(open);
   };
 
   advance(input.from);
@@ -136,6 +138,24 @@ export function simulateDay(input: SimInput): Forecast {
     const end = Math.min(input.to, t + SIM_STEP_MS);
     advance(t);
     const perMs = Math.max(0, input.rate(t)) / HOUR_MS;
+    if (perMs <= 0 && !active) {
+      // A gap is unmet demand only: it closes when the demand stops, and the
+      // account that refills meanwhile takes over at its reset.
+      if (open && !open.accountId) {
+        open.to = minute(t);
+        open = undefined;
+      }
+      for (let at = t; ;) {
+        active = choose();
+        if (active) {
+          mark(active.id, at);
+          break;
+        }
+        at = nextEvent(at);
+        if (at >= end) break;
+        advance(at);
+      }
+    }
     let cursor = t;
     while (cursor < end && perMs > 0) {
       if (!active || active.left <= EPSILON) {
@@ -171,8 +191,7 @@ export function simulateDay(input: SimInput): Forecast {
     }
     t = end;
   }
-  const last = segments[segments.length - 1];
-  if (last) last.to = minute(input.to);
+  if (open) open.to = minute(input.to);
   return {
     segments: segments.filter((s) => s.to > s.from),
     unmet: Math.round(unmet * 10) / 10,
