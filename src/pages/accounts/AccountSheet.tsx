@@ -1,0 +1,344 @@
+import type { ReactNode } from "react";
+import { Globe2, Monitor, RefreshCw } from "lucide-react";
+import type { Account } from "../../../shared/types";
+import {
+  cliNeedsReconnect,
+  desktopCliMismatch,
+  duplicateCliAccount,
+} from "../../../shared/account-state";
+import { historySources } from "../../../shared/history-policy";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { StatusDot } from "@/components/StatusDot";
+import { useI18n } from "@/data/i18n";
+import { useRelay } from "@/data/relay-context";
+import { pendingFlow } from "@/data/selectors";
+import { UsageCard } from "../../UsageCard";
+import { HistorySummary } from "../../HistorySummary";
+import { DesktopSetup } from "../../DesktopSetup";
+import { PlanEditor } from "../../PlanEditor";
+import { groupName, planLabel } from "./accountLabels";
+
+export function AccountSheet({
+  account,
+  close,
+}: {
+  account?: Account;
+  close: () => void;
+}) {
+  const { t } = useI18n();
+  const plan = account && planLabel(account);
+  return (
+    <Sheet open={!!account} onOpenChange={(open) => !open && close()}>
+      <SheetContent
+        side="right"
+        className="w-[360px] gap-0 overflow-y-auto sm:max-w-[360px]"
+      >
+        {account && (
+          <>
+            <SheetHeader className="pr-10">
+              <div className="flex min-w-0 items-center gap-2">
+                <SheetTitle className="truncate text-base">
+                  {account.name}
+                </SheetTitle>
+                {plan && <Badge variant="secondary">{plan}</Badge>}
+              </div>
+              <SheetDescription className="sr-only">
+                {t("Hesap ayrıntıları", "Account details")}
+              </SheetDescription>
+            </SheetHeader>
+            <AccountSheetBody account={account} />
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="grid gap-2">
+      <h3 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function ConnectionRow({
+  icon,
+  title,
+  status,
+  tone,
+  actions,
+}: {
+  icon: ReactNode;
+  title: string;
+  status: string;
+  tone: "ok" | "warn" | "crit" | "off";
+  actions: ReactNode;
+}) {
+  return (
+    <div className="grid gap-2 rounded-lg border p-3">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <span className="mt-0.5 text-muted-foreground [&_svg]:size-4">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold">{title}</div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <StatusDot tone={tone} />
+            <span className="min-w-0 break-words">{status}</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">{actions}</div>
+    </div>
+  );
+}
+
+/** Sheet contents, rendered outside the portal so it can be tested statically. */
+export function AccountSheetBody({
+  account: a,
+  now,
+}: {
+  account: Account;
+  now?: number;
+}) {
+  const relay = useRelay();
+  const { t, language } = useI18n();
+  const {
+    api,
+    data,
+    desktop,
+    accounts,
+    settings,
+    busy,
+    usageBusy,
+    desktopBusy,
+    pendingDesktop,
+    hasUnclaimedDesktop,
+    targetOrg,
+    desktopRequest,
+    setupId,
+    setSetupId,
+    action,
+    setNotice,
+    historyRevision,
+  } = relay;
+  const usage = data?.usage[a.id];
+  const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
+  const waiting = pendingFlow(authFlow);
+  const reconnect = cliNeedsReconnect(a, usage);
+  const mismatch = desktopCliMismatch(a);
+  const duplicate = duplicateCliAccount(a, accounts);
+  return (
+    <div className="grid gap-5 px-4 pb-6">
+      <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1 text-sm">
+        <dt className="text-muted-foreground">{t("E-posta", "Email")}</dt>
+        <dd className="min-w-0 break-words">
+          {a.desktop?.email ??
+            a.auth?.email ??
+            t("Giriş bekleniyor", "Waiting for sign-in")}
+        </dd>
+        <dt className="text-muted-foreground">{t("Kuruluş", "Organization")}</dt>
+        <dd className="min-w-0 break-words">{a.auth?.orgName ?? "—"}</dd>
+        <dt className="text-muted-foreground">{t("Tür · grup", "Type · group")}</dt>
+        <dd className="min-w-0 break-words">
+          {a.kind === "personal" ? t("Kişisel", "Personal") : t("Şirket", "Work")}
+          {a.kind === "work" ? ` · ${groupName(a, t)}` : ""}
+        </dd>
+        {a.auth?.subscription && (
+          <>
+            <dt className="text-muted-foreground">
+              {t("Abonelik", "Subscription")}
+            </dt>
+            <dd>{a.auth.subscription}</dd>
+          </>
+        )}
+      </dl>
+      {duplicate && (
+        <p
+          role="status"
+          className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm"
+        >
+          {t(
+            `Bu hesap ${duplicate.name} profiline de bağlı. İki profil aynı kullanım limitlerini paylaşır.`,
+            `This account is also connected to ${duplicate.name}. Both profiles share the same usage limits.`,
+          )}
+        </p>
+      )}
+      {mismatch && (
+        <p
+          role="alert"
+          className="rounded-lg border border-crit/40 bg-crit/10 px-3 py-2 text-sm"
+        >
+          {t(
+            "Desktop ve limit bağlantısı farklı hesaplara ait. Bu profilin doğru hesabıyla tarayıcı girişini yenile.",
+            "Desktop and usage are connected to different accounts. Reconnect browser sign-in with the correct account for this profile.",
+          )}
+        </p>
+      )}
+      <Section title={t("Plan", "Plan")}>
+        <PlanEditor
+          account={a}
+          disabled={!!busy}
+          t={t}
+          update={(input) =>
+            void action(`plan:${a.id}`, () =>
+              api.updateAccountPlanning(a.id, input),
+            )
+          }
+        />
+      </Section>
+      <Section title={t("Bağlantılar", "Connections")}>
+        <ConnectionRow
+          icon={<Monitor />}
+          title="Claude Desktop"
+          tone={a.desktop ? "ok" : "off"}
+          status={
+            a.desktop
+              ? t("Kaydedildi · hesap geçişine hazır", "Saved · ready to switch")
+              : t(
+                  "İlk kurulum gerekli · henüz geçiş yapılamaz",
+                  "Setup required · switching is not ready yet",
+                )
+          }
+          actions={
+            a.desktop ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={desktopBusy || !!pendingDesktop}
+                onClick={() => relay.requestDesktop(a, "reconnect")}
+              >
+                {t("Desktop girişini yenile…", "Reconnect Desktop…")}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={
+                  desktopBusy ||
+                  !desktop?.available ||
+                  !!pendingDesktop ||
+                  !!desktop?.recoveryRequired
+                }
+                onClick={() => {
+                  setSetupId(a.id);
+                  relay.cancelDesktopRequest();
+                }}
+              >
+                {t("Desktop’a bağla", "Connect Desktop")}
+              </Button>
+            )
+          }
+        />
+        {setupId === a.id && !pendingDesktop && !desktopRequest && (
+          <DesktopSetup
+            account={a}
+            accounts={accounts}
+            desktop={desktop}
+            unclaimed={hasUnclaimedDesktop}
+            org={targetOrg}
+            busy={desktopBusy}
+            t={t}
+            selectAccount={setSetupId}
+            selectOrg={relay.setOrg}
+            close={() => setSetupId(undefined)}
+            connect={() =>
+              relay.requestDesktop(a, hasUnclaimedDesktop ? "capture" : "login")
+            }
+          />
+        )}
+        <ConnectionRow
+          icon={<Globe2 />}
+          title={t(
+            "Kullanım limitleri · tarayıcı girişi",
+            "Usage limits · browser sign-in",
+          )}
+          tone={waiting ? "warn" : reconnect ? "crit" : "ok"}
+          status={
+            (waiting
+              ? t("Tarayıcı onayı bekleniyor", "Waiting for browser approval")
+              : reconnect
+                ? t("Giriş yenilenmeli", "Sign-in needs renewal")
+                : t("Bağlı", "Connected")) +
+            (a.auth?.email ? ` · ${a.auth.email}` : "")
+          }
+          actions={
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!!busy || waiting}
+                onClick={() => void relay.startCli(a)}
+              >
+                {waiting
+                  ? t("Bağlanıyor…", "Connecting…")
+                  : a.auth?.email
+                    ? t("Girişi yenile", "Reconnect")
+                    : t("Tarayıcıda bağla", "Connect in browser")}
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t("CLI bağlantısını doğrula", "Verify CLI connection")}
+                title={t("Bağlantıyı kontrol et", "Check connection")}
+                disabled={!!busy || waiting}
+                onClick={() =>
+                  void action(`verify:${a.id}`, async () => {
+                    const checked = await api.checkAuth(a.id);
+                    setNotice(
+                      checked.auth?.loggedIn
+                        ? t(
+                            `${a.name} · ${checked.auth.email ?? ""} bağlantısı doğrulandı.`,
+                            `${a.name} · ${checked.auth.email ?? ""} connection verified.`,
+                          )
+                        : t(
+                            "Giriş doğrulanamadı. Tarayıcı girişini yenile.",
+                            "Could not verify sign-in. Reconnect in the browser.",
+                          ),
+                    );
+                  })
+                }
+              >
+                <RefreshCw />
+              </Button>
+            </>
+          }
+        />
+        <UsageCard
+          usage={usage}
+          busy={usageBusy.has(a.id)}
+          connectBusy={!!busy || waiting}
+          settings={settings}
+          t={t}
+          language={language}
+          now={now}
+          refresh={(allowPrompt) => void relay.refreshUsage(a, allowPrompt)}
+          connect={() => void relay.startCli(a)}
+        />
+      </Section>
+      {a.desktop && (
+        <Section title={t("Code geçmişi", "Code history")}>
+          <HistorySummary
+            key={`${a.id}:${historyRevision}`}
+            account={a}
+            sources={historySources(a, accounts, settings)}
+            api={api}
+            t={t}
+          />
+        </Section>
+      )}
+    </div>
+  );
+}

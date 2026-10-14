@@ -6,6 +6,9 @@ import type {
   UsageWindow,
 } from "../shared/types";
 import { remaining } from "../shared/usage";
+import { Button } from "@/components/ui/button";
+import { meterClass, meterTone } from "@/lib/meter";
+import { cn } from "@/lib/utils";
 type T = (tr: string, en: string) => string;
 const issues: Record<UsageIssue, [string, string]> = {
   "connect-cli": [
@@ -145,14 +148,19 @@ export function UsageCard({
           ? { resetsAt: currentReset, checkedAt: usage.checkedAt }
           : undefined));
     return (
-      <div className={`usage-window ${warning ? "usage-low" : ""}`}>
-        <div className="usage-heading">
+      <div className="min-w-0">
+        <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
           <span>{title}</span>
-          <strong>
+          <strong
+            className={cn(
+              "text-sm whitespace-nowrap tabular-nums",
+              warning ? "text-crit" : "text-foreground",
+            )}
+          >
             {left === undefined
               ? "—"
               : `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(left)}%`}{" "}
-            <small>
+            <small className="text-[11px] font-normal text-muted-foreground">
               {left !== undefined
                 ? t("kaldı", "left")
                 : notReported
@@ -162,16 +170,24 @@ export function UsageCard({
           </strong>
         </div>
         <div
-          className="usage-track"
+          className="mt-1 h-1.5 overflow-hidden rounded-full bg-track"
           role={window ? "meter" : undefined}
           aria-label={title + t(" kalan kullanım", " remaining usage")}
           aria-valuemin={window ? 0 : undefined}
           aria-valuemax={window ? 100 : undefined}
           aria-valuenow={left}
         >
-          <span style={{ width: `${left ?? 0}%` }} />
+          <span
+            className={cn(
+              "block h-full rounded-full",
+              usage?.stale
+                ? "bg-muted-foreground/40"
+                : meterClass[meterTone(window?.usedPercent)],
+            )}
+            style={{ width: `${left ?? 0}%` }}
+          />
         </div>
-        <div className="usage-reset">
+        <div className="mt-1 text-[11px] text-muted-foreground">
           {currentResetIsFresh ? (
             <>
               {t("Yenilenir", "Resets")}{" "}
@@ -203,7 +219,7 @@ export function UsageCard({
             t("Yenilenme zamanı yok", "Reset time unavailable")
           )}
           {warning && (
-            <b>
+            <b className="font-semibold text-crit">
               {window?.usedPercent === 100
                 ? t(" · Limit doldu", " · Limit reached")
                 : t(" · Limit yaklaşıyor", " · Near limit")}
@@ -215,26 +231,22 @@ export function UsageCard({
   };
   if (usage?.issue === "connect-cli")
     return (
-      <div className="usage-connect">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground">
         <span>{t(...issues["connect-cli"])}</span>
-        <button
-          className="text-button"
-          disabled={connectBusy}
-          onClick={connect}
-        >
+        <Button size="sm" variant="outline" disabled={connectBusy} onClick={connect}>
           {t("Tarayıcıda bağla", "Connect in browser")}
-        </button>
+        </Button>
       </div>
     );
   return (
-    <div className={`usage-card ${usage?.stale ? "is-stale" : ""}`}>
-      <div className="usage-meters">
+    <div className="grid gap-2">
+      <div className="grid grid-cols-2 gap-3">
         {meter(usage?.fiveHour, t("5 saatlik", "5-hour"), "fiveHour")}
         {meter(usage?.sevenDay, t("Haftalık", "Weekly"), "sevenDay")}
       </div>
-      <div className="usage-caption">
-        <span>
-          {usage?.stale && <b>{t("Eski veri · ", "Stale data · ")}</b>}
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="min-w-0">
+          {usage?.stale && <b className="font-semibold text-warn">{t("Eski veri · ", "Stale data · ")}</b>}
           {loading
             ? t("Limitler okunuyor…", "Reading usage…")
             : displayedIssue
@@ -249,27 +261,33 @@ export function UsageCard({
             ` ${t("Tekrar", "Retry")} ${clock(usage!.retryAt!)}`}
         </span>
         {reconnect ? (
-          <button
-            className="text-button"
+          <Button
+            size="sm"
+            variant="link"
+            className="h-auto shrink-0 px-0"
             disabled={loading || connectBusy}
             onClick={connect}
           >
             {t("Girişi yenile", "Reconnect")}
-          </button>
+          </Button>
         ) : displayedIssue === "keychain-locked" ||
           displayedIssue === "renewal-required" ? (
-          <button
-            className="text-button"
+          <Button
+            size="sm"
+            variant="link"
+            className="h-auto shrink-0 px-0"
             disabled={loading}
             onClick={() => refresh(true)}
           >
             {displayedIssue === "renewal-required"
               ? t("Bağlantıyı yenile", "Renew connection")
               : t("Anahtarlık erişimine izin ver", "Allow Keychain access")}
-          </button>
+          </Button>
         ) : (
-          <button
-            className="icon"
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            className="shrink-0"
             aria-label={t(
               "Kullanım limitlerini yenile",
               "Refresh usage limits",
@@ -278,11 +296,11 @@ export function UsageCard({
             onClick={() => refresh()}
           >
             {loading ? (
-              <LoaderCircle size={13} className="spin" />
+              <LoaderCircle className="animate-spin" />
             ) : (
-              <RefreshCw size={13} />
+              <RefreshCw />
             )}
-          </button>
+          </Button>
         )}
       </div>
     </div>

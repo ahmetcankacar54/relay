@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Search,
   ShieldCheck,
-  X,
 } from "lucide-react";
 import type { Account } from "../../shared/types";
 import {
@@ -28,9 +27,12 @@ import { Preferences } from "../Preferences";
 import { DesktopSetup } from "../DesktopSetup";
 import { HistorySummary } from "../HistorySummary";
 import type { DesktopActionRequest } from "../DesktopActionReview";
+import { LegacyAddForm } from "./accounts/LegacyAddForm";
+import { groupName as accountGroupName } from "./accounts/accountLabels";
 
 // Temporary: the pre-redesign accounts list and preferences, mounted inside the
-// new shell until the dedicated pages replace them (Tasks 7–13).
+// new shell until the dedicated pages replace them (Tasks 7–13). LegacyHome is
+// no longer routed (Task 8); Task 9 moves its unclaimed-Desktop picker and removes it.
 
 export function LegacyHome() {
   const relay = useRelay();
@@ -64,9 +66,6 @@ export function LegacyHome() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [kind, setKind] = useState<"personal" | "work">("personal");
-  const [group, setGroup] = useState("");
   const [expanded, setExpanded] = useState<string>();
   const search = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -79,12 +78,7 @@ export function LegacyHome() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, []);
-  const groupName = (a: Account) =>
-    a.kind === "personal"
-      ? t("Kişisel", "Personal")
-      : a.group === `work:${a.id}`
-        ? t("Ayrı çalışma alanı", "Separate workspace")
-        : a.group.slice(5);
+  const groupName = (a: Account) => accountGroupName(a, t);
   const visible = accounts.filter(
     (a) =>
       `${a.name} ${a.auth?.email ?? ""} ${a.desktop?.email ?? ""} ${a.auth?.orgName ?? ""} ${groupName(a)}`
@@ -114,12 +108,6 @@ export function LegacyHome() {
     kind: DesktopActionRequest["kind"],
   ) => relay.requestDesktop(account, kind);
   const startCli = (a: Account) => relay.startCli(a);
-  const buttonLabel = (key: string, label: string) => (
-    <>
-      {busy === key ? <LoaderCircle className="spin" size={15} /> : null}
-      {label}
-    </>
-  );
   return (
     <div className="switcher">
       <div className="switcher-main mx-0 max-w-none px-6 pt-0">
@@ -218,115 +206,16 @@ export function LegacyHome() {
           />
         )}
         {adding && (
-          <form
-            className="profile-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void action("create", async () => {
-                const account = await api.createAccount({
-                  name,
-                  kind,
-                  group:
-                    kind === "work" && group.trim() ? group.trim() : undefined,
-                });
-                setAdding(false);
-                setName("");
-                setGroup("");
-                setExpanded(account.id);
-                setSetupId(account.id);
-                setQuery("");
-                setFilter("all");
-                setNotice(
-                  t(
-                    "Profil oluşturuldu. Bağlantı seçeneklerini aşağıdan seç.",
-                    "Profile created. Choose a connection option below.",
-                  ),
-                );
-              });
+          <LegacyAddForm
+            close={() => setAdding(false)}
+            created={(id) => {
+              setAdding(false);
+              setExpanded(id);
+              setSetupId(id);
+              setQuery("");
+              setFilter("all");
             }}
-          >
-            <div className="form-title">
-              <h3>{t("Yeni profil", "New profile")}</h3>
-              <button
-                type="button"
-                className="icon"
-                aria-label={t("Formu kapat", "Close form")}
-                onClick={() => setAdding(false)}
-              >
-                <X size={17} />
-              </button>
-            </div>
-            <div className="form-grid">
-              <label>
-                {t("Hesap adı", "Account name")}
-                <input
-                  required
-                  autoFocus
-                  maxLength={64}
-                  placeholder={t("Örn. Kişisel Max", "e.g. Personal Max")}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </label>
-              <label>
-                {t("Tür", "Type")}
-                <select
-                  value={kind}
-                  onChange={(e) =>
-                    setKind(e.target.value as "personal" | "work")
-                  }
-                >
-                  <option value="personal">{t("Kişisel", "Personal")}</option>
-                  <option value="work">{t("Şirket", "Work")}</option>
-                </select>
-              </label>
-            </div>
-            {kind === "work" && (
-              <label>
-                {t("Paylaşım grubu · isteğe bağlı", "Sharing group · optional")}
-                <input
-                  list="groups"
-                  maxLength={64}
-                  value={group}
-                  onChange={(e) => setGroup(e.target.value)}
-                  placeholder={t(
-                    "Aynı gruptaki şirket hesapları Code geçmişini paylaşır",
-                    "Work accounts in the same group share Code history",
-                  )}
-                />
-                <datalist id="groups">
-                  {[
-                    ...new Set(
-                      accounts
-                        .filter(
-                          (a) =>
-                            a.kind === "work" && a.group !== `work:${a.id}`,
-                        )
-                        .map((a) => a.group.slice(5)),
-                    ),
-                  ].map((g) => (
-                    <option key={g} value={g} />
-                  ))}
-                </datalist>
-              </label>
-            )}
-            <div className="form-end">
-              <small>
-                {kind === "personal"
-                  ? t(
-                      "Kişisel hesapların Code geçmişi aynı grupta korunur.",
-                      "Personal accounts share their local Code history.",
-                    )
-                  : t(
-                      "Boş bırakırsan bu şirket hesabı ayrı tutulur.",
-                      "Leave blank to keep this work account separate.",
-                    )}
-              </small>
-              <button className="primary" disabled={!!busy || !name.trim()}>
-                {buttonLabel("create", t("Profil oluştur", "Create profile"))}
-              </button>
-            </div>
-          </form>
+          />
         )}
         <section className="accounts-section">
           <div className="section-title">

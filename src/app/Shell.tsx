@@ -4,7 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { sidebarStatus } from "@/data/selectors";
-import { LegacyHome, LegacySettings } from "@/pages/Legacy";
+import { LegacySettings } from "@/pages/Legacy";
+import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
 import relayIcon from "../../assets/icon.png";
 import { Sidebar } from "./Sidebar";
@@ -79,17 +80,7 @@ export function Shell() {
           />
           {/* Legacy content is temporary; Tasks 8–13 replace the remaining pages. */}
           {page === "genel" && <Overview go={go} />}
-          {page === "hesaplar" && (
-            <PageFrame
-              title={t("Hesaplar", "Accounts")}
-              description={t(
-                "Hesapların ve bağlantıları",
-                "Your accounts and connections",
-              )}
-            >
-              <LegacyHome />
-            </PageFrame>
-          )}
+          {page === "hesaplar" && <Accounts />}
           {page === "kullanim" && (
             <PageFrame
               title={t("Kullanım", "Usage")}

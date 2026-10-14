@@ -1,5 +1,4 @@
 import { ArrowUpRight, Plus } from "lucide-react";
-import type { Account } from "../../../shared/types";
 import { freshUsage } from "../../../shared/usage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,15 +11,8 @@ import { pendingFlow, usageWindowRows } from "@/data/selectors";
 import { formatReset } from "@/lib/time";
 import type { PageId } from "@/app/routes";
 import { UsageCard } from "../../UsageCard";
+import { planLabel } from "../accounts/accountLabels";
 
-const PLAN_LABELS: Partial<Record<string, string>> = {
-  pro: "Pro",
-  max5: "Max 5×",
-  max20: "Max 20×",
-  team: "Team",
-};
-export const planLabel = (account: Account) =>
-  PLAN_LABELS[account.planning?.plan ?? ""];
 
 const eyebrow =
   "text-[11px] font-semibold tracking-wider text-muted-foreground uppercase";

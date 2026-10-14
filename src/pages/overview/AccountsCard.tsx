@@ -7,7 +7,7 @@ import { useRelay } from "@/data/relay-context";
 import { overviewAccounts, type OverviewRow } from "@/data/selectors";
 import { formatClock, formatReset } from "@/lib/time";
 import type { PageId } from "@/app/routes";
-import { planLabel } from "./ActiveAccountCard";
+import { planLabel } from "../accounts/accountLabels";
 
 export function AccountsCard({
   go,
