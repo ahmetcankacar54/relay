@@ -132,6 +132,42 @@ test("fewer than five qualifying weekdays fall back to the default tempo", () =>
   assert.deepEqual(tempo.days, { weekday: 4, weekend: 0 });
 });
 
+test("a weekend-only schedule learns the weekend and uses its rate on weekdays", () => {
+  // Six weekend days 09-26 … 10-11, 11:00–17:00, at 30 an hour and 60 at 13.
+  const weekends: string[] = [];
+  for (let back = 1; weekends.length < 6; back++) {
+    const date = shiftDate("2026-10-14", -back);
+    const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+    if (day === 0 || day === 6) weekends.push(date);
+  }
+  const rollups = emptyRollups();
+  for (const date of weekends)
+    for (let hour = 11; hour < 17; hour++)
+      put(rollups, IDENTITY, date, hour, hour === 13 ? 60 : 30);
+  const tempo = learn(rollups, {
+    weekday: { enabled: false, start: "09:00", end: "18:00" },
+    weekend: { enabled: true, start: "11:00", end: "17:00" },
+  });
+  assert.equal(tempo.source, "learned");
+  assert.deepEqual(tempo.days, { weekday: 0, weekend: 6 });
+  assert.deepEqual(tempo.rate, { weekday: 35, weekend: 35 });
+  assert.equal(tempo.weekend[13], 60);
+  assert.equal(tempo.weekend[11], 30);
+  assert.equal(tempo.weekend[20], 35);
+  assert.deepEqual(tempo.weekday, Array(24).fill(35));
+  // Four weekend days are not enough either.
+  const thin = emptyRollups();
+  for (const date of weekends.slice(0, 4))
+    for (let hour = 11; hour < 17; hour++) put(thin, IDENTITY, date, hour, 30);
+  assert.equal(
+    learn(thin, {
+      weekday: { enabled: false, start: "09:00", end: "18:00" },
+      weekend: { enabled: true, start: "11:00", end: "17:00" },
+    }).source,
+    "default",
+  );
+});
+
 test("points count at the account's plan capacity, and unknown identities at 1", () => {
   const rollups = emptyRollups();
   for (const date of WEEKDAYS)

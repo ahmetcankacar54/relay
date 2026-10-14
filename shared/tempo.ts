@@ -79,12 +79,16 @@ export function learnTempo({
     weekday: samples.weekday.length,
     weekend: samples.weekend.length,
   };
-  const weekday = profile(samples.weekday);
-  if (!weekday) return presetTempo("medium", "default", days);
-  const weekend = profile(samples.weekend) ?? {
-    rate: weekday.rate,
-    values: flat(weekday.rate),
+  const learned = {
+    weekday: profile(samples.weekday),
+    weekend: profile(samples.weekend),
   };
+  // A day type without its own profile runs flat at the other one's rate.
+  const other = (p: { rate: number } | undefined) =>
+    p && { rate: p.rate, values: flat(p.rate) };
+  const weekday = learned.weekday ?? other(learned.weekend);
+  const weekend = learned.weekend ?? other(learned.weekday);
+  if (!weekday || !weekend) return presetTempo("medium", "default", days);
   return {
     source: "learned",
     weekday: weekday.values,
