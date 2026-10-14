@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AddAccountSteps, profileInput } from "../src/pages/accounts/AddAccountDialog";
 import { LinkDesktopBody } from "../src/pages/accounts/LinkDesktopDialog";
-import { Accounts } from "../src/pages/Accounts";
+import { Accounts, intentAllowed } from "../src/pages/Accounts";
 import { ConnectionPanels } from "../src/app/ConnectionPanels";
 import { routeQuery } from "../src/app/routes";
 import { RelayContext, type Relay } from "../src/data/relay-context";
@@ -75,6 +75,20 @@ test("the add-account dialog walks the Desktop and limit steps for the created p
   assert.match(desktopStep, /Atla/);
   const pending = wrap(relayFor({ pendingDesktop: b }), createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }));
   assert.match(pending, /Claude’da giriş bekleniyor/);
+  assert.doesNotMatch(pending, /üstteki panel/);
+  assert.match(pending, /Claude’u yeniden aç/);
+  assert.match(pending, /İptal et ve önceki hesaba dön/);
+  assert.doesNotMatch(pending, /Bağlantıyı tamamla/);
+  const capture = wrap(
+    relayFor({
+      pendingDesktop: b, hasUnclaimedDesktop: true, targetOrg: "org-1",
+      desktop: { available: true, running: true, organizations: ["org-1", "org-2"], busy: false, recoveryRequired: false, errorRevision: 0 },
+    } as Partial<Relay>),
+    createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }),
+  );
+  assert.match(capture, /Bağlantıyı tamamla/);
+  assert.match(capture, /Code çalışma alanı/);
+  assert.match(capture, /org-2/);
   const limitStep = wrap(relayFor(), createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }));
   assert.match(limitStep, /Tarayıcıda bağla/);
   assert.match(limitStep, /Bitti/);
@@ -103,4 +117,17 @@ test("connection panels keep their ids, live regions and copy", () => {
   assert.match(html, /Tarayıcı onayı bekleniyor/);
   assert.match(html, /Tarayıcıyı yeniden aç/);
   assert.match(html, /2 \/ 3/);
+});
+
+test("hash intents open a dialog only when its header button would be enabled", () => {
+  const base = { busy: false, pending: false, recovery: false, count: 3, unclaimed: true, unlinked: true };
+  assert.equal(intentAllowed("ekle", base), true);
+  assert.equal(intentAllowed("eslestir", base), true);
+  assert.equal(intentAllowed("ekle", { ...base, count: 50 }), false);
+  assert.equal(intentAllowed("ekle", { ...base, busy: true }), false);
+  assert.equal(intentAllowed("ekle", { ...base, pending: true }), false);
+  assert.equal(intentAllowed("eslestir", { ...base, recovery: true }), false);
+  assert.equal(intentAllowed("eslestir", { ...base, unclaimed: false }), false);
+  assert.equal(intentAllowed("eslestir", { ...base, unlinked: false }), false);
+  assert.equal(intentAllowed("other", base), false);
 });

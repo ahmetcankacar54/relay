@@ -26,7 +26,8 @@ export function DesktopSetup({
   org: string;
   busy: boolean;
   t: (tr: string, en: string) => string;
-  selectAccount: (id: string) => void;
+  /** Only used by the picker (no `account`). */
+  selectAccount?: (id: string) => void;
   selectOrg: (id: string) => void;
   close: () => void;
   connect: () => void;
@@ -75,7 +76,7 @@ export function DesktopSetup({
           <select
             className={selectClass}
             value=""
-            onChange={(e) => selectAccount(e.target.value)}
+            onChange={(e) => selectAccount?.(e.target.value)}
             disabled={busy}
           >
             <option value="">{t("Profil seç", "Choose a profile")}</option>

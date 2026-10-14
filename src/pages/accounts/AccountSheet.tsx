@@ -251,7 +251,6 @@ export function AccountSheetBody({
             org={targetOrg}
             busy={desktopBusy}
             t={t}
-            selectAccount={setSetupId}
             selectOrg={relay.setOrg}
             close={() => setSetupId(undefined)}
             connect={() =>

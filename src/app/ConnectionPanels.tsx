@@ -17,8 +17,8 @@ const titleClass = "flex items-start gap-3";
 const iconClass = "mt-0.5 size-5 shrink-0 text-brand";
 const actionsClass = "flex flex-wrap items-center gap-2";
 
-/** Desktop sign-in in progress for a profile; shown above every page until saved or cancelled. */
-export function DesktopPendingPanel() {
+/** Workspace choice and the reopen / cancel / complete actions for a pending Desktop sign-in. */
+export function DesktopPendingActions() {
   const relay = useRelay();
   const { t } = useI18n();
   const {
@@ -32,14 +32,74 @@ export function DesktopPendingPanel() {
     action,
   } = relay;
   if (!pendingDesktop) return null;
+  return (
+    <>
+      {desktop?.organizations.length! > 1 && (
+        <label className="grid gap-1.5 text-sm font-medium">
+          {t("Code çalışma alanı", "Code workspace")}
+          <select
+            className={selectClass}
+            value={targetOrg}
+            onChange={(e) => setOrg(e.target.value)}
+          >
+            <option value="">
+              {t("Çalışma alanı seç", "Choose a workspace")}
+            </option>
+            {desktop?.organizations.map((id) => (
+              <option key={id} value={id}>
+                {id}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div className={actionsClass}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={desktopBusy}
+          onClick={() => void action("open", () => api.openDesktop())}
+        >
+          <ArrowUpRight />
+          {t("Claude’u yeniden aç", "Reopen Claude")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={desktopBusy}
+          onClick={() => relay.requestDesktop(pendingDesktop, "cancel")}
+        >
+          {t(
+            "İptal et ve önceki hesaba dön",
+            "Cancel and return to previous account",
+          )}
+        </Button>
+        {(hasUnclaimedDesktop ||
+          desktop?.activeProfileId === pendingDesktop.id) &&
+          targetOrg && (
+            <Button
+              size="sm"
+              disabled={desktopBusy}
+              onClick={() => relay.requestDesktop(pendingDesktop, "capture")}
+            >
+              {t("Bağlantıyı tamamla", "Complete connection")}
+            </Button>
+          )}
+      </div>
+    </>
+  );
+}
+
+/** Desktop sign-in in progress for a profile; shown above every page until saved or cancelled. */
+export function DesktopPendingPanel() {
+  const relay = useRelay();
+  const { t } = useI18n();
+  const { desktop, pendingDesktop, hasUnclaimedDesktop, targetOrg } = relay;
+  if (!pendingDesktop) return null;
   const desktopIdentityReady =
     hasUnclaimedDesktop || desktop?.activeProfileId === pendingDesktop.id;
   return (
-    <Card
-      id="desktop-pending-panel"
-      className={panelClass}
-      aria-live="polite"
-    >
+    <Card id="desktop-pending-panel" className={panelClass} aria-live="polite">
       <div className={titleClass}>
         <Globe2 className={iconClass} />
         <div className="min-w-0">
@@ -95,58 +155,7 @@ export function DesktopPendingPanel() {
           },
         ]}
       />
-      {desktop?.organizations.length! > 1 && (
-        <label className="grid gap-1.5 text-sm font-medium">
-          {t("Code çalışma alanı", "Code workspace")}
-          <select
-            className={selectClass}
-            value={targetOrg}
-            onChange={(e) => setOrg(e.target.value)}
-          >
-            <option value="">
-              {t("Çalışma alanı seç", "Choose a workspace")}
-            </option>
-            {desktop?.organizations.map((id) => (
-              <option key={id} value={id}>
-                {id}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <div className={actionsClass}>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={desktopBusy}
-          onClick={() => void action("open", () => api.openDesktop())}
-        >
-          <ArrowUpRight />
-          {t("Claude’u yeniden aç", "Reopen Claude")}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={desktopBusy}
-          onClick={() => relay.requestDesktop(pendingDesktop, "cancel")}
-        >
-          {t(
-            "İptal et ve önceki hesaba dön",
-            "Cancel and return to previous account",
-          )}
-        </Button>
-        {(hasUnclaimedDesktop ||
-          desktop?.activeProfileId === pendingDesktop.id) &&
-          targetOrg && (
-            <Button
-              size="sm"
-              disabled={desktopBusy}
-              onClick={() => relay.requestDesktop(pendingDesktop, "capture")}
-            >
-              {t("Bağlantıyı tamamla", "Complete connection")}
-            </Button>
-          )}
-      </div>
+      <DesktopPendingActions />
     </Card>
   );
 }
@@ -163,7 +172,10 @@ export function CliFlowPanel() {
   return (
     <Card
       id="cli-connection-panel"
-      className={cn(panelClass, flow.status === "connected" && "border-brand/40")}
+      className={cn(
+        panelClass,
+        flow.status === "connected" && "border-brand/40",
+      )}
       aria-live="polite"
     >
       <div className={titleClass}>

@@ -19,12 +19,38 @@ import { AddAccountDialog } from "./accounts/AddAccountDialog";
 import { LinkDesktopDialog } from "./accounts/LinkDesktopDialog";
 import { filterAccounts, type AccountFilter } from "./accounts/accountLabels";
 
+type IntentGuards = {
+  busy: boolean;
+  pending: boolean;
+  recovery: boolean;
+  count: number;
+  unclaimed: boolean;
+  unlinked: boolean;
+};
+/** Whether a `?ekle` / `?eslestir` intent may open its dialog; mirrors the header buttons. */
+export function intentAllowed(intent: string, g: IntentGuards): boolean {
+  if (g.busy || g.pending || g.recovery) return false;
+  if (intent === "ekle") return g.count < 50;
+  if (intent === "eslestir") return g.unclaimed && g.unlinked;
+  return false;
+}
+
 export function Accounts() {
   const relay = useRelay();
   const { t, language } = useI18n();
   const { accounts, desktop, desktopBusy, pendingDesktop, setupId, setSetupId } =
     relay;
   const unlinked = accounts.some((a) => !a.desktop);
+  const guards: IntentGuards = {
+    busy: desktopBusy,
+    pending: !!pendingDesktop,
+    recovery: !!desktop?.recoveryRequired,
+    count: accounts.length,
+    unclaimed: relay.hasUnclaimedDesktop,
+    unlinked,
+  };
+  const guardsRef = useRef(guards);
+  guardsRef.current = guards;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AccountFilter>("all");
   const [adding, setAdding] = useState(false);
@@ -47,8 +73,10 @@ export function Accounts() {
     const read = () => {
       const intent = routeQuery(window.location.hash);
       if (!intent) return;
-      if (intent === "ekle") setAdding(true);
-      else if (intent === "eslestir") setLinking(true);
+      if (intentAllowed(intent, guardsRef.current)) {
+        if (intent === "ekle") setAdding(true);
+        else setLinking(true);
+      }
       history.replaceState(null, "", routeHash("hesaplar"));
     };
     read();
@@ -80,12 +108,7 @@ export function Accounts() {
           {relay.hasUnclaimedDesktop && (
             <Button
               variant="outline"
-              disabled={
-                desktopBusy ||
-                !!pendingDesktop ||
-                !!desktop?.recoveryRequired ||
-                !unlinked
-              }
+              disabled={!intentAllowed("eslestir", guards)}
               onClick={() => setLinking(true)}
             >
               <Link2 />
@@ -93,7 +116,7 @@ export function Accounts() {
             </Button>
           )}
           <Button
-            disabled={desktopBusy || !!pendingDesktop || accounts.length >= 50}
+            disabled={!intentAllowed("ekle", guards)}
             onClick={() => {
               setSetupId(undefined);
               setAdding(true);

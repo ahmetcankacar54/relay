@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check, Globe2, LoaderCircle, Monitor } from "lucide-react";
 import type { Account, CreateAccount } from "../../../shared/types";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { DesktopSetup } from "../../DesktopSetup";
+import { DesktopPendingActions } from "@/app/ConnectionPanels";
 
 type Kind = "personal" | "work";
 type Step = 1 | 2 | 3;
@@ -145,6 +146,11 @@ export function AddAccountSteps({
     !desktop?.available ||
     !!desktop?.recoveryRequired ||
     !!pendingDesktop;
+  // A completed Desktop link moves the wizard on to the limit step.
+  const linked = !!account?.desktop;
+  useEffect(() => {
+    if (linked) setStep((current) => (current === 2 ? 3 : current));
+  }, [linked]);
   const flow = relay.flow?.accountId === account?.id ? relay.flow : undefined;
   return (
     <div className="grid gap-4">
@@ -249,14 +255,21 @@ export function AddAccountSteps({
               {t("Desktop’a bağlandı.", "Connected to Desktop.")}
             </StatusLine>
           ) : pendingDesktop?.id === account.id ? (
-            <StatusLine tone="warn" icon={<Monitor />}>
-              {t("Claude’da giriş bekleniyor", "Waiting for sign-in in Claude")}
-              {" · "}
-              {t(
-                "bağlantıyı üstteki panelden tamamla.",
-                "complete it from the panel above.",
-              )}
-            </StatusLine>
+            <div className="grid gap-3">
+              <StatusLine tone="warn" icon={<Monitor />}>
+                {t(
+                  "Claude’da giriş bekleniyor",
+                  "Waiting for sign-in in Claude",
+                )}
+              </StatusLine>
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  "Claude’da doğru hesaba giriş yap ve Code sekmesini aç. Sonra buradan bağlantıyı kaydet.",
+                  "Sign in to the matching account inside Claude and open Code. Then save the connection here.",
+                )}
+              </p>
+              <DesktopPendingActions />
+            </div>
           ) : (
             <DesktopSetup
               bare
@@ -267,7 +280,6 @@ export function AddAccountSteps({
               org={relay.targetOrg}
               busy={desktopLocked}
               t={t}
-              selectAccount={relay.setSetupId}
               selectOrg={relay.setOrg}
               close={() => setStep(3)}
               connect={() =>
