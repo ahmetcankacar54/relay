@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeftRight,
   ArrowUpRight,
@@ -15,17 +15,9 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import type {
-  Account,
-  AuthFlow,
-  DesktopState,
-  Snapshot,
-} from "../shared/types";
-import { DEFAULT_SETTINGS } from "../shared/types";
-import { suggestedAccount } from "../shared/usage";
+import type { Account } from "../shared/types";
 import { UsageCard } from "./UsageCard";
 import { Preferences } from "./Preferences";
-import { previewApi } from "./preview";
 import { localizeError } from "./messages";
 import { ConnectionProgress } from "./ConnectionProgress";
 import { DesktopSetup } from "./DesktopSetup";
@@ -41,122 +33,74 @@ import {
 import { historySources } from "../shared/history-policy";
 import { AutoSwitchStatus } from "./AutoSwitchStatus";
 import { HistorySummary } from "./HistorySummary";
-import packageInfo from "../package.json";
+import { I18nProvider, useI18n } from "./data/i18n";
+import { api, useRelay } from "./data/useRelay";
+import { pendingFlow } from "./data/selectors";
 import relayIcon from "../assets/icon.png";
 
-const api = window.relay ?? previewApi;
-const APP_VERSION = packageInfo.version;
-const preview = !window.relay;
-const pending = (f?: AuthFlow) =>
-  !!f && ["starting", "waiting", "verifying"].includes(f.status);
-type Language = "tr" | "en";
-export default function App() {
-  const [language, setLanguage] = useState<Language>(() =>
-    localStorage.getItem("relay-language") === "en" ? "en" : "tr",
-  );
-  const t = (tr: string, en: string) => (language === "tr" ? tr : en);
-  const [data, setData] = useState<Snapshot>();
-  const [desktop, setDesktop] = useState<DesktopState>();
+function Legacy() {
+  const relay = useRelay();
+  const { t, language, setLanguage } = useI18n();
+  const {
+    api,
+    preview,
+    version: APP_VERSION,
+    data,
+    desktop,
+    accounts,
+    active,
+    settings: preferences,
+    busy,
+    error,
+    notice,
+    usageBusy,
+    desktopBusy,
+    pendingDesktop,
+    hasUnclaimedDesktop,
+    targetOrg,
+    setOrg,
+    refresh,
+    action,
+    setNotice,
+    dismissError,
+    refreshUsage,
+    desktopRequest,
+    confirmDesktopAction,
+    setupId,
+    setSetupId,
+    flow,
+    flowAccount,
+    historyRevision,
+    suggestion,
+    setData,
+  } = relay;
+  const pending = pendingFlow;
+  const setDesktopRequest = (value: undefined) => {
+    if (value === undefined) relay.cancelDesktopRequest();
+  };
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [adding, setAdding] = useState(false);
-  const [setupId, setSetupId] = useState<string>();
-  const [desktopRequest, setDesktopRequest] = useState<DesktopActionRequest>();
-  const [usageBusy, setUsageBusy] = useState<Set<string>>(new Set());
   const [settings, setSettings] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"personal" | "work">("personal");
   const [group, setGroup] = useState("");
-  const [org, setOrg] = useState("");
   const [expanded, setExpanded] = useState<string>();
-  const [authId, setAuthId] = useState<string>();
   const [code, setCode] = useState("");
-  const [busy, setBusy] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [historyRevision, setHistoryRevision] = useState(0);
-  const lock = useRef(false);
-  const sequence = useRef(0);
-  const queuedTrayTarget = useRef<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
-  const [dismissed, setDismissed] = useState<string>();
-  const showError = useCallback(
-    (e: unknown) =>
-      setError(
-        String(e instanceof Error ? e.message : e).replace(
-          /^Error invoking remote method '[^']+': Error: /,
-          "",
-        ),
-      ),
-    [],
-  );
-  const refresh = useCallback(async () => {
-    const request = ++sequence.current;
-    const [snapshot, status] = await Promise.all([
-      api.panelSnapshot(),
-      api.desktopSnapshot(),
-    ]);
-    if (request === sequence.current) {
-      setData(snapshot);
-      setDesktop(status);
-    }
-    if (request !== sequence.current) return { snapshot, status };
-    const requested = await api.consumeTraySwitchRequest();
-    if (requested) queuedTrayTarget.current = requested;
-    if (request !== sequence.current) return { snapshot, status };
-    const trayTarget = queuedTrayTarget.current;
-    if (trayTarget) {
-      const target = snapshot.accounts.find((a) => a.id === trayTarget);
-      if (
-        !target?.desktop ||
-        desktopCliMismatch(target) ||
-        status.activeProfileId === trayTarget
-      )
-        queuedTrayTarget.current = null;
-      else if (
-        !lock.current &&
-        !status.busy &&
-        !status.recoveryRequired &&
-        !status.pendingProfileId &&
-        !snapshot.authFlows.some(pending)
-      ) {
-        queuedTrayTarget.current = null;
-        setExpanded(trayTarget);
-        setSettings(false);
-        setQuery("");
-        setFilter("all");
-        setDesktopRequest({ accountId: trayTarget, kind: "switch" });
-      }
-    }
-    return { snapshot, status };
-  }, []);
+  const userRequest = useRef(false);
   useEffect(() => {
-    void refresh().catch(showError);
-    const off = api.onAuth(() => {
-      void refresh().catch(showError);
-    });
-    const offTray = api.onTraySwitch(() => {
-      void refresh().catch(showError);
-    });
-    const timer = setInterval(() => {
-      void refresh().catch(showError);
-    }, 4000);
-    const focus = () => {
-      void refresh().catch(showError);
-    };
-    window.addEventListener("focus", focus);
-    return () => {
-      off();
-      offTray();
-      clearInterval(timer);
-      window.removeEventListener("focus", focus);
-    };
-  }, [refresh, showError]);
-  useEffect(() => {
-    localStorage.setItem("relay-language", language);
-    document.documentElement.lang = language;
-    void api.setTrayLanguage(language).catch(showError);
-  }, [language, showError]);
+    if (userRequest.current) {
+      userRequest.current = false;
+      return;
+    }
+    if (desktopRequest?.kind === "switch") {
+      setExpanded(desktopRequest.accountId);
+      setSettings(false);
+      setQuery("");
+      setFilter("all");
+    }
+  }, [desktopRequest]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -167,31 +111,6 @@ export default function App() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, []);
-  const action = async (key: string, fn: () => Promise<unknown>) => {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(key);
-    setError("");
-    setNotice("");
-    try {
-      await fn();
-      await refresh();
-    } catch (e) {
-      showError(e);
-    } finally {
-      lock.current = false;
-      setBusy("");
-    }
-  };
-  const accounts = data?.accounts ?? [];
-  const active = accounts.find((a) => a.id === desktop?.activeProfileId);
-  const preferences = data?.settings ?? DEFAULT_SETTINGS;
-  const suggestion = suggestedAccount(
-    active,
-    accounts,
-    data?.usage ?? {},
-    preferences,
-  );
   useEffect(() => {
     if (settings)
       document
@@ -213,138 +132,40 @@ export default function App() {
         filter === a.kind ||
         (filter === "connected" && a.desktop)),
   );
-  const flow =
-    data?.authFlows.find((f) => f.accountId === authId) ??
-    data?.authFlows.find((f) => pending(f) && f.id !== dismissed);
-  const flowAccount = accounts.find((a) => a.id === flow?.accountId);
-  const pendingDesktop = accounts.find(
-    (a) => a.id === desktop?.pendingProfileId,
-  );
-  const hasUnclaimedDesktop =
-    !!desktop?.currentAccountUuid && !desktop.activeProfileId;
-  const targetOrg = desktop?.organizations.includes(org)
-    ? org
-    : desktop?.organizations.length === 1
-      ? desktop.organizations[0]
-      : "";
-  const desktopBusy =
-    !!busy || desktop?.busy || data?.continuation?.status === "executing";
   const desktopIdentityReady =
     !!pendingDesktop &&
     (hasUnclaimedDesktop || desktop?.activeProfileId === pendingDesktop.id);
-  const dismissError = async () => {
-    setError("");
-    if (desktop?.error) {
-      const revision = desktop.errorRevision;
-      ++sequence.current;
-      setDesktop((previous) =>
-        previous ? { ...previous, error: undefined } : previous,
-      );
-      try {
-        await api.dismissDesktopError(revision);
-        await refresh();
-      } catch (e) {
-        showError(e);
-      }
-    }
-  };
   useEffect(() => {
-    const id =
-      flow?.id && flow.id !== dismissed
-        ? "cli-connection-panel"
-        : desktopRequest
-          ? `details-${desktopRequest.accountId}`
-          : setupId !== undefined
-            ? setupId
-              ? `details-${setupId}`
-              : "desktop-setup-picker"
-            : desktop?.pendingProfileId
-              ? "desktop-pending-panel"
-              : undefined;
+    const id = flow?.id
+      ? "cli-connection-panel"
+      : desktopRequest
+        ? `details-${desktopRequest.accountId}`
+        : setupId !== undefined
+          ? setupId
+            ? `details-${setupId}`
+            : "desktop-setup-picker"
+          : desktop?.pendingProfileId
+            ? "desktop-pending-panel"
+            : undefined;
     if (id)
       document
         .getElementById(id)
         ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [flow?.id, dismissed, desktop?.pendingProfileId, setupId, desktopRequest]);
+  }, [flow?.id, desktop?.pendingProfileId, setupId, desktopRequest]);
   const requestDesktop = (
     account: Account | undefined,
     kind: DesktopActionRequest["kind"],
   ) => {
+    userRequest.current = true;
     setExpanded(account?.id);
     setQuery("");
     setFilter("all");
-    setDesktopRequest({ accountId: account?.id ?? "recovery", kind });
+    relay.requestDesktop(account, kind);
   };
-  const confirmDesktopAction = () => {
-    if (!desktopRequest) return;
-    const request = desktopRequest;
-    const account = accounts.find((a) => a.id === request.accountId);
-    void action(`desktop-action:${request.accountId}`, async () => {
-      if (request.kind === "recover") await api.recoverDesktop();
-      else if (request.kind === "cancel") await api.cancelDesktopLogin();
-      else {
-        if (!account)
-          throw new Error(t("Hesap bulunamadı.", "Account not found."));
-        if (request.kind === "switch") await api.switchDesktop(account.id);
-        else if (request.kind === "history")
-          await api.syncDesktopHistory(account.id);
-        else if (request.kind === "capture")
-          await api.captureDesktop(account.id, targetOrg);
-        else await api.beginDesktopLogin(account.id);
-      }
-      setSetupId(undefined);
-      setDesktopRequest(undefined);
-      setHistoryRevision((value) => value + 1);
-      setNotice(
-        request.kind === "history"
-          ? t(
-              "Ortak Code geçmişi açık hesapla birleştirildi.",
-              "Shared Code history was merged into the current account.",
-            )
-          : request.kind === "switch"
-            ? t(
-                `${account?.name} · Desktop hesabına geçildi.`,
-                `${account?.name} · Desktop account switched.`,
-              )
-            : request.kind === "capture"
-              ? t(
-                  `${account?.name} · Desktop bağlantısı kaydedildi.`,
-                  `${account?.name} · Desktop connection saved.`,
-                )
-              : request.kind === "cancel" || request.kind === "recover"
-                ? t(
-                    "Önceki Desktop bağlantısı geri yüklendi.",
-                    "The previous Desktop connection was restored.",
-                  )
-                : t(
-                    "Claude’da bu hesabın girişini tamamla, ardından Relay’e dön.",
-                    "Complete this account’s sign-in in Claude, then return to Relay.",
-                  ),
-      );
-    });
+  const startCli = (a: Account) => {
+    setCode("");
+    return relay.startCli(a);
   };
-  const refreshUsage = async (account: Account, allowPrompt = false) => {
-    setUsageBusy((previous) => new Set(previous).add(account.id));
-    try {
-      await api.refreshUsage(account.id, allowPrompt);
-      await refresh();
-    } catch (e) {
-      showError(e);
-    } finally {
-      setUsageBusy((previous) => {
-        const next = new Set(previous);
-        next.delete(account.id);
-        return next;
-      });
-    }
-  };
-  const startCli = (a: Account) =>
-    action(`cli:${a.id}`, async () => {
-      setDismissed(undefined);
-      setAuthId(a.id);
-      setCode("");
-      await api.login(a.id);
-    });
   const buttonLabel = (key: string, label: string) => (
     <>
       {busy === key ? <LoaderCircle className="spin" size={15} /> : null}
@@ -369,7 +190,7 @@ export default function App() {
           <select
             aria-label={t("Dil", "Language")}
             value={language}
-            onChange={(e) => setLanguage(e.target.value as Language)}
+            onChange={(e) => setLanguage(e.target.value as "tr" | "en")}
           >
             <option value="tr">TR</option>
             <option value="en">EN</option>
@@ -664,7 +485,7 @@ export default function App() {
             </div>
           </section>
         )}
-        {flow && flow.id !== dismissed && (
+        {flow && (
           <section
             id="cli-connection-panel"
             className={`connection-panel ${flow.status === "connected" ? "connected-panel" : ""}`}
@@ -854,8 +675,7 @@ export default function App() {
                   <button
                     className="secondary"
                     onClick={() => {
-                      setDismissed(flow.id);
-                      setAuthId(undefined);
+                      relay.dismissFlow();
                     }}
                   >
                     {t("Tamam", "Done")}
@@ -1600,5 +1420,13 @@ export default function App() {
         </footer>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <I18nProvider api={api}>
+      <Legacy />
+    </I18nProvider>
   );
 }
