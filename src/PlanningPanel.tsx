@@ -16,8 +16,9 @@ import type {
   PlanningHours,
   PlanningSettings,
 } from "../shared/types";
-import { dayPlan, dayStart, shiftDate, WINDOW_MS } from "../shared/day-plan";
+import { dayPlan, shiftDate, WINDOW_MS } from "../shared/day-plan";
 import { localDate } from "../shared/planning";
+import { dayTimeline, nextPlannedWindow } from "./lib/day-timeline";
 import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { PlanEditor } from "./PlanEditor";
@@ -228,29 +229,13 @@ function Timeline({
 }) {
   const [offset, setOffset] = useState(0);
   const zone = settings.timeZone;
-  const date = shiftDate(localDate(now, zone), offset);
-  const dayBegin = dayStart(date, zone);
-  const dayEnd = dayStart(shiftDate(date, 1), zone);
-  const pct = (time: number) =>
-    Math.min(100, Math.max(0, ((time - dayBegin) / (dayEnd - dayBegin)) * 100));
-  const live = Object.fromEntries(
-    Object.entries(usage).map(([id, u]) => [
-      id,
-      Date.parse(u.fiveHour?.resetsAt ?? "") || undefined,
-    ]),
-  );
-  const plans = [-1, 0, 1].map((d) =>
-    dayPlan(shiftDate(date, d), settings, offset === 0 ? live : {}),
-  );
-  const intervals = plans
-    .map((p) => p.interval)
-    .filter(
-      (i): i is NonNullable<typeof i> =>
-        !!i && i.end > dayBegin && i.start < dayEnd,
-    );
-  const planned = settings.accounts
-    .map(({ id }) => accounts.find((a) => a.id === id))
-    .filter((a): a is Account => !!a);
+  const { dayBegin, pct, intervals, rows, showNow } = dayTimeline({
+    settings,
+    accounts,
+    usage,
+    now,
+    offset,
+  });
   const label = new Intl.DateTimeFormat(t("tr-TR", "en-GB"), {
     timeZone: zone,
     weekday: "long",
@@ -322,24 +307,12 @@ function Timeline({
                 }}
               />
             ))}
-            {offset === 0 && now >= dayBegin && now < dayEnd && (
+            {showNow && (
               <div className="timeline-now" style={{ left: `${pct(now)}%` }} />
             )}
           </div>
         </div>
-        {planned.map((account, index) => {
-          const windows = plans
-            .flatMap((p) =>
-              p.accounts
-                .filter((a) => a.accountId === account.id)
-                .flatMap((a) => a.windows),
-            )
-            .filter(
-              (w, i, all) =>
-                w.end > dayBegin &&
-                w.start < dayEnd &&
-                all.findIndex((x) => x.start === w.start) === i,
-            );
+        {rows.map(({ account, windows }, index) => {
           return (
             <div className="timeline-row" key={account.id}>
               <span className="timeline-name">
@@ -358,7 +331,7 @@ function Timeline({
                     }}
                   />
                 ))}
-                {offset === 0 && now >= dayBegin && now < dayEnd && (
+                {showNow && (
                   <div
                     className="timeline-now"
                     style={{ left: `${pct(now)}%` }}
@@ -433,17 +406,7 @@ export function PlanningPanel({
     (n, a) => n + a.windows.length,
     0,
   );
-  const upcoming =
-    keeper?.next ??
-    plans
-      .flatMap((p) =>
-        p.accounts.flatMap((a) =>
-          a.windows.map((w) => ({ accountId: a.accountId, at: w.start })),
-        ),
-      )
-      .filter((w) => w.at > now)
-      .sort((a, b) => a.at - b.at)
-      .map((w) => ({ ...w, at: new Date(w.at).toISOString() }))[0];
+  const upcoming = nextPlannedWindow(settings, accounts, keeper, now);
   const summary = !settings.autoStart
     ? t(
         "Kapalı. Açınca Relay pencereleri planlanan saatlerde başlatır ve gün boyu canlı tutar.",

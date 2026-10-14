@@ -7,7 +7,7 @@ import { useRelay } from "@/data/relay-context";
 import { formatClock } from "@/lib/time";
 import type { PageId } from "@/app/routes";
 import { fleetStatusLabel } from "../../FleetSettings";
-import { nextPlannedWindow } from "./TodayCard";
+import { nextPlannedWindow } from "@/lib/day-timeline";
 
 function Row({
   title,
@@ -44,6 +44,10 @@ export function AutomationCard({
   const disabled = !!relay.busy || !!relay.desktop?.busy;
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
   const fleet = relay.data?.fleet;
+  // As in FleetSettings: a handoff in progress cannot be turned off midway.
+  const fleetWorking =
+    !!fleet?.enabled &&
+    (fleet.status === "switching" || fleet.status === "continuing");
   const planning = settings.planning;
   const next = planning.autoStart
     ? nextPlannedWindow(planning, accounts, relay.data?.planning, now)
@@ -79,7 +83,7 @@ export function AutomationCard({
                 "Switch and continue at quota",
               )}
               checked={!!fleet?.enabled}
-              disabled={disabled}
+              disabled={disabled || fleetWorking}
               onCheckedChange={(v) =>
                 void action("fleet", () => api.setFleetContinuation(v))
               }

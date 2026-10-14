@@ -18,11 +18,17 @@ export function AccountsCard({
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
+  const zone = relay.settings.planning.timeZone;
+  // The badge names the same account as the suggestion banner when there is one.
   const rows = overviewAccounts(
     relay.active,
     relay.accounts,
     relay.data?.usage ?? {},
     now,
+  ).map((row) =>
+    relay.suggestion
+      ? { ...row, recommended: row.account.id === relay.suggestion.id }
+      : row,
   );
   const switchBlocked =
     relay.desktopBusy ||
@@ -32,7 +38,7 @@ export function AccountsCard({
     switch (row.state) {
       case "window-open": {
         const reset = row.usage?.fiveHour?.resetsAt;
-        const left = reset ? formatReset(reset, now, language) : "";
+        const left = reset ? formatReset(reset, now, language, zone) : "";
         return t(
           `Pencere açık${left ? ` · ${left}` : ""}`,
           `Window open${left ? ` · ${left}` : ""}`,
@@ -42,7 +48,7 @@ export function AccountsCard({
         return t("Hazır · pencere yok", "Ready · no window");
       case "exhausted": {
         const at = row.availableAt
-          ? formatClock(row.availableAt, language)
+          ? formatClock(row.availableAt, language, zone)
           : "—";
         return t(`${at}'te açılır`, `Opens at ${at}`);
       }

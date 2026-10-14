@@ -87,7 +87,12 @@ export function ActiveAccountCard({
               percent={row.usedPercent}
               detail={
                 row.resetsAt
-                  ? formatReset(row.resetsAt, now, language)
+                  ? formatReset(
+                      row.resetsAt,
+                      now,
+                      language,
+                      relay.settings.planning.timeZone,
+                    )
                   : undefined
               }
             />

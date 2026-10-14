@@ -25,6 +25,7 @@ export function Overview({
   const { active, suggestion, accounts, usageBusy } = relay;
   const usage = relay.data?.usage ?? {};
   const date = new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", {
+    timeZone: relay.settings.planning.timeZone,
     weekday: "long",
     day: "numeric",
     month: "long",

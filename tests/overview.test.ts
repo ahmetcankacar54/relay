@@ -92,3 +92,72 @@ test("unlinked accounts offer a Desktop link instead of a switch", () => {
   assert.match(html, /Desktop&#x27;a bağlı değil|Desktop'a bağlı değil/);
   assert.match(html, /Desktop&#x27;a bağla|Desktop'a bağla/);
 });
+
+const rowsOf = (html: string) => html.split("grid-cols-[1.2fr_1fr_1fr_auto]").slice(1);
+const rowFor = (html: string, name: string) => rowsOf(html).find((r) => r.includes(`>${name}<`)) ?? "";
+const switchButtons = (html: string) =>
+  (html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Geçiş yap<\/button>/g) ?? []);
+
+test("fleet switch is locked while a handoff is switching or continuing", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  for (const status of ["switching", "continuing"] as const) {
+    const relay = relayFor(active, [active], { active: use("active", 10, 10) });
+    (relay.data as Snapshot).fleet = { enabled: true, status, sourceId: "active", targetId: "active" };
+    const html = render(relay);
+    const tag = html.match(/<button[^>]*aria-label="Kota dolunca geçiş ve devam"[^>]*>/)?.[0] ?? "";
+    assert.match(tag, /disabled=""/, status);
+  }
+  const relay = relayFor(active, [active], { active: use("active", 10, 10) });
+  (relay.data as Snapshot).fleet = { enabled: true, status: "watching" };
+  const tag = render(relay).match(/<button[^>]*aria-label="Kota dolunca geçiş ve devam"[^>]*>/)?.[0] ?? "";
+  assert.doesNotMatch(tag, /disabled=""/);
+});
+
+test("the suggested account carries the badge even when ranking prefers another", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const x = acct("x", "Xeno", "max5");
+  const y = acct("y", "Yarn", "pro");
+  const usage = { active: use("active", 90, 90), x: use("x", 5, 5), y: use("y", 30, 40) };
+  const base = render(relayFor(active, [active, x, y], usage));
+  const ranked = rowFor(base, "Xeno").includes("Önerilen") ? "Xeno" : "Yarn";
+  const other = ranked === "Xeno" ? y : x;
+  const html = render(relayFor(active, [active, x, y], usage, { suggestion: other }));
+  assert.match(rowFor(html, other.name), /Önerilen/);
+  assert.doesNotMatch(rowFor(html, ranked), /Önerilen/);
+});
+
+test("switch buttons are disabled while Desktop is busy, pending or needs recovery", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const other = acct("other", "Vertex", "pro");
+  const accounts = [active, other];
+  const usage = { active: use("active", 10, 10), other: use("other", 10, 10) };
+  const idle = switchButtons(render(relayFor(active, accounts, usage)));
+  assert.equal(idle.length, 1);
+  assert.doesNotMatch(idle[0], /disabled=""/);
+  const cases: Partial<Relay>[] = [
+    { desktopBusy: true },
+    { pendingDesktop: other },
+    { desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: true, errorRevision: 0, activeProfileId: "active" } },
+  ];
+  for (const extra of cases) {
+    const buttons = switchButtons(render(relayFor(active, accounts, usage, extra)));
+    assert.equal(buttons.length, 1);
+    assert.match(buttons[0], /disabled=""/, JSON.stringify(Object.keys(extra)));
+  }
+});
+
+test("stale and unlinked accounts are never recommended", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const stale = acct("stale", "Stale", "pro");
+  const unlinked = acct("unlinked", "Loose", "pro", false);
+  const html = render(
+    relayFor(active, [active, stale, unlinked], {
+      active: use("active", 10, 10),
+      stale: { ...use("stale", 0, 0), checkedAt: iso(NOW - 3_600_000) },
+      unlinked: use("unlinked", 0, 0),
+    }),
+  );
+  assert.equal(rowsOf(html).length, 2);
+  assert.doesNotMatch(html, /Önerilen/);
+  assert.match(html, /Limit verisi eski/);
+});
