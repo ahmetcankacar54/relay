@@ -1,7 +1,8 @@
-import { Menu, nativeImage, Tray } from "electron";
+import { Menu, nativeImage, Tray, type Rectangle } from "electron";
 import {
   buildTrayMenu,
   canRequestTraySwitch,
+  trayTitle,
   trayTooltip,
   type TrayCommand,
   type TrayLanguage,
@@ -18,6 +19,8 @@ export interface RelayTrayOptions {
   requestSwitch(profileId: string): void;
   quit(): void;
   language?(): TrayLanguage;
+  /** macOS menu bar popover; when present, left click toggles it instead of the menu. */
+  panel?: { toggle(bounds: Rectangle): void };
 }
 
 export class RelayTray {
@@ -25,6 +28,8 @@ export class RelayTray {
   private menu?: Menu;
   private revision = 0;
   private destroyed = false;
+  /** macOS with a panel: no native account menu, the popover replaces it. */
+  private readonly panelMode: boolean;
   private readonly menuLifecycle = new TrayMenuLifecycle<TrayMenuItem[]>({
     apply: (items, generation) => this.installMenu(items, generation),
     schedule: (callback) => setImmediate(callback),
@@ -44,6 +49,14 @@ export class RelayTray {
     icon.setTemplateImage(template);
     this.tray = new Tray(icon);
     this.tray.setToolTip("Relay");
+    const panel = options.panel;
+    this.panelMode = process.platform === "darwin" && !!panel;
+    if (panel && this.panelMode) {
+      this.tray.on("click", () => panel.toggle(this.tray.getBounds()));
+      this.tray.on("right-click", () => this.popUpShortMenu());
+      void this.update();
+      return;
+    }
     // Native context menus are retained for Linux AppIndicator support. Menus
     // are refreshed by update(); clicks are revalidated against a fresh state.
     this.tray.on("double-click", () => this.options.showWindow());
@@ -57,13 +70,23 @@ export class RelayTray {
     try {
       const snapshot = await this.options.getSnapshot();
       if (this.destroyed || revision !== this.revision) return;
+      if (process.platform === "darwin") {
+        const title = trayTitle(snapshot);
+        this.tray.setTitle(title ? " " + title : "");
+      }
+      this.tray.setToolTip(trayTooltip(snapshot));
+      if (this.panelMode) return;
       const items = buildTrayMenu(snapshot, this.options.language?.() ?? "en");
       this.menuLifecycle.update(items, JSON.stringify(items));
-      this.tray.setToolTip(trayTooltip(snapshot));
     } catch {
       // Opening Relay remains available if a read-only snapshot fails. A stale
       // menu must not offer an action against unknown Desktop state.
       if (this.destroyed || revision !== this.revision) return;
+      if (process.platform === "darwin") this.tray.setTitle("");
+      if (this.panelMode) {
+        this.tray.setToolTip("Relay");
+        return;
+      }
       const items: TrayMenuItem[] = [
         {
           type: "normal",
@@ -88,6 +111,25 @@ export class RelayTray {
         // Every account action still rechecks Desktop state before review.
       }
     }
+  }
+
+  /** Right click in panel mode: open the main window or quit. */
+  private popUpShortMenu() {
+    if (this.destroyed) return;
+    const en = (this.options.language?.() ?? "en") === "en";
+    this.tray.popUpContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: en ? "Open Relay" : "Relay’i aç",
+          click: () => this.options.showWindow(),
+        },
+        { type: "separator" },
+        {
+          label: en ? "Quit Relay" : "Çık",
+          click: () => this.options.quit(),
+        },
+      ]),
+    );
   }
 
   private installMenu(items: TrayMenuItem[], generation: number) {

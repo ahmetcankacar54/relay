@@ -27,6 +27,8 @@ import {
 } from "./core/store";
 import { accountPlanningSchema } from "./core/store";
 import { RelayTray } from "./tray";
+import { TrayPanel } from "./tray-panel";
+import { PAGES } from "../src/app/routes";
 import { UsageHistory } from "./core/usage-history";
 import { planningIdentity } from "../shared/planning";
 import { WindowKeeper } from "./core/window-keeper";
@@ -62,6 +64,7 @@ let usage: UsageManager;
 let usageCredentialRefresher: UsageCredentialRefresher;
 let autoSwitch: AutoSwitchManager;
 let tray: RelayTray | undefined;
+let trayPanel: TrayPanel | undefined;
 let usageHistory: UsageHistory;
 let trayTimer: ReturnType<typeof setInterval> | undefined;
 let trayLanguage: "tr" | "en" = "tr";
@@ -273,7 +276,7 @@ else {
         }),
         withDesktopLock,
         pendingAuth: () => pendingAuth() || !!observedDesktop?.pendingProfileId,
-        changed: () => window?.webContents.send("relay:changed"),
+        changed: broadcastChanged,
       });
       autoSwitch = new AutoSwitchManager(service.store, desktop, usage, {
         withDesktopLock,
@@ -283,10 +286,7 @@ else {
           continuation.snapshot().status === "reconciliation-required" ||
           continuation.snapshot().reason === "continuation-state-unreadable" ||
           pendingAuth(),
-        changed: () => {
-          if (window && !window.isDestroyed())
-            window.webContents.send("relay:changed");
-        },
+        changed: broadcastChanged,
       });
       /** Reopen one stopped conversation on the target, verify it and send once. */
       const continueConversation = async (
@@ -400,7 +400,7 @@ else {
         switchTo: (targetId, guards) => desktop.switchTo(targetId, guards),
         continueOne: continueConversation,
         withDesktopLock,
-        changed: () => window?.webContents.send("relay:changed"),
+        changed: broadcastChanged,
       });
       observedDesktop = await desktop.snapshot();
       const keeperBlocked = () =>
@@ -451,11 +451,16 @@ else {
                 : `${account.name} kullanım penceresi başlatılamadı (${reason}).`,
           }).show();
         },
-        changed: () => window?.webContents.send("relay:changed"),
+        changed: broadcastChanged,
       });
       bindIPC();
       initialized = true;
       createWindow();
+      if (process.platform === "darwin")
+        trayPanel = new TrayPanel({
+          preload: path.join(__dirname, "preload.cjs"),
+          load: (win) => loadPage(win, "panel.html"),
+        });
       tray = new RelayTray({
         getSnapshot: async () => ({
           accounts: service.store.state.accounts,
@@ -474,6 +479,7 @@ else {
         requestSwitch: (profileId) => void traySwitch(profileId),
         quit: () => app.quit(),
         language: () => trayLanguage,
+        panel: trayPanel,
       });
       trayTimer = setInterval(() => tray?.update(), 5000);
       trayTimer.unref();
@@ -487,7 +493,7 @@ else {
           keeper.start();
           continuation.start();
           fleet.start();
-          window?.webContents.send("relay:changed");
+          broadcastChanged();
           // An unattended switch must not wait on a Keychain consent; ask now,
           // while Relay was just opened by the user.
           if (
@@ -536,13 +542,7 @@ async function traySwitch(profileId: string) {
   if (response !== 0) return;
   try {
     await manualDesktopLock(() => desktop.switchTo(profileId));
-    if (Notification.isSupported())
-      new Notification({
-        title: "Relay",
-        body: en
-          ? `Claude switched to ${account.name}.`
-          : `Claude, ${account.name} hesabına geçti.`,
-      }).show();
+    notifySwitched(account.name);
   } catch (error) {
     dialog.showErrorBox(
       en ? "Switch failed" : "Geçiş yapılamadı",
@@ -550,9 +550,32 @@ async function traySwitch(profileId: string) {
     );
   } finally {
     void tray?.update();
-    if (window && !window.isDestroyed())
-      window.webContents.send("relay:changed");
+    broadcastChanged();
   }
+}
+/** Same copy as the menu bar switch; shown after a tray or panel switch. */
+function notifySwitched(name: string) {
+  if (!Notification.isSupported()) return;
+  new Notification({
+    title: "Relay",
+    body:
+      trayLanguage === "en"
+        ? `Claude switched to ${name}.`
+        : `Claude, ${name} hesabına geçti.`,
+  }).show();
+}
+/** Tell every Relay renderer (main window and menu bar panel) that state changed. */
+function broadcastChanged() {
+  if (window && !window.isDestroyed())
+    window.webContents.send("relay:changed");
+  trayPanel?.webContents()?.send("relay:changed");
+}
+/** Loads a Vite entry from the dev server in development, else from dist. */
+function loadPage(win: BrowserWindow, page: "index.html" | "panel.html") {
+  const devURL = !app.isPackaged && process.env.RELAY_DEV_URL;
+  if (devURL === "http://127.0.0.1:5173")
+    void win.loadURL(page === "index.html" ? devURL : `${devURL}/${page}`);
+  else void win.loadFile(path.join(__dirname, "../dist", page));
 }
 function createWindow() {
   window = new BrowserWindow({
@@ -617,9 +640,7 @@ function createWindow() {
       },
     ]),
   );
-  const devURL = !app.isPackaged && process.env.RELAY_DEV_URL;
-  if (devURL === "http://127.0.0.1:5173") void window.loadURL(devURL);
-  else void window.loadFile(path.join(__dirname, "../dist/index.html"));
+  loadPage(window, "index.html");
   window.on("closed", () => {
     window = null;
   });
@@ -630,13 +651,24 @@ function createWindow() {
     }
   });
 }
+/** Only the main frames of the main window and the menu bar panel may call Relay. */
 function trusted(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) {
+  const allowed = [
+    window && !window.isDestroyed() ? window.webContents : undefined,
+    trayPanel?.webContents(),
+  ];
   if (
-    !window ||
-    event.sender !== window.webContents ||
-    event.senderFrame !== window.webContents.mainFrame
+    !allowed.includes(event.sender) ||
+    event.senderFrame !== event.sender.mainFrame
   )
     throw new Error("Geçersiz IPC kaynağı.");
+}
+/** Panel-only one-way messages; anything else (including the main window) is ignored. */
+function fromPanel(event: Electron.IpcMainEvent) {
+  const panel = trayPanel?.webContents();
+  return (
+    !!panel && event.sender === panel && event.senderFrame === panel.mainFrame
+  );
 }
 function bindIPC() {
   const handle = (name: string, fn: (...args: any[]) => unknown) =>
@@ -729,9 +761,48 @@ function bindIPC() {
   handle("cancel-desktop-login", () =>
     manualDesktopLock(() => desktop.cancelLogin()),
   );
-  handle("switch-desktop", (profileId) =>
-    manualDesktopLock(() => desktop.switchTo(id.parse(profileId))),
-  );
+  // Registered directly so a panel-initiated switch can confirm with a notification.
+  ipcMain.handle("relay:switch-desktop", async (event, profileId) => {
+    trusted(event);
+    const target = id.parse(profileId);
+    const result = await manualDesktopLock(() => desktop.switchTo(target));
+    if (event.sender === trayPanel?.webContents()) {
+      const account = service.store.state.accounts.find((a) => a.id === target);
+      if (account) notifySwitched(account.name);
+    }
+    void tray?.update();
+    return result;
+  });
+  handle("open-page", (page) => {
+    const target = z.enum(PAGES).parse(page);
+    showWindow();
+    const contents = window?.webContents;
+    if (contents) {
+      if (contents.isLoading())
+        contents.once("did-finish-load", () =>
+          contents.send("relay:navigate", target),
+        );
+      else contents.send("relay:navigate", target);
+    }
+    trayPanel?.hide();
+  });
+  handle("quit", () => {
+    trayPanel?.hide();
+    app.quit();
+  });
+  ipcMain.on("relay:panel-size", (event, height) => {
+    try {
+      if (!fromPanel(event)) return;
+      trayPanel?.setHeight(
+        z.number().finite().positive().max(4000).parse(height),
+      );
+    } catch {
+      /* Ignore invalid one-way messages. */
+    }
+  });
+  ipcMain.on("relay:panel-close", (event) => {
+    if (fromPanel(event)) trayPanel?.hide();
+  });
   handle("sync-desktop-history", (profileId) =>
     manualDesktopLock(() => desktop.syncHistory(id.parse(profileId))),
   );
@@ -994,6 +1065,7 @@ app.on("will-quit", () => {
   keeperAbort.abort();
   if (trayTimer) clearInterval(trayTimer);
   tray?.destroy();
+  trayPanel?.destroy();
   usage?.stop();
   autoSwitch?.stop();
   keeper?.stop();

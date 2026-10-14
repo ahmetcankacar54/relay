@@ -67,8 +67,11 @@ app.whenReady().then(async () => {
   let win;
   try {
     await eventually(() => {
-      win = BrowserWindow.getAllWindows()[0];
-      return win && !win.webContents.isLoading();
+      // The macOS menu bar panel is a second window; pick the main one.
+      win = BrowserWindow.getAllWindows().find(
+        (w) => !w.webContents.getURL().endsWith("panel.html"),
+      );
+      return win && win.webContents.getURL() && !win.webContents.isLoading();
     });
     const call = (method, ...args) =>
       win.webContents.executeJavaScript(
@@ -86,6 +89,50 @@ app.whenReady().then(async () => {
       "undefined",
     );
     assert.equal((await call("snapshot")).accounts.length, 0);
+    if (process.platform === "darwin") {
+      let panel;
+      await eventually(() => {
+        panel = BrowserWindow.getAllWindows().find((w) =>
+          w.webContents.getURL().endsWith("panel.html"),
+        );
+        return panel && !panel.webContents.isLoading();
+      });
+      assert.equal(panel.isVisible(), false, "the panel starts hidden");
+      assert.equal(
+        await panel.webContents.executeJavaScript("typeof require"),
+        "undefined",
+      );
+      // The panel opens a page in the main window.
+      await panel.webContents.executeJavaScript(
+        'window.relay.openPage("planlama")',
+      );
+      await eventually(
+        async () =>
+          (await win.webContents.executeJavaScript("location.hash")) ===
+          "#/planlama",
+      );
+      await assert.rejects(
+        panel.webContents.executeJavaScript('window.relay.openPage("nope")'),
+      );
+      // Panel sizing is accepted only from the panel itself.
+      await panel.webContents.executeJavaScript(
+        "window.relay.setPanelHeight(333)",
+      );
+      await eventually(() => panel.getContentSize()[1] === 333);
+      await call("setPanelHeight", 300);
+      await delay(300);
+      assert.equal(
+        panel.getContentSize()[1],
+        333,
+        "the main window cannot resize the panel",
+      );
+      await call("openPage", "genel");
+      await eventually(
+        async () =>
+          (await win.webContents.executeJavaScript("location.hash")) ===
+          "#/genel",
+      );
+    }
     const initialContinuation = (await call("panelSnapshot")).continuation;
     assert.equal(initialContinuation.status, "off");
     assert.equal(initialContinuation.enabled, false);

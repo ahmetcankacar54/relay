@@ -13,3 +13,17 @@ export function panelPosition(tray: Rect, workArea: Rect, size: { width: number;
 export function clampPanelHeight(height: number, workAreaHeight: number) {
   return Math.min(Math.max(Math.ceil(height), 200), workAreaHeight - 16);
 }
+/**
+ * Clicking the tray icon while the panel is open first blurs (and hides) the
+ * panel, then delivers the click. Ignore opens that land within 250 ms of a hide
+ * so that click closes the panel instead of reopening it.
+ */
+export class ToggleGuard {
+  private hiddenAt = -Infinity;
+  shouldOpen(now: number) {
+    return now - this.hiddenAt > 250;
+  }
+  hidden(now: number) {
+    this.hiddenAt = now;
+  }
+}
