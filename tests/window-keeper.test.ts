@@ -12,7 +12,7 @@ import {
 } from "../electron/core/window-keeper";
 import { wallTime } from "../shared/planning";
 import { dayPlan, planContext } from "../shared/day-plan";
-import { fallbackTempo } from "../shared/tempo";
+import { presetTempo, type Tempo } from "../shared/tempo";
 import {
   DEFAULT_PLANNING,
   type Account,
@@ -62,6 +62,7 @@ function setup(accounts = [account("A")]) {
     weekend: { enabled: true, start: "09:00", end: "21:00" },
     accounts: accounts.map((a) => ({ id: a.id })),
   };
+  const tempo: { value: Tempo } = { value: presetTempo("medium", "default") };
   const calls = {
     starts: [] as string[],
     refreshes: [] as string[],
@@ -78,6 +79,7 @@ function setup(accounts = [account("A")]) {
       settings,
       accounts,
       usage,
+      tempo: tempo.value,
       blocked: calls.blocked,
       busyAccountIds: calls.busy,
     }),
@@ -103,15 +105,21 @@ function setup(accounts = [account("A")]) {
     notify: (a, reason) => calls.notes.push(`${a.name}:${reason}`),
     changed: () => {},
   };
-  return { directory, clock, usage, settings, calls, deps, accounts, fresh };
+  return {
+    directory,
+    clock,
+    usage,
+    settings,
+    calls,
+    deps,
+    accounts,
+    fresh,
+    tempo,
+  };
 }
-/** Today's plan as the keeper sees it (default tempo until Task 4 learns one). */
+/** Today's plan as the keeper sees it, with the state's tempo. */
 const keeperPlan = (f: ReturnType<typeof setup>) =>
-  dayPlan(
-    "2026-10-13",
-    f.settings,
-    planContext(f.accounts, fallbackTempo(f.settings)),
-  );
+  dayPlan("2026-10-13", f.settings, planContext(f.accounts, f.tempo.value));
 
 test("off and outside work hours never start", async () => {
   const f = setup();
@@ -333,4 +341,59 @@ test("while Relay is busy a stale account waits for Relay, not for usage", async
   const keeper = new WindowKeeper(f.deps);
   await keeper.tick();
   assert.equal(keeper.snapshot().accounts[0].reason, "relay-busy");
+});
+
+test("the snapshot carries the state's tempo", () => {
+  const f = setup();
+  f.tempo.value = presetTempo("heavy");
+  const keeper = new WindowKeeper(f.deps);
+  assert.equal(keeper.snapshot().tempo, f.tempo.value);
+  f.tempo.value = presetTempo("light");
+  assert.equal(keeper.snapshot().tempo, f.tempo.value);
+});
+
+test("today's count and the next start follow the capacity-aware plan", async () => {
+  const max = {
+    ...account("Max"),
+    planning: { plan: "max5" as const, capacityWeight: 5 },
+  };
+  const pro = {
+    ...account("Pro"),
+    planning: { plan: "pro" as const, capacityWeight: 1 },
+  };
+  const f = setup([max, pro]);
+  f.clock.now = at("05:00");
+  const keeper = new WindowKeeper(f.deps);
+  await keeper.tick();
+  const expected = keeperPlan(f);
+  const windows = expected.accounts.reduce((n, a) => n + a.windows.length, 0);
+  assert.ok(windows >= 2);
+  assert.equal(keeper.snapshot().plannedToday, windows);
+  keeper.snapshot().accounts.forEach((status, i) => {
+    assert.equal(status.state, "outside");
+    assert.equal(
+      status.nextStartAt,
+      new Date(expected.accounts[i].firstStart).toISOString(),
+    );
+  });
+});
+
+test("the keeper plans with the state's tempo as soon as it changes", async () => {
+  const f = setup();
+  f.clock.now = at("04:00");
+  const keeper = new WindowKeeper(f.deps);
+  await keeper.tick();
+  const medium = keeperPlan(f).accounts[0];
+  assert.equal(keeper.snapshot().plannedToday, medium.windows.length);
+  f.tempo.value = presetTempo("heavy");
+  await keeper.tick();
+  const heavy = keeperPlan(f).accounts[0];
+  // A heavy day needs another window and an earlier warm-up.
+  assert.ok(heavy.windows.length > medium.windows.length);
+  assert.ok(heavy.firstStart < medium.firstStart);
+  assert.equal(keeper.snapshot().plannedToday, heavy.windows.length);
+  assert.equal(
+    keeper.snapshot().accounts[0].nextStartAt,
+    new Date(heavy.firstStart).toISOString(),
+  );
 });

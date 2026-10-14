@@ -34,6 +34,7 @@ import { usageStatisticsInput } from "./core/usage-statistics-input";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { planningIdentity } from "../shared/planning";
 import { WindowKeeper } from "./core/window-keeper";
+import { TempoTracker } from "./core/tempo-tracker";
 import { runQuotaStarter } from "./core/routine-runner";
 import { readProfileIdentity } from "./core/profile-identity";
 import type { Account, DesktopState } from "../shared/types";
@@ -68,6 +69,7 @@ let autoSwitch: AutoSwitchManager;
 let tray: RelayTray | undefined;
 let trayPanel: TrayPanel | undefined;
 let usageHistory: UsageHistory;
+let tempo: TempoTracker;
 let trayTimer: ReturnType<typeof setInterval> | undefined;
 let trayLanguage: "tr" | "en" = "tr";
 let traySwitchRequest: string | null = null;
@@ -163,6 +165,12 @@ else {
       );
       await desktop.initialize();
       usageHistory = new UsageHistory(app.getPath("userData"));
+      tempo = new TempoTracker({
+        available: () => usageHistory.rollupsAvailable,
+        rollups: () => usageHistory.rollups(),
+        accounts: () => service.store.state.accounts,
+        settings: () => service.store.state.settings.planning,
+      });
       const readUsageCredential = (profile: string, allowPrompt: boolean) =>
         readCredential(profile, allowPrompt);
       usageCredentialRefresher = new UsageCredentialRefresher({
@@ -420,6 +428,7 @@ else {
           settings: service.store.state.settings.planning,
           accounts: service.store.state.accounts,
           usage: usage.snapshot(),
+          tempo: tempo.current(),
           blocked: keeperBlocked(),
           busyAccountIds: service.runner
             .list()

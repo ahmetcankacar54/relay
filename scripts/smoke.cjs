@@ -208,6 +208,22 @@ app.whenReady().then(async () => {
     assert.deepEqual(planningSnapshot.settings.planning, planning);
     assert.equal(planningSnapshot.planning.enabled, false);
     assert.equal(planningSnapshot.usageStatistics, undefined);
+    // A tempo choice survives a patch that does not mention it.
+    assert.equal(
+      (await call("updatePlanning", { tempo: "heavy" })).tempo,
+      "heavy",
+    );
+    assert.equal(
+      (await call("updatePlanning", { autoStart: false })).tempo,
+      "heavy",
+    );
+    const heavyTempo = (await call("panelSnapshot")).planning.tempo;
+    assert.equal(heavyTempo.source, "preset");
+    assert.equal(heavyTempo.rate.weekday, 120);
+    assert.equal(
+      (await call("updatePlanning", { tempo: "auto" })).tempo,
+      "auto",
+    );
     const statistics = await call("usageStatistics", { range: 30 });
     assert.equal(statistics.range, 30);
     assert.ok(["available", "empty"].includes(statistics.status));

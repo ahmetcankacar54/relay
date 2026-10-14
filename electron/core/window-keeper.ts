@@ -16,7 +16,7 @@ import {
   shouldHaveWindow,
   type PlanContext,
 } from "../../shared/day-plan";
-import { fallbackTempo } from "../../shared/tempo";
+import type { Tempo } from "../../shared/tempo";
 import {
   privateJournalDirectory,
   readPrivateJson,
@@ -44,6 +44,8 @@ export interface KeeperState {
   settings: PlanningSettings;
   accounts: Account[];
   usage: Record<string, AccountUsage>;
+  /** What the plan assumes about the work pace (learned or chosen). */
+  tempo: Tempo;
   /** Another Relay operation owns Claude or a sign-in is in progress. */
   blocked: boolean;
   /** Accounts with a running Relay CLI session. */
@@ -70,9 +72,9 @@ function planned(state: Pick<KeeperState, "settings" | "accounts">) {
     accounts: state.settings.accounts.filter((a) => ids.has(a.id)),
   };
 }
-/** Capacities and tempo the plan is drawn with (the default tempo for now). */
-const keeperContext = (state: Pick<KeeperState, "settings" | "accounts">) =>
-  planContext(state.accounts, fallbackTempo(state.settings));
+/** Capacities and tempo the plan is drawn with. */
+const keeperContext = (state: Pick<KeeperState, "accounts" | "tempo">) =>
+  planContext(state.accounts, state.tempo);
 
 function fresh(usage: AccountUsage | undefined, now: number) {
   const checked = Date.parse(usage?.checkedAt ?? "");
@@ -223,6 +225,7 @@ export class WindowKeeper {
       accounts: structuredClone(this.statuses),
       attempts: structuredClone(this.attempts.slice(-20).reverse()),
       plannedToday: today.accounts.reduce((n, a) => n + a.windows.length, 0),
+      tempo: state.tempo,
       ...(upcoming ? { next: upcoming } : {}),
     };
   }
