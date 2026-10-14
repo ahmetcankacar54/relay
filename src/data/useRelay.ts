@@ -18,6 +18,7 @@ import { desktopCliMismatch } from "../../shared/account-state";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
 import { previewApi } from "../preview";
 import packageInfo from "../../package.json";
+import { errorMessage } from "./error-message";
 import { useI18n } from "./i18n";
 import { pendingFlow } from "./selectors";
 import {
@@ -55,16 +56,7 @@ function useRelayState(
   const lock = useRef(false);
   const sequence = useRef(0);
   const queuedTrayTarget = useRef<string | null>(null);
-  const showError = useCallback(
-    (e: unknown) =>
-      setError(
-        String(e instanceof Error ? e.message : e).replace(
-          /^Error invoking remote method '[^']+': Error: /,
-          "",
-        ),
-      ),
-    [],
-  );
+  const showError = useCallback((e: unknown) => setError(errorMessage(e)), []);
   const refresh = useCallback(async () => {
     const request = ++sequence.current;
     const [snapshot, status] = await Promise.all([

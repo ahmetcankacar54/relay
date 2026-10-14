@@ -4,6 +4,7 @@ import type {
   StatisticsRange,
   UsageStatisticsView,
 } from "../../../shared/usage-statistics-view";
+import { errorMessage } from "@/data/error-message";
 import { useRelay } from "@/data/relay-context";
 
 /** A Relay change refetches the statistics at most this often. */
@@ -15,11 +16,50 @@ export interface UsageStatisticsState {
   error?: string;
 }
 
+/** A request started: the last view and error stay until it settles. */
+export const statisticsLoading = (
+  state: UsageStatisticsState,
+): UsageStatisticsState => ({ ...state, loading: true });
+
+/** A request failed: the last view stays shown beside the error. */
+export const statisticsFailed = (
+  state: UsageStatisticsState,
+  error: unknown,
+): UsageStatisticsState => ({
+  ...(state.view ? { view: state.view } : {}),
+  loading: false,
+  error: errorMessage(error),
+});
+
+/**
+ * Orders statistics requests: only the latest one may update the state, and
+ * a Relay change refetches at most once per throttle interval.
+ */
+export class StatisticsRequests {
+  private latest = 0;
+  private startedAt = -Infinity;
+  constructor(private readonly throttleMs = STATISTICS_THROTTLE_MS) {}
+  /** Starts a request at `now` and returns its id. */
+  start(now: number): number {
+    this.startedAt = now;
+    return ++this.latest;
+  }
+  /** Whether request `id` is still the latest one. */
+  current(id: number): boolean {
+    return id === this.latest;
+  }
+  /** Milliseconds until a change may refetch; 0 means now. */
+  wait(now: number): number {
+    return Math.max(0, this.startedAt + this.throttleMs - now);
+  }
+}
+
 /**
  * Fetches the statistics view on mount and whenever the range or account
  * changes. Relay changes refetch it, throttled: `relay:changed`, and new
  * usage checks or plan edits seen in the snapshot (recording a sample does
- * not broadcast `relay:changed`). The last view stays shown while reloading.
+ * not broadcast `relay:changed`). The last view stays shown while reloading
+ * and after a failed reload.
  */
 export function useUsageStatistics(
   range: StatisticsRange,
@@ -27,29 +67,23 @@ export function useUsageStatistics(
 ): UsageStatisticsState {
   const { api, data, accounts } = useRelay();
   const [state, setState] = useState<UsageStatisticsState>({ loading: true });
-  const request = useRef(0);
-  const lastLoad = useRef(0);
+  const [requests] = useState(() => new StatisticsRequests());
   const pending = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const load = useCallback(() => {
     clearTimeout(pending.current);
     pending.current = undefined;
-    lastLoad.current = Date.now();
-    const id = ++request.current;
-    setState((s) => ({ view: s.view, loading: true }));
+    const id = requests.start(Date.now());
+    setState(statisticsLoading);
     api.usageStatistics({ range, ...(accountId ? { accountId } : {}) }).then(
       (view) => {
-        if (id === request.current) setState({ view, loading: false });
+        if (requests.current(id)) setState({ view, loading: false });
       },
       (error: unknown) => {
-        if (id === request.current)
-          setState({
-            loading: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
+        if (requests.current(id)) setState((s) => statisticsFailed(s, error));
       },
     );
-  }, [api, range, accountId]);
+  }, [api, range, accountId, requests]);
   // A trailing timer must load the current range, not the one it was set for.
   const latestLoad = useRef(load);
   useEffect(() => {
@@ -59,14 +93,14 @@ export function useUsageStatistics(
 
   const changed = useCallback(() => {
     if (pending.current) return;
-    const wait = lastLoad.current + STATISTICS_THROTTLE_MS - Date.now();
-    if (wait <= 0) latestLoad.current();
+    const wait = requests.wait(Date.now());
+    if (!wait) latestLoad.current();
     else
       pending.current = setTimeout(() => {
         pending.current = undefined;
         latestLoad.current();
       }, wait);
-  }, []);
+  }, [requests]);
   useEffect(() => api.onChanged(changed), [api, changed]);
   useEffect(() => () => clearTimeout(pending.current), []);
 

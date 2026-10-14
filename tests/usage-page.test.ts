@@ -9,6 +9,13 @@ import { DailyChart } from "../src/pages/usage/DailyChart";
 import { UsageHeatmap } from "../src/pages/usage/UsageHeatmap";
 import { LimitHits } from "../src/pages/usage/LimitHits";
 import { StatisticsHeader } from "../src/pages/usage/StatisticsHeader";
+import {
+  StatisticsRequests,
+  STATISTICS_THROTTLE_MS,
+  statisticsFailed,
+  statisticsLoading,
+} from "../src/pages/usage/useUsageStatistics";
+import { errorMessage } from "../src/data/error-message";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
@@ -257,6 +264,11 @@ test("the statistics section shows the empty, unavailable, no-identity, loading 
   assert.doesNotMatch(withSignedOut, /Bu hesap için kullanım kaydı yok/);
   assert.match(section({ loading: true }), /İstatistikler yükleniyor/);
   assert.match(section({ loading: false, error: "boom" }), /İstatistikler alınamadı/);
+  // A failed refresh keeps the last view under a short alert.
+  const stale = render(createElement(UsageStatisticsSection, { state: { view, loading: false, error: "boom" }, accounts, zone: ZONE }));
+  assert.match(stale, /role="alert"[^>]*>.*İstatistikler yenilenemedi\..*boom/);
+  assert.match(text(stale), /Hesap dengesi/);
+  assert.doesNotMatch(text(stale), /İstatistikler alınamadı/);
   for (const html of [section({ view: emptyView("empty"), loading: false }), section({ loading: true })])
     assert.doesNotMatch(html, /Hesap dengesi|Limite takılmalar/);
 
@@ -297,4 +309,35 @@ test("Usage leaves the refresh interval and suggestions to other pages", () => {
   const html = render(createElement(Usage));
   assert.doesNotMatch(html, /Limit yaklaşınca hesap öner/);
   assert.doesNotMatch(html, /Yenileme sıklığı|Otomatik yenileme/);
+});
+
+test("IPC errors lose Electron's remote-method prefix", () => {
+  assert.equal(errorMessage(new Error("Error invoking remote method 'relay:usage-statistics': Error: Kayıt okunamadı")), "Kayıt okunamadı");
+  assert.equal(errorMessage(new Error("Error invoking remote method 'relay:usage-statistics': TypeError: boom")), "boom");
+  assert.equal(errorMessage("plain"), "plain");
+  assert.equal(errorMessage(new Error("local")), "local");
+});
+
+test("statistics requests: only the latest response applies and changes refetch at most every 30 s", () => {
+  const requests = new StatisticsRequests();
+  assert.equal(requests.wait(5_000), 0);
+  const first = requests.start(1_000);
+  const second = requests.start(2_000);
+  assert.equal(requests.current(first), false);
+  assert.equal(requests.current(second), true);
+  assert.equal(STATISTICS_THROTTLE_MS, 30_000);
+  assert.equal(requests.wait(2_000), 30_000);
+  assert.equal(requests.wait(22_000), 10_000);
+  assert.equal(requests.wait(32_000), 0);
+  assert.equal(requests.wait(60_000), 0);
+});
+
+test("statistics state keeps the last view while loading and after a failure", () => {
+  const loaded = { view, loading: false };
+  assert.deepEqual(statisticsLoading(loaded), { view, loading: true });
+  const failed = statisticsFailed(statisticsLoading(loaded), new Error("Error invoking remote method 'relay:usage-statistics': Error: boom"));
+  assert.deepEqual(failed, { view, loading: false, error: "boom" });
+  // The error stays until the next response settles.
+  assert.deepEqual(statisticsLoading(failed), { view, loading: true, error: "boom" });
+  assert.deepEqual(statisticsFailed({ loading: true }, "down"), { loading: false, error: "down" });
 });

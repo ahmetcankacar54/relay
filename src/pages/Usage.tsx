@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Account } from "../../shared/types";
 import type { StatisticsRange } from "../../shared/usage-statistics-view";
 import { historyIdentity } from "../../shared/usage-statistics";
+import { Banner } from "@/app/Banners";
 import { PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -40,22 +41,21 @@ function StatisticsMessage({
   );
 }
 
-/** The statistics cards for a fetched view, or the state that replaces them. */
-export function UsageStatisticsSection({
-  state,
-  accounts,
-  accountId,
-  zone,
-}: {
+interface SectionProps {
   state: UsageStatisticsState;
   accounts: Account[];
   accountId?: string;
   zone: string;
-}) {
-  const { t, language } = useI18n();
-  const { view, loading, error } = state;
-  const selected = accounts.find((a) => a.id === accountId);
-  if (error)
+}
+
+/**
+ * The statistics cards for a fetched view, or the state that replaces them.
+ * A failed reload keeps the last view under a short alert.
+ */
+export function UsageStatisticsSection(props: SectionProps) {
+  const { t } = useI18n();
+  const { view, error } = props.state;
+  if (error && !view)
     return (
       <StatisticsMessage
         alert
@@ -63,6 +63,26 @@ export function UsageStatisticsSection({
         description={error}
       />
     );
+  if (!error) return <StatisticsContent {...props} />;
+  return (
+    <>
+      <Banner tone="error" role="alert">
+        <span>
+          <b>
+            {t("İstatistikler yenilenemedi.", "Could not refresh statistics.")}
+          </b>{" "}
+          {error}
+        </span>
+      </Banner>
+      <StatisticsContent {...props} />
+    </>
+  );
+}
+
+function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
+  const { t, language } = useI18n();
+  const { view, loading } = state;
+  const selected = accounts.find((a) => a.id === accountId);
   if (selected && !historyIdentity(selected))
     return (
       <StatisticsMessage
