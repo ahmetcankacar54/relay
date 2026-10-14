@@ -119,7 +119,7 @@ export class UsageHistory {
       if (parsed?.version === 2) {
         const loaded: UsageRollups = { ...parsed, version: 2 };
         // Catch up samples recorded after the last successful rollups write,
-        // and drop state stamped later than now (the clock moved back).
+        // and clamp last samples stamped later than now (the clock moved back).
         this.rollupsState = catchUp(
           loaded,
           this.historyAvailable ? this.samples : [],

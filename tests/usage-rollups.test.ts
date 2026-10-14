@@ -374,33 +374,80 @@ test("an open hit follows its window's drifting reset instead of reopening", () 
   assert.equal(r.hits[0].until, late.fiveHour!.resetsAt);
 });
 
-test("state stamped later than now is dropped so new samples are accepted again", () => {
+test("last checks stamped later than now are clamped and nothing else changes", () => {
   // Folded while the clock ran ahead: minutes 120 and 180 are in the future
   // once the clock moves back to minute 30.
-  const r = fold([
+  const samples = [
     s("x", 0, 10, 200),
     s("x", 180, 100, 400),
     s("y", 0, 100, 200),
     s("y", 120, 50, 200),
-  ]);
+  ];
+  const r = fold(samples);
+  const copy = structuredClone(r);
   const back = T0 + 30 * minute;
-  const cleaned = catchUp(r, [], back);
-  assert.notEqual(cleaned, r);
-  assert.deepEqual(cleaned.last, {});
-  assert.deepEqual(Object.keys(cleaned.hours.x), [h(0)]);
-  assert.deepEqual(Object.keys(cleaned.hours.y), [h(0)]);
-  // The window opened at minute 0 stays; the one opened at 180 is dropped.
-  assert.deepEqual(cleaned.windows.x, [{ resetAt: iso(200), maxPercent: 10 }]);
-  // The future hit is dropped; the real one is open again.
-  assert.deepEqual(cleaned.hits, [
-    { identity: "y", kind: "five-hour", at: iso(0), resetAt: iso(200) },
-  ]);
-  const caught = catchUp(r, [s("x", 30, 20, 200)], back);
-  assert.equal(caught.last.x.checkedAt, iso(30));
-  assert.equal(
-    foldSample(r, s("x", 30, 20, 200), back).last.x.checkedAt,
-    iso(30),
-  );
+  const clamped = catchUp(r, [], back);
+  assert.notEqual(clamped, r);
+  assert.deepEqual(r, copy);
+  // Hours, windows and hits stay, the future hit and the one it closed too.
+  assert.deepEqual(clamped, {
+    ...r,
+    last: {
+      x: { ...r.last.x, checkedAt: iso(30) },
+      y: { ...r.last.y, checkedAt: iso(30) },
+    },
+  });
+  // Samples up to the clamped check were folded already and are not replayed.
+  assert.deepEqual(catchUp(r, [samples[0], samples[2]], back), clamped);
+  assert.deepEqual(foldSample(r, s("x", 25, 20, 200), back), clamped);
   // Nothing in the future: catchUp keeps returning the same object.
-  assert.equal(catchUp(cleaned, [], back), cleaned);
+  assert.equal(catchUp(clamped, [samples[0], samples[2]], back), clamped);
+  // Samples after the clamped check are accepted again.
+  const later = T0 + 40 * minute;
+  assert.equal(
+    catchUp(clamped, [s("x", 40, 20, 200)], later).last.x.checkedAt,
+    iso(40),
+  );
+  assert.equal(
+    foldSample(clamped, s("x", 40, 20, 200), later).last.x.checkedAt,
+    iso(40),
+  );
+  // A kept window seen again is the same record: not counted twice.
+  const again = foldSample(clamped, s("x", 200, 100, 400), T0 + 200 * minute);
+  assert.deepEqual(again.windows.x, r.windows.x);
+  assert.equal(
+    Object.values(again.hours.x).reduce((sum, v) => sum + v.windows, 0),
+    2,
+  );
+  assert.deepEqual(again.hits, r.hits);
+});
+
+test("coverage never credits an hour more than 60 minutes", () => {
+  // 08:00 → 08:55 every 5 minutes, then the clock moves back to 08:53.
+  const polls = Array.from({ length: 12 }, (_, i) =>
+    s("x", 10 + 5 * i, 10, 300),
+  );
+  const r = fold(polls);
+  assert.equal(r.hours.x[h(10)].coveredMinutes, 55);
+  const clamped = catchUp(r, [], T0 + 63 * minute);
+  // 08:53 → 08:59 overlaps the 08:53 → 08:55 already covered.
+  const next = foldSample(clamped, s("x", 69, 10, 300), T0 + 69 * minute);
+  assert.equal(next.last.x.checkedAt, iso(69));
+  assert.equal(next.hours.x[h(10)].coveredMinutes, 60);
+});
+
+test("a hit closed by a sample before it opened ends where it began", () => {
+  let r = fold([s("x", 0, 90, 200), s("x", 60, 100, 200)]);
+  // The clock moves back to minute 30; the next sample is below 100.
+  r = catchUp(r, [], T0 + 30 * minute);
+  r = foldSample(r, s("x", 40, 50, 200), T0 + 40 * minute);
+  assert.deepEqual(r.hits, [
+    {
+      identity: "x",
+      kind: "five-hour",
+      at: iso(60),
+      until: iso(60),
+      resetAt: iso(200),
+    },
+  ]);
 });

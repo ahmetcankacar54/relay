@@ -344,14 +344,72 @@ test("rollups stamped ahead of the clock accept new samples after a restart", (t
   fs.writeFileSync(rawFile, "broken");
   now = start + 5 * minute;
   const history = new UsageHistory(root, () => now);
-  assert.equal(history.rollups()!.last[identity], undefined);
+  // Only the last check moves back to the clock; the folded hour stays.
   assert.equal(
-    JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")).last[identity],
-    undefined,
+    history.rollups()!.last[identity].checkedAt,
+    new Date(now).toISOString(),
   );
+  assert.ok(history.rollups()!.hours[identity][hourKey(start + 60 * minute)]);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")),
+    history.rollups(),
+  );
+  now += 5 * minute;
   history.record(account, usage(now, 10));
   assert.equal(
     history.rollups()!.last[identity].checkedAt,
     new Date(now).toISOString(),
   );
+});
+
+test("a restart with the clock behind the last sample does not replay the raw ledger", (t) => {
+  const root = directory(t);
+  let now = start;
+  const before = new UsageHistory(root, () => now);
+  // 08:00 → 08:55 every 5 minutes, full from 08:50.
+  for (let i = 0; i < 12; i++) {
+    now = start + i * 5 * minute;
+    before.record(account, usage(now, Math.min(100, 10 + 9 * i)));
+  }
+  const folded = before.rollups()!;
+  assert.deepEqual(folded.hours[identity][hourKey(start)], {
+    points: 90,
+    windows: 1,
+    coveredMinutes: 55,
+  });
+  assert.equal(folded.hits.length, 1);
+  // The clock moves back to 08:53; the raw ledger drops the 08:55 sample.
+  now = start + 53 * minute;
+  const restarted = new UsageHistory(root, () => now);
+  const reopened = restarted.rollups()!;
+  assert.deepEqual(reopened.hours, folded.hours);
+  assert.deepEqual(reopened.windows, folded.windows);
+  assert.deepEqual(reopened.hits, folded.hits);
+  assert.deepEqual(reopened.last[identity], {
+    ...folded.last[identity],
+    checkedAt: new Date(now).toISOString(),
+  });
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")),
+    reopened,
+  );
+  // A sample after the restarted clock is accepted. 08:53 → 09:00 overlaps
+  // the 08:55 check, but the hour stays at 60 minutes and the window's
+  // high-water mark is not counted again.
+  now = start + 60 * minute;
+  restarted.record(account, usage(now, 100));
+  const after = restarted.rollups()!;
+  assert.equal(after.last[identity].checkedAt, new Date(now).toISOString());
+  assert.deepEqual(after.hours[identity][hourKey(start)], {
+    points: 90,
+    windows: 1,
+    coveredMinutes: 60,
+  });
+  assert.deepEqual(after.hours[identity][hourKey(now)], {
+    points: 0,
+    windows: 0,
+    coveredMinutes: 0,
+  });
+  assert.deepEqual(after.windows, folded.windows);
+  assert.deepEqual(after.hits, folded.hits);
 });

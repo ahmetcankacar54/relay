@@ -77,7 +77,11 @@ function addCoverage(
   for (let at = from; at < to;) {
     const end = Math.min(to, (Math.floor(at / HOUR_MS) + 1) * HOUR_MS);
     const hour = (hours[hourKey(at)] ??= emptyHour());
-    hour.coveredMinutes = round2(hour.coveredMinutes + (end - at) / 60_000);
+    // A clamped last check can overlap covered minutes; an hour has only 60.
+    hour.coveredMinutes = Math.min(
+      60,
+      round2(hour.coveredMinutes + (end - at) / 60_000),
+    );
     at = end;
   }
 }
@@ -103,7 +107,12 @@ function foldHits(r: UsageRollups, s: UsageSample, t: number): void {
       const resetAt = open!.resetAt ? Date.parse(open!.resetAt) : Infinity;
       // A passed reset closes the hit even if this poll lacks that window.
       if ((window && window.usedPercent < 100) || t >= resetAt) {
-        open!.until = new Date(Math.min(t, resetAt)).toISOString();
+        // Never before it opened: after a clamp, a sample can precede the hit.
+        const until = Math.min(t, resetAt);
+        open!.until =
+          until < Date.parse(open!.at)
+            ? open!.at
+            : new Date(until).toISOString();
         isOpen = false;
       }
     }
@@ -146,14 +155,15 @@ function prune(r: UsageRollups, now: number): void {
  * the first sample after a gap or new window is a baseline. Reset times within
  * ±2 minutes are the same window. Coverage counts every gap of at most
  * MAX_USAGE_GAP_MS between consecutive samples, whatever their windows, and
- * credits each UTC hour the minutes that fall inside it.
+ * credits each UTC hour the minutes that fall inside it, at most 60. Last
+ * samples stamped later than `now` are clamped to it first.
  */
 export function foldSample(
   r: UsageRollups,
   s: UsageSample,
   now: number,
 ): UsageRollups {
-  const base = withoutFuture(r, now);
+  const base = withLastClamped(r, now);
   if (!accepts(base, s)) return base;
   const next = base === r ? structuredClone(r) : base;
   foldInto(next, s);
@@ -162,35 +172,20 @@ export function foldSample(
 }
 
 /**
- * Drops what samples stamped later than `now` folded in (the clock moved
- * back), so the next sample is accepted again as a baseline: their last
- * samples, later hours, windows starting later and hits opening later; a hit
- * they closed is open again. Returns `r` itself when nothing is later.
+ * Moves the check time of last samples stamped later than `now` (the clock
+ * moved back) to `now`. Rollups fold in time order, so every sample up to
+ * such a last one is folded already: the clamp keeps them from being replayed
+ * yet accepts samples after `now`. Hours, windows and hits stay as they are;
+ * a later sample in a kept window matches it and its high-water mark. Returns
+ * `r` itself when nothing is later.
  */
-function withoutFuture(r: UsageRollups, now: number): UsageRollups {
-  // Every folded sample is at or before its identity's last one.
-  const later = (time: string) => Date.parse(time) > now;
-  if (!Object.values(r.last).some((s) => later(s.checkedAt))) return r;
+function withLastClamped(r: UsageRollups, now: number): UsageRollups {
+  const later = (s: UsageSample) => Date.parse(s.checkedAt) > now;
+  if (!Object.values(r.last).some(later)) return r;
   const next = structuredClone(r);
-  for (const [identity, sample] of Object.entries(next.last))
-    if (later(sample.checkedAt)) delete next.last[identity];
-  const hour = Math.floor(now / HOUR_MS) * HOUR_MS;
-  for (const [identity, hours] of Object.entries(next.hours)) {
-    for (const key of Object.keys(hours))
-      if (Date.parse(key) > hour) delete hours[key];
-    if (!Object.keys(hours).length) delete next.hours[identity];
-  }
-  // A sample sees only windows resetting within five hours after it.
-  for (const [identity, windows] of Object.entries(next.windows)) {
-    const kept = windows.filter(
-      (w) => Date.parse(w.resetAt) - FIVE_HOURS_MS <= now,
-    );
-    if (kept.length) next.windows[identity] = kept;
-    else delete next.windows[identity];
-  }
-  next.hits = next.hits.filter((hit) => !later(hit.at));
-  for (const hit of next.hits)
-    if (hit.until && later(hit.until)) delete hit.until;
+  const checkedAt = new Date(now).toISOString();
+  for (const sample of Object.values(next.last))
+    if (later(sample)) sample.checkedAt = checkedAt;
   return next;
 }
 
@@ -251,15 +246,15 @@ export function foldSamples(
 /**
  * Folds every sample newer than its identity's last folded sample, in
  * identity and time order, into one clone (cloning per sample would be
- * quadratic) and prunes once. State stamped later than `now` is dropped
- * first. Returns `r` itself when nothing was dropped or folded.
+ * quadratic) and prunes once. Last samples stamped later than `now` are
+ * clamped to it first. Returns `r` itself when nothing was clamped or folded.
  */
 export function catchUp(
   r: UsageRollups,
   samples: readonly UsageSample[],
   now: number,
 ): UsageRollups {
-  const base = withoutFuture(r, now);
+  const base = withLastClamped(r, now);
   const pending = samples
     .filter((sample) => accepts(base, sample))
     .sort((a, b) =>
