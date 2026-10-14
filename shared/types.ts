@@ -365,6 +365,13 @@ export type UsageIssue =
   | "rate-limited"
   | "unavailable"
   | "unsupported";
+export interface ModelWindow {
+  /** API key, e.g. "seven_day_opus". */
+  key: string;
+  label: string;
+  usedPercent: number;
+  resetsAt?: string;
+}
 export interface AccountUsage {
   accountId: string;
   connectionRenewalRequired?: boolean;
@@ -373,6 +380,8 @@ export interface AccountUsage {
   sevenDay?: UsageWindow;
   /** A model-specific window (e.g. weekly Opus) is exhausted. */
   otherLimitReached?: boolean;
+  /** Model-specific windows such as weekly Opus. */
+  modelWindows?: ModelWindow[];
   checkedAt?: string;
   stale: boolean;
   issue?: UsageIssue;

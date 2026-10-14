@@ -6,7 +6,10 @@ import type { RefreshUsageCredential } from "./usage-refresh";
 type Json = Record<string, any>;
 export function parseUsage(
   value: unknown,
-): Pick<AccountUsage, "fiveHour" | "sevenDay" | "otherLimitReached"> {
+): Pick<
+  AccountUsage,
+  "fiveHour" | "sevenDay" | "otherLimitReached" | "modelWindows"
+> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new UsageError("unsupported");
   const root = value as Json;
@@ -43,9 +46,23 @@ export function parseUsage(
       typeof (window as Json | null)?.utilization === "number" &&
       (window as Json).utilization >= 100,
   );
+  const modelWindows = Object.entries(root)
+    .filter(([key]) => /^(?:five_hour|seven_day)_[a-z0-9_]+$/.test(key))
+    .flatMap(([key, raw]) => {
+      const window = parse(raw);
+      if (!window) return [];
+      const label = key
+        .replace(/^(?:five_hour|seven_day)_/, "")
+        .split("_")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+      return [{ key, label, ...window }];
+    })
+    .sort((a, b) => a.key.localeCompare(b.key));
   return {
     fiveHour,
     sevenDay,
+    ...(modelWindows.length ? { modelWindows } : {}),
     ...(otherLimitReached ? { otherLimitReached } : {}),
   };
 }
