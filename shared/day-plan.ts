@@ -1,5 +1,12 @@
-import type { PlanningSettings } from "./types";
-import { localDate, wallTime } from "./planning";
+import type { Account, PlanningSettings } from "./types";
+import { localDate, planCapacity, wallTime } from "./planning";
+import {
+  optimizeStarts,
+  SIM_STEP_MS,
+  type Forecast,
+  type StartPlan,
+} from "./capacity-plan";
+import { tempoRate, type Tempo } from "./tempo";
 import {
   WINDOW_MS,
   shiftDate,
@@ -24,6 +31,8 @@ export interface AccountDayPlan {
   accountId: string;
   /** Warm-up time of the day's first window. */
   firstStart: number;
+  /** The evenly spread warm-up the capacity-aware plan is compared with. */
+  evenStart: number;
   manual: boolean;
   windows: PlannedWindow[];
   /** Relay keeps a window running between these times. */
@@ -34,6 +43,24 @@ export interface DayPlan {
   date: string;
   interval?: WorkInterval;
   accounts: AccountDayPlan[];
+  /** The day simulated with the chosen first starts (shared; never mutate). */
+  forecast?: Forecast;
+  /** The day simulated with the even spread (shared; never mutate). */
+  evenForecast?: Forecast;
+}
+/** What the plan needs beyond the settings: how big each account is and how fast quota goes. */
+export interface PlanContext {
+  /** planCapacity per account id; a missing id counts as 1. */
+  capacities: Record<string, number>;
+  tempo: Tempo;
+}
+export function planContext(accounts: Account[], tempo: Tempo): PlanContext {
+  return {
+    capacities: Object.fromEntries(
+      accounts.map((a) => [a.id, planCapacity(a)]),
+    ),
+    tempo,
+  };
 }
 
 const cycle = (value: number) => ((value % WINDOW_MS) + WINDOW_MS) % WINDOW_MS;
@@ -99,9 +126,60 @@ function manualStart(
   );
   return interval.start + phase - WINDOW_MS;
 }
+// Optimizing is the expensive part and does not depend on live resets.
+const startCache = new Map<string, StartPlan>();
+const START_CACHE_SIZE = 32;
+function plannedStarts(
+  interval: WorkInterval,
+  settings: PlanningSettings,
+  context: PlanContext,
+  manual: (number | undefined)[],
+  even: number[],
+): StartPlan {
+  const accounts = settings.accounts.map((a, i) => ({
+    id: a.id,
+    capacity: context.capacities[a.id] ?? 1,
+    ...(manual[i] !== undefined ? { manual: manual[i] } : {}),
+  }));
+  const profile = interval.weekend
+    ? context.tempo.weekend
+    : context.tempo.weekday;
+  const key = JSON.stringify([
+    interval.start,
+    interval.end,
+    settings.timeZone,
+    accounts,
+    even,
+    profile,
+  ]);
+  const cached = startCache.get(key);
+  if (cached) return cached;
+  const plan = optimizeStarts({
+    interval,
+    accounts,
+    even,
+    rate: tempoRate(
+      context.tempo,
+      interval.weekend,
+      settings.timeZone,
+      interval.start,
+      interval.end,
+      SIM_STEP_MS,
+    ),
+  });
+  startCache.set(key, plan);
+  if (startCache.size > START_CACHE_SIZE)
+    startCache.delete(startCache.keys().next().value!);
+  return plan;
+}
+/**
+ * The day's warm-ups and windows per planned account. Automatic first starts
+ * come from simulating the day by capacity and tempo; manual ones stay.
+ */
 export function dayPlan(
   date: string,
   settings: PlanningSettings,
+  context: PlanContext,
   liveResets: Record<string, number | undefined> = {},
 ): DayPlan {
   const interval = workInterval(date, settings);
@@ -123,12 +201,17 @@ export function dayPlan(
       start === undefined ? undefined : start + WINDOW_MS - interval.start,
     ),
   );
+  const even = settings.accounts.map(
+    (_, i) => manual[i] ?? interval.start + phases[i] - WINDOW_MS,
+  );
+  const planned = plannedStarts(interval, settings, context, manual, even);
   return {
     date,
     interval,
+    forecast: planned.forecast,
+    evenForecast: planned.evenForecast,
     accounts: settings.accounts.map((account, index) => {
-      const firstStart =
-        manual[index] ?? interval.start + phases[index] - WINDOW_MS;
+      const firstStart = planned.starts[index];
       const windows: PlannedWindow[] = [];
       let cursor = firstStart;
       const live = liveResets[account.id];
@@ -146,6 +229,7 @@ export function dayPlan(
       return {
         accountId: account.id,
         firstStart,
+        evenStart: even[index],
         manual: manual[index] !== undefined,
         windows,
         activeFrom: firstStart,
@@ -157,18 +241,22 @@ export function dayPlan(
 function plansAround(
   now: number,
   settings: PlanningSettings,
+  context: PlanContext,
   deltas: number[],
 ) {
   const today = localDate(now, settings.timeZone);
-  return deltas.map((delta) => dayPlan(shiftDate(today, delta), settings));
+  return deltas.map((delta) =>
+    dayPlan(shiftDate(today, delta), settings, context),
+  );
 }
 /** Whether Relay should keep a window running for this account now. */
 export function shouldHaveWindow(
   accountId: string,
   now: number,
   settings: PlanningSettings,
+  context: PlanContext,
 ) {
-  return plansAround(now, settings, [-1, 0, 1]).some((plan) =>
+  return plansAround(now, settings, context, [-1, 0, 1]).some((plan) =>
     plan.accounts.some(
       (account) =>
         account.accountId === accountId &&
@@ -181,12 +269,17 @@ export function nextPlannedStart(
   accountId: string,
   now: number,
   settings: PlanningSettings,
+  context: PlanContext,
 ) {
-  const starts = plansAround(now, settings, [0, 1, 2, 3, 4, 5, 6, 7]).flatMap(
-    (plan) =>
-      plan.accounts
-        .filter((a) => a.accountId === accountId && a.activeFrom > now)
-        .map((a) => a.activeFrom),
+  const starts = plansAround(
+    now,
+    settings,
+    context,
+    [0, 1, 2, 3, 4, 5, 6, 7],
+  ).flatMap((plan) =>
+    plan.accounts
+      .filter((a) => a.accountId === accountId && a.activeFrom > now)
+      .map((a) => a.activeFrom),
   );
   return starts.length ? Math.min(...starts) : undefined;
 }

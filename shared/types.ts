@@ -1,5 +1,6 @@
 import type { UsageStatisticsView } from "./usage-statistics-view";
 export type { UsageStatisticsView } from "./usage-statistics-view";
+import type { Tempo } from "./tempo";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 import type { PageId } from "../src/app/routes";
 export type AccountKind = "personal" | "work";
@@ -313,6 +314,8 @@ export interface KeeperSnapshot {
   /** Planned window starts on today's plan. */
   plannedToday: number;
   next?: { accountId: string; at: string };
+  /** The tempo the keeper plans with. */
+  tempo?: Tempo;
 }
 export interface DesktopHistorySummary {
   profileId: string;

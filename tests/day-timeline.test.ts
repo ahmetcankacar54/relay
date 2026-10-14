@@ -7,8 +7,13 @@ import {
   windowsInDay,
 } from "../src/lib/day-timeline";
 import { wallTime } from "../shared/planning";
-import { WINDOW_MS } from "../shared/day-plan";
-import { DEFAULT_PLANNING, type PlanningSettings } from "../shared/types";
+import { WINDOW_MS, dayPlan, planContext } from "../shared/day-plan";
+import { presetTempo, type Tempo } from "../shared/tempo";
+import {
+  DEFAULT_PLANNING,
+  type KeeperSnapshot,
+  type PlanningSettings,
+} from "../shared/types";
 import { planningAccount } from "./planning-fixtures";
 
 const ZONE = "Europe/Istanbul";
@@ -27,7 +32,7 @@ const settings = (patch: Partial<PlanningSettings> = {}): PlanningSettings => ({
 test("deleted planned accounts are filtered before planning", () => {
   const accounts = [planningAccount("a"), planningAccount("b")];
   assert.deepEqual(plannedSettings(settings(), accounts).accounts.map((a) => a.id), ["a", "b"]);
-  const view = dayTimeline({ settings: settings(), accounts, usage: {}, now: at("2026-10-13", "12:00") });
+  const view = dayTimeline({ settings: settings(), accounts, usage: {}, now: at("2026-10-13", "12:00"), tempo: presetTempo("medium") });
   assert.deepEqual(view.rows.map((r) => r.account.id), ["a", "b"]);
   assert.equal(view.intervals.length, 1);
   assert.ok(view.rows.every((r) => r.windows.length > 0));
@@ -47,7 +52,7 @@ test("windows are de-duplicated across neighbouring days and clipped to the day"
 test("overnight hours carry yesterday's windows into today", () => {
   const accounts = [planningAccount("a")];
   const s = settings({ weekday: { enabled: true, start: "20:00", end: "04:00" }, accounts: [{ id: "a" }] });
-  const view = dayTimeline({ settings: s, accounts, usage: {}, now: at("2026-10-14", "12:00") });
+  const view = dayTimeline({ settings: s, accounts, usage: {}, now: at("2026-10-14", "12:00"), tempo: presetTempo("medium") });
   const starts = view.rows[0].windows.map((x) => x.start);
   assert.equal(new Set(starts).size, starts.length);
   assert.ok(starts.some((x) => x < view.dayBegin));
@@ -62,4 +67,32 @@ test("next window prefers the keeper's live view", () => {
   assert.ok(computed && Date.parse(computed.at) > now);
   assert.ok(["a", "b"].includes(computed.accountId));
   assert.equal(nextPlannedWindow(settings({ accounts: [{ id: "gone" }] }), accounts, undefined, now), undefined);
+});
+
+test("the keeper's tempo plans the next window and the timeline", () => {
+  const busyHours: Record<number, number> = { 9: 220, 10: 242, 11: 242, 12: 110, 13: 198, 14: 242, 15: 242, 16: 220, 17: 154 };
+  const tempo: Tempo = {
+    source: "learned",
+    weekday: Array.from({ length: 24 }, (_, hour) => busyHours[hour] ?? 205),
+    weekend: Array.from({ length: 24 }, () => 205),
+    rate: { weekday: 205, weekend: 205 },
+    days: { weekday: 15, weekend: 2 },
+  };
+  const team = planningAccount("vertex", "team");
+  team.planning!.capacityWeight = 2;
+  const accounts = [planningAccount("max", "max5"), team, planningAccount("pro")];
+  const s = settings({ accounts: accounts.map(({ id }) => ({ id })) });
+  const now = at("2026-10-13", "22:00");
+  const keeper: KeeperSnapshot = { enabled: true, running: false, accounts: [], attempts: [], plannedToday: 0, tempo };
+  const plan = dayPlan("2026-10-14", s, planContext(accounts, tempo));
+  const first = plan.accounts.reduce((a, b) => (b.firstStart < a.firstStart ? b : a));
+  assert.deepEqual(nextPlannedWindow(s, accounts, keeper, now), {
+    accountId: first.accountId,
+    at: new Date(first.firstStart).toISOString(),
+  });
+  // Without the keeper's tempo the default one plans other times.
+  assert.notDeepEqual(nextPlannedWindow(s, accounts, undefined, now), nextPlannedWindow(s, accounts, keeper, now));
+  const view = dayTimeline({ settings: s, accounts, usage: {}, now, offset: 1, tempo });
+  for (const [index, row] of view.rows.entries())
+    assert.equal(row.windows[0].start, plan.accounts[index].firstStart);
 });

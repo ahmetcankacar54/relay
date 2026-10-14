@@ -12,8 +12,11 @@ import { localDate, planningIdentity } from "../../shared/planning";
 import {
   dayPlan,
   nextPlannedStart,
+  planContext,
   shouldHaveWindow,
+  type PlanContext,
 } from "../../shared/day-plan";
+import { fallbackTempo } from "../../shared/tempo";
 import {
   privateJournalDirectory,
   readPrivateJson,
@@ -67,6 +70,9 @@ function planned(state: Pick<KeeperState, "settings" | "accounts">) {
     accounts: state.settings.accounts.filter((a) => ids.has(a.id)),
   };
 }
+/** Capacities and tempo the plan is drawn with (the default tempo for now). */
+const keeperContext = (state: Pick<KeeperState, "settings" | "accounts">) =>
+  planContext(state.accounts, fallbackTempo(state.settings));
 
 function fresh(usage: AccountUsage | undefined, now: number) {
   const checked = Date.parse(usage?.checkedAt ?? "");
@@ -83,6 +89,7 @@ export function keeperDecision(
   account: Account,
   usage: AccountUsage | undefined,
   settings: PlanningSettings,
+  context: PlanContext,
   attempts: WindowAttempt[],
   now: number,
   busy: boolean,
@@ -93,8 +100,8 @@ export function keeperDecision(
   const identity = planningIdentity(account);
   if (!identity) return { ...base, state: "blocked", reason: "identity" };
   if (stopped) return { ...base, state: "blocked", reason: stopped };
-  if (!shouldHaveWindow(account.id, now, settings)) {
-    const next = nextPlannedStart(account.id, now, settings);
+  if (!shouldHaveWindow(account.id, now, settings, context)) {
+    const next = nextPlannedStart(account.id, now, settings, context);
     return {
       ...base,
       state: "outside",
@@ -198,9 +205,14 @@ export class WindowKeeper {
     this.timer = undefined;
   }
   snapshot(): KeeperSnapshot {
-    const settings = planned(this.deps.state());
+    const state = this.deps.state();
+    const settings = planned(state);
     const now = this.now();
-    const today = dayPlan(localDate(now, settings.timeZone), settings);
+    const today = dayPlan(
+      localDate(now, settings.timeZone),
+      settings,
+      keeperContext(state),
+    );
     const upcoming = this.statuses
       .map((s) => ({ accountId: s.accountId, at: s.nextStartAt ?? s.resetsAt }))
       .filter((s): s is { accountId: string; at: string } => !!s.at)
@@ -217,6 +229,7 @@ export class WindowKeeper {
   private evaluate(state: KeeperState) {
     const now = this.now();
     const settings = planned(state);
+    const context = keeperContext(state);
     return settings.accounts
       .map(({ id }) => state.accounts.find((a) => a.id === id)!)
       .map((account) =>
@@ -224,6 +237,7 @@ export class WindowKeeper {
           account,
           state.usage[account.id],
           settings,
+          context,
           this.attempts,
           now,
           state.busyAccountIds.includes(account.id),

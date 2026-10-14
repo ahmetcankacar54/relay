@@ -16,8 +16,14 @@ import type {
   PlanningHours,
   PlanningSettings,
 } from "../../shared/types";
-import { dayPlan, shiftDate, WINDOW_MS } from "../../shared/day-plan";
+import {
+  dayPlan,
+  planContext,
+  shiftDate,
+  WINDOW_MS,
+} from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
+import { fallbackTempo } from "../../shared/tempo";
 import {
   dayTimeline,
   nextPlannedWindow,
@@ -426,8 +432,12 @@ export function PlanningPanel({
   );
   // Deleted accounts take no slot, exactly as in the window keeper.
   const planned = { ...settings, accounts: included };
+  const context = planContext(
+    accounts,
+    keeper?.tempo ?? fallbackTempo(settings),
+  );
   const plans = [0, 1, 2, 3, 4, 5, 6, 7].map((d) =>
-    dayPlan(shiftDate(today, d), planned),
+    dayPlan(shiftDate(today, d), planned, context),
   );
   // The next day with work hours supplies the automatic times shown per account.
   const reference = plans.find((plan) => plan.accounts.length);

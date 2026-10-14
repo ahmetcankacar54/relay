@@ -8,11 +8,13 @@ import type {
 import {
   dayPlan,
   dayStart,
+  planContext,
   shiftDate,
   type PlannedWindow,
   type WorkInterval,
 } from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
+import { fallbackTempo, type Tempo } from "../../shared/tempo";
 
 /** Planned settings without deleted accounts; deleted accounts take no slot, exactly as in the window keeper. */
 export function plannedSettings(
@@ -56,22 +58,28 @@ export interface DayTimeline {
   showNow: boolean;
 }
 
-/** The day `offset` days from today in the planning zone; live resets apply to today only. */
+/**
+ * The day `offset` days from today in the planning zone; live resets apply to
+ * today only. Without a tempo the settings' fallback tempo plans the day.
+ */
 export function dayTimeline({
   settings,
   accounts,
   usage,
   now,
   offset = 0,
+  tempo,
 }: {
   settings: PlanningSettings;
   accounts: Account[];
   usage: Record<string, AccountUsage>;
   now: number;
   offset?: number;
+  tempo?: Tempo;
 }): DayTimeline {
   const zone = settings.timeZone;
   const planned = plannedSettings(settings, accounts);
+  const context = planContext(accounts, tempo ?? fallbackTempo(settings));
   const date = shiftDate(localDate(now, zone), offset);
   const dayBegin = dayStart(date, zone);
   const dayEnd = dayStart(shiftDate(date, 1), zone);
@@ -84,7 +92,7 @@ export function dayTimeline({
     ]),
   );
   const plans = [-1, 0, 1].map((d) =>
-    dayPlan(shiftDate(date, d), planned, offset === 0 ? live : {}),
+    dayPlan(shiftDate(date, d), planned, context, offset === 0 ? live : {}),
   );
   const intervals = plans
     .map((p) => p.interval)
@@ -117,7 +125,10 @@ export function dayTimeline({
   };
 }
 
-/** The next planned start: the keeper's live view (actual resets) first, else the plan for the coming week. */
+/**
+ * The next planned start: the keeper's live view (actual resets) first, else
+ * the plan for the coming week with the keeper's tempo (or the fallback).
+ */
 export function nextPlannedWindow(
   settings: PlanningSettings,
   accounts: Account[],
@@ -126,9 +137,13 @@ export function nextPlannedWindow(
 ): { accountId: string; at: string } | undefined {
   if (keeper?.next) return keeper.next;
   const planned = plannedSettings(settings, accounts);
+  const context = planContext(
+    accounts,
+    keeper?.tempo ?? fallbackTempo(settings),
+  );
   const today = localDate(now, settings.timeZone);
   return [0, 1, 2, 3, 4, 5, 6, 7]
-    .flatMap((d) => dayPlan(shiftDate(today, d), planned).accounts)
+    .flatMap((d) => dayPlan(shiftDate(today, d), planned, context).accounts)
     .flatMap((a) =>
       a.windows.map((w) => ({ accountId: a.accountId, at: w.start })),
     )

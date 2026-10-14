@@ -11,6 +11,8 @@ import {
   type KeeperDeps,
 } from "../electron/core/window-keeper";
 import { wallTime } from "../shared/planning";
+import { dayPlan, planContext } from "../shared/day-plan";
+import { fallbackTempo } from "../shared/tempo";
 import {
   DEFAULT_PLANNING,
   type Account,
@@ -103,6 +105,13 @@ function setup(accounts = [account("A")]) {
   };
   return { directory, clock, usage, settings, calls, deps, accounts, fresh };
 }
+/** Today's plan as the keeper sees it (default tempo until Task 4 learns one). */
+const keeperPlan = (f: ReturnType<typeof setup>) =>
+  dayPlan(
+    "2026-10-13",
+    f.settings,
+    planContext(f.accounts, fallbackTempo(f.settings)),
+  );
 
 test("off and outside work hours never start", async () => {
   const f = setup();
@@ -115,7 +124,9 @@ test("off and outside work hours never start", async () => {
   await keeper.tick();
   const status = keeper.snapshot().accounts[0];
   assert.equal(status.state, "outside");
-  assert.equal(status.nextStartAt, new Date(at("06:30")).toISOString());
+  const first = keeperPlan(f).accounts[0].firstStart;
+  assert.ok(first > f.clock.now);
+  assert.equal(status.nextStartAt, new Date(first).toISOString());
   assert.deepEqual(f.calls.starts, []);
 });
 
@@ -258,10 +269,15 @@ test("a deleted planned account takes no slot in the staggering or today's count
   f.clock.now = at("05:30");
   const keeper = new WindowKeeper(f.deps);
   await keeper.tick();
-  const status = keeper.snapshot().accounts[0];
+  const snapshot = keeper.snapshot();
+  const status = snapshot.accounts[0];
   assert.equal(status.state, "outside");
-  assert.equal(status.nextStartAt, new Date(at("06:30")).toISOString());
-  assert.equal(keeper.snapshot().plannedToday, 3);
+  // Planned as if the deleted account were not listed at all.
+  f.settings.accounts.pop();
+  const [only] = keeperPlan(f).accounts;
+  assert.ok(only.firstStart > f.clock.now);
+  assert.equal(status.nextStartAt, new Date(only.firstStart).toISOString());
+  assert.equal(snapshot.plannedToday, only.windows.length);
 });
 
 test("local administrator policy stops the account until the plan changes", async () => {

@@ -1,5 +1,6 @@
-import { dayPlan } from "../../../shared/day-plan";
+import { dayPlan, planContext } from "../../../shared/day-plan";
 import { localDate } from "../../../shared/planning";
+import { fallbackTempo } from "../../../shared/tempo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useI18n } from "@/data/i18n";
@@ -25,18 +26,22 @@ export function TodayCard({
   const settings = relay.settings.planning;
   const zone = settings.timeZone;
   const accounts = relay.accounts;
+  // The keeper's tempo, so the card shows the times the keeper starts.
+  const tempo = relay.data?.planning?.tempo ?? fallbackTempo(settings);
   const { pct, intervals, rows, showNow } = dayTimeline({
     settings,
     accounts,
     usage: relay.data?.usage ?? {},
     now,
+    tempo,
   });
   const planned = plannedSettings(settings, accounts);
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
-  const plannedToday = dayPlan(localDate(now, zone), planned).accounts.reduce(
-    (n, a) => n + a.windows.length,
-    0,
-  );
+  const plannedToday = dayPlan(
+    localDate(now, zone),
+    planned,
+    planContext(accounts, tempo),
+  ).accounts.reduce((n, a) => n + a.windows.length, 0);
   const upcoming = nextPlannedWindow(
     settings,
     accounts,

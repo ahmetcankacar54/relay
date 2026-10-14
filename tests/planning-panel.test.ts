@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { randomUUID } from "node:crypto";
 import { PlanningPanel } from "../src/features/PlanningPanel";
 import { wallTime } from "../shared/planning";
+import { dayPlan, planContext } from "../shared/day-plan";
+import { presetTempo } from "../shared/tempo";
 import {
   DEFAULT_PLANNING,
   type Account,
@@ -24,15 +26,30 @@ const account = (name: string): Account => ({
   planning: { plan: "max5", capacityWeight: 1 },
 });
 const [a, b] = [account("Kişisel - Max"), account("Vertex")];
+const panelSettings = (settings: Partial<PlanningSettings>) => ({
+  ...DEFAULT_PLANNING,
+  timeZone: ZONE,
+  weekday: { enabled: true, start: "09:00", end: "21:00" },
+  ...settings,
+});
+/** Today's plan with the default tempo the panel assumes without a keeper tempo. */
+const todayPlan = (settings: Partial<PlanningSettings>) =>
+  dayPlan(
+    "2026-10-13",
+    panelSettings(settings),
+    planContext([a, b], presetTempo("medium", "default")),
+  );
+const clock = (time: number) =>
+  new Intl.DateTimeFormat("en-GB", {
+    timeZone: ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(time);
 function render(settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot) {
   return renderToStaticMarkup(
     createElement(PlanningPanel, {
-      settings: {
-        ...DEFAULT_PLANNING,
-        timeZone: ZONE,
-        weekday: { enabled: true, start: "09:00", end: "21:00" },
-        ...settings,
-      },
+      settings: panelSettings(settings),
       keeper,
       accounts: [a, b],
       usage: {},
@@ -46,25 +63,32 @@ function render(settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot) {
 }
 
 test("the panel shows the switch, both hour rows and automatic first starts", () => {
-  const html = render({ accounts: [{ id: a.id }, { id: b.id }] });
+  const accounts = [{ id: a.id }, { id: b.id }];
+  const html = render({ accounts });
   assert.match(html, /Otomatik pencere başlatma/);
   assert.match(html, /Hafta içi/);
   assert.match(html, /Hafta sonu/);
-  assert.match(html, /Kişisel - Max ilk başlangıç, 05:15/);
-  assert.match(html, /Vertex ilk başlangıç, 07:45/);
+  const [first, second] = todayPlan({ accounts }).accounts;
+  assert.ok(
+    html.includes(`Kişisel - Max ilk başlangıç, ${clock(first.firstStart)}`),
+  );
+  assert.ok(html.includes(`Vertex ilk başlangıç, ${clock(second.firstStart)}`));
   assert.equal(html.match(/>Otomatik</g)?.length, 2);
   assert.doesNotMatch(html, />Elle</);
 });
 
 test("a manual first start is marked and can return to automatic", () => {
-  const html = render({
-    accounts: [{ id: a.id, firstStart: "07:00" }, { id: b.id }],
-  });
+  const accounts = [{ id: a.id, firstStart: "07:00" }, { id: b.id }];
+  const html = render({ accounts });
   assert.match(html, /Kişisel - Max ilk başlangıç, 07:00/);
   assert.match(html, />Elle</);
   assert.equal(html.match(/>Otomatik</g)?.length, 1);
   assert.match(html, /Otomatiğe dön/);
-  assert.match(html, /Vertex ilk başlangıç, 04:30/);
+  const automatic = todayPlan({ accounts }).accounts[1];
+  assert.equal(automatic.manual, false);
+  assert.ok(
+    html.includes(`Vertex ilk başlangıç, ${clock(automatic.firstStart)}`),
+  );
 });
 
 test("keeper status, an empty plan and deleted accounts render safely", () => {
@@ -93,11 +117,18 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
   );
   assert.match(html, /Pencere açık · Sıfırlanma 15:15/);
   assert.match(html, /text-ok-foreground/);
-  // Today's count comes from the plan itself (06:30, 11:30, 16:30); the next
-  // start comes from the keeper's live view.
-  assert.match(html, /Bugün 3 başlatma planlı · sonraki 17:45 Vertex/);
-  // The deleted account takes no stagger slot: one planned account warms up at 06:30.
-  assert.match(html, /Kişisel - Max ilk başlangıç, 06:30/);
+  // Today's count comes from the plan itself; the next start comes from the
+  // keeper's live view. The deleted account takes no slot: the plan is the one
+  // of the single remaining account.
+  const [alone] = todayPlan({ accounts: [{ id: a.id }] }).accounts;
+  assert.ok(
+    html.includes(
+      `Bugün ${alone.windows.length} başlatma planlı · sonraki 17:45 Vertex`,
+    ),
+  );
+  assert.ok(
+    html.includes(`Kişisel - Max ilk başlangıç, ${clock(alone.firstStart)}`),
+  );
   const empty = render({
     accounts: [{ id: a.id }],
     weekday: { enabled: false, start: "09:00", end: "21:00" },
@@ -106,11 +137,20 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
 });
 
 test("without a keeper view the summary is drawn from the plan", () => {
-  const html = render({
-    autoStart: true,
-    accounts: [{ id: a.id }, { id: b.id }],
-  });
-  assert.match(html, /Bugün 7 başlatma planlı · sonraki 10:15 Kişisel - Max/);
+  const accounts = [{ id: a.id }, { id: b.id }];
+  const html = render({ autoStart: true, accounts });
+  const plan = todayPlan({ accounts });
+  const count = plan.accounts.reduce((n, p) => n + p.windows.length, 0);
+  const next = plan.accounts
+    .flatMap((p) => p.windows.map((w) => ({ id: p.accountId, at: w.start })))
+    .filter((w) => w.at > NOW)
+    .sort((x, y) => x.at - y.at)[0];
+  const name = next.id === a.id ? a.name : b.name;
+  assert.ok(
+    html.includes(
+      `Bugün ${count} başlatma planlı · sonraki ${clock(next.at)} ${name}`,
+    ),
+  );
   assert.match(html, /Pzt–Cum/);
   assert.match(html, /12 sa/);
 });
