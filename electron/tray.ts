@@ -11,6 +11,7 @@ import {
 } from "../shared/tray";
 import { TrayMenuLifecycle } from "./core/tray-menu-lifecycle";
 import { trayIcons } from "./tray-icons";
+import { trayClickAction } from "../shared/tray-panel";
 
 export interface RelayTrayOptions {
   getSnapshot(): TraySnapshot | Promise<TraySnapshot>;
@@ -20,7 +21,7 @@ export interface RelayTrayOptions {
   quit(): void;
   language?(): TrayLanguage;
   /** macOS menu bar popover; when present, left click toggles it instead of the menu. */
-  panel?: { toggle(bounds: Rectangle): void };
+  panel?: { toggle(bounds: Rectangle): void; usable(): boolean };
 }
 
 export class RelayTray {
@@ -28,7 +29,10 @@ export class RelayTray {
   private menu?: Menu;
   private revision = 0;
   private destroyed = false;
-  /** macOS with a panel: no native account menu, the popover replaces it. */
+  /**
+   * macOS with a panel: left click opens the popover. The full native menu is
+   * still built but only popped up when the panel failed to load.
+   */
   private readonly panelMode: boolean;
   private readonly menuLifecycle = new TrayMenuLifecycle<TrayMenuItem[]>({
     apply: (items, generation) => this.installMenu(items, generation),
@@ -52,16 +56,21 @@ export class RelayTray {
     const panel = options.panel;
     this.panelMode = process.platform === "darwin" && !!panel;
     if (panel && this.panelMode) {
-      this.tray.on("click", () => panel.toggle(this.tray.getBounds()));
+      this.tray.on("click", () => {
+        if (this.destroyed) return;
+        if (trayClickAction(panel.usable()) === "toggle")
+          panel.toggle(this.tray.getBounds());
+        else if (this.menu) this.tray.popUpContextMenu(this.menu);
+        else this.popUpShortMenu();
+      });
       this.tray.on("right-click", () => this.popUpShortMenu());
-      void this.update();
-      return;
+    } else {
+      // Native context menus are retained for Linux AppIndicator support. Menus
+      // are refreshed by update(); clicks are revalidated against a fresh state.
+      this.tray.on("double-click", () => this.options.showWindow());
+      if (process.platform === "win32")
+        this.tray.on("click", () => this.tray.popUpContextMenu());
     }
-    // Native context menus are retained for Linux AppIndicator support. Menus
-    // are refreshed by update(); clicks are revalidated against a fresh state.
-    this.tray.on("double-click", () => this.options.showWindow());
-    if (process.platform === "win32")
-      this.tray.on("click", () => this.tray.popUpContextMenu());
     void this.update();
   }
 
@@ -75,7 +84,6 @@ export class RelayTray {
         this.tray.setTitle(title ? " " + title : "");
       }
       this.tray.setToolTip(trayTooltip(snapshot));
-      if (this.panelMode) return;
       const items = buildTrayMenu(snapshot, this.options.language?.() ?? "en");
       this.menuLifecycle.update(items, JSON.stringify(items));
     } catch {
@@ -83,10 +91,6 @@ export class RelayTray {
       // menu must not offer an action against unknown Desktop state.
       if (this.destroyed || revision !== this.revision) return;
       if (process.platform === "darwin") this.tray.setTitle("");
-      if (this.panelMode) {
-        this.tray.setToolTip("Relay");
-        return;
-      }
       const items: TrayMenuItem[] = [
         {
           type: "normal",
@@ -159,7 +163,9 @@ export class RelayTray {
     const previous = this.menu;
     this.menu = menu;
     try {
-      this.tray.setContextMenu(menu);
+      // In panel mode the menu is popped up on demand, never attached, so a
+      // left click reaches the panel.
+      if (!this.panelMode) this.tray.setContextMenu(menu);
     } catch (error) {
       this.menu = previous;
       throw error;

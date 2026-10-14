@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ToggleGuard } from "../shared/tray-panel";
+import { ToggleGuard, trayClickAction } from "../shared/tray-panel";
 
 test("a tray click right after a blur-hide does not reopen the panel", () => {
   const guard = new ToggleGuard();
@@ -9,4 +9,9 @@ test("a tray click right after a blur-hide does not reopen the panel", () => {
   assert.equal(guard.shouldOpen(1200), false);
   assert.equal(guard.shouldOpen(1250), false);
   assert.equal(guard.shouldOpen(1251), true);
+});
+
+test("a tray click falls back to the native menu until the panel has loaded", () => {
+  assert.equal(trayClickAction(true), "toggle");
+  assert.equal(trayClickAction(false), "menu");
 });

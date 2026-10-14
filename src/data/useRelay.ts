@@ -20,7 +20,11 @@ import { previewApi } from "../preview";
 import packageInfo from "../../package.json";
 import { useI18n } from "./i18n";
 import { pendingFlow } from "./selectors";
-import { relayAction, shouldConsumeTraySwitch } from "./relay-action";
+import {
+  relayAction,
+  shouldConsumeTraySwitch,
+  shouldPoll,
+} from "./relay-action";
 import { RelayContext, useRelay, type Relay } from "./relay-context";
 
 export { relayAction, RelayContext, useRelay, type Relay };
@@ -31,9 +35,10 @@ export const preview = !injected;
 export const APP_VERSION: string = packageInfo.version;
 
 function useRelayState(
-  options: { consumeTraySwitch?: boolean } = {},
+  options: { consumeTraySwitch?: boolean; pollWhenHidden?: boolean } = {},
 ): Relay {
   const consumeTraySwitch = shouldConsumeTraySwitch(options);
+  const pollWhenHidden = options.pollWhenHidden !== false;
   const { t } = useI18n();
   const [data, setData] = useState<Snapshot>();
   const [desktop, setDesktop] = useState<DesktopState>();
@@ -106,19 +111,26 @@ function useRelayState(
       void refresh().catch(showError);
     });
     const timer = setInterval(() => {
-      void refresh().catch(showError);
+      if (shouldPoll({ pollWhenHidden }, document.visibilityState))
+        void refresh().catch(showError);
     }, 4000);
     const focus = () => {
       void refresh().catch(showError);
     };
+    const visible = () => {
+      if (document.visibilityState === "visible")
+        void refresh().catch(showError);
+    };
     window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", visible);
     return () => {
       off();
       offTray();
       clearInterval(timer);
       window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", visible);
     };
-  }, [refresh, showError]);
+  }, [refresh, showError, pollWhenHidden]);
   const action = relayAction(lock, {
     setBusy,
     setError,
@@ -297,11 +309,14 @@ function useRelayState(
 export function RelayProvider({
   children,
   consumeTraySwitch = true,
+  pollWhenHidden = true,
 }: {
   children: ReactNode;
   /** The menu bar panel passes false so only the main window takes tray requests. */
   consumeTraySwitch?: boolean;
+  /** The menu bar panel passes false: no 4 s poll while it is hidden. */
+  pollWhenHidden?: boolean;
 }) {
-  const relay = useRelayState({ consumeTraySwitch });
+  const relay = useRelayState({ consumeTraySwitch, pollWhenHidden });
   return createElement(RelayContext.Provider, { value: relay }, children);
 }

@@ -27,3 +27,7 @@ export class ToggleGuard {
     this.hiddenAt = now;
   }
 }
+/** Left tray click: the popover once it has loaded, else today's native menu. */
+export function trayClickAction(panelUsable: boolean): "toggle" | "menu" {
+  return panelUsable ? "toggle" : "menu";
+}

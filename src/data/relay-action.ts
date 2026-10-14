@@ -36,3 +36,11 @@ export function shouldConsumeTraySwitch(options: {
 }): boolean {
   return options.consumeTraySwitch !== false;
 }
+
+/** The long-lived menu bar panel skips its poll while it is hidden. */
+export function shouldPoll(
+  options: { pollWhenHidden?: boolean },
+  visibility: DocumentVisibilityState,
+): boolean {
+  return options.pollWhenHidden !== false || visibility !== "hidden";
+}

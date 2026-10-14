@@ -102,6 +102,9 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(html, /Haftalık · Opus/);
   assert.match(html, /Limit dolmak üzere/);
   assert.match(html, /Önerilen/);
+  // The name has its own line; the badge sits on the subtitle line so names stay readable.
+  assert.match(html, /title="Vertex"[^>]*>Vertex<\/div><div[^>]*>.*Önerilen/);
+  assert.match(html, /title="Pro · Hazır · pencere yok"/);
   assert.match(html, /Hesaplar/);
   assert.match(html, /Kota dolunca devam/);
   assert.match(html, /Otomatik başlatma kapalı/);

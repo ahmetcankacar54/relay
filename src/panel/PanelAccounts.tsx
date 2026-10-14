@@ -84,23 +84,31 @@ export function PanelAccounts({
             const plan = planLabel(account);
             const { canSwitch } = panelRowState(row, relay);
             const open = confirmId === account.id;
+            const subtitle = `${plan ? `${plan} · ` : ""}${accountRowSubtitle(row, t, language, zone, now)}`;
             return (
               <div
                 key={account.id}
                 className="grid grid-cols-[1fr_72px_72px_auto] items-center gap-2 border-t px-1 py-1.5 first:border-0"
               >
                 <div className="min-w-0">
-                  <div className="flex min-w-0 items-center gap-1.5 font-semibold">
-                    <span className="truncate">{account.name}</span>
+                  <div
+                    className="min-w-0 truncate font-semibold"
+                    title={account.name}
+                  >
+                    {account.name}
+                  </div>
+                  <div className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-muted-foreground">
                     {row.recommended && (
-                      <Badge variant="secondary" className="px-1.5 text-[10px]">
+                      <Badge
+                        variant="secondary"
+                        className="shrink-0 px-1.5 text-[10px]"
+                      >
                         {t("Önerilen", "Suggested")}
                       </Badge>
                     )}
-                  </div>
-                  <div className="truncate text-[10.5px] text-muted-foreground">
-                    {plan ? `${plan} · ` : ""}
-                    {accountRowSubtitle(row, t, language, zone, now)}
+                    <span className="min-w-0 truncate" title={subtitle}>
+                      {subtitle}
+                    </span>
                   </div>
                 </div>
                 <LimitMeter
@@ -145,8 +153,8 @@ export function PanelAccounts({
                           </>
                         ) : (
                           <>
-                            Claude quits and reopens with{" "}
-                            <b>{account.name}</b>. Let running replies finish.
+                            Claude quits and reopens with <b>{account.name}</b>.
+                            Let running replies finish.
                           </>
                         )}
                       </span>

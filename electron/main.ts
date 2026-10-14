@@ -566,8 +566,7 @@ function notifySwitched(name: string) {
 }
 /** Tell every Relay renderer (main window and menu bar panel) that state changed. */
 function broadcastChanged() {
-  if (window && !window.isDestroyed())
-    window.webContents.send("relay:changed");
+  if (window && !window.isDestroyed()) window.webContents.send("relay:changed");
   trayPanel?.webContents()?.send("relay:changed");
 }
 /** Loads a Vite entry from the dev server in development, else from dist. */
@@ -765,13 +764,19 @@ function bindIPC() {
   ipcMain.handle("relay:switch-desktop", async (event, profileId) => {
     trusted(event);
     const target = id.parse(profileId);
-    const result = await manualDesktopLock(() => desktop.switchTo(target));
-    if (event.sender === trayPanel?.webContents()) {
-      const account = service.store.state.accounts.find((a) => a.id === target);
-      if (account) notifySwitched(account.name);
+    try {
+      const result = await manualDesktopLock(() => desktop.switchTo(target));
+      if (event.sender === trayPanel?.webContents()) {
+        const account = service.store.state.accounts.find(
+          (a) => a.id === target,
+        );
+        if (account) notifySwitched(account.name);
+      }
+      return result;
+    } finally {
+      void tray?.update();
+      broadcastChanged();
     }
-    void tray?.update();
-    return result;
   });
   handle("open-page", (page) => {
     const target = z.enum(PAGES).parse(page);

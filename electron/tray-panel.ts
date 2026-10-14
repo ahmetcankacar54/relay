@@ -18,6 +18,8 @@ export interface TrayPanelOptions {
 export class TrayPanel {
   private win?: BrowserWindow;
   private anchor?: Rect;
+  /** True only after panel.html finished loading and its renderer is alive. */
+  private loaded = false;
   private readonly guard = new ToggleGuard();
   private readonly now: () => number;
 
@@ -48,11 +50,34 @@ export class TrayPanel {
     win.setVisibleOnAllWorkspaces(true);
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     win.webContents.on("will-navigate", (event) => event.preventDefault());
+    // A failed main-frame load wins over a later did-finish-load (error page).
+    let failed = false;
+    win.webContents.on("did-start-loading", () => {
+      failed = false;
+      this.loaded = false;
+    });
+    win.webContents.on("did-finish-load", () => {
+      this.loaded = !failed;
+    });
+    win.webContents.on(
+      "did-fail-load",
+      (_event, _code, _description, _url, mainFrame) => {
+        if (!mainFrame) return;
+        failed = true;
+        this.unusable();
+      },
+    );
+    win.webContents.on("render-process-gone", () => this.unusable());
     win.on("blur", () => this.hide());
     win.on("closed", () => {
       this.win = undefined;
     });
     options.load(win);
+  }
+
+  /** Whether a tray click may open the panel; otherwise the native menu is used. */
+  usable() {
+    return this.loaded && !!this.live();
   }
 
   toggle(trayBounds: Rect) {
@@ -91,6 +116,11 @@ export class TrayPanel {
     const win = this.live();
     this.win = undefined;
     if (win) win.destroy();
+  }
+
+  private unusable() {
+    this.loaded = false;
+    this.hide();
   }
 
   private place(win: BrowserWindow) {
