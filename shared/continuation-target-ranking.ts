@@ -72,18 +72,26 @@ const byScore = (
       ? 1
       : 0);
 
-/** The open five-hour window's reset, if one is running. */
-function openReset(usage: AccountUsage | undefined, now: number) {
-  const reset = Date.parse(usage?.fiveHour?.resetsAt ?? "");
+/**
+ * When the binding window resets: the weekly one when it has less left (its
+ * quota is not lost at the five-hour reset), else the open five-hour window.
+ * A closed window or an unknown reset is Infinity.
+ */
+function bindingReset(usage: AccountUsage | undefined, now: number) {
+  const [fiveHour, weekly] = quotaWindows(usage) ?? [];
+  const binding =
+    weekly && weekly.usedPercent > fiveHour.usedPercent ? weekly : fiveHour;
+  const reset = Date.parse(binding?.resetsAt ?? "");
   return Number.isFinite(reset) && reset > now ? reset : Infinity;
 }
 
 /**
  * Rank policy-eligible candidates without mutating the caller's collection.
  * With a context: accounts with enough quota for half an hour at the current
- * tempo (else 10% left) first, open windows resetting soonest first (their
- * quota is lost at the reset), closed windows after them. Without one, or
- * when nobody has enough: plan capacity × remaining quota.
+ * tempo (else 10% left) first, by the reset of the window that binds them,
+ * soonest first (their quota is lost at the reset), closed windows after
+ * them. Without one, or when nobody has enough: plan capacity × remaining
+ * quota.
  */
 export function rankContinuationTargets(
   candidates: readonly ContinuationTargetCandidate[],
@@ -111,8 +119,8 @@ export function rankContinuationTargets(
   // Two closed windows give Infinity − Infinity = NaN, which falls through to byScore.
   passing.sort(
     (left, right) =>
-      openReset(left.usage, context.now) -
-        openReset(right.usage, context.now) || byScore(left, right),
+      bindingReset(left.usage, context.now) -
+        bindingReset(right.usage, context.now) || byScore(left, right),
   );
   return [
     ...passing,

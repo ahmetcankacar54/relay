@@ -346,3 +346,63 @@ test("the weekly window binds the threshold when it has less left", () => {
     ["max5", "pro"],
   );
 });
+
+test("a weekly-bound account is ordered by its weekly reset, not its five-hour one", () => {
+  const max5 = planningAccount("max5", "max5");
+  const max20 = planningAccount("max20", "max20");
+  const pro = planningAccount("pro", "pro");
+  // Its five-hour window is untouched and resets in an hour, but 8% of the
+  // week is left: 40 Pro units, enough for half an hour at 60/h.
+  const weeklyBound = (weeklyReset?: number): AccountUsage => ({
+    ...windowUsage(max5, 100, 1 * HOUR),
+    sevenDay: {
+      usedPercent: 92,
+      ...(weeklyReset === undefined
+        ? {}
+        : { resetsAt: new Date(NOW + weeklyReset).toISOString() }),
+    },
+  });
+  const full = { account: max20, usage: windowUsage(max20, 100) };
+  // Its quota is not lost in an hour: without a known weekly reset it ranks
+  // like a closed window, after the full Max 20× by capacity × remaining.
+  assert.deepEqual(
+    order(
+      rankContinuationTargets([{ account: max5, usage: weeklyBound() }, full], {
+        now: NOW,
+        rate: 60,
+      }),
+    ),
+    ["max20", "max5"],
+  );
+  // A known weekly reset in three days comes after every open five-hour
+  // window and before the closed ones.
+  const open = { account: pro, usage: windowUsage(pro, 80, 4 * HOUR) };
+  assert.deepEqual(
+    order(
+      rankContinuationTargets(
+        [full, { account: max5, usage: weeklyBound(3 * 86_400_000) }, open],
+        { now: NOW, rate: 60 },
+      ),
+    ),
+    ["pro", "max5", "max20"],
+  );
+  // When the five-hour window has less left, it binds as before.
+  assert.deepEqual(
+    order(
+      rankContinuationTargets(
+        [
+          open,
+          {
+            account: max5,
+            usage: {
+              ...windowUsage(max5, 20, 1 * HOUR),
+              sevenDay: { usedPercent: 50 },
+            },
+          },
+        ],
+        { now: NOW, rate: 60 },
+      ),
+    ),
+    ["max5", "pro"],
+  );
+});
