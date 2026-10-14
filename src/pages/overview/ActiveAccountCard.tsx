@@ -41,7 +41,7 @@ export function ActiveAccountCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className={eyebrow}>
-            {t("CLAUDE DESKTOP'TA AÇIK", "OPEN IN CLAUDE DESKTOP")}
+            {t("CLAUDE DESKTOP’TA AÇIK", "OPEN IN CLAUDE DESKTOP")}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-2">
             <span className="text-lg font-bold">{active.name}</span>
@@ -66,8 +66,8 @@ export function ActiveAccountCard({
         >
           <ArrowUpRight />
           {running
-            ? t("Claude'u öne getir", "Bring Claude to front")
-            : t("Claude'u aç", "Open Claude")}
+            ? t("Claude’u öne getir", "Bring Claude to front")
+            : t("Claude’u aç", "Open Claude")}
         </Button>
       </div>
       {freshUsage(usage, now) ? (

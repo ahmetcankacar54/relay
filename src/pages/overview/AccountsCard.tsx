@@ -53,7 +53,7 @@ export function AccountsCard({
         return t(`${at}'te açılır`, `Opens at ${at}`);
       }
       case "not-linked":
-        return t("Desktop'a bağlı değil", "Not linked to Desktop");
+        return t("Desktop’a bağlı değil", "Not linked to Desktop");
       default:
         return t("Limit verisi eski", "Usage data is out of date");
     }
@@ -123,7 +123,7 @@ export function AccountsCard({
                       go("hesaplar");
                     }}
                   >
-                    {t("Desktop'a bağla", "Link to Desktop")}
+                    {t("Desktop’a bağla", "Link to Desktop")}
                   </Button>
                 ) : (
                   <Button

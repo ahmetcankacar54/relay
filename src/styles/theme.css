@@ -1,11 +1,5 @@
-/* Layer order: Tailwind's base < old Relay CSS < Tailwind components/utilities.
-   The legacy imports are removed in the cleanup task. */
-@layer theme, base, legacy, components, utilities;
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "../styles.css" layer(legacy);
-@import "../modern.css" layer(legacy);
-@import "../continuation-settings.css" layer(legacy);
 
 :root {
   --radius: 0.75rem;

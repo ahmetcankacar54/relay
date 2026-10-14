@@ -3,6 +3,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 import type { RelayAPI, Run, TerminalEvent } from "../../shared/types";
+import { terminalTheme } from "../lib/terminal-theme";
 
 export default function TerminalPane({
   run,
@@ -25,20 +26,7 @@ export default function TerminalPane({
       fontFamily: "Menlo, Consolas, monospace",
       scrollback: 5000,
       allowProposedApi: false,
-      theme: {
-        background: "#202723",
-        foreground: "#eeeae1",
-        cursor: "#dba788",
-        selectionBackground: "#5c655e",
-        black: "#202723",
-        red: "#e99580",
-        green: "#bbcba6",
-        yellow: "#e5c789",
-        blue: "#a6c3d2",
-        magenta: "#c6b1d4",
-        cyan: "#a3cec4",
-        white: "#eeeae1",
-      },
+      theme: terminalTheme,
     });
     const fit = new FitAddon();
     terminal.loadAddon(fit);

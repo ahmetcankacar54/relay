@@ -246,7 +246,7 @@ export function UsageCard({
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="min-w-0">
-          {usage?.stale && <b className="font-semibold text-warn">{t("Eski veri · ", "Stale data · ")}</b>}
+          {usage?.stale && <b className="font-semibold text-warn-foreground">{t("Eski veri · ", "Stale data · ")}</b>}
           {loading
             ? t("Limitler okunuyor…", "Reading usage…")
             : displayedIssue

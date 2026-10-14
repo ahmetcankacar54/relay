@@ -59,7 +59,7 @@ test("overview shows the active account, limits, accounts, today and automation"
     vertex: use("vertex", 12, 31),
   };
   const html = render(relayFor(active, [active, vertex], usage, { suggestion: vertex }));
-  assert.match(html, /CLAUDE DESKTOP&#x27;TA AÇIK|CLAUDE DESKTOP'TA AÇIK/);
+  assert.match(html, /CLAUDE DESKTOP’TA AÇIK/);
   assert.match(html, /Kişisel · Max/);
   assert.match(html, /Max 5×/);
   assert.match(html, /Çalışıyor/);
@@ -82,15 +82,15 @@ test("overview without an active account offers onboarding", () => {
   assert.match(emptyHtml, /İlk hesabını bağla/);
   assert.match(emptyHtml, /Hesap ekle/);
   assert.match(emptyHtml, /Başka hesap yok/);
-  assert.doesNotMatch(emptyHtml, /CLAUDE DESKTOP&#x27;TA AÇIK|CLAUDE DESKTOP'TA AÇIK/);
+  assert.doesNotMatch(emptyHtml, /CLAUDE DESKTOP’TA AÇIK/);
 });
 
 test("unlinked accounts offer a Desktop link instead of a switch", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const other = acct("other", "Studio", "pro", false);
   const html = render(relayFor(active, [active, other], { active: use("active", 10, 10) }));
-  assert.match(html, /Desktop&#x27;a bağlı değil|Desktop'a bağlı değil/);
-  assert.match(html, /Desktop&#x27;a bağla|Desktop'a bağla/);
+  assert.match(html, /Desktop’a bağlı değil/);
+  assert.match(html, /Desktop’a bağla/);
 });
 
 const rowsOf = (html: string) => html.split("grid-cols-[1.2fr_1fr_1fr_auto]").slice(1);

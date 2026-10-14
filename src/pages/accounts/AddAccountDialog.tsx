@@ -87,7 +87,7 @@ function StepIndicator({ step }: { step: Step }) {
               className={cn(
                 "grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold",
                 done
-                  ? "bg-brand text-white dark:text-[#1d1916]"
+                  ? "bg-brand text-primary-foreground"
                   : active
                     ? "border-2 border-brand text-brand"
                     : "bg-muted text-muted-foreground",

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { ArrowLeftRight, LoaderCircle, RefreshCw, X } from "lucide-react";
 import type { Account } from "../../shared/types";
 
@@ -54,30 +55,36 @@ export function DesktopActionReview({
                 )
               : t("Desktop bağlantısını kur", "Connect Desktop");
   return (
-    <section className="desktop-review" aria-label={title} aria-live="polite">
-      <div className="form-title">
-        <h3>{title}</h3>
-        <button
-          className="icon"
+    <section
+      className="grid gap-3"
+      aria-label={title}
+      aria-live="polite"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-display text-base font-semibold">{title}</h3>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           disabled={busy}
           aria-label={t("İşlemi iptal et", "Cancel action")}
           onClick={cancel}
         >
-          <X size={16} />
-        </button>
+          <X />
+        </Button>
       </div>
-      <div className="switch-route">
-        <span>
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+        <span className="text-muted-foreground">
           {active?.name ?? t("Açık Claude hesabı", "Current Claude account")}
         </span>
-        <ArrowLeftRight size={15} />
-        <strong>
+        <ArrowLeftRight size={15} className="shrink-0 text-muted-foreground" />
+        <strong className="font-semibold">
           {kind === "cancel" || kind === "recover"
             ? t("Önceki Desktop bağlantısı", "Previous Desktop connection")
             : account?.name}
         </strong>
       </div>
-      <p>
+      <p className="text-sm text-muted-foreground">
         {kind === "history"
           ? t(
               "Seçilen hesapların yerel Code oturumları ve proje kayıtları açık hesapla birleştirilir. Claude yeniden başlatılır; hesap değişmez.",
@@ -105,15 +112,16 @@ export function DesktopActionReview({
       </p>
       {(kind === "history" || kind === "switch") &&
         historyAccounts.length > 0 && (
-          <p className="review-history-scope">
+          <p className="text-sm">
             <strong>
               {t("Geçmiş alınacak hesaplar", "History sources")}:{" "}
             </strong>
             {historyAccounts.map((a) => a.name).join(", ")}
           </p>
         )}
-      <label className="restart-consent">
+      <label className="flex items-start gap-2 text-sm">
         <input
+          className="mt-0.5 size-4 shrink-0 accent-primary"
           type="checkbox"
           checked={ready}
           disabled={busy}
@@ -124,12 +132,12 @@ export function DesktopActionReview({
           "My running work is finished; Claude can restart.",
         )}
       </label>
-      <div className="panel-actions">
-        <button className="primary" disabled={!ready || busy} onClick={confirm}>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button type="button" disabled={!ready || busy} onClick={confirm}>
           {busy ? (
-            <LoaderCircle size={14} className="spin" />
+            <LoaderCircle className="animate-spin" />
           ) : (
-            <RefreshCw size={14} />
+            <RefreshCw />
           )}
           {kind === "history"
             ? t("Birleştir ve yeniden başlat", "Merge and restart")
@@ -140,10 +148,15 @@ export function DesktopActionReview({
                 : kind === "capture"
                   ? t("Kaydet ve yeniden başlat", "Save and restart")
                   : t("Yeniden başlat ve giriş aç", "Restart and open sign-in")}
-        </button>
-        <button className="text-button" disabled={busy} onClick={cancel}>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={busy}
+          onClick={cancel}
+        >
           {t("Vazgeç", "Cancel")}
-        </button>
+        </Button>
       </div>
     </section>
   );

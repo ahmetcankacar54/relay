@@ -67,7 +67,7 @@ export function ConnectionProgress({
                 className={cn(
                   "row-span-2 grid size-6 place-items-center rounded-full text-[11px] font-semibold tabular-nums",
                   done
-                    ? "bg-brand text-white dark:text-[#1d1916]"
+                    ? "bg-brand text-primary-foreground"
                     : active
                       ? "border-2 border-brand text-brand"
                       : "bg-muted text-muted-foreground",

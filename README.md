@@ -7,6 +7,19 @@ Claude is signed in to, keeps your Code conversations available on every account
 you choose, and shows how much quota each account has left. Turkish and English.
 Independent tool, not an Anthropic product.
 
+## Screens
+
+A sidebar (a 56 px icon rail in narrow windows) opens six pages; the keyboard
+shortcuts are ⌘1–⌘5 and ⌘, for Settings.
+
+- **Genel** (Overview) — the active account, today's plan and automation status.
+- **Hesaplar** (Accounts) — search, add, link to Desktop and edit accounts.
+- **Kullanım** (Usage) — five-hour and weekly limits and 7/30-day statistics.
+- **Planlama** (Planning) — work hours, the day timeline and per-account start times.
+- **Geçiş** (Switching) — switch preferences, shared history, continuation and fleet.
+- **Ayarlar** (Settings) — appearance (system, light or dark), language and
+  technical details.
+
 ## What it does
 
 - **Accounts** — connect each Claude account once (normal sign-in inside Claude),
