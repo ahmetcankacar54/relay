@@ -1,4 +1,5 @@
 import type { AccountUsageStatistics } from "./usage-statistics";
+export type { UsageStatisticsView } from "./usage-statistics-view";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 import type { PageId } from "../src/app/routes";
 export type AccountKind = "personal" | "work";
