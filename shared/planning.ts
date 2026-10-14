@@ -31,6 +31,10 @@ export function localDate(time: number, timeZone: string) {
   const p = localParts(time, timeZone);
   return `${p.year}-${p.month}-${p.day}`;
 }
+/** The local clock hour (0–23) of `time` in `timeZone`. */
+export function localHour(time: number, timeZone: string) {
+  return Number(localParts(time, timeZone).hour);
+}
 // Resolve wall times using the zone's actual offsets on either side of a DST
 // transition. A nonexistent time is skipped; an ambiguous time uses its first
 // occurrence so no quota-consuming job can run twice in the repeated hour.

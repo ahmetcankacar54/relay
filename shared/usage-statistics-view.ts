@@ -1,6 +1,6 @@
 import type { Account } from "./types";
 import { localDate, planCapacity, wallTime } from "./planning";
-import { historyIdentity } from "./usage-statistics";
+import { historyIdentity, identityOwners } from "./usage-statistics";
 import type { UsageRollups } from "./usage-rollups";
 
 export type StatisticsRange = 7 | 30 | 90;
@@ -146,15 +146,11 @@ export function buildStatisticsView(
   // Identity → row: current accounts in their order, then one "former" row.
   // A signed-out account keeps its history; of accounts sharing an identity,
   // the first signed-in one, else the first one, owns it.
-  const owner = new Map<string, Account>();
-  for (const account of accounts) {
-    if (input.accountId && account.id !== input.accountId) continue;
-    const identity = historyIdentity(account);
-    if (!identity) continue;
-    const current = owner.get(identity);
-    if (!current || (!current.auth?.loggedIn && account.auth?.loggedIn))
-      owner.set(identity, account);
-  }
+  const owner = identityOwners(
+    input.accountId
+      ? accounts.filter((account) => account.id === input.accountId)
+      : accounts,
+  );
   const rows: Row[] = [];
   const rowOf = new Map<string, Row>();
   for (const account of accounts) {

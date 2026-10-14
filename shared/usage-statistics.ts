@@ -33,6 +33,19 @@ export function historyIdentity(account: Account): string | undefined {
   return JSON.stringify([uuid ? "uuid" : "email", uuid ?? email, org]);
 }
 
+/** Identity → owning account: the first signed-in account sharing it, else the first. */
+export function identityOwners(accounts: Account[]): Map<string, Account> {
+  const owner = new Map<string, Account>();
+  for (const account of accounts) {
+    const identity = historyIdentity(account);
+    if (!identity) continue;
+    const current = owner.get(identity);
+    if (!current || (!current.auth?.loggedIn && account.auth?.loggedIn))
+      owner.set(identity, account);
+  }
+  return owner;
+}
+
 function normalizedWindow(
   window: UsageWindow | undefined,
 ): UsageWindow | undefined {

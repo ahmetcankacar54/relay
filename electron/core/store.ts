@@ -47,6 +47,8 @@ export const planningSchema = z
         (list) => new Set(list.map((a) => a.id)).size === list.length,
         "Select each account once.",
       ),
+    // No .default(): a partial patch must keep the stored choice.
+    tempo: z.enum(["auto", "light", "medium", "heavy"]).optional(),
   })
   .strict();
 export const planningPatchSchema = planningSchema.partial();

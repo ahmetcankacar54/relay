@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import {
   Store,
   planningFromWorkday,
+  planningPatchSchema,
   planningSchema,
 } from "../electron/core/store";
 import { DEFAULT_PLANNING, DEFAULT_SETTINGS } from "../shared/types";
@@ -135,4 +136,20 @@ test("an untouched legacy workday becomes the new default hours, not a 24-hour d
     ...DEFAULT_PLANNING,
     timeZone: "Europe/Berlin",
   });
+});
+
+test("the tempo choice is optional, validated, and kept by a patch that omits it", () => {
+  const { tempo: _default, ...valid } = DEFAULT_PLANNING;
+  assert.equal(
+    planningSchema.parse({ ...valid, tempo: "medium" }).tempo,
+    "medium",
+  );
+  const without = planningSchema.parse(valid);
+  assert.equal("tempo" in without, false);
+  assert.throws(() => planningSchema.parse({ ...valid, tempo: "fast" }));
+  const patch = planningPatchSchema.parse({ autoStart: true });
+  assert.equal("tempo" in patch, false);
+  const stored = planningSchema.parse({ ...valid, tempo: "heavy" });
+  assert.equal({ ...stored, ...patch }.tempo, "heavy");
+  assert.equal(DEFAULT_PLANNING.tempo, "auto");
 });

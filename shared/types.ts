@@ -261,6 +261,8 @@ export interface PlanningAccount {
   /** Manual first warm-up clock (HH:mm), applied on every planned day. */
   firstStart?: string;
 }
+/** How fast the plan expects usage to be consumed; "auto" learns it. */
+export type TempoChoice = "auto" | "light" | "medium" | "heavy";
 export interface PlanningSettings {
   /** Start and keep usage windows running automatically. */
   autoStart: boolean;
@@ -271,6 +273,8 @@ export interface PlanningSettings {
   weekend: PlanningHours;
   /** Planned accounts in priority order. */
   accounts: PlanningAccount[];
+  /** Missing means "auto". */
+  tempo?: TempoChoice;
 }
 export const DEFAULT_PLANNING: PlanningSettings = {
   autoStart: false,
@@ -278,6 +282,7 @@ export const DEFAULT_PLANNING: PlanningSettings = {
   weekday: { enabled: true, start: "09:00", end: "18:00" },
   weekend: { enabled: false, start: "11:00", end: "17:00" },
   accounts: [],
+  tempo: "auto",
 };
 export type WindowAttemptStatus =
   "started" | "verified" | "sent-unverified" | "failed";
