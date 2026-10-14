@@ -20,7 +20,7 @@ import { previewApi } from "../preview";
 import packageInfo from "../../package.json";
 import { useI18n } from "./i18n";
 import { pendingFlow } from "./selectors";
-import { relayAction } from "./relay-action";
+import { relayAction, shouldConsumeTraySwitch } from "./relay-action";
 import { RelayContext, useRelay, type Relay } from "./relay-context";
 
 export { relayAction, RelayContext, useRelay, type Relay };
@@ -30,7 +30,10 @@ export const api: RelayAPI = injected ?? previewApi;
 export const preview = !injected;
 export const APP_VERSION: string = packageInfo.version;
 
-function useRelayState(): Relay {
+function useRelayState(
+  options: { consumeTraySwitch?: boolean } = {},
+): Relay {
+  const consumeTraySwitch = shouldConsumeTraySwitch(options);
   const { t } = useI18n();
   const [data, setData] = useState<Snapshot>();
   const [desktop, setDesktop] = useState<DesktopState>();
@@ -68,6 +71,7 @@ function useRelayState(): Relay {
       setDesktop(status);
     }
     if (request !== sequence.current) return { snapshot, status };
+    if (!consumeTraySwitch) return { snapshot, status };
     const requested = await api.consumeTraySwitchRequest();
     if (requested) queuedTrayTarget.current = requested;
     if (request !== sequence.current) return { snapshot, status };
@@ -92,7 +96,7 @@ function useRelayState(): Relay {
       }
     }
     return { snapshot, status };
-  }, []);
+  }, [consumeTraySwitch]);
   useEffect(() => {
     void refresh().catch(showError);
     const off = api.onAuth(() => {
@@ -290,7 +294,14 @@ function useRelayState(): Relay {
 }
 
 /** Owns the app state once and shares it with every page through context. */
-export function RelayProvider({ children }: { children: ReactNode }) {
-  const relay = useRelayState();
+export function RelayProvider({
+  children,
+  consumeTraySwitch = true,
+}: {
+  children: ReactNode;
+  /** The menu bar panel passes false so only the main window takes tray requests. */
+  consumeTraySwitch?: boolean;
+}) {
+  const relay = useRelayState({ consumeTraySwitch });
   return createElement(RelayContext.Provider, { value: relay }, children);
 }

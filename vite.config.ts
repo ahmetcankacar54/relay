@@ -7,4 +7,12 @@ export default defineConfig({
   plugins: [tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: { host: "127.0.0.1", port: 5173, strictPort: true },
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        panel: fileURLToPath(new URL("./panel.html", import.meta.url)),
+      },
+    },
+  },
 });

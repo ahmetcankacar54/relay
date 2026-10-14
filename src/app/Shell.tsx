@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { api } from "@/data/useRelay";
 import { sidebarStatus } from "@/data/selectors";
 import { Usage } from "@/pages/Usage";
 import { Settings } from "@/pages/Settings";
@@ -45,6 +46,7 @@ export function Shell() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [go]);
+  useEffect(() => api.onNavigate((page) => go(page)), [go]);
   const active = relay.active;
   return (
     <TooltipProvider delayDuration={300}>

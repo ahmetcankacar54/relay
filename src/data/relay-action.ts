@@ -26,3 +26,13 @@ export function relayAction(
     }
   };
 }
+
+/**
+ * Only the main window consumes a queued tray switch request; the menu bar
+ * panel opts out so it never steals the request from the main window.
+ */
+export function shouldConsumeTraySwitch(options: {
+  consumeTraySwitch?: boolean;
+}): boolean {
+  return options.consumeTraySwitch !== false;
+}
