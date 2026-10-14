@@ -5,6 +5,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { sidebarStatus } from "@/data/selectors";
 import { LegacyHome, LegacySettings } from "@/pages/Legacy";
+import { Overview } from "@/pages/Overview";
 import relayIcon from "../../assets/icon.png";
 import { Sidebar } from "./Sidebar";
 import { PageFrame } from "./PageFrame";
@@ -76,18 +77,8 @@ export function Shell() {
               compact ? "h-8" : "h-2",
             )}
           />
-          {/* Legacy content is temporary; Tasks 7–13 replace each page. */}
-          {page === "genel" && (
-            <PageFrame
-              title={t("Genel bakış", "Overview")}
-              description={t(
-                "Açık hesap, limitler ve bugünün planı",
-                "Open account, limits and today’s plan",
-              )}
-            >
-              <LegacyHome />
-            </PageFrame>
-          )}
+          {/* Legacy content is temporary; Tasks 8–13 replace the remaining pages. */}
+          {page === "genel" && <Overview go={go} />}
           {page === "hesaplar" && (
             <PageFrame
               title={t("Hesaplar", "Accounts")}

@@ -15,6 +15,24 @@ const badge: Record<
   attention: ["Dikkat", "Attention", "blocked"],
 };
 
+/** Short status line for compact surfaces (Overview automation card). */
+export function fleetStatusLabel(
+  value: FleetContinuationState | undefined,
+  name: (id?: string) => string,
+  t: T,
+) {
+  const state = value ?? { enabled: false, status: "off" as const };
+  const [tr, en] = badge[state.status];
+  const label = t(tr, en);
+  if (state.status === "switching")
+    return `${label} · ${name(state.sourceId)} → ${name(state.targetId)}`;
+  if (state.status === "continuing")
+    return `${label} · ${name(state.targetId)}`;
+  if ((state.stopped ?? 0) > 0)
+    return `${label} · ${t(`${state.stopped} konuşma`, `${state.stopped} conversations`)}`;
+  return label;
+}
+
 function message(
   value: FleetContinuationState,
   name: (id?: string) => string,
