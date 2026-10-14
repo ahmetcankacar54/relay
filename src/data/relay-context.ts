@@ -55,7 +55,7 @@ export interface Relay {
   submitCode(code: string): void;
   historyRevision: number;
   suggestion?: Account;
-  /** Legacy-only escape hatch: replaces the snapshot with a locally derived one. */
+  /** Escape hatch: replaces the snapshot with a locally derived one. */
   setData: Dispatch<SetStateAction<Snapshot | undefined>>;
 }
 

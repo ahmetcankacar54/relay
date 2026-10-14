@@ -357,13 +357,3 @@ export function AfterExitPreferences({
     </div>
   );
 }
-
-/** Both sections in one stack (used by the legacy Preferences panel). */
-export function SwitchPreferences(props: Props) {
-  return (
-    <div className="grid gap-6">
-      <SharedHistoryPreferences {...props} />
-      <AfterExitPreferences {...props} />
-    </div>
-  );
-}

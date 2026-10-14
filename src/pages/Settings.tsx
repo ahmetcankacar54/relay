@@ -1,0 +1,176 @@
+import { PageFrame } from "@/app/PageFrame";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Note,
+  OptionSelect,
+  SectionHeading,
+  SettingRow,
+} from "@/components/SettingRow";
+import { useI18n, type Language } from "@/data/i18n";
+import { useRelay } from "@/data/relay-context";
+import type { RelaySettings } from "../../shared/types";
+
+const cardClass = "gap-0 px-5 py-4";
+
+export function Settings() {
+  const { api, data, desktop, settings, busy, version, action } = useRelay();
+  const { t, language, setLanguage } = useI18n();
+  const disabled = !!busy || !!desktop?.busy;
+  const update = (patch: Partial<RelaySettings>) =>
+    void action("settings", () => api.updateSettings(patch));
+  return (
+    <PageFrame
+      title={t("Ayarlar", "Settings")}
+      description={t(
+        "Görünüm, dil ve teknik bilgiler",
+        "Appearance, language and technical details",
+      )}
+    >
+      <div className="grid gap-3 px-6 pb-6">
+        <Card className={cardClass}>
+          <SectionHeading title={t("Görünüm", "Appearance")} />
+          <SettingRow
+            label={<span id="appearance-label">{t("Tema", "Theme")}</span>}
+            description={t(
+              "Sistem seçeneği macOS görünümünü izler.",
+              "System follows the macOS appearance.",
+            )}
+          >
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              aria-labelledby="appearance-label"
+              value={settings.appearance}
+              disabled={disabled}
+              onValueChange={(v) =>
+                v && update({ appearance: v as RelaySettings["appearance"] })
+              }
+            >
+              <ToggleGroupItem value="system">
+                {t("Sistem", "System")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="light">
+                {t("Açık", "Light")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="dark">
+                {t("Koyu", "Dark")}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </SettingRow>
+        </Card>
+        <Card className={cardClass}>
+          <SectionHeading title={t("Dil", "Language")} />
+          <SettingRow
+            label={
+              <span id="language-label">
+                {t("Arayüz dili", "Interface language")}
+              </span>
+            }
+            description={t(
+              "Menü çubuğu da bu dili izler.",
+              "The menu bar follows this language.",
+            )}
+          >
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              aria-labelledby="language-label"
+              value={language}
+              onValueChange={(v) => v && setLanguage(v as Language)}
+            >
+              <ToggleGroupItem value="tr">Türkçe</ToggleGroupItem>
+              <ToggleGroupItem value="en">English</ToggleGroupItem>
+            </ToggleGroup>
+          </SettingRow>
+        </Card>
+        <Card className={cardClass}>
+          <SectionHeading title={t("Limitleri yenileme", "Limit refresh")} />
+          <SettingRow
+            label={t("Kullanım limitlerini yenile", "Refresh usage limits")}
+            htmlFor="usage-interval"
+            description={t(
+              "Yalnızca kullanım verisi okunur; Claude çalışmaya devam eder.",
+              "Reads usage data while Claude keeps running.",
+            )}
+          >
+            <OptionSelect
+              id="usage-interval"
+              value={String(settings.usageRefreshMinutes)}
+              disabled={disabled}
+              options={[
+                { value: "0", label: t("Elle", "Manually") },
+                ...[5, 15, 30].map((n) => ({
+                  value: String(n),
+                  label: `${n} ${t("dakika", "minutes")}`,
+                })),
+              ]}
+              onChange={(v) =>
+                update({
+                  usageRefreshMinutes: Number(
+                    v,
+                  ) as RelaySettings["usageRefreshMinutes"],
+                })
+              }
+            />
+          </SettingRow>
+        </Card>
+        <Card className={cardClass}>
+          <SectionHeading
+            title={t("Teknik bilgiler", "Technical details")}
+            description={t(
+              "Bağlantı ve teknik bilgiler",
+              "Connection and technical details",
+            )}
+          />
+          <SettingRow label="Claude Desktop">
+            <span className="text-sm text-muted-foreground">
+              {desktop?.available
+                ? t("Bulundu", "Detected")
+                : t("Bulunamadı / desteklenmiyor", "Not found / unsupported")}
+            </span>
+          </SettingRow>
+          <SettingRow label="Claude Code CLI">
+            <span className="text-sm text-muted-foreground">
+              {data?.diagnostics.version ?? t("Bulunamadı", "Not found")}
+            </span>
+          </SettingRow>
+          <div className="border-t border-border py-3">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!!busy}
+              onClick={() =>
+                void action("executable", () => api.pickExecutable())
+              }
+            >
+              {t("Claude CLI dosyasını seç", "Choose Claude CLI executable")}
+            </Button>
+          </div>
+          <Note className="mb-2">
+            {t(
+              "Desktop geçişi, Claude’un yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",
+              "Desktop switching is an experimental integration with Claude’s local file format. Code sessions and local project records merge within your chosen sharing scope. Chat history and server-managed project groups remain account-specific.",
+            )}
+          </Note>
+          <Note>
+            {t(
+              "Giriş kayıtları bu cihazda işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. CLI girişi resmi Claude Code üzerinden tamamlanır.",
+              "Saved Desktop sign-ins are encrypted on this device using the operating system. Every switch creates a backup. CLI sign-in uses the official Claude Code.",
+            )}
+          </Note>
+        </Card>
+        <p className="px-1 text-center text-[13px] text-muted-foreground">
+          {t(
+            "Yerelde saklanır. Kontrol sende.",
+            "Stored locally. You stay in control.",
+          )}{" "}
+          {t("Bağımsız araç", "Independent tool")} · {version}
+        </p>
+      </div>
+    </PageFrame>
+  );
+}
