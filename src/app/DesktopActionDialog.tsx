@@ -8,18 +8,16 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { historySources } from "../../shared/history-policy";
 import { DesktopActionReview } from "../features/DesktopActionReview";
+import { RelayErrorAlert } from "./Banners";
 
 /** Confirms every Desktop action (switch, sign-in, recovery…) on whatever page is open. */
 export function DesktopActionDialog() {
   const relay = useRelay();
   const { t } = useI18n();
-  const request = relay.desktopRequest;
   const busy = !!relay.desktopBusy;
-  const account =
-    request && relay.accounts.find((a) => a.id === request.accountId);
   return (
     <Dialog
-      open={!!request}
+      open={!!relay.desktopRequest}
       onOpenChange={(open) => !open && !busy && relay.cancelDesktopRequest()}
     >
       <DialogContent className="sm:max-w-lg" showCloseButton={false}>
@@ -32,24 +30,36 @@ export function DesktopActionDialog() {
             "Confirmation is required before Claude restarts.",
           )}
         </DialogDescription>
-        {request && (
-          <DesktopActionReview
-            key={`${request.accountId}:${request.kind}`}
-            account={account}
-            active={relay.active}
-            kind={request.kind}
-            historyAccounts={
-              account
-                ? historySources(account, relay.accounts, relay.settings)
-                : []
-            }
-            busy={busy}
-            t={t}
-            cancel={relay.cancelDesktopRequest}
-            confirm={relay.confirmDesktopAction}
-          />
-        )}
+        <DesktopActionBody />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Dialog contents, rendered outside the portal so it can be tested statically. */
+export function DesktopActionBody() {
+  const relay = useRelay();
+  const { t } = useI18n();
+  const request = relay.desktopRequest;
+  if (!request) return null;
+  const account = relay.accounts.find((a) => a.id === request.accountId);
+  return (
+    <>
+      {/* The page banners sit under the overlay; failures of this action show here. */}
+      <RelayErrorAlert />
+      <DesktopActionReview
+        key={`${request.accountId}:${request.kind}`}
+        account={account}
+        active={relay.active}
+        kind={request.kind}
+        historyAccounts={
+          account ? historySources(account, relay.accounts, relay.settings) : []
+        }
+        busy={!!relay.desktopBusy}
+        t={t}
+        cancel={relay.cancelDesktopRequest}
+        confirm={relay.confirmDesktopAction}
+      />
+    </>
   );
 }

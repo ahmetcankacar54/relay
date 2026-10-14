@@ -1,5 +1,7 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Check, Monitor, X } from "lucide-react";
+import type { Account, AccountUsage } from "../../shared/types";
+import { cliNeedsReconnect } from "../../shared/account-state";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
@@ -7,11 +9,56 @@ import { useRelay } from "@/data/relay-context";
 import { localizeError } from "../messages";
 import { AutoSwitchStatus } from "../features/AutoSwitchStatus";
 
-const RECONNECT_ISSUES = new Set([
-  "renewal-required",
-  "expired",
-  "credentials-missing",
-]);
+export interface ReconnectIssue {
+  account: Account;
+  issue: string;
+  /** `login` needs a new browser sign-in; `renew` re-reads the saved one (may prompt). */
+  action: "login" | "renew";
+}
+
+/**
+ * Signed-in accounts whose usage connection needs attention, minus the ones the
+ * user dismissed this session (keyed `accountId:issue`). Mirrors UsageCard.
+ */
+export function reconnectIssues(
+  accounts: Account[],
+  usage: Record<string, AccountUsage | undefined>,
+  dismissed: ReadonlySet<string>,
+): ReconnectIssue[] {
+  const result: ReconnectIssue[] = [];
+  for (const account of accounts) {
+    if (!account.auth?.loggedIn) continue;
+    const u = usage[account.id];
+    const issue =
+      u?.issue ?? (u?.connectionRenewalRequired ? "renewal-required" : "");
+    const action = cliNeedsReconnect(account, u)
+      ? "login"
+      : issue === "renewal-required" || issue === "keychain-locked"
+        ? "renew"
+        : undefined;
+    if (!action || dismissed.has(`${account.id}:${issue}`)) continue;
+    result.push({ account, issue, action });
+  }
+  return result;
+}
+
+/** The current Relay or Desktop error, for surfaces (dialogs) that cover the page banners. */
+export function RelayErrorAlert() {
+  const relay = useRelay();
+  const { t, language } = useI18n();
+  const message = relay.error || relay.desktop?.error;
+  if (!message) return null;
+  return (
+    <Banner
+      tone="error"
+      role="alert"
+      onDismiss={() => void relay.dismissError()}
+      dismissLabel={t("Hatayı kapat", "Dismiss error")}
+    >
+      <span>{localizeError(message, language)}</span>
+    </Banner>
+  );
+}
 
 export function Banner({
   tone,
@@ -60,13 +107,14 @@ export function Banner({
 
 export function Banners() {
   const relay = useRelay();
-  const { t, language } = useI18n();
-  const { desktop, error, notice, settings, accounts, active } = relay;
-  const reconnect = accounts.filter((a) => {
-    const issue = relay.data?.usage[a.id]?.issue;
-    return !!issue && RECONNECT_ISSUES.has(issue);
-  });
-  const message = error || desktop?.error;
+  const { t } = useI18n();
+  const { desktop, notice, settings, accounts, active } = relay;
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  const reconnect = reconnectIssues(
+    accounts,
+    relay.data?.usage ?? {},
+    dismissed,
+  );
   return (
     <div className="flex flex-col gap-2 px-6 pb-3 empty:hidden">
       {relay.preview && (
@@ -80,16 +128,7 @@ export function Banners() {
           </span>
         </Banner>
       )}
-      {message && (
-        <Banner
-          tone="error"
-          role="alert"
-          onDismiss={() => void relay.dismissError()}
-          dismissLabel={t("Hatayı kapat", "Dismiss error")}
-        >
-          <span>{localizeError(message, language)}</span>
-        </Banner>
-      )}
+      <RelayErrorAlert />
       {notice && (
         <Banner
           tone="info"
@@ -130,26 +169,53 @@ export function Banners() {
           </span>
         </Banner>
       )}
-      {reconnect.map((a) => (
+      {reconnect.map(({ account: a, issue, action }) => (
         <Banner
-          key={a.id}
+          key={`${a.id}:${issue}`}
           tone="warn"
+          onDismiss={() =>
+            setDismissed((prev) => new Set(prev).add(`${a.id}:${issue}`))
+          }
+          dismissLabel={t("Uyarıyı kapat", "Dismiss warning")}
           action={
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!!relay.busy}
-              onClick={() => void relay.startCli(a)}
-            >
-              {t("Yeniden bağlan", "Reconnect")}
-            </Button>
+            action === "login" ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!!relay.busy}
+                onClick={() => void relay.startCli(a)}
+              >
+                {t("Yeniden bağlan", "Reconnect")}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={relay.usageBusy.has(a.id)}
+                onClick={() => void relay.refreshUsage(a, true)}
+              >
+                {issue === "keychain-locked"
+                  ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+                  : t("Bağlantıyı yenile", "Renew connection")}
+              </Button>
+            )
           }
         >
           <span>
-            {t(
-              `${a.name} · kullanım bağlantısının yenilenmesi gerekiyor.`,
-              `${a.name} · the usage connection needs to be renewed.`,
-            )}
+            {issue === "keychain-locked"
+              ? t(
+                  `${a.name} · limitleri okumak için Anahtarlık erişimi gerekiyor.`,
+                  `${a.name} · Keychain access is needed to read usage limits.`,
+                )
+              : action === "renew"
+                ? t(
+                    `${a.name} · kullanım bağlantısının yenilenmesi gerekiyor.`,
+                    `${a.name} · the usage connection needs to be renewed.`,
+                  )
+                : t(
+                    `${a.name} · tarayıcı girişinin yenilenmesi gerekiyor.`,
+                    `${a.name} · the browser sign-in needs to be renewed.`,
+                  )}
           </span>
         </Banner>
       ))}

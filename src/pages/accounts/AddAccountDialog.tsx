@@ -16,15 +16,19 @@ import { StatusDot } from "@/components/StatusDot";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { pendingFlow } from "@/data/selectors";
 import { DesktopSetup } from "../../features/DesktopSetup";
-import { DesktopPendingActions } from "@/app/ConnectionPanels";
+import { CliFlowPanel, DesktopPendingActions } from "@/app/ConnectionPanels";
+import { RelayErrorAlert } from "@/app/Banners";
 
 type Kind = "personal" | "work";
 type Step = 1 | 2 | 3;
 
 /** The create-profile payload: trimmed, with a sharing group only for work accounts. */
-export function profileInput(name: string, kind: Kind, group: string): CreateAccount {
+export function profileInput(
+  name: string,
+  kind: Kind,
+  group: string,
+): CreateAccount {
   const trimmed = group.trim();
   return kind === "work" && trimmed
     ? { name: name.trim(), kind, group: trimmed }
@@ -81,7 +85,10 @@ function StepIndicator({ step }: { step: Step }) {
             aria-current={active ? "step" : undefined}
           >
             {index > 0 && (
-              <span className="h-px w-3 shrink-0 bg-border" aria-hidden="true" />
+              <span
+                className="h-px w-3 shrink-0 bg-border"
+                aria-hidden="true"
+              />
             )}
             <span
               className={cn(
@@ -155,6 +162,8 @@ export function AddAccountSteps({
   return (
     <div className="grid gap-4">
       <StepIndicator step={step} />
+      {/* The page banners sit under the overlay; failures from these steps show here. */}
+      <RelayErrorAlert />
       {step === 1 && (
         <form
           className="grid gap-4"
@@ -292,7 +301,9 @@ export function AddAccountSteps({
           )}
           <div className="flex justify-end gap-2">
             {account.desktop ? (
-              <Button onClick={() => setStep(3)}>{t("Devam", "Continue")}</Button>
+              <Button onClick={() => setStep(3)}>
+                {t("Devam", "Continue")}
+              </Button>
             ) : (
               <Button variant="ghost" onClick={() => setStep(3)}>
                 {t("Atla", "Skip")}
@@ -309,10 +320,9 @@ export function AddAccountSteps({
               "Browser sign-in connects this account’s usage limits.",
             )}
           </p>
-          {flow && pendingFlow(flow) ? (
-            <StatusLine tone="warn" icon={<Globe2 />}>
-              {t("Tarayıcı onayı bekleniyor", "Waiting for browser approval")}
-            </StatusLine>
+          {/* The page-frame panel sits under the overlay; finish the sign-in here. */}
+          {flow ? (
+            <CliFlowPanel embedded />
           ) : account.auth?.loggedIn ? (
             <StatusLine tone="ok" icon={<Globe2 />}>
               {t("Bağlı", "Connected")}
@@ -320,14 +330,16 @@ export function AddAccountSteps({
             </StatusLine>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              variant="outline"
-              disabled={!!busy || (!!flow && pendingFlow(flow))}
-              onClick={() => void relay.startCli(account)}
-            >
-              <Globe2 />
-              {t("Tarayıcıda bağla", "Connect in browser")}
-            </Button>
+            {!flow && (
+              <Button
+                variant="outline"
+                disabled={!!busy}
+                onClick={() => void relay.startCli(account)}
+              >
+                <Globe2 />
+                {t("Tarayıcıda bağla", "Connect in browser")}
+              </Button>
+            )}
             <Button onClick={close}>{t("Bitti", "Done")}</Button>
           </div>
         </>

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatRelative } from "@/lib/time";
+import { formatPercent } from "@/lib/meter";
 import { PageFrame } from "@/app/PageFrame";
 import { Banner } from "@/app/Banners";
 import type { PageId } from "@/app/routes";
@@ -83,7 +84,7 @@ export function Overview({
               )}
               <b>{suggestion.name}</b>
               {suggestedUse !== undefined
-                ? ` (%${Math.round(suggestedUse)})`
+                ? ` (${formatPercent(suggestedUse, language)})`
                 : ""}
               .
             </span>

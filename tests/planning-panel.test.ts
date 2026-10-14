@@ -91,7 +91,8 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
     { autoStart: true, accounts: [{ id: a.id }, { id: randomUUID() }] },
     keeper,
   );
-  assert.match(html, /Pencere açık · 15:15&#x27;te sıfırlanır/);
+  assert.match(html, /Pencere açık · Sıfırlanma 15:15/);
+  assert.match(html, /text-ok-foreground/);
   // Today's count comes from the plan itself (06:30, 11:30, 16:30); the next
   // start comes from the keeper's live view.
   assert.match(html, /Bugün 3 başlatma planlı · sonraki 17:45 Vertex/);

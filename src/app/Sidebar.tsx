@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { StatusDot } from "@/components/StatusDot";
@@ -136,82 +135,80 @@ export function Sidebar({
     label: t("Ayarlar", "Settings"),
   };
   return (
-    <TooltipProvider delayDuration={300}>
-      <aside
+    <aside
+      className={cn(
+        "flex h-full shrink-0 flex-col border-r bg-sidebar pb-3 text-sidebar-foreground",
+        compact ? "w-14 items-center px-1.5" : "w-[200px] px-2.5",
+      )}
+    >
+      <div className="h-10 w-full shrink-0 [-webkit-app-region:drag]" />
+      <div
         className={cn(
-          "flex h-full shrink-0 flex-col border-r bg-sidebar pb-3 text-sidebar-foreground",
-          compact ? "w-14 items-center px-1.5" : "w-[200px] px-2.5",
+          "mb-4 flex items-center gap-2 font-display text-[15px] font-bold",
+          compact ? "justify-center" : "px-1.5",
         )}
       >
-        <div className="h-10 w-full shrink-0 [-webkit-app-region:drag]" />
-        <div
-          className={cn(
-            "mb-4 flex items-center gap-2 font-display text-[15px] font-bold",
-            compact ? "justify-center" : "px-1.5",
-          )}
-        >
-          {icon ? (
-            <img src={icon} alt="" className="size-6 rounded-md" />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="grid size-6 place-items-center rounded-md bg-brand text-xs text-white"
-            >
-              R
-            </span>
-          )}
-          {!compact && "Relay"}
-        </div>
-        <nav
-          aria-label={t("Sayfalar", "Pages")}
-          className="flex w-full flex-col gap-0.5"
-        >
-          {items.map((item) => (
-            <NavItem
-              key={item.id}
-              item={item}
-              active={page === item.id}
-              compact={compact}
-              go={go}
-            />
-          ))}
-        </nav>
-        <div className="flex-1" />
-        {summary && !compact && (
-          <div className="mb-2 w-full rounded-lg border bg-card p-2.5 text-xs [-webkit-app-region:no-drag]">
-            <button
-              type="button"
-              onClick={() => go("genel")}
-              className="flex w-full flex-col items-start justify-start gap-0.5 rounded-md text-left whitespace-normal"
-            >
-              <span className="flex w-full min-w-0 items-center gap-1.5">
-                <StatusDot tone={summary.running ? "ok" : "off"} />
-                <b className="truncate font-semibold">{summary.name}</b>
-              </span>
-              <span className="text-muted-foreground">
-                {summary.running
-                  ? t("Desktop'ta açık", "Open in Desktop")
-                  : t("Desktop kapalı", "Desktop closed")}
-              </span>
-            </button>
-            <div className="mt-1.5">
-              <LimitMeter
-                label={t("5 saatlik pencere", "5-hour window")}
-                percent={summary.fiveHour}
-                size="sm"
-              />
-            </div>
-          </div>
+        {icon ? (
+          <img src={icon} alt="" className="size-6 rounded-md" />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="grid size-6 place-items-center rounded-md bg-brand text-xs text-white"
+          >
+            R
+          </span>
         )}
-        <div className="w-full">
+        {!compact && "Relay"}
+      </div>
+      <nav
+        aria-label={t("Sayfalar", "Pages")}
+        className="flex w-full flex-col gap-0.5"
+      >
+        {items.map((item) => (
           <NavItem
-            item={settings}
-            active={page === "ayarlar"}
+            key={item.id}
+            item={item}
+            active={page === item.id}
             compact={compact}
             go={go}
           />
+        ))}
+      </nav>
+      <div className="flex-1" />
+      {summary && !compact && (
+        <div className="mb-2 w-full rounded-lg border bg-card p-2.5 text-xs [-webkit-app-region:no-drag]">
+          <button
+            type="button"
+            onClick={() => go("genel")}
+            className="flex w-full flex-col items-start justify-start gap-0.5 rounded-md text-left whitespace-normal"
+          >
+            <span className="flex w-full min-w-0 items-center gap-1.5">
+              <StatusDot tone={summary.running ? "ok" : "off"} />
+              <b className="truncate font-semibold">{summary.name}</b>
+            </span>
+            <span className="text-muted-foreground">
+              {summary.running
+                ? t("Desktop'ta açık", "Open in Desktop")
+                : t("Desktop kapalı", "Desktop closed")}
+            </span>
+          </button>
+          <div className="mt-1.5">
+            <LimitMeter
+              label={t("5 saatlik pencere", "5-hour window")}
+              percent={summary.fiveHour}
+              size="sm"
+            />
+          </div>
         </div>
-      </aside>
-    </TooltipProvider>
+      )}
+      <div className="w-full">
+        <NavItem
+          item={settings}
+          active={page === "ayarlar"}
+          compact={compact}
+          go={go}
+        />
+      </div>
+    </aside>
   );
 }

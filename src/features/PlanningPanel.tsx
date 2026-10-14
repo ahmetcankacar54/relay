@@ -18,7 +18,11 @@ import type {
 } from "../../shared/types";
 import { dayPlan, shiftDate, WINDOW_MS } from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
-import { dayTimeline, nextPlannedWindow, windowTone } from "../lib/day-timeline";
+import {
+  dayTimeline,
+  nextPlannedWindow,
+  windowTone,
+} from "../lib/day-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -92,8 +96,8 @@ function statusText(
         : t("Planlı başlatma yok", "No planned start");
     case "active":
       return t(
-        `Pencere açık · ${clock(status.resetsAt!, zone)}'te sıfırlanır`,
-        `Window open · resets ${clock(status.resetsAt!, zone)}`,
+        `Pencere açık · Sıfırlanma ${clock(status.resetsAt!, zone)}`,
+        `Window open · Resets ${clock(status.resetsAt!, zone)}`,
       );
     case "due":
       return t("Başlatılıyor…", "Starting…");
@@ -148,7 +152,7 @@ const noteClass = "text-xs text-muted-foreground";
 
 /** Account status colour by keeper state. */
 const stateTone: Partial<Record<KeeperAccountStatus["state"], string>> = {
-  active: "text-ok",
+  active: "text-ok-foreground",
   waiting: "text-warn-foreground",
   due: "text-warn-foreground",
   blocked: "text-crit",
@@ -765,7 +769,7 @@ export function PlanningPanel({
                       attempt.status === "failed"
                         ? "text-crit"
                         : attempt.status === "verified"
-                          ? "text-ok"
+                          ? "text-ok-foreground"
                           : "text-muted-foreground",
                     )}
                   >

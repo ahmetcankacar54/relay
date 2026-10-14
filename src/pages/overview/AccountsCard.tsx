@@ -34,6 +34,12 @@ export function AccountsCard({
     relay.desktopBusy ||
     !!relay.pendingDesktop ||
     !!relay.desktop?.recoveryRequired;
+  // Same lock as the Accounts row and sheet “Connect Desktop” buttons.
+  const linkBlocked =
+    relay.desktopBusy ||
+    !relay.desktop?.available ||
+    !!relay.pendingDesktop ||
+    !!relay.desktop?.recoveryRequired;
   const subtitle = (row: OverviewRow) => {
     switch (row.state) {
       case "window-open": {
@@ -50,7 +56,7 @@ export function AccountsCard({
         const at = row.availableAt
           ? formatClock(row.availableAt, language, zone)
           : "—";
-        return t(`${at}'te açılır`, `Opens at ${at}`);
+        return t(`Açılış ${at}`, `Opens ${at}`);
       }
       case "not-linked":
         return t("Desktop’a bağlı değil", "Not linked to Desktop");
@@ -118,6 +124,7 @@ export function AccountsCard({
                   <Button
                     size="sm"
                     variant="ghost"
+                    disabled={linkBlocked}
                     onClick={() => {
                       relay.setSetupId(account.id);
                       go("hesaplar");

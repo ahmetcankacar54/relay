@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 
 :root {
+  color-scheme: light;
   --radius: 0.75rem;
   --background: #fbf8f3;
   --foreground: #2b2621;
@@ -26,6 +27,8 @@
   --brand: #ec5f1f;
   --track: #f0e9df;
   --ok: #3f9d5a;
+  /* Success text on light surfaces; --ok is for dots and fills. */
+  --ok-foreground: #2f7a45;
   --warn: #d99a00;
   --warn-foreground: #8a5a00;
   --crit: #d4380d;
@@ -37,6 +40,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --background: #1d1916;
     --foreground: #f3ece4;
     --card: #2b2622;
@@ -60,6 +64,7 @@
     --brand: #ff7a3d;
     --track: #3a332d;
     --ok: #5cc27a;
+    --ok-foreground: #7ad694;
     --warn: #e0a100;
     --warn-foreground: #f2c14e;
     --crit: #ff5a36;
@@ -99,6 +104,7 @@
   --color-brand: var(--brand);
   --color-track: var(--track);
   --color-ok: var(--ok);
+  --color-ok-foreground: var(--ok-foreground);
   --color-warn: var(--warn);
   --color-warn-foreground: var(--warn-foreground);
   --color-crit: var(--crit);

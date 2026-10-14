@@ -1,5 +1,7 @@
+import { useContext } from "react";
 import { cn } from "@/lib/utils";
-import { meterClass, meterTone } from "@/lib/meter";
+import { formatPercent, meterClass, meterTone } from "@/lib/meter";
+import { I18nContext } from "@/data/i18n";
 export function LimitMeter({
   label,
   percent,
@@ -11,6 +13,8 @@ export function LimitMeter({
   detail?: string;
   size?: "sm" | "md";
 }) {
+  // Read the context directly: the sidebar renders this without a provider in tests.
+  const language = useContext(I18nContext)?.language ?? "tr";
   const value =
     percent === undefined ? undefined : Math.max(0, Math.min(100, percent));
   return (
@@ -23,7 +27,7 @@ export function LimitMeter({
             size === "md" ? "text-sm" : "text-xs",
           )}
         >
-          {value === undefined ? "—" : `%${Math.round(value)}`}
+          {formatPercent(value, language)}
         </b>
       </div>
       <div

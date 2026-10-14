@@ -14,7 +14,7 @@ shortcuts are ⌘1–⌘5 and ⌘, for Settings.
 
 - **Genel** (Overview) — the active account, today's plan and automation status.
 - **Hesaplar** (Accounts) — search, add, link to Desktop and edit accounts.
-- **Kullanım** (Usage) — five-hour and weekly limits and 7/30-day statistics.
+- **Kullanım** (Usage) — 7/30-day usage statistics and limit warning settings.
 - **Planlama** (Planning) — work hours, the day timeline and per-account start times.
 - **Geçiş** (Switching) — switch preferences, shared history, continuation and fleet.
 - **Ayarlar** (Settings) — appearance (system, light or dark), language and

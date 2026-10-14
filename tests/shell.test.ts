@@ -5,11 +5,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Sidebar } from "../src/app/Sidebar";
 import { LimitMeter } from "../src/components/LimitMeter";
 import { Banners } from "../src/app/Banners";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account } from "../shared/types";
 
 const t = (tr: string) => tr;
+// The shell owns the single TooltipProvider; the compact rail's tooltips need it.
+const inShell = (child: ReturnType<typeof createElement>) =>
+  createElement(TooltipProvider, null, child);
 
 test("sidebar lists the six pages, marks the current one and shows automation dots", () => {
   const html = renderToStaticMarkup(
@@ -39,13 +43,13 @@ test("sidebar lists the six pages, marks the current one and shows automation do
 
 test("compact sidebar keeps accessible names", () => {
   const html = renderToStaticMarkup(
-    createElement(Sidebar, {
+    inShell(createElement(Sidebar, {
       page: "genel",
       go: () => {},
       t,
       compact: true,
       status: { accounts: 0, planning: false, switching: false },
-    }),
+    })),
   );
   assert.match(html, /aria-label="Planlama"/);
 });
@@ -71,6 +75,7 @@ test("banners read an injected relay and offer reconnect for expired usage sign-
     group: "work:a1",
     color: "olive",
     createdAt: "2026-10-14T00:00:00Z",
+    auth: { loggedIn: true, checkedAt: "2026-10-14T00:00:00Z" },
   } as Account;
   const relay = {
     preview: true,
@@ -136,13 +141,13 @@ test("sidebar buttons override the legacy centred button style and keep the mete
 
 test("compact rail centres its icon buttons", () => {
   const html = renderToStaticMarkup(
-    createElement(Sidebar, {
+    inShell(createElement(Sidebar, {
       page: "genel",
       go: () => {},
       t,
       compact: true,
       status: { accounts: 0, planning: false, switching: false },
-    }),
+    })),
   );
   for (const b of html.match(/<button[^>]*>/g) ?? [])
     assert.match(b, /justify-center/);

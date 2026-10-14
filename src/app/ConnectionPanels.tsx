@@ -12,7 +12,8 @@ import { ConnectionProgress } from "../features/ConnectionProgress";
 import { selectClass } from "../features/DesktopSetup";
 import { localizeError } from "../messages";
 
-const panelClass = "mx-6 mb-3 gap-3 px-4 py-4";
+const cardClass = "gap-3 px-4 py-4";
+const panelClass = `mx-6 mb-3 ${cardClass}`;
 const titleClass = "flex items-start gap-3";
 const iconClass = "mt-0.5 size-5 shrink-0 text-brand";
 const actionsClass = "flex flex-wrap items-center gap-2";
@@ -160,8 +161,12 @@ export function DesktopPendingPanel() {
   );
 }
 
-/** Browser (CLI) sign-in flow for usage limits; shown above every page. */
-export function CliFlowPanel() {
+/**
+ * Browser (CLI) sign-in flow for usage limits; shown above every page. The
+ * `embedded` copy lives inside the add dialog and account sheet (which cover the
+ * page panel) and drops the page-level id and margins.
+ */
+export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
   const relay = useRelay();
   const { t, language } = useI18n();
   const { api, accounts, busy, flow, flowAccount, action } = relay;
@@ -171,9 +176,9 @@ export function CliFlowPanel() {
   if (!flow) return null;
   return (
     <Card
-      id="cli-connection-panel"
+      id={embedded ? undefined : "cli-connection-panel"}
       className={cn(
-        panelClass,
+        embedded ? cardClass : panelClass,
         flow.status === "connected" && "border-brand/40",
       )}
       aria-live="polite"

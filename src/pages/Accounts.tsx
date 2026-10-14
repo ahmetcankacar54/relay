@@ -35,11 +35,38 @@ export function intentAllowed(intent: string, g: IntentGuards): boolean {
   return false;
 }
 
+/**
+ * Effect that forgets the global setup target when the Accounts page closes, so a
+ * stale setup can’t reopen the sheet on a later visit. `get` returns the current
+ * setter. The clear is deferred so StrictMode’s immediate re-mount keeps it.
+ */
+export function forgetSetupOnLeave(
+  get: () => (id: string | undefined) => void,
+  defer: (fn: () => void) => void = queueMicrotask,
+) {
+  let mounted = 0;
+  return () => {
+    mounted++;
+    return () => {
+      mounted--;
+      defer(() => {
+        if (!mounted) get()(undefined);
+      });
+    };
+  };
+}
+
 export function Accounts() {
   const relay = useRelay();
   const { t, language } = useI18n();
-  const { accounts, desktop, desktopBusy, pendingDesktop, setupId, setSetupId } =
-    relay;
+  const {
+    accounts,
+    desktop,
+    desktopBusy,
+    pendingDesktop,
+    setupId,
+    setSetupId,
+  } = relay;
   const unlinked = accounts.some((a) => !a.desktop);
   const guards: IntentGuards = {
     busy: desktopBusy,
@@ -57,6 +84,12 @@ export function Accounts() {
   const [linking, setLinking] = useState(false);
   const [selected, setSelected] = useState<string>();
   const search = useRef<HTMLInputElement>(null);
+  const setSetupIdRef = useRef(setSetupId);
+  setSetupIdRef.current = setSetupId;
+  const [forgetSetup] = useState(() =>
+    forgetSetupOnLeave(() => setSetupIdRef.current),
+  );
+  useEffect(forgetSetup, [forgetSetup]);
   // ⌘K focuses the account search while this page is open.
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -162,7 +195,9 @@ export function Accounts() {
               <SelectItem value="connected">
                 {t("Desktop bağlı", "Desktop connected")}
               </SelectItem>
-              <SelectItem value="personal">{t("Kişisel", "Personal")}</SelectItem>
+              <SelectItem value="personal">
+                {t("Kişisel", "Personal")}
+              </SelectItem>
               <SelectItem value="work">{t("Şirket", "Work")}</SelectItem>
             </SelectContent>
           </Select>
@@ -184,7 +219,10 @@ export function Accounts() {
             <h3 className="font-semibold">
               {accounts.length
                 ? t("Eşleşen hesap yok", "No matching accounts")
-                : t("Tek panel. Tüm hesapların.", "One panel. All your accounts.")}
+                : t(
+                    "Tek panel. Tüm hesapların.",
+                    "One panel. All your accounts.",
+                  )}
             </h3>
             <p className="text-sm text-muted-foreground">
               {accounts.length

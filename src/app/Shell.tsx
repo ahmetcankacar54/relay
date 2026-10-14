@@ -28,7 +28,10 @@ export function Shell() {
   });
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      const target = shortcutPage(e);
+      const target = shortcutPage(
+        e,
+        !!document.querySelector('[role="dialog"]'),
+      );
       if (target) {
         e.preventDefault();
         go(target);

@@ -20,6 +20,8 @@ import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
+import { CliFlowPanel } from "@/app/ConnectionPanels";
+import { RelayErrorAlert } from "@/app/Banners";
 import { UsageCard } from "../../features/UsageCard";
 import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
@@ -142,6 +144,8 @@ export function AccountSheetBody({
   const duplicate = duplicateCliAccount(a, accounts);
   return (
     <div className="grid gap-5 px-4 pb-6">
+      {/* The page banners sit under the sheet; failures of its actions show here. */}
+      <RelayErrorAlert />
       <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1 text-sm">
         <dt className="text-muted-foreground">{t("E-posta", "Email")}</dt>
         <dd className="min-w-0 break-words">
@@ -149,11 +153,17 @@ export function AccountSheetBody({
             a.auth?.email ??
             t("Giriş bekleniyor", "Waiting for sign-in")}
         </dd>
-        <dt className="text-muted-foreground">{t("Kuruluş", "Organization")}</dt>
+        <dt className="text-muted-foreground">
+          {t("Kuruluş", "Organization")}
+        </dt>
         <dd className="min-w-0 break-words">{a.auth?.orgName ?? "—"}</dd>
-        <dt className="text-muted-foreground">{t("Tür · grup", "Type · group")}</dt>
+        <dt className="text-muted-foreground">
+          {t("Tür · grup", "Type · group")}
+        </dt>
         <dd className="min-w-0 break-words">
-          {a.kind === "personal" ? t("Kişisel", "Personal") : t("Şirket", "Work")}
+          {a.kind === "personal"
+            ? t("Kişisel", "Personal")
+            : t("Şirket", "Work")}
           {a.kind === "work" ? ` · ${groupName(a, t)}` : ""}
         </dd>
         {a.auth?.subscription && (
@@ -206,7 +216,10 @@ export function AccountSheetBody({
           tone={a.desktop ? "ok" : "off"}
           status={
             a.desktop
-              ? t("Kaydedildi · hesap geçişine hazır", "Saved · ready to switch")
+              ? t(
+                  "Kaydedildi · hesap geçişine hazır",
+                  "Saved · ready to switch",
+                )
               : t(
                   "İlk kurulum gerekli · henüz geçiş yapılamaz",
                   "Setup required · switching is not ready yet",
@@ -290,7 +303,10 @@ export function AccountSheetBody({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                aria-label={t("CLI bağlantısını doğrula", "Verify CLI connection")}
+                aria-label={t(
+                  "CLI bağlantısını doğrula",
+                  "Verify CLI connection",
+                )}
                 title={t("Bağlantıyı kontrol et", "Check connection")}
                 disabled={!!busy || waiting}
                 onClick={() =>
@@ -315,6 +331,8 @@ export function AccountSheetBody({
             </>
           }
         />
+        {/* The page-frame panel sits under the sheet; finish the sign-in here. */}
+        {relay.flow?.accountId === a.id && <CliFlowPanel embedded />}
         <UsageCard
           usage={usage}
           busy={usageBusy.has(a.id)}

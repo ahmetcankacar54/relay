@@ -33,13 +33,17 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { cn } from "@/lib/utils";
+import { formatPercent } from "@/lib/meter";
 import { avatarClass, planLabel } from "./accountLabels";
 
-const percent = (value?: number) =>
-  value === undefined ? "—" : `%${Math.round(value)}`;
-
 export interface RowAction {
-  key: "switch" | "open" | "cli" | "desktop-reconnect" | "desktop-link" | "refresh";
+  key:
+    | "switch"
+    | "open"
+    | "cli"
+    | "desktop-reconnect"
+    | "desktop-link"
+    | "refresh";
   label: string;
   icon: LucideIcon;
   disabled: boolean;
@@ -73,7 +77,8 @@ export function rowActions(
       label: t("Claude’u aç", "Open Claude"),
       icon: ArrowUpRight,
       disabled: switchBlocked,
-      run: () => void relay.action(`open:${a.id}`, () => relay.api.openDesktop()),
+      run: () =>
+        void relay.action(`open:${a.id}`, () => relay.api.openDesktop()),
     });
   items.push({
     key: "cli",
@@ -157,11 +162,17 @@ export function AccountsTable({
               ? { tone: "ok" as const, label: t("Açık", "Running") }
               : a.desktop
                 ? { tone: "ok" as const, label: t("Kayıtlı", "Saved") }
-                : { tone: "off" as const, label: t("Bağlı değil", "Not linked") };
+                : {
+                    tone: "off" as const,
+                    label: t("Bağlı değil", "Not linked"),
+                  };
           const usageState = waiting
             ? {
                 tone: "warn" as const,
-                label: t("Tarayıcı onayı bekleniyor", "Waiting for browser approval"),
+                label: t(
+                  "Tarayıcı onayı bekleniyor",
+                  "Waiting for browser approval",
+                ),
               }
             : !a.auth
               ? { tone: "off" as const, label: "—" }
@@ -226,7 +237,7 @@ export function AccountsTable({
               <TableCell className="tabular-nums">
                 {five === undefined && week === undefined
                   ? "—"
-                  : `${percent(five)} · ${percent(week)}`}
+                  : `${formatPercent(five, language)} · ${formatPercent(week, language)}`}
               </TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
