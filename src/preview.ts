@@ -272,18 +272,37 @@ if (scenario === "recovery") desktop.recoveryRequired = true;
 if (scenario === "planning") {
   accounts[0].planning = { plan: "max5", capacityWeight: 5 };
   accounts[1].planning = { plan: "pro", capacityWeight: 1 };
-  accounts[2].planning = { plan: "team", capacityWeight: 8 };
+  accounts[2].planning = { plan: "team", capacityWeight: 2 };
   state.settings.planning = {
     ...state.settings.planning,
     autoStart: true,
-    weekday: { enabled: true, start: "09:00", end: "21:00" },
+    weekday: { enabled: true, start: "09:00", end: "18:00" },
     accounts: ids.slice(0, 3).map((id) => ({ id })),
   };
   const hour = 3_600_000;
+  // A learned busy day: quieter at lunch, flat at the weekend.
+  const busy: Record<number, number> = {
+    9: 220,
+    10: 242,
+    11: 242,
+    12: 110,
+    13: 198,
+    14: 242,
+    15: 242,
+    16: 220,
+    17: 154,
+  };
   state.planning = {
     enabled: true,
     running: false,
     plannedToday: 0,
+    tempo: {
+      source: "learned",
+      weekday: Array.from({ length: 24 }, (_, h) => busy[h] ?? 205),
+      weekend: Array.from({ length: 24 }, () => 205),
+      rate: { weekday: 205, weekend: 205 },
+      days: { weekday: 15, weekend: 2 },
+    },
     accounts: [
       {
         accountId: ids[0],

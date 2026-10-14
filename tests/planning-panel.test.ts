@@ -7,6 +7,7 @@ import { PlanningPanel } from "../src/features/PlanningPanel";
 import { wallTime } from "../shared/planning";
 import { dayPlan, planContext } from "../shared/day-plan";
 import { presetTempo, type Tempo } from "../shared/tempo";
+import { liveForecast } from "../shared/live-forecast";
 import { dayTimeline } from "../src/lib/day-timeline";
 import { forecastSummary } from "../src/lib/forecast-text";
 import {
@@ -14,6 +15,7 @@ import {
   type Account,
   type KeeperSnapshot,
   type PlanningSettings,
+  type TempoChoice,
 } from "../shared/types";
 
 const ZONE = "Europe/Istanbul";
@@ -48,6 +50,9 @@ const clock = (time: number) =>
     minute: "2-digit",
     hourCycle: "h23",
   }).format(time);
+/** Badges with exactly this text (the tempo toggle also reads "Otomatik"). */
+const badges = (html: string, text: string) =>
+  html.match(new RegExp(`data-slot="badge"[^>]*>${text}<`, "g"))?.length ?? 0;
 function render(settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot) {
   return renderToStaticMarkup(
     createElement(PlanningPanel, {
@@ -75,7 +80,7 @@ test("the panel shows the switch, both hour rows and automatic first starts", ()
     html.includes(`Kişisel - Max ilk başlangıç, ${clock(first.firstStart)}`),
   );
   assert.ok(html.includes(`Vertex ilk başlangıç, ${clock(second.firstStart)}`));
-  assert.equal(html.match(/>Otomatik</g)?.length, 2);
+  assert.equal(badges(html, "Otomatik"), 2);
   assert.doesNotMatch(html, />Elle</);
 });
 
@@ -84,7 +89,7 @@ test("a manual first start is marked and can return to automatic", () => {
   const html = render({ accounts });
   assert.match(html, /Kişisel - Max ilk başlangıç, 07:00/);
   assert.match(html, />Elle</);
-  assert.equal(html.match(/>Otomatik</g)?.length, 1);
+  assert.equal(badges(html, "Otomatik"), 1);
   assert.match(html, /Otomatiğe dön/);
   const automatic = todayPlan({ accounts }).accounts[1];
   assert.equal(automatic.manual, false);
@@ -380,4 +385,186 @@ test("an all-manual plan shows its gap on the lane and no comparison", () => {
   // With the windows as planned the live forecast is the plan's, switches and all.
   assert.equal(count(html, /bg-foreground\/55/g), plan.forecast!.switches);
   assert.doesNotMatch(html, /Bu plan|Eşit aralıklı dağıtım/);
+});
+
+// Tempo, forecast pill and per-account window lines.
+const unknownPlan: Account = {
+  ...account("Eski"),
+  planning: { plan: "unknown", capacityWeight: 1 },
+};
+const noPlan: Account = { ...account("Yeni"), planning: undefined };
+function renderPlanning({
+  planned,
+  now = wednesday("08:00"),
+  tempo,
+  choice,
+}: {
+  planned: Account[];
+  now?: number;
+  /** The keeper's tempo; without it the page falls back to the settings. */
+  tempo?: Tempo;
+  choice?: TempoChoice;
+}) {
+  return renderToStaticMarkup(
+    createElement(PlanningPanel, {
+      settings: {
+        ...scenarioSettings(planned.map(({ id }) => ({ id }))),
+        ...(choice ? { tempo: choice } : {}),
+      },
+      keeper: {
+        enabled: true,
+        running: false,
+        plannedToday: 0,
+        attempts: [],
+        accounts: [],
+        ...(tempo ? { tempo } : {}),
+      },
+      accounts: [a, b, team, pro, unknownPlan, noPlan],
+      usage: {},
+      activeId: a.id,
+      disabled: false,
+      t: tr,
+      now,
+      update: () => {},
+      updateAccount: () => {},
+    }),
+  );
+}
+/** The tempo toggle item with this label (its whole button). */
+const toggleItem = (html: string, label: string) =>
+  html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0] ?? "";
+
+test("the hours card shows the learned tempo and how long a window lasts at it", () => {
+  const html = renderPlanning({ planned: [a, b, pro], tempo: busyTempo });
+  assert.match(html, />Çalışma saatleri ve tempo</);
+  assert.match(html, />Tempo</);
+  assert.match(html, />ne hızla tüketiyorsun</);
+  assert.match(toggleItem(html, "Otomatik"), /data-state="on"/);
+  for (const label of ["Hafif", "Orta", "Yoğun"])
+    assert.match(toggleItem(html, label), /data-state="off"/, label);
+  assert.ok(
+    html.includes("Yoğun gün ≈ 205 Pro birimi/sa · son 4 haftada 17 iş günü"),
+  );
+  // Each plan once (both Max 5× accounts share a line), largest first; the
+  // unplanned Team account is not listed.
+  assert.ok(
+    html.includes(
+      "Bu tempoyla bir pencere: Max 5× ~2 sa 25 dk · Pro ~30 dk yeter.",
+    ),
+  );
+  assert.ok(
+    renderScenario(automatic, wednesday("08:00")).includes(
+      "Bu tempoyla bir pencere: Max 5× ~2 sa 25 dk · Team · 2 ~1 sa · Pro ~30 dk yeter.",
+    ),
+  );
+});
+
+test("the default and a fixed tempo say so, and the toggle shows the choice", () => {
+  const fallback = renderPlanning({ planned: [a, pro] });
+  assert.ok(
+    fallback.includes("Orta (varsayılan) ≈ 50 Pro birimi/sa · veri birikiyor"),
+  );
+  assert.match(toggleItem(fallback, "Otomatik"), /data-state="on"/);
+  assert.ok(
+    fallback.includes(
+      "Bu tempoyla bir pencere: Max 5× ~10 sa · Pro ~2 sa yeter.",
+    ),
+  );
+  const heavy = renderPlanning({ planned: [a, pro], choice: "heavy" });
+  assert.ok(heavy.includes("Sabit tempo ≈ 120 Pro birimi/sa"));
+  assert.doesNotMatch(heavy, /Sabit tempo ≈ 120 Pro birimi\/sa ·/);
+  assert.match(toggleItem(heavy, "Yoğun"), /data-state="on"/);
+  assert.match(toggleItem(heavy, "Otomatik"), /data-state="off"/);
+  assert.ok(
+    heavy.includes(
+      "Bu tempoyla bir pencere: Max 5× ~4 sa 10 dk · Pro ~50 dk yeter.",
+    ),
+  );
+});
+
+test("the hero forecasts the day before work and the rest of it during work", () => {
+  const before = renderScenario(automatic, wednesday("08:00"));
+  assert.match(
+    before,
+    /<i class="[^"]*bg-ok[^"]*"[^>]*><\/i>Tahmin: Kesintisiz · 3 geçiş</,
+  );
+  assert.match(before, />Yoğun gün temposuyla</);
+  // During work: the live forecast from now, as the lane shows it.
+  const now = wednesday("12:00");
+  const settings = scenarioSettings(automatic);
+  const context = planContext(scenarioAccounts, busyTempo);
+  const rest = liveForecast({
+    plan: dayPlan(WEDNESDAY, settings, context),
+    settings,
+    context,
+    usage: {},
+    activeId: a.id,
+    now,
+  })!;
+  assert.equal(
+    forecastSummary(rest, tr, clock),
+    "16:02–16:15 kotasız · 3 geçiş",
+  );
+  const during = renderScenario(automatic, now);
+  assert.match(
+    during,
+    /<i class="[^"]*bg-warn[^"]*"[^>]*><\/i>Bugün kalan: 16:02–16:15 kotasız · 3 geçiş</,
+  );
+  assert.doesNotMatch(during, /Tahmin: /);
+  // The tempo chip names the tempo's source.
+  assert.match(
+    renderPlanning({ planned: [a], choice: "heavy" }),
+    />Sabit tempoyla</,
+  );
+  assert.match(renderPlanning({ planned: [a] }), />Varsayılan tempoyla</);
+  // Nothing planned: neither pill.
+  assert.doesNotMatch(
+    renderPlanning({ planned: [] }),
+    /Tahmin: |Bugün kalan: |tempoyla</,
+  );
+});
+
+test("each planned account says how long its window lasts and when it works today", () => {
+  const html = renderScenario(automatic, wednesday("08:00"));
+  const line = (text: string) =>
+    new RegExp(
+      `<small class="[^"]*text-muted-foreground[^"]*">${text}</small>`,
+    );
+  assert.match(
+    html,
+    line("Pencere ~2 sa 25 dk yeter · bugün 09:00–11:09, 14:13–18:00"),
+  );
+  assert.match(html, line("Pencere ~1 sa yeter · bugün 11:55–14:13"));
+  assert.match(html, line("Pencere ~30 dk yeter · bugün 11:09–11:55"));
+  // At 10:00 Max's block runs across now: the planned and the live part read
+  // as one range.
+  assert.ok(
+    renderScenario(automatic, wednesday("10:00")).includes(
+      "Pencere ~2 sa 25 dk yeter · bugün 09:00–14:03, 16:15–18:00",
+    ),
+  );
+  // An account without a chosen plan asks for one instead.
+  const unknown = renderPlanning({
+    planned: [a, unknownPlan, noPlan],
+    tempo: busyTempo,
+  });
+  assert.equal(
+    count(
+      unknown,
+      /<small class="[^"]*text-warn-foreground[^"]*">Plan türünü seç; 1× sayılıyor<\/small>/g,
+    ),
+    2,
+  );
+  assert.equal(count(unknown, />Pencere ~/g), 1);
+});
+
+test("the notes explain the order and the warm-ups", () => {
+  const html = renderScenario(automatic, wednesday("08:00"));
+  assert.match(html, /Sıra yalnızca eşitlikte öncelik verir\./);
+  assert.doesNotMatch(html, /Sıra, otomatik saatlerin dağıtım sırasıdır/);
+  assert.ok(
+    html.includes(
+      "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay hesapları kapasiteye ve tempoya göre işten önce ısıtır.",
+    ),
+  );
 });

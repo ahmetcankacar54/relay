@@ -110,6 +110,8 @@ export interface DayTimeline {
    * current or next work interval is forecast from `now` with live usage.
    */
   lane: LaneSegment[];
+  /** Today only: the live forecast the lane shows from now, and its plan's date. */
+  live?: { date: string; forecast: Forecast };
   /** The day's own plan against the even spread, when some account is automatic. */
   compare?: {
     plan: Forecast;
@@ -234,6 +236,9 @@ export function dayTimeline({
     rows,
     showNow: offset === 0 && now >= dayBegin && now < dayEnd,
     lane,
+    ...(current && rest
+      ? { live: { date: current.date, forecast: rest } }
+      : {}),
     ...(compare ? { compare } : {}),
   };
 }

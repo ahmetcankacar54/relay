@@ -11,7 +11,7 @@ import type {
 import { dayPlan, planContext, shiftDate } from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
 import { fallbackTempo } from "../../shared/tempo";
-import { nextPlannedWindow } from "../lib/day-timeline";
+import { dayTimeline, nextPlannedWindow } from "../lib/day-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,6 +22,9 @@ import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { PlanEditor } from "./PlanEditor";
 import { PlanTimeline } from "../pages/planning/PlanTimeline";
+import { TempoRow } from "../pages/planning/TempoRow";
+import { ForecastBadges } from "../pages/planning/ForecastBadges";
+import { AccountWindowLine } from "../pages/planning/AccountWindowLine";
 
 type T = (tr: string, en: string) => string;
 const failure: Record<string, [string, string]> = {
@@ -252,6 +255,29 @@ export function PlanningPanel({
   );
   // The next day with work hours supplies the automatic times shown per account.
   const reference = plans.find((plan) => plan.accounts.length);
+  // Today's lane: who works when, live from now (the account lines read it).
+  const todayView = dayTimeline({
+    settings: planned,
+    accounts,
+    usage,
+    now,
+    tempo: keeper?.tempo,
+    activeId,
+  });
+  // While today's work runs, the hero forecasts its rest as the lane does.
+  const interval = reference?.interval;
+  const live =
+    reference === plans[0] &&
+    interval &&
+    now >= interval.start &&
+    now < interval.end &&
+    todayView.live?.date === reference.date
+      ? todayView.live.forecast
+      : undefined;
+  const forecast = live ?? reference?.forecast;
+  // A window's length is measured at the reference day's busy-day rate.
+  const rate = context.tempo.rate[interval?.weekend ? "weekend" : "weekday"];
+  const zoneClock = (time: number) => clock(time, zone);
   const excluded = accounts.filter(
     (a) => !settings.accounts.some((p) => p.id === a.id),
   );
@@ -313,6 +339,15 @@ export function PlanningPanel({
             {t("Otomatik pencere başlatma", "Automatic window start")}
           </strong>
           <p className="mt-0.5 text-[13px]">{summary}</p>
+          {forecast && (
+            <ForecastBadges
+              forecast={forecast}
+              live={!!live}
+              source={context.tempo.source}
+              clock={zoneClock}
+              t={t}
+            />
+          )}
           <small className={cn(noteClass, "mt-0.5 block")}>
             {t(
               "Her başlatma küçük bir istek kadar kota harcar. Relay açık ve Mac uyanık olmalı.",
@@ -329,7 +364,9 @@ export function PlanningPanel({
       </Card>
 
       <Card className={cn(cardClass, "@container")}>
-        <SectionHeading title={t("Çalışma saatleri", "Work hours")} />
+        <SectionHeading
+          title={t("Çalışma saatleri ve tempo", "Work hours and tempo")}
+        />
         <div className="grid">
           <HoursRow
             id="weekday"
@@ -349,6 +386,16 @@ export function PlanningPanel({
             onChange={(weekend) => update({ weekend })}
             t={t}
           />
+          <TempoRow
+            tempo={context.tempo}
+            choice={settings.tempo ?? "auto"}
+            accounts={included.map(({ id }) =>
+              accounts.find((a) => a.id === id)!,
+            )}
+            disabled={disabled}
+            onChange={(tempo) => update({ tempo })}
+            t={t}
+          />
         </div>
         <div className="mt-2.5 max-w-[420px]">
           <TimeZonePicker
@@ -363,8 +410,8 @@ export function PlanningPanel({
         </div>
         <p className={cn(noteClass, "mt-2.5")}>
           {t(
-            "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay her hesabı işe başlamadan önce kademeli ısıtır.",
-            "An end before the start runs into the next day. Relay warms each account up in turn before work starts.",
+            "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay hesapları kapasiteye ve tempoya göre işten önce ısıtır.",
+            "An end before the start runs into the next day. Relay warms accounts up before work by capacity and tempo.",
           )}
         </p>
       </Card>
@@ -383,8 +430,8 @@ export function PlanningPanel({
         <SectionHeading
           title={t("Hesaplar", "Accounts")}
           description={t(
-            "Sıra, otomatik saatlerin dağıtım sırasıdır.",
-            "The order sets how automatic times are spread.",
+            "Sıra yalnızca eşitlikte öncelik verir.",
+            "Order only breaks ties.",
           )}
         />
         {included.map((entry, index) => {
@@ -438,6 +485,13 @@ export function PlanningPanel({
                     {t("Yeniden dene", "Try again")}
                   </Button>
                 )}
+                <AccountWindowLine
+                  account={account}
+                  rate={rate}
+                  lane={todayView.lane}
+                  clock={zoneClock}
+                  t={t}
+                />
               </span>
               <div className={wideCell}>
                 <PlanEditor
