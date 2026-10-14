@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Account } from "../shared/types";
-import type { AccountUsageStatistics } from "../shared/usage-statistics";
+import type { Account } from "../../shared/types";
+import type { AccountUsageStatistics } from "../../shared/usage-statistics";
 import { SectionHeading, Note } from "@/components/SettingRow";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {

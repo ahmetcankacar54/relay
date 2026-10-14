@@ -13,11 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Note, SectionHeading } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
-import type { Account, AccountUsage, RelaySettings } from "../shared/types";
+import type { Account, AccountUsage, RelaySettings } from "../../shared/types";
 import {
   continuationTargetReadinessReason,
   type ContinuationTargetReadinessReason,
-} from "../shared/continuation-readiness";
+} from "../../shared/continuation-readiness";
 
 type T = (tr: string, en: string) => string;
 

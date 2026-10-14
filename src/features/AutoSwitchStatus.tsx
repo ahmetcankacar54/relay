@@ -1,5 +1,5 @@
 import { StatusDot } from "@/components/StatusDot";
-import type { Account, AutoSwitchState } from "../shared/types";
+import type { Account, AutoSwitchState } from "../../shared/types";
 
 export function AutoSwitchStatus({
   value,

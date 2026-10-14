@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Account, DesktopHistorySummary, RelayAPI } from "../shared/types";
+import type { Account, DesktopHistorySummary, RelayAPI } from "../../shared/types";
 import { Button } from "@/components/ui/button";
 
 export function HistorySummary({

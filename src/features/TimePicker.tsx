@@ -13,7 +13,7 @@ import {
   moveTimeGridCursor,
   parsePickerClock,
   type ClockParts,
-} from "../shared/time-picker";
+} from "../../shared/time-picker";
 
 type T = (tr: string, en: string) => string;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { randomUUID } from "node:crypto";
-import { PlanningPanel } from "../src/PlanningPanel";
+import { PlanningPanel } from "../src/features/PlanningPanel";
 import { wallTime } from "../shared/planning";
 import {
   DEFAULT_PLANNING,

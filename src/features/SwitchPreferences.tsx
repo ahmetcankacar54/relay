@@ -1,7 +1,7 @@
-import type { Account, AutoSwitchState, RelaySettings } from "../shared/types";
-import { historySources } from "../shared/history-policy";
+import type { Account, AutoSwitchState, RelaySettings } from "../../shared/types";
+import { historySources } from "../../shared/history-policy";
 import { AutoSwitchStatus } from "./AutoSwitchStatus";
-import { desktopCliMismatch } from "../shared/account-state";
+import { desktopCliMismatch } from "../../shared/account-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";

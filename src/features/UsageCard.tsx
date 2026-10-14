@@ -4,8 +4,8 @@ import type {
   RelaySettings,
   UsageIssue,
   UsageWindow,
-} from "../shared/types";
-import { remaining } from "../shared/usage";
+} from "../../shared/types";
+import { remaining } from "../../shared/usage";
 import { Button } from "@/components/ui/button";
 import { meterClass, meterTone } from "@/lib/meter";
 import { cn } from "@/lib/utils";

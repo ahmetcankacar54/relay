@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowLeftRight, LoaderCircle, RefreshCw, X } from "lucide-react";
-import type { Account } from "../shared/types";
+import type { Account } from "../../shared/types";
 
 export type DesktopActionKind =
   | "switch"

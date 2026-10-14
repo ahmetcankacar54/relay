@@ -15,7 +15,7 @@ import type {
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { suggestedAccount } from "../../shared/usage";
 import { desktopCliMismatch } from "../../shared/account-state";
-import type { DesktopActionRequest } from "../DesktopActionReview";
+import type { DesktopActionRequest } from "../features/DesktopActionReview";
 import { previewApi } from "../preview";
 import packageInfo from "../../package.json";
 import { useI18n } from "./i18n";

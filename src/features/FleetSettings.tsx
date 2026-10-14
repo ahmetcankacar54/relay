@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Note, SectionHeading } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
-import type { Account, FleetContinuationState } from "../shared/types";
+import type { Account, FleetContinuationState } from "../../shared/types";
 
 type T = (tr: string, en: string) => string;
 

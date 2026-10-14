@@ -8,9 +8,9 @@ import { useRelay } from "@/data/relay-context";
 import {
   AfterExitPreferences,
   SharedHistoryPreferences,
-} from "../SwitchPreferences";
-import { ContinuationSettings } from "../ContinuationSettings";
-import { FleetSettings } from "../FleetSettings";
+} from "../features/SwitchPreferences";
+import { ContinuationSettings } from "../features/ContinuationSettings";
+import { FleetSettings } from "../features/FleetSettings";
 
 const cardClass = "gap-0 px-5 py-4";
 

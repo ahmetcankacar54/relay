@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TimeZonePicker } from "../src/TimeZonePicker";
+import { TimeZonePicker } from "../src/features/TimeZonePicker";
 import {
   COMMON_TIME_ZONES,
   buildTimeZoneCatalog,

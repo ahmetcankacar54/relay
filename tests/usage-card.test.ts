@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { UsageCard } from "../src/UsageCard";
+import { UsageCard } from "../src/features/UsageCard";
 import { DEFAULT_SETTINGS, type AccountUsage } from "../shared/types";
 
 const now = Date.parse("2026-10-13T10:00:00.000Z");

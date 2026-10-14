@@ -20,10 +20,10 @@ import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
-import { UsageCard } from "../../UsageCard";
-import { HistorySummary } from "../../HistorySummary";
-import { DesktopSetup } from "../../DesktopSetup";
-import { PlanEditor } from "../../PlanEditor";
+import { UsageCard } from "../../features/UsageCard";
+import { HistorySummary } from "../../features/HistorySummary";
+import { DesktopSetup } from "../../features/DesktopSetup";
+import { PlanEditor } from "../../features/PlanEditor";
 import { groupName, planLabel } from "./accountLabels";
 
 export function AccountSheet({

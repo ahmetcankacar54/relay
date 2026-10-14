@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
-import type { RelayAPI, Run, TerminalEvent } from "../shared/types";
+import type { RelayAPI, Run, TerminalEvent } from "../../shared/types";
 
 export default function TerminalPane({
   run,

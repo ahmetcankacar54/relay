@@ -6,7 +6,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatClock } from "@/lib/time";
 import type { PageId } from "@/app/routes";
-import { fleetStatusLabel } from "../../FleetSettings";
+import { fleetStatusLabel } from "../../features/FleetSettings";
 import { nextPlannedWindow } from "@/lib/day-timeline";
 
 function Row({

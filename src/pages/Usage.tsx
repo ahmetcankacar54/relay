@@ -5,7 +5,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { UsageStatistics } from "../UsageStatistics";
+import { UsageStatistics } from "../features/UsageStatistics";
 
 const cardClass = "gap-0 px-5 py-4";
 

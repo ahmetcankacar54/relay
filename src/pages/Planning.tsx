@@ -1,7 +1,7 @@
 import { PageFrame } from "@/app/PageFrame";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { PlanningPanel } from "../PlanningPanel";
+import { PlanningPanel } from "../features/PlanningPanel";
 
 export function Planning() {
   const { api, data, accounts, settings, busy, desktop, action } = useRelay();

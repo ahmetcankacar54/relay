@@ -15,10 +15,10 @@ import type {
   KeeperSnapshot,
   PlanningHours,
   PlanningSettings,
-} from "../shared/types";
-import { dayPlan, shiftDate, WINDOW_MS } from "../shared/day-plan";
-import { localDate } from "../shared/planning";
-import { dayTimeline, nextPlannedWindow, windowTone } from "./lib/day-timeline";
+} from "../../shared/types";
+import { dayPlan, shiftDate, WINDOW_MS } from "../../shared/day-plan";
+import { localDate } from "../../shared/planning";
+import { dayTimeline, nextPlannedWindow, windowTone } from "../lib/day-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

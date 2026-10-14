@@ -1,6 +1,6 @@
 import { Monitor, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Account, DesktopState } from "../shared/types";
+import type { Account, DesktopState } from "../../shared/types";
 
 export const selectClass =
   "h-9 w-full rounded-md border bg-background px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";

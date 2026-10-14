@@ -14,7 +14,7 @@ import type {
   RelaySettings,
   Snapshot,
 } from "../../shared/types";
-import type { DesktopActionRequest } from "../DesktopActionReview";
+import type { DesktopActionRequest } from "../features/DesktopActionReview";
 
 export interface Relay {
   api: RelayAPI;

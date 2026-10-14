@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
-import { DesktopSetup } from "../../DesktopSetup";
+import { DesktopSetup } from "../../features/DesktopSetup";
 import { DesktopPendingActions } from "@/app/ConnectionPanels";
 
 type Kind = "personal" | "work";

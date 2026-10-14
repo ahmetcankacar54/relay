@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { DesktopSetup } from "../../DesktopSetup";
+import { DesktopSetup } from "../../features/DesktopSetup";
 
 /** Links the account already open in Claude (not yet claimed by any profile) to a profile. */
 export function LinkDesktopDialog({

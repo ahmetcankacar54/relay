@@ -13,7 +13,7 @@ import {
   type AccountUsage,
   type RelaySettings,
 } from "../shared/types";
-import { ContinuationSettings } from "../src/ContinuationSettings";
+import { ContinuationSettings } from "../src/features/ContinuationSettings";
 
 const NOW = Date.parse("2026-10-13T14:00:00Z");
 const source: Account = {

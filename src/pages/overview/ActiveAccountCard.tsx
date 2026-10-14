@@ -10,7 +10,7 @@ import { useRelay } from "@/data/relay-context";
 import { pendingFlow, usageWindowRows } from "@/data/selectors";
 import { formatReset } from "@/lib/time";
 import type { PageId } from "@/app/routes";
-import { UsageCard } from "../../UsageCard";
+import { UsageCard } from "../../features/UsageCard";
 import { planLabel } from "../accounts/accountLabels";
 
 

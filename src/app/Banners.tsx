@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { localizeError } from "../messages";
-import { AutoSwitchStatus } from "../AutoSwitchStatus";
+import { AutoSwitchStatus } from "../features/AutoSwitchStatus";
 
 const RECONNECT_ISSUES = new Set([
   "renewal-required",

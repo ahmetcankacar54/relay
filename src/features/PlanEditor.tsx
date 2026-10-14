@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Account, AccountPlanning } from "../shared/types";
+import type { Account, AccountPlanning } from "../../shared/types";
 type T = (tr: string, en: string) => string;
 export function PlanEditor({
   account,

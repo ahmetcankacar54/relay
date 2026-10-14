@@ -19,7 +19,7 @@ import {
   timeZoneOffset,
   timeZoneOptions,
   validTimeZone,
-} from "../shared/time-zones";
+} from "../../shared/time-zones";
 
 type Props = {
   id: string;

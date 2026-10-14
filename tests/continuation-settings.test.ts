@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   ContinuationSettings,
   type ContinuationSettingsView,
-} from "../src/ContinuationSettings";
+} from "../src/features/ContinuationSettings";
 import type { Account } from "../shared/types";
 
 const account = (id: string, name: string): Account => ({

@@ -8,8 +8,8 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { duplicateCliAccount } from "../../shared/account-state";
-import { ConnectionProgress } from "../ConnectionProgress";
-import { selectClass } from "../DesktopSetup";
+import { ConnectionProgress } from "../features/ConnectionProgress";
+import { selectClass } from "../features/DesktopSetup";
 import { localizeError } from "../messages";
 
 const panelClass = "mx-6 mb-3 gap-3 px-4 py-4";
