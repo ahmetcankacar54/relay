@@ -439,7 +439,7 @@ else {
           settings: service.store.state.settings.planning,
           accounts: service.store.state.accounts,
           usage: usage.snapshot(),
-          tempo: tempo.current(),
+          tempo: tempo.currentOrFallback(),
           blocked: keeperBlocked(),
           busyAccountIds: service.runner
             .list()

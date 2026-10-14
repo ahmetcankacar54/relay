@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { TempoTracker } from "../electron/core/tempo-tracker";
-import { tempoAt } from "../shared/tempo";
+import { fallbackTempo, presetTempo, tempoAt } from "../shared/tempo";
 import { wallTime } from "../shared/planning";
 import { emptyRollups } from "../shared/usage-rollups";
 import {
@@ -136,4 +136,29 @@ test("rateAt reads the current tempo at a time, defaulting to now", () => {
   );
   assert.equal(tracker.rateAt(noon), 20);
   assert.equal(tracker.rateAt(), 20);
+});
+
+test("when learning fails the keeper still gets the settings' fallback tempo", () => {
+  const { state, tracker } = setup();
+  let broken = true;
+  const failing = new TempoTracker({
+    available: () => true,
+    rollups: () => {
+      if (broken) throw new Error("rollups unreadable");
+      state.calls++;
+      return emptyRollups();
+    },
+    accounts: () => state.accounts,
+    settings: () => state.settings,
+    now: () => state.now,
+  });
+  assert.throws(() => failing.current());
+  assert.deepEqual(failing.currentOrFallback(), fallbackTempo(state.settings));
+  state.settings = { ...state.settings, tempo: "light" };
+  assert.deepEqual(failing.currentOrFallback(), presetTempo("light"));
+  // Once the rollups read again, the tempo is learned as usual.
+  state.settings = { ...state.settings, tempo: "auto" };
+  broken = false;
+  assert.deepEqual(failing.currentOrFallback(), tracker.current());
+  assert.equal(state.calls, 2);
 });

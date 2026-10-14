@@ -1,7 +1,12 @@
 import type { Account, PlanningSettings } from "../../shared/types";
 import type { UsageRollups } from "../../shared/usage-rollups";
 import { localDate, planCapacity } from "../../shared/planning";
-import { learnTempo, tempoAt, type Tempo } from "../../shared/tempo";
+import {
+  fallbackTempo,
+  learnTempo,
+  tempoAt,
+  type Tempo,
+} from "../../shared/tempo";
 import { historyIdentity } from "../../shared/usage-statistics";
 
 export interface TempoSource {
@@ -50,6 +55,14 @@ export class TempoTracker {
       this.key = key;
     }
     return this.value;
+  }
+  /** The current tempo; when learning it fails, the settings' fallback (the keeper still plans). */
+  currentOrFallback(): Tempo {
+    try {
+      return this.current();
+    } catch {
+      return fallbackTempo(this.source.settings());
+    }
   }
   /** Pro units per hour at `time` (default now) under the current tempo. */
   rateAt(time = this.now()) {
