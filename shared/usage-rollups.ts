@@ -1,7 +1,4 @@
-import {
-  MAX_USAGE_GAP_MS,
-  type UsageSample,
-} from "./usage-statistics";
+import { MAX_USAGE_GAP_MS, type UsageSample } from "./usage-statistics";
 import type { UsageWindow } from "./types";
 
 export const ROLLUP_DAYS = 90;
@@ -124,11 +121,24 @@ export function foldSample(
   s: UsageSample,
   now: number,
 ): UsageRollups {
+  if (!accepts(r, s)) return r;
+  const next = structuredClone(r);
+  foldInto(next, s);
+  prune(next, now);
+  return next;
+}
+
+/** Out-of-order and duplicate samples (per identity) are ignored. */
+function accepts(r: UsageRollups, s: UsageSample): boolean {
   const t = Date.parse(s.checkedAt);
   const prev = r.last[s.identity];
-  if (!Number.isFinite(t) || (prev && Date.parse(prev.checkedAt) >= t))
-    return r;
-  const next = structuredClone(r);
+  return Number.isFinite(t) && !(prev && Date.parse(prev.checkedAt) >= t);
+}
+
+// Mutates `next`; callers own it (a clone, or the backfill accumulator).
+function foldInto(next: UsageRollups, s: UsageSample): void {
+  const t = Date.parse(s.checkedAt);
+  const prev = next.last[s.identity];
   const hours = (next.hours[s.identity] ??= {});
   const hour = (hours[hourKey(t)] ??= {
     points: 0,
@@ -139,7 +149,10 @@ export function foldSample(
     const reset = s.fiveHour!.resetsAt!;
     const pct = s.fiveHour!.usedPercent;
     const windows = (next.windows[s.identity] ??= []);
-    let record = windows.find((w) => sameReset(w.resetAt, reset));
+    // Windows are appended in time order, so a match is almost always last.
+    let record: WindowRecord | undefined;
+    for (let i = windows.length - 1; i >= 0 && !record; i--)
+      if (sameReset(windows[i].resetAt, reset)) record = windows[i];
     if (!record) {
       record = { resetAt: reset, maxPercent: pct };
       windows.push(record);
@@ -161,16 +174,17 @@ export function foldSample(
   }
   foldHits(next, s, t);
   next.last[s.identity] = structuredClone(s);
-  prune(next, now);
-  return next;
 }
 
-/** Backfill: folds samples per identity in time order. */
+/**
+ * Backfill: folds samples per identity in time order into one accumulator
+ * (cloning per sample would be quadratic) and prunes once at the end.
+ */
 export function foldSamples(
   samples: readonly UsageSample[],
   now: number,
 ): UsageRollups {
-  return samples
+  const sorted = samples
     .slice()
     .sort((a, b) =>
       a.identity === b.identity
@@ -178,6 +192,9 @@ export function foldSamples(
         : a.identity < b.identity
           ? -1
           : 1,
-    )
-    .reduce((r, sample) => foldSample(r, sample, now), emptyRollups());
+    );
+  const r = emptyRollups();
+  for (const sample of sorted) if (accepts(r, sample)) foldInto(r, sample);
+  prune(r, now);
+  return r;
 }

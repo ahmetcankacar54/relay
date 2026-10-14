@@ -12,6 +12,11 @@ import {
   type AccountUsageStatistics,
   type UsageSample,
 } from "../../shared/usage-statistics";
+import {
+  foldSample,
+  foldSamples,
+  type UsageRollups,
+} from "../../shared/usage-rollups";
 import { privateDir } from "./store";
 
 const windowSchema = z
@@ -36,55 +41,143 @@ const historySchema = z
     samples: z.array(sampleSchema).max(MAX_USAGE_SAMPLES),
   })
   .strict();
-const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const hourSchema = z
+  .object({
+    points: z.number().finite().min(0),
+    windows: z.number().int().min(0),
+    coveredMinutes: z.number().finite().min(0),
+  })
+  .strict();
+const windowRecordSchema = z
+  .object({
+    resetAt: z.iso.datetime(),
+    maxPercent: z.number().finite().min(0).max(100),
+  })
+  .strict();
+const identityKey = z.string().min(1).max(1024);
+const hitSchema = z
+  .object({
+    identity: identityKey,
+    kind: z.enum(["five-hour", "weekly"]),
+    at: z.iso.datetime(),
+    until: z.iso.datetime().optional(),
+    resetAt: z.iso.datetime().optional(),
+  })
+  .strict();
+const rollupsSchema = z
+  .object({
+    version: z.literal(1),
+    hours: z.record(identityKey, z.record(z.iso.datetime(), hourSchema)),
+    windows: z.record(identityKey, z.array(windowRecordSchema)),
+    hits: z.array(hitSchema),
+    last: z.record(identityKey, sampleSchema),
+  })
+  .strict();
+// 50,000 samples of ~340 bytes each must stay readable after they are written.
+const MAX_HISTORY_BYTES = 32 * 1024 * 1024;
+const MAX_ROLLUPS_BYTES = 16 * 1024 * 1024;
 
 // This ledger contains only verified quota metadata, never messages or tokens.
 // An unreadable ledger stays unavailable rather than silently overwriting it.
+// Rollups keep 90 days of hourly aggregates beside the 14-day raw ledger; an
+// unreadable rollups file is likewise never overwritten and never affects the
+// raw ledger or live limits.
 export class UsageHistory {
   readonly file: string;
+  readonly rollupsFile: string;
   private samples: UsageSample[] = [];
   private available = true;
+  private rollupsState: UsageRollups | undefined;
+  rollupsAvailable = true;
   constructor(
     readonly root: string,
     private now = Date.now,
   ) {
     this.file = path.join(root, "usage-history.json");
+    this.rollupsFile = path.join(root, "usage-rollups.json");
     try {
-      privateDir(root);
-      let metadata: fs.Stats;
-      try {
-        metadata = fs.lstatSync(this.file);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-        throw error;
-      }
-      if (
-        !metadata.isFile() ||
-        metadata.isSymbolicLink() ||
-        metadata.size > MAX_FILE_BYTES
-      )
-        throw new Error("Invalid usage history file.");
-      const fd = fs.openSync(
-        this.file,
-        fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0),
+      const value = this.readPrivateJsonFile(this.file, MAX_HISTORY_BYTES);
+      if (value !== undefined)
+        this.samples = this.pruned(historySchema.parse(value).samples);
+    } catch {
+      this.available = false;
+    }
+    try {
+      const value = this.readPrivateJsonFile(
+        this.rollupsFile,
+        MAX_ROLLUPS_BYTES,
       );
+      if (value !== undefined) this.rollupsState = rollupsSchema.parse(value);
+      else if (!this.available)
+        throw new Error("No readable usage history to backfill from.");
+      else {
+        const backfilled = foldSamples(this.samples, this.now());
+        this.writePrivateJsonFile(this.rollupsFile, backfilled);
+        this.rollupsState = backfilled;
+      }
+    } catch {
+      this.rollupsAvailable = false;
+      this.rollupsState = undefined;
+    }
+  }
+  /** Parsed JSON, or undefined when the file does not exist. */
+  private readPrivateJsonFile(file: string, maxBytes: number): unknown {
+    privateDir(this.root);
+    let metadata: fs.Stats;
+    try {
+      metadata = fs.lstatSync(file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw error;
+    }
+    if (
+      !metadata.isFile() ||
+      metadata.isSymbolicLink() ||
+      metadata.size > maxBytes
+    )
+      throw new Error("Invalid usage file.");
+    const fd = fs.openSync(
+      file,
+      fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0),
+    );
+    try {
+      const opened = fs.fstatSync(fd);
+      if (
+        !opened.isFile() ||
+        opened.size > maxBytes ||
+        opened.ino !== metadata.ino ||
+        opened.dev !== metadata.dev
+      )
+        throw new Error("Usage file changed while reading.");
+      return JSON.parse(fs.readFileSync(fd, "utf8"));
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+  /** Atomic private write that refuses to replace a non-file or symlink. */
+  private writePrivateJsonFile(file: string, value: unknown): void {
+    const temporary = `${file}.${randomUUID()}.tmp`;
+    try {
+      privateDir(this.root);
       try {
-        const opened = fs.fstatSync(fd);
-        if (
-          !opened.isFile() ||
-          opened.size > MAX_FILE_BYTES ||
-          opened.ino !== metadata.ino ||
-          opened.dev !== metadata.dev
-        )
-          throw new Error("Usage history changed while reading.");
-        this.samples = this.pruned(
-          historySchema.parse(JSON.parse(fs.readFileSync(fd, "utf8"))).samples,
-        );
+        const target = fs.lstatSync(file);
+        if (!target.isFile() || target.isSymbolicLink())
+          throw new Error("Invalid usage file.");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      const fd = fs.openSync(temporary, "wx", 0o600);
+      try {
+        fs.writeFileSync(fd, JSON.stringify(value));
+        fs.fsyncSync(fd);
       } finally {
         fs.closeSync(fd);
       }
-    } catch {
-      this.available = false;
+      fs.renameSync(temporary, file);
+    } finally {
+      try {
+        fs.unlinkSync(temporary);
+      } catch {}
     }
   }
   private pruned(samples: UsageSample[]): UsageSample[] {
@@ -123,32 +216,28 @@ export class UsageHistory {
     )
       return;
     const next = this.pruned([...this.samples, sample]);
-    const temporary = `${this.file}.${randomUUID()}.tmp`;
     try {
-      privateDir(this.root);
-      try {
-        const target = fs.lstatSync(this.file);
-        if (!target.isFile() || target.isSymbolicLink())
-          throw new Error("Invalid usage history file.");
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      }
-      const fd = fs.openSync(temporary, "wx", 0o600);
-      try {
-        fs.writeFileSync(fd, JSON.stringify({ version: 1, samples: next }));
-        fs.fsyncSync(fd);
-      } finally {
-        fs.closeSync(fd);
-      }
-      fs.renameSync(temporary, this.file);
+      this.writePrivateJsonFile(this.file, { version: 1, samples: next });
       this.samples = next;
     } catch {
       this.available = false;
-    } finally {
-      try {
-        fs.unlinkSync(temporary);
-      } catch {}
+      return;
     }
+    if (!this.rollupsAvailable || !this.rollupsState) return;
+    try {
+      const folded = foldSample(this.rollupsState, sample, this.now());
+      if (folded === this.rollupsState) return;
+      this.writePrivateJsonFile(this.rollupsFile, folded);
+      this.rollupsState = folded;
+    } catch {
+      this.rollupsAvailable = false;
+      this.rollupsState = undefined;
+    }
+  }
+  /** 90-day hourly rollups; undefined when the rollups file is unavailable. */
+  rollups(): UsageRollups | undefined {
+    if (!this.rollupsAvailable || !this.rollupsState) return;
+    return structuredClone(this.rollupsState);
   }
   snapshot(
     accounts: readonly Account[],

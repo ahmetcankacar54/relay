@@ -40,7 +40,10 @@ function s(
   };
 }
 function fold(samples: UsageSample[], at = now): UsageRollups {
-  return samples.reduce((r, sample) => foldSample(r, sample, at), emptyRollups());
+  return samples.reduce(
+    (r, sample) => foldSample(r, sample, at),
+    emptyRollups(),
+  );
 }
 const h = (m: number) => hourKey(T0 + m * minute);
 
@@ -59,8 +62,16 @@ test("hourKey is the UTC hour start", () => {
 
 test("same window increases are attributed to the hour of the later sample", () => {
   const r = fold([s("x", 0, 10, 200), s("x", 5, 14, 200), s("x", 10, 20, 200)]);
-  assert.deepEqual(r.hours.x[h(0)], { points: 4, windows: 1, coveredMinutes: 5 });
-  assert.deepEqual(r.hours.x[h(10)], { points: 6, windows: 0, coveredMinutes: 5 });
+  assert.deepEqual(r.hours.x[h(0)], {
+    points: 4,
+    windows: 1,
+    coveredMinutes: 5,
+  });
+  assert.deepEqual(r.hours.x[h(10)], {
+    points: 6,
+    windows: 0,
+    coveredMinutes: 5,
+  });
   const covered = Object.values(r.hours.x).reduce(
     (sum, hour) => sum + hour.coveredMinutes,
     0,
@@ -73,8 +84,14 @@ test("same window increases are attributed to the hour of the later sample", () 
 test("a gap over 35 minutes makes the next sample a baseline", () => {
   const r = fold([s("x", 0, 10, 200), s("x", 40, 30, 200)]);
   const hours = Object.values(r.hours.x);
-  assert.equal(hours.reduce((sum, v) => sum + v.points, 0), 0);
-  assert.equal(hours.reduce((sum, v) => sum + v.coveredMinutes, 0), 0);
+  assert.equal(
+    hours.reduce((sum, v) => sum + v.points, 0),
+    0,
+  );
+  assert.equal(
+    hours.reduce((sum, v) => sum + v.coveredMinutes, 0),
+    0,
+  );
   assert.deepEqual(r.windows.x, [{ resetAt: iso(200), maxPercent: 30 }]);
 });
 
@@ -186,7 +203,11 @@ test("records older than 90 days relative to now are pruned", () => {
   ]);
   assert.ok(r.hours.x[h(0)]);
   const later = T0 + 90 * day + 6 * 60 * minute;
-  const pruned = foldSample(r, s("z", 91 * 24 * 60, 10, 91 * 24 * 60 + 60), later);
+  const pruned = foldSample(
+    r,
+    s("z", 91 * 24 * 60, 10, 91 * 24 * 60 + 60),
+    later,
+  );
   assert.equal(pruned.hours.x?.[h(0)], undefined);
   assert.equal(pruned.hours.z[h(0)], undefined);
   assert.deepEqual(pruned.windows.x ?? [], []);

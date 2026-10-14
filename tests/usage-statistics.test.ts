@@ -10,6 +10,7 @@ import { Store } from "../electron/core/store";
 import {
   MAX_USAGE_GAP_MS,
   MAX_USAGE_SAMPLES,
+  USAGE_HISTORY_DAYS,
   summarizeUsageSamples,
   usageIdentity,
   usageSample,
@@ -292,19 +293,30 @@ test("history persists privately, reloads, and rejects duplicate/out-of-order/fu
   }
   const raw = fs.readFileSync(history.file, "utf8");
   assert.doesNotMatch(raw, /token|message|credential|name|subscription/);
-  assert.deepEqual(fs.readdirSync(root), ["usage-history.json"]);
+  assert.deepEqual(fs.readdirSync(root).sort(), [
+    "usage-history.json",
+    "usage-rollups.json",
+  ]);
+  assert.doesNotMatch(
+    fs.readFileSync(path.join(root, "usage-rollups.json"), "utf8"),
+    /token|message|credential|name|subscription/,
+  );
 });
-test("30-day retention and maximum sample count are bounded on load and next write", (t) => {
+test("14-day retention and maximum sample count are bounded on load and next write", (t) => {
   const root = directory(t);
   let now = start;
-  const oldest = now - 30 * day;
-  const values = Array.from({ length: MAX_USAGE_SAMPLES }, (_, index) =>
-    sample(
-      oldest + index * minute,
+  const oldest = now - USAGE_HISTORY_DAYS * day;
+  // 50,000 samples 20 seconds apart fit inside the retention window.
+  const step = 20_000;
+  const fiveHours = 5 * 60 * minute;
+  const values = Array.from({ length: MAX_USAGE_SAMPLES }, (_, index) => {
+    const at = oldest + 5 * minute + index * step;
+    return sample(
+      at,
       10,
-      new Date(oldest + index * minute + 60 * minute).toISOString(),
-    ),
-  );
+      new Date(at - ((at - oldest) % fiveHours) + fiveHours).toISOString(),
+    );
+  });
   values[0].checkedAt = new Date(oldest - 1).toISOString();
   const file = path.join(root, "usage-history.json");
   fs.writeFileSync(file, JSON.stringify({ version: 1, samples: values }));
@@ -321,6 +333,10 @@ test("30-day retention and maximum sample count are bounded on load and next wri
     JSON.parse(fs.readFileSync(file, "utf8")).samples.length,
     MAX_USAGE_SAMPLES,
   );
+  assert.equal(
+    new UsageHistory(root, () => now).snapshot([account])[account.id].status,
+    "available",
+  );
 });
 test("corrupt or oversized history fails safely without overwriting the evidence", (t) => {
   const root = directory(t);
@@ -332,7 +348,7 @@ test("corrupt or oversized history fails safely without overwriting the evidence
       version: 1,
       samples: [{ ...sample(start, 10), accessToken: "not-allowed" }],
     }),
-    "x".repeat(8 * 1024 * 1024 + 1),
+    "x".repeat(32 * 1024 * 1024 + 1),
   ]) {
     fs.writeFileSync(file, content);
     const history = new UsageHistory(root, () => start + minute);

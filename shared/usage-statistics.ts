@@ -1,7 +1,7 @@
 import type { Account, AccountUsage, UsageWindow } from "./types";
 
-export const USAGE_HISTORY_DAYS = 30;
-export const MAX_USAGE_SAMPLES = 10_000;
+export const USAGE_HISTORY_DAYS = 14;
+export const MAX_USAGE_SAMPLES = 50_000;
 export const MAX_USAGE_GAP_MS = 35 * 60_000;
 const DAY_MS = 86_400_000;
 

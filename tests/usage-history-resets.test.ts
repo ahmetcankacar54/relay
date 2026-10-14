@@ -140,7 +140,7 @@ test("expired retention and unavailable ledgers cannot supply reset metadata", (
   let now = at;
   const history = new UsageHistory(root, () => now);
   history.record(account, usage());
-  now += 30 * 86_400_000 + 1;
+  now += 14 * 86_400_000 + 1;
   assert.equal(history.lastKnownResets(account), undefined);
   assert.equal(
     new UsageHistory(root, () => now).lastKnownResets(account),
