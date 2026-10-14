@@ -15,6 +15,8 @@ import {
 } from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
 import { fallbackTempo, type Tempo } from "../../shared/tempo";
+import type { Forecast, ForecastSegment } from "../../shared/capacity-plan";
+import { liveForecast } from "../../shared/live-forecast";
 
 /** Planned settings without deleted accounts; deleted accounts take no slot, exactly as in the window keeper. */
 export function plannedSettings(
@@ -45,6 +47,30 @@ export function windowsInDay(
     );
 }
 
+/** A stretch of the usage lane; no `accountId` is an outage, `live` comes from live usage. */
+export interface LaneSegment {
+  accountId?: string;
+  from: number;
+  to: number;
+  live: boolean;
+}
+
+/** Segments clipped to `[from, to)`. */
+const clip = (
+  segments: ForecastSegment[],
+  from: number,
+  to: number,
+  live: boolean,
+): LaneSegment[] =>
+  segments
+    .filter((s) => s.to > from && s.from < to)
+    .map((s) => ({
+      ...(s.accountId ? { accountId: s.accountId } : {}),
+      from: Math.max(s.from, from),
+      to: Math.min(s.to, to),
+      live,
+    }));
+
 export interface DayTimeline {
   date: string;
   dayBegin: number;
@@ -56,11 +82,19 @@ export interface DayTimeline {
   rows: { account: Account; windows: PlannedWindow[] }[];
   /** Whether `now` falls on the shown day (only on today's view). */
   showNow: boolean;
+  /**
+   * Who works when: the plans' forecasts clipped to the day; on today the
+   * work interval under way is forecast from `now` with live usage.
+   */
+  lane: LaneSegment[];
+  /** The day's own plan against the even spread, when some account is automatic. */
+  compare?: { plan: Forecast; even: Forecast };
 }
 
 /**
- * The day `offset` days from today in the planning zone; live resets apply to
- * today only. Without a tempo the settings' fallback tempo plans the day.
+ * The day `offset` days from today in the planning zone; live resets and the
+ * live forecast apply to today only. Without a tempo the settings' fallback
+ * tempo plans the day.
  */
 export function dayTimeline({
   settings,
@@ -69,6 +103,7 @@ export function dayTimeline({
   now,
   offset = 0,
   tempo,
+  activeId,
 }: {
   settings: PlanningSettings;
   accounts: Account[];
@@ -76,6 +111,8 @@ export function dayTimeline({
   now: number;
   offset?: number;
   tempo?: Tempo;
+  /** The account Claude Desktop uses now (the live forecast starts with it). */
+  activeId?: string;
 }): DayTimeline {
   const zone = settings.timeZone;
   const planned = plannedSettings(settings, accounts);
@@ -114,6 +151,38 @@ export function dayTimeline({
         dayEnd,
       ),
     }));
+  // Today the work interval under way goes on from now as live usage says.
+  const current =
+    offset === 0
+      ? plans.find(
+          ({ interval }) =>
+            interval && interval.start <= now && now < interval.end,
+        )
+      : undefined;
+  const rest =
+    current &&
+    liveForecast({
+      plan: current,
+      settings: planned,
+      context,
+      usage,
+      activeId,
+      now,
+    });
+  const lane = plans.flatMap((plan) => {
+    const segments = plan.forecast?.segments ?? [];
+    if (plan !== current || !rest)
+      return clip(segments, dayBegin, dayEnd, false);
+    return [
+      ...clip(segments, dayBegin, Math.min(now, dayEnd), false),
+      ...clip(rest.segments, dayBegin, dayEnd, true),
+    ];
+  });
+  const own = plans[1];
+  const compare =
+    own.forecast && own.evenForecast && own.accounts.some((a) => !a.manual)
+      ? { plan: own.forecast, even: own.evenForecast }
+      : undefined;
   return {
     date,
     dayBegin,
@@ -122,6 +191,8 @@ export function dayTimeline({
     intervals,
     rows,
     showNow: offset === 0 && now >= dayBegin && now < dayEnd,
+    lane,
+    ...(compare ? { compare } : {}),
   };
 }
 

@@ -1,12 +1,4 @@
-import { useState } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  CalendarClock,
-  ChevronLeft,
-  ChevronRight,
-  Play,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarClock, Play } from "lucide-react";
 import type {
   Account,
   AccountPlanning,
@@ -16,19 +8,10 @@ import type {
   PlanningHours,
   PlanningSettings,
 } from "../../shared/types";
-import {
-  dayPlan,
-  planContext,
-  shiftDate,
-  WINDOW_MS,
-} from "../../shared/day-plan";
+import { dayPlan, planContext, shiftDate } from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
 import { fallbackTempo } from "../../shared/tempo";
-import {
-  dayTimeline,
-  nextPlannedWindow,
-  windowTone,
-} from "../lib/day-timeline";
+import { nextPlannedWindow } from "../lib/day-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -38,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { PlanEditor } from "./PlanEditor";
+import { PlanTimeline } from "../pages/planning/PlanTimeline";
 
 type T = (tr: string, en: string) => string;
 const failure: Record<string, [string, string]> = {
@@ -228,187 +212,12 @@ function HoursRow({
   );
 }
 
-const RULER = [0, 3, 6, 9, 12, 15, 18, 21, 24];
-const rowClass =
-  "grid grid-cols-[84px_minmax(0,1fr)] items-center text-xs @xl:grid-cols-[128px_minmax(0,1fr)]";
-
-function Timeline({
-  settings,
-  accounts,
-  usage,
-  now,
-  t,
-}: {
-  settings: PlanningSettings;
-  accounts: Account[];
-  usage: Record<string, AccountUsage>;
-  now: number;
-  t: T;
-}) {
-  const [offset, setOffset] = useState(0);
-  const zone = settings.timeZone;
-  const { dayBegin, pct, intervals, rows, showNow } = dayTimeline({
-    settings,
-    accounts,
-    usage,
-    now,
-    offset,
-  });
-  const label = new Intl.DateTimeFormat(t("tr-TR", "en-GB"), {
-    timeZone: zone,
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).format(new Date(dayBegin + 12 * 3_600_000));
-  const title =
-    offset === 0
-      ? t("Bugün", "Today")
-      : offset === 1
-        ? t("Yarın", "Tomorrow")
-        : offset === -1
-          ? t("Dün", "Yesterday")
-          : label;
-  const position = (start: number, end: number) => ({
-    left: `${pct(start)}%`,
-    width: `${pct(end) - pct(start)}%`,
-  });
-  const nowLine = showNow && (
-    <div
-      className="absolute -inset-y-[3px] -ml-px w-0.5 rounded-[1px] bg-foreground"
-      style={{ left: `${pct(now)}%` }}
-    />
-  );
-  return (
-    <Card className={cn(cardClass, "@container")}>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <span className="flex min-w-0 items-baseline gap-2">
-          <strong className="font-display text-[15px] font-semibold">
-            {title}
-          </strong>
-          {offset >= -1 && offset <= 1 && (
-            <small className={noteClass}>{label}</small>
-          )}
-        </span>
-        <div className="flex items-center gap-1">
-          {offset !== 0 && (
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              className="h-auto px-1 text-xs"
-              onClick={() => setOffset(0)}
-            >
-              {t("Bugüne dön", "Back to today")}
-            </Button>
-          )}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("Önceki gün", "Previous day")}
-            onClick={() => setOffset(offset - 1)}
-          >
-            <ChevronLeft />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t("Sonraki gün", "Next day")}
-            onClick={() => setOffset(offset + 1)}
-          >
-            <ChevronRight />
-          </Button>
-        </div>
-      </div>
-      <div className="grid gap-[7px]">
-        <div className={rowClass} aria-hidden="true">
-          <span />
-          <div className="relative h-4 text-[11px] text-muted-foreground tabular-nums">
-            {RULER.map((h, index) => (
-              <span
-                key={h}
-                className={cn(
-                  "absolute",
-                  index === 0
-                    ? ""
-                    : index === RULER.length - 1
-                      ? "-translate-x-full"
-                      : "-translate-x-1/2",
-                  index % 2 === 1 && "hidden @xl:inline",
-                )}
-                style={{ left: `${(h / 24) * 100}%` }}
-              >
-                {String(h).padStart(2, "0")}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className={rowClass}>
-          <span className="truncate pr-2.5 text-muted-foreground">
-            {t("Çalışma", "Work")}
-          </span>
-          <div className="relative h-[18px] rounded-md bg-track">
-            {intervals.map((i) => (
-              <div
-                key={i.start}
-                className="absolute inset-y-0 rounded-md bg-brand/20"
-                title={`${clock(i.start, zone)}–${clock(i.end, zone)}`}
-                style={position(i.start, i.end)}
-              />
-            ))}
-            {nowLine}
-          </div>
-        </div>
-        {rows.map(({ account, windows }, index) => (
-          <div className={rowClass} key={account.id}>
-            <span className="flex min-w-0 items-center gap-1.5 pr-2.5">
-              <i
-                className={cn(
-                  "size-2 shrink-0 rounded-full",
-                  windowTone(index),
-                )}
-                aria-hidden="true"
-              />
-              <span className="truncate">{account.name}</span>
-            </span>
-            <div className="relative h-[18px] rounded-md bg-track">
-              {windows.map((w) => (
-                <div
-                  key={w.start}
-                  className={cn(
-                    "absolute inset-y-0.5 rounded-[5px]",
-                    windowTone(index),
-                  )}
-                  title={`${clock(w.start, zone)}–${clock(w.start + WINDOW_MS, zone)}`}
-                  style={position(w.start, w.end)}
-                />
-              ))}
-              {nowLine}
-            </div>
-          </div>
-        ))}
-      </div>
-      {!intervals.length && (
-        <p className={cn(noteClass, "mt-2")}>
-          {t("Bu gün için plan yok.", "No plan for this day.")}
-        </p>
-      )}
-      <p className={cn(noteClass, "mt-2.5")}>
-        {t(
-          "Her çubuk 5 saatlik bir pencere; çubuğun sonu sıfırlanma anı.",
-          "Each bar is a five-hour window; its end is the reset.",
-        )}
-      </p>
-    </Card>
-  );
-}
-
 export function PlanningPanel({
   settings,
   keeper,
   accounts,
   usage,
+  activeId,
   disabled,
   t,
   now = Date.now(),
@@ -419,6 +228,8 @@ export function PlanningPanel({
   keeper?: KeeperSnapshot;
   accounts: Account[];
   usage: Record<string, AccountUsage>;
+  /** The account Claude Desktop uses now. */
+  activeId?: string;
   disabled: boolean;
   t: T;
   now?: number;
@@ -558,11 +369,13 @@ export function PlanningPanel({
         </p>
       </Card>
 
-      <Timeline
+      <PlanTimeline
         settings={planned}
         accounts={accounts}
         usage={usage}
         now={now}
+        tempo={keeper?.tempo}
+        activeId={activeId}
         t={t}
       />
 

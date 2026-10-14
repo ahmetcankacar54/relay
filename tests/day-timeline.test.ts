@@ -9,12 +9,13 @@ import {
 import { wallTime } from "../shared/planning";
 import { WINDOW_MS, dayPlan, planContext } from "../shared/day-plan";
 import { presetTempo, type Tempo } from "../shared/tempo";
+import { liveForecast } from "../shared/live-forecast";
 import {
   DEFAULT_PLANNING,
   type KeeperSnapshot,
   type PlanningSettings,
 } from "../shared/types";
-import { planningAccount } from "./planning-fixtures";
+import { planningAccount, planningUsage } from "./planning-fixtures";
 
 const ZONE = "Europe/Istanbul";
 const H = 3_600_000;
@@ -95,4 +96,78 @@ test("the keeper's tempo plans the next window and the timeline", () => {
   const view = dayTimeline({ settings: s, accounts, usage: {}, now, offset: 1, tempo });
   for (const [index, row] of view.rows.entries())
     assert.equal(row.windows[0].start, plan.accounts[index].firstStart);
+});
+
+// The capacity scenario of the day plan: Max 5×, Team (weight 2) and Pro on a
+// busy Wednesday, 09:00–18:00 in Istanbul.
+const WEDNESDAY = "2026-10-14";
+const scenarioHours: Record<number, number> = { 9: 220, 10: 242, 11: 242, 12: 110, 13: 198, 14: 242, 15: 242, 16: 220, 17: 154 };
+const busyTempo: Tempo = {
+  source: "learned",
+  weekday: Array.from({ length: 24 }, (_, hour) => scenarioHours[hour] ?? 205),
+  weekend: Array.from({ length: 24 }, () => 205),
+  rate: { weekday: 205, weekend: 205 },
+  days: { weekday: 15, weekend: 2 },
+};
+const scenarioTeam = planningAccount("vertex", "team");
+scenarioTeam.planning!.capacityWeight = 2;
+const scenarioAccounts = [planningAccount("max", "max5"), scenarioTeam, planningAccount("pro")];
+const scenario = (patch: Partial<PlanningSettings> = {}) =>
+  settings({ accounts: scenarioAccounts.map(({ id }) => ({ id })), ...patch });
+const noon = at(WEDNESDAY, "12:00");
+/** Fresh usage read at noon: no window open on any account. */
+const freshUsage = Object.fromEntries(scenarioAccounts.map((a) => [a.id, planningUsage(a, noon)]));
+const plain = (lane: { accountId?: string; from: number; to: number }[]) =>
+  lane.map(({ accountId, from, to }) => ({ ...(accountId ? { accountId } : {}), from, to }));
+/** Segments clipped to [from, to). */
+const clipped = (segments: { accountId?: string; from: number; to: number }[], from: number, to: number) =>
+  plain(segments.filter((s) => s.to > from && s.from < to).map((s) => ({ ...s, from: Math.max(s.from, from), to: Math.min(s.to, to) })));
+
+test("today's usage lane is the plan before now and the live forecast from now", () => {
+  const s = scenario();
+  const view = dayTimeline({ settings: s, accounts: scenarioAccounts, usage: freshUsage, now: noon, tempo: busyTempo, activeId: "max" });
+  const context = planContext(scenarioAccounts, busyTempo);
+  const plan = dayPlan(WEDNESDAY, s, context);
+  const before = view.lane.filter((x) => x.from < noon);
+  const after = view.lane.filter((x) => x.from >= noon);
+  assert.ok(before.length && after.length);
+  assert.ok(before.every((x) => !x.live && x.to <= noon));
+  assert.ok(after.every((x) => x.live));
+  assert.deepEqual(plain(before), clipped(plan.forecast!.segments, view.dayBegin, noon));
+  const live = liveForecast({ plan, settings: s, context, usage: freshUsage, activeId: "max", now: noon })!;
+  assert.deepEqual(plain(after), plain(live.segments));
+  assert.equal(after[0].accountId, "max");
+  assert.equal(after.at(-1)!.to, at(WEDNESDAY, "18:00"));
+  // The comparison is the day's own plan against the even spread.
+  assert.equal(view.compare?.plan.switches, 3);
+  assert.equal(view.compare?.plan.unmet, 0);
+  assert.equal(view.compare?.even.outageMinutes, 32);
+});
+
+test("another day's lane is its plan only; an all-manual plan has nothing to compare", () => {
+  const s = scenario();
+  const tomorrow = dayTimeline({ settings: s, accounts: scenarioAccounts, usage: freshUsage, now: noon, offset: 1, tempo: busyTempo, activeId: "max" });
+  const plan = dayPlan("2026-10-15", s, planContext(scenarioAccounts, busyTempo));
+  assert.ok(tomorrow.lane.length);
+  assert.ok(tomorrow.lane.every((x) => !x.live));
+  assert.deepEqual(plain(tomorrow.lane), plain(plan.forecast!.segments));
+  assert.ok(tomorrow.compare);
+  const manual = scenario({ accounts: [{ id: "max", firstStart: "06:15" }, { id: "vertex", firstStart: "08:15" }, { id: "pro", firstStart: "06:30" }] });
+  const fixed = dayTimeline({ settings: manual, accounts: scenarioAccounts, usage: freshUsage, now: noon, offset: 1, tempo: busyTempo });
+  assert.ok(fixed.lane.length);
+  assert.equal(fixed.compare, undefined);
+  // Saturday is a day off: nothing to forecast or compare.
+  const saturday = dayTimeline({ settings: s, accounts: scenarioAccounts, usage: freshUsage, now: noon, offset: 3, tempo: busyTempo });
+  assert.equal(saturday.date, "2026-10-17");
+  assert.deepEqual(saturday.lane, []);
+  assert.equal(saturday.compare, undefined);
+});
+
+test("an overnight lane keeps yesterday's tail and today's start, clipped to the day", () => {
+  const accounts = [planningAccount("a")];
+  const s = settings({ weekday: { enabled: true, start: "20:00", end: "04:00" }, accounts: [{ id: "a" }] });
+  const view = dayTimeline({ settings: s, accounts, usage: {}, now: at("2026-10-14", "12:00"), tempo: presetTempo("medium") });
+  assert.equal(view.lane[0].from, view.dayBegin);
+  assert.equal(view.lane.at(-1)!.to, view.dayEnd);
+  assert.ok(view.lane.every((x) => x.from >= view.dayBegin && x.to <= view.dayEnd && !x.live));
 });

@@ -4,7 +4,8 @@ import { useRelay } from "@/data/relay-context";
 import { PlanningPanel } from "../features/PlanningPanel";
 
 export function Planning() {
-  const { api, data, accounts, settings, busy, desktop, action } = useRelay();
+  const { api, data, accounts, active, settings, busy, desktop, action } =
+    useRelay();
   const { t } = useI18n();
   return (
     <PageFrame
@@ -17,6 +18,7 @@ export function Planning() {
           keeper={data?.planning}
           accounts={accounts}
           usage={data?.usage ?? {}}
+          activeId={active?.id}
           disabled={!!busy || !!desktop?.busy}
           t={t}
           update={(patch) =>
