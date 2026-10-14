@@ -52,7 +52,8 @@ test("the panel shows the switch, both hour rows and automatic first starts", ()
   assert.match(html, /Hafta sonu/);
   assert.match(html, /Kişisel - Max ilk başlangıç, 05:15/);
   assert.match(html, /Vertex ilk başlangıç, 07:45/);
-  assert.equal(html.match(/planning-mode auto/g)?.length, 2);
+  assert.equal(html.match(/>Otomatik</g)?.length, 2);
+  assert.doesNotMatch(html, />Elle</);
 });
 
 test("a manual first start is marked and can return to automatic", () => {
@@ -60,7 +61,8 @@ test("a manual first start is marked and can return to automatic", () => {
     accounts: [{ id: a.id, firstStart: "07:00" }, { id: b.id }],
   });
   assert.match(html, /Kişisel - Max ilk başlangıç, 07:00/);
-  assert.match(html, /planning-mode manual">Elle</);
+  assert.match(html, />Elle</);
+  assert.equal(html.match(/>Otomatik</g)?.length, 1);
   assert.match(html, /Otomatiğe dön/);
   assert.match(html, /Vertex ilk başlangıç, 04:30/);
 });
