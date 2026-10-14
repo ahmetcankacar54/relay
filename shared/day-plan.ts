@@ -134,6 +134,8 @@ const CACHE_SIZE = 32;
 const shapeCache = new Map<string, StartPlan>();
 /** Plans by date in absolute times, so a repeated call returns the same object. */
 const dateCache = new Map<string, StartPlan>();
+/** Shape-cache misses, each one optimization. */
+let optimizations = 0;
 function remember(cache: Map<string, StartPlan>, key: string, plan: StartPlan) {
   cache.set(key, plan);
   if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
@@ -142,6 +144,11 @@ function remember(cache: Map<string, StartPlan>, key: string, plan: StartPlan) {
 export function clearPlanCache() {
   shapeCache.clear();
   dateCache.clear();
+  optimizations = 0;
+}
+/** How many optimizations ran since the cache was last cleared. */
+export function planCacheStats() {
+  return { optimizations };
 }
 const shifted = (forecast: Forecast, by: number): Forecast => ({
   ...forecast,
@@ -203,6 +210,7 @@ function plannedStarts(
   const shapeKey = JSON.stringify([duration, steps, relative, offsets]);
   let shape = shapeCache.get(shapeKey);
   if (!shape) {
+    optimizations++;
     shape = optimizeStarts({
       interval: { start: 0, end: duration },
       accounts: relative,

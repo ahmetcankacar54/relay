@@ -8,6 +8,7 @@ import {
   dayPlan,
   dayStart,
   nextPlannedStart,
+  planCacheStats,
   planContext,
   shiftDate,
   shouldHaveWindow,
@@ -529,23 +530,14 @@ test("a week of plans optimizes each distinct day shape once", () => {
     accounts: four.map(({ id }) => ({ id })),
   });
   const ctx = planContext(four, busyTempo);
-  const time = (dates: string[]) => {
-    const begin = performance.now();
-    for (const date of dates) dayPlan(date, s, ctx);
-    return performance.now() - begin;
-  };
+  const week = Array.from({ length: 7 }, (_, i) => shiftDate("2026-10-12", i));
   clearPlanCache();
-  const cold = time(["2026-10-12"]);
-  time(["2026-10-17"]);
-  const warm = time([
-    "2026-10-13",
-    "2026-10-14",
-    "2026-10-15",
-    "2026-10-16",
-    "2026-10-18",
-  ]);
-  assert.ok(
-    warm < cold,
-    `five more days took ${warm.toFixed(1)} ms, one optimization ${cold.toFixed(1)} ms`,
-  );
+  assert.equal(planCacheStats().optimizations, 0);
+  for (const date of week) dayPlan(date, s, ctx);
+  // One weekday shape and one weekend shape.
+  assert.equal(planCacheStats().optimizations, 2);
+  for (const date of week) dayPlan(date, s, ctx);
+  assert.equal(planCacheStats().optimizations, 2);
+  clearPlanCache();
+  assert.equal(planCacheStats().optimizations, 0);
 });

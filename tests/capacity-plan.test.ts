@@ -487,28 +487,46 @@ test("equal input gives equal starts", () => {
   assert.deepEqual(optimizeStarts(input).starts, optimizeStarts(input).starts);
 });
 
-test("planning stays fast with three, four and six accounts", () => {
-  const timed = (input: StartPlanInput) => {
-    const began = performance.now();
+test("planning stays bounded with three, four and six accounts", () => {
+  // The simulation reads the demand once per step, so demand reads bound the
+  // simulations: a whole simulated day is `steps` reads.
+  const steps = (E - S) / SIM_STEP_MS;
+  const counted = (list: typeof accounts, factor: number) => {
+    let reads = 0;
+    const input: StartPlanInput = {
+      interval: { start: S, end: E },
+      accounts: list,
+      rate: (time) => {
+        reads++;
+        return scaled(factor)(time);
+      },
+      even: evenFor(list.length),
+    };
     const plan = optimizeStarts(input);
-    return { plan, took: performance.now() - began };
+    return { input, plan, simulations: reads / steps };
   };
-  const input = (list: typeof accounts, factor: number): StartPlanInput => ({
-    interval: { start: S, end: E },
-    accounts: list,
-    rate: scaled(factor),
-    even: evenFor(list.length),
-  });
+  const began = performance.now();
 
-  const three = timed(input(accounts, 1));
-  assert.ok(three.took < 200, `three accounts took ${three.took} ms`);
+  // Every 15-minute combination, plus the even spread.
+  const three = counted(accounts, 1);
+  assert.ok(three.simulations >= 1, `${three.simulations}`);
+  assert.ok(three.simulations <= 20 ** 3 + 1, `${three.simulations}`);
 
-  const four = timed(input(withPro(1), 1.15));
-  assert.ok(four.took < 200, `four accounts took ${four.took} ms`);
+  // Every 30-minute combination, then four descent rounds from the best 8.
+  const four = counted(withPro(1), 1.15);
+  assert.ok(
+    four.simulations <= 10 ** 4 + 1 + 8 * 4 * 4 * 19,
+    `${four.simulations}`,
+  );
 
-  const sixInput = input(withPro(3), 1.15);
-  const six = timed(sixInput);
-  assert.ok(six.took < 500, `six accounts took ${six.took} ms`);
+  // Descent only: from the even and the proportional spread, then fine.
+  const six = counted(withPro(3), 1.15);
+  assert.ok(six.simulations < 1_000, `${six.simulations}`);
+  // A loose canary for a per-simulation slowdown, not a speed budget.
+  const took = performance.now() - began;
+  assert.ok(took < 2_000, `planning took ${took} ms`);
+
+  const sixInput = six.input;
   assert.equal(six.plan.starts.length, 6);
   for (const start of six.plan.starts)
     assert.equal(
