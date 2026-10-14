@@ -5,6 +5,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { sidebarStatus } from "@/data/selectors";
 import { LegacySettings } from "@/pages/Legacy";
+import { Switching } from "@/pages/Switching";
 import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
 import relayIcon from "../../assets/icon.png";
@@ -103,17 +104,7 @@ export function Shell() {
               <LegacySettings section="planning" />
             </PageFrame>
           )}
-          {page === "gecis" && (
-            <PageFrame
-              title={t("Geçiş", "Switching")}
-              description={t(
-                "Kota dolunca geçiş, kapanınca hazırlama, ortak geçmiş",
-                "Switch when quota runs out, prepare on quit, shared history",
-              )}
-            >
-              <LegacySettings section="switch" />
-            </PageFrame>
-          )}
+          {page === "gecis" && <Switching />}
           {page === "ayarlar" && (
             <PageFrame
               title={t("Ayarlar", "Settings")}

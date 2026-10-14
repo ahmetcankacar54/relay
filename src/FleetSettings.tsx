@@ -1,4 +1,8 @@
 import { Check, LoaderCircle, Pause, Play, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Note, SectionHeading } from "@/components/SettingRow";
+import { StatusDot } from "@/components/StatusDot";
 import type { Account, FleetContinuationState } from "../shared/types";
 
 type T = (tr: string, en: string) => string;
@@ -137,65 +141,69 @@ export function FleetSettings({
     accounts.find((account) => account.id === id)?.name ?? "—";
   const [tr, en, tone] = badge[state.status];
   const working = state.status === "switching" || state.status === "continuing";
+  const dot =
+    tone === "armed"
+      ? "ok"
+      : tone === "blocked"
+        ? "crit"
+        : tone === "off"
+          ? "off"
+          : "warn";
   return (
-    <section className="continuation-settings" aria-labelledby="fleet-title">
-      <div className="continuation-heading">
-        <div>
-          <h4 id="fleet-title">
-            <ShieldCheck size={19} aria-hidden="true" />
-            {t("Kota dolunca geç ve devam et", "Switch and continue at quota")}
-          </h4>
-          <p>
-            {t(
-              "Tüm Code konuşmaları için, kapatana kadar açık kalır. İzin modları korunur.",
-              "For every Code conversation, until you turn it off. Permission modes are kept.",
+    <section aria-labelledby="fleet-title" className="grid gap-3">
+      <SectionHeading
+        id="fleet-title"
+        icon={<ShieldCheck size={18} aria-hidden="true" />}
+        title={t("Kota dolunca geçiş ve devam", "Switch and continue at quota")}
+        description={t(
+          "Tüm Code konuşmaları için, kapatana kadar açık kalır. İzin modları korunur.",
+          "For every Code conversation, until you turn it off. Permission modes are kept.",
+        )}
+        aside={
+          <Badge variant="outline">
+            {working ? (
+              <LoaderCircle
+                size={13}
+                className="animate-spin"
+                aria-hidden="true"
+              />
+            ) : state.reason === "continued" ? (
+              <Check size={13} aria-hidden="true" />
+            ) : (
+              <StatusDot tone={dot} />
             )}
-          </p>
-        </div>
-        <span className={`continuation-badge ${tone}`}>
-          {working ? (
-            <LoaderCircle size={13} className="spin" aria-hidden="true" />
-          ) : state.reason === "continued" ? (
-            <Check size={13} aria-hidden="true" />
-          ) : (
-            <span aria-hidden="true" className="continuation-dot" />
-          )}
-          {t(tr, en)}
-        </span>
-      </div>
+            {t(tr, en)}
+          </Badge>
+        }
+      />
       <div
-        className={`continuation-feedback ${tone}`}
+        className="rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-[13px]"
         role="status"
         aria-live="polite"
       >
         <p>{message(state, name, t)}</p>
       </div>
-      <div className="continuation-actions">
+      <div className="flex flex-wrap gap-2">
         {state.enabled ? (
-          <button
+          <Button
             type="button"
-            className="secondary"
+            variant="outline"
             disabled={busy || working}
             onClick={() => onToggle(false)}
           >
             <Pause size={15} aria-hidden="true" />
             {t("Kapat", "Turn off")}
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
-            className="primary"
-            disabled={busy}
-            onClick={() => onToggle(true)}
-          >
+          <Button type="button" disabled={busy} onClick={() => onToggle(true)}>
             <Play size={15} aria-hidden="true" />
             {t("Aç", "Turn on")}
-          </button>
+          </Button>
         )}
         {state.reason === "accessibility-permission-required" && (
-          <button
+          <Button
             type="button"
-            className="secondary"
+            variant="outline"
             disabled={busy}
             onClick={requestAccessibility}
           >
@@ -203,15 +211,15 @@ export function FleetSettings({
               "macOS Erişilebilirlik iznini aç",
               "Open macOS Accessibility permission",
             )}
-          </button>
+          </Button>
         )}
       </div>
-      <p className="continuation-footnote">
+      <Note>
         {t(
           "Relay açık kalmalı. Çalışan işler bitmeden Claude yeniden başlatılmaz; her konuşmaya en fazla bir devam mesajı gönderilir. Kotası hâlâ dolu hesaba dönülmez.",
           "Relay must stay open. Claude is not restarted while work is running; each conversation gets at most one continuation message. It never returns to an account that is still out of quota.",
         )}
-      </p>
+      </Note>
     </section>
   );
 }

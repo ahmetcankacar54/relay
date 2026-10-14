@@ -2,6 +2,16 @@ import type { Account, AutoSwitchState, RelaySettings } from "../shared/types";
 import { historySources } from "../shared/history-policy";
 import { AutoSwitchStatus } from "./AutoSwitchStatus";
 import { desktopCliMismatch } from "../shared/account-state";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Note,
+  OptionSelect,
+  SectionHeading,
+  SettingRow,
+} from "@/components/SettingRow";
+import { StatusDot } from "@/components/StatusDot";
 
 type T = (tr: string, en: string) => string;
 function AccountSelection({
@@ -20,90 +30,88 @@ function AccountSelection({
   t: T;
 }) {
   return (
-    <fieldset className="account-selection" disabled={disabled}>
-      <legend>
+    <fieldset
+      className="mt-1 rounded-lg border border-border p-3 disabled:opacity-60"
+      disabled={disabled}
+    >
+      <legend className="px-1 text-[13px] font-medium">
         {label}{" "}
-        <span>
+        <span className="text-muted-foreground">
           {selected.filter((id) => accounts.some((a) => a.id === id)).length} /{" "}
           {accounts.length}
         </span>
       </legend>
-      <div className="selection-actions">
-        <button
+      <div className="mb-1 flex gap-1">
+        <Button
           type="button"
-          className="text-button"
+          variant="ghost"
+          size="sm"
           onClick={() => update(accounts.map((a) => a.id))}
         >
           {t("Tümünü seç", "Select all")}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="text-button"
+          variant="ghost"
+          size="sm"
           onClick={() => update([])}
         >
           {t("Seçimi temizle", "Clear selection")}
-        </button>
+        </Button>
       </div>
-      <div className="selection-list">
-        {accounts.map((a) => (
-          <label key={a.id} className="selection-account">
-            <input
-              type="checkbox"
-              checked={selected.includes(a.id)}
-              onChange={(e) =>
-                update(
-                  e.target.checked
-                    ? [...selected, a.id]
-                    : selected.filter((id) => id !== a.id),
-                )
-              }
-            />
-            <span>
-              <strong>{a.name}</strong>
-              <small>
-                {a.desktop?.email ??
-                  (!desktopCliMismatch(a) ? a.auth?.email : undefined) ??
-                  t("E-posta henüz bağlanmadı", "Email not connected yet")}
-              </small>
-            </span>
-            <small
-              className={
-                a.desktop && !desktopCliMismatch(a)
-                  ? "selection-ready"
-                  : "selection-missing"
-              }
+      <div className="grid gap-1">
+        {accounts.map((a) => {
+          const ready = !!a.desktop && !desktopCliMismatch(a);
+          return (
+            <label
+              key={a.id}
+              className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/60"
             >
-              {desktopCliMismatch(a)
-                ? t(
-                    "Bağlantı kimlikleri farklı",
-                    "Connection identities differ",
+              <Switch
+                size="sm"
+                aria-label={a.name}
+                checked={selected.includes(a.id)}
+                onCheckedChange={(checked) =>
+                  update(
+                    checked
+                      ? [...selected, a.id]
+                      : selected.filter((id) => id !== a.id),
                   )
-                : a.desktop
-                  ? t("Desktop bağlı", "Desktop connected")
-                  : t("Desktop kurulumu gerekli", "Desktop setup required")}
-            </small>
-          </label>
-        ))}
+                }
+              />
+              <span className="min-w-0 flex-1">
+                <strong className="block truncate text-sm font-medium">
+                  {a.name}
+                </strong>
+                <small className="block truncate text-xs text-muted-foreground">
+                  {a.desktop?.email ??
+                    (!desktopCliMismatch(a) ? a.auth?.email : undefined) ??
+                    t("E-posta henüz bağlanmadı", "Email not connected yet")}
+                </small>
+              </span>
+              <Badge variant="outline" className="text-muted-foreground">
+                <StatusDot tone={ready ? "ok" : "warn"} />
+                {desktopCliMismatch(a)
+                  ? t(
+                      "Bağlantı kimlikleri farklı",
+                      "Connection identities differ",
+                    )
+                  : a.desktop
+                    ? t("Desktop bağlı", "Desktop connected")
+                    : t("Desktop kurulumu gerekli", "Desktop setup required")}
+              </Badge>
+            </label>
+          );
+        })}
         {!accounts.length && (
-          <p>{t("Önce hesap ekle.", "Add an account first.")}</p>
+          <Note>{t("Önce hesap ekle.", "Add an account first.")}</Note>
         )}
       </div>
     </fieldset>
   );
 }
 
-export function SwitchPreferences({
-  value,
-  accounts,
-  active,
-  autoSwitch,
-  platform,
-  update,
-  disabled,
-  syncDisabled,
-  sync,
-  t,
-}: {
+type Props = {
   value: RelaySettings;
   accounts: Account[];
   active?: Account;
@@ -114,71 +122,90 @@ export function SwitchPreferences({
   syncDisabled: boolean;
   sync: () => void;
   t: T;
-}) {
+};
+
+/** Shared Code history: scope, selection and the merge into the open account. */
+export function SharedHistoryPreferences({
+  value,
+  accounts,
+  active,
+  update,
+  disabled,
+  syncDisabled,
+  sync,
+  t,
+}: Pick<
+  Props,
+  | "value"
+  | "accounts"
+  | "active"
+  | "update"
+  | "disabled"
+  | "syncDisabled"
+  | "sync"
+  | "t"
+>) {
   const sources = active ? historySources(active, accounts, value) : [];
-  const supported = platform === "darwin" || platform === "preview";
   return (
-    <>
-      <div className="preference-section-heading">
-        <h4>{t("Ortak Code geçmişi", "Shared Code history")}</h4>
-        <p>
-          {t(
-            "Geçişten sonra Code konuşmaların diğer hesapta da görünür.",
-            "After a switch, your Code conversations appear in the other account too.",
-          )}
-        </p>
-      </div>
-      <div className="preference-row">
-        <div>
-          <label htmlFor="history-transfer">
-            {t("Geçmişi paylaş", "Share history")}
-          </label>
-          <p>
-            {t(
-              "Her hesap geçişinde birleştirilir.",
-              "Merged on every account switch.",
-            )}
-          </p>
-        </div>
-        <select
+    <div className="grid gap-1">
+      <SectionHeading
+        title={t("Ortak Code geçmişi", "Shared Code history")}
+        description={t(
+          "Geçişten sonra Code konuşmaların diğer hesapta da görünür.",
+          "After a switch, your Code conversations appear in the other account too.",
+        )}
+      />
+      <SettingRow
+        label={t("Geçmişi paylaş", "Share history")}
+        htmlFor="history-transfer"
+        description={t(
+          "Her hesap geçişinde birleştirilir.",
+          "Merged on every account switch.",
+        )}
+      >
+        <OptionSelect
           id="history-transfer"
           value={value.desktopHistoryTransfer}
           disabled={disabled}
-          onChange={(e) =>
-            update({
-              desktopHistoryTransfer: e.target
-                .value as RelaySettings["desktopHistoryTransfer"],
-            })
+          onChange={(desktopHistoryTransfer) =>
+            update({ desktopHistoryTransfer })
           }
-        >
-          <option value="all">
-            {t("Tüm hesaplar arasında", "Between all accounts")}
-          </option>
-          <option value="same-group">
-            {t("Aynı paylaşım grubunda", "Within sharing group")}
-          </option>
-          <option value="selected">
-            {t("Seçtiğim hesaplar arasında", "Between selected accounts")}
-          </option>
-          <option value="off">{t("Paylaşma", "Do not share")}</option>
-        </select>
-      </div>
+          options={[
+            {
+              value: "all",
+              label: t("Tüm hesaplar arasında", "Between all accounts"),
+            },
+            {
+              value: "same-group",
+              label: t("Aynı paylaşım grubunda", "Within sharing group"),
+            },
+            {
+              value: "selected",
+              label: t(
+                "Seçtiğim hesaplar arasında",
+                "Between selected accounts",
+              ),
+            },
+            { value: "off", label: t("Paylaşma", "Do not share") },
+          ]}
+        />
+      </SettingRow>
       {value.desktopHistoryTransfer === "all" && (
-        <p className="sharing-scope-note">
+        <Note>
           {t(
             "Desktop’a bağlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
             "All Desktop-connected accounts, personal or work, share Code history.",
           )}
-        </p>
+        </Note>
       )}
       {value.desktopHistoryTransfer === "selected" && (
         <>
-          <p className="sharing-scope-note">
+          <Note>
             {t(
               "Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır.",
               "Selected accounts share Code history, even across companies.",
             )}
-          </p>
+          </Note>
           <AccountSelection
             accounts={accounts}
             selected={value.desktopHistoryAccounts}
@@ -189,8 +216,8 @@ export function SwitchPreferences({
           />
         </>
       )}
-      <div className="history-sync-row">
-        <p>
+      <div className="mt-1 flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+        <p className="text-[13px]">
           {active
             ? sources.length
               ? t(
@@ -206,69 +233,82 @@ export function SwitchPreferences({
                 "Link the current Desktop account first.",
               )}
         </p>
-        <button
-          className="secondary"
+        <Button
+          type="button"
+          variant="outline"
+          className="shrink-0"
           disabled={syncDisabled || disabled || !active || !sources.length}
           onClick={sync}
         >
           {t("Açık hesapla birleştir…", "Merge into current account…")}
-        </button>
+        </Button>
       </div>
-      <p className="preference-footnote">
+      <Note>
         {t(
           "Yalnızca yerel Code geçmişi; Chat ve bulut oturumları eşitlenmez.",
           "Local Code history only; Chat and cloud sessions are not synced.",
         )}
-      </p>
-      <div className="preference-section-heading">
-        <h4>
-          {t(
-            "Claude kapandıktan sonra hesap hazırlama",
-            "Prepare an account after Claude exits",
-          )}
-        </h4>
-        <p>
-          {t(
-            "Kota dolduğunda sonraki hesabı hazırla.",
-            "Prepare the next account when a quota is exhausted.",
-          )}
-        </p>
-      </div>
-      <div className="preference-row">
-        <div>
-          <label htmlFor="auto-switch-mode">
-            {t("Geçiş zamanı", "When to switch")}
-          </label>
-          <p>
-            {t(
-              "Kota dolup Claude kapandığında sıradaki hesabı hazırlar. Claude’u kendisi açıp kapatmaz.",
-              "When quota runs out and Claude has exited, prepares the next account. Never opens or quits Claude.",
-            )}
-          </p>
-        </div>
-        <select
+      </Note>
+    </div>
+  );
+}
+
+/** After-exit preparation: when to switch, which accounts, and its status. */
+export function AfterExitPreferences({
+  value,
+  accounts,
+  autoSwitch,
+  platform,
+  update,
+  disabled,
+  t,
+}: Pick<
+  Props,
+  "value" | "accounts" | "autoSwitch" | "platform" | "update" | "disabled" | "t"
+>) {
+  const supported = platform === "darwin" || platform === "preview";
+  return (
+    <div className="grid gap-1">
+      <SectionHeading
+        title={t(
+          "Claude kapanınca sıradaki hesabı hazırla",
+          "Prepare the next account after Claude exits",
+        )}
+        description={t(
+          "Kota dolduğunda sonraki hesabı hazırla.",
+          "Prepare the next account when a quota is exhausted.",
+        )}
+      />
+      <SettingRow
+        label={t("Geçiş zamanı", "When to switch")}
+        htmlFor="auto-switch-mode"
+        description={t(
+          "Kota dolup Claude kapandığında sıradaki hesabı hazırlar. Claude’u kendisi açıp kapatmaz.",
+          "When quota runs out and Claude has exited, prepares the next account. Never opens or quits Claude.",
+        )}
+      >
+        <OptionSelect
           id="auto-switch-mode"
           value={value.autoSwitchMode}
           disabled={disabled}
-          onChange={(e) =>
-            update({
-              autoSwitchMode: e.target.value as RelaySettings["autoSwitchMode"],
-            })
-          }
-        >
-          <option value="off">{t("Kapalı", "Off")}</option>
-          <option value="after-exit" disabled={!supported}>
-            {t("Claude kapandıktan sonra", "After Claude exits")}
-          </option>
-        </select>
-      </div>
+          onChange={(autoSwitchMode) => update({ autoSwitchMode })}
+          options={[
+            { value: "off", label: t("Kapalı", "Off") },
+            {
+              value: "after-exit",
+              label: t("Claude kapandıktan sonra", "After Claude exits"),
+              disabled: !supported,
+            },
+          ]}
+        />
+      </SettingRow>
       {!supported && (
-        <p className="sharing-scope-note">
+        <Note>
           {t(
             "Otomatik geçiş bu sürümde macOS’ta kullanılabilir.",
             "Automatic switching is available on macOS in this release.",
           )}
-        </p>
+        </Note>
       )}
       {value.autoSwitchMode !== "off" && (
         <>
@@ -283,37 +323,47 @@ export function SwitchPreferences({
             )}
             t={t}
           />
-          <p className="preference-footnote">
+          <Note>
             {t(
               "Açık ve hedef hesapları seç. Hedefte en az %10 limit kalmalı.",
               "Select the current and target accounts. The target needs at least 10% quota left.",
             )}
-          </p>
+          </Note>
           {value.usageRefreshMinutes === 0 && (
-            <p className="sharing-scope-note">
+            <Note>
               {t(
                 "Otomatik geçiş için düzenli limit yenilemeyi aç.",
                 "Enable regular usage refresh for automatic switching.",
               )}
-            </p>
+            </Note>
           )}
           <AutoSwitchStatus value={autoSwitch} accounts={accounts} t={t} />
         </>
       )}
-      <div className="capability-note">
-        <strong>
+      <div className="mt-1 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+        <strong className="text-sm font-semibold">
           {t(
             "Çalışan görevler tamamlanmayı bekler",
             "Running tasks must finish first",
           )}
         </strong>
-        <p>
+        <Note>
           {t(
             "Başka iş çalışırken Claude yeniden başlatılmaz.",
             "Claude is not restarted while other work runs.",
           )}
-        </p>
+        </Note>
       </div>
-    </>
+    </div>
+  );
+}
+
+/** Both sections in one stack (used by the legacy Preferences panel). */
+export function SwitchPreferences(props: Props) {
+  return (
+    <div className="grid gap-6">
+      <SharedHistoryPreferences {...props} />
+      <AfterExitPreferences {...props} />
+    </div>
   );
 }

@@ -8,6 +8,11 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Note, SectionHeading } from "@/components/SettingRow";
+import { StatusDot } from "@/components/StatusDot";
 import type { Account, AccountUsage, RelaySettings } from "../shared/types";
 import {
   continuationTargetReadinessReason,
@@ -458,51 +463,69 @@ export function ContinuationSettings({
     enrollmentKey,
   ]);
 
-  return (
-    <section
-      className="continuation-settings"
-      aria-labelledby={`${fieldId}-title`}
-    >
-      <div className="continuation-heading">
-        <div>
-          <h4 id={`${fieldId}-title`}>
-            <ShieldCheck size={19} aria-hidden="true" />
-            {t("Kota dolunca geç ve devam et", "Switch and continue at quota")}
-          </h4>
-          <p>
-            {t(
-              "Kota dolunca uygun hesaba geçer ve bu Code konuşmasında devam eder. İzin modu korunur.",
-              "When quota runs out, switches to an eligible account and continues this Code conversation. Its permission mode is kept.",
-            )}
-          </p>
-        </div>
-        <span className={`continuation-badge ${status}`}>
-          {executing ? (
-            <LoaderCircle size={13} className="spin" aria-hidden="true" />
-          ) : status === "continued" ? (
-            <Check size={13} aria-hidden="true" />
-          ) : (
-            <span aria-hidden="true" className="continuation-dot" />
-          )}
-          {t(...statusLabels[status])}
-        </span>
-      </div>
+  const statusDot =
+    status === "armed" || status === "continued"
+      ? "ok"
+      : status === "off"
+        ? "off"
+        : status === "blocked" || status === "reconciliation-required"
+          ? "crit"
+          : "warn";
+  const panel = "rounded-lg border border-border bg-muted/40 px-3 py-2.5";
+  const caption = "block text-xs text-muted-foreground";
 
-      <div className="continuation-route">
-        <div className="continuation-source">
-          <span>{t("Kaynak hesap", "Source account")}</span>
-          <strong>
+  return (
+    <section aria-labelledby={`${fieldId}-title`} className="grid gap-3">
+      <SectionHeading
+        id={`${fieldId}-title`}
+        icon={<ShieldCheck size={18} aria-hidden="true" />}
+        title={t(
+          "Kota dolunca geç ve devam et",
+          "Switch and continue at quota",
+        )}
+        description={t(
+          "Kota dolunca uygun hesaba geçer ve bu Code konuşmasında devam eder. İzin modu korunur.",
+          "When quota runs out, switches to an eligible account and continues this Code conversation. Its permission mode is kept.",
+        )}
+        aside={
+          <Badge variant="outline">
+            {executing ? (
+              <LoaderCircle
+                size={13}
+                className="animate-spin"
+                aria-hidden="true"
+              />
+            ) : status === "continued" ? (
+              <Check size={13} aria-hidden="true" />
+            ) : (
+              <StatusDot tone={statusDot} />
+            )}
+            {t(...statusLabels[status])}
+          </Badge>
+        }
+      />
+
+      <div className="grid items-stretch gap-2 sm:grid-cols-[1fr_auto_1fr]">
+        <div className={panel}>
+          <span className={caption}>{t("Kaynak hesap", "Source account")}</span>
+          <strong className="block text-sm font-semibold">
             {source?.name ?? t("Henüz doğrulanmadı", "Not verified yet")}
           </strong>
-          <small>
+          <small className={caption}>
             {source?.desktop?.email ??
               t("Desktop bağlantısı gerekli", "Desktop connection required")}
           </small>
         </div>
-        <ArrowRight size={18} aria-hidden="true" />
-        <div className="continuation-target">
-          <span>{t("Hesap seçimi", "Account selection")}</span>
-          <strong>
+        <ArrowRight
+          size={18}
+          aria-hidden="true"
+          className="hidden self-center text-muted-foreground sm:block"
+        />
+        <div className={panel}>
+          <span className={caption}>
+            {t("Hesap seçimi", "Account selection")}
+          </span>
+          <strong className="block text-sm font-semibold">
             {selectedTarget && (operationStatus || legacyWatch)
               ? selectedTarget.name
               : t(
@@ -510,7 +533,7 @@ export function ContinuationSettings({
                   "Automatic · by remaining capacity",
                 )}
           </strong>
-          <small>
+          <small className={caption}>
             {selectedTarget && (operationStatus || legacyWatch)
               ? selectedTarget.desktop?.email
               : t(
@@ -519,7 +542,7 @@ export function ContinuationSettings({
                 )}
           </small>
           {!hasTarget && (
-            <small>
+            <small className={caption}>
               {t(
                 "Başka bir hesabın Desktop ve limit bağlantısını tamamla.",
                 "Complete another account’s Desktop and usage connections.",
@@ -530,29 +553,33 @@ export function ContinuationSettings({
       </div>
 
       {!watching && !operationStatus && readiness && (
-        <div className="continuation-readiness">
-          <strong>
+        <div className={panel}>
+          <strong className="text-sm font-semibold">
             {t(
               `${eligibleCount} hesabın hedef kapasitesi doğrulandı`,
               `${eligibleCount} accounts have verified target capacity`,
             )}
           </strong>
-          <p>
+          <Note>
             {t(
               "Bu, şu anki limit kontrolüdür. Geçiş sırasında kayıtlı hesap kapsamı, kaynak kota ve görevlerin durumu yeniden doğrulanır.",
               "This checks current quota only. The saved account scope, source quota and task state are verified again at handoff.",
             )}
-          </p>
+          </Note>
           <ul
+            className="mt-2 grid gap-1"
             aria-label={t(
               "Hesap hazırlık durumu",
               "Account preparation status",
             )}
           >
             {readiness.map(({ account, reason }) => (
-              <li key={account.id}>
-                <strong>{account.name}</strong>
-                <span>
+              <li
+                key={account.id}
+                className="flex items-baseline justify-between gap-3 text-[13px]"
+              >
+                <strong className="font-medium">{account.name}</strong>
+                <span className="text-right text-muted-foreground">
                   {reason
                     ? t(...readinessExplanations[reason])
                     : usage?.[account.id]?.sevenDay
@@ -569,20 +596,20 @@ export function ContinuationSettings({
             ))}
           </ul>
           {settings?.usageRefreshMinutes !== 5 && (
-            <p>
+            <Note className="mt-2">
               {t(
                 "Otomatik geçiş en fazla 5 dakikalık limit verisi kullanır. Kullanım ayarlarında 5 dakikalık yenileme seç; daha uzun aralıkta geçiş yeni veriyi bekleyebilir.",
                 "Automatic switching uses usage data at most 5 minutes old. Choose 5-minute refresh in Usage settings; longer intervals can delay switching until a fresh check.",
               )}
-            </p>
+            </Note>
           )}
         </div>
       )}
 
-      <div className="continuation-session">
-        <div>
-          <span>{t("Konuşma", "Conversation")}</span>
-          <strong>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className={panel}>
+          <span className={caption}>{t("Konuşma", "Conversation")}</span>
+          <strong className="block break-all text-sm font-semibold">
             {value?.projectKey ??
               t(
                 "Claude’daki açık Code konuşması",
@@ -590,23 +617,26 @@ export function ContinuationSettings({
               )}
           </strong>
           {value?.sessionId && (
-            <code title={value.sessionId}>{value.sessionId}</code>
+            <code
+              className="block break-all text-xs text-muted-foreground"
+              title={value.sessionId}
+            >
+              {value.sessionId}
+            </code>
           )}
         </div>
-        <div className="continuation-permission">
-          <span>{t("Korunacak izin modu", "Permission mode to preserve")}</span>
-          <strong>
+        <div className={panel}>
+          <span className={caption}>
+            {t("Korunacak izin modu", "Permission mode to preserve")}
+          </span>
+          <strong className="block text-sm font-semibold">
             {value?.permissionMode ??
               t("Kontrol bekleniyor", "Awaiting verification")}
           </strong>
         </div>
       </div>
 
-      <div
-        className={`continuation-feedback ${status}`}
-        role="status"
-        aria-live="polite"
-      >
+      <div className={`${panel} text-[13px]`} role="status" aria-live="polite">
         <p>
           {value?.executable === false && (!reason || reason === "disabled")
             ? t(
@@ -643,38 +673,38 @@ export function ContinuationSettings({
       </div>
 
       {!watching && (
-        <label className="continuation-consent" htmlFor={`${fieldId}-consent`}>
-          <input
+        <div className="flex items-start gap-3">
+          <Switch
             id={`${fieldId}-consent`}
-            type="checkbox"
+            size="sm"
+            className="mt-0.5"
             checked={consent}
             disabled={busy || !canEnable || !hasTarget}
-            onChange={(event) => setConsent(event.target.checked)}
+            onCheckedChange={setConsent}
           />
-          <span>
+          <label htmlFor={`${fieldId}-consent`} className="text-[13px]">
             {t(
               "Kota dolunca ve diğer işler bitince Claude’u yeniden başlat, uygun hesaba geç ve bu konuşmaya bir devam mesajı gönder.",
               "When quota runs out and other work finishes, restart Claude, switch to an eligible account and send one continuation message to this conversation.",
             )}
-          </span>
-        </label>
+          </label>
+        </div>
       )}
 
-      <div className="continuation-actions">
+      <div className="flex flex-wrap gap-2">
         {watching ? (
-          <button
+          <Button
             type="button"
-            className="secondary"
+            variant="outline"
             disabled={busy || executing}
             onClick={onDisable}
           >
             <Pause size={15} aria-hidden="true" />
             {t("İzlemeyi kapat", "Turn off watching")}
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             type="button"
-            className="primary"
             disabled={busy || !canEnable || !hasTarget || !consent}
             onClick={() => {
               if (canEnable && hasTarget && consent) onArm();
@@ -682,32 +712,32 @@ export function ContinuationSettings({
           >
             <Play size={15} aria-hidden="true" />
             {t("Bu konuşmayı izle", "Watch this conversation")}
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
-          className="secondary"
+          variant="outline"
           disabled={busy || executing}
           onClick={onRefresh}
         >
           <RefreshCw size={15} aria-hidden="true" />
           {t("Yeniden kontrol et", "Check again")}
-        </button>
+        </Button>
       </div>
       {legacyWatch && (
-        <p className="continuation-footnote">
+        <Note>
           {t(
             "Bu önceki izleme, kayıtlı hedef hesabı kullanır. Otomatik hesap seçimine geçmek için izlemeyi kapatıp yeniden aç.",
             "This earlier watch retains its saved target account. Turn watching off and on to use automatic account selection.",
           )}
-        </p>
+        </Note>
       )}
-      <p className="continuation-footnote">
+      <Note>
         {t(
           "Relay açıkken bu konuşma için bir kez çalışır. Hesap, güncel limit ve plan kapasitesine göre seçilir; sonradan eklenen hesaplar için izlemeyi yeniden aç. Geçiş sırasında Claude’da yeni iş başlatma.",
           "Runs once for this conversation while Relay is open. The account is chosen by current quota and plan capacity; enable watching again to include accounts added later. Don’t start new work in Claude during a handoff.",
         )}
-      </p>
+      </Note>
     </section>
   );
 }

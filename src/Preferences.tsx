@@ -302,26 +302,6 @@ export function Preferences({
               ))}
             </select>
           </div>
-          <div className="preference-row">
-            <div>
-              <label htmlFor="usage-suggestions">
-                {t("Geçilecek hesabı öner", "Suggest another account")}
-              </label>
-              <p>
-                {t(
-                  "Geçmiş kapsamındaki, iki limiti de uygun olan Desktop hesabını önerir. Geçişi sen başlatırsın.",
-                  "Suggests a Desktop account in the history scope with room in both limits. You start the switch.",
-                )}
-              </p>
-            </div>
-            <input
-              id="usage-suggestions"
-              type="checkbox"
-              checked={value.suggestAccounts}
-              disabled={disabled || !value.usageWarnings}
-              onChange={(e) => update({ suggestAccounts: e.target.checked })}
-            />
-          </div>
           <details className="planning-help usage-source-details">
             <summary>
               {t("Veri kaynağı ve sınırlar", "Data source and limits")}

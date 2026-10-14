@@ -41,6 +41,15 @@ const view: ContinuationSettingsView = {
   projectKey: "/isolated/project",
   permissionMode: "Manual",
 };
+/** Opening tag of the first button whose visible text contains `name`. */
+function buttonTag(html: string, name: string) {
+  for (const m of html.matchAll(/<button([^>]*)>([\s\S]*?)<\/button>/g))
+    if (m[2].replace(/<[^>]*>/g, "").includes(name)) return m[1];
+  return undefined;
+}
+const text = (html: string) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+const consentTag = (html: string) =>
+  html.match(/<button[^>]*role="switch"[^>]*>/)?.[0];
 function render(
   patch: Partial<ContinuationSettingsView> = {},
   blockingReason?: string,
@@ -64,15 +73,14 @@ function render(
 
 test("read-only readiness does not arm or authorize a continuation, and unavailable execution cannot be enabled", () => {
   const ready = render();
-  assert.match(ready, /type="checkbox"/);
-  assert.doesNotMatch(ready, /type="checkbox"[^>]*checked/);
-  assert.match(ready, /class="primary" disabled=""/);
+  assert.match(consentTag(ready) ?? "", /aria-checked="false"/);
+  assert.match(buttonTag(ready, "Watch this conversation") ?? "", /disabled=""/);
   assert.match(ready, /restart Claude/);
   assert.match(ready, /one continuation message/);
   const unavailable = render({ executable: false });
   assert.match(unavailable, /Automatic continuation cannot be enabled/);
-  assert.match(unavailable, /type="checkbox" disabled=""/);
-  assert.match(unavailable, /class="primary" disabled=""/);
+  assert.match(consentTag(unavailable) ?? "", /disabled=""/);
+  assert.match(buttonTag(unavailable, "Watch this conversation") ?? "", /disabled=""/);
 });
 
 test("execution and verified completion remain visible when an older observation reason is present", () => {
@@ -118,7 +126,7 @@ test("each guarded wait explains the actual work and retains a way to turn watch
     const html = render({ status: "waiting", reason, enabled: true });
     assert.match(html, expected);
     assert.match(html, /Turn off watching/);
-    assert.doesNotMatch(html, /type="checkbox"/);
+    assert.doesNotMatch(html, /role="switch"/);
   }
 });
 
@@ -165,13 +173,13 @@ test("an automatic watch explains missing live quota and reveals a frozen target
     waiting,
     /No connected account in the shared history scope has fresh, sufficient quota/,
   );
-  assert.doesNotMatch(waiting, /<strong>Target account<\/strong>/);
+  assert.doesNotMatch(text(waiting), /Target account/);
   const pending = render({
     status: "reconciliation-required",
     reason: "delivery-unknown",
     targetSelection: "automatic",
   });
-  assert.match(pending, /<strong>Target account<\/strong>/);
+  assert.match(text(pending), /Target account/);
   assert.match(pending, /b@example.test/);
   assert.match(pending, /It will not be sent again/);
 });
@@ -182,7 +190,7 @@ test("a previous fixed-target watch does not imply newly expanded automatic auth
     reason: "awaiting-quota-stop",
     enabled: true,
   });
-  assert.match(html, /<strong>Target account<\/strong>/);
+  assert.match(text(html), /Target account/);
   assert.match(html, /This earlier watch retains its saved target account/);
   assert.match(
     html,

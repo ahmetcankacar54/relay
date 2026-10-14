@@ -1,3 +1,4 @@
+import { StatusDot } from "@/components/StatusDot";
 import type { Account, AutoSwitchState } from "../shared/types";
 
 export function AutoSwitchStatus({
@@ -95,15 +96,24 @@ export function AutoSwitchStatus({
     ],
   };
   const [tr, en] = reasons[value.reason];
+  const tone =
+    value.status === "switched"
+      ? "ok"
+      : value.status === "blocked"
+        ? "warn"
+        : "off";
   return (
-    <div className={`auto-switch-status ${value.status}`} role="status">
-      <span className="auto-switch-dot" />
+    <div
+      className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/40 px-3 py-2.5"
+      role="status"
+    >
+      <StatusDot tone={tone} className="mt-1.5" />
       <div>
-        <strong>
+        <strong className="text-sm font-semibold">
           {t("Otomatik geçiş", "Automatic switching")}
           {target ? ` · ${target}` : ""}
         </strong>
-        <p>{t(tr, en)}</p>
+        <p className="text-[13px] text-muted-foreground">{t(tr, en)}</p>
       </div>
     </div>
   );
