@@ -30,6 +30,8 @@ import { RelayTray } from "./tray";
 import { TrayPanel } from "./tray-panel";
 import { PAGES } from "../src/app/routes";
 import { UsageHistory } from "./core/usage-history";
+import { usageStatisticsInput } from "./core/usage-statistics-input";
+import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { planningIdentity } from "../shared/planning";
 import { WindowKeeper } from "./core/window-keeper";
 import { runQuotaStarter } from "./core/routine-runner";
@@ -881,7 +883,6 @@ function bindIPC() {
     continuation: continuation.snapshot(),
     fleet: fleet.snapshot(),
     autoSwitch: autoSwitch.snapshot(),
-    usageStatistics: usageHistory.snapshot(service.store.state.accounts),
     planning: keeper.snapshot(),
   }));
   handle("snapshot", () =>
@@ -891,10 +892,21 @@ function bindIPC() {
       continuation: continuation.snapshot(),
       fleet: fleet.snapshot(),
       autoSwitch: autoSwitch.snapshot(),
-      usageStatistics: usageHistory.snapshot(service.store.state.accounts),
       planning: keeper.snapshot(),
     })),
   );
+  handle("usage-statistics", (input) => {
+    const { range, accountId } = usageStatisticsInput.parse(input);
+    return buildStatisticsView({
+      rollups: usageHistory.rollups(),
+      available: usageHistory.rollupsAvailable,
+      accounts: service.store.state.accounts,
+      range,
+      ...(accountId ? { accountId } : {}),
+      zone: service.store.state.settings.planning.timeZone,
+      now: Date.now(),
+    });
+  });
   handle("create-account", (input) =>
     service.store.create(createAccountSchema.parse(input)),
   );

@@ -1,5 +1,7 @@
 import { DEFAULT_SETTINGS } from "../shared/types";
-import { summarizeUsageSamples, usageSample } from "../shared/usage-statistics";
+import { usageSample, type UsageSample } from "../shared/usage-statistics";
+import { foldSamples } from "../shared/usage-rollups";
+import { buildStatisticsView } from "../shared/usage-statistics-view";
 import type {
   Account,
   AuthFlow,
@@ -103,6 +105,37 @@ const sessions: Session[] = [
   bytes: 18_000,
   updatedAt: new Date(Date.now() - (i + 1) * 1200_000).toISOString(),
 }));
+// 30 days of sample polls: most days open one window per connected account at
+// a varying hour, polled every 10 minutes for two hours; some windows fill up.
+function previewSamples(): UsageSample[] {
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const today = Math.floor(Date.now() / hour) * hour;
+  const samples: UsageSample[] = [];
+  accounts.forEach((account, index) => {
+    for (let day = 0; day < 30; day++) {
+      if ((day + index) % 4 === 3) continue;
+      const opened =
+        today - day * 24 * hour - ((day * 5 + index * 3) % 9) * hour;
+      if (opened + 2 * hour > Date.now()) continue;
+      const step = 4 + ((day + index * 7) % 9);
+      for (let i = 0; i <= 12; i++) {
+        const sample = usageSample(account, {
+          accountId: account.id,
+          status: "ready",
+          stale: false,
+          checkedAt: new Date(opened + i * 10 * minute).toISOString(),
+          fiveHour: {
+            usedPercent: Math.min(100, i * step),
+            resetsAt: new Date(opened + 5 * hour).toISOString(),
+          },
+        });
+        if (sample) samples.push(sample);
+      }
+    }
+  });
+  return samples;
+}
 const state: Snapshot = {
   settings: structuredClone(DEFAULT_SETTINGS),
   usage: Object.fromEntries(
@@ -282,25 +315,6 @@ if (scenario === "planning") {
       },
     ],
   };
-  state.usageStatistics = Object.fromEntries(
-    accounts.map((a, index) => {
-      const samples = Array.from({ length: 14 }, (_, i) =>
-        usageSample(a, {
-          accountId: a.id,
-          status: "ready",
-          stale: false,
-          checkedAt: new Date(
-            Date.now() - (131 - i * 10) * 60_000,
-          ).toISOString(),
-          fiveHour: {
-            usedPercent: 12 + i * (index + 1),
-            resetsAt: new Date(Date.now() + 2 * 3600_000).toISOString(),
-          },
-        }),
-      ).filter((s) => s !== undefined);
-      return [a.id, summarizeUsageSamples(a, samples, Date.now())];
-    }),
-  );
 }
 if (scenario === "auto-waiting" || scenario === "auto-prepared") {
   state.settings.desktopHistoryTransfer = "selected";
@@ -402,6 +416,16 @@ export const previewApi: RelayAPI = {
   openDesktop: desktopOnly,
   recoverDesktop: desktopOnly,
   panelSnapshot: async () => structuredClone(state),
+  usageStatistics: async ({ range, accountId }) =>
+    buildStatisticsView({
+      rollups: foldSamples(previewSamples(), Date.now()),
+      available: true,
+      accounts,
+      range,
+      ...(accountId ? { accountId } : {}),
+      zone: state.settings.planning.timeZone,
+      now: Date.now(),
+    }),
   snapshot: async () => structuredClone(state),
   createAccount: async (input) => {
     if (scenario !== "unlinked-no-code" && scenario !== "mixed-connections")

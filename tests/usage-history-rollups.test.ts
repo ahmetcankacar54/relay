@@ -143,7 +143,7 @@ test("a corrupt rollups file is unavailable and never overwritten", (t) => {
     fs.readFileSync(path.join(root, "usage-history.json"), "utf8"),
   ).samples;
   assert.equal(raw.length, 2);
-  assert.equal(history.snapshot([account])[account.id].status, "available");
+  assert.equal(history.historyAvailable, true);
   assert.equal(fs.readFileSync(rollupsFile(root), "utf8"), content);
   // Valid JSON with an invalid shape is also rejected.
   const wrongShape = JSON.stringify({ version: 2, hours: {} });
@@ -182,7 +182,7 @@ test("a symlinked rollups file is unavailable and not followed", (t) => {
   substituted.record(account, usage(start + 5 * minute, 20));
   assert.equal(substituted.rollupsAvailable, false);
   assert.equal(fs.readFileSync(foreign, "utf8"), foreignContent);
-  assert.equal(substituted.snapshot([account])[account.id].status, "available");
+  assert.equal(substituted.historyAvailable, true);
 });
 
 test("a stale rollups file is caught up with newer raw samples on load", (t) => {

@@ -207,9 +207,14 @@ app.whenReady().then(async () => {
     const planningSnapshot = await call("panelSnapshot");
     assert.deepEqual(planningSnapshot.settings.planning, planning);
     assert.equal(planningSnapshot.planning.enabled, false);
-    assert.equal(
-      planningSnapshot.usageStatistics[a.id].periods.sevenDay.samples,
-      0,
+    assert.equal(planningSnapshot.usageStatistics, undefined);
+    const statistics = await call("usageStatistics", { range: 30 });
+    assert.equal(statistics.range, 30);
+    assert.ok(["available", "empty"].includes(statistics.status));
+    assert.equal(statistics.heatmap.length, 7);
+    await assert.rejects(call("usageStatistics", { range: 14 }));
+    await assert.rejects(
+      call("usageStatistics", { range: 30, accountId: "../../invalid" }),
     );
     await assert.rejects(call("updatePlanning", { timeZone: "invalid" }));
     await assert.rejects(

@@ -18,15 +18,6 @@ const b: Account = { ...a, id: "b", name: "İş · Team", desktop: { ...desktop,
 const accounts = [a, b];
 const settings = { ...DEFAULT_SETTINGS, autoSwitchMode: "off" as const, desktopHistoryTransfer: "all" as const };
 
-const period = (points: number) => ({
-  days: 7 as const, observedFiveHourPoints: points, windowsObserved: 3, samples: 40,
-  coveredMinutes: 600, coveragePercent: 12.5, partial: true as const,
-});
-const stat = (id: string, points: number) => ({
-  accountId: id, status: "available" as const,
-  periods: { sevenDay: period(points), thirtyDay: { ...period(points * 2), days: 30 as const } },
-});
-
 function relayFor(): Relay {
   return {
     api: {}, preview: false, error: "", notice: "", accounts, active: a, settings, busy: "",
@@ -34,7 +25,6 @@ function relayFor(): Relay {
     desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0, activeProfileId: "a" },
     data: {
       settings, usage: {}, accounts, authFlows: [], diagnostics: { platform: "darwin" },
-      usageStatistics: { a: stat("a", 42), b: stat("b", 7) },
     } as unknown as Snapshot,
     requestDesktop() {}, setSetupId() {}, cancelDesktopRequest() {}, setOrg() {}, setNotice() {},
     startCli: async () => {}, refreshUsage: async () => {}, action: async () => {}, setData() {},
@@ -49,13 +39,9 @@ const render = (relay: Relay) =>
     ),
   );
 
-test("Usage shows statistics for both accounts and the warning preferences", () => {
+test("Usage shows the statistics placeholder and the warning preferences", () => {
   const html = render(relayFor());
-  assert.match(html, /7 gün/);
-  assert.match(html, /30 gün/);
-  assert.match(html, /Kişisel · Max/);
-  assert.match(html, /İş · Team/);
-  assert.match(html, /42 puan/);
+  assert.match(html, /İstatistikler yükleniyor/);
   assert.match(html, /Limit uyarıları/);
   assert.match(html, /Uyarı eşiği/);
   assert.match(html, /%20 kalınca/);

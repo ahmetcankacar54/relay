@@ -5,12 +5,11 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { UsageStatistics } from "../features/UsageStatistics";
 
 const cardClass = "gap-0 px-5 py-4";
 
 export function Usage() {
-  const { api, data, accounts, settings, busy, desktop, action } = useRelay();
+  const { api, settings, busy, desktop, action } = useRelay();
   const { t } = useI18n();
   const disabled = !!busy || !!desktop?.busy;
   const update = (patch: Partial<typeof settings>) =>
@@ -22,11 +21,9 @@ export function Usage() {
     >
       <div className="grid gap-3 px-6 pb-6">
         <Card className={cardClass}>
-          <UsageStatistics
-            accounts={accounts}
-            value={data?.usageStatistics ?? {}}
-            t={t}
-          />
+          {/* Statistics are served on demand by relay:usage-statistics. */}
+          <SectionHeading title={t("İstatistikler", "Statistics")} />
+          <Note>{t("İstatistikler yükleniyor", "Loading statistics")}</Note>
         </Card>
         <Card className={cardClass}>
           <SectionHeading title={t("Uyarılar", "Warnings")} />

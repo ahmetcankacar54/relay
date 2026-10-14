@@ -64,7 +64,7 @@ test("an exhausted account's reset dates survive cache invalidation and Relay re
   assert.equal(invalidated.status, "idle");
   assert.equal(invalidated.stale, false);
   assert.equal(
-    restored.snapshot([account])[account.id].periods.sevenDay.samples,
+    JSON.parse(fs.readFileSync(restored.file, "utf8")).samples.length,
     1,
   );
 });

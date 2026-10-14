@@ -1,4 +1,4 @@
-import type { AccountUsageStatistics } from "./usage-statistics";
+import type { UsageStatisticsView } from "./usage-statistics-view";
 export type { UsageStatisticsView } from "./usage-statistics-view";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 import type { PageId } from "../src/app/routes";
@@ -80,7 +80,6 @@ export interface Snapshot {
   autoSwitch?: AutoSwitchState;
   continuation?: DesktopContinuationSnapshot;
   fleet?: FleetContinuationState;
-  usageStatistics?: Record<string, AccountUsageStatistics>;
   planning?: KeeperSnapshot;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
@@ -196,6 +195,10 @@ export interface RelayAPI {
   recoverDesktop(): Promise<void>;
   snapshot(): Promise<Snapshot>;
   panelSnapshot(): Promise<Snapshot>;
+  usageStatistics(input: {
+    range: 7 | 30 | 90;
+    accountId?: string;
+  }): Promise<UsageStatisticsView>;
   createAccount(input: CreateAccount): Promise<Account>;
   checkAuth(accountId: string): Promise<Account>;
   login(accountId: string): Promise<AuthFlow>;

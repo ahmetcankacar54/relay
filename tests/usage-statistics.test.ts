@@ -11,12 +11,12 @@ import {
   MAX_USAGE_GAP_MS,
   MAX_USAGE_SAMPLES,
   USAGE_HISTORY_DAYS,
-  summarizeUsageSamples,
   usageIdentity,
   usageSample,
   type UsageSample,
 } from "../shared/usage-statistics";
 import type { Account, AccountUsage } from "../shared/types";
+import { foldSamples, type UsageRollups } from "../shared/usage-rollups";
 
 const start = Date.parse("2026-10-13T08:00:00.000Z");
 const reset = "2026-10-13T13:00:00.000Z";
@@ -59,8 +59,20 @@ function sample(
 ): UsageSample {
   return usageSample(account, usage(at, usedPercent, resetsAt))!;
 }
+// The points rule now lives in the rollups; these totals sum one identity.
+function totals(r: UsageRollups, identity = usageIdentity(account)!) {
+  const hours = Object.values(r.hours[identity] ?? {});
+  return {
+    observedFiveHourPoints:
+      Math.round(hours.reduce((sum, h) => sum + h.points, 0) * 100) / 100,
+    windowsObserved: r.windows[identity]?.length ?? 0,
+    coveredMinutes: Math.round(
+      hours.reduce((sum, h) => sum + h.coveredMinutes, 0),
+    ),
+  };
+}
 function stats(samples: UsageSample[], now = start + 60 * minute) {
-  return summarizeUsageSamples(account, samples, now).periods.sevenDay;
+  return totals(foldSamples(samples, now));
 }
 function directory(t: any) {
   const root = fs.mkdtempSync(
@@ -70,7 +82,7 @@ function directory(t: any) {
   return root;
 }
 
-test("statistics count observed increases with an explicit baseline and partial coverage", () => {
+test("statistics count observed increases with an explicit baseline and covered minutes", () => {
   const result = stats([
     sample(start, 20),
     sample(start + 5 * minute, 25.2),
@@ -78,12 +90,7 @@ test("statistics count observed increases with an explicit baseline and partial 
   ]);
   assert.equal(result.observedFiveHourPoints, 11.3);
   assert.equal(result.windowsObserved, 1);
-  assert.equal(result.samples, 3);
   assert.equal(result.coveredMinutes, 10);
-  assert.equal(result.coveragePercent, 0.1);
-  assert.equal(result.firstAt, new Date(start).toISOString());
-  assert.equal(result.lastAt, new Date(start + 10 * minute).toISOString());
-  assert.equal(result.partial, true);
   assert.equal(stats([sample(start, 80)]).observedFiveHourPoints, 0);
 });
 test("corrections never lower the running baseline and inflate later increases", () => {
@@ -143,30 +150,7 @@ test("missing, expired, and implausible reset timestamps cannot form usage delta
     assert.equal(result.windowsObserved, 0);
   }
 });
-test("seven-day boundary starts a baseline and cannot pull in earlier usage", () => {
-  const now = start + 7 * day;
-  const values = [
-    sample(start - minute, 10, "2026-10-13T12:00:00.000Z"),
-    sample(start, 15, "2026-10-13T12:00:00.000Z"),
-    sample(start + 5 * minute, 20, "2026-10-13T12:00:00.000Z"),
-  ];
-  const result = summarizeUsageSamples(account, values, now);
-  assert.equal(result.periods.sevenDay.observedFiveHourPoints, 5);
-  assert.equal(result.periods.sevenDay.samples, 2);
-  assert.equal(result.periods.thirtyDay.observedFiveHourPoints, 10);
-  assert.equal(result.periods.thirtyDay.samples, 3);
-});
-test("corrections around the period boundary or a long gap do not count rebounds twice", () => {
-  const result = summarizeUsageSamples(
-    account,
-    [
-      sample(start - minute, 40, "2026-10-13T12:00:00.000Z"),
-      sample(start, 20, "2026-10-13T12:00:00.000Z"),
-      sample(start + 5 * minute, 25, "2026-10-13T12:00:00.000Z"),
-    ],
-    start + 7 * day,
-  );
-  assert.equal(result.periods.sevenDay.observedFiveHourPoints, 0);
+test("a long gap does not count a rebound twice", () => {
   assert.equal(
     stats([
       sample(start, 20),
@@ -190,19 +174,18 @@ test("duplicate timestamps and temporarily missing windows never inflate totals"
     sample(start + 15 * minute, 10),
     sample(start + 20 * minute, 20),
   ]);
-  assert.equal(result.samples, 5);
   assert.equal(result.observedFiveHourPoints, 30);
   assert.equal(result.coveredMinutes, 10);
 });
 test("stable identity isolates organizations/accounts while UUID survives email changes", () => {
   const values = [sample(start, 10), sample(start + 5 * minute, 20)];
+  const rollups = foldSamples(values, start + 10 * minute);
   const alteredEmail = {
     ...account,
     auth: { ...account.auth!, email: "new@example.test" },
   };
   assert.equal(
-    summarizeUsageSamples(alteredEmail, values, start + 10 * minute).periods
-      .sevenDay.observedFiveHourPoints,
+    totals(rollups, usageIdentity(alteredEmail)).observedFiveHourPoints,
     10,
   );
   for (const change of [
@@ -212,11 +195,9 @@ test("stable identity isolates organizations/accounts while UUID survives email 
     { loggedIn: false },
   ]) {
     const changed = { ...account, auth: { ...account.auth!, ...change } };
-    assert.equal(
-      summarizeUsageSamples(changed, values, start + 10 * minute).periods
-        .sevenDay.samples,
-      0,
-    );
+    const identity = usageIdentity(changed);
+    assert.notEqual(identity, usageIdentity(account));
+    if (identity) assert.equal(rollups.hours[identity], undefined);
   }
   const legacy = {
     ...account,
@@ -281,12 +262,13 @@ test("history persists privately, reloads, and rejects duplicate/out-of-order/fu
   history.record(account, usage(start + 5 * minute, 90));
   history.record(account, usage(start - minute, 0));
   history.record(account, usage(now + minute, 100));
-  const restored = new UsageHistory(root, () => now).snapshot([account])[
-    account.id
-  ];
-  assert.equal(restored.status, "available");
-  assert.equal(restored.periods.sevenDay.samples, 2);
-  assert.equal(restored.periods.sevenDay.observedFiveHourPoints, 10);
+  const restored = new UsageHistory(root, () => now);
+  assert.equal(restored.historyAvailable, true);
+  assert.equal(
+    JSON.parse(fs.readFileSync(restored.file, "utf8")).samples.length,
+    2,
+  );
+  assert.equal(totals(restored.rollups()!).observedFiveHourPoints, 10);
   if (process.platform !== "win32") {
     assert.equal(fs.statSync(history.file).mode & 0o777, 0o600);
     assert.equal(fs.statSync(root).mode & 0o777, 0o700);
@@ -333,10 +315,7 @@ test("14-day retention and maximum sample count are bounded on load and next wri
     JSON.parse(fs.readFileSync(file, "utf8")).samples.length,
     MAX_USAGE_SAMPLES,
   );
-  assert.equal(
-    new UsageHistory(root, () => now).snapshot([account])[account.id].status,
-    "available",
-  );
+  assert.equal(new UsageHistory(root, () => now).historyAvailable, true);
 });
 test("corrupt or oversized history fails safely without overwriting the evidence", (t) => {
   const root = directory(t);
@@ -353,7 +332,7 @@ test("corrupt or oversized history fails safely without overwriting the evidence
     fs.writeFileSync(file, content);
     const history = new UsageHistory(root, () => start + minute);
     history.record(account, usage(start, 20));
-    assert.equal(history.snapshot([account])[account.id].status, "unavailable");
+    assert.equal(history.historyAvailable, false);
     assert.equal(fs.readFileSync(file, "utf8"), content);
   }
 });
@@ -366,23 +345,19 @@ test("symlink files and roots fail closed; write never follows a substituted sym
   fs.symlinkSync(foreign, file);
   const linked = new UsageHistory(root, () => start + minute);
   linked.record(account, usage(start, 10));
-  assert.equal(linked.snapshot([account])[account.id].status, "unavailable");
+  assert.equal(linked.historyAvailable, false);
   assert.equal(fs.readFileSync(foreign, "utf8"), foreignContent);
   fs.unlinkSync(file);
   const substituted = new UsageHistory(root, () => start + minute);
   fs.symlinkSync(foreign, file);
   substituted.record(account, usage(start, 10));
-  assert.equal(
-    substituted.snapshot([account])[account.id].status,
-    "unavailable",
-  );
+  assert.equal(substituted.historyAvailable, false);
   assert.equal(fs.readFileSync(foreign, "utf8"), foreignContent);
   const linkedRoot = path.join(root, "linked-root");
   fs.symlinkSync(root, linkedRoot);
   assert.equal(
-    new UsageHistory(linkedRoot, () => start).snapshot([account])[account.id]
-      .status,
-    "unavailable",
+    new UsageHistory(linkedRoot, () => start).historyAvailable,
+    false,
   );
 });
 test("identity replacement does not inherit the earlier login's statistics", (t) => {
@@ -394,15 +369,12 @@ test("identity replacement does not inherit the earlier login's statistics", (t)
     auth: { ...account.auth!, accountUuid: "new-account" },
   };
   history.record(different, usage(start + 10 * minute, 90));
+  const rollups = history.rollups()!;
   assert.equal(
-    history.snapshot([different])[account.id].periods.sevenDay
-      .observedFiveHourPoints,
+    totals(rollups, usageIdentity(different)).observedFiveHourPoints,
     0,
   );
-  assert.equal(
-    history.snapshot([different])[account.id].periods.sevenDay.samples,
-    1,
-  );
+  assert.equal(totals(rollups).observedFiveHourPoints, 10);
 });
 test("UsageManager emits only successfully identity-verified fresh polls and tolerates recorder failures", async (t) => {
   const store = new Store(directory(t));

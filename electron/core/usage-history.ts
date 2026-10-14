@@ -6,10 +6,8 @@ import type { Account, AccountUsage } from "../../shared/types";
 import {
   MAX_USAGE_SAMPLES,
   USAGE_HISTORY_DAYS,
-  summarizeUsageSamples,
   usageIdentity,
   usageSample,
-  type AccountUsageStatistics,
   type UsageSample,
 } from "../../shared/usage-statistics";
 import {
@@ -91,7 +89,8 @@ export class UsageHistory {
   readonly file: string;
   readonly rollupsFile: string;
   private samples: UsageSample[] = [];
-  private available = true;
+  /** usage-history.json is readable and writable. */
+  historyAvailable = true;
   private rollupsState: UsageRollups | undefined;
   /** In-memory rollups differ from usage-rollups.json. */
   private rollupsDirty = false;
@@ -107,7 +106,7 @@ export class UsageHistory {
       if (value !== undefined)
         this.samples = this.pruned(historySchema.parse(value).samples);
     } catch {
-      this.available = false;
+      this.historyAvailable = false;
     }
     try {
       const value = this.readPrivateJsonFile(
@@ -117,11 +116,11 @@ export class UsageHistory {
       if (value !== undefined) {
         const loaded: UsageRollups = rollupsSchema.parse(value);
         // Catch up samples recorded after the last successful rollups write.
-        this.rollupsState = this.available
+        this.rollupsState = this.historyAvailable
           ? catchUp(loaded, this.samples, this.now())
           : loaded;
         this.rollupsDirty = this.rollupsState !== loaded;
-      } else if (!this.available)
+      } else if (!this.historyAvailable)
         throw new Error("No readable usage history to backfill from.");
       else {
         this.rollupsState = foldSamples(this.samples, this.now());
@@ -226,7 +225,7 @@ export class UsageHistory {
       .slice(-MAX_USAGE_SAMPLES);
   }
   record(account: Account, usage: AccountUsage): void {
-    if (!this.available) return;
+    if (!this.historyAvailable) return;
     const sample = usageSample(account, usage);
     if (!sample || Date.parse(sample.checkedAt) > this.now()) return;
     const previous = [...this.samples]
@@ -245,7 +244,7 @@ export class UsageHistory {
       this.writePrivateJsonFile(this.file, { version: 1, samples: next });
       this.samples = next;
     } catch {
-      this.available = false;
+      this.historyAvailable = false;
       return;
     }
     if (!this.rollupsAvailable || !this.rollupsState) return;
@@ -259,24 +258,9 @@ export class UsageHistory {
     if (!this.rollupsAvailable || !this.rollupsState) return;
     return structuredClone(this.rollupsState);
   }
-  snapshot(
-    accounts: readonly Account[],
-  ): Record<string, AccountUsageStatistics> {
-    return Object.fromEntries(
-      accounts.map((account) => [
-        account.id,
-        summarizeUsageSamples(
-          account,
-          this.samples,
-          this.now(),
-          this.available,
-        ),
-      ]),
-    );
-  }
   /** Reset dates survive a cache invalidation, without reviving old quota. */
   lastKnownResets(account: Account): AccountUsage["lastKnownResets"] {
-    if (!this.available) return;
+    if (!this.historyAvailable) return;
     const identity = usageIdentity(account);
     if (!identity) return;
     const samples = this.pruned(this.samples)

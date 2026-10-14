@@ -43,6 +43,8 @@ const api: RelayAPI = {
   refreshUsage: (id, allowPrompt) =>
     ipcRenderer.invoke("relay:refresh-usage", id, allowPrompt),
   desktopSnapshot: () => ipcRenderer.invoke("relay:desktop-snapshot"),
+  usageStatistics: (input) =>
+    ipcRenderer.invoke("relay:usage-statistics", input),
   dismissDesktopError: (revision) =>
     ipcRenderer.invoke("relay:dismiss-desktop-error", revision),
   captureDesktop: (id, org) =>
