@@ -283,6 +283,7 @@ else {
           accounts: service.store.state.accounts,
           settings: service.store.state.settings,
           usage: usage.snapshot(),
+          tempoRate: tempo.rateAt(),
         }),
         withDesktopLock,
         pendingAuth: () => pendingAuth() || !!observedDesktop?.pendingProfileId,
@@ -379,6 +380,7 @@ else {
           accounts: service.store.state.accounts,
           settings: service.store.state.settings,
           usage: usage.snapshot(),
+          tempoRate: tempo.rateAt(),
         }),
         desktop: async () => ({
           ...(observedDesktop = await desktop.snapshot()),

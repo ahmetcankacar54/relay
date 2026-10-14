@@ -5,6 +5,7 @@ import type {
   UsageWindow,
 } from "./types";
 import { allowedHistoryPair } from "./history-policy";
+import { rankContinuationTargets } from "./continuation-target-ranking";
 export function freshUsage(
   u: AccountUsage | undefined,
   now = Date.now(),
@@ -41,12 +42,17 @@ export function maxUsedPercent(
   const windows = quotaWindows(u);
   return windows && Math.max(...windows.map((w) => w.usedPercent));
 }
+/**
+ * The account to suggest once the active one passes the warning threshold,
+ * ranked like automatic switching (`rate`: the tempo, Pro units per hour).
+ */
 export function suggestedAccount(
   active: Account | undefined,
   accounts: Account[],
   usage: Record<string, AccountUsage>,
   settings: RelaySettings,
   now = Date.now(),
+  rate?: number,
 ) {
   if (
     !active ||
@@ -62,17 +68,17 @@ export function suggestedAccount(
     )
   )
     return;
-  return accounts
-    .filter(
-      (a) =>
-        a.id !== active.id &&
-        allowedHistoryPair(active, a, settings) &&
-        a.desktop &&
-        (!a.cooldownUntil || Date.parse(a.cooldownUntil) <= now) &&
-        freshUsage(usage[a.id], now) &&
-        (maxUsedPercent(usage[a.id]) ?? 100) < settings.usageWarningPercent,
-    )
-    .sort(
-      (a, b) => maxUsedPercent(usage[a.id])! - maxUsedPercent(usage[b.id])!,
-    )[0];
+  const eligible = accounts.filter(
+    (a) =>
+      a.id !== active.id &&
+      allowedHistoryPair(active, a, settings) &&
+      a.desktop &&
+      (!a.cooldownUntil || Date.parse(a.cooldownUntil) <= now) &&
+      freshUsage(usage[a.id], now) &&
+      (maxUsedPercent(usage[a.id]) ?? 100) < settings.usageWarningPercent,
+  );
+  return rankContinuationTargets(
+    eligible.map((a) => ({ account: a, usage: usage[a.id] })),
+    { now, rate },
+  )[0]?.account;
 }

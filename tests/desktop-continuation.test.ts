@@ -1461,3 +1461,26 @@ test("a wakeup takeover refused before any click withdraws its intent and keeps 
   assert.deepEqual(f.persisted().arm, armed);
   assert.equal(f.requests.length, 0);
 });
+
+test("automatic selection takes the soonest reset that holds half an hour at the snapshot's tempo", async () => {
+  for (const [tempoRate, expected] of [
+    [undefined, "target"],
+    [200, "alternate"],
+  ] as const) {
+    const f = automaticSetup();
+    f.alternate.planning = { plan: "max5", capacityWeight: 5 };
+    // Target: 50 Pro units until its reset in 30 minutes; alternate: 400 in an hour.
+    f.usage[f.target.id].fiveHour = {
+      usedPercent: 50,
+      resetsAt: new Date(NOW + 30 * 60_000).toISOString(),
+    };
+    f.usage[f.alternate.id].fiveHour!.usedPercent = 20;
+    const manager = new DesktopContinuationManager({
+      ...f.deps,
+      snapshot: () => ({ ...f.deps.snapshot(), tempoRate }),
+    });
+    await manager.arm(automaticArm);
+    await manager.tick();
+    assert.equal(f.requests[0].target.id, f[expected].id);
+  }
+});

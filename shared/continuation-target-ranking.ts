@@ -51,28 +51,71 @@ export function continuationTargetScore(
   return (planCapacity(account) * remainingQuotaPercent(account, usage)) / 100;
 }
 
-/** Rank policy-eligible candidates without mutating the caller's collection. */
+export interface RankingContext {
+  now: number;
+  /** Pro units per hour now */
+  rate?: number;
+}
+
+const MIN_LEFT_PERCENT = 10;
+const MIN_TEMPO_HOURS = 0.5;
+
+const byScore = (
+  left: RankedContinuationTarget,
+  right: RankedContinuationTarget,
+) =>
+  right.score - left.score ||
+  right.remainingPercent - left.remainingPercent ||
+  (left.account.id < right.account.id
+    ? -1
+    : left.account.id > right.account.id
+      ? 1
+      : 0);
+
+/** The open five-hour window's reset, if one is running. */
+function openReset(usage: AccountUsage | undefined, now: number) {
+  const reset = Date.parse(usage?.fiveHour?.resetsAt ?? "");
+  return Number.isFinite(reset) && reset > now ? reset : Infinity;
+}
+
+/**
+ * Rank policy-eligible candidates without mutating the caller's collection.
+ * With a context: accounts with enough quota for half an hour at the current
+ * tempo (else 10% left) first, open windows resetting soonest first (their
+ * quota is lost at the reset), closed windows after them. Without one, or
+ * when nobody has enough: plan capacity × remaining quota.
+ */
 export function rankContinuationTargets(
   candidates: readonly ContinuationTargetCandidate[],
+  context?: RankingContext,
 ): RankedContinuationTarget[] {
-  return candidates
-    .map(({ account, usage }) => {
-      const remainingPercent = remainingQuotaPercent(account, usage);
-      return {
-        account,
-        usage,
-        remainingPercent,
-        score: (planCapacity(account) * remainingPercent) / 100,
-      };
-    })
-    .sort(
-      (left, right) =>
-        right.score - left.score ||
-        right.remainingPercent - left.remainingPercent ||
-        (left.account.id < right.account.id
-          ? -1
-          : left.account.id > right.account.id
-            ? 1
-            : 0),
-    );
+  const ranked = candidates.map(({ account, usage }) => {
+    const remainingPercent = remainingQuotaPercent(account, usage);
+    return {
+      account,
+      usage,
+      remainingPercent,
+      score: (planCapacity(account) * remainingPercent) / 100,
+    };
+  });
+  if (!context) return ranked.sort(byScore);
+  const rate = context.rate;
+  // `score` is in Pro windows, so `score × 100` is Pro units.
+  const enough = (r: RankedContinuationTarget) =>
+    r.remainingPercent > 0 &&
+    (rate && rate > 0
+      ? r.score * 100 >= rate * MIN_TEMPO_HOURS
+      : r.remainingPercent >= MIN_LEFT_PERCENT);
+  const passing = ranked.filter(enough);
+  if (!passing.length) return ranked.sort(byScore);
+  // Two closed windows give Infinity − Infinity = NaN, which falls through to byScore.
+  passing.sort(
+    (left, right) =>
+      openReset(left.usage, context.now) -
+        openReset(right.usage, context.now) || byScore(left, right),
+  );
+  return [
+    ...passing,
+    ...ranked.filter((r) => !passing.includes(r)).sort(byScore),
+  ];
 }

@@ -266,3 +266,37 @@ test("a switch that was interrupted mid-way resumes continuing on the target", a
   assert.equal(f.state.sent.length, 2);
   assert.deepEqual(f.state.switches, []);
 });
+
+test("the target is the soonest reset that holds half an hour at the snapshot's tempo", async () => {
+  const f = setup();
+  const c = enroll(account("C", "pro"));
+  // C (Pro, 50 Pro units) resets in 30 minutes; B (Max 5×, 450) in an hour.
+  const usageOf = {
+    ...f.state.usage,
+    [c.id]: {
+      ...usage(c, 50),
+      fiveHour: {
+        usedPercent: 50,
+        resetsAt: new Date(NOW + 30 * 60_000).toISOString(),
+      },
+    },
+  };
+  let tempoRate: number | undefined;
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    snapshot: () => ({
+      accounts: [f.a, f.b, c],
+      settings: structuredClone(DEFAULT_SETTINGS),
+      usage: usageOf,
+      tempoRate,
+    }),
+  });
+  fleet.setEnabled(true);
+  // Missing automation stops the tick after the target is chosen.
+  f.state.automation = "accessibility-permission-required";
+  assert.equal((await fleet.tick()).targetId, c.id);
+  // 200 Pro units/h needs 100 left: C falls short.
+  tempoRate = 200;
+  assert.equal((await fleet.tick()).targetId, f.b.id);
+  assert.deepEqual(f.state.switches, []);
+});

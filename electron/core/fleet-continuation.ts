@@ -26,6 +26,8 @@ export interface FleetDeps {
     accounts: Account[];
     settings: RelaySettings;
     usage: Record<string, AccountUsage>;
+    /** Pro units per hour now (the tempo); absent means unknown. */
+    tempoRate?: number;
   };
   desktop(): Promise<DesktopState>;
   /** Another Relay operation (sign-in, single-conversation watch…) owns Claude now. */
@@ -97,13 +99,18 @@ export function sourceExhausted(usage: AccountUsage | undefined, now: number) {
   );
 }
 
-/** Best eligible target by plan capacity × smallest remaining quota. */
+/**
+ * Best eligible target: the open window resetting soonest among accounts with
+ * quota for half an hour at the tempo (`rate`, Pro units per hour), else by
+ * plan capacity × smallest remaining quota.
+ */
 export function chooseTarget(
   source: Account,
   accounts: Account[],
   settings: RelaySettings,
   usage: Record<string, AccountUsage>,
   now: number,
+  rate?: number,
 ) {
   const eligible = accounts.filter(
     (account) =>
@@ -118,6 +125,7 @@ export function chooseTarget(
   );
   return rankContinuationTargets(
     eligible.map((account) => ({ account, usage: usage[account.id] })),
+    { now, rate },
   )[0]?.account;
 }
 
@@ -227,7 +235,7 @@ export class FleetContinuation {
       this.deps.busy()
     )
       return this.publish({ status: "waiting", reason: "desktop-busy" });
-    const { accounts, settings, usage } = this.deps.snapshot();
+    const { accounts, settings, usage, tempoRate } = this.deps.snapshot();
     const source = accounts.find((a) => a.id === desktop.activeProfileId);
     if (!source?.desktop)
       return this.publish({ status: "waiting", reason: "source-not-enrolled" });
@@ -249,7 +257,14 @@ export class FleetContinuation {
         status: "waiting",
         reason: "source-quota-unconfirmed",
       });
-    const target = chooseTarget(source, accounts, settings, usage, now);
+    const target = chooseTarget(
+      source,
+      accounts,
+      settings,
+      usage,
+      now,
+      tempoRate,
+    );
     if (!target)
       return this.publish({ ...base, status: "waiting", reason: "no-target" });
     const busy = await this.deps.quiet(stops);

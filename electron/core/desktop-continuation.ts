@@ -98,6 +98,8 @@ export interface DesktopContinuationDependencies {
     accounts: Account[];
     settings: RelaySettings;
     usage: Record<string, AccountUsage>;
+    /** Pro units per hour now (the tempo); absent means unknown. */
+    tempoRate?: number;
   };
   persistence: DesktopContinuationPersistence;
   /** The same lock used by manual switching, login, recovery and history writes. */
@@ -683,6 +685,7 @@ export class DesktopContinuationManager {
         account,
         usage: snapshot.usage[account.id],
       })),
+      { now: this.now(), rate: snapshot.tempoRate },
     )[0];
     if (!chosen || !enrolled(chosen.account)) return undefined;
     return { ...arm, target: identity(chosen.account) };

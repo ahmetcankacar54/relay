@@ -1,0 +1,241 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { dayPlan, planContext } from "../shared/day-plan";
+import { liveForecast } from "../shared/live-forecast";
+import type { Forecast } from "../shared/capacity-plan";
+import { wallTime } from "../shared/planning";
+import { presetTempo, type Tempo } from "../shared/tempo";
+import {
+  DEFAULT_PLANNING,
+  type AccountUsage,
+  type PlanningSettings,
+} from "../shared/types";
+import { planningAccount } from "./planning-fixtures";
+
+const ZONE = "Europe/Istanbul";
+const WEDNESDAY = "2026-10-14";
+const MINUTE = 60_000;
+const at = (clock: string) => wallTime(WEDNESDAY, clock, ZONE)!;
+const clockOf = new Intl.DateTimeFormat("en-GB", {
+  timeZone: ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+/** Segments as "account from-to"; "-" is an outage. */
+const lane = (forecast: Forecast) =>
+  forecast.segments.map(
+    (s) =>
+      `${s.accountId ?? "-"} ${clockOf.format(s.from)}-${clockOf.format(s.to)}`,
+  );
+
+// The capacity scenario of the day plan: Max 5×, Team (weight 2) and Pro on a
+// busy Wednesday, 09:00–18:00 in Istanbul.
+const busyHours: Record<number, number> = {
+  9: 220,
+  10: 242,
+  11: 242,
+  12: 110,
+  13: 198,
+  14: 242,
+  15: 242,
+  16: 220,
+  17: 154,
+};
+const busyTempo: Tempo = {
+  source: "learned",
+  weekday: Array.from({ length: 24 }, (_, hour) => busyHours[hour] ?? 205),
+  weekend: Array.from({ length: 24 }, () => 205),
+  rate: { weekday: 205, weekend: 205 },
+  days: { weekday: 15, weekend: 2 },
+};
+const flatTempo = (rate: number): Tempo => ({
+  ...presetTempo("medium"),
+  weekday: Array.from({ length: 24 }, () => rate),
+  weekend: Array.from({ length: 24 }, () => rate),
+  rate: { weekday: rate, weekend: rate },
+});
+const max = planningAccount("max", "max5");
+const team = planningAccount("vertex", "team");
+team.planning!.capacityWeight = 2;
+const pro = planningAccount("pro", "pro");
+function settings(patch: Partial<PlanningSettings> = {}): PlanningSettings {
+  return {
+    ...DEFAULT_PLANNING,
+    autoStart: true,
+    timeZone: ZONE,
+    weekday: { enabled: true, start: "09:00", end: "18:00" },
+    weekend: { enabled: false, start: "11:00", end: "18:00" },
+    accounts: [{ id: max.id }, { id: team.id }, { id: pro.id }],
+    ...patch,
+  };
+}
+const context = (tempo: Tempo = presetTempo("medium")) =>
+  planContext([max, team, pro], tempo);
+// Windows: max 06:15–11:15–16:15, vertex 08:15–13:15, pro 06:30–11:30–16:30.
+const plan = dayPlan(WEDNESDAY, settings(), context(busyTempo));
+
+/** Usage read five minutes before `now`; the five-hour window is open until `resets`. */
+function fresh(
+  id: string,
+  now: number,
+  used: number,
+  resets?: string,
+  weekly = 20,
+): AccountUsage {
+  return {
+    accountId: id,
+    status: "ready",
+    stale: false,
+    checkedAt: new Date(now - 5 * MINUTE).toISOString(),
+    fiveHour: {
+      usedPercent: used,
+      ...(resets ? { resetsAt: new Date(at(resets)).toISOString() } : {}),
+    },
+    sevenDay: {
+      usedPercent: weekly,
+      resetsAt: new Date(now + 3 * 86_400_000).toISOString(),
+    },
+  };
+}
+
+test("the scenario plan's windows are the ones the live forecast falls back on", () => {
+  const windows = (id: string) =>
+    plan.accounts
+      .find((a) => a.accountId === id)!
+      .windows.map((w) => clockOf.format(w.start));
+  assert.deepEqual(windows("max"), ["06:15", "11:15", "16:15"]);
+  assert.deepEqual(windows("vertex"), ["08:15", "13:15"]);
+  assert.deepEqual(windows("pro"), ["06:30", "11:30", "16:30"]);
+});
+
+test("live usage goes on from now with the active account; stale accounts follow the plan's chain", () => {
+  const now = at("10:00");
+  const usage = {
+    max: fresh("max", now, 80, "11:15"),
+    vertex: fresh("vertex", now, 0, "12:00"),
+    // Stale data is ignored, even when it says the window is used up.
+    pro: { ...fresh("pro", now, 100, "13:00"), stale: true },
+  };
+  const input = { plan, settings: settings(), usage, activeId: "max", now };
+  const medium = liveForecast({ ...input, context: context() })!;
+  assert.deepEqual(medium.segments[0], {
+    accountId: "max",
+    from: now,
+    to: at("18:00"),
+  });
+  assert.equal(medium.unmet, 0);
+  // At 120 Pro units/h max's 100 units last until 10:50. Pro's planned window
+  // (06:30–11:30) resets before vertex's (12:00), so pro goes next with a full
+  // quota: 80 units until 11:30, then a fresh window until 12:20.
+  const heavy = liveForecast({
+    ...input,
+    context: context(presetTempo("heavy")),
+  })!;
+  assert.deepEqual(lane(heavy), [
+    "max 10:00-10:50",
+    "pro 10:50-12:20",
+    "max 12:20-18:00",
+  ]);
+  assert.equal(heavy.switches, 2);
+  assert.equal(heavy.unmet, 0);
+});
+
+test("an active account outside the plan, or none, starts with the soonest reset", () => {
+  const now = at("10:00");
+  // Pro has no usage at all: its planned window resets at 11:30.
+  const usage = {
+    max: fresh("max", now, 80, "13:00"),
+    vertex: fresh("vertex", now, 0, "12:00"),
+  };
+  const input = { plan, settings: settings(), context: context(), usage, now };
+  const outside = liveForecast({ ...input, activeId: "not-planned" })!;
+  assert.deepEqual(lane(outside), ["pro 10:00-13:30", "vertex 13:30-18:00"]);
+  assert.deepEqual(liveForecast(input), outside);
+  assert.equal(
+    liveForecast({ ...input, activeId: "max" })!.segments[0].accountId,
+    "max",
+  );
+});
+
+test("an account whose weekly limit is used up never serves", () => {
+  const now = at("10:00");
+  const usage = {
+    max: fresh("max", now, 80, "11:15"),
+    vertex: fresh("vertex", now, 0, "12:00"),
+  };
+  // 300 Pro units/h runs through every open window before 11:15.
+  const input = {
+    plan,
+    settings: settings(),
+    context: context(flatTempo(300)),
+    activeId: "vertex",
+    now,
+  };
+  const open = liveForecast({ ...input, usage })!;
+  assert.equal(open.segments[0].accountId, "vertex");
+  const blocked = liveForecast({
+    ...input,
+    usage: { ...usage, vertex: fresh("vertex", now, 0, "12:00", 100) },
+  })!;
+  assert.ok(blocked.segments.every((s) => s.accountId !== "vertex"));
+  assert.equal(blocked.segments[0].accountId, "max");
+  assert.ok(blocked.unmet > open.unmet);
+});
+
+test("after work there is nothing to forecast; before work it starts at the work start", () => {
+  const input = { plan, settings: settings(), context: context(), usage: {} };
+  for (const clock of ["18:00", "20:00"])
+    assert.equal(liveForecast({ ...input, now: at(clock) }), undefined);
+  // A day off and a plan without accounts have nothing to forecast either.
+  const saturday = dayPlan("2026-10-17", settings(), context());
+  assert.equal(saturday.interval, undefined);
+  assert.equal(
+    liveForecast({ ...input, plan: saturday, now: at("10:00") }),
+    undefined,
+  );
+  const empty = dayPlan(WEDNESDAY, settings({ accounts: [] }), context());
+  assert.equal(
+    liveForecast({ ...input, plan: empty, now: at("10:00") }),
+    undefined,
+  );
+  const early = liveForecast({ ...input, now: at("08:00") })!;
+  assert.equal(early.segments[0].from, at("09:00"));
+  assert.equal(early.segments.at(-1)!.to, at("18:00"));
+  // With the plan's own tempo and windows kept as planned it is the plan's forecast.
+  assert.deepEqual(
+    liveForecast({ ...input, context: context(busyTempo), now: at("08:00") }),
+    plan.forecast,
+  );
+});
+
+test("without auto start a closed window opens at first use, not at its planned warm-up", () => {
+  const now = at("10:00");
+  const usage = {
+    // 100 Pro units until 12:00; the window resets at 17:30.
+    max: fresh("max", now, 80, "17:30"),
+    vertex: fresh("vertex", now, 0, "12:00", 100),
+    // No window open; the plan warms pro up at 11:30.
+    pro: fresh("pro", now, 0),
+  };
+  const input = { plan, context: context(), usage, activeId: "max", now };
+  // Pro's window starts when it takes over at 12:00, so it resets at 17:00.
+  const firstUse = liveForecast({
+    ...input,
+    settings: settings({ autoStart: false }),
+  })!;
+  assert.deepEqual(lane(firstUse), [
+    "max 10:00-12:00",
+    "pro 12:00-14:00",
+    "- 14:00-17:00",
+    "pro 17:00-18:00",
+  ]);
+  // With auto start Relay warms it up at 11:30, so it resets at 16:30.
+  const warmed = liveForecast({ ...input, settings: settings() })!;
+  assert.deepEqual(lane(warmed), [
+    "max 10:00-12:00",
+    "pro 12:00-14:00",
+    "- 14:00-16:30",
+    "pro 16:30-18:00",
+  ]);
+});

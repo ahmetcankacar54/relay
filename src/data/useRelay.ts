@@ -14,6 +14,7 @@ import type {
 } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { suggestedAccount } from "../../shared/usage";
+import { tempoAt } from "../../shared/tempo";
 import { desktopCliMismatch } from "../../shared/account-state";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
 import { previewApi } from "../preview";
@@ -137,11 +138,16 @@ function useRelayState(
   const accounts = data?.accounts ?? [];
   const active = accounts.find((a) => a.id === desktop?.activeProfileId);
   const settings = data?.settings ?? DEFAULT_SETTINGS;
+  const now = Date.now();
   const suggestion = suggestedAccount(
     active,
     accounts,
     data?.usage ?? {},
     settings,
+    now,
+    data?.planning?.tempo
+      ? tempoAt(data.planning.tempo, settings.planning, now)
+      : undefined,
   );
   const flow =
     data?.authFlows.find((f) => f.accountId === authId) ??
