@@ -132,6 +132,7 @@ const accountSchema = z.object({
 });
 export const settingsSchema = z
   .object({
+    appearance: z.enum(["system", "light", "dark"]).default("system"),
     planning: planningSchema,
     usageRefreshMinutes: z.union([
       z.literal(0),
@@ -154,6 +155,7 @@ export const settingsSchema = z
 // selected accounts whenever an unrelated preference is changed.
 export const settingsPatchSchema = settingsSchema
   .extend({
+    appearance: settingsSchema.shape.appearance.removeDefault(),
     desktopHistoryAccounts:
       settingsSchema.shape.desktopHistoryAccounts.removeDefault(),
     autoSwitchMode: settingsSchema.shape.autoSwitchMode.removeDefault(),

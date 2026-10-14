@@ -4,10 +4,12 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeTheme,
   Notification,
   shell,
   systemPreferences,
 } from "electron";
+import { themeSource } from "./core/appearance";
 import path from "node:path";
 import os from "node:os";
 import { z } from "zod";
@@ -148,6 +150,7 @@ else {
         },
         (url) => shell.openExternal(url),
       );
+      nativeTheme.themeSource = themeSource(service.store.state.settings);
       desktop = new DesktopManager(
         path.join(app.getPath("appData"), "Claude"),
         service.store,
@@ -762,6 +765,7 @@ function bindIPC() {
     service.store.update((s) => {
       Object.assign(s.settings, patch);
     });
+    nativeTheme.themeSource = themeSource(service.store.state.settings);
     usage.tick();
     void autoSwitch.tick();
     return service.store.state.settings;

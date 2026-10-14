@@ -220,6 +220,8 @@ declare global {
 }
 
 export interface RelaySettings {
+  /** Window theme; "system" follows macOS. */
+  appearance: "system" | "light" | "dark";
   planning: PlanningSettings;
   usageRefreshMinutes: 0 | 5 | 15 | 30;
   usageWarningPercent: 80 | 90 | 95;
@@ -305,6 +307,7 @@ export interface DesktopHistorySummary {
   checkedAt: string;
 }
 export const DEFAULT_SETTINGS: RelaySettings = {
+  appearance: "system",
   planning: DEFAULT_PLANNING,
   usageRefreshMinutes: 5,
   usageWarningPercent: 90,
