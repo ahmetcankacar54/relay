@@ -739,6 +739,9 @@ function bindIPC() {
     service.store.update((s) => {
       s.accounts.find((a) => a.id === account.id)!.planning = planning;
     });
+    // Capacity shapes the plan: replan as after a planning edit.
+    keeper.resume();
+    void keeper.tick();
     return service.store.account(account.id);
   });
   handle("desktop-snapshot", async () => ({

@@ -3,16 +3,19 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import {
   WINDOW_MS,
+  clearPlanCache,
   cyclePhases,
   dayPlan,
   dayStart,
   nextPlannedStart,
   planContext,
+  shiftDate,
   shouldHaveWindow,
   workInterval,
 } from "../shared/day-plan";
 import { planCapacity, wallTime } from "../shared/planning";
-import { presetTempo, type Tempo } from "../shared/tempo";
+import { presetTempo, tempoRate, type Tempo } from "../shared/tempo";
+import { optimizeStarts, SIM_STEP_MS } from "../shared/capacity-plan";
 import { planningAccount } from "./planning-fixtures";
 import { DEFAULT_PLANNING, type PlanningSettings } from "../shared/types";
 
@@ -421,4 +424,128 @@ test("the keeper's checks agree with the capacity-aware plan", () => {
       true,
     );
   }
+});
+
+test("the default tempo plans a lone Pro and two Pro accounts at fixed times", () => {
+  const hours = { enabled: true, start: "09:00", end: "18:00" };
+  // Nine hours at 50 Pro units/h, 100 per window: only a 06:00 warm-up uses
+  // three whole windows (09:00–11:00, 11:00–13:00, 16:00–18:00).
+  const lone = dayPlan(TUESDAY, settings({ weekday: hours }), context());
+  assert.deepEqual(clocks(lone.accounts.map((a) => a.firstStart)), ["06:00"]);
+  assert.equal(lone.forecast?.unmet, 150);
+  const two = dayPlan(
+    TUESDAY,
+    settings({ weekday: hours, accounts: [{ id: A }, { id: B }] }),
+    context(),
+  );
+  // 450 Pro units of demand, 100 per window: no gap with two switches.
+  assert.deepEqual(clocks(two.accounts.map((a) => a.firstStart)), [
+    "07:00",
+    "08:00",
+  ]);
+  assert.equal(two.forecast?.unmet, 0);
+  assert.equal(two.forecast?.switches, 2);
+});
+
+test("plans shared across dates equal plans optimized for each date alone", () => {
+  // Hour-shaped demand, so the profile's alignment with the work start matters.
+  const shaped: Tempo = {
+    ...busyTempo,
+    weekday: Array.from({ length: 24 }, (_, hour) => 40 + hour * 7),
+    weekend: Array.from({ length: 24 }, (_, hour) => 120 - hour * 3),
+  };
+  // Night shifts in Berlin span both DST changes (2026-03-29, 2026-10-25),
+  // with a manual clock after the change.
+  const night = settings({
+    timeZone: "Europe/Berlin",
+    weekday: { enabled: true, start: "22:00", end: "06:00" },
+    weekend: { enabled: true, start: "22:00", end: "06:00" },
+    accounts: [
+      { id: max.id },
+      { id: team.id },
+      { id: pro.id, firstStart: "03:30" },
+    ],
+  });
+  const days = (from: string, count: number) =>
+    Array.from({ length: count }, (_, i) => shiftDate(from, i));
+  const cases = [
+    {
+      s: scenario(),
+      ctx: scenarioContext(),
+      dates: days("2026-10-12", 3),
+    },
+    {
+      s: night,
+      ctx: planContext([max, team, pro], shaped),
+      dates: [...days("2026-03-26", 6), ...days("2026-10-22", 6)],
+    },
+  ];
+  for (const { s, ctx, dates } of cases) {
+    clearPlanCache();
+    const warm = dates.map((date) => dayPlan(date, s, ctx));
+    const cold = dates.map((date) => {
+      clearPlanCache();
+      return dayPlan(date, s, ctx);
+    });
+    assert.deepEqual(warm, cold);
+    // The same as optimizing the day in absolute time.
+    for (const plan of warm) {
+      const interval = plan.interval!;
+      const direct = optimizeStarts({
+        interval,
+        accounts: plan.accounts.map((a) => ({
+          id: a.accountId,
+          capacity: ctx.capacities[a.accountId] ?? 1,
+          ...(a.manual ? { manual: a.firstStart } : {}),
+        })),
+        even: plan.accounts.map((a) => a.evenStart),
+        rate: tempoRate(
+          ctx.tempo,
+          interval.weekend,
+          s.timeZone,
+          interval.start,
+          interval.end,
+          SIM_STEP_MS,
+        ),
+      });
+      assert.deepEqual(
+        {
+          starts: plan.accounts.map((a) => a.firstStart),
+          forecast: plan.forecast,
+          evenForecast: plan.evenForecast,
+        },
+        direct,
+        plan.date,
+      );
+    }
+  }
+});
+
+test("a week of plans optimizes each distinct day shape once", () => {
+  const four = [max, team, pro, planningAccount("pro2", "pro")];
+  const s = settings({
+    weekday: { enabled: true, start: "09:00", end: "21:00" },
+    weekend: { enabled: true, start: "11:00", end: "17:00" },
+    accounts: four.map(({ id }) => ({ id })),
+  });
+  const ctx = planContext(four, busyTempo);
+  const time = (dates: string[]) => {
+    const begin = performance.now();
+    for (const date of dates) dayPlan(date, s, ctx);
+    return performance.now() - begin;
+  };
+  clearPlanCache();
+  const cold = time(["2026-10-12"]);
+  time(["2026-10-17"]);
+  const warm = time([
+    "2026-10-13",
+    "2026-10-14",
+    "2026-10-15",
+    "2026-10-16",
+    "2026-10-18",
+  ]);
+  assert.ok(
+    warm < cold,
+    `five more days took ${warm.toFixed(1)} ms, one optimization ${cold.toFixed(1)} ms`,
+  );
 });

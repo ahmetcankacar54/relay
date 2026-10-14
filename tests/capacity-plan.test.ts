@@ -241,6 +241,46 @@ test("a run-out exactly on a step boundary is recorded once", () => {
   assert.deepEqual(view(forecast), ["c 09:00-10:00", "outage 10:00-12:00"]);
 });
 
+test("running out exactly at its own reset keeps the account, at any time scale", () => {
+  // b serves 11:00–13:00 and its window resets at 13:00: no switch to a and
+  // back, whether times are absolute or relative to the work start.
+  const run = (origin: number) =>
+    simulateDay({
+      from: origin,
+      to: origin + 9 * H,
+      rate: () => 50,
+      accounts: [
+        {
+          id: "a",
+          capacity: 1,
+          firstReset: origin + 3 * H,
+          keepAlive: true,
+          remaining: 100,
+        },
+        {
+          id: "b",
+          capacity: 1,
+          firstReset: origin + 4 * H,
+          keepAlive: true,
+          remaining: 100,
+        },
+      ],
+    });
+  const absolute = run(S);
+  assert.deepEqual(view(absolute), [
+    "a 09:00-11:00",
+    "b 11:00-15:00",
+    "a 15:00-18:00",
+  ]);
+  assert.equal(absolute.switches, 2);
+  const relative = run(0);
+  assert.equal(relative.switches, 2);
+  assert.deepEqual(
+    relative.segments.map((s) => [s.accountId, s.from + S, s.to + S]),
+    absolute.segments.map((s) => [s.accountId, s.from, s.to]),
+  );
+});
+
 test("a window that reset during the step is available when the active one runs dry", () => {
   // a runs out at 09:02:30; b's window reset at 09:02, mid-step.
   const forecast = sim(

@@ -4,6 +4,11 @@ const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
 export const SIM_STEP_MS = 5 * MINUTE_MS;
 const EPSILON = 1e-6;
+/**
+ * A run-out this close to the step's end is float noise (it depends on how
+ * large the times are), so it counts as running out at the end.
+ */
+const RUN_OUT_SLACK_MS = 1;
 
 export interface SimAccount {
   id: string;
@@ -151,7 +156,7 @@ export function simulateDay(input: SimInput): Forecast {
         active.warmUp = undefined;
       }
       const runOut = cursor + active.left / perMs;
-      if (runOut >= end) {
+      if (runOut >= end - RUN_OUT_SLACK_MS) {
         active.left -= perMs * (end - cursor);
         cursor = end;
         if (active.left <= EPSILON) {

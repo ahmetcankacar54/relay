@@ -126,9 +126,37 @@ function manualStart(
   );
   return interval.start + phase - WINDOW_MS;
 }
-// Optimizing is the expensive part and does not depend on live resets.
-const startCache = new Map<string, StartPlan>();
-const START_CACHE_SIZE = 32;
+// Optimizing is the expensive part. It does not depend on live resets, and a
+// day solved relative to its work start serves every date of the same shape:
+// the same length, demand per simulation step, accounts and start offsets.
+const CACHE_SIZE = 32;
+/** Plans by day shape, in times relative to the work start. */
+const shapeCache = new Map<string, StartPlan>();
+/** Plans by date in absolute times, so a repeated call returns the same object. */
+const dateCache = new Map<string, StartPlan>();
+function remember(cache: Map<string, StartPlan>, key: string, plan: StartPlan) {
+  cache.set(key, plan);
+  if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value!);
+}
+/** Forgets every cached optimization (tests compare cached and fresh plans). */
+export function clearPlanCache() {
+  shapeCache.clear();
+  dateCache.clear();
+}
+const shifted = (forecast: Forecast, by: number): Forecast => ({
+  ...forecast,
+  segments: forecast.segments.map((s) => ({
+    ...s,
+    from: s.from + by,
+    to: s.to + by,
+  })),
+  exhaustedAt: Object.fromEntries(
+    Object.entries(forecast.exhaustedAt).map(([id, times]) => [
+      id,
+      times.map((time) => time + by),
+    ]),
+  ),
+});
 function plannedStarts(
   interval: WorkInterval,
   settings: PlanningSettings,
@@ -144,7 +172,7 @@ function plannedStarts(
   const profile = interval.weekend
     ? context.tempo.weekend
     : context.tempo.weekday;
-  const key = JSON.stringify([
+  const dateKey = JSON.stringify([
     interval.start,
     interval.end,
     settings.timeZone,
@@ -152,24 +180,43 @@ function plannedStarts(
     even,
     profile,
   ]);
-  const cached = startCache.get(key);
-  if (cached) return cached;
-  const plan = optimizeStarts({
-    interval,
-    accounts,
-    even,
-    rate: tempoRate(
-      context.tempo,
-      interval.weekend,
-      settings.timeZone,
-      interval.start,
-      interval.end,
-      SIM_STEP_MS,
-    ),
-  });
-  startCache.set(key, plan);
-  if (startCache.size > START_CACHE_SIZE)
-    startCache.delete(startCache.keys().next().value!);
+  const known = dateCache.get(dateKey);
+  if (known) return known;
+  const origin = interval.start;
+  const duration = interval.end - origin;
+  // Demand per step from the work start; it carries the zone's offsets (DST).
+  const rate = tempoRate(
+    context.tempo,
+    interval.weekend,
+    settings.timeZone,
+    origin,
+    interval.end,
+    SIM_STEP_MS,
+  );
+  const steps: number[] = [];
+  for (let time = origin; time < interval.end; time += SIM_STEP_MS)
+    steps.push(rate(time));
+  const relative = accounts.map((a) =>
+    a.manual === undefined ? a : { ...a, manual: a.manual - origin },
+  );
+  const offsets = even.map((start) => start - origin);
+  const shapeKey = JSON.stringify([duration, steps, relative, offsets]);
+  let shape = shapeCache.get(shapeKey);
+  if (!shape) {
+    shape = optimizeStarts({
+      interval: { start: 0, end: duration },
+      accounts: relative,
+      even: offsets,
+      rate: (time) => steps[Math.floor(time / SIM_STEP_MS)] ?? 0,
+    });
+    remember(shapeCache, shapeKey, shape);
+  }
+  const plan: StartPlan = {
+    starts: shape.starts.map((start) => start + origin),
+    forecast: shifted(shape.forecast, origin),
+    evenForecast: shifted(shape.evenForecast, origin),
+  };
+  remember(dateCache, dateKey, plan);
   return plan;
 }
 /**
