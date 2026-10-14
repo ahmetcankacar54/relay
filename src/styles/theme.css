@@ -1,0 +1,111 @@
+/* Layer order: Tailwind's base < old Relay CSS < Tailwind components/utilities.
+   The legacy imports are removed in the cleanup task. */
+@layer theme, base, legacy, components, utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "../styles.css" layer(legacy);
+@import "../modern.css" layer(legacy);
+@import "../planning.css" layer(legacy);
+@import "../continuation-settings.css" layer(legacy);
+
+:root {
+  --radius: 0.75rem;
+  --background: #fbf8f3;
+  --foreground: #2b2621;
+  --card: #ffffff;
+  --card-foreground: #2b2621;
+  --popover: #ffffff;
+  --popover-foreground: #2b2621;
+  --primary: #c2410c;
+  --primary-foreground: #ffffff;
+  --secondary: #f3ede4;
+  --secondary-foreground: #2b2621;
+  --muted: #f3ede4;
+  --muted-foreground: #73685c;
+  --accent: #fde8dc;
+  --accent-foreground: #c2410c;
+  --destructive: #d4380d;
+  --border: #e8e0d4;
+  --input: #e8e0d4;
+  --ring: #ec5f1f;
+  --sidebar: #f3ede4;
+  --sidebar-foreground: #2b2621;
+  --brand: #ec5f1f;
+  --track: #f0e9df;
+  --ok: #3f9d5a;
+  --warn: #d99a00;
+  --crit: #d4380d;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1d1916;
+    --foreground: #f3ece4;
+    --card: #2b2622;
+    --card-foreground: #f3ece4;
+    --popover: #2b2622;
+    --popover-foreground: #f3ece4;
+    --primary: #ff7a3d;
+    --primary-foreground: #1d1916;
+    --secondary: #25201c;
+    --secondary-foreground: #f3ece4;
+    --muted: #25201c;
+    --muted-foreground: #a3988c;
+    --accent: #4a2b1c;
+    --accent-foreground: #ff9a66;
+    --destructive: #ff5a36;
+    --border: #3a332d;
+    --input: #3a332d;
+    --ring: #ff7a3d;
+    --sidebar: #25201c;
+    --sidebar-foreground: #f3ece4;
+    --brand: #ff7a3d;
+    --track: #3a332d;
+    --ok: #5cc27a;
+    --warn: #e0a100;
+    --crit: #ff5a36;
+  }
+}
+@theme inline {
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-display: "Manrope", "DM Sans", system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-brand: var(--brand);
+  --color-track: var(--track);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-crit: var(--crit);
+}
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+  }
+}
