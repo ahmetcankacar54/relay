@@ -164,3 +164,17 @@ test("past reset metadata stays available as history and returned objects cannot
     fiveHourReset,
   );
 });
+
+test("samples stamped after the current time do not supply reset metadata", (t) => {
+  let now = at + minute;
+  const history = new UsageHistory(directory(t), () => now);
+  history.record(account, usage());
+  // The clock moves back before the recorded check.
+  now = at - minute;
+  assert.equal(history.lastKnownResets(account), undefined);
+  now = at + minute;
+  assert.equal(
+    history.lastKnownResets(account)?.fiveHour?.resetsAt,
+    fiveHourReset,
+  );
+});

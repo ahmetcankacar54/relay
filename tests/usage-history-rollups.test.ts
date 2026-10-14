@@ -280,3 +280,78 @@ test("a transient rollups write failure is retried on the next record", (t) => {
   });
   assert.deepEqual(persisted, history.rollups());
 });
+
+test("an unreadable raw ledger still folds new samples into the rollups", (t) => {
+  const root = directory(t);
+  const rawFile = path.join(root, "usage-history.json");
+  let now = start;
+  new UsageHistory(root, () => now).record(account, usage(now, 10));
+  const corrupt = "{ broken history";
+  fs.writeFileSync(rawFile, corrupt);
+  now += 5 * minute;
+  const history = new UsageHistory(root, () => now);
+  assert.equal(history.historyAvailable, false);
+  assert.equal(history.rollupsAvailable, true);
+  history.record(account, usage(now, 17.5));
+  assert.equal(history.rollupsAvailable, true);
+  assert.deepEqual(history.rollups()!.hours[identity][hourKey(start)], {
+    points: 7.5,
+    windows: 1,
+    coveredMinutes: 5,
+  });
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")),
+    history.rollups(),
+  );
+  // A repeated sample is still ignored, and the raw ledger is never replaced.
+  history.record(account, usage(now, 40));
+  assert.equal(history.rollups()!.hours[identity][hourKey(start)].points, 7.5);
+  assert.equal(fs.readFileSync(rawFile, "utf8"), corrupt);
+  assert.equal(history.lastKnownResets(account), undefined);
+});
+
+test("a failed raw write keeps folding samples into the rollups", (t) => {
+  const root = directory(t);
+  const rawFile = path.join(root, "usage-history.json");
+  let now = start;
+  const history = new UsageHistory(root, () => now);
+  const rename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from: fs.PathLike, to: fs.PathLike) => {
+    if (String(to) === rawFile)
+      throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+    return rename(from, to);
+  });
+  history.record(account, usage(now, 10));
+  assert.equal(history.historyAvailable, false);
+  now += 5 * minute;
+  history.record(account, usage(now, 17));
+  assert.equal(history.rollupsAvailable, true);
+  assert.equal(history.rollups()!.hours[identity][hourKey(start)].points, 7);
+  assert.equal(
+    JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")).last[identity]
+      .checkedAt,
+    new Date(now).toISOString(),
+  );
+  assert.equal(fs.existsSync(rawFile), false);
+});
+
+test("rollups stamped ahead of the clock accept new samples after a restart", (t) => {
+  const root = directory(t);
+  const rawFile = path.join(root, "usage-history.json");
+  let now = start + 60 * minute;
+  new UsageHistory(root, () => now).record(account, usage(now, 50));
+  // The clock moves back an hour; the raw ledger is unreadable too.
+  fs.writeFileSync(rawFile, "broken");
+  now = start + 5 * minute;
+  const history = new UsageHistory(root, () => now);
+  assert.equal(history.rollups()!.last[identity], undefined);
+  assert.equal(
+    JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")).last[identity],
+    undefined,
+  );
+  history.record(account, usage(now, 10));
+  assert.equal(
+    history.rollups()!.last[identity].checkedAt,
+    new Date(now).toISOString(),
+  );
+});

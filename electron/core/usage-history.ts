@@ -80,9 +80,10 @@ const MAX_ROLLUPS_BYTES = 16 * 1024 * 1024;
 // An unreadable ledger stays unavailable rather than silently overwriting it.
 // Rollups keep 90 days of hourly aggregates beside the 14-day raw ledger; an
 // unreadable rollups file is likewise never overwritten and never affects the
-// raw ledger or live limits. A failed rollups write keeps the folded state in
-// memory and is retried on the next record; only an unsafe target (symlink or
-// non-file) makes the rollups unavailable.
+// raw ledger or live limits. An unavailable raw ledger does not stop the
+// rollups: new samples are still folded and persisted. A failed rollups write
+// keeps the folded state in memory and is retried on the next record; only an
+// unsafe target (symlink or non-file) makes the rollups unavailable.
 class UnsafeUsageFileError extends Error {}
 
 export class UsageHistory {
@@ -117,10 +118,13 @@ export class UsageHistory {
         value === undefined ? undefined : rollupsSchema.parse(value);
       if (parsed?.version === 2) {
         const loaded: UsageRollups = { ...parsed, version: 2 };
-        // Catch up samples recorded after the last successful rollups write.
-        this.rollupsState = this.historyAvailable
-          ? catchUp(loaded, this.samples, this.now())
-          : loaded;
+        // Catch up samples recorded after the last successful rollups write,
+        // and drop state stamped later than now (the clock moved back).
+        this.rollupsState = catchUp(
+          loaded,
+          this.historyAvailable ? this.samples : [],
+          this.now(),
+        );
         this.rollupsDirty = this.rollupsState !== loaded;
       } else if (!this.historyAvailable)
         throw new Error("No readable usage history to backfill from.");
@@ -229,28 +233,29 @@ export class UsageHistory {
       .slice(-MAX_USAGE_SAMPLES);
   }
   record(account: Account, usage: AccountUsage): void {
-    if (!this.historyAvailable) return;
     const sample = usageSample(account, usage);
     if (!sample || Date.parse(sample.checkedAt) > this.now()) return;
-    const previous = [...this.samples]
-      .reverse()
-      .find(
-        (s) =>
-          s.accountId === sample.accountId && s.identity === sample.identity,
-      );
-    if (
-      previous &&
-      Date.parse(previous.checkedAt) >= Date.parse(sample.checkedAt)
-    )
-      return;
-    const next = this.pruned([...this.samples, sample]);
-    try {
-      this.writePrivateJsonFile(this.file, { version: 1, samples: next });
-      this.samples = next;
-    } catch {
-      this.historyAvailable = false;
-      return;
+    if (this.historyAvailable) {
+      const previous = [...this.samples]
+        .reverse()
+        .find(
+          (s) =>
+            s.accountId === sample.accountId && s.identity === sample.identity,
+        );
+      if (
+        previous &&
+        Date.parse(previous.checkedAt) >= Date.parse(sample.checkedAt)
+      )
+        return;
+      const next = this.pruned([...this.samples, sample]);
+      try {
+        this.writePrivateJsonFile(this.file, { version: 1, samples: next });
+        this.samples = next;
+      } catch {
+        this.historyAvailable = false;
+      }
     }
+    // The rollups reject duplicate and out-of-order samples on their own.
     if (!this.rollupsAvailable || !this.rollupsState) return;
     const folded = foldSample(this.rollupsState, sample, this.now());
     if (folded === this.rollupsState && !this.rollupsDirty) return;
@@ -267,20 +272,28 @@ export class UsageHistory {
     if (!this.historyAvailable) return;
     const identity = usageIdentity(account);
     if (!identity) return;
-    const samples = this.pruned(this.samples)
-      .filter(
-        (sample) =>
-          sample.accountId === account.id && sample.identity === identity,
-      )
-      .reverse();
-    const lastReset = (key: "fiveHour" | "sevenDay") => {
-      const sample = samples.find((value) => value[key]?.resetsAt);
-      return sample
-        ? { resetsAt: sample[key]!.resetsAt!, checkedAt: sample.checkedAt }
-        : undefined;
-    };
-    const fiveHour = lastReset("fiveHour");
-    const sevenDay = lastReset("sevenDay");
+    const now = this.now();
+    const oldest = now - USAGE_HISTORY_DAYS * 86_400_000;
+    type Reset = NonNullable<AccountUsage["lastKnownResets"]>["fiveHour"];
+    let fiveHour: Reset;
+    let sevenDay: Reset;
+    // Runs on every snapshot: the samples are already deduplicated and in
+    // time order, so scan back from the newest and stop at the retention.
+    for (let i = this.samples.length - 1; i >= 0; i--) {
+      const sample = this.samples[i];
+      if (sample.accountId !== account.id || sample.identity !== identity)
+        continue;
+      const checkedAt = Date.parse(sample.checkedAt);
+      if (checkedAt < oldest) break;
+      if (checkedAt > now) continue;
+      const reset = (key: "fiveHour" | "sevenDay") =>
+        sample[key]?.resetsAt
+          ? { resetsAt: sample[key].resetsAt, checkedAt: sample.checkedAt }
+          : undefined;
+      fiveHour ??= reset("fiveHour");
+      sevenDay ??= reset("sevenDay");
+      if (fiveHour && sevenDay) break;
+    }
     if (!fiveHour && !sevenDay) return;
     return {
       ...(fiveHour ? { fiveHour } : {}),
