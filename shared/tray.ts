@@ -187,3 +187,12 @@ export function trayTooltip(snapshot: TraySnapshot) {
   );
   return active ? `Relay — ${active.name.replace(/[\r\n\t]/g, " ")}` : "Relay";
 }
+
+/** Menu-bar text: the Desktop-active account's five-hour percent, empty when unknown. */
+export function trayTitle(snapshot: TraySnapshot, now = Date.now()) {
+  const active = snapshot.accounts.find((a) => a.id === snapshot.desktop?.activeProfileId);
+  const usage = active ? snapshot.usage[active.id] : undefined;
+  if (!active || !freshUsage(usage, now) || usage.fiveHour === undefined) return "";
+  const percent = Math.round(usage.fiveHour.usedPercent);
+  return percent >= 90 ? `${percent}% ⚠︎` : `${percent}%`;
+}
