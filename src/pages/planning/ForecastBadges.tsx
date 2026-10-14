@@ -15,21 +15,21 @@ const SOURCE: Record<Tempo["source"], [string, string]> = {
 /** The hero's forecast pill (the rest of today while work runs) and the tempo it assumes. */
 export function ForecastBadges({
   forecast,
-  live,
+  rest,
   source,
   clock,
   t,
 }: {
   forecast: Forecast;
-  /** The live forecast of today's work from now, rather than a plan's. */
-  live: boolean;
+  /** The forecast covers the rest of today's running work, not a whole day. */
+  rest: boolean;
   source: Tempo["source"];
   clock: (time: number) => string;
   t: T;
 }) {
   const gap = forecast.segments.some((s) => !s.accountId);
   const text =
-    (live
+    (rest
       ? t("Bugün kalan: ", "Rest of today: ")
       : t("Tahmin: ", "Forecast: ")) + forecastSummary(forecast, t, clock);
   return (

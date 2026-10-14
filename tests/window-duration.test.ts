@@ -13,6 +13,8 @@ test("a window lasts its capacity in Pro units at the tempo, to five minutes", (
   assert.equal(windowMinutes(1, 0), undefined);
   assert.equal(windowMinutes(1, -5), undefined);
   assert.equal(windowMinutes(1, Number.NaN), undefined);
+  // Never "~0 dk": a window lasts at least five minutes.
+  assert.equal(windowMinutes(1, 5000), 5);
 });
 
 test("durations read in hours and minutes", () => {

@@ -30,6 +30,8 @@ function windowLabel(account: Account) {
 export function TempoRow({
   tempo,
   choice,
+  rate,
+  weekend,
   accounts,
   disabled,
   onChange,
@@ -37,24 +39,31 @@ export function TempoRow({
 }: {
   tempo: Tempo;
   choice: TempoChoice;
+  /** The busy-day rate of the next work day, which measures the windows. */
+  rate: number;
+  /** Whether that day is a weekend day. */
+  weekend: boolean;
   /** The planned accounts. */
   accounts: Account[];
   disabled: boolean;
   onChange: (choice: TempoChoice) => void;
   t: T;
 }) {
-  // The busy weekday rate shown below also measures the windows.
-  const rate = tempo.rate.weekday;
   const n = new Intl.NumberFormat(t("tr-TR", "en-GB"), {
     maximumFractionDigits: 0,
   }).format(rate);
   const days = tempo.days.weekday + tempo.days.weekend;
   const summary =
     tempo.source === "learned"
-      ? t(
-          `Yoğun gün ≈ ${n} Pro birimi/sa · son 4 haftada ${days} iş günü`,
-          `Busy day ≈ ${n} Pro units/h · ${days} work days in the last 4 weeks`,
-        )
+      ? weekend && tempo.rate.weekend !== tempo.rate.weekday
+        ? t(
+            `Hafta sonu yoğun gün ≈ ${n} Pro birimi/sa · son 4 haftada ${days} iş günü`,
+            `Busy weekend day ≈ ${n} Pro units/h · ${days} work days in the last 4 weeks`,
+          )
+        : t(
+            `Yoğun gün ≈ ${n} Pro birimi/sa · son 4 haftada ${days} iş günü`,
+            `Busy day ≈ ${n} Pro units/h · ${days} work days in the last 4 weeks`,
+          )
       : tempo.source === "preset"
         ? t(
             `Sabit tempo ≈ ${n} Pro birimi/sa`,

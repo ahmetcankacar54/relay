@@ -252,7 +252,11 @@ const evenByHand = [
   { id: team.id, firstStart: "06:30" },
   { id: pro.id, firstStart: "08:10" },
 ];
-function renderScenario(accounts: PlanningSettings["accounts"], now: number) {
+function renderScenario(
+  accounts: PlanningSettings["accounts"],
+  now: number,
+  activeId = a.id,
+) {
   return renderToStaticMarkup(
     createElement(PlanningPanel, {
       settings: scenarioSettings(accounts),
@@ -266,7 +270,7 @@ function renderScenario(accounts: PlanningSettings["accounts"], now: number) {
       },
       accounts: scenarioAccounts,
       usage: {},
-      activeId: a.id,
+      activeId,
       disabled: false,
       t: tr,
       now,
@@ -398,18 +402,21 @@ function renderPlanning({
   now = wednesday("08:00"),
   tempo,
   choice,
+  settings,
 }: {
   planned: Account[];
   now?: number;
   /** The keeper's tempo; without it the page falls back to the settings. */
   tempo?: Tempo;
   choice?: TempoChoice;
+  settings?: Partial<PlanningSettings>;
 }) {
   return renderToStaticMarkup(
     createElement(PlanningPanel, {
       settings: {
         ...scenarioSettings(planned.map(({ id }) => ({ id }))),
         ...(choice ? { tempo: choice } : {}),
+        ...settings,
       },
       keeper: {
         enabled: true,
@@ -517,11 +524,40 @@ test("the hero forecasts the day before work and the rest of it during work", ()
     />Sabit tempoyla</,
   );
   assert.match(renderPlanning({ planned: [a] }), />Varsayılan tempoyla</);
-  // Nothing planned: neither pill.
+  // Nothing planned, or automatic start off: neither pill.
   assert.doesNotMatch(
     renderPlanning({ planned: [] }),
     /Tahmin: |Bugün kalan: |tempoyla</,
   );
+  const off = renderPlanning({
+    planned: scenarioAccounts,
+    tempo: busyTempo,
+    settings: { autoStart: false },
+  });
+  assert.match(off, /Kapalı\. Açınca/);
+  assert.doesNotMatch(off, /Tahmin: |Bugün kalan: |tempoyla</);
+});
+
+test("before work the pill forecasts the day as the lane does", () => {
+  // Desktop is on Vertex Team, so the live forecast starts there rather than
+  // as planned; the pill must not repeat the plan's own forecast.
+  const now = wednesday("08:00");
+  const view = dayTimeline({
+    settings: scenarioSettings(automatic),
+    accounts: scenarioAccounts,
+    usage: {},
+    now,
+    tempo: busyTempo,
+    activeId: team.id,
+  });
+  const summary = forecastSummary(view.live!.forecast, tr, clock);
+  assert.equal(summary, "15:17–16:15 kotasız · 4 geçiş");
+  const html = renderScenario(automatic, now, team.id);
+  assert.match(
+    html,
+    new RegExp(`<i class="[^"]*bg-warn[^"]*"[^>]*></i>Tahmin: ${summary}<`),
+  );
+  assert.doesNotMatch(html, /Tahmin: Kesintisiz|Bugün kalan: /);
 });
 
 test("each planned account says how long its window lasts and when it works today", () => {
@@ -565,6 +601,112 @@ test("the notes explain the order and the warm-ups", () => {
   assert.ok(
     html.includes(
       "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay hesapları kapasiteye ve tempoya göre işten önce ısıtır.",
+    ),
+  );
+});
+
+// Saturday work with a learned weekend rate well below the weekday one.
+const SATURDAY = "2026-10-17";
+const weekendTempo: Tempo = {
+  ...busyTempo,
+  weekend: Array.from({ length: 24 }, () => 60),
+  rate: { weekday: 205, weekend: 60 },
+  days: { weekday: 15, weekend: 6 },
+};
+const weekendHours: Partial<PlanningSettings> = {
+  weekend: { enabled: true, start: "11:00", end: "17:00" },
+};
+
+test("on a weekend work day the tempo row and the account rows use the weekend rate", () => {
+  const html = renderPlanning({
+    planned: [a, pro],
+    tempo: weekendTempo,
+    now: wallTime(SATURDAY, "08:00", ZONE)!,
+    settings: weekendHours,
+  });
+  assert.ok(
+    html.includes(
+      "Hafta sonu yoğun gün ≈ 60 Pro birimi/sa · son 4 haftada 21 iş günü",
+    ),
+  );
+  assert.ok(
+    html.includes(
+      "Bu tempoyla bir pencere: Max 5× ~8 sa 20 dk · Pro ~1 sa 40 dk yeter.",
+    ),
+  );
+  assert.ok(html.includes("Pencere ~8 sa 20 dk yeter · bugün 11:00–17:00"));
+  assert.ok(html.includes(">Pencere ~1 sa 40 dk yeter<"));
+  assert.doesNotMatch(html, /205 Pro birimi|~2 sa 25 dk/);
+  // A weekend that learned no rate of its own reads as the busy day.
+  assert.ok(
+    renderPlanning({
+      planned: [a, pro],
+      tempo: busyTempo,
+      now: wallTime(SATURDAY, "08:00", ZONE)!,
+      settings: weekendHours,
+    }).includes("Yoğun gün ≈ 205 Pro birimi/sa · son 4 haftada 17 iş günü"),
+  );
+});
+
+test("after work the pill and the rows describe the next work day", () => {
+  // Friday 23:30: Saturday is next, with its own hours and rate.
+  const now = wallTime("2026-10-16", "23:30", ZONE)!;
+  const saturday = dayPlan(
+    SATURDAY,
+    { ...scenarioSettings(automatic), ...weekendHours },
+    planContext(scenarioAccounts, weekendTempo),
+  );
+  assert.equal(
+    forecastSummary(saturday.forecast!, tr, clock),
+    "Kesintisiz · geçiş yok",
+  );
+  const html = renderPlanning({
+    planned: scenarioAccounts,
+    tempo: weekendTempo,
+    now,
+    settings: weekendHours,
+  });
+  assert.match(html, /><\/i>Tahmin: Kesintisiz · geçiş yok</);
+  assert.ok(
+    html.includes(
+      `Kişisel - Max ilk başlangıç, ${clock(saturday.accounts[0].firstStart)}`,
+    ),
+  );
+  assert.ok(html.includes("Hafta sonu yoğun gün ≈ 60 Pro birimi/sa"));
+  // The window lasts as on Saturday; today's ranges are still today's.
+  assert.ok(
+    html.includes("Pencere ~8 sa 20 dk yeter · bugün 09:00–11:09, 14:13–18:00"),
+  );
+});
+
+test("a fixed tempo applies at once, before the keeper reports it", () => {
+  // The keeper snapshot still carries the learned tempo.
+  const html = renderPlanning({
+    planned: [a, pro],
+    tempo: busyTempo,
+    choice: "heavy",
+  });
+  assert.ok(html.includes("Sabit tempo ≈ 120 Pro birimi/sa"));
+  assert.ok(
+    html.includes(
+      "Bu tempoyla bir pencere: Max 5× ~4 sa 10 dk · Pro ~50 dk yeter.",
+    ),
+  );
+  assert.match(html, />Pencere ~4 sa 10 dk yeter/);
+  assert.match(html, />Sabit tempoyla</);
+  assert.doesNotMatch(html, /Yoğun gün|~2 sa 25 dk/);
+  const settings = scenarioSettings([{ id: a.id }, { id: pro.id }]);
+  const view = dayTimeline({
+    settings,
+    accounts: [a, pro],
+    usage: {},
+    now: wednesday("08:00"),
+    tempo: presetTempo("heavy"),
+    activeId: a.id,
+  });
+  assert.ok(
+    html.includes(
+      `Tahmin: ${forecastSummary(view.live!.forecast, tr, clock)}<`,
     ),
   );
 });

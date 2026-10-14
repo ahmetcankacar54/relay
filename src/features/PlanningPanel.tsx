@@ -10,7 +10,7 @@ import type {
 } from "../../shared/types";
 import { dayPlan, planContext, shiftDate } from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
-import { fallbackTempo } from "../../shared/tempo";
+import { fallbackTempo, presetTempo } from "../../shared/tempo";
 import { dayTimeline, nextPlannedWindow } from "../lib/day-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -246,37 +246,41 @@ export function PlanningPanel({
   );
   // Deleted accounts take no slot, exactly as in the window keeper.
   const planned = { ...settings, accounts: included };
-  const context = planContext(
-    accounts,
-    keeper?.tempo ?? fallbackTempo(settings),
-  );
+  // A fixed tempo applies at once; "auto" uses what the keeper learned.
+  const choice = settings.tempo ?? "auto";
+  const tempo =
+    choice === "auto"
+      ? (keeper?.tempo ?? fallbackTempo(settings))
+      : presetTempo(choice);
+  const context = planContext(accounts, tempo);
   const plans = [0, 1, 2, 3, 4, 5, 6, 7].map((d) =>
     dayPlan(shiftDate(today, d), planned, context),
   );
-  // The next day with work hours supplies the automatic times shown per account.
-  const reference = plans.find((plan) => plan.accounts.length);
+  // The next work day that has not ended supplies the automatic times, the
+  // forecast and the rate shown on the page.
+  const reference = plans.find(
+    (plan) => plan.accounts.length > 0 && (plan.interval?.end ?? 0) > now,
+  );
   // Today's lane: who works when, live from now (the account lines read it).
   const todayView = dayTimeline({
     settings: planned,
     accounts,
     usage,
     now,
-    tempo: keeper?.tempo,
+    tempo,
     activeId,
   });
-  // While today's work runs, the hero forecasts its rest as the lane does.
+  // Today the hero reads the lane's live forecast: of the whole day before
+  // work, of the rest while work runs. A later day has its plan's forecast.
   const interval = reference?.interval;
   const live =
-    reference === plans[0] &&
-    interval &&
-    now >= interval.start &&
-    now < interval.end &&
-    todayView.live?.date === reference.date
+    reference === plans[0] && todayView.live?.date === reference.date
       ? todayView.live.forecast
       : undefined;
   const forecast = live ?? reference?.forecast;
-  // A window's length is measured at the reference day's busy-day rate.
-  const rate = context.tempo.rate[interval?.weekend ? "weekend" : "weekday"];
+  // One busy-day rate measures every window: the reference day's.
+  const weekend = !!interval?.weekend;
+  const rate = tempo.rate[weekend ? "weekend" : "weekday"];
   const zoneClock = (time: number) => clock(time, zone);
   const excluded = accounts.filter(
     (a) => !settings.accounts.some((p) => p.id === a.id),
@@ -339,11 +343,11 @@ export function PlanningPanel({
             {t("Otomatik pencere başlatma", "Automatic window start")}
           </strong>
           <p className="mt-0.5 text-[13px]">{summary}</p>
-          {forecast && (
+          {settings.autoStart && forecast && (
             <ForecastBadges
               forecast={forecast}
-              live={!!live}
-              source={context.tempo.source}
+              rest={!!live && !!interval && now >= interval.start}
+              source={tempo.source}
               clock={zoneClock}
               t={t}
             />
@@ -387,8 +391,10 @@ export function PlanningPanel({
             t={t}
           />
           <TempoRow
-            tempo={context.tempo}
-            choice={settings.tempo ?? "auto"}
+            tempo={tempo}
+            choice={choice}
+            rate={rate}
+            weekend={weekend}
             accounts={included.map(({ id }) =>
               accounts.find((a) => a.id === id)!,
             )}
@@ -421,7 +427,7 @@ export function PlanningPanel({
         accounts={accounts}
         usage={usage}
         now={now}
-        tempo={keeper?.tempo}
+        tempo={tempo}
         activeId={activeId}
         t={t}
       />
