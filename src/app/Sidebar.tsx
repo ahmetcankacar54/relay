@@ -64,7 +64,7 @@ function NavItem({
       aria-current={active ? "page" : undefined}
       aria-label={compact ? item.label : undefined}
       className={cn(
-        "relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium text-muted-foreground hover:bg-card/60 [-webkit-app-region:no-drag]",
+        "relative flex w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium whitespace-nowrap text-muted-foreground hover:bg-card/60 [-webkit-app-region:no-drag]",
         compact && "justify-center px-2",
         active &&
           "bg-card font-semibold text-accent-foreground shadow-xs hover:bg-card",
@@ -178,26 +178,30 @@ export function Sidebar({
         </nav>
         <div className="flex-1" />
         {summary && !compact && (
-          <button
-            type="button"
-            onClick={() => go("genel")}
-            className="mb-2 w-full rounded-lg border bg-card p-2.5 text-left text-xs [-webkit-app-region:no-drag]"
-          >
-            <span className="flex items-center gap-1.5">
-              <StatusDot tone={summary.running ? "ok" : "off"} />
-              <b className="truncate font-semibold">{summary.name}</b>
-            </span>
-            <span className="mt-0.5 mb-1.5 block text-muted-foreground">
-              {summary.running
-                ? t("Desktop'ta açık", "Open in Desktop")
-                : t("Desktop kapalı", "Desktop closed")}
-            </span>
-            <LimitMeter
-              label={t("5 saatlik pencere", "5-hour window")}
-              percent={summary.fiveHour}
-              size="sm"
-            />
-          </button>
+          <div className="mb-2 w-full rounded-lg border bg-card p-2.5 text-xs [-webkit-app-region:no-drag]">
+            <button
+              type="button"
+              onClick={() => go("genel")}
+              className="flex w-full flex-col items-start justify-start gap-0.5 rounded-md text-left whitespace-normal"
+            >
+              <span className="flex w-full min-w-0 items-center gap-1.5">
+                <StatusDot tone={summary.running ? "ok" : "off"} />
+                <b className="truncate font-semibold">{summary.name}</b>
+              </span>
+              <span className="text-muted-foreground">
+                {summary.running
+                  ? t("Desktop'ta açık", "Open in Desktop")
+                  : t("Desktop kapalı", "Desktop closed")}
+              </span>
+            </button>
+            <div className="mt-1.5">
+              <LimitMeter
+                label={t("5 saatlik pencere", "5-hour window")}
+                percent={summary.fiveHour}
+                size="sm"
+              />
+            </div>
+          </div>
         )}
         <div className="w-full">
           <NavItem

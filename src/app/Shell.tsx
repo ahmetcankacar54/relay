@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -17,6 +18,10 @@ export function Shell() {
   const { t, language, setLanguage } = useI18n();
   const [page, go] = useHashRoute();
   const compact = useMediaQuery("(max-width: 839px)");
+  const relayRef = useRef(relay);
+  useEffect(() => {
+    relayRef.current = relay;
+  });
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const target = shortcutPage(e);
@@ -25,19 +30,21 @@ export function Shell() {
         go(target);
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
-        for (const a of relay.accounts) void relay.refreshUsage(a);
+        if (e.repeat) return;
+        const current = relayRef.current;
+        for (const a of current.accounts) void current.refreshUsage(a);
       }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [go, relay]);
+  }, [go]);
   const active = relay.active;
   const languagePicker = (
     <select
       aria-label={t("Dil", "Language")}
       value={language}
       onChange={(e) => setLanguage(e.target.value as "tr" | "en")}
-      className="h-8 rounded-md border bg-card px-2 text-sm"
+      className="h-8 rounded-md border bg-card px-2 py-0 text-sm"
     >
       <option value="tr">Türkçe</option>
       <option value="en">English</option>
@@ -62,7 +69,13 @@ export function Shell() {
           }
         />
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          <div className="h-2 shrink-0 [-webkit-app-region:drag]" />
+          {/* In the 56 px rail the macOS traffic lights overhang into this column; keep it clear. */}
+          <div
+            className={cn(
+              "shrink-0 [-webkit-app-region:drag]",
+              compact ? "h-8" : "h-2",
+            )}
+          />
           {/* Legacy content is temporary; Tasks 7–13 replace each page. */}
           {page === "genel" && (
             <PageFrame

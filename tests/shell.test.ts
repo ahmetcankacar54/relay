@@ -113,3 +113,37 @@ test("banners read an injected relay and offer reconnect for expired usage sign-
   assert.match(html, /Vertex/);
   assert.match(html, /Yeniden bağlan/);
 });
+
+test("sidebar buttons override the legacy centred button style and keep the meter outside buttons", () => {
+  const html = renderToStaticMarkup(
+    createElement(Sidebar, {
+      page: "genel",
+      go: () => {},
+      t,
+      compact: false,
+      status: { accounts: 2, planning: false, switching: false },
+      summary: { name: "Kişisel · Max", running: true, fiveHour: 94 },
+    }),
+  );
+  const buttons = html.match(/<button[\s\S]*?<\/button>/g) ?? [];
+  assert.equal(buttons.length, 7);
+  for (const b of buttons) {
+    assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
+    assert.doesNotMatch(b, /role="meter"/);
+  }
+  assert.match(html, /role="meter"/);
+});
+
+test("compact rail centres its icon buttons", () => {
+  const html = renderToStaticMarkup(
+    createElement(Sidebar, {
+      page: "genel",
+      go: () => {},
+      t,
+      compact: true,
+      status: { accounts: 0, planning: false, switching: false },
+    }),
+  );
+  for (const b of html.match(/<button[^>]*>/g) ?? [])
+    assert.match(b, /justify-center/);
+});
