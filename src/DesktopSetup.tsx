@@ -1,5 +1,9 @@
 import { Monitor, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import type { Account, DesktopState } from "../shared/types";
+
+export const selectClass =
+  "h-9 w-full rounded-md border bg-background px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";
 
 export function DesktopSetup({
   account,
@@ -13,6 +17,7 @@ export function DesktopSetup({
   selectOrg,
   close,
   connect,
+  bare = false,
 }: {
   account?: Account;
   accounts: Account[];
@@ -25,28 +30,35 @@ export function DesktopSetup({
   selectOrg: (id: string) => void;
   close: () => void;
   connect: () => void;
+  /** Inside a dialog: no card chrome and no close button (the dialog has its own). */
+  bare?: boolean;
 }) {
   return (
     <section
       id={account ? `setup-${account.id}` : "desktop-setup-picker"}
-      className="desktop-setup"
+      className={
+        bare ? "grid gap-3" : "grid gap-3 rounded-lg border bg-card p-3"
+      }
       aria-label={t("Desktop ilk kurulumu", "First Desktop setup")}
     >
-      <div className="form-title">
-        <h3>
-          <Monitor size={16} />{" "}
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+          <Monitor className="size-4 text-brand" />
           {t("Desktop ilk kurulumu", "First Desktop setup")}
         </h3>
-        <button
-          className="icon"
-          disabled={busy}
-          aria-label={t("Kurulumu kapat", "Close setup")}
-          onClick={close}
-        >
-          <X size={16} />
-        </button>
+        {!bare && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={busy}
+            aria-label={t("Kurulumu kapat", "Close setup")}
+            onClick={close}
+          >
+            <X />
+          </Button>
+        )}
       </div>
-      <p>
+      <p className="text-sm text-muted-foreground">
         {unclaimed
           ? t(
               "Claude’da açık hesabı doğru Relay profiliyle eşleştir. E-posta ve çalışma alanı aynı hesaba ait olmalı.",
@@ -58,9 +70,10 @@ export function DesktopSetup({
             )}
       </p>
       {!account && (
-        <label className="setup-select">
+        <label className="grid gap-1.5 text-sm font-medium">
           {t("Claude’da açık olan hesap", "Account currently open in Claude")}
           <select
+            className={selectClass}
             value=""
             onChange={(e) => selectAccount(e.target.value)}
             disabled={busy}
@@ -80,9 +93,10 @@ export function DesktopSetup({
       {account &&
         unclaimed &&
         (!org || (desktop?.organizations.length ?? 0) > 1) && (
-          <label className="setup-select">
+          <label className="grid gap-1.5 text-sm font-medium">
             {t("Code çalışma alanı", "Code workspace")}
             <select
+              className={selectClass}
               value={org}
               onChange={(e) => selectOrg(e.target.value)}
               disabled={busy}
@@ -102,17 +116,18 @@ export function DesktopSetup({
           </label>
         )}
       {account && (
-        <div className="panel-actions">
-          <button
-            className="secondary"
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <Button
+            variant="outline"
+            size="sm"
             disabled={busy || (unclaimed && !org)}
             onClick={connect}
           >
             {unclaimed
               ? t("Bu hesabı eşleştir…", "Link this account…")
               : t("Desktop bağlantısını başlat…", "Start Desktop connection…")}
-          </button>
-          <small>
+          </Button>
+          <small className="text-xs text-muted-foreground">
             {t(
               "Sonraki adımda yeniden başlatmayı onaylarsın.",
               "Review the restart in the next step.",

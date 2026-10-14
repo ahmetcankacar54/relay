@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Monitor, Plus, Search } from "lucide-react";
+import { Link2, Monitor, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,10 +12,11 @@ import {
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { PageFrame } from "@/app/PageFrame";
-import { DesktopSetup } from "../DesktopSetup";
+import { routeHash, routeQuery } from "@/app/routes";
 import { AccountsTable } from "./accounts/AccountsTable";
 import { AccountSheet } from "./accounts/AccountSheet";
-import { LegacyAddForm } from "./accounts/LegacyAddForm";
+import { AddAccountDialog } from "./accounts/AddAccountDialog";
+import { LinkDesktopDialog } from "./accounts/LinkDesktopDialog";
 import { filterAccounts, type AccountFilter } from "./accounts/accountLabels";
 
 export function Accounts() {
@@ -23,9 +24,11 @@ export function Accounts() {
   const { t, language } = useI18n();
   const { accounts, desktop, desktopBusy, pendingDesktop, setupId, setSetupId } =
     relay;
+  const unlinked = accounts.some((a) => !a.desktop);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AccountFilter>("all");
   const [adding, setAdding] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [selected, setSelected] = useState<string>();
   const search = useRef<HTMLInputElement>(null);
   // ⌘K focuses the account search while this page is open.
@@ -39,9 +42,23 @@ export function Accounts() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, []);
-  // Arriving with a setup target (e.g. "Desktop’a bağla" on Overview) opens that account.
+  // `#/hesaplar?ekle` and `#/hesaplar?eslestir` (Overview onboarding) open a dialog.
   useEffect(() => {
-    if (setupId) setSelected(setupId);
+    const read = () => {
+      const intent = routeQuery(window.location.hash);
+      if (!intent) return;
+      if (intent === "ekle") setAdding(true);
+      else if (intent === "eslestir") setLinking(true);
+      history.replaceState(null, "", routeHash("hesaplar"));
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+  // Arriving with a setup target (e.g. "Desktop’a bağla" on Overview) opens that
+  // account; the add dialog sets one too but keeps the setup inside the dialog.
+  useEffect(() => {
+    if (setupId && !adding) setSelected(setupId);
   }, [setupId]);
   const show = (id: string) => {
     setSelected(id);
@@ -59,46 +76,36 @@ export function Accounts() {
         `${accounts.length} accounts · ${linked} linked to Desktop`,
       )}
       actions={
-        <Button
-          disabled={desktopBusy || !!pendingDesktop || accounts.length >= 50}
-          onClick={() => {
-            setAdding(!adding);
-            setSetupId(undefined);
-          }}
-        >
-          <Plus />
-          {t("Hesap ekle", "Add account")}
-        </Button>
+        <>
+          {relay.hasUnclaimedDesktop && (
+            <Button
+              variant="outline"
+              disabled={
+                desktopBusy ||
+                !!pendingDesktop ||
+                !!desktop?.recoveryRequired ||
+                !unlinked
+              }
+              onClick={() => setLinking(true)}
+            >
+              <Link2 />
+              {t("Desktop hesabını eşleştir", "Link Desktop account")}
+            </Button>
+          )}
+          <Button
+            disabled={desktopBusy || !!pendingDesktop || accounts.length >= 50}
+            onClick={() => {
+              setSetupId(undefined);
+              setAdding(true);
+            }}
+          >
+            <Plus />
+            {t("Hesap ekle", "Add account")}
+          </Button>
+        </>
       }
     >
       <div className="grid gap-3 px-6 pb-6">
-        {setupId === "" && !pendingDesktop && (
-          <DesktopSetup
-            accounts={accounts}
-            desktop={desktop}
-            unclaimed={relay.hasUnclaimedDesktop}
-            org={relay.targetOrg}
-            busy={desktopBusy}
-            t={t}
-            selectOrg={relay.setOrg}
-            selectAccount={(id) => {
-              setSetupId(id);
-              show(id);
-            }}
-            close={() => setSetupId(undefined)}
-            connect={() => {}}
-          />
-        )}
-        {adding && (
-          <LegacyAddForm
-            close={() => setAdding(false)}
-            created={(id) => {
-              setAdding(false);
-              setSetupId(id);
-              show(id);
-            }}
-          />
-        )}
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-48 flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -145,7 +152,6 @@ export function Accounts() {
             link={(id) => {
               setSetupId(id);
               relay.cancelDesktopRequest();
-              setAdding(false);
               setSelected(id);
             }}
           />
@@ -171,6 +177,23 @@ export function Accounts() {
           </div>
         )}
       </div>
+      <AddAccountDialog
+        open={adding}
+        onOpenChange={(open) => {
+          setAdding(open);
+          // The dialog owns the new profile’s setup; don’t reopen it in the sheet.
+          if (!open) setSetupId(undefined);
+        }}
+      />
+      <LinkDesktopDialog
+        open={linking}
+        onOpenChange={setLinking}
+        picked={(id) => {
+          setLinking(false);
+          setSetupId(id);
+          show(id);
+        }}
+      />
       <AccountSheet
         account={account}
         close={() => {

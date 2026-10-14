@@ -145,9 +145,11 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
             desktop?.recoveryRequired
           }
           onClick={() => {
-            if (hasUnclaimedDesktop && accounts.some((a) => !a.desktop))
-              relay.setSetupId("");
-            go("hesaplar");
+            // The Accounts page opens the matching dialog for the query.
+            window.location.hash =
+              hasUnclaimedDesktop && accounts.some((a) => !a.desktop)
+                ? "#/hesaplar?eslestir"
+                : "#/hesaplar?ekle";
           }}
         >
           <Plus />

@@ -1,12 +1,21 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Globe2, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { duplicateCliAccount } from "../../shared/account-state";
 import { ConnectionProgress } from "../ConnectionProgress";
+import { selectClass } from "../DesktopSetup";
 import { localizeError } from "../messages";
+
+const panelClass = "mx-6 mb-3 gap-3 px-4 py-4";
+const titleClass = "flex items-start gap-3";
+const iconClass = "mt-0.5 size-5 shrink-0 text-brand";
+const actionsClass = "flex flex-wrap items-center gap-2";
 
 /** Desktop sign-in in progress for a profile; shown above every page until saved or cancelled. */
 export function DesktopPendingPanel() {
@@ -28,17 +37,17 @@ export function DesktopPendingPanel() {
   return (
     <Card
       id="desktop-pending-panel"
-      className="connection-panel mx-6 mb-3"
+      className={panelClass}
       aria-live="polite"
     >
-      <div className="panel-title">
-        <Globe2 size={19} />
-        <div>
-          <h3>
+      <div className={titleClass}>
+        <Globe2 className={iconClass} />
+        <div className="min-w-0">
+          <h3 className="font-semibold">
             {pendingDesktop.name} ·{" "}
             {t("Desktop bağlantısı", "Desktop connection")}
           </h3>
-          <p>
+          <p className="text-sm text-muted-foreground">
             {t(
               "Claude’da doğru hesaba giriş yap ve Code sekmesini aç. Sonra buradan bağlantıyı kaydet.",
               "Sign in to the matching account inside Claude and open Code. Then save the connection here.",
@@ -87,9 +96,13 @@ export function DesktopPendingPanel() {
         ]}
       />
       {desktop?.organizations.length! > 1 && (
-        <label>
+        <label className="grid gap-1.5 text-sm font-medium">
           {t("Code çalışma alanı", "Code workspace")}
-          <select value={targetOrg} onChange={(e) => setOrg(e.target.value)}>
+          <select
+            className={selectClass}
+            value={targetOrg}
+            onChange={(e) => setOrg(e.target.value)}
+          >
             <option value="">
               {t("Çalışma alanı seç", "Choose a workspace")}
             </option>
@@ -101,17 +114,19 @@ export function DesktopPendingPanel() {
           </select>
         </label>
       )}
-      <div className="panel-actions">
-        <button
-          className="secondary"
+      <div className={actionsClass}>
+        <Button
+          variant="outline"
+          size="sm"
           disabled={desktopBusy}
           onClick={() => void action("open", () => api.openDesktop())}
         >
-          <ArrowUpRight size={14} />
+          <ArrowUpRight />
           {t("Claude’u yeniden aç", "Reopen Claude")}
-        </button>
-        <button
-          className="text-button"
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           disabled={desktopBusy}
           onClick={() => relay.requestDesktop(pendingDesktop, "cancel")}
         >
@@ -119,17 +134,17 @@ export function DesktopPendingPanel() {
             "İptal et ve önceki hesaba dön",
             "Cancel and return to previous account",
           )}
-        </button>
+        </Button>
         {(hasUnclaimedDesktop ||
           desktop?.activeProfileId === pendingDesktop.id) &&
           targetOrg && (
-            <button
-              className="text-button"
+            <Button
+              size="sm"
               disabled={desktopBusy}
               onClick={() => relay.requestDesktop(pendingDesktop, "capture")}
             >
               {t("Bağlantıyı tamamla", "Complete connection")}
-            </button>
+            </Button>
           )}
       </div>
     </Card>
@@ -148,21 +163,21 @@ export function CliFlowPanel() {
   return (
     <Card
       id="cli-connection-panel"
-      className={`connection-panel mx-6 mb-3 ${flow.status === "connected" ? "connected-panel" : ""}`}
+      className={cn(panelClass, flow.status === "connected" && "border-brand/40")}
       aria-live="polite"
     >
-      <div className="panel-title">
+      <div className={titleClass}>
         {flow.status === "connected" ? (
-          <ShieldCheck size={22} />
+          <ShieldCheck className={iconClass} />
         ) : (
-          <Globe2 size={22} />
+          <Globe2 className={iconClass} />
         )}
-        <div>
-          <h3>
+        <div className="min-w-0">
+          <h3 className="font-semibold">
             {flowAccount?.name} ·{" "}
             {t("Tarayıcı bağlantısı", "Browser connection")}
           </h3>
-          <p>
+          <p className="text-sm text-muted-foreground">
             {flow.status === "connected"
               ? t(
                   "Tarayıcı bağlantısı tamamlandı. Bu hesaba ait kullanım limitleri okunabilir.",
@@ -188,7 +203,7 @@ export function CliFlowPanel() {
         </div>
       </div>
       {flow.status === "connected" && flowAccount?.auth?.email && (
-        <p className="auth-identity">
+        <p className="text-sm font-medium">
           {flowAccount.auth.email}
           {flowAccount.auth.subscription
             ? ` · ${flowAccount.auth.subscription}`
@@ -198,7 +213,7 @@ export function CliFlowPanel() {
       {flow.status === "connected" &&
         flowAccount &&
         duplicateCliAccount(flowAccount, accounts) && (
-          <p className="account-warning">
+          <p className="rounded-md bg-amber-500/10 px-2.5 py-1.5 text-sm text-amber-700 dark:text-amber-400">
             {t(
               "Bu hesap başka bir profile de bağlı. İki profil aynı limitleri paylaşır.",
               "This account is connected to another profile too. Both profiles share the same limits.",
@@ -262,7 +277,7 @@ export function CliFlowPanel() {
       />
       {flow.codeRequested && (
         <form
-          className="code-form"
+          className="flex flex-wrap items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             const value = code;
@@ -270,12 +285,12 @@ export function CliFlowPanel() {
             relay.submitCode(value);
           }}
         >
-          <label>
+          <label className="grid min-w-56 flex-1 gap-1.5 text-sm font-medium">
             {t(
               "Tarayıcı bir kod gösterdiyse buraya yapıştır",
               "If the browser shows a code, paste it here",
             )}
-            <input
+            <Input
               type="password"
               autoComplete="off"
               value={code}
@@ -283,16 +298,17 @@ export function CliFlowPanel() {
               onChange={(e) => setCode(e.target.value)}
             />
           </label>
-          <button className="secondary" disabled={!!busy || !code.trim()}>
+          <Button variant="outline" disabled={!!busy || !code.trim()}>
             {t("Kodu gönder", "Submit code")}
-          </button>
+          </Button>
         </form>
       )}
-      <div className="panel-actions">
+      <div className={actionsClass}>
         {pending(flow) ? (
           <>
-            <button
-              className="secondary"
+            <Button
+              variant="outline"
+              size="sm"
               disabled={!!busy || !flow.browserReady}
               onClick={() =>
                 void action("reopen", () =>
@@ -300,11 +316,12 @@ export function CliFlowPanel() {
                 )
               }
             >
-              <ArrowUpRight size={14} />
+              <ArrowUpRight />
               {t("Tarayıcıyı yeniden aç", "Reopen browser")}
-            </button>
-            <button
-              className="text-button"
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               disabled={!!busy}
               onClick={() =>
                 void action("cancel", () =>
@@ -313,13 +330,13 @@ export function CliFlowPanel() {
               }
             >
               {t("İptal et", "Cancel")}
-            </button>
+            </Button>
           </>
         ) : (
           <>
             {flow.status !== "connected" && (
-              <button
-                className="primary"
+              <Button
+                size="sm"
                 disabled={!!busy}
                 onClick={() => {
                   if (!flowAccount) return;
@@ -328,16 +345,17 @@ export function CliFlowPanel() {
                 }}
               >
                 {t("Yeniden bağlan", "Reconnect")}
-              </button>
+              </Button>
             )}
-            <button
-              className="secondary"
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 relay.dismissFlow();
               }}
             >
               {t("Tamam", "Done")}
-            </button>
+            </Button>
           </>
         )}
       </div>

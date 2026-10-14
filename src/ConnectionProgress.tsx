@@ -1,4 +1,5 @@
 import { Check, CircleAlert, LoaderCircle, Pause } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Step = { title: string; detail: string };
 export function ConnectionProgress({
@@ -14,49 +15,75 @@ export function ConnectionProgress({
 }) {
   const stopped = state === "failed" || state === "cancelled";
   return (
-    <div className={`connection-progress ${stopped ? "is-stopped" : ""}`}>
-      <div className="progress-summary">
-        <span className={`progress-status ${state}`}>
+    <div className="grid gap-2.5">
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 font-medium",
+            state === "failed" && "text-destructive",
+            state === "cancelled" && "text-muted-foreground",
+            state === "complete" && "text-brand",
+          )}
+        >
           {state === "working" ? (
-            <LoaderCircle className="spin" size={14} />
+            <LoaderCircle className="size-3.5 animate-spin" />
           ) : state === "complete" ? (
-            <Check size={14} />
+            <Check className="size-3.5" />
           ) : state === "failed" ? (
-            <CircleAlert size={14} />
+            <CircleAlert className="size-3.5" />
           ) : state === "cancelled" ? (
-            <Pause size={14} />
+            <Pause className="size-3.5" />
           ) : (
-            <span className="waiting-dot" />
+            <span className="size-2 animate-pulse rounded-full bg-brand" />
           )}
           {label}
         </span>
         {!stopped && (
-          <span className="progress-count">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {state === "complete" ? steps.length : current + 1} / {steps.length}
           </span>
         )}
       </div>
-      <ol className="connection-steps" aria-label={label}>
+      <ol
+        className={cn(
+          "grid gap-2 sm:grid-cols-3",
+          stopped && "opacity-60",
+        )}
+        aria-label={label}
+      >
         {steps.map((step, index) => {
           const done = !stopped && (state === "complete" || index < current);
           const active = !stopped && state !== "complete" && index === current;
           return (
             <li
               key={index}
-              className={done ? "done" : active ? "current" : "upcoming"}
+              className={cn(
+                "grid grid-cols-[auto_1fr] items-start gap-x-2 rounded-lg border p-2.5",
+                active && "border-brand/50 bg-brand/5",
+              )}
               aria-current={active ? "step" : undefined}
             >
-              <span className="step-track" aria-hidden="true">
-                <span className="step-number">
-                  {done ? (
-                    <Check size={15} />
-                  ) : (
-                    String(index + 1).padStart(2, "0")
-                  )}
-                </span>
+              <span
+                className={cn(
+                  "row-span-2 grid size-6 place-items-center rounded-full text-[11px] font-semibold tabular-nums",
+                  done
+                    ? "bg-brand text-white dark:text-[#1d1916]"
+                    : active
+                      ? "border-2 border-brand text-brand"
+                      : "bg-muted text-muted-foreground",
+                )}
+                aria-hidden="true"
+              >
+                {done ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  String(index + 1).padStart(2, "0")
+                )}
               </span>
-              <strong>{step.title}</strong>
-              <span className="step-detail">{step.detail}</span>
+              <strong className="text-sm font-semibold">{step.title}</strong>
+              <span className="text-xs text-muted-foreground">
+                {step.detail}
+              </span>
             </li>
           );
         })}

@@ -73,7 +73,9 @@ export function AccountsCard({
             variant="link"
             size="sm"
             className="h-auto px-0"
-            onClick={() => go("hesaplar")}
+            onClick={() => {
+              window.location.hash = "#/hesaplar?ekle";
+            }}
           >
             {t("Hesap ekle", "Add account")}
           </Button>

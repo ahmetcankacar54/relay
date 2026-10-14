@@ -12,3 +12,5 @@ export function shortcutPage(e: { key: string; metaKey: boolean; ctrlKey: boolea
   const index = Number(e.key) - 1;
   return Number.isInteger(index) && index >= 0 && index < 5 ? PAGES[index] : undefined;
 }
+/** The intent after the page id, e.g. `#/hesaplar?ekle` → `"ekle"`. */
+export const routeQuery = (hash: string) => hash.split("?")[1] ?? "";
