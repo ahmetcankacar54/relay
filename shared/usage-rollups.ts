@@ -25,7 +25,8 @@ export interface LimitHit {
   resetAt?: string;
 }
 export interface UsageRollups {
-  version: 1;
+  /** 2: coverage counts every polled gap, split across the hours it spans. */
+  version: 2;
   /** identity → UTC hour start ISO → rollup */
   hours: Record<string, Record<string, HourRollup>>;
   /** identity → observed five-hour windows */
@@ -36,7 +37,7 @@ export interface UsageRollups {
 }
 
 export const emptyRollups = (): UsageRollups => ({
-  version: 1,
+  version: 2,
   hours: {},
   windows: {},
   hits: [],
@@ -47,7 +48,7 @@ export function hourKey(time: number): string {
   return new Date(Math.floor(time / HOUR_MS) * HOUR_MS).toISOString();
 }
 
-// Same rule as summarizeUsageSamples: a five-hour reset in (checkedAt, +5h].
+// A usable five-hour window resets in (checkedAt, checkedAt + 5h].
 function validWindow(sample: UsageSample): boolean {
   const reset = sample.fiveHour?.resetsAt;
   if (!reset) return false;
@@ -61,6 +62,25 @@ function sameReset(a: string, b: string): boolean {
 }
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
+
+const emptyHour = (): HourRollup => ({
+  points: 0,
+  windows: 0,
+  coveredMinutes: 0,
+});
+
+function addCoverage(
+  hours: Record<string, HourRollup>,
+  from: number,
+  to: number,
+): void {
+  for (let at = from; at < to;) {
+    const end = Math.min(to, (Math.floor(at / HOUR_MS) + 1) * HOUR_MS);
+    const hour = (hours[hourKey(at)] ??= emptyHour());
+    hour.coveredMinutes = round2(hour.coveredMinutes + (end - at) / 60_000);
+    at = end;
+  }
+}
 
 function foldHits(r: UsageRollups, s: UsageSample, t: number): void {
   const kinds: [LimitHit["kind"], UsageWindow | undefined][] = [
@@ -113,11 +133,13 @@ function prune(r: UsageRollups, now: number): void {
 }
 
 /**
- * Folds one sample into the rollups and returns a new object. Points follow
- * summarizeUsageSamples: increases over the window's high-water mark between
- * consecutive samples of one identity in the same five-hour window, at most
- * MAX_USAGE_GAP_MS apart; the first sample after a gap or new window is a
- * baseline. Reset times within ±2 minutes are the same window.
+ * Folds one sample into the rollups and returns a new object. Points are
+ * increases over the window's high-water mark between consecutive samples of
+ * one identity in the same five-hour window, at most MAX_USAGE_GAP_MS apart;
+ * the first sample after a gap or new window is a baseline. Reset times within
+ * ±2 minutes are the same window. Coverage counts every gap of at most
+ * MAX_USAGE_GAP_MS between consecutive samples, whatever their windows, and
+ * credits each UTC hour the minutes that fall inside it.
  */
 export function foldSample(
   r: UsageRollups,
@@ -143,11 +165,10 @@ function foldInto(next: UsageRollups, s: UsageSample): void {
   const t = Date.parse(s.checkedAt);
   const prev = next.last[s.identity];
   const hours = (next.hours[s.identity] ??= {});
-  const hour = (hours[hourKey(t)] ??= {
-    points: 0,
-    windows: 0,
-    coveredMinutes: 0,
-  });
+  const hour = (hours[hourKey(t)] ??= emptyHour());
+  const gap = prev ? t - Date.parse(prev.checkedAt) : Infinity;
+  if (gap > 0 && gap <= MAX_USAGE_GAP_MS)
+    addCoverage(hours, Date.parse(prev!.checkedAt), t);
   if (validWindow(s)) {
     const reset = s.fiveHour!.resetsAt!;
     const pct = s.fiveHour!.usedPercent;
@@ -164,17 +185,14 @@ function foldInto(next: UsageRollups, s: UsageSample): void {
     // Follow the latest reported reset so monotonic drift stays one window.
     record.resetAt = reset;
     const high = record.maxPercent;
-    const gap = prev ? t - Date.parse(prev.checkedAt) : Infinity;
     if (
       prev &&
       validWindow(prev) &&
       sameReset(prev.fiveHour!.resetsAt!, reset) &&
       gap > 0 &&
       gap <= MAX_USAGE_GAP_MS
-    ) {
-      hour.coveredMinutes = round2(hour.coveredMinutes + gap / 60_000);
+    )
       hour.points = round2(hour.points + Math.max(0, pct - high));
-    }
     record.maxPercent = Math.max(high, pct);
   }
   foldHits(next, s, t);

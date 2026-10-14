@@ -3,10 +3,11 @@ import assert from "node:assert/strict";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import {
   emptyRollups,
+  foldSamples,
   type HourRollup,
   type UsageRollups,
 } from "../shared/usage-rollups";
-import { usageIdentity } from "../shared/usage-statistics";
+import { usageIdentity, type UsageSample } from "../shared/usage-statistics";
 import type { Account } from "../shared/types";
 import { planningAccount } from "./planning-fixtures";
 
@@ -23,7 +24,9 @@ const unlinked: Account = {
   ...account("none", "None", "pro"),
   auth: undefined,
 };
-const accounts = [max, pro, unlinked];
+// Linked, but no usage in any range: no row.
+const spare = account("spare", "Spare", "max20");
+const accounts = [max, pro, unlinked, spare];
 const MAX = usageIdentity(max)!;
 const PRO = usageIdentity(pro)!;
 const OLD = JSON.stringify(["uuid", "gone", "org-gone"]);
@@ -41,6 +44,8 @@ function fixture(): UsageRollups {
     "2026-10-13T08:00:00.000Z": h(4, 1, 60),
     // Sat 2026-10-10: observed but idle
     "2026-10-10T09:00:00.000Z": h(0),
+    // Sun 2026-10-11: polled once, no coverage, so not an idle day
+    "2026-10-11T09:00:00.000Z": h(0, 0, 0),
     // previous 7-day period
     "2026-10-05T08:00:00.000Z": h(2),
     // older than 90 days: ignored even for range 90
@@ -55,6 +60,8 @@ function fixture(): UsageRollups {
     { resetAt: "2026-10-01T10:00:00.000Z", maxPercent: 100 },
     { resetAt: "2026-10-13T12:00:00.000Z", maxPercent: 30 },
     { resetAt: "2026-10-13T18:00:00.000Z", maxPercent: 50 },
+    // still open at NOW: counted as started, not in averageFill
+    { resetAt: "2026-10-14T14:00:00.000Z", maxPercent: 90 },
   ];
   r.windows[PRO] = [{ resetAt: "2026-10-14T02:00:00.000Z", maxPercent: 70 }];
   r.hits = [
@@ -91,15 +98,16 @@ test("Pro units scale points by plan capacity and shares split the total", () =>
   assert.deepEqual(
     view.accounts.map((a) => [
       a.accountId,
+      a.former,
       a.name,
       a.plan,
       a.proUnits,
       a.share,
     ]),
     [
-      ["max", "Max", "Max 5×", 20, 66.7],
-      ["pro", "Pro", "Pro", 10, 33.3],
-      [undefined, "Eski hesap", undefined, 0, 0],
+      ["max", undefined, "Max", "Max 5×", 20, 66.7],
+      ["pro", undefined, "Pro", "Pro", 10, 33.3],
+      [undefined, true, "Eski hesap", undefined, 0, 0],
     ],
   );
 });
@@ -146,7 +154,7 @@ test("heatmap is [weekday Mon=0][local hour] in Pro units", () => {
   assert.equal(sum, 30);
 });
 
-test("averageFill uses windows started in range; idle days are observed days without use", () => {
+test("averageFill uses closed windows started in range; idle days are covered days without use", () => {
   const view = build();
   const row = (id?: string) => view.accounts.find((a) => a.accountId === id)!;
   assert.equal(row("max").averageFill, 40);
@@ -155,7 +163,7 @@ test("averageFill uses windows started in range; idle days are observed days wit
   assert.equal(row("max").idleDays, 1);
   assert.equal(row("pro").idleDays, 0);
   assert.equal(row(undefined).idleDays, 1);
-  assert.equal(view.totals.windows, 3);
+  assert.equal(view.totals.windows, 4);
 });
 
 test("previous period is reported only for ranges up to 45 days", () => {
@@ -195,7 +203,7 @@ function insightRollups(maxFills: number[], proFills: number[]) {
 test("insight rule 1: highest-capacity account barely fills five or more windows", () => {
   const view = build({ rollups: insightRollups([10, 10, 10, 10, 20], [90]) });
   assert.deepEqual(view.insight, {
-    tr: "Max (Max 5×) pencerelerinin yalnızca %12’ini dolduruyor.",
+    tr: "Max (Max 5×) pencerelerinin ortalama yalnızca %12 kadarını dolduruyor.",
     en: "Max (Max 5×) fills only 12% of its windows.",
   });
 });
@@ -232,7 +240,12 @@ test("hits are named, newest first, and counted per kind", () => {
       at: "2026-10-13T09:00:00.000Z",
       until: "2026-10-13T10:10:00.000Z",
     },
-    { name: "Eski hesap", kind: "five-hour", at: "2026-10-12T09:30:00.000Z" },
+    {
+      former: true,
+      name: "Eski hesap",
+      kind: "five-hour",
+      at: "2026-10-12T09:30:00.000Z",
+    },
   ]);
   assert.deepEqual(view.totals.hits, { fiveHour: 2, weekly: 1 });
 });
@@ -297,4 +310,42 @@ test("a 25-hour DST day totals the sum of its 25 hourly buckets", () => {
     view.heatmap[6].reduce((a, b) => a + b, 0),
     25,
   );
+});
+
+test("rows without in-range hours, windows or hits are dropped", () => {
+  const view = build();
+  assert.ok(!view.accounts.some((a) => a.accountId === "spare"));
+  const r = fixture();
+  r.hours[OLD] = { "2026-08-01T09:00:00.000Z": h(5) };
+  r.hits = r.hits.filter((hit) => hit.identity !== OLD);
+  assert.ok(!build({ rollups: r }).accounts.some((a) => a.former));
+});
+
+test("polls every 10 minutes for 7 days with one window a day cover the range", () => {
+  const now = Date.parse("2026-10-14T12:00:00.000Z");
+  const first = Date.parse("2026-10-07T21:00:00.000Z"); // 2026-10-08 00:00 local
+  const samples: UsageSample[] = [];
+  for (let t = first; t <= now; t += 10 * 60_000) {
+    const dayStart = first + Math.floor((t - first) / 86_400_000) * 86_400_000;
+    const opened = dayStart + 8 * 3_600_000;
+    const open = t >= opened && t < opened + 5 * 3_600_000;
+    samples.push({
+      accountId: "max",
+      identity: MAX,
+      checkedAt: new Date(t).toISOString(),
+      ...(open
+        ? {
+            fiveHour: {
+              usedPercent: Math.min(100, (t - opened) / 600_000),
+              resetsAt: new Date(opened + 5 * 3_600_000).toISOString(),
+            },
+          }
+        : {}),
+    });
+  }
+  const view = build({ rollups: foldSamples(samples, now), now });
+  assert.ok(view.coveragePercent >= 99, String(view.coveragePercent));
+  assert.equal(view.totals.windows, 7);
+  assert.equal(view.accounts.length, 1);
+  assert.equal(view.accounts[0].idleDays, 0);
 });

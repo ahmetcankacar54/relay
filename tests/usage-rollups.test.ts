@@ -53,7 +53,7 @@ test("hourKey is the UTC hour start", () => {
   assert.equal(h(0), "2026-10-13T07:00:00.000Z");
   assert.equal(h(10), "2026-10-13T08:00:00.000Z");
   assert.deepEqual(emptyRollups(), {
-    version: 1,
+    version: 2,
     hours: {},
     windows: {},
     hits: [],
@@ -63,15 +63,16 @@ test("hourKey is the UTC hour start", () => {
 
 test("same window increases are attributed to the hour of the later sample", () => {
   const r = fold([s("x", 0, 10, 200), s("x", 5, 14, 200), s("x", 10, 20, 200)]);
+  // 07:50 → 07:55 → 08:00: both gaps fall inside the 07:00 hour.
   assert.deepEqual(r.hours.x[h(0)], {
     points: 4,
     windows: 1,
-    coveredMinutes: 5,
+    coveredMinutes: 10,
   });
   assert.deepEqual(r.hours.x[h(10)], {
     points: 6,
     windows: 0,
-    coveredMinutes: 5,
+    coveredMinutes: 0,
   });
   const covered = Object.values(r.hours.x).reduce(
     (sum, hour) => sum + hour.coveredMinutes,
@@ -94,6 +95,44 @@ test("a gap over 35 minutes makes the next sample a baseline", () => {
     0,
   );
   assert.deepEqual(r.windows.x, [{ resetAt: iso(200), maxPercent: 30 }]);
+});
+
+test("coverage splits a gap across the UTC hours it spans", () => {
+  // 23:50 → 00:15 is 10 minutes in one hour and 15 in the next.
+  const at = (clock: string) => `2026-10-13T${clock}:00.000Z`;
+  const poll = (checkedAt: string): UsageSample => ({
+    accountId: "a",
+    identity: "x",
+    checkedAt,
+    fiveHour: { usedPercent: 10, resetsAt: "2026-10-14T02:00:00.000Z" },
+  });
+  const r = fold(
+    [poll(at("23:50")), { ...poll("2026-10-14T00:15:00.000Z") }],
+    Date.parse("2026-10-14T01:00:00.000Z"),
+  );
+  assert.equal(r.hours.x[at("23:00")].coveredMinutes, 10);
+  assert.equal(r.hours.x["2026-10-14T00:00:00.000Z"].coveredMinutes, 15);
+});
+
+test("coverage counts consecutive polls outside a valid window", () => {
+  const r = fold([
+    s("x", 0, undefined, 0, 10),
+    s("x", 5, undefined, 0, 10),
+    s("x", 15, 10, 200),
+    s("x", 20, 12, 260),
+    s("x", 70, 15, 260),
+  ]);
+  const hours = Object.values(r.hours.x);
+  // 5 + 10 + 5 minutes; the 50-minute gap is not covered.
+  assert.equal(
+    hours.reduce((sum, v) => sum + v.coveredMinutes, 0),
+    20,
+  );
+  // Points stay window-scoped: the window change is a baseline.
+  assert.equal(
+    hours.reduce((sum, v) => sum + v.points, 0),
+    0,
+  );
 });
 
 test("drops do not lower the high-water mark", () => {

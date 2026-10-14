@@ -112,7 +112,8 @@ test("a reset is a new baseline even if its starting utilization is higher", () 
   ]);
   assert.equal(result.observedFiveHourPoints, 8);
   assert.equal(result.windowsObserved, 2);
-  assert.equal(result.coveredMinutes, 10);
+  // Coverage spans the window change; points do not.
+  assert.equal(result.coveredMinutes, 15);
 });
 test("gaps longer than 35 minutes do not invent unobserved usage", () => {
   assert.equal(
@@ -146,7 +147,8 @@ test("missing, expired, and implausible reset timestamps cannot form usage delta
     b.fiveHour!.resetsAt = resetsAt;
     const result = stats([a, b]);
     assert.equal(result.observedFiveHourPoints, 0);
-    assert.equal(result.coveredMinutes, 0);
+    // Polling is still observed even without a usable window.
+    assert.equal(result.coveredMinutes, 5);
     assert.equal(result.windowsObserved, 0);
   }
 });
@@ -175,7 +177,7 @@ test("duplicate timestamps and temporarily missing windows never inflate totals"
     sample(start + 20 * minute, 20),
   ]);
   assert.equal(result.observedFiveHourPoints, 30);
-  assert.equal(result.coveredMinutes, 10);
+  assert.equal(result.coveredMinutes, 20);
 });
 test("stable identity isolates organizations/accounts while UUID survives email changes", () => {
   const values = [sample(start, 10), sample(start + 5 * minute, 20)];

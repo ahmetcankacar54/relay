@@ -18,9 +18,13 @@ export interface UsageStatisticsView {
     /** weekday 0 = Monday; workShare is a percentage (0–100). */
     busiest?: { weekday: number; hour: number; workShare: number };
   };
-  /** Unmatched identities form one row without accountId ("Eski hesap"). */
+  /**
+   * Rows with in-range hours, windows or hits. Unmatched identities form one
+   * row with `former: true` and the Turkish default name "Eski hesap".
+   */
   accounts: {
     accountId?: string;
+    former?: true;
     name: string;
     plan?: string;
     proUnits: number;
@@ -34,6 +38,7 @@ export interface UsageStatisticsView {
   heatmap: number[][];
   hits: {
     accountId?: string;
+    former?: true;
     name: string;
     kind: "five-hour" | "weekly";
     at: string;
@@ -183,7 +188,8 @@ export function buildStatisticsView(
   const view = emptyView(range, "available", dates);
   const daily = new Map(view.daily.map((d) => [d.date, d.byAccount]));
   const units = new Map<Row, number>();
-  const observedDays = new Map<Row, Set<string>>();
+  const coveredDays = new Map<Row, Set<string>>();
+  const present = new Set<Row>();
   const activeDays = new Map<Row, Set<string>>();
   const coverage = new Map<string, number>();
   let total = 0;
@@ -192,7 +198,7 @@ export function buildStatisticsView(
 
   for (const row of rows) {
     units.set(row, 0);
-    observedDays.set(row, new Set());
+    coveredDays.set(row, new Set());
     activeDays.set(row, new Set());
     for (const identity of row.identities) {
       for (const [key, hour] of Object.entries(rollups.hours[identity] ?? {})) {
@@ -202,7 +208,8 @@ export function buildStatisticsView(
         if (previous.has(date)) previousTotal += value;
         if (!inRange.has(date)) continue;
         observedAny = true;
-        observedDays.get(row)!.add(date);
+        present.add(row);
+        if (hour.coveredMinutes > 0) coveredDays.get(row)!.add(date);
         coverage.set(
           key,
           Math.max(coverage.get(key) ?? 0, Math.min(60, hour.coveredMinutes)),
@@ -221,28 +228,48 @@ export function buildStatisticsView(
   }
   if (!observedAny) return emptyView(range, "empty", dates);
 
-  // Windows that started (resetAt − 5h) inside the range.
+  // Windows that started (resetAt − 5h) inside the range; a window still
+  // open at `now` counts as started but its fill is not final.
   const fills = new Map<Row, number[]>();
   for (const row of rows) {
     const list: number[] = [];
     for (const identity of row.identities)
       for (const w of rollups.windows[identity] ?? []) {
-        const date = localDate(Date.parse(w.resetAt) - FIVE_HOURS_MS, zone);
+        const resetAt = Date.parse(w.resetAt);
+        const date = localDate(resetAt - FIVE_HOURS_MS, zone);
         if (!inRange.has(date)) continue;
-        list.push(w.maxPercent);
+        present.add(row);
         activeDays.get(row)!.add(date);
+        view.totals.windows += 1;
+        if (resetAt <= now) list.push(w.maxPercent);
       }
     fills.set(row, list);
-    view.totals.windows += list.length;
   }
 
-  view.accounts = rows.map((row) => {
+  for (const hit of rollups.hits) {
+    const row = rowOf.get(hit.identity);
+    if (!row || !inRange.has(localDate(Date.parse(hit.at), zone))) continue;
+    present.add(row);
+    view.hits.push({
+      ...(row.account ? { accountId: row.account.id } : { former: true }),
+      name: row.account?.name ?? FORMER_NAME,
+      kind: hit.kind,
+      at: hit.at,
+      ...(hit.until ? { until: hit.until } : {}),
+    });
+    if (hit.kind === "five-hour") view.totals.hits.fiveHour += 1;
+    else view.totals.hits.weekly += 1;
+  }
+  view.hits.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+
+  const shown = rows.filter((row) => present.has(row));
+  view.accounts = shown.map((row) => {
     const list = fills.get(row)!;
     const active = activeDays.get(row)!;
     const plan = row.account && PLAN_LABELS[row.account.planning?.plan ?? ""];
     const proUnits = round2(units.get(row)!);
     return {
-      ...(row.account ? { accountId: row.account.id } : {}),
+      ...(row.account ? { accountId: row.account.id } : { former: true }),
       name: row.account?.name ?? FORMER_NAME,
       ...(plan ? { plan } : {}),
       proUnits,
@@ -250,8 +277,7 @@ export function buildStatisticsView(
       ...(list.length
         ? { averageFill: round1(list.reduce((a, b) => a + b, 0) / list.length) }
         : {}),
-      idleDays: [...observedDays.get(row)!].filter((d) => !active.has(d))
-        .length,
+      idleDays: [...coveredDays.get(row)!].filter((d) => !active.has(d)).length,
     };
   });
 
@@ -281,22 +307,7 @@ export function buildStatisticsView(
   const covered = [...coverage.values()].reduce((a, b) => a + b, 0);
   view.coveragePercent = Math.min(100, round1((covered / rangeMinutes) * 100));
 
-  for (const hit of rollups.hits) {
-    const row = rowOf.get(hit.identity);
-    if (!row || !inRange.has(localDate(Date.parse(hit.at), zone))) continue;
-    view.hits.push({
-      ...(row.account ? { accountId: row.account.id } : {}),
-      name: row.account?.name ?? FORMER_NAME,
-      kind: hit.kind,
-      at: hit.at,
-      ...(hit.until ? { until: hit.until } : {}),
-    });
-    if (hit.kind === "five-hour") view.totals.hits.fiveHour += 1;
-    else view.totals.hits.weekly += 1;
-  }
-  view.hits.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-
-  const insight = buildInsight(rows, view.accounts, fills);
+  const insight = buildInsight(shown, view.accounts, fills);
   if (insight) view.insight = insight;
   return view;
 }
@@ -311,6 +322,7 @@ function buildInsight(
     .filter(({ row, view }) => row.account && view.averageFill !== undefined);
   const label = (c: (typeof candidates)[number]) =>
     c.view.plan ? `${c.view.name} (${c.view.plan})` : c.view.name;
+  // Rule 1 counts the same closed windows that averageFill is built from.
   // Stable sorts keep account order between equal capacities.
   const sparse = candidates
     .filter(
@@ -321,7 +333,7 @@ function buildInsight(
   if (sparse) {
     const n = Math.round(sparse.view.averageFill!);
     return {
-      tr: `${label(sparse)} pencerelerinin yalnızca %${n}’ini dolduruyor.`,
+      tr: `${label(sparse)} pencerelerinin ortalama yalnızca %${n} kadarını dolduruyor.`,
       en: `${label(sparse)} fills only ${n}% of its windows.`,
     };
   }

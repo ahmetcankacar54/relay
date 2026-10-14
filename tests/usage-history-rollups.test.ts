@@ -158,7 +158,7 @@ test("a symlinked rollups file is unavailable and not followed", (t) => {
   const root = directory(t);
   const foreign = path.join(root, "foreign.json");
   const foreignContent = JSON.stringify({
-    version: 1,
+    version: 2,
     hours: {},
     windows: {},
     hits: [],
@@ -206,6 +206,53 @@ test("a stale rollups file is caught up with newer raw samples on load", (t) => 
     JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")),
     foldSamples(samples, now),
   );
+});
+
+test("a version 1 rollups file is rebuilt from the raw ledger", (t) => {
+  const root = directory(t);
+  const now = start + 60 * minute;
+  const samples: UsageSample[] = [0, 5, 10, 15].map((m, index) =>
+    usageSample(account, usage(start + m * minute, 10 + index * 3))!,
+  );
+  fs.writeFileSync(
+    path.join(root, "usage-history.json"),
+    JSON.stringify({ version: 1, samples }),
+  );
+  // Version 1 credited coverage only inside windows and to the later hour.
+  const v1 = {
+    ...foldSamples(samples.slice(0, 2), now),
+    version: 1,
+    hours: {
+      [identity]: {
+        [hourKey(start - day)]: { points: 99, windows: 1, coveredMinutes: 5 },
+      },
+    },
+  };
+  fs.writeFileSync(rollupsFile(root), JSON.stringify(v1));
+  const history = new UsageHistory(root, () => now);
+  assert.equal(history.rollupsAvailable, true);
+  assert.deepEqual(history.rollups(), foldSamples(samples, now));
+  assert.equal(history.rollups()!.version, 2);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(rollupsFile(root), "utf8")),
+    foldSamples(samples, now),
+  );
+});
+
+test("a version 1 rollups file without a readable raw ledger stays unavailable", (t) => {
+  const root = directory(t);
+  fs.writeFileSync(path.join(root, "usage-history.json"), "broken");
+  const content = JSON.stringify({
+    version: 1,
+    hours: {},
+    windows: {},
+    hits: [],
+    last: {},
+  });
+  fs.writeFileSync(rollupsFile(root), content);
+  const history = new UsageHistory(root, () => start);
+  assert.equal(history.rollupsAvailable, false);
+  assert.equal(fs.readFileSync(rollupsFile(root), "utf8"), content);
 });
 
 test("a transient rollups write failure is retried on the next record", (t) => {

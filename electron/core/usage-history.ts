@@ -65,7 +65,7 @@ const hitSchema = z
   .strict();
 const rollupsSchema = z
   .object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
     hours: z.record(identityKey, z.record(z.iso.datetime(), hourSchema)),
     windows: z.record(identityKey, z.array(windowRecordSchema)),
     hits: z.array(hitSchema),
@@ -113,8 +113,10 @@ export class UsageHistory {
         this.rollupsFile,
         MAX_ROLLUPS_BYTES,
       );
-      if (value !== undefined) {
-        const loaded: UsageRollups = rollupsSchema.parse(value);
+      const parsed =
+        value === undefined ? undefined : rollupsSchema.parse(value);
+      if (parsed?.version === 2) {
+        const loaded: UsageRollups = { ...parsed, version: 2 };
         // Catch up samples recorded after the last successful rollups write.
         this.rollupsState = this.historyAvailable
           ? catchUp(loaded, this.samples, this.now())
@@ -123,6 +125,8 @@ export class UsageHistory {
       } else if (!this.historyAvailable)
         throw new Error("No readable usage history to backfill from.");
       else {
+        // Missing, or version 1 (coverage counted differently): rebuild from
+        // the raw ledger. Version 1 history beyond the raw 14 days is lost.
         this.rollupsState = foldSamples(this.samples, this.now());
         this.rollupsDirty = true;
       }
