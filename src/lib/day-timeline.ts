@@ -71,6 +71,29 @@ const clip = (
       live,
     }));
 
+/**
+ * Where work moves to another account, counted as the forecast counts
+ * switches: a gap without quota in between does not hide one. A break between
+ * work intervals and the seam where the live forecast takes over from the
+ * plan start afresh (the plan's account there is no switch anyone makes).
+ */
+export function switchTimes(lane: LaneSegment[]): number[] {
+  const times: number[] = [];
+  let last: string | undefined;
+  for (const [index, segment] of lane.entries()) {
+    const previous = lane[index - 1];
+    if (
+      previous &&
+      (previous.to !== segment.from || previous.live !== segment.live)
+    )
+      last = undefined;
+    if (!segment.accountId) continue;
+    if (last && last !== segment.accountId) times.push(segment.from);
+    last = segment.accountId;
+  }
+  return times;
+}
+
 export interface DayTimeline {
   date: string;
   dayBegin: number;
@@ -84,11 +107,16 @@ export interface DayTimeline {
   showNow: boolean;
   /**
    * Who works when: the plans' forecasts clipped to the day; on today the
-   * work interval under way is forecast from `now` with live usage.
+   * current or next work interval is forecast from `now` with live usage.
    */
   lane: LaneSegment[];
   /** The day's own plan against the even spread, when some account is automatic. */
-  compare?: { plan: Forecast; even: Forecast };
+  compare?: {
+    plan: Forecast;
+    even: Forecast;
+    /** The automatic accounts' warm-ups in planned order: as planned and as evenly spread. */
+    warmUps: { plan: number[]; even: number[] };
+  };
 }
 
 /**
@@ -151,13 +179,11 @@ export function dayTimeline({
         dayEnd,
       ),
     }));
-  // Today the work interval under way goes on from now as live usage says.
+  // Today the live forecast takes over from now: in yesterday's overnight
+  // interval while it runs, else in today's (from its start when work is ahead).
   const current =
     offset === 0
-      ? plans.find(
-          ({ interval }) =>
-            interval && interval.start <= now && now < interval.end,
-        )
+      ? plans.slice(0, 2).find(({ interval }) => interval && interval.end > now)
       : undefined;
   const rest =
     current &&
@@ -173,15 +199,31 @@ export function dayTimeline({
     const segments = plan.forecast?.segments ?? [];
     if (plan !== current || !rest)
       return clip(segments, dayBegin, dayEnd, false);
+    // The live part starts exactly where the plan part ends; the simulation
+    // rounds its first time to the minute.
+    const start = Math.max(now, plan.interval?.start ?? now);
     return [
       ...clip(segments, dayBegin, Math.min(now, dayEnd), false),
-      ...clip(rest.segments, dayBegin, dayEnd, true),
+      ...clip(
+        rest.segments.map((s, i) => (i ? s : { ...s, from: start })),
+        dayBegin,
+        dayEnd,
+        true,
+      ),
     ];
   });
   const own = plans[1];
+  const automatic = own.accounts.filter((a) => !a.manual);
   const compare =
-    own.forecast && own.evenForecast && own.accounts.some((a) => !a.manual)
-      ? { plan: own.forecast, even: own.evenForecast }
+    own.forecast && own.evenForecast && automatic.length
+      ? {
+          plan: own.forecast,
+          even: own.evenForecast,
+          warmUps: {
+            plan: automatic.map((a) => a.firstStart),
+            even: automatic.map((a) => a.evenStart),
+          },
+        }
       : undefined;
   return {
     date,

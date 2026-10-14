@@ -270,12 +270,17 @@ function renderScenario(accounts: PlanningSettings["accounts"], now: number) {
     }),
   );
 }
-const laneBlock = (html: string, label: string) =>
-  html.match(
+/** The lane block with this label: its fill's classes and its name, if shown. */
+function laneBlock(html: string, label: string) {
+  const block = html.match(
     new RegExp(
-      `<div class="([^"]*)" title="${label}" aria-label="${label}"[^>]*>([^<]*)<`,
+      `title="${label}" aria-label="${label}"[^>]*><span class="([^"]*)".*?</div>`,
     ),
   );
+  if (!block) return undefined;
+  const name = block[0].match(/<span class="(relative [^"]*)">([^<]*)<\/span>/);
+  return { fill: block[1], nameClass: name?.[1] ?? "", name: name?.[2] ?? "" };
+}
 const count = (html: string, pattern: RegExp) =>
   html.match(pattern)?.length ?? 0;
 
@@ -309,22 +314,30 @@ test("the usage lane shows who works when, with switches and the comparison", ()
     ),
     view.lane.length,
   );
-  // The planned morning is dimmed and named (a block under 8% of the day is
-  // not); the live forecast from now is not dimmed.
+  // The planned morning's fill is dimmed, not its name, which is dark on the
+  // tone in both themes and ellipsized from the end; a block under 8% of the
+  // day has no name. The live forecast from now is not dimmed.
   const morning = laneBlock(html, "Kişisel - Max 09:00–11:09")!;
-  assert.match(morning[1], /opacity-50/);
-  assert.equal(morning[2], "Kişisel - Max");
-  assert.equal(laneBlock(html, "Vertex Team 11:55–12:00")![2], "");
+  assert.match(morning.fill, /bg-tone-1/);
+  assert.match(morning.fill, /opacity-50 dark:opacity-65/);
+  assert.equal(morning.name, "Kişisel - Max");
+  assert.match(morning.nameClass, /min-w-0 truncate/);
+  assert.match(
+    morning.nameClass,
+    /text-foreground dark:text-primary-foreground/,
+  );
+  assert.doesNotMatch(morning.nameClass, /opacity/);
+  assert.equal(laneBlock(html, "Vertex Team 11:55–12:00")!.name, "");
   const next = view.lane.find((s) => s.from === now)!;
   assert.equal(next.accountId, a.id);
   assert.doesNotMatch(
-    laneBlock(html, `Kişisel - Max 12:00–${clock(next.to)}`)![1],
+    laneBlock(html, `Kişisel - Max 12:00–${clock(next.to)}`)!.fill,
     /opacity-50/,
   );
   // A switch marker wherever work moves to another account: max → pro →
-  // vertex by plan, back to max at noon as it is active, then pro, vertex and
-  // (after the gap) max again.
-  assert.equal(count(html, /bg-foreground\/55/g), 6);
+  // vertex by plan, then (the seam at now is none) pro, vertex and, after the
+  // gap, max again.
+  assert.equal(count(html, /bg-foreground\/55/g), 5);
   // The comparison: this plan against the even spread, which has a gap.
   assert.match(html, />Bu plan</);
   assert.match(html, />Eşit aralıklı dağıtım</);
@@ -341,19 +354,30 @@ test("the usage lane shows who works when, with switches and the comparison", ()
     html,
     /class="[^"]*text-crit[^"]*">14:18–14:50 kotasız · 5 geçiş</,
   );
+  // Each box says when its automatic accounts warm up, in planned order.
+  assert.match(
+    html,
+    /Kesintisiz · 3 geçiş<\/strong><small class="[^"]*text-xs text-muted-foreground[^"]*">Isıtma 06:15 · 08:15 · 06:30</,
+  );
+  assert.match(
+    html,
+    /5 geçiş<\/strong><small class="[^"]*">Isıtma 04:50 · 06:30 · 08:10</,
+  );
 });
 
 test("an all-manual plan shows its gap on the lane and no comparison", () => {
   const html = renderScenario(evenByHand, wednesday("08:00"));
+  // Before work the lane is already live from the work start.
   const gap = laneBlock(html, "Kotasız 14:18–14:50")!;
-  assert.match(gap[1], /bg-crit\/25/);
+  assert.match(gap.fill, /bg-crit\/25/);
+  assert.doesNotMatch(gap.fill, /opacity-50/);
   const plan = dayPlan(
     WEDNESDAY,
     scenarioSettings(evenByHand),
     planContext(scenarioAccounts, busyTempo),
   );
   assert.equal(plan.forecast!.outageMinutes, 32);
-  // Before work the whole lane is the plan, so its markers are the plan's switches.
+  // With the windows as planned the live forecast is the plan's, switches and all.
   assert.equal(count(html, /bg-foreground\/55/g), plan.forecast!.switches);
   assert.doesNotMatch(html, /Bu plan|Eşit aralıklı dağıtım/);
 });

@@ -4,6 +4,7 @@ import {
   dayTimeline,
   nextPlannedWindow,
   plannedSettings,
+  switchTimes,
   windowsInDay,
 } from "../src/lib/day-timeline";
 import { wallTime } from "../shared/planning";
@@ -115,6 +116,8 @@ const scenarioAccounts = [planningAccount("max", "max5"), scenarioTeam, planning
 const scenario = (patch: Partial<PlanningSettings> = {}) =>
   settings({ accounts: scenarioAccounts.map(({ id }) => ({ id })), ...patch });
 const noon = at(WEDNESDAY, "12:00");
+const clockOf = (time: number) =>
+  new Intl.DateTimeFormat("en-GB", { timeZone: ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(time);
 /** Fresh usage read at noon: no window open on any account. */
 const freshUsage = Object.fromEntries(scenarioAccounts.map((a) => [a.id, planningUsage(a, noon)]));
 const plain = (lane: { accountId?: string; from: number; to: number }[]) =>
@@ -138,10 +141,57 @@ test("today's usage lane is the plan before now and the live forecast from now",
   assert.deepEqual(plain(after), plain(live.segments));
   assert.equal(after[0].accountId, "max");
   assert.equal(after.at(-1)!.to, at(WEDNESDAY, "18:00"));
-  // The comparison is the day's own plan against the even spread.
+  // The comparison is the day's own plan against the even spread, with the
+  // automatic accounts' warm-ups in planned order.
   assert.equal(view.compare?.plan.switches, 3);
   assert.equal(view.compare?.plan.unmet, 0);
   assert.equal(view.compare?.even.outageMinutes, 32);
+  assert.deepEqual(view.compare?.warmUps.plan.map(clockOf), ["06:15", "08:15", "06:30"]);
+  assert.deepEqual(view.compare?.warmUps.even.map(clockOf), ["04:50", "06:30", "08:10"]);
+  // The seam at now (vertex → max) is not a switch: max → pro → vertex by
+  // plan, then the live forecast's own switches; its windows open at noon, so
+  // after the gap max is back at 17:00.
+  assert.deepEqual(switchTimes(view.lane).map(clockOf), ["11:09", "11:55", "14:48", "15:37", "17:00"]);
+});
+
+test("before work today's lane is live from the work start", () => {
+  const s = scenario();
+  const now = at(WEDNESDAY, "08:00");
+  const usage = Object.fromEntries(scenarioAccounts.map((a) => [a.id, planningUsage(a, now)]));
+  const view = dayTimeline({ settings: s, accounts: scenarioAccounts, usage, now, tempo: busyTempo, activeId: "max" });
+  const context = planContext(scenarioAccounts, busyTempo);
+  const plan = dayPlan(WEDNESDAY, s, context);
+  assert.ok(view.lane.length);
+  assert.ok(view.lane.every((x) => x.live));
+  assert.equal(view.lane[0].from, at(WEDNESDAY, "09:00"));
+  const live = liveForecast({ plan, settings: s, context, usage, activeId: "max", now })!;
+  assert.deepEqual(plain(view.lane), plain(live.segments));
+});
+
+test("a now between whole minutes leaves no overlap, gap or switch at the seam", () => {
+  const s = scenario();
+  for (const seconds of [20, 30]) {
+    const now = noon + seconds * 1000;
+    const usage = Object.fromEntries(scenarioAccounts.map((a) => [a.id, planningUsage(a, now)]));
+    const view = dayTimeline({ settings: s, accounts: scenarioAccounts, usage, now, tempo: busyTempo, activeId: "max" });
+    const seam = view.lane.findIndex((x) => x.live);
+    assert.equal(view.lane[seam - 1].to, now, `${seconds}s`);
+    assert.equal(view.lane[seam].from, now, `${seconds}s`);
+    // Today's work interval is one contiguous stretch.
+    for (let i = 1; i < view.lane.length; i++) assert.equal(view.lane[i].from, view.lane[i - 1].to);
+    assert.ok(!switchTimes(view.lane).includes(now));
+    assert.equal(new Set(view.lane.map((x) => `${x.live}-${x.from}`)).size, view.lane.length);
+  }
+});
+
+test("a manual account is left out of the warm-ups the comparison lists", () => {
+  const s = scenario({ accounts: [{ id: "max", firstStart: "07:10" }, { id: "vertex" }, { id: "pro" }] });
+  const view = dayTimeline({ settings: s, accounts: scenarioAccounts, usage: {}, now: noon, offset: 1, tempo: busyTempo });
+  const plan = dayPlan("2026-10-15", s, planContext(scenarioAccounts, busyTempo));
+  assert.deepEqual(view.compare?.warmUps, {
+    plan: plan.accounts.slice(1).map((a) => a.firstStart),
+    even: plan.accounts.slice(1).map((a) => a.evenStart),
+  });
 });
 
 test("another day's lane is its plan only; an all-manual plan has nothing to compare", () => {
@@ -166,8 +216,36 @@ test("another day's lane is its plan only; an all-manual plan has nothing to com
 test("an overnight lane keeps yesterday's tail and today's start, clipped to the day", () => {
   const accounts = [planningAccount("a")];
   const s = settings({ weekday: { enabled: true, start: "20:00", end: "04:00" }, accounts: [{ id: "a" }] });
-  const view = dayTimeline({ settings: s, accounts, usage: {}, now: at("2026-10-14", "12:00"), tempo: presetTempo("medium") });
+  const now = at("2026-10-14", "12:00");
+  const view = dayTimeline({ settings: s, accounts, usage: {}, now, tempo: presetTempo("medium") });
   assert.equal(view.lane[0].from, view.dayBegin);
   assert.equal(view.lane.at(-1)!.to, view.dayEnd);
-  assert.ok(view.lane.every((x) => x.from >= view.dayBegin && x.to <= view.dayEnd && !x.live));
+  assert.ok(view.lane.every((x) => x.from >= view.dayBegin && x.to <= view.dayEnd));
+  // Yesterday's tail is over; tonight's interval is the next one, forecast live.
+  assert.ok(view.lane.filter((x) => x.from < now).every((x) => !x.live && x.to <= at("2026-10-14", "04:00")));
+  const tonight = view.lane.filter((x) => x.from >= now);
+  assert.equal(tonight[0].from, at("2026-10-14", "20:00"));
+  assert.ok(tonight.every((x) => x.live));
+});
+
+test("inside yesterday's overnight interval the live part comes from yesterday's plan", () => {
+  const accounts = [planningAccount("a"), planningAccount("b")];
+  const s = settings({ weekday: { enabled: true, start: "22:00", end: "06:00" }, accounts: [{ id: "a" }, { id: "b" }] });
+  const now = at("2026-10-14", "02:00");
+  const tempo = presetTempo("medium");
+  const view = dayTimeline({ settings: s, accounts, usage: {}, now, tempo, activeId: "b" });
+  const context = planContext(accounts, tempo);
+  const yesterday = dayPlan("2026-10-13", s, context);
+  const before = view.lane.filter((x) => x.from < now);
+  assert.equal(before[0].from, view.dayBegin);
+  assert.ok(before.every((x) => !x.live && x.to <= now));
+  assert.deepEqual(plain(before), clipped(yesterday.forecast!.segments, view.dayBegin, now));
+  const live = view.lane.filter((x) => x.live);
+  const rest = liveForecast({ plan: yesterday, settings: s, context, usage: {}, activeId: "b", now })!;
+  assert.deepEqual(plain(live), plain(rest.segments));
+  assert.equal(live[0].accountId, "b");
+  assert.equal(live.at(-1)!.to, at("2026-10-14", "06:00"));
+  // Tonight's interval is still the plan.
+  const tonight = view.lane.filter((x) => x.from >= at("2026-10-14", "22:00"));
+  assert.ok(tonight.length && tonight.every((x) => !x.live));
 });
