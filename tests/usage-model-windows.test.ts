@@ -18,3 +18,18 @@ test("model-specific windows are exposed with readable labels", () => {
   assert.equal(usage.otherLimitReached, true);
   assert.equal(parseUsage({ five_hour: { utilization: 1 } }).modelWindows, undefined);
 });
+
+test("malformed model windows are skipped without failing the usage read", () => {
+  const usage = parseUsage({
+    five_hour: { utilization: 10 },
+    seven_day: { utilization: 20 },
+    seven_day_x: { utilization: 105 },
+    seven_day_y: "bad",
+    seven_day_z: { utilization: 5, resets_at: "nope" },
+    seven_day_ok: { utilization: 3 },
+  });
+  assert.equal(usage.fiveHour?.usedPercent, 10);
+  assert.equal(usage.sevenDay?.usedPercent, 20);
+  assert.deepEqual(usage.modelWindows, [{ key: "seven_day_ok", label: "Ok", usedPercent: 3 }]);
+  assert.equal("resetsAt" in usage.modelWindows![0], false);
+});

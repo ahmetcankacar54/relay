@@ -49,14 +49,26 @@ export function parseUsage(
   const modelWindows = Object.entries(root)
     .filter(([key]) => /^(?:five_hour|seven_day)_[a-z0-9_]+$/.test(key))
     .flatMap(([key, raw]) => {
-      const window = parse(raw);
+      let window: UsageWindow | undefined;
+      try {
+        window = parse(raw);
+      } catch {
+        return []; // A malformed model window must not fail the whole read.
+      }
       if (!window) return [];
       const label = key
         .replace(/^(?:five_hour|seven_day)_/, "")
         .split("_")
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
-      return [{ key, label, ...window }];
+      return [
+        {
+          key,
+          label,
+          usedPercent: window.usedPercent,
+          ...(window.resetsAt ? { resetsAt: window.resetsAt } : {}),
+        },
+      ];
     })
     .sort((a, b) => a.key.localeCompare(b.key));
   return {
