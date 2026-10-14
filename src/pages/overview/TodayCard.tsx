@@ -8,6 +8,7 @@ import {
   dayTimeline,
   nextPlannedWindow,
   plannedSettings,
+  windowTone,
 } from "@/lib/day-timeline";
 import { formatClock } from "@/lib/time";
 import type { PageId } from "@/app/routes";
@@ -97,7 +98,7 @@ export function TodayCard({
             {nowLine}
           </div>
         </div>
-        {rows.map(({ account, windows }) => (
+        {rows.map(({ account, windows }, index) => (
           <div
             key={account.id}
             className="grid grid-cols-[84px_1fr] items-center gap-2"
@@ -108,7 +109,7 @@ export function TodayCard({
                 <div
                   key={w.start}
                   title={`${clock(w.start)}–${clock(w.end)}`}
-                  className="absolute inset-y-0.5 rounded bg-brand/80"
+                  className={`absolute inset-y-0.5 rounded ${windowTone(index)}`}
                   style={span(w.start, w.end)}
                 />
               ))}

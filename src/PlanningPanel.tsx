@@ -18,7 +18,13 @@ import type {
 } from "../shared/types";
 import { dayPlan, shiftDate, WINDOW_MS } from "../shared/day-plan";
 import { localDate } from "../shared/planning";
-import { dayTimeline, nextPlannedWindow } from "./lib/day-timeline";
+import { dayTimeline, nextPlannedWindow, windowTone } from "./lib/day-timeline";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { SectionHeading } from "@/components/SettingRow";
+import { cn } from "@/lib/utils";
 import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { PlanEditor } from "./PlanEditor";
@@ -133,29 +139,20 @@ function span(hours: PlanningHours, t: T) {
   return m ? t(`${h} sa ${m} dk`, `${h} h ${m} min`) : t(`${h} sa`, `${h} h`);
 }
 
-function Switch({
-  checked,
-  disabled,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  disabled: boolean;
-  label: string;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <input
-      type="checkbox"
-      role="switch"
-      className="planning-switch"
-      aria-label={label}
-      checked={checked}
-      disabled={disabled}
-      onChange={(e) => onChange(e.target.checked)}
-    />
-  );
-}
+const cardClass = "gap-0 px-5 py-4";
+/** Account row: narrow = switch · name · order, editors below; wide (@xl) = one row. */
+const accountRowClass =
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 border-t py-3 @xl:grid-cols-[auto_minmax(0,1.3fr)_160px_minmax(0,1.1fr)_28px]";
+const wideCell = "col-start-2 col-end-4 min-w-0 @xl:col-auto";
+const noteClass = "text-xs text-muted-foreground";
+
+/** Account status colour by keeper state. */
+const stateTone: Partial<Record<KeeperAccountStatus["state"], string>> = {
+  active: "text-ok",
+  waiting: "text-warn",
+  due: "text-warn",
+  blocked: "text-crit",
+};
 
 function HoursRow({
   id,
@@ -175,18 +172,25 @@ function HoursRow({
   t: T;
 }) {
   return (
-    <div className={`planning-hours-row${value.enabled ? "" : " off"}`}>
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 border-t py-2.5 first:border-t-0 @xl:grid-cols-[auto_120px_minmax(0,1fr)_auto]">
       <Switch
         checked={value.enabled}
         disabled={disabled}
-        label={label}
-        onChange={(enabled) => onChange({ ...value, enabled })}
+        aria-label={label}
+        onCheckedChange={(enabled) => onChange({ ...value, enabled })}
       />
-      <span className="planning-hours-name">
-        <strong>{label}</strong>
-        <small>{days}</small>
+      <span className="grid min-w-0">
+        <strong
+          className={cn(
+            "text-sm font-semibold",
+            !value.enabled && "text-muted-foreground",
+          )}
+        >
+          {label}
+        </strong>
+        <small className={noteClass}>{days}</small>
       </span>
-      <div className="planning-hours-range">
+      <div className="col-span-full grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 @xl:col-span-1 @xl:col-start-3 @xl:row-start-1">
         <TimePicker
           id={`${id}-start`}
           label={t(`${label} başlangıç`, `${label} start`)}
@@ -195,7 +199,7 @@ function HoursRow({
           onChange={(start) => onChange({ ...value, start })}
           t={t}
         />
-        <span className="planning-dash" aria-hidden="true">
+        <span className="text-muted-foreground" aria-hidden="true">
           –
         </span>
         <TimePicker
@@ -207,12 +211,16 @@ function HoursRow({
           t={t}
         />
       </div>
-      <small className="planning-span">
+      <small className="col-start-3 row-start-1 justify-self-end text-xs text-muted-foreground tabular-nums @xl:col-start-4">
         {value.enabled ? span(value, t) : t("Kapalı", "Off")}
       </small>
     </div>
   );
 }
+
+const RULER = [0, 3, 6, 9, 12, 15, 18, 21, 24];
+const rowClass =
+  "grid grid-cols-[84px_minmax(0,1fr)] items-center text-xs @xl:grid-cols-[128px_minmax(0,1fr)]";
 
 function Timeline({
   settings,
@@ -250,110 +258,139 @@ function Timeline({
         : offset === -1
           ? t("Dün", "Yesterday")
           : label;
+  const position = (start: number, end: number) => ({
+    left: `${pct(start)}%`,
+    width: `${pct(end) - pct(start)}%`,
+  });
+  const nowLine = showNow && (
+    <div
+      className="absolute -inset-y-[3px] -ml-px w-0.5 rounded-[1px] bg-foreground"
+      style={{ left: `${pct(now)}%` }}
+    />
+  );
   return (
-    <section className="planning-card">
-      <div className="planning-card-head">
-        <span>
-          <strong>{title}</strong>
-          {offset >= -1 && offset <= 1 && <small>{label}</small>}
+    <Card className={cn(cardClass, "@container")}>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <strong className="font-display text-[15px] font-semibold">
+            {title}
+          </strong>
+          {offset >= -1 && offset <= 1 && (
+            <small className={noteClass}>{label}</small>
+          )}
         </span>
-        <div className="planning-nav">
+        <div className="flex items-center gap-1">
           {offset !== 0 && (
-            <button
+            <Button
               type="button"
-              className="text-button"
+              variant="link"
+              size="sm"
+              className="h-auto px-1 text-xs"
               onClick={() => setOffset(0)}
             >
               {t("Bugüne dön", "Back to today")}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
-            className="icon"
+            variant="ghost"
+            size="icon-sm"
             aria-label={t("Önceki gün", "Previous day")}
             onClick={() => setOffset(offset - 1)}
           >
-            <ChevronLeft size={16} />
-          </button>
-          <button
+            <ChevronLeft />
+          </Button>
+          <Button
             type="button"
-            className="icon"
+            variant="ghost"
+            size="icon-sm"
             aria-label={t("Sonraki gün", "Next day")}
             onClick={() => setOffset(offset + 1)}
           >
-            <ChevronRight size={16} />
-          </button>
+            <ChevronRight />
+          </Button>
         </div>
       </div>
-      <div className="timeline">
-        <div className="timeline-ruler" aria-hidden="true">
-          {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((h) => (
-            <span key={h} style={{ left: `${(h / 24) * 100}%` }}>
-              {String(h).padStart(2, "0")}
-            </span>
-          ))}
+      <div className="grid gap-[7px]">
+        <div className={rowClass} aria-hidden="true">
+          <span />
+          <div className="relative h-4 text-[11px] text-muted-foreground tabular-nums">
+            {RULER.map((h, index) => (
+              <span
+                key={h}
+                className={cn(
+                  "absolute",
+                  index === 0
+                    ? ""
+                    : index === RULER.length - 1
+                      ? "-translate-x-full"
+                      : "-translate-x-1/2",
+                  index % 2 === 1 && "hidden @xl:inline",
+                )}
+                style={{ left: `${(h / 24) * 100}%` }}
+              >
+                {String(h).padStart(2, "0")}
+              </span>
+            ))}
+          </div>
         </div>
-        <div className="timeline-row">
-          <span className="timeline-name">{t("Çalışma", "Work")}</span>
-          <div className="timeline-track">
+        <div className={rowClass}>
+          <span className="truncate pr-2.5 text-muted-foreground">
+            {t("Çalışma", "Work")}
+          </span>
+          <div className="relative h-[18px] rounded-md bg-track">
             {intervals.map((i) => (
               <div
                 key={i.start}
-                className="timeline-band"
+                className="absolute inset-y-0 rounded-md bg-brand/20"
                 title={`${clock(i.start, zone)}–${clock(i.end, zone)}`}
-                style={{
-                  left: `${pct(i.start)}%`,
-                  width: `${pct(i.end) - pct(i.start)}%`,
-                }}
+                style={position(i.start, i.end)}
               />
             ))}
-            {showNow && (
-              <div className="timeline-now" style={{ left: `${pct(now)}%` }} />
-            )}
+            {nowLine}
           </div>
         </div>
-        {rows.map(({ account, windows }, index) => {
-          return (
-            <div className="timeline-row" key={account.id}>
-              <span className="timeline-name">
-                <i className={`tone-${index % 4}`} aria-hidden="true" />
-                {account.name}
-              </span>
-              <div className="timeline-track">
-                {windows.map((w) => (
-                  <div
-                    key={w.start}
-                    className={`timeline-window tone-${index % 4}`}
-                    title={`${clock(w.start, zone)}–${clock(w.start + WINDOW_MS, zone)}`}
-                    style={{
-                      left: `${pct(w.start)}%`,
-                      width: `${pct(w.end) - pct(w.start)}%`,
-                    }}
-                  />
-                ))}
-                {showNow && (
-                  <div
-                    className="timeline-now"
-                    style={{ left: `${pct(now)}%` }}
-                  />
+        {rows.map(({ account, windows }, index) => (
+          <div className={rowClass} key={account.id}>
+            <span className="flex min-w-0 items-center gap-1.5 pr-2.5">
+              <i
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  windowTone(index),
                 )}
-              </div>
+                aria-hidden="true"
+              />
+              <span className="truncate">{account.name}</span>
+            </span>
+            <div className="relative h-[18px] rounded-md bg-track">
+              {windows.map((w) => (
+                <div
+                  key={w.start}
+                  className={cn(
+                    "absolute inset-y-0.5 rounded-[5px]",
+                    windowTone(index),
+                  )}
+                  title={`${clock(w.start, zone)}–${clock(w.start + WINDOW_MS, zone)}`}
+                  style={position(w.start, w.end)}
+                />
+              ))}
+              {nowLine}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
       {!intervals.length && (
-        <p className="planning-empty">
+        <p className={cn(noteClass, "mt-2")}>
           {t("Bu gün için plan yok.", "No plan for this day.")}
         </p>
       )}
-      <p className="planning-note">
+      <p className={cn(noteClass, "mt-2.5")}>
         {t(
           "Her çubuk 5 saatlik bir pencere; çubuğun sonu sıfırlanma anı.",
           "Each bar is a five-hour window; its end is the reset.",
         )}
       </p>
-    </section>
+    </Card>
   );
 }
 
@@ -427,17 +464,31 @@ export function PlanningPanel({
             `${plannedToday} starts planned today`,
           );
   return (
-    <div className="planning-panel">
-      <section className={`planning-bar${settings.autoStart ? " on" : ""}`}>
-        <span className="planning-bar-icon" aria-hidden="true">
-          <Play size={16} />
+    <div className="grid gap-3">
+      <Card
+        className={cn(
+          cardClass,
+          "@container flex-row items-center gap-3.5",
+          settings.autoStart && "border-primary/40",
+        )}
+      >
+        <span
+          className={cn(
+            "hidden size-9 shrink-0 place-items-center rounded-lg @lg:grid",
+            settings.autoStart
+              ? "bg-accent text-accent-foreground"
+              : "bg-muted text-muted-foreground",
+          )}
+          aria-hidden="true"
+        >
+          <Play className="size-4" />
         </span>
-        <div>
-          <strong>
+        <div className="min-w-0 flex-1">
+          <strong className="font-display text-[15px] font-semibold">
             {t("Otomatik pencere başlatma", "Automatic window start")}
           </strong>
-          <p>{summary}</p>
-          <small>
+          <p className="mt-0.5 text-[13px]">{summary}</p>
+          <small className={cn(noteClass, "mt-0.5 block")}>
             {t(
               "Her başlatma küçük bir istek kadar kota harcar. Relay açık ve Mac uyanık olmalı.",
               "Each start uses a small request of quota. Relay must be open and the Mac awake.",
@@ -447,34 +498,34 @@ export function PlanningPanel({
         <Switch
           checked={settings.autoStart}
           disabled={disabled}
-          label={t("Otomatik pencere başlatma", "Automatic window start")}
-          onChange={(autoStart) => update({ autoStart })}
+          aria-label={t("Otomatik pencere başlatma", "Automatic window start")}
+          onCheckedChange={(autoStart) => update({ autoStart })}
         />
-      </section>
+      </Card>
 
-      <section className="planning-card">
-        <div className="planning-card-head">
-          <strong>{t("Çalışma saatleri", "Work hours")}</strong>
+      <Card className={cn(cardClass, "@container")}>
+        <SectionHeading title={t("Çalışma saatleri", "Work hours")} />
+        <div className="grid">
+          <HoursRow
+            id="weekday"
+            label={t("Hafta içi", "Weekdays")}
+            days={t("Pzt–Cum", "Mon–Fri")}
+            value={settings.weekday}
+            disabled={disabled}
+            onChange={(weekday) => update({ weekday })}
+            t={t}
+          />
+          <HoursRow
+            id="weekend"
+            label={t("Hafta sonu", "Weekend")}
+            days={t("Cmt–Paz", "Sat–Sun")}
+            value={settings.weekend}
+            disabled={disabled}
+            onChange={(weekend) => update({ weekend })}
+            t={t}
+          />
         </div>
-        <HoursRow
-          id="weekday"
-          label={t("Hafta içi", "Weekdays")}
-          days={t("Pzt–Cum", "Mon–Fri")}
-          value={settings.weekday}
-          disabled={disabled}
-          onChange={(weekday) => update({ weekday })}
-          t={t}
-        />
-        <HoursRow
-          id="weekend"
-          label={t("Hafta sonu", "Weekend")}
-          days={t("Cmt–Paz", "Sat–Sun")}
-          value={settings.weekend}
-          disabled={disabled}
-          onChange={(weekend) => update({ weekend })}
-          t={t}
-        />
-        <div className="planning-zone">
+        <div className="mt-2.5 max-w-[420px]">
           <TimeZonePicker
             id="planning-zone"
             label={t("Saat dilimi", "Time zone")}
@@ -485,13 +536,13 @@ export function PlanningPanel({
             now={now}
           />
         </div>
-        <p className="planning-note">
+        <p className={cn(noteClass, "mt-2.5")}>
           {t(
             "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay her hesabı işe başlamadan önce kademeli ısıtır.",
             "An end before the start runs into the next day. Relay warms each account up in turn before work starts.",
           )}
         </p>
-      </section>
+      </Card>
 
       <Timeline
         settings={planned}
@@ -501,16 +552,14 @@ export function PlanningPanel({
         t={t}
       />
 
-      <section className="planning-card">
-        <div className="planning-card-head">
-          <strong>{t("Hesaplar", "Accounts")}</strong>
-          <small>
-            {t(
-              "Sıra, otomatik saatlerin dağıtım sırasıdır.",
-              "The order sets how automatic times are spread.",
-            )}
-          </small>
-        </div>
+      <Card className={cn(cardClass, "@container")}>
+        <SectionHeading
+          title={t("Hesaplar", "Accounts")}
+          description={t(
+            "Sıra, otomatik saatlerin dağıtım sırasıdır.",
+            "The order sets how automatic times are spread.",
+          )}
+        />
         {included.map((entry, index) => {
           const account = accounts.find((a) => a.id === entry.id)!;
           const automatic = reference?.accounts.find(
@@ -524,55 +573,70 @@ export function PlanningPanel({
             (a) => a.accountId === entry.id && a.status === "failed",
           )?.reason;
           return (
-            <div className="planning-account" key={entry.id}>
+            <div className={accountRowClass} key={entry.id}>
               <Switch
                 checked
                 disabled={disabled}
-                label={t(
+                aria-label={t(
                   `${account.name} plana dahil`,
                   `${account.name} in the plan`,
                 )}
-                onChange={() =>
+                onCheckedChange={() =>
                   update({
                     accounts: included.filter((a) => a.id !== entry.id),
                   })
                 }
               />
-              <span className="planning-account-name">
-                <strong>{account.name}</strong>
-                <small className={`planning-state ${status?.state ?? ""}`}>
+              <span className="grid min-w-0 justify-items-start gap-0.5">
+                <strong className="text-sm font-semibold">
+                  {account.name}
+                </strong>
+                <small
+                  className={cn(
+                    "text-xs text-muted-foreground",
+                    status && stateTone[status.state],
+                  )}
+                >
                   {statusText(status, lastFailure, zone, t)}
                 </small>
                 {stopReason(status) && (
-                  <button
+                  <Button
                     type="button"
-                    className="text-button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto px-0 text-xs"
                     disabled={disabled}
                     onClick={() => update({})}
                   >
                     {t("Yeniden dene", "Try again")}
-                  </button>
+                  </Button>
                 )}
               </span>
-              <PlanEditor
-                account={account}
-                disabled={disabled}
-                update={(planning) => updateAccount(account.id, planning)}
-                t={t}
-              />
-              <div className="planning-first">
-                <span className="planning-first-label">
-                  <CalendarClock size={13} aria-hidden="true" />
+              <div className={wideCell}>
+                <PlanEditor
+                  account={account}
+                  disabled={disabled}
+                  update={(planning) => updateAccount(account.id, planning)}
+                  t={t}
+                />
+              </div>
+              <div className={cn(wideCell, "grid min-w-0 gap-1")}>
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <CalendarClock className="size-3.5" aria-hidden="true" />
                   {t("İlk başlangıç", "First start")}
-                  {entry.firstStart ? (
-                    <span className="planning-mode manual">
-                      {t("Elle", "Manual")}
-                    </span>
-                  ) : (
-                    <span className="planning-mode auto">
-                      {t("Otomatik", "Automatic")}
-                    </span>
-                  )}
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "ml-auto rounded-md",
+                      entry.firstStart
+                        ? "bg-warn/15 text-foreground"
+                        : "bg-ok/15 text-foreground",
+                    )}
+                  >
+                    {entry.firstStart
+                      ? t("Elle", "Manual")
+                      : t("Otomatik", "Automatic")}
+                  </Badge>
                 </span>
                 <TimePicker
                   id={`first-${entry.id}`}
@@ -592,9 +656,11 @@ export function PlanningPanel({
                   t={t}
                 />
                 {entry.firstStart && (
-                  <button
+                  <Button
                     type="button"
-                    className="text-button"
+                    variant="link"
+                    size="sm"
+                    className="h-auto justify-self-start px-0 text-xs"
                     disabled={disabled}
                     onClick={() =>
                       update({
@@ -605,13 +671,15 @@ export function PlanningPanel({
                     }
                   >
                     {t("Otomatiğe dön", "Back to automatic")}
-                  </button>
+                  </Button>
                 )}
               </div>
-              <div className="planning-order">
-                <button
+              <div className="col-start-3 row-start-1 flex gap-0.5 @xl:col-start-5 @xl:flex-col">
+                <Button
                   type="button"
-                  className="icon"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="h-6 w-7"
                   aria-label={t(
                     `${account.name} yukarı`,
                     `Move ${account.name} up`,
@@ -619,11 +687,13 @@ export function PlanningPanel({
                   disabled={disabled || index === 0}
                   onClick={() => move(index, -1)}
                 >
-                  <ArrowUp size={14} />
-                </button>
-                <button
+                  <ArrowUp className="size-3.5" />
+                </Button>
+                <Button
                   type="button"
-                  className="icon"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="h-6 w-7"
                   aria-label={t(
                     `${account.name} aşağı`,
                     `Move ${account.name} down`,
@@ -631,65 +701,87 @@ export function PlanningPanel({
                   disabled={disabled || index === included.length - 1}
                   onClick={() => move(index, 1)}
                 >
-                  <ArrowDown size={14} />
-                </button>
+                  <ArrowDown className="size-3.5" />
+                </Button>
               </div>
             </div>
           );
         })}
         {excluded.map((account) => (
-          <div className="planning-account excluded" key={account.id}>
+          <div className={accountRowClass} key={account.id}>
             <Switch
               checked={false}
               disabled={disabled}
-              label={t(
+              aria-label={t(
                 `${account.name} plana dahil`,
                 `${account.name} in the plan`,
               )}
-              onChange={() =>
+              onCheckedChange={() =>
                 update({ accounts: [...included, { id: account.id }] })
               }
             />
-            <span className="planning-account-name">
-              <strong>{account.name}</strong>
-              <small>{t("Plana dahil değil", "Not in the plan")}</small>
+            <span className="grid min-w-0 gap-0.5">
+              <strong className="text-sm font-semibold text-muted-foreground">
+                {account.name}
+              </strong>
+              <small className={noteClass}>
+                {t("Plana dahil değil", "Not in the plan")}
+              </small>
             </span>
-            <PlanEditor
-              account={account}
-              disabled={disabled}
-              update={(planning) => updateAccount(account.id, planning)}
-              t={t}
-            />
+            <div className={wideCell}>
+              <PlanEditor
+                account={account}
+                disabled={disabled}
+                update={(planning) => updateAccount(account.id, planning)}
+                t={t}
+              />
+            </div>
           </div>
         ))}
-      </section>
+      </Card>
 
       {!!keeper?.attempts.length && (
-        <details className="planning-card planning-history">
-          <summary>
-            {t(
-              `Son başlatmalar (${keeper.attempts.length})`,
-              `Recent starts (${keeper.attempts.length})`,
-            )}
-          </summary>
-          <ul>
-            {keeper.attempts.map((attempt) => (
-              <li key={attempt.id} className={attempt.status}>
-                <time>{clock(attempt.at, zone)}</time>
-                <span>{name(attempt.accountId)}</span>
-                <small>
-                  {attempt.status === "verified"
-                    ? t("doğrulandı", "verified")
-                    : attempt.status === "sent-unverified"
-                      ? t("gönderildi, doğrulanamadı", "sent, not verified")
-                      : attempt.status === "started"
-                        ? t("sürüyor", "in progress")
-                        : `${t("başarısız", "failed")}: ${failureText(attempt.reason, t)}`}
-                </small>
-              </li>
-            ))}
-          </ul>
-        </details>
+        <Card className={cn(cardClass, "@container")}>
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold">
+              {t(
+                `Son başlatmalar (${keeper.attempts.length})`,
+                `Recent starts (${keeper.attempts.length})`,
+              )}
+            </summary>
+            <ul className="mt-2.5 grid gap-1.5 text-xs">
+              {keeper.attempts.map((attempt) => (
+                <li
+                  key={attempt.id}
+                  className="grid grid-cols-[44px_minmax(0,1fr)] gap-x-2.5 @xl:grid-cols-[44px_minmax(0,160px)_1fr]"
+                >
+                  <time className="text-muted-foreground tabular-nums">
+                    {clock(attempt.at, zone)}
+                  </time>
+                  <span className="truncate">{name(attempt.accountId)}</span>
+                  <small
+                    className={cn(
+                      "col-start-2 text-xs @xl:col-start-3",
+                      attempt.status === "failed"
+                        ? "text-crit"
+                        : attempt.status === "verified"
+                          ? "text-ok"
+                          : "text-muted-foreground",
+                    )}
+                  >
+                    {attempt.status === "verified"
+                      ? t("doğrulandı", "verified")
+                      : attempt.status === "sent-unverified"
+                        ? t("gönderildi, doğrulanamadı", "sent, not verified")
+                        : attempt.status === "started"
+                          ? t("sürüyor", "in progress")
+                          : `${t("başarısız", "failed")}: ${failureText(attempt.reason, t)}`}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </Card>
       )}
     </div>
   );

@@ -9,6 +9,7 @@ import { LegacySettings } from "@/pages/Legacy";
 import { Switching } from "@/pages/Switching";
 import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
+import { Planning } from "@/pages/Planning";
 import relayIcon from "../../assets/icon.png";
 import { Sidebar } from "./Sidebar";
 import { PageFrame } from "./PageFrame";
@@ -80,21 +81,11 @@ export function Shell() {
               compact ? "h-8" : "h-2",
             )}
           />
-          {/* Legacy content is temporary; Tasks 8–13 replace the remaining pages. */}
+          {/* Legacy content is temporary; Task 13 replaces the remaining page. */}
           {page === "genel" && <Overview go={go} />}
           {page === "hesaplar" && <Accounts />}
           {page === "kullanim" && <Usage />}
-          {page === "planlama" && (
-            <PageFrame
-              title={t("Planlama", "Planning")}
-              description={t(
-                "Otomatik pencere başlatma",
-                "Automatic window start",
-              )}
-            >
-              <LegacySettings section="planning" />
-            </PageFrame>
-          )}
+          {page === "planlama" && <Planning />}
           {page === "gecis" && <Switching />}
           {page === "ayarlar" && (
             <PageFrame

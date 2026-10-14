@@ -136,3 +136,13 @@ export function nextPlannedWindow(
     .sort((a, b) => a.at - b.at)
     .map((w) => ({ ...w, at: new Date(w.at).toISOString() }))[0];
 }
+
+/** Timeline window colours, cycled per planned account (theme variables `--tone-1..4`). */
+export const WINDOW_TONES = [
+  "bg-tone-1",
+  "bg-tone-2",
+  "bg-tone-3",
+  "bg-tone-4",
+] as const;
+export const windowTone = (index: number) =>
+  WINDOW_TONES[index % WINDOW_TONES.length];

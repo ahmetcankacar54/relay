@@ -3,13 +3,9 @@ import { useRelay } from "@/data/relay-context";
 import { Preferences } from "../Preferences";
 
 // Temporary: the pre-redesign preferences, mounted inside the new shell until
-// the dedicated pages replace them (Tasks 10–13).
+// the dedicated pages replace them (Task 13).
 
-export function LegacySettings({
-  section,
-}: {
-  section: "switch" | "usage" | "planning";
-}) {
+export function LegacySettings({ section }: { section: "switch" | "usage" }) {
   const relay = useRelay();
   const { t } = useI18n();
   const {
@@ -74,15 +70,6 @@ export function LegacySettings({
             }
             usage={data?.usage ?? {}}
             statistics={data?.usageStatistics ?? {}}
-            keeper={data?.planning}
-            updatePlanning={(patch) =>
-              void action("planning", () => api.updatePlanning(patch))
-            }
-            updateAccount={(id, input) =>
-              void action(`plan:${id}`, () =>
-                api.updateAccountPlanning(id, input),
-              )
-            }
             platform={data?.diagnostics.platform ?? "unknown"}
             sync={() => requestDesktop(active, "history")}
             syncDisabled={

@@ -1,4 +1,12 @@
 import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Account, AccountPlanning } from "../shared/types";
 type T = (tr: string, en: string) => string;
 export function PlanEditor({
@@ -18,33 +26,55 @@ export function PlanEditor({
     () => setWeight(String(current.capacityWeight)),
     [current.capacityWeight],
   );
+  const plans: { value: AccountPlanning["plan"]; label: string }[] = [
+    { value: "unknown", label: t("Plan seç", "Choose plan") },
+    { value: "pro", label: "Pro · 1×" },
+    { value: "max5", label: "Max · 5×" },
+    { value: "max20", label: "Max · 20×" },
+    { value: "team", label: "Team / Enterprise" },
+  ];
+  const capacityId = `capacity-${account.id}`;
   return (
-    <div className="plan-editor">
-      <select
-        aria-label={t(`${account.name} planı`, `${account.name} plan`)}
+    <div className="grid min-w-0 gap-1.5">
+      <Select
         value={current.plan}
         disabled={disabled}
-        onChange={(e) =>
-          update({
-            ...current,
-            plan: e.target.value as AccountPlanning["plan"],
-          })
+        onValueChange={(plan) =>
+          update({ ...current, plan: plan as AccountPlanning["plan"] })
         }
       >
-        <option value="unknown">{t("Plan seç", "Choose plan")}</option>
-        <option value="pro">Pro · 1×</option>
-        <option value="max5">Max · 5×</option>
-        <option value="max20">Max · 20×</option>
-        <option value="team">Team / Enterprise</option>
-      </select>
+        <SelectTrigger
+          aria-label={t(`${account.name} planı`, `${account.name} plan`)}
+          className="w-full"
+        >
+          {/* Children keep the label in static markup, before Radix measures items. */}
+          <SelectValue>
+            {plans.find((p) => p.value === current.plan)?.label}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {plans.map((p) => (
+            <SelectItem key={p.value} value={p.value}>
+              {p.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       {(current.plan === "unknown" || current.plan === "team") && (
-        <label className="capacity-input">
-          {t("Göreli kapasite", "Relative capacity")}
-          <input
+        <div className="flex items-center justify-between gap-2">
+          <label
+            htmlFor={capacityId}
+            className="block text-xs text-muted-foreground"
+          >
+            {t("Göreli kapasite", "Relative capacity")}
+          </label>
+          <Input
+            id={capacityId}
             aria-label={t(
               `${account.name} göreli kapasitesi`,
               `${account.name} relative capacity`,
             )}
+            className="h-8 w-16 px-2 tabular-nums"
             type="number"
             min={1}
             max={100}
@@ -60,7 +90,7 @@ export function PlanEditor({
               } else setWeight(String(current.capacityWeight));
             }}
           />
-        </label>
+        </div>
       )}
     </div>
   );

@@ -1,25 +1,27 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type KeyboardEvent,
-} from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ChevronDown, Clock3 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import {
   formatPickerClock,
   moveTimeGridCursor,
   parsePickerClock,
-  positionTimePopover,
   type ClockParts,
 } from "../shared/time-picker";
 
 type T = (tr: string, en: string) => string;
-type Position = ReturnType<typeof positionTimePopover>;
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
+const pad = (n: number) => String(n).padStart(2, "0");
+/** Popover width: 336 px, or the window less a 12 px margin each side. */
+const popoverWidth = () =>
+  typeof window === "undefined" ? 336 : Math.min(336, window.innerWidth - 24);
 
 export function TimePicker({
   id,
@@ -42,20 +44,20 @@ export function TimePicker({
   const inputRef = useRef<HTMLInputElement>(null);
   const hourRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const minuteRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  // Whether closing returns focus to the trigger (Radix does it unless prevented).
+  const restoreFocus = useRef(true);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [hourCursor, setHourCursor] = useState(0);
   const [minuteCursor, setMinuteCursor] = useState(0);
-  const [position, setPosition] = useState<Position | null>(null);
+  const [columns, setColumns] = useState(6);
   const [showError, setShowError] = useState(false);
   const parsed = parsePickerClock(draft);
-  const columns = position && position.width < 320 ? 4 : 6;
 
   function close(returnFocus: boolean) {
+    restoreFocus.current = returnFocus;
     setOpen(false);
-    setPosition(null);
     setShowError(false);
-    if (returnFocus) triggerRef.current?.focus({ preventScroll: true });
   }
 
   function begin() {
@@ -64,7 +66,9 @@ export function TimePicker({
     setDraft(value);
     setHourCursor(seed?.hour ?? 0);
     setMinuteCursor(Math.floor((seed?.minute ?? 0) / 5));
+    setColumns(popoverWidth() < 320 ? 4 : 6);
     setShowError(false);
+    restoreFocus.current = true;
     setOpen(true);
   }
 
@@ -141,288 +145,241 @@ export function TimePicker({
     if (disabled && open) close(false);
   }, [disabled, open]);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const trigger = triggerRef.current;
-    const panel = panelRef.current;
-    if (!trigger || !panel) return;
-    const place = () => {
-      const anchor = trigger.getBoundingClientRect();
-      const body = bodyRef.current;
-      const contentHeight =
-        panel.scrollHeight +
-          (panel.offsetHeight - panel.clientHeight) +
-          (body ? Math.max(0, body.scrollHeight - body.clientHeight) : 0) ||
-        480;
-      const next = positionTimePopover(
-        anchor,
-        { width: window.innerWidth, height: window.innerHeight },
-        contentHeight,
-      );
-      setPosition((old) =>
-        old &&
-        old.left === next.left &&
-        old.top === next.top &&
-        old.width === next.width &&
-        old.maxHeight === next.maxHeight
-          ? old
-          : next,
-      );
-    };
-    place();
-    window.addEventListener("resize", place);
-    const observer = new ResizeObserver(place);
-    observer.observe(panel);
-    return () => {
-      window.removeEventListener("resize", place);
-      observer.disconnect();
-    };
-  }, [open]);
-
-  const positioned = position !== null;
-  useLayoutEffect(() => {
-    if (!open || !positioned) return;
-    // The placement render has now made the portal visible, so focus can land.
-    inputRef.current?.focus({ preventScroll: true });
-    inputRef.current?.select();
-  }, [open, positioned]);
-
-  useEffect(() => {
-    if (!open) return;
-    const inside = (target: EventTarget | null) =>
-      target instanceof Node &&
-      (panelRef.current?.contains(target) ||
-        triggerRef.current?.contains(target));
-    const outside = (event: PointerEvent | FocusEvent) => {
-      if (!inside(event.target)) close(false);
-    };
-    const escape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      close(true);
-    };
-    const scroll = (event: Event) => {
-      if (
-        !(event.target instanceof Node) ||
-        !panelRef.current?.contains(event.target)
-      )
-        close(false);
-    };
-    document.addEventListener("pointerdown", outside, true);
-    document.addEventListener("focusin", outside);
-    document.addEventListener("keydown", escape, true);
-    window.addEventListener("scroll", scroll, true);
-    return () => {
-      document.removeEventListener("pointerdown", outside, true);
-      document.removeEventListener("focusin", outside);
-      document.removeEventListener("keydown", escape, true);
-      window.removeEventListener("scroll", scroll, true);
-    };
-  }, [open]);
+  const option = (
+    part: keyof ClockParts,
+    n: number,
+    index: number,
+    refs: typeof hourRefs,
+    cursor: number,
+    setCursor: (n: number) => void,
+  ) => {
+    const selected = parsed?.[part] === n;
+    const name = part === "hour" ? t("Saat", "Hour") : t("Dakika", "Minute");
+    return (
+      <Button
+        key={n}
+        ref={(element: HTMLButtonElement | null) => {
+          refs.current[index] = element;
+        }}
+        type="button"
+        variant={selected ? "default" : "ghost"}
+        size="sm"
+        className={cn("h-8 px-0 tabular-nums", !selected && "font-normal")}
+        tabIndex={cursor === index ? 0 : -1}
+        aria-label={`${name} ${pad(n)}`}
+        aria-pressed={selected}
+        data-selected={selected || undefined}
+        onClick={() => choose(part, n)}
+        onFocus={() => {
+          setCursor(index);
+          revealOption(refs.current[index]);
+        }}
+        onKeyDown={(event) => move(event, index, part)}
+      >
+        {pad(n)}
+      </Button>
+    );
+  };
+  const grid = { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` };
 
   return (
-    <div className="time-picker-field">
-      <label htmlFor={id} className="time-picker-label">
+    <div className="grid min-w-0 gap-1">
+      {/* The row names each picker; the label stays for assistive tech. */}
+      <label htmlFor={id} className="sr-only">
         {label}
       </label>
-      <button
-        id={id}
-        ref={triggerRef}
-        type="button"
-        className="time-picker-trigger"
-        disabled={disabled}
-        aria-label={`${label}, ${value}, ${t("24 saat", "24-hour")}`}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-controls={open ? `${id}-panel` : undefined}
-        onClick={() => (open ? close(true) : begin())}
+      <Popover
+        open={open}
+        onOpenChange={(next) => (next ? begin() : close(true))}
       >
-        <Clock3 size={17} aria-hidden="true" />
-        <span className="time-picker-value">{value}</span>
-        <span className="time-picker-suffix">24h</span>
-        <ChevronDown size={15} aria-hidden="true" />
-      </button>
-      {open &&
-        createPortal(
-          <div
-            id={`${id}-panel`}
-            ref={panelRef}
-            role="dialog"
-            aria-modal="false"
-            aria-labelledby={`${id}-heading`}
-            className="time-picker-popover"
-            style={
-              {
-                position: "fixed",
-                ...(position ?? {
-                  width: Math.min(336, window.innerWidth - 24),
-                  top: 12,
-                  left: 12,
-                }),
-                "--time-picker-columns": columns,
-                visibility: position ? "visible" : "hidden",
-              } as CSSProperties & { "--time-picker-columns": number }
-            }
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            ref={triggerRef}
+            type="button"
+            variant="outline"
+            className="w-full justify-start gap-2 px-2.5 font-normal"
+            disabled={disabled}
+            aria-label={`${label}, ${value}, ${t("24 saat", "24-hour")}`}
           >
-            <div className="time-picker-heading">
-              <span id={`${id}-heading`}>{label}</span>
-              <span>{t("24 saat biçimi", "24-hour format")}</span>
-            </div>
-            <div className="time-picker-manual">
-              <label htmlFor={`${id}-entry`}>
-                {t("Tam saati gir", "Enter exact time")}
-              </label>
-              <input
-                id={`${id}-entry`}
-                ref={inputRef}
-                type="text"
-                inputMode="text"
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={5}
-                placeholder="HH:mm"
-                value={draft}
-                aria-invalid={showError || undefined}
-                aria-describedby={`${id}-hint${showError ? ` ${id}-error` : ""}`}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setDraft(next);
-                  setShowError(false);
-                  const parts = parsePickerClock(next);
-                  if (parts) {
-                    setHourCursor(parts.hour);
-                    setMinuteCursor(Math.floor(parts.minute / 5));
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Tab" && event.shiftKey) {
-                    event.preventDefault();
-                    close(true);
-                    return;
-                  }
-                  if (event.key !== "Enter") return;
+            <Clock3 className="text-muted-foreground" aria-hidden="true" />
+            <span className="text-base font-medium tabular-nums">{value}</span>
+            <ChevronDown
+              className="ml-auto text-muted-foreground"
+              aria-hidden="true"
+            />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          ref={panelRef}
+          align="start"
+          collisionPadding={12}
+          aria-modal="false"
+          aria-labelledby={`${id}-heading`}
+          className="flex max-h-[min(480px,var(--radix-popover-content-available-height))] flex-col gap-0 p-0"
+          style={{ width: popoverWidth() }}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            inputRef.current?.focus({ preventScroll: true });
+            inputRef.current?.select();
+          }}
+          onCloseAutoFocus={(event) => {
+            if (!restoreFocus.current) event.preventDefault();
+            restoreFocus.current = true;
+          }}
+        >
+          <div className="flex items-baseline justify-between gap-2 border-b px-4 pt-3 pb-2">
+            <span id={`${id}-heading`} className="text-sm font-semibold">
+              {label}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {t("24 saat biçimi", "24-hour format")}
+            </span>
+          </div>
+          <div className="grid gap-1 border-b px-4 py-3">
+            <label
+              htmlFor={`${id}-entry`}
+              className="block text-xs font-medium text-muted-foreground"
+            >
+              {t("Tam saati gir", "Enter exact time")}
+            </label>
+            <Input
+              id={`${id}-entry`}
+              ref={inputRef}
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={5}
+              placeholder="HH:mm"
+              className="h-9 text-base tabular-nums"
+              value={draft}
+              aria-invalid={showError || undefined}
+              aria-describedby={`${id}-hint${showError ? ` ${id}-error` : ""}`}
+              onChange={(event) => {
+                const next = event.target.value;
+                setDraft(next);
+                setShowError(false);
+                const parts = parsePickerClock(next);
+                if (parts) {
+                  setHourCursor(parts.hour);
+                  setMinuteCursor(Math.floor(parts.minute / 5));
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Tab" && event.shiftKey) {
                   event.preventDefault();
-                  apply();
-                }}
-              />
-              <small id={`${id}-hint`}>
-                {t(
-                  "00:00–23:59 · Her dakika seçilebilir.",
-                  "00:00–23:59 · Any minute is available.",
-                )}
-              </small>
-              {showError && (
-                <p
-                  id={`${id}-error`}
-                  className="time-picker-error"
-                  role="alert"
-                >
-                  {t(
-                    "Geçerli bir saat gir. Örnek: 09:17.",
-                    "Enter a valid time, such as 09:17.",
-                  )}
-                </p>
+                  close(true);
+                  return;
+                }
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                apply();
+              }}
+            />
+            <small id={`${id}-hint`} className="text-xs text-muted-foreground">
+              {t(
+                "00:00–23:59 · Her dakika seçilebilir.",
+                "00:00–23:59 · Any minute is available.",
               )}
-            </div>
-            <div className="time-picker-body" ref={bodyRef}>
-              <section className="time-picker-section">
-                <h4 id={`${id}-hours`} className="time-picker-section-title">
-                  {t("Saat", "Hour")}
-                </h4>
-                <div
-                  className="time-picker-grid time-picker-hours"
-                  role="group"
-                  aria-labelledby={`${id}-hours`}
-                >
-                  {HOURS.map((hour) => (
-                    <button
-                      key={hour}
-                      ref={(element) => {
-                        hourRefs.current[hour] = element;
-                      }}
-                      className="time-picker-option"
-                      type="button"
-                      tabIndex={hourCursor === hour ? 0 : -1}
-                      aria-label={`${t("Saat", "Hour")} ${String(hour).padStart(2, "0")}`}
-                      aria-pressed={parsed?.hour === hour}
-                      data-selected={parsed?.hour === hour || undefined}
-                      onClick={() => choose("hour", hour)}
-                      onFocus={() => {
-                        setHourCursor(hour);
-                        revealOption(hourRefs.current[hour]);
-                      }}
-                      onKeyDown={(event) => move(event, hour, "hour")}
-                    >
-                      {String(hour).padStart(2, "0")}
-                    </button>
-                  ))}
-                </div>
-              </section>
-              <section className="time-picker-section">
-                <h4 id={`${id}-minutes`} className="time-picker-section-title">
-                  {t("Dakika", "Minute")}
-                  {parsed && parsed.minute % 5 !== 0 && (
-                    <span className="time-picker-custom-minute">
-                      {t("Özel", "Custom")} ·{" "}
-                      {String(parsed.minute).padStart(2, "0")}
-                    </span>
-                  )}
-                </h4>
-                <div
-                  className="time-picker-grid time-picker-minutes"
-                  role="group"
-                  aria-labelledby={`${id}-minutes`}
-                >
-                  {MINUTES.map((minute, index) => (
-                    <button
-                      key={minute}
-                      ref={(element) => {
-                        minuteRefs.current[index] = element;
-                      }}
-                      className="time-picker-option"
-                      type="button"
-                      tabIndex={minuteCursor === index ? 0 : -1}
-                      aria-label={`${t("Dakika", "Minute")} ${String(minute).padStart(2, "0")}`}
-                      aria-pressed={parsed?.minute === minute}
-                      data-selected={parsed?.minute === minute || undefined}
-                      onClick={() => choose("minute", minute)}
-                      onFocus={() => {
-                        setMinuteCursor(index);
-                        revealOption(minuteRefs.current[index]);
-                      }}
-                      onKeyDown={(event) => move(event, index, "minute")}
-                    >
-                      {String(minute).padStart(2, "0")}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            </div>
-            <div className="time-picker-actions">
-              <button
-                className="time-picker-cancel"
-                type="button"
-                onClick={() => close(true)}
+            </small>
+            {showError && (
+              <p
+                id={`${id}-error`}
+                className="text-xs font-medium text-destructive"
+                role="alert"
               >
-                {t("Vazgeç", "Cancel")}
-              </button>
-              <button
-                className="time-picker-apply"
-                type="button"
-                onClick={apply}
-                onKeyDown={(event) => {
-                  if (event.key !== "Tab" || event.shiftKey) return;
-                  event.preventDefault();
-                  focusAfterTrigger();
-                }}
+                {t(
+                  "Geçerli bir saat gir. Örnek: 09:17.",
+                  "Enter a valid time, such as 09:17.",
+                )}
+              </p>
+            )}
+          </div>
+          <div
+            className="grid min-h-0 flex-1 gap-3 overflow-y-auto px-4 py-3"
+            ref={bodyRef}
+          >
+            <section className="grid gap-1.5">
+              <h4
+                id={`${id}-hours`}
+                className="text-xs font-semibold text-muted-foreground"
               >
-                {t("Uygula", "Apply")}
-              </button>
-            </div>
-          </div>,
-          document.body,
-        )}
+                {t("Saat", "Hour")}
+              </h4>
+              <div
+                className="grid gap-1"
+                style={grid}
+                role="group"
+                aria-labelledby={`${id}-hours`}
+              >
+                {HOURS.map((hour) =>
+                  option(
+                    "hour",
+                    hour,
+                    hour,
+                    hourRefs,
+                    hourCursor,
+                    setHourCursor,
+                  ),
+                )}
+              </div>
+            </section>
+            <section className="grid gap-1.5">
+              <h4
+                id={`${id}-minutes`}
+                className="flex items-center justify-between text-xs font-semibold text-muted-foreground"
+              >
+                {t("Dakika", "Minute")}
+                {parsed && parsed.minute % 5 !== 0 && (
+                  <span className="font-medium text-foreground">
+                    {t("Özel", "Custom")} · {pad(parsed.minute)}
+                  </span>
+                )}
+              </h4>
+              <div
+                className="grid gap-1"
+                style={grid}
+                role="group"
+                aria-labelledby={`${id}-minutes`}
+              >
+                {MINUTES.map((minute, index) =>
+                  option(
+                    "minute",
+                    minute,
+                    index,
+                    minuteRefs,
+                    minuteCursor,
+                    setMinuteCursor,
+                  ),
+                )}
+              </div>
+            </section>
+          </div>
+          <div className="flex justify-end gap-2 border-t px-4 py-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => close(true)}
+            >
+              {t("Vazgeç", "Cancel")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={apply}
+              onKeyDown={(event) => {
+                if (event.key !== "Tab" || event.shiftKey) return;
+                event.preventDefault();
+                focusAfterTrigger();
+              }}
+            >
+              {t("Uygula", "Apply")}
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

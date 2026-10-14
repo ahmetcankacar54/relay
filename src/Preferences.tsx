@@ -1,18 +1,14 @@
 import { useState } from "react";
 import type {
   Account,
-  AccountPlanning,
   AccountUsage,
   AutoSwitchState,
   FleetContinuationState,
-  KeeperSnapshot,
-  PlanningSettings,
   RelaySettings,
 } from "../shared/types";
 import type { AccountUsageStatistics } from "../shared/usage-statistics";
 import { SwitchPreferences } from "./SwitchPreferences";
 import { UsageStatistics } from "./UsageStatistics";
-import { PlanningPanel } from "./PlanningPanel";
 import { ContinuationSettings } from "./ContinuationSettings";
 import { FleetSettings } from "./FleetSettings";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
@@ -29,9 +25,6 @@ export function Preferences({
   syncDisabled,
   usage,
   statistics,
-  keeper,
-  updatePlanning,
-  updateAccount,
   continuation,
   inspectContinuation,
   armContinuation,
@@ -52,9 +45,6 @@ export function Preferences({
   syncDisabled: boolean;
   usage: Record<string, AccountUsage>;
   statistics: Record<string, AccountUsageStatistics>;
-  keeper?: KeeperSnapshot;
-  updatePlanning: (patch: Partial<PlanningSettings>) => void;
-  updateAccount: (id: string, input: AccountPlanning) => void;
   continuation?: DesktopContinuationSnapshot;
   inspectContinuation: () => void;
   armContinuation: () => void;
@@ -68,11 +58,9 @@ export function Preferences({
   disabled: boolean;
   t: (tr: string, en: string) => string;
   /** Render just this section without the tab bar (used by the sidebar pages). */
-  only?: "switch" | "usage" | "planning";
+  only?: "switch" | "usage";
 }) {
-  const [selected, setTab] = useState<"switch" | "usage" | "planning">(
-    "switch",
-  );
+  const [selected, setTab] = useState<"switch" | "usage">("switch");
   const tab = only ?? selected;
   return (
     <div className="preferences">
@@ -81,7 +69,7 @@ export function Preferences({
           className="preferences-tabs"
           aria-label={t("Tercih bölümleri", "Preference sections")}
         >
-          {(["switch", "usage", "planning"] as const).map((key) => (
+          {(["switch", "usage"] as const).map((key) => (
             <button
               key={key}
               type="button"
@@ -91,32 +79,16 @@ export function Preferences({
               <strong>
                 {key === "switch"
                   ? t("Hesap geçişi", "Account switching")
-                  : key === "usage"
-                    ? t("Kullanım", "Usage")
-                    : t("Planlama", "Planning")}
+                  : t("Kullanım", "Usage")}
               </strong>
               <small>
                 {key === "switch"
                   ? t("Desktop ve ortak geçmiş", "Desktop and shared history")
-                  : key === "usage"
-                    ? t("İstatistikler ve uyarılar", "Statistics and warnings")
-                    : t("Otomatik başlatma", "Automatic start")}
+                  : t("İstatistikler ve uyarılar", "Statistics and warnings")}
               </small>
             </button>
           ))}
         </nav>
-      )}
-      {tab === "planning" && (
-        <PlanningPanel
-          settings={value.planning}
-          keeper={keeper}
-          accounts={accounts}
-          usage={usage}
-          disabled={disabled}
-          t={t}
-          update={updatePlanning}
-          updateAccount={updateAccount}
-        />
       )}
       {tab === "switch" && (
         <>
