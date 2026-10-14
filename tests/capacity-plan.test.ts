@@ -602,3 +602,74 @@ test("planning stays bounded with three, four and six accounts", () => {
     );
   assert.deepEqual(optimizeStarts(sixInput).starts, six.plan.starts);
 });
+
+test("stopping a losing candidate early changes no plan", () => {
+  let seed = 7;
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const randomDays = Array.from({ length: 6 }, (_, day): StartPlanInput => {
+    const hourly = Array.from({ length: 9 }, () => Math.round(random() * 400));
+    const list = withPro(day % 3).slice(0, 1 + (day % 4));
+    return {
+      interval: { start: S, end: E },
+      accounts: list,
+      rate: (time) => hourly[Math.floor((time - S) / H)] ?? 0,
+      even: evenFor(list.length),
+    };
+  });
+  const inputs: StartPlanInput[] = [
+    { interval: { start: S, end: E }, accounts, rate, even },
+    {
+      interval: { start: S, end: E },
+      accounts: withPro(1),
+      rate: scaled(1.15),
+      even: evenFor(4),
+    },
+    {
+      interval: { start: S, end: E },
+      accounts: withPro(3),
+      rate: scaled(1.15),
+      even: evenFor(6),
+    },
+    {
+      interval: { start: S, end: E },
+      accounts: [
+        { ...accounts[0], manual: base + 7 * H },
+        ...accounts.slice(1),
+      ],
+      rate,
+      even,
+    },
+    {
+      interval: { start: S, end: E },
+      accounts: [{ id: "pro", capacity: 1 }],
+      rate: () => 50,
+      even: [S - 2.5 * H],
+    },
+    // A whole day around the clock.
+    {
+      interval: { start: S, end: S + 24 * H },
+      accounts: withPro(1),
+      rate: flat(150),
+      even: evenFor(4),
+    },
+    ...randomDays,
+  ];
+  let stopped = 0,
+    whole = 0;
+  for (const [index, input] of inputs.entries()) {
+    const counting = (count: () => void) => ({
+      ...input,
+      rate: (time: number) => {
+        count();
+        return input.rate(time);
+      },
+    });
+    const early = optimizeStarts(counting(() => stopped++));
+    const full = optimizeStarts({
+      ...counting(() => whole++),
+      earlyStop: false,
+    });
+    assert.deepEqual(early, full, `input ${index}`);
+  }
+  assert.ok(stopped < whole, `${stopped} demand reads vs ${whole}`);
+});

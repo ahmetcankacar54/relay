@@ -33,6 +33,12 @@ export interface SimInput {
   accounts: SimAccount[];
   /** The account in use at `from`, kept first while it has quota. */
   active?: string;
+  /**
+   * Stops once this holds for the unmet demand and switches so far (both only
+   * grow), with the forecast cut short: the optimizer's way to drop a
+   * candidate that has already lost.
+   */
+  stopWhen?: (unmet: number, switches: number) => boolean;
 }
 /** A stretch served by one account; no `accountId` is an outage. */
 export interface ForecastSegment {
@@ -92,23 +98,27 @@ export function simulateDay(input: SimInput): Forecast {
       }
     }
   };
-  const choose = () =>
-    states
-      .filter((s) => !s.blocked && s.left > EPSILON)
-      .sort(
-        (a, b) =>
-          (a.reset ?? Infinity) - (b.reset ?? Infinity) ||
-          b.capacity - a.capacity ||
-          a.order - b.order,
-      )[0];
-  const nextEvent = (after: number) =>
-    Math.min(
-      ...states.flatMap((s) =>
-        [s.reset, s.reset === undefined ? s.warmUp : undefined].filter(
-          (t): t is number => t !== undefined && t > after,
-        ),
-      ),
-    );
+  // Two closed windows give Infinity − Infinity = NaN, which falls through.
+  const precedes = (a: SimState, b: SimState) =>
+    ((a.reset ?? Infinity) - (b.reset ?? Infinity) ||
+      b.capacity - a.capacity ||
+      a.order - b.order) < 0;
+  // Both run at every switch and gap, so neither allocates.
+  const choose = () => {
+    let chosen: SimState | undefined;
+    for (const s of states)
+      if (!s.blocked && s.left > EPSILON && (!chosen || precedes(s, chosen)))
+        chosen = s;
+    return chosen;
+  };
+  const nextEvent = (after: number) => {
+    let next = Infinity;
+    for (const s of states) {
+      const time = s.reset ?? s.warmUp;
+      if (time !== undefined && time > after && time < next) next = time;
+    }
+    return next;
+  };
 
   const segments: ForecastSegment[] = [];
   const exhaustedAt: Record<string, number[]> = {};
@@ -116,13 +126,20 @@ export function simulateDay(input: SimInput): Forecast {
     outageMs = 0,
     switches = 0;
   let lastUsed: string | undefined;
+  let stopped = false;
+  const check = () => {
+    if (input.stopWhen?.(unmet, switches)) stopped = true;
+  };
   /** The segment still running; none after a gap closes with the demand. */
   let open: ForecastSegment | undefined;
   const mark = (accountId: string | undefined, at: number) => {
     const time = minute(at);
     if (open && open.accountId === accountId) return;
     if (open) open.to = time;
-    if (accountId && lastUsed && accountId !== lastUsed) switches++;
+    if (accountId && lastUsed && accountId !== lastUsed) {
+      switches++;
+      check();
+    }
     if (accountId) lastUsed = accountId;
     open = { accountId, from: time, to: time };
     segments.push(open);
@@ -134,7 +151,8 @@ export function simulateDay(input: SimInput): Forecast {
       (s) => s.id === input.active && !s.blocked && s.left > EPSILON,
     ) ?? choose();
   mark(active?.id, input.from);
-  for (let t = input.from; t < input.to;) {
+  let t = input.from;
+  while (t < input.to && !stopped) {
     const end = Math.min(input.to, t + SIM_STEP_MS);
     advance(t);
     const perMs = Math.max(0, input.rate(t)) / HOUR_MS;
@@ -157,7 +175,7 @@ export function simulateDay(input: SimInput): Forecast {
       }
     }
     let cursor = t;
-    while (cursor < end && perMs > 0) {
+    while (cursor < end && perMs > 0 && !stopped) {
       if (!active || active.left <= EPSILON) {
         advance(cursor);
         active = choose();
@@ -165,6 +183,7 @@ export function simulateDay(input: SimInput): Forecast {
         if (!active) {
           const until = Math.min(end, nextEvent(cursor));
           unmet += perMs * (until - cursor);
+          check();
           outageMs += until - cursor;
           cursor = until;
           advance(cursor);
@@ -191,7 +210,7 @@ export function simulateDay(input: SimInput): Forecast {
     }
     t = end;
   }
-  if (open) open.to = minute(input.to);
+  if (open) open.to = minute(t);
   return {
     segments: segments.filter((s) => s.to > s.from),
     unmet: Math.round(unmet * 10) / 10,
@@ -211,6 +230,11 @@ export interface StartPlanInput {
    * must put that same start at its index.
    */
   even: number[];
+  /**
+   * Whether a candidate's simulation stops once it is sure to lose (the
+   * default; tests compare the plans with and without).
+   */
+  earlyStop?: boolean;
 }
 export interface StartPlan {
   starts: number[];
@@ -232,7 +256,7 @@ const ROUNDS = 4;
  */
 export function optimizeStarts(input: StartPlanInput): StartPlan {
   const { start, end } = input.interval;
-  const simulate = (starts: number[]) =>
+  const simulate = (starts: number[], stopWhen?: SimInput["stopWhen"]) =>
     simulateDay({
       from: start,
       to: end,
@@ -246,9 +270,28 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
           ? { firstReset: starts[i] + WINDOW_MS }
           : { warmUp: starts[i] }),
       })),
+      ...(stopWhen ? { stopWhen } : {}),
     });
-  const scored = (starts: number[]) => {
-    const forecast = simulate(starts);
+  interface Scored {
+    starts: number[];
+    forecast: Forecast;
+    key: number[];
+  }
+  /**
+   * Scores `starts`. With a `rival` the simulation stops once the candidate
+   * is sure to lose to it, so a stopped forecast is never kept. Unmet demand
+   * and switches only grow: more than the rival's rounded unmet + 0.5 rounds
+   * above it, and at least its rounded unmet rounds no lower.
+   */
+  const scored = (starts: number[], rival?: Scored): Scored => {
+    const forecast = simulate(
+      starts,
+      rival && input.earlyStop !== false
+        ? (unmet, switches) =>
+            unmet > rival.key[0] + 0.5 ||
+            (unmet >= rival.key[0] && switches > rival.key[1])
+        : undefined,
+    );
     return {
       starts,
       forecast,
@@ -260,7 +303,6 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
       ],
     };
   };
-  type Scored = ReturnType<typeof scored>;
   const better = (a: Scored, b: Scored) => {
     for (let i = 0; i < a.key.length; i++)
       if (a.key[i] !== b.key[i]) return a.key[i] < b.key[i];
@@ -283,8 +325,9 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
   const coarse = fine.filter((_, k) => k % 2 === 0);
   const fixed = input.accounts.map((a, i) => a.manual ?? input.even[i]);
   let best = evenScored;
-  const consider = (starts: number[]) => {
-    const candidate = scored(starts);
+  /** Scores `starts` and keeps the best; a `rival` no worse than the best may stop it early. */
+  const consider = (starts: number[], rival?: Scored) => {
+    const candidate = scored(starts, rival);
     if (better(candidate, best)) best = candidate;
     return candidate;
   };
@@ -298,7 +341,9 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
           if (c === current.starts[i]) continue;
           const starts = [...current.starts];
           starts[i] = c;
-          const candidate = consider(starts);
+          // Only a candidate better than the current one matters (the best
+          // is no worse than the current one).
+          const candidate = consider(starts, current);
           if (better(candidate, current)) {
             current = candidate;
             moved = true;
@@ -307,12 +352,18 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
       if (!moved) break;
     }
   };
-  /** Every combination of `grid` for the free accounts; returns the best few. */
+  /** Every combination of `grid` for the free accounts; returns the best `keep`. */
   const enumerate = (grid: number[], keep: number) => {
     const top: Scored[] = [];
     const pick = (index: number, starts: number[]) => {
       if (index === free.length) {
-        const candidate = consider([...starts]);
+        // A candidate matters while it could still join the kept few (the
+        // best is no worse than any of them); with none to keep, only the
+        // best counts.
+        const candidate = consider(
+          [...starts],
+          top.length < keep ? undefined : (top[keep - 1] ?? best),
+        );
         let at = top.findIndex((t) => better(candidate, t));
         if (at < 0) at = top.length;
         if (at < keep) {
@@ -329,7 +380,7 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
     pick(0, [...fixed]);
     return top;
   };
-  if (free.length <= EXHAUSTIVE_FINE) enumerate(fine, 1);
+  if (free.length <= EXHAUSTIVE_FINE) enumerate(fine, 0);
   else if (free.length <= EXHAUSTIVE_COARSE)
     for (const seed of enumerate(coarse, SEEDS)) descend(seed, fine);
   else {
