@@ -52,6 +52,12 @@ export function Switching() {
       )}
     >
       <div className="grid gap-3 px-6 pb-6">
+        <Note>
+          {t(
+            "Menü çubuğundan bir hesap seçip tek onayla geçebilirsin. Pencere kapanınca Relay menü çubuğunda çalışmaya devam eder.",
+            "Pick an account in the menu bar to switch after one confirmation. Relay keeps running there when its window closes.",
+          )}
+        </Note>
         <Card className={cardClass}>
           <FleetSettings
             value={data?.fleet}

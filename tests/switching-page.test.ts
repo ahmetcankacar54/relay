@@ -9,26 +9,71 @@ import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
-const desktop = { accountUuid: "00000000-0000-4000-8000-000000000001", orgId: "00000000-0000-4000-8000-000000000002", savedAt: iso(NOW), email: "a@example.com" };
+const desktop = {
+  accountUuid: "00000000-0000-4000-8000-000000000001",
+  orgId: "00000000-0000-4000-8000-000000000002",
+  savedAt: iso(NOW),
+  email: "a@example.com",
+};
 const a: Account = {
-  id: "a", name: "Kişisel · Max", kind: "personal", group: "personal", color: "olive", createdAt: iso(NOW),
-  desktop, auth: { loggedIn: true, email: "a@example.com", checkedAt: iso(NOW) },
+  id: "a",
+  name: "Kişisel · Max",
+  kind: "personal",
+  group: "personal",
+  color: "olive",
+  createdAt: iso(NOW),
+  desktop,
+  auth: { loggedIn: true, email: "a@example.com", checkedAt: iso(NOW) },
 };
 const accounts = [a];
-const settings = { ...DEFAULT_SETTINGS, autoSwitchMode: "off" as const, desktopHistoryTransfer: "all" as const };
+const settings = {
+  ...DEFAULT_SETTINGS,
+  autoSwitchMode: "off" as const,
+  desktopHistoryTransfer: "all" as const,
+};
 
 function relayFor(data: Record<string, unknown> = {}): Relay {
   return {
-    api: {}, preview: false, error: "", notice: "", accounts, active: a, settings, busy: "",
-    usageBusy: new Set<string>(), desktopBusy: false, hasUnclaimedDesktop: false, targetOrg: "", historyRevision: 0,
-    desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0, activeProfileId: "a" },
+    api: {},
+    preview: false,
+    error: "",
+    notice: "",
+    accounts,
+    active: a,
+    settings,
+    busy: "",
+    usageBusy: new Set<string>(),
+    desktopBusy: false,
+    hasUnclaimedDesktop: false,
+    targetOrg: "",
+    historyRevision: 0,
+    desktop: {
+      available: true,
+      running: true,
+      organizations: [],
+      busy: false,
+      recoveryRequired: false,
+      errorRevision: 0,
+      activeProfileId: "a",
+    },
     data: {
-      settings, usage: {}, accounts, authFlows: [], diagnostics: { platform: "darwin" },
+      settings,
+      usage: {},
+      accounts,
+      authFlows: [],
+      diagnostics: { platform: "darwin" },
       fleet: { enabled: true, status: "watching", stopped: 3 },
       ...data,
     } as unknown as Snapshot,
-    requestDesktop() {}, setSetupId() {}, cancelDesktopRequest() {}, setOrg() {}, setNotice() {},
-    startCli: async () => {}, refreshUsage: async () => {}, action: async () => {}, setData() {},
+    requestDesktop() {},
+    setSetupId() {},
+    cancelDesktopRequest() {},
+    setOrg() {},
+    setNotice() {},
+    startCli: async () => {},
+    refreshUsage: async () => {},
+    action: async () => {},
+    setData() {},
   } as unknown as Relay;
 }
 const render = (relay: Relay) =>
@@ -36,7 +81,11 @@ const render = (relay: Relay) =>
     createElement(
       I18nContext.Provider,
       { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-      createElement(RelayContext.Provider, { value: relay }, createElement(Switching)),
+      createElement(
+        RelayContext.Provider,
+        { value: relay },
+        createElement(Switching),
+      ),
     ),
   );
 
@@ -49,12 +98,23 @@ test("Switching shows fleet, after-exit preparation, shared history and suggesti
   assert.match(html, /Tüm hesaplar arasında/);
   assert.match(html, /Açık hesapla birleştir/);
   assert.match(html, /Limit yaklaşınca hesap öner/);
+  assert.match(
+    html,
+    /Menü çubuğundan bir hesap seçip tek onayla geçebilirsin. Pencere kapanınca Relay menü çubuğunda çalışmaya devam eder./,
+  );
   assert.doesNotMatch(html, /Bu konuşmayı izle/);
 });
 
 test("the single-conversation watch card appears only while a legacy watch needs attention", () => {
   const html = render(
-    relayFor({ continuation: { status: "armed", reason: "awaiting-quota-stop", enabled: true, executable: true } }),
+    relayFor({
+      continuation: {
+        status: "armed",
+        reason: "awaiting-quota-stop",
+        enabled: true,
+        executable: true,
+      },
+    }),
   );
   assert.match(html, /Bu konuşmayı izle|İzlemeyi kapat/);
 });

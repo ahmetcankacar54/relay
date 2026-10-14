@@ -122,8 +122,8 @@ export function Settings() {
           <SectionHeading
             title={t("Teknik bilgiler", "Technical details")}
             description={t(
-              "Bağlantı ve teknik bilgiler",
-              "Connection and technical details",
+              "Claude bağlantısı ve sürüm",
+              "Claude connection and version",
             )}
           />
           <SettingRow label="Claude Desktop">
