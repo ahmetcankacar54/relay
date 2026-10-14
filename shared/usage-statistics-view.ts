@@ -1,6 +1,6 @@
 import type { Account } from "./types";
 import { localDate, planCapacity, wallTime } from "./planning";
-import { usageIdentity } from "./usage-statistics";
+import { historyIdentity } from "./usage-statistics";
 import type { UsageRollups } from "./usage-rollups";
 
 export type StatisticsRange = 7 | 30 | 90;
@@ -138,34 +138,39 @@ export function buildStatisticsView(
   if (!input.available) return emptyView(range, "unavailable", dates);
 
   const inRange = new Set(dates);
+  const previousFirst = shiftDate(dates[0], -range);
   const previous = new Set(
-    Array.from({ length: range }, (_, i) => shiftDate(dates[0], i - range)),
+    Array.from({ length: range }, (_, i) => shiftDate(previousFirst, i)),
   );
 
   // Identity → row: current accounts in their order, then one "former" row.
+  // A signed-out account keeps its history; of accounts sharing an identity,
+  // the first signed-in one, else the first one, owns it.
+  const owner = new Map<string, Account>();
+  for (const account of accounts) {
+    if (input.accountId && account.id !== input.accountId) continue;
+    const identity = historyIdentity(account);
+    if (!identity) continue;
+    const current = owner.get(identity);
+    if (!current || (!current.auth?.loggedIn && account.auth?.loggedIn))
+      owner.set(identity, account);
+  }
   const rows: Row[] = [];
   const rowOf = new Map<string, Row>();
   for (const account of accounts) {
-    if (input.accountId && account.id !== input.accountId) continue;
-    const identity = usageIdentity(account);
-    if (!identity) continue;
-    let row = rows.find((r) => r.account?.id === account.id);
-    if (!row) {
-      row = {
-        key: account.id,
-        account,
-        identities: [],
-        capacity: planCapacity(account),
-      };
-      rows.push(row);
-    }
-    if (!rowOf.has(identity)) {
-      row.identities.push(identity);
-      rowOf.set(identity, row);
-    }
+    const identity = historyIdentity(account);
+    if (!identity || owner.get(identity) !== account) continue;
+    const row: Row = {
+      key: account.id,
+      account,
+      identities: [identity],
+      capacity: planCapacity(account),
+    };
+    rows.push(row);
+    rowOf.set(identity, row);
   }
   if (!input.accountId) {
-    const known = new Set(accounts.map(usageIdentity));
+    const known = new Set(accounts.map(historyIdentity));
     const former: Row = {
       key: FORMER_KEY,
       identities: [],
@@ -194,6 +199,8 @@ export function buildStatisticsView(
   const coverage = new Map<string, number>();
   let total = 0;
   let previousTotal = 0;
+  /** Earliest stored hour of the identities shown. */
+  let recordedFrom = Infinity;
   let observedAny = false;
 
   for (const row of rows) {
@@ -203,6 +210,7 @@ export function buildStatisticsView(
     for (const identity of row.identities) {
       for (const [key, hour] of Object.entries(rollups.hours[identity] ?? {})) {
         const time = Date.parse(key);
+        recordedFrom = Math.min(recordedFrom, time);
         const date = localDate(time, zone);
         const value = hour.points * row.capacity;
         if (previous.has(date)) previousTotal += value;
@@ -250,12 +258,16 @@ export function buildStatisticsView(
     const row = rowOf.get(hit.identity);
     if (!row || !inRange.has(localDate(Date.parse(hit.at), zone))) continue;
     present.add(row);
+    // A hit ends at its reset at the latest, even without a later sample.
+    const until =
+      hit.until ??
+      (hit.resetAt && Date.parse(hit.resetAt) <= now ? hit.resetAt : undefined);
     view.hits.push({
       ...(row.account ? { accountId: row.account.id } : { former: true }),
       name: row.account?.name ?? FORMER_NAME,
       kind: hit.kind,
       at: hit.at,
-      ...(hit.until ? { until: hit.until } : {}),
+      ...(until ? { until } : {}),
     });
     if (hit.kind === "five-hour") view.totals.hits.fiveHour += 1;
     else view.totals.hits.weekly += 1;
@@ -282,7 +294,11 @@ export function buildStatisticsView(
   });
 
   view.totals.proUnits = round2(total);
-  if (range <= PREVIOUS_MAX_DAYS)
+  // Compare only with a previous period that recording covers from its
+  // start; a partly recorded one would read as growth.
+  const previousStart =
+    wallTime(previousFirst, "00:00", zone) ?? now - 2 * range * DAY_MS;
+  if (range <= PREVIOUS_MAX_DAYS && recordedFrom <= previousStart)
     view.totals.previousProUnits = round2(previousTotal);
 
   view.heatmap = view.heatmap.map((row) => row.map(round2));

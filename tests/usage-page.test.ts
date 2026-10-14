@@ -248,6 +248,13 @@ test("the statistics section shows the empty, unavailable, no-identity, loading 
   assert.match(section({ view: emptyView("empty"), loading: false }, "c"), /Bu hesap için kullanım kaydı yok/);
   // A connected account with no rows yet is still "collecting".
   assert.match(section({ view: emptyView("empty"), loading: false }, "a"), /Veri birikiyor/);
+  // A signed-out account keeps the history recorded under its identity.
+  const signedOut: Account = { ...a, id: "d", name: "Signed out", auth: { ...a.auth!, loggedIn: false } };
+  const withSignedOut = text(render(createElement(UsageStatisticsSection, {
+    state: { view: emptyView("empty"), loading: false }, accounts: [...accounts, signedOut], zone: ZONE, accountId: "d",
+  })));
+  assert.match(withSignedOut, /Veri birikiyor/);
+  assert.doesNotMatch(withSignedOut, /Bu hesap için kullanım kaydı yok/);
   assert.match(section({ loading: true }), /İstatistikler yükleniyor/);
   assert.match(section({ loading: false, error: "boom" }), /İstatistikler alınamadı/);
   for (const html of [section({ view: emptyView("empty"), loading: false }), section({ loading: true })])

@@ -349,3 +349,100 @@ test("polls every 10 minutes for 7 days with one window a day cover the range", 
   assert.equal(view.accounts.length, 1);
   assert.equal(view.accounts[0].idleDays, 0);
 });
+
+test("an open hit whose reset has passed ends at that reset", () => {
+  const r = fixture();
+  r.hits = [
+    {
+      identity: MAX,
+      kind: "five-hour",
+      at: "2026-10-14T08:00:00.000Z",
+      resetAt: "2026-10-14T10:00:00.000Z",
+    },
+    {
+      identity: PRO,
+      kind: "five-hour",
+      at: "2026-10-14T10:00:00.000Z",
+      resetAt: "2026-10-14T13:00:00.000Z",
+    },
+  ];
+  const view = build({ rollups: r });
+  const hit = (id: string) => view.hits.find((x) => x.accountId === id)!;
+  assert.equal(hit("max").until, "2026-10-14T10:00:00.000Z");
+  // The reset is still ahead: the hit is ongoing.
+  assert.ok(!("until" in hit("pro")));
+  // A reset exactly at now has passed.
+  r.hits[1].resetAt = new Date(NOW).toISOString();
+  assert.equal(
+    build({ rollups: r }).hits.find((x) => x.accountId === "pro")!.until,
+    new Date(NOW).toISOString(),
+  );
+});
+
+test("a signed-out account keeps its history under its own name and plan", () => {
+  const signedOut: Account = {
+    ...max,
+    auth: { ...max.auth!, loggedIn: false },
+  };
+  const view = build({ accounts: [signedOut, pro, unlinked, spare] });
+  assert.deepEqual(
+    view.accounts.map((a) => [a.accountId, a.former, a.proUnits]),
+    [
+      ["max", undefined, 20],
+      ["pro", undefined, 10],
+      [undefined, true, 0],
+    ],
+  );
+  assert.equal(
+    view.hits.find((x) => x.at === "2026-10-13T09:00:00.000Z")!.accountId,
+    "max",
+  );
+  const filtered = build({ accounts: [signedOut, pro], accountId: "max" });
+  assert.equal(filtered.status, "available");
+  assert.equal(filtered.totals.proUnits, 20);
+});
+
+test("a signed-in account claims an identity it shares with a signed-out one", () => {
+  const stale: Account = {
+    ...max,
+    id: "stale",
+    name: "Stale",
+    planning: { plan: "pro", capacityWeight: 1 },
+    auth: { ...max.auth!, loggedIn: false },
+  };
+  const view = build({ accounts: [stale, max, pro] });
+  assert.deepEqual(
+    view.accounts.map((a) => [a.accountId, a.proUnits]),
+    [
+      ["max", 20],
+      ["pro", 10],
+      [undefined, 0],
+    ],
+  );
+  // Among equals the account list order decides.
+  const twin: Account = { ...max, id: "twin", name: "Twin" };
+  assert.equal(
+    build({ accounts: [twin, max, pro] }).accounts[0].accountId,
+    "twin",
+  );
+});
+
+test("the previous period is compared only when recording reaches back to its start", () => {
+  // Range 7 at NOW: the previous period starts 2026-10-01 00:00 Istanbul.
+  const start = "2026-09-30T21:00:00.000Z";
+  const r = emptyRollups();
+  r.hours[MAX] = {
+    "2026-10-06T08:00:00.000Z": h(2),
+    "2026-10-13T08:00:00.000Z": h(4),
+  };
+  // Recording began inside the previous period: no comparison.
+  assert.equal(build({ rollups: r }).totals.previousProUnits, undefined);
+  r.hours[MAX][start] = h(0);
+  assert.equal(build({ rollups: r }).totals.previousProUnits, 10);
+  // Only identities in the view count: Pro's own history starts later.
+  r.hours[PRO] = { "2026-10-13T22:00:00.000Z": h(1) };
+  assert.equal(
+    build({ rollups: r, accountId: "pro" }).totals.previousProUnits,
+    undefined,
+  );
+});

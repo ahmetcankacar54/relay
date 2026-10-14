@@ -13,8 +13,17 @@ export interface UsageSample {
 }
 // A verified UUID survives an email/name change; the organization remains part
 // of its quota identity. Legacy accounts fall back to normalized email.
+// Samples are recorded only under a signed-in account's identity.
 export function usageIdentity(account: Account): string | undefined {
-  if (!account.auth?.loggedIn) return;
+  return account.auth?.loggedIn ? historyIdentity(account) : undefined;
+}
+
+/**
+ * The identity an account's recorded usage is filed under, also while it is
+ * signed out: a sign-out keeps the last verified UUID and organization.
+ */
+export function historyIdentity(account: Account): string | undefined {
+  if (!account.auth) return;
   const uuid = account.auth.accountUuid ?? account.desktop?.accountUuid;
   const email = account.auth.email?.trim().toLowerCase();
   const org = account.auth.orgId ?? account.desktop?.orgId ?? "";

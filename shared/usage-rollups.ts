@@ -93,6 +93,13 @@ function foldHits(r: UsageRollups, s: UsageSample, t: number): void {
       if (hit.identity === s.identity && hit.kind === kind) open = hit;
     let isOpen = !!open && open.until === undefined;
     if (isOpen) {
+      // Like its window record, an open hit follows a drifting reset.
+      if (
+        window?.resetsAt &&
+        open!.resetAt &&
+        sameReset(open!.resetAt, window.resetsAt)
+      )
+        open!.resetAt = window.resetsAt;
       const resetAt = open!.resetAt ? Date.parse(open!.resetAt) : Infinity;
       // A passed reset closes the hit even if this poll lacks that window.
       if ((window && window.usedPercent < 100) || t >= resetAt) {
@@ -146,10 +153,44 @@ export function foldSample(
   s: UsageSample,
   now: number,
 ): UsageRollups {
-  if (!accepts(r, s)) return r;
-  const next = structuredClone(r);
+  const base = withoutFuture(r, now);
+  if (!accepts(base, s)) return base;
+  const next = base === r ? structuredClone(r) : base;
   foldInto(next, s);
   prune(next, now);
+  return next;
+}
+
+/**
+ * Drops what samples stamped later than `now` folded in (the clock moved
+ * back), so the next sample is accepted again as a baseline: their last
+ * samples, later hours, windows starting later and hits opening later; a hit
+ * they closed is open again. Returns `r` itself when nothing is later.
+ */
+function withoutFuture(r: UsageRollups, now: number): UsageRollups {
+  // Every folded sample is at or before its identity's last one.
+  const later = (time: string) => Date.parse(time) > now;
+  if (!Object.values(r.last).some((s) => later(s.checkedAt))) return r;
+  const next = structuredClone(r);
+  for (const [identity, sample] of Object.entries(next.last))
+    if (later(sample.checkedAt)) delete next.last[identity];
+  const hour = Math.floor(now / HOUR_MS) * HOUR_MS;
+  for (const [identity, hours] of Object.entries(next.hours)) {
+    for (const key of Object.keys(hours))
+      if (Date.parse(key) > hour) delete hours[key];
+    if (!Object.keys(hours).length) delete next.hours[identity];
+  }
+  // A sample sees only windows resetting within five hours after it.
+  for (const [identity, windows] of Object.entries(next.windows)) {
+    const kept = windows.filter(
+      (w) => Date.parse(w.resetAt) - FIVE_HOURS_MS <= now,
+    );
+    if (kept.length) next.windows[identity] = kept;
+    else delete next.windows[identity];
+  }
+  next.hits = next.hits.filter((hit) => !later(hit.at));
+  for (const hit of next.hits)
+    if (hit.until && later(hit.until)) delete hit.until;
   return next;
 }
 
@@ -210,15 +251,17 @@ export function foldSamples(
 /**
  * Folds every sample newer than its identity's last folded sample, in
  * identity and time order, into one clone (cloning per sample would be
- * quadratic) and prunes once. Returns `r` itself when nothing was folded.
+ * quadratic) and prunes once. State stamped later than `now` is dropped
+ * first. Returns `r` itself when nothing was dropped or folded.
  */
 export function catchUp(
   r: UsageRollups,
   samples: readonly UsageSample[],
   now: number,
 ): UsageRollups {
+  const base = withoutFuture(r, now);
   const pending = samples
-    .filter((sample) => accepts(r, sample))
+    .filter((sample) => accepts(base, sample))
     .sort((a, b) =>
       a.identity === b.identity
         ? Date.parse(a.checkedAt) - Date.parse(b.checkedAt)
@@ -226,8 +269,8 @@ export function catchUp(
           ? -1
           : 1,
     );
-  if (!pending.length) return r;
-  const next = structuredClone(r);
+  if (!pending.length) return base;
+  const next = base === r ? structuredClone(r) : base;
   for (const sample of pending)
     if (accepts(next, sample)) foldInto(next, sample);
   prune(next, now);

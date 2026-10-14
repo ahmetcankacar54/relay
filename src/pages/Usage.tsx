@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Account } from "../../shared/types";
 import type { StatisticsRange } from "../../shared/usage-statistics-view";
-import { usageIdentity } from "../../shared/usage-statistics";
+import { historyIdentity } from "../../shared/usage-statistics";
 import { PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -63,7 +63,7 @@ export function UsageStatisticsSection({
         description={error}
       />
     );
-  if (selected && !usageIdentity(selected))
+  if (selected && !historyIdentity(selected))
     return (
       <StatisticsMessage
         title={t(
