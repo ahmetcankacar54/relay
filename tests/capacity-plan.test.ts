@@ -196,6 +196,8 @@ test("a spill consumes exactly the demand of the step", () => {
     "b 09:01-09:55",
     "outage 09:55-10:00",
   ]);
+  // b runs dry exactly at the end of a step; that is still an exhaustion.
+  assert.deepEqual(forecast.exhaustedAt.b.map(hhmm), ["09:55"]);
 });
 
 test("a pro account refills at its reset and idles in the outage between", () => {
@@ -219,6 +221,52 @@ test("a pro account refills at its reset and idles in the outage between", () =>
   assert.equal(forecast.outageMinutes, 180);
   assert.equal(forecast.unmet, 150);
   assert.equal(forecast.switches, 0);
+  // 100 units at 50 an hour run out on a step boundary, window after window;
+  // the last one lands exactly on the end of the day.
+  assert.deepEqual(forecast.exhaustedAt.pro.map(hhmm), [
+    "11:00",
+    "13:00",
+    "18:00",
+  ]);
+});
+
+test("a run-out exactly on a step boundary is recorded once", () => {
+  const forecast = simulateDay({
+    from: S,
+    to: S + 3 * H,
+    rate: () => 100,
+    accounts: [{ id: "c", capacity: 1, keepAlive: false, remaining: 100 }],
+  });
+  assert.deepEqual(forecast.exhaustedAt.c.map(hhmm), ["10:00"]);
+  assert.deepEqual(view(forecast), ["c 09:00-10:00", "outage 10:00-12:00"]);
+});
+
+test("a window that reset during the step is available when the active one runs dry", () => {
+  // a runs out at 09:02:30; b's window reset at 09:02, mid-step.
+  const forecast = sim(
+    [
+      {
+        id: "a",
+        capacity: 1,
+        firstReset: base + 14 * H,
+        keepAlive: false,
+        remaining: 5,
+      },
+      {
+        id: "b",
+        capacity: 20,
+        firstReset: S + 2 * MIN,
+        keepAlive: false,
+        remaining: 0,
+      },
+    ],
+    () => 120,
+  );
+  assert.equal(forecast.outageMinutes, 0);
+  assert.equal(forecast.unmet, 0);
+  assert.deepEqual(view(forecast), ["a 09:00-09:03", "b 09:03-18:00"]);
+  assert.deepEqual(forecast.exhaustedAt.a.map(hhmm), ["09:03"]);
+  assert.equal(forecast.switches, 1);
 });
 
 test("a closed window starts on first use and refills five hours later", () => {
@@ -234,6 +282,7 @@ test("a closed window starts on first use and refills five hours later", () => {
   ]);
   assert.equal(forecast.outageMinutes, 240);
   assert.equal(forecast.unmet, 400);
+  assert.deepEqual(forecast.exhaustedAt.c.map(hhmm), ["11:00", "16:00"]);
 });
 
 test("time without demand is never an outage", () => {

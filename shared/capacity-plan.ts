@@ -13,7 +13,7 @@ export interface SimAccount {
   firstReset?: number;
   /** A new window starts at each reset. */
   keepAlive: boolean;
-  /** Planned start of a closed window when `keepAlive`. */
+  /** Planned start of a closed window (used only while no window is open). */
   warmUp?: number;
   /** Pro units left in the open window. */
   remaining: number;
@@ -134,6 +134,7 @@ export function simulateDay(input: SimInput): Forecast {
     let cursor = t;
     while (cursor < end && perMs > 0) {
       if (!active || active.left <= EPSILON) {
+        advance(cursor);
         active = choose();
         mark(active?.id, cursor);
         if (!active) {
@@ -153,6 +154,10 @@ export function simulateDay(input: SimInput): Forecast {
       if (runOut >= end) {
         active.left -= perMs * (end - cursor);
         cursor = end;
+        if (active.left <= EPSILON) {
+          active.left = 0;
+          (exhaustedAt[active.id] ??= []).push(minute(end));
+        }
       } else {
         active.left = 0;
         (exhaustedAt[active.id] ??= []).push(minute(runOut));
@@ -176,7 +181,11 @@ export interface StartPlanInput {
   interval: { start: number; end: number };
   accounts: { id: string; capacity: number; manual?: number }[];
   rate: (time: number) => number;
-  /** The even spread: the baseline every plan is compared with. */
+  /**
+   * The even spread: the baseline every plan is compared with. It is
+   * evaluated as given, so for an account with a `manual` start the caller
+   * must put that same start at its index.
+   */
   even: number[];
 }
 export interface StartPlan {
