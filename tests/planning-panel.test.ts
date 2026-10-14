@@ -299,6 +299,11 @@ test("the usage lane shows who works when, with switches and the comparison", ()
   assert.match(html, />Kullanım</);
   assert.match(html, />tahmin</);
   assert.match(html, /Kullanım şeridi Relay’in tahmini/);
+  assert.ok(
+    html.includes(
+      "Soluk kısım planın tahmini, canlı kısım şu anki kullanımdan hesaplanır.",
+    ),
+  );
   const view = dayTimeline({
     settings: scenarioSettings(automatic),
     accounts: scenarioAccounts,
@@ -363,15 +368,35 @@ test("the usage lane shows who works when, with switches and the comparison", ()
     html,
     /class="[^"]*text-crit[^"]*">14:18–14:50 kotasız · 5 geçiş</,
   );
-  // Each box says when its automatic accounts warm up, in planned order.
+  // Each box says when its automatic accounts warm up, by name in planned
+  // order, on one line.
+  const warmUps = (text: string) =>
+    new RegExp(
+      `geçiş</strong><small class="[^"]*text-xs text-muted-foreground[^"]*block truncate[^"]*" title="${text}">${text}</small>`,
+    );
   assert.match(
     html,
-    /Kesintisiz · 3 geçiş<\/strong><small class="[^"]*text-xs text-muted-foreground[^"]*">Isıtma 06:15 · 08:15 · 06:30</,
+    warmUps("Isıtma: Kişisel - Max 06:15 · Vertex Team 08:15 · Pro 06:30"),
   );
   assert.match(
     html,
-    /5 geçiş<\/strong><small class="[^"]*">Isıtma 04:50 · 06:30 · 08:10</,
+    warmUps("Isıtma: Kişisel - Max 04:50 · Vertex Team 06:30 · Pro 08:10"),
   );
+  assert.doesNotMatch(html, /ısıtma yapılmaz/);
+});
+
+test("with automatic start off the comparison says nothing is warmed up", () => {
+  const html = renderPlanning({
+    planned: scenarioAccounts,
+    tempo: busyTempo,
+    now: wednesday("12:00"),
+    settings: { autoStart: false },
+  });
+  assert.match(html, />Bu plan</);
+  assert.match(html, /class="block [^"]*font-semibold">Kesintisiz · 3 geçiş</);
+  assert.match(html, />14:18–14:50 kotasız · 5 geçiş</);
+  assert.equal(count(html, />Otomatik başlatma kapalı; ısıtma yapılmaz</g), 2);
+  assert.doesNotMatch(html, /Isıtma/);
 });
 
 test("an all-manual plan shows its gap on the lane and no comparison", () => {
@@ -403,6 +428,7 @@ function renderPlanning({
   tempo,
   choice,
   settings,
+  t = tr,
 }: {
   planned: Account[];
   now?: number;
@@ -410,6 +436,7 @@ function renderPlanning({
   tempo?: Tempo;
   choice?: TempoChoice;
   settings?: Partial<PlanningSettings>;
+  t?: (tr: string, en: string) => string;
 }) {
   return renderToStaticMarkup(
     createElement(PlanningPanel, {
@@ -430,7 +457,7 @@ function renderPlanning({
       usage: {},
       activeId: a.id,
       disabled: false,
-      t: tr,
+      t,
       now,
       update: () => {},
       updateAccount: () => {},
@@ -666,7 +693,8 @@ test("after work the pill and the rows describe the next work day", () => {
     now,
     settings: weekendHours,
   });
-  assert.match(html, /><\/i>Tahmin: Kesintisiz · geçiş yok</);
+  assert.match(html, /><\/i>Yarın tahmini: Kesintisiz · geçiş yok</);
+  assert.doesNotMatch(html, /Tahmin: /);
   assert.ok(
     html.includes(
       `Kişisel - Max ilk başlangıç, ${clock(saturday.accounts[0].firstStart)}`,
@@ -708,5 +736,45 @@ test("a fixed tempo applies at once, before the keeper reports it", () => {
     html.includes(
       `Tahmin: ${forecastSummary(view.live!.forecast, tr, clock)}<`,
     ),
+  );
+});
+
+test("a pill for a later day says which day it forecasts", () => {
+  const en = (_: string, text: string) => text;
+  // Friday 23:30 with Saturday work: tomorrow.
+  const friday = wallTime("2026-10-16", "23:30", ZONE)!;
+  assert.match(
+    renderPlanning({
+      planned: scenarioAccounts,
+      tempo: weekendTempo,
+      now: friday,
+      settings: weekendHours,
+      t: en,
+    }),
+    /><\/i>Tomorrow: No gaps · no switches</,
+  );
+  // Without weekend work Monday is next: its weekday name.
+  const monday = dayPlan(
+    "2026-10-19",
+    scenarioSettings(automatic),
+    planContext(scenarioAccounts, busyTempo),
+  );
+  const summary = forecastSummary(monday.forecast!, tr, clock);
+  assert.equal(summary, "Kesintisiz · 3 geçiş");
+  const html = renderPlanning({
+    planned: scenarioAccounts,
+    tempo: busyTempo,
+    now: friday,
+  });
+  assert.match(html, new RegExp(`></i>Pazartesi tahmini: ${summary}<`));
+  assert.doesNotMatch(html, /Tahmin: |Yarın tahmini: /);
+  assert.match(
+    renderPlanning({
+      planned: scenarioAccounts,
+      tempo: busyTempo,
+      now: friday,
+      t: en,
+    }),
+    /><\/i>Monday: No gaps · 3 switches</,
   );
 });

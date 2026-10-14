@@ -78,16 +78,30 @@ export function PlanTimeline({
       style={{ left: `${pct(now)}%` }}
     />
   );
+  const name = (id: string) =>
+    rows.find((r) => r.account.id === id)?.account.name ?? "—";
+  /** Who warms up when, by name; nothing is warmed up while auto start is off. */
+  const warmUpLine = (ids: string[], times: number[]) => {
+    if (!settings.autoStart)
+      return t(
+        "Otomatik başlatma kapalı; ısıtma yapılmaz",
+        "Automatic start is off; no warm-ups",
+      );
+    const list = times
+      .map((time, i) => `${name(ids[i])} ${clock(time)}`)
+      .join(" · ");
+    return t(`Isıtma: ${list}`, `Warm-up: ${list}`);
+  };
   const comparison = compare && [
     {
       title: t("Bu plan", "This plan"),
       forecast: compare.plan,
-      warmUps: compare.warmUps.plan,
+      warmUps: warmUpLine(compare.warmUps.accountIds, compare.warmUps.plan),
     },
     {
       title: t("Eşit aralıklı dağıtım", "Even spread"),
       forecast: compare.even,
-      warmUps: compare.warmUps.even,
+      warmUps: warmUpLine(compare.warmUps.accountIds, compare.warmUps.even),
     },
   ];
   return (
@@ -266,31 +280,34 @@ export function PlanTimeline({
       )}
       <p className={cn(noteClass, "mt-2.5")}>
         {t(
-          "Kullanım şeridi Relay’in tahmini: hangi saatte hangi hesapla çalışacağın. Dikey çizgiler geçiş, taralı kırmızı kotasız. Alttaki çubuklar 5 saatlik pencereler; çubuğun sonu sıfırlanma.",
-          "The usage lane is Relay’s forecast of which account you work on when. Vertical lines are switches, striped red is no quota. The bars below are five-hour windows; a bar ends at the reset.",
+          "Kullanım şeridi Relay’in tahmini: hangi saatte hangi hesapla çalışacağın. Dikey çizgiler geçiş, taralı kırmızı kotasız. Alttaki çubuklar 5 saatlik pencereler; çubuğun sonu sıfırlanma. Soluk kısım planın tahmini, canlı kısım şu anki kullanımdan hesaplanır.",
+          "The usage lane is Relay’s forecast of which account you work on when. Vertical lines are switches, striped red is no quota. The bars below are five-hour windows; a bar ends at the reset. The faded part is the plan’s forecast; the solid part is computed from current usage.",
         )}
       </p>
       {comparison && (
         <div className="mt-2.5 grid gap-2.5 @xl:grid-cols-2">
-          {comparison.map(({ title, forecast, warmUps }) => {
-            const times = warmUps.map(clock).join(" · ");
-            return (
-              <div key={title} className="rounded-[10px] border px-2.5 py-2">
-                <span className={noteClass}>{title}</span>
-                <strong
-                  className={cn(
-                    "block text-[13px] font-semibold",
-                    hasGap(forecast) && "text-crit",
-                  )}
-                >
-                  {forecastSummary(forecast, t, clock)}
-                </strong>
-                <small className={cn(noteClass, "block")}>
-                  {t(`Isıtma ${times}`, `Warm-up ${times}`)}
-                </small>
-              </div>
-            );
-          })}
+          {comparison.map(({ title, forecast, warmUps }) => (
+            <div
+              key={title}
+              className="min-w-0 rounded-[10px] border px-2.5 py-2"
+            >
+              <span className={noteClass}>{title}</span>
+              <strong
+                className={cn(
+                  "block text-[13px] font-semibold",
+                  hasGap(forecast) && "text-crit",
+                )}
+              >
+                {forecastSummary(forecast, t, clock)}
+              </strong>
+              <small
+                className={cn(noteClass, "block truncate")}
+                title={warmUps}
+              >
+                {warmUps}
+              </small>
+            </div>
+          ))}
         </div>
       )}
     </Card>

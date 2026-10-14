@@ -12,26 +12,23 @@ const SOURCE: Record<Tempo["source"], [string, string]> = {
   default: ["Varsayılan tempoyla", "At the default tempo"],
 };
 
-/** The hero's forecast pill (the rest of today while work runs) and the tempo it assumes. */
+/** The hero's forecast pill, led by the day it covers, and the tempo it assumes. */
 export function ForecastBadges({
   forecast,
-  rest,
+  day,
   source,
   clock,
   t,
 }: {
   forecast: Forecast;
-  /** The forecast covers the rest of today's running work, not a whole day. */
-  rest: boolean;
+  /** Which day the forecast covers, as its lead ("Bugün kalan: ", "Yarın tahmini: " …). */
+  day: string;
   source: Tempo["source"];
   clock: (time: number) => string;
   t: T;
 }) {
   const gap = forecast.segments.some((s) => !s.accountId);
-  const text =
-    (rest
-      ? t("Bugün kalan: ", "Rest of today: ")
-      : t("Tahmin: ", "Forecast: ")) + forecastSummary(forecast, t, clock);
+  const text = day + forecastSummary(forecast, t, clock);
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
       <Badge

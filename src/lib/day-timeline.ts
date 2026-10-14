@@ -121,8 +121,8 @@ export interface DayTimeline {
   compare?: {
     plan: Forecast;
     even: Forecast;
-    /** The automatic accounts' warm-ups in planned order: as planned and as evenly spread. */
-    warmUps: { plan: number[]; even: number[] };
+    /** The automatic accounts in planned order and their warm-ups: as planned and as evenly spread. */
+    warmUps: { accountIds: string[]; plan: number[]; even: number[] };
   };
 }
 
@@ -230,6 +230,7 @@ export function dayTimeline({
           plan: own.forecast,
           even: own.evenForecast,
           warmUps: {
+            accountIds: automatic.map((a) => a.accountId),
             plan: automatic.map((a) => a.firstStart),
             even: automatic.map((a) => a.evenStart),
           },

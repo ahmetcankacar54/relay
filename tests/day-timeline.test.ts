@@ -189,6 +189,7 @@ test("a manual account is left out of the warm-ups the comparison lists", () => 
   const view = dayTimeline({ settings: s, accounts: scenarioAccounts, usage: {}, now: noon, offset: 1, tempo: busyTempo });
   const plan = dayPlan("2026-10-15", s, planContext(scenarioAccounts, busyTempo));
   assert.deepEqual(view.compare?.warmUps, {
+    accountIds: ["vertex", "pro"],
     plan: plan.accounts.slice(1).map((a) => a.firstStart),
     even: plan.accounts.slice(1).map((a) => a.evenStart),
   });

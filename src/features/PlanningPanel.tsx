@@ -8,7 +8,12 @@ import type {
   PlanningHours,
   PlanningSettings,
 } from "../../shared/types";
-import { dayPlan, planContext, shiftDate } from "../../shared/day-plan";
+import {
+  dayPlan,
+  dayStart,
+  planContext,
+  shiftDate,
+} from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
 import { fallbackTempo, presetTempo } from "../../shared/tempo";
 import { dayTimeline, nextPlannedWindow } from "../lib/day-timeline";
@@ -68,6 +73,15 @@ function clock(time: number | string, zone: string) {
     minute: "2-digit",
     hourCycle: "h23",
   }).format(new Date(time));
+}
+
+/** "Cumartesi tahmini: " / "Saturday: " for a later day's pill. */
+function weekdayForecast(date: string, zone: string, t: T) {
+  const weekday = new Intl.DateTimeFormat(t("tr-TR", "en-GB"), {
+    timeZone: zone,
+    weekday: "long",
+  }).format(new Date(dayStart(date, zone) + 12 * 3_600_000));
+  return t(`${weekday} tahmini: `, `${weekday}: `);
 }
 
 function statusText(
@@ -278,6 +292,16 @@ export function PlanningPanel({
       ? todayView.live.forecast
       : undefined;
   const forecast = live ?? reference?.forecast;
+  // The pill names its day unless it is today's.
+  const forecastDay = !reference
+    ? ""
+    : reference.date === today
+      ? live && interval && now >= interval.start
+        ? t("Bugün kalan: ", "Rest of today: ")
+        : t("Tahmin: ", "Forecast: ")
+      : reference.date === shiftDate(today, 1)
+        ? t("Yarın tahmini: ", "Tomorrow: ")
+        : weekdayForecast(reference.date, zone, t);
   // One busy-day rate measures every window: the reference day's.
   const weekend = !!interval?.weekend;
   const rate = tempo.rate[weekend ? "weekend" : "weekday"];
@@ -346,7 +370,7 @@ export function PlanningPanel({
           {settings.autoStart && forecast && (
             <ForecastBadges
               forecast={forecast}
-              rest={!!live && !!interval && now >= interval.start}
+              day={forecastDay}
               source={tempo.source}
               clock={zoneClock}
               t={t}
