@@ -18,6 +18,15 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:consume-tray-switch"),
   setTrayLanguage: (language) =>
     ipcRenderer.invoke("relay:tray-language", language),
+  openPage: (page) => ipcRenderer.invoke("relay:open-page", page),
+  onNavigate: (callback) => {
+    const listener = (_: unknown, page: string) => callback(page as never);
+    ipcRenderer.on("relay:navigate", listener);
+    return () => ipcRenderer.removeListener("relay:navigate", listener);
+  },
+  setPanelHeight: (height) => ipcRenderer.send("relay:panel-size", height),
+  closePanel: () => ipcRenderer.send("relay:panel-close"),
+  quit: () => ipcRenderer.invoke("relay:quit"),
   onTraySwitch: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("relay:tray-switch", listener);

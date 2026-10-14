@@ -350,6 +350,13 @@ export const previewApi: RelayAPI = {
   },
   setTrayLanguage: async () => {},
   onTraySwitch: () => () => {},
+  openPage: async (page) => {
+    location.hash = "#/" + page;
+  },
+  onNavigate: () => () => {},
+  setPanelHeight: () => {},
+  closePanel: () => {},
+  quit: async () => {},
   updatePlanning: async (patch) => {
     state.settings.planning = { ...state.settings.planning, ...patch };
     return structuredClone(state.settings.planning);

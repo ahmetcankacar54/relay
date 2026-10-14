@@ -4,8 +4,8 @@ import { Card } from "@/components/ui/card";
 import { LimitMeter } from "@/components/LimitMeter";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { overviewAccounts, type OverviewRow } from "@/data/selectors";
-import { formatClock, formatReset } from "@/lib/time";
+import { overviewAccounts } from "@/data/selectors";
+import { accountRowSubtitle } from "@/lib/account-row";
 import type { PageId } from "@/app/routes";
 import { planLabel } from "../accounts/accountLabels";
 
@@ -40,30 +40,6 @@ export function AccountsCard({
     !relay.desktop?.available ||
     !!relay.pendingDesktop ||
     !!relay.desktop?.recoveryRequired;
-  const subtitle = (row: OverviewRow) => {
-    switch (row.state) {
-      case "window-open": {
-        const reset = row.usage?.fiveHour?.resetsAt;
-        const left = reset ? formatReset(reset, now, language, zone) : "";
-        return t(
-          `Pencere açık${left ? ` · ${left}` : ""}`,
-          `Window open${left ? ` · ${left}` : ""}`,
-        );
-      }
-      case "ready":
-        return t("Hazır · pencere yok", "Ready · no window");
-      case "exhausted": {
-        const at = row.availableAt
-          ? formatClock(row.availableAt, language, zone)
-          : "—";
-        return t(`Açılış ${at}`, `Opens ${at}`);
-      }
-      case "not-linked":
-        return t("Desktop’a bağlı değil", "Not linked to Desktop");
-      default:
-        return t("Limit verisi eski", "Usage data is out of date");
-    }
-  };
   return (
     <Card className="gap-0 px-4 py-3.5">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -107,7 +83,7 @@ export function AccountsCard({
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {plan ? `${plan} · ` : ""}
-                    {subtitle(row)}
+                    {accountRowSubtitle(row, t, language, zone, now)}
                   </div>
                 </div>
                 <LimitMeter

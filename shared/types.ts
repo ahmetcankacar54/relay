@@ -1,5 +1,6 @@
 import type { AccountUsageStatistics } from "./usage-statistics";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
+import type { PageId } from "../src/app/routes";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
 export interface AccountPlanning {
@@ -165,6 +166,15 @@ export interface RelayAPI {
   consumeTraySwitchRequest(): Promise<string | null>;
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   onTraySwitch(callback: () => void): () => void;
+  /** Shows the main window on a page (and hides the menu bar panel). */
+  openPage(page: PageId): Promise<void>;
+  /** Main window: a page requested from the menu bar panel. */
+  onNavigate(callback: (page: PageId) => void): () => void;
+  /** Menu bar panel only: reports its content height. */
+  setPanelHeight(height: number): void;
+  /** Menu bar panel only: hides it. */
+  closePanel(): void;
+  quit(): Promise<void>;
   updateSettings(input: Partial<RelaySettings>): Promise<RelaySettings>;
   updatePlanning(patch: Partial<PlanningSettings>): Promise<PlanningSettings>;
   refreshUsage(
