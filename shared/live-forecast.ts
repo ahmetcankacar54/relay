@@ -35,6 +35,8 @@ export interface LiveInput {
   factor?: number;
   /** accountId → next window start: an open window restarts then, a closed one starts then. */
   schedule?: Record<string, number>;
+  /** Live times exactly as read: none counts as the plan's own nearby time. */
+  exact?: boolean;
 }
 
 /**
@@ -50,8 +52,8 @@ export interface LiveInput {
  * would; the account in use then does not count. A window the keeper may not
  * restart yet (it resets before the account's active range) restarts when
  * that range begins. Live times within a tick of the plan's own windows (a
- * warm-up just started, a reset within the reported jitter) count as planned.
- * Shared with the adaptive search.
+ * warm-up just started, a reset within the reported jitter) count as planned,
+ * unless `exact`. Shared with the adaptive search.
  */
 export function liveSetup({
   plan,
@@ -62,6 +64,7 @@ export function liveSetup({
   now,
   factor,
   schedule,
+  exact,
 }: LiveInput): LiveSetup | undefined {
   const interval = plan.interval;
   if (!interval || now >= interval.end || !plan.accounts.length) return;
@@ -86,7 +89,7 @@ export function liveSetup({
     const due = () => {
       if (now < p.activeFrom) return p.activeFrom;
       const start = planned(now);
-      return start <= now && now - start < ON_TIME_MS ? start : now;
+      return !exact && start <= now && now - start < ON_TIME_MS ? start : now;
     };
     const closed = {
       warmUp:
@@ -103,7 +106,9 @@ export function liveSetup({
       const used = open ? (u.fiveHour?.usedPercent ?? 0) : 0;
       const end = planned(reported);
       const reset =
-        end > Math.max(now, p.activeFrom) && sameReset(iso(reported), iso(end))
+        !exact &&
+        end > Math.max(now, p.activeFrom) &&
+        sameReset(iso(reported), iso(end))
           ? end
           : reported;
       const restartAt =

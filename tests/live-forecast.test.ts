@@ -484,6 +484,15 @@ test("live times within a tick of the plan's own windows count as planned", () =
   const late = liveSetup(live(at("05:03"), { p1: at("09:03") }))!;
   assert.equal(late.accounts[0].firstReset, at("09:03"));
   assert.equal(late.accounts[1].warmUp, at("05:03"));
+  // Asked for the times exactly as read, none counts as planned.
+  const exact = liveSetup({ ...tick, exact: true })!;
+  assert.equal(exact.accounts[0].firstReset, at("09:00") + 5 * second);
+  assert.equal(exact.accounts[1].warmUp, at("05:00") + 30 * second);
+  assert.equal(
+    liveSetup({ ...live(at("04:00") + 5 * second), exact: true })!.accounts[0]
+      .warmUp,
+    at("04:00") + 5 * second,
+  );
 });
 
 test("a window resetting before its account's active range restarts when the range begins", () => {

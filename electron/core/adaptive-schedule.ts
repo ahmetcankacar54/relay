@@ -78,6 +78,18 @@ const unmet = (forecast: Forecast) => Math.round(forecast.unmet * 2) / 2;
 /** Strictly better on unmet demand (to half a Pro unit), then on switches. */
 const beats = (a: Forecast, b: Forecast) =>
   unmet(a) < unmet(b) || (unmet(a) === unmet(b) && a.switches < b.switches);
+/**
+ * The schedule still beats the default with live times exactly as read. Near
+ * times count as the plan's own, so two resets a minute apart can become one
+ * instant at which the simulation refills the larger account first; a gain
+ * that rests on that tie is none.
+ */
+const winsAsRead = (live: LiveInput, schedule: Schedule) =>
+  empty(schedule) ||
+  beats(
+    liveForecast({ ...live, schedule, exact: true })!,
+    liveForecast({ ...live, exact: true })!,
+  );
 
 /** The plan's own forecast in [from, to): minutes without quota and switches. */
 function planAfter(forecast: Forecast, from: number, to: number) {
@@ -140,7 +152,8 @@ function missedWarmUp(plan: DayPlan, { usage, blocked, now }: AdaptiveInput) {
  * Each planned account's next window start for the rest of the plan in
  * force (from its first warm-up to the end of work), re-chosen only when the
  * live forecast falls behind the plan's own. A search result is adopted only
- * when strictly better than the schedule held, and the schedule is dropped
+ * when strictly better than the schedule held, and than the default with live
+ * times exactly as read; the schedule is dropped
  * once the default does as well at two reviews in a row; reviews come at
  * most every 15 minutes.
  * Kept in memory; the keeper updates it before its decisions.
@@ -244,7 +257,11 @@ export class AdaptiveSchedule {
         this.lastReview = now;
         if (search) {
           const replan = this.search({ ...live, blocked: input.blocked });
-          if (replan && beats(replan.forecast, current)) {
+          if (
+            replan &&
+            beats(replan.forecast, current) &&
+            winsAsRead(live, replan.schedule)
+          ) {
             this.adopt(replan.schedule, now);
             current = replan.forecast;
           }

@@ -194,6 +194,16 @@ function pace(now: number, b = fresh("b", now, 0, at("10:00"))) {
   );
 }
 
+/**
+ * The pace scenario at `perHour` over the last hour (a's samples only set the
+ * pace); from 10:00 b's window has reset and waits for its hold.
+ */
+function paced(now: number, perHour: number) {
+  const value = pace(now, now < at("10:00") ? undefined : fresh("b", now, 0));
+  const used = (time: number) => 16 + ((time - now) / HOUR) * (perHour / 3);
+  return { ...value, recentSamples: aSamples(now, used) };
+}
+
 test("the search and notice intervals are 15 and 30 minutes", () => {
   assert.equal(SEARCH_EVERY_MS, 15 * MINUTE);
   assert.equal(NOTIFY_EVERY_MS, 30 * MINUTE);
@@ -362,14 +372,54 @@ test("today's pace scales the forecast: 1.6 times the plan adopts a hold", () =>
   assert.deepEqual(calm, { schedule: {}, factor: 1 });
 });
 
+test("a gain that rests on two resets at the plan's same instant is not adopted", () => {
+  // Planned at 50 an hour, both accounts warmed up at 08:45. At 09:56 a has
+  // been used at 93 an hour (1.9 times the plan) and runs out at 12:07; b
+  // runs out at 13:10, and both windows reset at about 13:45 (a at 13:45:08,
+  // b at 13:46:20), both within the plan's own 13:45.
+  const now = at("09:56") + 5_000;
+  const aReset = at("13:45") + 8_000;
+  const value = input([A, B], 50, now, {
+    a: fresh("a", now, 31, aReset),
+    b: fresh("b", now, 0, at("13:46") + 20_000),
+  });
+  const samples: UsageSample[] = [];
+  for (let time = now - HOUR; time <= now; time += 5 * MINUTE)
+    samples.push({
+      accountId: "a",
+      identity: usageIdentity(A)!,
+      checkedAt: new Date(time).toISOString(),
+      fiveHour: {
+        usedPercent: (31 * (time - now + HOUR)) / HOUR,
+        resetsAt: new Date(aReset).toISOString(),
+      },
+    });
+  const fast = { ...value, activeId: "a", recentSamples: samples };
+  // Counted as one instant, the larger a refills first and serves on, so
+  // holding its restart to 14:15 seems to save a switch.
+  const context = planContext([A, B], fast.tempo);
+  assert.deepEqual(
+    replanStarts({
+      plan: dayPlan(WEDNESDAY, fast.settings, context),
+      settings: fast.settings,
+      context,
+      usage: fast.usage,
+      activeId: "a",
+      now,
+      factor: 1.9,
+      blocked: [],
+    })!.schedule,
+    { a: at("14:15") },
+  );
+  // As read, a resets first either way: nothing is adopted or announced.
+  assert.deepEqual(new AdaptiveSchedule().update(fast), {
+    schedule: {},
+    factor: 1.9,
+    observedRate: 93,
+  });
+});
+
 test("a slower day clears the schedule once two reviews in a row agree, with one notice", () => {
-  // The pace scenario at `perHour` over the last hour (a's samples only set
-  // the pace); b's window has reset at 10:00 and waits for its hold.
-  const paced = (now: number, perHour: number) => {
-    const value = pace(now, now < at("10:00") ? undefined : fresh("b", now, 0));
-    const used = (time: number) => 16 + ((time - now) / HOUR) * (perHour / 3);
-    return { ...value, recentSamples: aSamples(now, used) };
-  };
   const adaptive = new AdaptiveSchedule();
   const kinds: string[] = [];
   const run = (clock: string, perHour: number) => {
@@ -653,60 +703,57 @@ test("an adopted hold stays in force minute by minute through b's reset", () => 
 });
 
 test("an entry dropped from the schedule starts the count of agreeing reviews over", () => {
-  // An injected search holds a's restart to 12:30 and gives b a start at
-  // 09:50 (the verdict is not under test), then finds nothing more. a is in
-  // use when it resets, so its hold changes nothing: every review finds the
-  // default as good.
-  const both = { a: at("12:30"), b: at("09:50") };
+  // At 1.6 times the plan the search holds b's restart to 11:00; an injected
+  // search adds a restart of a at 09:50, before a's own reset, which changes
+  // nothing (the verdict is not under test), then finds nothing more. From
+  // 09:45 the day runs at the planned pace, where the default does as well.
+  const both = { a: at("09:50"), b: at("11:00") };
   const { search } = searching((_, replan, call) =>
     call === 1
-      ? {
-          ...replan!,
-          schedule: both,
-          forecast: { ...replan!.forecast, unmet: 0, switches: 0 },
-        }
+      ? { ...replan!, schedule: { ...replan!.schedule, a: at("09:50") } }
       : undefined,
   );
   const adaptive = new AdaptiveSchedule({ search });
-  adaptive.update(hold(at("09:30")));
+  assert.deepEqual(adaptive.update(pace(at("09:30"))).schedule, both);
   // 09:45: the first review that agrees.
-  assert.deepEqual(adaptive.update(hold(at("09:45"))).schedule, both);
-  // 09:50: b's start has come; the schedule that review compared is gone.
-  assert.deepEqual(adaptive.update(hold(at("09:50"))).schedule, {
-    a: at("12:30"),
+  assert.deepEqual(adaptive.update(paced(at("09:45"), 60)).schedule, both);
+  // 09:50: a's start has come; the schedule that review compared is gone.
+  assert.deepEqual(adaptive.update(paced(at("09:50"), 60)).schedule, {
+    b: at("11:00"),
   });
   // So 10:00 agrees for the first time again, and only 10:15 clears it.
-  let now = at("10:00");
-  assert.deepEqual(adaptive.update(hold(now, fresh("b", now, 0))).schedule, {
-    a: at("12:30"),
+  assert.deepEqual(adaptive.update(paced(at("10:00"), 60)).schedule, {
+    b: at("11:00"),
   });
-  now = at("10:15");
-  assert.deepEqual(
-    adaptive.update(hold(now, fresh("b", now, 0, at("15:00")))).schedule,
-    {},
-  );
+  assert.deepEqual(adaptive.update(paced(at("10:15"), 60)).schedule, {});
 });
 
 test("the window open at the adoption is not mistaken for use when its reset is reported 90 s later", () => {
-  // b's window opened at 09:29:30, half a minute before the adoption at 09:30.
-  // (A search that holds its restart is injected: the verdict is not under test.)
+  // The hold scenario with a third account and work until 19:00: c's idle
+  // window resets at 10:00, and b's opened at 09:29:30, half a minute before
+  // the adoption at 09:30. Holding both restarts saves a switch.
+  const C = planningAccount("c", "pro");
   const opened = at("09:29") + 30_000;
-  const held = { b: at("15:00") };
-  const { search } = searching((_, replan) => ({
-    ...replan!,
-    schedule: held,
-    forecast: { ...replan!.forecast, unmet: 0, switches: 0 },
-  }));
-  const adaptive = new AdaptiveSchedule({ search });
+  const trio = (now: number, b: AccountUsage) => {
+    const value = hold(now, b);
+    return {
+      ...value,
+      accounts: [A, B, C],
+      settings: settingsFor([A, B, C], { start: "09:00", end: "19:00" }),
+      usage: { ...value.usage, c: fresh("c", now, 0, at("10:00")) },
+    };
+  };
+  const adaptive = new AdaptiveSchedule();
   const adoption = at("09:30");
+  const held = { b: opened + 8 * HOUR, c: at("11:00") };
   assert.deepEqual(
-    adaptive.update(hold(adoption, fresh("b", adoption, 0, opened + 5 * HOUR)))
+    adaptive.update(trio(adoption, fresh("b", adoption, 0, opened + 5 * HOUR)))
       .schedule,
     held,
   );
   const now = at("09:35");
   assert.deepEqual(
-    adaptive.update(hold(now, fresh("b", now, 1, opened + 5 * HOUR + 90_000))),
+    adaptive.update(trio(now, fresh("b", now, 1, opened + 5 * HOUR + 90_000))),
     { schedule: held, factor: 1, since: adoption },
   );
 });
