@@ -9,8 +9,16 @@ import "@fontsource/manrope/700.css";
 import "@fontsource/manrope/800.css";
 import App from "./App";
 import "./styles/theme.css";
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+const root = createRoot(document.getElementById("root")!);
+// Development only: a review sheet for the mascot artwork.
+if (
+  import.meta.env.DEV &&
+  new URLSearchParams(location.search).get("scenario") === "mascot"
+)
+  void import("./dev/mascot-gallery-entry").then(({ render }) => render(root));
+else
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
