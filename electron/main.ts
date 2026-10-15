@@ -94,13 +94,15 @@ async function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
   await before;
   desktopTransactionActive = true;
   desktopTransactions++;
-  // Show the panda leaving now rather than at the next five-second poll.
-  void tray?.update();
   try {
+    // Show the operation in the menu bar now rather than at the next poll.
+    void tray?.update();
     return await action();
   } finally {
     desktopTransactionActive = false;
     release();
+    // And its end, for operations no caller refreshes the tray after.
+    void tray?.update();
   }
 }
 function manualDesktopLock<T>(action: () => Promise<T>): Promise<T> {

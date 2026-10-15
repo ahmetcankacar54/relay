@@ -66,12 +66,12 @@ export function Settings() {
             <SettingRow
               label={
                 <span id="menu-bar-animation-label">
-                  {t("Menü çubuğu animasyonu", "Menu bar animation")}
+                  {t("Panda animasyonları", "Panda animations")}
                 </span>
               }
               description={t(
-                "Kapalıyken panda yalnızca duruş değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
-                "When off, the panda only changes pose. With Reduce motion on in macOS it never animates.",
+                "Kapalıyken panda yalnızca ifade değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
+                "When off, the panda only changes expression. With Reduce motion on in macOS it never animates.",
               )}
             >
               <Switch

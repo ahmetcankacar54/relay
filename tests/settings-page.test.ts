@@ -50,8 +50,8 @@ test("Settings offers the menu bar animation switch, on unless turned off", () =
     );
   };
   const on = render();
-  assert.match(on, /Menü çubuğu animasyonu/);
-  assert.match(on, /Kapalıyken panda yalnızca duruş değiştirir/);
+  assert.match(on, /Panda animasyonları/);
+  assert.match(on, /Kapalıyken panda yalnızca ifade değiştirir/);
   assert.match(on, /role="switch"[^>]*aria-checked="true"/);
   assert.match(render(false), /role="switch"[^>]*aria-checked="false"/);
 });
@@ -68,10 +68,10 @@ test("the menu bar animation switch is shown on macOS only", () => {
       ),
     );
   };
-  assert.match(render("darwin"), /Menü çubuğu animasyonu/);
+  assert.match(render("darwin"), /Panda animasyonları/);
   for (const platform of ["win32", "linux"]) {
     const html = render(platform);
-    assert.doesNotMatch(html, /Menü çubuğu animasyonu/, platform);
+    assert.doesNotMatch(html, /Panda animasyonları/, platform);
     assert.doesNotMatch(html, /menu-bar-animation-label/, platform);
     assert.match(html, /Görünüm/, platform);
   }

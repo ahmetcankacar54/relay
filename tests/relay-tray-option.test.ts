@@ -43,3 +43,10 @@ test("the panel entry does not add an unused root class", () => {
   const entry = readFileSync(new URL("../src/panel/main.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(entry, /classList\.add\("panel"\)/);
 });
+
+test("every Desktop operation refreshes the tray inside the lock when it begins and when it ends", () => {
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  const lock = main.slice(main.indexOf("async function withDesktopLock"), main.indexOf("function manualDesktopLock"));
+  assert.match(lock, /try \{(?:\s*\/\/[^\n]*)*\s*void tray\?\.update\(\);[\s\S]*?\} finally \{[\s\S]*?void tray\?\.update\(\);[\s\S]*?\}/);
+  assert.doesNotMatch(lock.slice(0, lock.indexOf("try {")), /tray\?\.update/);
+});
