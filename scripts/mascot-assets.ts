@@ -4,7 +4,12 @@ import sharp from "sharp";
 import { MASCOT_FRAME_SIZE, MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
 
 const SCALES = [1, 2, 3] as const;
-const VIEWBOX = /viewBox\s*=\s*["']\s*0[\s,]+0[\s,]+24[\s,]+20\s*["']/;
+const VIEWBOX = /^\s*0[\s,]+0[\s,]+24[\s,]+20\s*$/;
+/** Markup before the root skipped over, then the root start tag with its attributes captured. */
+const ROOT_TAG =
+  /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!\[CDATA\[[\s\S]*?\]\]>|<!DOCTYPE(?:[^>[]|\[[\s\S]*?\])*>|<svg(?=[\s/>])((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+/** One attribute at a time, so a quoted value is never mistaken for an attribute. */
+const ATTRIBUTE = /\s+([^\s"'=<>/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'))?/g;
 
 export interface TrayRepresentation {
   scaleFactor: number;
@@ -17,6 +22,46 @@ async function list(dir: string) {
   } catch {
     return [];
   }
+}
+
+/**
+ * The SVG with its root element sized to the frame. A delivered file's own width
+ * and height are dropped so the viewBox alone decides the aspect and the render
+ * density; `viewBoxOk` is read from that root element only.
+ */
+function prepareSvg(text: string): { svg: string; viewBoxOk: boolean } | undefined {
+  for (const tag of text.matchAll(ROOT_TAG)) {
+    const attributes = tag[1];
+    if (attributes === undefined) continue; // a comment, declaration or CDATA before the root
+    let viewBox: string | undefined;
+    const rest = attributes.replace(ATTRIBUTE, (all, name: string, double?: string, single?: string) => {
+      const value = double ?? single;
+      if (name === "viewBox") viewBox = value;
+      return name === "width" || name === "height" ? "" : all;
+    });
+    const { width, height } = MASCOT_FRAME_SIZE;
+    const root = `<svg width="${width}" height="${height}"${rest}>`;
+    return {
+      svg: text.slice(0, tag.index) + root + text.slice(tag.index + tag[0].length),
+      viewBoxOk: viewBox !== undefined && VIEWBOX.test(viewBox),
+    };
+  }
+  return undefined;
+}
+
+const NO_ROOT = "no <svg> root element";
+
+function reason(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.split("\n")[0].replace(/^Input buffer has corrupt header: /, "").trim().slice(0, 200) || "unknown error";
+}
+
+/** A prepared SVG as a PNG of the frame at `scale`, rasterized at 4× first. */
+function rasterize(svg: string, scale: number) {
+  return sharp(Buffer.from(svg), { density: 72 * scale * 4 })
+    .resize(MASCOT_FRAME_SIZE.width * scale, MASCOT_FRAME_SIZE.height * scale, { fit: "fill" })
+    .png()
+    .toBuffer();
 }
 
 /** Every problem with the delivered menu bar frames; empty when they can be rendered. */
@@ -36,7 +81,14 @@ export async function checkTraySources(trayDir: string): Promise<string[]> {
     if (svg && png) problems.push(`tray/${frame}: both .svg and .png; keep one`);
     else if (svg) {
       const text = await readFile(path.join(trayDir, `${frame}.svg`), "utf8");
-      if (!VIEWBOX.test(text)) problems.push(`tray/${frame}.svg: viewBox must be "0 0 24 20"`);
+      const prepared = prepareSvg(text);
+      if (!prepared) problems.push(`tray/${frame}.svg: cannot be rendered (${NO_ROOT})`);
+      else {
+        if (!prepared.viewBoxOk) problems.push(`tray/${frame}.svg: viewBox must be "0 0 24 20"`);
+        await rasterize(prepared.svg, 1).catch((error) =>
+          problems.push(`tray/${frame}.svg: cannot be rendered (${reason(error)})`),
+        );
+      }
     } else if (png) {
       const meta = await sharp(path.join(trayDir, `${frame}.png`)).metadata().catch(() => undefined);
       if (!meta) problems.push(`tray/${frame}.png: not a readable PNG`);
@@ -54,17 +106,22 @@ export async function checkMascotSources(source: string): Promise<string[]> {
 
 /** One frame as 1x/2x/3x PNGs; an SVG's own width/height never changes the result. */
 export async function renderTrayFrame(trayDir: string, frame: MascotFrame): Promise<TrayRepresentation[]> {
-  const svg = await readFile(path.join(trayDir, `${frame}.svg`)).catch(() => undefined);
+  const text = await readFile(path.join(trayDir, `${frame}.svg`), "utf8").catch(() => undefined);
+  const prepared = text === undefined ? undefined : prepareSvg(text);
+  if (text !== undefined && !prepared) throw new Error(`tray/${frame}.svg: cannot be rendered (${NO_ROOT})`);
   const reps: TrayRepresentation[] = [];
   for (const scale of SCALES) {
-    // Rasterize SVGs finely (4× the target) before the exact resize.
-    const image = svg
-      ? sharp(svg, { density: 72 * scale * 4 })
-      : sharp(path.join(trayDir, `${frame}.png`));
-    const png = await image
-      .resize(MASCOT_FRAME_SIZE.width * scale, MASCOT_FRAME_SIZE.height * scale, { fit: "fill" })
-      .png()
-      .toBuffer();
+    let png: Buffer;
+    if (prepared) {
+      png = await rasterize(prepared.svg, scale).catch((error) => {
+        throw new Error(`tray/${frame}.svg: cannot be rendered (${reason(error)})`);
+      });
+    } else {
+      png = await sharp(path.join(trayDir, `${frame}.png`))
+        .resize(MASCOT_FRAME_SIZE.width * scale, MASCOT_FRAME_SIZE.height * scale, { fit: "fill" })
+        .png()
+        .toBuffer();
+    }
     reps.push({ scaleFactor: scale, png: png.toString("base64") });
   }
   return reps;

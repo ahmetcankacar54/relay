@@ -66,6 +66,78 @@ test("frames render at exactly 24×20, 48×40 and 72×60 from an SVG with its ow
   }
 });
 
+const cover = (attrs: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20" ${attrs}><rect width="24" height="20"/></svg>`;
+
+test("an SVG with its own square size is not letterboxed or stretched", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  try {
+    await writeFile(path.join(tray, "idle.svg"), cover('width="48" height="48"'));
+    for (const rep of await renderTrayFrame(tray, "idle")) {
+      const stats = await sharp(Buffer.from(rep.png, "base64")).ensureAlpha().stats();
+      assert.equal(stats.channels[3].min, 255, `${rep.scaleFactor}x has transparent pixels`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an SVG with a huge own size still renders at the exact sizes", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  try {
+    await writeFile(path.join(tray, "idle.svg"), svg('width="2400" height="2000"'));
+    const reps = await renderTrayFrame(tray, "idle");
+    const sizes = await Promise.all(reps.map(async (r) => {
+      const meta = await sharp(Buffer.from(r.png, "base64")).metadata();
+      return [r.scaleFactor, meta.width, meta.height];
+    }));
+    assert.deepEqual(sizes, [[1, 24, 20], [2, 48, 40], [3, 72, 60]]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the viewBox counts only on the root element", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  try {
+    for (const frame of MASCOT_FRAMES.slice(2)) await writeFile(path.join(tray, `${frame}.svg`), svg());
+    const wrong = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">';
+    await writeFile(
+      path.join(tray, "idle.svg"),
+      `${wrong}<symbol viewBox="0 0 24 20"/><rect width="4" height="4"/></svg>`,
+    );
+    await writeFile(
+      path.join(tray, "blink-0.svg"),
+      `<!-- <svg viewBox="0 0 24 20"> -->${wrong}<rect width="4" height="4"/></svg>`,
+    );
+    assert.deepEqual((await checkTraySources(tray)).sort(), [
+      'tray/blink-0.svg: viewBox must be "0 0 24 20"',
+      'tray/idle.svg: viewBox must be "0 0 24 20"',
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an SVG that cannot be rendered is reported by name instead of failing at render time", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  try {
+    for (const frame of MASCOT_FRAMES.slice(2)) await writeFile(path.join(tray, `${frame}.svg`), svg());
+    await writeFile(path.join(tray, "idle.svg"), svg().slice(0, 60));
+    await writeFile(path.join(tray, "blink-0.svg"), "<html></html>");
+    const problems = await checkTraySources(tray);
+    assert.equal(problems.length, 2, problems.join("\n"));
+    assert.match(problems.find((p) => p.startsWith("tray/idle.svg"))!, /^tray\/idle\.svg: cannot be rendered \(.+\)$/);
+    assert.match(problems.find((p) => p.startsWith("tray/blink-0.svg"))!, /^tray\/blink-0\.svg: cannot be rendered \(.+\)$/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("the generated tray module holds every frame at three scales", async () => {
   assert.deepEqual(Object.keys(mascotTrayFrames).sort(), [...MASCOT_FRAMES].sort());
   for (const frame of MASCOT_FRAMES) {
