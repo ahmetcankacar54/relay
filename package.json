@@ -11,7 +11,9 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:ui": "vite --host 127.0.0.1",
-    "icons": "node scripts/icon.mjs",
+    "icons": "node scripts/icon.mjs && node --import tsx scripts/mascot.ts",
+    "mascot": "node --import tsx scripts/mascot.ts",
+    "mascot:placeholders": "node --import tsx scripts/mascot-placeholders.ts",
     "build": "tsc --noEmit && vite build && node scripts/build.mjs",
     "start": "electron .",
     "typecheck": "tsc --noEmit",
