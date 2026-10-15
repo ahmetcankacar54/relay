@@ -622,8 +622,10 @@ function holding() {
   f.tempo.value = flatTempo(100);
   f.clock.now = at("09:30", WEDNESDAY);
   f.calls.activeId = "a";
+  // Read at 09:30: a's use since an older read would come off its 250.
   const open = (id: string, usedPercent: number, clock: string) => ({
     ...f.fresh(f.accounts.find((x) => x.id === id)!),
+    checkedAt: iso(f.clock.now),
     fiveHour: { usedPercent, resetsAt: iso(at(clock, WEDNESDAY)) },
   });
   f.usage.a = open("a", 100 / 6, "12:00");

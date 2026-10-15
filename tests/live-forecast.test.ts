@@ -75,7 +75,7 @@ const context = (tempo: Tempo = presetTempo("medium")) =>
 // Windows: max 06:15–11:15–16:15, vertex 08:15–13:15, pro 06:30–11:30–16:30.
 const plan = dayPlan(WEDNESDAY, settings(), context(busyTempo));
 
-/** Usage read five minutes before `now`; the five-hour window is open until `resets`. */
+/** Usage read at `now`; the five-hour window is open until `resets`. */
 function fresh(
   id: string,
   now: number,
@@ -87,7 +87,7 @@ function fresh(
     accountId: id,
     status: "ready",
     stale: false,
-    checkedAt: new Date(now - 5 * MINUTE).toISOString(),
+    checkedAt: new Date(now).toISOString(),
     fiveHour: {
       usedPercent: used,
       ...(resets ? { resetsAt: new Date(at(resets)).toISOString() } : {}),
@@ -422,6 +422,68 @@ test("a schedule restarts an open window later and starts a closed one at its ti
       })!,
     ),
     ["max 10:00-15:00", "pro 15:00-16:00", "- 16:00-17:00", "pro 17:00-18:00"],
+  );
+});
+
+test("the account in use is read as of now: its use since the read at today's pace comes off", () => {
+  const duo = dayPlan(
+    WEDNESDAY,
+    settings({ accounts: [{ id: max.id }, { id: pro.id }] }),
+    context(flatTempo(120)),
+  );
+  // Every read five minutes old.
+  const read = (id: string, now: number, used: number, resets: string) => ({
+    ...fresh(id, now, used, resets),
+    checkedAt: new Date(now - 5 * MINUTE).toISOString(),
+  });
+  const live = (now: number, usage: Record<string, AccountUsage>) => ({
+    plan: duo,
+    settings: settings(),
+    context: context(flatTempo(120)),
+    usage,
+    activeId: "max",
+    now,
+  });
+  // Read at 09:55 with 100 Pro units left; at 120 an hour 10 went since.
+  const now = at("10:00");
+  const usage = {
+    max: read("max", now, 80, "14:00"),
+    pro: read("pro", now, 50, "13:00"),
+  };
+  const remaining = (input: ReturnType<typeof live> & { factor?: number }) =>
+    liveSetup(input)!.accounts.map(
+      (a) => Math.round(a.remaining * 1000) / 1000,
+    );
+  // Pro is not in use: as read.
+  assert.deepEqual(remaining(live(now, usage)), [90, 50]);
+  // At twice the pace, 20 went.
+  assert.deepEqual(remaining({ ...live(now, usage), factor: 2 }), [80, 50]);
+  // Never below empty.
+  assert.deepEqual(
+    remaining(live(now, { ...usage, max: read("max", now, 99, "14:00") })),
+    [0, 50],
+  );
+  // Only work time counts: read at 08:58, three minutes of work by 09:03.
+  const start = at("09:03");
+  assert.deepEqual(
+    remaining(
+      live(start, {
+        max: read("max", start, 80, "14:00"),
+        pro: read("pro", start, 50, "13:00"),
+      }),
+    ),
+    [94, 50],
+  );
+  // Before work no account is in use: as read.
+  const early = at("08:50");
+  assert.deepEqual(
+    remaining(
+      live(early, {
+        max: read("max", early, 80, "14:00"),
+        pro: read("pro", early, 50, "13:00"),
+      }),
+    ),
+    [100, 50],
   );
 });
 
