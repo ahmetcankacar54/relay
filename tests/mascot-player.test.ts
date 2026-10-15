@@ -185,6 +185,20 @@ test("each pose cycles its own fidgets, wherever the other poses left off", () =
   ]);
 });
 
+test("alert stands still and arms no timer, after its rise too", () => {
+  const h = harness();
+  h.player.update("alert");
+  assert.equal(h.shown.at(-1), "alert");
+  assert.equal(h.timers.size, 0);
+  const risen = harness();
+  risen.player.update("alert", "rise");
+  risen.advance(1000);
+  assert.deepEqual(after(risen.shown, 1), ["rise-0", "rise-1", "alert"]);
+  assert.equal(risen.timers.size, 0);
+  risen.advance(10 * 60_000);
+  assert.equal(risen.shown.at(-1), "alert");
+});
+
 test("destroy leaves no timers and ignores later updates", () => {
   const h = harness();
   h.player.update("warming");
