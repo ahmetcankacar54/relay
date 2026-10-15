@@ -923,7 +923,9 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
   assert.ok(html.includes(`></i>Bugün kalan: ${summary}<`));
   assert.ok(laneBlock(html, "Kotasız 14:48–17:00"));
   assert.doesNotMatch(html, /16:02–17:00/);
-  // Pro's window row: nothing from now until 13:30, then a window from it.
+  // Pro's window row: its planned window is closed by now (only the past
+  // part stays), nothing until 13:30, then a window from it.
+  assert.match(html, /title="11:30–12:00"/);
   assert.match(html, /title="13:30–18:30"/);
   assert.doesNotMatch(html, /title="11:30–16:30"/);
   // Pro's row: the adopted start, in the warning tone.
@@ -997,7 +999,12 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   // Turned off on the page: neither chip nor the adopted forecast, before
   // the keeper's next report.
   const off = renderAdapted({ settings: { adaptive: false } });
-  assert.doesNotMatch(off, /hızlısın|Plan uyarlandı/);
+  assert.doesNotMatch(off, /hızlısın|Plan uyarlandı|Uyarlandı/);
+  // Pro's adapted wait reads as a plain next start.
+  assert.match(
+    off,
+    /<small class="text-xs text-muted-foreground">Sonraki başlatma 13:30</,
+  );
   assert.match(off, /><\/i>Bugün kalan: 16:02–16:15 kotasız · 3 geçiş</);
   assert.doesNotMatch(
     renderScenario(automatic, wednesday("12:00")),
@@ -1013,4 +1020,25 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   assert.match(en, />Adapted · starts at 13:30</);
   assert.match(en, />Adapt</);
   assert.match(en, />Update the plan for today’s pace</);
+});
+
+test("an unreadable adopted time is left out", () => {
+  // The keeper's list carries a time that does not parse: no chip, no
+  // adopted start, and the account keeps the keeper's own status.
+  const html = renderAdapted({
+    now: wednesday("06:00"),
+    adaptation: {
+      factor: 1,
+      schedule: [{ accountId: pro.id, startAt: "later" }],
+    },
+    statuses: [
+      {
+        accountId: pro.id,
+        state: "outside",
+        nextStartAt: iso(wednesday("06:30")),
+      },
+    ],
+  });
+  assert.doesNotMatch(html, /Plan uyarlandı|Uyarlandı/);
+  assert.match(html, />Sonraki başlatma 06:30</);
 });

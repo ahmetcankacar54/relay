@@ -149,6 +149,34 @@ function statusText(
   }
 }
 
+/**
+ * An account's status as the page shows it. While adaptation is on, a start
+ * deferred before the account's active range (the keeper still reports it as
+ * outside the range) waits for its adopted time; once it is off on the page,
+ * an adapted wait reads as a plain next start.
+ */
+function shownStatus(
+  status: KeeperAccountStatus | undefined,
+  adaptation: TimelineAdaptation | undefined,
+): KeeperAccountStatus | undefined {
+  if (!status) return undefined;
+  const deferred = adaptation?.schedule[status.accountId];
+  if (status.state === "outside" && Number.isFinite(deferred))
+    return {
+      ...status,
+      state: "waiting",
+      reason: "adapted",
+      nextStartAt: new Date(deferred!).toISOString(),
+    };
+  if (!adaptation && status.state === "waiting" && status.reason === "adapted")
+    return {
+      accountId: status.accountId,
+      state: "outside",
+      nextStartAt: status.nextStartAt,
+    };
+  return status;
+}
+
 /** Hours and minutes between two clocks; an end at or before the start is the next day. */
 function span(hours: PlanningHours, t: T) {
   const minutes = (value: string) =>
@@ -286,7 +314,9 @@ export function PlanningPanel({
   const adaptation: TimelineAdaptation | undefined = report && {
     factor: report.factor,
     schedule: Object.fromEntries(
-      report.schedule.map((s) => [s.accountId, Date.parse(s.startAt)]),
+      report.schedule
+        .map((s) => [s.accountId, Date.parse(s.startAt)] as const)
+        .filter(([, time]) => Number.isFinite(time)),
     ),
   };
   const plans = [0, 1, 2, 3, 4, 5, 6, 7].map((d) =>
@@ -506,21 +536,10 @@ export function PlanningPanel({
           const first =
             entry.firstStart ??
             (automatic ? clock(automatic.firstStart, zone) : "09:00");
-          const reported = keeper?.accounts.find(
-            (s) => s.accountId === entry.id,
+          const status = shownStatus(
+            keeper?.accounts.find((s) => s.accountId === entry.id),
+            adaptation,
           );
-          // A start deferred before the account's active range still reads
-          // as outside it; it waits for the adopted time all the same.
-          const deferred = adaptation?.schedule[entry.id];
-          const status: KeeperAccountStatus | undefined =
-            reported?.state === "outside" && deferred !== undefined
-              ? {
-                  ...reported,
-                  state: "waiting",
-                  reason: "adapted",
-                  nextStartAt: new Date(deferred).toISOString(),
-                }
-              : reported;
           const lastFailure = keeper?.attempts.find(
             (a) => a.accountId === entry.id && a.status === "failed",
           )?.reason;

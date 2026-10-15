@@ -5,7 +5,6 @@ import type {
   AccountUsage,
   PlanningSettings,
 } from "../../../shared/types";
-import { WINDOW_MS } from "../../../shared/day-plan";
 import type { Forecast } from "../../../shared/capacity-plan";
 import type { Tempo } from "../../../shared/tempo";
 import {
@@ -281,7 +280,7 @@ export function PlanTimeline({
                     "absolute inset-y-0.5 rounded-[5px]",
                     windowTone(index),
                   )}
-                  title={`${clock(w.start)}–${clock(w.start + WINDOW_MS)}`}
+                  title={`${clock(w.start)}–${clock(w.end)}`}
                   style={position(w.start, w.end)}
                 />
               ))}

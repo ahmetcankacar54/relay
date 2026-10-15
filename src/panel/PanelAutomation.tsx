@@ -50,7 +50,9 @@ export function PanelAutomation({ now }: { now: number }) {
   // The earliest start the keeper moved today (its schedule is earliest first).
   const deferred =
     planning.autoStart && planning.adaptive !== false
-      ? relay.data?.planning?.adaptation?.schedule[0]
+      ? relay.data?.planning?.adaptation?.schedule.find((s) =>
+          Number.isFinite(Date.parse(s.startAt)),
+        )
       : undefined;
   const planLabel = !planning.autoStart
     ? t("Otomatik başlatma kapalı", "Automatic start off")

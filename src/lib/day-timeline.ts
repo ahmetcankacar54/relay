@@ -59,26 +59,36 @@ export interface TimelineAdaptation {
 }
 
 /**
- * An account's windows once its next start moved to `at`: what ran and the
- * window open now stay; the windows still to come give way to a chain from
- * `at` (or from the open window's reset, if later) until the work ends.
+ * An account's windows once its next start moved to `at`: what ran stays
+ * (a planned window that is closed by now only up to now), and the windows
+ * still to come give way to a chain until the work ends. The chain starts at
+ * `at` (never before the open window's reset), or earlier where the forecast
+ * first `uses` the account (every other account dry: its window opens then).
  */
-function deferredWindows(
-  windows: PlannedWindow[],
-  at: number,
-  now: number,
-  end: number,
-  open: boolean,
-): PlannedWindow[] {
-  const running = open
-    ? windows.find((w) => w.start <= now && w.end > now)
-    : undefined;
-  const kept = windows.filter((w) => w.end <= now || w === running);
-  for (
-    let start = Math.max(at, running?.end ?? now);
-    start < end;
-    start += WINDOW_MS
-  )
+function deferredWindows({
+  windows,
+  at,
+  now,
+  end,
+  open,
+  uses,
+}: {
+  windows: PlannedWindow[];
+  at: number;
+  now: number;
+  end: number;
+  open: boolean;
+  /** The account's stretches on the live forecast. */
+  uses: ForecastSegment[];
+}): PlannedWindow[] {
+  const running = windows.find((w) => w.start <= now && w.end > now);
+  const kept = windows.filter((w) => w.end <= now || (open && w === running));
+  if (running && !open && running.start < now)
+    kept.push({ start: running.start, end: now });
+  const after = open && running ? running.end : now;
+  const use = uses.find((s) => s.to > after);
+  const first = use ? Math.min(at, Math.max(use.from, after)) : at;
+  for (let start = Math.max(first, after); start < end; start += WINDOW_MS)
     kept.push({ start, end: start + WINDOW_MS });
   return kept;
 }
@@ -219,9 +229,28 @@ export function dayTimeline({
     offset === 0
       ? plans.slice(0, 2).find(({ interval }) => interval && interval.end > now)
       : undefined;
+  const rest =
+    current &&
+    liveForecast({
+      plan: current,
+      settings: planned,
+      context,
+      usage,
+      activeId,
+      now,
+      ...adaptation,
+    });
+  // The live part starts exactly where the plan part ends; the simulation
+  // rounds its first time to the minute. (Without demand and quota at now it
+  // starts later, at a refill.)
+  const liveStart = Math.max(now, current?.interval?.start ?? now);
+  const liveSegments = (rest?.segments ?? []).map((s, i) =>
+    i || Math.abs(s.from - liveStart) >= 60_000 ? s : { ...s, from: liveStart },
+  );
   // An account's planned windows; in the current interval a deferred account
-  // keeps its open window (by fresh usage, else by the plan, as the live
-  // forecast counts it) and starts again at its adopted time.
+  // keeps what ran (its window open now by fresh usage, else by the plan, as
+  // the live forecast counts it) and starts again at its adopted time, or
+  // where the lane first uses it.
   const windowsOf = (plan: DayPlan, id: string) =>
     plan.accounts
       .filter((a) => a.accountId === id)
@@ -229,9 +258,15 @@ export function dayTimeline({
         const at = plan === current ? adaptation?.schedule[id] : undefined;
         if (at === undefined) return a.windows;
         const u = usage[id];
-        const open =
-          !freshUsage(u, now) || Date.parse(u.fiveHour?.resetsAt ?? "") > now;
-        return deferredWindows(a.windows, at, now, plan.interval!.end, open);
+        return deferredWindows({
+          windows: a.windows,
+          at,
+          now,
+          end: plan.interval!.end,
+          open:
+            !freshUsage(u, now) || Date.parse(u.fiveHour?.resetsAt ?? "") > now,
+          uses: liveSegments.filter((s) => s.accountId === id),
+        });
       });
   const rows = planned.accounts
     .map(({ id }) => accounts.find((a) => a.id === id))
@@ -244,35 +279,13 @@ export function dayTimeline({
         dayEnd,
       ),
     }));
-  const rest =
-    current &&
-    liveForecast({
-      plan: current,
-      settings: planned,
-      context,
-      usage,
-      activeId,
-      now,
-      ...adaptation,
-    });
   const lane = plans.flatMap((plan) => {
     const segments = plan.forecast?.segments ?? [];
     if (plan !== current || !rest)
       return clip(segments, dayBegin, dayEnd, false);
-    // The live part starts exactly where the plan part ends; the simulation
-    // rounds its first time to the minute. (Without demand and quota at now
-    // it starts later, at a refill.)
-    const start = Math.max(now, plan.interval?.start ?? now);
     return [
       ...clip(segments, dayBegin, Math.min(now, dayEnd), false),
-      ...clip(
-        rest.segments.map((s, i) =>
-          i || Math.abs(s.from - start) >= 60_000 ? s : { ...s, from: start },
-        ),
-        dayBegin,
-        dayEnd,
-        true,
-      ),
+      ...clip(liveSegments, dayBegin, dayEnd, true),
     ];
   });
   const own = plans[1];

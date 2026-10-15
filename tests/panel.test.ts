@@ -246,6 +246,15 @@ test("the planning pill names the adopted start while the plan is adapted", () =
     assert.match(html, />Sonraki başlatma 13:00 · Kişisel · Max</);
     assert.doesNotMatch(html, /Uyarlandı/);
   }
+  // An entry whose time does not parse is skipped.
+  assert.match(
+    pill(keeper({ factor: 1, schedule: [{ accountId: "vertex", startAt: "later" }, ...deferred.schedule] })),
+    />Uyarlandı · Vertex 13:30</,
+  );
+  assert.match(
+    pill(keeper({ factor: 1, schedule: [{ accountId: "vertex", startAt: "later" }] })),
+    />Sonraki başlatma 13:00 · Kişisel · Max</,
+  );
   // Adaptation turned off applies at once.
   assert.doesNotMatch(
     pill(keeper(deferred), { ...settings, planning: { ...settings.planning, adaptive: false } }),
