@@ -8,7 +8,12 @@ import type {
 import { WINDOW_MS } from "../../../shared/day-plan";
 import type { Forecast } from "../../../shared/capacity-plan";
 import type { Tempo } from "../../../shared/tempo";
-import { dayTimeline, switchTimes, windowTone } from "@/lib/day-timeline";
+import {
+  dayTimeline,
+  switchTimes,
+  windowTone,
+  type TimelineAdaptation,
+} from "@/lib/day-timeline";
 import { forecastSummary } from "@/lib/forecast-text";
 import { formatClock } from "@/lib/time";
 import { parseLanguage } from "@/data/language";
@@ -36,6 +41,7 @@ export function PlanTimeline({
   now,
   tempo,
   activeId,
+  adaptation,
   t,
 }: {
   settings: PlanningSettings;
@@ -46,6 +52,8 @@ export function PlanTimeline({
   tempo?: Tempo;
   /** The account Claude Desktop uses now. */
   activeId?: string;
+  /** Today's pace and adopted starts from the keeper. */
+  adaptation?: TimelineAdaptation;
   t: T;
 }) {
   const [offset, setOffset] = useState(0);
@@ -53,7 +61,16 @@ export function PlanTimeline({
   const clock = (time: number) =>
     formatClock(time, parseLanguage(t("tr", "en")), zone);
   const { dayBegin, pct, intervals, rows, showNow, lane, compare } =
-    dayTimeline({ settings, accounts, usage, now, offset, tempo, activeId });
+    dayTimeline({
+      settings,
+      accounts,
+      usage,
+      now,
+      offset,
+      tempo,
+      activeId,
+      adaptation,
+    });
   const label = new Intl.DateTimeFormat(t("tr-TR", "en-GB"), {
     timeZone: zone,
     weekday: "long",

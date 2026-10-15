@@ -10,6 +10,8 @@ import {
   dayStart,
   planContext,
   shiftDate,
+  WINDOW_MS,
+  type DayPlan,
   type PlannedWindow,
   type WorkInterval,
 } from "../../shared/day-plan";
@@ -17,6 +19,7 @@ import { localDate } from "../../shared/planning";
 import { fallbackTempo, type Tempo } from "../../shared/tempo";
 import type { Forecast, ForecastSegment } from "../../shared/capacity-plan";
 import { liveForecast } from "../../shared/live-forecast";
+import { freshUsage } from "../../shared/usage";
 
 /** Planned settings without deleted accounts; deleted accounts take no slot, exactly as in the window keeper. */
 export function plannedSettings(
@@ -45,6 +48,39 @@ export function windowsInDay(
         w.start < dayEnd &&
         all.findIndex((x) => x.start === w.start) === i,
     );
+}
+
+/** Today's adaptation from the window keeper. */
+export interface TimelineAdaptation {
+  /** Today's pace multiplier for the tempo. */
+  factor: number;
+  /** accountId → adopted next window start. */
+  schedule: Record<string, number>;
+}
+
+/**
+ * An account's windows once its next start moved to `at`: what ran and the
+ * window open now stay; the windows still to come give way to a chain from
+ * `at` (or from the open window's reset, if later) until the work ends.
+ */
+function deferredWindows(
+  windows: PlannedWindow[],
+  at: number,
+  now: number,
+  end: number,
+  open: boolean,
+): PlannedWindow[] {
+  const running = open
+    ? windows.find((w) => w.start <= now && w.end > now)
+    : undefined;
+  const kept = windows.filter((w) => w.end <= now || w === running);
+  for (
+    let start = Math.max(at, running?.end ?? now);
+    start < end;
+    start += WINDOW_MS
+  )
+    kept.push({ start, end: start + WINDOW_MS });
+  return kept;
 }
 
 /** A stretch of the usage lane; no `accountId` is an outage, `live` comes from live usage. */
@@ -127,9 +163,9 @@ export interface DayTimeline {
 }
 
 /**
- * The day `offset` days from today in the planning zone; live resets and the
- * live forecast apply to today only. Without a tempo the settings' fallback
- * tempo plans the day.
+ * The day `offset` days from today in the planning zone; live resets, the
+ * live forecast and the keeper's adaptation apply to today only. Without a
+ * tempo the settings' fallback tempo plans the day.
  */
 export function dayTimeline({
   settings,
@@ -139,6 +175,7 @@ export function dayTimeline({
   offset = 0,
   tempo,
   activeId,
+  adaptation,
 }: {
   settings: PlanningSettings;
   accounts: Account[];
@@ -148,6 +185,11 @@ export function dayTimeline({
   tempo?: Tempo;
   /** The account Claude Desktop uses now (the live forecast starts with it). */
   activeId?: string;
+  /**
+   * Today's pace and adopted starts: the live forecast runs with them, and a
+   * deferred account's windows start at its adopted time.
+   */
+  adaptation?: TimelineAdaptation;
 }): DayTimeline {
   const zone = settings.timeZone;
   const planned = plannedSettings(settings, accounts);
@@ -171,27 +213,37 @@ export function dayTimeline({
     .filter(
       (i): i is WorkInterval => !!i && i.end > dayBegin && i.start < dayEnd,
     );
-  const rows = planned.accounts
-    .map(({ id }) => accounts.find((a) => a.id === id))
-    .filter((a): a is Account => !!a)
-    .map((account) => ({
-      account,
-      windows: windowsInDay(
-        plans.map((p) =>
-          p.accounts
-            .filter((a) => a.accountId === account.id)
-            .flatMap((a) => a.windows),
-        ),
-        dayBegin,
-        dayEnd,
-      ),
-    }));
   // Today the live forecast takes over from now: in yesterday's overnight
   // interval while it runs, else in today's (from its start when work is ahead).
   const current =
     offset === 0
       ? plans.slice(0, 2).find(({ interval }) => interval && interval.end > now)
       : undefined;
+  // An account's planned windows; in the current interval a deferred account
+  // keeps its open window (by fresh usage, else by the plan, as the live
+  // forecast counts it) and starts again at its adopted time.
+  const windowsOf = (plan: DayPlan, id: string) =>
+    plan.accounts
+      .filter((a) => a.accountId === id)
+      .flatMap((a) => {
+        const at = plan === current ? adaptation?.schedule[id] : undefined;
+        if (at === undefined) return a.windows;
+        const u = usage[id];
+        const open =
+          !freshUsage(u, now) || Date.parse(u.fiveHour?.resetsAt ?? "") > now;
+        return deferredWindows(a.windows, at, now, plan.interval!.end, open);
+      });
+  const rows = planned.accounts
+    .map(({ id }) => accounts.find((a) => a.id === id))
+    .filter((a): a is Account => !!a)
+    .map((account) => ({
+      account,
+      windows: windowsInDay(
+        plans.map((p) => windowsOf(p, account.id)),
+        dayBegin,
+        dayEnd,
+      ),
+    }));
   const rest =
     current &&
     liveForecast({
@@ -201,6 +253,7 @@ export function dayTimeline({
       usage,
       activeId,
       now,
+      ...adaptation,
     });
   const lane = plans.flatMap((plan) => {
     const segments = plan.forecast?.segments ?? [];

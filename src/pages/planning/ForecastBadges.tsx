@@ -12,11 +12,19 @@ const SOURCE: Record<Tempo["source"], [string, string]> = {
   default: ["Varsayılan tempoyla", "At the default tempo"],
 };
 
-/** The hero's forecast pill, led by the day it covers, and the tempo it assumes. */
+const warnChip = "bg-warn/15 text-warn-foreground";
+
+/**
+ * The hero's forecast pill, led by the day it covers, and the tempo it
+ * assumes; while the keeper adapts the day, today's pace and that the plan
+ * moved.
+ */
 export function ForecastBadges({
   forecast,
   day,
   source,
+  factor = 1,
+  adapted = false,
   clock,
   t,
 }: {
@@ -24,11 +32,19 @@ export function ForecastBadges({
   /** Which day the forecast covers, as its lead ("Bugün kalan: ", "Yarın tahmini: " …). */
   day: string;
   source: Tempo["source"];
+  /** Today's pace against the plan's (1 = as planned). */
+  factor?: number;
+  /** Whether the keeper moved a start today. */
+  adapted?: boolean;
   clock: (time: number) => string;
   t: T;
 }) {
   const gap = forecast.segments.some((s) => !s.accountId);
   const text = day + forecastSummary(forecast, t, clock);
+  const pace = new Intl.NumberFormat(t("tr-TR", "en-GB"), {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(factor);
   return (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
       <Badge
@@ -48,6 +64,19 @@ export function ForecastBadges({
         {text}
       </Badge>
       <Badge variant="secondary">{t(...SOURCE[source])}</Badge>
+      {factor > 1 && (
+        <Badge variant="secondary" className={warnChip}>
+          {t(
+            `Bugün planın ${pace}× hızlısın`,
+            `Today you’re at ${pace}× the plan’s pace`,
+          )}
+        </Badge>
+      )}
+      {adapted && (
+        <Badge variant="secondary" className={warnChip}>
+          {t("Plan uyarlandı", "Plan adapted")}
+        </Badge>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { panelRowState, accountRowSubtitle } from "../src/lib/account-row";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import type { OverviewRow } from "../src/data/selectors";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type DesktopState, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type DesktopState, type KeeperAdaptation, type KeeperSnapshot, type Snapshot } from "../shared/types";
 
 const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -213,4 +213,42 @@ test("a rejected switch clears the confirmation and shows the error", async () =
   assert.equal(refreshed, false);
   assert.equal(busy, "");
   assert.equal(lock.current, false);
+});
+
+test("the planning pill names the adopted start while the plan is adapted", () => {
+  // 10:00 / 10:30 UTC are 13:00 / 13:30 in Istanbul, the planning zone.
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    planning: { ...DEFAULT_SETTINGS.planning, autoStart: true, accounts: [{ id: "active" }, { id: "vertex" }] },
+  };
+  const keeper = (adaptation?: KeeperAdaptation): KeeperSnapshot => ({
+    enabled: true,
+    running: false,
+    accounts: [],
+    attempts: [],
+    plannedToday: 2,
+    next: { accountId: "active", at: "2026-10-15T10:00:00.000Z" },
+    ...(adaptation ? { adaptation } : {}),
+  });
+  const pill = (planning: KeeperSnapshot, planningSettings = settings) =>
+    render(
+      relayFor(active, [active, vertex], baseUsage, {
+        settings: planningSettings,
+        data: { settings: planningSettings, usage: baseUsage, accounts: [active, vertex], authFlows: [], planning } as unknown as Snapshot,
+      }),
+    );
+  const deferred = { factor: 1.6, schedule: [{ accountId: "vertex", startAt: "2026-10-15T10:30:00.000Z" }] };
+  assert.match(pill(keeper(deferred)), />Uyarlandı · Vertex 13:30</);
+  assert.doesNotMatch(pill(keeper(deferred)), /Sonraki başlatma/);
+  // A faster pace alone, or no adaptation: the next start as before.
+  for (const planning of [keeper({ factor: 1.6, schedule: [] }), keeper()]) {
+    const html = pill(planning);
+    assert.match(html, />Sonraki başlatma 13:00 · Kişisel · Max</);
+    assert.doesNotMatch(html, /Uyarlandı/);
+  }
+  // Adaptation turned off applies at once.
+  assert.doesNotMatch(
+    pill(keeper(deferred), { ...settings, planning: { ...settings.planning, adaptive: false } }),
+    /Uyarlandı/,
+  );
 });

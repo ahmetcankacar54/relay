@@ -1,19 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { createElement, isValidElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { randomUUID } from "node:crypto";
 import { PlanningPanel } from "../src/features/PlanningPanel";
+import { AdaptiveRow } from "../src/pages/planning/AdaptiveRow";
+import { Switch } from "../src/components/ui/switch";
 import { wallTime } from "../shared/planning";
 import { dayPlan, planContext } from "../shared/day-plan";
 import { presetTempo, type Tempo } from "../shared/tempo";
 import { liveForecast } from "../shared/live-forecast";
 import { dayTimeline } from "../src/lib/day-timeline";
 import { forecastSummary } from "../src/lib/forecast-text";
+import { planningUsage } from "./planning-fixtures";
 import {
   DEFAULT_PLANNING,
   type Account,
   type AccountUsage,
+  type KeeperAccountStatus,
+  type KeeperAdaptation,
   type KeeperSnapshot,
   type PlanningSettings,
   type TempoChoice,
@@ -797,4 +802,215 @@ test("a pill for a later day says which day it forecasts", () => {
     }),
     /><\/i>Monday: No gaps · 3 switches</,
   );
+});
+
+// Today's adaptation: the keeper saw a faster pace and moved Pro's next start.
+const iso = (time: number) => new Date(time).toISOString();
+const adapted = (
+  factor: number,
+  schedule: [Account, string][],
+): KeeperAdaptation => ({
+  factor,
+  schedule: schedule.map(([x, clock]) => ({
+    accountId: x.id,
+    startAt: iso(wednesday(clock)),
+  })),
+});
+const adaptedProps = ({
+  now = wednesday("12:00"),
+  settings,
+  adaptation = adapted(1.6, [[pro, "13:30"]]),
+  statuses = [
+    {
+      accountId: pro.id,
+      state: "waiting",
+      reason: "adapted",
+      nextStartAt: iso(wednesday("13:30")),
+    },
+  ],
+  usage = {},
+  t = tr,
+  update = () => {},
+}: {
+  now?: number;
+  settings?: Partial<PlanningSettings>;
+  adaptation?: KeeperAdaptation;
+  statuses?: KeeperAccountStatus[];
+  usage?: Record<string, AccountUsage>;
+  t?: (tr: string, en: string) => string;
+  update?: (patch: Partial<PlanningSettings>) => void;
+} = {}) => ({
+  settings: { ...scenarioSettings(automatic), ...settings },
+  keeper: {
+    enabled: true,
+    running: false,
+    plannedToday: 0,
+    attempts: [],
+    accounts: statuses,
+    tempo: busyTempo,
+    adaptation,
+  },
+  accounts: scenarioAccounts,
+  usage,
+  activeId: a.id,
+  disabled: false,
+  t,
+  now,
+  update,
+  updateAccount: () => {},
+});
+const renderAdapted = (options?: Parameters<typeof adaptedProps>[0]) =>
+  renderToStaticMarkup(createElement(PlanningPanel, adaptedProps(options)));
+/** A badge's classes by its exact text. */
+const badgeClass = (html: string, text: string) =>
+  html.match(
+    new RegExp(
+      `<span data-slot="badge"[^>]*class="([^"]*)"[^>]*>${text}</span>`,
+    ),
+  )?.[1];
+/** The switch with this label (its opening tag). */
+const switchTag = (html: string, label: string) =>
+  html.match(
+    new RegExp(`<button[^>]*role="switch"[^>]*aria-label="${label}"[^>]*>`),
+  )?.[0] ?? "";
+/** The first element of this component type in a rendered tree (unexpanded). */
+function findElement(node: unknown, type: unknown): ReactElement | undefined {
+  if (Array.isArray(node))
+    for (const child of node) {
+      const found = findElement(child, type);
+      if (found) return found;
+    }
+  if (!isValidElement(node)) return undefined;
+  if (node.type === type) return node;
+  return findElement((node.props as { children?: unknown }).children, type);
+}
+
+test("an adapted day shows the pace, the adapted forecast and the deferred start", () => {
+  // Fresh usage at noon: no window open, so Pro waits for its adopted 13:30.
+  const now = wednesday("12:00");
+  const usage = Object.fromEntries(
+    scenarioAccounts.map((x) => [x.id, planningUsage(x, now)]),
+  );
+  const html = renderAdapted({ usage });
+  // The hours card: the switch under the tempo row, on.
+  assert.match(html, />Uyarla</);
+  assert.match(html, />Gün içinde hızına göre planı güncelle</);
+  const toggle = switchTag(html, "Uyarla");
+  assert.match(toggle, /aria-checked="true"/);
+  assert.doesNotMatch(toggle, / disabled=""/);
+  assert.ok(html.indexOf(">ne hızla tüketiyorsun<") < html.indexOf(">Uyarla<"));
+  assert.ok(html.indexOf(">Uyarla<") < html.indexOf("Saat dilimi"));
+  // The hero: today's pace and the adapted plan, in the warning tone.
+  for (const text of ["Bugün planın 1,6× hızlısın", "Plan uyarlandı"]) {
+    const classes = badgeClass(html, text);
+    assert.ok(classes, text);
+    assert.match(classes, /bg-warn\/15/);
+    assert.match(classes, /text-warn-foreground/);
+  }
+  // The pill and the lane forecast the rest of the day at today's pace with
+  // the adopted start (16:02–17:00 without them).
+  const view = dayTimeline({
+    settings: scenarioSettings(automatic),
+    accounts: scenarioAccounts,
+    usage,
+    now,
+    tempo: busyTempo,
+    activeId: a.id,
+    adaptation: { factor: 1.6, schedule: { [pro.id]: wednesday("13:30") } },
+  });
+  const summary = forecastSummary(view.live!.forecast, tr, clock);
+  assert.equal(summary, "14:48–17:00 kotasız · 3 geçiş");
+  assert.ok(html.includes(`></i>Bugün kalan: ${summary}<`));
+  assert.ok(laneBlock(html, "Kotasız 14:48–17:00"));
+  assert.doesNotMatch(html, /16:02–17:00/);
+  // Pro's window row: nothing from now until 13:30, then a window from it.
+  assert.match(html, /title="13:30–18:30"/);
+  assert.doesNotMatch(html, /title="11:30–16:30"/);
+  // Pro's row: the adopted start, in the warning tone.
+  assert.match(
+    html,
+    /<small class="[^"]*text-warn-foreground[^"]*">Uyarlandı · başlatma 13:30<\/small>/,
+  );
+});
+
+test("the adapt switch follows the setting, needs automatic start and sends the change", () => {
+  assert.match(
+    switchTag(renderAdapted({ settings: { adaptive: false } }), "Uyarla"),
+    /aria-checked="false"/,
+  );
+  const off = switchTag(
+    renderAdapted({ settings: { autoStart: false } }),
+    "Uyarla",
+  );
+  assert.match(off, / disabled=""/);
+  // Turning it off sends just that.
+  const patches: Partial<PlanningSettings>[] = [];
+  const panel = PlanningPanel(
+    adaptedProps({ update: (patch) => patches.push(patch) }),
+  );
+  const row = findElement(panel, AdaptiveRow)!;
+  assert.ok(row);
+  const toggle = findElement(
+    AdaptiveRow(row.props as Parameters<typeof AdaptiveRow>[0]),
+    Switch,
+  )!;
+  (
+    toggle.props as { onCheckedChange: (checked: boolean) => void }
+  ).onCheckedChange(false);
+  assert.deepEqual(patches, [{ adaptive: false }]);
+});
+
+test("a start deferred before the account's active range shows the adopted time", () => {
+  // At 06:00 Pro's warm-up (06:30) is moved to 09:30; the keeper still
+  // reports the account as outside its range.
+  const html = renderAdapted({
+    now: wednesday("06:00"),
+    adaptation: adapted(1, [[pro, "09:30"]]),
+    statuses: [
+      {
+        accountId: pro.id,
+        state: "outside",
+        nextStartAt: iso(wednesday("06:30")),
+      },
+      {
+        accountId: team.id,
+        state: "outside",
+        nextStartAt: iso(wednesday("08:15")),
+      },
+    ],
+  });
+  assert.match(
+    html,
+    /<small class="[^"]*text-warn-foreground[^"]*">Uyarlandı · başlatma 09:30<\/small>/,
+  );
+  assert.doesNotMatch(html, /Sonraki başlatma 06:30/);
+  assert.match(html, />Sonraki başlatma 08:15</);
+});
+
+test("only what was adapted shows, and nothing once adaptation is off", () => {
+  const pace = renderAdapted({ adaptation: adapted(1.6, []), statuses: [] });
+  assert.ok(badgeClass(pace, "Bugün planın 1,6× hızlısın"));
+  assert.equal(badgeClass(pace, "Plan uyarlandı"), undefined);
+  const moved = renderAdapted({ adaptation: adapted(1, [[pro, "13:30"]]) });
+  assert.ok(badgeClass(moved, "Plan uyarlandı"));
+  assert.doesNotMatch(moved, /hızlısın/);
+  // Turned off on the page: neither chip nor the adopted forecast, before
+  // the keeper's next report.
+  const off = renderAdapted({ settings: { adaptive: false } });
+  assert.doesNotMatch(off, /hızlısın|Plan uyarlandı/);
+  assert.match(off, /><\/i>Bugün kalan: 16:02–16:15 kotasız · 3 geçiş</);
+  assert.doesNotMatch(
+    renderScenario(automatic, wednesday("12:00")),
+    /hızlısın|Plan uyarlandı|Uyarlandı/,
+  );
+  // In English, with one decimal.
+  const en = renderAdapted({
+    adaptation: adapted(2, [[pro, "13:30"]]),
+    t: (_, text) => text,
+  });
+  assert.ok(badgeClass(en, "Today you’re at 2.0× the plan’s pace"));
+  assert.ok(badgeClass(en, "Plan adapted"));
+  assert.match(en, />Adapted · starts at 13:30</);
+  assert.match(en, />Adapt</);
+  assert.match(en, />Update the plan for today’s pace</);
 });

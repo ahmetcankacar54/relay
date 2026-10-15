@@ -42,17 +42,29 @@ export function PanelAutomation({ now }: { now: number }) {
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
   const fleet = relay.data?.fleet;
   const planning = settings.planning;
+  const clock = (time: string) =>
+    formatClock(time, language, planning.timeZone);
   const next = planning.autoStart
     ? nextPlannedWindow(planning, accounts, relay.data?.planning, now)
     : undefined;
+  // The earliest start the keeper moved today (its schedule is earliest first).
+  const deferred =
+    planning.autoStart && planning.adaptive !== false
+      ? relay.data?.planning?.adaptation?.schedule[0]
+      : undefined;
   const planLabel = !planning.autoStart
     ? t("Otomatik başlatma kapalı", "Automatic start off")
-    : next
+    : deferred
       ? t(
-          `Sonraki başlatma ${formatClock(next.at, language, planning.timeZone)} · ${name(next.accountId)}`,
-          `Next start ${formatClock(next.at, language, planning.timeZone)} · ${name(next.accountId)}`,
+          `Uyarlandı · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
+          `Adapted · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
         )
-      : t("Otomatik başlatma açık", "Automatic start on");
+      : next
+        ? t(
+            `Sonraki başlatma ${clock(next.at)} · ${name(next.accountId)}`,
+            `Next start ${clock(next.at)} · ${name(next.accountId)}`,
+          )
+        : t("Otomatik başlatma açık", "Automatic start on");
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>

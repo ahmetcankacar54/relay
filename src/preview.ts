@@ -280,6 +280,13 @@ if (scenario === "planning") {
     accounts: ids.slice(0, 3).map((id) => ({ id })),
   };
   const hour = 3_600_000;
+  // Today runs 1.6× the plan's pace, so the keeper moved the second account's
+  // next start 90 minutes out; its window is closed until then.
+  const adoptedStart = new Date(Date.now() + 90 * 60_000).toISOString();
+  state.usage[ids[1]] = {
+    ...state.usage[ids[1]],
+    fiveHour: { usedPercent: 0 },
+  };
   // A learned busy day: quieter at lunch, flat at the weekend.
   const busy: Record<number, number> = {
     9: 220,
@@ -311,8 +318,9 @@ if (scenario === "planning") {
       },
       {
         accountId: ids[1],
-        state: "outside",
-        nextStartAt: new Date(Date.now() + 5 * hour).toISOString(),
+        state: "waiting",
+        reason: "adapted",
+        nextStartAt: adoptedStart,
       },
       { accountId: ids[2], state: "waiting", reason: "cooldown" },
     ],
@@ -333,6 +341,12 @@ if (scenario === "planning") {
         status: "verified",
       },
     ],
+    adaptation: {
+      factor: 1.6,
+      observedRate: 330,
+      schedule: [{ accountId: ids[1], startAt: adoptedStart }],
+      since: new Date().toISOString(),
+    },
   };
 }
 if (scenario === "auto-waiting" || scenario === "auto-prepared") {

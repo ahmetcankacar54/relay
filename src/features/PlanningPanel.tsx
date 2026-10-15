@@ -16,7 +16,11 @@ import {
 } from "../../shared/day-plan";
 import { localDate } from "../../shared/planning";
 import { fallbackTempo, presetTempo } from "../../shared/tempo";
-import { dayTimeline, nextPlannedWindow } from "../lib/day-timeline";
+import {
+  dayTimeline,
+  nextPlannedWindow,
+  type TimelineAdaptation,
+} from "../lib/day-timeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +32,7 @@ import { TimeZonePicker } from "./TimeZonePicker";
 import { PlanEditor } from "./PlanEditor";
 import { PlanTimeline } from "../pages/planning/PlanTimeline";
 import { TempoRow } from "../pages/planning/TempoRow";
+import { AdaptiveRow } from "../pages/planning/AdaptiveRow";
 import { ForecastBadges } from "../pages/planning/ForecastBadges";
 import { AccountWindowLine } from "../pages/planning/AccountWindowLine";
 
@@ -109,6 +114,11 @@ function statusText(
     case "due":
       return t("Başlatılıyor…", "Starting…");
     case "waiting":
+      if (status.reason === "adapted")
+        return t(
+          `Uyarlandı · başlatma ${clock(status.nextStartAt!, zone)}`,
+          `Adapted · starts at ${clock(status.nextStartAt!, zone)}`,
+        );
       if (status.reason === "cooldown")
         return t(
           `Son deneme başarısız (${failureText(lastFailure, t)}); 15 dk sonra yeniden denenecek`,
@@ -267,6 +277,18 @@ export function PlanningPanel({
       ? (keeper?.tempo ?? fallbackTempo(settings))
       : presetTempo(choice);
   const context = planContext(accounts, tempo);
+  // Today's pace and adopted starts, while the keeper adapts the day (turning
+  // adaptation off here applies at once).
+  const report =
+    settings.autoStart && settings.adaptive !== false
+      ? keeper?.adaptation
+      : undefined;
+  const adaptation: TimelineAdaptation | undefined = report && {
+    factor: report.factor,
+    schedule: Object.fromEntries(
+      report.schedule.map((s) => [s.accountId, Date.parse(s.startAt)]),
+    ),
+  };
   const plans = [0, 1, 2, 3, 4, 5, 6, 7].map((d) =>
     dayPlan(shiftDate(today, d), planned, context),
   );
@@ -283,6 +305,7 @@ export function PlanningPanel({
     now,
     tempo,
     activeId,
+    adaptation,
   });
   // Today the hero reads the lane's live forecast: of the whole day before
   // work, of the rest while work runs. A later day has its plan's forecast.
@@ -372,6 +395,10 @@ export function PlanningPanel({
               forecast={forecast}
               day={forecastDay}
               source={tempo.source}
+              factor={adaptation?.factor}
+              adapted={
+                !!adaptation && Object.keys(adaptation.schedule).length > 0
+              }
               clock={zoneClock}
               t={t}
             />
@@ -426,6 +453,12 @@ export function PlanningPanel({
             onChange={(tempo) => update({ tempo })}
             t={t}
           />
+          <AdaptiveRow
+            settings={settings}
+            disabled={disabled}
+            update={update}
+            t={t}
+          />
         </div>
         <div className="mt-2.5 max-w-[420px]">
           <TimeZonePicker
@@ -453,6 +486,7 @@ export function PlanningPanel({
         now={now}
         tempo={tempo}
         activeId={activeId}
+        adaptation={adaptation}
         t={t}
       />
 
@@ -472,7 +506,21 @@ export function PlanningPanel({
           const first =
             entry.firstStart ??
             (automatic ? clock(automatic.firstStart, zone) : "09:00");
-          const status = keeper?.accounts.find((s) => s.accountId === entry.id);
+          const reported = keeper?.accounts.find(
+            (s) => s.accountId === entry.id,
+          );
+          // A start deferred before the account's active range still reads
+          // as outside it; it waits for the adopted time all the same.
+          const deferred = adaptation?.schedule[entry.id];
+          const status: KeeperAccountStatus | undefined =
+            reported?.state === "outside" && deferred !== undefined
+              ? {
+                  ...reported,
+                  state: "waiting",
+                  reason: "adapted",
+                  nextStartAt: new Date(deferred).toISOString(),
+                }
+              : reported;
           const lastFailure = keeper?.attempts.find(
             (a) => a.accountId === entry.id && a.status === "failed",
           )?.reason;

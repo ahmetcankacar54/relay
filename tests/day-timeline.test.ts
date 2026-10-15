@@ -283,3 +283,60 @@ test("during lunch after a gap the live part starts when demand resumes, not at 
   assert.equal(live[0].accountId, "a");
   assert.ok(view.lane.every((x) => x.to <= now || x.from >= at(WEDNESDAY, "13:00")));
 });
+
+// Today's adaptation: a faster pace and b's next start moved later.
+test("an adapted day forecasts the rest at today's pace with the adopted starts", () => {
+  const accounts = [planningAccount("a"), planningAccount("b")];
+  const s = settings();
+  const tempo = presetTempo("medium");
+  const now = at("2026-10-13", "12:00");
+  // Fresh usage read at noon: no window open on either account.
+  const usage = Object.fromEntries(accounts.map((x) => [x.id, planningUsage(x, now)]));
+  const startAt = at("2026-10-13", "14:30");
+  const adaptation = { factor: 2, schedule: { b: startAt } };
+  const view = dayTimeline({ settings: s, accounts, usage, now, tempo, activeId: "a", adaptation });
+  const unadapted = dayTimeline({ settings: s, accounts, usage, now, tempo, activeId: "a" });
+  const context = planContext(accounts, tempo);
+  const plan = dayPlan("2026-10-13", plannedSettings(s, accounts), context);
+  const live = liveForecast({ plan, settings: plannedSettings(s, accounts), context, usage, activeId: "a", now, factor: 2, schedule: { b: startAt } })!;
+  assert.deepEqual(plain(view.lane.filter((x) => x.live)), plain(live.segments));
+  assert.deepEqual(view.live?.forecast, live);
+  assert.notDeepEqual(plain(view.lane), plain(unadapted.lane));
+  // The part before now is still the plan's.
+  assert.deepEqual(plain(view.lane.filter((x) => !x.live)), plain(unadapted.lane.filter((x) => !x.live)));
+  // b's row: its closed planned window and the rest of the chain give way to
+  // a chain from 14:30; a's row is the plan's.
+  const windows = (v: typeof view, id: string) =>
+    v.rows.find((r) => r.account.id === id)!.windows.map((w) => `${clockOf(w.start)}–${clockOf(w.end)}`);
+  assert.deepEqual(windows(unadapted, "b"), ["08:00–13:00", "13:00–18:00"]);
+  assert.deepEqual(windows(view, "b"), ["14:30–19:30"]);
+  const b = view.rows.find((r) => r.account.id === "b")!.windows;
+  assert.ok(b.every((w) => w.end <= now || w.start >= startAt));
+  assert.deepEqual(windows(view, "a"), windows(unadapted, "a"));
+  // Another day is the plan only.
+  const tomorrow = dayTimeline({ settings: s, accounts, usage, now, offset: 1, tempo, activeId: "a", adaptation });
+  const tomorrowPlain = dayTimeline({ settings: s, accounts, usage, now, offset: 1, tempo, activeId: "a" });
+  assert.deepEqual(tomorrow.rows, tomorrowPlain.rows);
+  assert.deepEqual(tomorrow.lane, tomorrowPlain.lane);
+});
+
+test("a held restart keeps the open window and starts the next one at the adopted time", () => {
+  const accounts = [planningAccount("a"), planningAccount("b")];
+  const s = settings();
+  const tempo = presetTempo("medium");
+  const now = at("2026-10-13", "12:00");
+  const usage = {
+    a: planningUsage(accounts[0], now),
+    b: { ...planningUsage(accounts[1], now), fiveHour: { usedPercent: 40, resetsAt: new Date(at("2026-10-13", "13:00")).toISOString() } },
+  };
+  const view = dayTimeline({ settings: s, accounts, usage, now, tempo, activeId: "a", adaptation: { factor: 1, schedule: { b: at("2026-10-13", "14:00") } } });
+  const b = view.rows.find((r) => r.account.id === "b")!.windows;
+  // Nothing between its reset at 13:00 and 14:00; the chain stops at the work end.
+  assert.deepEqual(b.map((w) => `${clockOf(w.start)}–${clockOf(w.end)}`), ["08:00–13:00", "14:00–19:00"]);
+  // Without fresh usage the plan's window counts as open, as in the live forecast.
+  const stale = dayTimeline({ settings: s, accounts, usage: {}, now, tempo, activeId: "a", adaptation: { factor: 1, schedule: { b: at("2026-10-13", "13:30") } } });
+  assert.deepEqual(
+    stale.rows.find((r) => r.account.id === "b")!.windows.map((w) => `${clockOf(w.start)}–${clockOf(w.end)}`),
+    ["08:00–13:00", "13:30–18:30"],
+  );
+});
