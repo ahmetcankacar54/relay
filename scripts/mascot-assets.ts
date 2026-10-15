@@ -3,6 +3,10 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { MASCOT_FRAME_SIZE, MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
+import {
+  DISGUISE_PROPS, PANDA_CANVAS, PANDA_EXPRESSIONS, PANDA_POSES, POSE_NESTING, POSE_PARTS, POSE_PROPS,
+  type PandaPose,
+} from "../shared/panda-poses";
 
 const SCALES = [1, 2, 3] as const;
 const VIEWBOX = /^\s*0[\s,]+0[\s,]+24[\s,]+20\s*$/;
@@ -138,9 +142,136 @@ export async function checkTraySources(trayDir: string): Promise<string[]> {
   return problems;
 }
 
-/** Every problem with a delivery in `source` (tray/ now; phase 2 adds rig/). */
+const RIG_VIEWBOX = /^\s*0[\s,]+0[\s,]+512[\s,]+512\s*$/;
+/** The shapes the Codex brief allows; anything else (script, style, image, use…) is refused. */
+const RIG_ELEMENTS = new Set([
+  "g", "path", "circle", "ellipse", "rect", "polygon", "polyline", "line",
+  "defs", "clipPath", "mask", "linearGradient", "radialGradient", "stop", "title", "desc",
+]);
+/** Markup that is not an element skipped; a start or end tag with its slash, name and attributes captured. */
+const TAG =
+  /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<!\[CDATA\[[\s\S]*?\]\]>|<!DOCTYPE(?:[^>[]|\[[\s\S]*?\])*>|<(\/?)([A-Za-z][\w:.-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+/** The start of each url(…) target, quotes skipped. */
+const URL_TARGET = /url\(\s*['"]?([^'")\s]*)/gi;
+
+interface RigNode {
+  name: string;
+  attributes: Map<string, string>;
+  /** Labels of the groups around it (`part:head`, `prop:bamboo`, `expression:open`), outermost first. */
+  within: string[];
+}
+
+function attributesOf(source: string) {
+  const attributes = new Map<string, string>();
+  for (const [, name, double, single] of source.matchAll(ATTRIBUTE)) attributes.set(name, double ?? single ?? "");
+  return attributes;
+}
+
+function labelOf(attributes: Map<string, string>) {
+  for (const key of ["part", "prop", "expression"] as const) {
+    const value = attributes.get(`data-${key}`);
+    if (value !== undefined) return `${key}:${value}`;
+  }
+  return undefined;
+}
+
+/** The root's attributes and every element inside it, with the labelled groups around each. */
+function readRig(text: string): { root?: Map<string, string>; nodes: RigNode[] } {
+  const nodes: RigNode[] = [];
+  const stack: (string | undefined)[] = [];
+  let root: Map<string, string> | undefined;
+  for (const [, slash, name, rest] of text.matchAll(TAG)) {
+    if (name === undefined) continue; // a comment, declaration or CDATA
+    if (slash) {
+      stack.pop();
+      continue;
+    }
+    const attributes = attributesOf(rest);
+    if (!root) {
+      if (name !== "svg") return { nodes };
+      root = attributes;
+      continue;
+    }
+    nodes.push({ name, attributes, within: stack.filter((label): label is string => !!label) });
+    if (!/\/\s*$/.test(rest)) stack.push(labelOf(attributes));
+  }
+  return { root, nodes };
+}
+
+function pivotInside(value: string) {
+  const numbers = value.trim().split(/[\s,]+/).map(Number);
+  return numbers.length === 2 && numbers.every((n) => Number.isFinite(n) && n >= 0 && n <= PANDA_CANVAS);
+}
+
+/** Every problem with one rig file; each distinct problem once. */
+function rigProblems(pose: PandaPose, text: string): string[] {
+  const file = `rig/${pose}.svg`;
+  const { root, nodes } = readRig(text);
+  if (!root) return [`${file}: no <svg> root element`];
+  const problems = new Set<string>();
+  if (!RIG_VIEWBOX.test(root.get("viewBox") ?? "")) problems.add(`${file}: viewBox must be "0 0 512 512"`);
+  if (/javascript:/i.test(text)) problems.add(`${file}: javascript: is not allowed`);
+  const parts = new Map<string, RigNode>();
+  const props = new Map<string, RigNode>();
+  for (const node of [{ name: "svg", attributes: root, within: [] } as RigNode, ...nodes]) {
+    if (node.attributes !== root && !RIG_ELEMENTS.has(node.name)) problems.add(`${file}: <${node.name}> is not allowed`);
+    for (const [name, value] of node.attributes) {
+      if (/^on/i.test(name)) problems.add(`${file}: event attribute ${name} is not allowed`);
+      if ((name === "href" || name === "xlink:href") && !value.startsWith("#"))
+        problems.add(`${file}: ${name}="${value}" must point to an #id in the same file`);
+      for (const [, target] of value.matchAll(URL_TARGET))
+        if (!target.startsWith("#")) problems.add(`${file}: url(${target}) must point to an #id in the same file`);
+    }
+    const part = node.attributes.get("data-part");
+    const prop = node.attributes.get("data-prop");
+    if (part === undefined && prop === undefined) continue;
+    const label = part !== undefined ? `part "${part}"` : `prop "${prop}"`;
+    if (part !== undefined) parts.set(part, node);
+    else props.set(prop!, node);
+    // A CSS transform replaces the element's own transform attribute while it animates.
+    if (node.attributes.has("transform"))
+      problems.add(`${file}: ${label} has its own transform; move it to an inner group`);
+    const pivot = node.attributes.get("data-pivot");
+    const needsPivot = part !== undefined || (DISGUISE_PROPS as readonly string[]).includes(prop!);
+    if (pivot === undefined ? needsPivot : !pivotInside(pivot))
+      problems.add(`${file}: ${label} needs data-pivot="x y" inside the 512×512 canvas`);
+  }
+  for (const name of POSE_PARTS[pose]) if (!parts.has(name)) problems.add(`${file}: missing part "${name}"`);
+  for (const name of POSE_PROPS[pose]) if (!props.has(name)) problems.add(`${file}: missing prop "${name}"`);
+  if (parts.has("eyes"))
+    for (const expression of PANDA_EXPRESSIONS)
+      if (!nodes.some((n) => n.attributes.get("data-expression") === expression && n.within.includes("part:eyes")))
+        problems.add(`${file}: missing expression "${expression}" inside part "eyes"`);
+  for (const [name, holders] of Object.entries(POSE_NESTING[pose] ?? {})) {
+    const node = props.get(name) ?? parts.get(name);
+    if (node && !holders.some((holder) => node.within.includes(`part:${holder}`)))
+      problems.add(
+        `${file}: ${props.has(name) ? "prop" : "part"} "${name}" must be inside part ${holders.map((h) => `"${h}"`).join(" or ")}`,
+      );
+  }
+  return [...problems];
+}
+
+/** Every problem with the delivered puppet rig; empty when it can be generated. */
+export async function checkRigSources(rigDir: string): Promise<string[]> {
+  const problems: string[] = [];
+  const files = await list(rigDir);
+  const poses = new Set<string>(PANDA_POSES);
+  for (const file of files)
+    if (!file.endsWith(".svg") || !poses.has(file.slice(0, -4))) problems.push(`rig/${file}: not a puppet pose`);
+  for (const pose of PANDA_POSES) {
+    if (!files.includes(`${pose}.svg`)) problems.push(`rig/${pose}.svg: missing`);
+    else problems.push(...rigProblems(pose, await readFile(path.join(rigDir, `${pose}.svg`), "utf8")));
+  }
+  return problems;
+}
+
+/** Every problem with a delivery in `source`: the menu bar frames and the puppet rig. */
 export async function checkMascotSources(source: string): Promise<string[]> {
-  return checkTraySources(path.join(source, "tray"));
+  return [
+    ...(await checkTraySources(path.join(source, "tray"))),
+    ...(await checkRigSources(path.join(source, "rig"))),
+  ];
 }
 
 /** One frame as 1x/2x/3x PNGs; an SVG's own width/height never changes the result. */

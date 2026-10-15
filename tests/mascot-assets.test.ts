@@ -5,12 +5,14 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import {
-  checkMascotSources, checkTraySources, renderMascot, renderTrayFrame, traySourcesHash, writeMascot,
+  checkMascotSources, checkRigSources, checkTraySources, renderMascot, renderTrayFrame, traySourcesHash, writeMascot,
 } from "../scripts/mascot-assets";
 import { mascotTrayFrames } from "../electron/mascot-tray-frames";
 import { MASCOT_FRAMES } from "../shared/mascot-frames";
+import { PANDA_POSES, type PandaPose } from "../shared/panda-poses";
 
 const root = path.resolve(import.meta.dirname, "..");
+const RIG = path.join(root, "assets/mascot/source/rig");
 const svg = (attrs = "") =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20" ${attrs}><rect x="2" y="2" width="20" height="16"/></svg>`;
 /** A black silhouette with a transparent border, like a valid template frame. */
@@ -264,5 +266,118 @@ test("the sources hash ignores SVG line endings, as a Windows checkout writes th
   } finally {
     await rm(lf, { recursive: true, force: true });
     await rm(crlf, { recursive: true, force: true });
+  }
+});
+
+/** A temporary copy of the committed rig, each file changed by its mutator. */
+async function rigDir(mutate: Partial<Record<PandaPose, (svg: string) => string>> = {}) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "relay-rig-"));
+  for (const pose of PANDA_POSES) {
+    const svg = await readFile(path.join(RIG, `${pose}.svg`), "utf8");
+    await writeFile(path.join(dir, `${pose}.svg`), mutate[pose]?.(svg) ?? svg);
+  }
+  return dir;
+}
+/** Markup added right after the root start tag. */
+const inject = (svg: string, markup: string) => svg.replace(/(<svg[^>]*>)/, `$1${markup}`);
+
+test("the committed rig is complete and valid", async () => {
+  assert.deepEqual(await checkRigSources(RIG), []);
+});
+
+test("a rig delivery with missing or extra files lists each, ignoring hidden files", async () => {
+  const dir = await rigDir();
+  try {
+    await rm(path.join(dir, "door.svg"));
+    await writeFile(path.join(dir, "dance.svg"), "<svg/>");
+    await writeFile(path.join(dir, "sit.png"), "");
+    await writeFile(path.join(dir, ".DS_Store"), "");
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      "rig/dance.svg: not a puppet pose",
+      "rig/door.svg: missing",
+      "rig/sit.png: not a puppet pose",
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("unsafe rig content is refused by name", async () => {
+  const dir = await rigDir({
+    sit: (s) => inject(s, "<script>alert(1)</script>"),
+    stand: (s) => inject(s, '<image href="https://example.com/panda.png" width="10" height="10"/>'),
+    walk: (s) => s.replace('data-part="tail"', 'onclick="steal()" data-part="tail"'),
+    curl: (s) => inject(s, '<rect width="4" height="4" fill="url(https://example.com/x.svg#p)"/>'),
+    head: (s) => inject(s, '<linearGradient id="panda-g" href="javascript:alert(1)"/>'),
+    peek: (s) => inject(s, "<style>*{}</style>"),
+  });
+  try {
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      "rig/curl.svg: url(https://example.com/x.svg#p) must point to an #id in the same file",
+      'rig/head.svg: href="javascript:alert(1)" must point to an #id in the same file',
+      "rig/head.svg: javascript: is not allowed",
+      "rig/peek.svg: <style> is not allowed",
+      "rig/sit.svg: <script> is not allowed",
+      "rig/stand.svg: <image> is not allowed",
+      'rig/stand.svg: href="https://example.com/panda.png" must point to an #id in the same file',
+      "rig/walk.svg: event attribute onclick is not allowed",
+    ].sort());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a rig pose missing a part, expression, prop or nesting lists each", async () => {
+  const dir = await rigDir({
+    sit: (s) => s.replace('data-part="tail"', 'data-part="tale"').replace('data-expression="happy"', 'data-expression="glad"'),
+    stand: (s) => s.replace('data-prop="coat"', 'data-prop="cape"'),
+    chew: (s) => s.replace('data-part="held"', 'data-part="hold"'),
+  });
+  try {
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      'rig/chew.svg: missing part "held"',
+      'rig/chew.svg: prop "bamboo" must be inside part "held"',
+      'rig/chew.svg: prop "cursor" must be inside part "held"',
+      'rig/chew.svg: prop "cursor-bitten" must be inside part "held"',
+      'rig/sit.svg: missing expression "happy" inside part "eyes"',
+      'rig/sit.svg: missing part "tail"',
+      'rig/stand.svg: missing prop "coat"',
+    ].sort());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("rig pivots must sit inside the canvas, and parts carry no transform of their own", async () => {
+  const dir = await rigDir({
+    walk: (s) => s.replace('data-part="tail" data-pivot="218 300"', 'data-part="tail"'),
+    stand: (s) => s.replace('data-pivot="256 91"', 'data-pivot="256 600"'),
+    door: (s) => s.replace('data-part="leaf"', 'data-part="leaf" transform="translate(4 0)"'),
+    sit: (s) => s.replace('data-pivot="405 454"', 'data-pivot="bowl"'),
+  });
+  try {
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      'rig/door.svg: part "leaf" has its own transform; move it to an inner group',
+      'rig/sit.svg: prop "bowl" needs data-pivot="x y" inside the 512×512 canvas',
+      'rig/stand.svg: prop "fedora" needs data-pivot="x y" inside the 512×512 canvas',
+      'rig/walk.svg: part "tail" needs data-pivot="x y" inside the 512×512 canvas',
+    ].sort());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the rig viewBox counts on the root element, and a file needs one", async () => {
+  const dir = await rigDir({
+    stand: (s) => s.replace('viewBox="0 0 512 512"', 'viewBox="0 0 256 256"'),
+    head: () => "<html></html>",
+  });
+  try {
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      "rig/head.svg: no <svg> root element",
+      'rig/stand.svg: viewBox must be "0 0 512 512"',
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
