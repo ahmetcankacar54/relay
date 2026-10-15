@@ -20,6 +20,8 @@ export interface SimAccount {
   keepAlive: boolean;
   /** Planned start of a closed window (used only while no window is open). */
   warmUp?: number;
+  /** Hold the restart after the open window's reset until this time (first use starts it earlier). */
+  restartAt?: number;
   /** Pro units left in the open window. */
   remaining: number;
   /** Out of reach (for example, its weekly limit is used up). */
@@ -61,6 +63,7 @@ interface SimState {
   order: number;
   reset?: number;
   warmUp?: number;
+  restartAt?: number;
   keepAlive: boolean;
   left: number;
   blocked: boolean;
@@ -80,6 +83,7 @@ export function simulateDay(input: SimInput): Forecast {
     order,
     reset: a.firstReset,
     warmUp: a.firstReset === undefined ? a.warmUp : undefined,
+    restartAt: a.restartAt,
     keepAlive: a.keepAlive,
     left: a.remaining,
     blocked: !!a.blocked,
@@ -87,14 +91,28 @@ export function simulateDay(input: SimInput): Forecast {
   const full = (s: SimState) => 100 * s.capacity;
   const advance = (time: number) => {
     for (const s of states) {
-      if (s.reset === undefined && s.warmUp !== undefined && s.warmUp <= time) {
-        s.reset = s.warmUp + WINDOW_MS;
-        s.left = full(s);
-        s.warmUp = undefined;
-      }
-      while (s.reset !== undefined && s.reset <= time) {
-        s.left = full(s);
-        s.reset = s.keepAlive ? s.reset + WINDOW_MS : undefined;
+      for (;;) {
+        if (
+          s.reset === undefined &&
+          s.warmUp !== undefined &&
+          s.warmUp <= time
+        ) {
+          s.reset = s.warmUp + WINDOW_MS;
+          s.left = full(s);
+          s.warmUp = undefined;
+          continue;
+        }
+        if (s.reset !== undefined && s.reset <= time) {
+          s.left = full(s);
+          if (s.restartAt !== undefined && s.restartAt > s.reset) {
+            // Held: closed (full) until the restart, unless used first.
+            s.warmUp = s.restartAt;
+            s.reset = undefined;
+          } else s.reset = s.keepAlive ? s.reset + WINDOW_MS : undefined;
+          s.restartAt = undefined;
+          continue;
+        }
+        break;
       }
     }
   };
@@ -156,23 +174,11 @@ export function simulateDay(input: SimInput): Forecast {
     const end = Math.min(input.to, t + SIM_STEP_MS);
     advance(t);
     const perMs = Math.max(0, input.rate(t)) / HOUR_MS;
-    if (perMs <= 0 && !active) {
-      // A gap is unmet demand only: it closes when the demand stops, and the
-      // account that refills meanwhile takes over at its reset.
-      if (open && !open.accountId) {
-        open.to = minute(t);
-        open = undefined;
-      }
-      for (let at = t; ;) {
-        active = choose();
-        if (active) {
-          mark(active.id, at);
-          break;
-        }
-        at = nextEvent(at);
-        if (at >= end) break;
-        advance(at);
-      }
+    if (perMs <= 0 && open && !open.accountId) {
+      // A gap is unmet demand only: it closes when the demand stops; the
+      // next account is chosen when the demand resumes.
+      open.to = minute(t);
+      open = undefined;
     }
     let cursor = t;
     while (cursor < end && perMs > 0 && !stopped) {
@@ -325,7 +331,7 @@ export function optimizeStarts(input: StartPlanInput): StartPlan {
   const coarse = fine.filter((_, k) => k % 2 === 0);
   const fixed = input.accounts.map((a, i) => a.manual ?? input.even[i]);
   let best = evenScored;
-  /** Scores `starts` and keeps the best; a `rival` no worse than the best may stop it early. */
+  /** Scores `starts` and keeps the best; it may stop early against a `rival` that the best is no worse than. */
   const consider = (starts: number[], rival?: Scored) => {
     const candidate = scored(starts, rival);
     if (better(candidate, best)) best = candidate;

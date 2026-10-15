@@ -351,7 +351,7 @@ test("time without demand is never an outage", () => {
   assert.equal(forecast.switches, 0);
 });
 
-test("a gap covers only unmet demand, and a refill over lunch takes over at its reset", () => {
+test("a gap covers only unmet demand, and a refill over lunch takes over when demand resumes", () => {
   // 60 an hour from 11:00 with lunch from 12:20 to 13:00; everything runs out
   // at 12:10 and `a` refills at 12:40, in the middle of lunch.
   const lunch = (time: number) =>
@@ -379,7 +379,7 @@ test("a gap covers only unmet demand, and a refill over lunch takes over at its 
   assert.deepEqual(view(refilled), [
     "a 11:00-12:10",
     "outage 12:10-12:20",
-    "a 12:40-15:00",
+    "a 13:00-15:00",
   ]);
   assert.equal(refilled.outageMinutes, 10);
   assert.equal(gapMinutes(refilled), refilled.outageMinutes);
@@ -397,7 +397,7 @@ test("a gap covers only unmet demand, and a refill over lunch takes over at its 
   assert.equal(late.outageMinutes, 20);
   assert.equal(gapMinutes(late), late.outageMinutes);
 
-  // Another account refilling over lunch is the switch, at its reset.
+  // Another account refilling over lunch is the switch, when demand resumes.
   const other = day([
     { ...a(base + 18 * H), remaining: 70 },
     {
@@ -411,7 +411,7 @@ test("a gap covers only unmet demand, and a refill over lunch takes over at its 
   assert.deepEqual(view(other), [
     "a 11:00-12:10",
     "outage 12:10-12:20",
-    "b 12:40-15:00",
+    "b 13:00-15:00",
   ]);
   assert.equal(other.switches, 1);
   assert.equal(gapMinutes(other), other.outageMinutes);
@@ -672,4 +672,155 @@ test("stopping a losing candidate early changes no plan", () => {
     assert.deepEqual(early, full, `input ${index}`);
   }
   assert.ok(stopped < whole, `${stopped} demand reads vs ${whole}`);
+});
+
+test("a held restart keeps a refilled window closed until the hold", () => {
+  const list = (restartAt?: number): SimAccount[] => [
+    {
+      id: "a",
+      capacity: 3,
+      keepAlive: true,
+      firstReset: base + 12 * H,
+      remaining: 250,
+    },
+    {
+      id: "b",
+      capacity: 1,
+      keepAlive: true,
+      firstReset: base + 10 * H,
+      remaining: 100,
+      ...(restartAt === undefined ? {} : { restartAt }),
+    },
+  ];
+  const day = (accounts: SimAccount[]) =>
+    simulateDay({
+      from: base + 9.5 * H,
+      to: base + 18 * H,
+      rate: () => 100,
+      accounts,
+      active: "a",
+    });
+  // b refills at 10:00 but its next window starts at 11:00 (the hold), so it
+  // resets at 16:00 and again at 21:00: it serves 15:00–17:00 on two quotas.
+  const held = day(list(base + 11 * H));
+  assert.deepEqual(view(held), [
+    "a 09:30-15:00",
+    "b 15:00-17:00",
+    "a 17:00-18:00",
+  ]);
+  assert.equal(held.outageMinutes, 0);
+  assert.equal(held.switches, 2);
+  // Without the hold the window restarts at 10:00 and resets at 15:00 and 20:00.
+  const free = day(list());
+  assert.deepEqual(view(free), [
+    "a 09:30-15:00",
+    "b 15:00-16:00",
+    "outage 16:00-17:00",
+    "a 17:00-18:00",
+  ]);
+  assert.equal(free.outageMinutes, 60);
+});
+
+test("first use starts a held window before the hold", () => {
+  const forecast = simulateDay({
+    from: base + 9.5 * H,
+    to: base + 18 * H,
+    rate: () => 100,
+    active: "a",
+    accounts: [
+      {
+        id: "a",
+        capacity: 1,
+        keepAlive: true,
+        firstReset: base + 20 * H,
+        remaining: 100,
+      },
+      {
+        id: "b",
+        capacity: 1,
+        keepAlive: true,
+        firstReset: base + 10 * H,
+        remaining: 0,
+        restartAt: base + 12 * H,
+      },
+    ],
+  });
+  // b refills at 10:00 and is held until 12:00, but a runs dry at 10:30 and b
+  // starts then: its window resets at 15:30, not at the hold's 17:00.
+  assert.deepEqual(view(forecast), [
+    "a 09:30-10:30",
+    "b 10:30-11:30",
+    "outage 11:30-15:30",
+    "b 15:30-16:30",
+    "outage 16:30-18:00",
+  ]);
+});
+
+test("the next account is chosen when demand resumes, not while it is quiet", () => {
+  // 60 an hour from 11:00 until 12:20, then nothing until the end at 13:00.
+  const quiet = (time: number) => (time < base + 12 * H + 20 * MIN ? 60 : 0);
+  const forecast = simulateDay({
+    from: base + 11 * H,
+    to: base + 13 * H,
+    rate: quiet,
+    accounts: [
+      {
+        id: "a",
+        capacity: 1,
+        keepAlive: true,
+        firstReset: base + 16 * H,
+        remaining: 70,
+      },
+      {
+        id: "b",
+        capacity: 1,
+        keepAlive: true,
+        firstReset: base + 12 * H + 40 * MIN,
+        remaining: 0,
+      },
+    ],
+  });
+  // a runs dry at 12:10 and b refills at 12:40, but nobody asks for it.
+  assert.deepEqual(view(forecast), ["a 11:00-12:10", "outage 12:10-12:20"]);
+  assert.equal(forecast.switches, 0);
+  assert.ok(forecast.segments.every((s) => s.accountId !== "b"));
+});
+
+test("without auto start the account that starts when demand resumes is the larger of the closed ones", () => {
+  // 100 an hour until 17:00 with a pause from 12:20 to 13:00.
+  const paused = (time: number) =>
+    time >= base + 12 * H + 20 * MIN && time < base + 13 * H
+      ? 0
+      : time < base + 17 * H
+        ? 100
+        : 0;
+  const forecast = simulateDay({
+    from: base + 12 * H,
+    to: base + 17 * H,
+    rate: paused,
+    active: "max",
+    accounts: [
+      {
+        id: "max",
+        capacity: 5,
+        keepAlive: false,
+        firstReset: base + 12 * H + 45 * MIN,
+        remaining: 20,
+      },
+      {
+        id: "pro",
+        capacity: 1,
+        keepAlive: false,
+        firstReset: base + 12 * H + 30 * MIN,
+        remaining: 0,
+      },
+    ],
+  });
+  // max runs dry at 12:12; both have refilled and closed by 13:00, so the
+  // larger one takes the demand when it resumes.
+  assert.equal(
+    forecast.segments.find((s) => s.from >= base + 13 * H)!.accountId,
+    "max",
+  );
+  assert.equal(forecast.switches, 0);
 });

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { dayPlan, planContext } from "../shared/day-plan";
-import { liveForecast } from "../shared/live-forecast";
+import { liveForecast, liveSetup } from "../shared/live-forecast";
 import type { Forecast } from "../shared/capacity-plan";
 import { wallTime } from "../shared/planning";
 import { presetTempo, type Tempo } from "../shared/tempo";
@@ -304,5 +304,111 @@ test("a window that resets between now and the work start counts as closed and f
       },
     }),
     reset,
+  );
+});
+
+test("a pace factor scales the demand; one or none leaves the forecast alone", () => {
+  const now = at("10:00");
+  const usage = {
+    max: fresh("max", now, 80, "11:15"),
+    vertex: fresh("vertex", now, 0, "12:00"),
+    pro: { ...fresh("pro", now, 100, "13:00"), stale: true },
+  };
+  const input = {
+    plan,
+    settings: settings(),
+    context: context(presetTempo("heavy")),
+    usage,
+    activeId: "max",
+    now,
+  };
+  // Max's 100 units last until 10:50 at 120 an hour; twice as fast, 25 minutes.
+  const steady = liveForecast(input)!;
+  assert.equal(lane(steady)[0], "max 10:00-10:50");
+  assert.deepEqual(liveForecast({ ...input, factor: 1 }), steady);
+  const faster = liveForecast({ ...input, factor: 2 })!;
+  assert.equal(lane(faster)[0], "max 10:00-10:25");
+  assert.ok(faster.exhaustedAt.max[0] < steady.exhaustedAt.max[0]);
+});
+
+test("a schedule restarts an open window later and starts a closed one at its time", () => {
+  const duo = dayPlan(
+    WEDNESDAY,
+    settings({ accounts: [{ id: max.id }, { id: pro.id }] }),
+    context(flatTempo(100)),
+  );
+  const now = at("10:00");
+  const input = {
+    plan: duo,
+    settings: settings(),
+    context: context(flatTempo(100)),
+    activeId: "max",
+    now,
+  };
+  // Pro's open window resets at 10:30; max (500 units) serves until 15:00.
+  const open = {
+    max: fresh("max", now, 0, "20:00"),
+    pro: fresh("pro", now, 0, "10:30"),
+  };
+  // Restarting at once, pro resets at 15:30 and serves on until 16:30.
+  assert.deepEqual(lane(liveForecast({ ...input, usage: open })!), [
+    "max 10:00-15:00",
+    "pro 15:00-16:30",
+    "- 16:30-18:00",
+  ]);
+  // Held to 11:30, its window resets at 16:30: an hour of quota, a wait, an hour more.
+  const held = liveForecast({
+    ...input,
+    usage: open,
+    schedule: { pro: at("11:30") },
+  })!;
+  assert.deepEqual(lane(held), [
+    "max 10:00-15:00",
+    "pro 15:00-16:00",
+    "- 16:00-16:30",
+    "pro 16:30-17:30",
+    "- 17:30-18:00",
+  ]);
+  // A restart scheduled at the reset itself holds nothing.
+  assert.deepEqual(
+    liveForecast({ ...input, usage: open, schedule: { pro: at("10:30") } }),
+    liveForecast({ ...input, usage: open }),
+  );
+
+  // The plan's window chain (pro's planned window resets at 13:45) is held
+  // the same way for an account with stale usage.
+  assert.deepEqual(
+    liveSetup({
+      ...input,
+      usage: { max: open.max, pro: { ...open.pro, stale: true } },
+      schedule: { pro: at("14:45") },
+    })!.accounts[1],
+    {
+      id: "pro",
+      capacity: 1,
+      keepAlive: true,
+      remaining: 100,
+      firstReset: at("13:45"),
+      restartAt: at("14:45"),
+    },
+  );
+
+  // A closed window is started now by the keeper, so it resets at 15:00.
+  const closed = { max: open.max, pro: fresh("pro", now, 0) };
+  assert.deepEqual(lane(liveForecast({ ...input, usage: closed })!), [
+    "max 10:00-15:00",
+    "pro 15:00-16:00",
+    "- 16:00-18:00",
+  ]);
+  // Started at 12:00 as scheduled, it resets at 17:00.
+  assert.deepEqual(
+    lane(
+      liveForecast({
+        ...input,
+        usage: closed,
+        schedule: { pro: at("12:00") },
+      })!,
+    ),
+    ["max 10:00-15:00", "pro 15:00-16:00", "- 16:00-17:00", "pro 17:00-18:00"],
   );
 });
