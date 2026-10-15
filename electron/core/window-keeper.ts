@@ -19,7 +19,7 @@ import {
 } from "../../shared/day-plan";
 import type { Tempo } from "../../shared/tempo";
 import type { UsageSample } from "../../shared/usage-statistics";
-import { AdaptiveSchedule } from "./adaptive-schedule";
+import { AdaptiveSchedule, type AdaptiveResult } from "./adaptive-schedule";
 import {
   privateJournalDirectory,
   readPrivateJson,
@@ -254,11 +254,24 @@ export class WindowKeeper {
       settings,
       keeperContext(state),
     );
+    const adaptive = this.adaptive.current();
     const upcoming = this.statuses
-      .map((s) => ({ accountId: s.accountId, at: s.nextStartAt ?? s.resetsAt }))
+      .map((s) => {
+        // A held restart or a deferred warm-up starts at its adopted time.
+        const held =
+          s.state === "blocked" || s.state === "off"
+            ? undefined
+            : adaptive.schedule[s.accountId];
+        return {
+          accountId: s.accountId,
+          at:
+            held === undefined
+              ? (s.nextStartAt ?? s.resetsAt)
+              : new Date(held).toISOString(),
+        };
+      })
       .filter((s): s is { accountId: string; at: string } => !!s.at)
       .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
-    const adaptive = this.adaptive.current();
     const adaptation: KeeperAdaptation | undefined =
       adaptive.factor > 1 || Object.keys(adaptive.schedule).length
         ? {
@@ -307,34 +320,47 @@ export class WindowKeeper {
       );
   }
   /**
-   * Updates today's schedule from the state, tells the user about a change,
-   * and returns the decisions under the updated schedule.
+   * Today's schedule for this tick: updated from the state (the user hears
+   * about a change), kept as it is while Relay is busy, and the plan's own
+   * starts if it cannot be computed.
    */
-  private adapt(state: KeeperState) {
+  private adapt(state: KeeperState): Record<string, number> {
     const settings = planned(state);
+    // Another operation owns Claude: usage may be minutes old and the active
+    // account mid-switch, so nothing is searched or adopted now. Turning
+    // auto start or adaptation off only clears the schedule, and goes ahead.
+    if (state.blocked && settings.autoStart && settings.adaptive !== false)
+      return this.adaptive.current().schedule;
     // Accounts the keeper cannot start, whatever the schedule says.
-    const unscheduled = this.evaluate(state, {});
-    const blocked = unscheduled
+    const blocked = this.evaluate(state, {})
       .filter((d) => d.state === "blocked" || d.state === "off")
       .map((d) => d.accountId);
-    const result = this.adaptive.update({
-      settings,
-      accounts: state.accounts,
-      usage: state.usage,
-      tempo: state.tempo,
-      recentSamples: state.recentSamples,
-      activeId: state.activeId,
-      blocked,
-      now: this.now(),
-    });
-    if (result.notice)
-      this.deps.adapted?.({
-        kind: result.notice.kind,
-        schedule: startList(result.notice.schedule, settings),
+    let result: AdaptiveResult;
+    try {
+      result = this.adaptive.update({
+        settings,
+        accounts: state.accounts,
+        usage: state.usage,
+        tempo: state.tempo,
+        recentSamples: state.recentSamples,
+        activeId: state.activeId,
+        blocked,
+        now: this.now(),
       });
-    return Object.keys(result.schedule).length
-      ? this.evaluate(state, result.schedule)
-      : unscheduled;
+    } catch {
+      // A failing re-plan never stops the keep-alive.
+      return {};
+    }
+    if (result.notice)
+      try {
+        this.deps.adapted?.({
+          kind: result.notice.kind,
+          schedule: startList(result.notice.schedule, settings),
+        });
+      } catch {
+        // Not hearing about the schedule does not undo it.
+      }
+    return result.schedule;
   }
   async tick() {
     if (this.running) return;
@@ -348,14 +374,15 @@ export class WindowKeeper {
         if (stale.length) state = this.deps.state();
       }
       // The schedule is built from the refreshed usage, before any start.
-      let decisions = this.adapt(state);
+      const schedule = this.adapt(state);
+      let decisions = this.evaluate(state, schedule);
       const due = decisions.find((d) => d.state === "due");
       if (due && state.settings.autoStart && !state.blocked) {
         await this.startOne(
           state.accounts.find((a) => a.id === due.accountId)!,
         );
         state = this.deps.state();
-        decisions = this.evaluate(state);
+        decisions = this.evaluate(state, schedule);
       }
       this.statuses = decisions.map(({ refresh, ...status }) =>
         // Nothing is refreshed or started while Relay is busy.

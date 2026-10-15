@@ -455,9 +455,12 @@ const WEDNESDAY = "2026-10-14";
 /**
  * The Mac wakes at 08:50 on a 09:00–18:00 Wednesday planned at 120 Pro units
  * an hour: every warm-up (08:00, 08:45, 08:45) was missed, every window is
- * closed and the usage was last read the evening before.
+ * closed and the usage was last read `readAgo` before (the evening before).
  */
-function wake(adaptive?: boolean) {
+function wake({
+  adaptive,
+  readAgo = 10 * 3_600_000,
+}: { adaptive?: boolean; readAgo?: number } = {}) {
   const team = planningAccount("vertex", "team");
   team.planning!.capacityWeight = 2;
   const f = setup([
@@ -472,7 +475,7 @@ function wake(adaptive?: boolean) {
   for (const a of f.accounts)
     f.usage[a.id] = {
       ...f.fresh(a),
-      checkedAt: iso(f.clock.now - 10 * 3_600_000),
+      checkedAt: iso(f.clock.now - readAgo),
     };
   const order: string[] = [];
   const keeper = new WindowKeeper({
@@ -544,7 +547,7 @@ test("a Mac waking with every window closed refreshes, re-plans, then starts onl
 });
 
 test("with adaptation off the waking Mac starts the first planned account", async () => {
-  const f = wake(false);
+  const f = wake({ adaptive: false });
   await f.keeper.tick();
   assert.deepEqual(f.order, [
     "refresh max",
@@ -582,4 +585,108 @@ test("today's faster pace shows in the snapshot without a schedule or a notice",
   });
   assert.deepEqual(f.calls.adapted, []);
   assert.deepEqual(f.calls.starts, []);
+});
+
+test("while Relay is busy nothing is searched or adopted; the next free tick refreshes, adapts, then starts", async () => {
+  // Read 10 minutes ago: fresh enough for a forecast, stale for the keeper.
+  const f = wake({ readAgo: 10 * 60_000 });
+  f.calls.blocked = true;
+  await f.keeper.tick();
+  assert.deepEqual(f.order, []);
+  assert.deepEqual(f.calls.adapted, []);
+  assert.equal("adaptation" in f.keeper.snapshot(), false);
+  // No review was spent: the first free tick searches at once.
+  f.calls.blocked = false;
+  f.clock.now = at("08:51", WEDNESDAY);
+  await f.keeper.tick();
+  assert.deepEqual(f.order, [
+    "refresh max",
+    "refresh vertex",
+    "refresh pro",
+    "adapted updated",
+    "start vertex",
+  ]);
+});
+
+/**
+ * The adaptive schedule's hold scenario at 09:30 on Wednesday: `a` serves at
+ * 100 Pro units an hour on its last 250 (until its 12:00 reset) while `b`'s
+ * idle window resets at 10:00; holding b's restart to 11:00 removes an hour
+ * without quota.
+ */
+function holding() {
+  const a = planningAccount("a", "team");
+  a.planning!.capacityWeight = 3;
+  const f = setup([a, planningAccount("b", "pro")]);
+  f.settings.weekday = { enabled: true, start: "09:00", end: "18:00" };
+  f.tempo.value = flatTempo(100);
+  f.clock.now = at("09:30", WEDNESDAY);
+  f.calls.activeId = "a";
+  const open = (id: string, usedPercent: number, clock: string) => ({
+    ...f.fresh(f.accounts.find((x) => x.id === id)!),
+    fiveHour: { usedPercent, resetsAt: iso(at(clock, WEDNESDAY)) },
+  });
+  f.usage.a = open("a", 100 / 6, "12:00");
+  f.usage.b = open("b", 0, "10:00");
+  return { ...f, keeper: new WindowKeeper(f.deps) };
+}
+
+test("a held restart is the next start; adaptation turned off says the plan is normal again", async () => {
+  const f = holding();
+  await f.keeper.tick();
+  const eleven = iso(at("11:00", WEDNESDAY));
+  assert.deepEqual(f.calls.adapted, [
+    { kind: "updated", schedule: [{ accountId: "b", startAt: eleven }] },
+  ]);
+  const snapshot = f.keeper.snapshot();
+  // b's window still resets at 10:00, but the keeper restarts it at 11:00.
+  assert.deepEqual(
+    snapshot.accounts.map((s) => [s.accountId, s.state, s.resetsAt]),
+    [
+      ["a", "active", iso(at("12:00", WEDNESDAY))],
+      ["b", "active", iso(at("10:00", WEDNESDAY))],
+    ],
+  );
+  assert.deepEqual(snapshot.next, { accountId: "b", at: eleven });
+  // Turned off half an hour later, while Relay is busy: dropped at once, and
+  // the user hears the plan is back to normal.
+  f.clock.now = at("10:00", WEDNESDAY);
+  f.settings.adaptive = false;
+  f.calls.blocked = true;
+  await f.keeper.tick();
+  assert.deepEqual(f.calls.adapted[1], { kind: "normal", schedule: [] });
+  assert.equal(f.calls.adapted.length, 2);
+  assert.equal("adaptation" in f.keeper.snapshot(), false);
+  assert.deepEqual(f.calls.starts, []);
+  // Free again: b's window, closed since 10:00, starts at once.
+  f.calls.blocked = false;
+  await f.keeper.tick();
+  assert.deepEqual(f.calls.starts, ["b"]);
+});
+
+test("a failing re-plan or notification never stops the keep-alive", async () => {
+  // The schedule cannot be computed: the plan's own starts, quietly.
+  const broken = wake();
+  broken.calls.samples = null as unknown as UsageSample[];
+  await broken.keeper.tick();
+  assert.deepEqual(broken.order, [
+    "refresh max",
+    "refresh vertex",
+    "refresh pro",
+    "start max",
+  ]);
+  assert.deepEqual(broken.calls.adapted, []);
+  // The notification fails: the adopted schedule still holds.
+  const silent = wake();
+  silent.deps.adapted = () => {
+    throw new Error("notifications unavailable");
+  };
+  await silent.keeper.tick();
+  assert.deepEqual(silent.order, [
+    "refresh max",
+    "refresh vertex",
+    "refresh pro",
+    "adapted updated",
+    "start vertex",
+  ]);
 });

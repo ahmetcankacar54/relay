@@ -34,11 +34,11 @@ import { usageStatisticsInput } from "./core/usage-statistics-input";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { planningIdentity } from "../shared/planning";
 import { PACE_WINDOW_MS } from "../shared/adaptive-plan";
-import { WindowKeeper } from "./core/window-keeper";
+import { WindowKeeper, type KeeperDeps } from "./core/window-keeper";
 import { TempoTracker } from "./core/tempo-tracker";
 import { runQuotaStarter } from "./core/routine-runner";
 import { readProfileIdentity } from "./core/profile-identity";
-import type { Account, DesktopState, KeeperAdaptation } from "../shared/types";
+import type { Account, DesktopState } from "../shared/types";
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
 import {
@@ -599,10 +599,9 @@ function notifySwitched(name: string) {
   }).show();
 }
 /** Today's plan was re-planned at today's pace, or is back to normal. */
-function notifyAdapted(notice: {
-  kind: "updated" | "normal";
-  schedule: KeeperAdaptation["schedule"];
-}) {
+function notifyAdapted(
+  notice: Parameters<NonNullable<KeeperDeps["adapted"]>>[0],
+) {
   if (!Notification.isSupported()) return;
   const { accounts, settings } = service.store.state;
   // Clocks in the planning zone, without suffixes.
