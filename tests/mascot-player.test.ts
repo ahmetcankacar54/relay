@@ -167,6 +167,24 @@ test("a pose change reschedules the fidget", () => {
   assert.deepEqual(after(h.shown, 2), ["rumble-0", "rumble-1", "rumble-2", "rumble-3", "hungry"]);
 });
 
+test("each pose cycles its own fidgets, wherever the other poses left off", () => {
+  const h = harness();
+  h.advance(3 * 60_000 + 1000);
+  h.player.update("hungry");
+  h.advance(3 * 60_000 + 1000);
+  h.player.update("idle");
+  h.advance(3 * 60_000 + 1000);
+  h.advance(3 * 60_000 + 1000);
+  h.advance(3 * 60_000 + 1000);
+  assert.deepEqual(h.shown, [
+    "idle", "blink-0", "blink-1", "blink-0", "idle",
+    "hungry", "rumble-0", "rumble-1", "rumble-2", "rumble-3", "hungry",
+    "idle", "ear-0", "ear-1", "idle",
+    "wash-0", "wash-1", "wash-2", "wash-1", "wash-2", "wash-0", "idle",
+    "tail-0", "tail-1", "tail-0", "idle",
+  ]);
+});
+
 test("destroy leaves no timers and ignores later updates", () => {
   const h = harness();
   h.player.update("warming");

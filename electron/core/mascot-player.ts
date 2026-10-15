@@ -43,7 +43,8 @@ export class MascotPlayer {
   private playing?: Playing;
   private frameTimer?: unknown;
   private fidgetTimer?: unknown;
-  private fidgetTurn = 0;
+  /** Which fidget each pose plays next, so every pose cycles its own list in turn. */
+  private readonly fidgetTurns = new Map<MascotPose, number>();
   private disguise?: Disguise;
   private destroyed = false;
   private readonly now: () => number;
@@ -135,11 +136,14 @@ export class MascotPlayer {
     const fidgets = POSE_FIDGETS[this.pose];
     if (!fidgets?.length || this.destroyed) return;
     const delay = FIDGET_MIN_MS + this.random() * (FIDGET_MAX_MS - FIDGET_MIN_MS);
+    const pose = this.pose;
     this.fidgetTimer = this.setTimer(() => {
       this.fidgetTimer = undefined;
       if (this.playing || this.destroyed) return;
       if (!this.deps.motionAllowed()) return this.scheduleFidget();
-      this.play("fidget", fidgets[this.fidgetTurn++ % fidgets.length]);
+      const turn = this.fidgetTurns.get(pose) ?? 0;
+      this.fidgetTurns.set(pose, (turn + 1) % fidgets.length);
+      this.play("fidget", fidgets[turn]);
     }, delay);
   }
 
