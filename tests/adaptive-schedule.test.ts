@@ -212,8 +212,8 @@ test("adaptation off, auto start off or no work interval: no schedule at the pla
       schedule: {},
       factor: 1,
     });
-  // Before the work starts (the Mac woke at 08:50) and once it ends.
-  for (const time of [at("08:50"), at("18:00")])
+  // Before the plan's first warm-up (Max at 08:00) and once work ends.
+  for (const time of [at("07:30"), at("18:00")])
     assert.deepEqual(adaptive.update(wakeUp(time)), {
       schedule: {},
       factor: 1,
@@ -234,14 +234,23 @@ test("turning adaptation off drops the schedule and says so; leaving work drops 
     }),
     { schedule: {}, factor: 1, notice: { kind: "normal", schedule: {} } },
   );
-  // Within 30 minutes of the last notice it goes quietly.
+  // Within 30 minutes of the last notice it goes quietly, and is announced
+  // once the 30 minutes are up.
   const quiet = new AdaptiveSchedule();
   quiet.update(hold(at("09:30")));
-  const stop = hold(at("09:40"));
-  assert.deepEqual(
-    quiet.update({ ...stop, settings: { ...stop.settings, autoStart: false } }),
-    { schedule: {}, factor: 1 },
-  );
+  const stopped = (now: number) => {
+    const value = hold(now, fresh("b", now, 0));
+    return { ...value, settings: { ...value.settings, autoStart: false } };
+  };
+  assert.deepEqual(quiet.update(stopped(at("09:40"))), {
+    schedule: {},
+    factor: 1,
+  });
+  assert.deepEqual(quiet.update(stopped(at("10:00"))), {
+    schedule: {},
+    factor: 1,
+    notice: { kind: "normal", schedule: {} },
+  });
   // Outside the work interval (here the day was cut short to end at 10:00)
   // the schedule goes quietly too.
   const short = new AdaptiveSchedule();
@@ -268,8 +277,7 @@ test("holding a restart is adopted once and kept without searching again", () =>
     notice: { kind: "updated", schedule: { b: at("11:00") } },
   });
   clock = at("09:31");
-  // The usage read at 09:30 is still fresh.
-  const second = adaptive.update({ ...hold(at("09:30")), now: clock });
+  const second = adaptive.update(hold(clock));
   assert.deepEqual(second, {
     schedule: { b: at("11:00") },
     factor: 1,
@@ -345,16 +353,14 @@ test("today's pace scales the forecast: 1.6 times the plan adopts a hold", () =>
   assert.deepEqual(calm, { schedule: {}, factor: 1 });
 });
 
-test("when the pace drops the schedule clears, announced only after 30 minutes", () => {
-  const quiet = new AdaptiveSchedule();
-  quiet.update(pace(at("09:30")));
-  // 48 Pro units in the 50 minutes observed since 09:00: below the plan.
-  const { observedRate, ...early } = quiet.update(pace(at("09:50")));
-  assert.ok(Math.abs(observedRate! - 57.6) < 1e-9, `${observedRate}`);
-  assert.deepEqual(early, { schedule: {}, factor: 1 });
+test("when the pace drops the schedule clears, announced once 30 minutes are up", () => {
   const adaptive = new AdaptiveSchedule();
   adaptive.update(pace(at("09:30")));
-  // b's window has reset and waits for its 11:00 start.
+  // 48 Pro units in the 50 minutes observed since 09:00: below the plan.
+  const { observedRate, ...early } = adaptive.update(pace(at("09:50")));
+  assert.ok(Math.abs(observedRate! - 57.6) < 1e-9, `${observedRate}`);
+  assert.deepEqual(early, { schedule: {}, factor: 1 });
+  // At 10:00 the user hears it; b's window has reset meanwhile.
   const now = at("10:00");
   assert.deepEqual(adaptive.update(pace(now, fresh("b", now, 0))), {
     schedule: {},
@@ -362,19 +368,127 @@ test("when the pace drops the schedule clears, announced only after 30 minutes",
     observedRate: 48,
     notice: { kind: "normal", schedule: {} },
   });
+  assert.equal(
+    adaptive.update(pace(at("10:31"), fresh("b", now, 0))).notice,
+    undefined,
+  );
+  // Had the Mac slept from 09:50 until after the 11:00 start, nothing would
+  // be left to tell: that start has passed.
+  const slept = new AdaptiveSchedule();
+  slept.update(pace(at("09:30")));
+  slept.update(pace(at("09:50")));
+  const later = at("11:05");
+  assert.equal(
+    slept.update(pace(later, fresh("b", later, 0))).notice,
+    undefined,
+  );
 });
 
-test("after a sleep with every window closed, the extra switch triggers a search", () => {
-  const adaptive = new AdaptiveSchedule();
-  const result = adaptive.update(wakeUp(at("09:00")));
+test("a change inside the 30 minutes is announced only if it still stands", () => {
+  const { calls, search } = searching();
+  const adaptive = new AdaptiveSchedule({ search });
+  adaptive.update(hold(at("09:30")));
+  // Adaptation off at 09:40 and on again at 09:45: the same hold comes back,
+  // so the user, who heard of it at 09:30, hears nothing more.
+  const off = hold(at("09:40"));
+  assert.deepEqual(
+    adaptive.update({ ...off, settings: { ...off.settings, adaptive: false } }),
+    { schedule: {}, factor: 1 },
+  );
+  assert.deepEqual(adaptive.update(hold(at("09:45"))), {
+    schedule: { b: at("11:00") },
+    factor: 1,
+    since: at("09:45"),
+  });
+  assert.deepEqual(calls, [at("09:30"), at("09:45")]);
+  for (const clock of ["10:00", "10:15"]) {
+    const now = at(clock);
+    assert.equal(
+      adaptive.update(hold(now, fresh("b", now, 0))).notice,
+      undefined,
+      clock,
+    );
+  }
+});
+
+test("the Mac waking at 08:50 with every warm-up missed is re-planned before work", () => {
+  const now = at("08:50");
+  const { calls, search } = searching();
+  const result = new AdaptiveSchedule({ search }).update(wakeUp(now));
   // No samples: the planned pace.
   assert.equal(result.factor, 1);
   assert.equal(result.observedRate, undefined);
-  assert.deepEqual(result.schedule, { max: at("09:30"), pro: at("09:30") });
+  // Started now, all three would switch twice against the plan's once.
+  assert.equal(forecastWith(wakeUp(now), {}).switches, 2);
+  assert.deepEqual(result.schedule, { max: at("09:00"), pro: at("09:00") });
+  assert.equal(forecastWith(wakeUp(now), result.schedule).switches, 1);
   assert.equal(result.notice?.kind, "updated");
-  // The default would start all three now and switch twice.
-  assert.equal(forecastWith(wakeUp(at("09:00")), {}).switches, 2);
-  assert.equal(forecastWith(wakeUp(at("09:00")), result.schedule).switches, 1);
+  assert.deepEqual(calls, [now]);
+  // Four Pros planned at 100 an hour warm up from 04:00. Started at 08:50
+  // they leave 60 minutes without quota and 7 switches against the plan's
+  // none and 4, so the search runs; but no later start does better (two
+  // windows a Pro after 08:50 hold 800 of the 900 Pro units of demand).
+  const pros = ["p1", "p2", "p3", "p4"].map((id) => planningAccount(id, "pro"));
+  const usage = Object.fromEntries(
+    pros.map((a) => [a.id, fresh(a.id, now, 0)]),
+  );
+  const four = input(pros, 100, now, usage);
+  const fallback = forecastWith(four, {});
+  assert.deepEqual([fallback.outageMinutes, fallback.switches], [60, 7]);
+  const other = searching();
+  assert.deepEqual(
+    new AdaptiveSchedule({ search: other.search }).update(four),
+    {
+      schedule: {},
+      factor: 1,
+    },
+  );
+  assert.deepEqual(other.calls, [now]);
+});
+
+test("a calm morning that follows the plan never searches, before work or after its start", () => {
+  const pros = ["p1", "p2", "p3", "p4"].map((id) => planningAccount(id, "pro"));
+  for (const [accounts, rate] of [
+    [[max, team, pro], 120],
+    [pros, 100],
+  ] as const) {
+    const settings = settingsFor([...accounts]);
+    const plan = dayPlan(
+      WEDNESDAY,
+      settings,
+      planContext([...accounts], flatTempo(rate)),
+    );
+    const { calls, search } = searching();
+    const adaptive = new AdaptiveSchedule({ search });
+    for (const clock of [
+      "04:00",
+      "05:30",
+      "06:30",
+      "07:30",
+      "08:00",
+      "08:50",
+      "09:00",
+    ]) {
+      const now = at(clock);
+      // Every window warmed up when planned, and nothing is used before work.
+      const usage = Object.fromEntries(
+        plan.accounts.map((p) => {
+          let reset = p.activeFrom;
+          while (reset <= now) reset += 5 * HOUR;
+          return [
+            p.accountId,
+            fresh(p.accountId, now, 0, p.activeFrom <= now ? reset : undefined),
+          ];
+        }),
+      );
+      assert.deepEqual(
+        adaptive.update(input([...accounts], rate, now, usage)),
+        { schedule: {}, factor: 1 },
+        clock,
+      );
+    }
+    assert.deepEqual(calls, []);
+  }
 });
 
 test("a start whose time came is dropped quietly: the keeper starts the window", () => {
@@ -386,6 +500,78 @@ test("a start whose time came is dropped quietly: the keeper starts the window",
     schedule: {},
     factor: 1,
   });
+});
+
+test("an adopted hold stays in force minute by minute through b's reset", () => {
+  // The hold scenario updated every minute from 09:30 to b's reset at 10:00:
+  // usage recomputed each minute, or read every five minutes in whole percent.
+  for (const reads of ["exact", "whole percent"] as const) {
+    const adaptive = new AdaptiveSchedule();
+    const kinds: string[] = [];
+    let adopted: number | undefined;
+    for (let now = at("09:30"); now <= at("10:00"); now += MINUTE) {
+      const read =
+        reads === "exact"
+          ? now
+          : at("09:30") +
+            Math.floor((now - at("09:30")) / (5 * MINUTE)) * 5 * MINUTE;
+      const value = hold(read);
+      const a = value.usage.a;
+      const result = adaptive.update({
+        ...value,
+        usage: {
+          a:
+            reads === "exact"
+              ? a
+              : {
+                  ...a,
+                  fiveHour: {
+                    ...a.fiveHour!,
+                    usedPercent: Math.round(a.fiveHour!.usedPercent),
+                  },
+                },
+          // Held, b's window stays closed once it resets at 10:00.
+          b: now < at("10:00") ? value.usage.b : fresh("b", now, 0),
+        },
+        now,
+      });
+      if (result.notice) kinds.push(result.notice.kind);
+      if (adopted === undefined && result.schedule.b !== undefined)
+        adopted = now;
+      if (adopted !== undefined)
+        assert.deepEqual(
+          result.schedule,
+          { b: at("11:00") },
+          `${reads} ${now}`,
+        );
+    }
+    assert.ok(adopted !== undefined, reads);
+    assert.deepEqual(kinds, ["updated"], reads);
+  }
+});
+
+test("the window open at the adoption is not mistaken for use when its reset is reported 90 s later", () => {
+  // b's window opened at 09:29:30, half a minute before the adoption at 09:30.
+  // (A search that holds its restart is injected: the verdict is not under test.)
+  const opened = at("09:29") + 30_000;
+  const held = { b: at("15:00") };
+  const { search } = searching((_, replan) => ({
+    ...replan!,
+    schedule: held,
+    forecast: { ...replan!.forecast, unmet: 0, switches: 0 },
+  }));
+  const adaptive = new AdaptiveSchedule({ search });
+  const adoption = at("09:30");
+  assert.deepEqual(
+    adaptive.update(hold(adoption, fresh("b", adoption, 0, opened + 5 * HOUR)))
+      .schedule,
+    held,
+  );
+  const now = at("09:35");
+  assert.deepEqual(
+    adaptive.update(hold(now, fresh("b", now, 1, opened + 5 * HOUR + 90_000))),
+    { schedule: held, factor: 1, since: adoption },
+  );
 });
 
 test("a deferred account used by hand loses its deferral without a notice", () => {
@@ -409,13 +595,21 @@ test("a clock moved back starts the schedule over", () => {
   const adaptive = new AdaptiveSchedule({ search });
   adaptive.update(hold(at("09:30")));
   const result = adaptive.update(hold(at("09:20")));
-  // Adopted anew at once; the last notice still counts as just now.
+  // Adopted anew at once, and the user, who heard of it, hears nothing more.
   assert.deepEqual(calls, [at("09:30"), at("09:20")]);
   assert.deepEqual(result, {
     schedule: { b: at("11:00") },
     factor: 1,
     since: at("09:20"),
   });
+  // The last notice counts as given at 09:20: the next one may come 30
+  // minutes later, at 09:50, not only at 10:00.
+  const off = hold(at("09:50"));
+  assert.equal(
+    adaptive.update({ ...off, settings: { ...off.settings, adaptive: false } })
+      .notice?.kind,
+    "normal",
+  );
 });
 
 test("a new plan date starts over: its first update searches at once", () => {
@@ -440,6 +634,60 @@ test("a new plan date starts over: its first update searches at once", () => {
   for (const clock of ["08:50", "08:55", "09:00"])
     adaptive.update(day(at(clock, THURSDAY)));
   assert.deepEqual(calls, [at("08:50", THURSDAY), at("09:00", THURSDAY)]);
+});
+
+test("an overnight interval keeps the schedule across local midnight", () => {
+  // The hold scenario 14 h 20 min later: work runs from 23:20 to 08:20, and at
+  // 23:50 b's restart at 00:20 is held to 01:20.
+  const night = (now: number, b: AccountUsage) => {
+    const value = hold(now - 14 * HOUR - 20 * MINUTE, b);
+    return {
+      ...value,
+      usage: {
+        a: fresh(
+          "a",
+          now,
+          value.usage.a.fiveHour!.usedPercent,
+          at("02:20", THURSDAY),
+        ),
+        b,
+      },
+      settings: settingsFor([A, B], { start: "23:20", end: "08:20" }),
+      now,
+    };
+  };
+  const { calls, search } = searching();
+  const adaptive = new AdaptiveSchedule({ search });
+  const adoption = at("23:50");
+  const first = adaptive.update(
+    night(adoption, fresh("b", adoption, 0, at("00:20", THURSDAY))),
+  );
+  assert.deepEqual(first.schedule, { b: at("01:20", THURSDAY) });
+  // Past midnight the local date is Thursday, but Wednesday's plan still runs.
+  const now = at("00:01", THURSDAY);
+  assert.deepEqual(
+    adaptive.update(night(now, fresh("b", now, 0, at("00:20", THURSDAY)))),
+    {
+      schedule: { b: at("01:20", THURSDAY) },
+      factor: 1,
+      since: adoption,
+    },
+  );
+  assert.deepEqual(calls, [adoption]);
+});
+
+test("an account taken out of the plan leaves the schedule at once and quietly", () => {
+  const adaptive = new AdaptiveSchedule();
+  adaptive.update(hold(at("09:30")));
+  const without = (now: number) => ({
+    ...hold(now, fresh("b", now, 0, at("10:00"))),
+    settings: settingsFor([A]),
+  });
+  assert.deepEqual(adaptive.update(without(at("09:35"))), {
+    schedule: {},
+    factor: 1,
+  });
+  assert.equal(adaptive.update(without(at("09:59"))).notice, undefined);
 });
 
 test("current() leaves out starts whose time has come since the last update", () => {
