@@ -9,3 +9,4 @@ output/
 .playwright-cli/
 config/local-signing.json
 .superpowers/
+.claude/worktrees/
