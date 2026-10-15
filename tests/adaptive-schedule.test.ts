@@ -512,6 +512,96 @@ test("a start whose time came is dropped quietly: the keeper starts the window",
   });
 });
 
+/**
+ * A morning run the way the keeper runs it: a tick every minute, `phase` past
+ * the minute, the adaptive update first, then at most one due window started
+ * (`late` after its warm-up time at the earliest), open in the usage read at
+ * the next tick. Every adoption or notice is kept.
+ */
+function keeperMorning(
+  accounts: Account[],
+  rate: number,
+  phase: number,
+  {
+    night = {},
+    late = 0,
+  }: { night?: Record<string, number>; late?: number } = {},
+) {
+  const settings = settingsFor(accounts);
+  const plan = dayPlan(
+    WEDNESDAY,
+    settings,
+    planContext(accounts, flatTempo(rate)),
+  );
+  const resets: Record<string, number> = { ...night };
+  const open = (id: string, now: number) => (resets[id] ?? 0) > now;
+  const adaptive = new AdaptiveSchedule();
+  const seen: string[] = [];
+  const first = Math.min(...plan.accounts.map((p) => p.activeFrom));
+  for (let now = first + phase; now < at("09:30"); now += MINUTE) {
+    const usage = Object.fromEntries(
+      plan.accounts.map((p) => [
+        p.accountId,
+        fresh(
+          p.accountId,
+          now,
+          0,
+          open(p.accountId, now) ? resets[p.accountId] : undefined,
+        ),
+      ]),
+    );
+    const result = adaptive.update(input(accounts, rate, now, usage));
+    if (result.notice || Object.keys(result.schedule).length)
+      seen.push(`${new Date(now).toISOString()} ${JSON.stringify(result)}`);
+    const due = plan.accounts.find(
+      (p) =>
+        now >= p.activeFrom + late &&
+        !open(p.accountId, now) &&
+        !((result.schedule[p.accountId] ?? 0) > now),
+    );
+    if (due) resets[due.accountId] = now + 5 * HOUR;
+  }
+  return seen;
+}
+
+test("calm mornings run the way the keeper runs them adopt nothing and say nothing", () => {
+  const pros = ["p1", "p2", "p3", "p4"].map((id) => planningAccount(id, "pro"));
+  const trio = [max, team, pro];
+  const cases: [Account[], number][] = [
+    [trio, 100],
+    [trio, 120],
+    [trio, 150],
+    [pros, 80],
+    [pros, 100],
+    [[A, B], 60],
+    [[A, B], 80],
+    [[A, B], 100],
+  ];
+  for (const phase of [5_000, 30_000]) {
+    for (const [accounts, rate] of cases)
+      assert.deepEqual(
+        keeperMorning(accounts, rate, phase),
+        [],
+        `${accounts.map((a) => a.id)} at ${rate}, +${phase / 1000} s`,
+      );
+    // At 80 an hour p3 warms up at 07:30, but its window from the night
+    // resets at 07:15: the keeper waits for 07:30, as planned.
+    assert.deepEqual(
+      keeperMorning(pros, 80, phase, { night: { p3: at("07:15") } }),
+      [],
+    );
+  }
+  // Warm-ups a few minutes late (several due at once, a slow refresh) are
+  // not missed ones: before work nothing is searched for them.
+  for (const late of [3, 8])
+    for (const rate of [80, 100])
+      assert.deepEqual(
+        keeperMorning(pros, rate, 5_000, { late: late * MINUTE }),
+        [],
+        `${late} min late at ${rate}`,
+      );
+});
+
 test("an adopted hold stays in force minute by minute through b's reset", () => {
   // The hold scenario updated every minute from 09:30 to b's reset at 10:00,
   // with a's usage recomputed each minute or read every five minutes in whole
@@ -560,6 +650,41 @@ test("an adopted hold stays in force minute by minute through b's reset", () => 
     assert.ok(adopted !== undefined, `${left} ${reads}`);
     assert.deepEqual(kinds, ["updated"], `${left} ${reads}`);
   }
+});
+
+test("an entry dropped from the schedule starts the count of agreeing reviews over", () => {
+  // An injected search holds a's restart to 12:30 and gives b a start at
+  // 09:50 (the verdict is not under test), then finds nothing more. a is in
+  // use when it resets, so its hold changes nothing: every review finds the
+  // default as good.
+  const both = { a: at("12:30"), b: at("09:50") };
+  const { search } = searching((_, replan, call) =>
+    call === 1
+      ? {
+          ...replan!,
+          schedule: both,
+          forecast: { ...replan!.forecast, unmet: 0, switches: 0 },
+        }
+      : undefined,
+  );
+  const adaptive = new AdaptiveSchedule({ search });
+  adaptive.update(hold(at("09:30")));
+  // 09:45: the first review that agrees.
+  assert.deepEqual(adaptive.update(hold(at("09:45"))).schedule, both);
+  // 09:50: b's start has come; the schedule that review compared is gone.
+  assert.deepEqual(adaptive.update(hold(at("09:50"))).schedule, {
+    a: at("12:30"),
+  });
+  // So 10:00 agrees for the first time again, and only 10:15 clears it.
+  let now = at("10:00");
+  assert.deepEqual(adaptive.update(hold(now, fresh("b", now, 0))).schedule, {
+    a: at("12:30"),
+  });
+  now = at("10:15");
+  assert.deepEqual(
+    adaptive.update(hold(now, fresh("b", now, 0, at("15:00")))).schedule,
+    {},
+  );
 });
 
 test("the window open at the adoption is not mistaken for use when its reset is reported 90 s later", () => {

@@ -33,6 +33,9 @@ export const SEARCH_EVERY_MS = 15 * MINUTE_MS;
 export const NOTIFY_EVERY_MS = 30 * MINUTE_MS;
 // This many more minutes without quota than the plan makes a forecast worse.
 const WORSE_BY_MINUTES = 5;
+// A warm-up still not started this long after its time was missed (the Mac
+// slept), rather than being on its way with the keeper's next tick.
+const MISSED_MS = 10 * MINUTE_MS;
 
 export interface AdaptiveInput {
   /** Planned accounts only (deleted ones filtered out). */
@@ -122,6 +125,19 @@ function planAt(
   }
 }
 
+/** A planned account the keeper could start is still closed well after its warm-up time. */
+function missedWarmUp(plan: DayPlan, { usage, blocked, now }: AdaptiveInput) {
+  return plan.accounts.some((p) => {
+    const u = usage[p.accountId];
+    return (
+      now - p.activeFrom >= MISSED_MS &&
+      !blocked.includes(p.accountId) &&
+      freshUsage(u, now) &&
+      !u.fiveHour?.resetsAt
+    );
+  });
+}
+
 /**
  * Each planned account's next window start for the rest of the plan in
  * force (from its first warm-up to the end of work), re-chosen only when the
@@ -183,6 +199,8 @@ export class AdaptiveSchedule {
       ) {
         delete this.schedule[id];
         delete this.announced[id];
+        // What the last review compared is gone.
+        this.defaultNoWorse = false;
       }
     if (empty(this.schedule)) this.since = undefined;
     for (const [id, time] of Object.entries(this.announced))
@@ -221,9 +239,13 @@ export class AdaptiveSchedule {
       const due =
         this.lastReview === undefined ||
         now - this.lastReview >= SEARCH_EVERY_MS;
-      if (due && (worse || !empty(this.schedule))) {
+      // Before work a search is worth it only when a warm-up was missed;
+      // otherwise the keeper is still warming the windows up as planned.
+      const search =
+        worse && (now >= plan.interval!.start || missedWarmUp(plan, input));
+      if (due && (search || !empty(this.schedule))) {
         this.lastReview = now;
-        if (worse) {
+        if (search) {
           const replan = this.search({ ...live, blocked: input.blocked });
           if (replan && beats(replan.forecast, current)) {
             this.adopt(replan.schedule, now);
