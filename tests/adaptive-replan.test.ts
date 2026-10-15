@@ -207,7 +207,7 @@ test("outside work there is nothing to replan", () => {
   );
 });
 
-test("the next start candidates are the default, then later half hours before the work end", () => {
+test("the next start candidates are the default, then later half hours after now and before the work end", () => {
   const account: SimAccount = {
     id: "a",
     capacity: 1,
@@ -234,6 +234,16 @@ test("the next start candidates are the default, then later half hours before th
   assert.deepEqual(
     nextStartCandidates(account, at("09:00"), end),
     halfHours("09:00", 11),
+  );
+  // A warm-up counted at its planned 08:59 a tick later: no later start lies
+  // in the past.
+  assert.deepEqual(
+    nextStartCandidates(
+      { ...account, warmUp: at("08:59") },
+      at("09:00") + 30_000,
+      end,
+    ),
+    [at("08:59"), ...halfHours("09:30", 9)],
   );
   // A window that resets before its active range waits for it to begin.
   assert.deepEqual(

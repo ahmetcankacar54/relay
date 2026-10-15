@@ -233,7 +233,7 @@ const ROUNDS = 4;
 /**
  * The default first (restart at the reset, or when the account's active range
  * begins if that is later; or start now / at the active range), then later
- * half hours.
+ * half hours after `from` and before `to`.
  */
 export function nextStartCandidates(
   a: SimAccount,
@@ -251,7 +251,9 @@ export function nextStartCandidates(
       : ceilHalfHour(base);
   const out = [base];
   for (let k = 0; k < CHOICES; k++) out.push(first + k * HALF_HOUR);
-  return out.filter((t) => t < to);
+  // A warm-up counted at its planned time can lie a tick in the past; a
+  // later start must not.
+  return out.filter((t, k) => t < to && (k === 0 || t > from));
 }
 
 /**
