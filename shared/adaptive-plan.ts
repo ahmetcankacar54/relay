@@ -135,14 +135,20 @@ const ceilHalfHour = (t: number) => Math.ceil(t / HALF_HOUR) * HALF_HOUR;
 const EXHAUSTIVE = 4;
 const ROUNDS = 4;
 
-/** The default first (restart at the reset, or start now / at the active range), then later half hours. */
+/**
+ * The default first (restart at the reset, or when the account's active range
+ * begins if that is later; or start now / at the active range), then later
+ * half hours.
+ */
 export function nextStartCandidates(
   a: SimAccount,
   from: number,
   to: number,
 ): number[] {
   const open = a.firstReset !== undefined && a.firstReset > from;
-  const base = open ? a.firstReset! : (a.warmUp ?? from);
+  const base = open
+    ? Math.max(a.firstReset!, a.restartAt ?? a.firstReset!)
+    : (a.warmUp ?? from);
   const first = open
     ? base + HALF_HOUR
     : ceilHalfHour(base) === base

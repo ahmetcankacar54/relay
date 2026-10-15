@@ -425,6 +425,85 @@ test("a schedule restarts an open window later and starts a closed one at its ti
   );
 });
 
+// Four Pros on a flat day, read with second-precise resets (no resets: closed).
+const pros = ["p1", "p2", "p3", "p4"].map((id) => planningAccount(id, "pro"));
+const quad = settings({ accounts: pros.map((a) => ({ id: a.id })) });
+const quadContext = (rate: number) => planContext(pros, flatTempo(rate));
+const read = (now: number, resets: Record<string, number> = {}) =>
+  Object.fromEntries(
+    pros.map((a): [string, AccountUsage] => [
+      a.id,
+      {
+        accountId: a.id,
+        status: "ready",
+        stale: false,
+        checkedAt: new Date(now).toISOString(),
+        fiveHour: {
+          usedPercent: 0,
+          ...(resets[a.id]
+            ? { resetsAt: new Date(resets[a.id]).toISOString() }
+            : {}),
+        },
+        sevenDay: {
+          usedPercent: 20,
+          resetsAt: new Date(now + 3 * 86_400_000).toISOString(),
+        },
+      },
+    ]),
+  );
+
+test("live times within a tick of the plan's own windows count as planned", () => {
+  const context = quadContext(100);
+  const four = dayPlan(WEDNESDAY, quad, context);
+  assert.deepEqual(
+    four.accounts.map((a) => clockOf.format(a.activeFrom)),
+    ["04:00", "05:00", "06:00", "07:00"],
+  );
+  const live = (now: number, resets: Record<string, number> = {}) => ({
+    plan: four,
+    settings: quad,
+    context,
+    usage: read(now, resets),
+    now,
+  });
+  const second = 1000;
+  // The keeper's tick at 04:00:05 has not started p1 yet: it warms at 04:00.
+  assert.equal(
+    liveSetup(live(at("04:00") + 5 * second))!.accounts[0].warmUp,
+    at("04:00"),
+  );
+  // Started at 04:00:05, p1 resets at 09:00:05: its planned 09:00. p2 has
+  // been due since 05:00.
+  const tick = live(at("05:00") + 30 * second, {
+    p1: at("09:00") + 5 * second,
+  });
+  assert.equal(liveSetup(tick)!.accounts[0].firstReset, at("09:00"));
+  assert.equal(liveSetup(tick)!.accounts[1].warmUp, at("05:00"));
+  assert.deepEqual(liveForecast(tick), four.forecast);
+  // Three minutes off is not a tick: p2 warms now, p1 keeps its reset.
+  const late = liveSetup(live(at("05:03"), { p1: at("09:03") }))!;
+  assert.equal(late.accounts[0].firstReset, at("09:03"));
+  assert.equal(late.accounts[1].warmUp, at("05:03"));
+});
+
+test("a window resetting before its account's active range restarts when the range begins", () => {
+  // At 80 an hour p3 and p4 warm up at 07:30. At 06:00 p3 still has a window
+  // from the night that resets at 07:15; the keeper restarts it at 07:30.
+  const context = quadContext(80);
+  const plan80 = dayPlan(WEDNESDAY, quad, context);
+  assert.equal(clockOf.format(plan80.accounts[2].activeFrom), "07:30");
+  const now = at("06:00");
+  const input = {
+    plan: plan80,
+    settings: quad,
+    context,
+    usage: read(now, { p1: at("10:00"), p2: at("10:00"), p3: at("07:15") }),
+    now,
+  };
+  assert.equal(liveSetup(input)!.accounts[2].restartAt, at("07:30"));
+  assert.deepEqual(liveForecast(input), plan80.forecast);
+});
+
 test("a closed window scheduled before now starts now, not at the past time", () => {
   const duo = dayPlan(
     WEDNESDAY,

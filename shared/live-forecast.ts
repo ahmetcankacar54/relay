@@ -8,6 +8,13 @@ import type { DayPlan, PlanContext } from "./day-plan";
 import { tempoRate } from "./tempo";
 import type { AccountUsage, PlanningSettings } from "./types";
 import { freshUsage } from "./usage";
+import { sameReset } from "./usage-rollups";
+import { WINDOW_MS } from "./work-hours";
+
+// A warm-up this recent counts at its planned time: the keeper's tick starts
+// it a little late.
+const ON_TIME_MS = 2 * 60_000;
+const iso = (time: number) => new Date(time).toISOString();
 
 export interface LiveSetup {
   from: number;
@@ -40,7 +47,10 @@ export interface LiveInput {
  * entry holds an open window's restart, or starts a closed window, at its time
  * (now, if that has passed). Before work the day runs from now with no demand
  * until the work starts, so warm-ups and resets on the way happen as they
- * would; the account in use then does not count.
+ * would; the account in use then does not count. A window the keeper may not
+ * restart yet (it resets before the account's active range) restarts when
+ * that range begins. Live times within a tick of the plan's own windows (a
+ * warm-up just started, a reset within the reported jitter) count as planned.
  * Shared with the adaptive search.
  */
 export function liveSetup({
@@ -66,21 +76,38 @@ export function liveSetup({
   const accounts: SimAccount[] = plan.accounts.map((p) => {
     const capacity = context.capacities[p.accountId] ?? 1;
     const next = schedule?.[p.accountId];
+    // The plan's own window boundary nearest `time`: the warm-up at
+    // activeFrom, then every five hours.
+    const planned = (time: number) =>
+      p.activeFrom +
+      Math.max(0, Math.round((time - p.activeFrom) / WINDOW_MS)) * WINDOW_MS;
     // The keeper starts a due window right away (inside its active range); a
     // scheduled start already past starts it now, too.
+    const due = () => {
+      if (now < p.activeFrom) return p.activeFrom;
+      const start = planned(now);
+      return start <= now && now - start < ON_TIME_MS ? start : now;
+    };
     const closed = {
       warmUp:
         next !== undefined
           ? Math.max(now, next)
           : keepAlive && now < p.activeUntil
-            ? Math.max(now, p.activeFrom)
+            ? due()
             : undefined,
     };
     const u = usage[p.accountId];
     if (freshUsage(u, now)) {
-      const reset = Date.parse(u.fiveHour?.resetsAt ?? "");
-      const open = Number.isFinite(reset) && reset > now;
+      const reported = Date.parse(u.fiveHour?.resetsAt ?? "");
+      const open = Number.isFinite(reported) && reported > now;
       const used = open ? (u.fiveHour?.usedPercent ?? 0) : 0;
+      const end = planned(reported);
+      const reset =
+        end > Math.max(now, p.activeFrom) && sameReset(iso(reported), iso(end))
+          ? end
+          : reported;
+      const restartAt =
+        next ?? (keepAlive && reset < p.activeFrom ? p.activeFrom : undefined);
       return {
         id: p.accountId,
         capacity,
@@ -90,7 +117,7 @@ export function liveSetup({
         ...(open
           ? {
               firstReset: reset,
-              ...(next === undefined ? {} : { restartAt: next }),
+              ...(restartAt === undefined ? {} : { restartAt }),
             }
           : closed),
       };

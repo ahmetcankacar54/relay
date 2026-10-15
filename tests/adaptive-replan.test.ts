@@ -235,6 +235,15 @@ test("the next start candidates are the default, then later half hours before th
     nextStartCandidates(account, at("09:00"), end),
     halfHours("09:00", 11),
   );
+  // A window that resets before its active range waits for it to begin.
+  assert.deepEqual(
+    nextStartCandidates(
+      { ...account, firstReset: at("07:15"), restartAt: at("07:30") },
+      at("06:00"),
+      end,
+    ),
+    halfHours("07:30", 11),
+  );
   // Nothing at or after the work end.
   assert.deepEqual(
     nextStartCandidates(
