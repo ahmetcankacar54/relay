@@ -14,7 +14,7 @@ import {
 import { dayPlan, planContext } from "../shared/day-plan";
 import { liveForecast } from "../shared/live-forecast";
 import { wallTime } from "../shared/planning";
-import type { Tempo } from "../shared/tempo";
+import { tempoAt, type Tempo } from "../shared/tempo";
 import { usageIdentity, type UsageSample } from "../shared/usage-statistics";
 import {
   DEFAULT_PLANNING,
@@ -839,4 +839,167 @@ test("current() leaves out starts whose time has come since the last update", ()
   });
   clock = at("11:00");
   assert.deepEqual(adaptive.current(), { schedule: {}, factor: 1 });
+});
+
+/** A busy day's shape from 09:00 to 18:00, nothing outside, times `scale`. */
+function busyTempo(scale: number): Tempo {
+  const busy: Record<number, number> = {
+    9: 180,
+    10: 230,
+    11: 250,
+    12: 80,
+    13: 170,
+    14: 240,
+    15: 230,
+    16: 200,
+    17: 140,
+  };
+  const profile = Array.from({ length: 24 }, (_, h) => (busy[h] ?? 0) * scale);
+  return {
+    source: "learned",
+    weekday: profile,
+    weekend: profile,
+    rate: { weekday: 250 * scale, weekend: 250 * scale },
+    days: { weekday: 15, weekend: 2 },
+  };
+}
+
+/**
+ * A calm day minute by minute from `wake` to the work end: work at exactly
+ * the tempo from 09:00, one account at a time (the one in use until it runs
+ * out, then the one with quota that resets soonest, the larger first); each
+ * window opens when the keeper starts it (honouring the schedule, a tick
+ * after `phase`) or at first use. Every account is read every five minutes
+ * (each a minute later than the one before) in whole percent, and the reads
+ * are the samples. Returns every notice and adopted schedule.
+ */
+function calmDay(
+  accounts: Account[],
+  tempo: Tempo,
+  { wake, phase }: { wake: number; phase: number },
+) {
+  const settings = settingsFor(accounts);
+  const context = planContext(accounts, tempo);
+  const plan = dayPlan(WEDNESDAY, settings, context);
+  const end = plan.interval!.end;
+  const capacity = (id: string) => 100 * context.capacities[id];
+  const state = Object.fromEntries(
+    accounts.map((a) => [a.id, { reset: 0, used: 0 }]),
+  );
+  const open = (id: string, time: number) => state[id].reset > time;
+  const start = (id: string, time: number) =>
+    (state[id] = { reset: time + 5 * HOUR, used: 0 });
+  const usage: Record<string, AccountUsage> = {};
+  const samples: UsageSample[] = [];
+  const read = (account: Account, time: number) => {
+    const s = state[account.id];
+    const percent = open(account.id, time)
+      ? Math.min(100, Math.round((s.used / capacity(account.id)) * 100))
+      : 0;
+    usage[account.id] = fresh(
+      account.id,
+      time,
+      percent,
+      open(account.id, time) ? s.reset : undefined,
+    );
+    samples.push({
+      accountId: account.id,
+      identity: usageIdentity(account)!,
+      checkedAt: new Date(time).toISOString(),
+      fiveHour: usage[account.id].fiveHour,
+    });
+  };
+  const left = (id: string, time: number) =>
+    open(id, time) ? capacity(id) - state[id].used : capacity(id);
+  let active: string | undefined;
+  const adaptive = new AdaptiveSchedule();
+  const seen: string[] = [];
+  for (let minute = wake; minute < end; minute += MINUTE) {
+    const now = minute + phase;
+    accounts.forEach((account, k) => {
+      const u = usage[account.id];
+      // First read k minutes after waking, then every five minutes; a window
+      // that reset since the last read is read again at once.
+      if (
+        u
+          ? now - Date.parse(u.checkedAt ?? "") >= 5 * MINUTE ||
+            Date.parse(u.fiveHour?.resetsAt ?? "") <= now
+          : now - wake >= k * MINUTE
+      )
+        read(account, now);
+    });
+    if (accounts.every((a) => usage[a.id])) {
+      const result = adaptive.update({
+        ...input(accounts, 0, now, usage, {
+          activeId: active,
+          recentSamples: samples.filter(
+            (sample) => Date.parse(sample.checkedAt) >= now - HOUR,
+          ),
+        }),
+        tempo,
+      });
+      const clock = new Date(now).toISOString();
+      if (result.notice) seen.push(`${clock} notice ${result.notice.kind}`);
+      if (Object.keys(result.schedule).length)
+        seen.push(
+          `${clock} ${JSON.stringify(result.schedule)} f ${result.factor}`,
+        );
+      const due = plan.accounts.find(
+        (p) =>
+          now >= p.activeFrom &&
+          !open(p.accountId, now) &&
+          !((result.schedule[p.accountId] ?? 0) > now),
+      );
+      if (due) {
+        start(due.accountId, now + 3000);
+        read(
+          accounts.find((a) => a.id === due.accountId)!,
+          now + 4000,
+        );
+      }
+    }
+    // The work in this minute.
+    let need =
+      minute >= plan.interval!.start
+        ? tempoAt(tempo, settings, minute) / 60
+        : 0;
+    while (need > 1e-9) {
+      if (!active || left(active, minute) <= 1e-9) {
+        const choices = accounts
+          .map((a) => a.id)
+          .filter((id) => left(id, minute) > 1e-9)
+          .sort(
+            (x, y) =>
+              (open(x, minute) ? state[x].reset : Infinity) -
+                (open(y, minute) ? state[y].reset : Infinity) ||
+              capacity(y) - capacity(x),
+          );
+        active = choices[0];
+        if (!active) break;
+      }
+      if (!open(active, minute)) start(active, minute);
+      const take = Math.min(need, left(active, minute));
+      state[active].used += take;
+      need -= take;
+    }
+  }
+  return seen;
+}
+
+test("a calm day read in whole percent adopts nothing and says nothing", () => {
+  // Awake from 03:00: every warm-up as planned, the pace read all night.
+  const pros = ["p1", "p2", "p3"].map((id) => planningAccount(id, "pro"));
+  const cases: [string, Account[], number][] = [
+    ["a and b", [A, B], 0.45],
+    ["max and pro", [max, pro], 0.45],
+    ["max, team and pro", [max, team, pro], 0.6],
+    ["three Pros", pros, 0.2],
+  ];
+  for (const [label, accounts, scale] of cases)
+    for (const phase of [5_000, 40_000])
+      assert.deepEqual(
+        calmDay(accounts, busyTempo(scale), { wake: at("03:00"), phase }),
+        [],
+        `${label} ×${scale} +${phase / 1000} s`,
+      );
 });

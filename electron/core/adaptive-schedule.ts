@@ -5,10 +5,8 @@ import type {
 } from "../../shared/types";
 import {
   PACE_WINDOW_MS,
-  observedRate,
-  paceFactor,
-  plannedRate,
   replanStarts,
+  todaysPace,
 } from "../../shared/adaptive-plan";
 import type { Forecast } from "../../shared/capacity-plan";
 import {
@@ -210,18 +208,17 @@ export class AdaptiveSchedule {
     // Turned off: dropped, and the user hears the plan is normal again.
     if (!plan) this.clear();
     else {
-      const from = now - PACE_WINDOW_MS;
-      observed = observedRate({
+      const pace = todaysPace({
         samples: input.recentSamples,
         accounts: input.accounts.filter((a) => planned.has(a.id)),
-        from,
+        tempo: input.tempo,
+        settings,
+        from: now - PACE_WINDOW_MS,
         // `to` is exclusive: a sample read just now counts.
         to: now + 1,
       });
-      factor = paceFactor(
-        observed,
-        plannedRate(input.tempo, settings, from, now),
-      );
+      factor = pace.factor;
+      observed = pace.observed;
       const live = {
         plan,
         settings,

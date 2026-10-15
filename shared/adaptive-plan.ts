@@ -12,22 +12,49 @@ import { sameReset, validWindow } from "./usage-rollups";
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
+// Every zone's local hours begin on a quarter hour, so the tempo is constant
+// within each.
+const QUARTER_MS = 15 * MINUTE_MS;
 /** How far back today's pace is measured. */
 export const PACE_WINDOW_MS = HOUR_MS;
 /** The plan never assumes more than three times its tempo. */
 export const MAX_PACE = 3;
+/**
+ * Under this many times the planned rate the day is on plan: whole-percent
+ * reads and the minutes between them are this coarse.
+ */
+export const PACE_DEAD_BAND = 1.2;
 // Under this much observed time a rate would be noise, not a pace.
 const MIN_OBSERVED_MS = 30 * MINUTE_MS;
-const PLANNED_STEP_MS = 5 * MINUTE_MS;
+
+/** A stretch of time: `from` inclusive, `to` exclusive. */
+export interface Span {
+  from: number;
+  to: number;
+}
+interface Observation {
+  /** Pro units used. */
+  units: number;
+  /**
+   * How far whole-percent reads may put `units` off: a percent of each
+   * window whose use rose (its first and highest reads are each rounded).
+   */
+  resolution: number;
+  /** How long any identity was observed. */
+  observedMs: number;
+  /** When any identity was observed, earliest first, apart. */
+  spans: Span[];
+}
 
 /**
- * Pro units per hour in [from, to): increases over each five-hour window's
+ * Pro units used in [from, to): increases over each five-hour window's
  * high-water mark between samples at most 35 minutes apart (the statistics
- * rule), times the owning account's plan capacity. Observed time counts every
- * gap of at most 35 minutes, whatever the window, and is the longest any
- * identity was observed; under 30 minutes there is no rate.
+ * rule), times the owning account's plan capacity. Observed time is every gap
+ * of at most 35 minutes between an identity's samples, whatever the window (a
+ * read without a usable window too), counted once where identities overlap:
+ * every unit falls within it.
  */
-export function observedRate({
+function observe({
   samples,
   accounts,
   from,
@@ -37,7 +64,7 @@ export function observedRate({
   accounts: Account[];
   from: number;
   to: number;
-}): number | undefined {
+}): Observation {
   const owners = identityOwners(accounts);
   const byIdentity = new Map<string, UsageSample[]>();
   for (const sample of samples) {
@@ -48,22 +75,26 @@ export function observedRate({
     byIdentity.set(sample.identity, list);
   }
   let units = 0;
-  let observedMs = 0;
+  let resolution = 0;
+  const gaps: Span[] = [];
   for (const [identity, list] of byIdentity) {
     list.sort((a, b) => Date.parse(a.checkedAt) - Date.parse(b.checkedAt));
     const capacity = planCapacity(owners.get(identity)!);
-    let covered = 0;
-    let high: { reset: string; used: number } | undefined;
+    let high: { reset: string; used: number; rose?: boolean } | undefined;
+    // A run of one window ends: a percent of it, if its use rose.
+    const end = () => {
+      if (high?.rose) resolution += capacity;
+    };
     for (let i = 0; i < list.length; i++) {
       const sample = list[i];
-      const previous = list[i - 1];
-      const gap = previous
-        ? Date.parse(sample.checkedAt) - Date.parse(previous.checkedAt)
-        : Infinity;
-      if (gap <= MAX_USAGE_GAP_MS) covered += gap;
+      const time = Date.parse(sample.checkedAt);
+      const before = i ? Date.parse(list[i - 1].checkedAt) : -Infinity;
+      const gap = time - before;
+      if (gap <= MAX_USAGE_GAP_MS) gaps.push({ from: before, to: time });
       // Without a usable window there is no baseline, so no increase either
       // here or at the next sample.
       if (!validWindow(sample)) {
+        end();
         high = undefined;
         continue;
       }
@@ -71,37 +102,57 @@ export function observedRate({
       const used = sample.fiveHour!.usedPercent;
       if (gap <= MAX_USAGE_GAP_MS && high && sameReset(high.reset, reset)) {
         units += Math.max(0, used - high.used) * capacity;
-        high = { reset, used: Math.max(high.used, used) };
+        high = {
+          reset,
+          used: Math.max(high.used, used),
+          rose: high.rose || used > high.used,
+        };
       } else {
         // A new window, or a sample after a gap: only a new baseline.
+        end();
         high = { reset, used };
       }
     }
-    observedMs = Math.max(observedMs, covered);
+    end();
   }
-  if (observedMs < MIN_OBSERVED_MS) return;
-  return units / (observedMs / HOUR_MS);
-}
-
-/** Mean Pro units per hour the tempo plans for [from, to), sampled every 5 minutes. */
-export function plannedRate(
-  tempo: Tempo,
-  settings: PlanningSettings,
-  from: number,
-  to: number,
-): number {
-  let total = 0;
-  let count = 0;
-  for (let time = from; time < to; time += PLANNED_STEP_MS) {
-    total += tempoAt(tempo, settings, time);
-    count++;
+  const spans: Span[] = [];
+  for (const gap of gaps.sort((a, b) => a.from - b.from)) {
+    const last = spans.at(-1);
+    if (last && gap.from <= last.to) last.to = Math.max(last.to, gap.to);
+    else spans.push({ ...gap });
   }
-  return count ? total / count : 0;
+  const observedMs = spans.reduce((sum, s) => sum + s.to - s.from, 0);
+  return { units, resolution, observedMs, spans };
 }
 
 /**
- * How many times faster than planned today is going: 1 (no faster, no usable
- * measurement, or nothing planned) up to MAX_PACE, in tenths.
+ * Mean Pro units per hour the tempo plans over `spans` (0 for none), exact:
+ * each minute at its own local hour and day type.
+ */
+export function plannedRate(
+  tempo: Tempo,
+  settings: PlanningSettings,
+  spans: Span[],
+): number {
+  let units = 0;
+  let ms = 0;
+  for (const span of spans) {
+    for (let time = span.from; time < span.to;) {
+      const next = Math.min(
+        span.to,
+        (Math.floor(time / QUARTER_MS) + 1) * QUARTER_MS,
+      );
+      units += (tempoAt(tempo, settings, time) * (next - time)) / HOUR_MS;
+      time = next;
+    }
+    ms += Math.max(0, span.to - span.from);
+  }
+  return ms > 0 ? units / (ms / HOUR_MS) : 0;
+}
+
+/**
+ * How many times faster than planned today is going: 1 (under 1.2 times the
+ * plan, no usable measurement, or nothing planned) up to MAX_PACE, in tenths.
  */
 export function paceFactor(
   observed: number | undefined,
@@ -109,9 +160,53 @@ export function paceFactor(
 ): number {
   if (observed === undefined || !Number.isFinite(observed) || !(planned >= 1))
     return 1;
-  return (
-    Math.round(Math.min(MAX_PACE, Math.max(1, observed / planned)) * 10) / 10
-  );
+  const ratio = observed / planned;
+  if (!(ratio >= PACE_DEAD_BAND)) return 1;
+  return Math.round(Math.min(MAX_PACE, ratio) * 10) / 10;
+}
+
+export interface Pace {
+  /** Pro units an hour observed; absent under 30 observed minutes. */
+  observed?: number;
+  /** Pro units an hour the tempo plans over the same stretches. */
+  planned: number;
+  factor: number;
+}
+/**
+ * Today's pace in [from, to): Pro units an hour observed (see `observe`)
+ * against the tempo's over exactly the stretches observed, so time without a
+ * read counts on neither side; under 30 observed minutes there is no rate.
+ * Use above the plan by no more than the reads' rounding is no pace either
+ * (early in the work a percent of a large window can be most of it).
+ */
+export function todaysPace({
+  samples,
+  accounts,
+  tempo,
+  settings,
+  from,
+  to,
+}: {
+  samples: UsageSample[];
+  accounts: Account[];
+  tempo: Tempo;
+  settings: PlanningSettings;
+  from: number;
+  to: number;
+}): Pace {
+  const seen = observe({ samples, accounts, from, to });
+  const planned = plannedRate(tempo, settings, seen.spans);
+  if (seen.observedMs < MIN_OBSERVED_MS) return { planned, factor: 1 };
+  const hours = seen.observedMs / HOUR_MS;
+  const observed = seen.units / hours;
+  return {
+    observed,
+    planned,
+    factor:
+      seen.units - planned * hours <= seen.resolution
+        ? 1
+        : paceFactor(observed, planned),
+  };
 }
 
 /** The search starts from the default; an adopted schedule is not an input. */
