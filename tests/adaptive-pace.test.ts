@@ -57,6 +57,11 @@ const hour = (account: Account, top: number, reset?: string) =>
     Array.from({ length: 13 }, (_, i) => (top * i) / 12),
     reset ? { reset } : undefined,
   );
+const near = (actual: number | undefined, expected: number) =>
+  assert.ok(
+    actual !== undefined && Math.abs(actual - expected) < 1e-9,
+    `${actual} is not ${expected}`,
+  );
 const rate = (samples: UsageSample[], from = FROM, to = TO) =>
   observedRate({ samples, accounts, from, to });
 
@@ -151,7 +156,7 @@ test("an identity with no current account is ignored", () => {
   assert.equal(rate([...hour(stranger, 50), ...hour(pro, 30)]), 30);
 });
 
-test("a sample without a usable window breaks the baseline and adds no time", () => {
+test("a sample without a usable window breaks the baseline but still counts as observed time", () => {
   const samples = series(pro, FROM, [0, 10, 12, 90, 95, 100, 100, 100]);
   // 09:10 reports a reset that already passed.
   samples[2] = {
@@ -159,8 +164,20 @@ test("a sample without a usable window breaks the baseline and adds no time", ()
     fiveHour: { usedPercent: 12, resetsAt: "2026-10-14T05:00:00.000Z" },
   };
   // 0 → 10 counts; the 12 → 90 step is not seen as an increase, 90 → 100
-  // counts. The 09:05 → 09:10 gap is not observed: 30 minutes, 20 units.
-  assert.equal(rate(samples), 40);
+  // counts. Every 5-minute gap is observed: 20 units over 35 minutes.
+  near(rate(samples), (20 * 60) / 35);
+});
+
+test("an hour that turns from idle to active uses the whole hour as observed time", () => {
+  // 09:00–09:25 idle (the window has no reset yet), then 09:30–10:00 rising
+  // from 10 to 40. The first active sample is a baseline, so 30 units over
+  // the 60 observed minutes (not over the 30 active ones).
+  const idle = series(pro, FROM, [0, 0, 0, 0, 0, 0]).map((sample) => ({
+    ...sample,
+    fiveHour: { usedPercent: 0 },
+  }));
+  const active = series(pro, at("09:30"), [10, 15, 20, 25, 30, 35, 40]);
+  assert.equal(rate([...idle, ...active]), 30);
 });
 
 test("the pace factor is at least 1, at most 3, in tenths", () => {
@@ -172,6 +189,10 @@ test("the pace factor is at least 1, at most 3, in tenths", () => {
   assert.equal(paceFactor(80, 50), 1.6);
   assert.equal(paceFactor(500, 50), 3);
   assert.equal(paceFactor(63.3, 50), 1.3);
+  // Anything that is not a finite measurement against a plan is no pace.
+  assert.equal(paceFactor(NaN, 50), 1);
+  assert.equal(paceFactor(Infinity, 50), 1);
+  assert.equal(paceFactor(80, NaN), 1);
 });
 
 test("the planned rate is the mean of the tempo every five minutes", () => {

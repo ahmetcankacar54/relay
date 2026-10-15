@@ -429,7 +429,7 @@ test("recentSamples returns clones of the samples at or after a time", (t) => {
     [10, 15, 20].map((m) => new Date(start + m * minute).toISOString()),
   );
   assert.equal(recent[0].identity, identity);
-  assert.deepEqual(history.recentSamples(start - day).length, 5);
+  assert.equal(history.recentSamples(start - day).length, 5);
   assert.deepEqual(history.recentSamples(now + minute), []);
   // The result is a copy: changing it never reaches the ledger.
   recent[0].fiveHour!.usedPercent = 99;

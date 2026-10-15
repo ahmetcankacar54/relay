@@ -21,8 +21,9 @@ const PLANNED_STEP_MS = 5 * MINUTE_MS;
 /**
  * Pro units per hour in [from, to): increases over each five-hour window's
  * high-water mark between samples at most 35 minutes apart (the statistics
- * rule), times the owning account's plan capacity. Observed time is the
- * longest any identity was observed; under 30 minutes there is no rate.
+ * rule), times the owning account's plan capacity. Observed time counts every
+ * gap of at most 35 minutes, whatever the window, and is the longest any
+ * identity was observed; under 30 minutes there is no rate.
  */
 export function observedRate({
   samples,
@@ -57,13 +58,15 @@ export function observedRate({
       const gap = previous
         ? Date.parse(sample.checkedAt) - Date.parse(previous.checkedAt)
         : Infinity;
+      if (gap <= MAX_USAGE_GAP_MS) covered += gap;
+      // Without a usable window there is no baseline, so no increase either
+      // here or at the next sample.
       if (!validWindow(sample)) {
         high = undefined;
         continue;
       }
       const reset = sample.fiveHour!.resetsAt!;
       const used = sample.fiveHour!.usedPercent;
-      if (gap <= MAX_USAGE_GAP_MS) covered += gap;
       if (gap <= MAX_USAGE_GAP_MS && high && sameReset(high.reset, reset)) {
         units += Math.max(0, used - high.used) * capacity;
         high = { reset, used: Math.max(high.used, used) };
@@ -95,14 +98,15 @@ export function plannedRate(
 }
 
 /**
- * How many times faster than planned today is going: 1 (no faster, no
+ * How many times faster than planned today is going: 1 (no faster, no usable
  * measurement, or nothing planned) up to MAX_PACE, in tenths.
  */
 export function paceFactor(
   observed: number | undefined,
   planned: number,
 ): number {
-  if (observed === undefined || planned < 1) return 1;
+  if (observed === undefined || !Number.isFinite(observed) || !(planned >= 1))
+    return 1;
   return (
     Math.round(Math.min(MAX_PACE, Math.max(1, observed / planned)) * 10) / 10
   );
