@@ -1,28 +1,30 @@
 import {
   mascotStep,
-  type MascotCue,
+  type DesktopEvent,
   type MascotInput,
   type MascotMemory,
   type MascotPose,
 } from "../../shared/mascot";
 
 export interface MascotSink {
-  update(pose: MascotPose, cue?: MascotCue): void;
+  update(pose: MascotPose): void;
   destroy(): void;
 }
 
-/** Feeds the menu bar panda the pose and one-off cue of each tray snapshot. */
+/** Feeds the menu bar panda its pose, and Desktop operation events to a listener. */
 export class TrayMascot {
   private memory?: MascotMemory;
   constructor(
     private readonly player: MascotSink,
     private readonly now: () => number = Date.now,
+    private readonly onEvent?: (event: DesktopEvent) => void,
   ) {}
 
   next(input: MascotInput) {
     const step = mascotStep(this.memory, input, this.now());
     this.memory = step.memory;
-    this.player.update(step.pose, step.cue);
+    this.player.update(step.pose);
+    if (step.event) this.onEvent?.(step.event);
   }
 
   /** The snapshot could not be read: rest on idle, keep the memory for the next one. */

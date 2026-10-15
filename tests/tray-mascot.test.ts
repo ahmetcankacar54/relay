@@ -21,49 +21,53 @@ const input = (d: Partial<DesktopState> = {}): MascotInput => ({
 });
 
 function recorder() {
-  const calls: unknown[][] = [];
+  const poses: string[] = [];
+  const events: string[] = [];
   let destroyed = false;
   const mascot = new TrayMascot(
-    {
-      update: (...args) => void calls.push(args.filter((x) => x !== undefined)),
-      destroy: () => void (destroyed = true),
-    },
+    { update: (pose) => void poses.push(pose), destroy: () => void (destroyed = true) },
     () => NOW,
+    (event) => void events.push(event),
   );
-  return { mascot, calls, destroyed: () => destroyed };
+  return { mascot, poses, events, destroyed: () => destroyed };
 }
+const withOps = (d: Partial<DesktopState>, desktopOperations: number): MascotInput => ({
+  ...input(d),
+  desktopOperations,
+});
 
-test("each tray snapshot becomes a pose and, after the first, maybe a cue", () => {
-  const { mascot, calls } = recorder();
-  mascot.next(input());
-  mascot.next(input({ busy: true }));
-  mascot.next(input({ activeProfileId: "b" }));
-  assert.deepEqual(calls, [["idle"], ["away", "leave"], ["idle", "return"]]);
+test("each tray snapshot becomes a pose, and Desktop operations become events", () => {
+  const r = recorder();
+  r.mascot.next(input());
+  r.mascot.next(input({ busy: true }));
+  r.mascot.next(input({ activeProfileId: "b" }));
+  assert.deepEqual(r.poses, ["idle", "away", "idle"]);
+  assert.deepEqual(r.events, ["left", "switched"]);
 });
 
 test("an unreadable snapshot rests on idle and keeps the memory for the next one", () => {
-  const { mascot, calls } = recorder();
-  mascot.next(input());
-  mascot.next(input({ busy: true }));
-  mascot.unavailable();
-  mascot.next(input({ activeProfileId: "b" }));
-  assert.deepEqual(calls, [["idle"], ["away", "leave"], ["idle"], ["idle", "return"]]);
+  const r = recorder();
+  r.mascot.next(input());
+  r.mascot.next(input({ busy: true }));
+  r.mascot.unavailable();
+  r.mascot.next(input({ activeProfileId: "b" }));
+  assert.deepEqual(r.poses, ["idle", "away", "idle", "idle"]);
+  assert.deepEqual(r.events, ["left", "switched"]);
 });
 
-test("a switch shorter than the poll interval still returns", () => {
-  const { mascot, calls } = recorder();
-  mascot.next({ ...input(), desktopOperations: 1 });
-  mascot.next({ ...input({ activeProfileId: "b" }), desktopOperations: 2 });
-  mascot.next({ ...input({ activeProfileId: "b" }), desktopOperations: 2 });
-  assert.deepEqual(calls, [["idle"], ["idle", "return"], ["idle"]]);
+test("a switch shorter than the poll interval still reports the switch", () => {
+  const r = recorder();
+  r.mascot.next(withOps({}, 0));
+  r.mascot.next(withOps({ activeProfileId: "b" }, 1));
+  assert.deepEqual(r.events, ["switched"]);
 });
 
 test("a fast switch survives an unreadable snapshot in between", () => {
-  const { mascot, calls } = recorder();
-  mascot.next({ ...input(), desktopOperations: 1 });
-  mascot.unavailable();
-  mascot.next({ ...input({ activeProfileId: "b" }), desktopOperations: 2 });
-  assert.deepEqual(calls, [["idle"], ["idle"], ["idle", "return"]]);
+  const r = recorder();
+  r.mascot.next(withOps({}, 0));
+  r.mascot.unavailable();
+  r.mascot.next(withOps({ activeProfileId: "b" }, 1));
+  assert.deepEqual(r.events, ["switched"]);
 });
 
 test("a Desktop read that overlapped an operation counts as busy", async () => {
