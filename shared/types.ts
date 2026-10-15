@@ -307,6 +307,17 @@ export interface KeeperAccountStatus {
   resetsAt?: string;
   nextStartAt?: string;
 }
+/** Today's re-plan at today's pace. */
+export interface KeeperAdaptation {
+  /** Today's pace multiplier for the tempo (1–3). */
+  factor: number;
+  /** Pro units an hour over the last hour, when observed long enough. */
+  observedRate?: number;
+  /** Next window starts that differ from the plan, earliest first. */
+  schedule: { accountId: string; startAt: string }[];
+  /** When the schedule was adopted. */
+  since?: string;
+}
 export interface KeeperSnapshot {
   enabled: boolean;
   running: boolean;
@@ -318,6 +329,8 @@ export interface KeeperSnapshot {
   next?: { accountId: string; at: string };
   /** The tempo the keeper plans with. */
   tempo?: Tempo;
+  /** Present while today's pace is above the plan or a start is moved. */
+  adaptation?: KeeperAdaptation;
 }
 export interface DesktopHistorySummary {
   profileId: string;

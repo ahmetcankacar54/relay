@@ -4,6 +4,7 @@ import type {
   Account,
   AccountUsage,
   KeeperAccountStatus,
+  KeeperAdaptation,
   KeeperSnapshot,
   PlanningSettings,
   WindowAttempt,
@@ -17,6 +18,8 @@ import {
   type PlanContext,
 } from "../../shared/day-plan";
 import type { Tempo } from "../../shared/tempo";
+import type { UsageSample } from "../../shared/usage-statistics";
+import { AdaptiveSchedule } from "./adaptive-schedule";
 import {
   privateJournalDirectory,
   readPrivateJson,
@@ -50,6 +53,10 @@ export interface KeeperState {
   blocked: boolean;
   /** Accounts with a running Relay CLI session. */
   busyAccountIds: string[];
+  /** Raw usage samples of the last hour: today's pace. */
+  recentSamples: UsageSample[];
+  /** The account Claude Desktop uses now. */
+  activeId?: string;
 }
 export interface KeeperDeps {
   directory: string;
@@ -60,6 +67,11 @@ export interface KeeperDeps {
   /** Sends the isolated window-start message; throws a sanitized reason. */
   start(account: Account): Promise<void>;
   notify?(account: Account, reason: string): void;
+  /** Today's schedule changed (already throttled): tell the user. */
+  adapted?(notice: {
+    kind: "updated" | "normal";
+    schedule: KeeperAdaptation["schedule"];
+  }): void;
   changed(): void;
 }
 type Decision = KeeperAccountStatus & { refresh?: boolean };
@@ -75,6 +87,19 @@ function planned(state: Pick<KeeperState, "settings" | "accounts">) {
 /** Capacities and tempo the plan is drawn with. */
 const keeperContext = (state: Pick<KeeperState, "accounts" | "tempo">) =>
   planContext(state.accounts, state.tempo);
+/** The schedule as a list with ISO times, earliest first, then in plan order. */
+function startList(
+  schedule: Record<string, number>,
+  settings: PlanningSettings,
+): KeeperAdaptation["schedule"] {
+  const order = settings.accounts.map((a) => a.id);
+  return Object.entries(schedule)
+    .sort(([a, x], [b, y]) => x - y || order.indexOf(a) - order.indexOf(b))
+    .map(([accountId, time]) => ({
+      accountId,
+      startAt: new Date(time).toISOString(),
+    }));
+}
 
 function fresh(usage: AccountUsage | undefined, now: number) {
   const checked = Date.parse(usage?.checkedAt ?? "");
@@ -86,7 +111,10 @@ function fresh(usage: AccountUsage | undefined, now: number) {
     now - checked <= FRESH_MS
   );
 }
-/** What the keeper should do for one planned account right now. */
+/**
+ * What the keeper should do for one planned account right now. A closed
+ * window waits for `scheduledStart` (today's adapted schedule) when given.
+ */
 export function keeperDecision(
   account: Account,
   usage: AccountUsage | undefined,
@@ -96,6 +124,7 @@ export function keeperDecision(
   now: number,
   busy: boolean,
   stopped?: string,
+  scheduledStart?: number,
 ): Decision {
   const base = { accountId: account.id };
   if (!settings.autoStart) return { ...base, state: "off" };
@@ -125,6 +154,13 @@ export function keeperDecision(
     };
   if ((usage!.sevenDay?.usedPercent ?? 0) >= 100)
     return { ...base, state: "blocked", reason: "weekly-limit" };
+  if (scheduledStart !== undefined && now < scheduledStart)
+    return {
+      ...base,
+      state: "waiting",
+      reason: "adapted",
+      nextStartAt: new Date(scheduledStart).toISOString(),
+    };
   if (busy) return { ...base, state: "waiting", reason: "in-use" };
   const mine = attempts.filter((a) => a.identityKey === identity);
   const today = localDate(now, settings.timeZone);
@@ -156,8 +192,11 @@ export class WindowKeeper {
   private stopped = new Map<string, string>();
   private readonly file: string;
   private readonly now: () => number;
+  /** Today's next starts at today's pace; rebuilt after a restart. */
+  private readonly adaptive: AdaptiveSchedule;
   constructor(private readonly deps: KeeperDeps) {
     this.now = deps.now ?? Date.now;
+    this.adaptive = new AdaptiveSchedule({ now: this.now });
     privateJournalDirectory(deps.directory);
     this.file = path.join(deps.directory, "attempts.json");
     try {
@@ -219,6 +258,20 @@ export class WindowKeeper {
       .map((s) => ({ accountId: s.accountId, at: s.nextStartAt ?? s.resetsAt }))
       .filter((s): s is { accountId: string; at: string } => !!s.at)
       .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
+    const adaptive = this.adaptive.current();
+    const adaptation: KeeperAdaptation | undefined =
+      adaptive.factor > 1 || Object.keys(adaptive.schedule).length
+        ? {
+            factor: adaptive.factor,
+            ...(adaptive.observedRate === undefined
+              ? {}
+              : { observedRate: adaptive.observedRate }),
+            schedule: startList(adaptive.schedule, settings),
+            ...(adaptive.since === undefined
+              ? {}
+              : { since: new Date(adaptive.since).toISOString() }),
+          }
+        : undefined;
     return {
       enabled: settings.autoStart,
       running: this.running,
@@ -227,9 +280,13 @@ export class WindowKeeper {
       plannedToday: today.accounts.reduce((n, a) => n + a.windows.length, 0),
       tempo: state.tempo,
       ...(upcoming ? { next: upcoming } : {}),
+      ...(adaptation ? { adaptation } : {}),
     };
   }
-  private evaluate(state: KeeperState) {
+  private evaluate(
+    state: KeeperState,
+    schedule: Record<string, number> = this.adaptive.current().schedule,
+  ) {
     const now = this.now();
     const settings = planned(state);
     const context = keeperContext(state);
@@ -245,31 +302,60 @@ export class WindowKeeper {
           now,
           state.busyAccountIds.includes(account.id),
           this.stopped.get(planningIdentity(account) ?? ""),
+          schedule[account.id],
         ),
       );
+  }
+  /**
+   * Updates today's schedule from the state, tells the user about a change,
+   * and returns the decisions under the updated schedule.
+   */
+  private adapt(state: KeeperState) {
+    const settings = planned(state);
+    // Accounts the keeper cannot start, whatever the schedule says.
+    const unscheduled = this.evaluate(state, {});
+    const blocked = unscheduled
+      .filter((d) => d.state === "blocked" || d.state === "off")
+      .map((d) => d.accountId);
+    const result = this.adaptive.update({
+      settings,
+      accounts: state.accounts,
+      usage: state.usage,
+      tempo: state.tempo,
+      recentSamples: state.recentSamples,
+      activeId: state.activeId,
+      blocked,
+      now: this.now(),
+    });
+    if (result.notice)
+      this.deps.adapted?.({
+        kind: result.notice.kind,
+        schedule: startList(result.notice.schedule, settings),
+      });
+    return Object.keys(result.schedule).length
+      ? this.evaluate(state, result.schedule)
+      : unscheduled;
   }
   async tick() {
     if (this.running) return;
     this.running = true;
     try {
       let state = this.deps.state();
-      let decisions = this.evaluate(state);
       if (state.settings.autoStart && !state.blocked) {
-        const stale = decisions.filter((d) => d.refresh);
+        const stale = this.evaluate(state).filter((d) => d.refresh);
         for (const d of stale)
           await this.deps.refresh(d.accountId).catch(() => {});
-        if (stale.length) {
-          state = this.deps.state();
-          decisions = this.evaluate(state);
-        }
-        const due = decisions.find((d) => d.state === "due");
-        if (due && !state.blocked) {
-          await this.startOne(
-            state.accounts.find((a) => a.id === due.accountId)!,
-          );
-          state = this.deps.state();
-          decisions = this.evaluate(state);
-        }
+        if (stale.length) state = this.deps.state();
+      }
+      // The schedule is built from the refreshed usage, before any start.
+      let decisions = this.adapt(state);
+      const due = decisions.find((d) => d.state === "due");
+      if (due && state.settings.autoStart && !state.blocked) {
+        await this.startOne(
+          state.accounts.find((a) => a.id === due.accountId)!,
+        );
+        state = this.deps.state();
+        decisions = this.evaluate(state);
       }
       this.statuses = decisions.map(({ refresh, ...status }) =>
         // Nothing is refreshed or started while Relay is busy.

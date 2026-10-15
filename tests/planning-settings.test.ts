@@ -153,3 +153,18 @@ test("the tempo choice is optional, validated, and kept by a patch that omits it
   assert.equal({ ...stored, ...patch }.tempo, "heavy");
   assert.equal(DEFAULT_PLANNING.tempo, "auto");
 });
+
+test("adaptation is optional, validated, and kept by a patch that omits it", () => {
+  const { tempo: _tempo, ...valid } = DEFAULT_PLANNING;
+  assert.equal(
+    planningSchema.parse({ ...valid, adaptive: false }).adaptive,
+    false,
+  );
+  // A registry without the field parses without it: missing means on.
+  assert.equal("adaptive" in planningSchema.parse(valid), false);
+  assert.throws(() => planningSchema.parse({ ...valid, adaptive: "off" }));
+  const patch = planningPatchSchema.parse({ autoStart: true });
+  assert.equal("adaptive" in patch, false);
+  const stored = planningSchema.parse({ ...valid, adaptive: false });
+  assert.equal({ ...stored, ...patch }.adaptive, false);
+});

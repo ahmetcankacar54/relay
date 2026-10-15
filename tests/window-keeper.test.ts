@@ -8,17 +8,20 @@ import {
   KEEPER_COOLDOWN_MS,
   KEEPER_DAILY_LIMIT,
   WindowKeeper,
+  keeperDecision,
   type KeeperDeps,
 } from "../electron/core/window-keeper";
 import { wallTime } from "../shared/planning";
 import { dayPlan, planContext } from "../shared/day-plan";
 import { presetTempo, type Tempo } from "../shared/tempo";
+import { usageIdentity, type UsageSample } from "../shared/usage-statistics";
 import {
   DEFAULT_PLANNING,
   type Account,
   type AccountUsage,
   type PlanningSettings,
 } from "../shared/types";
+import { planningAccount } from "./planning-fixtures";
 
 const ZONE = "Europe/Istanbul";
 const at = (clock: string, date = "2026-10-13") => wallTime(date, clock, ZONE)!;
@@ -71,6 +74,9 @@ function setup(accounts = [account("A")]) {
     refreshFails: false,
     blocked: false,
     busy: [] as string[],
+    samples: [] as UsageSample[],
+    activeId: undefined as string | undefined,
+    adapted: [] as Parameters<NonNullable<KeeperDeps["adapted"]>>[0][],
   };
   const deps: KeeperDeps = {
     directory,
@@ -82,6 +88,8 @@ function setup(accounts = [account("A")]) {
       tempo: tempo.value,
       blocked: calls.blocked,
       busyAccountIds: calls.busy,
+      recentSamples: calls.samples,
+      activeId: calls.activeId,
     }),
     refresh: async (id) => {
       calls.refreshes.push(id);
@@ -103,6 +111,7 @@ function setup(accounts = [account("A")]) {
       if (calls.fail) throw calls.fail;
     },
     notify: (a, reason) => calls.notes.push(`${a.name}:${reason}`),
+    adapted: (notice) => calls.adapted.push(notice),
     changed: () => {},
   };
   return {
@@ -146,6 +155,9 @@ test("a due account is started once and verified; an active window is left alone
   const snapshot = keeper.snapshot();
   assert.equal(snapshot.attempts[0].status, "verified");
   assert.equal(snapshot.accounts[0].state, "active");
+  // At the planned pace with nothing moved there is no adaptation to show.
+  assert.equal("adaptation" in snapshot, false);
+  assert.deepEqual(f.calls.adapted, []);
   await keeper.tick();
   assert.equal(f.calls.starts.length, 1);
 });
@@ -396,4 +408,178 @@ test("the keeper plans with the state's tempo as soon as it changes", async () =
     keeper.snapshot().accounts[0].nextStartAt,
     new Date(heavy.firstStart).toISOString(),
   );
+});
+
+/** Every hour at `rate` Pro units. */
+const flatTempo = (rate: number): Tempo => ({
+  source: "learned",
+  weekday: Array.from({ length: 24 }, () => rate),
+  weekend: Array.from({ length: 24 }, () => rate),
+  rate: { weekday: rate, weekend: rate },
+  days: { weekday: 15, weekend: 2 },
+});
+const iso = (time: number) => new Date(time).toISOString();
+
+test("a closed window waits for its adapted start and is due at that time", () => {
+  const f = setup();
+  const [a] = f.accounts;
+  const context = planContext(f.accounts, f.tempo.value);
+  const scheduled = f.clock.now + 30 * 60_000;
+  const decide = (now: number, usage = f.fresh(a)) =>
+    keeperDecision(
+      a,
+      { ...usage, checkedAt: iso(now) },
+      f.settings,
+      context,
+      [],
+      now,
+      false,
+      undefined,
+      scheduled,
+    );
+  assert.deepEqual(decide(f.clock.now), {
+    accountId: a.id,
+    state: "waiting",
+    reason: "adapted",
+    nextStartAt: iso(scheduled),
+  });
+  assert.deepEqual(decide(scheduled), { accountId: a.id, state: "due" });
+  // A full week still blocks: the keeper could not start it then either.
+  assert.deepEqual(
+    decide(f.clock.now, { ...f.fresh(a), sevenDay: { usedPercent: 100 } }),
+    { accountId: a.id, state: "blocked", reason: "weekly-limit" },
+  );
+});
+
+const WEDNESDAY = "2026-10-14";
+/**
+ * The Mac wakes at 08:50 on a 09:00–18:00 Wednesday planned at 120 Pro units
+ * an hour: every warm-up (08:00, 08:45, 08:45) was missed, every window is
+ * closed and the usage was last read the evening before.
+ */
+function wake(adaptive?: boolean) {
+  const team = planningAccount("vertex", "team");
+  team.planning!.capacityWeight = 2;
+  const f = setup([
+    planningAccount("max", "max5"),
+    team,
+    planningAccount("pro", "pro"),
+  ]);
+  f.settings.weekday = { enabled: true, start: "09:00", end: "18:00" };
+  if (adaptive !== undefined) f.settings.adaptive = adaptive;
+  f.tempo.value = flatTempo(120);
+  f.clock.now = at("08:50", WEDNESDAY);
+  for (const a of f.accounts)
+    f.usage[a.id] = {
+      ...f.fresh(a),
+      checkedAt: iso(f.clock.now - 10 * 3_600_000),
+    };
+  const order: string[] = [];
+  const keeper = new WindowKeeper({
+    ...f.deps,
+    refresh: (id) => {
+      order.push(`refresh ${id}`);
+      return f.deps.refresh(id);
+    },
+    start: (a) => {
+      order.push(`start ${a.id}`);
+      return f.deps.start(a);
+    },
+    adapted: (notice) => {
+      order.push(`adapted ${notice.kind}`);
+      f.deps.adapted!(notice);
+    },
+  });
+  return { ...f, keeper, order };
+}
+
+test("a Mac waking with every window closed refreshes, re-plans, then starts only what is not deferred", async () => {
+  const f = wake();
+  await f.keeper.tick();
+  // Started now, all three would switch twice; held to 09:00, max and pro
+  // switch once (the adaptive schedule's own wake-up case).
+  assert.deepEqual(f.order, [
+    "refresh max",
+    "refresh vertex",
+    "refresh pro",
+    "adapted updated",
+    "start vertex",
+  ]);
+  const nine = iso(at("09:00", WEDNESDAY));
+  const schedule = [
+    { accountId: "max", startAt: nine },
+    { accountId: "pro", startAt: nine },
+  ];
+  assert.deepEqual(f.calls.adapted, [{ kind: "updated", schedule }]);
+  const snapshot = f.keeper.snapshot();
+  assert.deepEqual(snapshot.adaptation, {
+    factor: 1,
+    schedule,
+    since: iso(at("08:50", WEDNESDAY)),
+  });
+  assert.deepEqual(
+    snapshot.accounts.map((s) => [s.accountId, s.state, s.reason]),
+    [
+      ["max", "waiting", "adapted"],
+      ["vertex", "active", undefined],
+      ["pro", "waiting", "adapted"],
+    ],
+  );
+  assert.equal(snapshot.accounts[0].nextStartAt, nine);
+  assert.deepEqual(snapshot.next, { accountId: "max", at: nine });
+  // Nothing else starts before 09:00, and nothing more is announced.
+  for (const clock of ["08:51", "08:55", "08:59"]) {
+    f.clock.now = at(clock, WEDNESDAY);
+    await f.keeper.tick();
+  }
+  assert.deepEqual(f.calls.starts, ["vertex"]);
+  // At 09:00 the deferred accounts start, one a tick, quietly.
+  for (const clock of ["09:00", "09:01"]) {
+    f.clock.now = at(clock, WEDNESDAY);
+    await f.keeper.tick();
+  }
+  assert.deepEqual(f.calls.starts, ["vertex", "max", "pro"]);
+  assert.equal(f.calls.adapted.length, 1);
+  assert.equal("adaptation" in f.keeper.snapshot(), false);
+});
+
+test("with adaptation off the waking Mac starts the first planned account", async () => {
+  const f = wake(false);
+  await f.keeper.tick();
+  assert.deepEqual(f.order, [
+    "refresh max",
+    "refresh vertex",
+    "refresh pro",
+    "start max",
+  ]);
+  assert.equal("adaptation" in f.keeper.snapshot(), false);
+});
+
+test("today's faster pace shows in the snapshot without a schedule or a notice", async () => {
+  const f = setup();
+  const [a] = f.accounts;
+  // Planned at 60 an hour; the last hour used 90% of a Pro window.
+  f.tempo.value = flatTempo(60);
+  const used = (time: number) => ((time - at("09:00")) / 3_600_000) * 90;
+  const resetsAt = iso(at("12:00"));
+  for (let time = at("09:00"); time <= f.clock.now; time += 5 * 60_000)
+    f.calls.samples.push({
+      accountId: a.id,
+      identity: usageIdentity(a)!,
+      checkedAt: iso(time),
+      fiveHour: { usedPercent: used(time), resetsAt },
+    });
+  f.usage[a.id] = {
+    ...f.fresh(a, at("12:00")),
+    fiveHour: { usedPercent: 90, resetsAt },
+  };
+  const keeper = new WindowKeeper(f.deps);
+  await keeper.tick();
+  assert.deepEqual(keeper.snapshot().adaptation, {
+    factor: 1.5,
+    observedRate: 90,
+    schedule: [],
+  });
+  assert.deepEqual(f.calls.adapted, []);
+  assert.deepEqual(f.calls.starts, []);
 });

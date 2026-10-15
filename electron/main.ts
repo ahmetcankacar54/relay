@@ -33,11 +33,12 @@ import { UsageHistory } from "./core/usage-history";
 import { usageStatisticsInput } from "./core/usage-statistics-input";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { planningIdentity } from "../shared/planning";
+import { PACE_WINDOW_MS } from "../shared/adaptive-plan";
 import { WindowKeeper } from "./core/window-keeper";
 import { TempoTracker } from "./core/tempo-tracker";
 import { runQuotaStarter } from "./core/routine-runner";
 import { readProfileIdentity } from "./core/profile-identity";
-import type { Account, DesktopState } from "../shared/types";
+import type { Account, DesktopState, KeeperAdaptation } from "../shared/types";
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
 import {
@@ -433,6 +434,14 @@ else {
         pendingAuth() ||
         ["switching", "continuing"].includes(fleet.snapshot().status) ||
         continuation.snapshot().status === "executing";
+      /** The last hour of raw usage: today's pace; none without the ledger. */
+      const recentUsageSamples = () => {
+        try {
+          return usageHistory.recentSamples(Date.now() - PACE_WINDOW_MS);
+        } catch {
+          return [];
+        }
+      };
       keeper = new WindowKeeper({
         directory: path.join(app.getPath("userData"), "window-keeper"),
         state: () => ({
@@ -445,6 +454,8 @@ else {
             .list()
             .filter((run) => run.status === "running")
             .map((run) => run.accountId),
+          recentSamples: recentUsageSamples(),
+          activeId: observedDesktop?.activeProfileId,
         }),
         refresh: (id) => usage.refresh(id),
         refreshAfterStart: (id) => usage.refreshAfterRequest(id),
@@ -473,6 +484,7 @@ else {
                 : `${account.name} kullanım penceresi başlatılamadı (${reason}).`,
           }).show();
         },
+        adapted: notifyAdapted,
         changed: broadcastChanged,
       });
       bindIPC();
@@ -584,6 +596,41 @@ function notifySwitched(name: string) {
       trayLanguage === "en"
         ? `Claude switched to ${name}.`
         : `Claude, ${name} hesabına geçti.`,
+  }).show();
+}
+/** Today's plan was re-planned at today's pace, or is back to normal. */
+function notifyAdapted(notice: {
+  kind: "updated" | "normal";
+  schedule: KeeperAdaptation["schedule"];
+}) {
+  if (!Notification.isSupported()) return;
+  const { accounts, settings } = service.store.state;
+  // Clocks in the planning zone, without suffixes.
+  const clock = new Intl.DateTimeFormat("en-GB", {
+    timeZone: settings.planning.timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const list = notice.schedule
+    .flatMap(({ accountId, startAt }) => {
+      const account = accounts.find((a) => a.id === accountId);
+      return account
+        ? [`${account.name} ${clock.format(new Date(startAt))}`]
+        : [];
+    })
+    .join(", ");
+  const en = trayLanguage === "en";
+  new Notification({
+    title: "Relay",
+    body:
+      notice.kind === "normal"
+        ? en
+          ? "Plan is back to normal."
+          : "Plan yeniden normale döndü."
+        : en
+          ? `Plan updated for today’s pace · restarts: ${list}`
+          : `Plan bugünkü hızına göre güncellendi · yeniden başlatma: ${list}`,
   }).show();
 }
 /** Tell every Relay renderer (main window and menu bar panel) that state changed. */

@@ -49,6 +49,8 @@ export const planningSchema = z
       ),
     // No .default(): a partial patch must keep the stored choice.
     tempo: z.enum(["auto", "light", "medium", "heavy"]).optional(),
+    // Missing means on; no .default() for the same reason.
+    adaptive: z.boolean().optional(),
   })
   .strict();
 export const planningPatchSchema = planningSchema.partial();

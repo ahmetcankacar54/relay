@@ -224,6 +224,19 @@ app.whenReady().then(async () => {
       (await call("updatePlanning", { tempo: "auto" })).tempo,
       "auto",
     );
+    // So does turning adaptation off.
+    assert.equal(
+      (await call("updatePlanning", { adaptive: false })).adaptive,
+      false,
+    );
+    assert.equal(
+      (await call("updatePlanning", { autoStart: false })).adaptive,
+      false,
+    );
+    assert.equal(
+      (await call("updatePlanning", { adaptive: true })).adaptive,
+      true,
+    );
     const statistics = await call("usageStatistics", { range: 30 });
     assert.equal(statistics.range, 30);
     assert.ok(["available", "empty"].includes(statistics.status));
