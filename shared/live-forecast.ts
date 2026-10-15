@@ -38,7 +38,9 @@ export interface LiveInput {
  * `autoStart` a closed window starts when the keeper would start it (now, or
  * when the account's active range begins), else at first use; a `schedule`
  * entry holds an open window's restart, or starts a closed window, at its time
- * (now, if that has passed).
+ * (now, if that has passed). Before work the day runs from now with no demand
+ * until the work starts, so warm-ups and resets on the way happen as they
+ * would; the account in use then does not count.
  * Shared with the adaptive search.
  */
 export function liveSetup({
@@ -53,7 +55,13 @@ export function liveSetup({
 }: LiveInput): LiveSetup | undefined {
   const interval = plan.interval;
   if (!interval || now >= interval.end || !plan.accounts.length) return;
-  const from = Math.max(now, interval.start);
+  const early = now < interval.start;
+  // Steps on the work start's five-minute grid, so the demand begins exactly
+  // then (nothing happens between this and now).
+  const from = early
+    ? interval.start -
+      Math.ceil((interval.start - now) / SIM_STEP_MS) * SIM_STEP_MS
+    : now;
   const keepAlive = settings.autoStart;
   const accounts: SimAccount[] = plan.accounts.map((p) => {
     const capacity = context.capacities[p.accountId] ?? 1;
@@ -63,15 +71,15 @@ export function liveSetup({
     const closed = {
       warmUp:
         next !== undefined
-          ? Math.max(from, next)
-          : keepAlive && from < p.activeUntil
-            ? Math.max(from, p.activeFrom)
+          ? Math.max(now, next)
+          : keepAlive && now < p.activeUntil
+            ? Math.max(now, p.activeFrom)
             : undefined,
     };
     const u = usage[p.accountId];
     if (freshUsage(u, now)) {
       const reset = Date.parse(u.fiveHour?.resetsAt ?? "");
-      const open = Number.isFinite(reset) && reset > from;
+      const open = Number.isFinite(reset) && reset > now;
       const used = open ? (u.fiveHour?.usedPercent ?? 0) : 0;
       return {
         id: p.accountId,
@@ -87,7 +95,7 @@ export function liveSetup({
           : closed),
       };
     }
-    const current = p.windows.find((w) => w.start <= from && w.end > from);
+    const current = p.windows.find((w) => w.start <= now && w.end > now);
     return {
       id: p.accountId,
       capacity,
@@ -105,19 +113,22 @@ export function liveSetup({
     context.tempo,
     interval.weekend,
     settings.timeZone,
-    from,
+    early ? interval.start : from,
     interval.end,
     SIM_STEP_MS,
   );
+  const rate =
+    factor === undefined || factor === 1
+      ? base
+      : (time: number) => factor * base(time);
   return {
     from,
     to: interval.end,
     accounts,
-    rate:
-      factor === undefined || factor === 1
-        ? base
-        : (time) => factor * base(time),
-    ...(activeId && plan.accounts.some((a) => a.accountId === activeId)
+    rate: early ? (time) => (time < interval.start ? 0 : rate(time)) : rate,
+    ...(activeId &&
+    !early &&
+    plan.accounts.some((a) => a.accountId === activeId)
       ? { active: activeId }
       : {}),
   };

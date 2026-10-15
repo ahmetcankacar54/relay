@@ -202,11 +202,22 @@ test("after work there is nothing to forecast; before work it starts at the work
   const early = liveForecast({ ...input, now: at("08:00") })!;
   assert.equal(early.segments[0].from, at("09:00"));
   assert.equal(early.segments.at(-1)!.to, at("18:00"));
-  // With the plan's own tempo and windows kept as planned it is the plan's forecast.
-  assert.deepEqual(
-    liveForecast({ ...input, context: context(busyTempo), now: at("08:00") }),
-    plan.forecast,
-  );
+  // With the plan's own tempo and windows kept as planned it is the plan's
+  // forecast, at any time before work (off the five-minute grid too); the
+  // account in use before work does not count.
+  for (const clock of ["04:00", "06:20", "08:00", "08:47", "08:59"]) {
+    const morning = { ...input, context: context(busyTempo), now: at(clock) };
+    // Simulated from now, on the work start's five-minute grid.
+    const from = liveSetup(morning)!.from;
+    assert.ok(from <= at(clock) && at(clock) - from < 5 * MINUTE, clock);
+    assert.equal((at("09:00") - from) % (5 * MINUTE), 0, clock);
+    assert.deepEqual(liveForecast(morning), plan.forecast, clock);
+    assert.deepEqual(
+      liveForecast({ ...morning, activeId: "vertex" }),
+      plan.forecast,
+      clock,
+    );
+  }
 });
 
 test("without auto start a closed window opens at first use, not at its planned warm-up", () => {
@@ -269,7 +280,7 @@ test("with auto start a closed window warms now, as the keeper starts a due wind
   );
 });
 
-test("a window that resets between now and the work start counts as closed and full", () => {
+test("before work a window resets, or a missed warm-up starts, when the keeper would", () => {
   const now = at("08:00");
   const blocked = (id: string) => fresh(id, now, 0, undefined, 100);
   const input = {
@@ -278,7 +289,9 @@ test("a window that resets between now and the work start counts as closed and f
     context: context(presetTempo("heavy")),
     now,
   };
-  // 90% used, but the window resets at 08:30, before work starts at 09:00.
+  // 90% used, but the window resets at 08:30 and restarts then: a full Max 5×
+  // window from 09:00 (500 Pro units at 120/h) lasts until 13:10 and comes
+  // back at 13:30.
   const reset = liveForecast({
     ...input,
     usage: {
@@ -287,24 +300,23 @@ test("a window that resets between now and the work start counts as closed and f
       pro: blocked("pro"),
     },
   })!;
-  // A full Max 5× window from 09:00 (500 Pro units at 120/h) lasts until
-  // 13:10 and comes back at 14:00, five hours after the work start.
   assert.deepEqual(lane(reset), [
     "max 09:00-13:10",
-    "- 13:10-14:00",
-    "max 14:00-18:00",
+    "- 13:10-13:30",
+    "max 13:30-17:40",
+    "- 17:40-18:00",
   ]);
-  assert.deepEqual(
-    liveForecast({
-      ...input,
-      usage: {
-        max: fresh("max", now, 0),
-        vertex: blocked("vertex"),
-        pro: blocked("pro"),
-      },
-    }),
-    reset,
-  );
+  // Closed at 08:00 (the Mac slept through its 06:15 warm-up), it starts now
+  // and refills at 13:00 while still in use.
+  const missed = liveForecast({
+    ...input,
+    usage: {
+      max: fresh("max", now, 0),
+      vertex: blocked("vertex"),
+      pro: blocked("pro"),
+    },
+  })!;
+  assert.deepEqual(lane(missed), ["max 09:00-17:10", "- 17:10-18:00"]);
 });
 
 test("a pace factor scales the demand; one or none leaves the forecast alone", () => {

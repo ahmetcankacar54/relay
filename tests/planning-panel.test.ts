@@ -13,6 +13,7 @@ import { forecastSummary } from "../src/lib/forecast-text";
 import {
   DEFAULT_PLANNING,
   type Account,
+  type AccountUsage,
   type KeeperSnapshot,
   type PlanningSettings,
   type TempoChoice,
@@ -256,6 +257,7 @@ function renderScenario(
   accounts: PlanningSettings["accounts"],
   now: number,
   activeId = a.id,
+  usage: Record<string, AccountUsage> = {},
 ) {
   return renderToStaticMarkup(
     createElement(PlanningPanel, {
@@ -269,7 +271,7 @@ function renderScenario(
         tempo: busyTempo,
       },
       accounts: scenarioAccounts,
-      usage: {},
+      usage,
       activeId,
       disabled: false,
       t: tr,
@@ -566,20 +568,38 @@ test("the hero forecasts the day before work and the rest of it during work", ()
 });
 
 test("before work the pill forecasts the day as the lane does", () => {
-  // Desktop is on Vertex Team, so the live forecast starts there rather than
-  // as planned; the pill must not repeat the plan's own forecast.
+  // The Mac slept through the 06:15 and 06:30 warm-ups: at 08:00 every
+  // window is closed, so the live forecast is not the plan's own and the pill
+  // must not repeat the plan's. (The account Desktop is on does not count
+  // before work.)
   const now = wednesday("08:00");
+  const usage: Record<string, AccountUsage> = Object.fromEntries(
+    scenarioAccounts.map((x) => [
+      x.id,
+      {
+        accountId: x.id,
+        status: "ready",
+        stale: false,
+        checkedAt: new Date(now).toISOString(),
+        fiveHour: { usedPercent: 0 },
+        sevenDay: {
+          usedPercent: 20,
+          resetsAt: new Date(now + 3 * 86_400_000).toISOString(),
+        },
+      },
+    ]),
+  );
   const view = dayTimeline({
     settings: scenarioSettings(automatic),
     accounts: scenarioAccounts,
-    usage: {},
+    usage,
     now,
     tempo: busyTempo,
     activeId: team.id,
   });
   const summary = forecastSummary(view.live!.forecast, tr, clock);
-  assert.equal(summary, "15:17–16:15 kotasız · 4 geçiş");
-  const html = renderScenario(automatic, now, team.id);
+  assert.equal(summary, "2 kotasız aralık, ilk 12:52–13:00 · 5 geçiş");
+  const html = renderScenario(automatic, now, team.id, usage);
   assert.match(
     html,
     new RegExp(`<i class="[^"]*bg-warn[^"]*"[^>]*></i>Tahmin: ${summary}<`),
