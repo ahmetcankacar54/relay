@@ -49,7 +49,7 @@ export function hourKey(time: number): string {
 }
 
 // A usable five-hour window resets in (checkedAt, checkedAt + 5h].
-function validWindow(sample: UsageSample): boolean {
+export function validWindow(sample: UsageSample): boolean {
   const reset = sample.fiveHour?.resetsAt;
   if (!reset) return false;
   const checkedAt = Date.parse(sample.checkedAt);
@@ -57,7 +57,7 @@ function validWindow(sample: UsageSample): boolean {
   return resetAt > checkedAt && resetAt <= checkedAt + FIVE_HOURS_MS;
 }
 
-function sameReset(a: string, b: string): boolean {
+export function sameReset(a: string, b: string): boolean {
   return Math.abs(Date.parse(a) - Date.parse(b)) <= RESET_TOLERANCE_MS;
 }
 

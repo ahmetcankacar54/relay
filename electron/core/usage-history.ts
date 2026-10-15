@@ -262,6 +262,15 @@ export class UsageHistory {
     this.rollupsState = folded;
     this.persistRollups();
   }
+  /** Copies of the raw samples checked at or after `since`, oldest first. */
+  recentSamples(since: number): UsageSample[] {
+    if (!this.historyAvailable) return [];
+    // The samples are in time order: walk back from the newest.
+    let first = this.samples.length;
+    while (first > 0 && Date.parse(this.samples[first - 1].checkedAt) >= since)
+      first--;
+    return structuredClone(this.samples.slice(first));
+  }
   /** 90-day hourly rollups; undefined when the rollups file is unavailable. */
   rollups(): UsageRollups | undefined {
     if (!this.rollupsAvailable || !this.rollupsState) return;

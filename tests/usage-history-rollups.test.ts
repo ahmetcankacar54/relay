@@ -413,3 +413,54 @@ test("a restart with the clock behind the last sample does not replay the raw le
   assert.deepEqual(after.windows, folded.windows);
   assert.deepEqual(after.hits, folded.hits);
 });
+
+test("recentSamples returns clones of the samples at or after a time", (t) => {
+  const root = directory(t);
+  let now = start;
+  const history = new UsageHistory(root, () => now);
+  for (let i = 0; i < 5; i++) {
+    now = start + i * 5 * minute;
+    history.record(account, usage(now, 10 + i));
+  }
+  const since = start + 10 * minute;
+  const recent = history.recentSamples(since);
+  assert.deepEqual(
+    recent.map((sample) => sample.checkedAt),
+    [10, 15, 20].map((m) => new Date(start + m * minute).toISOString()),
+  );
+  assert.equal(recent[0].identity, identity);
+  assert.deepEqual(history.recentSamples(start - day).length, 5);
+  assert.deepEqual(history.recentSamples(now + minute), []);
+  // The result is a copy: changing it never reaches the ledger.
+  recent[0].fiveHour!.usedPercent = 99;
+  recent.pop();
+  assert.equal(history.recentSamples(since)[0].fiveHour!.usedPercent, 12);
+  assert.equal(history.recentSamples(since).length, 3);
+});
+
+test("recentSamples is empty while the raw ledger is unavailable", (t) => {
+  const root = directory(t);
+  const rawFile = path.join(root, "usage-history.json");
+  let now = start;
+  const history = new UsageHistory(root, () => now);
+  history.record(account, usage(now, 10));
+  assert.equal(history.recentSamples(start).length, 1);
+  // A failed raw write leaves the ledger unavailable although the earlier
+  // samples are still in memory.
+  const rename = fs.renameSync;
+  t.mock.method(fs, "renameSync", (from: fs.PathLike, to: fs.PathLike) => {
+    if (String(to) === rawFile)
+      throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+    return rename(from, to);
+  });
+  now += 5 * minute;
+  history.record(account, usage(now, 17));
+  assert.equal(history.historyAvailable, false);
+  assert.deepEqual(history.recentSamples(start), []);
+  // A ledger that cannot be read at startup is unavailable the same way.
+  const broken = directory(t);
+  fs.writeFileSync(path.join(broken, "usage-history.json"), "{ broken");
+  const reopened = new UsageHistory(broken, () => now);
+  assert.equal(reopened.historyAvailable, false);
+  assert.deepEqual(reopened.recentSamples(start), []);
+});
