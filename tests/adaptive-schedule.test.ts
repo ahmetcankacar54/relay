@@ -251,6 +251,15 @@ test("turning adaptation off drops the schedule and says so; leaving work drops 
     factor: 1,
     notice: { kind: "normal", schedule: {} },
   });
+  // Had the Mac slept from then until after the 11:00 start, nothing would
+  // be left to tell: that start has passed.
+  const slept = new AdaptiveSchedule();
+  slept.update(hold(at("09:30")));
+  slept.update(stopped(at("09:40")));
+  assert.deepEqual(slept.update(stopped(at("11:05"))), {
+    schedule: {},
+    factor: 1,
+  });
   // Outside the work interval (here the day was cut short to end at 10:00)
   // the schedule goes quietly too.
   const short = new AdaptiveSchedule();
@@ -353,35 +362,36 @@ test("today's pace scales the forecast: 1.6 times the plan adopts a hold", () =>
   assert.deepEqual(calm, { schedule: {}, factor: 1 });
 });
 
-test("when the pace drops the schedule clears, announced once 30 minutes are up", () => {
+test("a slower day clears the schedule once two reviews in a row agree, with one notice", () => {
+  // The pace scenario at `perHour` over the last hour (a's samples only set
+  // the pace); b's window has reset at 10:00 and waits for its hold.
+  const paced = (now: number, perHour: number) => {
+    const value = pace(now, now < at("10:00") ? undefined : fresh("b", now, 0));
+    const used = (time: number) => 16 + ((time - now) / HOUR) * (perHour / 3);
+    return { ...value, recentSamples: aSamples(now, used) };
+  };
   const adaptive = new AdaptiveSchedule();
-  adaptive.update(pace(at("09:30")));
-  // 48 Pro units in the 50 minutes observed since 09:00: below the plan.
-  const { observedRate, ...early } = adaptive.update(pace(at("09:50")));
-  assert.ok(Math.abs(observedRate! - 57.6) < 1e-9, `${observedRate}`);
-  assert.deepEqual(early, { schedule: {}, factor: 1 });
-  // At 10:00 the user hears it; b's window has reset meanwhile.
-  const now = at("10:00");
-  assert.deepEqual(adaptive.update(pace(now, fresh("b", now, 0))), {
-    schedule: {},
-    factor: 1,
-    observedRate: 48,
-    notice: { kind: "normal", schedule: {} },
-  });
-  assert.equal(
-    adaptive.update(pace(at("10:31"), fresh("b", now, 0))).notice,
-    undefined,
-  );
-  // Had the Mac slept from 09:50 until after the 11:00 start, nothing would
-  // be left to tell: that start has passed.
-  const slept = new AdaptiveSchedule();
-  slept.update(pace(at("09:30")));
-  slept.update(pace(at("09:50")));
-  const later = at("11:05");
-  assert.equal(
-    slept.update(pace(later, fresh("b", later, 0))).notice,
-    undefined,
-  );
+  const kinds: string[] = [];
+  const run = (clock: string, perHour: number) => {
+    const result = adaptive.update(paced(at(clock), perHour));
+    if (result.notice) kinds.push(result.notice.kind);
+    return result;
+  };
+  assert.equal(run("09:30", 96).factor, 1.6);
+  const held = { b: at("11:00") };
+  // 09:45: the planned pace, where the default does as well. One review is
+  // not enough.
+  assert.deepEqual(run("09:45", 60).schedule, held);
+  // 10:00: fast again, the hold is better, and the count starts over.
+  assert.deepEqual(run("10:00", 96).schedule, held);
+  // 10:15 and 10:30: the planned pace twice in a row clears it.
+  assert.deepEqual(run("10:15", 60).schedule, held);
+  for (const clock of ["10:16", "10:29"])
+    assert.deepEqual(run(clock, 60).schedule, held, clock);
+  const cleared = run("10:30", 60);
+  assert.deepEqual(cleared.schedule, {});
+  assert.deepEqual(cleared.notice, { kind: "normal", schedule: {} });
+  assert.deepEqual(kinds, ["updated", "normal"]);
 });
 
 test("a change inside the 30 minutes is announced only if it still stands", () => {
@@ -503,9 +513,17 @@ test("a start whose time came is dropped quietly: the keeper starts the window",
 });
 
 test("an adopted hold stays in force minute by minute through b's reset", () => {
-  // The hold scenario updated every minute from 09:30 to b's reset at 10:00:
-  // usage recomputed each minute, or read every five minutes in whole percent.
-  for (const reads of ["exact", "whole percent"] as const) {
+  // The hold scenario updated every minute from 09:30 to b's reset at 10:00,
+  // with a's usage recomputed each minute or read every five minutes in whole
+  // percent. With 249 Pro units left at 09:30 instead of 250, a's quota runs
+  // out within a minute of its 12:00 reset: the 10:00 read (34%) puts the
+  // run-out a minute early, where the default does as well as the hold. One
+  // such review does not clear it.
+  for (const [left, reads] of [
+    [250, "exact"],
+    [250, "whole percent"],
+    [249, "whole percent"],
+  ] as const) {
     const adaptive = new AdaptiveSchedule();
     const kinds: string[] = [];
     let adopted: number | undefined;
@@ -515,38 +533,32 @@ test("an adopted hold stays in force minute by minute through b's reset", () => 
           ? now
           : at("09:30") +
             Math.floor((now - at("09:30")) / (5 * MINUTE)) * 5 * MINUTE;
+      // a serves 100 Pro units an hour out of its 300.
+      const used = (300 - left + ((read - at("09:30")) / HOUR) * 100) / 3;
       const value = hold(read);
-      const a = value.usage.a;
       const result = adaptive.update({
         ...value,
         usage: {
-          a:
-            reads === "exact"
-              ? a
-              : {
-                  ...a,
-                  fiveHour: {
-                    ...a.fiveHour!,
-                    usedPercent: Math.round(a.fiveHour!.usedPercent),
-                  },
-                },
+          a: fresh(
+            "a",
+            read,
+            reads === "exact" ? used : Math.round(used),
+            at("12:00"),
+          ),
           // Held, b's window stays closed once it resets at 10:00.
           b: now < at("10:00") ? value.usage.b : fresh("b", now, 0),
         },
         now,
       });
+      const label = `${left} ${reads} ${now}`;
       if (result.notice) kinds.push(result.notice.kind);
       if (adopted === undefined && result.schedule.b !== undefined)
         adopted = now;
       if (adopted !== undefined)
-        assert.deepEqual(
-          result.schedule,
-          { b: at("11:00") },
-          `${reads} ${now}`,
-        );
+        assert.deepEqual(result.schedule, { b: at("11:00") }, label);
     }
-    assert.ok(adopted !== undefined, reads);
-    assert.deepEqual(kinds, ["updated"], reads);
+    assert.ok(adopted !== undefined, `${left} ${reads}`);
+    assert.deepEqual(kinds, ["updated"], `${left} ${reads}`);
   }
 });
 

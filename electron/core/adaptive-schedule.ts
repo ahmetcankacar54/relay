@@ -127,7 +127,8 @@ function planAt(
  * force (from its first warm-up to the end of work), re-chosen only when the
  * live forecast falls behind the plan's own. A search result is adopted only
  * when strictly better than the schedule held, and the schedule is dropped
- * once the default does as well; both are looked at most every 15 minutes.
+ * once the default does as well at two reviews in a row; reviews come at
+ * most every 15 minutes.
  * Kept in memory; the keeper updates it before its decisions.
  */
 export class AdaptiveSchedule {
@@ -139,6 +140,8 @@ export class AdaptiveSchedule {
   private lastUpdate?: number;
   /** The last search or check whether to drop the schedule. */
   private lastReview?: number;
+  /** The default did as well as the schedule held at the last review. */
+  private defaultNoWorse = false;
   private lastNotice?: number;
   private last: AdaptiveResult = { schedule: {}, factor: 1 };
   private readonly now: () => number;
@@ -228,9 +231,13 @@ export class AdaptiveSchedule {
           }
         }
         // The pace dropped, or the day turned out fine: the default does as
-        // well. Looked at only this often, so noise in the reads cannot flap.
-        if (!empty(this.schedule) && !beats(current, liveForecast(live)!))
-          this.clear();
+        // well. Only two reviews in a row clear the schedule, so a single
+        // read on the wrong side of a reset cannot flap it.
+        if (!empty(this.schedule)) {
+          if (beats(current, liveForecast(live)!)) this.defaultNoWorse = false;
+          else if (this.defaultNoWorse) this.clear();
+          else this.defaultNoWorse = true;
+        }
       }
     }
     return this.finish(now, factor, observed);
@@ -296,11 +303,13 @@ export class AdaptiveSchedule {
   private adopt(schedule: Schedule, now: number) {
     this.schedule = { ...schedule };
     this.since = empty(schedule) ? undefined : now;
+    this.defaultNoWorse = false;
   }
 
   private clear() {
     this.schedule = {};
     this.since = undefined;
+    this.defaultNoWorse = false;
   }
 
   /** A new plan date or a clock moved back: nothing kept still applies. */
