@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { TrayMascot, motionAllowed } from "../electron/core/tray-mascot";
+import { TrayMascot, motionAllowed, readDesktopForTray } from "../electron/core/tray-mascot";
 import type { MascotInput } from "../shared/mascot";
 import type { Account, AccountUsage, DesktopState } from "../shared/types";
 
@@ -48,6 +48,49 @@ test("an unreadable snapshot rests on idle and keeps the memory for the next one
   mascot.unavailable();
   mascot.next(input({ activeProfileId: "b" }));
   assert.deepEqual(calls, [["idle"], ["away", "leave"], ["idle"], ["idle", "return"]]);
+});
+
+test("a switch shorter than the poll interval still returns", () => {
+  const { mascot, calls } = recorder();
+  mascot.next({ ...input(), desktopOperations: 1 });
+  mascot.next({ ...input({ activeProfileId: "b" }), desktopOperations: 2 });
+  mascot.next({ ...input({ activeProfileId: "b" }), desktopOperations: 2 });
+  assert.deepEqual(calls, [["idle"], ["idle", "return"], ["idle"]]);
+});
+
+test("a fast switch survives an unreadable snapshot in between", () => {
+  const { mascot, calls } = recorder();
+  mascot.next({ ...input(), desktopOperations: 1 });
+  mascot.unavailable();
+  mascot.next({ ...input({ activeProfileId: "b" }), desktopOperations: 2 });
+  assert.deepEqual(calls, [["idle"], ["idle"], ["idle", "return"]]);
+});
+
+test("a Desktop read that overlapped an operation counts as busy", async () => {
+  const world = { busy: false, operations: 4 };
+  const read = (during: () => void) =>
+    readDesktopForTray({
+      read: async () => {
+        during();
+        return "state";
+      },
+      busy: () => world.busy,
+      operations: () => world.operations,
+    });
+  assert.deepEqual(await read(() => {}), { state: "state", busy: false, operations: 4 });
+  // Began and ended during the read: the state may predate the switch.
+  assert.deepEqual(await read(() => void world.operations++), { state: "state", busy: true, operations: 5 });
+  // Busy when the read began, finished before it ended.
+  world.busy = true;
+  assert.deepEqual(await read(() => void (world.busy = false)), { state: "state", busy: true, operations: 5 });
+  // Began during the read and still running.
+  assert.deepEqual(
+    await read(() => {
+      world.operations++;
+      world.busy = true;
+    }),
+    { state: "state", busy: true, operations: 6 },
+  );
 });
 
 test("destroy stops the player", () => {

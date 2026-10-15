@@ -12,6 +12,11 @@ export interface MascotInput {
   desktop?: DesktopState;
   /** The keeper's recent window starts. */
   attempts?: WindowAttempt[];
+  /**
+   * How many Desktop operations have begun since Relay opened. It only grows, so
+   * an operation that began and ended between two snapshots is not missed.
+   */
+  desktopOperations?: number;
 }
 
 /** What the previous step saw, to detect one-off events. */
@@ -22,6 +27,8 @@ export interface MascotMemory {
   /** Set while Desktop is busy: the active profile when it became busy. */
   busyFrom?: { activeProfileId?: string };
   attempts: Record<string, WindowAttempt["status"]>;
+  /** The last Desktop operation count seen. */
+  desktopOperations?: number;
 }
 
 /** A "started" attempt older than this was interrupted, not warming. */
@@ -80,22 +87,30 @@ export function mascotStep(
   const active = desktop ? desktop.activeProfileId : memory?.active;
   const attempts: MascotMemory["attempts"] = {};
   for (const a of input.attempts ?? []) attempts[a.id] = a.status;
+  const operations = input.desktopOperations ?? memory?.desktopOperations;
+  // An operation began since the last step, even if no snapshot saw it busy.
+  const began =
+    memory?.desktopOperations !== undefined &&
+    operations !== undefined &&
+    operations > memory.desktopOperations;
+  // Desktop files change during a switch, so compare with the account from
+  // before it began, not with the previous snapshot.
+  const busyFrom =
+    memory?.busyFrom ?? (memory && began ? { activeProfileId: memory.active } : undefined);
   const next: MascotMemory = {
     pose,
     active,
-    // Desktop files change during a switch, so compare with the account from
-    // before it began, not with the previous snapshot.
-    busyFrom: busy
-      ? (memory?.busyFrom ?? { activeProfileId: memory ? memory.active : active })
-      : undefined,
+    busyFrom: busy ? (busyFrom ?? { activeProfileId: memory ? memory.active : active }) : undefined,
     attempts,
+    desktopOperations: operations,
   };
   if (!memory) return { memory: next, pose };
+  // An operation that began and ended between two steps counts as finished.
   const returned =
-    !!memory.busyFrom &&
+    !!busyFrom &&
     !busy &&
     !!desktop?.activeProfileId &&
-    desktop.activeProfileId !== memory.busyFrom.activeProfileId;
+    desktop.activeProfileId !== busyFrom.activeProfileId;
   const left = !memory.busyFrom && busy && pose === "away";
   const warmed = (input.attempts ?? []).some(
     (a) =>

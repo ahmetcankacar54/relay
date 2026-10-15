@@ -118,6 +118,51 @@ test("an operation that keeps the account, or a failed switch, has no return", (
   );
 });
 
+test("a switch shorter than the poll interval still returns", () => {
+  const ops = (desktopOperations: number, extra: Partial<DesktopState> = {}) =>
+    input({ desktop: desktop(extra), desktopOperations });
+  assert.deepEqual(cues(ops(3), ops(4, { activeProfileId: "b" })), [undefined, "return"]);
+  // Two operations between two polls count the same as one.
+  assert.deepEqual(cues(ops(3), ops(5, { activeProfileId: "b" }), ops(5, { activeProfileId: "b" })), [undefined, "return", undefined]);
+  // A fast switch that failed raises the alert instead.
+  assert.deepEqual(cues(ops(3), ops(4, { activeProfileId: "b", error: "Switch failed" })), [undefined, "rise"]);
+});
+
+test("an operation shorter than the poll interval that keeps the account stays quiet", () => {
+  const ops = (desktopOperations: number, extra: Partial<DesktopState> = {}) =>
+    input({ desktop: desktop(extra), desktopOperations });
+  assert.deepEqual(cues(ops(3), ops(4)), [undefined, undefined]);
+  assert.deepEqual(cues(ops(3), ops(4, { activeProfileId: undefined })), [undefined, undefined]);
+});
+
+test("an operation counted while Desktop is busy leaves, then returns as usual", () => {
+  const ops = (desktopOperations: number, extra: Partial<DesktopState> = {}) =>
+    input({ desktop: desktop(extra), desktopOperations });
+  assert.deepEqual(
+    cues(ops(3), ops(4, { busy: true }), ops(4, { busy: true, activeProfileId: "b" }), ops(4, { activeProfileId: "b" })),
+    [undefined, "leave", undefined, "return"],
+  );
+});
+
+test("a counter that does not advance keeps the busy-only behaviour", () => {
+  const ops = (desktopOperations: number, extra: Partial<DesktopState> = {}) =>
+    input({ desktop: desktop(extra), desktopOperations });
+  // The account changed with no Desktop operation (for example in Claude itself): no return.
+  assert.deepEqual(cues(ops(3), ops(3, { activeProfileId: "b" })), [undefined, undefined]);
+  assert.deepEqual(
+    cues(ops(3), ops(3, { busy: true }), ops(3, { activeProfileId: "b" })),
+    [undefined, "leave", "return"],
+  );
+  // A snapshot without a count neither starts nor forgets one.
+  assert.deepEqual(cues(ops(3), input(), ops(4, { activeProfileId: "b" })), [undefined, undefined, "return"]);
+});
+
+test("the first step with a counter only remembers it", () => {
+  const step = mascotStep(undefined, input({ desktop: desktop({ activeProfileId: "b" }), desktopOperations: 7 }), NOW);
+  assert.equal(step.cue, undefined);
+  assert.equal(step.memory.desktopOperations, 7);
+});
+
 test("a finished warm-up stretches once, even between two snapshots", () => {
   const done = input({ attempts: [attempt("1", "verified")] });
   assert.deepEqual(cues(input(), done, done), [undefined, "stretch", undefined]);

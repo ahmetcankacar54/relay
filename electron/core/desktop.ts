@@ -59,6 +59,11 @@ export class DesktopManager {
   get isBusy() {
     return this.busy;
   }
+  private started = 0;
+  /** How many operations have marked Desktop busy; it only grows. */
+  get operations() {
+    return this.started;
+  }
   private pending?: Pending;
   private lastError?: string;
   private errorRevision = 0;
@@ -493,6 +498,7 @@ export class DesktopManager {
       throw new Error("A Desktop operation is already in progress.");
     // Acquire before any await; separate IPC calls must not both pass the guard.
     this.busy = true;
+    this.started++;
     this.lastError = undefined;
     try {
       if (!(await this.host.available()))

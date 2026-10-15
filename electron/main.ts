@@ -27,7 +27,7 @@ import {
 } from "./core/store";
 import { accountPlanningSchema } from "./core/store";
 import { RelayTray } from "./tray";
-import { motionAllowed } from "./core/tray-mascot";
+import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
 import { TrayPanel } from "./tray-panel";
 import { PAGES } from "../src/app/routes";
 import { UsageHistory } from "./core/usage-history";
@@ -83,6 +83,8 @@ let fleet: FleetContinuation;
 let automation: ReturnType<typeof nativeDesktopAutomation>;
 let desktopTail: Promise<void> = Promise.resolve();
 let desktopTransactionActive = false;
+/** Desktop transactions begun so far; with DesktopManager's own count it tells the panda. */
+let desktopTransactions = 0;
 async function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
   const before = desktopTail;
   let release!: () => void;
@@ -91,6 +93,9 @@ async function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
   });
   await before;
   desktopTransactionActive = true;
+  desktopTransactions++;
+  // Show the panda leaving now rather than at the next five-second poll.
+  void tray?.update();
   try {
     return await action();
   } finally {
@@ -497,20 +502,26 @@ else {
           load: (win) => loadPage(win, "panel.html"),
         });
       tray = new RelayTray({
-        getSnapshot: async () => ({
-          accounts: service.store.state.accounts,
-          usage: usage.snapshot(),
-          desktop: {
-            ...(observedDesktop = await desktop.snapshot()),
-            busy: desktop.isBusy || desktopTransactionActive,
-          },
-          authBusy: service.auth
-            .list()
-            .some((f) =>
-              ["starting", "waiting", "verifying"].includes(f.status),
-            ),
-          attempts: keeper.snapshot().attempts,
-        }),
+        getSnapshot: async () => {
+          const read = await readDesktopForTray({
+            read: () => desktop.snapshot(),
+            busy: () => desktop.isBusy || desktopTransactionActive,
+            operations: () => desktopTransactions + desktop.operations,
+          });
+          observedDesktop = read.state;
+          return {
+            accounts: service.store.state.accounts,
+            usage: usage.snapshot(),
+            desktop: { ...read.state, busy: read.busy },
+            desktopOperations: read.operations,
+            authBusy: service.auth
+              .list()
+              .some((f) =>
+                ["starting", "waiting", "verifying"].includes(f.status),
+              ),
+            attempts: keeper.snapshot().attempts,
+          };
+        },
         showWindow,
         requestSwitch: (profileId) => void traySwitch(profileId),
         quit: () => app.quit(),

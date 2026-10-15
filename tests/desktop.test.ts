@@ -530,6 +530,25 @@ test("Desktop operations acquire their lock before availability checks yield", a
   assert.equal((await f.manager.snapshot()).pendingProfileId, b.id);
 });
 
+test("every Desktop operation that marks Desktop busy is counted, failed ones too", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  const start = f.manager.operations;
+  await f.manager.switchTo(a.id);
+  assert.equal(f.manager.operations, start + 1);
+  await assert.rejects(f.manager.switchTo(b.id, { canProceed: () => false }));
+  assert.equal(f.manager.operations, start + 2);
+  // An operation refused because another is running never marked Desktop busy.
+  let release!: (value: boolean) => void;
+  f.host.available = () => new Promise<boolean>((resolve) => (release = resolve));
+  const first = f.manager.switchTo(b.id);
+  await assert.rejects(f.manager.switchTo(a.id), /operation is already in progress/);
+  release(true);
+  await first;
+  assert.equal(f.manager.operations, start + 3);
+});
+
 test("an unknown current Desktop account is rejected before any restart", async (t) => {
   const f = await fixture(t);
   const a = await f.account("A");

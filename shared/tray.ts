@@ -9,6 +9,8 @@ export interface TraySnapshot {
   authBusy?: boolean;
   /** The keeper's recent window starts, for the menu bar panda. */
   attempts?: WindowAttempt[];
+  /** Desktop operations begun so far, so the panda sees ones shorter than a poll. */
+  desktopOperations?: number;
 }
 
 export type TrayLanguage = "tr" | "en";
