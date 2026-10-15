@@ -97,7 +97,14 @@ test("the first step only remembers", () => {
   const step = mascotStep(undefined, busy(), NOW);
   assert.equal(step.pose, "away");
   assert.equal(step.event, undefined);
-  assert.deepEqual(step.memory.busyFrom, { activeProfileId: "a", errorRevision: 0, recoveryRequired: false });
+  assert.deepEqual(step.memory.busyFrom, { activeProfileId: "a", errorRevision: 0, recoveryRequired: false, unseen: true });
+});
+
+test("an operation already running when Relay opens reports nothing, then later operations report as usual", () => {
+  assert.deepEqual(
+    events(busy(), at({ activeProfileId: "b" }), busy({ activeProfileId: "b" }), at({ activeProfileId: "b" })),
+    [undefined, undefined, "left", "back"],
+  );
 });
 
 test("a switch leaves, then reports the new account even when it changed mid-switch", () => {

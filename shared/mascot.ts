@@ -65,6 +65,8 @@ interface OperationStart {
   activeProfileId?: string;
   errorRevision?: number;
   recoveryRequired?: boolean;
+  /** The operation was already open at the first step: its start was never seen, so its end is not reported. */
+  unseen?: boolean;
 }
 
 /** What the previous step saw, to detect Desktop operations. */
@@ -83,7 +85,7 @@ export interface MascotMemory {
 /**
  * One tray snapshot: its pose, the memory for the next step and at most one
  * Desktop event. The first step only remembers, so an operation already
- * running when Relay opens reports nothing.
+ * running when Relay opens reports nothing: neither its start nor its end.
  */
 export function mascotStep(
   memory: MascotMemory | undefined,
@@ -108,7 +110,8 @@ export function mascotStep(
     memory?.desktopOperations !== undefined &&
     operations !== undefined &&
     operations > memory.desktopOperations;
-  const open = memory?.busyFrom ?? (busy || began ? before : undefined);
+  // An operation first seen already open (no memory) has an unknown start: mark it unseen.
+  const open = memory?.busyFrom ?? (busy || began ? (memory ? before : { ...before, unseen: true }) : undefined);
   const next: MascotMemory = {
     pose,
     active: desktop ? desktop.activeProfileId : memory?.active,
@@ -121,7 +124,7 @@ export function mascotStep(
   if (!memory) return { memory: next, pose };
   let event: DesktopEvent | undefined;
   if (busy && !memory.busyFrom) event = "left";
-  else if (!busy && desktop && open) {
+  else if (!busy && desktop && open && !open.unseen) {
     const failed =
       (!!desktop.error && desktop.errorRevision > (open.errorRevision ?? -1)) ||
       (desktop.recoveryRequired && !open.recoveryRequired);
