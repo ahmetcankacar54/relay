@@ -55,3 +55,24 @@ test("Settings offers the menu bar animation switch, on unless turned off", () =
   assert.match(on, /role="switch"[^>]*aria-checked="true"/);
   assert.match(render(false), /role="switch"[^>]*aria-checked="false"/);
 });
+
+test("the menu bar animation switch is shown on macOS only", () => {
+  const render = (platform: string) => {
+    const relay = relayFor();
+    const data = { ...relay.data!, diagnostics: { ...relay.data!.diagnostics, platform } } as Snapshot;
+    return renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        createElement(RelayContext.Provider, { value: { ...relay, data } as Relay }, createElement(Settings)),
+      ),
+    );
+  };
+  assert.match(render("darwin"), /Menü çubuğu animasyonu/);
+  for (const platform of ["win32", "linux"]) {
+    const html = render(platform);
+    assert.doesNotMatch(html, /Menü çubuğu animasyonu/, platform);
+    assert.doesNotMatch(html, /menu-bar-animation-label/, platform);
+    assert.match(html, /Görünüm/, platform);
+  }
+});

@@ -61,24 +61,27 @@ export function Settings() {
               </ToggleGroupItem>
             </ToggleGroup>
           </SettingRow>
-          <SettingRow
-            label={
-              <span id="menu-bar-animation-label">
-                {t("Menü çubuğu animasyonu", "Menu bar animation")}
-              </span>
-            }
-            description={t(
-              "Kapalıyken panda yalnızca duruş değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
-              "When off, the panda only changes pose. With Reduce motion on in macOS it never animates.",
-            )}
-          >
-            <Switch
-              aria-labelledby="menu-bar-animation-label"
-              checked={settings.menuBarAnimation !== false}
-              disabled={disabled}
-              onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
-            />
-          </SettingRow>
+          {/* The menu bar panda is macOS-only; other platforms keep the R icon. */}
+          {data?.diagnostics.platform === "darwin" && (
+            <SettingRow
+              label={
+                <span id="menu-bar-animation-label">
+                  {t("Menü çubuğu animasyonu", "Menu bar animation")}
+                </span>
+              }
+              description={t(
+                "Kapalıyken panda yalnızca duruş değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
+                "When off, the panda only changes pose. With Reduce motion on in macOS it never animates.",
+              )}
+            >
+              <Switch
+                aria-labelledby="menu-bar-animation-label"
+                checked={settings.menuBarAnimation !== false}
+                disabled={disabled}
+                onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
+              />
+            </SettingRow>
+          )}
         </Card>
         <Card className={cardClass}>
           <SectionHeading title={t("Dil", "Language")} />
