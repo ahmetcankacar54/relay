@@ -501,6 +501,14 @@ else {
           preload: path.join(__dirname, "preload.cjs"),
           load: (win) => loadPage(win, "panel.html"),
         });
+      /** Unreadable attempts only cost the panda its warm-up, never the tray. */
+      const recentKeeperAttempts = () => {
+        try {
+          return keeper.recentAttempts();
+        } catch {
+          return undefined;
+        }
+      };
       tray = new RelayTray({
         getSnapshot: async () => {
           const read = await readDesktopForTray({
@@ -519,7 +527,7 @@ else {
               .some((f) =>
                 ["starting", "waiting", "verifying"].includes(f.status),
               ),
-            attempts: keeper.snapshot().attempts,
+            attempts: recentKeeperAttempts(),
           };
         },
         showWindow,

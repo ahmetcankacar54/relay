@@ -16,6 +16,7 @@ import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
 import { mascotTrayFrames } from "./mascot-tray-frames";
 import { MascotPlayer } from "./core/mascot-player";
 import { TrayMascot } from "./core/tray-mascot";
+import { refreshTray } from "./core/tray-refresh";
 
 export interface RelayTrayOptions {
   getSnapshot(): TraySnapshot | Promise<TraySnapshot>;
@@ -100,48 +101,53 @@ export class RelayTray {
     void this.update();
   }
 
-  async update() {
+  update() {
     const revision = ++this.revision;
-    try {
-      const snapshot = await this.options.getSnapshot();
-      if (this.destroyed || revision !== this.revision) return;
-      this.mascot?.next(snapshot);
-      if (process.platform === "darwin") {
-        const title = trayTitle(snapshot);
-        this.tray.setTitle(title ? " " + title : "");
-      }
-      this.tray.setToolTip(trayTooltip(snapshot));
-      const items = buildTrayMenu(snapshot, this.options.language?.() ?? "en");
-      this.menuLifecycle.update(items, JSON.stringify(items));
-    } catch {
-      // Opening Relay remains available if a read-only snapshot fails. A stale
-      // menu must not offer an action against unknown Desktop state.
-      if (this.destroyed || revision !== this.revision) return;
-      this.mascot?.unavailable();
-      if (process.platform === "darwin") this.tray.setTitle("");
-      const items: TrayMenuItem[] = [
-        {
-          type: "normal",
-          label: "Open Relay",
-          enabled: true,
-          command: { type: "show" },
-        },
-        { type: "normal", label: "Desktop status unavailable", enabled: false },
-        { type: "separator" },
-        {
-          type: "normal",
-          label: "Quit Relay",
-          enabled: true,
-          command: { type: "quit" },
-        },
-      ];
-      try {
+    return refreshTray<TraySnapshot>({
+      current: () => !this.destroyed && revision === this.revision,
+      snapshot: () => this.options.getSnapshot(),
+      mascot: this.mascot,
+      show: (snapshot) => {
+        if (process.platform === "darwin") {
+          const title = trayTitle(snapshot);
+          this.tray.setTitle(title ? " " + title : "");
+        }
+        this.tray.setToolTip(trayTooltip(snapshot));
+        const items = buildTrayMenu(snapshot, this.options.language?.() ?? "en");
         this.menuLifecycle.update(items, JSON.stringify(items));
-        this.tray.setToolTip("Relay");
-      } catch {
-        // Retain the existing menu if even a native fallback cannot be built.
-        // Every account action still rechecks Desktop state before review.
-      }
+      },
+      unavailable: () => this.showUnavailable(),
+    });
+  }
+
+  /**
+   * Opening Relay remains available if a read-only snapshot fails. A stale
+   * menu must not offer an action against unknown Desktop state.
+   */
+  private showUnavailable() {
+    const items: TrayMenuItem[] = [
+      {
+        type: "normal",
+        label: "Open Relay",
+        enabled: true,
+        command: { type: "show" },
+      },
+      { type: "normal", label: "Desktop status unavailable", enabled: false },
+      { type: "separator" },
+      {
+        type: "normal",
+        label: "Quit Relay",
+        enabled: true,
+        command: { type: "quit" },
+      },
+    ];
+    try {
+      if (process.platform === "darwin") this.tray.setTitle("");
+      this.menuLifecycle.update(items, JSON.stringify(items));
+      this.tray.setToolTip("Relay");
+    } catch {
+      // Retain the existing menu if even a native fallback cannot be built.
+      // Every account action still rechecks Desktop state before review.
     }
   }
 

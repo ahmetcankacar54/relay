@@ -173,6 +173,12 @@ test("a finished warm-up stretches once, even between two snapshots", () => {
   assert.deepEqual(cues(input(), input({ attempts: [attempt("1", "failed")] })), [undefined, undefined]);
 });
 
+test("a snapshot whose attempts could not be read keeps the remembered ones", () => {
+  const done = input({ attempts: [attempt("1", "verified")] });
+  assert.deepEqual(cues(input(), done, input(), done), [undefined, "stretch", undefined, undefined]);
+  assert.deepEqual(cues(input({ attempts: [attempt("1", "started")] }), input(), done), [undefined, undefined, "stretch"]);
+});
+
 test("a refilled limit munches bamboo, but a change of account does not", () => {
   const hungry = input({ usage: { a: usage("a", 95), b: usage("b", 30) } });
   const asleep = input({ usage: { a: usage("a", 100), b: usage("b", 100) } });

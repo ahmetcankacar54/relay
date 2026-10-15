@@ -162,6 +162,21 @@ test("a due account is started once and verified; an active window is left alone
   assert.equal(f.calls.starts.length, 1);
 });
 
+test("the recent attempts match the snapshot's without reading the state", async () => {
+  const f = setup();
+  const keeper = new WindowKeeper(f.deps);
+  await keeper.tick();
+  const expected = keeper.snapshot().attempts;
+  assert.equal(expected.length, 1);
+  f.deps.state = () => {
+    throw new Error("the day plan is not needed");
+  };
+  assert.deepEqual(keeper.recentAttempts(), expected);
+  // A copy: the caller cannot change the keeper's log.
+  keeper.recentAttempts()[0].status = "failed";
+  assert.equal(keeper.recentAttempts()[0].status, expected[0].status);
+});
+
 test("stale usage is refreshed before deciding; a failing refresh waits without starting", async () => {
   const f = setup();
   const a = f.accounts[0];

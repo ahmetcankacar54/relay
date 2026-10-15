@@ -115,7 +115,9 @@ export function mascotStep(
   const desktop = input.desktop;
   const busy = !!desktop?.busy;
   const active = desktop ? desktop.activeProfileId : memory?.active;
-  const attempts: MascotMemory["attempts"] = {};
+  // Unknown attempts (the keeper could not be read) keep the remembered ones,
+  // so finished warm-ups do not stretch again when they reappear.
+  const attempts: MascotMemory["attempts"] = input.attempts ? {} : { ...memory?.attempts };
   for (const a of input.attempts ?? []) attempts[a.id] = a.status;
   const operations = input.desktopOperations ?? memory?.desktopOperations;
   // An operation began since the last step, even if no snapshot saw it busy.

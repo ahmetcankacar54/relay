@@ -246,6 +246,10 @@ export class WindowKeeper {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
   }
+  /** The newest attempts first, as in the snapshot, without building the day plan. */
+  recentAttempts(): WindowAttempt[] {
+    return structuredClone(this.attempts.slice(-20).reverse());
+  }
   snapshot(): KeeperSnapshot {
     const state = this.deps.state();
     const settings = planned(state);
@@ -290,7 +294,7 @@ export class WindowKeeper {
       enabled: settings.autoStart,
       running: this.running,
       accounts: structuredClone(this.statuses),
-      attempts: structuredClone(this.attempts.slice(-20).reverse()),
+      attempts: this.recentAttempts(),
       plannedToday: today.accounts.reduce((n, a) => n + a.windows.length, 0),
       tempo: state.tempo,
       ...(upcoming ? { next: upcoming } : {}),
