@@ -114,7 +114,8 @@ export function paceFactor(
   );
 }
 
-export interface ReplanInput extends LiveInput {
+/** The search starts from the default; an adopted schedule is not an input. */
+export interface ReplanInput extends Omit<LiveInput, "schedule"> {
   factor: number;
   /** Accounts the keeper cannot start now (identity, weekly limit, policy stop, daily limit, auto start off). */
   blocked: string[];
@@ -158,7 +159,8 @@ export function nextStartCandidates(
  * window now) is always scored, so the result is never worse.
  */
 export function replanStarts(input: ReplanInput): Replan | undefined {
-  const setup = liveSetup(input);
+  // A schedule carried along anyway would become the default.
+  const setup = liveSetup({ ...input, schedule: undefined });
   if (!setup) return;
   const searchable = setup.accounts
     .filter((a) => a.keepAlive && !a.blocked && !input.blocked.includes(a.id))

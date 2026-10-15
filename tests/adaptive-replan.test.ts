@@ -7,7 +7,7 @@ import {
 } from "../shared/adaptive-plan";
 import { SIM_STEP_MS, type SimAccount } from "../shared/capacity-plan";
 import { dayPlan, planContext } from "../shared/day-plan";
-import { liveSetup } from "../shared/live-forecast";
+import { liveForecast, liveSetup } from "../shared/live-forecast";
 import { wallTime } from "../shared/planning";
 import type { Tempo } from "../shared/tempo";
 import {
@@ -102,40 +102,53 @@ const wakeUp = (accounts: Account[], rate: number) => {
   );
 };
 
-test("holding a restart until the busy account runs out removes the outage", () => {
+/** At 09:30 `a` serves on its last 250 Pro units while `b`'s idle window resets at 10:00. */
+function holdInput() {
   const a = planningAccount("a", "team");
   a.planning!.capacityWeight = 3;
   const b = planningAccount("b", "pro");
   const now = at("09:30");
-  const replan = replanStarts(
-    replanInput(
-      [a, b],
-      100,
-      now,
-      {
-        // 250 of a's 300 Pro units are left: they last until 12:00 at 100 an hour.
-        a: fresh("a", now, 100 / 6, "12:00"),
-        b: fresh("b", now, 0, "10:00"),
-      },
-      { activeId: "a" },
-    ),
-  )!;
+  return replanInput(
+    [a, b],
+    100,
+    now,
+    {
+      // 250 of a's 300 Pro units are left: they last until 12:00 at 100 an hour.
+      a: fresh("a", now, 100 / 6, "12:00"),
+      b: fresh("b", now, 0, "10:00"),
+    },
+    { activeId: "a" },
+  );
+}
+
+test("holding a restart until the busy account runs out removes the outage", () => {
+  const input = holdInput();
+  const replan = replanStarts(input)!;
   // Restarted at 10:00, b's window is idle while a serves and resets at 15:00,
   // so its single hour runs out at 16:00 with a back only at 17:00. Held to
   // 11:00 it resets at 16:00, just as its first hour runs out.
   assert.deepEqual(replan.schedule, { b: at("11:00") });
   assert.equal(replan.forecast.outageMinutes, 0);
   assert.equal(replan.defaultForecast.outageMinutes, 60);
+  // The live forecast with the schedule is the one the search scored.
+  assert.deepEqual(
+    liveForecast({ ...input, schedule: replan.schedule }),
+    replan.forecast,
+  );
+  assert.deepEqual(liveForecast(input), replan.defaultForecast);
 });
 
 test("after a sleep with every window closed, staggered starts save a switch", () => {
   const input = wakeUp(trio, 120);
   const replan = replanStarts(input)!;
-  assert.ok(
-    replan.forecast.switches < replan.defaultForecast.switches,
-    `${replan.forecast.switches} switches, ${replan.defaultForecast.switches} by default`,
-  );
+  assert.equal(replan.defaultForecast.switches, 2);
+  assert.equal(replan.forecast.switches, 1);
   assert.ok(replan.forecast.unmet <= replan.defaultForecast.unmet);
+  assert.deepEqual(
+    liveForecast({ ...input, schedule: replan.schedule }),
+    replan.forecast,
+  );
+  assert.deepEqual(liveForecast(input), replan.defaultForecast);
   const setup = liveSetup(input)!;
   const moved = Object.entries(replan.schedule);
   assert.ok(moved.length > 0);
@@ -143,6 +156,22 @@ test("after a sleep with every window closed, staggered starts save a switch", (
     const account = setup.accounts.find((a) => a.id === id)!;
     const candidates = nextStartCandidates(account, setup.from, setup.to);
     assert.ok(candidates.slice(1).includes(time), `${id} at ${time}`);
+  }
+});
+
+test("a schedule carried in the input does not change the search", () => {
+  for (const input of [holdInput(), wakeUp(trio, 120)]) {
+    const replan = replanStarts(input)!;
+    const ids = input.plan.accounts.map((a) => a.accountId);
+    // The schedule adopted last time, and one deferring every account to 12:30.
+    for (const schedule of [
+      replan.schedule,
+      Object.fromEntries(ids.map((id) => [id, at("12:30")])),
+    ])
+      assert.deepEqual(
+        replanStarts({ ...input, schedule } as ReplanInput),
+        replan,
+      );
   }
 });
 
