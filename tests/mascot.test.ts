@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { headFor, mascotPose, mascotStep, type MascotInput, type MascotMemory } from "../shared/mascot";
+import { headFor, mascotPose, type MascotInput } from "../shared/mascot";
 import { BLINK_FRAME, MASCOT_FRAMES, POSE_FRAME } from "../shared/mascot-frames";
 import type { Account, AccountUsage, DesktopState, WindowAttempt } from "../shared/types";
 
@@ -26,17 +26,6 @@ const input = (extra: Partial<MascotInput> = {}): MascotInput => ({
   desktop: desktop(),
   ...extra,
 });
-const events = (...inputs: MascotInput[]) => {
-  let memory: MascotMemory | undefined;
-  return inputs.map((i) => {
-    const step = mascotStep(memory, i, NOW);
-    memory = step.memory;
-    return step.event;
-  });
-};
-const busy = (extra: Partial<DesktopState> = {}) => input({ desktop: desktop({ busy: true, ...extra }) });
-const at = (extra: Partial<DesktopState> = {}, desktopOperations?: number) =>
-  input({ desktop: desktop(extra), desktopOperations });
 
 test("the panda idles when nothing needs showing", () => {
   assert.equal(mascotPose(input(), NOW), "idle");
@@ -90,76 +79,6 @@ test("the panel head follows the pose", () => {
   assert.deepEqual(
     (["alert", "away", "warming", "sleeping", "hungry", "idle"] as const).map(headFor),
     ["alert", "idle", "idle", "sleep", "hungry", "idle"],
-  );
-});
-
-test("the first step only remembers", () => {
-  const step = mascotStep(undefined, busy(), NOW);
-  assert.equal(step.pose, "away");
-  assert.equal(step.event, undefined);
-  assert.deepEqual(step.memory.busyFrom, { activeProfileId: "a", errorRevision: 0, recoveryRequired: false, unseen: true });
-});
-
-test("an operation already running when Relay opens reports nothing, then later operations report as usual", () => {
-  assert.deepEqual(
-    events(busy(), at({ activeProfileId: "b" }), busy({ activeProfileId: "b" }), at({ activeProfileId: "b" })),
-    [undefined, undefined, "left", "back"],
-  );
-});
-
-test("a switch leaves, then reports the new account even when it changed mid-switch", () => {
-  assert.deepEqual(
-    events(input(), busy(), busy({ activeProfileId: "b" }), at({ activeProfileId: "b" })),
-    [undefined, "left", undefined, "switched"],
-  );
-});
-
-test("an operation that keeps the account comes back", () => {
-  assert.deepEqual(events(input(), busy(), input()), [undefined, "left", "back"]);
-  assert.deepEqual(events(input(), busy(), at({ activeProfileId: undefined })), [undefined, "left", "back"]);
-});
-
-test("a new error or recovery fails the operation; an old error or a cleared read error does not", () => {
-  assert.deepEqual(
-    events(input(), busy(), at({ activeProfileId: "b", error: "Switch failed", errorRevision: 1 })),
-    [undefined, "left", "failed"],
-  );
-  assert.deepEqual(events(input(), busy(), at({ recoveryRequired: true })), [undefined, "left", "failed"]);
-  const old = { error: "Earlier failure", errorRevision: 3 };
-  assert.deepEqual(
-    events(at(old), busy(old), at({ ...old, activeProfileId: "b" })),
-    [undefined, "left", "switched"],
-  );
-  assert.deepEqual(events(input(), busy({ errorRevision: 1 }), at({ errorRevision: 1 })), [undefined, "left", "back"]);
-});
-
-test("an operation between two polls still reports how it ended", () => {
-  assert.deepEqual(events(at({}, 0), at({ activeProfileId: "b" }, 1)), [undefined, "switched"]);
-  assert.deepEqual(events(at({}, 0), at({}, 1)), [undefined, "back"]);
-  assert.deepEqual(events(at({}, 0), at({ error: "Switch failed", errorRevision: 1 }, 1)), [undefined, "failed"]);
-});
-
-test("an operation counted while Desktop is busy leaves, then ends as usual", () => {
-  assert.deepEqual(
-    events(at({}, 0), input({ desktop: desktop({ busy: true }), desktopOperations: 1 }), at({ activeProfileId: "b" }, 1)),
-    [undefined, "left", "switched"],
-  );
-});
-
-test("an account change without a Relay operation is no event", () => {
-  assert.deepEqual(events(at({}, 2), at({}, 2), at({ activeProfileId: "b" }, 2)), [undefined, undefined, undefined]);
-});
-
-test("the first step with a counter only remembers it", () => {
-  const step = mascotStep(undefined, at({}, 4), NOW);
-  assert.equal(step.event, undefined);
-  assert.equal(step.memory.desktopOperations, 4);
-});
-
-test("a snapshot without Desktop state keeps an operation open", () => {
-  assert.deepEqual(
-    events(input(), busy(), input({ desktop: undefined }), at({ activeProfileId: "b" })),
-    [undefined, "left", undefined, "switched"],
   );
 });
 

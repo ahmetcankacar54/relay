@@ -1,33 +1,22 @@
-import {
-  mascotStep,
-  type DesktopEvent,
-  type MascotInput,
-  type MascotMemory,
-  type MascotPose,
-} from "../../shared/mascot";
+import { mascotPose, type MascotInput, type MascotPose } from "../../shared/mascot";
 
 export interface MascotSink {
   update(pose: MascotPose): void;
   destroy(): void;
 }
 
-/** Feeds the menu bar panda its pose, and Desktop operation events to a listener. */
+/** Feeds the menu bar panda the pose for each tray snapshot. */
 export class TrayMascot {
-  private memory?: MascotMemory;
   constructor(
     private readonly player: MascotSink,
     private readonly now: () => number = Date.now,
-    private readonly onEvent?: (event: DesktopEvent) => void,
   ) {}
 
   next(input: MascotInput) {
-    const step = mascotStep(this.memory, input, this.now());
-    this.memory = step.memory;
-    this.player.update(step.pose);
-    if (step.event) this.onEvent?.(step.event);
+    this.player.update(mascotPose(input, this.now()));
   }
 
-  /** The snapshot could not be read: rest on idle, keep the memory for the next one. */
+  /** The snapshot could not be read: rest on idle. */
   unavailable() {
     this.player.update("idle");
   }
@@ -38,20 +27,18 @@ export class TrayMascot {
 }
 
 /**
- * Reads Desktop state for a tray snapshot with the Desktop operation count. A
- * read that overlapped an operation counts as busy: its state may predate the
- * switch, so the panda only returns on a later read.
+ * Reads Desktop state for a tray snapshot. A read that overlapped an operation
+ * counts as busy: its state may predate the switch.
  */
 export async function readDesktopForTray<T>(deps: {
   read(): Promise<T>;
   busy(): boolean;
   operations(): number;
-}): Promise<{ state: T; busy: boolean; operations: number }> {
+}): Promise<{ state: T; busy: boolean }> {
   const before = deps.operations();
   const busyBefore = deps.busy();
   const state = await deps.read();
-  const operations = deps.operations();
-  return { state, busy: busyBefore || deps.busy() || operations !== before, operations };
+  return { state, busy: busyBefore || deps.busy() || deps.operations() !== before };
 }
 
 /** The setting must not be off and macOS Reduce motion must be off. */

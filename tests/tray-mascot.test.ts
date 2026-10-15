@@ -22,52 +22,27 @@ const input = (d: Partial<DesktopState> = {}): MascotInput => ({
 
 function recorder() {
   const poses: string[] = [];
-  const events: string[] = [];
   let destroyed = false;
   const mascot = new TrayMascot(
     { update: (pose) => void poses.push(pose), destroy: () => void (destroyed = true) },
     () => NOW,
-    (event) => void events.push(event),
   );
-  return { mascot, poses, events, destroyed: () => destroyed };
+  return { mascot, poses, destroyed: () => destroyed };
 }
-const withOps = (d: Partial<DesktopState>, desktopOperations: number): MascotInput => ({
-  ...input(d),
-  desktopOperations,
-});
 
-test("each tray snapshot becomes a pose, and Desktop operations become events", () => {
+test("each tray snapshot becomes a pose", () => {
   const r = recorder();
   r.mascot.next(input());
   r.mascot.next(input({ busy: true }));
   r.mascot.next(input({ activeProfileId: "b" }));
   assert.deepEqual(r.poses, ["idle", "away", "idle"]);
-  assert.deepEqual(r.events, ["left", "switched"]);
 });
 
-test("an unreadable snapshot rests on idle and keeps the memory for the next one", () => {
+test("an unreadable snapshot rests on idle", () => {
   const r = recorder();
-  r.mascot.next(input());
   r.mascot.next(input({ busy: true }));
   r.mascot.unavailable();
-  r.mascot.next(input({ activeProfileId: "b" }));
-  assert.deepEqual(r.poses, ["idle", "away", "idle", "idle"]);
-  assert.deepEqual(r.events, ["left", "switched"]);
-});
-
-test("a switch shorter than the poll interval still reports the switch", () => {
-  const r = recorder();
-  r.mascot.next(withOps({}, 0));
-  r.mascot.next(withOps({ activeProfileId: "b" }, 1));
-  assert.deepEqual(r.events, ["switched"]);
-});
-
-test("a fast switch survives an unreadable snapshot in between", () => {
-  const r = recorder();
-  r.mascot.next(withOps({}, 0));
-  r.mascot.unavailable();
-  r.mascot.next(withOps({ activeProfileId: "b" }, 1));
-  assert.deepEqual(r.events, ["switched"]);
+  assert.deepEqual(r.poses, ["away", "idle"]);
 });
 
 test("a Desktop read that overlapped an operation counts as busy", async () => {
@@ -81,19 +56,19 @@ test("a Desktop read that overlapped an operation counts as busy", async () => {
       busy: () => world.busy,
       operations: () => world.operations,
     });
-  assert.deepEqual(await read(() => {}), { state: "state", busy: false, operations: 4 });
+  assert.deepEqual(await read(() => {}), { state: "state", busy: false });
   // Began and ended during the read: the state may predate the switch.
-  assert.deepEqual(await read(() => void world.operations++), { state: "state", busy: true, operations: 5 });
+  assert.deepEqual(await read(() => void world.operations++), { state: "state", busy: true });
   // Busy when the read began, finished before it ended.
   world.busy = true;
-  assert.deepEqual(await read(() => void (world.busy = false)), { state: "state", busy: true, operations: 5 });
+  assert.deepEqual(await read(() => void (world.busy = false)), { state: "state", busy: true });
   // Began during the read and still running.
   assert.deepEqual(
     await read(() => {
       world.operations++;
       world.busy = true;
     }),
-    { state: "state", busy: true, operations: 6 },
+    { state: "state", busy: true },
   );
 });
 

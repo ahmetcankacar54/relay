@@ -523,7 +523,6 @@ else {
             accounts: service.store.state.accounts,
             usage: usage.snapshot(),
             desktop: { ...read.state, busy: read.busy },
-            desktopOperations: read.operations,
             authBusy: service.auth
               .list()
               .some((f) =>
