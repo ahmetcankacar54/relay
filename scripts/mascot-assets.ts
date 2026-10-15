@@ -173,7 +173,9 @@ export async function renderTrayFrame(trayDir: string, frame: MascotFrame): Prom
 export async function traySourcesHash(trayDir: string) {
   const hash = createHash("sha256");
   for (const file of (await list(trayDir)).sort()) {
-    const content = await readFile(path.join(trayDir, file));
+    const raw = await readFile(path.join(trayDir, file));
+    // Git on Windows checks text out with CRLF; the artwork is the same.
+    const content = file.endsWith(".svg") ? Buffer.from(raw.toString("utf8").replace(/\r\n/g, "\n")) : raw;
     hash.update(`${file}\0${content.length}\0`);
     hash.update(content);
   }

@@ -252,3 +252,17 @@ test("the generator writes the sources hash into the module header", async () =>
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("the sources hash ignores SVG line endings, as a Windows checkout writes them", async () => {
+  const lf = await trayDir();
+  const crlf = await trayDir();
+  try {
+    const multiline = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20">\n  <rect x="2" y="2" width="20" height="16"/>\n</svg>\n';
+    await writeFile(path.join(lf, "tray", "idle.svg"), multiline);
+    await writeFile(path.join(crlf, "tray", "idle.svg"), multiline.replaceAll("\n", "\r\n"));
+    assert.equal(await traySourcesHash(path.join(crlf, "tray")), await traySourcesHash(path.join(lf, "tray")));
+  } finally {
+    await rm(lf, { recursive: true, force: true });
+    await rm(crlf, { recursive: true, force: true });
+  }
+});
