@@ -60,6 +60,12 @@ npm run install:mac      # build, sign with the local certificate, install to /A
 
 Signing every build with the same local certificate keeps macOS permissions
 across updates. One-time setup: [docs/macos-local-signing.md](docs/macos-local-signing.md).
+To give Relay to someone else, `npm run dist:mac:share` makes a DMG; the same
+document explains the Intel build and the one-time "Open Anyway" step.
+
+Runtime packages that Vite or esbuild bundle (React, Radix, zod…) are
+`devDependencies`; only `node-pty`, which loads a native module at run time,
+belongs in `dependencies`, because electron-builder copies those into the app.
 
 Development: `npm run dev` (Electron + Vite), `npm run dev:ui` (browser preview
 with sample data, `?demo=50` for 50 accounts), `npm test`, `npm run typecheck`.

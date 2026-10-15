@@ -332,11 +332,13 @@ function parseArguments(args) {
     output: "release/stable",
     skipBuild: false,
     install: false,
+    dmg: false,
   };
   for (let index = 0; index < args.length; index++) {
     const flag = args[index];
     if (flag === "--skip-build") options.skipBuild = true;
     else if (flag === "--install") options.install = true;
+    else if (flag === "--dmg") options.dmg = true;
     else if (
       ["--identity", "--arch", "--output", "--previous", "--verify"].includes(
         flag,
@@ -465,7 +467,11 @@ async function main() {
     targets: Platform.MAC.createTarget("dir", Arch[options.arch]),
     config: {
       forceCodeSigning: true,
-      electronDist: path.join(root, "node_modules/electron/dist"),
+      // The installed Electron only matches this Mac's architecture; another
+      // architecture uses electron-builder's verified download of the same version.
+      ...(options.arch === process.arch
+        ? { electronDist: path.join(root, "node_modules/electron/dist") }
+        : {}),
       directories: { output },
       mac: {
         identity: identity.fingerprint,
@@ -487,8 +493,53 @@ async function main() {
     ? "local-no-server"
     : "library-default";
   if (prior) report.continuity = verifySigningContinuity(prior, report);
+  if (options.dmg) {
+    const { version } = JSON.parse(
+      await fs.readFile(path.join(root, "package.json"), "utf8"),
+    );
+    report.diskImage = await createDiskImage(
+      bundle,
+      path.join(output, `Relay-${version}-${options.arch}.dmg`),
+    );
+  }
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   if (options.install) installBundle(bundle);
+}
+
+/**
+ * Wrap the verified bundle in a DMG for another Mac, with macOS's own hdiutil:
+ * no download, and the copy keeps the app's signature intact. The image itself
+ * is not signed.
+ */
+async function createDiskImage(bundle, image) {
+  const staging = await fs.mkdtemp(path.join(os.tmpdir(), "relay-dmg-"));
+  try {
+    execFileSync("/usr/bin/ditto", [bundle, path.join(staging, "Relay.app")]);
+    await fs.symlink("/Applications", path.join(staging, "Applications"));
+    await fs.rm(image, { force: true });
+    execFileSync(
+      "/usr/bin/hdiutil",
+      [
+        "create",
+        "-volname",
+        "Relay",
+        "-srcfolder",
+        staging,
+        "-fs",
+        "HFS+",
+        // LZMA: about 30% smaller than the default zlib; any Mac that runs
+        // Relay (macOS 13+) opens it.
+        "-format",
+        "ULMO",
+        image,
+      ],
+      { stdio: "inherit" },
+    );
+    execFileSync("/usr/bin/hdiutil", ["verify", image], { stdio: "inherit" });
+  } finally {
+    await fs.rm(staging, { recursive: true, force: true });
+  }
+  return image;
 }
 
 /**

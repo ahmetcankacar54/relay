@@ -51,15 +51,20 @@ export async function buildNativeHelpers() {
       encoding: "utf8",
     }).trim(),
   );
-  const targetArch = process.arch === "arm64" ? "arm64" : "x86_64";
-  const target = `${targetArch}-apple-macosx13.0`;
+  const lipo = execFileSync("/usr/bin/xcrun", ["--find", "lipo"], {
+    encoding: "utf8",
+  }).trim();
+  // One universal helper serves Apple silicon and Intel builds (and a universal
+  // app) alike, whichever Mac runs the build.
+  const targets = ["arm64", "x86_64"].map((arch) => `${arch}-apple-macosx13.0`);
   const toolchain = {
     swift: await toolIdentity(swift),
     linker: await toolIdentity(linker),
+    lipo: await toolIdentity(lipo),
     version: execFileSync(swift, ["--version"], { encoding: "utf8" }),
     sdk,
     sdkSettings: sha256(await fs.readFile(path.join(sdk, "SDKSettings.json"))),
-    target,
+    targets,
   };
   const results = [];
   for (const name of helpers) {
@@ -71,8 +76,6 @@ export async function buildNativeHelpers() {
     const args = [
       source,
       "-O",
-      "-target",
-      target,
       "-sdk",
       sdk,
       "-module-name",
@@ -91,7 +94,7 @@ export async function buildNativeHelpers() {
     const sourceHash = sha256(await fs.readFile(source));
     const inputHash = sha256(
       JSON.stringify({
-        pipelineVersion: 2,
+        pipelineVersion: 3,
         source: sourceHash,
         plist,
         toolchain,
@@ -123,9 +126,16 @@ export async function buildNativeHelpers() {
     // Neither an interrupted build nor a replacement can poison the next reuse.
     const temporary = path.join(cacheDir, `${name}-${randomUUID()}`);
     const temporaryRecord = `${recordFile}-${randomUUID()}`;
+    const slices = targets.map((target) => `${temporary}-${target}`);
     try {
       await fs.writeFile(plistFile, plist, { mode: 0o600 });
-      execFileSync(swift, [...args, "-o", temporary], { stdio: "inherit" });
+      for (const [index, target] of targets.entries())
+        execFileSync(swift, [...args, "-target", target, "-o", slices[index]], {
+          stdio: "inherit",
+        });
+      execFileSync(lipo, ["-create", ...slices, "-output", temporary], {
+        stdio: "inherit",
+      });
       if (sha256(await fs.readFile(source)) !== sourceHash)
         throw new Error(`Native source changed during compilation: ${name}`);
       // Standard local signing also binds the embedded plist in development.
@@ -154,8 +164,8 @@ export async function buildNativeHelpers() {
       console.log(`Native helper built: ${name}`);
       results.push({ name, reused: false });
     } finally {
-      await fs.rm(temporary, { force: true });
-      await fs.rm(temporaryRecord, { force: true });
+      for (const file of [temporary, temporaryRecord, ...slices])
+        await fs.rm(file, { force: true });
     }
   }
   return results;

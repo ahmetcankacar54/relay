@@ -45,3 +45,30 @@ Verify an existing bundle:
 ```sh
 node scripts/stable-signing.mjs --verify /Applications/Relay.app
 ```
+
+## Sharing a build with another Mac
+
+```sh
+npm run dist:mac:share
+node scripts/stable-signing.mjs --dmg --output release/share --arch x64 --skip-build
+```
+
+The first command writes `release/share/Relay-<version>-arm64.dmg` for Apple
+silicon Macs, the second `Relay-<version>-x64.dmg` for Intel Macs (Apple menu →
+About This Mac shows which: "Chip Apple M…" or "Processor Intel"). Both hold the
+same certificate-signed app; the `desktop-automation` helper is a universal binary.
+
+The certificate is local and the app is not notarized by Apple, so the other Mac
+blocks the first launch of a downloaded copy:
+
+1. Open the DMG and drag Relay into Applications.
+2. Open Relay. macOS says it cannot verify the app; choose **Done**.
+3. System Settings → Privacy & Security → "Relay was blocked…" → **Open Anyway**,
+   then confirm with the Mac's password. This is needed only once.
+
+A newer download may ask for this step again. Because every build uses the same
+certificate, the Accessibility permission granted there is kept. Skipping the
+step entirely needs a paid Apple Developer ID certificate and notarization.
+
+The other Mac needs macOS 13 or later, Claude Desktop and, for usage limits, the
+native Claude Code CLI 2.1.296+. Node.js and Xcode are only needed to build.
