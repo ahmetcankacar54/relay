@@ -37,16 +37,18 @@ test("a delivery with missing, misnamed or misshapen frames lists every problem"
     for (const frame of MASCOT_FRAMES.slice(2)) await writeFile(path.join(tray, `${frame}.svg`), svg());
     await writeFile(path.join(tray, "idle.svg"), svg().replace("0 0 24 20", "0 0 32 32"));
     await writeFile(path.join(tray, "blink0.svg"), svg());
-    await writeFile(path.join(tray, "exit-0.png"), await png(72, 60));
-    await writeFile(path.join(tray, "away-1.png"), await png(60, 60));
-    await rm(path.join(tray, "away-1.svg"));
+    await writeFile(path.join(tray, "hungry.png"), await png(72, 60));
+    await writeFile(path.join(tray, "away.png"), await png(60, 60));
+    await rm(path.join(tray, "away.svg"));
+    await writeFile(path.join(tray, "run-0.svg"), svg());
     await writeFile(path.join(tray, ".DS_Store"), "");
     assert.deepEqual((await checkTraySources(tray)).sort(), [
       'tray/idle.svg: viewBox must be "0 0 24 20"',
-      "tray/blink-0: missing (.svg or .png)",
+      "tray/blink: missing (.svg or .png)",
       "tray/blink0.svg: not a mascot frame",
-      "tray/exit-0: both .svg and .png; keep one",
-      "tray/away-1.png: must be 72×60, is 60×60",
+      "tray/hungry: both .svg and .png; keep one",
+      "tray/away.png: must be 72×60, is 60×60",
+      "tray/run-0.svg: not a mascot frame",
     ].sort());
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -116,11 +118,11 @@ test("the viewBox counts only on the root element", async () => {
       `${wrong}<symbol viewBox="0 0 24 20"/><rect width="4" height="4"/></svg>`,
     );
     await writeFile(
-      path.join(tray, "blink-0.svg"),
+      path.join(tray, "blink.svg"),
       `<!-- <svg viewBox="0 0 24 20"> -->${wrong}<rect width="4" height="4"/></svg>`,
     );
     assert.deepEqual((await checkTraySources(tray)).sort(), [
-      'tray/blink-0.svg: viewBox must be "0 0 24 20"',
+      'tray/blink.svg: viewBox must be "0 0 24 20"',
       'tray/idle.svg: viewBox must be "0 0 24 20"',
     ]);
   } finally {
@@ -134,11 +136,11 @@ test("an SVG that cannot be rendered is reported by name instead of failing at r
   try {
     for (const frame of MASCOT_FRAMES.slice(2)) await writeFile(path.join(tray, `${frame}.svg`), svg());
     await writeFile(path.join(tray, "idle.svg"), svg().slice(0, 60));
-    await writeFile(path.join(tray, "blink-0.svg"), "<html></html>");
+    await writeFile(path.join(tray, "blink.svg"), "<html></html>");
     const problems = await checkTraySources(tray);
     assert.equal(problems.length, 2, problems.join("\n"));
     assert.match(problems.find((p) => p.startsWith("tray/idle.svg"))!, /^tray\/idle\.svg: cannot be rendered \(.+\)$/);
-    assert.match(problems.find((p) => p.startsWith("tray/blink-0.svg"))!, /^tray\/blink-0\.svg: cannot be rendered \(.+\)$/);
+    assert.match(problems.find((p) => p.startsWith("tray/blink.svg"))!, /^tray\/blink\.svg: cannot be rendered \(.+\)$/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -153,23 +155,23 @@ test("frames are checked the way macOS draws template images, from alpha only", 
     // A design-tool export with a white background behind the panda.
     await writeFile(path.join(tray, "idle.svg"), `${root}<rect width="24" height="20" fill="#fff"/><rect x="2" y="2" width="20" height="16"/></svg>`);
     // White eyes painted on a black body instead of cut out.
-    await writeFile(path.join(tray, "blink-0.svg"), `${root}<rect x="2" y="2" width="20" height="16"/><circle cx="16" cy="8" r="2" fill="white"/></svg>`);
+    await writeFile(path.join(tray, "blink.svg"), `${root}<rect x="2" y="2" width="20" height="16"/><circle cx="16" cy="8" r="2" fill="white"/></svg>`);
     // An RGB export without an alpha channel.
     await writeFile(
-      path.join(tray, "blink-1.png"),
+      path.join(tray, "hungry.png"),
       await sharp({ create: { width: 72, height: 60, channels: 3, background: { r: 0, g: 0, b: 0 } } }).png().toBuffer(),
     );
     // An opaque PNG with an alpha channel, and one with a light fill.
     await writeFile(
-      path.join(tray, "ear-0.png"),
+      path.join(tray, "sleep.png"),
       await sharp({ create: { width: 72, height: 60, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 1 } } }).png().toBuffer(),
     );
-    await writeFile(path.join(tray, "ear-1.png"), await png(72, 60, { r: 200, g: 120, b: 60, alpha: 1 }));
+    await writeFile(path.join(tray, "alert.png"), await png(72, 60, { r: 200, g: 120, b: 60, alpha: 1 }));
     assert.deepEqual((await checkTraySources(tray)).sort(), [
-      "tray/blink-0.svg: opaque light pixels; cut holes instead of light fills",
-      "tray/blink-1.png: needs an alpha channel",
-      "tray/ear-0.png: no transparent pixels; the background must be transparent",
-      "tray/ear-1.png: opaque light pixels; cut holes instead of light fills",
+      "tray/blink.svg: opaque light pixels; cut holes instead of light fills",
+      "tray/hungry.png: needs an alpha channel",
+      "tray/sleep.png: no transparent pixels; the background must be transparent",
+      "tray/alert.png: opaque light pixels; cut holes instead of light fills",
       "tray/idle.svg: no transparent pixels; the background must be transparent",
       "tray/idle.svg: opaque light pixels; cut holes instead of light fills",
     ].sort());
@@ -222,16 +224,16 @@ test("the sources hash follows file names and contents and ignores hidden files"
   const tray = path.join(dir, "tray");
   try {
     await writeFile(path.join(tray, "idle.svg"), svg());
-    await writeFile(path.join(tray, "blink-0.svg"), svg());
+    await writeFile(path.join(tray, "blink.svg"), svg());
     const first = await traySourcesHash(tray);
     assert.match(first, /^sha256-[0-9a-f]{64}$/);
     await writeFile(path.join(tray, ".DS_Store"), "finder");
     assert.equal(await traySourcesHash(tray), first);
-    await writeFile(path.join(tray, "blink-0.svg"), svg('opacity="0.5"'));
+    await writeFile(path.join(tray, "blink.svg"), svg('opacity="0.5"'));
     const changed = await traySourcesHash(tray);
     assert.notEqual(changed, first);
-    await rm(path.join(tray, "blink-0.svg"));
-    await writeFile(path.join(tray, "blink-1.svg"), svg('opacity="0.5"'));
+    await rm(path.join(tray, "blink.svg"));
+    await writeFile(path.join(tray, "hungry.svg"), svg('opacity="0.5"'));
     assert.notEqual(await traySourcesHash(tray), changed);
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -1,26 +1,17 @@
-import type { MascotCue, MascotPose } from "../../shared/mascot";
-import {
-  CUE_SEQUENCE,
-  DISGUISES,
-  POSE_FIDGETS,
-  POSE_FRAME,
-  POSE_LOOP,
-  returnSequence,
-  type Disguise,
-  type MascotFrame,
-  type MascotSequence,
-} from "../../shared/mascot-frames";
+import type { MascotPose } from "../../shared/mascot";
+import { BLINK_FRAME, POSE_FRAME, type MascotFrame } from "../../shared/mascot-frames";
 
-/** A loop longer than this rests on its still frame until the pose changes. */
-export const LOOP_LIMIT_MS = 60_000;
-export const FIDGET_MIN_MS = 3 * 60_000;
-export const FIDGET_MAX_MS = 6 * 60_000;
-/** A frame this late (the Mac slept) drops its sequence instead of catching up. */
+/** The idle panda blinks this often, at a random moment in between. */
+export const BLINK_MIN_MS = 3 * 60_000;
+export const BLINK_MAX_MS = 6 * 60_000;
+/** How long the eyes stay closed. */
+export const BLINK_MS = 150;
+/** A blink this late (the Mac slept) is skipped instead of played. */
 export const LATE_FRAME_MS = 2_000;
 
 export interface MascotPlayerDeps {
   show(frame: MascotFrame): void;
-  /** Read before every frame: the setting and macOS Reduce motion. */
+  /** Read right before each blink: the setting and macOS Reduce motion. */
   motionAllowed(): boolean;
   now?: () => number;
   setTimeout?: (fn: () => void, ms: number) => unknown;
@@ -28,24 +19,13 @@ export interface MascotPlayerDeps {
   random?: () => number;
 }
 
-interface Playing {
-  kind: "loop" | "once" | "fidget";
-  sequence: MascotSequence;
-  index: number;
-  startedAt: number;
-  dueAt: number;
-}
-
-/** Plays the menu bar panda: still poses, loops, one-off cues and fidgets. */
+/** Shows the menu bar panda's pose; the idle panda blinks every few minutes. */
 export class MascotPlayer {
   private pose: MascotPose = "idle";
   private shown?: MascotFrame;
-  private playing?: Playing;
-  private frameTimer?: unknown;
-  private fidgetTimer?: unknown;
-  /** Which fidget each pose plays next, so every pose cycles its own list in turn. */
-  private readonly fidgetTurns = new Map<MascotPose, number>();
-  private disguise?: Disguise;
+  /** The tray refused the last image; the next update tries again. */
+  private failed = false;
+  private timer?: unknown;
   private destroyed = false;
   private readonly now: () => number;
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
@@ -61,107 +41,57 @@ export class MascotPlayer {
     this.rest();
   }
 
-  update(pose: MascotPose, cue?: MascotCue) {
+  update(pose: MascotPose) {
     if (this.destroyed) return;
-    const changed = pose !== this.pose;
+    if (pose === this.pose && !this.failed) return;
     this.pose = pose;
-    if (cue && this.deps.motionAllowed())
-      return this.play("once", cue === "return" ? returnSequence(this.nextDisguise()) : CUE_SEQUENCE[cue]);
-    if (!changed) return;
-    // A one-off finishes first; it returns to whatever the pose is then.
-    if (this.playing?.kind === "once") return;
     this.rest();
   }
 
   destroy() {
     this.destroyed = true;
-    this.stop();
+    this.clear();
   }
 
-  /** A random disguise, never the previous one. */
-  private nextDisguise() {
-    const options = DISGUISES.filter((d) => DISGUISES.length < 2 || d !== this.disguise);
-    const pick = options[Math.min(options.length - 1, Math.floor(this.random() * options.length))];
-    this.disguise = pick;
-    return pick;
-  }
-
-  /** The pose's loop when motion is allowed, else its still frame and a fidget timer. */
+  /** The pose's frame, and a blink timer when idle. */
   private rest() {
-    this.stop();
-    const loop = POSE_LOOP[this.pose];
-    if (loop && this.deps.motionAllowed()) return this.play("loop", loop);
-    if (this.show(POSE_FRAME[this.pose])) this.scheduleFidget();
+    this.clear();
+    if (this.show(POSE_FRAME[this.pose])) this.scheduleBlink();
   }
 
-  private play(kind: Playing["kind"], sequence: MascotSequence) {
-    this.stop();
-    const now = this.now();
-    this.playing = { kind, sequence, index: 0, startedAt: now, dueAt: now };
-    this.step();
+  private scheduleBlink() {
+    if (this.pose !== "idle" || this.destroyed) return;
+    const delay = BLINK_MIN_MS + this.random() * (BLINK_MAX_MS - BLINK_MIN_MS);
+    const due = this.now() + delay;
+    this.timer = this.setTimer(() => this.blink(due), delay);
   }
 
-  private step() {
-    this.frameTimer = undefined;
-    const playing = this.playing;
-    if (!playing || this.destroyed) return;
-    const now = this.now();
-    const late = now - playing.dueAt > LATE_FRAME_MS;
-    const tooLong = playing.kind === "loop" && now - playing.startedAt >= LOOP_LIMIT_MS;
-    if (late || tooLong || !this.deps.motionAllowed()) {
-      this.playing = undefined;
-      // A loop cut short stays still until the pose changes; anything else may fidget.
-      if (this.show(POSE_FRAME[this.pose]) && !POSE_LOOP[this.pose]) this.scheduleFidget();
-      return;
-    }
-    if (playing.index >= playing.sequence.frames.length) {
-      if (playing.kind !== "loop") {
-        this.playing = undefined;
-        return this.rest();
-      }
-      playing.index = 0;
-    }
-    if (!this.show(playing.sequence.frames[playing.index++])) {
-      this.playing = undefined;
-      return;
-    }
-    const interval = 1000 / playing.sequence.fps;
-    playing.dueAt = now + interval;
-    this.frameTimer = this.setTimer(() => this.step(), interval);
+  private blink(due: number) {
+    this.timer = undefined;
+    if (this.destroyed) return;
+    if (this.now() - due > LATE_FRAME_MS || !this.deps.motionAllowed()) return this.scheduleBlink();
+    if (!this.show(BLINK_FRAME)) return;
+    this.timer = this.setTimer(() => {
+      this.timer = undefined;
+      if (this.show(POSE_FRAME[this.pose])) this.scheduleBlink();
+    }, BLINK_MS);
   }
 
-  private scheduleFidget() {
-    if (this.fidgetTimer !== undefined) this.clearTimer(this.fidgetTimer);
-    this.fidgetTimer = undefined;
-    const fidgets = POSE_FIDGETS[this.pose];
-    if (!fidgets?.length || this.destroyed) return;
-    const delay = FIDGET_MIN_MS + this.random() * (FIDGET_MAX_MS - FIDGET_MIN_MS);
-    const pose = this.pose;
-    this.fidgetTimer = this.setTimer(() => {
-      this.fidgetTimer = undefined;
-      if (this.playing || this.destroyed) return;
-      if (!this.deps.motionAllowed()) return this.scheduleFidget();
-      const turn = this.fidgetTurns.get(pose) ?? 0;
-      this.fidgetTurns.set(pose, (turn + 1) % fidgets.length);
-      this.play("fidget", fidgets[turn]);
-    }, delay);
+  private clear() {
+    if (this.timer !== undefined) this.clearTimer(this.timer);
+    this.timer = undefined;
   }
 
-  private stop() {
-    if (this.frameTimer !== undefined) this.clearTimer(this.frameTimer);
-    if (this.fidgetTimer !== undefined) this.clearTimer(this.fidgetTimer);
-    this.frameTimer = this.fidgetTimer = undefined;
-    this.playing = undefined;
-  }
-
-  /** False when the tray refused the image; the caller stops its sequence. */
+  /** False when the tray refused the image. */
   private show(frame: MascotFrame) {
-    if (frame === this.shown) return true;
+    if (frame === this.shown && !this.failed) return true;
     try {
       this.deps.show(frame);
       this.shown = frame;
+      this.failed = false;
       return true;
     } catch {
+      this.failed = true;
       return false;
     }
   }

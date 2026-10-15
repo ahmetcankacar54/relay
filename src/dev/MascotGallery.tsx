@@ -1,16 +1,12 @@
 import { useEffect, useState } from "react";
-import {
-  CUE_SEQUENCE,
-  DISGUISES,
-  POSE_FIDGETS,
-  POSE_FRAME,
-  POSE_LOOP,
-  returnSequence,
-  type MascotFrame,
-  type MascotSequence,
-} from "../../shared/mascot-frames";
+import { BLINK_FRAME, POSE_FRAME, type MascotFrame } from "../../shared/mascot-frames";
 
 type Frames = Record<MascotFrame, readonly { scaleFactor: number; png: string }[]>;
+interface StripSpec {
+  label: string;
+  frames: readonly MascotFrame[];
+  fps: number;
+}
 const PAUSE = 6;
 const src = (frames: Frames, frame: MascotFrame, scale: number) =>
   `data:image/png;base64,${frames[frame].find((r) => r.scaleFactor === scale)?.png ?? ""}`;
@@ -20,20 +16,20 @@ const src = (frames: Frames, frame: MascotFrame, scale: number) =>
  * Frames are drawn from their alpha only, as macOS draws template images:
  * light fills disappear into the silhouette here just as in the menu bar.
  */
-function Strip({ label, sequence, frames }: { label: string; sequence: MascotSequence; frames: Frames }) {
+function Strip({ spec, frames }: { spec: StripSpec; frames: Frames }) {
   const [tick, setTick] = useState(0);
+  const length = spec.frames.length;
   useEffect(() => {
-    if (sequence.frames.length < 2) return;
-    const id = setInterval(() => setTick((n) => n + 1), 1000 / sequence.fps);
+    if (length < 2) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000 / spec.fps);
     return () => clearInterval(id);
-  }, [sequence]);
-  const cycle = sequence.frames.length + PAUSE;
-  const frame = sequence.frames[Math.min(tick % cycle, sequence.frames.length - 1)];
+  }, [length, spec.fps]);
+  const frame = spec.frames[Math.min(tick % (length + PAUSE), length - 1)];
   return (
     <div className="grid grid-cols-[200px_auto_auto_auto] items-center gap-3 py-1.5">
       <div>
-        <div className="font-semibold">{label}</div>
-        <div className="text-xs text-muted-foreground">{sequence.frames.join(" · ")}</div>
+        <div className="font-semibold">{spec.label}</div>
+        <div className="text-xs text-muted-foreground">{spec.frames.join(" · ")}</div>
       </div>
       {(["light", "dark"] as const).map((bar) => (
         <div
@@ -69,17 +65,9 @@ function Strip({ label, sequence, frames }: { label: string; sequence: MascotSeq
 
 /** Development-only review sheet for the mascot artwork (?scenario=mascot). */
 export function MascotGallery({ frames }: { frames: Frames }) {
-  const strips: { label: string; sequence: MascotSequence }[] = [
-    ...Object.entries(POSE_FRAME).map(([pose, frame]) => ({
-      label: `${pose} (duruş)`,
-      sequence: { frames: [frame], fps: 1 },
-    })),
-    ...Object.entries(POSE_LOOP).map(([pose, sequence]) => ({ label: `${pose} döngüsü`, sequence: sequence! })),
-    ...Object.entries(CUE_SEQUENCE).map(([cue, sequence]) => ({ label: cue, sequence })),
-    ...DISGUISES.map((disguise) => ({ label: `dönüş (${disguise})`, sequence: returnSequence(disguise) })),
-    ...Object.entries(POSE_FIDGETS).flatMap(([pose, list]) =>
-      (list ?? []).map((sequence, i) => ({ label: `${pose} kıpırtısı ${i + 1}`, sequence })),
-    ),
+  const strips: StripSpec[] = [
+    ...Object.entries(POSE_FRAME).map(([pose, frame]) => ({ label: `${pose} (duruş)`, frames: [frame], fps: 1 })),
+    { label: "göz kırpma", frames: [POSE_FRAME.idle, BLINK_FRAME, POSE_FRAME.idle], fps: 6 },
   ];
   return (
     <div className="min-h-screen bg-background p-6 text-foreground">
@@ -90,7 +78,7 @@ export function MascotGallery({ frames }: { frames: Frames }) {
       </p>
       <section className="divide-y">
         {strips.map((s) => (
-          <Strip key={s.label} label={s.label} sequence={s.sequence} frames={frames} />
+          <Strip key={s.label} spec={s} frames={frames} />
         ))}
       </section>
     </div>

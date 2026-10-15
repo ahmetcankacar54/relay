@@ -1,10 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { headFor, mascotPose, mascotStep, type MascotInput, type MascotMemory } from "../shared/mascot";
-import {
-  CUE_SEQUENCE, DISGUISES, MASCOT_FRAMES, POSE_FIDGETS, POSE_FRAME, POSE_LOOP, returnSequence,
-  type MascotSequence,
-} from "../shared/mascot-frames";
+import { BLINK_FRAME, MASCOT_FRAMES, POSE_FRAME } from "../shared/mascot-frames";
 import type { Account, AccountUsage, DesktopState, WindowAttempt } from "../shared/types";
 
 const NOW = Date.parse("2026-10-15T10:00:00Z");
@@ -250,20 +247,10 @@ test("entering alert, sleep and hunger plays their one-off once", () => {
   );
 });
 
-test("every sequence uses known frames and every frame is used", () => {
-  assert.equal(MASCOT_FRAMES.length, 56);
-  const known = new Set<string>(MASCOT_FRAMES);
-  const sequences = [
-    ...Object.values(POSE_LOOP),
-    ...Object.values(CUE_SEQUENCE),
-    ...DISGUISES.map(returnSequence),
-    ...Object.values(POSE_FIDGETS).flat(),
-  ].filter((s): s is MascotSequence => !!s);
-  const used = new Set<string>([...sequences.flatMap((s) => s.frames), ...Object.values(POSE_FRAME)]);
-  for (const frame of used) assert.ok(known.has(frame), frame);
-  assert.deepEqual(MASCOT_FRAMES.filter((f) => !used.has(f)), []);
-  assert.deepEqual(returnSequence("shades").frames, [
-    "enter-shades-0", "enter-shades-1", "enter-shades-1", "enter-shades-1",
-    "toss-shades-0", "toss-shades-1", "bow-0", "bow-1", "bow-1",
-  ]);
+test("the menu bar has six head frames and every pose shows one", () => {
+  assert.deepEqual([...MASCOT_FRAMES], ["idle", "blink", "hungry", "sleep", "alert", "away"]);
+  assert.deepEqual(POSE_FRAME, {
+    idle: "idle", warming: "idle", hungry: "hungry", sleeping: "sleep", alert: "alert", away: "away",
+  });
+  assert.equal(BLINK_FRAME, "blink");
 });
