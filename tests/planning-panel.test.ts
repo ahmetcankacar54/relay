@@ -933,9 +933,30 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
     html,
     /<small class="[^"]*text-warn-foreground[^"]*">Uyarlandı · başlatma 13:30<\/small>/,
   );
+  // Each window lasts as long as it does at today's pace (1.6 × 205 an
+  // hour); the tempo row keeps the plan's own.
+  assert.match(html, />Pencere ~1 sa 30 dk yeter · bugün /);
+  assert.match(html, />Pencere ~35 dk yeter/);
+  assert.match(html, />Pencere ~20 dk yeter/);
+  assert.match(
+    html,
+    /Bu tempoyla bir pencere: Max 5× ~2 sa 25 dk · Team · 2 ~1 sa · Pro ~30 dk yeter\./,
+  );
 });
 
 test("the adapt switch follows the setting, needs automatic start and sends the change", () => {
+  // Its note describes it.
+  const html = renderAdapted();
+  const described = switchTag(html, "Uyarla").match(
+    /aria-describedby="([^"]+)"/,
+  )?.[1];
+  assert.ok(described);
+  assert.match(
+    html,
+    new RegExp(
+      `<small id="${described}"[^>]*>Gün içinde hızına göre planı güncelle</small>`,
+    ),
+  );
   assert.match(
     switchTag(renderAdapted({ settings: { adaptive: false } }), "Uyarla"),
     /aria-checked="false"/,
@@ -1000,11 +1021,14 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   // the keeper's next report.
   const off = renderAdapted({ settings: { adaptive: false } });
   assert.doesNotMatch(off, /hızlısın|Plan uyarlandı|Uyarlandı/);
-  // Pro's adapted wait reads as a plain next start.
+  // Pro's adapted wait reads as a plain next start, and windows last as at
+  // the plan's tempo.
   assert.match(
     off,
     /<small class="text-xs text-muted-foreground">Sonraki başlatma 13:30</,
   );
+  assert.match(off, />Pencere ~30 dk yeter/);
+  assert.doesNotMatch(off, />Pencere ~20 dk yeter/);
   assert.match(off, /><\/i>Bugün kalan: 16:02–16:15 kotasız · 3 geçiş</);
   assert.doesNotMatch(
     renderScenario(automatic, wednesday("12:00")),

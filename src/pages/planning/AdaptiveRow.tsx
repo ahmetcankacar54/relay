@@ -4,6 +4,9 @@ import { cn } from "@/lib/utils";
 
 type T = (tr: string, en: string) => string;
 
+// The page has one adapt row.
+const NOTE_ID = "planning-adaptive-note";
+
 /**
  * The hours card's adapt row, under the tempo: re-plan the rest of the day
  * at today's pace. It works through automatic start, so it rests while that
@@ -28,6 +31,7 @@ export function AdaptiveRow({
         checked={on}
         disabled={disabled || !settings.autoStart}
         aria-label={label}
+        aria-describedby={NOTE_ID}
         onCheckedChange={(adaptive) => update({ adaptive })}
       />
       <span className="grid min-w-0">
@@ -39,7 +43,7 @@ export function AdaptiveRow({
         >
           {label}
         </strong>
-        <small className="text-xs text-muted-foreground">
+        <small id={NOTE_ID} className="text-xs text-muted-foreground">
           {t(
             "Gün içinde hızına göre planı güncelle",
             "Update the plan for today’s pace",

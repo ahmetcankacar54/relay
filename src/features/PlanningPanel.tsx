@@ -355,9 +355,11 @@ export function PlanningPanel({
       : reference.date === shiftDate(today, 1)
         ? t("Yarın tahmini: ", "Tomorrow: ")
         : weekdayForecast(reference.date, zone, t);
-  // One busy-day rate measures every window: the reference day's.
+  // One busy-day rate measures every window: the reference day's; an
+  // account's own line reads it at today's pace while the day is adapted.
   const weekend = !!interval?.weekend;
   const rate = tempo.rate[weekend ? "weekend" : "weekday"];
+  const todayRate = rate * (adaptation?.factor ?? 1);
   const zoneClock = (time: number) => clock(time, zone);
   const excluded = accounts.filter(
     (a) => !settings.accounts.some((p) => p.id === a.id),
@@ -584,7 +586,7 @@ export function PlanningPanel({
                 )}
                 <AccountWindowLine
                   account={account}
-                  rate={rate}
+                  rate={todayRate}
                   lane={todayView.lane}
                   clock={zoneClock}
                   t={t}
