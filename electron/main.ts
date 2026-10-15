@@ -27,6 +27,7 @@ import {
 } from "./core/store";
 import { accountPlanningSchema } from "./core/store";
 import { RelayTray } from "./tray";
+import { motionAllowed } from "./core/tray-mascot";
 import { TrayPanel } from "./tray-panel";
 import { PAGES } from "../src/app/routes";
 import { UsageHistory } from "./core/usage-history";
@@ -508,12 +509,17 @@ else {
             .some((f) =>
               ["starting", "waiting", "verifying"].includes(f.status),
             ),
+          attempts: keeper.snapshot().attempts,
         }),
         showWindow,
         requestSwitch: (profileId) => void traySwitch(profileId),
         quit: () => app.quit(),
         language: () => trayLanguage,
         panel: trayPanel,
+        motionAllowed: () =>
+          motionAllowed(service.store.state.settings, () =>
+            systemPreferences.getAnimationSettings(),
+          ),
       });
       trayTimer = setInterval(() => tray?.update(), 5000);
       trayTimer.unref();

@@ -1,4 +1,4 @@
-import type { Account, AccountUsage, DesktopState } from "./types";
+import type { Account, AccountUsage, DesktopState, WindowAttempt } from "./types";
 import { desktopCliMismatch } from "./account-state";
 import { freshUsage } from "./usage";
 
@@ -7,6 +7,8 @@ export interface TraySnapshot {
   usage: Record<string, AccountUsage>;
   desktop?: DesktopState;
   authBusy?: boolean;
+  /** The keeper's recent window starts, for the menu bar panda. */
+  attempts?: WindowAttempt[];
 }
 
 export type TrayLanguage = "tr" | "en";
@@ -193,6 +195,6 @@ export function trayTitle(snapshot: TraySnapshot, now = Date.now()) {
   const active = snapshot.accounts.find((a) => a.id === snapshot.desktop?.activeProfileId);
   const usage = active ? snapshot.usage[active.id] : undefined;
   if (!active || !freshUsage(usage, now) || usage.fiveHour === undefined) return "";
-  const percent = Math.round(usage.fiveHour.usedPercent);
-  return percent >= 90 ? `${percent}% ⚠︎` : `${percent}%`;
+  // The menu bar panda shows the warning; the title stays a plain percent.
+  return `${Math.round(usage.fiveHour.usedPercent)}%`;
 }

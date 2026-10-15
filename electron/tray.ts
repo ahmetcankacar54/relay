@@ -12,6 +12,10 @@ import {
 import { TrayMenuLifecycle } from "./core/tray-menu-lifecycle";
 import { trayIcons } from "./tray-icons";
 import { trayClickAction } from "../shared/tray-panel";
+import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
+import { mascotTrayFrames } from "./mascot-tray-frames";
+import { MascotPlayer } from "./core/mascot-player";
+import { TrayMascot } from "./core/tray-mascot";
 
 export interface RelayTrayOptions {
   getSnapshot(): TraySnapshot | Promise<TraySnapshot>;
@@ -22,11 +26,34 @@ export interface RelayTrayOptions {
   language?(): TrayLanguage;
   /** macOS menu bar popover; when present, left click toggles it instead of the menu. */
   panel?: { toggle(bounds: Rectangle): void; usable(): boolean };
+  /** Whether the menu bar panda may animate (setting and Reduce motion); poses change regardless. */
+  motionAllowed?(): boolean;
+}
+
+function image(
+  representations: readonly { scaleFactor: number; png: string }[],
+  template: boolean,
+) {
+  const icon = nativeImage.createEmpty();
+  for (const representation of representations)
+    icon.addRepresentation({
+      scaleFactor: representation.scaleFactor,
+      buffer: Buffer.from(representation.png, "base64"),
+    });
+  icon.setTemplateImage(template);
+  return icon;
+}
+/** Every panda frame, decoded once; macOS tints template images for the menu bar. */
+function mascotImages() {
+  return new Map<MascotFrame, Electron.NativeImage>(
+    MASCOT_FRAMES.map((frame) => [frame, image(mascotTrayFrames[frame], true)]),
+  );
 }
 
 export class RelayTray {
   private readonly tray: Tray;
   private menu?: Menu;
+  private readonly mascot?: TrayMascot;
   private revision = 0;
   private destroyed = false;
   /**
@@ -41,18 +68,17 @@ export class RelayTray {
   });
 
   constructor(private readonly options: RelayTrayOptions) {
-    const template = process.platform === "darwin";
-    const representations = template ? trayIcons.template : trayIcons.color;
-    const icon = nativeImage.createEmpty();
-    for (const representation of representations) {
-      icon.addRepresentation({
-        scaleFactor: representation.scaleFactor,
-        buffer: Buffer.from(representation.png, "base64"),
-      });
-    }
-    icon.setTemplateImage(template);
-    this.tray = new Tray(icon);
+    // macOS shows the panda; other platforms keep the colored R.
+    const frames = process.platform === "darwin" ? mascotImages() : undefined;
+    this.tray = new Tray(frames ? frames.get("idle")! : image(trayIcons.color, false));
     this.tray.setToolTip("Relay");
+    if (frames)
+      this.mascot = new TrayMascot(
+        new MascotPlayer({
+          show: (frame) => this.tray.setImage(frames.get(frame)!),
+          motionAllowed: () => options.motionAllowed?.() ?? true,
+        }),
+      );
     const panel = options.panel;
     this.panelMode = process.platform === "darwin" && !!panel;
     if (panel && this.panelMode) {
@@ -79,6 +105,7 @@ export class RelayTray {
     try {
       const snapshot = await this.options.getSnapshot();
       if (this.destroyed || revision !== this.revision) return;
+      this.mascot?.next(snapshot);
       if (process.platform === "darwin") {
         const title = trayTitle(snapshot);
         this.tray.setTitle(title ? " " + title : "");
@@ -90,6 +117,7 @@ export class RelayTray {
       // Opening Relay remains available if a read-only snapshot fails. A stale
       // menu must not offer an action against unknown Desktop state.
       if (this.destroyed || revision !== this.revision) return;
+      this.mascot?.unavailable();
       if (process.platform === "darwin") this.tray.setTitle("");
       const items: TrayMenuItem[] = [
         {
@@ -192,6 +220,7 @@ export class RelayTray {
     this.destroyed = true;
     this.revision++;
     this.menuLifecycle.destroy();
+    this.mascot?.destroy();
     if (!this.tray.isDestroyed()) this.tray.destroy();
     this.menu = undefined;
   }

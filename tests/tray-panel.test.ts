@@ -17,9 +17,9 @@ const snap = (u?: AccountUsage, active = "a"): TraySnapshot => ({
   desktop: { available: true, running: true, organizations: [], activeProfileId: active, busy: false, recoveryRequired: false, errorRevision: 0 },
 });
 
-test("tray title shows the active account's five-hour percent and warns at 90", () => {
+test("tray title shows the active account's five-hour percent", () => {
   assert.equal(trayTitle(snap(usage(37.6)), NOW), "38%");
-  assert.equal(trayTitle(snap(usage(90)), NOW), "90% ⚠︎");
+  assert.equal(trayTitle(snap(usage(90)), NOW), "90%");
   assert.equal(trayTitle(snap(usage(20, NOW - 3_600_000)), NOW), "");
   assert.equal(trayTitle(snap(undefined), NOW), "");
   assert.equal(trayTitle(snap(usage(20), "missing"), NOW), "");
