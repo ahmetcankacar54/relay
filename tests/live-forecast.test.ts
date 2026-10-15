@@ -412,3 +412,24 @@ test("a schedule restarts an open window later and starts a closed one at its ti
     ["max 10:00-15:00", "pro 15:00-16:00", "- 16:00-17:00", "pro 17:00-18:00"],
   );
 });
+
+test("a closed window scheduled before now starts now, not at the past time", () => {
+  const duo = dayPlan(
+    WEDNESDAY,
+    settings({ accounts: [{ id: max.id }, { id: pro.id }] }),
+    context(flatTempo(100)),
+  );
+  const now = at("10:00");
+  const input = {
+    plan: duo,
+    settings: settings(),
+    context: context(flatTempo(100)),
+    usage: { max: fresh("max", now, 0, "20:00"), pro: fresh("pro", now, 0) },
+    activeId: "max",
+    now,
+  };
+  // Started at 07:00, pro's window would reset at 12:00 and again at 17:00.
+  const past = { ...input, schedule: { pro: at("07:00") } };
+  assert.equal(liveSetup(past)!.accounts[1].warmUp, now);
+  assert.deepEqual(liveForecast(past), liveForecast(input));
+});

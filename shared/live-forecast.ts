@@ -37,7 +37,8 @@ export interface LiveInput {
  * reach); the others from the plan's window chain with a full quota. With
  * `autoStart` a closed window starts when the keeper would start it (now, or
  * when the account's active range begins), else at first use; a `schedule`
- * entry holds an open window's restart, or starts a closed window, at its time.
+ * entry holds an open window's restart, or starts a closed window, at its time
+ * (now, if that has passed).
  * Shared with the adaptive search.
  */
 export function liveSetup({
@@ -57,13 +58,15 @@ export function liveSetup({
   const accounts: SimAccount[] = plan.accounts.map((p) => {
     const capacity = context.capacities[p.accountId] ?? 1;
     const next = schedule?.[p.accountId];
-    // The keeper starts a due window right away (inside its active range).
+    // The keeper starts a due window right away (inside its active range); a
+    // scheduled start already past starts it now, too.
     const closed = {
       warmUp:
-        next ??
-        (keepAlive && from < p.activeUntil
-          ? Math.max(from, p.activeFrom)
-          : undefined),
+        next !== undefined
+          ? Math.max(from, next)
+          : keepAlive && from < p.activeUntil
+            ? Math.max(from, p.activeFrom)
+            : undefined,
     };
     const u = usage[p.accountId];
     if (freshUsage(u, now)) {
