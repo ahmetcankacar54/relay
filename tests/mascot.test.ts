@@ -181,6 +181,59 @@ test("a refilled limit munches bamboo, but a change of account does not", () => 
   assert.deepEqual(cues(input(), hungry, input({ desktop: desktop({ activeProfileId: "b" }) })), [undefined, "rumble", undefined]);
 });
 
+test("usage that merely goes stale or fails does not munch", () => {
+  const hungry = input({ usage: { a: usage("a", 95), b: usage("b", 30) } });
+  const asleep = input({ usage: { a: usage("a", 100), b: usage("b", 100) } });
+  for (const extra of [
+    { checkedAt: iso(NOW - 36 * 60_000) },
+    { stale: true },
+    { status: "error" as const },
+  ]) {
+    assert.deepEqual(cues(input(), hungry, input({ usage: { a: usage("a", 95, 10, extra), b: usage("b", 30) } })), [undefined, "rumble", undefined], JSON.stringify(extra));
+    assert.deepEqual(cues(input(), asleep, input({ usage: { a: usage("a", 100, 10, extra), b: usage("b", 100, 10, extra) } })), [undefined, "curl", undefined], JSON.stringify(extra));
+  }
+  // The other account going stale wakes the panda, but the active one is still full.
+  const weekFull = input({ usage: { a: usage("a", 20, 100), b: usage("b", 100) } });
+  assert.deepEqual(
+    cues(input(), weekFull, input({ usage: { a: usage("a", 20, 100), b: usage("b", 100, 10, { stale: true }) } })),
+    [undefined, "curl", undefined],
+  );
+});
+
+test("a passed reset munches, from hunger and from sleep", () => {
+  const passed = { resetsAt: iso(NOW - 1_000) };
+  const hungry = input({ usage: { a: usage("a", 95), b: usage("b", 30) } });
+  const asleep = input({ usage: { a: usage("a", 100), b: usage("b", 100) } });
+  assert.deepEqual(
+    cues(input(), hungry, input({ usage: { a: usage("a", 95, 10, { fiveHour: { usedPercent: 95, ...passed } }), b: usage("b", 30) } })),
+    [undefined, "rumble", "munch"],
+  );
+  // The active account is full for the week; the other one's five hours reset.
+  const weekAsleep = input({ usage: { a: usage("a", 20, 100), b: usage("b", 100) } });
+  assert.deepEqual(
+    cues(input(), weekAsleep, input({ usage: { a: usage("a", 20, 100), b: usage("b", 100, 10, { fiveHour: { usedPercent: 100, ...passed } }) } })),
+    [undefined, "curl", "munch"],
+  );
+  const weekFull = input({ usage: { a: usage("a", 20, 100), b: usage("b", 30, 100) } });
+  assert.deepEqual(
+    cues(input(), weekFull, input({ usage: { a: usage("a", 20, 100, { sevenDay: { usedPercent: 100, ...passed } }), b: usage("b", 30, 100) } })),
+    [undefined, "curl", "munch"],
+  );
+  // A passed reset of a window that was not full is no refill.
+  assert.deepEqual(
+    cues(input(), asleep, input({ usage: { a: usage("a", 100, 10, { sevenDay: { usedPercent: 10, ...passed } }), b: usage("b", 100) } })),
+    [undefined, "curl", undefined],
+  );
+});
+
+test("a fresh refill munches, from hunger and from sleep", () => {
+  const hungry = input({ usage: { a: usage("a", 95), b: usage("b", 30) } });
+  const weekAsleep = input({ usage: { a: usage("a", 20, 100), b: usage("b", 100) } });
+  assert.deepEqual(cues(input(), hungry, input({ usage: { a: usage("a", 5), b: usage("b", 30) } })), [undefined, "rumble", "munch"]);
+  assert.deepEqual(cues(input(), weekAsleep, input({ usage: { a: usage("a", 20, 100), b: usage("b", 0) } })), [undefined, "curl", "munch"]);
+  assert.deepEqual(cues(input(), weekAsleep, input({ usage: { a: usage("a", 20, 0), b: usage("b", 100) } })), [undefined, "curl", "munch"]);
+});
+
 test("entering alert, sleep and hunger plays their one-off once", () => {
   const hungry = input({ usage: { a: usage("a", 95), b: usage("b", 30) } });
   const asleep = input({ usage: { a: usage("a", 100), b: usage("b", 100) } });

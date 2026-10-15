@@ -1,4 +1,4 @@
-import type { Account, AccountUsage, DesktopState, UsageIssue, WindowAttempt } from "./types";
+import type { Account, AccountUsage, DesktopState, UsageIssue, UsageWindow, WindowAttempt } from "./types";
 import { freshUsage, maxUsedPercent } from "./usage";
 
 export type MascotPose = "alert" | "away" | "warming" | "sleeping" | "hungry" | "idle";
@@ -71,6 +71,36 @@ export function mascotPose(input: MascotInput, now = Date.now()): MascotPose {
   return "idle";
 }
 
+const resetPassed = (window: UsageWindow, now: number) =>
+  !!window.resetsAt && Date.parse(window.resetsAt) <= now;
+
+/**
+ * Positive evidence that the limit that made the panda hungry or sleep was
+ * refilled. Usage that only went stale, failed or aged is no evidence.
+ */
+function refilled(previous: "hungry" | "sleeping", input: MascotInput, now: number) {
+  const { accounts, usage, desktop } = input;
+  if (previous === "hungry") {
+    const active = desktop?.activeProfileId ? usage[desktop.activeProfileId] : undefined;
+    const five = active?.fiveHour;
+    // Fresh and idle: the five hours are below the threshold again. Otherwise
+    // the window that made it hungry must have reached its reset time.
+    return (
+      freshUsage(active, now) ||
+      (!!five && Math.round(five.usedPercent) >= HUNGRY_PERCENT && resetPassed(five, now))
+    );
+  }
+  // Every account was fresh and full: one is fresh and below the limit now,
+  // or one of the full windows reached its reset time.
+  return accounts.some((a) => {
+    const u = usage[a.id];
+    return (
+      (freshUsage(u, now) && (maxUsedPercent(u) ?? 100) < 100) ||
+      [u?.fiveHour, u?.sevenDay].some((w) => !!w && w.usedPercent >= 100 && resetPassed(w, now))
+    );
+  });
+}
+
 /**
  * One tray snapshot: its pose, the memory for the next step and at most one
  * one-off cue. The first step (no memory) only remembers, so old events do not
@@ -117,13 +147,14 @@ export function mascotStep(
       (a.status === "verified" || a.status === "sent-unverified") &&
       (memory.attempts[a.id] === undefined || memory.attempts[a.id] === "started"),
   );
+  // Idle is never busy (busy shows away or alert), and neither was a hungry or
+  // sleeping step, so a refill never mixes with leaving or returning.
   const fed =
     (memory.pose === "hungry" || memory.pose === "sleeping") &&
     pose === "idle" &&
-    !busy &&
-    !memory.busyFrom &&
     !!desktop &&
-    active === memory.active;
+    active === memory.active &&
+    refilled(memory.pose, input, now);
   const cue: MascotCue | undefined =
     pose === "alert" && memory.pose !== "alert"
       ? "rise"
