@@ -276,6 +276,8 @@ export interface PlanningSettings {
   accounts: PlanningAccount[];
   /** Missing means "auto". */
   tempo?: TempoChoice;
+  /** Re-plan the rest of the day at today's pace; missing means on. */
+  adaptive?: boolean;
 }
 export const DEFAULT_PLANNING: PlanningSettings = {
   autoStart: false,
