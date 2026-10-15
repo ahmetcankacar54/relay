@@ -6,6 +6,7 @@ import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { Store } from "../electron/core/store";
 import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
+import type { DesktopRestartEvent } from "../shared/types";
 import {
   duplicateSessions,
   readObject,
@@ -286,8 +287,14 @@ test("failed multi-file switch rolls back and crash journal offers recovery", as
   await writeBytes(f.root, "config.json", jsonBytes({ broken: true }));
   assert.equal((await f.manager.snapshot()).recoveryRequired, true);
   await assert.rejects(f.manager.switchTo(b.id), /Restore/);
+  const restarts: DesktopRestartEvent[] = [];
+  f.manager.onRestart = (event) => void restarts.push(event);
   await f.manager.recover();
   assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.deepEqual(restarts, [
+    { phase: "start", kind: "restore" },
+    { phase: "end", kind: "restore", ok: true },
+  ]);
 });
 test("project merge preserves target organization bindings and rejects symlink paths", async (t) => {
   const f = await fixture(t);
@@ -1145,4 +1152,86 @@ test("verifying saved sign-ins decrypts each one without touching Claude", async
     /Connect this account again/,
   );
   assert.ok(a.desktop);
+});
+test("a Desktop switch reports the Claude restart it causes", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  const events: DesktopRestartEvent[] = [];
+  f.manager.onRestart = (event) => void events.push(event);
+  await f.manager.switchTo(a.id);
+  assert.deepEqual(events, [
+    { phase: "start", kind: "switch", profileId: a.id },
+    { phase: "end", kind: "switch", profileId: a.id, ok: true },
+  ]);
+});
+
+test("Desktop operations that never quit Claude report nothing", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  const events: DesktopRestartEvent[] = [];
+  f.manager.onRestart = (event) => void events.push(event);
+  // B is open and already saved: saving it again changes nothing.
+  await f.manager.capture(b.id, b.desktop!.orgId);
+  // Refused before Claude is asked to quit.
+  await assert.rejects(f.manager.switchTo(a.id, { canProceed: () => false }), /cancelled before restart/);
+  // No sign-in to cancel.
+  await f.manager.cancelLogin();
+  // Claude is closed: the files are prepared without a restart.
+  f.setRunning(false);
+  await f.manager.switchTo(a.id, { closedOnly: true, expectedActiveProfileId: b.id });
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+  // Opening Claude is not a Desktop operation.
+  await f.manager.open();
+  assert.deepEqual(events, []);
+});
+
+test("a Desktop operation that fails after asking Claude to quit reports a failed end", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  const events: DesktopRestartEvent[] = [];
+  f.manager.onRestart = (event) => void events.push(event);
+  f.setFailQuit();
+  await assert.rejects(f.manager.switchTo(a.id), /still running/);
+  assert.deepEqual(events, [
+    { phase: "start", kind: "switch", profileId: a.id },
+    { phase: "end", kind: "switch", profileId: a.id, ok: false },
+  ]);
+});
+
+test("each restarting Desktop operation reports its own kind", async (t) => {
+  const f = await fixture(t);
+  const events: DesktopRestartEvent[] = [];
+  f.manager.onRestart = (event) => void events.push(event);
+  const a = await f.account("A");
+  const c = f.store.create({ name: "C", kind: "personal" });
+  await f.manager.beginLogin(c.id);
+  await f.manager.cancelLogin();
+  await f.manager.syncHistory(a.id);
+  assert.deepEqual(
+    events.map((e) => [e.phase, e.kind, e.profileId, e.phase === "end" ? e.ok : undefined]),
+    [
+      ["start", "save", a.id, undefined],
+      ["end", "save", a.id, true],
+      ["start", "link", c.id, undefined],
+      ["end", "link", c.id, true],
+      ["start", "cancel-link", undefined, undefined],
+      ["end", "cancel-link", undefined, true],
+      ["start", "merge", a.id, undefined],
+      ["end", "merge", a.id, true],
+    ],
+  );
+});
+
+test("a failing restart listener never breaks the Desktop operation", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  f.manager.onRestart = () => {
+    throw new Error("listener");
+  };
+  await f.manager.switchTo(a.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
 });

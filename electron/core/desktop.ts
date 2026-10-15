@@ -17,7 +17,7 @@ import {
   uuid,
   type JsonObject,
 } from "./desktop-files";
-import type { Account, DesktopState } from "../../shared/types";
+import type { Account, DesktopOperationKind, DesktopRestartEvent, DesktopState } from "../../shared/types";
 import { historySources } from "../../shared/history-policy";
 import { summarizeHistory } from "./desktop-history";
 
@@ -54,6 +54,10 @@ export interface DesktopSwitchOptions {
   canProceed?: () => boolean;
   beforeQuit?: () => Promise<void>;
 }
+interface Operation {
+  kind: DesktopOperationKind;
+  profileId?: string;
+}
 export class DesktopManager {
   private busy = false;
   get isBusy() {
@@ -71,6 +75,13 @@ export class DesktopManager {
   private lastBackup?: string;
   private vault: string;
   private pendingHistorySeen?: Buffer;
+  /**
+   * Told right before an operation first quits Claude, and when that operation
+   * ends; operations that never quit Claude report nothing.
+   */
+  onRestart?: (event: DesktopRestartEvent) => void;
+  /** The running operation, and whether it has reported its restart. */
+  private operation?: Operation & { restarted: boolean };
   constructor(
     readonly root: string,
     private store: Store,
@@ -140,7 +151,7 @@ export class DesktopManager {
     };
   }
   async capture(profileId: string, orgId: string) {
-    return this.exclusive(async () => {
+    return this.exclusive({ kind: "save", profileId }, async () => {
       if (this.pending && this.pending.profileId !== profileId)
         throw new Error("Finish or cancel the current Desktop sign-in first.");
       const account = this.store.account(profileId);
@@ -176,7 +187,7 @@ export class DesktopManager {
         !this.pending
       )
         return;
-      await this.host.quit();
+      await this.quitClaude();
       try {
         const saved = await this.saveCurrent();
         if (saved !== state.currentAccountUuid)
@@ -214,7 +225,7 @@ export class DesktopManager {
     });
   }
   async beginLogin(profileId: string) {
-    return this.exclusive(async () => {
+    return this.exclusive({ kind: "link", profileId }, async () => {
       const account = this.store.account(profileId);
       if (account.desktop)
         this.assertProfileIdentity(
@@ -260,7 +271,7 @@ export class DesktopManager {
     });
   }
   async switchTo(profileId: string, options: DesktopSwitchOptions = {}) {
-    return this.exclusive(async () => {
+    return this.exclusive({ kind: "switch", profileId }, async () => {
       if (this.pending)
         throw new Error("Finish or cancel the current Desktop sign-in first.");
       const target = this.store.account(profileId);
@@ -347,7 +358,7 @@ export class DesktopManager {
     });
   }
   async cancelLogin() {
-    return this.exclusive(async () => {
+    return this.exclusive({ kind: "cancel-link" }, async () => {
       if (!this.pending) return;
       const previous = this.pending.previousUuid;
       const saved = previous ? await this.readLogin(previous) : undefined;
@@ -405,7 +416,7 @@ export class DesktopManager {
     );
   }
   async syncHistory(profileId: string) {
-    return this.exclusive(async () => {
+    return this.exclusive({ kind: "merge", profileId }, async () => {
       if (this.pending)
         throw new Error("Finish or cancel the current Desktop sign-in first.");
       const account = this.store.account(profileId);
@@ -483,35 +494,62 @@ export class DesktopManager {
     return new Map(plan);
   }
   async recover() {
-    return this.exclusive(async () => {
+    return this.exclusive({ kind: "restore" }, async () => {
       const journal = await readObject(this.vault, "journal.json");
       if (!journal) return;
-      await this.host.quit();
+      await this.quitClaude();
       await this.restore(uuid.parse(journal.backup));
       await writeBytes(this.vault, "journal.json", null);
       this.lastError = undefined;
       await this.host.launch();
     }, true);
   }
-  private async exclusive<T>(fn: () => Promise<T>, recovery = false) {
+  private async exclusive<T>(operation: Operation, fn: () => Promise<T>, recovery = false) {
     if (this.busy)
       throw new Error("A Desktop operation is already in progress.");
     // Acquire before any await; separate IPC calls must not both pass the guard.
     this.busy = true;
     this.started++;
     this.lastError = undefined;
+    const current = { ...operation, restarted: false };
+    this.operation = current;
+    let ok = false;
     try {
       if (!(await this.host.available()))
         throw new Error("Claude Desktop was not found on this platform.");
       if (!recovery && (await readObject(this.vault, "journal.json")))
         throw new Error("Restore the interrupted Desktop switch first.");
-      return await fn();
+      const result = await fn();
+      ok = true;
+      return result;
     } catch (e: any) {
       this.reportError(e.message);
       throw e;
     } finally {
       this.busy = false;
       this.pendingHistorySeen = undefined;
+      this.operation = undefined;
+      if (current.restarted) this.report("end", current, ok);
+    }
+  }
+  /** Quits Claude for the running operation, reporting the restart first. */
+  private async quitClaude() {
+    const current = this.operation;
+    if (current && !current.restarted) {
+      current.restarted = true;
+      this.report("start", current);
+    }
+    await this.host.quit();
+  }
+  private report(phase: "start" | "end", operation: Operation, ok = false) {
+    const base = {
+      kind: operation.kind,
+      ...(operation.profileId ? { profileId: operation.profileId } : {}),
+    };
+    try {
+      this.onRestart?.(phase === "start" ? { phase, ...base } : { phase, ...base, ok });
+    } catch {
+      // A listener never changes how a Desktop operation ends.
     }
   }
   private assertProfileIdentity(
@@ -554,7 +592,7 @@ export class DesktopManager {
     await beforeQuit?.();
     if (canProceed && !canProceed())
       throw new Error("Automatic Desktop switch was cancelled before restart.");
-    await this.host.quit();
+    await this.quitClaude();
     try {
       await fn();
     } finally {

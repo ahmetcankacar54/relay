@@ -148,6 +148,15 @@ export interface DesktopState {
   errorRevision: number;
   lastBackup?: string;
 }
+/** A DesktopManager operation; each may restart Claude. */
+export type DesktopOperationKind = "switch" | "save" | "link" | "cancel-link" | "merge" | "restore";
+/**
+ * An operation about to quit Claude (`start`, once), then its end (`end`).
+ * Operations that never quit Claude report nothing.
+ */
+export type DesktopRestartEvent =
+  | { phase: "start"; kind: DesktopOperationKind; profileId?: string }
+  | { phase: "end"; kind: DesktopOperationKind; profileId?: string; ok: boolean };
 export interface RelayAPI {
   inspectContinuation(): Promise<DesktopContinuationSnapshot>;
   /** "automatic" selects from identities enrolled when watching starts; UUIDs support existing watches. */
