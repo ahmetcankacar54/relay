@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { checkMascotSources, checkTraySources, renderTrayFrame } from "../scripts/mascot-assets";
+import {
+  checkMascotSources, checkTraySources, renderMascot, renderTrayFrame, traySourcesHash, writeMascot,
+} from "../scripts/mascot-assets";
 import { mascotTrayFrames } from "../electron/mascot-tray-frames";
 import { MASCOT_FRAMES } from "../shared/mascot-frames";
 
@@ -199,5 +201,52 @@ test("the generated tray module holds every frame at three scales", async () => 
     assert.deepEqual(reps.map((r) => r.scaleFactor), [1, 2, 3], frame);
     const meta = await sharp(Buffer.from(reps[2].png, "base64")).metadata();
     assert.deepEqual([meta.width, meta.height], [72, 60], frame);
+  }
+});
+
+const SOURCES_HEADER = /^\/\/ Sources: (sha256-[0-9a-f]{64})$/m;
+
+test("the generated tray module was rendered from the committed sources", async () => {
+  const module = await readFile(path.join(root, "electron/mascot-tray-frames.ts"), "utf8");
+  const header = SOURCES_HEADER.exec(module.slice(0, module.indexOf("export ")));
+  assert.ok(header, "the generated module must name its sources' hash; run npm run mascot");
+  assert.equal(
+    header[1],
+    await traySourcesHash(path.join(root, "assets/mascot/source/tray")),
+    "assets/mascot/source/tray changed since the module was generated; run npm run mascot",
+  );
+});
+
+test("the sources hash follows file names and contents and ignores hidden files", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  try {
+    await writeFile(path.join(tray, "idle.svg"), svg());
+    await writeFile(path.join(tray, "blink-0.svg"), svg());
+    const first = await traySourcesHash(tray);
+    assert.match(first, /^sha256-[0-9a-f]{64}$/);
+    await writeFile(path.join(tray, ".DS_Store"), "finder");
+    assert.equal(await traySourcesHash(tray), first);
+    await writeFile(path.join(tray, "blink-0.svg"), svg('opacity="0.5"'));
+    const changed = await traySourcesHash(tray);
+    assert.notEqual(changed, first);
+    await rm(path.join(tray, "blink-0.svg"));
+    await writeFile(path.join(tray, "blink-1.svg"), svg('opacity="0.5"'));
+    assert.notEqual(await traySourcesHash(tray), changed);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the generator writes the sources hash into the module header", async () => {
+  const dir = await trayDir();
+  try {
+    for (const frame of MASCOT_FRAMES) await writeFile(path.join(dir, "tray", `${frame}.svg`), svg());
+    await mkdir(path.join(dir, "electron"));
+    await writeMascot(await renderMascot(dir), dir);
+    const module = await readFile(path.join(dir, "electron/mascot-tray-frames.ts"), "utf8");
+    assert.equal(SOURCES_HEADER.exec(module)?.[1], await traySourcesHash(path.join(dir, "tray")));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
