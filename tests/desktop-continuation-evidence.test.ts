@@ -744,3 +744,42 @@ test("every quota-stopped conversation of an account is found from files, and it
     await fs.rm(f.root, { recursive: true, force: true });
   }
 });
+test("quota-stop polling follows a growing transcript and refuses a malformed one", async () => {
+  const f = await fixture();
+  try {
+    const metadataFile = path.join(
+      f.root,
+      "desktop",
+      "claude-code-sessions",
+      f.source.id,
+      f.org,
+      `local_${uuid}.json`,
+    );
+    const metadata = JSON.parse(await fs.readFile(metadataFile, "utf8"));
+    metadata.lastActivityAt = Date.parse("2026-10-13T14:00:00.000Z");
+    await fs.writeFile(metadataFile, JSON.stringify(metadata));
+    const account = f.store.account(f.source.id);
+    const append = (row: unknown) =>
+      fs.appendFile(f.transcriptFile, JSON.stringify(row) + "\n");
+    assert.equal((await f.evidence.quotaStops(account)).length, 1);
+    // Agent and meta rows after the stop do not end the main chain's turn.
+    await append({ type: "assistant", uuid: nextAssistant, isSidechain: true });
+    await append({ type: "user", uuid: userId, isMeta: true });
+    const [stop] = await f.evidence.quotaStops(account);
+    assert.equal(stop.turnId, assistantId);
+    assert.equal(stop.transcriptBytes, (await fs.stat(f.transcriptFile)).size);
+    assert.equal(f.evidence.unchanged(stop), true);
+    // A line still being written hides the conversation until it is complete.
+    await fs.appendFile(f.transcriptFile, '{"type":"summary"');
+    assert.equal((await f.evidence.quotaStops(account)).length, 0);
+    await fs.appendFile(f.transcriptFile, "}\n");
+    assert.equal((await f.evidence.quotaStops(account)).length, 1);
+    // A malformed line makes the transcript unusable, also after more rows.
+    await fs.appendFile(f.transcriptFile, "{not json\n");
+    assert.equal((await f.evidence.quotaStops(account)).length, 0);
+    await append({ ...terminal, uuid: nextAssistant });
+    assert.equal((await f.evidence.quotaStops(account)).length, 0);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});

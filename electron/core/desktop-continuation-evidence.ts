@@ -4,7 +4,8 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
-import { readObject, readBytes, scopePath } from "./desktop-files";
+import { readObject, readBytes, safeFile, scopePath } from "./desktop-files";
+import { TranscriptScanner, type TranscriptSummary } from "./transcript-scan";
 import type { Account } from "../../shared/types";
 import type { Store } from "./store";
 import type { DesktopManager } from "./desktop";
@@ -452,6 +453,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   }
   private cpu?: { at: number; times: Map<number, number> };
   private family = new Set<number>();
+  private readonly scanner = new TranscriptScanner();
   /** Count other recently written transcripts whose turn is unfinished. */
   private busyTranscripts(excluded: ReadonlySet<string>) {
     const root = path.join(this.options.transcriptRoot, "projects");
@@ -570,6 +572,39 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     return found[0];
   }
   /**
+   * `transcript` for quota-stop polling: the same file and project checks, but
+   * read incrementally instead of loading and parsing every row on each poll.
+   * Each file looked at is added to `scanned`.
+   */
+  private async scannedTranscript(
+    cliId: string,
+    cwd: string,
+    folders: () => Promise<string[]>,
+    scanned: Set<string>,
+  ) {
+    const found: { relative: string; summary: TranscriptSummary }[] = [];
+    for (const folder of await folders()) {
+      const relative = `projects/${folder}/${cliId}.jsonl`;
+      const file = path.resolve(this.options.transcriptRoot, relative);
+      try {
+        await fs.lstat(file);
+      } catch (error: any) {
+        if (error.code === "ENOENT") continue;
+        throw error;
+      }
+      // No symbolic link anywhere on the path, as readBytes requires.
+      await safeFile(this.options.transcriptRoot, relative);
+      scanned.add(file);
+      const summary = await this.scanner.scan(file);
+      if (!summary.cwds.has(path.resolve(cwd)))
+        throw new DesktopAutomationError("exact-session-not-observed");
+      found.push({ relative, summary });
+    }
+    if (found.length !== 1)
+      throw new DesktopAutomationError("exact-session-not-observed");
+    return found[0];
+  }
+  /**
    * Local Code conversations of `account` whose latest turn ended with a usage
    * limit within `withinMs`, most recent first. Read from Claude's index and
    * transcripts only; nothing in Claude is touched.
@@ -588,6 +623,16 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     }
     const cutoff = this.now() - withinMs;
     const stops: QuotaStop[] = [];
+    let listing: Promise<string[]> | undefined;
+    const folders = () =>
+      (listing ??= fs
+        .readdir(path.join(this.options.transcriptRoot, "projects"), {
+          withFileTypes: true,
+        })
+        .then((entries) =>
+          entries.filter((entry) => entry.isDirectory()).map((e) => e.name),
+        ));
+    const scanned = new Set<string>();
     for (const name of names) {
       const local = /^(local_[0-9a-f-]{36})\.json$/i.exec(name);
       if (!local) continue;
@@ -621,11 +666,17 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
         continue;
       let transcript;
       try {
-        transcript = await this.transcript(metadata.cliSessionId, metadata.cwd);
+        transcript = await this.scannedTranscript(
+          metadata.cliSessionId,
+          metadata.cwd,
+          folders,
+          scanned,
+        );
       } catch {
         continue;
       }
-      const ended = latestQuotaEndedTurn(transcript.rows);
+      const { last } = transcript.summary;
+      const ended = latestQuotaEndedTurn(last ? [last] : []);
       if (
         !ended ||
         !Number.isFinite(ended.timestamp) ||
@@ -641,10 +692,11 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
         turnId: ended.turnId,
         stoppedAt: ended.timestamp,
         transcriptRelative: transcript.relative,
-        transcriptBytes: transcript.data.length,
-        transcriptSha256: sha(transcript.data),
+        transcriptBytes: transcript.summary.bytes,
+        transcriptSha256: transcript.summary.sha256,
       });
     }
+    this.scanner.retain(scanned);
     return stops.sort((a, b) => b.stoppedAt - a.stoppedAt);
   }
   /**
