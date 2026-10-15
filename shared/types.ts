@@ -251,6 +251,8 @@ export interface RelaySettings {
   autoSwitchAccounts: string[];
   /** 2: registries before "all" existed were migrated from the old default. */
   historyPolicyVersion?: 2;
+  /** Animate the menu bar panda; missing means on. */
+  menuBarAnimation?: boolean;
 }
 export interface PlanningHours {
   enabled: boolean;

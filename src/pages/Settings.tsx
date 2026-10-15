@@ -1,6 +1,7 @@
 import { PageFrame } from "@/app/PageFrame";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Note,
@@ -59,6 +60,24 @@ export function Settings() {
                 {t("Koyu", "Dark")}
               </ToggleGroupItem>
             </ToggleGroup>
+          </SettingRow>
+          <SettingRow
+            label={
+              <span id="menu-bar-animation-label">
+                {t("Menü çubuğu animasyonu", "Menu bar animation")}
+              </span>
+            }
+            description={t(
+              "Kapalıyken panda yalnızca duruş değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
+              "When off, the panda only changes pose. With Reduce motion on in macOS it never animates.",
+            )}
+          >
+            <Switch
+              aria-labelledby="menu-bar-animation-label"
+              checked={settings.menuBarAnimation !== false}
+              disabled={disabled}
+              onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
+            />
           </SettingRow>
         </Card>
         <Card className={cardClass}>

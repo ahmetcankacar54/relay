@@ -120,3 +120,12 @@ test("a registry from before shared-by-default moves from the old group default 
     }
   }
 });
+
+test("the menu bar animation setting is optional and never defaulted", () => {
+  const stored = settingsSchema.parse({ ...DEFAULT_SETTINGS });
+  assert.equal("menuBarAnimation" in stored, false);
+  assert.equal(settingsSchema.parse({ ...DEFAULT_SETTINGS, menuBarAnimation: false }).menuBarAnimation, false);
+  assert.deepEqual(settingsPatchSchema.parse({ menuBarAnimation: false }), { menuBarAnimation: false });
+  assert.equal("menuBarAnimation" in settingsPatchSchema.parse({ appearance: "dark" }), false);
+  assert.throws(() => settingsPatchSchema.parse({ menuBarAnimation: "yes" }));
+});

@@ -36,3 +36,22 @@ test("Settings shows appearance, language, refresh interval and technical detail
   ])
     assert.match(html, re);
 });
+
+test("Settings offers the menu bar animation switch, on unless turned off", () => {
+  const render = (menuBarAnimation?: boolean) => {
+    const relay = relayFor();
+    const value = { ...settings, ...(menuBarAnimation === undefined ? {} : { menuBarAnimation }) };
+    return renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        createElement(RelayContext.Provider, { value: { ...relay, settings: value } as Relay }, createElement(Settings)),
+      ),
+    );
+  };
+  const on = render();
+  assert.match(on, /Menü çubuğu animasyonu/);
+  assert.match(on, /Kapalıyken panda yalnızca duruş değiştirir/);
+  assert.match(on, /role="switch"[^>]*aria-checked="true"/);
+  assert.match(render(false), /role="switch"[^>]*aria-checked="false"/);
+});
