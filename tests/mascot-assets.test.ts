@@ -11,8 +11,12 @@ import { MASCOT_FRAMES } from "../shared/mascot-frames";
 const root = path.resolve(import.meta.dirname, "..");
 const svg = (attrs = "") =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20" ${attrs}><rect x="2" y="2" width="20" height="16"/></svg>`;
-const png = (width: number, height: number) =>
-  sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 1 } } }).png().toBuffer();
+/** A black silhouette with a transparent border, like a valid template frame. */
+const png = (width: number, height: number, fill = { r: 0, g: 0, b: 0, alpha: 1 }) =>
+  sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([{ input: { create: { width: width - 4, height: height - 4, channels: 4, background: fill } }, left: 2, top: 2 }])
+    .png()
+    .toBuffer();
 
 async function trayDir() {
   const dir = await mkdtemp(path.join(os.tmpdir(), "relay-mascot-"));
@@ -133,6 +137,56 @@ test("an SVG that cannot be rendered is reported by name instead of failing at r
     assert.equal(problems.length, 2, problems.join("\n"));
     assert.match(problems.find((p) => p.startsWith("tray/idle.svg"))!, /^tray\/idle\.svg: cannot be rendered \(.+\)$/);
     assert.match(problems.find((p) => p.startsWith("tray/blink-0.svg"))!, /^tray\/blink-0\.svg: cannot be rendered \(.+\)$/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("frames are checked the way macOS draws template images, from alpha only", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  const root = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20">';
+  try {
+    for (const frame of MASCOT_FRAMES.slice(5)) await writeFile(path.join(tray, `${frame}.svg`), svg());
+    // A design-tool export with a white background behind the panda.
+    await writeFile(path.join(tray, "idle.svg"), `${root}<rect width="24" height="20" fill="#fff"/><rect x="2" y="2" width="20" height="16"/></svg>`);
+    // White eyes painted on a black body instead of cut out.
+    await writeFile(path.join(tray, "blink-0.svg"), `${root}<rect x="2" y="2" width="20" height="16"/><circle cx="16" cy="8" r="2" fill="white"/></svg>`);
+    // An RGB export without an alpha channel.
+    await writeFile(
+      path.join(tray, "blink-1.png"),
+      await sharp({ create: { width: 72, height: 60, channels: 3, background: { r: 0, g: 0, b: 0 } } }).png().toBuffer(),
+    );
+    // An opaque PNG with an alpha channel, and one with a light fill.
+    await writeFile(
+      path.join(tray, "ear-0.png"),
+      await sharp({ create: { width: 72, height: 60, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 1 } } }).png().toBuffer(),
+    );
+    await writeFile(path.join(tray, "ear-1.png"), await png(72, 60, { r: 200, g: 120, b: 60, alpha: 1 }));
+    assert.deepEqual((await checkTraySources(tray)).sort(), [
+      "tray/blink-0.svg: opaque light pixels; cut holes instead of light fills",
+      "tray/blink-1.png: needs an alpha channel",
+      "tray/ear-0.png: no transparent pixels; the background must be transparent",
+      "tray/ear-1.png: opaque light pixels; cut holes instead of light fills",
+      "tray/idle.svg: no transparent pixels; the background must be transparent",
+      "tray/idle.svg: opaque light pixels; cut holes instead of light fills",
+    ].sort());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("dark anti-aliased edges and faint light pixels are not light fills", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  const root = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20">';
+  try {
+    for (const frame of MASCOT_FRAMES.slice(1)) await writeFile(path.join(tray, `${frame}.svg`), svg());
+    await writeFile(
+      path.join(tray, "idle.svg"),
+      `${root}<circle cx="12" cy="10" r="7.3" fill="#222"/><rect x="1" y="1" width="3" height="3" fill="#fff" opacity="0.1"/></svg>`,
+    );
+    assert.deepEqual(await checkTraySources(tray), []);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

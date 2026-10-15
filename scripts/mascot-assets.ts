@@ -64,6 +64,36 @@ function rasterize(svg: string, scale: number) {
     .toBuffer();
 }
 
+/** Above this alpha a pixel shows in the menu bar. */
+const VISIBLE_ALPHA = 32;
+/** A visible pixel with any channel above this is a light fill, not black. */
+const DARK_CHANNEL = 64;
+
+/**
+ * macOS draws a template image from its alpha only, so a light fill becomes part
+ * of the silhouette and an opaque background a solid block. `file` names the
+ * frame in each problem.
+ */
+async function templateProblems(image: ReturnType<typeof sharp>, file: string): Promise<string[]> {
+  // PNG pixels come out straight (not premultiplied), so colours need no correction.
+  const { data, info } = await image
+    .toColourspace("srgb")
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let light = false;
+  let transparent = false;
+  for (let i = 0; i < data.length; i += info.channels) {
+    const alpha = data[i + info.channels - 1];
+    if (alpha === 0) transparent = true;
+    else if (alpha > VISIBLE_ALPHA && Math.max(data[i], data[i + 1], data[i + 2]) > DARK_CHANNEL) light = true;
+  }
+  return [
+    ...(light ? [`tray/${file}: opaque light pixels; cut holes instead of light fills`] : []),
+    ...(transparent ? [] : [`tray/${file}: no transparent pixels; the background must be transparent`]),
+  ];
+}
+
 /** Every problem with the delivered menu bar frames; empty when they can be rendered. */
 export async function checkTraySources(trayDir: string): Promise<string[]> {
   const problems: string[] = [];
@@ -85,15 +115,23 @@ export async function checkTraySources(trayDir: string): Promise<string[]> {
       if (!prepared) problems.push(`tray/${frame}.svg: cannot be rendered (${NO_ROOT})`);
       else {
         if (!prepared.viewBoxOk) problems.push(`tray/${frame}.svg: viewBox must be "0 0 24 20"`);
-        await rasterize(prepared.svg, 1).catch((error) =>
-          problems.push(`tray/${frame}.svg: cannot be rendered (${reason(error)})`),
-        );
+        // At 3x so thin light details such as eyes are not averaged away.
+        const rendered = await rasterize(prepared.svg, 3).catch((error) => {
+          problems.push(`tray/${frame}.svg: cannot be rendered (${reason(error)})`);
+          return undefined;
+        });
+        if (rendered) problems.push(...(await templateProblems(sharp(rendered), `${frame}.svg`)));
       }
     } else if (png) {
-      const meta = await sharp(path.join(trayDir, `${frame}.png`)).metadata().catch(() => undefined);
+      const file = path.join(trayDir, `${frame}.png`);
+      const meta = await sharp(file).metadata().catch(() => undefined);
       if (!meta) problems.push(`tray/${frame}.png: not a readable PNG`);
-      else if (meta.width !== width * 3 || meta.height !== height * 3)
-        problems.push(`tray/${frame}.png: must be ${width * 3}×${height * 3}, is ${meta.width}×${meta.height}`);
+      else {
+        if (meta.width !== width * 3 || meta.height !== height * 3)
+          problems.push(`tray/${frame}.png: must be ${width * 3}×${height * 3}, is ${meta.width}×${meta.height}`);
+        if (!meta.hasAlpha) problems.push(`tray/${frame}.png: needs an alpha channel`);
+        else problems.push(...(await templateProblems(sharp(file), `${frame}.png`)));
+      }
     } else problems.push(`tray/${frame}: missing (.svg or .png)`);
   }
   return problems;

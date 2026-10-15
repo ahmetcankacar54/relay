@@ -15,7 +15,11 @@ const PAUSE = 6;
 const src = (frames: Frames, frame: MascotFrame, scale: number) =>
   `data:image/png;base64,${frames[frame].find((r) => r.scaleFactor === scale)?.png ?? ""}`;
 
-/** One sequence, repeated with a short pause, on a light and a dark menu bar. */
+/**
+ * One sequence, repeated with a short pause, on a light and a dark menu bar.
+ * Frames are drawn from their alpha only, as macOS draws template images:
+ * light fills disappear into the silhouette here just as in the menu bar.
+ */
 function Strip({ label, sequence, frames }: { label: string; sequence: MascotSequence; frames: Frames }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -46,7 +50,7 @@ function Strip({ label, sequence, frames }: { label: string; sequence: MascotSeq
             alt=""
             width={24}
             height={20}
-            className={bar === "dark" ? "invert" : undefined}
+            className={bar === "dark" ? "brightness-0 invert" : "brightness-0"}
           />
           <span className="text-[13px]">38%</span>
         </div>
@@ -57,7 +61,7 @@ function Strip({ label, sequence, frames }: { label: string; sequence: MascotSeq
         width={96}
         height={80}
         style={{ imageRendering: "pixelated" }}
-        className="rounded border dark:invert"
+        className="rounded border brightness-0 dark:invert"
       />
     </div>
   );
@@ -82,6 +86,7 @@ export function MascotGallery({ frames }: { frames: Frames }) {
       <h1 className="font-display text-xl font-bold">Relay maskot galerisi</h1>
       <p className="mb-4 text-sm text-muted-foreground">
         Menü çubuğu kareleri gerçek boyutta (açık ve koyu) ve 1x pikselleri 4 kat büyütülmüş.
+        macOS gibi yalnızca saydamlık çizilir; renkli ya da beyaz dolgular siluetin içinde kaybolur.
       </p>
       <section className="divide-y">
         {strips.map((s) => (
