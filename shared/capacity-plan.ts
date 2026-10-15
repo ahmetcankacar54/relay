@@ -33,7 +33,10 @@ export interface SimInput {
   /** Demand in Pro units per hour at `time`. */
   rate: (time: number) => number;
   accounts: SimAccount[];
-  /** The account in use at `from`, kept first while it has quota. */
+  /**
+   * The account in use at `from`, kept first while it has quota. Without one
+   * the first account is chosen when demand first arises.
+   */
   active?: string;
   /**
    * Stops once this holds for the unmet demand and switches so far (both only
@@ -164,11 +167,10 @@ export function simulateDay(input: SimInput): Forecast {
   };
 
   advance(input.from);
-  let active =
-    states.find(
-      (s) => s.id === input.active && !s.blocked && s.left > EPSILON,
-    ) ?? choose();
-  mark(active?.id, input.from);
+  let active = states.find(
+    (s) => s.id === input.active && !s.blocked && s.left > EPSILON,
+  );
+  if (active) mark(active.id, input.from);
   let t = input.from;
   while (t < input.to && !stopped) {
     const end = Math.min(input.to, t + SIM_STEP_MS);
@@ -200,14 +202,19 @@ export function simulateDay(input: SimInput): Forecast {
         active.reset = cursor + WINDOW_MS;
         active.warmUp = undefined;
       }
+      // Its own window refreshes within this step: serve until then and go
+      // on with it, the way a refresh at a step boundary does.
+      const until =
+        active.reset > cursor && active.reset < end ? active.reset : end;
       const runOut = cursor + active.left / perMs;
-      if (runOut >= end - RUN_OUT_SLACK_MS) {
-        active.left -= perMs * (end - cursor);
-        cursor = end;
+      if (runOut >= until - RUN_OUT_SLACK_MS) {
+        active.left -= perMs * (until - cursor);
+        cursor = until;
         if (active.left <= EPSILON) {
           active.left = 0;
-          (exhaustedAt[active.id] ??= []).push(minute(end));
+          (exhaustedAt[active.id] ??= []).push(minute(until));
         }
+        if (until < end) advance(until);
       } else {
         active.left = 0;
         (exhaustedAt[active.id] ??= []).push(minute(runOut));

@@ -281,6 +281,69 @@ test("running out exactly at its own reset keeps the account, at any time scale"
   );
 });
 
+test("running out exactly at its own reset inside a step keeps the account too", () => {
+  // From 09:01 the five-minute steps miss the hours: a lasts exactly until its
+  // reset at 12:00, inside the step from 11:56, and goes on with its refill
+  // rather than handing over to b, whose refilled window resets sooner (15:00
+  // against 17:00).
+  const run = (from: number, left: number) =>
+    simulateDay({
+      from,
+      to: E,
+      rate: () => 60,
+      accounts: [
+        {
+          id: "a",
+          capacity: 3,
+          firstReset: base + 12 * H,
+          keepAlive: true,
+          remaining: left,
+        },
+        {
+          id: "b",
+          capacity: 1,
+          firstReset: base + 10 * H,
+          keepAlive: true,
+          remaining: 100,
+        },
+      ],
+      active: "a",
+    });
+  const offGrid = run(S + MIN, 179);
+  assert.deepEqual(view(offGrid), ["a 09:01-18:00"]);
+  assert.equal(offGrid.switches, 0);
+  assert.deepEqual(view(run(S, 180)), ["a 09:00-18:00"]);
+  // It runs dry exactly at each reset and goes on with the refill.
+  assert.deepEqual(offGrid.exhaustedAt.a.map(hhmm), ["12:00", "17:00"]);
+});
+
+test("without an account in use the first is chosen when demand first arises", () => {
+  // Quiet until 09:00: q's window warms up at 06:30 and resets at 11:30,
+  // before p's at 12:00, so q goes first although only p was open at 06:00.
+  const forecast = simulateDay({
+    from: base + 6 * H,
+    to: E,
+    rate: flat(100),
+    accounts: [
+      {
+        id: "p",
+        capacity: 1,
+        firstReset: base + 12 * H,
+        keepAlive: true,
+        remaining: 100,
+      },
+      {
+        id: "q",
+        capacity: 1,
+        warmUp: base + 6.5 * H,
+        keepAlive: true,
+        remaining: 100,
+      },
+    ],
+  });
+  assert.equal(view(forecast)[0], "q 09:00-10:00");
+});
+
 test("a window that reset during the step is available when the active one runs dry", () => {
   // a runs out at 09:02:30; b's window reset at 09:02, mid-step.
   const forecast = sim(
@@ -314,9 +377,10 @@ test("a closed window starts on first use and refills five hours later", () => {
     [{ id: "c", capacity: 1, keepAlive: false, remaining: 100 }],
     (time) => (time >= base + 10 * H && time < base + 16 * H ? 100 : 0),
   );
-  // Used from 10:00, so the window ends 15:00 (not 14:00, five hours after 09:00).
+  // Used from 10:00, so the window ends 15:00 (not 14:00, five hours after
+  // 09:00); the account is chosen only when the demand starts.
   assert.deepEqual(view(forecast), [
-    "c 09:00-11:00",
+    "c 10:00-11:00",
     "outage 11:00-15:00",
     "c 15:00-18:00",
   ]);
