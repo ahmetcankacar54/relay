@@ -153,9 +153,10 @@ function missedWarmUp(plan: DayPlan, { usage, blocked, now }: AdaptiveInput) {
  * force (from its first warm-up to the end of work), re-chosen only when the
  * live forecast falls behind the plan's own. A search result is adopted only
  * when strictly better than the schedule held, and than the default with live
- * times exactly as read; the schedule is dropped
- * once the default does as well at two reviews in a row; reviews come at
- * most every 15 minutes.
+ * times exactly as read; the schedule is dropped once the default does as
+ * well at two reviews in a row, unless every start left comes before the next
+ * review; reviews come at most every 15 minutes. Turning adaptation or auto
+ * start off, and a planning edit (`reset`), drop it without a notice.
  * Kept in memory; the keeper updates it before its decisions.
  */
 export class AdaptiveSchedule {
@@ -170,6 +171,12 @@ export class AdaptiveSchedule {
   /** The default did as well as the schedule held at the last review. */
   private defaultNoWorse = false;
   private lastNotice?: number;
+  /**
+   * The user turned adaptation off or edited the plan: what they last heard
+   * may go without a notice. At the next update with adaptation on it stands
+   * only where the schedule still holds it.
+   */
+  private quiet = false;
   private last: AdaptiveResult = { schedule: {}, factor: 1 };
   private readonly now: () => number;
   private readonly search: typeof replanStarts;
@@ -191,6 +198,7 @@ export class AdaptiveSchedule {
     }
     this.lastUpdate = now;
     const on = settings.adaptive !== false && settings.autoStart;
+    if (!on) this.quiet = true;
     const context = planContext(input.accounts, input.tempo);
     const plan = on ? planAt(input, context) : undefined;
     if (plan && plan.date !== this.date) {
@@ -218,7 +226,7 @@ export class AdaptiveSchedule {
       if (time <= now || !planned.has(id)) delete this.announced[id];
     let factor = 1;
     let observed: number | undefined;
-    // Turned off: dropped, and the user hears the plan is normal again.
+    // Turned off (or outside the plan): dropped.
     if (!plan) this.clear();
     else {
       const pace = todaysPace({
@@ -268,15 +276,41 @@ export class AdaptiveSchedule {
         }
         // The pace dropped, or the day turned out fine: the default does as
         // well. Only two reviews in a row clear the schedule, so a single
-        // read on the wrong side of a reset cannot flap it.
+        // read on the wrong side of a reset cannot flap it. When every start
+        // left comes before the next review, it goes then, quietly, rather
+        // than with "back to normal" now.
         if (!empty(this.schedule)) {
           if (beats(current, liveForecast(live)!)) this.defaultNoWorse = false;
-          else if (this.defaultNoWorse) this.clear();
-          else this.defaultNoWorse = true;
+          else if (!this.defaultNoWorse) this.defaultNoWorse = true;
+          else if (
+            Object.values(this.schedule).some(
+              (time) => time - now > SEARCH_EVERY_MS,
+            )
+          )
+            this.clear();
         }
       }
     }
-    return this.finish(now, factor, observed);
+    if (on && this.quiet) {
+      this.announced = Object.fromEntries(
+        Object.entries(this.announced).filter(
+          ([id, time]) => this.schedule[id] === time,
+        ),
+      );
+      this.quiet = false;
+    }
+    return this.finish(now, factor, observed, on);
+  }
+
+  /**
+   * The plan was edited: nothing adopted still applies. It goes without a
+   * notice, and the next update reviews the day at once.
+   */
+  reset() {
+    this.restart();
+    this.quiet = true;
+    this.last = { ...this.last, schedule: {} };
+    delete this.last.since;
   }
 
   /** The last result without its notice, less any start whose time has come. */
@@ -293,11 +327,15 @@ export class AdaptiveSchedule {
     };
   }
 
-  /** The result; a notice when the schedule differs from what the user last heard. */
+  /**
+   * The result; a notice when the schedule differs from what the user last
+   * heard, never while adaptation is off.
+   */
   private finish(
     now: number,
     factor: number,
     observed: number | undefined,
+    on: boolean,
   ): AdaptiveResult {
     this.last = {
       schedule: { ...this.schedule },
@@ -306,6 +344,7 @@ export class AdaptiveSchedule {
       ...(this.since === undefined ? {} : { since: this.since }),
     };
     if (
+      !on ||
       key(this.schedule) === key(this.announced) ||
       (this.lastNotice !== undefined && now - this.lastNotice < NOTIFY_EVERY_MS)
     )

@@ -631,7 +631,7 @@ function holding() {
   return { ...f, keeper: new WindowKeeper(f.deps) };
 }
 
-test("a held restart is the next start; adaptation turned off says the plan is normal again", async () => {
+test("a held restart is the next start; adaptation turned off drops it quietly", async () => {
   const f = holding();
   await f.keeper.tick();
   const eleven = iso(at("11:00", WEDNESDAY));
@@ -648,20 +648,52 @@ test("a held restart is the next start; adaptation turned off says the plan is n
     ],
   );
   assert.deepEqual(snapshot.next, { accountId: "b", at: eleven });
-  // Turned off half an hour later, while Relay is busy: dropped at once, and
-  // the user hears the plan is back to normal.
-  f.clock.now = at("10:00", WEDNESDAY);
+  // Turned off at 10:05, while Relay is busy: dropped at once, and quietly
+  // (the user turned it off), though the last notice was 35 minutes ago.
+  f.clock.now = at("10:05", WEDNESDAY);
   f.settings.adaptive = false;
   f.calls.blocked = true;
   await f.keeper.tick();
-  assert.deepEqual(f.calls.adapted[1], { kind: "normal", schedule: [] });
-  assert.equal(f.calls.adapted.length, 2);
+  assert.equal(f.calls.adapted.length, 1);
   assert.equal("adaptation" in f.keeper.snapshot(), false);
   assert.deepEqual(f.calls.starts, []);
   // Free again: b's window, closed since 10:00, starts at once.
   f.calls.blocked = false;
   await f.keeper.tick();
   assert.deepEqual(f.calls.starts, ["b"]);
+  assert.equal(f.calls.adapted.length, 1);
+});
+
+test("a planning edit re-plans today at once and quietly", async () => {
+  const f = holding();
+  await f.keeper.tick();
+  assert.equal(f.calls.adapted.length, 1);
+  // The edit drops the held restart at once: b's next start is its reset.
+  f.keeper.resume();
+  assert.equal("adaptation" in f.keeper.snapshot(), false);
+  assert.deepEqual(f.keeper.snapshot().next, {
+    accountId: "b",
+    at: iso(at("10:00", WEDNESDAY)),
+  });
+  // The next tick searches at once and holds it again; the user heard of
+  // that hold at 09:30.
+  f.clock.now = at("09:31", WEDNESDAY);
+  await f.keeper.tick();
+  assert.deepEqual(f.keeper.snapshot().adaptation, {
+    factor: 1,
+    schedule: [{ accountId: "b", startAt: iso(at("11:00", WEDNESDAY)) }],
+    since: iso(at("09:31", WEDNESDAY)),
+  });
+  assert.equal(f.calls.adapted.length, 1);
+  // Work cut short to 15:00 needs no hold: dropped quietly, and b, closed
+  // since 10:00, starts at once.
+  f.settings.weekday = { enabled: true, start: "09:00", end: "15:00" };
+  f.keeper.resume();
+  f.clock.now = at("10:05", WEDNESDAY);
+  await f.keeper.tick();
+  assert.equal("adaptation" in f.keeper.snapshot(), false);
+  assert.deepEqual(f.calls.starts, ["b"]);
+  assert.equal(f.calls.adapted.length, 1);
 });
 
 test("a failing re-plan or notification never stops the keep-alive", async () => {

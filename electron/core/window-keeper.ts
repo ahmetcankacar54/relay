@@ -237,9 +237,10 @@ export class WindowKeeper {
     this.timer.unref();
     void this.tick();
   }
-  /** The plan changed: try stopped accounts again. */
+  /** The plan changed: try stopped accounts again and re-plan today, quietly. */
   resume() {
     this.stopped.clear();
+    this.adaptive.reset();
   }
   stop() {
     if (this.timer) clearInterval(this.timer);
