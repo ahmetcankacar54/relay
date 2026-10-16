@@ -1,0 +1,982 @@
+import test, { mock } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { StrictMode, act, createElement, type ReactElement } from "react";
+import type { Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import {
+  NibbleCursorLayer,
+  NibbleCursorView,
+  nibbleController,
+} from "../src/pranks/NibbleCursor";
+import {
+  PrankStage,
+  usePrank,
+  type PrankApi,
+  type PrankPlay,
+} from "../src/pranks/PrankStage";
+import { PRANK_LAYERS } from "../src/pranks/registry";
+import {
+  NIBBLE_ABORT_PX,
+  NIBBLE_MAX_MS,
+  NIBBLE_MS,
+  NIBBLE_SIZE,
+  nibbleFrame,
+  nibbleLayout,
+  type NibblePhase,
+} from "../src/pranks/timing";
+import { mediaBlock } from "./css";
+import { fakeDom } from "./fake-dom";
+
+const CLASS = "prank-cursor-hidden";
+const VIEWPORT = { width: 1_000, height: 800 };
+
+// --- the view, phase by phase -----------------------------------------------
+
+/** A click near the bottom edge (the panda stays upright), and one near the left edge (it turns 90 degrees). */
+const START = { x: 500, y: 700 };
+const BOTTOM = nibbleLayout(START, VIEWPORT);
+const LEFT_START = { x: 30, y: 400 };
+const LEFT = nibbleLayout(LEFT_START, VIEWPORT);
+const POINTER = { x: 520, y: 690 };
+
+const view = (
+  phase: NibblePhase,
+  bitten = false,
+  extra: Partial<Parameters<typeof NibbleCursorView>[0]> = {},
+) =>
+  renderToStaticMarkup(
+    createElement(NibbleCursorView, {
+      frame: { phase, bitten },
+      layout: BOTTOM,
+      start: START,
+      pointer: POINTER,
+      ...extra,
+    }),
+  );
+
+/** The opening <svg> tag of the rig, and of the drawn cursor, in some markup. */
+const rigTag = (html: string) =>
+  html.match(/<svg [^>]*data-pose="[^"]*"[^>]*>/)?.[0];
+const cursorTag = (html: string) =>
+  html.match(/<svg [^>]*data-prank-cursor="[^"]*"[^>]*>/)?.[0];
+const attr = (tag: string | undefined, name: string) =>
+  tag?.match(new RegExp(`${name}="([^"]*)"`))?.[1];
+/** Where the drawn cursor's tip is: the translate() of its style. */
+const cursorAt = (html: string) => {
+  const m = cursorTag(html)?.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/);
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : undefined;
+};
+
+test("peek: a peek rig at the layout's left and top, turned by the layout's rotation, and the cursor where the click was", () => {
+  const html = view("peek");
+  const rig = rigTag(html);
+  assert.equal(attr(rig, "data-pose"), "peek");
+  assert.equal(attr(rig, "data-props"), "");
+  assert.equal(attr(rig, "width"), String(NIBBLE_SIZE));
+  assert.match(
+    html,
+    new RegExp(
+      `^<div class="absolute" style="left:${BOTTOM.left}px;top:${BOTTOM.top}px;[^"]*transform:rotate\\(${BOTTOM.rotate}deg\\)"`,
+    ),
+  );
+  assert.equal(attr(cursorTag(html), "data-prank-cursor"), "whole");
+  assert.deepEqual(cursorAt(html), START);
+  assert.equal(html.match(/data-pose=/g)?.length, 1);
+});
+
+test("the panda turns with the nearest edge: bottom 0, left 90, top 180, right -90", () => {
+  const edges = [
+    [{ x: 500, y: 790 }, 0],
+    [{ x: 10, y: 400 }, 90],
+    [{ x: 500, y: 10 }, 180],
+    [{ x: 990, y: 400 }, -90],
+  ] as const;
+  for (const [point, rotate] of edges) {
+    const layout = nibbleLayout(point, VIEWPORT);
+    const html = view("peek", false, { layout, start: point });
+    assert.equal(layout.rotate, rotate);
+    assert.ok(
+      html.includes(`left:${layout.left}px;top:${layout.top}px`),
+      `${rotate} left/top`,
+    );
+    assert.ok(
+      html.includes(`transform:rotate(${rotate}deg)`),
+      `${rotate} turn`,
+    );
+  }
+  assert.ok(
+    view("peek", false, { layout: LEFT, start: LEFT_START }).includes(
+      "rotate(90deg)",
+    ),
+  );
+});
+
+test("fly-in: the chewing panda holds nothing yet and the whole cursor sets off for the held point", () => {
+  const html = view("fly-in");
+  const rig = rigTag(html);
+  assert.equal(attr(rig, "data-pose"), "chew");
+  assert.equal(attr(rig, "data-props"), "");
+  assert.equal(attr(cursorTag(html), "data-prank-cursor"), "whole");
+  assert.equal(attr(cursorTag(html), "data-flight"), "in");
+  assert.deepEqual(cursorAt(html), BOTTOM.held);
+});
+
+test("chew: the panda holds the whole cursor, then the bitten one from the third nibble, and no drawn cursor is left", () => {
+  const whole = view("chew", false);
+  assert.equal(attr(rigTag(whole), "data-pose"), "chew");
+  assert.equal(attr(rigTag(whole), "data-props"), "cursor");
+  assert.equal(cursorTag(whole), undefined);
+  const bitten = view("chew", true);
+  assert.equal(attr(rigTag(bitten), "data-pose"), "chew");
+  assert.equal(attr(rigTag(bitten), "data-props"), "cursor-bitten");
+  assert.equal(cursorTag(bitten), undefined);
+  // The panda chews while it holds the cursor.
+  assert.equal(attr(rigTag(whole), "data-motion"), "chew");
+});
+
+test("fly-out and withdraw: the panda holds nothing and the bitten cursor is at the pointer", () => {
+  for (const phase of ["fly-out", "withdraw"] as const) {
+    const html = view(phase, true);
+    assert.equal(attr(rigTag(html), "data-pose"), "chew", phase);
+    assert.equal(attr(rigTag(html), "data-props"), "", phase);
+    assert.equal(attr(cursorTag(html), "data-prank-cursor"), "bitten", phase);
+    assert.equal(attr(cursorTag(html), "data-flight"), "out", phase);
+    assert.deepEqual(cursorAt(html), POINTER, phase);
+    // It sets off from where the panda held it.
+    assert.ok(html.includes(`--prank-from-x:${BOTTOM.held.x}px`), phase);
+    assert.ok(html.includes(`--prank-from-y:${BOTTOM.held.y}px`), phase);
+  }
+});
+
+test("the cursor follows the pointer it is given", () => {
+  assert.deepEqual(
+    cursorAt(view("withdraw", true, { pointer: { x: 111, y: 222 } })),
+    { x: 111, y: 222 },
+  );
+  assert.deepEqual(cursorAt(view("peek", false, { start: { x: 5, y: 6 } })), {
+    x: 5,
+    y: 6,
+  });
+});
+
+test("done draws nothing", () => {
+  assert.equal(view("done"), "");
+  assert.equal(view("done", true), "");
+});
+
+test("the panda slides in on its peek and out on its withdraw, and stays put in between", () => {
+  const phases = ["peek", "fly-in", "chew", "fly-out", "withdraw"] as const;
+  for (const phase of phases)
+    assert.ok(view(phase).includes(`data-phase="${phase}"`), phase);
+});
+
+test("the drawn cursor is a decorative arrow in theme classes; nothing takes a click or uses a hex colour", () => {
+  for (const phase of ["peek", "fly-in", "fly-out", "withdraw"] as const) {
+    const html = view(phase, phase === "fly-out" || phase === "withdraw");
+    const tag = cursorTag(html);
+    assert.ok(tag, phase);
+    assert.equal(attr(tag, "aria-hidden"), "true");
+    assert.equal(attr(tag, "focusable"), "false");
+    assert.equal(attr(tag, "width"), "16");
+    assert.equal(attr(tag, "height"), "22");
+    assert.match(attr(tag, "class") ?? "", /\bfill-neutral-950\b/);
+    assert.match(attr(tag, "class") ?? "", /\bstroke-neutral-50\b/);
+    assert.ok(!html.includes("pointer-events-auto"), phase);
+  }
+  const whole = view("peek").match(/<path d="([^"]*)"/)?.[1];
+  const bitten = view("withdraw", true).match(/<path d="([^"]*)"/)?.[1];
+  assert.ok(
+    whole && bitten && whole !== bitten,
+    "the bitten cursor is another path",
+  );
+  const source = readFileSync("src/pranks/NibbleCursor.tsx", "utf8");
+  assert.doesNotMatch(source, /#[0-9a-fA-F]{3,8}\b|pointer-events-auto/);
+});
+
+// --- the controller: the real cursor always comes back ----------------------
+
+/** A fake classList, a fake clock and a fake scheduler, so no test waits for real time. */
+function harness() {
+  const classes = new Set<string>();
+  const calls = { add: 0, remove: 0, done: 0 };
+  const timers: { fn: () => void; ms: number; cleared: boolean }[] = [];
+  let clock = 1_000;
+  const controller = nibbleController({
+    now: () => clock,
+    classList: {
+      add: (name) => {
+        calls.add++;
+        classes.add(name);
+      },
+      remove: (name) => {
+        calls.remove++;
+        classes.delete(name);
+      },
+    },
+    onDone: () => void calls.done++,
+    setTimeout: (fn, ms) => timers.push({ fn, ms, cleared: false }) - 1,
+    clearTimeout: (handle) => {
+      timers[handle as number].cleared = true;
+    },
+  });
+  return {
+    controller,
+    classes,
+    calls,
+    timers,
+    hidden: () => classes.has(CLASS),
+    at: (ms: number) => void (clock = 1_000 + ms),
+  };
+}
+
+test("the controller hides the cursor on start, and starts a 3 s cap", () => {
+  const h = harness();
+  assert.equal(h.controller.cursorHidden, false);
+  assert.equal(h.hidden(), false);
+  h.controller.start({ x: 10, y: 20 });
+  assert.equal(h.hidden(), true);
+  assert.equal(h.controller.cursorHidden, true);
+  assert.equal(h.timers.length, 1);
+  assert.equal(h.timers[0].ms, NIBBLE_MAX_MS);
+  assert.equal(NIBBLE_MAX_MS, 3_000);
+  assert.deepEqual(h.controller.pointer, { x: 10, y: 20 });
+});
+
+test("(a) the normal timeline: the frames follow the phases and the cursor is back at 1 500 ms", () => {
+  const h = harness();
+  h.controller.start({ x: 10, y: 20 });
+  const expected: [number, string, boolean][] = [
+    [0, "peek", false],
+    [249, "peek", false],
+    [250, "fly-in", false],
+    [450, "chew", false],
+    [749, "chew", false],
+    [750, "chew", true],
+    [1_050, "fly-out", true],
+    [1_300, "withdraw", true],
+    [NIBBLE_MS - 1, "withdraw", true],
+  ];
+  for (const [ms, phase, bitten] of expected) {
+    h.at(ms);
+    assert.deepEqual(h.controller.tick(), { phase, bitten }, `${ms} ms`);
+    assert.equal(h.hidden(), true, `${ms} ms: still hidden`);
+    assert.equal(h.calls.done, 0, `${ms} ms: not done`);
+  }
+  h.at(NIBBLE_MS);
+  assert.equal(h.controller.tick().phase, "done");
+  assert.equal(h.controller.cursorHidden, false);
+  assert.equal(h.hidden(), false);
+  assert.equal(h.calls.done, 1);
+  assert.equal(h.timers[0].cleared, true, "the cap is cleared");
+  // Later ticks change nothing.
+  h.at(NIBBLE_MS + 500);
+  assert.equal(h.controller.tick().phase, "done");
+  assert.equal(h.calls.done, 1);
+  assert.equal(h.calls.remove, 1);
+});
+
+test("(a) a late frame still ends the nibble: ticks that arrive after 1 500 ms finish it", () => {
+  const h = harness();
+  h.controller.start({ x: 0, y: 0 });
+  h.at(2_900);
+  assert.equal(h.controller.tick().phase, "done");
+  assert.equal(h.hidden(), false);
+  assert.equal(h.calls.done, 1);
+});
+
+test("(b) an abort event ends it at once: a press, a key, a blur, a hidden document, a far pointer", () => {
+  const aborts: Record<
+    string,
+    Parameters<ReturnType<typeof harness>["controller"]["event"]>[0]
+  > = {
+    pointerdown: { type: "pointerdown" },
+    keydown: { type: "keydown" },
+    blur: { type: "blur" },
+    "visibilitychange hidden": { type: "visibilitychange", hidden: true },
+    "pointermove 81 px": {
+      type: "pointermove",
+      clientX: 100 + NIBBLE_ABORT_PX + 1,
+      clientY: 100,
+    },
+  };
+  for (const [name, event] of Object.entries(aborts)) {
+    const h = harness();
+    h.controller.start({ x: 100, y: 100 });
+    h.at(400);
+    h.controller.tick();
+    h.controller.event(event);
+    assert.equal(h.hidden(), false, name);
+    assert.equal(h.controller.cursorHidden, false, name);
+    assert.equal(h.calls.done, 1, name);
+    assert.equal(h.timers[0].cleared, true, `${name}: cap cleared`);
+    // A second event, a tick and the cap firing anyway do not call onDone again.
+    h.controller.event({ type: "pointerdown" });
+    h.controller.tick();
+    h.timers[0].fn();
+    assert.equal(h.calls.done, 1, `${name}: once`);
+  }
+});
+
+test("(b) other events do not end it: a pointer within 80 px, a visible document, a release", () => {
+  const h = harness();
+  h.controller.start({ x: 100, y: 100 });
+  h.at(500);
+  for (const event of [
+    { type: "pointermove", clientX: 100 + NIBBLE_ABORT_PX, clientY: 100 },
+    { type: "pointermove", clientX: 60, clientY: 60 },
+    { type: "visibilitychange", hidden: false },
+    { type: "pointerup" },
+    { type: "focus" },
+  ]) {
+    h.controller.event(event);
+    assert.equal(h.hidden(), true, event.type);
+    assert.equal(h.calls.done, 0, event.type);
+  }
+});
+
+test("the controller remembers where the pointer last was, for the bitten cursor to fly to", () => {
+  const h = harness();
+  h.controller.start({ x: 100, y: 100 });
+  assert.deepEqual(h.controller.pointer, { x: 100, y: 100 });
+  h.controller.event({ type: "pointermove", clientX: 130, clientY: 90 });
+  assert.deepEqual(h.controller.pointer, { x: 130, y: 90 });
+  // Events without coordinates leave it alone.
+  h.controller.event({ type: "pointermove" });
+  h.controller.event({ type: "visibilitychange", hidden: false });
+  assert.deepEqual(h.controller.pointer, { x: 130, y: 90 });
+  // The abort rule still measures from where the click was, not from the last position.
+  h.controller.event({
+    type: "pointermove",
+    clientX: 100 + NIBBLE_ABORT_PX,
+    clientY: 100,
+  });
+  assert.equal(h.hidden(), true);
+  h.controller.event({
+    type: "pointermove",
+    clientX: 100,
+    clientY: 100 + NIBBLE_ABORT_PX + 1,
+  });
+  assert.equal(h.hidden(), false);
+});
+
+test("(c) if no frame ever runs, the 3 s cap still brings the cursor back", () => {
+  const h = harness();
+  h.controller.start({ x: 5, y: 5 });
+  assert.equal(h.hidden(), true);
+  // No tick, no event: only the timer.
+  h.timers[0].fn();
+  assert.equal(h.hidden(), false);
+  assert.equal(h.controller.cursorHidden, false);
+  assert.equal(h.calls.done, 1);
+});
+
+test("(d) stop() restores the cursor without waiting, and a second stop does nothing", () => {
+  const h = harness();
+  h.controller.start({ x: 5, y: 5 });
+  h.at(100);
+  h.controller.stop();
+  assert.equal(h.hidden(), false);
+  assert.equal(h.controller.cursorHidden, false);
+  assert.equal(h.calls.done, 1);
+  assert.equal(h.timers[0].cleared, true);
+  h.controller.stop();
+  assert.equal(h.calls.done, 1);
+  assert.equal(h.calls.remove, 1);
+});
+
+test("a finished controller stays finished: it never hides the cursor again", () => {
+  const h = harness();
+  h.controller.start({ x: 5, y: 5 });
+  h.controller.stop();
+  h.controller.start({ x: 9, y: 9 });
+  assert.equal(h.hidden(), false);
+  assert.equal(h.calls.add, 1);
+  assert.equal(h.timers.length, 1);
+});
+
+test("stop() before start() never hides anything and still reports done once", () => {
+  const h = harness();
+  h.controller.stop();
+  assert.equal(h.calls.add, 0);
+  assert.equal(h.hidden(), false);
+  assert.equal(h.calls.done, 1);
+  h.controller.start({ x: 1, y: 1 });
+  assert.equal(h.calls.add, 0);
+});
+
+test("a second start() does not restart the clock or stack a second cap", () => {
+  const h = harness();
+  h.controller.start({ x: 1, y: 1 });
+  h.at(700);
+  h.controller.start({ x: 50, y: 50 });
+  assert.equal(h.timers.length, 1);
+  assert.equal(h.calls.add, 1);
+  assert.deepEqual(h.controller.tick(), nibbleFrame(700));
+});
+
+test("the controller's default timers are the global ones: the cap fires at 3 s", () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const classes = new Set<string>();
+    let done = 0;
+    const controller = nibbleController({
+      now: () => 0,
+      classList: {
+        add: (n) => void classes.add(n),
+        remove: (n) => void classes.delete(n),
+      },
+      onDone: () => void done++,
+    });
+    controller.start({ x: 1, y: 1 });
+    mock.timers.tick(NIBBLE_MAX_MS - 1);
+    assert.equal(classes.has(CLASS), true);
+    mock.timers.tick(1);
+    assert.equal(classes.has(CLASS), false);
+    assert.equal(done, 1);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+// --- the layer, mounted ------------------------------------------------------
+
+/** What the drawn tree says, read from the fake DOM. */
+interface FakeNode {
+  tagName: string;
+  attributes: Map<string, string>;
+  childNodes: FakeNode[];
+  style: Record<string, string>;
+}
+const nodes = (node: FakeNode, found: FakeNode[] = []): FakeNode[] => {
+  found.push(node);
+  for (const child of node.childNodes) nodes(child, found);
+  return found;
+};
+const drawn = (dom: ReturnType<typeof fakeDom>) => {
+  const all = nodes(dom.container as unknown as FakeNode);
+  return {
+    pose: all
+      .find((n) => n.attributes.has("data-pose"))
+      ?.attributes.get("data-pose"),
+    props: all
+      .find((n) => n.attributes.has("data-pose"))
+      ?.attributes.get("data-props"),
+    cursor: all
+      .find((n) => n.attributes.has("data-prank-cursor"))
+      ?.attributes.get("data-prank-cursor"),
+  };
+};
+
+/** requestAnimationFrame on a hand-turned crank, installed on the global like the browser's. */
+function fakeFrames() {
+  let next = 1;
+  const queue = new Map<number, () => void>();
+  Object.assign(globalThis, {
+    requestAnimationFrame: (callback: () => void) => {
+      queue.set(next, callback);
+      return next++;
+    },
+    cancelAnimationFrame: (id: number) => void queue.delete(id),
+  });
+  return {
+    pending: () => queue.size,
+    /** Runs the frames that are waiting now; ones they ask for wait for the next call. */
+    run: () => {
+      const batch = [...queue.values()];
+      queue.clear();
+      for (const callback of batch) callback();
+    },
+    restore: () => {
+      Reflect.deleteProperty(globalThis, "requestAnimationFrame");
+      Reflect.deleteProperty(globalThis, "cancelAnimationFrame");
+    },
+  };
+}
+
+const PLAY: PrankPlay = { id: 1, kind: "nibble-cursor", point: START };
+
+/** Mounts something in a fake browser with a fake frame clock; `run` gets the DOM, the crank, the clock and the root. */
+async function inFakeBrowser(
+  element: ReactElement,
+  run: (env: {
+    dom: ReturnType<typeof fakeDom>;
+    frames: ReturnType<typeof fakeFrames>;
+    root: Root;
+    at: (ms: number) => void;
+  }) => Promise<void>,
+) {
+  const dom = fakeDom();
+  dom.install();
+  const frames = fakeFrames();
+  let clock = 5_000;
+  const now = mock.method(performance, "now", () => clock);
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    // Loaded after the stubs, so react-dom sees a DOM.
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(element));
+    await run({ dom, frames, root, at: (ms) => void (clock = 5_000 + ms) });
+    await act(async () => root.unmount());
+    // However the test went, an unmounted layer leaves the cursor, the listeners and the frames behind it clean.
+    assert.equal(
+      dom.cursorHidden(),
+      false,
+      "the cursor is back after the unmount",
+    );
+    assert.equal(frames.pending(), 0, "no frame is left waiting");
+    for (const type of ["pointermove", "pointerdown", "keydown", "blur"])
+      assert.equal(dom.windowListeners(type), 0, type);
+    assert.equal(dom.documentListeners("visibilitychange"), 0);
+  } finally {
+    mock.timers.reset();
+    now.mock.restore();
+    frames.restore();
+    dom.uninstall();
+  }
+}
+
+const frame = (env: { frames: ReturnType<typeof fakeFrames> }) =>
+  act(async () => env.frames.run());
+
+test("the layer hides the cursor before paint and draws the peeking panda and the cursor at the click", async () => {
+  let done = 0;
+  await inFakeBrowser(
+    createElement(NibbleCursorLayer, { play: PLAY, done: () => done++ }),
+    async ({ dom, frames }) => {
+      // Right after the mount, before any frame: the layout effect has already hidden the cursor.
+      assert.equal(dom.cursorHidden(), true);
+      assert.deepEqual(drawn(dom), {
+        pose: "peek",
+        props: "",
+        cursor: "whole",
+      });
+      assert.equal(frames.pending(), 1);
+      assert.equal(done, 0);
+      for (const type of ["pointermove", "pointerdown", "keydown", "blur"])
+        assert.equal(dom.windowListeners(type), 1, type);
+      assert.equal(dom.documentListeners("visibilitychange"), 1);
+    },
+  );
+});
+
+test("the layer plays the whole sequence from its frames and calls done once, at 1 500 ms, with the cursor back", async () => {
+  let done = 0;
+  await inFakeBrowser(
+    createElement(NibbleCursorLayer, { play: PLAY, done: () => done++ }),
+    async (env) => {
+      const { dom, at } = env;
+      const seen: [number, ReturnType<typeof drawn>][] = [
+        [100, { pose: "peek", props: "", cursor: "whole" }],
+        [300, { pose: "chew", props: "", cursor: "whole" }],
+        [600, { pose: "chew", props: "cursor", cursor: undefined }],
+        [800, { pose: "chew", props: "cursor-bitten", cursor: undefined }],
+        [1_100, { pose: "chew", props: "", cursor: "bitten" }],
+        [1_400, { pose: "chew", props: "", cursor: "bitten" }],
+      ];
+      for (const [ms, expected] of seen) {
+        at(ms);
+        await frame(env);
+        assert.deepEqual(drawn(dom), expected, `${ms} ms`);
+        assert.equal(dom.cursorHidden(), true, `${ms} ms`);
+        assert.equal(done, 0, `${ms} ms`);
+      }
+      at(NIBBLE_MS);
+      await frame(env);
+      assert.equal(done, 1);
+      assert.equal(dom.cursorHidden(), false);
+      // No more frames are asked for once it is over.
+      assert.equal(env.frames.pending(), 0);
+    },
+  );
+  assert.equal(done, 1, "the unmount does not call done again");
+});
+
+test("the layer ends at once on a press, a key, a blur, a hidden window or a far pointer, and not on a near one", async () => {
+  const aborts: [string, (dom: ReturnType<typeof fakeDom>) => void][] = [
+    ["pointerdown", (dom) => dom.emit("pointerdown")],
+    ["keydown", (dom) => dom.emit("keydown")],
+    ["blur", (dom) => dom.emit("blur")],
+    ["hidden", (dom) => dom.setVisibility("hidden")],
+    [
+      "far pointer",
+      () =>
+        void window.dispatchEvent(
+          Object.assign(new Event("pointermove"), {
+            clientX: START.x + 81,
+            clientY: START.y,
+          }),
+        ),
+    ],
+  ];
+  for (const [name, abort] of aborts) {
+    let done = 0;
+    await inFakeBrowser(
+      createElement(NibbleCursorLayer, { play: PLAY, done: () => done++ }),
+      async (env) => {
+        env.at(300);
+        await frame(env);
+        assert.equal(env.dom.cursorHidden(), true, `${name}: playing`);
+        await act(async () => abort(env.dom));
+        assert.equal(env.dom.cursorHidden(), false, name);
+        assert.equal(done, 1, name);
+      },
+    );
+    assert.equal(done, 1, `${name}: once`);
+  }
+  let stayed = 0;
+  await inFakeBrowser(
+    createElement(NibbleCursorLayer, { play: PLAY, done: () => stayed++ }),
+    async (env) => {
+      await act(async () => {
+        window.dispatchEvent(
+          Object.assign(new Event("pointermove"), {
+            clientX: START.x + 80,
+            clientY: START.y,
+          }),
+        );
+        env.dom.setVisibility("visible");
+      });
+      assert.equal(env.dom.cursorHidden(), true);
+      assert.equal(stayed, 0);
+    },
+  );
+});
+
+test("the bitten cursor flies to where the pointer has moved to", async () => {
+  await inFakeBrowser(
+    createElement(NibbleCursorLayer, { play: PLAY, done() {} }),
+    async (env) => {
+      await act(async () =>
+        window.dispatchEvent(
+          Object.assign(new Event("pointermove"), {
+            clientX: START.x + 30,
+            clientY: START.y - 20,
+          }),
+        ),
+      );
+      env.at(1_100);
+      await frame(env);
+      const cursor = nodes(env.dom.container as unknown as FakeNode).find((n) =>
+        n.attributes.has("data-prank-cursor"),
+      );
+      assert.equal(cursor?.attributes.get("data-prank-cursor"), "bitten");
+      // Its tip is where the pointer now is (the flight starts from the held point, in a custom property).
+      assert.equal(
+        cursor?.style.transform,
+        `translate(${START.x + 30}px, ${START.y - 20}px)`,
+      );
+      assert.equal(
+        cursor?.style["--prank-from-x"],
+        `${nibbleLayout(START, { width: 1_000, height: 800 }).held.x}px`,
+      );
+    },
+  );
+});
+
+test("if no frame ever runs, the 3 s cap still restores the cursor and ends the play", async () => {
+  let done = 0;
+  await inFakeBrowser(
+    createElement(NibbleCursorLayer, { play: PLAY, done: () => done++ }),
+    async ({ dom }) => {
+      assert.equal(dom.cursorHidden(), true);
+      await act(async () => mock.timers.tick(NIBBLE_MAX_MS - 1));
+      assert.equal(dom.cursorHidden(), true);
+      await act(async () => mock.timers.tick(1));
+      assert.equal(dom.cursorHidden(), false);
+      assert.equal(done, 1);
+    },
+  );
+});
+
+test("an unmount mid-play restores the cursor, lets go of everything and does not call done", async () => {
+  let done = 0;
+  await inFakeBrowser(
+    createElement(NibbleCursorLayer, { play: PLAY, done: () => done++ }),
+    async (env) => {
+      env.at(600);
+      await frame(env);
+      assert.equal(env.dom.cursorHidden(), true);
+      assert.equal(env.frames.pending(), 1);
+      await act(async () => env.root.unmount());
+      assert.equal(env.dom.cursorHidden(), false);
+      assert.equal(env.frames.pending(), 0);
+      assert.equal(done, 0);
+      // The cap timer went with it: nothing fires later.
+      await act(async () => mock.timers.tick(2 * NIBBLE_MAX_MS));
+      assert.equal(done, 0);
+    },
+  );
+});
+
+test("a play with no point (no event) ends at once and never hides the cursor", async () => {
+  let done = 0;
+  const play: PrankPlay = { id: 1, kind: "nibble-cursor" };
+  await inFakeBrowser(
+    createElement(NibbleCursorLayer, { play, done: () => done++ }),
+    async ({ dom, frames }) => {
+      assert.equal(done, 1);
+      assert.equal(dom.cursorHidden(), false);
+      assert.deepEqual(drawn(dom), {
+        pose: undefined,
+        props: undefined,
+        cursor: undefined,
+      });
+      assert.equal(frames.pending(), 0);
+      for (const type of ["pointermove", "pointerdown", "keydown", "blur"])
+        assert.equal(dom.windowListeners(type), 0, type);
+    },
+  );
+});
+
+test("StrictMode's mount, unmount and mount again leaves one play with the cursor hidden, and does not end it", async () => {
+  let done = 0;
+  await inFakeBrowser(
+    createElement(
+      StrictMode,
+      null,
+      createElement(NibbleCursorLayer, { play: PLAY, done: () => done++ }),
+    ),
+    async ({ dom, frames }) => {
+      assert.equal(done, 0, "the throwaway first mount did not end the play");
+      assert.equal(dom.cursorHidden(), true);
+      assert.equal(frames.pending(), 1);
+      for (const type of ["pointermove", "pointerdown", "keydown", "blur"])
+        assert.equal(dom.windowListeners(type), 1, type);
+      assert.equal(dom.documentListeners("visibilitychange"), 1);
+    },
+  );
+});
+
+test("a layer that is handed a new done does not restart the nibble", async () => {
+  const dones: number[] = [];
+  const first = createElement(NibbleCursorLayer, {
+    play: PLAY,
+    done: () => dones.push(1),
+  });
+  const second = createElement(NibbleCursorLayer, {
+    play: PLAY,
+    done: () => dones.push(2),
+  });
+  await inFakeBrowser(first, async (env) => {
+    env.at(800);
+    await frame(env);
+    await act(async () => env.root.render(second));
+    assert.equal(env.dom.cursorHidden(), true);
+    assert.equal(env.dom.windowListeners("keydown"), 1);
+    // Still the same nibble, 800 ms in: it is bitten, not peeking again.
+    assert.equal(drawn(env.dom).props, "cursor-bitten");
+    env.at(NIBBLE_MS);
+    await frame(env);
+    assert.deepEqual(dones, [2], "the newest done is the one called");
+  });
+});
+
+test("inside the stage the nibble plays, ends at 1 500 ms and the stage takes the layer away with the cursor back", async () => {
+  const dom = fakeDom();
+  dom.install();
+  const frames = fakeFrames();
+  let clock = 0;
+  const now = mock.method(performance, "now", () => clock);
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const { createRoot } = await import("react-dom/client");
+    let api: PrankApi | undefined;
+    const Probe = () => {
+      api = usePrank();
+      return null;
+    };
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(PrankStage, {
+          level: "sometimes",
+          desktopBusy: false,
+          errorShown: false,
+          dialogOpen: false,
+          ignoreLimits: true,
+          children: createElement(Probe),
+        }),
+      ),
+    );
+    const stageIsEmpty = () =>
+      dom.container.childNodes[0]?.childNodes.length === 0;
+    assert.ok(api);
+    assert.equal(PRANK_LAYERS["nibble-cursor"], NibbleCursorLayer);
+
+    await act(async () =>
+      api!.offer("nibble-cursor", null, {
+        clientX: 500,
+        clientY: 700,
+        detail: 1,
+      }),
+    );
+    assert.equal(dom.cursorHidden(), true);
+    assert.equal(stageIsEmpty(), false);
+    assert.equal(drawn(dom).pose, "peek");
+
+    clock = NIBBLE_MS;
+    await act(async () => frames.run());
+    assert.equal(dom.cursorHidden(), false);
+    assert.equal(stageIsEmpty(), true);
+    assert.equal(frames.pending(), 0);
+
+    // A press mid-play ends it too, through the stage.
+    clock = 0;
+    await act(async () =>
+      api!.offer("nibble-cursor", null, {
+        clientX: 500,
+        clientY: 700,
+        detail: 1,
+      }),
+    );
+    assert.equal(dom.cursorHidden(), true);
+    await act(async () => dom.emit("pointerdown"));
+    assert.equal(dom.cursorHidden(), false);
+    assert.equal(stageIsEmpty(), true);
+
+    // A nibble offered without a point (no event) is over at once.
+    await act(async () => api!.offer("nibble-cursor", null));
+    assert.equal(dom.cursorHidden(), false);
+    assert.equal(stageIsEmpty(), true);
+
+    // The stage going away mid-play brings the cursor back too.
+    await act(async () =>
+      api!.offer("nibble-cursor", null, {
+        clientX: 500,
+        clientY: 700,
+        detail: 1,
+      }),
+    );
+    assert.equal(dom.cursorHidden(), true);
+    await act(async () => root.unmount());
+    assert.equal(dom.cursorHidden(), false);
+    assert.equal(frames.pending(), 0);
+  } finally {
+    mock.timers.reset();
+    now.mock.restore();
+    frames.restore();
+    dom.uninstall();
+  }
+});
+
+test("the layer hides the cursor in a layout effect, so it is hidden before the first paint", () => {
+  const source = readFileSync("src/pranks/NibbleCursor.tsx", "utf8");
+  assert.match(source, /useLayoutEffect\(\(\) => \{\s*\/\/ Nothing to nibble/);
+  assert.doesNotMatch(source, /\buseEffect\b/);
+});
+
+test("the registry draws the nibble with its layer, and the registry is still a plain object", () => {
+  assert.equal(PRANK_LAYERS["nibble-cursor"], NibbleCursorLayer);
+  assert.equal(Object.getPrototypeOf(PRANK_LAYERS), Object.prototype);
+});
+
+// --- the stylesheet ---------------------------------------------------------
+
+test("the nibble's slides, flight and transition animate only with motion on", () => {
+  const css = readFileSync("src/styles/pranks.css", "utf8");
+  const motion = mediaBlock(css, "(prefers-reduced-motion: no-preference)");
+  assert.match(
+    motion,
+    /\.prank-nibble-panda\[data-phase="peek"\]\s*\{[^}]*animation-name:\s*prank-nibble-peek/,
+  );
+  assert.match(
+    motion,
+    /\.prank-nibble-panda\[data-phase="withdraw"\]\s*\{[^}]*animation-name:\s*prank-nibble-withdraw/,
+  );
+  assert.match(
+    motion,
+    /\.prank-cursor\[data-flight="in"\]\s*\{[^}]*transition-property:\s*transform/,
+  );
+  assert.match(
+    motion,
+    /\.prank-cursor\[data-flight="out"\]\s*\{[^}]*animation-name:\s*prank-cursor-fly-out/,
+  );
+  for (const name of [
+    "prank-nibble-peek",
+    "prank-nibble-withdraw",
+    "prank-cursor-fly-out",
+  ])
+    assert.match(css, new RegExp(`@keyframes ${name}\\s*\\{`), name);
+  // Not one animation or transition property, longhands included, outside the no-preference block.
+  assert.doesNotMatch(
+    css.replace(motion, ""),
+    /(animation|transition)[\w-]*\s*:/,
+  );
+  // The cursor-hiding rule is the stage's, and still there.
+  assert.match(
+    css,
+    /\.prank-cursor-hidden,\s*\.prank-cursor-hidden \* \{\s*cursor: none !important;\s*\}/,
+  );
+});
+
+// --- the triggers -----------------------------------------------------------
+
+test("every nibble trigger goes through offerAfter, so the button's own action runs first", () => {
+  const files = [
+    "src/panel/PanelAccounts.tsx",
+    "src/panel/Panel.tsx",
+    "src/pages/overview/AccountsCard.tsx",
+    "src/pages/Overview.tsx",
+    "src/pages/accounts/AccountsTable.tsx",
+  ];
+  for (const file of files) {
+    const source = readFileSync(file, "utf8");
+    assert.ok(source.includes('offerAfter(prank, "nibble-cursor"'), file);
+    assert.match(
+      source,
+      /import \{[^}]*\bofferAfter\b[^}]*\} from "@\/pranks\/PrankStage"/,
+      `${file} imports offerAfter`,
+    );
+    assert.match(source, /usePrank\(\)/, `${file} reads the stage`);
+  }
+});
+
+test("each trigger still runs its own action, and the Accounts menu keeps onSelect", () => {
+  const panelAccounts = readFileSync("src/panel/PanelAccounts.tsx", "utf8");
+  assert.match(
+    panelAccounts,
+    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(open \? undefined : account\.id\),?\s*\)/,
+  );
+  const panel = readFileSync("src/panel/Panel.tsx", "utf8");
+  assert.match(
+    panel,
+    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(suggestion\.id\),?\s*\)/,
+  );
+  const card = readFileSync("src/pages/overview/AccountsCard.tsx", "utf8");
+  assert.match(
+    card,
+    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(account, "switch"\),?\s*\)/,
+  );
+  const overview = readFileSync("src/pages/Overview.tsx", "utf8");
+  assert.match(
+    overview,
+    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(suggestion, "switch"\),?\s*\)/,
+  );
+  const table = readFileSync("src/pages/accounts/AccountsTable.tsx", "utf8");
+  assert.match(table, /onSelect=\{run\}/);
+  // Only the switch item offers; the offer carries no action of its own, since onSelect already runs `run`.
+  assert.match(table, /offerAfter\(prank, "nibble-cursor", e, \(\) => \{\}\)/);
+  assert.match(table, /onClick=\{key === "switch" \? nibble : undefined\}/);
+});
+
+test("only a switch request nibbles: no confirmation button offers it", () => {
+  const panelAccounts = readFileSync("src/panel/PanelAccounts.tsx", "utf8");
+  // The confirmation's own button (the one that calls confirmSwitch) is not a trigger.
+  const call = panelAccounts.indexOf("confirmSwitch(relay, account.id");
+  assert.ok(call > 0, "the confirmation button is still where this test looks");
+  assert.ok(!panelAccounts.slice(call - 300, call + 300).includes("nibble"));
+  assert.equal(panelAccounts.match(/"nibble-cursor"/g)?.length, 1);
+  for (const file of [
+    "src/panel/Panel.tsx",
+    "src/pages/overview/AccountsCard.tsx",
+    "src/pages/Overview.tsx",
+    "src/pages/accounts/AccountsTable.tsx",
+  ])
+    assert.equal(
+      readFileSync(file, "utf8").match(/"nibble-cursor"/g)?.length,
+      1,
+      file,
+    );
+});

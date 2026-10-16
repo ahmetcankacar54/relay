@@ -7,6 +7,7 @@ import { useRelay } from "@/data/relay-context";
 import { overviewAccounts, tempoRateNow } from "@/data/selectors";
 import { accountRowSubtitle } from "@/lib/account-row";
 import type { PageId } from "@/app/routes";
+import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { planLabel } from "../accounts/accountLabels";
 
 export function AccountsCard({
@@ -17,6 +18,7 @@ export function AccountsCard({
   now: number;
 }) {
   const relay = useRelay();
+  const prank = usePrank();
   const { t, language } = useI18n();
   const zone = relay.settings.planning.timeZone;
   // The badge names the same account as the suggestion banner when there is one.
@@ -114,7 +116,11 @@ export function AccountsCard({
                     size="sm"
                     variant={row.recommended ? "default" : "outline"}
                     disabled={switchBlocked}
-                    onClick={() => relay.requestDesktop(account, "switch")}
+                    onClick={(e) =>
+                      offerAfter(prank, "nibble-cursor", e, () =>
+                        relay.requestDesktop(account, "switch"),
+                      )
+                    }
                   >
                     {t("Geçiş yap", "Switch")}
                   </Button>

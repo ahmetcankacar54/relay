@@ -42,7 +42,12 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     readonly ownerDocument = doc;
     readonly childNodes: FakeElement[] = [];
     readonly attributes = new Map<string, string>();
-    readonly style = {};
+    /** Inline styles. React sets custom properties (`--name`) through setProperty. */
+    readonly style: Record<string, unknown> = {
+      setProperty(this: Record<string, unknown>, name: string, value: unknown) {
+        this[name] = value;
+      },
+    };
     innerHTML = "";
     parentNode: FakeElement | null = null;
     /** What getBoundingClientRect answers; a test sets it on the element it wants to tell apart. */
@@ -115,6 +120,7 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     document: doc,
     event: undefined,
     innerWidth: 1_000,
+    innerHeight: 800,
     HTMLIFrameElement: class {},
     matchMedia: (query: string) => ({ matches: options.reducedMotion === true && query.includes("reduce") }),
     addEventListener: windowEvents.addEventListener,

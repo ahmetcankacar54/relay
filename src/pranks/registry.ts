@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { PrankKind } from "./budget";
 import { ConfettiLayer, DozeLayer, NibbleBarLayer, WheelLayer } from "./layers";
+import { NibbleCursorLayer } from "./NibbleCursor";
 import type { PrankPlay } from "./PrankStage";
 
 /**
@@ -12,6 +13,7 @@ export type PrankLayer = (props: { play: PrankPlay; done(): void }) => ReactNode
 
 /** The layer that draws each kind of prank. A kind without one ends the moment it starts. */
 export const PRANK_LAYERS: Partial<Record<PrankKind, PrankLayer>> = {
+  "nibble-cursor": NibbleCursorLayer,
   wheel: WheelLayer,
   "nibble-bar": NibbleBarLayer,
   doze: DozeLayer,

@@ -110,7 +110,11 @@ export function Panel({
           <Button
             size="xs"
             disabled={!suggestionCanSwitch}
-            onClick={() => setConfirmId(suggestion.id)}
+            onClick={(e) =>
+              offerAfter(prank, "nibble-cursor", e, () =>
+                setConfirmId(suggestion.id),
+              )
+            }
           >
             {t("Geç", "Switch")}
           </Button>

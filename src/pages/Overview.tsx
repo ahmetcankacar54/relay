@@ -75,7 +75,11 @@ export function Overview({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => relay.requestDesktop(suggestion, "switch")}
+                onClick={(e) =>
+                  offerAfter(prank, "nibble-cursor", e, () =>
+                    relay.requestDesktop(suggestion, "switch"),
+                  )
+                }
               >
                 {t("Geçişi incele", "Review switch")}
               </Button>

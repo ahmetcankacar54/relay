@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type MouseEvent } from "react";
 import {
   ArrowLeftRight,
   type LucideIcon,
@@ -32,6 +32,7 @@ import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
+import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
 import { formatPercent } from "@/lib/meter";
 import { avatarClass, planLabel } from "./accountLabels";
@@ -132,8 +133,12 @@ export function AccountsTable({
   link: (id: string) => void;
 }) {
   const relay = useRelay();
+  const prank = usePrank();
   const { t, language } = useI18n();
   const { data, desktop, active } = relay;
+  // The switch item's `onSelect` runs the switch; its click only offers the prank, with nothing of its own to run.
+  const nibble = (e: MouseEvent<Element>) =>
+    offerAfter(prank, "nibble-cursor", e, () => {});
   return (
     <Table>
       <TableHeader>
@@ -262,7 +267,11 @@ export function AccountsTable({
                       ({ key, label, icon: Icon, disabled, run }) => (
                         <Fragment key={key}>
                           {key === "refresh" && <DropdownMenuSeparator />}
-                          <DropdownMenuItem disabled={disabled} onSelect={run}>
+                          <DropdownMenuItem
+                            disabled={disabled}
+                            onSelect={run}
+                            onClick={key === "switch" ? nibble : undefined}
+                          >
                             <Icon />
                             {label}
                           </DropdownMenuItem>

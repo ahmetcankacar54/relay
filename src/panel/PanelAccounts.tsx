@@ -12,6 +12,7 @@ import {
   type OverviewRow,
 } from "@/data/selectors";
 import { accountRowSubtitle, panelRowState } from "@/lib/account-row";
+import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { planLabel } from "../pages/accounts/accountLabels";
 import { panelCard, panelEyebrow } from "./PanelActiveCard";
 
@@ -57,6 +58,7 @@ export function PanelAccounts({
   onConfirmChange?: (id: string | undefined) => void;
 }) {
   const relay = useRelay();
+  const prank = usePrank();
   const { t, language } = useI18n();
   const [local, setLocal] = useState(initialConfirm);
   const confirmId = onConfirmChange ? controlled : local;
@@ -131,7 +133,11 @@ export function PanelAccounts({
                   variant={row.recommended ? "default" : "outline"}
                   disabled={!canSwitch || !!switching}
                   aria-expanded={open}
-                  onClick={() => setConfirmId(open ? undefined : account.id)}
+                  onClick={(e) =>
+                    offerAfter(prank, "nibble-cursor", e, () =>
+                      setConfirmId(open ? undefined : account.id),
+                    )
+                  }
                 >
                   {t("Geç", "Switch")}
                 </Button>
