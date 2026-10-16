@@ -222,6 +222,14 @@ export async function duplicateSessions(root: string, scope: Scope) {
     .map((group) => group.map((record) => record.name).sort());
 }
 
+/** One conversation the merge carries into the target account. */
+export interface CarriedConversation {
+  /** The alias of the conversation's single card in the target after the merge. */
+  targetAlias: string;
+  /** Every record of the group, any account, including target cards the merge deletes. */
+  members: { alias: string; accountUuid: string }[];
+}
+
 // Only local Code records travel. Remote connectors, permission grants, browser access,
 // and server-owned project bindings must be established by the destination account.
 export async function planHistory(
@@ -230,7 +238,21 @@ export async function planHistory(
   sources: Scope[],
   options: { seenSpaceIds?: string[] } = {},
 ): Promise<Map<string, Buffer | null>> {
+  return (await planHistoryDetailed(root, target, sources, options)).writes;
+}
+
+/** `planHistory`, plus the conversations the merge carries and the alias each ends with. */
+export async function planHistoryDetailed(
+  root: string,
+  target: Scope,
+  sources: Scope[],
+  options: { seenSpaceIds?: string[] } = {},
+): Promise<{
+  writes: Map<string, Buffer | null>;
+  conversations: CarriedConversation[];
+}> {
   const writes = new Map<string, Buffer | null>();
+  const conversations: CarriedConversation[] = [];
   const targetDir = scopePath("claude-code-sessions", target);
   const deleted = new Set<string>();
   const all: SessionRecord[] = [];
@@ -252,6 +274,15 @@ export async function planHistory(
     // resurrect it through another alias and leaves the destination's files alone.
     if (group.some((record) => deleted.has(record.alias))) continue;
     const winner = newest(group);
+    // The target ends with one card named after the winner: it is written below,
+    // or the target already has it.
+    conversations.push({
+      targetAlias: winner.alias,
+      members: group.map((record) => ({
+        alias: record.alias,
+        accountUuid: record.scope.accountUuid,
+      })),
+    });
     const existing = group.filter((record) => record.isTarget);
     const keep = existing.find((record) => record.alias === winner.alias);
     // Remove every other destination card of the same conversation. The kept
@@ -358,5 +389,5 @@ export async function planHistory(
     }
   }
   if (changed) writes.set(targetSpaces, jsonBytes({ ...own, spaces }));
-  return writes;
+  return { writes, conversations };
 }
