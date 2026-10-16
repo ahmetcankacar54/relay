@@ -6,11 +6,15 @@ export const DRAFT_WORKER_FLAG = "--relay-draft-worker=";
 
 export interface DraftJob {
   /**
-   * Absolute path of the directory the helper opens as Local Storage: the working dir that holds
-   * a copy of Claude's leveldb, `<Claude>/Local Storage/.relay-work-<uuid>`.
+   * Absolute path of the directory the helper opens as Local Storage: `<scratch>/copy`, which
+   * holds Relay's private copy of Claude's leveldb, outside Claude's directory.
    */
   storage: string;
-  /** Scratch dir the helper owns: root/ (symlink "Local Storage" -> storage) and userData/. */
+  /**
+   * The run's scratch dir, `<tmp>/relay-drafts-*`. Relay puts the copy (copy/) in it, the helper
+   * its root/ (symlink "Local Storage" -> storage), userData/ and result, and Relay removes it
+   * after the run.
+   */
   scratch: string;
   /** Where the helper writes its DraftResult. */
   result: string;

@@ -15,9 +15,9 @@ import {
 } from "./draft-job";
 
 // Relay's Electron, started by `entry.ts` as `--relay-draft-worker=<job.json>` while Claude is
-// closed. It opens a working copy of Claude's Chromium Local Storage (`job.storage`) through a
-// scratch session root, so Chromium itself reads its own LevelDB, and answers with the unsent
-// drafts it holds. It only reads: Claude Desktop wipes drafts itself after an account change,
+// closed. It opens Relay's private copy of Claude's Chromium Local Storage (`job.storage`)
+// through a scratch session root, so Chromium itself reads its own LevelDB, and answers with
+// the unsent drafts it holds. It only reads: Claude Desktop wipes drafts itself after an account change,
 // and Relay re-types them later.
 // It never imports `main.ts`: nothing here may start the tray, a window or the network.
 

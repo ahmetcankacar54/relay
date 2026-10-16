@@ -9,6 +9,10 @@ import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
 import type { DesktopRestartEvent } from "../shared/types";
 import type { DraftJob, DraftResult } from "../electron/draft-job";
 import {
+  CONVERSATION_DRAFT_PREFIX,
+  NEW_SESSION_DRAFT,
+} from "../electron/core/drafts";
+import {
   duplicateSessions,
   readObject,
   writeBytes,
@@ -1238,10 +1242,10 @@ test("a failing restart listener never breaks the Desktop operation", async (t) 
 });
 
 // Gives the fixture's Claude a Local Storage and its host a draft helper that records each job,
-// answering with `move`. Launches are recorded too, to see what happens in which order.
+// answering with `read`. Launches are recorded too, to see what happens in which order.
 async function withDraftHelper(
   f: Awaited<ReturnType<typeof fixture>>,
-  move: (job: DraftJob) => Promise<DraftResult> = async () => ({
+  read: (job: DraftJob) => Promise<DraftResult> = async () => ({
     ok: true,
     drafts: {},
   }),
@@ -1251,13 +1255,13 @@ async function withDraftHelper(
   await fs.writeFile(path.join(leveldb, "CURRENT"), "MANIFEST-000001\n");
   const jobs: DraftJob[] = [];
   const events: string[] = [];
-  f.host.moveDrafts = async (job) => {
+  f.host.readDrafts = async (job) => {
     jobs.push(job);
-    events.push("moveDrafts:start");
+    events.push("readDrafts:start");
     try {
-      return await move(job);
+      return await read(job);
     } finally {
-      events.push("moveDrafts:end");
+      events.push("readDrafts:end");
     }
   };
   const launch = f.host.launch;
@@ -1276,36 +1280,145 @@ async function withDraftHelper(
     events,
     leveldb,
     tmp,
+    vault,
     last: () => readObject(vault, "drafts/last.json"),
     drafts: async () => fs.readdir(path.join(vault, "drafts")).catch(() => []),
   };
 }
 
-test("an A→B switch runs the draft helper once, on a working copy", async (t) => {
+// An unsent draft as Claude keeps it in Local Storage.
+const draftOf = (owner: string, text: string, files: string[] = []) =>
+  JSON.stringify({ text, files, snippets: [], owner });
+const UNSENT = "an unsent draft, word for word";
+
+// A switch from A, open in Claude, to B, sharing one conversation. B's card of it is the newest
+// and is called "Fix login"; A has an unsent draft there and one on the new-session screen.
+async function sharedConversation(t: any) {
   const f = await fixture(t);
   const b = await f.account("B");
   const a = await f.account("A"); // A is open in Claude
   const shared = randomUUID();
-  await session(f.root, a, shared, { lastActivityAt: 300 });
-  await session(f.root, b, shared, { lastActivityAt: 100 });
+  await session(f.root, a, shared, { lastActivityAt: 100, title: "A's title" });
+  await session(f.root, b, shared, { lastActivityAt: 300, title: "Fix login" });
+  const d = await withDraftHelper(f, async () => ({
+    ok: true,
+    drafts: {
+      [CONVERSATION_DRAFT_PREFIX + shared]: draftOf(a.desktop!.accountUuid, UNSENT),
+      [NEW_SESSION_DRAFT]: draftOf(a.desktop!.accountUuid, "a new start", ["f"]),
+      // B's own draft somewhere else is not A's to carry.
+      [CONVERSATION_DRAFT_PREFIX + randomUUID()]: draftOf(b.desktop!.accountUuid, "B's"),
+    },
+  }));
+  return { f, a, b, shared, d };
+}
+
+test("an A→B switch captures A's draft of a shared conversation for B", async (t) => {
+  const { f, a, b, shared, d } = await sharedConversation(t);
+
+  await f.manager.switchTo(b.id);
+
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  const records = await f.manager.pendingDraftRecords();
+  assert.equal(records.length, 2);
+  const [conversation, newSession] = records;
+  const { id, capturedAt, ...rest } = conversation;
+  assert.match(id, /^[0-9a-f-]{36}$/);
+  assert.ok(!Number.isNaN(Date.parse(capturedAt)));
+  assert.deepEqual(rest, {
+    to: b.desktop!.accountUuid,
+    targetAlias: shared,
+    title: "Fix login",
+    text: UNSENT,
+    attachments: false,
+    state: "pending",
+  });
+  // The title is the one on B's card of the conversation, after the merge.
+  assert.equal(
+    (await readObject(
+      f.root,
+      `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}/local_${shared}.json`,
+    ))!.title,
+    "Fix login",
+  );
+  assert.equal(newSession.newSession, true);
+  assert.equal(newSession.text, "a new start");
+  assert.equal(newSession.attachments, true);
+  assert.equal(newSession.to, b.desktop!.accountUuid);
+
+  const { at, ...last } = (await d.last())!;
+  assert.ok(!Number.isNaN(Date.parse(at)));
+  assert.deepEqual(last, {
+    from: a.desktop!.accountUuid,
+    to: b.desktop!.accountUuid,
+    status: "captured",
+    count: 2,
+  });
+  // The text is only in the sealed vault file, and only sealed.
+  assert.deepEqual((await d.drafts()).sort(), ["last.json", "pending.bin"]);
+  for (const file of ["last.json", "pending.bin"]) {
+    const raw = await fs.readFile(path.join(d.vault, "drafts", file), "utf8");
+    assert.ok(!raw.includes(UNSENT), file);
+  }
+  assert.deepEqual(await fs.readdir(d.tmp), []);
+});
+
+test("the draft methods work by id, and summaries carry no text", async (t) => {
+  const { f, b, d } = await sharedConversation(t);
+  await f.manager.switchTo(b.id);
+  const [conversation, newSession] = await f.manager.pendingDraftRecords();
+
+  const summaries = await f.manager.pendingDrafts();
+  assert.ok(!JSON.stringify(summaries).includes(UNSENT));
+  assert.deepEqual(summaries[0], {
+    id: conversation.id,
+    to: b.desktop!.accountUuid,
+    title: "Fix login",
+    newSession: false,
+    attachments: false,
+    state: "pending",
+    capturedAt: conversation.capturedAt,
+  });
+  assert.equal(await f.manager.draftText(conversation.id), UNSENT);
+  assert.equal(await f.manager.draftText(randomUUID()), undefined);
+
+  await f.manager.markDraft(conversation.id, "needs-copy", "accessibility");
+  const [marked] = await f.manager.pendingDrafts();
+  assert.equal(marked.state, "needs-copy");
+  assert.equal(marked.reason, "accessibility");
+
+  await f.manager.dismissDraft(conversation.id);
+  assert.deepEqual(
+    (await f.manager.pendingDrafts()).map((summary) => summary.id),
+    [newSession.id],
+  );
+  await f.manager.dismissDraft(newSession.id);
+  assert.deepEqual(await f.manager.pendingDrafts(), []);
+  assert.deepEqual(await d.drafts(), ["last.json"]);
+});
+
+test("an A→B switch runs the draft helper once, on a private copy", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
   const d = await withDraftHelper(f);
 
   await f.manager.switchTo(b.id);
 
   assert.equal(d.jobs.length, 1);
   const [job] = d.jobs;
-  // A working copy beside Claude's leveldb, never Claude's own Local Storage.
-  assert.equal(path.dirname(job.storage), path.join(f.root, "Local Storage"));
-  assert.match(path.basename(job.storage), /^\.relay-work-/);
+  // A copy in the step's own scratch dir, never anything in Claude's directory.
   assert.equal(path.dirname(job.scratch), d.tmp);
+  assert.equal(job.storage, path.join(job.scratch, "copy"));
+  assert.ok(!job.storage.startsWith(f.root + path.sep));
   assert.equal(job.claudeElectron, "44.7.2");
+  assert.deepEqual(await fs.readdir(path.join(f.root, "Local Storage")), [
+    "leveldb",
+  ]);
+  assert.deepEqual(await fs.readdir(d.tmp), []);
   assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
-  // Until captured drafts are stored, a run ends as pending.
-  const last = (await d.last())!;
-  assert.equal(last.from, a.desktop!.accountUuid);
-  assert.equal(last.to, b.desktop!.accountUuid);
-  assert.equal(last.status, "skipped");
-  assert.equal(last.reason, "capture pending");
+  assert.equal((await d.last())!.status, "captured");
+  assert.equal((await d.last())!.count, 0);
+  assert.deepEqual(await f.manager.pendingDraftRecords(), []);
 });
 
 test("Claude relaunches only after the draft helper finished", async (t) => {
@@ -1317,10 +1430,10 @@ test("Claude relaunches only after the draft helper finished", async (t) => {
     return { ok: true, drafts: {} };
   });
   await f.manager.switchTo(b.id);
-  assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end", "launch"]);
+  assert.deepEqual(d.events, ["readDrafts:start", "readDrafts:end", "launch"]);
 });
 
-test("a throwing moveDrafts still switches", async (t) => {
+test("a throwing helper still switches", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   const a = await f.account("A");
@@ -1346,27 +1459,48 @@ test("a throwing moveDrafts still switches", async (t) => {
   assert.deepEqual(last, {
     from: a.desktop!.accountUuid,
     to: b.desktop!.accountUuid,
-    status: "skipped",
-    reason: "capture pending",
+    status: "failed",
+    error: "helper crashed",
   });
+  assert.deepEqual(await f.manager.pendingDraftRecords(), []);
+  assert.deepEqual(await fs.readdir(d.tmp), []);
 });
 
-test("no drafts move when history transfer is off", async (t) => {
-  const f = await fixture(t);
+test("a draft step that cannot seal its drafts still switches", async (t) => {
+  const { f, b, d } = await sharedConversation(t);
+  const seal = f.host.seal;
+  // Saved sign-ins still seal; only the drafts cannot.
+  f.host.seal = (text) => {
+    if (text.includes(UNSENT))
+      throw new Error("System encryption is unavailable.");
+    return seal(text);
+  };
+
+  await f.manager.switchTo(b.id);
+
+  const state = await f.manager.snapshot();
+  assert.equal(state.activeProfileId, b.id);
+  assert.equal(state.error, undefined);
+  assert.equal((await d.last())!.status, "failed");
+  assert.equal((await d.last())!.error, "System encryption is unavailable.");
+  assert.deepEqual(await f.manager.pendingDraftRecords(), []);
+  assert.deepEqual(await d.drafts(), ["last.json"]);
+});
+
+test("no drafts are captured when history transfer is off", async (t) => {
+  const { f, b, d } = await sharedConversation(t);
   f.store.update((s) => {
     s.settings.desktopHistoryTransfer = "off";
   });
-  const b = await f.account("B");
-  await f.account("A");
-  const d = await withDraftHelper(f);
   await f.manager.switchTo(b.id);
   assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
   assert.equal(d.jobs.length, 0);
   assert.equal(await d.last(), null);
   assert.deepEqual(await d.drafts(), []);
+  assert.deepEqual(await f.manager.pendingDraftRecords(), []);
 });
 
-test("no drafts move when the pair is not allowed", async (t) => {
+test("no drafts are captured when the pair is not allowed", async (t) => {
   const f = await fixture(t);
   f.store.update((s) => {
     s.settings.desktopHistoryTransfer = "same-group";
@@ -1378,25 +1512,21 @@ test("no drafts move when the pair is not allowed", async (t) => {
   assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
   assert.equal(d.jobs.length, 0);
   assert.equal(await d.last(), null);
+  assert.deepEqual(await f.manager.pendingDraftRecords(), []);
 });
 
-test("no drafts move when switching to the same account", async (t) => {
-  const f = await fixture(t);
-  await f.account("B");
-  const a = await f.account("A");
-  const d = await withDraftHelper(f);
+test("no drafts are captured when switching to the same account", async (t) => {
+  const { f, a, d } = await sharedConversation(t);
   await f.manager.switchTo(a.id);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
   assert.equal(d.jobs.length, 0);
   assert.deepEqual(d.events, ["launch"]);
+  assert.deepEqual(await f.manager.pendingDraftRecords(), []);
 });
 
-test("the closedOnly switch moves drafts too", async (t) => {
-  const f = await fixture(t);
-  const b = await f.account("B");
-  const a = await f.account("A");
+test("the closedOnly switch captures drafts too", async (t) => {
+  const { f, a, b, d } = await sharedConversation(t);
   f.setRunning(false);
-  const d = await withDraftHelper(f);
   await f.manager.switchTo(b.id, {
     closedOnly: true,
     expectedActiveProfileId: a.id,
@@ -1405,11 +1535,12 @@ test("the closedOnly switch moves drafts too", async (t) => {
   assert.equal(d.jobs.length, 1);
   assert.equal((await d.last())!.from, a.desktop!.accountUuid);
   assert.equal((await d.last())!.to, b.desktop!.accountUuid);
+  assert.equal((await f.manager.pendingDraftRecords()).length, 2);
   // Claude stays closed.
-  assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end"]);
+  assert.deepEqual(d.events, ["readDrafts:start", "readDrafts:end"]);
 });
 
-test("a host that cannot move drafts records why and moves nothing", async (t) => {
+test("a host that cannot read drafts records why and captures nothing", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   await f.account("A");
@@ -1421,16 +1552,15 @@ test("a host that cannot move drafts records why and moves nothing", async (t) =
   assert.equal(d.jobs.length, 0);
   assert.equal((await d.last())!.status, "skipped");
   assert.equal((await d.last())!.reason, reason);
-  // No backup was made.
   assert.deepEqual(await d.drafts(), ["last.json"]);
 });
 
-test("drafts are not moved once Claude is running again", async (t) => {
+test("drafts are not captured once Claude is running again", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   await f.account("A");
   const d = await withDraftHelper(f);
-  // Claude is opened right after the switch's files are written.
+  // Claude is opened right after the switch's files are written: a copy made now could be torn.
   f.host.draftsBlocked = async () => {
     f.setRunning(true);
     return undefined;
@@ -1440,9 +1570,10 @@ test("drafts are not moved once Claude is running again", async (t) => {
   assert.equal(d.jobs.length, 0);
   assert.equal((await d.last())!.reason, "Claude is running");
   assert.deepEqual(await d.drafts(), ["last.json"]);
+  assert.deepEqual(await fs.readdir(d.tmp), []);
 });
 
-test("a host that cannot read Claude's Electron version moves nothing", async (t) => {
+test("a host that cannot read Claude's Electron version captures nothing", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   await f.account("A");
@@ -1458,7 +1589,7 @@ test("a host that cannot read Claude's Electron version moves nothing", async (t
   assert.deepEqual(await d.drafts(), ["last.json"]);
 });
 
-test("what the helper wrote to its working copy never reaches Claude's leveldb", async (t) => {
+test("what the helper wrote to its copy never reaches Claude's leveldb", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   await f.account("A");
@@ -1470,7 +1601,7 @@ test("what the helper wrote to its working copy never reaches Claude's leveldb",
     return { ok: true, drafts: {} };
   });
   await f.manager.switchTo(b.id);
-  assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end", "launch"]);
+  assert.deepEqual(d.events, ["readDrafts:start", "readDrafts:end", "launch"]);
   assert.equal(
     await fs.readFile(path.join(d.leveldb, "CURRENT"), "utf8"),
     "MANIFEST-000001\n",
@@ -1478,12 +1609,12 @@ test("what the helper wrote to its working copy never reaches Claude's leveldb",
   assert.deepEqual(await fs.readdir(path.join(f.root, "Local Storage")), [
     "leveldb",
   ]);
-  // The backup made before the run and last.json.
-  assert.equal((await d.drafts()).length, 2);
-  assert.equal((await d.last())!.status, "skipped");
+  // No backup of Claude's Local Storage is made any more: only last.json.
+  assert.deepEqual(await d.drafts(), ["last.json"]);
+  assert.equal((await d.last())!.status, "captured");
 });
 
-test("a failure deciding whether drafts can move never reaches the switch", async (t) => {
+test("a failure deciding whether drafts can be read never reaches the switch", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   await f.account("A");
@@ -1500,7 +1631,7 @@ test("a failure deciding whether drafts can move never reaches the switch", asyn
   assert.deepEqual(d.events, ["launch"]);
 });
 
-test("no drafts move between accounts that are not both selected", async (t) => {
+test("no drafts are captured between accounts that are not both selected", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   const a = await f.account("A");
@@ -1558,7 +1689,7 @@ test("a switch whose files fail to apply runs no draft step", async (t) => {
   assert.deepEqual(d.events, ["launch"]);
 });
 
-test("saving an account and syncing history never move drafts", async (t) => {
+test("saving an account and syncing history never capture drafts", async (t) => {
   const f = await fixture(t);
   await f.account("B");
   const d = await withDraftHelper(f);
@@ -1579,11 +1710,33 @@ test("Claude relaunches only after a slow draft helper that then fails", async (
     return { ok: false, error: "verification failed" };
   });
   await f.manager.switchTo(b.id);
-  assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end", "launch"]);
+  assert.deepEqual(d.events, ["readDrafts:start", "readDrafts:end", "launch"]);
   assert.equal(
     await fs.readFile(path.join(d.leveldb, "CURRENT"), "utf8"),
     "MANIFEST-000001\n",
   );
-  assert.equal((await d.last())!.status, "skipped");
-  assert.equal((await d.last())!.reason, "capture pending");
+  assert.equal((await d.last())!.status, "failed");
+  assert.equal((await d.last())!.error, "verification failed");
+});
+
+test("initialize removes the first design's plaintext backups, and keeps the rest", async (t) => {
+  const f = await fixture(t);
+  const drafts = path.join(f.store.root, "desktop-vault", "drafts");
+  for (const stamp of ["2026-10-16T09-08-07-654Z", "2026-10-15T23-00-00-000Z"]) {
+    await fs.mkdir(path.join(drafts, stamp, "leveldb"), { recursive: true });
+    await fs.writeFile(
+      path.join(drafts, stamp, "leveldb", "000003.log"),
+      "a plaintext draft",
+    );
+  }
+  await fs.writeFile(path.join(drafts, "last.json"), "{}");
+  await fs.writeFile(path.join(drafts, "pending.bin"), "sealed");
+
+  await new DesktopManager(f.root, f.store, f.host, f.transcriptRoot).initialize();
+
+  assert.deepEqual((await fs.readdir(drafts)).sort(), [
+    "last.json",
+    "pending.bin",
+  ]);
+  assert.equal(await fs.readFile(path.join(drafts, "pending.bin"), "utf8"), "sealed");
 });

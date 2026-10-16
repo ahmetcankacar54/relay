@@ -18,28 +18,29 @@ import {
   CONVERSATION_DRAFT_PREFIX as P,
   NEW_SESSION_DRAFT,
   selectDrafts,
+  type CapturedDraft,
 } from "../electron/core/drafts";
 import {
   LEVELDB,
   LOCAL_STORAGE,
-  backupLocalStorage,
-  discardWorkingCopy,
-  makeWorkingCopy,
-  PutBackFailed,
-  pruneDraftBackups,
-  swapInWorkingCopy,
+  copyLocalStorage,
+  removeLegacyDraftBackups,
   sweepDraftLeftovers,
-  syncWorkingCopy,
 } from "../electron/core/draft-storage";
 import {
   awaitHelper,
+  captureDrafts,
   draftsBlockedReason,
   electronMismatch,
   helperOutcome,
-  preserveDrafts,
   runHelper,
   type HelperExit,
 } from "../electron/core/draft-transfer";
+import {
+  DraftVault,
+  summarize,
+  type DraftRecord,
+} from "../electron/core/draft-vault";
 import {
   DRAFT_WORKER_FLAG,
   EMPTY_STORAGE,
@@ -498,7 +499,7 @@ test("an empty draft is not captured", () => {
   );
 });
 
-// --- Local Storage backup, working copy and swap ---------------------------------
+// --- Copying Local Storage, and sweeping what the first design left --------------
 
 // A fake Claude root and vault, each with the pieces a real LevelDB directory has.
 async function storageFixture(t: any) {
@@ -528,7 +529,8 @@ async function storageFixture(t: any) {
   return { base, root, vault, leveldb, files, tmp };
 }
 
-// Every entry under `dir`, relative, with its bytes (files) or null (directories).
+// Every entry under `dir`, relative, with its bytes (files), its target (links) or null
+// (directories).
 async function snapshot(dir: string) {
   const out: Record<string, string | null> = {};
   async function walk(current: string) {
@@ -538,6 +540,8 @@ async function snapshot(dir: string) {
       if (entry.isDirectory()) {
         out[rel] = null;
         await walk(full);
+      } else if (entry.isSymbolicLink()) {
+        out[rel] = `-> ${await fs.readlink(full)}`;
       } else {
         assert.ok(entry.isFile(), `${rel} is a plain file`);
         out[rel] = (await fs.readFile(full)).toString("base64");
@@ -548,61 +552,112 @@ async function snapshot(dir: string) {
   return out;
 }
 
-test("a backup is a byte-exact copy", async (t) => {
-  const { root, vault, leveldb, files } = await storageFixture(t);
-  const now = new Date("2026-10-16T09:08:07.654Z");
-  const backup = await backupLocalStorage(root, vault, now);
-  assert.equal(backup, path.join(vault, "drafts", "2026-10-16T09-08-07-654Z"));
-  const copy = path.join(backup!, "leveldb");
+// Where a test asks for a copy: a new dir in a scratch dir of its own, as the draft step does.
+async function copyTarget(fx: { base: string }) {
+  const scratch = await fs.mkdtemp(path.join(fx.base, "scratch-"));
+  return path.join(scratch, "copy");
+}
+
+test("a copy of leveldb is byte-exact and private, and Claude's stays as it was", async (t) => {
+  const fx = await storageFixture(t);
+  const { root, leveldb, files } = fx;
+  const before = await snapshot(path.join(root, LOCAL_STORAGE));
+  const storage = await copyTarget(fx);
+
+  assert.equal(await copyLocalStorage(root, storage), true);
+
+  assert.deepEqual(await fs.readdir(storage), ["leveldb"]);
+  const copy = path.join(storage, "leveldb");
   assert.deepEqual(await snapshot(copy), await snapshot(leveldb));
   assert.equal((await fs.stat(path.join(copy, "LOCK"))).size, 0);
   assert.equal((await fs.stat(path.join(copy, "nested/empty"))).size, 0);
   for (const [name, bytes] of Object.entries(files))
     assert.deepEqual(await fs.readFile(path.join(copy, name)), bytes, name);
-  // The source is untouched.
+  assert.equal((await fs.stat(storage)).mode & 0o777, 0o700);
+  // Nothing was made or changed beside Claude's leveldb.
+  assert.deepEqual(await snapshot(path.join(root, LOCAL_STORAGE)), before);
+  // A directory that already exists is never copied into.
+  await assert.rejects(copyLocalStorage(root, storage), { code: "EEXIST" });
+});
+
+test("a relative symlink in leveldb stays relative in the copy", async (t) => {
+  const fx = await storageFixture(t);
+  await fs.symlink("LOCK", path.join(fx.leveldb, "link"));
+  await fs.symlink("../CURRENT", path.join(fx.leveldb, "nested", "up"));
+  const storage = await copyTarget(fx);
+  assert.equal(await copyLocalStorage(fx.root, storage), true);
+  // Resolved against the copy, so they lead into the copy and never to Claude's files.
+  assert.equal(await fs.readlink(path.join(storage, "leveldb", "link")), "LOCK");
   assert.equal(
-    (await fs.readFile(path.join(leveldb, "000005.ldb"))).length,
-    3 * 1024 * 1024,
+    await fs.readlink(path.join(storage, "leveldb", "nested", "up")),
+    "../CURRENT",
   );
-  // The vault directories are private to Relay.
-  for (const dir of [path.join(vault, "drafts"), backup!])
-    assert.equal((await fs.stat(dir)).mode & 0o777, 0o700, dir);
 });
 
-test("a working copy is a byte-exact copy beside leveldb", async (t) => {
-  const { root, leveldb } = await storageFixture(t);
-  const before = await snapshot(leveldb);
-  const work = await makeWorkingCopy(root);
-  assert.equal(path.dirname(work), path.join(root, LOCAL_STORAGE));
-  assert.match(
-    path.basename(work),
-    /^\.relay-work-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+test("a link that would lead the copy out of itself fails it", async (t) => {
+  // Followed from the copy, either would reach Claude's own files or something else.
+  for (const target of ["ABSOLUTE", "../outside", "nested/../../escape"]) {
+    const fx = await storageFixture(t);
+    const link = path.join(fx.leveldb, "link");
+    await fs.symlink(
+      target === "ABSOLUTE" ? path.join(fx.leveldb, "CURRENT") : target,
+      link,
+    );
+    const before = await snapshot(path.join(fx.root, LOCAL_STORAGE));
+    await assert.rejects(
+      copyLocalStorage(fx.root, await copyTarget(fx)),
+      /leads out of Local Storage\/leveldb/,
+      target,
+    );
+    assert.deepEqual(
+      await snapshot(path.join(fx.root, LOCAL_STORAGE)),
+      before,
+      target,
+    );
+  }
+});
+
+test("a missing leveldb gives no copy", async (t) => {
+  const fx = await storageFixture(t);
+  const storage = await copyTarget(fx);
+  await fs.rm(fx.leveldb, { recursive: true });
+  assert.equal(await copyLocalStorage(fx.root, storage), false);
+  await fs.rm(path.join(fx.root, LOCAL_STORAGE), { recursive: true });
+  assert.equal(await copyLocalStorage(fx.root, storage), false);
+  await fs.rm(fx.root, { recursive: true });
+  assert.equal(await copyLocalStorage(fx.root, storage), false);
+  // Nothing was made where the copy would have gone.
+  await assertGone(storage);
+});
+
+test("a linked or misshapen Local Storage or leveldb is refused", async (t) => {
+  const linked = await storageFixture(t);
+  const real = path.join(linked.base, "real-leveldb");
+  await fs.rename(linked.leveldb, real);
+  await fs.symlink(real, linked.leveldb);
+  await assert.rejects(
+    copyLocalStorage(linked.root, await copyTarget(linked)),
+    /^Error: Local Storage\/leveldb is a symbolic link\.$/,
   );
-  assert.deepEqual(await fs.readdir(work), ["leveldb"]);
-  assert.deepEqual(await snapshot(path.join(work, "leveldb")), before);
-  assert.deepEqual(await snapshot(leveldb), before);
-  // Every copy gets its own directory.
-  assert.notEqual(await makeWorkingCopy(root), work);
-});
 
-test("a relative symlink stays relative in the backup and the working copy", async (t) => {
-  const { root, vault, leveldb } = await storageFixture(t);
-  await fs.symlink("LOCK", path.join(leveldb, "link"));
-  const backup = (await backupLocalStorage(root, vault, new Date()))!;
-  assert.equal(await fs.readlink(path.join(backup, "leveldb", "link")), "LOCK");
-  const work = await makeWorkingCopy(root);
-  assert.equal(await fs.readlink(path.join(work, "leveldb", "link")), "LOCK");
-});
+  const file = await storageFixture(t);
+  await fs.rm(file.leveldb, { recursive: true });
+  await fs.writeFile(file.leveldb, "not a directory");
+  await assert.rejects(
+    copyLocalStorage(file.root, await copyTarget(file)),
+    /^Error: Local Storage\/leveldb is not a directory\.$/,
+  );
 
-test("a missing or linked leveldb gets no working copy", async (t) => {
-  const { root, base, leveldb } = await storageFixture(t);
-  const real = path.join(base, "real-leveldb");
-  await fs.rename(leveldb, real);
-  await fs.symlink(real, leveldb);
-  await assert.rejects(makeWorkingCopy(root), /symbolic link/);
-  await fs.rm(leveldb);
-  await assert.rejects(makeWorkingCopy(root), /missing/);
-  assert.deepEqual(await fs.readdir(path.join(root, LOCAL_STORAGE)), []);
+  const storage = await storageFixture(t);
+  const elsewhere = path.join(storage.base, "real-storage");
+  await fs.rename(path.join(storage.root, LOCAL_STORAGE), elsewhere);
+  await fs.symlink(elsewhere, path.join(storage.root, LOCAL_STORAGE));
+  const target = await copyTarget(storage);
+  await assert.rejects(
+    copyLocalStorage(storage.root, target),
+    /^Error: Local Storage is a symbolic link\.$/,
+  );
+  await assertGone(target);
 });
 
 // A root user ignores file modes, so the chmod-based tests prove nothing there.
@@ -611,149 +666,30 @@ const needsPermissions = {
 };
 
 test(
-  "an unreadable leveldb file fails the working copy and leaves none behind",
+  "an unreadable leveldb file fails the copy",
   needsPermissions,
   async (t) => {
-    const { root, leveldb } = await storageFixture(t);
-    const file = path.join(leveldb, "000003.log");
+    const fx = await storageFixture(t);
+    const file = path.join(fx.leveldb, "000003.log");
     await fs.chmod(file, 0);
     try {
-      await assert.rejects(makeWorkingCopy(root), { code: "EACCES" });
-    } finally {
-      await fs.chmod(file, 0o600);
-    }
-    assert.deepEqual(await fs.readdir(path.join(root, LOCAL_STORAGE)), [
-      "leveldb",
-    ]);
-  },
-);
-
-test(
-  "an unreadable leveldb file fails the backup and leaves no stamp directory",
-  needsPermissions,
-  async (t) => {
-    const { root, vault, leveldb } = await storageFixture(t);
-    const file = path.join(leveldb, "000003.log");
-    await fs.chmod(file, 0);
-    try {
-      await assert.rejects(backupLocalStorage(root, vault, new Date()), {
+      await assert.rejects(copyLocalStorage(fx.root, await copyTarget(fx)), {
         code: "EACCES",
       });
     } finally {
       await fs.chmod(file, 0o600);
     }
-    assert.deepEqual(await fs.readdir(path.join(vault, "drafts")), []);
+    assert.deepEqual(await fs.readdir(path.join(fx.root, LOCAL_STORAGE)), [
+      "leveldb",
+    ]);
   },
 );
-
-// A `rename` that fails on the given calls (1-based) and otherwise works.
-function renameFailingOn(...failing: number[]) {
-  let calls = 0;
-  const rename: typeof fs.rename = async (from, to) => {
-    calls += 1;
-    if (failing.includes(calls))
-      throw Object.assign(new Error(`injected failure ${calls}`), {
-        code: "EIO",
-      });
-    return fs.rename(from, to);
-  };
-  return { ops: { rename }, calls: () => calls };
-}
-
-// A working copy the helper changed, beside the original leveldb.
-async function changedCopy(t: any) {
-  const fx = await storageFixture(t);
-  const original = await snapshot(fx.leveldb);
-  const work = await makeWorkingCopy(fx.root);
-  const copy = path.join(work, "leveldb");
-  await fs.writeFile(path.join(copy, "000005.ldb"), "rewritten");
-  await fs.writeFile(path.join(copy, "000009.log"), "new");
-  await fs.rm(path.join(copy, "LOCK"));
-  const names = async () =>
-    (await fs.readdir(path.join(fx.root, LOCAL_STORAGE))).sort();
-  return { ...fx, work, original, changed: await snapshot(copy), names };
-}
-
-test("a swap puts the working copy in place and sets the old leveldb aside", async (t) => {
-  const { root, leveldb, work, original, changed } = await changedCopy(t);
-  await syncWorkingCopy(work);
-  const old = await swapInWorkingCopy(root, work);
-  assert.deepEqual(await snapshot(leveldb), changed);
-  assert.equal(path.dirname(old), path.join(root, LOCAL_STORAGE));
-  assert.match(path.basename(old), /^leveldb\.relay-old-[0-9a-f-]{36}$/);
-  assert.deepEqual(await snapshot(old), original);
-  // The working dir is left empty.
-  assert.deepEqual(await fs.readdir(work), []);
-});
-
-test("a failure moving the live directory aside leaves it as it was", async (t) => {
-  const { root, leveldb, work, original, changed, names } =
-    await changedCopy(t);
-  const seam = renameFailingOn(1);
-  await assert.rejects(swapInWorkingCopy(root, work, seam.ops), {
-    message: "injected failure 1",
-  });
-  assert.equal(seam.calls(), 1);
-  assert.deepEqual(await snapshot(leveldb), original);
-  assert.deepEqual(await snapshot(path.join(work, "leveldb")), changed);
-  assert.deepEqual(await names(), [path.basename(work), "leveldb"]);
-});
-
-test("a failure putting the copy in place puts the original back", async (t) => {
-  const { root, leveldb, work, original, changed, names } =
-    await changedCopy(t);
-  const seam = renameFailingOn(2);
-  await assert.rejects(
-    swapInWorkingCopy(root, work, seam.ops),
-    (error: Error) =>
-      error.message === "injected failure 2" &&
-      !(error instanceof PutBackFailed),
-  );
-  assert.equal(seam.calls(), 3); // aside, copy in (fails), original back
-  assert.deepEqual(await snapshot(leveldb), original);
-  assert.deepEqual(await snapshot(path.join(work, "leveldb")), changed);
-  // No old leveldb is left beside it.
-  assert.deepEqual(await names(), [path.basename(work), "leveldb"]);
-});
-
-test("a failed put-back does not hide the error, and keeps both copies", async (t) => {
-  const { root, leveldb, work, original, changed, names } =
-    await changedCopy(t);
-  const seam = renameFailingOn(2, 3);
-  await assert.rejects(
-    swapInWorkingCopy(root, work, seam.ops),
-    (error: Error) =>
-      error instanceof PutBackFailed && error.message === "injected failure 2",
-  );
-  await assert.rejects(fs.lstat(leveldb), { code: "ENOENT" });
-  const [workName, oldName, ...rest] = await names();
-  assert.equal(workName, path.basename(work));
-  assert.match(oldName, /^leveldb\.relay-old-/);
-  assert.deepEqual(rest, []);
-  assert.deepEqual(
-    await snapshot(path.join(root, LOCAL_STORAGE, oldName)),
-    original,
-  );
-  assert.deepEqual(await snapshot(path.join(work, "leveldb")), changed);
-});
-
-test("a working copy is discarded only while leveldb is in place", async (t) => {
-  const { root, leveldb, work, names } = await changedCopy(t);
-  const aside = path.join(root, LOCAL_STORAGE, "leveldb.relay-old-1234");
-  await fs.rename(leveldb, aside);
-  // Without leveldb, the copy may be what is left of Claude's data.
-  await discardWorkingCopy(root, work);
-  assert.deepEqual(await names(), [path.basename(work), path.basename(aside)]);
-  await fs.rename(aside, leveldb);
-  await discardWorkingCopy(root, work);
-  assert.deepEqual(await names(), ["leveldb"]);
-});
 
 test("the sweep removes only unfinished copies, and only while leveldb is in place", async (t) => {
   const { root, leveldb } = await storageFixture(t);
   const storage = path.join(root, LOCAL_STORAGE);
   const before = await snapshot(leveldb);
-  // Claude's own earlier leveldb, set aside by a swap: never deleted.
+  // Claude's own earlier leveldb, set aside by the first design: never deleted.
   const old = path.join(storage, `leveldb.relay-old-${randomUUID()}`);
   await fs.cp(leveldb, old, { recursive: true });
   const plant = async () => {
@@ -785,169 +721,80 @@ test("the sweep removes only unfinished copies, and only while leveldb is in pla
   assert.deepEqual((await fs.readdir(storage)).sort(), left);
 });
 
-test("a missing leveldb gives no backup", async (t) => {
-  const { root, vault } = await storageFixture(t);
-  await fs.rm(path.join(root, LEVELDB), { recursive: true });
-  assert.equal(await backupLocalStorage(root, vault, new Date()), undefined);
-  await fs.rm(path.join(root, LOCAL_STORAGE), { recursive: true });
-  assert.equal(await backupLocalStorage(root, vault, new Date()), undefined);
-  await fs.rm(root, { recursive: true });
-  assert.equal(await backupLocalStorage(root, vault, new Date()), undefined);
-  // A fresh install leaves no stray directories in the vault either.
-  assert.deepEqual(await fs.readdir(vault), []);
+test("the sweep never reaches through a symlinked Local Storage", async (t) => {
+  const fx = await storageFixture(t);
+  const storage = path.join(fx.root, LOCAL_STORAGE);
+  const elsewhere = path.join(fx.base, "elsewhere");
+  await fs.rename(storage, elsewhere);
+  await fs.mkdir(path.join(elsewhere, "leveldb.relay-1234"));
+  await fs.mkdir(path.join(elsewhere, ".relay-work-5678"));
+  await fs.symlink(elsewhere, storage);
+
+  await sweepDraftLeftovers(fx.root);
+
+  assert.deepEqual((await fs.readdir(elsewhere)).sort(), [
+    ".relay-work-5678",
+    "leveldb",
+    "leveldb.relay-1234",
+  ]);
 });
 
-test("a symlinked Local Storage or leveldb is refused", async (t) => {
-  const { root, vault, base } = await storageFixture(t);
-  const real = path.join(base, "real");
-  await fs.rename(path.join(root, LEVELDB), real);
-  await fs.symlink(real, path.join(root, LEVELDB));
-  await assert.rejects(backupLocalStorage(root, vault, new Date()));
-
-  await fs.rm(path.join(root, LOCAL_STORAGE), { recursive: true });
-  const realStorage = path.join(base, "real-storage");
-  await fs.mkdir(path.join(realStorage, "leveldb"), { recursive: true });
-  await fs.symlink(realStorage, path.join(root, LOCAL_STORAGE));
-  await assert.rejects(backupLocalStorage(root, vault, new Date()));
-  assert.deepEqual(await fs.readdir(vault), []);
-});
-
-test("a leveldb that is not a directory is refused", async (t) => {
-  const { root, vault } = await storageFixture(t);
-  await fs.rm(path.join(root, LEVELDB), { recursive: true });
-  await fs.writeFile(path.join(root, LEVELDB), "not a directory");
-  await assert.rejects(backupLocalStorage(root, vault, new Date()));
-  assert.deepEqual(await fs.readdir(vault), []);
-});
-
-test("a second backup in the same millisecond does not overwrite the first", async (t) => {
-  const { root, vault } = await storageFixture(t);
-  const now = new Date("2026-10-16T09:08:07.654Z");
-  const first = (await backupLocalStorage(root, vault, now))!;
-  const before = await snapshot(first);
-  await assert.rejects(backupLocalStorage(root, vault, now));
-  assert.deepEqual(await snapshot(first), before);
-});
-
-test("only the three newest backups stay", async (t) => {
-  const { root, vault } = await storageFixture(t);
-  // Out of order on purpose: pruning goes by the stamp, not by creation order.
-  for (const day of [3, 1, 5, 2, 4])
-    await backupLocalStorage(root, vault, new Date(Date.UTC(2026, 9, day, 12)));
+test("the first design's plaintext backups are removed, and nothing else", async (t) => {
+  const { vault, base } = await storageFixture(t);
   const drafts = path.join(vault, "drafts");
+  for (const stamp of ["2026-10-16T09-08-07-654Z", "2025-12-31T23-59-59-999Z"]) {
+    await fs.mkdir(path.join(drafts, stamp, "leveldb"), { recursive: true });
+    await fs.writeFile(path.join(drafts, stamp, "leveldb", "000003.log"), "x");
+  }
   await fs.writeFile(path.join(drafts, "last.json"), "{}");
-  await fs.mkdir(path.join(drafts, "scratch"));
-  await fs.writeFile(path.join(vault, "journal.json"), "[]");
+  await fs.writeFile(path.join(drafts, "pending.bin"), "sealed");
+  await fs.mkdir(path.join(drafts, "not-a-stamp"));
+  // Named like a backup, but a file.
+  await fs.writeFile(path.join(drafts, "2026-10-01T00-00-00-000Z"), "file");
+  // Named like a backup, but a link: neither it nor what it leads to is removed.
+  const outside = path.join(base, "outside");
+  await fs.mkdir(outside);
+  await fs.writeFile(path.join(outside, "precious"), "mine");
+  await fs.symlink(outside, path.join(drafts, "2026-11-01T12-00-00-000Z"));
+  // Outside <vault>/drafts, however it is named.
   await fs.mkdir(path.join(vault, "backups", "2026-01-01T00-00-00-000Z"), {
     recursive: true,
   });
 
-  await pruneDraftBackups(vault);
+  await removeLegacyDraftBackups(vault);
 
   assert.deepEqual((await fs.readdir(drafts)).sort(), [
-    "2026-10-03T12-00-00-000Z",
-    "2026-10-04T12-00-00-000Z",
-    "2026-10-05T12-00-00-000Z",
+    "2026-10-01T00-00-00-000Z",
+    "2026-11-01T12-00-00-000Z",
     "last.json",
-    "scratch",
+    "not-a-stamp",
+    "pending.bin",
   ]);
-  assert.equal(await fs.readFile(path.join(drafts, "last.json"), "utf8"), "{}");
-  // Nothing outside <vault>/drafts is touched.
-  assert.deepEqual((await fs.readdir(vault)).sort(), [
-    "backups",
-    "drafts",
-    "journal.json",
-  ]);
+  assert.equal(await fs.readFile(path.join(drafts, "pending.bin"), "utf8"), "sealed");
+  assert.equal(await fs.readFile(path.join(outside, "precious"), "utf8"), "mine");
+  assert.ok(
+    (await fs.lstat(path.join(drafts, "2026-11-01T12-00-00-000Z"))).isSymbolicLink(),
+  );
   assert.deepEqual(await fs.readdir(path.join(vault, "backups")), [
     "2026-01-01T00-00-00-000Z",
   ]);
-  // The surviving backups are whole.
-  const kept = path.join(drafts, "2026-10-05T12-00-00-000Z", "leveldb");
-  assert.equal(
-    (await fs.stat(path.join(kept, "000005.ldb"))).size,
-    3 * 1024 * 1024,
-  );
 });
 
-test("pruning keeps what is under the limit and honours a smaller one", async (t) => {
-  const { root, vault } = await storageFixture(t);
-  await backupLocalStorage(root, vault, new Date("2026-10-01T00:00:00.000Z"));
-  await backupLocalStorage(root, vault, new Date("2026-10-02T00:00:00.000Z"));
-  await pruneDraftBackups(vault);
-  assert.equal((await fs.readdir(path.join(vault, "drafts"))).length, 2);
-  await pruneDraftBackups(vault, 1);
-  assert.deepEqual(await fs.readdir(path.join(vault, "drafts")), [
-    "2026-10-02T00-00-00-000Z",
-  ]);
-});
-
-test("pruning a vault without drafts does nothing", async (t) => {
-  const { vault } = await storageFixture(t);
-  await pruneDraftBackups(vault);
-  assert.deepEqual(await fs.readdir(vault), []);
-});
-
-test("pruning never follows a symlink that looks like a backup", async (t) => {
+test("the backup cleanup never follows a linked drafts dir", async (t) => {
   const { vault, base } = await storageFixture(t);
-  const drafts = path.join(vault, "drafts");
-  const outside = path.join(base, "outside");
-  await fs.mkdir(outside);
-  await fs.writeFile(path.join(outside, "precious"), "mine");
-  await fs.mkdir(drafts);
-  for (const day of [1, 2, 3, 4])
-    await fs.mkdir(path.join(drafts, `2026-10-0${day}T12-00-00-000Z`));
-  // The newest stamp of all, so if it counted as a backup it would push a real
-  // one out of the three kept, and it would be among those removed when it did not.
-  const link = "2026-11-01T12-00-00-000Z";
-  await fs.symlink(outside, path.join(drafts, link));
-  await pruneDraftBackups(vault);
-  assert.equal(
-    await fs.readFile(path.join(outside, "precious"), "utf8"),
-    "mine",
-  );
-  // The link itself is not a backup, so it is neither counted nor removed.
-  assert.equal(
-    (await fs.lstat(path.join(drafts, link))).isSymbolicLink(),
-    true,
-  );
-  assert.deepEqual((await fs.readdir(drafts)).sort(), [
-    "2026-10-02T12-00-00-000Z",
-    "2026-10-03T12-00-00-000Z",
-    "2026-10-04T12-00-00-000Z",
-    link,
-  ]);
-});
-
-test("pruning orders stamps across a year boundary and by the millisecond", async (t) => {
-  const { root, vault } = await storageFixture(t);
-  const drafts = path.join(vault, "drafts");
-  const at = (iso: string) => backupLocalStorage(root, vault, new Date(iso));
-  await at("2025-12-31T23:59:59.999Z");
-  await at("2026-01-01T00:00:00.000Z");
-  await pruneDraftBackups(vault, 1);
-  assert.deepEqual(await fs.readdir(drafts), ["2026-01-01T00-00-00-000Z"]);
-
-  await at("2026-10-16T08:00:00.000Z");
-  await at("2026-10-16T08:00:00.001Z");
-  await at("2026-10-16T07:59:59.999Z");
-  await pruneDraftBackups(vault, 2);
-  assert.deepEqual((await fs.readdir(drafts)).sort(), [
-    "2026-10-16T08-00-00-000Z",
-    "2026-10-16T08-00-00-001Z",
-  ]);
-});
-
-test("a symlinked drafts directory is refused by backup and prune", async (t) => {
-  const { root, vault, base } = await storageFixture(t);
   const outside = path.join(base, "outside");
   await fs.mkdir(path.join(outside, "2026-10-01T12-00-00-000Z"), {
     recursive: true,
   });
   await fs.symlink(outside, path.join(vault, "drafts"));
-  await assert.rejects(backupLocalStorage(root, vault, new Date()));
-  await assert.rejects(pruneDraftBackups(vault, 0));
+  await removeLegacyDraftBackups(vault);
   assert.deepEqual(await fs.readdir(outside), ["2026-10-01T12-00-00-000Z"]);
+  // A vault without drafts is left as it is.
+  await fs.rm(path.join(vault, "drafts"));
+  await removeLegacyDraftBackups(vault);
+  assert.deepEqual(await fs.readdir(vault), []);
 });
+
 
 test("the job flag's value is the path after it", () => {
   assert.equal(DRAFT_WORKER_FLAG, "--relay-draft-worker=");
@@ -995,9 +842,9 @@ const ALIAS_X = "aaaaaaaa-0000-4000-8000-0000000000a1";
 const ALIAS_Y = "bbbbbbbb-0000-4000-8000-0000000000b2";
 function job(): DraftJob {
   return {
-    storage: "/claude/Local Storage/.relay-work-1234",
-    scratch: "/tmp/relay-draft-job",
-    result: "/tmp/relay-draft-job/result.json",
+    storage: "/tmp/relay-drafts-job/copy",
+    scratch: "/tmp/relay-drafts-job",
+    result: "/tmp/relay-drafts-job/result.json",
     claudeElectron: "44.7.2",
   };
 }
@@ -1233,22 +1080,24 @@ test("the package runs the entry", async () => {
 // --- The draft step of a switch ---------------------------------------------------
 
 const NOW = new Date("2026-10-16T10:00:00.000Z");
-const NOW_STAMP = "2026-10-16T10-00-00-000Z";
 // The Electron version the gate read from Claude.app.
 const CLAUDE_ELECTRON = "44.7.2";
-// Until captured drafts are stored, a run only reads: nothing is swapped in.
-const CAPTURE_PENDING = "capture pending";
+// Text that must never reach last.json, or survive the step outside the vault.
+const UNSENT = "an unsent draft, word for word";
+const NEW_SESSION_TEXT = "the start of a new session";
 
-// The backup directories under <vault>/drafts, oldest first.
-async function backupsIn(vault: string) {
-  let names: string[] = [];
-  try {
-    names = await fs.readdir(path.join(vault, "drafts"));
-  } catch (e: any) {
-    if (e.code !== "ENOENT") throw e;
-  }
-  return names.filter((name) => /^\d{4}-\d{2}-\d{2}T/.test(name)).sort();
-}
+// What the helper reads from the copy: A's drafts of X and of a new session, and B's own draft.
+const HELPER_DRAFTS = {
+  [P + ALIAS_X]: draft(A, UNSENT),
+  [P + ALIAS_Y]: draft(B, "B's own draft"),
+  [NEW_SESSION_DRAFT]: draft(A, NEW_SESSION_TEXT, { files: ["a.png"] }),
+};
+const READ: DraftResult = { ok: true, drafts: HELPER_DRAFTS };
+// What the step keeps of them for B.
+const CAPTURED: CapturedDraft[] = [
+  { targetAlias: ALIAS_X, title: "Fix login", text: UNSENT, attachments: false },
+  { newSession: true, title: "", text: NEW_SESSION_TEXT, attachments: true },
+];
 
 async function lastOutcome(vault: string) {
   return JSON.parse(
@@ -1261,12 +1110,18 @@ async function storageNames(fx: { root: string }) {
   return (await fs.readdir(path.join(fx.root, LOCAL_STORAGE))).sort();
 }
 
-// A stand-in for the helper: it leaves its scratch dir the way the real one does (a root
-// whose "Local Storage" links to the job's storage, and a userData), then does `effect` and
-// answers.
+const inside = (dir: string, target: string) => {
+  const relative = path.relative(dir, target);
+  return (
+    relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)
+  );
+};
+
+// A stand-in for the helper. It leaves its scratch dir the way the real one does: a root whose
+// "Local Storage" links to the job's storage, a userData, and a result file holding the drafts
+// it read, text and all. Then it answers with `answer`, or with what `answer(job)` gives.
 function fakeRun(
-  effect?: (job: DraftJob) => Promise<DraftResult | void>,
-  answer: DraftResult = { ok: true, drafts: {} },
+  answer: DraftResult | ((job: DraftJob) => Promise<DraftResult>) = READ,
 ) {
   const jobs: DraftJob[] = [];
   const run = async (job: DraftJob): Promise<DraftResult> => {
@@ -1278,56 +1133,48 @@ function fakeRun(
     );
     await fs.mkdir(path.join(job.scratch, "userData"), { recursive: true });
     await fs.writeFile(path.join(job.scratch, "userData", "Preferences"), "{}");
-    return (await effect?.(job)) ?? answer;
+    await fs.writeFile(job.result, JSON.stringify(READ));
+    return typeof answer === "function" ? answer(job) : answer;
   };
   return { run, jobs };
 }
 
-// What a helper does to the leveldb it was given. Returns what that leveldb then holds.
+// What a helper's Chromium may do to the leveldb it was given.
 async function rewrite(job: DraftJob) {
   const leveldb = path.join(job.storage, "leveldb");
   await fs.writeFile(path.join(leveldb, "000005.ldb"), "rewritten");
   await fs.writeFile(path.join(leveldb, "000009.log"), "new");
-  // Gone already when an earlier run's rewrite was swapped in.
   await fs.rm(path.join(leveldb, "LOCK"), { force: true });
-  return snapshot(leveldb);
 }
 
-// Claude stays closed unless `running` says otherwise.
-function transfer(
+// Runs the step for an A→B switch that carries X (A's and B's) and Y (B's only). B calls X
+// "Fix login". Returns the outcome and what was handed to `store`.
+async function capture(
   fx: { root: string; vault: string; tmp: string },
   run: (job: DraftJob) => Promise<DraftResult>,
-  extra: {
-    now?: Date;
-    blocked?: string;
-    claudeElectron?: string;
-    running?: () => Promise<boolean>;
-  } = {},
+  extra: Partial<Parameters<typeof captureDrafts>[0]> = {},
 ) {
-  return preserveDrafts({
+  const stored: { to: string; drafts: CapturedDraft[] }[] = [];
+  const outcome = await captureDrafts({
     root: fx.root,
-    vault: fx.vault,
     from: A,
     to: B,
-    conversations: [carried(ALIAS_X, [ALIAS_X, A], [ALIAS_X, B])],
+    conversations: [
+      carried(ALIAS_X, [ALIAS_X, A], [ALIAS_X, B]),
+      carried(ALIAS_Y, [ALIAS_Y, B]),
+    ],
+    titles: { [ALIAS_X]: "Fix login", [ALIAS_Y]: "B's work" },
     run,
+    store: async (to, drafts) => {
+      stored.push({ to, drafts });
+    },
+    lastJson: path.join(fx.vault, "drafts", "last.json"),
     now: NOW,
     claudeElectron: CLAUDE_ELECTRON,
-    running: async () => false,
     tmp: fx.tmp,
     ...extra,
   });
-}
-
-// A `running` check that answers in turn from `answers` (true, false, or "throw"), then false.
-function runningSequence(...answers: (boolean | "throw")[]) {
-  let calls = 0;
-  const running = async () => {
-    const answer = answers[calls++] ?? false;
-    if (answer === "throw") throw new Error("ps failed");
-    return answer;
-  };
-  return { running, calls: () => calls };
+  return { outcome, stored };
 }
 
 async function assertGone(target: string) {
@@ -1352,233 +1199,248 @@ function failCopies(...failing: number[]) {
   };
 }
 
-test("a successful run never swaps: its working copy is dropped and the step is pending", async (t) => {
+test("captures A's drafts and never changes Claude's leveldb", async (t) => {
   const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
+  const before = await snapshot(path.join(fx.root, LOCAL_STORAGE));
   const { run, jobs } = fakeRun(async (job) => {
+    // Whatever the helper's Chromium does to its copy stays in the copy.
     await rewrite(job);
-    // What the read-only helper answers: the drafts' text must never reach last.json.
-    return { ok: true, drafts: { [P + ALIAS_X]: draft(A, "an unsent draft") } };
+    return READ;
   });
 
-  const outcome = await transfer(fx, run);
+  const { outcome, stored } = await capture(fx, run);
 
-  assert.deepEqual(outcome, { status: "skipped", reason: CAPTURE_PENDING });
+  assert.deepEqual(outcome, { status: "captured", count: 2 });
+  assert.deepEqual(stored, [{ to: B, drafts: CAPTURED }]);
   assert.equal(jobs.length, 1);
-  const [job] = jobs;
-  assert.equal(path.dirname(job.scratch), fx.tmp);
-  assert.equal(job.result, path.join(job.scratch, "result.json"));
-  assert.equal(job.claudeElectron, CLAUDE_ELECTRON);
-  // The job names only where to read: no accounts, no conversations.
-  assert.deepEqual(Object.keys(job).sort(), [
-    "claudeElectron",
-    "result",
-    "scratch",
-    "storage",
-  ]);
-  // Claude's leveldb is as it was, and nothing is left beside it.
-  assert.deepEqual(await snapshot(fx.leveldb), before);
+  // Byte for byte as it was, and nothing was made beside it.
+  assert.deepEqual(await snapshot(path.join(fx.root, LOCAL_STORAGE)), before);
   assert.deepEqual(await storageNames(fx), ["leveldb"]);
-  assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
-  await assertGone(job.scratch);
+  // The scratch dir, with the copy and the text-bearing result file, is gone.
+  await assertGone(jobs[0].scratch);
   assert.deepEqual(await fs.readdir(fx.tmp), []);
-
-  assert.deepEqual(await lastOutcome(fx.vault), {
-    at: NOW.toISOString(),
-    from: A,
-    to: B,
-    status: "skipped",
-    reason: CAPTURE_PENDING,
-  });
-  const raw = await fs.readFile(
-    path.join(fx.vault, "drafts", "last.json"),
-    "utf8",
-  );
-  assert.ok(!raw.includes("an unsent draft"), raw);
 });
 
-test("the helper only ever sees the working copy", async (t) => {
+test("the helper sees only the private copy", async (t) => {
   const fx = await storageFixture(t);
-  const storage = path.join(fx.root, LOCAL_STORAGE);
   const before = await snapshot(fx.leveldb);
-  const seen: string[] = [];
   let problem: unknown;
-  const { run } = fakeRun(async (job) => {
-    seen.push(job.storage);
-    // A step ignores what a run throws, so a failed check is kept to be raised below.
+  const { run, jobs } = fakeRun(async (job) => {
+    // The step turns what a run throws into an outcome, so a failed check is raised below.
     try {
-      assert.notEqual(job.storage, storage);
-      assert.equal(path.dirname(job.storage), storage);
-      assert.match(path.basename(job.storage), /^\.relay-work-/);
-      // A copy of Claude's leveldb, made after the backup.
+      assert.equal(path.dirname(job.scratch), fx.tmp);
+      assert.match(path.basename(job.scratch), /^relay-drafts-/);
+      assert.equal(job.storage, path.join(job.scratch, "copy"));
+      assert.ok(inside(fx.tmp, job.storage));
+      assert.ok(!inside(fx.root, job.storage));
+      assert.equal(job.result, path.join(job.scratch, "result.json"));
+      assert.equal(job.claudeElectron, CLAUDE_ELECTRON);
+      // The job names only where to read: no accounts, no conversations.
+      assert.deepEqual(Object.keys(job).sort(), [
+        "claudeElectron",
+        "result",
+        "scratch",
+        "storage",
+      ]);
+      // A copy of Claude's leveldb, and nothing was made in Claude's dir for it.
       assert.deepEqual(
         await snapshot(path.join(job.storage, "leveldb")),
         before,
       );
-      // While the run works on its copy, Claude's leveldb is as it was.
-      await rewrite(job);
-      assert.deepEqual(await snapshot(fx.leveldb), before);
+      assert.deepEqual(await storageNames(fx), ["leveldb"]);
     } catch (error) {
       problem = error;
     }
+    return READ;
   });
 
-  assert.equal((await transfer(fx, run)).status, "skipped");
+  assert.equal((await capture(fx, run)).outcome.status, "captured");
   assert.equal(problem, undefined);
-  assert.equal(seen.length, 1);
+  assert.equal(jobs.length, 1);
 });
 
-test("whatever the run answers, live stays byte-identical and the working copy is discarded", async (t) => {
-  const answers: [string, () => Promise<DraftResult>][] = [
-    ["ok", async () => ({ ok: true, drafts: {} })],
-    ["ok false", async () => ({ ok: false, error: "verification failed" })],
+test("a failed run stores nothing and leaves no scratch", async (t) => {
+  const cases: [string, Parameters<typeof fakeRun>[0], string][] = [
+    ["ok false", { ok: false, error: "verification failed" }, "verification failed"],
+    ["empty origin", { ok: false, error: EMPTY_STORAGE }, EMPTY_STORAGE],
     [
       "a throw",
       async () => {
         throw new Error("helper crashed");
       },
+      "helper crashed",
     ],
-    ["no answer", async () => undefined as unknown as DraftResult],
+    ["no answer", async () => undefined as unknown as DraftResult, "no result"],
   ];
-  for (const [name, answer] of answers) {
+  for (const [name, answer, error] of cases) {
     const fx = await storageFixture(t);
-    const before = await snapshot(fx.leveldb);
-    const helper = fakeRun(async (job) => {
-      await rewrite(job);
-    });
-    const run = async (job: DraftJob) => {
-      await helper.run(job);
-      return answer();
-    };
+    const before = await snapshot(path.join(fx.root, LOCAL_STORAGE));
+    const { run, jobs } = fakeRun(answer);
 
-    const outcome = await transfer(fx, run);
+    const { outcome, stored } = await capture(fx, run);
 
-    const expected = { status: "skipped", reason: CAPTURE_PENDING };
-    assert.deepEqual(outcome, expected, name);
-    assert.deepEqual(await snapshot(fx.leveldb), before, name);
-    assert.deepEqual(await storageNames(fx), ["leveldb"], name);
-    // The backup stays, in case it is ever needed by hand.
-    assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP], name);
-    await assertGone(helper.jobs[0].scratch);
+    assert.deepEqual(outcome, { status: "failed", error }, name);
+    assert.deepEqual(stored, [], name);
+    assert.equal(jobs.length, 1, name);
+    // The fake left the text it read in its result file: that is gone with the scratch dir.
+    await assertGone(jobs[0].scratch);
+    assert.deepEqual(await fs.readdir(fx.tmp), [], name);
+    assert.deepEqual(
+      await snapshot(path.join(fx.root, LOCAL_STORAGE)),
+      before,
+      name,
+    );
     assert.deepEqual(
       await lastOutcome(fx.vault),
-      { at: NOW.toISOString(), from: A, to: B, ...expected },
+      { at: NOW.toISOString(), from: A, to: B, status: "failed", error },
       name,
     );
   }
 });
 
-test("a working-copy failure skips and leaves nothing behind", async (t) => {
+test("a store that fails is a failure, and leaves no scratch", async (t) => {
   const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
   const { run, jobs } = fakeRun();
-  // The backup is the first copy, the working copy the second.
-  const undo = failCopies(2);
-  t.after(undo);
 
-  const outcome = await transfer(fx, run);
-  undo();
-
-  assert.deepEqual(outcome, {
-    status: "skipped",
-    reason: "injected copy failure 2",
+  const { outcome } = await capture(fx, run, {
+    store: async () => {
+      throw new Error("System encryption is unavailable.");
+    },
   });
-  assert.equal(jobs.length, 0);
-  assert.deepEqual(await snapshot(fx.leveldb), before);
-  assert.deepEqual(await storageNames(fx), ["leveldb"]);
-  assert.equal((await lastOutcome(fx.vault)).reason, "injected copy failure 2");
+
+  const expected = {
+    status: "failed",
+    error: "System encryption is unavailable.",
+  };
+  assert.deepEqual(outcome, expected);
+  await assertGone(jobs[0].scratch);
+  assert.deepEqual(await lastOutcome(fx.vault), {
+    at: NOW.toISOString(),
+    from: A,
+    to: B,
+    ...expected,
+  });
 });
 
-test("a relay-old dir from an earlier run is never deleted", async (t) => {
+test("blocked or no Electron version skips", async (t) => {
+  const unknown = "Claude Desktop's Electron version is unknown";
+  const cases: [string, Partial<Parameters<typeof captureDrafts>[0]>, string][] = [
+    [
+      "blocked",
+      { blocked: "drafts move only on macOS" },
+      "drafts move only on macOS",
+    ],
+    ["running", { blocked: "Claude is running" }, "Claude is running"],
+    ["no Electron version", { claudeElectron: undefined }, unknown],
+  ];
+  for (const [name, extra, reason] of cases) {
+    const fx = await storageFixture(t);
+    const storage = path.join(fx.root, LOCAL_STORAGE);
+    // What the sweeps would remove, had the step gone on.
+    await fs.mkdir(path.join(storage, "leveldb.relay-1234"));
+    await fs.mkdir(path.join(storage, ".relay-work-5678"));
+    const stale = await fs.mkdtemp(path.join(fx.tmp, "relay-drafts-"));
+    const eleven = new Date(Date.now() - 11 * 60_000);
+    await fs.utimes(stale, eleven, eleven);
+    const before = await snapshot(storage);
+    const { run, jobs } = fakeRun();
+
+    const { outcome, stored } = await capture(fx, run, extra);
+
+    assert.deepEqual(outcome, { status: "skipped", reason }, name);
+    assert.equal(jobs.length, 0, name);
+    assert.deepEqual(stored, [], name);
+    // Nothing is swept, copied or made.
+    assert.deepEqual(await snapshot(storage), before, name);
+    assert.deepEqual(await fs.readdir(fx.tmp), [path.basename(stale)], name);
+    assert.deepEqual(
+      await lastOutcome(fx.vault),
+      { at: NOW.toISOString(), from: A, to: B, status: "skipped", reason },
+      name,
+    );
+  }
+});
+
+test("last.json holds no text", async (t) => {
+  const fx = await storageFixture(t);
+
+  assert.equal((await capture(fx, fakeRun().run)).outcome.status, "captured");
+
+  const drafts = path.join(fx.vault, "drafts");
+  const raw = await fs.readFile(path.join(drafts, "last.json"), "utf8");
+  for (const text of [UNSENT, NEW_SESSION_TEXT, "B's own draft"])
+    assert.ok(!raw.includes(text), raw);
+  // Counts and reasons only.
+  assert.deepEqual(JSON.parse(raw), {
+    at: NOW.toISOString(),
+    from: A,
+    to: B,
+    status: "captured",
+    count: 2,
+  });
+  // Private to Relay, like the directory made for it.
+  assert.equal((await fs.stat(drafts)).mode & 0o777, 0o700);
+  assert.equal(
+    (await fs.stat(path.join(drafts, "last.json"))).mode & 0o777,
+    0o600,
+  );
+});
+
+test("stale scratch is swept, relay-old is never touched", async (t) => {
   const fx = await storageFixture(t);
   const storage = path.join(fx.root, LOCAL_STORAGE);
-  const stray = path.join(storage, "leveldb.relay-old-0123");
-  await fs.cp(fx.leveldb, stray, { recursive: true });
-  const kept = await snapshot(stray);
-  const at = (minute: number) => new Date(Date.UTC(2026, 9, 16, 10, minute));
-
-  // A run that completes, and one that fails.
-  assert.equal((await transfer(fx, fakeRun().run)).status, "skipped");
-  assert.deepEqual(await storageNames(fx), [
-    "leveldb",
-    "leveldb.relay-old-0123",
-  ]);
-  const failing = fakeRun(async () => ({
-    ok: false,
-    error: "verification failed",
-  }));
-  assert.equal(
-    (await transfer(fx, failing.run, { now: at(1) })).status,
-    "skipped",
-  );
-  // And one that finds no leveldb.
-  await fs.rename(fx.leveldb, path.join(fx.base, "elsewhere"));
-  assert.equal(
-    (await transfer(fx, fakeRun().run, { now: at(2) })).status,
-    "skipped",
-  );
-
-  assert.deepEqual(await snapshot(stray), kept);
-  assert.deepEqual(await storageNames(fx), ["leveldb.relay-old-0123"]);
-});
-
-test("a stale scratch dir is removed, but not what it links to", async (t) => {
-  const fx = await storageFixture(t);
   // What a crashed helper left: a scratch dir whose link leads to a Claude dir.
   const claude = path.join(fx.base, "fake-claude");
   await fs.mkdir(path.join(claude, "leveldb"), { recursive: true });
   await fs.writeFile(path.join(claude, "leveldb", "CURRENT"), "MANIFEST-1\n");
   const stale = await fs.mkdtemp(path.join(fx.tmp, "relay-drafts-"));
+  await fs.mkdir(path.join(stale, "root"));
+  await fs.symlink(claude, path.join(stale, "root", "Local Storage"));
+  // Younger than ten minutes: it may belong to a step still running.
   const fresh = await fs.mkdtemp(path.join(fx.tmp, "relay-drafts-"));
   // Not a scratch dir, however old.
   const other = path.join(fx.tmp, "someone-else");
   await fs.mkdir(other);
-  await fs.mkdir(path.join(stale, "root"));
-  await fs.symlink(claude, path.join(stale, "root", "Local Storage"));
   const eleven = new Date(Date.now() - 11 * 60_000);
   await fs.utimes(stale, eleven, eleven);
   await fs.utimes(other, eleven, eleven);
+  // What the first design left in Claude's Local Storage: a leveldb it set aside, which is
+  // never deleted, and a working dir and an unfinished copy, which are.
+  const old = path.join(storage, "leveldb.relay-old-0123");
+  await fs.cp(fx.leveldb, old, { recursive: true });
+  const kept = await snapshot(old);
+  await fs.mkdir(path.join(storage, `.relay-work-${randomUUID()}`, "leveldb"), {
+    recursive: true,
+  });
+  await fs.mkdir(path.join(storage, `leveldb.relay-${randomUUID()}`));
 
-  assert.equal((await transfer(fx, fakeRun().run)).status, "skipped");
+  assert.equal((await capture(fx, fakeRun().run)).outcome.status, "captured");
 
   await assertGone(stale);
-  // Younger than ten minutes: it may belong to a step still running.
   assert.ok((await fs.lstat(fresh)).isDirectory());
   assert.ok((await fs.lstat(other)).isDirectory());
   assert.equal(
     await fs.readFile(path.join(claude, "leveldb", "CURRENT"), "utf8"),
     "MANIFEST-1\n",
   );
-});
+  assert.deepEqual(await storageNames(fx), [
+    "leveldb",
+    "leveldb.relay-old-0123",
+  ]);
+  assert.deepEqual(await snapshot(old), kept);
 
-test("a prune that throws still backs up and runs", async (t) => {
-  const fx = await storageFixture(t);
-  // Three backups, so the prune before the new one removes the oldest, and that fails.
-  for (const day of [1, 2, 3])
-    await backupLocalStorage(
-      fx.root,
-      fx.vault,
-      new Date(Date.UTC(2026, 9, day)),
-    );
-  const doomed = path.join(fx.vault, "drafts", "2026-10-01T00-00-00-000Z");
-  const rm = fs.rm;
-  t.after(() => {
-    fs.rm = rm;
+  // Without leveldb, what is beside it may be all that is left of Claude's data: it all stays.
+  await fs.mkdir(path.join(storage, ".relay-work-5678"));
+  await fs.rename(fx.leveldb, path.join(fx.base, "elsewhere"));
+  assert.deepEqual((await capture(fx, fakeRun().run)).outcome, {
+    status: "skipped",
+    reason: "no Local Storage",
   });
-  fs.rm = (async (target: any, ...rest: any[]) => {
-    if (target === doomed)
-      throw Object.assign(new Error("injected rm failure"), { code: "EPERM" });
-    return (rm as any)(target, ...rest);
-  }) as typeof fs.rm;
-  const { run, jobs } = fakeRun();
-
-  const outcome = await transfer(fx, run);
-  fs.rm = rm;
-
-  assert.equal(outcome.status, "skipped");
-  assert.equal(jobs.length, 1);
-  assert.ok((await backupsIn(fx.vault)).includes(NOW_STAMP));
-  assert.ok((await backupsIn(fx.vault)).includes("2026-10-01T00-00-00-000Z"));
+  assert.deepEqual(await storageNames(fx), [
+    ".relay-work-5678",
+    "leveldb.relay-old-0123",
+  ]);
+  assert.deepEqual(await snapshot(old), kept);
 });
 
 test("no Local Storage → skipped, run not called", async (t) => {
@@ -1586,11 +1448,12 @@ test("no Local Storage → skipped, run not called", async (t) => {
   await fs.rm(fx.leveldb, { recursive: true });
   const { run, jobs } = fakeRun();
 
-  const outcome = await transfer(fx, run);
+  const { outcome, stored } = await capture(fx, run);
 
   assert.deepEqual(outcome, { status: "skipped", reason: "no Local Storage" });
   assert.equal(jobs.length, 0);
-  assert.deepEqual(await backupsIn(fx.vault), []);
+  assert.deepEqual(stored, []);
+  assert.deepEqual(await fs.readdir(fx.tmp), []);
   assert.deepEqual(await lastOutcome(fx.vault), {
     at: NOW.toISOString(),
     from: A,
@@ -1600,234 +1463,306 @@ test("no Local Storage → skipped, run not called", async (t) => {
   });
 });
 
-test("a run first sweeps what an earlier step left, but only while leveldb is in place", async (t) => {
-  const fx = await storageFixture(t);
-  const storage = path.join(fx.root, LOCAL_STORAGE);
-  await fs.mkdir(path.join(storage, "leveldb.relay-5678"));
-  await fs.mkdir(path.join(storage, ".relay-work-1234", "leveldb"), {
-    recursive: true,
-  });
-  const seen: string[][] = [];
-  const { run } = fakeRun(async (job) => {
-    const names = await fs.readdir(storage);
-    seen.push(names.filter((name) => name !== path.basename(job.storage)));
-  });
-
-  await transfer(fx, run);
-  assert.deepEqual(seen, [["leveldb"]]);
-
-  // With leveldb gone, what is beside it may be the only copy of Claude's data: it stays.
-  await fs.rename(fx.leveldb, path.join(storage, "leveldb.relay-old-9999"));
-  await fs.mkdir(path.join(storage, ".relay-work-5678", "leveldb"), {
-    recursive: true,
-  });
-  assert.deepEqual(
-    await transfer(fx, run, { now: new Date("2026-10-16T11:00:00.000Z") }),
-    { status: "skipped", reason: "no Local Storage" },
-  );
-  assert.deepEqual(await storageNames(fx), [
-    ".relay-work-5678",
-    "leveldb.relay-old-9999",
-  ]);
-});
-
-test("the sweep never reaches through a symlinked Local Storage", async (t) => {
-  const fx = await storageFixture(t);
-  const storage = path.join(fx.root, LOCAL_STORAGE);
-  const elsewhere = path.join(fx.base, "elsewhere");
-  await fs.rename(storage, elsewhere);
-  await fs.mkdir(path.join(elsewhere, "leveldb.relay-1234"));
-  await fs.mkdir(path.join(elsewhere, ".relay-work-5678"));
-  await fs.symlink(elsewhere, storage);
-
-  await sweepDraftLeftovers(fx.root);
-
-  assert.deepEqual((await fs.readdir(elsewhere)).sort(), [
-    ".relay-work-5678",
-    "leveldb",
-    "leveldb.relay-1234",
-  ]);
-});
-
-test("old backups are pruned before the new one, so at most three ever exist", async (t) => {
-  const fx = await storageFixture(t);
-  const during: number[] = [];
-  const { run } = fakeRun(async (job) => {
-    during.push((await backupsIn(fx.vault)).length);
-    await rewrite(job);
-  });
-  const stamps: string[] = [];
-  for (const day of [1, 2, 3, 4, 5]) {
-    const outcome = await transfer(fx, run, {
-      now: new Date(Date.UTC(2026, 9, day, 12)),
-    });
-    assert.equal(outcome.status, "skipped", `day ${day}`);
-    stamps.push(`2026-10-0${day}T12-00-00-000Z`);
-    // The two newest from before and this run's own backup, nothing else.
-    assert.deepEqual(await backupsIn(fx.vault), stamps.slice(-3), `day ${day}`);
-    assert.deepEqual(await storageNames(fx), ["leveldb"], `day ${day}`);
-  }
-  assert.deepEqual(during, [1, 2, 3, 3, 3]);
-});
-
-test("the backup a run depends on survives a clock that went back", async (t) => {
-  const fx = await storageFixture(t);
-  // Three backups made while the clock was years ahead.
-  for (const day of [1, 2, 3])
-    await backupLocalStorage(
-      fx.root,
-      fx.vault,
-      new Date(Date.UTC(2030, 0, day)),
-    );
-  const before = await snapshot(fx.leveldb);
-  const during: string[][] = [];
-  const { run } = fakeRun(async (job) => {
-    during.push(await backupsIn(fx.vault));
-    await fs.writeFile(path.join(job.storage, "leveldb", "CURRENT"), "x");
-    return { ok: false, error: "verification failed" };
-  });
-
-  const outcome = await transfer(fx, run);
-
-  const kept = [
-    NOW_STAMP,
-    "2030-01-02T00-00-00-000Z",
-    "2030-01-03T00-00-00-000Z",
-  ];
-  assert.deepEqual(during, [kept]);
-  assert.deepEqual(outcome, { status: "skipped", reason: CAPTURE_PENDING });
-  assert.deepEqual(await snapshot(fx.leveldb), before);
-  assert.deepEqual(await backupsIn(fx.vault), kept);
-});
-
-test("a backup that cannot be made is a skip, and the helper never runs", async (t) => {
+test("a leveldb that cannot be copied fails, and the helper never runs", async (t) => {
   const { run, jobs } = fakeRun();
 
-  // leveldb is a link.
   const linked = await storageFixture(t);
   const real = path.join(linked.base, "real-leveldb");
   await fs.rename(linked.leveldb, real);
   await fs.symlink(real, linked.leveldb);
-  assert.deepEqual(await transfer(linked, run), {
-    status: "skipped",
-    reason: "Local Storage/leveldb is a symbolic link.",
+  assert.deepEqual((await capture(linked, run)).outcome, {
+    status: "failed",
+    error: "Local Storage/leveldb is a symbolic link.",
   });
-  assert.deepEqual(await backupsIn(linked.vault), []);
-  assert.equal((await lastOutcome(linked.vault)).status, "skipped");
+  assert.deepEqual(await fs.readdir(linked.tmp), []);
 
-  // leveldb is a file.
-  const file = await storageFixture(t);
-  await fs.rm(file.leveldb, { recursive: true });
-  await fs.writeFile(file.leveldb, "not a directory");
-  assert.deepEqual(await transfer(file, run), {
-    status: "skipped",
-    reason: "Local Storage/leveldb is not a directory.",
+  const broken = await storageFixture(t);
+  const undo = failCopies(1);
+  t.after(undo);
+  const { outcome } = await capture(broken, run);
+  undo();
+  assert.deepEqual(outcome, {
+    status: "failed",
+    error: "injected copy failure 1",
   });
-
-  // A backup with this stamp already exists.
-  const taken = await storageFixture(t);
-  await fs.mkdir(path.join(taken.vault, "drafts", NOW_STAMP), {
-    recursive: true,
-  });
-  const outcome = await transfer(taken, run);
-  assert.equal(outcome.status, "skipped");
-  assert.match((outcome as { reason: string }).reason, /EEXIST/);
-  assert.deepEqual(
-    await fs.readdir(path.join(taken.vault, "drafts", NOW_STAMP)),
-    [],
-  );
-
-  // The drafts directory is a link: nothing is written through it, last.json included.
-  const outside = await storageFixture(t);
-  const target = path.join(outside.base, "outside");
-  await fs.mkdir(target);
-  await fs.symlink(target, path.join(outside.vault, "drafts"));
-  assert.equal((await transfer(outside, run)).status, "skipped");
-  assert.deepEqual(await fs.readdir(target), []);
-
-  assert.equal(jobs.length, 0);
-});
-
-test("a blocked step records why, without a backup or a run", async (t) => {
-  const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  const { run, jobs } = fakeRun();
-  const reason = "Claude Desktop runs Electron 45.0.0, Relay 44.7.0";
-
-  assert.deepEqual(await transfer(fx, run, { blocked: reason }), {
-    status: "skipped",
-    reason,
-  });
-
-  assert.equal(jobs.length, 0);
-  assert.deepEqual(await backupsIn(fx.vault), []);
-  assert.deepEqual(await snapshot(fx.leveldb), before);
-  // last.json is private to Relay, and so is the directory made for it.
-  const drafts = path.join(fx.vault, "drafts");
-  assert.equal((await fs.stat(drafts)).mode & 0o777, 0o700);
+  // The half copy went with the scratch dir.
+  assert.deepEqual(await fs.readdir(broken.tmp), []);
+  assert.deepEqual(await storageNames(broken), ["leveldb"]);
   assert.equal(
-    (await fs.stat(path.join(drafts, "last.json"))).mode & 0o777,
-    0o600,
+    (await lastOutcome(broken.vault)).error,
+    "injected copy failure 1",
   );
-  assert.deepEqual(await lastOutcome(fx.vault), {
-    at: NOW.toISOString(),
-    from: A,
-    to: B,
-    status: "skipped",
-    reason,
-  });
-});
 
-test("a skipped step never deletes anything in Claude's Local Storage", async (t) => {
-  const { run, jobs } = fakeRun();
-  const unknown = "Claude Desktop's Electron version is unknown";
-  const cases: [string, Parameters<typeof transfer>[2], string][] = [
-    [
-      "blocked",
-      { blocked: "drafts move only on macOS" },
-      "drafts move only on macOS",
-    ],
-    ["no Electron version", { claudeElectron: undefined }, unknown],
-    ["running", { running: async () => true }, "Claude is running"],
-    ["unknown", runningSequence("throw"), "Claude is running"],
-  ];
-  for (const [name, extra, reason] of cases) {
-    const fx = await storageFixture(t);
-    const storage = path.join(fx.root, LOCAL_STORAGE);
-    // What the sweep would remove, had the step gone on.
-    await fs.mkdir(path.join(storage, "leveldb.relay-1234"));
-    await fs.mkdir(path.join(storage, ".relay-work-5678"));
-    const before = await snapshot(storage);
-    assert.deepEqual(
-      await transfer(fx, run, extra),
-      { status: "skipped", reason },
-      name,
-    );
-    assert.deepEqual(await snapshot(storage), before, name);
-    assert.deepEqual(await backupsIn(fx.vault), [], name);
-    assert.equal((await lastOutcome(fx.vault)).reason, reason, name);
-  }
   assert.equal(jobs.length, 0);
 });
 
-test("Claude opening after the working copy is made stops the run", async (t) => {
+test("without drafts worth keeping, nothing is stored", async (t) => {
   const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  const { run, jobs } = fakeRun();
-  // Closed at the start, open once the backup and the working copy are made.
-  const check = runningSequence(false, true);
-
-  assert.deepEqual(await transfer(fx, run, { running: check.running }), {
-    status: "skipped",
-    reason: "Claude is running",
+  const { run } = fakeRun({
+    ok: true,
+    drafts: { [P + ALIAS_Y]: draft(B, "B's own draft"), [P + ALIAS_X]: draft(A, " ") },
   });
 
-  assert.equal(check.calls(), 2);
-  assert.equal(jobs.length, 0);
-  assert.deepEqual(await snapshot(fx.leveldb), before);
-  assert.deepEqual(await storageNames(fx), ["leveldb"]);
-  assert.equal((await lastOutcome(fx.vault)).reason, "Claude is running");
+  const { outcome, stored } = await capture(fx, run);
+
+  assert.deepEqual(outcome, { status: "captured", count: 0 });
+  assert.deepEqual(stored, []);
+  assert.equal((await lastOutcome(fx.vault)).count, 0);
 });
+
+test("last.json is never written through a linked drafts dir", async (t) => {
+  const fx = await storageFixture(t);
+  const target = path.join(fx.base, "outside");
+  await fs.mkdir(target);
+  await fs.symlink(target, path.join(fx.vault, "drafts"));
+
+  assert.equal((await capture(fx, fakeRun().run)).outcome.status, "captured");
+
+  assert.deepEqual(await fs.readdir(target), []);
+});
+
+// --- The sealed draft vault -------------------------------------------------------
+
+// A stand-in for safeStorage: the text is base64 behind a marker, so it never shows as is.
+const seal = (text: string) =>
+  Buffer.from("SEALED:" + Buffer.from(text).toString("base64"));
+const unseal = (data: Buffer) => {
+  const text = data.toString();
+  if (!text.startsWith("SEALED:")) throw new Error("not sealed");
+  return Buffer.from(text.slice(7), "base64").toString();
+};
+const DAY = 24 * 60 * 60_000;
+
+async function vaultFixture(t: any) {
+  const vault = await fs.mkdtemp(path.join(os.tmpdir(), "relay-draft-vault-"));
+  t.after(() => fs.rm(vault, { recursive: true, force: true }));
+  let clock = NOW.getTime();
+  const now = () => clock;
+  return {
+    vault,
+    file: path.join(vault, "drafts", "pending.bin"),
+    drafts: new DraftVault(vault, seal, unseal, now),
+    // Another vault on the same files, as after a restart of Relay.
+    reopen: () => new DraftVault(vault, seal, unseal, now),
+    advance: (ms: number) => {
+      clock += ms;
+    },
+  };
+}
+
+const conversationDraft = (targetAlias: string, text = UNSENT): CapturedDraft => ({
+  targetAlias,
+  title: `Title of ${targetAlias}`,
+  text,
+  attachments: false,
+});
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+test("the vault gives back what it was given, sealed in between", async (t) => {
+  const v = await vaultFixture(t);
+  const newSession: CapturedDraft = {
+    newSession: true,
+    title: "",
+    text: NEW_SESSION_TEXT,
+    attachments: true,
+  };
+
+  await v.drafts.add(B, [conversationDraft(ALIAS_X), newSession]);
+
+  const records = await v.reopen().list();
+  assert.equal(records.length, 2);
+  for (const record of records) {
+    assert.match(record.id, UUID);
+    assert.equal(record.to, B);
+    assert.equal(record.capturedAt, NOW.toISOString());
+    assert.equal(record.state, "pending");
+    assert.equal("reason" in record, false);
+  }
+  assert.notEqual(records[0].id, records[1].id);
+  const strip = ({ id, to, capturedAt, state, ...draft }: DraftRecord) => draft;
+  assert.deepEqual(records.map(strip), [conversationDraft(ALIAS_X), newSession]);
+  // A summary for the panel: everything but the text and the alias.
+  assert.deepEqual(summarize(records[0]), {
+    id: records[0].id,
+    to: B,
+    title: `Title of ${ALIAS_X}`,
+    newSession: false,
+    attachments: false,
+    state: "pending",
+    capturedAt: NOW.toISOString(),
+  });
+  assert.equal(summarize(records[1]).newSession, true);
+  assert.ok(!JSON.stringify(records.map(summarize)).includes(UNSENT));
+  // The file is private to Relay.
+  assert.equal((await fs.stat(v.file)).mode & 0o777, 0o600);
+});
+
+test("the vault's file does not hold the text", async (t) => {
+  const v = await vaultFixture(t);
+  await v.drafts.add(B, [conversationDraft(ALIAS_X)]);
+  const raw = await fs.readFile(v.file);
+  assert.ok(raw.toString().startsWith("SEALED:"));
+  assert.ok(!raw.includes(Buffer.from(UNSENT)));
+  assert.ok(!raw.includes(Buffer.from(`Title of ${ALIAS_X}`)));
+});
+
+test("the vault keeps at most 20 records, the newest", async (t) => {
+  const v = await vaultFixture(t);
+  const aliases = Array.from({ length: 25 }, () => randomUUID());
+  for (const alias of aliases) {
+    await v.drafts.add(B, [conversationDraft(alias)]);
+    v.advance(1000);
+  }
+  const records = await v.drafts.list();
+  assert.equal(records.length, 20);
+  // Newest first.
+  assert.deepEqual(
+    records.map((record) => record.targetAlias),
+    aliases.slice(5).reverse(),
+  );
+  // A batch bigger than the cap keeps its first 20.
+  const batch = Array.from({ length: 21 }, () => conversationDraft(randomUUID()));
+  await v.drafts.add(C, batch);
+  assert.deepEqual(
+    (await v.drafts.list()).map((record) => record.targetAlias),
+    batch.slice(0, 20).map((draft) => draft.targetAlias),
+  );
+});
+
+test("the newest capture wins per account and conversation", async (t) => {
+  const v = await vaultFixture(t);
+  const newSession = (text: string): CapturedDraft => ({
+    newSession: true,
+    title: "",
+    text,
+    attachments: false,
+  });
+  await v.drafts.add(B, [conversationDraft(ALIAS_X, "older"), newSession("old start")]);
+  const [olderX] = await v.drafts.list();
+  await v.drafts.update(olderX.id, { state: "needs-copy", reason: "lost" });
+  v.advance(1000);
+  await v.drafts.add(B, [conversationDraft(ALIAS_X, "newer"), newSession("new start")]);
+  // The same conversation for another account, and another conversation, stay.
+  await v.drafts.add(C, [conversationDraft(ALIAS_X, "C's")]);
+  await v.drafts.add(B, [conversationDraft(ALIAS_Y, "Y's")]);
+
+  const records = await v.drafts.list();
+  const view = records.map((record) => [record.to, record.targetAlias, record.text, record.state]);
+  assert.deepEqual(view.sort(), [
+    [B, ALIAS_X, "newer", "pending"],
+    [B, ALIAS_Y, "Y's", "pending"],
+    [B, undefined, "new start", "pending"],
+    [C, ALIAS_X, "C's", "pending"],
+  ].sort());
+  assert.ok(!records.some((record) => record.id === olderX.id));
+});
+
+test("records older than seven days are dropped", async (t) => {
+  const v = await vaultFixture(t);
+  await v.drafts.add(B, [conversationDraft(ALIAS_X)]);
+  v.advance(DAY);
+  await v.drafts.add(B, [conversationDraft(ALIAS_Y)]);
+
+  v.advance(6 * DAY);
+  // X is exactly seven days old: kept.
+  assert.equal((await v.drafts.list()).length, 2);
+  v.advance(1);
+  assert.deepEqual(
+    (await v.drafts.list()).map((record) => record.targetAlias),
+    [ALIAS_Y],
+  );
+  // Dropped from the file too, not only from the answer.
+  const sealed = JSON.parse(unseal(await fs.readFile(v.file)));
+  assert.equal(sealed.length, 1);
+  v.advance(DAY);
+  assert.deepEqual(await v.drafts.list(), []);
+  await assertGone(v.file);
+});
+
+test("a record's state changes and the record goes, by id", async (t) => {
+  const v = await vaultFixture(t);
+  await v.drafts.add(B, [conversationDraft(ALIAS_X), conversationDraft(ALIAS_Y)]);
+  const [x, y] = await v.drafts.list();
+
+  await v.drafts.update(x.id, { state: "needs-copy", reason: "accessibility" });
+  let [first] = await v.reopen().list();
+  assert.equal(first.state, "needs-copy");
+  assert.equal(first.reason, "accessibility");
+  // The text and the rest are as they were.
+  assert.deepEqual({ ...first, state: x.state, reason: undefined }, { ...x, reason: undefined });
+  // A patch without a reason keeps it; one that clears it removes it.
+  await v.drafts.update(x.id, { state: "pending" });
+  [first] = await v.drafts.list();
+  assert.equal(first.reason, "accessibility");
+  await v.drafts.update(x.id, { state: "needs-copy", reason: undefined });
+  [first] = await v.drafts.list();
+  assert.equal("reason" in first, false);
+  // An unknown id changes nothing.
+  const before = await fs.readFile(v.file);
+  await v.drafts.update(randomUUID(), { state: "needs-copy" });
+  await v.drafts.remove(randomUUID());
+  assert.deepEqual(await fs.readFile(v.file), before);
+
+  await v.drafts.remove(x.id);
+  assert.deepEqual((await v.drafts.list()).map((record) => record.id), [y.id]);
+  // The last one takes the file with it.
+  await v.drafts.remove(y.id);
+  assert.deepEqual(await v.drafts.list(), []);
+  await assertGone(v.file);
+});
+
+test("a corrupt vault file reads as empty", async (t) => {
+  const v = await vaultFixture(t);
+  await fs.mkdir(path.dirname(v.file), { recursive: true });
+  const valid = {
+    id: randomUUID(),
+    to: B,
+    targetAlias: ALIAS_X,
+    title: "",
+    text: UNSENT,
+    attachments: false,
+    capturedAt: NOW.toISOString(),
+    state: "pending",
+  };
+  for (const contents of [
+    Buffer.from("not sealed at all"),
+    seal("not json"),
+    seal("null"),
+    seal('{"records":[]}'),
+    seal(JSON.stringify([{ ...valid, state: "sent" }])),
+    seal(JSON.stringify([{ ...valid, text: 7 }])),
+    seal(JSON.stringify([{ ...valid, capturedAt: "yesterday" }])),
+    seal(JSON.stringify([{ ...valid, targetAlias: undefined }])),
+    seal(JSON.stringify([{ ...valid, newSession: true }])),
+  ]) {
+    await fs.writeFile(v.file, contents);
+    assert.deepEqual(await v.drafts.list(), [], contents.toString());
+  }
+  // Only the records that are wrong are left out.
+  await fs.writeFile(
+    v.file,
+    seal(JSON.stringify([valid, { ...valid, id: "" }, "junk", null])),
+  );
+  assert.deepEqual(await v.drafts.list(), [valid]);
+  // A corrupt file does not stop the next capture.
+  await fs.writeFile(v.file, "garbage");
+  await v.drafts.add(B, [conversationDraft(ALIAS_Y)]);
+  assert.deepEqual(
+    (await v.drafts.list()).map((record) => record.targetAlias),
+    [ALIAS_Y],
+  );
+});
+
+test("vault changes made at the same time all land", async (t) => {
+  const v = await vaultFixture(t);
+  await Promise.all([
+    v.drafts.add(B, [conversationDraft(ALIAS_X)]),
+    v.drafts.add(B, [conversationDraft(ALIAS_Y)]),
+    v.drafts.add(C, [conversationDraft(ALIAS_X)]),
+  ]);
+  assert.equal((await v.drafts.list()).length, 3);
+});
+
 
 // --- Waiting for the helper process -----------------------------------------------
 
@@ -1864,7 +1799,7 @@ test("a helper past its time is killed, and waited for until it is gone", async 
   });
   await pause(80);
   assert.deepEqual(signals, ["SIGKILL"]);
-  // Killed is not gone: until it exits it may still hold Claude's LevelDB lock.
+  // Killed is not gone: until it exits it may still have the copy and its result file open.
   assert.equal(settled, false);
   emitter.emit("exit", null, "SIGKILL");
   assert.deepEqual(await exit, {
@@ -2042,6 +1977,64 @@ test("the result is read only after the helper exited", async (t) => {
   h.children[0].emitter.emit("exit", 0, null);
   assert.deepEqual(await h.outcome, { ok: true, drafts: reported });
   assert.deepEqual(h.reads, [h.job.result]);
+});
+
+test("the result file is removed right after it is read", async (t) => {
+  // It holds the drafts' text, so it must not wait for the scratch dir to go.
+  const h = await startHelper(t);
+  await until(() => h.spawned.length === 1);
+  await fs.writeFile(h.job.result, success);
+  h.children[0].emitter.emit("exit", 0, null);
+  assert.deepEqual(await h.outcome, { ok: true, drafts: reported });
+  await assertGone(h.job.result);
+  // A failed helper's result goes the same way.
+  const failed = await startHelper(t);
+  await until(() => failed.spawned.length === 1);
+  await fs.writeFile(failed.job.result, "not json");
+  failed.children[0].emitter.emit("exit", 1, null);
+  assert.deepEqual(await failed.outcome, { ok: false, error: "no result" });
+  await assertGone(failed.job.result);
+});
+
+test("a result over 16 MiB is never read", async (t) => {
+  const limit = 16 * 1024 * 1024;
+  // Exactly the limit is read: JSON may end in spaces.
+  const h = await startHelper(t);
+  await until(() => h.spawned.length === 1);
+  await fs.writeFile(h.job.result, success.padEnd(limit, " "));
+  h.children[0].emitter.emit("exit", 0, null);
+  assert.deepEqual(await h.outcome, { ok: true, drafts: reported });
+  assert.deepEqual(h.reads, [h.job.result]);
+
+  // One byte more is no result, and is still removed.
+  const big = await startHelper(t);
+  await until(() => big.spawned.length === 1);
+  await fs.writeFile(big.job.result, success.padEnd(limit + 1, " "));
+  big.children[0].emitter.emit("exit", 0, null);
+  assert.deepEqual(await big.outcome, { ok: false, error: "no result" });
+  assert.deepEqual(big.reads, []);
+  await assertGone(big.job.result);
+});
+
+test("a result file that is not a plain file is not read", async (t) => {
+  const h = await startHelper(t);
+  await until(() => h.spawned.length === 1);
+  const elsewhere = path.join(h.job.scratch, "elsewhere.json");
+  await fs.writeFile(elsewhere, success);
+  await fs.symlink(elsewhere, h.job.result);
+  h.children[0].emitter.emit("exit", 0, null);
+  assert.deepEqual(await h.outcome, { ok: false, error: "no result" });
+  assert.deepEqual(h.reads, []);
+  // The link goes, never what it leads to.
+  await assertGone(h.job.result);
+  assert.equal(await fs.readFile(elsewhere, "utf8"), success);
+
+  const dir = await startHelper(t);
+  await until(() => dir.spawned.length === 1);
+  await fs.mkdir(dir.job.result);
+  dir.children[0].emitter.emit("exit", 0, null);
+  assert.deepEqual(await dir.outcome, { ok: false, error: "no result" });
+  assert.deepEqual(dir.reads, []);
 });
 
 // --- Reading the helper's answer --------------------------------------------------

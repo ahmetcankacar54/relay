@@ -7,14 +7,12 @@ import {
   writeBytes,
   type CarriedConversation,
 } from "./desktop-files";
-import { DRAFT_KEY_PREFIX } from "./drafts";
 import {
-  backupLocalStorage,
-  discardWorkingCopy,
-  makeWorkingCopy,
-  pruneDraftBackups,
-  sweepDraftLeftovers,
-} from "./draft-storage";
+  DRAFT_KEY_PREFIX,
+  selectDrafts,
+  type CapturedDraft,
+} from "./drafts";
+import { copyLocalStorage, sweepDraftLeftovers } from "./draft-storage";
 import {
   DRAFT_WORKER_FLAG,
   electronMajor,
@@ -30,61 +28,58 @@ const SCRATCH_PREFIX = "relay-drafts-";
 /** A scratch dir older than this was left by a Relay that stopped mid-step: the helper gets 10 s. */
 const STALE_SCRATCH_MS = 10 * 60_000;
 const ELECTRON_UNKNOWN = "Claude Desktop's Electron version is unknown";
-/** Why every run ends as skipped until the drafts it reads are stored. */
-const CAPTURE_PENDING = "capture pending";
 
-export type DraftOutcome =
+export type CaptureOutcome =
+  | { status: "captured"; count: number }
   | { status: "skipped"; reason: string }
-  /** `restored` is true when Claude's leveldb is as it was, false when it may not be. */
-  | { status: "failed"; error: string; restored: boolean };
+  | { status: "failed"; error: string };
 
 /**
- * The draft step of a switch, while Claude is closed. For now it only runs the read-only helper:
- * what the helper reads is not stored yet, so every run that gets as far as the helper ends as
- * skipped with reason "capture pending".
+ * The draft step of a switch, while Claude is closed: reads the unsent drafts of account `from`
+ * and hands those worth re-typing for account `to` to `store`, as `selectDrafts` picks them
+ * from the carried `conversations`, with B's `titles`.
  *
- * Local Storage is backed up to the vault, then copied to a working dir beside Claude's leveldb,
- * and `run` reads only that copy. Whatever `run` answers, the copy is dropped and Claude's
- * leveldb is never replaced.
+ * Nothing in Claude's directory is written. Its leveldb is copied into a new scratch dir in
+ * `tmp` (os.tmpdir() when unset), as `<scratch>/copy/leveldb`, and `run` reads only that copy.
+ * The scratch dir, which holds the copy and the helper's result file and so the drafts' text,
+ * is removed whatever happens. Before the copy, scratch dirs left in `tmp` by an earlier step
+ * and what the first design left in Claude's Local Storage are swept.
  *
- * `blocked`, when set, says why drafts cannot be read on this machine. `claudeElectron` is the
- * Electron version the same gate read from Claude.app; the helper refuses to open the copy under
- * another major. With `blocked`, or without `claudeElectron`, the step is recorded as skipped,
- * with no backup and no run.
+ * `blocked`, when set, says why drafts cannot be read now. `claudeElectron` is the Electron
+ * version the same gate read from Claude.app; the helper refuses to open the copy under another
+ * major. With `blocked`, or without `claudeElectron`, the step is skipped before anything is
+ * swept or copied.
  *
- * `running` says whether Claude is running; a check that throws counts as running. It is asked
- * at the start and just before `run`. Once Claude runs, its Local Storage is not touched any more.
- *
- * The helper's scratch dir is made in `tmp`, which defaults to os.tmpdir(), and stale ones
- * there are removed.
- *
- * The outcome is written to `<vault>/drafts/last.json`, with a reason but never draft text.
- * Never throws.
+ * A run that fails, throws or answers nothing, and a copy or a store that fails, end the step
+ * as failed. The outcome is written to `lastJson` (`<vault>/drafts/last.json`) with counts and
+ * reasons, never draft text. Never throws.
  */
-export async function preserveDrafts(input: {
+export async function captureDrafts(input: {
   root: string;
-  vault: string;
   from: string;
   to: string;
   conversations: CarriedConversation[];
+  titles: Record<string, string>;
   run: (job: DraftJob) => Promise<DraftResult>;
+  store: (to: string, drafts: CapturedDraft[]) => Promise<void>;
+  lastJson: string;
   now: Date;
   blocked?: string;
   claudeElectron?: string;
-  running: () => Promise<boolean>;
   tmp?: string;
-}): Promise<DraftOutcome> {
-  let outcome: DraftOutcome;
+}): Promise<CaptureOutcome> {
+  let outcome: CaptureOutcome;
   try {
-    outcome = await transfer(input);
+    outcome = await capture(input);
   } catch (error) {
-    // Not expected: every step that can fail handles its own failure.
-    outcome = { status: "failed", error: errorMessage(error), restored: false };
+    outcome = { status: "failed", error: errorMessage(error) };
   }
   try {
+    // Written as `drafts/last.json` under the vault, so a linked drafts dir is refused too.
+    const drafts = path.dirname(input.lastJson);
     await writeBytes(
-      input.vault,
-      "drafts/last.json",
+      path.dirname(drafts),
+      path.join(path.basename(drafts), path.basename(input.lastJson)),
       jsonBytes({
         at: input.now.toISOString(),
         from: input.from,
@@ -98,98 +93,52 @@ export async function preserveDrafts(input: {
   return outcome;
 }
 
-async function transfer(
-  input: Parameters<typeof preserveDrafts>[0],
-): Promise<DraftOutcome> {
-  const { root, vault } = input;
-  const running = async () => {
-    try {
-      return await input.running();
-    } catch {
-      return true; // Unknown is treated as running.
-    }
-  };
-  // All before the sweeps, so a skipped step deletes nothing in Claude's Local Storage.
+async function capture(
+  input: Parameters<typeof captureDrafts>[0],
+): Promise<CaptureOutcome> {
+  // All before the sweeps, so a skipped step deletes nothing.
   if (input.blocked) return { status: "skipped", reason: input.blocked };
   const claudeElectron = input.claudeElectron;
   if (!claudeElectron) return { status: "skipped", reason: ELECTRON_UNKNOWN };
-  if (await running()) return claudeRunning();
   const tmp = input.tmp ?? os.tmpdir();
   await sweepStaleScratch(tmp);
-  await sweepDraftLeftovers(root);
+  await sweepDraftLeftovers(input.root);
 
+  const scratch = await fs.mkdtemp(path.join(tmp, SCRATCH_PREFIX));
   try {
-    // Pruned before the new backup is made, so the backup this run depends on is never among
-    // those removed, even when the clock went back.
-    await pruneDraftBackups(vault, 2);
-  } catch {
-    // Old backups stay a little longer; the step goes on.
-  }
-  let backup: string | undefined;
-  try {
-    backup = await backupLocalStorage(root, vault, input.now);
-  } catch (error) {
-    // Nothing has been touched yet, and nothing runs without a backup.
-    return { status: "skipped", reason: errorMessage(error) };
-  }
-  if (!backup) return { status: "skipped", reason: "no Local Storage" };
-
-  let work: string;
-  try {
-    work = await makeWorkingCopy(root);
-  } catch (error) {
-    return { status: "skipped", reason: errorMessage(error) };
-  }
-  try {
-    return await moveInCopy(input, work, claudeElectron, tmp, running);
+    const storage = path.join(scratch, "copy");
+    if (!(await copyLocalStorage(input.root, storage)))
+      return { status: "skipped", reason: "no Local Storage" };
+    const result: DraftResult | undefined = await input.run({
+      storage,
+      scratch,
+      result: path.join(scratch, "result.json"),
+      claudeElectron,
+    });
+    if (result?.ok !== true)
+      return {
+        status: "failed",
+        error:
+          result?.ok === false && result.error ? result.error : "no result",
+      };
+    const drafts = selectDrafts({
+      drafts: result.drafts,
+      from: input.from,
+      conversations: input.conversations,
+      titles: input.titles,
+    });
+    if (drafts.length) await input.store(input.to, drafts);
+    return { status: "captured", count: drafts.length };
   } finally {
-    // Claude's leveldb was never replaced, so the copy has no use left.
-    await discardWorkingCopy(root, work);
-  }
-}
-
-/** Runs the helper on the working copy in `work`, and ends the step as pending whatever it answered. */
-async function moveInCopy(
-  input: Parameters<typeof preserveDrafts>[0],
-  work: string,
-  claudeElectron: string,
-  tmp: string,
-  running: () => Promise<boolean>,
-): Promise<DraftOutcome> {
-  let scratch: string;
-  try {
-    scratch = await fs.mkdtemp(path.join(tmp, SCRATCH_PREFIX));
-  } catch (error) {
-    return { status: "skipped", reason: errorMessage(error) };
-  }
-  try {
-    if (await running()) return claudeRunning();
-    try {
-      await input.run({
-        storage: work,
-        scratch,
-        result: path.join(scratch, "result.json"),
-        claudeElectron,
-      });
-    } catch {
-      // A failed run is no different from a finished one while nothing is stored.
-    }
-    return { status: "skipped", reason: CAPTURE_PENDING };
-  } finally {
-    // The helper leaves a link to the working copy in here. rm removes the link itself, never
-    // what it points to.
+    // The helper leaves a link to the copy in here. rm removes the link itself, never what it
+    // points to.
     await fs.rm(scratch, { recursive: true, force: true }).catch(() => {});
   }
 }
 
-const claudeRunning = (): DraftOutcome => ({
-  status: "skipped",
-  reason: "Claude is running",
-});
-
 /**
  * Removes the helper scratch dirs in `tmp` that are older than ten minutes: a Relay that crashed
- * or was killed mid-step leaves one behind, with its link. Never throws.
+ * or was killed mid-step leaves one behind, with its copy and its link. Never throws.
  */
 async function sweepStaleScratch(tmp: string): Promise<void> {
   try {
@@ -233,9 +182,13 @@ export interface HelperDeps {
   readFile: (file: string, encoding: "utf8") => Promise<string>;
 }
 
+/** The largest result file Relay reads: well above a real answer, capped at 4 MiB of text. */
+const MAX_RESULT_BYTES = 16 * 1024 * 1024;
+
 /**
  * Starts the draft helper on `job` and resolves with its result once it has exited, or been
- * killed past its time. The result file is read only then.
+ * killed past its time. The result file is read only then, only when it is a plain file of at
+ * most 16 MiB, and removed right after: it holds the drafts' text.
  */
 export async function runHelper(
   job: DraftJob,
@@ -259,9 +212,15 @@ export async function runHelper(
   const exit = await awaitHelper(child);
   let text: string | undefined;
   try {
-    text = await deps.readFile(job.result, "utf8");
+    // lstat, so a link is not followed. Anything else is no result.
+    const st = await fs.lstat(job.result);
+    if (st.isFile() && st.size <= MAX_RESULT_BYTES)
+      text = await deps.readFile(job.result, "utf8");
   } catch {
     // No result file: helperOutcome reports it.
+  } finally {
+    // Before the text is parsed. The scratch dir goes later, whatever this leaves.
+    await fs.rm(job.result, { force: true }).catch(() => {});
   }
   return helperOutcome(exit, text);
 }
@@ -278,7 +237,8 @@ export interface HelperExit {
 
 /**
  * Resolves once the helper has exited. Past `ms` it is killed with SIGKILL and still waited
- * for: until it is gone it may hold Claude's LevelDB lock, and Claude must not start before.
+ * for: until it is gone it may still have the copy open, or write its result file, and the
+ * scratch dir that holds both must not be removed before.
  */
 export function awaitHelper(
   child: ChildProcess,
@@ -390,7 +350,7 @@ export function electronMismatch(
   return undefined;
 }
 
-/** Why drafts cannot move on this machine, or undefined when they can. */
+/** Why drafts cannot be captured on this machine, or undefined when they can. */
 export function draftsBlockedReason(
   platform: string,
   claudeVersion: string | undefined,

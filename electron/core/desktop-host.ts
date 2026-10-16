@@ -171,7 +171,7 @@ export function desktopHost(): DesktopHost {
       ),
     claudeElectron: async () =>
       process.platform === "darwin" ? readClaudeElectron() : undefined,
-    moveDrafts: (job) =>
+    readDrafts: (job) =>
       runHelper(job, {
         execPath: process.execPath,
         packaged: app.isPackaged,

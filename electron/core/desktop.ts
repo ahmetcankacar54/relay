@@ -25,7 +25,15 @@ import {
 } from "../../shared/history-policy";
 import { summarizeHistory } from "./desktop-history";
 import { errorMessage, type DraftJob, type DraftResult } from "../draft-job";
-import { preserveDrafts } from "./draft-transfer";
+import { captureDrafts } from "./draft-transfer";
+import { removeLegacyDraftBackups } from "./draft-storage";
+import {
+  DraftVault,
+  summarize,
+  type DraftRecord,
+  type DraftState,
+  type DraftSummary,
+} from "./draft-vault";
 
 export interface DesktopHost {
   available(): Promise<boolean>;
@@ -35,11 +43,12 @@ export interface DesktopHost {
   seal(data: string): Buffer;
   unseal(data: Buffer): string;
   /**
-   * Runs the draft helper on `job` while Claude is closed, and resolves only once the helper
-   * has exited or been killed. Without it, drafts never move.
+   * Runs the draft helper on `job` while Claude is closed: it reads the drafts in the job's
+   * private copy of Claude's Local Storage. Resolves only once the helper has exited or been
+   * killed. Without it, no drafts are captured.
    */
-  moveDrafts?(job: DraftJob): Promise<DraftResult>;
-  /** Why drafts cannot move on this machine, or undefined when they can. */
+  readDrafts?(job: DraftJob): Promise<DraftResult>;
+  /** Why drafts cannot be captured on this machine, or undefined when they can. */
   draftsBlocked?(): Promise<string | undefined>;
   /** The Electron version inside Claude.app, which the draft helper checks its own against. */
   claudeElectron?(): Promise<string | undefined>;
@@ -101,6 +110,8 @@ export class DesktopManager {
   onRestart?: (event: DesktopRestartEvent) => void;
   /** The running operation, and whether it has reported its restart. */
   private operation?: Operation & { restarted: boolean };
+  /** The drafts captured at switches, sealed, until they are re-typed or dismissed. */
+  private drafts: DraftVault;
   constructor(
     readonly root: string,
     private store: Store,
@@ -108,9 +119,16 @@ export class DesktopManager {
     private transcriptRoot = path.join(os.homedir(), ".claude"),
   ) {
     this.vault = path.join(store.root, "desktop-vault");
+    this.drafts = new DraftVault(
+      this.vault,
+      (text) => this.host.seal(text),
+      (data) => this.host.unseal(data),
+    );
   }
   async initialize() {
     await fs.mkdir(this.vault, { recursive: true, mode: 0o700 });
+    // The first design kept plaintext copies of Claude's Local Storage there.
+    await removeLegacyDraftBackups(this.vault);
     const pending = await readObject(this.vault, "pending.json");
     if (pending && uuid.safeParse(pending.profileId).success)
       this.pending = pending as Pending;
@@ -519,10 +537,12 @@ export class DesktopManager {
     return new Map(plan);
   }
   /**
-   * Moves the unsent drafts of the account being left (`from`) to the one switched to (`to`),
-   * once the switch's files are written and while Claude is still closed. Drafts follow the
-   * history policy: nothing moves when it is off or does not allow this pair. Never throws, so
-   * a draft can never fail, roll back or hold up a switch.
+   * Captures the unsent drafts of the account being left (`from`) in the conversations the
+   * switch carries, to be re-typed for the one switched to (`to`). Runs once the switch's files
+   * are written and while Claude is still closed; it reads only a copy of Claude's Local Storage
+   * and keeps what it finds sealed in the vault. Drafts follow the history policy: nothing is
+   * captured when it is off or does not allow this pair. Never throws, so a draft can never
+   * fail, roll back or hold up a switch.
    */
   private async carryDrafts(
     from: string,
@@ -532,7 +552,7 @@ export class DesktopManager {
   ) {
     try {
       const host = this.host;
-      if (!host.moveDrafts) return;
+      if (!host.readDrafts) return;
       const settings = this.store.state.settings;
       if (settings.desktopHistoryTransfer === "off") return;
       const source = this.store.state.accounts.find(
@@ -543,27 +563,73 @@ export class DesktopManager {
       let claudeElectron: string | undefined;
       try {
         blocked = (await host.draftsBlocked?.()) || undefined;
+        // The copy is made while Claude is closed; one Claude is writing could be torn.
+        if (!blocked && (await host.running())) blocked = "Claude is running";
         if (!blocked) claudeElectron = await host.claudeElectron?.();
       } catch (error) {
         blocked = errorMessage(error);
       }
-      await preserveDrafts({
+      await captureDrafts({
         root: this.root,
-        vault: this.vault,
         from,
         to,
         conversations,
-        run: (job) => host.moveDrafts!(job),
+        // Read only for a step that will run.
+        titles:
+          blocked || !claudeElectron
+            ? {}
+            : await this.draftTitles(target, conversations),
+        run: (job) => host.readDrafts!(job),
+        store: (account, drafts) => this.drafts.add(account, drafts),
+        lastJson: path.join(this.vault, "drafts", "last.json"),
         now: new Date(),
         blocked,
         claudeElectron,
-        // Asked again before the run and before the swap: Claude can be opened meanwhile.
-        running: () => host.running(),
         tmp: host.draftScratchDir,
       });
     } catch {
       // Drafts never change how a switch ends.
     }
+  }
+  /**
+   * The title of each carried conversation on the target's card of it, as the merge left it:
+   * what the user will see the conversation called. "" when the card has none or cannot be read.
+   */
+  private async draftTitles(
+    target: Account,
+    conversations: CarriedConversation[],
+  ): Promise<Record<string, string>> {
+    const dir = scopePath("claude-code-sessions", target.desktop!);
+    const titles: Record<string, string> = {};
+    for (const { targetAlias } of conversations) {
+      let title: unknown;
+      try {
+        title = (await readObject(this.root, `${dir}/local_${targetAlias}.json`))
+          ?.title;
+      } catch {
+        // An unreadable card has no title.
+      }
+      titles[targetAlias] = typeof title === "string" ? title : "";
+    }
+    return titles;
+  }
+  /** The captured drafts, newest first, for the panel: no text. */
+  async pendingDrafts(): Promise<DraftSummary[]> {
+    return (await this.drafts.list()).map(summarize);
+  }
+  /** The captured drafts with their text. Main process only: text never reaches the renderer. */
+  async pendingDraftRecords(): Promise<DraftRecord[]> {
+    return this.drafts.list();
+  }
+  /** The text of the captured draft `id`, or undefined when there is none. Main process only. */
+  async draftText(id: string): Promise<string | undefined> {
+    return (await this.drafts.list()).find((record) => record.id === id)?.text;
+  }
+  async markDraft(id: string, state: DraftState, reason?: string): Promise<void> {
+    await this.drafts.update(id, { state, reason });
+  }
+  async dismissDraft(id: string): Promise<void> {
+    await this.drafts.remove(id);
   }
   async recover() {
     return this.exclusive({ kind: "restore" }, async () => {
