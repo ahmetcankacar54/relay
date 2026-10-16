@@ -2,6 +2,8 @@ import type { UsageStatisticsView } from "./usage-statistics-view";
 export type { UsageStatisticsView } from "./usage-statistics-view";
 import type { Tempo } from "./tempo";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
+import type { DraftSummary } from "../electron/core/draft-vault";
+export type { DraftSummary } from "../electron/core/draft-vault";
 import type { PageId } from "../src/app/routes";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
@@ -82,6 +84,8 @@ export interface Snapshot {
   continuation?: DesktopContinuationSnapshot;
   fleet?: FleetContinuationState;
   planning?: KeeperSnapshot;
+  /** The drafts rescued at switches: summaries only, never their text. */
+  drafts?: DraftSummary[];
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   accounts: Account[];
@@ -169,6 +173,10 @@ export interface RelayAPI {
   reconcileContinuation(): Promise<DesktopContinuationSnapshot>;
   abandonContinuation(): Promise<DesktopContinuationSnapshot>;
   requestDesktopAccessibility(): Promise<boolean>;
+  /** Copies a rescued draft to the clipboard in main and removes it; its text never reaches a renderer. */
+  copyDraft(id: string): Promise<void>;
+  /** Removes a rescued draft. */
+  dismissDraft(id: string): Promise<void>;
   updateAccountPlanning(
     accountId: string,
     input: AccountPlanning,

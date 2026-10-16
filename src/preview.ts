@@ -383,6 +383,8 @@ export const previewApi: RelayAPI = {
   reconcileContinuation: desktopOnly,
   abandonContinuation: desktopOnly,
   requestDesktopAccessibility: desktopOnly,
+  copyDraft: desktopOnly,
+  dismissDraft: desktopOnly,
   updateAccountPlanning: async (id, input) => {
     const account = accounts.find((a) => a.id === id);
     if (!account) throw new Error("Account not found.");

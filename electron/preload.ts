@@ -12,6 +12,8 @@ const api: RelayAPI = {
   abandonContinuation: () => ipcRenderer.invoke("relay:abandon-continuation"),
   requestDesktopAccessibility: () =>
     ipcRenderer.invoke("relay:request-desktop-accessibility"),
+  copyDraft: (id) => ipcRenderer.invoke("relay:copy-draft", id),
+  dismissDraft: (id) => ipcRenderer.invoke("relay:dismiss-draft", id),
   updateAccountPlanning: (id, input) =>
     ipcRenderer.invoke("relay:account-planning", id, input),
   consumeTraySwitchRequest: () =>

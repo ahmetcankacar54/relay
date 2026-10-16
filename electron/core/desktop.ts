@@ -114,6 +114,11 @@ export class DesktopManager {
    * ends; operations that never quit Claude report nothing.
    */
   onRestart?: (event: DesktopRestartEvent) => void;
+  /**
+   * Told when a switch ends and Desktop is free again, closed-only or not, and also when it
+   * fails: one that fails late may already have changed the account and captured drafts.
+   */
+  onSwitched?: () => void;
   /** The running operation, and whether it has reported its restart. */
   private operation?: Operation & { restarted: boolean };
   /** The drafts captured at switches, sealed, until they are re-typed or dismissed. */
@@ -404,6 +409,12 @@ export class DesktopManager {
       };
       if (options.closedOnly) await change();
       else await this.restart(change, options.canProceed, options.beforeQuit);
+    }).finally(() => {
+      try {
+        this.onSwitched?.();
+      } catch {
+        // A listener never changes how a switch ends.
+      }
     });
   }
   async cancelLogin() {

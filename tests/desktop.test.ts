@@ -117,6 +117,39 @@ test("Claude's uptime comes from the host, and is unknown without one", async (t
   f.host.claudeUptimeMs = async () => undefined;
   assert.equal(await f.manager.claudeUptimeMs(), undefined);
 });
+test("every switch tells onSwitched once it ends, after Desktop is free, even when it fails", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B"); // B is open in Claude
+  const busyWhenTold: boolean[] = [];
+  f.manager.onSwitched = () => busyWhenTold.push(f.manager.isBusy);
+  await f.manager.switchTo(a.id);
+  assert.deepEqual(busyWhenTold, [false]);
+  // A closed-only switch, as automatic switching makes it.
+  f.setRunning(false);
+  await f.manager.switchTo(b.id, {
+    closedOnly: true,
+    expectedActiveProfileId: a.id,
+  });
+  assert.deepEqual(busyWhenTold, [false, false]);
+  // A switch that fails late may still have changed the account: it is told too.
+  f.setRunning(true);
+  await assert.rejects(
+    f.manager.switchTo(a.id, { canProceed: () => false }),
+    /cancelled before restart/,
+  );
+  assert.deepEqual(busyWhenTold, [false, false, false]);
+  // A listener that throws never changes how a switch ends.
+  f.manager.onSwitched = () => {
+    throw new Error("listener");
+  };
+  await f.manager.switchTo(a.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+  await assert.rejects(
+    f.manager.switchTo(b.id, { canProceed: () => false }),
+    /cancelled before restart/,
+  );
+});
 test("a changed continuation guard blocks restart before Claude is asked to quit", async (t) => {
   const f = await fixture(t);
   const a = await f.account("A");

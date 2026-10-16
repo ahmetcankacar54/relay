@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -15,6 +16,14 @@ import os from "node:os";
 import { z } from "zod";
 import { DesktopManager } from "./core/desktop";
 import { desktopHost } from "./core/desktop-host";
+import { identity, readObject } from "./core/desktop-files";
+import {
+  DraftScheduler,
+  draftActions,
+  draftNotice,
+  draftSummaries,
+  tryDesktopLock,
+} from "./core/draft-main";
 import { Service } from "./core/service";
 import { UsageManager } from "./core/usage";
 import { AutoSwitchManager } from "./core/auto-switch";
@@ -85,16 +94,20 @@ let initialized = false;
 let continuation: DesktopContinuationManager;
 let fleet: FleetContinuation;
 let automation: ReturnType<typeof nativeDesktopAutomation>;
+let draftRestore: DraftScheduler;
 let desktopTail: Promise<void> = Promise.resolve();
 let desktopTransactionActive = false;
 /** Desktop transactions begun so far; with DesktopManager's own count it marks a Desktop read that overlapped an operation as busy. */
 let desktopTransactions = 0;
+/** Callers holding the Desktop lock or waiting for it; the draft restorer takes only a free lock. */
+let desktopLockCallers = 0;
 async function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
   const before = desktopTail;
   let release!: () => void;
   desktopTail = new Promise<void>((resolve) => {
     release = resolve;
   });
+  desktopLockCallers++;
   await before;
   desktopTransactionActive = true;
   desktopTransactions++;
@@ -104,6 +117,7 @@ async function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
     return await action();
   } finally {
     desktopTransactionActive = false;
+    desktopLockCallers--;
     release();
     // And its end, for operations no caller refreshes the tray after.
     void tray?.update();
@@ -171,10 +185,11 @@ else {
         (url) => shell.openExternal(url),
       );
       nativeTheme.themeSource = themeSource(service.store.state.settings);
+      const host = desktopHost();
       desktop = new DesktopManager(
         path.join(app.getPath("appData"), "Claude"),
         service.store,
-        desktopHost(),
+        host,
       );
       await desktop.initialize();
       usageHistory = new UsageHistory(app.getPath("userData"));
@@ -258,6 +273,30 @@ else {
       automation = nativeDesktopAutomation(
         path.join(__dirname, "desktop-automation"),
       );
+      draftRestore = new DraftScheduler({
+        restorer: {
+          automation,
+          pending: () => desktop.pendingDraftRecords(),
+          mark: (id, state, reason) => desktop.markDraft(id, state, reason),
+          remove: (id) => desktop.dismissDraft(id),
+          currentAccount: async () =>
+            identity(await readObject(desktop.root, "config.json")),
+          running: () => host.running(),
+          uptimeMs: () => desktop.claudeUptimeMs(),
+          withLock: tryDesktopLock(
+            () => desktopLockCallers === 0 && !desktop.isBusy,
+            withDesktopLock,
+          ),
+          notify: notifyDrafts,
+          sleep: (ms) =>
+            new Promise<void>((resolve) => setTimeout(resolve, ms)),
+          now: Date.now,
+        },
+        drafts: () => desktop.pendingDrafts(),
+        changed: broadcastChanged,
+      });
+      // One hook for every switch: tray, panel, automatic, continuation and fleet.
+      desktop.onSwitched = () => void draftRestore.afterSwitch();
       const evidence = new NativeDesktopContinuationEvidence({
         store: service.store,
         desktop,
@@ -597,6 +636,7 @@ else {
           keeper.start();
           continuation.start();
           fleet.start();
+          void draftRestore.start();
           broadcastChanged();
           // An unattended switch must not wait on a Keychain consent; ask now,
           // while Relay was just opened by the user.
@@ -667,6 +707,12 @@ function notifySwitched(name: string) {
         ? `Claude switched to ${name}.`
         : `Claude, ${name} hesabına geçti.`,
   }).show();
+}
+/** After a draft restore: how many drafts were typed back, and how many wait in the panel. */
+function notifyDrafts(summary: { restored: number; left: number }) {
+  const body = draftNotice(summary, trayLanguage);
+  if (!body || !Notification.isSupported()) return;
+  new Notification({ title: "Relay", body }).show();
 }
 /** Today's plan was re-planned at today's pace, or is back to normal. */
 function notifyAdapted(
@@ -859,6 +905,13 @@ function bindIPC() {
       );
     return granted;
   });
+  const draft = draftActions({
+    drafts: desktop,
+    writeClipboard: (text) => clipboard.writeText(text),
+    changed: broadcastChanged,
+  });
+  handle("copy-draft", (draftId) => draft.copy(draftId));
+  handle("dismiss-draft", (draftId) => draft.dismiss(draftId));
   handle("consume-tray-switch", () => {
     const requested = traySwitchRequest;
     traySwitchRequest = null;
@@ -1033,6 +1086,7 @@ function bindIPC() {
     fleet: fleet.snapshot(),
     autoSwitch: autoSwitch.snapshot(),
     planning: keeper.snapshot(),
+    drafts: await draftSummaries(desktop),
   }));
   handle("snapshot", () =>
     service.transaction(async () => ({
@@ -1042,6 +1096,7 @@ function bindIPC() {
       fleet: fleet.snapshot(),
       autoSwitch: autoSwitch.snapshot(),
       planning: keeper.snapshot(),
+      drafts: await draftSummaries(desktop),
     })),
   );
   handle("usage-statistics", (input) => {
@@ -1239,4 +1294,5 @@ app.on("will-quit", () => {
   keeper?.stop();
   continuation?.stop();
   fleet?.stop();
+  draftRestore?.stop();
 });
