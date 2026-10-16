@@ -1,6 +1,7 @@
-import { app, BrowserWindow, session, type Session } from "electron";
+import { app, BrowserWindow, session } from "electron";
 import fs from "node:fs";
 import path from "node:path";
+import { DRAFT_KEY_PREFIX } from "./core/drafts";
 import {
   assertLocalStorage,
   draftJobPath,
@@ -15,19 +16,18 @@ import {
 
 // Relay's Electron, started by `entry.ts` as `--relay-draft-worker=<job.json>` while Claude is
 // closed. It opens a working copy of Claude's Chromium Local Storage (`job.storage`) through a
-// scratch session root, so Chromium itself reads and writes its own LevelDB, and moves drafts
-// with the real `localStorage` API. Relay swaps the copy in afterwards, only on success.
+// scratch session root, so Chromium itself reads its own LevelDB, and answers with the unsent
+// drafts it holds. It only reads: Claude Desktop wipes drafts itself after an account change,
+// and Relay re-types them later.
 // It never imports `main.ts`: nothing here may start the tray, a window or the network.
 
-/** Every draft Claude keeps in Local Storage starts with this. */
-const DRAFT_KEY_PREFIX = "composer-draft:";
 /** The origin Claude's Local Storage belongs to. */
 const ORIGIN = "https://claude.ai/";
 /** Below the caller's 10 000 ms kill, so the helper can report why it stopped and exit itself. */
 const DEADLINE_MS = 8_000;
 
 /** The page's side of a call: a script that gets JSON in as text and gives JSON back as text. */
-function pageFor(win: BrowserWindow, ses: Session): DraftPage {
+function pageFor(win: BrowserWindow): DraftPage {
   const run = (script: string): Promise<unknown> =>
     win.webContents.executeJavaScript(script);
   return {
@@ -45,17 +45,6 @@ function pageFor(win: BrowserWindow, ses: Session): DraftPage {
         return JSON.stringify(drafts);
       })()`);
       return JSON.parse(String(json)) as Record<string, string>;
-    },
-    async apply(ops) {
-      const json = JSON.stringify({ set: ops.set, remove: ops.remove });
-      await run(`(() => {
-        const ops = JSON.parse(${JSON.stringify(json)});
-        for (const [key, value] of Object.entries(ops.set)) localStorage.setItem(key, value);
-        for (const key of ops.remove) localStorage.removeItem(key);
-      })()`);
-    },
-    async flush() {
-      ses.flushStorageData();
     },
   };
 }
@@ -148,7 +137,7 @@ function main(): void {
           fail(new Error("renderer gone")),
         );
         await win.loadURL(ORIGIN);
-        result = await runDraftJob(job, pageFor(win, ses));
+        result = await runDraftJob(job, pageFor(win));
       } catch (error) {
         result = { ok: false, error: errorMessage(error) };
       } finally {

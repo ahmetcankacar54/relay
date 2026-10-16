@@ -17,7 +17,7 @@ import {
 import {
   CONVERSATION_DRAFT_PREFIX as P,
   NEW_SESSION_DRAFT,
-  planDraftMoves,
+  selectDrafts,
 } from "../electron/core/drafts";
 import {
   LEVELDB,
@@ -179,13 +179,16 @@ test("planHistory still returns the same writes", async (t) => {
   assert.deepEqual(plain, detailed.writes);
 });
 
-// planDraftMoves: a pure transform from the drafts Claude holds to the keys to write and remove.
+// selectDrafts: a pure choice of which of A's unsent drafts are worth keeping.
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
 const C = "33333333-3333-4333-8333-333333333333";
 
-const draft = (owner: string, text = "t") =>
-  JSON.stringify({ text, files: [], snippets: [], owner });
+const draft = (
+  owner: string,
+  text = "t",
+  extra: Record<string, unknown> = {},
+) => JSON.stringify({ text, files: [], snippets: [], ...extra, owner });
 const carried = (
   targetAlias: string,
   ...members: [string, string][]
@@ -193,187 +196,134 @@ const carried = (
   targetAlias,
   members: members.map(([alias, accountUuid]) => ({ alias, accountUuid })),
 });
+// A's draft as it is kept for a conversation.
+const kept = (targetAlias: string, text = "t", title = "") => ({
+  targetAlias,
+  title,
+  text,
+  attachments: false,
+});
+const select = (
+  drafts: Record<string, string>,
+  conversations: CarriedConversation[],
+  titles: Record<string, string> = {},
+  from = A,
+) => selectDrafts({ drafts, from, conversations, titles });
 
-test("the same alias changes owner in place", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "x"]: draft(A) },
-    from: A,
-    to: B,
-    conversations: [carried("x", ["x", A])],
-  });
-  assert.deepEqual(JSON.parse(ops.set[P + "x"]), {
-    text: "t",
-    files: [],
-    snippets: [],
-    owner: B,
-  });
-  assert.deepEqual(ops.remove, []);
-  assert.equal(ops.moved, 1);
+test("a draft at the target alias is kept", () => {
+  assert.deepEqual(
+    select({ [P + "x"]: draft(A, "hello") }, [carried("x", ["x", A])]),
+    [kept("x", "hello")],
+  );
 });
 
-test("a different target alias moves the key", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "x"]: draft(A) },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A])],
-  });
-  assert.equal(JSON.parse(ops.set[P + "y"]).owner, B);
-  assert.equal(P + "x" in ops.set, false);
-  assert.deepEqual(ops.remove, [P + "x"]);
-  assert.equal(ops.moved, 1);
+test("a draft at another member alias is kept under the target alias", () => {
+  assert.deepEqual(select({ [P + "x"]: draft(A) }, [carried("y", ["x", A])]), [
+    kept("y"),
+  ]);
 });
 
-test("A's draft overwrites B's draft for the same conversation", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "y"]: draft(B, "old"), [P + "x"]: draft(A, "new") },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A], ["y", B])],
-  });
-  assert.equal(JSON.parse(ops.set[P + "y"]).text, "new");
-  assert.equal(JSON.parse(ops.set[P + "y"]).owner, B);
-  assert.deepEqual(ops.remove, [P + "x"]);
+test("A's draft is kept even when B has one for the same conversation", () => {
+  assert.deepEqual(
+    select({ [P + "y"]: draft(B, "old"), [P + "x"]: draft(A, "new") }, [
+      carried("y", ["x", A], ["y", B]),
+    ]),
+    [kept("y", "new")],
+  );
 });
 
-test("without A's draft, B's draft is untouched", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "y"]: draft(B, "keep") },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A], ["y", B])],
-  });
-  assert.deepEqual(ops.set, {});
-  assert.deepEqual(ops.remove, []);
-  assert.equal(ops.moved, 0);
+test("without A's draft nothing is kept", () => {
+  assert.deepEqual(
+    select({ [P + "y"]: draft(B, "theirs") }, [
+      carried("y", ["x", A], ["y", B]),
+    ]),
+    [],
+  );
 });
 
 test("two A drafts in one conversation keep the one at the target alias", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "x"]: draft(A, "from x"), [P + "y"]: draft(A, "from y") },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A], ["y", A])],
-  });
-  assert.equal(JSON.parse(ops.set[P + "y"]).text, "from y");
-  assert.deepEqual(ops.remove, [P + "x"]);
-  assert.equal(ops.moved, 1);
+  assert.deepEqual(
+    select({ [P + "x"]: draft(A, "from x"), [P + "y"]: draft(A, "from y") }, [
+      carried("y", ["x", A], ["y", A]),
+    ]),
+    [kept("y", "from y")],
+  );
 });
 
 test("two A drafts, neither at the target alias, keep the lexically first", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "b"]: draft(A, "from b"), [P + "a"]: draft(A, "from a") },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["b", A], ["a", A])],
-  });
-  assert.equal(JSON.parse(ops.set[P + "y"]).text, "from a");
-  assert.deepEqual([...ops.remove].sort(), [P + "a", P + "b"]);
-  assert.equal(ops.moved, 1);
+  assert.deepEqual(
+    select({ [P + "b"]: draft(A, "from b"), [P + "a"]: draft(A, "from a") }, [
+      carried("y", ["b", A], ["a", A]),
+    ]),
+    [kept("y", "from a")],
+  );
 });
 
-test("a repeated member does not duplicate or break the plan", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "x"]: draft(A), [P + "y"]: draft(A) },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A], ["x", A], ["y", A], ["y", A])],
-  });
-  assert.deepEqual(Object.keys(ops.set), [P + "y"]);
-  assert.deepEqual(ops.remove, [P + "x"]);
-  assert.equal(ops.moved, 1);
+test("a repeated member does not duplicate the draft", () => {
+  assert.deepEqual(
+    select({ [P + "x"]: draft(A, "x"), [P + "y"]: draft(A, "y") }, [
+      carried("y", ["x", A], ["x", A], ["y", A], ["y", A]),
+    ]),
+    [kept("y", "y")],
+  );
 });
 
-test("another account's drafts and conversations outside the plan are untouched", () => {
-  const ops = planDraftMoves({
-    drafts: {
-      [P + "x"]: draft(C, "theirs"),
-      [P + "z"]: draft(A, "elsewhere"),
-      "composer-draft:other": draft(A),
-    },
-    from: A,
-    to: B,
-    conversations: [carried("x", ["x", A])],
-  });
-  assert.deepEqual(ops.set, {});
-  assert.deepEqual(ops.remove, []);
-  assert.equal(ops.moved, 0);
-  assert.equal(ops.skipped, 0);
+test("another account's drafts and conversations outside the plan are ignored", () => {
+  assert.deepEqual(
+    select(
+      {
+        [P + "x"]: draft(C, "theirs"),
+        [P + "z"]: draft(A, "elsewhere"),
+        "composer-draft:other": draft(A),
+      },
+      [carried("x", ["x", A])],
+    ),
+    [],
+  );
 });
 
-test("an upper-case owner still moves", () => {
+test("an upper-case owner is still A's", () => {
   const from = "aaaabbbb-cccc-4ddd-8eee-ffff00001111";
-  const to = "bbbbcccc-dddd-4eee-8fff-000011112222";
   // Upper-case drafts for a lower-case `from`, then the other way round.
   for (const [owner, given] of [
     [from.toUpperCase(), from],
     [from, from.toUpperCase()],
   ]) {
-    const ops = planDraftMoves({
-      drafts: { [P + "x"]: draft(owner), [NEW_SESSION_DRAFT]: draft(owner) },
-      from: given,
-      to,
-      conversations: [carried("y", ["x", given])],
-    });
-    assert.equal(ops.moved, 1, owner);
-    assert.equal(ops.owned, 1, owner);
-    assert.equal(JSON.parse(ops.set[P + "y"]).owner, to, owner);
-    assert.equal(JSON.parse(ops.set[NEW_SESSION_DRAFT]).owner, to, owner);
-    assert.deepEqual(ops.remove, [P + "x"], owner);
+    assert.deepEqual(
+      select(
+        {
+          [P + "x"]: draft(owner, "c"),
+          [NEW_SESSION_DRAFT]: draft(owner, "n"),
+        },
+        [carried("y", ["x", given])],
+        {},
+        given,
+      ),
+      [
+        kept("y", "c"),
+        { newSession: true, title: "", text: "n", attachments: false },
+      ],
+      owner,
+    );
   }
-  // The owner written is `to` as it is given.
-  const upper = planDraftMoves({
-    drafts: { [P + "x"]: draft(from) },
-    from,
-    to: to.toUpperCase(),
-    conversations: [carried("x", ["x", from])],
-  });
-  assert.equal(JSON.parse(upper.set[P + "x"]).owner, to.toUpperCase());
 });
 
-test("the new-session draft changes owner only from A", () => {
-  const mine = planDraftMoves({
-    drafts: { [NEW_SESSION_DRAFT]: draft(A, "hello") },
-    from: A,
-    to: B,
-    conversations: [],
-  });
-  assert.deepEqual(JSON.parse(mine.set[NEW_SESSION_DRAFT]), {
-    text: "hello",
-    files: [],
-    snippets: [],
-    owner: B,
-  });
-  assert.equal(mine.owned, 1);
-  assert.equal(mine.moved, 0);
-  assert.deepEqual(mine.remove, []);
-
-  const theirs = planDraftMoves({
-    drafts: { [NEW_SESSION_DRAFT]: draft(C) },
-    from: A,
-    to: B,
-    conversations: [],
-  });
-  assert.deepEqual(theirs.set, {});
-  assert.equal(theirs.owned, 0);
-});
-
-test("only the owner changes, every other field is kept", () => {
-  const value = {
-    text: "t",
-    files: [{ name: "a.png" }],
-    snippets: [{ id: 1 }],
-    extra: { nested: true },
-    owner: A,
-  };
-  const ops = planDraftMoves({
-    drafts: { [P + "x"]: JSON.stringify(value) },
-    from: A,
-    to: B,
-    conversations: [carried("x", ["x", A])],
-  });
-  // Compared as strings so the field order is pinned too.
-  assert.equal(ops.set[P + "x"], JSON.stringify({ ...value, owner: B }));
+test("the new-session draft is kept only from A", () => {
+  assert.deepEqual(select({ [NEW_SESSION_DRAFT]: draft(A, "hello") }, []), [
+    { newSession: true, title: "", text: "hello", attachments: false },
+  ]);
+  assert.deepEqual(select({ [NEW_SESSION_DRAFT]: draft(C, "theirs") }, []), []);
+  // It comes after the conversation drafts, and neither is mistaken for the other.
+  assert.deepEqual(
+    select(
+      { [NEW_SESSION_DRAFT]: draft(A, "new"), [P + "x"]: draft(A, "conv") },
+      [carried("x", ["x", A])],
+    ),
+    [
+      kept("x", "conv"),
+      { newSession: true, title: "", text: "new", attachments: false },
+    ],
+  );
 });
 
 test("a malformed draft is skipped", () => {
@@ -385,153 +335,167 @@ test("a malformed draft is skipped", () => {
     "null",
   ];
   for (const value of bad) {
-    const conversation = planDraftMoves({
-      drafts: { [P + "x"]: value },
-      from: A,
-      to: B,
-      conversations: [carried("y", ["x", A])],
-    });
-    assert.deepEqual(conversation.set, {}, value);
-    assert.deepEqual(conversation.remove, [], value);
-    assert.equal(conversation.moved, 0, value);
-    assert.equal(conversation.skipped, 1, value);
-
-    const newSession = planDraftMoves({
-      drafts: { [NEW_SESSION_DRAFT]: value },
-      from: A,
-      to: B,
-      conversations: [],
-    });
-    assert.deepEqual(newSession.set, {}, value);
-    assert.equal(newSession.owned, 0, value);
-    assert.equal(newSession.skipped, 1, value);
+    assert.deepEqual(
+      select({ [P + "x"]: value }, [carried("y", ["x", A])]),
+      [],
+      value,
+    );
+    assert.deepEqual(select({ [NEW_SESSION_DRAFT]: value }, []), [], value);
   }
 });
 
 test("a malformed draft does not stop a good one in the same conversation", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "x"]: "not json", [P + "y"]: draft(A, "good") },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A], ["y", A])],
-  });
-  assert.equal(JSON.parse(ops.set[P + "y"]).text, "good");
-  assert.deepEqual(ops.remove, []);
-  assert.equal(ops.moved, 1);
-  assert.equal(ops.skipped, 1);
+  assert.deepEqual(
+    select({ [P + "x"]: "not json", [P + "y"]: draft(A, "good") }, [
+      carried("y", ["x", A], ["y", A]),
+    ]),
+    [kept("y", "good")],
+  );
 });
 
-test("from === to changes nothing", () => {
-  const ops = planDraftMoves({
-    drafts: {
-      [P + "x"]: draft(A),
-      [P + "bad"]: "not json",
-      [NEW_SESSION_DRAFT]: draft(A),
-    },
-    from: A,
-    to: A,
-    conversations: [carried("y", ["x", A], ["bad", A])],
-  });
-  assert.deepEqual(ops, {
-    set: {},
-    remove: [],
-    moved: 0,
-    owned: 0,
-    skipped: 0,
-  });
-});
-
-test("a malformed draft at the target key leaves the conversation untouched", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "y"]: "garbage", [P + "x"]: draft(A, "mine") },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A], ["y", B])],
-  });
-  assert.deepEqual(ops.set, {});
-  assert.deepEqual(ops.remove, []);
-  assert.equal(ops.moved, 0);
-  assert.equal(ops.skipped, 1);
+test("a malformed draft at the target key skips the conversation", () => {
+  assert.deepEqual(
+    select({ [P + "y"]: "garbage", [P + "x"]: draft(A, "mine") }, [
+      carried("y", ["x", A], ["y", B]),
+    ]),
+    [],
+  );
 });
 
 test("a malformed target draft does not hold back another conversation", () => {
-  const ops = planDraftMoves({
-    drafts: {
-      [P + "y"]: "garbage",
-      [P + "x"]: draft(A, "stays"),
-      [P + "q"]: draft(A, "moves"),
-    },
-    from: A,
-    to: B,
-    conversations: [
-      carried("y", ["x", A], ["y", B]),
-      carried("q", ["q", A]),
-    ],
-  });
-  assert.deepEqual(Object.keys(ops.set), [P + "q"]);
-  assert.deepEqual(ops.remove, []);
-  assert.equal(ops.moved, 1);
-  assert.equal(ops.skipped, 1);
+  assert.deepEqual(
+    select(
+      {
+        [P + "y"]: "garbage",
+        [P + "x"]: draft(A, "stays"),
+        [P + "q"]: draft(A, "moves"),
+      },
+      [carried("y", ["x", A], ["y", B]), carried("q", ["q", A])],
+    ),
+    [kept("q", "moves")],
+  );
 });
 
-test("A's draft overwrites a third account's draft at the target key", () => {
+test("A's draft is kept over a third account's draft at the target key", () => {
   // The target key is shared by every account that has that alias, so it holds
   // one draft whoever wrote it last.
-  const ops = planDraftMoves({
-    drafts: { [P + "y"]: draft(C, "theirs"), [P + "x"]: draft(A, "mine") },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A], ["y", B])],
-  });
-  assert.equal(JSON.parse(ops.set[P + "y"]).text, "mine");
-  assert.equal(JSON.parse(ops.set[P + "y"]).owner, B);
-  assert.deepEqual(ops.remove, [P + "x"]);
+  assert.deepEqual(
+    select({ [P + "y"]: draft(C, "theirs"), [P + "x"]: draft(A, "mine") }, [
+      carried("y", ["x", A], ["y", B]),
+    ]),
+    [kept("y", "mine")],
+  );
 });
 
 test("two carried conversations do not interact", () => {
-  const ops = planDraftMoves({
-    drafts: {
-      [P + "x"]: draft(A, "first"),
-      [P + "m"]: draft(A, "second"),
-      [P + "n"]: draft(B, "kept"),
-    },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A]), carried("n", ["m", A], ["n", B])],
-  });
-  assert.deepEqual(Object.keys(ops.set).sort(), [P + "n", P + "y"]);
-  assert.equal(JSON.parse(ops.set[P + "y"]).text, "first");
-  assert.equal(JSON.parse(ops.set[P + "n"]).text, "second");
-  assert.deepEqual([...ops.remove].sort(), [P + "m", P + "x"]);
-  assert.equal(ops.moved, 2);
-  assert.equal(ops.skipped, 0);
+  assert.deepEqual(
+    select(
+      {
+        [P + "x"]: draft(A, "first"),
+        [P + "m"]: draft(A, "second"),
+        [P + "n"]: draft(B, "theirs"),
+      },
+      [carried("y", ["x", A]), carried("n", ["m", A], ["n", B])],
+    ),
+    [kept("y", "first"), kept("n", "second")],
+  );
 });
 
-test("a key written for one conversation is not removed for another", () => {
-  // Guards an input the real merge cannot produce: two conversations that share an
-  // alias (here `x` is a member of the first and the target of the second).
-  const ops = planDraftMoves({
-    drafts: { [P + "x"]: draft(A, "one"), [P + "q"]: draft(A, "two") },
-    from: A,
-    to: B,
-    conversations: [carried("y", ["x", A]), carried("x", ["q", A])],
-  });
-  assert.equal(JSON.parse(ops.set[P + "y"]).text, "one");
-  assert.equal(JSON.parse(ops.set[P + "x"]).text, "two");
-  assert.deepEqual(ops.remove, [P + "q"]);
-  assert.equal(ops.moved, 2);
+test("a draft is kept for one conversation only", () => {
+  // Guards an input the real merge cannot produce: `x` is a member of both conversations.
+  assert.deepEqual(
+    select({ [P + "x"]: draft(A) }, [
+      carried("y", ["x", A]),
+      carried("z", ["x", A]),
+    ]),
+    [kept("y")],
+  );
 });
 
 test("the target alias is scanned even when it is not a member", () => {
-  const ops = planDraftMoves({
-    drafts: { [P + "x"]: draft(A) },
-    from: A,
-    to: B,
-    conversations: [carried("x")],
-  });
-  assert.equal(JSON.parse(ops.set[P + "x"]).owner, B);
-  assert.deepEqual(ops.remove, []);
-  assert.equal(ops.moved, 1);
+  assert.deepEqual(select({ [P + "x"]: draft(A) }, [carried("x")]), [
+    kept("x"),
+  ]);
+});
+
+test("the text is kept exactly", () => {
+  const text = "  first line\n\n\tsecond line \n";
+  assert.deepEqual(
+    select({ [P + "x"]: draft(A, text) }, [carried("x", ["x", A])]),
+    [kept("x", text)],
+  );
+});
+
+test("the title comes from B's record", () => {
+  const drafts = { [P + "x"]: draft(A, "one"), [P + "q"]: draft(A, "two") };
+  const conversations = [carried("y", ["x", A]), carried("n", ["q", A])];
+  assert.deepEqual(
+    select(drafts, conversations, { y: "Fix login", unrelated: "Other" }),
+    [kept("y", "one", "Fix login"), kept("n", "two", "")],
+  );
+  // The new-session draft belongs to no conversation, so it has no title.
+  assert.equal(
+    select({ [NEW_SESSION_DRAFT]: draft(A) }, [], { y: "Fix login" })[0].title,
+    "",
+  );
+  // A name that is only inherited is not a title.
+  assert.equal(
+    select({ [P + "constructor"]: draft(A) }, [carried("constructor")])[0]
+      .title,
+    "",
+  );
+});
+
+test("attachments are flagged", () => {
+  const flagged = (extra: Record<string, unknown>) =>
+    select({ [P + "x"]: draft(A, "t", extra) }, [carried("x", ["x", A])])[0]
+      .attachments;
+  assert.equal(flagged({ files: [{ name: "a.png" }] }), true);
+  assert.equal(flagged({ snippets: [{ id: 1 }] }), true);
+  assert.equal(
+    flagged({ files: [{ name: "a.png" }], snippets: [{ id: 1 }] }),
+    true,
+  );
+  assert.equal(flagged({}), false);
+  // Absent, empty or not a list: nothing is attached.
+  assert.equal(flagged({ files: undefined, snippets: undefined }), false);
+  assert.equal(flagged({ files: "a.png", snippets: {} }), false);
+  assert.equal(
+    selectDrafts({
+      drafts: { [NEW_SESSION_DRAFT]: draft(A, "t", { files: [1] }) },
+      from: A,
+      conversations: [],
+      titles: {},
+    })[0].attachments,
+    true,
+  );
+});
+
+test("an empty draft is not captured", () => {
+  const empty = [
+    draft(A, ""),
+    draft(A, "  \n\t "),
+    // No text at all, or text that is not a string.
+    JSON.stringify({ files: [], snippets: [], owner: A }),
+    draft(A, 5 as unknown as string),
+    // Attachments alone are not worth keeping: only text is re-typed.
+    draft(A, "", { files: [{ name: "a.png" }] }),
+  ];
+  for (const value of empty) {
+    assert.deepEqual(
+      select({ [P + "x"]: value }, [carried("x", ["x", A])]),
+      [],
+      value,
+    );
+    assert.deepEqual(select({ [NEW_SESSION_DRAFT]: value }, []), [], value);
+  }
+  // An empty draft never takes the place of one with text, wherever it sits.
+  assert.deepEqual(
+    select({ [P + "y"]: draft(A, ""), [P + "x"]: draft(A, "real") }, [
+      carried("y", ["x", A], ["y", A]),
+    ]),
+    [kept("y", "real")],
+  );
 });
 
 // --- Local Storage backup, working copy and swap ---------------------------------
@@ -1034,38 +998,24 @@ function job(): DraftJob {
     storage: "/claude/Local Storage/.relay-work-1234",
     scratch: "/tmp/relay-draft-job",
     result: "/tmp/relay-draft-job/result.json",
-    from: A,
-    to: B,
-    conversations: [
-      {
-        targetAlias: ALIAS_Y,
-        members: [
-          { alias: ALIAS_X, accountUuid: A },
-          { alias: ALIAS_Y, accountUuid: B },
-        ],
-      },
-    ],
     claudeElectron: "44.7.2",
   };
 }
 
-// A page backed by a plain object, recording what the runner asks of it. `stuck` keys ignore
-// being set or removed, like a write that never reached storage. `size` is how many keys the
-// whole origin holds: Claude keeps plenty besides drafts, so it defaults to a non-empty origin.
+// A page backed by a plain object, recording what the runner asks of it. `size` is how many
+// keys the whole origin holds: Claude keeps plenty besides drafts, so it defaults to a non-empty
+// origin. A DraftPage has no way to write, so neither has this one.
 function fakePage(
   initial: Record<string, string>,
   options: {
-    stuck?: string[];
     size?: number;
-    failAt?: "size" | "read" | "apply" | "flush";
+    failAt?: "size" | "read";
     failWith?: unknown;
   } = {},
 ) {
   const store = { ...initial };
   const calls: string[] = [];
-  const applied: unknown[] = [];
-  const stuck = new Set(options.stuck ?? []);
-  const trip = (at: "size" | "read" | "apply" | "flush") => {
+  const trip = (at: "size" | "read") => {
     if (options.failAt === at)
       throw "failWith" in options
         ? options.failWith
@@ -1082,113 +1032,46 @@ function fakePage(
       trip("read");
       return { ...store };
     },
-    async apply(ops) {
-      calls.push("apply");
-      applied.push(ops);
-      trip("apply");
-      for (const [key, value] of Object.entries(ops.set))
-        if (!stuck.has(key)) store[key] = value;
-      for (const key of ops.remove) if (!stuck.has(key)) delete store[key];
-    },
-    async flush() {
-      calls.push("flush");
-      trip("flush");
-    },
   };
-  return { page, store, calls, applied };
+  return { page, store, calls };
 }
 
-test("the job applies the planned ops and reports the counts", async () => {
-  const j = job();
+test("runDraftJob only reads: it answers with the drafts the page holds", async () => {
+  // Raw values pass through as they are, even ones nobody could parse.
   const initial = {
     [P + ALIAS_X]: draft(A, "from A"),
     [P + ALIAS_Y]: draft(B, "B's own"),
-    "composer-draft:other-surface": draft(A, "never touched"),
+    [NEW_SESSION_DRAFT]: "not json",
   };
   const fake = fakePage(initial);
-  const result = await runDraftJob(j, fake.page);
-  assert.deepEqual(result, { ok: true, moved: 1, owned: 0, skipped: 0 });
-  const planned = planDraftMoves({
-    drafts: initial,
-    from: A,
-    to: B,
-    conversations: j.conversations,
-  });
-  assert.equal(fake.applied.length, 1);
-  assert.deepEqual(fake.applied[0], planned);
-  assert.deepEqual(fake.store, {
-    [P + ALIAS_Y]: draft(B, "from A"),
-    "composer-draft:other-surface": draft(A, "never touched"),
-  });
-  // Check the origin has data, read, change, persist, then read again to verify.
-  assert.deepEqual(fake.calls, ["size", "read", "apply", "flush", "read"]);
-});
-
-test("the new-session draft is counted as owned", async () => {
-  const fake = fakePage({ [NEW_SESSION_DRAFT]: draft(A) });
   assert.deepEqual(await runDraftJob(job(), fake.page), {
     ok: true,
-    moved: 0,
-    owned: 1,
-    skipped: 0,
+    drafts: initial,
   });
-  assert.equal(fake.store[NEW_SESSION_DRAFT], draft(B));
-});
-
-test("with nothing to change the job applies nothing and is still ok", async () => {
-  const fake = fakePage({
-    [P + ALIAS_X]: draft(C),
-    [P + ALIAS_Y]: "not json",
-  });
-  const before = { ...fake.store };
-  const result = await runDraftJob(job(), fake.page);
-  assert.deepEqual(result, { ok: true, moved: 0, owned: 0, skipped: 1 });
-  assert.ok(!fake.calls.includes("apply"));
-  assert.deepEqual(fake.store, before);
-  // No drafts at all is not an error either.
-  const empty = fakePage({});
-  assert.deepEqual(await runDraftJob(job(), empty.page), {
+  assert.deepEqual(fake.store, initial);
+  // Check the origin has data, then read once. There is nothing else to ask of the page.
+  assert.deepEqual(fake.calls, ["size", "read"]);
+  // No drafts at all is not an error.
+  assert.deepEqual(await runDraftJob(job(), fakePage({}).page), {
     ok: true,
-    moved: 0,
-    owned: 0,
-    skipped: 0,
+    drafts: {},
   });
-  assert.ok(!empty.calls.includes("apply"));
 });
 
 test("an empty origin is a failure, not a success", async () => {
-  // Chromium rebuilt or could not open Claude's database: nothing to move, and nothing to trust.
+  // Chromium rebuilt or could not open Claude's database: nothing to read, and nothing to trust.
   const fake = fakePage({}, { size: 0 });
   assert.deepEqual(await runDraftJob(job(), fake.page), {
     ok: false,
     error: "Claude's Local Storage opened empty",
   });
   assert.equal(EMPTY_STORAGE, "Claude's Local Storage opened empty");
-  // The helper stops there: it reads and writes nothing.
+  // The helper stops there: it reads nothing.
   assert.deepEqual(fake.calls, ["size"]);
 });
 
-test("a value that did not stick fails verification", async () => {
-  const fake = fakePage(
-    { [P + ALIAS_X]: draft(A), [NEW_SESSION_DRAFT]: draft(A) },
-    { stuck: [NEW_SESSION_DRAFT] },
-  );
-  assert.deepEqual(await runDraftJob(job(), fake.page), {
-    ok: false,
-    error: "verification failed",
-  });
-});
-
-test("a key that was not removed fails verification", async () => {
-  const fake = fakePage({ [P + ALIAS_X]: draft(A) }, { stuck: [P + ALIAS_X] });
-  assert.deepEqual(await runDraftJob(job(), fake.page), {
-    ok: false,
-    error: "verification failed",
-  });
-});
-
 test("a page that throws is reported, not thrown", async () => {
-  for (const failAt of ["size", "read", "apply", "flush"] as const) {
+  for (const failAt of ["size", "read"] as const) {
     const fake = fakePage({ [P + ALIAS_X]: draft(A) }, { failAt });
     assert.deepEqual(
       await runDraftJob(job(), fake.page),
@@ -1244,18 +1127,14 @@ test("Local Storage is opened only when it and its leveldb are real directories"
 test("a job file is checked before the helper uses it", () => {
   const good = { ...job() };
   assert.deepEqual(parseDraftJob(JSON.parse(JSON.stringify(good))), good);
-  // Unknown fields are not carried along.
-  assert.deepEqual(parseDraftJob({ ...good, extra: 1 }), good);
+  // Unknown fields are not carried along, the ones an older Relay wrote included.
+  assert.deepEqual(
+    parseDraftJob({ ...good, extra: 1, from: A, to: B, conversations: [] }),
+    good,
+  );
   const bad = (change: Record<string, unknown>) =>
     assert.throws(() => parseDraftJob({ ...good, ...change }), Error);
-  for (const key of [
-    "storage",
-    "scratch",
-    "result",
-    "from",
-    "to",
-    "claudeElectron",
-  ]) {
+  for (const key of ["storage", "scratch", "result", "claudeElectron"]) {
     bad({ [key]: undefined });
     bad({ [key]: "" });
     bad({ [key]: 7 });
@@ -1263,25 +1142,8 @@ test("a job file is checked before the helper uses it", () => {
   // Relative paths would resolve against whatever directory the helper starts in.
   for (const key of ["storage", "scratch", "result"])
     bad({ [key]: "relative/dir" });
-  bad({ conversations: undefined });
-  bad({ conversations: {} });
-  bad({ conversations: [null] });
-  bad({ conversations: [{ targetAlias: ALIAS_Y }] });
-  bad({ conversations: [{ targetAlias: "", members: [] }] });
-  bad({
-    conversations: [{ targetAlias: ALIAS_Y, members: [{ alias: ALIAS_X }] }],
-  });
-  bad({
-    conversations: [
-      { targetAlias: ALIAS_Y, members: [{ alias: 1, accountUuid: A }] },
-    ],
-  });
   for (const value of [null, undefined, "job", 3, []])
     assert.throws(() => parseDraftJob(value), Error);
-  assert.deepEqual(parseDraftJob({ ...good, conversations: [] }), {
-    ...good,
-    conversations: [],
-  });
 });
 
 test("the build bundles the entry and the helper", async () => {
@@ -1331,6 +1193,21 @@ test("the helper checks its Electron before it opens a session", async () => {
   assert.ok(check < worker.indexOf("session.fromPath("), "before fromPath");
 });
 
+test("the helper and its job never write to Local Storage", async () => {
+  // The helper only reads: Claude Desktop wipes drafts itself after an account change.
+  for (const file of ["draft-worker.ts", "draft-job.ts"]) {
+    const source = await fs.readFile(
+      path.join(import.meta.dirname, "../electron", file),
+      "utf8",
+    );
+    for (const write of ["setItem", "removeItem", "flushStorageData"])
+      assert.ok(
+        !source.includes(write),
+        `electron/${file} must not contain ${write}`,
+      );
+  }
+});
+
 test("the smoke test uses the real draft-worker flag", async () => {
   // A stale copy would start a whole Relay instead of the helper.
   const smoke = await fs.readFile(
@@ -1359,7 +1236,8 @@ const NOW = new Date("2026-10-16T10:00:00.000Z");
 const NOW_STAMP = "2026-10-16T10-00-00-000Z";
 // The Electron version the gate read from Claude.app.
 const CLAUDE_ELECTRON = "44.7.2";
-const NOT_APPLIED = "Claude opened, so the drafts were not applied";
+// Until captured drafts are stored, a run only reads: nothing is swapped in.
+const CAPTURE_PENDING = "capture pending";
 
 // The backup directories under <vault>/drafts, oldest first.
 async function backupsIn(vault: string) {
@@ -1385,16 +1263,10 @@ async function storageNames(fx: { root: string }) {
 
 // A stand-in for the helper: it leaves its scratch dir the way the real one does (a root
 // whose "Local Storage" links to the job's storage, and a userData), then does `effect` and
-// answers. The default answer carries a stray `text` field, which must never reach last.json.
+// answers.
 function fakeRun(
   effect?: (job: DraftJob) => Promise<DraftResult | void>,
-  answer = {
-    ok: true,
-    moved: 1,
-    owned: 1,
-    skipped: 0,
-    text: "an unsent draft",
-  } as DraftResult,
+  answer: DraftResult = { ok: true, drafts: {} },
 ) {
   const jobs: DraftJob[] = [];
   const run = async (job: DraftJob): Promise<DraftResult> => {
@@ -1462,23 +1334,6 @@ async function assertGone(target: string) {
   await assert.rejects(fs.lstat(target), { code: "ENOENT" }, target);
 }
 
-// Makes `fs.rename` fail on the given calls (1-based) from now on, until the returned undo.
-function failRenames(...failing: number[]) {
-  const original = fs.rename;
-  let calls = 0;
-  fs.rename = (async (from: any, to: any) => {
-    calls += 1;
-    if (failing.includes(calls))
-      throw Object.assign(new Error(`injected failure ${calls}`), {
-        code: "EIO",
-      });
-    return original(from, to);
-  }) as typeof fs.rename;
-  return () => {
-    fs.rename = original;
-  };
-}
-
 // Makes `fs.cp` copy and then fail on the given calls (1-based), until the returned undo:
 // a copy that broke at the very end leaves a whole-looking directory behind.
 function failCopies(...failing: number[]) {
@@ -1497,59 +1352,48 @@ function failCopies(...failing: number[]) {
   };
 }
 
-test("a successful run swaps the working copy in and drops its own old leveldb", async (t) => {
+test("a successful run never swaps: its working copy is dropped and the step is pending", async (t) => {
   const fx = await storageFixture(t);
   const before = await snapshot(fx.leveldb);
-  let written: Record<string, string | null> = {};
   const { run, jobs } = fakeRun(async (job) => {
-    written = await rewrite(job);
+    await rewrite(job);
+    // What the read-only helper answers: the drafts' text must never reach last.json.
+    return { ok: true, drafts: { [P + ALIAS_X]: draft(A, "an unsent draft") } };
   });
 
   const outcome = await transfer(fx, run);
 
-  assert.deepEqual(outcome, {
-    status: "moved",
-    moved: 1,
-    owned: 1,
-    skipped: 0,
-  });
+  assert.deepEqual(outcome, { status: "skipped", reason: CAPTURE_PENDING });
   assert.equal(jobs.length, 1);
   const [job] = jobs;
   assert.equal(path.dirname(job.scratch), fx.tmp);
   assert.equal(job.result, path.join(job.scratch, "result.json"));
-  assert.equal(job.from, A);
-  assert.equal(job.to, B);
   assert.equal(job.claudeElectron, CLAUDE_ELECTRON);
-  assert.deepEqual(job.conversations, [
-    carried(ALIAS_X, [ALIAS_X, A], [ALIAS_X, B]),
+  // The job names only where to read: no accounts, no conversations.
+  assert.deepEqual(Object.keys(job).sort(), [
+    "claudeElectron",
+    "result",
+    "scratch",
+    "storage",
   ]);
-  // Claude's leveldb now holds what the run wrote, and nothing is left beside it: the old
-  // leveldb held the same bytes as the backup, so it is not kept twice.
-  assert.deepEqual(await snapshot(fx.leveldb), written);
+  // Claude's leveldb is as it was, and nothing is left beside it.
+  assert.deepEqual(await snapshot(fx.leveldb), before);
   assert.deepEqual(await storageNames(fx), ["leveldb"]);
   assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
-  assert.deepEqual(
-    await snapshot(path.join(fx.vault, "drafts", NOW_STAMP, "leveldb")),
-    before,
-  );
   await assertGone(job.scratch);
   assert.deepEqual(await fs.readdir(fx.tmp), []);
 
-  const last = await lastOutcome(fx.vault);
-  assert.deepEqual(last, {
+  assert.deepEqual(await lastOutcome(fx.vault), {
     at: NOW.toISOString(),
     from: A,
     to: B,
-    status: "moved",
-    moved: 1,
-    owned: 1,
-    skipped: 0,
+    status: "skipped",
+    reason: CAPTURE_PENDING,
   });
   const raw = await fs.readFile(
     path.join(fx.vault, "drafts", "last.json"),
     "utf8",
   );
-  assert.ok(!raw.includes("text"), raw);
   assert.ok(!raw.includes("an unsent draft"), raw);
 });
 
@@ -1558,45 +1402,45 @@ test("the helper only ever sees the working copy", async (t) => {
   const storage = path.join(fx.root, LOCAL_STORAGE);
   const before = await snapshot(fx.leveldb);
   const seen: string[] = [];
+  let problem: unknown;
   const { run } = fakeRun(async (job) => {
     seen.push(job.storage);
-    // A throw here would turn the outcome into a failure.
-    assert.notEqual(job.storage, storage);
-    assert.equal(path.dirname(job.storage), storage);
-    assert.match(path.basename(job.storage), /^\.relay-work-/);
-    // A copy of Claude's leveldb, made after the backup.
-    assert.deepEqual(await snapshot(path.join(job.storage, "leveldb")), before);
-    // While the run works on its copy, Claude's leveldb is as it was.
-    await rewrite(job);
-    assert.deepEqual(await snapshot(fx.leveldb), before);
+    // A step ignores what a run throws, so a failed check is kept to be raised below.
+    try {
+      assert.notEqual(job.storage, storage);
+      assert.equal(path.dirname(job.storage), storage);
+      assert.match(path.basename(job.storage), /^\.relay-work-/);
+      // A copy of Claude's leveldb, made after the backup.
+      assert.deepEqual(
+        await snapshot(path.join(job.storage, "leveldb")),
+        before,
+      );
+      // While the run works on its copy, Claude's leveldb is as it was.
+      await rewrite(job);
+      assert.deepEqual(await snapshot(fx.leveldb), before);
+    } catch (error) {
+      problem = error;
+    }
   });
 
-  assert.equal((await transfer(fx, run)).status, "moved");
+  assert.equal((await transfer(fx, run)).status, "skipped");
+  assert.equal(problem, undefined);
   assert.equal(seen.length, 1);
 });
 
-test("a failed run leaves live byte-identical and discards the working copy", async (t) => {
-  const answers: [string, () => Promise<DraftResult>, string][] = [
-    [
-      "ok false",
-      async () => ({ ok: false, error: "verification failed" }),
-      "verification failed",
-    ],
+test("whatever the run answers, live stays byte-identical and the working copy is discarded", async (t) => {
+  const answers: [string, () => Promise<DraftResult>][] = [
+    ["ok", async () => ({ ok: true, drafts: {} })],
+    ["ok false", async () => ({ ok: false, error: "verification failed" })],
     [
       "a throw",
       async () => {
         throw new Error("helper crashed");
       },
-      "helper crashed",
     ],
-    [
-      "a non-zero exit",
-      async () => ({ ok: false, error: "the helper exited with code 1" }),
-      "the helper exited with code 1",
-    ],
-    ["no answer", async () => undefined as unknown as DraftResult, "no result"],
+    ["no answer", async () => undefined as unknown as DraftResult],
   ];
-  for (const [name, answer, error] of answers) {
+  for (const [name, answer] of answers) {
     const fx = await storageFixture(t);
     const before = await snapshot(fx.leveldb);
     const helper = fakeRun(async (job) => {
@@ -1609,7 +1453,7 @@ test("a failed run leaves live byte-identical and discards the working copy", as
 
     const outcome = await transfer(fx, run);
 
-    const expected = { status: "failed", error, restored: true };
+    const expected = { status: "skipped", reason: CAPTURE_PENDING };
     assert.deepEqual(outcome, expected, name);
     assert.deepEqual(await snapshot(fx.leveldb), before, name);
     assert.deepEqual(await storageNames(fx), ["leveldb"], name);
@@ -1622,217 +1466,6 @@ test("a failed run leaves live byte-identical and discards the working copy", as
       name,
     );
   }
-});
-
-test("Claude opening during the run leaves live untouched", async (t) => {
-  const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  let open = false;
-  const { run } = fakeRun(async (job) => {
-    await rewrite(job);
-    // Claude is opened from the Dock while the helper runs.
-    open = true;
-  });
-
-  const outcome = await transfer(fx, run, { running: async () => open });
-
-  const expected = { status: "failed", error: NOT_APPLIED, restored: true };
-  assert.deepEqual(outcome, expected);
-  assert.deepEqual(await snapshot(fx.leveldb), before);
-  // The working copy is gone.
-  assert.deepEqual(await storageNames(fx), ["leveldb"]);
-  assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
-  assert.deepEqual(await lastOutcome(fx.vault), {
-    at: NOW.toISOString(),
-    from: A,
-    to: B,
-    ...expected,
-  });
-});
-
-test("a running check that fails before the swap counts as running", async (t) => {
-  const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  const { run } = fakeRun(async (job) => {
-    await rewrite(job);
-  });
-  // Closed at the start and before the run; then the check itself fails.
-  const check = runningSequence(false, false, "throw");
-
-  assert.deepEqual(await transfer(fx, run, { running: check.running }), {
-    status: "failed",
-    error: NOT_APPLIED,
-    restored: true,
-  });
-  assert.equal(check.calls(), 3);
-  assert.deepEqual(await snapshot(fx.leveldb), before);
-  assert.deepEqual(await storageNames(fx), ["leveldb"]);
-});
-
-test("the working copy is on disk before it is swapped in", async (t) => {
-  const fx = await storageFixture(t);
-  const open = fs.open;
-  const rename = fs.rename;
-  const undo = () => {
-    fs.open = open;
-    fs.rename = rename;
-  };
-  t.after(undo);
-  const events: string[] = [];
-  let copy = "";
-  const { run } = fakeRun(async (job) => {
-    copy = path.join(job.storage, "leveldb");
-    await rewrite(job);
-    fs.open = (async (file: any, ...rest: any[]) => {
-      const handle = await (open as any)(file, ...rest);
-      const sync = handle.sync.bind(handle);
-      handle.sync = async () => {
-        events.push(`sync ${path.relative(copy, String(file)) || "."}`);
-        return sync();
-      };
-      return handle;
-    }) as typeof fs.open;
-    fs.rename = (async (from: any, to: any) => {
-      events.push(`rename ${path.basename(String(from))}`);
-      return rename(from, to);
-    }) as typeof fs.rename;
-  });
-
-  const outcome = await transfer(fx, run);
-  undo();
-
-  assert.equal(outcome.status, "moved");
-  const first = events.indexOf("rename leveldb");
-  assert.ok(first > 0, events.join("\n"));
-  const synced = events.slice(0, first);
-  // Every file the run left, then the directory itself.
-  const files = (await fs.readdir(fx.leveldb, { withFileTypes: true }))
-    .filter((entry) => entry.isFile())
-    .map((entry) => `sync ${entry.name}`)
-    .sort();
-  assert.deepEqual(synced.slice(0, -1).sort(), files);
-  assert.equal(synced.at(-1), "sync .");
-});
-
-test("a failing second rename puts live back", async (t) => {
-  const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  let undo = () => {};
-  t.after(() => undo());
-  const { run } = fakeRun(async (job) => {
-    await rewrite(job);
-    // The swap moves live aside (1), fails to put the copy in (2), and puts live back (3).
-    undo = failRenames(2);
-  });
-
-  const outcome = await transfer(fx, run);
-  undo();
-
-  assert.deepEqual(outcome, {
-    status: "failed",
-    error: "injected failure 2",
-    restored: true,
-  });
-  assert.deepEqual(await snapshot(fx.leveldb), before);
-  // Neither the working copy nor the old leveldb is left beside it.
-  assert.deepEqual(await storageNames(fx), ["leveldb"]);
-  assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
-  assert.equal((await lastOutcome(fx.vault)).restored, true);
-});
-
-test("a swap that cannot put live back keeps both copies for recovery", async (t) => {
-  const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  let undo = () => {};
-  t.after(() => undo());
-  let written: Record<string, string | null> = {};
-  const { run } = fakeRun(async (job) => {
-    written = await rewrite(job);
-    undo = failRenames(2, 3);
-  });
-
-  const outcome = await transfer(fx, run);
-  undo();
-
-  assert.deepEqual(outcome, {
-    status: "failed",
-    error: "injected failure 2",
-    restored: false,
-  });
-  await assertGone(fx.leveldb);
-  // Claude's data is in the old leveldb, the run's in the working copy: neither is deleted.
-  const names = await storageNames(fx);
-  assert.equal(names.length, 2, names.join());
-  assert.match(names[0], /^\.relay-work-/);
-  assert.match(names[1], /^leveldb\.relay-old-/);
-  const storage = path.join(fx.root, LOCAL_STORAGE);
-  assert.deepEqual(await snapshot(path.join(storage, names[1])), before);
-  assert.deepEqual(
-    await snapshot(path.join(storage, names[0], "leveldb")),
-    written,
-  );
-
-  // The next run finds no leveldb, and leaves both alone.
-  assert.deepEqual(
-    await transfer(fx, fakeRun().run, {
-      now: new Date("2026-10-16T11:00:00.000Z"),
-    }),
-    { status: "skipped", reason: "no Local Storage" },
-  );
-  assert.deepEqual(await storageNames(fx), names);
-});
-
-test("a swap that cannot put live back keeps both copies, even when Claude made a new leveldb", async (t) => {
-  const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  const rename = fs.rename;
-  t.after(() => {
-    fs.rename = rename;
-  });
-  let written: Record<string, string | null> = {};
-  const { run } = fakeRun(async (job) => {
-    written = await rewrite(job);
-    let calls = 0;
-    fs.rename = (async (from: any, to: any) => {
-      calls += 1;
-      if (calls === 2) {
-        // Claude starts in the gap between the two renames and makes a leveldb of its own.
-        await fs.mkdir(fx.leveldb);
-        await fs.writeFile(path.join(fx.leveldb, "CURRENT"), "Claude's own\n");
-        throw Object.assign(new Error("injected failure 2"), { code: "EIO" });
-      }
-      if (calls === 3)
-        throw Object.assign(new Error("injected failure 3"), { code: "EIO" });
-      return rename(from, to);
-    }) as typeof fs.rename;
-  });
-
-  const outcome = await transfer(fx, run);
-  fs.rename = rename;
-
-  // Whatever now sits at live, it is not Claude's leveldb as it was.
-  assert.deepEqual(outcome, {
-    status: "failed",
-    error: "injected failure 2",
-    restored: false,
-  });
-  assert.equal((await lastOutcome(fx.vault)).restored, false);
-  const names = await storageNames(fx);
-  assert.equal(names.length, 3, names.join());
-  assert.match(names[0], /^\.relay-work-/);
-  assert.equal(names[1], "leveldb");
-  assert.match(names[2], /^leveldb\.relay-old-/);
-  const storage = path.join(fx.root, LOCAL_STORAGE);
-  // The original, the run's copy and Claude's new leveldb are all where they were.
-  assert.deepEqual(await snapshot(path.join(storage, names[2])), before);
-  assert.deepEqual(
-    await snapshot(path.join(storage, names[0], "leveldb")),
-    written,
-  );
-  assert.equal(
-    await fs.readFile(path.join(fx.leveldb, "CURRENT"), "utf8"),
-    "Claude's own\n",
-  );
 });
 
 test("a working-copy failure skips and leaves nothing behind", async (t) => {
@@ -1864,21 +1497,21 @@ test("a relay-old dir from an earlier run is never deleted", async (t) => {
   const kept = await snapshot(stray);
   const at = (minute: number) => new Date(Date.UTC(2026, 9, 16, 10, minute));
 
-  // A run that moves: only its own old leveldb goes.
-  assert.equal((await transfer(fx, fakeRun().run)).status, "moved");
+  // A run that completes, and one that fails.
+  assert.equal((await transfer(fx, fakeRun().run)).status, "skipped");
   assert.deepEqual(await storageNames(fx), [
     "leveldb",
     "leveldb.relay-old-0123",
   ]);
-  // One that fails, and one that finds no leveldb.
   const failing = fakeRun(async () => ({
     ok: false,
     error: "verification failed",
   }));
   assert.equal(
     (await transfer(fx, failing.run, { now: at(1) })).status,
-    "failed",
+    "skipped",
   );
+  // And one that finds no leveldb.
   await fs.rename(fx.leveldb, path.join(fx.base, "elsewhere"));
   assert.equal(
     (await transfer(fx, fakeRun().run, { now: at(2) })).status,
@@ -1887,45 +1520,6 @@ test("a relay-old dir from an earlier run is never deleted", async (t) => {
 
   assert.deepEqual(await snapshot(stray), kept);
   assert.deepEqual(await storageNames(fx), ["leveldb.relay-old-0123"]);
-});
-
-test("this run's old leveldb stays beside live when it cannot be removed", async (t) => {
-  const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  const rm = fs.rm;
-  t.after(() => {
-    fs.rm = rm;
-  });
-  fs.rm = (async (target: any, ...rest: any[]) => {
-    if (path.basename(String(target)).startsWith("leveldb.relay-old-"))
-      throw Object.assign(new Error("injected rm failure"), { code: "EPERM" });
-    return (rm as any)(target, ...rest);
-  }) as typeof fs.rm;
-  let written: Record<string, string | null> = {};
-  const { run } = fakeRun(async (job) => {
-    written = await rewrite(job);
-  });
-
-  const outcome = await transfer(fx, run);
-  fs.rm = rm;
-
-  assert.deepEqual(outcome, {
-    status: "moved",
-    moved: 1,
-    owned: 1,
-    skipped: 0,
-  });
-  assert.deepEqual(await snapshot(fx.leveldb), written);
-  const names = await storageNames(fx);
-  assert.equal(names.length, 2, names.join());
-  assert.equal(names[0], "leveldb");
-  assert.match(names[1], /^leveldb\.relay-old-/);
-  assert.deepEqual(
-    await snapshot(path.join(fx.root, LOCAL_STORAGE, names[1])),
-    before,
-  );
-  assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
-  assert.equal((await lastOutcome(fx.vault)).status, "moved");
 });
 
 test("a stale scratch dir is removed, but not what it links to", async (t) => {
@@ -1945,7 +1539,7 @@ test("a stale scratch dir is removed, but not what it links to", async (t) => {
   await fs.utimes(stale, eleven, eleven);
   await fs.utimes(other, eleven, eleven);
 
-  assert.equal((await transfer(fx, fakeRun().run)).status, "moved");
+  assert.equal((await transfer(fx, fakeRun().run)).status, "skipped");
 
   await assertGone(stale);
   // Younger than ten minutes: it may belong to a step still running.
@@ -1981,7 +1575,7 @@ test("a prune that throws still backs up and runs", async (t) => {
   const outcome = await transfer(fx, run);
   fs.rm = rm;
 
-  assert.equal(outcome.status, "moved");
+  assert.equal(outcome.status, "skipped");
   assert.equal(jobs.length, 1);
   assert.ok((await backupsIn(fx.vault)).includes(NOW_STAMP));
   assert.ok((await backupsIn(fx.vault)).includes("2026-10-01T00-00-00-000Z"));
@@ -2058,20 +1652,16 @@ test("the sweep never reaches through a symlinked Local Storage", async (t) => {
 test("old backups are pruned before the new one, so at most three ever exist", async (t) => {
   const fx = await storageFixture(t);
   const during: number[] = [];
-  let ok = false;
   const { run } = fakeRun(async (job) => {
     during.push((await backupsIn(fx.vault)).length);
     await rewrite(job);
-    if (!ok) return { ok: false, error: "verification failed" };
   });
   const stamps: string[] = [];
   for (const day of [1, 2, 3, 4, 5]) {
-    // Runs that swap and runs that fail, in turn.
-    ok = day % 2 === 1;
     const outcome = await transfer(fx, run, {
       now: new Date(Date.UTC(2026, 9, day, 12)),
     });
-    assert.equal(outcome.status, ok ? "moved" : "failed", `day ${day}`);
+    assert.equal(outcome.status, "skipped", `day ${day}`);
     stamps.push(`2026-10-0${day}T12-00-00-000Z`);
     // The two newest from before and this run's own backup, nothing else.
     assert.deepEqual(await backupsIn(fx.vault), stamps.slice(-3), `day ${day}`);
@@ -2105,11 +1695,7 @@ test("the backup a run depends on survives a clock that went back", async (t) =>
     "2030-01-03T00-00-00-000Z",
   ];
   assert.deepEqual(during, [kept]);
-  assert.deepEqual(outcome, {
-    status: "failed",
-    error: "verification failed",
-    restored: true,
-  });
+  assert.deepEqual(outcome, { status: "skipped", reason: CAPTURE_PENDING });
   assert.deepEqual(await snapshot(fx.leveldb), before);
   assert.deepEqual(await backupsIn(fx.vault), kept);
 });
@@ -2381,7 +1967,12 @@ async function startHelper(
   };
 }
 
-const success = JSON.stringify({ ok: true, moved: 1, owned: 0, skipped: 0 });
+// What a helper reports: every composer draft, as Claude stored it.
+const reported = {
+  [P + ALIAS_X]: draft(A, "an unsent draft"),
+  [NEW_SESSION_DRAFT]: draft(A, "a new session"),
+};
+const success = JSON.stringify({ ok: true, drafts: reported });
 
 test("packaged, the helper is Relay itself with only the job flag", async (t) => {
   const h = await startHelper(t, { packaged: true });
@@ -2394,12 +1985,7 @@ test("packaged, the helper is Relay itself with only the job flag", async (t) =>
   assert.equal(h.spawned[0].options.stdio, "ignore");
   await fs.writeFile(h.job.result, success);
   h.children[0].emitter.emit("exit", 0, null);
-  assert.deepEqual(await h.outcome, {
-    ok: true,
-    moved: 1,
-    owned: 0,
-    skipped: 0,
-  });
+  assert.deepEqual(await h.outcome, { ok: true, drafts: reported });
 });
 
 test("in development, the helper script is given before the job flag", async (t) => {
@@ -2454,35 +2040,27 @@ test("the result is read only after the helper exited", async (t) => {
   await pause(30);
   assert.deepEqual(h.reads, []);
   h.children[0].emitter.emit("exit", 0, null);
-  assert.deepEqual(await h.outcome, {
-    ok: true,
-    moved: 1,
-    owned: 0,
-    skipped: 0,
-  });
+  assert.deepEqual(await h.outcome, { ok: true, drafts: reported });
   assert.deepEqual(h.reads, [h.job.result]);
 });
 
 // --- Reading the helper's answer --------------------------------------------------
 
-const written = JSON.stringify({ ok: true, moved: 2, owned: 1, skipped: 3 });
 const exited = (
   code: number | null,
   signal: NodeJS.Signals | null = null,
 ): HelperExit => ({ code, signal, timedOut: false });
 
 test("a written success counts only with exit code 0", () => {
-  assert.deepEqual(helperOutcome(exited(0), written), {
+  assert.deepEqual(helperOutcome(exited(0), success), {
     ok: true,
-    moved: 2,
-    owned: 1,
-    skipped: 3,
+    drafts: reported,
   });
-  assert.deepEqual(helperOutcome(exited(1), written), {
+  assert.deepEqual(helperOutcome(exited(1), success), {
     ok: false,
     error: "the helper exited with code 1",
   });
-  assert.deepEqual(helperOutcome(exited(null, "SIGTERM"), written), {
+  assert.deepEqual(helperOutcome(exited(null, "SIGTERM"), success), {
     ok: false,
     error: "the helper was stopped by SIGTERM",
   });
@@ -2500,22 +2078,19 @@ test("a written failure is passed on", () => {
 test("only the result's own fields are kept", () => {
   const extra = JSON.stringify({
     ok: true,
+    drafts: reported,
     moved: 1,
-    owned: 0,
-    skipped: 0,
     text: "an unsent draft",
   });
   assert.deepEqual(helperOutcome(exited(0), extra), {
     ok: true,
-    moved: 1,
-    owned: 0,
-    skipped: 0,
+    drafts: reported,
   });
 });
 
 test("a helper that timed out failed, whatever it wrote", () => {
   assert.deepEqual(
-    helperOutcome({ code: null, signal: "SIGKILL", timedOut: true }, written),
+    helperOutcome({ code: null, signal: "SIGKILL", timedOut: true }, success),
     { ok: false, error: "timed out" },
   );
 });
@@ -2539,10 +2114,21 @@ test("a missing or invalid result is no result", () => {
     "[]",
     '"ok"',
     '{"ok":true}',
-    '{"ok":"yes","moved":1,"owned":0,"skipped":0}',
-    '{"ok":true,"moved":"1","owned":0,"skipped":0}',
-    '{"ok":true,"moved":-1,"owned":0,"skipped":0}',
-    '{"ok":true,"moved":1.5,"owned":0,"skipped":0}',
+    '{"ok":"yes","drafts":{}}',
+    // The old answer, from before the helper only read.
+    '{"ok":true,"moved":1,"owned":0,"skipped":0}',
+    // The drafts are a map from composer-draft keys to strings, and nothing else.
+    '{"ok":true,"drafts":null}',
+    '{"ok":true,"drafts":[]}',
+    '{"ok":true,"drafts":"x"}',
+    '{"ok":true,"drafts":["composer-draft:a"]}',
+    '{"ok":true,"drafts":{"composer-draft:a":1}}',
+    '{"ok":true,"drafts":{"composer-draft:a":null}}',
+    '{"ok":true,"drafts":{"composer-draft:a":{"text":"t"}}}',
+    '{"ok":true,"drafts":{"other:a":"x"}}',
+    '{"ok":true,"drafts":{"":"x"}}',
+    '{"ok":true,"drafts":{"__proto__":"x"}}',
+    '{"ok":true,"drafts":{"composer-draft:a":"x","other:b":"y"}}',
     '{"ok":false}',
     '{"ok":false,"error":""}',
   ])
@@ -2552,6 +2138,46 @@ test("a missing or invalid result is no result", () => {
         { ok: false, error: "no result" },
         `${text} with code ${code}`,
       );
+});
+
+test("no drafts is a valid answer", () => {
+  assert.deepEqual(helperOutcome(exited(0), '{"ok":true,"drafts":{}}'), {
+    ok: true,
+    drafts: {},
+  });
+});
+
+test("an answer is limited to 500 drafts and 4 MiB", () => {
+  const answer = (drafts: Record<string, string>) =>
+    helperOutcome(exited(0), JSON.stringify({ ok: true, drafts }));
+  const keys = (count: number) =>
+    Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`composer-draft:${i}`, "t"]),
+    );
+  assert.equal(answer(keys(500)).ok, true);
+  assert.deepEqual(answer(keys(501)), { ok: false, error: "no result" });
+
+  // Keys count as well as values: the limit is on the total length.
+  const key = "composer-draft:a";
+  const limit = 4 * 1024 * 1024;
+  assert.deepEqual(answer({ [key]: "x".repeat(limit - key.length) }), {
+    ok: true,
+    drafts: { [key]: "x".repeat(limit - key.length) },
+  });
+  assert.deepEqual(answer({ [key]: "x".repeat(limit - key.length + 1) }), {
+    ok: false,
+    error: "no result",
+  });
+  // Several drafts add up.
+  const half = "x".repeat(limit / 2 - 16);
+  assert.equal(
+    answer({ "composer-draft:a": half, "composer-draft:b": half }).ok,
+    true,
+  );
+  assert.deepEqual(
+    answer({ "composer-draft:a": half, "composer-draft:b": half + "x" }),
+    { ok: false, error: "no result" },
+  );
 });
 
 // --- Whether drafts can move on this machine --------------------------------------

@@ -1243,9 +1243,7 @@ async function withDraftHelper(
   f: Awaited<ReturnType<typeof fixture>>,
   move: (job: DraftJob) => Promise<DraftResult> = async () => ({
     ok: true,
-    moved: 0,
-    owned: 0,
-    skipped: 0,
+    drafts: {},
   }),
 ) {
   const leveldb = path.join(f.root, "Local Storage", "leveldb");
@@ -1283,7 +1281,7 @@ async function withDraftHelper(
   };
 }
 
-test("an A→B switch moves drafts once with A, B and the carried conversations", async (t) => {
+test("an A→B switch runs the draft helper once, on a working copy", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   const a = await f.account("A"); // A is open in Claude
@@ -1296,33 +1294,18 @@ test("an A→B switch moves drafts once with A, B and the carried conversations"
 
   assert.equal(d.jobs.length, 1);
   const [job] = d.jobs;
-  assert.equal(job.from, a.desktop!.accountUuid);
-  assert.equal(job.to, b.desktop!.accountUuid);
   // A working copy beside Claude's leveldb, never Claude's own Local Storage.
   assert.equal(path.dirname(job.storage), path.join(f.root, "Local Storage"));
   assert.match(path.basename(job.storage), /^\.relay-work-/);
   assert.equal(path.dirname(job.scratch), d.tmp);
   assert.equal(job.claudeElectron, "44.7.2");
-  assert.ok(job.conversations.length > 0);
-  const conversation = job.conversations.find((c) => c.targetAlias === shared);
-  assert.ok(conversation, "the shared conversation is carried");
-  assert.deepEqual(
-    conversation.members.map((m) => m.accountUuid).sort(),
-    [a.desktop!.accountUuid, b.desktop!.accountUuid].sort(),
-  );
   assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
-  assert.equal((await d.last())!.status, "moved");
-});
-
-test("a switch that carries no conversation still runs the helper, with none", async (t) => {
-  const f = await fixture(t);
-  const b = await f.account("B");
-  await f.account("A");
-  const d = await withDraftHelper(f);
-  await f.manager.switchTo(b.id);
-  assert.equal(d.jobs.length, 1);
-  // The new-session draft can still change owner.
-  assert.deepEqual(d.jobs[0].conversations, []);
+  // Until captured drafts are stored, a run ends as pending.
+  const last = (await d.last())!;
+  assert.equal(last.from, a.desktop!.accountUuid);
+  assert.equal(last.to, b.desktop!.accountUuid);
+  assert.equal(last.status, "skipped");
+  assert.equal(last.reason, "capture pending");
 });
 
 test("Claude relaunches only after the draft helper finished", async (t) => {
@@ -1331,7 +1314,7 @@ test("Claude relaunches only after the draft helper finished", async (t) => {
   await f.account("A");
   const d = await withDraftHelper(f, async () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
-    return { ok: true, moved: 0, owned: 0, skipped: 0 };
+    return { ok: true, drafts: {} };
   });
   await f.manager.switchTo(b.id);
   assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end", "launch"]);
@@ -1363,9 +1346,8 @@ test("a throwing moveDrafts still switches", async (t) => {
   assert.deepEqual(last, {
     from: a.desktop!.accountUuid,
     to: b.desktop!.accountUuid,
-    status: "failed",
-    error: "helper crashed",
-    restored: true,
+    status: "skipped",
+    reason: "capture pending",
   });
 });
 
@@ -1421,8 +1403,8 @@ test("the closedOnly switch moves drafts too", async (t) => {
   });
   assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
   assert.equal(d.jobs.length, 1);
-  assert.equal(d.jobs[0].from, a.desktop!.accountUuid);
-  assert.equal(d.jobs[0].to, b.desktop!.accountUuid);
+  assert.equal((await d.last())!.from, a.desktop!.accountUuid);
+  assert.equal((await d.last())!.to, b.desktop!.accountUuid);
   // Claude stays closed.
   assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end"]);
 });
@@ -1476,7 +1458,7 @@ test("a host that cannot read Claude's Electron version moves nothing", async (t
   assert.deepEqual(await d.drafts(), ["last.json"]);
 });
 
-test("what a successful helper wrote is Claude's leveldb after the switch", async (t) => {
+test("what the helper wrote to its working copy never reaches Claude's leveldb", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
   await f.account("A");
@@ -1485,20 +1467,20 @@ test("what a successful helper wrote is Claude's leveldb after the switch", asyn
       path.join(job.storage, "leveldb", "CURRENT"),
       "MANIFEST-000002\n",
     );
-    return { ok: true, moved: 1, owned: 0, skipped: 0 };
+    return { ok: true, drafts: {} };
   });
   await f.manager.switchTo(b.id);
   assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end", "launch"]);
   assert.equal(
     await fs.readFile(path.join(d.leveldb, "CURRENT"), "utf8"),
-    "MANIFEST-000002\n",
+    "MANIFEST-000001\n",
   );
   assert.deepEqual(await fs.readdir(path.join(f.root, "Local Storage")), [
     "leveldb",
   ]);
-  // The backup made before the run and last.json: the old leveldb is not kept twice.
+  // The backup made before the run and last.json.
   assert.equal((await d.drafts()).length, 2);
-  assert.equal((await d.last())!.status, "moved");
+  assert.equal((await d.last())!.status, "skipped");
 });
 
 test("a failure deciding whether drafts can move never reaches the switch", async (t) => {
@@ -1544,7 +1526,7 @@ test("the draft helper runs on the switched files, after the switch is complete"
       account: (await readObject(f.root, "config.json"))?.lastKnownAccountUuid,
       journal: !!(await readObject(vault, "journal.json")),
     });
-    return { ok: true, moved: 0, owned: 0, skipped: 0 };
+    return { ok: true, drafts: {} };
   });
   await f.manager.switchTo(b.id);
   assert.deepEqual(seen, [{ account: b.desktop!.accountUuid, journal: false }]);
@@ -1602,6 +1584,6 @@ test("Claude relaunches only after a slow draft helper that then fails", async (
     await fs.readFile(path.join(d.leveldb, "CURRENT"), "utf8"),
     "MANIFEST-000001\n",
   );
-  assert.equal((await d.last())!.status, "failed");
-  assert.equal((await d.last())!.restored, true);
+  assert.equal((await d.last())!.status, "skipped");
+  assert.equal((await d.last())!.reason, "capture pending");
 });

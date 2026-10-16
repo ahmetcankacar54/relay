@@ -7,15 +7,13 @@ import {
   writeBytes,
   type CarriedConversation,
 } from "./desktop-files";
+import { DRAFT_KEY_PREFIX } from "./drafts";
 import {
   backupLocalStorage,
   discardWorkingCopy,
   makeWorkingCopy,
-  PutBackFailed,
   pruneDraftBackups,
-  swapInWorkingCopy,
   sweepDraftLeftovers,
-  syncWorkingCopy,
 } from "./draft-storage";
 import {
   DRAFT_WORKER_FLAG,
@@ -32,35 +30,36 @@ const SCRATCH_PREFIX = "relay-drafts-";
 /** A scratch dir older than this was left by a Relay that stopped mid-step: the helper gets 10 s. */
 const STALE_SCRATCH_MS = 10 * 60_000;
 const ELECTRON_UNKNOWN = "Claude Desktop's Electron version is unknown";
+/** Why every run ends as skipped until the drafts it reads are stored. */
+const CAPTURE_PENDING = "capture pending";
 
 export type DraftOutcome =
-  | { status: "moved"; moved: number; owned: number; skipped: number }
   | { status: "skipped"; reason: string }
   /** `restored` is true when Claude's leveldb is as it was, false when it may not be. */
   | { status: "failed"; error: string; restored: boolean };
 
 /**
- * Moves `from`'s unsent drafts to `to` in Claude's Local Storage, while Claude is closed.
+ * The draft step of a switch, while Claude is closed. For now it only runs the read-only helper:
+ * what the helper reads is not stored yet, so every run that gets as far as the helper ends as
+ * skipped with reason "capture pending".
  *
  * Local Storage is backed up to the vault, then copied to a working dir beside Claude's leveldb,
- * and `run` edits only that copy. When `run` succeeds and Claude is still closed, the copy
- * replaces Claude's leveldb by two renames, and the old leveldb, the same bytes as the backup, is
- * removed. Any failure drops the copy and leaves Claude's leveldb as it was.
+ * and `run` reads only that copy. Whatever `run` answers, the copy is dropped and Claude's
+ * leveldb is never replaced.
  *
- * `blocked`, when set, says why drafts cannot move on this machine. `claudeElectron` is the
+ * `blocked`, when set, says why drafts cannot be read on this machine. `claudeElectron` is the
  * Electron version the same gate read from Claude.app; the helper refuses to open the copy under
  * another major. With `blocked`, or without `claudeElectron`, the step is recorded as skipped,
  * with no backup and no run.
  *
  * `running` says whether Claude is running; a check that throws counts as running. It is asked
- * at the start, just before `run`, and just before the swap. Once Claude runs, nothing in its
- * Local Storage is replaced any more.
+ * at the start and just before `run`. Once Claude runs, its Local Storage is not touched any more.
  *
  * The helper's scratch dir is made in `tmp`, which defaults to os.tmpdir(), and stale ones
  * there are removed.
  *
- * The outcome is written to `<vault>/drafts/last.json`, with counts or a reason but never
- * draft text. Never throws.
+ * The outcome is written to `<vault>/drafts/last.json`, with a reason but never draft text.
+ * Never throws.
  */
 export async function preserveDrafts(input: {
   root: string;
@@ -141,22 +140,15 @@ async function transfer(
   } catch (error) {
     return { status: "skipped", reason: errorMessage(error) };
   }
-  let outcome: DraftOutcome | undefined;
   try {
-    outcome = await moveInCopy(input, work, claudeElectron, tmp, running);
-    return outcome;
+    return await moveInCopy(input, work, claudeElectron, tmp, running);
   } finally {
-    // Empty after a swap, and dropped after a failure that left Claude's leveldb as it was.
-    // Otherwise it is kept beside the original, whatever now sits at live.
-    if (outcome && (outcome.status !== "failed" || outcome.restored))
-      await discardWorkingCopy(root, work);
+    // Claude's leveldb was never replaced, so the copy has no use left.
+    await discardWorkingCopy(root, work);
   }
 }
 
-/**
- * Runs the helper on the working copy in `work` and, once it succeeded and Claude is still
- * closed, swaps the copy in for Claude's leveldb.
- */
+/** Runs the helper on the working copy in `work`, and ends the step as pending whatever it answered. */
 async function moveInCopy(
   input: Parameters<typeof preserveDrafts>[0],
   work: string,
@@ -172,61 +164,17 @@ async function moveInCopy(
   }
   try {
     if (await running()) return claudeRunning();
-    let result: DraftResult | undefined;
     try {
-      result = await input.run({
+      await input.run({
         storage: work,
         scratch,
         result: path.join(scratch, "result.json"),
-        from: input.from,
-        to: input.to,
-        conversations: input.conversations,
         claudeElectron,
       });
-    } catch (error) {
-      result = { ok: false, error: errorMessage(error) };
+    } catch {
+      // A failed run is no different from a finished one while nothing is stored.
     }
-    // Claude's leveldb was never touched: the copy is dropped.
-    if (result?.ok !== true)
-      return {
-        status: "failed",
-        error: result?.error || "no result",
-        restored: true,
-      };
-    try {
-      // Before the last check, so only the two renames follow it.
-      await syncWorkingCopy(work);
-    } catch (error) {
-      return { status: "failed", error: errorMessage(error), restored: true };
-    }
-    if (await running())
-      return {
-        status: "failed",
-        error: "Claude opened, so the drafts were not applied",
-        restored: true,
-      };
-    let old: string;
-    try {
-      old = await swapInWorkingCopy(input.root, work);
-    } catch (error) {
-      // Only a failed put-back leaves live not as it was, even when a leveldb sits there: Claude
-      // may have made its own meanwhile. The original is then in leveldb.relay-old-*.
-      return {
-        status: "failed",
-        error: errorMessage(error),
-        restored: !(error instanceof PutBackFailed),
-      };
-    }
-    // Claude stayed closed since the backup, so the old leveldb holds the backup's bytes. Only
-    // this run's own is removed, and should that fail it stays: the sweep never removes one.
-    await fs.rm(old, { recursive: true, force: true }).catch(() => {});
-    // Field by field, so nothing else the run answered reaches last.json.
-    return {
-      status: "moved",
-      moved: result.moved,
-      owned: result.owned,
-      skipped: result.skipped,
-    };
+    return { status: "skipped", reason: CAPTURE_PENDING };
   } finally {
     // The helper leaves a link to the working copy in here. rm removes the link itself, never
     // what it points to.
@@ -365,8 +313,31 @@ export function awaitHelper(
   });
 }
 
-const count = (value: unknown): value is number =>
-  Number.isSafeInteger(value) && (value as number) >= 0;
+/** Most drafts a helper may report. Claude holds a few dozen at most. */
+const MAX_DRAFTS = 500;
+/** Most characters, keys and values together, a helper may report. */
+const MAX_DRAFT_CHARS = 4 * 1024 * 1024;
+
+/**
+ * The drafts of a helper's answer, or undefined when it is not a plain map from `composer-draft:`
+ * keys to strings within the limits.
+ */
+function validDrafts(value: unknown): Record<string, string> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return undefined;
+  const entries = Object.entries(value);
+  if (entries.length > MAX_DRAFTS) return undefined;
+  const drafts: Record<string, string> = {};
+  let chars = 0;
+  for (const [key, text] of entries) {
+    if (!key.startsWith(DRAFT_KEY_PREFIX) || typeof text !== "string")
+      return undefined;
+    chars += key.length + text.length;
+    if (chars > MAX_DRAFT_CHARS) return undefined;
+    drafts[key] = text;
+  }
+  return drafts;
+}
 
 /**
  * What the helper's exit and the text of its result file add up to. A written success counts
@@ -392,23 +363,13 @@ export function helperOutcome(
     return typeof result.error === "string" && result.error !== ""
       ? { ok: false, error: result.error }
       : noResult;
-  if (
-    result.ok !== true ||
-    !count(result.moved) ||
-    !count(result.owned) ||
-    !count(result.skipped)
-  )
-    return noResult;
+  const drafts = result.ok === true ? validDrafts(result.drafts) : undefined;
+  if (!drafts) return noResult;
   if (exit.signal)
     return { ok: false, error: `the helper was stopped by ${exit.signal}` };
   if (exit.code !== 0)
     return { ok: false, error: `the helper exited with code ${exit.code}` };
-  return {
-    ok: true,
-    moved: result.moved,
-    owned: result.owned,
-    skipped: result.skipped,
-  };
+  return { ok: true, drafts };
 }
 
 /**
