@@ -5,7 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import { randomBytes, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import type { ChildProcess } from "node:child_process";
+import type { ChildProcess, SpawnOptions } from "node:child_process";
 import {
   jsonBytes,
   planHistory,
@@ -33,6 +33,7 @@ import {
   electronMismatch,
   helperOutcome,
   preserveDrafts,
+  runHelper,
   type HelperExit,
 } from "../electron/core/draft-transfer";
 import {
@@ -1369,10 +1370,15 @@ function fakeRun(
   return { run, jobs };
 }
 
+// Claude stays closed unless `running` says otherwise.
 function transfer(
   fx: { root: string; vault: string },
   run: (job: DraftJob) => Promise<DraftResult>,
-  extra: { now?: Date; blocked?: string } = {},
+  extra: {
+    now?: Date;
+    blocked?: string;
+    running?: () => Promise<boolean>;
+  } = {},
 ) {
   return preserveDrafts({
     root: fx.root,
@@ -1382,9 +1388,23 @@ function transfer(
     conversations: [carried(ALIAS_X, [ALIAS_X, A], [ALIAS_X, B])],
     run,
     now: NOW,
+    running: async () => false,
     ...extra,
   });
 }
+
+// A `running` check that answers in turn from `answers` (true, false, or "throw"), then false.
+function runningSequence(...answers: (boolean | "throw")[]) {
+  let calls = 0;
+  const running = async () => {
+    const answer = answers[calls++] ?? false;
+    if (answer === "throw") throw new Error("ps failed");
+    return answer;
+  };
+  return { running, calls: () => calls };
+}
+
+const NOT_RESTORED = "Claude opened, so Local Storage was not restored";
 
 async function assertGone(target: string) {
   await assert.rejects(fs.lstat(target), { code: "ENOENT" }, target);
@@ -1772,6 +1792,207 @@ test("a blocked step records why, without a backup or a run", async (t) => {
   });
 });
 
+test("a skipped step never deletes anything in Claude's Local Storage", async (t) => {
+  const { run, jobs } = fakeRun();
+  const cases: [string, Parameters<typeof transfer>[2], string][] = [
+    [
+      "blocked",
+      { blocked: "drafts move only on macOS" },
+      "drafts move only on macOS",
+    ],
+    ["running", { running: async () => true }, "Claude is running"],
+    ["unknown", runningSequence("throw"), "Claude is running"],
+  ];
+  for (const [name, extra, reason] of cases) {
+    const fx = await storageFixture(t);
+    const storage = path.join(fx.root, LOCAL_STORAGE);
+    await fs.mkdir(path.join(storage, "leveldb.relay-old-1234"));
+    const before = await snapshot(storage);
+    assert.deepEqual(
+      await transfer(fx, run, extra),
+      { status: "skipped", reason },
+      name,
+    );
+    // Not even an earlier restore's leftovers are swept.
+    assert.deepEqual(await snapshot(storage), before, name);
+    assert.deepEqual(await backupsIn(fx.vault), [], name);
+    assert.equal((await lastOutcome(fx.vault)).reason, reason, name);
+  }
+  assert.equal(jobs.length, 0);
+});
+
+test("Claude opening after the backup stops the run", async (t) => {
+  const fx = await storageFixture(t);
+  const before = await snapshot(fx.leveldb);
+  const { run, jobs } = fakeRun();
+  // Closed at the start, open once the backup is made.
+  const check = runningSequence(false, true);
+
+  assert.deepEqual(await transfer(fx, run, { running: check.running }), {
+    status: "skipped",
+    reason: "Claude is running",
+  });
+
+  assert.equal(check.calls(), 2);
+  assert.equal(jobs.length, 0);
+  assert.deepEqual(await snapshot(fx.leveldb), before);
+  assert.equal((await lastOutcome(fx.vault)).reason, "Claude is running");
+});
+
+// A run that damages Local Storage and, while it runs, Claude is opened from the Dock.
+function openedDuringRun(fail: "answer" | "throw") {
+  let open = false;
+  let damaged: Record<string, string | null> = {};
+  const { run } = fakeRun(async (job) => {
+    const leveldb = path.join(job.storage, "leveldb");
+    await fs.writeFile(path.join(leveldb, "000005.ldb"), "half written");
+    await fs.writeFile(path.join(leveldb, "000009.log"), "new");
+    damaged = await snapshot(leveldb);
+    open = true;
+    if (fail === "throw") throw new Error("helper crashed");
+    return { ok: false, error: "verification failed" };
+  });
+  return { run, running: async () => open, damaged: () => damaged };
+}
+
+for (const [fail, error] of [
+  ["answer", "verification failed"],
+  ["throw", "helper crashed"],
+] as const)
+  test(`Claude opening during a run that fails (${fail}) leaves Local Storage alone`, async (t) => {
+    const fx = await storageFixture(t);
+    const opened = openedDuringRun(fail);
+
+    const outcome = await transfer(fx, opened.run, {
+      running: opened.running,
+    });
+
+    const expected = {
+      status: "failed",
+      error: `${error}; ${NOT_RESTORED}`,
+      restored: false,
+    };
+    assert.deepEqual(outcome, expected);
+    // What the run left is kept as it is: no swap happens under a running Claude.
+    assert.deepEqual(await snapshot(fx.leveldb), opened.damaged());
+    assert.deepEqual(await fs.readdir(path.join(fx.root, LOCAL_STORAGE)), [
+      "leveldb",
+    ]);
+    // The backup is the way back.
+    assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
+    assert.deepEqual(await lastOutcome(fx.vault), {
+      at: NOW.toISOString(),
+      from: A,
+      to: B,
+      ...expected,
+    });
+  });
+
+test("a running check that fails before the restore counts as running", async (t) => {
+  const fx = await storageFixture(t);
+  const opened = openedDuringRun("answer");
+  // Closed at the start and before the run; then the check itself fails.
+  const check = runningSequence(false, false, "throw");
+
+  const outcome = await transfer(fx, opened.run, { running: check.running });
+
+  assert.deepEqual(outcome, {
+    status: "failed",
+    error: `verification failed; ${NOT_RESTORED}`,
+    restored: false,
+  });
+  assert.equal(check.calls(), 3);
+  assert.deepEqual(await snapshot(fx.leveldb), opened.damaged());
+  assert.deepEqual(await fs.readdir(path.join(fx.root, LOCAL_STORAGE)), [
+    "leveldb",
+  ]);
+});
+
+test("Claude opening before the last-resort copy leaves leveldb missing", async (t) => {
+  const fx = await storageFixture(t);
+  const storage = path.join(fx.root, LOCAL_STORAGE);
+  let undo = () => {};
+  t.after(() => undo());
+  const { run } = fakeRun(async (job) => {
+    await fs.writeFile(path.join(job.storage, "leveldb", "000005.ldb"), "half");
+    undo = failRenames(2, 3);
+    return { ok: false, error: "verification failed" };
+  });
+  // Closed at the start, before the run and before the restore; open before the copy.
+  const check = runningSequence(false, false, false, true);
+
+  const outcome = await transfer(fx, run, { running: check.running });
+  undo();
+
+  assert.equal(check.calls(), 4);
+  assert.equal(outcome.status, "failed");
+  assert.equal((outcome as { restored: boolean }).restored, false);
+  const { error } = outcome as { error: string };
+  assert.match(
+    error,
+    /^verification failed; the restore failed: injected failure 2/,
+  );
+  assert.ok(error.endsWith(`; ${NOT_RESTORED}`), error);
+  await assertGone(fx.leveldb);
+  // Only the run's leveldb, moved aside by the restore, is left.
+  const names = await fs.readdir(storage);
+  assert.equal(names.length, 1);
+  assert.match(names[0], /^leveldb\.relay-old-/);
+});
+
+// Makes `fs.cp` copy and then fail on the given calls (1-based), until the returned undo:
+// a copy that broke at the very end leaves a whole-looking directory behind.
+function failCopies(...failing: number[]) {
+  const original = fs.cp;
+  let calls = 0;
+  fs.cp = (async (from: any, to: any, options: any) => {
+    calls += 1;
+    await original(from, to, options);
+    if (failing.includes(calls))
+      throw Object.assign(new Error(`injected copy failure ${calls}`), {
+        code: "EIO",
+      });
+  }) as typeof fs.cp;
+  return () => {
+    fs.cp = original;
+  };
+}
+
+// The restore's renames are 1-3 and putting the last-resort copy in place is the fourth.
+// The restore's own copy is the first cp and the last-resort copy is the second.
+for (const [broken, renames, copies, message] of [
+  ["copy", [2, 3], [2], /the copy failed: injected copy failure 2/],
+  ["rename", [2, 3, 4], [], /the copy failed: injected failure 4/],
+] as const)
+  test(`a last-resort ${broken} that fails leaves no half leveldb in place`, async (t) => {
+    const fx = await storageFixture(t);
+    const storage = path.join(fx.root, LOCAL_STORAGE);
+    const undos: (() => void)[] = [];
+    t.after(() => undos.forEach((undo) => undo()));
+    const { run } = fakeRun(async (job) => {
+      await fs.writeFile(
+        path.join(job.storage, "leveldb", "000005.ldb"),
+        "half",
+      );
+      undos.push(failRenames(...renames));
+      if (copies.length) undos.push(failCopies(...copies));
+      return { ok: false, error: "verification failed" };
+    });
+
+    const outcome = await transfer(fx, run);
+    undos.forEach((undo) => undo());
+
+    assert.equal(outcome.status, "failed");
+    assert.equal((outcome as { restored: boolean }).restored, false);
+    assert.match((outcome as { error: string }).error, message);
+    // Nothing sits at live, and the half copy beside it is gone.
+    await assertGone(fx.leveldb);
+    const names = await fs.readdir(storage);
+    assert.equal(names.length, 1, names.join());
+    assert.match(names[0], /^leveldb\.relay-old-/);
+    assert.equal((await lastOutcome(fx.vault)).restored, false);
+  });
+
 // --- Waiting for the helper process -----------------------------------------------
 
 // A child process that exits only when the test says so, and records the signals it gets.
@@ -1841,6 +2062,155 @@ test("an error from a running helper does not end the wait", async () => {
   assert.equal(settled, false);
   emitter.emit("exit", 0, null);
   assert.deepEqual(await exit, { code: 0, signal: null, timedOut: false });
+});
+
+// --- Starting the helper process --------------------------------------------------
+
+async function until(condition: () => boolean) {
+  for (let i = 0; i < 200 && !condition(); i++) await pause(5);
+  assert.ok(condition(), "timed out waiting");
+}
+
+// runHelper with a real scratch dir, recording what it spawns, writes and reads.
+async function startHelper(
+  t: any,
+  options: {
+    packaged?: boolean;
+    env?: NodeJS.ProcessEnv;
+    existingJob?: boolean;
+  } = {},
+) {
+  const scratch = await fs.mkdtemp(
+    path.join(os.tmpdir(), "relay-drafts-spawn-"),
+  );
+  t.after(() => fs.rm(scratch, { recursive: true, force: true }));
+  if (options.existingJob)
+    await fs.writeFile(path.join(scratch, "job.json"), "planted");
+  const helperJob = {
+    ...job(),
+    scratch,
+    result: path.join(scratch, "result.json"),
+  };
+  const spawned: { command: string; args: string[]; options: SpawnOptions }[] =
+    [];
+  const children: ReturnType<typeof fakeChild>[] = [];
+  const writes: unknown[][] = [];
+  const reads: string[] = [];
+  const env = options.env ?? { PATH: "/usr/bin" };
+  const outcome = runHelper(helperJob, {
+    execPath: "/Applications/Relay.app/Contents/MacOS/Relay",
+    packaged: options.packaged ?? true,
+    dir: "/relay/dist-electron",
+    env,
+    spawn: (command, args, spawnOptions) => {
+      spawned.push({ command, args: [...args], options: spawnOptions });
+      const fake = fakeChild();
+      children.push(fake);
+      return fake.child;
+    },
+    writeFile: async (file, data, writeOptions) => {
+      writes.push([file, data, writeOptions]);
+      await fs.writeFile(file, data, writeOptions);
+    },
+    readFile: async (file, encoding) => {
+      reads.push(file);
+      return fs.readFile(file, encoding);
+    },
+  });
+  const jobFile = path.join(scratch, "job.json");
+  return {
+    job: helperJob,
+    outcome,
+    spawned,
+    children,
+    writes,
+    reads,
+    env,
+    jobFile,
+    flag: DRAFT_WORKER_FLAG + jobFile,
+  };
+}
+
+const success = JSON.stringify({ ok: true, moved: 1, owned: 0, skipped: 0 });
+
+test("packaged, the helper is Relay itself with only the job flag", async (t) => {
+  const h = await startHelper(t, { packaged: true });
+  await until(() => h.spawned.length === 1);
+  assert.equal(
+    h.spawned[0].command,
+    "/Applications/Relay.app/Contents/MacOS/Relay",
+  );
+  assert.deepEqual(h.spawned[0].args, [h.flag]);
+  assert.equal(h.spawned[0].options.stdio, "ignore");
+  await fs.writeFile(h.job.result, success);
+  h.children[0].emitter.emit("exit", 0, null);
+  assert.deepEqual(await h.outcome, {
+    ok: true,
+    moved: 1,
+    owned: 0,
+    skipped: 0,
+  });
+});
+
+test("in development, the helper script is given before the job flag", async (t) => {
+  const h = await startHelper(t, { packaged: false });
+  await until(() => h.spawned.length === 1);
+  assert.deepEqual(h.spawned[0].args, [
+    path.join("/relay/dist-electron", "draft-worker.cjs"),
+    h.flag,
+  ]);
+  h.children[0].emitter.emit("exit", 1, null);
+  assert.deepEqual(await h.outcome, { ok: false, error: "no result" });
+});
+
+test("the helper's environment never runs Electron as Node", async (t) => {
+  const env = { PATH: "/usr/bin", ELECTRON_RUN_AS_NODE: "1", KEEP: "me" };
+  const h = await startHelper(t, { env });
+  await until(() => h.spawned.length === 1);
+  const given = h.spawned[0].options.env!;
+  assert.equal("ELECTRON_RUN_AS_NODE" in given, false);
+  assert.equal(given.KEEP, "me");
+  assert.equal(given.PATH, "/usr/bin");
+  // Relay's own environment is left as it was.
+  assert.equal(env.ELECTRON_RUN_AS_NODE, "1");
+  h.children[0].emitter.emit("exit", 1, null);
+  await h.outcome;
+});
+
+test("the job file is written new and private before the helper starts", async (t) => {
+  const h = await startHelper(t);
+  await until(() => h.spawned.length === 1);
+  assert.deepEqual(h.writes, [
+    [h.jobFile, JSON.stringify(h.job), { mode: 0o600, flag: "wx" }],
+  ]);
+  assert.equal((await fs.stat(h.jobFile)).mode & 0o777, 0o600);
+  assert.deepEqual(JSON.parse(await fs.readFile(h.jobFile, "utf8")), h.job);
+  h.children[0].emitter.emit("exit", 1, null);
+  await h.outcome;
+});
+
+test("a job file that already exists is not reused, and nothing is started", async (t) => {
+  const h = await startHelper(t, { existingJob: true });
+  await assert.rejects(h.outcome, { code: "EEXIST" });
+  assert.deepEqual(h.spawned, []);
+  assert.equal(await fs.readFile(h.jobFile, "utf8"), "planted");
+});
+
+test("the result is read only after the helper exited", async (t) => {
+  const h = await startHelper(t);
+  await until(() => h.spawned.length === 1);
+  // The result is already there, but the helper has not exited yet.
+  await fs.writeFile(h.job.result, success);
+  await pause(30);
+  assert.deepEqual(h.reads, []);
+  h.children[0].emitter.emit("exit", 0, null);
+  assert.deepEqual(await h.outcome, {
+    ok: true,
+    moved: 1,
+    owned: 0,
+    skipped: 0,
+  });
+  assert.deepEqual(h.reads, [h.job.result]);
 });
 
 // --- Reading the helper's answer --------------------------------------------------

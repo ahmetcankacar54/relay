@@ -1466,3 +1466,91 @@ test("a failure deciding whether drafts can move never reaches the switch", asyn
   assert.equal((await d.last())!.reason, "plutil failed");
   assert.deepEqual(d.events, ["launch"]);
 });
+
+test("no drafts move between accounts that are not both selected", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A");
+  f.store.update((s) => {
+    s.settings.desktopHistoryTransfer = "selected";
+    s.settings.desktopHistoryAccounts = [a.id];
+  });
+  const d = await withDraftHelper(f);
+  await f.manager.switchTo(b.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 0);
+  assert.equal(await d.last(), null);
+});
+
+test("the draft helper runs on the switched files, after the switch is complete", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const vault = path.join(f.store.root, "desktop-vault");
+  const seen: { account?: string; journal: boolean }[] = [];
+  await withDraftHelper(f, async () => {
+    seen.push({
+      account: (await readObject(f.root, "config.json"))?.lastKnownAccountUuid,
+      journal: !!(await readObject(vault, "journal.json")),
+    });
+    return { ok: true, moved: 0, owned: 0, skipped: 0 };
+  });
+  await f.manager.switchTo(b.id);
+  assert.deepEqual(seen, [{ account: b.desktop!.accountUuid, journal: false }]);
+});
+
+test("a switch whose files fail to apply runs no draft step", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f);
+  const originalRm = fs.rm;
+  let failed = false;
+  fs.rm = (async (p: any, ...args: any[]) => {
+    if (!failed && p === path.join(f.root, "Cookies-journal")) {
+      failed = true;
+      throw new Error("disk failure");
+    }
+    return (originalRm as any)(p, ...args);
+  }) as any;
+  try {
+    await assert.rejects(f.manager.switchTo(b.id), /disk failure/);
+  } finally {
+    fs.rm = originalRm;
+  }
+  assert.equal(failed, true);
+  assert.equal(d.jobs.length, 0);
+  assert.equal(await d.last(), null);
+  // Claude still comes back.
+  assert.deepEqual(d.events, ["launch"]);
+});
+
+test("saving an account and syncing history never move drafts", async (t) => {
+  const f = await fixture(t);
+  await f.account("B");
+  const d = await withDraftHelper(f);
+  const a = await f.account("A"); // a capture that changes the open account
+  await session(f.root, a);
+  await f.manager.syncHistory(a.id);
+  assert.equal(d.jobs.length, 0);
+  assert.equal(await d.last(), null);
+});
+
+test("Claude relaunches only after a slow draft helper that then fails", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f, async (job) => {
+    await fs.writeFile(path.join(job.storage, "leveldb", "CURRENT"), "x");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return { ok: false, error: "verification failed" };
+  });
+  await f.manager.switchTo(b.id);
+  assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end", "launch"]);
+  assert.equal(
+    await fs.readFile(path.join(d.leveldb, "CURRENT"), "utf8"),
+    "MANIFEST-000001\n",
+  );
+  assert.equal((await d.last())!.status, "failed");
+  assert.equal((await d.last())!.restored, true);
+});

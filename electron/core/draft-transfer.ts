@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ChildProcess } from "node:child_process";
+import type { ChildProcess, SpawnOptions } from "node:child_process";
 import {
   jsonBytes,
   writeBytes,
@@ -11,11 +11,17 @@ import {
   LEVELDB,
   LOCAL_STORAGE,
   backupLocalStorage,
+  copyBackupIntoPlace,
   pruneDraftBackups,
   restoreLocalStorage,
   sweepRestoreLeftovers,
 } from "./draft-storage";
-import { errorMessage, type DraftJob, type DraftResult } from "../draft-job";
+import {
+  DRAFT_WORKER_FLAG,
+  errorMessage,
+  type DraftJob,
+  type DraftResult,
+} from "../draft-job";
 
 /** How long Relay waits for the draft helper before it kills it. */
 const HELPER_TIMEOUT_MS = 10_000;
@@ -30,8 +36,15 @@ export type DraftOutcome =
  *
  * Local Storage is backed up first, and the backup is put back when `run` fails or throws.
  * `blocked`, when set, says why drafts cannot move on this machine: the step is then recorded
- * as skipped, with no backup and no run. The outcome is written to `<vault>/drafts/last.json`,
- * with counts or a reason but never draft text. Never throws.
+ * as skipped, with no backup and no run.
+ *
+ * `running` says whether Claude is running; a check that throws counts as running. It is
+ * asked at the start, after the backup just before `run`, before the restore and before the
+ * last-resort copy. Once Claude runs, nothing in its Local Storage is touched any more: like
+ * `apply()`, the step never rolls back under a running Claude. The backup stays in the vault.
+ *
+ * The outcome is written to `<vault>/drafts/last.json`, with counts or a reason but never
+ * draft text. Never throws.
  */
 export async function preserveDrafts(input: {
   root: string;
@@ -42,6 +55,7 @@ export async function preserveDrafts(input: {
   run: (job: DraftJob) => Promise<DraftResult>;
   now: Date;
   blocked?: string;
+  running: () => Promise<boolean>;
 }): Promise<DraftOutcome> {
   let outcome: DraftOutcome;
   try {
@@ -71,8 +85,17 @@ async function transfer(
   input: Parameters<typeof preserveDrafts>[0],
 ): Promise<DraftOutcome> {
   const { root, vault } = input;
-  await sweepRestoreLeftovers(root);
+  const running = async () => {
+    try {
+      return await input.running();
+    } catch {
+      return true; // Unknown is treated as running.
+    }
+  };
+  // Both before the sweep, so a skipped step deletes nothing in Claude's Local Storage.
   if (input.blocked) return { status: "skipped", reason: input.blocked };
+  if (await running()) return claudeRunning();
+  await sweepRestoreLeftovers(root);
 
   let backup: string | undefined;
   try {
@@ -93,6 +116,8 @@ async function transfer(
     return { status: "skipped", reason: errorMessage(error) };
   }
   try {
+    // The helper must never open Local Storage while Claude has it open.
+    if (await running()) return claudeRunning();
     let result: DraftResult | undefined;
     try {
       result = await input.run({
@@ -114,7 +139,7 @@ async function transfer(
         owned: result.owned,
         skipped: result.skipped,
       };
-    return await putBack(root, backup, result?.error || "no result");
+    return await putBack(root, backup, result?.error || "no result", running);
   } finally {
     // The helper leaves a link to Claude's Local Storage in here. rm removes the link itself,
     // never what it points to.
@@ -122,12 +147,26 @@ async function transfer(
   }
 }
 
-/** Puts `backup` back in place of Claude's leveldb after a failed run. */
+const claudeRunning = (): DraftOutcome => ({
+  status: "skipped",
+  reason: "Claude is running",
+});
+
+/** A failed run whose Local Storage is left as it is, because Claude opened meanwhile. */
+const claudeOpened = (error: string): DraftOutcome => ({
+  status: "failed",
+  error: `${error}; Claude opened, so Local Storage was not restored`,
+  restored: false,
+});
+
+/** Puts `backup` back in place of Claude's leveldb after a failed run, unless Claude opened. */
 async function putBack(
   root: string,
   backup: string,
   error: string,
+  running: () => Promise<boolean>,
 ): Promise<DraftOutcome> {
+  if (await running()) return claudeOpened(error);
   try {
     await restoreLocalStorage(root, backup);
     return { status: "failed", error, restored: true };
@@ -135,14 +174,12 @@ async function putBack(
     const why = `${error}; the restore failed: ${errorMessage(restoreError)}`;
     const live = path.join(root, LEVELDB);
     // A leveldb that is there is left as it is. Two failed renames can leave none at all, and
-    // Claude would then start with an empty Local Storage: copy the backup straight in.
+    // Claude would then start with an empty Local Storage: put a copy of the backup in place.
     if (!(await missing(live)))
       return { status: "failed", error: why, restored: false };
+    if (await running()) return claudeOpened(why);
     try {
-      await fs.cp(path.join(backup, "leveldb"), live, {
-        recursive: true,
-        verbatimSymlinks: true,
-      });
+      await copyBackupIntoPlace(root, backup);
       return {
         status: "failed",
         error: why,
@@ -165,6 +202,62 @@ async function missing(target: string): Promise<boolean> {
   } catch (error: any) {
     return error?.code === "ENOENT";
   }
+}
+
+/** What `runHelper` needs from Relay's process, injected so tests never start Electron. */
+export interface HelperDeps {
+  /** Relay's own executable: Relay's Electron doubles as the helper. */
+  execPath: string;
+  /** Packaged, the entry picks the helper from the flag alone. */
+  packaged: boolean;
+  /** The directory that holds `draft-worker.cjs`, for an unpackaged Relay. */
+  dir: string;
+  /** Relay's environment. The helper gets a copy without ELECTRON_RUN_AS_NODE. */
+  env: NodeJS.ProcessEnv;
+  spawn: (
+    command: string,
+    args: string[],
+    options: SpawnOptions,
+  ) => ChildProcess;
+  writeFile: (
+    file: string,
+    data: string,
+    options: { mode: number; flag: string },
+  ) => Promise<void>;
+  readFile: (file: string, encoding: "utf8") => Promise<string>;
+}
+
+/**
+ * Starts the draft helper on `job` and resolves with its result once it has exited, or been
+ * killed past its time. The result file is read only then.
+ */
+export async function runHelper(
+  job: DraftJob,
+  deps: HelperDeps,
+): Promise<DraftResult> {
+  const jobPath = path.join(job.scratch, "job.json");
+  // New and private: an existing file is never reused.
+  await deps.writeFile(jobPath, JSON.stringify(job), {
+    mode: 0o600,
+    flag: "wx",
+  });
+  const flag = DRAFT_WORKER_FLAG + jobPath;
+  const env = { ...deps.env };
+  // Set, it would start Relay's Electron as plain Node instead of as the helper.
+  delete env.ELECTRON_RUN_AS_NODE;
+  const child = deps.spawn(
+    deps.execPath,
+    deps.packaged ? [flag] : [path.join(deps.dir, "draft-worker.cjs"), flag],
+    { stdio: "ignore", env },
+  );
+  const exit = await awaitHelper(child);
+  let text: string | undefined;
+  try {
+    text = await deps.readFile(job.result, "utf8");
+  } catch {
+    // No result file: helperOutcome reports it.
+  }
+  return helperOutcome(exit, text);
 }
 
 /** How the helper process ended. */

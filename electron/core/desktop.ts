@@ -537,10 +537,7 @@ export class DesktopManager {
       if (!source || !allowedHistoryPair(source, target, settings)) return;
       let blocked: string | undefined;
       try {
-        // The helper must never open Local Storage while Claude has it open.
-        blocked =
-          (await host.draftsBlocked?.()) ||
-          ((await host.running()) ? "Claude is running" : undefined);
+        blocked = (await host.draftsBlocked?.()) || undefined;
       } catch (error) {
         blocked = errorMessage(error);
       }
@@ -553,6 +550,8 @@ export class DesktopManager {
         run: (job) => host.moveDrafts!(job),
         now: new Date(),
         blocked,
+        // Asked again before the run and before any restore: Claude can be opened meanwhile.
+        running: () => host.running(),
       });
     } catch {
       // Drafts never change how a switch ends.

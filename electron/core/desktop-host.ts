@@ -6,12 +6,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import type { DesktopHost } from "./desktop";
 import { macDesktopPids } from "./desktop-processes";
-import { DRAFT_WORKER_FLAG } from "../draft-job";
-import {
-  awaitHelper,
-  draftsBlockedReason,
-  helperOutcome,
-} from "./draft-transfer";
+import { draftsBlockedReason, runHelper } from "./draft-transfer";
 const exec = promisify(execFile);
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function desktopHost(): DesktopHost {
@@ -165,32 +160,16 @@ export function desktopHost(): DesktopHost {
         process.platform === "darwin" ? await claudeElectron() : undefined,
         process.versions.electron,
       ),
-    moveDrafts: async (job) => {
-      const jobPath = path.join(job.scratch, "job.json");
-      await fs.promises.writeFile(jobPath, JSON.stringify(job), {
-        mode: 0o600,
-        flag: "wx",
-      });
-      const flag = DRAFT_WORKER_FLAG + jobPath;
-      const env = { ...process.env };
-      // Set, it would start Relay's Electron as plain Node instead of as the helper.
-      delete env.ELECTRON_RUN_AS_NODE;
-      // Packaged, the entry picks the helper from the flag; in development the script is given.
-      const child = spawn(
-        process.execPath,
-        app.isPackaged
-          ? [flag]
-          : [path.join(__dirname, "draft-worker.cjs"), flag],
-        { stdio: "ignore", env },
-      );
-      const exit = await awaitHelper(child);
-      let text: string | undefined;
-      try {
-        text = await fs.promises.readFile(job.result, "utf8");
-      } catch {
-        // No result file: helperOutcome reports it.
-      }
-      return helperOutcome(exit, text);
-    },
+    moveDrafts: (job) =>
+      runHelper(job, {
+        execPath: process.execPath,
+        packaged: app.isPackaged,
+        // dist-electron, beside main.cjs, once bundled.
+        dir: __dirname,
+        env: process.env,
+        spawn,
+        writeFile: fs.promises.writeFile,
+        readFile: fs.promises.readFile,
+      }),
   };
 }

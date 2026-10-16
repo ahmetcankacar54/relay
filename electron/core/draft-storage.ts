@@ -161,6 +161,32 @@ export async function restoreLocalStorage(
 }
 
 /**
+ * The last resort after a restore that left no `<root>/Local Storage/leveldb` at
+ * all: copies `<backup>/leveldb` beside it, then renames the copy into place, so
+ * a copy that breaks partway never sits where Claude looks. Only for a missing
+ * leveldb. Throws on failure, after removing its own copy.
+ */
+export async function copyBackupIntoPlace(
+  root: string,
+  backup: string,
+): Promise<void> {
+  const storage = path.join(root, LOCAL_STORAGE);
+  if (!(await realDirectory(storage, LOCAL_STORAGE)))
+    await fs.mkdir(storage, { recursive: true, mode: 0o700 });
+  const copy = path.join(storage, `${LEFTOVER}${randomUUID()}`);
+  try {
+    await fs.cp(path.join(backup, "leveldb"), copy, {
+      recursive: true,
+      verbatimSymlinks: true,
+    });
+    await fs.rename(copy, path.join(root, LEVELDB));
+  } catch (error) {
+    await fs.rm(copy, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+/**
  * Deletes all but the `keep` newest `<vault>/drafts/<stamp>` directories.
  * Only real directories named like a stamp are considered, so `last.json`,
  * other entries and anything outside `<vault>/drafts` are never touched.
