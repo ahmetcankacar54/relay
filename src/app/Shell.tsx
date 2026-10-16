@@ -12,6 +12,7 @@ import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
 import { Planning } from "@/pages/Planning";
 import relayIcon from "../../assets/icon.png";
+import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
 import { RelayPrankStage } from "@/pranks/RelayPrankStage";
 import { Sidebar } from "./Sidebar";
 import { DesktopActionDialog } from "./DesktopActionDialog";
@@ -52,6 +53,7 @@ export function Shell() {
   return (
     <TooltipProvider delayDuration={300}>
       <RelayPrankStage>
+        <MainWindowPranks />
         <div className="flex h-screen overflow-hidden bg-background text-foreground">
           <Sidebar
             page={page}

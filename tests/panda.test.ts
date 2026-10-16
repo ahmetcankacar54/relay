@@ -65,3 +65,11 @@ test("every panda motion plays only without Reduce motion and moves the parts it
   for (const [name, parts] of Object.entries(MOTION_PARTS))
     for (const part of parts) assert.ok(motion.includes(`.panda[data-motion~="${name}"] [data-part="${part}"]`), `${name} → ${part}`);
 });
+
+test("the prank motions move what they name: chew the head and the held item, breathe the body", () => {
+  assert.deepEqual(MOTION_PARTS.chew, ["head", "held"]);
+  assert.deepEqual(MOTION_PARTS.breathe, ["body"]);
+  for (const part of MOTION_PARTS.chew) assert.ok(POSE_PARTS.chew.includes(part), `chew pose has ${part}`);
+  for (const part of MOTION_PARTS.breathe) assert.ok(POSE_PARTS.curl.includes(part), `curl pose has ${part}`);
+  for (const name of ["panda-chew", "panda-gnaw", "panda-breathe"]) assert.match(css, new RegExp(`@keyframes ${name}\\s*\\{`), name);
+});

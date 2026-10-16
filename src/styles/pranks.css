@@ -1,6 +1,42 @@
-/* The prank stage (src/pranks/PrankStage.tsx). Every animation goes inside @media (prefers-reduced-motion: no-preference). */
+/* The prank stage (src/pranks/PrankStage.tsx). Every animation property goes inside the reduced-motion "no-preference" block below. */
 /* The nibble prank hides the real cursor while a drawn one flies; the stage always takes this class off again. */
 .prank-cursor-hidden,
 .prank-cursor-hidden * {
   cursor: none !important;
+}
+
+/* The confetti: bamboo leaves above the window, each placed and delayed by its inline style. Without motion they stay unseen. */
+.prank-leaf {
+  position: absolute;
+  top: -24px;
+  width: 10px;
+  height: 18px;
+  border-radius: 0 100% 0 100%;
+  background: #7aa65a;
+  opacity: 0;
+}
+.prank-leaf:nth-child(even) {
+  background: #9cc06b;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .prank-leaf {
+    animation-name: prank-leaf-fall;
+    animation-duration: 1.2s;
+    animation-timing-function: ease-in;
+    animation-fill-mode: backwards;
+  }
+  /* The shower lasts CONFETTI_MS (src/pranks/timing.ts); it fades out as the layer goes. */
+  .prank-confetti {
+    animation: prank-confetti-fade 2s linear forwards;
+  }
+}
+@keyframes prank-leaf-fall {
+  from { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+  40% { transform: translate3d(14px, 40vh, 0) rotate(150deg); }
+  70% { transform: translate3d(-10px, 75vh, 0) rotate(260deg); }
+  to { transform: translate3d(6px, 110vh, 0) rotate(380deg); opacity: 1; }
+}
+@keyframes prank-confetti-fade {
+  0%, 85% { opacity: 1; }
+  100% { opacity: 0; }
 }

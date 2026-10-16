@@ -9,6 +9,7 @@ import { panelRowState } from "@/lib/account-row";
 import { formatPercent } from "@/lib/meter";
 import { formatRelative } from "@/lib/time";
 import { RelayErrorAlert } from "@/app/Banners";
+import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { PanelActiveCard } from "./PanelActiveCard";
 import { PanelAccounts, panelRows, switchingId } from "./PanelAccounts";
 import { PanelAutomation } from "./PanelAutomation";
@@ -22,6 +23,7 @@ export function Panel({
   now?: number;
 }) {
   const relay = useRelay();
+  const prank = usePrank();
   const { t, language } = useI18n();
   const { api, accounts, suggestion, usageBusy } = relay;
   const [confirmId, setConfirmId] = useState<string>();
@@ -76,9 +78,11 @@ export function Panel({
             size="icon-xs"
             aria-label={t("Limitleri yenile", "Refresh limits")}
             disabled={refreshing || !accounts.length}
-            onClick={() => {
-              for (const a of accounts) void relay.refreshUsage(a);
-            }}
+            onClick={(e) =>
+              offerAfter(prank, "wheel", e, () => {
+                for (const a of accounts) void relay.refreshUsage(a);
+              })
+            }
           >
             <RefreshCw className={refreshing ? "animate-spin" : undefined} />
           </Button>

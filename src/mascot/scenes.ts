@@ -8,6 +8,8 @@ export const MOTION_PARTS = {
   look: ["head"],
   nod: ["head"],
   walk: ["leg-front", "leg-back"],
+  chew: ["head", "held"],
+  breathe: ["body"],
 } as const satisfies Record<string, readonly string[]>;
 export type PandaMotion = keyof typeof MOTION_PARTS;
 

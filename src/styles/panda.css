@@ -50,6 +50,15 @@
   .panda[data-motion~="walk"] [data-part="leg-back"] {
     animation: panda-step 0.5s ease-in-out infinite alternate-reverse;
   }
+  .panda[data-motion~="chew"] [data-part="head"] {
+    animation: panda-chew 0.33s ease-in-out infinite;
+  }
+  .panda[data-motion~="chew"] [data-part="held"] {
+    animation: panda-gnaw 0.33s ease-in-out infinite;
+  }
+  .panda[data-motion~="breathe"] [data-part="body"] {
+    animation: panda-breathe 3.2s ease-in-out infinite;
+  }
 }
 @keyframes panda-blink {
   0%, 92%, 100% { transform: scaleY(1); }
@@ -78,4 +87,18 @@
 @keyframes panda-step {
   from { transform: rotate(-12deg); }
   to { transform: rotate(12deg); }
+}
+/* The head dips into each bite; what it holds shakes as it is gnawed. */
+@keyframes panda-chew {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(4deg); }
+}
+@keyframes panda-gnaw {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-7deg); }
+}
+/* The curled body swells and settles about its own pivot. */
+@keyframes panda-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
 }

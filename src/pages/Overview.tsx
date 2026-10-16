@@ -6,6 +6,7 @@ import { useRelay } from "@/data/relay-context";
 import { formatRelative } from "@/lib/time";
 import { formatPercent } from "@/lib/meter";
 import { PageFrame } from "@/app/PageFrame";
+import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { Banner } from "@/app/Banners";
 import type { PageId } from "@/app/routes";
 import { ActiveAccountCard } from "./overview/ActiveAccountCard";
@@ -22,6 +23,7 @@ export function Overview({
   now?: number;
 }) {
   const relay = useRelay();
+  const prank = usePrank();
   const { t, language } = useI18n();
   const { active, suggestion, accounts, usageBusy } = relay;
   const usage = relay.data?.usage ?? {};
@@ -49,9 +51,11 @@ export function Overview({
         <Button
           variant="outline"
           disabled={refreshing || !accounts.length}
-          onClick={() => {
-            for (const a of accounts) void relay.refreshUsage(a);
-          }}
+          onClick={(e) =>
+            offerAfter(prank, "wheel", e, () => {
+              for (const a of accounts) void relay.refreshUsage(a);
+            })
+          }
         >
           {refreshing ? (
             <LoaderCircle className="animate-spin" />
