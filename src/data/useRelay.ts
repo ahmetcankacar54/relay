@@ -22,6 +22,7 @@ import { errorMessage } from "./error-message";
 import { useI18n } from "./i18n";
 import { pendingFlow, tempoRateNow } from "./selectors";
 import {
+  errorAfterRefresh,
   relayAction,
   shouldConsumeTraySwitch,
   shouldPoll,
@@ -57,6 +58,14 @@ function useRelayState(
   const sequence = useRef(0);
   const queuedTrayTarget = useRef<string | null>(null);
   const showError = useCallback((e: unknown) => setError(errorMessage(e)), []);
+  // A background refresh that failed once (a busy moment) must not leave its error behind
+  // after refreshes work again.
+  const refreshError = useRef<string | undefined>(undefined);
+  const showRefreshError = useCallback((e: unknown) => {
+    const message = errorMessage(e);
+    refreshError.current = message;
+    setError(message);
+  }, []);
   const refresh = useCallback(async () => {
     const request = ++sequence.current;
     const [snapshot, status] = await Promise.all([
@@ -66,6 +75,11 @@ function useRelayState(
     if (request === sequence.current) {
       setData(snapshot);
       setDesktop(status);
+      const stale = refreshError.current;
+      if (stale !== undefined) {
+        refreshError.current = undefined;
+        setError((current) => errorAfterRefresh(current, stale));
+      }
     }
     if (request !== sequence.current) return { snapshot, status };
     if (!consumeTraySwitch) return { snapshot, status };
@@ -95,26 +109,26 @@ function useRelayState(
     return { snapshot, status };
   }, [consumeTraySwitch]);
   useEffect(() => {
-    void refresh().catch(showError);
+    void refresh().catch(showRefreshError);
     const off = api.onAuth(() => {
-      void refresh().catch(showError);
+      void refresh().catch(showRefreshError);
     });
     const offTray = api.onTraySwitch(() => {
-      void refresh().catch(showError);
+      void refresh().catch(showRefreshError);
     });
     const offChanged = api.onChanged(() => {
-      void refresh().catch(showError);
+      void refresh().catch(showRefreshError);
     });
     const timer = setInterval(() => {
       if (shouldPoll({ pollWhenHidden }, document.visibilityState))
-        void refresh().catch(showError);
+        void refresh().catch(showRefreshError);
     }, 4000);
     const focus = () => {
-      void refresh().catch(showError);
+      void refresh().catch(showRefreshError);
     };
     const visible = () => {
       if (document.visibilityState === "visible")
-        void refresh().catch(showError);
+        void refresh().catch(showRefreshError);
     };
     window.addEventListener("focus", focus);
     document.addEventListener("visibilitychange", visible);
@@ -126,7 +140,7 @@ function useRelayState(
       window.removeEventListener("focus", focus);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [refresh, showError, pollWhenHidden]);
+  }, [refresh, showRefreshError, pollWhenHidden]);
   const action = relayAction(lock, {
     setBusy,
     setError,

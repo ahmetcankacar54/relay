@@ -5,7 +5,11 @@ import os from "node:os";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import type { DesktopHost } from "./desktop";
-import { macDesktopPids } from "./desktop-processes";
+import {
+  assertProcessListing,
+  macDesktopPids,
+  retryOnce,
+} from "./desktop-processes";
 import { draftsBlockedReason, runHelper } from "./draft-transfer";
 const exec = promisify(execFile);
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -37,10 +41,15 @@ export function desktopHost(): DesktopHost {
   const pids = async (): Promise<number[]> => {
     if (!executable) return [];
     if (process.platform === "darwin") {
-      const { stdout } = await exec("/bin/ps", ["-axo", "pid=,comm="], {
-        timeout: 5000,
-      });
-      return macDesktopPids(stdout, executable);
+      // A busy main process can cut ps short (its timeout fires before the output is read), so
+      // an empty listing is a failure, not "closed"; one retry rides out such a moment.
+      return retryOnce(async () => {
+        const { stdout } = await exec("/bin/ps", ["-axo", "pid=,comm="], {
+          timeout: 5000,
+        });
+        assertProcessListing(stdout);
+        return macDesktopPids(stdout, executable);
+      }, 250);
     }
     const { stdout } = await exec(
       "powershell.exe",

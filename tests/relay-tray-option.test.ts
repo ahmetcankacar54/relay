@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { shouldConsumeTraySwitch, shouldPoll } from "../src/data/relay-action";
+import {
+  errorAfterRefresh,
+  shouldConsumeTraySwitch,
+  shouldPoll,
+} from "../src/data/relay-action";
 import { languageFromStorage } from "../src/data/language";
 
 test("the tray switch request is consumed unless the caller opts out", () => {
@@ -49,4 +53,19 @@ test("every Desktop operation refreshes the tray inside the lock when it begins 
   const lock = main.slice(main.indexOf("async function withDesktopLock"), main.indexOf("function manualDesktopLock"));
   assert.match(lock, /try \{(?:\s*\/\/[^\n]*)*\s*void tray\?\.update\(\);[\s\S]*?\} finally \{[\s\S]*?desktopTransactionActive = false;[\s\S]*?void tray\?\.update\(\);[\s\S]*?\}/);
   assert.doesNotMatch(lock.slice(0, lock.indexOf("try {")), /tray\?\.update/);
+});
+
+test("an error from a background refresh clears once a refresh succeeds; other errors stay", () => {
+  assert.equal(errorAfterRefresh("Command failed: /bin/ps", "Command failed: /bin/ps"), "");
+  // An action's error that replaced the refresh error is not the refresh's to clear.
+  assert.equal(errorAfterRefresh("Switch failed", "Command failed: /bin/ps"), "Switch failed");
+  assert.equal(errorAfterRefresh("Switch failed", undefined), "Switch failed");
+  assert.equal(errorAfterRefresh("", undefined), "");
+});
+
+test("background refreshes report through the self-clearing refresh error", () => {
+  const hook = readFileSync(new URL("../src/data/useRelay.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(hook, /refresh\(\)\.catch\(showError\)/);
+  assert.match(hook, /refresh\(\)\.catch\(showRefreshError\)/);
+  assert.match(hook, /errorAfterRefresh\(/);
 });

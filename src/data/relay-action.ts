@@ -37,6 +37,17 @@ export function shouldConsumeTraySwitch(options: {
   return options.consumeTraySwitch !== false;
 }
 
+/**
+ * The error to show after a background refresh succeeded. A refresh's own earlier failure is
+ * over once a refresh works again; an error something else set in the meantime stays.
+ */
+export function errorAfterRefresh(
+  current: string,
+  refreshError: string | undefined,
+): string {
+  return refreshError !== undefined && current === refreshError ? "" : current;
+}
+
 /** The long-lived menu bar panel skips its poll while it is hidden. */
 export function shouldPoll(
   options: { pollWhenHidden?: boolean },
