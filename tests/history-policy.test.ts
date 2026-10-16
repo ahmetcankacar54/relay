@@ -138,3 +138,12 @@ test("the switch window setting is optional and never defaulted", () => {
   assert.equal("switchWindow" in settingsPatchSchema.parse({ appearance: "dark" }), false);
   assert.throws(() => settingsPatchSchema.parse({ switchWindow: "no" }));
 });
+
+test("the panda pranks setting is optional and never defaulted", () => {
+  const stored = settingsSchema.parse({ ...DEFAULT_SETTINGS });
+  assert.equal("pranks" in stored, false);
+  assert.equal(settingsSchema.parse({ ...DEFAULT_SETTINGS, pranks: "rarely" }).pranks, "rarely");
+  assert.deepEqual(settingsPatchSchema.parse({ pranks: "off" }), { pranks: "off" });
+  assert.equal("pranks" in settingsPatchSchema.parse({ appearance: "dark" }), false);
+  assert.throws(() => settingsPatchSchema.parse({ pranks: "never" }));
+});

@@ -11,7 +11,7 @@ import {
 } from "@/components/SettingRow";
 import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import type { RelaySettings } from "../../shared/types";
+import type { PrankLevel, RelaySettings } from "../../shared/types";
 
 const cardClass = "gap-0 px-5 py-4";
 
@@ -102,6 +102,35 @@ export function Settings() {
               </SettingRow>
             </>
           )}
+          <SettingRow
+            label={
+              <span id="panda-pranks-label">
+                {t("Panda şakaları", "Panda pranks")}
+              </span>
+            }
+            description={t(
+              "Seyrek şakalar; hiçbir işlemi geciktirmez.",
+              "Rare pranks; they never delay anything.",
+            )}
+          >
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              aria-labelledby="panda-pranks-label"
+              value={settings.pranks ?? "sometimes"}
+              disabled={disabled}
+              onValueChange={(v) => v && update({ pranks: v as PrankLevel })}
+            >
+              <ToggleGroupItem value="sometimes">
+                {t("Ara sıra", "Sometimes")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="rarely">
+                {t("Nadiren", "Rarely")}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="off">{t("Kapalı", "Off")}</ToggleGroupItem>
+            </ToggleGroup>
+          </SettingRow>
         </Card>
         <Card className={cardClass}>
           <SectionHeading title={t("Dil", "Language")} />

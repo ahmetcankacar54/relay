@@ -99,3 +99,44 @@ test("Settings offers the switch window, on unless turned off, on macOS only", (
   for (const platform of ["win32", "linux"])
     assert.doesNotMatch(render({ platform }), /Geçişte panda penceresini göster|switch-window-label/, platform);
 });
+
+test("Settings offers the panda pranks setting on every platform", () => {
+  const render = (extra: { pranks?: "sometimes" | "rarely" | "off"; platform?: string } = {}) => {
+    const relay = relayFor();
+    const data = { ...relay.data!, diagnostics: { ...relay.data!.diagnostics, platform: extra.platform ?? "darwin" } } as Snapshot;
+    const value = { ...settings, ...(extra.pranks === undefined ? {} : { pranks: extra.pranks }) };
+    return renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        createElement(RelayContext.Provider, { value: { ...relay, settings: value, data } as Relay }, createElement(Settings)),
+      ),
+    );
+  };
+  // The group labelled by the row's label id, then the item that is switched on inside it.
+  const selected = (html: string) => {
+    const group = /<div[^>]*aria-labelledby="panda-pranks-label"[^>]*>.*?<\/div>/s.exec(html)?.[0] ?? "";
+    return [...group.matchAll(/<button[^>]*data-state="on"[^>]*>(.*?)<\/button>/gs)].map((m) => m[1]);
+  };
+  for (const platform of ["darwin", "win32", "linux"]) {
+    const html = render({ platform });
+    for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /Seyrek şakalar; hiçbir işlemi geciktirmez\./])
+      assert.match(html, re, platform);
+    assert.match(html, /id="panda-pranks-label"/, platform);
+    assert.deepEqual(selected(html), ["Ara sıra"], platform);
+    assert.deepEqual(selected(render({ platform, pranks: "off" })), ["Kapalı"], platform);
+    assert.deepEqual(selected(render({ platform, pranks: "rarely" })), ["Nadiren"], platform);
+  }
+});
+
+test("Settings shows the panda pranks setting in English", () => {
+  const html = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "en", setLanguage() {}, t: (_tr: string, en: string) => en } },
+      createElement(RelayContext.Provider, { value: relayFor() }, createElement(Settings)),
+    ),
+  );
+  for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Rare pranks; they never delay anything\./])
+    assert.match(html, re);
+});

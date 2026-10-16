@@ -264,7 +264,10 @@ export interface RelaySettings {
   menuBarAnimation?: boolean;
   /** Show the switch window under the menu bar while Claude restarts; missing means on. */
   switchWindow?: boolean;
+  /** How often the panda pranks; missing means "sometimes". */
+  pranks?: PrankLevel;
 }
+export type PrankLevel = "sometimes" | "rarely" | "off";
 export interface PlanningHours {
   enabled: boolean;
   start: string;

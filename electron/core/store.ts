@@ -154,6 +154,7 @@ export const settingsSchema = z
     historyPolicyVersion: z.literal(2).optional(),
     menuBarAnimation: z.boolean().optional(),
     switchWindow: z.boolean().optional(),
+    pranks: z.enum(["sometimes", "rarely", "off"]).optional(),
   })
   .strict();
 // Migration defaults belong to a complete saved registry, never to an IPC patch.
