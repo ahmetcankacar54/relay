@@ -307,7 +307,8 @@ test("only the owner changes, every other field is kept", () => {
     to: B,
     conversations: [carried("x", ["x", A])],
   });
-  assert.deepEqual(JSON.parse(ops.set[P + "x"]), { ...value, owner: B });
+  // Compared as strings so the field order is pinned too.
+  assert.equal(ops.set[P + "x"], JSON.stringify({ ...value, owner: B }));
 });
 
 test("a malformed draft is skipped", () => {
@@ -373,4 +374,97 @@ test("from === to changes nothing", () => {
     owned: 0,
     skipped: 0,
   });
+});
+
+test("a malformed draft at the target key leaves the conversation untouched", () => {
+  const ops = planDraftMoves({
+    drafts: { [P + "y"]: "garbage", [P + "x"]: draft(A, "mine") },
+    from: A,
+    to: B,
+    conversations: [carried("y", ["x", A], ["y", B])],
+  });
+  assert.deepEqual(ops.set, {});
+  assert.deepEqual(ops.remove, []);
+  assert.equal(ops.moved, 0);
+  assert.equal(ops.skipped, 1);
+});
+
+test("a malformed target draft does not hold back another conversation", () => {
+  const ops = planDraftMoves({
+    drafts: {
+      [P + "y"]: "garbage",
+      [P + "x"]: draft(A, "stays"),
+      [P + "q"]: draft(A, "moves"),
+    },
+    from: A,
+    to: B,
+    conversations: [
+      carried("y", ["x", A], ["y", B]),
+      carried("q", ["q", A]),
+    ],
+  });
+  assert.deepEqual(Object.keys(ops.set), [P + "q"]);
+  assert.deepEqual(ops.remove, []);
+  assert.equal(ops.moved, 1);
+  assert.equal(ops.skipped, 1);
+});
+
+test("A's draft overwrites a third account's draft at the target key", () => {
+  // The target key is shared by every account that has that alias, so it holds
+  // one draft whoever wrote it last.
+  const ops = planDraftMoves({
+    drafts: { [P + "y"]: draft(C, "theirs"), [P + "x"]: draft(A, "mine") },
+    from: A,
+    to: B,
+    conversations: [carried("y", ["x", A], ["y", B])],
+  });
+  assert.equal(JSON.parse(ops.set[P + "y"]).text, "mine");
+  assert.equal(JSON.parse(ops.set[P + "y"]).owner, B);
+  assert.deepEqual(ops.remove, [P + "x"]);
+});
+
+test("two carried conversations do not interact", () => {
+  const ops = planDraftMoves({
+    drafts: {
+      [P + "x"]: draft(A, "first"),
+      [P + "m"]: draft(A, "second"),
+      [P + "n"]: draft(B, "kept"),
+    },
+    from: A,
+    to: B,
+    conversations: [carried("y", ["x", A]), carried("n", ["m", A], ["n", B])],
+  });
+  assert.deepEqual(Object.keys(ops.set).sort(), [P + "n", P + "y"]);
+  assert.equal(JSON.parse(ops.set[P + "y"]).text, "first");
+  assert.equal(JSON.parse(ops.set[P + "n"]).text, "second");
+  assert.deepEqual([...ops.remove].sort(), [P + "m", P + "x"]);
+  assert.equal(ops.moved, 2);
+  assert.equal(ops.skipped, 0);
+});
+
+test("a key written for one conversation is not removed for another", () => {
+  // Guards an input the real merge cannot produce: two conversations that share an
+  // alias (here `x` is a member of the first and the target of the second).
+  const ops = planDraftMoves({
+    drafts: { [P + "x"]: draft(A, "one"), [P + "q"]: draft(A, "two") },
+    from: A,
+    to: B,
+    conversations: [carried("y", ["x", A]), carried("x", ["q", A])],
+  });
+  assert.equal(JSON.parse(ops.set[P + "y"]).text, "one");
+  assert.equal(JSON.parse(ops.set[P + "x"]).text, "two");
+  assert.deepEqual(ops.remove, [P + "q"]);
+  assert.equal(ops.moved, 2);
+});
+
+test("the target alias is scanned even when it is not a member", () => {
+  const ops = planDraftMoves({
+    drafts: { [P + "x"]: draft(A) },
+    from: A,
+    to: B,
+    conversations: [carried("x")],
+  });
+  assert.equal(JSON.parse(ops.set[P + "x"]).owner, B);
+  assert.deepEqual(ops.remove, []);
+  assert.equal(ops.moved, 1);
 });

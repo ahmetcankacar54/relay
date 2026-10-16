@@ -38,8 +38,12 @@ function parseDraft(raw: string): Draft | null {
 
 /**
  * Decides which Local Storage keys to write or remove so that account `from`'s unsent drafts
- * follow its conversations to account `to`. A draft is moved, never copied. Drafts owned by any
- * other account, and keys outside the carried conversations, are never touched.
+ * follow its conversations to account `to`. A draft is moved, never copied.
+ *
+ * Keys outside the carried conversations are never touched, and neither are drafts owned by
+ * other accounts, with one exception: A's draft is written to the conversation's target key,
+ * which every account holding that alias shares, so it replaces whatever sits there. When that
+ * target key holds a malformed value, the whole conversation is left as it is.
  *
  * `drafts` holds every `composer-draft:` key with its raw string value.
  */
@@ -79,6 +83,9 @@ export function planDraftMoves(input: {
       const draft = read(key);
       if (draft && draft.owner === from) mine.push({ key, draft });
     }
+    // Overwriting a value Relay cannot read would lose it, so the conversation stays as it is.
+    const targetRaw = drafts[targetKey];
+    if (typeof targetRaw === "string" && !parseDraft(targetRaw)) continue;
     if (mine.length === 0) continue;
     // The draft already at the target alias wins; otherwise the lexically first (`keys` is sorted).
     const keep = mine.find(({ key }) => key === targetKey) ?? mine[0];
