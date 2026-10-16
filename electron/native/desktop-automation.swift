@@ -37,6 +37,10 @@ func stringAttribute(_ element: AXUIElement, _ name: String) -> String {
     if let value = attribute(element, name) as? URL { return value.absoluteString }
     return ""
 }
+// The one definition of an element's text: a missing or non-text AXValue is "".
+// observe() derives composerEmpty from it (via Node.value) and the pre-write
+// composer re-read uses it directly, so they cannot disagree about "empty".
+func valueText(_ element: AXUIElement) -> String { stringAttribute(element, kAXValueAttribute) }
 struct Node {
     let element: AXUIElement
     let role: String
@@ -101,7 +105,7 @@ func nodes(_ root: AXUIElement) throws -> [Node] {
             role: stringAttribute(element, kAXRoleAttribute),
             title: stringAttribute(element, kAXTitleAttribute),
             description: stringAttribute(element, kAXDescriptionAttribute),
-            value: stringAttribute(element, kAXValueAttribute),
+            value: valueText(element),
             url: stringAttribute(element, "AXURL"),
             enabled: (attribute(element, kAXEnabledAttribute) as? Bool) ?? true,
             path: path
@@ -357,7 +361,7 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         // or switching conversations; it cannot close it, as AX has no atomic lock.
         guard let text = request["text"] as? String, !text.isEmpty, text.utf8.count <= 65536, !text.contains("\0"),
               let composer = current.composer else { try fail("desktop-ui-unsupported") }
-        guard let live = attribute(composer.element, kAXValueAttribute) as? String, live.isEmpty else { try fail("composer-not-empty") }
+        guard valueText(composer.element).isEmpty else { try fail("composer-not-empty") }
         let sessions = liveSessionIDs(current)
         guard sessions.count == 1, sessions.first == expected["localSessionId"] as? String else { try fail("context-changed") }
         try writeComposer(current, text)

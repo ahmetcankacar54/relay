@@ -457,7 +457,7 @@ test("the Swift write-draft branch re-reads the composer and conversation right 
   const branch = swiftBlock('if command == "write-draft" {');
   const write = branch.indexOf("writeComposer(");
   for (const before of [
-    "kAXValueAttribute",
+    "valueText(composer.element).isEmpty",
     'fail("composer-not-empty")',
     "liveSessionIDs(",
     'fail("context-changed")',
@@ -465,6 +465,23 @@ test("the Swift write-draft branch re-reads the composer and conversation right 
     const at = branch.indexOf(before);
     assert.ok(at !== -1 && at < write, `${before} must precede writeComposer`);
   }
+});
+test("the Swift pre-write composer re-read shares observe's definition of an empty composer", () => {
+  // observe() derives composerEmpty from Node.value, which nodes() reads with
+  // valueText: a missing or non-text AXValue is "". The re-read must use the same
+  // helper, not its own raw attribute read, or the two could disagree about
+  // whether a composer that reports no value is empty.
+  assert.match(swiftBlock("func nodes("), /value: valueText\(element\)/);
+  assert.match(
+    swiftBlock("func observe()"),
+    /"composerEmpty": composer\?\.value\.isEmpty == true/,
+  );
+  const branch = swiftBlock('if command == "write-draft" {');
+  assert.match(
+    branch,
+    /guard valueText\(composer\.element\)\.isEmpty else \{ try fail\("composer-not-empty"\) \}/,
+  );
+  assert.doesNotMatch(branch, /kAXValueAttribute/);
 });
 test("the Swift writeComposer re-checks focus after its re-observe and before the clipboard write", () => {
   const body = swiftBlock("func writeComposer(");
