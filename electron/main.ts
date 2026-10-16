@@ -71,6 +71,7 @@ import {
 import { CONTINUATION_TEXT } from "./core/continuation";
 import { FleetContinuation, type FleetResult } from "./core/fleet-continuation";
 import { UsageCredentialRefresher } from "./core/usage-refresh";
+import { appendUsageIssue } from "./core/usage-issue-log";
 import { UsageError } from "./core/usage-credentials";
 
 let window: BrowserWindow | null = null;
@@ -243,6 +244,13 @@ else {
         (account) =>
           usageCredentialRefresher.hasPending(
             service.store.profile(account.id),
+          ),
+        // A short private log, so the cause of a sign-in warning can be found later.
+        (account, issue) =>
+          appendUsageIssue(
+            path.join(app.getPath("userData"), "usage-issues.json"),
+            { accountId: account.id, issue },
+            Date.now(),
           ),
       );
       automation = nativeDesktopAutomation(

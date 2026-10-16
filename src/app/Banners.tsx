@@ -42,6 +42,42 @@ export function reconnectIssues(
   return result;
 }
 
+/**
+ * Why an account's CLI sign-in cannot be used, in a few words for the sign-in
+ * banner. The first matching row wins; anything unlisted is a lost connection.
+ */
+export function reconnectCause(
+  account: Account,
+  usage: AccountUsage | undefined,
+  t: (tr: string, en: string) => string,
+): string {
+  if (!account.auth?.loggedIn) return t("giriş yapılmamış", "not signed in");
+  switch (usage?.issue) {
+    case "expired":
+      return t(
+        "oturumun süresi doldu ve yenilenemedi",
+        "the session expired and could not be renewed",
+      );
+    case "credentials-missing":
+      return t(
+        "kayıtlı giriş bulunamadı",
+        "the saved sign-in was not found",
+      );
+    case "scope":
+      return t(
+        "giriş kullanım verisine erişemiyor",
+        "the sign-in cannot read usage",
+      );
+    case "identity-mismatch":
+      return t(
+        "giriş başka bir hesaba ait",
+        "the sign-in belongs to another account",
+      );
+    default:
+      return t("bağlantı kullanılamıyor", "the connection is unavailable");
+  }
+}
+
 /** The current Relay or Desktop error, for surfaces (dialogs) that cover the page banners. */
 export function RelayErrorAlert() {
   const relay = useRelay();
@@ -201,22 +237,34 @@ export function Banners() {
             )
           }
         >
-          <span>
-            {issue === "keychain-locked"
-              ? t(
-                  `${a.name} · limitleri okumak için Anahtarlık erişimi gerekiyor.`,
-                  `${a.name} · Keychain access is needed to read usage limits.`,
-                )
-              : action === "renew"
+          {action === "login" ? (
+            <div className="min-w-0">
+              <span>
+                {t(
+                  `${a.name} · tarayıcı girişinin yenilenmesi gerekiyor: ${reconnectCause(a, relay.data?.usage?.[a.id], t)}.`,
+                  `${a.name} · the browser sign-in needs to be renewed: ${reconnectCause(a, relay.data?.usage?.[a.id], t)}.`,
+                )}
+              </span>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t(
+                  "Yeniden bağlan, tarayıcıda bu hesabın Claude girişini açar. Girişi onaylayınca uyarı kapanır.",
+                  "Reconnect opens this account's Claude sign-in in the browser. The warning closes once you approve it.",
+                )}
+              </p>
+            </div>
+          ) : (
+            <span>
+              {issue === "keychain-locked"
                 ? t(
-                    `${a.name} · kullanım bağlantısının yenilenmesi gerekiyor.`,
-                    `${a.name} · the usage connection needs to be renewed.`,
+                    `${a.name} · limitleri okumak için Anahtarlık erişimi gerekiyor.`,
+                    `${a.name} · Keychain access is needed to read usage limits.`,
                   )
                 : t(
-                    `${a.name} · tarayıcı girişinin yenilenmesi gerekiyor.`,
-                    `${a.name} · the browser sign-in needs to be renewed.`,
+                    `${a.name} · kullanım bağlantısının yenilenmesi gerekiyor.`,
+                    `${a.name} · the usage connection needs to be renewed.`,
                   )}
-          </span>
+            </span>
+          )}
         </Banner>
       ))}
     </div>

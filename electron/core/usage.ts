@@ -1,4 +1,9 @@
-import type { Account, AccountUsage, UsageWindow } from "../../shared/types";
+import type {
+  Account,
+  AccountUsage,
+  UsageIssue,
+  UsageWindow,
+} from "../../shared/types";
 import { Store } from "./store";
 import { UsageError, type UsageCredential } from "./usage-credentials";
 import type { RefreshUsageCredential } from "./usage-refresh";
@@ -237,6 +242,8 @@ export class UsageManager {
     ) => void = () => {},
     private refreshCredential?: RefreshUsageCredential,
     private refreshCredentialPending?: (account: Account) => boolean,
+    /** Told once each time an account's issue changes; never given a credential. */
+    private onIssue?: (account: Account, issue: UsageIssue) => void,
   ) {}
   invalidate(id: string) {
     this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
@@ -524,6 +531,14 @@ export class UsageManager {
         issue: error.issue,
         retryAt: new Date(retryAt).toISOString(),
       });
+      // Only a change is worth a log line: a failing poll repeats every few minutes.
+      if (error.issue !== previous.issue) {
+        try {
+          this.onIssue?.(account, error.issue);
+        } catch {
+          // The diagnosis log must never turn a usage failure into another one.
+        }
+      }
     } finally {
       const next = this.waiting.shift();
       if (next) next();
