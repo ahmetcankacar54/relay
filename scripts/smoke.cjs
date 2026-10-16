@@ -1,6 +1,7 @@
 // Runs real Electron + preload IPC + native PTY against a local CLI fixture.
 // No real accounts, credentials, browser login, model calls, or user history are used.
 const { app, BrowserWindow, dialog } = require("electron");
+const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
@@ -63,6 +64,185 @@ async function eventually(fn) {
   }
   throw new Error("Timed out waiting for fixture.");
 }
+
+// The draft helper's argument, as in electron/draft-job.ts.
+const DRAFT_WORKER_FLAG = "--relay-draft-worker=";
+const CHILD_TIMEOUT_MS = 20_000;
+/**
+ * Runs this Electron binary with `args` as a child process and resolves once it has exited, with
+ * its exit code and what it printed. A child still running after 20 s is killed and rejects.
+ */
+function runElectron(name, args, log) {
+  const env = { ...process.env };
+  // A leftover ELECTRON_RUN_AS_NODE would make the child a plain Node with no `app`.
+  delete env.ELECTRON_RUN_AS_NODE;
+  // A file instead of pipes: Chromium's own helper processes may keep a pipe open past the exit.
+  const output = fs.openSync(log, "w");
+  const printed = () => fs.readFileSync(log, "utf8").slice(-2000);
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, {
+      env,
+      stdio: ["ignore", output, output],
+    });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(
+        new Error(
+          `${name} did not exit within ${CHILD_TIMEOUT_MS / 1000} s and was killed. Output:\n${printed()}`,
+        ),
+      );
+    }, CHILD_TIMEOUT_MS);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      reject(new Error(`${name} did not start: ${error.message}`));
+    });
+    child.once("exit", (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal, printed: printed() });
+    });
+  }).finally(() => fs.closeSync(output));
+}
+
+/**
+ * The draft helper against real Chromium, on fixture data in <root>/appdata/Claude-drafts-fixture
+ * only. It never switches Desktop accounts: desktopHost() would drive the real Claude.app.
+ */
+async function proveDraftHelper() {
+  const fixtureScript = path.join(__dirname, "fixtures/local-storage.cjs");
+  const entry = path.join(__dirname, "../dist-electron/entry.cjs");
+  assert(fs.existsSync(entry), `${entry} is missing: run npm run build first.`);
+  const claudeDir = path.join(
+    path.resolve(root),
+    "appdata",
+    "Claude-drafts-fixture",
+  );
+  const work = path.join(path.resolve(root), "drafts-smoke");
+  fs.mkdirSync(work);
+  /** Runs one child to the end and fails the step unless it exits 0. */
+  const exitsClean = async (name, args, extra = () => "") => {
+    const run = await runElectron(name, args, path.join(work, `${name}.log`));
+    assert.equal(
+      run.code,
+      0,
+      `${name} exited with ${run.code ?? run.signal}.${extra()}\nOutput:\n${run.printed}`,
+    );
+  };
+  const dump = async (name) => {
+    const out = path.join(work, `${name}.json`);
+    await exitsClean(name, [
+      fixtureScript,
+      "dump",
+      claudeDir,
+      out,
+      path.join(work, `${name}-userData`),
+    ]);
+    return JSON.parse(fs.readFileSync(out, "utf8"));
+  };
+
+  const [A, B, C, x, y, z] = Array.from({ length: 6 }, () => randomUUID());
+  const conversationKey = (alias) => `composer-draft:epitaxy-local_${alias}`;
+  const newSessionKey = "composer-draft:epitaxy-draft";
+  const draft = (text, owner) =>
+    JSON.stringify({ text, files: [], snippets: [], owner });
+  const seeded = {
+    [conversationKey(x)]: draft("Taslak ğüş", A),
+    [newSessionKey]: draft("Yeni oturum taslağı", A),
+    [conversationKey(z)]: draft("Başka hesabın taslağı", C),
+    "relay-smoke-keep": "1",
+  };
+
+  // 1. A brand-new Local Storage, written by Chromium and committed when its process quits.
+  const seedFile = path.join(work, "seed.json");
+  fs.writeFileSync(seedFile, JSON.stringify(seeded));
+  await exitsClean("seed", [
+    fixtureScript,
+    "seed",
+    claudeDir,
+    seedFile,
+    path.join(work, "seed-userData"),
+  ]);
+  assert(
+    fs.statSync(path.join(claudeDir, "Local Storage", "leveldb")).isDirectory(),
+    "the seed left no Local Storage/leveldb",
+  );
+
+  // 2. The helper, started the way a packaged Relay starts it: this Electron, entry.cjs, the flag.
+  const job = {
+    storage: path.join(claudeDir, "Local Storage"),
+    scratch: path.join(work, "helper"),
+    result: path.join(work, "result.json"),
+    from: A,
+    to: B,
+    conversations: [
+      {
+        targetAlias: y,
+        members: [
+          { alias: x, accountUuid: A },
+          { alias: y, accountUuid: B },
+        ],
+      },
+    ],
+  };
+  const jobFile = path.join(work, "job.json");
+  // Relay hands the helper an existing scratch directory, and the helper makes the rest.
+  fs.mkdirSync(job.scratch);
+  fs.writeFileSync(jobFile, JSON.stringify(job));
+  const resultText = () =>
+    fs.existsSync(job.result)
+      ? fs.readFileSync(job.result, "utf8")
+      : "(no result file)";
+  await exitsClean(
+    "helper",
+    [entry, DRAFT_WORKER_FLAG + jobFile],
+    () => ` Result: ${resultText()}`,
+  );
+  assert.deepEqual(JSON.parse(resultText()), {
+    ok: true,
+    moved: 1,
+    owned: 1,
+    skipped: 0,
+  });
+
+  // 3. What a fresh Chromium reads from the disk afterwards.
+  const after = await dump("dump-after");
+  assert.deepEqual(
+    Object.keys(after).sort(),
+    [
+      conversationKey(y),
+      conversationKey(z),
+      newSessionKey,
+      "relay-smoke-keep",
+    ].sort(),
+    "the helper must leave exactly the moved, foreign and unrelated keys",
+  );
+  assert.deepEqual(JSON.parse(after[conversationKey(y)]), {
+    text: "Taslak ğüş",
+    files: [],
+    snippets: [],
+    owner: B,
+  });
+  assert.equal(
+    Object.hasOwn(after, conversationKey(x)),
+    false,
+    "A's draft must be moved, not copied",
+  );
+  assert.deepEqual(JSON.parse(after[newSessionKey]), {
+    text: "Yeni oturum taslağı",
+    files: [],
+    snippets: [],
+    owner: B,
+  });
+  assert.equal(
+    after[conversationKey(z)],
+    seeded[conversationKey(z)],
+    "another account's draft stays as it was",
+  );
+  assert.equal(after["relay-smoke-keep"], "1", "an unrelated key stays");
+
+  // 4. The helper let go of the LevelDB lock: another process opens it and sees the same data.
+  assert.deepEqual(await dump("dump-again"), after);
+}
+
 app.whenReady().then(async () => {
   let win;
   try {
@@ -435,6 +615,7 @@ app.whenReady().then(async () => {
     await assert.rejects(
       call("launch", { accountId: "../../invalid", cwd: project }),
     );
+    await proveDraftHelper();
     fs.mkdirSync(path.join(__dirname, "../output"), { recursive: true });
     fs.writeFileSync(
       path.join(__dirname, "../output/desktop-integration.json"),
@@ -468,6 +649,7 @@ app.whenReady().then(async () => {
             "A to B to A handoff",
             "cooldown",
             "desktop consent",
+            "Desktop drafts follow the switch (helper)",
             "IPC validation",
           ],
           sessionsPreserved: 3,
