@@ -1268,11 +1268,16 @@ async function withDraftHelper(
     await launch();
   };
   f.host.claudeElectron = async () => "44.7.2";
+  // The draft step's scratch dirs, instead of the real os.tmpdir().
+  const tmp = path.join(f.temp, "tmp");
+  await fs.mkdir(tmp);
+  f.host.draftScratchDir = tmp;
   const vault = path.join(f.store.root, "desktop-vault");
   return {
     jobs,
     events,
     leveldb,
+    tmp,
     last: () => readObject(vault, "drafts/last.json"),
     drafts: async () => fs.readdir(path.join(vault, "drafts")).catch(() => []),
   };
@@ -1296,6 +1301,7 @@ test("an A→B switch moves drafts once with A, B and the carried conversations"
   // A working copy beside Claude's leveldb, never Claude's own Local Storage.
   assert.equal(path.dirname(job.storage), path.join(f.root, "Local Storage"));
   assert.match(path.basename(job.storage), /^\.relay-work-/);
+  assert.equal(path.dirname(job.scratch), d.tmp);
   assert.equal(job.claudeElectron, "44.7.2");
   assert.ok(job.conversations.length > 0);
   const conversation = job.conversations.find((c) => c.targetAlias === shared);
@@ -1490,6 +1496,8 @@ test("what a successful helper wrote is Claude's leveldb after the switch", asyn
   assert.deepEqual(await fs.readdir(path.join(f.root, "Local Storage")), [
     "leveldb",
   ]);
+  // The backup made before the run and last.json: the old leveldb is not kept twice.
+  assert.equal((await d.drafts()).length, 2);
   assert.equal((await d.last())!.status, "moved");
 });
 

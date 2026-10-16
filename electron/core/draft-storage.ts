@@ -12,7 +12,8 @@ const DRAFTS = "drafts";
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/;
 // An unfinished copy beside `leveldb`, `leveldb.relay-<uuid>`, as an earlier restore left them.
 const COPY = `${path.basename(LEVELDB)}.relay-`;
-// Where a swap sets Claude's previous leveldb aside. Relay never deletes one.
+// Where a swap sets Claude's previous leveldb aside. Only the run that made one removes it,
+// once its swap succeeded; the sweep never does.
 const OLD = `${COPY}old-`;
 // The working dir beside `leveldb` that holds the copy the helper edits: `.relay-work-<uuid>/leveldb`.
 const WORK = ".relay-work-";
@@ -181,34 +182,6 @@ export async function swapInWorkingCopy(
     throw e;
   }
   return old;
-}
-
-/**
- * Moves `old`, a leveldb that a swap set aside, into the vault as `<vault>/drafts/<stamp>/leveldb`,
- * where it is kept and rotated like a backup. Never throws and never deletes it: when it cannot
- * move (another volume, a stamp already taken), it stays where it is. `ops.rename` is a seam for tests.
- */
-export async function archiveOldLeveldb(
-  vault: string,
-  old: string,
-  now: Date,
-  ops: Pick<typeof fs, "rename"> = fs,
-): Promise<void> {
-  const drafts = path.join(vault, DRAFTS);
-  const dir = path.join(drafts, stamp(now));
-  try {
-    if (!(await realDirectory(drafts, "The drafts directory"))) return;
-    // Not recursive: a stamp that is taken is not mixed into.
-    await fs.mkdir(dir, { mode: 0o700 });
-  } catch {
-    return;
-  }
-  try {
-    await ops.rename(old, path.join(dir, "leveldb"));
-  } catch {
-    // rmdir only removes the empty directory made above.
-    await fs.rmdir(dir).catch(() => {});
-  }
 }
 
 /**

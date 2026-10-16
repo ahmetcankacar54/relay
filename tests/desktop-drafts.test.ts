@@ -22,7 +22,6 @@ import {
 import {
   LEVELDB,
   LOCAL_STORAGE,
-  archiveOldLeveldb,
   backupLocalStorage,
   discardWorkingCopy,
   makeWorkingCopy,
@@ -558,7 +557,10 @@ async function storageFixture(t: any) {
   };
   for (const [name, bytes] of Object.entries(files))
     await fs.writeFile(path.join(leveldb, name), bytes);
-  return { base, root, vault, leveldb, files };
+  // Stands in for os.tmpdir(), so the draft step never touches the real one.
+  const tmp = path.join(base, "tmp");
+  await fs.mkdir(tmp);
+  return { base, root, vault, leveldb, files, tmp };
 }
 
 // Every entry under `dir`, relative, with its bytes (files) or null (directories).
@@ -811,51 +813,6 @@ test("the sweep removes only unfinished copies, and only while leveldb is in pla
   assert.equal(left.length, 3);
   await sweepDraftLeftovers(root);
   assert.deepEqual((await fs.readdir(storage)).sort(), left);
-});
-
-test("an old leveldb moves into the vault as a backup", async (t) => {
-  const { root, vault, leveldb } = await storageFixture(t);
-  const before = await snapshot(leveldb);
-  await backupLocalStorage(root, vault, new Date("2026-10-16T09:00:00.000Z"));
-  const old = path.join(root, LOCAL_STORAGE, "leveldb.relay-old-1234");
-  await fs.rename(leveldb, old);
-
-  await archiveOldLeveldb(vault, old, new Date("2026-10-16T09:00:01.000Z"));
-
-  await assert.rejects(fs.lstat(old), { code: "ENOENT" });
-  const dir = path.join(vault, "drafts", "2026-10-16T09-00-01-000Z");
-  assert.deepEqual(await fs.readdir(dir), ["leveldb"]);
-  assert.deepEqual(await snapshot(path.join(dir, "leveldb")), before);
-  assert.equal((await fs.stat(dir)).mode & 0o777, 0o700);
-});
-
-test("an old leveldb that cannot move into the vault stays where it is", async (t) => {
-  const { root, vault, leveldb } = await storageFixture(t);
-  const before = await snapshot(leveldb);
-  const now = new Date("2026-10-16T09:00:00.000Z");
-  const taken = (await backupLocalStorage(root, vault, now))!;
-  const backedUp = await snapshot(taken);
-  const old = path.join(root, LOCAL_STORAGE, "leveldb.relay-old-1234");
-  await fs.rename(leveldb, old);
-
-  // The stamp is taken: the backup there is not mixed into.
-  await archiveOldLeveldb(vault, old, now);
-  assert.deepEqual(await snapshot(old), before);
-  assert.deepEqual(await snapshot(taken), backedUp);
-
-  // The rename fails, as it does across volumes: the stamp dir made for it goes again.
-  const seam = renameFailingOn(1);
-  await archiveOldLeveldb(
-    vault,
-    old,
-    new Date("2026-10-16T09:00:01.000Z"),
-    seam.ops,
-  );
-  assert.equal(seam.calls(), 1);
-  assert.deepEqual(await snapshot(old), before);
-  assert.deepEqual(await fs.readdir(path.join(vault, "drafts")), [
-    "2026-10-16T09-00-00-000Z",
-  ]);
 });
 
 test("a missing leveldb gives no backup", async (t) => {
@@ -1453,13 +1410,14 @@ async function rewrite(job: DraftJob) {
   const leveldb = path.join(job.storage, "leveldb");
   await fs.writeFile(path.join(leveldb, "000005.ldb"), "rewritten");
   await fs.writeFile(path.join(leveldb, "000009.log"), "new");
-  await fs.rm(path.join(leveldb, "LOCK"));
+  // Gone already when an earlier run's rewrite was swapped in.
+  await fs.rm(path.join(leveldb, "LOCK"), { force: true });
   return snapshot(leveldb);
 }
 
 // Claude stays closed unless `running` says otherwise.
 function transfer(
-  fx: { root: string; vault: string },
+  fx: { root: string; vault: string; tmp: string },
   run: (job: DraftJob) => Promise<DraftResult>,
   extra: {
     now?: Date;
@@ -1478,6 +1436,7 @@ function transfer(
     now: NOW,
     claudeElectron: CLAUDE_ELECTRON,
     running: async () => false,
+    tmp: fx.tmp,
     ...extra,
   });
 }
@@ -1532,7 +1491,7 @@ function failCopies(...failing: number[]) {
   };
 }
 
-test("a successful run swaps the working copy in, and the old leveldb goes to the vault", async (t) => {
+test("a successful run swaps the working copy in and drops its own old leveldb", async (t) => {
   const fx = await storageFixture(t);
   const before = await snapshot(fx.leveldb);
   let written: Record<string, string | null> = {};
@@ -1550,7 +1509,7 @@ test("a successful run swaps the working copy in, and the old leveldb goes to th
   });
   assert.equal(jobs.length, 1);
   const [job] = jobs;
-  assert.equal(path.dirname(job.scratch), os.tmpdir());
+  assert.equal(path.dirname(job.scratch), fx.tmp);
   assert.equal(job.result, path.join(job.scratch, "result.json"));
   assert.equal(job.from, A);
   assert.equal(job.to, B);
@@ -1558,20 +1517,17 @@ test("a successful run swaps the working copy in, and the old leveldb goes to th
   assert.deepEqual(job.conversations, [
     carried(ALIAS_X, [ALIAS_X, A], [ALIAS_X, B]),
   ]);
-  // Claude's leveldb now holds what the run wrote, and nothing is left beside it.
+  // Claude's leveldb now holds what the run wrote, and nothing is left beside it: the old
+  // leveldb held the same bytes as the backup, so it is not kept twice.
   assert.deepEqual(await snapshot(fx.leveldb), written);
   assert.deepEqual(await storageNames(fx), ["leveldb"]);
-  // The backup made before the run, and one new stamp dir: the old leveldb itself.
-  const stamps = await backupsIn(fx.vault);
-  assert.equal(stamps.length, 2, stamps.join());
-  assert.ok(stamps.includes(NOW_STAMP));
-  for (const stamp of stamps)
-    assert.deepEqual(
-      await snapshot(path.join(fx.vault, "drafts", stamp, "leveldb")),
-      before,
-      stamp,
-    );
+  assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
+  assert.deepEqual(
+    await snapshot(path.join(fx.vault, "drafts", NOW_STAMP, "leveldb")),
+    before,
+  );
   await assertGone(job.scratch);
+  assert.deepEqual(await fs.readdir(fx.tmp), []);
 
   const last = await lastOutcome(fx.vault);
   assert.deepEqual(last, {
@@ -1841,7 +1797,7 @@ test("a working-copy failure skips and leaves nothing behind", async (t) => {
   assert.equal((await lastOutcome(fx.vault)).reason, "injected copy failure 2");
 });
 
-test("a stray relay-old dir is never deleted", async (t) => {
+test("a relay-old dir from an earlier run is never deleted", async (t) => {
   const fx = await storageFixture(t);
   const storage = path.join(fx.root, LOCAL_STORAGE);
   const stray = path.join(storage, "leveldb.relay-old-0123");
@@ -1849,8 +1805,13 @@ test("a stray relay-old dir is never deleted", async (t) => {
   const kept = await snapshot(stray);
   const at = (minute: number) => new Date(Date.UTC(2026, 9, 16, 10, minute));
 
-  // A run that moves, one that fails, and one that finds no leveldb.
+  // A run that moves: only its own old leveldb goes.
   assert.equal((await transfer(fx, fakeRun().run)).status, "moved");
+  assert.deepEqual(await storageNames(fx), [
+    "leveldb",
+    "leveldb.relay-old-0123",
+  ]);
+  // One that fails, and one that finds no leveldb.
   const failing = fakeRun(async () => ({
     ok: false,
     error: "verification failed",
@@ -1869,47 +1830,25 @@ test("a stray relay-old dir is never deleted", async (t) => {
   assert.deepEqual(await storageNames(fx), ["leveldb.relay-old-0123"]);
 });
 
-test("after a swap the old leveldb becomes a vault backup that prune can rotate", async (t) => {
+test("this run's old leveldb stays beside live when it cannot be removed", async (t) => {
   const fx = await storageFixture(t);
   const before = await snapshot(fx.leveldb);
-  const { run } = fakeRun(async (job) => {
-    await rewrite(job);
+  const rm = fs.rm;
+  t.after(() => {
+    fs.rm = rm;
   });
-  assert.equal((await transfer(fx, run)).status, "moved");
-
-  const archived = (await backupsIn(fx.vault)).filter((s) => s !== NOW_STAMP);
-  assert.equal(archived.length, 1);
-  const dir = path.join(fx.vault, "drafts", archived[0]);
-  assert.ok((await fs.lstat(dir)).isDirectory());
-  assert.equal((await fs.stat(dir)).mode & 0o777, 0o700);
-  assert.deepEqual(await fs.readdir(dir), ["leveldb"]);
-  assert.deepEqual(await snapshot(path.join(dir, "leveldb")), before);
-
-  // Three newer backups push out both of this run's, the old leveldb included.
-  const newer = [1, 2, 3].map((day) => new Date(Date.UTC(2099, 0, day)));
-  for (const now of newer) await backupLocalStorage(fx.root, fx.vault, now);
-  await pruneDraftBackups(fx.vault);
-  assert.deepEqual(await backupsIn(fx.vault), [
-    "2099-01-01T00-00-00-000Z",
-    "2099-01-02T00-00-00-000Z",
-    "2099-01-03T00-00-00-000Z",
-  ]);
-});
-
-test("an old leveldb that cannot move into the vault stays beside live", async (t) => {
-  const fx = await storageFixture(t);
-  const before = await snapshot(fx.leveldb);
-  let undo = () => {};
-  t.after(() => undo());
+  fs.rm = (async (target: any, ...rest: any[]) => {
+    if (path.basename(String(target)).startsWith("leveldb.relay-old-"))
+      throw Object.assign(new Error("injected rm failure"), { code: "EPERM" });
+    return (rm as any)(target, ...rest);
+  }) as typeof fs.rm;
   let written: Record<string, string | null> = {};
   const { run } = fakeRun(async (job) => {
     written = await rewrite(job);
-    // Live aside (1), the copy in (2), then the move into the vault (3) fails, as across volumes.
-    undo = failRenames(3);
   });
 
   const outcome = await transfer(fx, run);
-  undo();
+  fs.rm = rm;
 
   assert.deepEqual(outcome, {
     status: "moved",
@@ -1926,7 +1865,6 @@ test("an old leveldb that cannot move into the vault stays beside live", async (
     await snapshot(path.join(fx.root, LOCAL_STORAGE, names[1])),
     before,
   );
-  // No empty stamp dir is left for it in the vault.
   assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
   assert.equal((await lastOutcome(fx.vault)).status, "moved");
 });
@@ -1937,23 +1875,23 @@ test("a stale scratch dir is removed, but not what it links to", async (t) => {
   const claude = path.join(fx.base, "fake-claude");
   await fs.mkdir(path.join(claude, "leveldb"), { recursive: true });
   await fs.writeFile(path.join(claude, "leveldb", "CURRENT"), "MANIFEST-1\n");
-  const stale = await fs.mkdtemp(path.join(os.tmpdir(), "relay-drafts-"));
-  const fresh = await fs.mkdtemp(path.join(os.tmpdir(), "relay-drafts-"));
-  t.after(() =>
-    Promise.all(
-      [stale, fresh].map((dir) => fs.rm(dir, { recursive: true, force: true })),
-    ),
-  );
+  const stale = await fs.mkdtemp(path.join(fx.tmp, "relay-drafts-"));
+  const fresh = await fs.mkdtemp(path.join(fx.tmp, "relay-drafts-"));
+  // Not a scratch dir, however old.
+  const other = path.join(fx.tmp, "someone-else");
+  await fs.mkdir(other);
   await fs.mkdir(path.join(stale, "root"));
   await fs.symlink(claude, path.join(stale, "root", "Local Storage"));
   const eleven = new Date(Date.now() - 11 * 60_000);
   await fs.utimes(stale, eleven, eleven);
+  await fs.utimes(other, eleven, eleven);
 
   assert.equal((await transfer(fx, fakeRun().run)).status, "moved");
 
   await assertGone(stale);
   // Younger than ten minutes: it may belong to a step still running.
   assert.ok((await fs.lstat(fresh)).isDirectory());
+  assert.ok((await fs.lstat(other)).isDirectory());
   assert.equal(
     await fs.readFile(path.join(claude, "leveldb", "CURRENT"), "utf8"),
     "MANIFEST-1\n",
@@ -2058,22 +1996,29 @@ test("the sweep never reaches through a symlinked Local Storage", async (t) => {
   ]);
 });
 
-test("old backups are pruned before the new one, so a failed run never leaves more than three", async (t) => {
+test("old backups are pruned before the new one, so at most three ever exist", async (t) => {
   const fx = await storageFixture(t);
-  const counts: number[] = [];
-  // A failed run adds only its backup; a successful one also adds the old leveldb (tested above).
-  const { run } = fakeRun(async () => {
-    counts.push((await backupsIn(fx.vault)).length);
-    return { ok: false, error: "verification failed" };
+  const during: number[] = [];
+  let ok = false;
+  const { run } = fakeRun(async (job) => {
+    during.push((await backupsIn(fx.vault)).length);
+    await rewrite(job);
+    if (!ok) return { ok: false, error: "verification failed" };
   });
-  for (const day of [1, 2, 3, 4, 5])
-    await transfer(fx, run, { now: new Date(Date.UTC(2026, 9, day, 12)) });
-  assert.deepEqual(counts, [1, 2, 3, 3, 3]);
-  assert.deepEqual(await backupsIn(fx.vault), [
-    "2026-10-03T12-00-00-000Z",
-    "2026-10-04T12-00-00-000Z",
-    "2026-10-05T12-00-00-000Z",
-  ]);
+  const stamps: string[] = [];
+  for (const day of [1, 2, 3, 4, 5]) {
+    // Runs that swap and runs that fail, in turn.
+    ok = day % 2 === 1;
+    const outcome = await transfer(fx, run, {
+      now: new Date(Date.UTC(2026, 9, day, 12)),
+    });
+    assert.equal(outcome.status, ok ? "moved" : "failed", `day ${day}`);
+    stamps.push(`2026-10-0${day}T12-00-00-000Z`);
+    // The two newest from before and this run's own backup, nothing else.
+    assert.deepEqual(await backupsIn(fx.vault), stamps.slice(-3), `day ${day}`);
+    assert.deepEqual(await storageNames(fx), ["leveldb"], `day ${day}`);
+  }
+  assert.deepEqual(during, [1, 2, 3, 3, 3]);
 });
 
 test("the backup a run depends on survives a clock that went back", async (t) => {

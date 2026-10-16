@@ -8,7 +8,6 @@ import {
   type CarriedConversation,
 } from "./desktop-files";
 import {
-  archiveOldLeveldb,
   backupLocalStorage,
   discardWorkingCopy,
   leveldbInPlace,
@@ -28,7 +27,7 @@ import {
 
 /** How long Relay waits for the draft helper before it kills it. */
 const HELPER_TIMEOUT_MS = 10_000;
-/** The helper's scratch dirs are `<os.tmpdir()>/relay-drafts-*`. */
+/** The helper's scratch dirs are `<tmp>/relay-drafts-*`, where `tmp` defaults to os.tmpdir(). */
 const SCRATCH_PREFIX = "relay-drafts-";
 /** A scratch dir older than this was left by a Relay that stopped mid-step: the helper gets 10 s. */
 const STALE_SCRATCH_MS = 10 * 60_000;
@@ -45,8 +44,8 @@ export type DraftOutcome =
  *
  * Local Storage is backed up to the vault, then copied to a working dir beside Claude's leveldb,
  * and `run` edits only that copy. When `run` succeeds and Claude is still closed, the copy
- * replaces Claude's leveldb by two renames and the old leveldb moves into the vault. Any failure
- * drops the copy and leaves Claude's leveldb as it was.
+ * replaces Claude's leveldb by two renames, and the old leveldb, the same bytes as the backup, is
+ * removed. Any failure drops the copy and leaves Claude's leveldb as it was.
  *
  * `blocked`, when set, says why drafts cannot move on this machine. `claudeElectron` is the
  * Electron version the same gate read from Claude.app; the helper refuses to open the copy under
@@ -56,6 +55,9 @@ export type DraftOutcome =
  * `running` says whether Claude is running; a check that throws counts as running. It is asked
  * at the start, just before `run`, and just before the swap. Once Claude runs, nothing in its
  * Local Storage is replaced any more.
+ *
+ * The helper's scratch dir is made in `tmp`, which defaults to os.tmpdir(), and stale ones
+ * there are removed.
  *
  * The outcome is written to `<vault>/drafts/last.json`, with counts or a reason but never
  * draft text. Never throws.
@@ -71,6 +73,7 @@ export async function preserveDrafts(input: {
   blocked?: string;
   claudeElectron?: string;
   running: () => Promise<boolean>;
+  tmp?: string;
 }): Promise<DraftOutcome> {
   let outcome: DraftOutcome;
   try {
@@ -112,7 +115,8 @@ async function transfer(
   const claudeElectron = input.claudeElectron;
   if (!claudeElectron) return { status: "skipped", reason: ELECTRON_UNKNOWN };
   if (await running()) return claudeRunning();
-  await sweepStaleScratch();
+  const tmp = input.tmp ?? os.tmpdir();
+  await sweepStaleScratch(tmp);
   await sweepDraftLeftovers(root);
 
   try {
@@ -138,7 +142,7 @@ async function transfer(
     return { status: "skipped", reason: errorMessage(error) };
   }
   try {
-    return await moveInCopy(input, work, claudeElectron, running);
+    return await moveInCopy(input, work, claudeElectron, tmp, running);
   } finally {
     // Empty after a swap. Kept only when Claude's leveldb is missing.
     await discardWorkingCopy(root, work);
@@ -153,11 +157,12 @@ async function moveInCopy(
   input: Parameters<typeof preserveDrafts>[0],
   work: string,
   claudeElectron: string,
+  tmp: string,
   running: () => Promise<boolean>,
 ): Promise<DraftOutcome> {
   let scratch: string;
   try {
-    scratch = await fs.mkdtemp(path.join(os.tmpdir(), SCRATCH_PREFIX));
+    scratch = await fs.mkdtemp(path.join(tmp, SCRATCH_PREFIX));
   } catch (error) {
     return { status: "skipped", reason: errorMessage(error) };
   }
@@ -207,7 +212,9 @@ async function moveInCopy(
         restored: await leveldbInPlace(input.root),
       };
     }
-    await archiveOldLeveldb(input.vault, old, new Date());
+    // Claude stayed closed since the backup, so the old leveldb holds the backup's bytes. Only
+    // this run's own is removed, and should that fail it stays: the sweep never removes one.
+    await fs.rm(old, { recursive: true, force: true }).catch(() => {});
     // Field by field, so nothing else the run answered reaches last.json.
     return {
       status: "moved",
@@ -228,11 +235,10 @@ const claudeRunning = (): DraftOutcome => ({
 });
 
 /**
- * Removes the helper scratch dirs in the temp dir that are older than ten minutes: a Relay that
- * crashed or was killed mid-step leaves one behind, with its link. Never throws.
+ * Removes the helper scratch dirs in `tmp` that are older than ten minutes: a Relay that crashed
+ * or was killed mid-step leaves one behind, with its link. Never throws.
  */
-async function sweepStaleScratch(): Promise<void> {
-  const tmp = os.tmpdir();
+async function sweepStaleScratch(tmp: string): Promise<void> {
   try {
     for (const entry of await fs.readdir(tmp, { withFileTypes: true })) {
       if (!entry.isDirectory() || !entry.name.startsWith(SCRATCH_PREFIX))

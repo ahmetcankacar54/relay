@@ -43,6 +43,8 @@ export interface DesktopHost {
   draftsBlocked?(): Promise<string | undefined>;
   /** The Electron version inside Claude.app, which the draft helper checks its own against. */
   claudeElectron?(): Promise<string | undefined>;
+  /** Where the draft step makes the helper's scratch dirs; os.tmpdir() when unset. */
+  draftScratchDir?: string;
 }
 interface SavedLogin {
   accountUuid: string;
@@ -557,6 +559,7 @@ export class DesktopManager {
         claudeElectron,
         // Asked again before the run and before the swap: Claude can be opened meanwhile.
         running: () => host.running(),
+        tmp: host.draftScratchDir,
       });
     } catch {
       // Drafts never change how a switch ends.
