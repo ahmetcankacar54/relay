@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Panda } from "@/components/Panda";
 import { PANDA_SCENES, type PandaScene } from "@/mascot/scenes";
+import type { PrankKind } from "@/pranks/budget";
+import { PrankStage, usePrank } from "@/pranks/PrankStage";
 import { SwitchStage } from "@/switch/SwitchStage";
 import { BLINK_FRAME, POSE_FRAME, type MascotFrame } from "../../shared/mascot-frames";
 import {
@@ -175,6 +177,47 @@ function SwitchDemo() {
   );
 }
 
+const PRANKS: { label: string; kind: PrankKind }[] = [
+  { label: "İmleç kemirme", kind: "nibble-cursor" },
+  { label: "Çark", kind: "wheel" },
+  { label: "Çubuğu kemirme", kind: "nibble-bar" },
+  { label: "Uyuklama", kind: "doze" },
+  { label: "Konfeti", kind: "confetti" },
+];
+
+/** One button per prank. Each offers its prank with itself as the anchor and its click as the event. */
+function PrankButtons() {
+  const prank = usePrank();
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      {PRANKS.map(({ label, kind }) => (
+        <button key={kind} type="button" className="rounded-md border px-2.5 py-1 text-sm" onClick={(e) => prank.offer(kind, e.currentTarget, e)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Every prank on demand. Its own stage plays them whatever the budget and the gates say, so none of them
+ * waits for luck, a gap or ten idle minutes. The panda does a trick on each mouse click.
+ */
+export function PrankSheet() {
+  return (
+    <PrankStage level="sometimes" desktopBusy={false} errorShown={false} dialogOpen={false} ignoreLimits>
+      <section className="mt-8">
+        <h2 className="font-display text-lg font-bold">Şakalar</h2>
+        <PrankButtons />
+        <div className="mt-3 flex items-center gap-3">
+          <Panda scene="welcome" size={112} playful />
+          <span className="text-sm text-muted-foreground">Tıkla: numaralar</span>
+        </div>
+      </section>
+    </PrankStage>
+  );
+}
+
 /** Development-only review sheet for the mascot artwork (?scenario=mascot). */
 export function MascotGallery({ frames }: { frames: Frames }) {
   const strips: StripSpec[] = [
@@ -185,7 +228,7 @@ export function MascotGallery({ frames }: { frames: Frames }) {
     <div className="min-h-screen bg-background p-6 text-foreground">
       <h1 className="font-display text-xl font-bold">Relay maskot galerisi</h1>
       <p className="mb-4 text-sm text-muted-foreground">
-        Menü çubuğu kareleri gerçek boyutta (açık ve koyu) ve 1x pikselleri 4 kat büyütülmüş; altında uygulama içi sahneler ve geçiş penceresi.
+        Menü çubuğu kareleri gerçek boyutta (açık ve koyu) ve 1x pikselleri 4 kat büyütülmüş; altında uygulama içi sahneler, geçiş penceresi ve şakalar.
         macOS gibi yalnızca saydamlık çizilir; renkli ya da beyaz dolgular siluetin içinde kaybolur.
       </p>
       <section className="divide-y">
@@ -195,6 +238,7 @@ export function MascotGallery({ frames }: { frames: Frames }) {
       </section>
       <SceneSheet />
       <SwitchDemo />
+      <PrankSheet />
     </div>
   );
 }
