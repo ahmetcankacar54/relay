@@ -58,6 +58,8 @@ export interface DesktopHost {
   claudeElectron?(): Promise<string | undefined>;
   /** Where the draft step makes the helper's scratch dirs; os.tmpdir() when unset. */
   draftScratchDir?: string;
+  /** How long Claude's main process has run, in ms; undefined when that cannot be told. */
+  claudeUptimeMs?(): Promise<number | undefined>;
 }
 interface SavedLogin {
   accountUuid: string;
@@ -639,6 +641,10 @@ export class DesktopManager {
   }
   async dismissDraft(id: string): Promise<void> {
     await this.drafts.remove(id);
+  }
+  /** How long Claude has run, in ms; undefined when the host cannot tell. */
+  async claudeUptimeMs(): Promise<number | undefined> {
+    return this.host.claudeUptimeMs?.();
   }
   async recover() {
     return this.exclusive({ kind: "restore" }, async () => {

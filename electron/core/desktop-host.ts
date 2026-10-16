@@ -8,6 +8,8 @@ import type { DesktopHost } from "./desktop";
 import {
   assertProcessListing,
   macDesktopPids,
+  macMainPid,
+  parseEtime,
   retryOnce,
 } from "./desktop-processes";
 import { draftsBlockedReason, runHelper } from "./draft-transfer";
@@ -38,19 +40,21 @@ export function desktopHost(): DesktopHost {
   const executable = candidates.find(
     (p) => path.isAbsolute(p) && fs.existsSync(p),
   );
+  /** Every process's pid and executable. macOS only. */
+  const macListing = () =>
+    // A busy main process can cut ps short (its timeout fires before the output is read), so
+    // an empty listing is a failure, not "closed"; one retry rides out such a moment.
+    retryOnce(async () => {
+      const { stdout } = await exec("/bin/ps", ["-axo", "pid=,comm="], {
+        timeout: 5000,
+      });
+      assertProcessListing(stdout);
+      return stdout;
+    }, 250);
   const pids = async (): Promise<number[]> => {
     if (!executable) return [];
-    if (process.platform === "darwin") {
-      // A busy main process can cut ps short (its timeout fires before the output is read), so
-      // an empty listing is a failure, not "closed"; one retry rides out such a moment.
-      return retryOnce(async () => {
-        const { stdout } = await exec("/bin/ps", ["-axo", "pid=,comm="], {
-          timeout: 5000,
-        });
-        assertProcessListing(stdout);
-        return macDesktopPids(stdout, executable);
-      }, 250);
-    }
+    if (process.platform === "darwin")
+      return macDesktopPids(await macListing(), executable);
     const { stdout } = await exec(
       "powershell.exe",
       [
@@ -171,6 +175,22 @@ export function desktopHost(): DesktopHost {
       ),
     claudeElectron: async () =>
       process.platform === "darwin" ? readClaudeElectron() : undefined,
+    claudeUptimeMs: async () => {
+      if (process.platform !== "darwin" || !executable) return undefined;
+      try {
+        const main = macMainPid(await macListing(), executable);
+        if (main === undefined) return undefined;
+        const { stdout } = await exec(
+          "/bin/ps",
+          ["-o", "etime=", "-p", String(main)],
+          { timeout: 5000 },
+        );
+        return parseEtime(stdout);
+      } catch {
+        // Gone between the two reads, or ps failed: the uptime is unknown.
+        return undefined;
+      }
+    },
     readDrafts: (job) =>
       runHelper(job, {
         execPath: process.execPath,

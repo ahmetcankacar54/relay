@@ -109,6 +109,14 @@ async function session(root: string, a: any, id = randomUUID(), extra = {}) {
   );
   return { id, relative };
 }
+test("Claude's uptime comes from the host, and is unknown without one", async (t) => {
+  const f = await fixture(t);
+  assert.equal(await f.manager.claudeUptimeMs(), undefined);
+  f.host.claudeUptimeMs = async () => 21_000;
+  assert.equal(await f.manager.claudeUptimeMs(), 21_000);
+  f.host.claudeUptimeMs = async () => undefined;
+  assert.equal(await f.manager.claudeUptimeMs(), undefined);
+});
 test("a changed continuation guard blocks restart before Claude is asked to quit", async (t) => {
   const f = await fixture(t);
   const a = await f.account("A");

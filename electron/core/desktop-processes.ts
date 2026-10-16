@@ -36,3 +36,29 @@ export function macDesktopPids(stdout: string, executable: string): number[] {
       : [];
   });
 }
+
+/**
+ * The pid of Claude's main process in a `ps -axo pid=,comm=` listing: the one running the app's
+ * executable itself, not a helper. Undefined when there is none, or more than one.
+ */
+export function macMainPid(
+  stdout: string,
+  executable: string,
+): number | undefined {
+  const pids = stdout.split("\n").flatMap((line) => {
+    const match = /^\s*(\d+)\s+(.+)$/.exec(line);
+    return match && match[2] === executable ? [Number(match[1])] : [];
+  });
+  return pids.length === 1 ? pids[0] : undefined;
+}
+
+/** `ps -o etime=`, `[[dd-]hh:]mm:ss`, in milliseconds; undefined when it is not that. */
+export function parseEtime(text: string): number | undefined {
+  const match = /^(?:(?:(\d+)-)?(\d{2}):)?(\d{2}):(\d{2})$/.exec(text.trim());
+  if (!match) return undefined;
+  const [days, hours, minutes, seconds] = match
+    .slice(1)
+    .map((part) => Number(part ?? 0));
+  if (hours > 23 || minutes > 59 || seconds > 59) return undefined;
+  return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+}

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   assertProcessListing,
   macDesktopPids,
+  macMainPid,
+  parseEtime,
   retryOnce,
 } from "../electron/core/desktop-processes";
 
@@ -69,4 +71,42 @@ test("a failed process lookup is retried once, then reported", async () => {
   calls = 0;
   assert.equal(await retryOnce(async () => ++calls, 250, sleep), 1);
   assert.equal(calls, 1);
+});
+
+test("Claude's main pid is the one running the app's executable itself", () => {
+  const executable = "/Applications/Claude.app/Contents/MacOS/Claude";
+  const listing = [
+    "    1 /sbin/launchd",
+    `  100 ${executable}`,
+    "  101 /Applications/Claude.app/Contents/Frameworks/Claude Helper.app/Contents/MacOS/Claude Helper",
+    "  102 /Applications/Claude.app/Contents/Resources/claude-code/claude",
+    "  104 /Applications/Claude.app.backup/Contents/MacOS/Claude",
+  ].join("\n");
+  assert.equal(macMainPid(listing, executable), 100);
+  // Only helpers left, or two main processes at once: there is no single main process.
+  const helpersOnly = listing.replace(`100 ${executable}`, "100 /bin/zsh");
+  assert.equal(macMainPid(helpersOnly, executable), undefined);
+  const twoMains = `${listing}\n  105 ${executable}`;
+  assert.equal(macMainPid(twoMains, executable), undefined);
+});
+
+test("ps elapsed time [[dd-]hh:]mm:ss is read as milliseconds", () => {
+  assert.equal(parseEtime("01:02"), 62_000);
+  assert.equal(parseEtime("   00:15\n"), 15_000);
+  assert.equal(parseEtime("02:03:04"), (2 * 3600 + 3 * 60 + 4) * 1000);
+  assert.equal(parseEtime("1-02:03:04"), ((24 + 2) * 3600 + 3 * 60 + 4) * 1000);
+  assert.equal(parseEtime("12-00:00:00"), 12 * 86_400_000);
+  for (const bad of [
+    "",
+    "15",
+    "1:2",
+    "01:60",
+    "60:00",
+    "24:00:00",
+    "1-03:04",
+    "-01:02",
+    "01:02:03:04",
+    "aa:bb",
+  ])
+    assert.equal(parseEtime(bad), undefined, bad);
 });
