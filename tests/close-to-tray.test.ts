@@ -49,13 +49,13 @@ test("closeToTray quits without a tray; otherwise it hides the window, the panel
   assert.doesNotMatch(body, /switchWindow/);
 });
 
-test("showWindow brings the dock icon back before it shows the window", () => {
+test("showWindow brings a hidden dock icon back before it shows the window", () => {
   const body = topLevel("showWindow");
   assert.match(
     body,
-    /if \(process\.platform === "darwin"\) void app\.dock\?\.show\(\);/,
+    /if \(process\.platform === "darwin" && app\.dock && !app\.dock\.isVisible\(\)\)\s+void app\.dock\.show\(\);/,
   );
-  assert.ok(body.indexOf("app.dock?.show()") < body.indexOf("window.show()"));
+  assert.ok(body.indexOf("app.dock.show()") < body.indexOf("window.show()"));
 });
 
 test("the tray and panel quit, the dock quit and before-quit stay as they were", () => {

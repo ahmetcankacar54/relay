@@ -28,11 +28,14 @@ test("the automatic-switch status says that Continue at quota holds the switch",
 test("the browser sign-in status names what to finish and where", () => {
   assert.match(
     html("browser-sign-in", "tr"),
-    /Bir hesabın tarayıcı girişi sürüyor\. Hesaplar sayfasında girişi tamamla veya iptal et\./,
+    /Bir hesabın girişi veya bağlantı yenilemesi sürüyor\. Tarayıcıda açık bir giriş varsa Hesaplar sayfasında tamamla veya iptal et\./,
   );
   assert.match(
     html("browser-sign-in", "en"),
-    /An account's browser sign-in is in progress\. Finish or cancel it on the Accounts page\./,
+    /An account’s sign-in or connection renewal is in progress\. If a browser sign-in is open, finish or cancel it on the Accounts page\./,
   );
-  assert.doesNotMatch(html("browser-sign-in", "tr"), /Tarayıcı girişi tamamlanmalı/);
+  assert.doesNotMatch(
+    html("browser-sign-in", "tr"),
+    /Tarayıcı girişi tamamlanmalı/,
+  );
 });

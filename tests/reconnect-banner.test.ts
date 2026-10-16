@@ -34,24 +34,60 @@ const pick = (language: Language) => (tr: string, en: string) =>
   language === "tr" ? tr : en;
 
 const CAUSES: [string, UsageIssue | undefined, string, string][] = [
-  ["expired", "expired", "oturumun süresi doldu ve yenilenemedi", "the session expired and could not be renewed"],
-  ["credentials-missing", "credentials-missing", "kayıtlı giriş bulunamadı", "the saved sign-in was not found"],
-  ["scope", "scope", "giriş kullanım verisine erişemiyor", "the sign-in cannot read usage"],
-  ["identity-mismatch", "identity-mismatch", "giriş başka bir hesaba ait", "the sign-in belongs to another account"],
-  ["anything else", "unavailable", "bağlantı kullanılamıyor", "the connection is unavailable"],
-  ["no issue at all", undefined, "bağlantı kullanılamıyor", "the connection is unavailable"],
+  [
+    "expired",
+    "expired",
+    "oturumun süresi doldu ve yenilenemedi",
+    "the session expired and could not be renewed",
+  ],
+  [
+    "credentials-missing",
+    "credentials-missing",
+    "kayıtlı giriş bulunamadı",
+    "the saved sign-in was not found",
+  ],
+  [
+    "scope",
+    "scope",
+    "giriş kullanım verisine erişemiyor",
+    "the sign-in cannot read usage",
+  ],
+  [
+    "identity-mismatch",
+    "identity-mismatch",
+    "giriş başka bir hesaba ait",
+    "the sign-in belongs to another account",
+  ],
+  [
+    "anything else",
+    "unavailable",
+    "bağlantı kullanılamıyor",
+    "the connection is unavailable",
+  ],
+  [
+    "no issue at all",
+    undefined,
+    "bağlantı kullanılamıyor",
+    "the connection is unavailable",
+  ],
 ];
 
 test("reconnectCause names the cause for every row, in both languages", () => {
   const out = account(false);
-  assert.equal(reconnectCause(out, usage("expired"), pick("tr")), "giriş yapılmamış");
+  assert.equal(
+    reconnectCause(out, usage("expired"), pick("tr")),
+    "giriş yapılmamış",
+  );
   assert.equal(reconnectCause(out, undefined, pick("en")), "not signed in");
   for (const [name, issue, tr, en] of CAUSES) {
     assert.equal(reconnectCause(account(), usage(issue), pick("tr")), tr, name);
     assert.equal(reconnectCause(account(), usage(issue), pick("en")), en, name);
   }
   // A missing usage record is not a crash.
-  assert.equal(reconnectCause(account(), undefined, pick("tr")), "bağlantı kullanılamıyor");
+  assert.equal(
+    reconnectCause(account(), undefined, pick("tr")),
+    "bağlantı kullanılamıyor",
+  );
 });
 
 function relayFor(usages: Record<string, AccountUsage>): Relay {
@@ -67,8 +103,20 @@ function relayFor(usages: Record<string, AccountUsage>): Relay {
     busy: "",
     usageBusy: new Set<string>(),
     desktopBusy: false,
-    desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0 },
-    data: { settings: DEFAULT_SETTINGS, usage: usages, accounts, authFlows: [] } as unknown as Snapshot,
+    desktop: {
+      available: true,
+      running: true,
+      organizations: [],
+      busy: false,
+      recoveryRequired: false,
+      errorRevision: 0,
+    },
+    data: {
+      settings: DEFAULT_SETTINGS,
+      usage: usages,
+      accounts,
+      authFlows: [],
+    } as unknown as Snapshot,
     setNotice() {},
     startCli: async () => {},
     refreshUsage: async () => {},
@@ -80,7 +128,11 @@ const render = (relay: Relay, language: Language = "tr") =>
     createElement(
       I18nContext.Provider,
       { value: { language, setLanguage() {}, t: pick(language) } },
-      createElement(RelayContext.Provider, { value: relay }, createElement(Banners)),
+      createElement(
+        RelayContext.Provider,
+        { value: relay },
+        createElement(Banners),
+      ),
     ),
   );
 
@@ -102,7 +154,7 @@ test("the sign-in banner says what is wrong and what Reconnect does", () => {
   );
   assert.match(
     en,
-    /Reconnect opens this account&#x27;s Claude sign-in in the browser\. The warning closes once you approve it\./,
+    /Reconnect opens this account’s Claude sign-in in the browser\. The warning closes once you approve it\./,
   );
 });
 

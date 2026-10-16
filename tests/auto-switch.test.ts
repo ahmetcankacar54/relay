@@ -818,7 +818,10 @@ test("main passes the fleet and continuation conditions to continuationOwns, and
   );
   const start = main.indexOf("autoSwitch = new AutoSwitchManager(");
   assert.ok(start >= 0);
-  const block = main.slice(start, main.indexOf("changed: broadcastChanged", start));
+  const block = main.slice(
+    start,
+    main.indexOf("changed: broadcastChanged", start),
+  );
   const owns = block.slice(
     block.indexOf("continuationOwns:"),
     block.indexOf("pendingAuth:"),

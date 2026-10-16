@@ -643,7 +643,9 @@ function showWindow() {
   if (!window && service) createWindow();
   if (window) {
     // Cmd+Q hides the dock icon with the window; opening it again brings it back.
-    if (process.platform === "darwin") void app.dock?.show();
+    // Only when hidden: showing an already visible dock icon re-activates the app.
+    if (process.platform === "darwin" && app.dock && !app.dock.isVisible())
+      void app.dock.show();
     if (window.isMinimized()) window.restore();
     window.show();
     window.focus();
@@ -948,9 +950,7 @@ function bindIPC() {
   handle("desktop-snapshot", async () => ({
     ...(await desktop.snapshot()),
     busy:
-      desktop.isBusy ||
-      desktopLock.busy ||
-      usageCredentialRefresher?.anyActive,
+      desktop.isBusy || desktopLock.busy || usageCredentialRefresher?.anyActive,
   }));
   handle("dismiss-desktop-error", (revision) =>
     desktop.dismissError(z.number().int().nonnegative().parse(revision)),

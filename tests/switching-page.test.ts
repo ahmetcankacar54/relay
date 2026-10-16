@@ -130,7 +130,12 @@ test("while Continue at quota is on, the prepare-on-quit row says the switch wai
   assert.match(render(relayFor({}, afterExit)), hold);
   // Not while the fleet is off, and not when the switch itself is off.
   assert.doesNotMatch(
-    render(relayFor({ fleet: { enabled: false, status: "off", stopped: 0 } }, afterExit)),
+    render(
+      relayFor(
+        { fleet: { enabled: false, status: "off", stopped: 0 } },
+        afterExit,
+      ),
+    ),
     hold,
   );
   assert.doesNotMatch(render(relayFor()), hold);

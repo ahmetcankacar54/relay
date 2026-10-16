@@ -47,8 +47,8 @@ export function AutoSwitchStatus({
       "Complete the Desktop sign-in first.",
     ],
     "browser-sign-in": [
-      "Bir hesabın tarayıcı girişi sürüyor. Hesaplar sayfasında girişi tamamla veya iptal et.",
-      "An account's browser sign-in is in progress. Finish or cancel it on the Accounts page.",
+      "Bir hesabın girişi veya bağlantı yenilemesi sürüyor. Tarayıcıda açık bir giriş varsa Hesaplar sayfasında tamamla veya iptal et.",
+      "An account’s sign-in or connection renewal is in progress. If a browser sign-in is open, finish or cancel it on the Accounts page.",
     ],
     "continuation-active": [
       "Kota dolunca devam açık. Kotası dolan konuşmaları o devam ettirir; bu sırada Claude kapanınca hazırlama beklemede.",

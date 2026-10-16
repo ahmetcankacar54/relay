@@ -7,7 +7,7 @@ export const USAGE_ISSUE_LOG_LIMIT = 200;
 export interface UsageIssueEntry {
   accountId: string;
   issue: UsageIssue;
-  /** ISO time the issue was first seen. */
+  /** ISO time the issue appeared, once per change of issue while Relay runs. */
   at: string;
 }
 

@@ -55,7 +55,10 @@ test("the log keeps only the newest 200 entries", (t) => {
   const { entries } = readLog(file);
   assert.equal(entries.length, USAGE_ISSUE_LOG_LIMIT);
   assert.equal(entries[0].accountId, "account-25");
-  assert.equal(entries.at(-1).accountId, `account-${USAGE_ISSUE_LOG_LIMIT + 24}`);
+  assert.equal(
+    entries.at(-1).accountId,
+    `account-${USAGE_ISSUE_LOG_LIMIT + 24}`,
+  );
 });
 
 test("a missing, corrupt or wrongly shaped log starts over and a write failure is swallowed", (t) => {
@@ -117,7 +120,10 @@ test("the log holds only the account, the issue and the time, never a credential
   ]);
 });
 
-function pollingFixture(t: any, onIssue: (account: Account, issue: UsageIssue) => void) {
+function pollingFixture(
+  t: any,
+  onIssue: (account: Account, issue: UsageIssue) => void,
+) {
   const store = new Store(directory(t));
   const created = store.create({ name: "A", kind: "personal" });
   store.update((s) => {
@@ -168,7 +174,9 @@ function pollingFixture(t: any, onIssue: (account: Account, issue: UsageIssue) =
 
 test("onIssue fires once per change of issue, not on every failed poll", async (t) => {
   const seen: [string, UsageIssue][] = [];
-  const f = pollingFixture(t, (account, issue) => seen.push([account.id, issue]));
+  const f = pollingFixture(t, (account, issue) =>
+    seen.push([account.id, issue]),
+  );
   assert.equal((await f.poll("expired")).issue, "expired");
   assert.deepEqual(seen, [[f.id, "expired"]]);
   // The same issue on later failed polls is not reported again.
@@ -199,7 +207,10 @@ test("onIssue sees the account and the issue, never a credential, and a throwing
     received.push(args);
     throw new Error("fixture disk failure");
   });
-  assert.equal((await f.poll("credentials-missing")).issue, "credentials-missing");
+  assert.equal(
+    (await f.poll("credentials-missing")).issue,
+    "credentials-missing",
+  );
   assert.equal(received.length, 1);
   assert.equal(JSON.stringify(received).includes(SECRET), false);
   // The manager still answers and keeps polling after the failed write.
@@ -212,7 +223,10 @@ test("main logs usage issues to usage-issues.json in the user data folder", () =
     "utf8",
   );
   assert.match(main, /from "\.\/core\/usage-issue-log"/);
-  assert.match(main, /path\.join\(app\.getPath\("userData"\), "usage-issues\.json"\)/);
+  assert.match(
+    main,
+    /path\.join\(app\.getPath\("userData"\), "usage-issues\.json"\)/,
+  );
   assert.match(
     main,
     /appendUsageIssue\(\s*path\.join\(app\.getPath\("userData"\), "usage-issues\.json"\),\s*\{ accountId: account\.id, issue \},\s*Date\.now\(\),?\s*\)/,
