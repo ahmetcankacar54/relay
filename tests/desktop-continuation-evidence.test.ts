@@ -463,7 +463,9 @@ async function fixture() {
     setPermission: async (_g, mode) => ({ ...ui, permissionMode: mode }),
     send: async () => ({ acceptedVisible: false }),
     hasRequestMarker: async () => false,
-    writeDraft: async () => ({ ...ui }),
+    writeDraft: async () => {
+      throw new Error("writeDraft must not be called here");
+    },
   };
   const desktop = {
     snapshot: async () => ({

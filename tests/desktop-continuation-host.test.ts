@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import {
   DesktopAutomationError,
@@ -83,7 +85,9 @@ function fixture() {
       return { acceptedVisible: true };
     },
     hasRequestMarker: async () => false,
-    writeDraft: async () => ({ ...ui }),
+    writeDraft: async () => {
+      throw new Error("writeDraft must not be called here");
+    },
   };
   const evidence: DesktopContinuationEvidence = {
     read: async () => structuredClone(observed),
@@ -418,4 +422,58 @@ test("writeDraft never sends: the request has no requestId", async () => {
   ]);
   assert.equal(commands[0].command, "write-draft");
   assert.equal("requestId" in commands[0], false);
+});
+
+// The helper cannot be run in tests (it drives the real Claude UI), so these
+// scan its source for the properties that matter most. Comments are stripped:
+// only code counts.
+const swiftSource = readFileSync(
+  path.join(import.meta.dirname, "../electron/native/desktop-automation.swift"),
+  "utf8",
+);
+/** The `{ ... }` block that follows `header`, with `//` comments removed. */
+function swiftBlock(header: string): string {
+  const start = swiftSource.indexOf(header);
+  assert.notEqual(start, -1, `${header} not found`);
+  const open = swiftSource.indexOf("{", start);
+  let depth = 0;
+  for (let i = open; i < swiftSource.length; i++) {
+    if (swiftSource[i] === "{") depth++;
+    else if (swiftSource[i] === "}" && --depth === 0)
+      return swiftSource.slice(open, i + 1).replace(/\/\/.*$/gm, "");
+  }
+  throw new Error(`${header} is not closed`);
+}
+test("the Swift write-draft branch never presses a button, adds a marker or reads a requestId", () => {
+  const branch = swiftBlock('if command == "write-draft" {');
+  assert.match(branch, /writeComposer\(/);
+  assert.doesNotMatch(branch, /press\(/);
+  assert.doesNotMatch(branch, /marker/i);
+  assert.doesNotMatch(branch, /requestId/i);
+  // writeComposer is shared with send: it must only type, never press Send.
+  assert.doesNotMatch(swiftBlock("func writeComposer("), /press\(/);
+});
+test("the Swift write-draft branch re-reads the composer and conversation right before writing", () => {
+  const branch = swiftBlock('if command == "write-draft" {');
+  const write = branch.indexOf("writeComposer(");
+  for (const before of [
+    "kAXValueAttribute",
+    'fail("composer-not-empty")',
+    "liveSessionIDs(",
+    'fail("context-changed")',
+  ]) {
+    const at = branch.indexOf(before);
+    assert.ok(at !== -1 && at < write, `${before} must precede writeComposer`);
+  }
+});
+test("the Swift writeComposer re-checks focus after its re-observe and before the clipboard write", () => {
+  const body = swiftBlock("func writeComposer(");
+  const observed = body.indexOf("try observe()");
+  const board = body.indexOf("board.clearContents()");
+  const checks = [...body.matchAll(/focusHeld\(\)/g)].map((m) => m.index ?? -1);
+  assert.ok(observed !== -1 && board !== -1);
+  assert.ok(
+    checks.some((at) => at > observed && at < board),
+    "focus must be checked between the re-observe and the clipboard write",
+  );
 });

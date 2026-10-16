@@ -121,6 +121,24 @@ struct Observation {
     let permission: Node?
     let fields: [String: Any]
 }
+// The conversation ids a web area advertises through its epitaxy URL.
+func epitaxySessionIDs(_ strings: [String]) -> Set<String> {
+    var ids = Set<String>()
+    for text in strings where text.contains("claude.ai/epitaxy/local_") {
+        guard let range = text.range(of: "local_[0-9a-fA-F-]{36}", options: .regularExpression) else { continue }
+        let id = String(text[range])
+        if match(id, localPattern) { ids.insert(id) }
+    }
+    return ids
+}
+// Cheap re-read of only the web areas an earlier observe() already found: a few
+// attribute reads, no tree walk. Used right before a write that replaces text.
+func liveSessionIDs(_ observation: Observation) -> Set<String> {
+    let strings = observation.tree.filter { $0.role == "AXWebArea" }.flatMap { node in
+        [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute, "AXURL"].map { stringAttribute(node.element, $0) }
+    }
+    return epitaxySessionIDs(strings.filter { !$0.isEmpty })
+}
 func observe() throws -> Observation {
     guard AXIsProcessTrusted() else { try fail("accessibility-permission-required") }
     let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
@@ -129,13 +147,7 @@ func observe() throws -> Observation {
     let root = AXUIElementCreateApplication(app.processIdentifier)
     let tree = try nodes(root)
     let webAreas = tree.filter { $0.role == "AXWebArea" }
-    let activeURLs = webAreas.flatMap { $0.strings }.filter { $0.contains("claude.ai/epitaxy/local_") }
-    var localIDs = Set<String>()
-    for text in activeURLs {
-        guard let range = text.range(of: "local_[0-9a-fA-F-]{36}", options: .regularExpression) else { continue }
-        let id = String(text[range])
-        if match(id, localPattern) { localIDs.insert(id) }
-    }
+    let localIDs = epitaxySessionIDs(webAreas.flatMap { $0.strings })
     // Several web surfaces, ambiguous aliases or unsupported URL exposure block
     // targeting. A title or a sidebar card is never a conversation identity.
     let localID = localIDs.count == 1 ? localIDs.first : nil
@@ -232,13 +244,19 @@ func writeComposer(_ observation: Observation, _ body: String) throws {
           AXUIElementSetAttributeValue(composer.element, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success,
           let down = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: true),
           let up = CGEvent(keyboardEventSource: nil, virtualKey: 9, keyDown: false) else { try fail("desktop-ui-unsupported") }
-    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == observation.app.processIdentifier,
-          attribute(composer.element, kAXFocusedAttribute) as? Bool == true else { try fail("context-changed") }
+    func focusHeld() -> Bool {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier == observation.app.processIdentifier &&
+            attribute(composer.element, kAXFocusedAttribute) as? Bool == true
+    }
+    guard focusHeld() else { try fail("context-changed") }
     let focused = try observe()
     for field in ["pid", "localSessionId", "accountLabel", "permissionMode", "status", "composerEmpty"] {
         guard let before = observation.fields[field], let after = focused.fields[field],
               String(describing: before) == String(describing: after) else { try fail("context-changed") }
     }
+    // The re-observe walks the whole tree and takes time; focus or the frontmost
+    // app may have moved meanwhile. Check again right before the paste.
+    guard focusHeld() else { try fail("context-changed") }
     let board = NSPasteboard.general
     let original: [(NSPasteboard.PasteboardType, Data)] = (board.types ?? []).compactMap { type in
         board.data(forType: type).map { (type, $0) }
@@ -332,10 +350,16 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
     }
     if command == "write-draft" {
         // Re-types an unsent draft. It never presses Send and adds no marker. The
-        // guard above already required the same account/session/mode, a stopped
-        // conversation and an empty composer, so a user's own text is never overwritten.
+        // guard above required the same account/session/mode, a stopped conversation
+        // and an empty composer, but that was sampled during the observe() tree walk,
+        // which can be long. Re-read the composer value and the conversation id
+        // directly right before the write. This narrows the race with a user typing
+        // or switching conversations; it cannot close it, as AX has no atomic lock.
         guard let text = request["text"] as? String, !text.isEmpty, text.utf8.count <= 65536, !text.contains("\0"),
-              current.composer != nil else { try fail("desktop-ui-unsupported") }
+              let composer = current.composer else { try fail("desktop-ui-unsupported") }
+        guard let live = attribute(composer.element, kAXValueAttribute) as? String, live.isEmpty else { try fail("composer-not-empty") }
+        let sessions = liveSessionIDs(current)
+        guard sessions.count == 1, sessions.first == expected["localSessionId"] as? String else { try fail("context-changed") }
         try writeComposer(current, text)
         current = try observe()
         try validateGuard(current, expected, allowComposer: true)
