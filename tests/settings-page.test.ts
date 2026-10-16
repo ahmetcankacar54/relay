@@ -76,3 +76,26 @@ test("the menu bar animation switch is shown on macOS only", () => {
     assert.match(html, /Görünüm/, platform);
   }
 });
+
+test("Settings offers the switch window, on unless turned off, on macOS only", () => {
+  const render = (extra: { switchWindow?: boolean; platform?: string } = {}) => {
+    const relay = relayFor();
+    const data = { ...relay.data!, diagnostics: { ...relay.data!.diagnostics, platform: extra.platform ?? "darwin" } } as Snapshot;
+    const value = { ...settings, ...(extra.switchWindow === undefined ? {} : { switchWindow: extra.switchWindow }) };
+    return renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        createElement(RelayContext.Provider, { value: { ...relay, settings: value, data } as Relay }, createElement(Settings)),
+      ),
+    );
+  };
+  const control = (html: string) => /<button[^>]*aria-labelledby="switch-window-label"[^>]*>/.exec(html)?.[0] ?? "";
+  const on = render();
+  assert.match(on, /Geçişte panda penceresini göster/);
+  assert.match(on, /Claude yeniden başlarken menü çubuğunun altında kısa bir sahne oynar\./);
+  assert.match(control(on), /aria-checked="true"/);
+  assert.match(control(render({ switchWindow: false })), /aria-checked="false"/);
+  for (const platform of ["win32", "linux"])
+    assert.doesNotMatch(render({ platform }), /Geçişte panda penceresini göster|switch-window-label/, platform);
+});

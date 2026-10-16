@@ -61,26 +61,46 @@ export function Settings() {
               </ToggleGroupItem>
             </ToggleGroup>
           </SettingRow>
-          {/* The menu bar panda is macOS-only; other platforms keep the R icon. */}
+          {/* The menu bar panda and the switch window are macOS-only; other platforms keep the R icon. */}
           {data?.diagnostics.platform === "darwin" && (
-            <SettingRow
-              label={
-                <span id="menu-bar-animation-label">
-                  {t("Panda animasyonları", "Panda animations")}
-                </span>
-              }
-              description={t(
-                "Kapalıyken panda yalnızca ifade değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
-                "When off, the panda only changes expression. With Reduce motion on in macOS it never animates.",
-              )}
-            >
-              <Switch
-                aria-labelledby="menu-bar-animation-label"
-                checked={settings.menuBarAnimation !== false}
-                disabled={disabled}
-                onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
-              />
-            </SettingRow>
+            <>
+              <SettingRow
+                label={
+                  <span id="menu-bar-animation-label">
+                    {t("Panda animasyonları", "Panda animations")}
+                  </span>
+                }
+                description={t(
+                  "Kapalıyken panda yalnızca ifade değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
+                  "When off, the panda only changes expression. With Reduce motion on in macOS it never animates.",
+                )}
+              >
+                <Switch
+                  aria-labelledby="menu-bar-animation-label"
+                  checked={settings.menuBarAnimation !== false}
+                  disabled={disabled}
+                  onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
+                />
+              </SettingRow>
+              <SettingRow
+                label={
+                  <span id="switch-window-label">
+                    {t("Geçişte panda penceresini göster", "Show the panda window when switching")}
+                  </span>
+                }
+                description={t(
+                  "Claude yeniden başlarken menü çubuğunun altında kısa bir sahne oynar.",
+                  "A short scene plays under the menu bar while Claude restarts.",
+                )}
+              >
+                <Switch
+                  aria-labelledby="switch-window-label"
+                  checked={settings.switchWindow !== false}
+                  disabled={disabled}
+                  onCheckedChange={(checked) => update({ switchWindow: checked })}
+                />
+              </SettingRow>
+            </>
           )}
         </Card>
         <Card className={cardClass}>

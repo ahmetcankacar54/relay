@@ -262,6 +262,8 @@ export interface RelaySettings {
   historyPolicyVersion?: 2;
   /** Animate the menu bar panda; missing means on. */
   menuBarAnimation?: boolean;
+  /** Show the switch window under the menu bar while Claude restarts; missing means on. */
+  switchWindow?: boolean;
 }
 export interface PlanningHours {
   enabled: boolean;

@@ -129,3 +129,12 @@ test("the menu bar animation setting is optional and never defaulted", () => {
   assert.equal("menuBarAnimation" in settingsPatchSchema.parse({ appearance: "dark" }), false);
   assert.throws(() => settingsPatchSchema.parse({ menuBarAnimation: "yes" }));
 });
+
+test("the switch window setting is optional and never defaulted", () => {
+  const stored = settingsSchema.parse({ ...DEFAULT_SETTINGS });
+  assert.equal("switchWindow" in stored, false);
+  assert.equal(settingsSchema.parse({ ...DEFAULT_SETTINGS, switchWindow: false }).switchWindow, false);
+  assert.deepEqual(settingsPatchSchema.parse({ switchWindow: false }), { switchWindow: false });
+  assert.equal("switchWindow" in settingsPatchSchema.parse({ appearance: "dark" }), false);
+  assert.throws(() => settingsPatchSchema.parse({ switchWindow: "no" }));
+});

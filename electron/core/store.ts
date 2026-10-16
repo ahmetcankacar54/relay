@@ -153,6 +153,7 @@ export const settingsSchema = z
     autoSwitchAccounts: z.array(z.uuid()).max(50).default([]),
     historyPolicyVersion: z.literal(2).optional(),
     menuBarAnimation: z.boolean().optional(),
+    switchWindow: z.boolean().optional(),
   })
   .strict();
 // Migration defaults belong to a complete saved registry, never to an IPC patch.
