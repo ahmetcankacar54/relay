@@ -25,6 +25,7 @@ import {
   backupLocalStorage,
   discardWorkingCopy,
   makeWorkingCopy,
+  PutBackFailed,
   pruneDraftBackups,
   swapInWorkingCopy,
   sweepDraftLeftovers,
@@ -738,9 +739,12 @@ test("a failure putting the copy in place puts the original back", async (t) => 
   const { root, leveldb, work, original, changed, names } =
     await changedCopy(t);
   const seam = renameFailingOn(2);
-  await assert.rejects(swapInWorkingCopy(root, work, seam.ops), {
-    message: "injected failure 2",
-  });
+  await assert.rejects(
+    swapInWorkingCopy(root, work, seam.ops),
+    (error: Error) =>
+      error.message === "injected failure 2" &&
+      !(error instanceof PutBackFailed),
+  );
   assert.equal(seam.calls(), 3); // aside, copy in (fails), original back
   assert.deepEqual(await snapshot(leveldb), original);
   assert.deepEqual(await snapshot(path.join(work, "leveldb")), changed);
@@ -752,9 +756,11 @@ test("a failed put-back does not hide the error, and keeps both copies", async (
   const { root, leveldb, work, original, changed, names } =
     await changedCopy(t);
   const seam = renameFailingOn(2, 3);
-  await assert.rejects(swapInWorkingCopy(root, work, seam.ops), {
-    message: "injected failure 2",
-  });
+  await assert.rejects(
+    swapInWorkingCopy(root, work, seam.ops),
+    (error: Error) =>
+      error instanceof PutBackFailed && error.message === "injected failure 2",
+  );
   await assert.rejects(fs.lstat(leveldb), { code: "ENOENT" });
   const [workName, oldName, ...rest] = await names();
   assert.equal(workName, path.basename(work));
@@ -1774,6 +1780,59 @@ test("a swap that cannot put live back keeps both copies for recovery", async (t
     { status: "skipped", reason: "no Local Storage" },
   );
   assert.deepEqual(await storageNames(fx), names);
+});
+
+test("a swap that cannot put live back keeps both copies, even when Claude made a new leveldb", async (t) => {
+  const fx = await storageFixture(t);
+  const before = await snapshot(fx.leveldb);
+  const rename = fs.rename;
+  t.after(() => {
+    fs.rename = rename;
+  });
+  let written: Record<string, string | null> = {};
+  const { run } = fakeRun(async (job) => {
+    written = await rewrite(job);
+    let calls = 0;
+    fs.rename = (async (from: any, to: any) => {
+      calls += 1;
+      if (calls === 2) {
+        // Claude starts in the gap between the two renames and makes a leveldb of its own.
+        await fs.mkdir(fx.leveldb);
+        await fs.writeFile(path.join(fx.leveldb, "CURRENT"), "Claude's own\n");
+        throw Object.assign(new Error("injected failure 2"), { code: "EIO" });
+      }
+      if (calls === 3)
+        throw Object.assign(new Error("injected failure 3"), { code: "EIO" });
+      return rename(from, to);
+    }) as typeof fs.rename;
+  });
+
+  const outcome = await transfer(fx, run);
+  fs.rename = rename;
+
+  // Whatever now sits at live, it is not Claude's leveldb as it was.
+  assert.deepEqual(outcome, {
+    status: "failed",
+    error: "injected failure 2",
+    restored: false,
+  });
+  assert.equal((await lastOutcome(fx.vault)).restored, false);
+  const names = await storageNames(fx);
+  assert.equal(names.length, 3, names.join());
+  assert.match(names[0], /^\.relay-work-/);
+  assert.equal(names[1], "leveldb");
+  assert.match(names[2], /^leveldb\.relay-old-/);
+  const storage = path.join(fx.root, LOCAL_STORAGE);
+  // The original, the run's copy and Claude's new leveldb are all where they were.
+  assert.deepEqual(await snapshot(path.join(storage, names[2])), before);
+  assert.deepEqual(
+    await snapshot(path.join(storage, names[0], "leveldb")),
+    written,
+  );
+  assert.equal(
+    await fs.readFile(path.join(fx.leveldb, "CURRENT"), "utf8"),
+    "Claude's own\n",
+  );
 });
 
 test("a working-copy failure skips and leaves nothing behind", async (t) => {

@@ -107,8 +107,8 @@ function runElectron(name, args, log, command = process.execPath) {
 /**
  * How the smoke starts the draft helper, the way Relay does. Packaged (`--packaged`, so
  * RELAY_SMOKE_MAIN is set): the packaged binary with only the flag, so its app.asar entry
- * dispatches. Otherwise: this Electron with dist-electron/entry.cjs. `entry` is the file the
- * dispatch relies on, which must contain the flag.
+ * dispatches; the helper's run is the proof. Otherwise: this Electron with
+ * dist-electron/entry.cjs, which must contain the flag.
  */
 function draftHelperCommand() {
   const packagedMain = process.env.RELAY_SMOKE_MAIN;
@@ -118,7 +118,11 @@ function draftHelperCommand() {
       fs.existsSync(entry),
       `${entry} is missing: run npm run build first.`,
     );
-    return { command: process.execPath, args: [entry], entry };
+    assert(
+      fs.readFileSync(entry, "utf8").includes(DRAFT_WORKER_FLAG),
+      `${entry} does not contain ${DRAFT_WORKER_FLAG}, so the helper would start Relay itself.`,
+    );
+    return { command: process.execPath, args: [entry] };
   }
   let bundle = path.resolve(packagedMain);
   while (!bundle.endsWith(".app")) {
@@ -126,11 +130,7 @@ function draftHelperCommand() {
     assert.notEqual(parent, bundle, `${packagedMain} is not inside a .app.`);
     bundle = parent;
   }
-  return {
-    command: path.join(bundle, "Contents/MacOS/Relay"),
-    args: [],
-    entry: path.join(bundle, "Contents/Resources/app.asar"),
-  };
+  return { command: path.join(bundle, "Contents/MacOS/Relay"), args: [] };
 }
 
 /**
@@ -140,11 +140,6 @@ function draftHelperCommand() {
 async function proveDraftHelper() {
   const fixtureScript = path.join(__dirname, "fixtures/local-storage.cjs");
   const helper = draftHelperCommand();
-  // A grep is enough for app.asar: it stores its files uncompressed.
-  assert(
-    fs.readFileSync(helper.entry).includes(DRAFT_WORKER_FLAG),
-    `${helper.entry} does not contain ${DRAFT_WORKER_FLAG}, so the helper would start Relay itself.`,
-  );
   const claudeDir = path.join(
     path.resolve(root),
     "appdata",

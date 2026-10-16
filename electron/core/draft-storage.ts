@@ -38,7 +38,7 @@ async function realDirectory(target: string, name: string): Promise<boolean> {
 }
 
 /** True when `<root>/Local Storage/leveldb` is a real directory. Never throws. */
-export async function leveldbInPlace(root: string): Promise<boolean> {
+async function leveldbInPlace(root: string): Promise<boolean> {
   try {
     return (await fs.lstat(path.join(root, LEVELDB))).isDirectory();
   } catch {
@@ -158,13 +158,26 @@ async function syncPath(target: string): Promise<void> {
 }
 
 /**
+ * Thrown by `swapInWorkingCopy` when the copy could not be put in place and the original could
+ * not be put back either. Live is then not Claude's leveldb as it was, whatever sits there: it
+ * may be missing, or hold one Claude made meanwhile. The original is in the
+ * `leveldb.relay-old-*` beside it, and the copy is still in the working dir.
+ */
+export class PutBackFailed extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = "PutBackFailed";
+  }
+}
+
+/**
  * Puts `<work>/leveldb` in place of `<root>/Local Storage/leveldb` by two renames: live aside to
  * `leveldb.relay-old-<uuid>`, then the copy into its place. Returns where the old leveldb is now.
  *
  * After any single failure live is either the original or fully replaced, never half deleted:
  * when the second rename fails, the original is renamed back. Throws when the swap did not
- * happen. Live is then missing only when putting it back failed too; the original is in the
- * `leveldb.relay-old-*` beside it, and the copy is still in `work`. `ops.rename` is a seam for tests.
+ * happen, with the second rename's error; as a `PutBackFailed` when the original could not be
+ * put back either. `ops.rename` is a seam for tests.
  */
 export async function swapInWorkingCopy(
   root: string,
@@ -178,7 +191,11 @@ export async function swapInWorkingCopy(
     await ops.rename(path.join(work, "leveldb"), live);
   } catch (e) {
     // Put the original back. Failing to is not allowed to hide `e`.
-    await ops.rename(old, live).catch(() => {});
+    try {
+      await ops.rename(old, live);
+    } catch {
+      throw new PutBackFailed(e);
+    }
     throw e;
   }
   return old;
@@ -186,8 +203,8 @@ export async function swapInWorkingCopy(
 
 /**
  * Removes a working dir made by `makeWorkingCopy`. Never throws. Like the sweep, it does
- * nothing while Claude's leveldb is missing: after a swap that could not put the original
- * back, the working copy and the `leveldb.relay-old-*` beside it are all there is.
+ * nothing while Claude's leveldb is missing. After a `PutBackFailed` it is not called at all:
+ * a leveldb Claude made meanwhile may sit at live, and the copy is kept with the original.
  */
 export async function discardWorkingCopy(
   root: string,

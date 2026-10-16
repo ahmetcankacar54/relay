@@ -10,8 +10,8 @@ import {
 import {
   backupLocalStorage,
   discardWorkingCopy,
-  leveldbInPlace,
   makeWorkingCopy,
+  PutBackFailed,
   pruneDraftBackups,
   swapInWorkingCopy,
   sweepDraftLeftovers,
@@ -141,11 +141,15 @@ async function transfer(
   } catch (error) {
     return { status: "skipped", reason: errorMessage(error) };
   }
+  let outcome: DraftOutcome | undefined;
   try {
-    return await moveInCopy(input, work, claudeElectron, tmp, running);
+    outcome = await moveInCopy(input, work, claudeElectron, tmp, running);
+    return outcome;
   } finally {
-    // Empty after a swap. Kept only when Claude's leveldb is missing.
-    await discardWorkingCopy(root, work);
+    // Empty after a swap, and dropped after a failure that left Claude's leveldb as it was.
+    // Otherwise it is kept beside the original, whatever now sits at live.
+    if (outcome && (outcome.status !== "failed" || outcome.restored))
+      await discardWorkingCopy(root, work);
   }
 }
 
@@ -205,11 +209,12 @@ async function moveInCopy(
     try {
       old = await swapInWorkingCopy(input.root, work);
     } catch (error) {
-      // Claude's leveldb is missing only when putting the original back failed too.
+      // Only a failed put-back leaves live not as it was, even when a leveldb sits there: Claude
+      // may have made its own meanwhile. The original is then in leveldb.relay-old-*.
       return {
         status: "failed",
         error: errorMessage(error),
-        restored: await leveldbInPlace(input.root),
+        restored: !(error instanceof PutBackFailed),
       };
     }
     // Claude stayed closed since the backup, so the old leveldb holds the backup's bytes. Only
