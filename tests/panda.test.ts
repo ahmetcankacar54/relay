@@ -128,14 +128,13 @@ test("panda.css plays each trick for 1.2 s, and only without Reduce motion", () 
     assert.ok(!outside.includes(`data-trick="${trick}"`), `${trick} is not outside it`);
   }
   const rule = (trick: string) => new RegExp(`\\.panda\\[data-trick="${trick}"\\][^{]*\\{([^}]*)\\}`).exec(motion)?.[1] ?? "";
-  // 8 swishes of 0.15 s; every other trick is one run of 1.2 s.
-  assert.match(rule("swish"), /animation:\s*panda-swish 0\.15s ease-in-out 8 alternate;/);
+  // Every trick is one run of 1.2 s, the swish too: its keyframes hold the back and forth, and end at rest.
+  assert.match(rule("swish"), /animation:\s*panda-swish 1\.2s ease-in-out 1;/);
   assert.match(rule("wave"), /animation:\s*panda-wave-once 1\.2s ease-in-out 1;/);
   assert.match(rule("happy"), /animation:\s*panda-happy 1\.2s ease-in-out 1;/);
   assert.match(rule("grumpy"), /animation:\s*panda-grumpy 1\.2s ease-in-out 1;/);
   assert.match(rule("hide"), /animation:\s*panda-hide 1\.2s ease-in-out 1;/);
   assert.match(rule("rawr"), /animation:\s*panda-rawr 1\.2s ease-out 1;/);
-  assert.equal(Math.round(0.15 * 8 * 1_000), TRICK_MS);
   // The swish moves the tail and the wave the arm, as their motions do; the others move the whole puppet.
   assert.match(motion, /\.panda\[data-trick="swish"\] \[data-part="tail"\]/);
   assert.match(motion, /\.panda\[data-trick="wave"\] \[data-part="arm-left"\]/);
@@ -147,6 +146,21 @@ test("panda.css plays each trick for 1.2 s, and only without Reduce motion", () 
   // The swish swings wider than the idle tail, so it reads at 40 px; the wave raises the arm and comes back to rest.
   const angles = (name: string) => [...keyframes(name).matchAll(/rotate\((-?\d+(?:\.\d+)?)deg\)/g)].map((m) => Number(m[1]));
   assert.ok(Math.max(...angles("panda-swish").map(Math.abs)) > Math.max(...angles("panda-tail").map(Math.abs)));
+  // It starts and ends at rest, so the tail does not snap when the trick ends, and swings to alternate sides in between, one swing every 0.15 s.
+  const swish = keyframes("panda-swish");
+  assert.match(swish, /0%,\s*100%\s*\{[^}]*rotate\(0deg\)/);
+  const stops = [...swish.matchAll(/([\d.%,\s]+)\{[^}]*rotate\((-?\d+(?:\.\d+)?)deg\)/g)]
+    .flatMap(([, percents, angle]) => percents.split(",").map((percent) => ({ at: (parseFloat(percent) * TRICK_MS) / 100, angle: Number(angle) })))
+    .sort((a, b) => a.at - b.at);
+  assert.deepEqual([stops[0], stops.at(-1)], [{ at: 0, angle: 0 }, { at: TRICK_MS, angle: 0 }]);
+  const swings = stops.slice(1, -1);
+  assert.ok(swings.length >= 6, "a fast tail swings several times");
+  assert.ok(swings.every((swing) => swing.angle !== 0));
+  for (const [i, swing] of swings.entries()) {
+    if (i === 0) continue;
+    assert.equal(Math.sign(swing.angle), -Math.sign(swings[i - 1].angle), `swing ${i} is on the other side`);
+    assert.equal(swing.at - swings[i - 1].at, 150, `swing ${i} follows after 0.15 s`);
+  }
   assert.match(keyframes("panda-wave-once"), /0%,\s*100%\s*\{[^}]*rotate\(0deg\)/);
   assert.ok(Math.max(...angles("panda-wave-once")) >= Math.max(...angles("panda-wave")));
   // The happy bounce is smaller than rawr's hop, and both stay within the 5.9% of free canvas above the stand pose's ears.

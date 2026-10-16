@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MascotGallery, PrankSheet } from "../src/dev/MascotGallery";
 import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
 import { PANDA_SCENES } from "../src/mascot/scenes";
-import { WHEEL_MS } from "../src/pranks/layers";
+import { NIBBLE_BAR_MS, WHEEL_MS } from "../src/pranks/layers";
 import { CONFETTI_MS, STARTLE_MS } from "../src/pranks/timing";
 import { fakeDom } from "./fake-dom";
 
@@ -112,6 +112,14 @@ test("a click on a prank button plays that prank in the section's stage at once,
   dom.install();
   mock.timers.enable({ apis: ["setTimeout"] });
   const timers = trackTimers();
+  // The nibble draws from requestAnimationFrame. The frames never run here (tests/prank-nibble.test.ts turns that crank),
+  // so a nibble plays until something ends it: a press, the 3 s cap or the unmount.
+  const frames = new Set<number>();
+  let nextFrame = 1;
+  Object.assign(globalThis, {
+    requestAnimationFrame: () => (frames.add(nextFrame), nextFrame++),
+    cancelAnimationFrame: (id: number) => void frames.delete(id),
+  });
   try {
     // Loaded after the stubs, so react-dom sees a DOM.
     const { createRoot } = await import("react-dom/client");
@@ -120,6 +128,7 @@ test("a click on a prank button plays that prank in the section's stage at once,
     const all = () => nodes(dom.container as unknown as FakeNode);
     // The fake DOM drops an element's single text child, so a button is found by its place: the labels' order in the markup.
     const labels = [...renderToStaticMarkup(createElement(PrankSheet)).matchAll(/<button[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
+    assert.deepEqual(labels, ["İmleç kemirme", "Çark", "Çubuğu kemirme", "Uyuklama", "Konfeti"]);
     const button = (label: string) => all().filter((n) => n.tagName === "button")[labels.indexOf(label)];
     const stage = () => all().find((n) => n.attributes.has("data-prank-stage"));
     const rig = () => all().find((n) => n.attributes.has("data-pose"));
@@ -129,9 +138,23 @@ test("a click on a prank button plays that prank in the section's stage at once,
     assert.equal(drawn(), 0, "nothing plays before a click");
 
     // The stage ignores the budget and the gates (no storage here, so a budgeted prank would not play): a mouse click always plays.
+    // The nibble hides the real cursor while it plays, and a press ends it with the cursor back.
+    await click("İmleç kemirme");
+    assert.ok((drawn() ?? 0) > 0, "the panda and the drawn cursor are in the stage");
+    assert.equal(dom.cursorHidden(), true, "the real cursor is hidden while it plays");
+    await act(async () => dom.emit("pointerdown"));
+    assert.equal(drawn(), 0);
+    assert.equal(dom.cursorHidden(), false);
+    assert.equal(frames.size, 0, "no frame is left waiting");
+
     await click("Çark");
     assert.equal(drawn(), 1, "the wheel is drawn beside the button");
     await wait(WHEEL_MS);
+    assert.equal(drawn(), 0, "and ends by itself");
+
+    await click("Çubuğu kemirme");
+    assert.equal(drawn(), 1, "the panda nibbling at the bar is drawn at the button");
+    await wait(NIBBLE_BAR_MS);
     assert.equal(drawn(), 0, "and ends by itself");
 
     // The doze plays right away, without ten idle minutes, and leaves when the first activity has startled it.
@@ -154,12 +177,20 @@ test("a click on a prank button plays that prank in the section's stage at once,
     await act(async () => dom.dispatch(panda, "click", { clientX: 4, clientY: 5, detail: 1 }));
     assert.ok(rig()?.attributes.get("data-trick"), "the panda plays a trick");
 
+    // Leaving the page mid-nibble: the cursor is hidden until the unmount brings it back, and nothing is left running.
+    await click("İmleç kemirme");
+    assert.equal(dom.cursorHidden(), true, "the cursor is hidden mid-nibble");
+    assert.equal(frames.size, 1);
     await act(async () => root.unmount());
     assert.equal(dom.cursorHidden(), false);
+    assert.equal(frames.size, 0, "no frame is left waiting after the unmount");
     assert.equal(timers.armed.size, 0, "no timer is left armed after the unmount");
+    for (const type of ["pointermove", "pointerdown", "keydown", "blur"]) assert.equal(dom.windowListeners(type), 0, type);
   } finally {
     timers.restore();
     mock.timers.reset();
+    Reflect.deleteProperty(globalThis, "requestAnimationFrame");
+    Reflect.deleteProperty(globalThis, "cancelAnimationFrame");
     dom.uninstall();
   }
 });

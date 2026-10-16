@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { PandaRig } from "@/components/Panda";
+import { CURSOR_HIDDEN_CLASS } from "./context";
 import type { LayerProps } from "./layers";
 import {
   NIBBLE_MAX_MS,
@@ -14,14 +15,13 @@ import {
   nibbleFrame,
   nibbleLayout,
   type NibblePhase,
+  type NibbleRect,
 } from "./timing";
 
 type Point = { x: number; y: number };
 type NibbleFrame = ReturnType<typeof nibbleFrame>;
 type NibbleEvent = Parameters<typeof nibbleAborts>[1];
 
-/** The class on <html> that hides the real cursor (src/styles/pranks.css). */
-const CURSOR_HIDDEN = "prank-cursor-hidden";
 /** What a finished nibble is: over, with the cursor already bitten. */
 const OVER: NibbleFrame = { phase: "done", bitten: true };
 
@@ -49,10 +49,12 @@ export function nibbleController(options: {
   now: () => number;
   classList: Pick<DOMTokenList, "add" | "remove">;
   onDone: () => void;
+  /** The clicked control's box: the pointer leaving it (grown a little) ends the nibble. Missing, only the 80 px rule applies. */
+  rect?: NibbleRect;
   setTimeout?: (callback: () => void, ms: number) => unknown;
   clearTimeout?: (handle: unknown) => void;
 }): NibbleController {
-  const { now, classList, onDone } = options;
+  const { now, classList, onDone, rect } = options;
   // Called as plain functions: a browser's setTimeout refuses to run with another object as `this`.
   const schedule =
     options.setTimeout ?? ((callback, ms) => setTimeout(callback, ms));
@@ -72,7 +74,7 @@ export function nibbleController(options: {
     // The cursor first: nothing below may keep it hidden.
     if (hidden) {
       hidden = false;
-      classList.remove(CURSOR_HIDDEN);
+      classList.remove(CURSOR_HIDDEN_CLASS);
     }
     if (cap) {
       unschedule(cap.handle);
@@ -87,7 +89,7 @@ export function nibbleController(options: {
       startedAt = now();
       origin = point;
       pointer = point;
-      classList.add(CURSOR_HIDDEN);
+      classList.add(CURSOR_HIDDEN_CLASS);
       hidden = true;
       cap = { handle: schedule(finish, NIBBLE_MAX_MS) };
     },
@@ -107,7 +109,7 @@ export function nibbleController(options: {
       )
         pointer = { x: event.clientX as number, y: event.clientY as number };
       // Measured from where the click was, not from where the pointer last was.
-      if (nibbleAborts(origin, event)) finish();
+      if (nibbleAborts(origin, event, rect)) finish();
     },
     stop: finish,
     get cursorHidden() {
@@ -246,7 +248,7 @@ interface Shown {
  * comes back: the controller restores it on every way out, and unmounting stops it.
  */
 export function NibbleCursorLayer({ play, done }: LayerProps) {
-  const { point } = play;
+  const { point, rect } = play;
   // Where the panda goes is fixed when the play starts; resizing the window mid-nibble does not move it.
   const [layout] = useState(() =>
     point
@@ -278,6 +280,7 @@ export function NibbleCursorLayer({ play, done }: LayerProps) {
     const controller = nibbleController({
       now: () => performance.now(),
       classList: document.documentElement.classList,
+      rect,
       onDone: () => {
         if (live) finish.current();
       },
@@ -323,7 +326,7 @@ export function NibbleCursorLayer({ play, done }: LayerProps) {
       document.removeEventListener("visibilitychange", onVisibility);
       controller.stop();
     };
-  }, [point]);
+  }, [point, rect]);
 
   if (!point || !layout) return null;
   return (

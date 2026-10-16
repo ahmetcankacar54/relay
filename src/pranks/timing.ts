@@ -48,18 +48,41 @@ export function nibbleFrame(elapsed: number): { phase: NibblePhase; bitten: bool
   return { phase, bitten: elapsed >= NIBBLE_BITTEN_FROM };
 }
 
+/** The box of the control that was clicked, in viewport px. */
+export interface NibbleRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+/** The pointer may stray this far outside the clicked control's box, for jitter, before the nibble ends. */
+export const NIBBLE_LEAVE_GROW_PX = 8;
+
 /**
  * Whether an event ends the nibble at once: the pointer moved more than 80 px from where it
- * started, any pointer or key press, the window blurred, or the document became hidden.
+ * started or, when the clicked control's `rect` is known, left that box grown by 8 px on each
+ * side (the inline confirmation that opens under a "Geç" is within 80 px, but not on the button);
+ * any pointer or key press, the window blurred, or the document became hidden.
  */
 export function nibbleAborts(
   start: { x: number; y: number },
   event: { type: string; clientX?: number; clientY?: number; hidden?: boolean },
+  rect?: NibbleRect,
 ): boolean {
   switch (event.type) {
-    case "pointermove":
-      if (event.clientX === undefined || event.clientY === undefined) return false;
-      return Math.hypot(event.clientX - start.x, event.clientY - start.y) > NIBBLE_ABORT_PX;
+    case "pointermove": {
+      const { clientX: x, clientY: y } = event;
+      if (x === undefined || y === undefined) return false;
+      if (Math.hypot(x - start.x, y - start.y) > NIBBLE_ABORT_PX) return true;
+      if (!rect) return false;
+      const grow = NIBBLE_LEAVE_GROW_PX;
+      return (
+        x < rect.left - grow ||
+        x > rect.left + rect.width + grow ||
+        y < rect.top - grow ||
+        y > rect.top + rect.height + grow
+      );
+    }
     case "pointerdown":
     case "keydown":
     case "blur":

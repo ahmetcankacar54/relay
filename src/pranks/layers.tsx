@@ -57,14 +57,14 @@ export function besideRect(
   };
 }
 
-/** A panda runs in a wheel beside the refresh button. */
+/** A panda runs in a wheel beside the refresh button. `prank-wheel` makes its legs step faster (src/styles/pranks.css). */
 export function WheelLayer({ play, done }: LayerProps) {
   const { rect } = play;
   useEndAfter(done, rect ? WHEEL_MS : undefined);
   if (!rect) return null;
   const at = besideRect(rect, WHEEL_SIZE, typeof window === "undefined" ? Infinity : window.innerWidth);
   return (
-    <div className="absolute" style={{ left: at.left, top: at.top }}>
+    <div className="absolute prank-wheel" style={{ left: at.left, top: at.top }}>
       <PandaRig pose="walk" size={WHEEL_SIZE} props={["wheel"]} motion={["walk"]} />
     </div>
   );

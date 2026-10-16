@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { formatPercent, meterClass, meterTone } from "@/lib/meter";
 import { I18nContext } from "@/data/i18n";
-import { usePrank } from "@/pranks/PrankStage";
+import { usePrank } from "@/pranks/context";
 
 /** A meter above this percent may be nibbled once the mouse has rested on it for the time below. */
 export const NIBBLE_BAR_PERCENT = 90;

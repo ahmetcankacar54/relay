@@ -110,11 +110,13 @@ export function Panel({
           <Button
             size="xs"
             disabled={!suggestionCanSwitch}
-            onClick={(e) =>
-              offerAfter(prank, "nibble-cursor", e, () =>
-                setConfirmId(suggestion.id),
-              )
-            }
+            onClick={(e) => {
+              // Opening the confirmation is the switch request and offers; with it already open there is nothing to request.
+              if (confirmId !== suggestion.id)
+                offerAfter(prank, "nibble-cursor", e, () =>
+                  setConfirmId(suggestion.id),
+                );
+            }}
           >
             {t("Geç", "Switch")}
           </Button>

@@ -47,6 +47,12 @@
   .prank-nibble-panda .panda[data-motion~="chew"] [data-part="held"] {
     animation-duration: 200ms;
   }
+  /* The wheel's panda runs: its legs step in 0.2 s, not the walk motion's 0.5 s (src/styles/panda.css). The extra class
+     wins over that shorthand, whatever order the sheets load in. Only the pace changes, and the wheel itself stays still. */
+  .prank-wheel .panda[data-motion~="walk"] [data-part="leg-front"],
+  .prank-wheel .panda[data-motion~="walk"] [data-part="leg-back"] {
+    animation-duration: 0.2s;
+  }
   /* The drawn cursor flies to the panda over the fly-in's 200 ms (the same element moves), and back from the panda's
      hand over the fly-out's 250 ms (a new element, so it starts from a custom property). */
   .prank-cursor[data-flight="in"] {

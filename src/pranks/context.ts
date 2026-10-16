@@ -20,6 +20,9 @@ export interface PrankApi {
   allowsTrick(event: { detail: number }): boolean;
 }
 
+/** The class on <html> that hides the real cursor (src/styles/pranks.css); the stage takes it off when a play ends. */
+export const CURSOR_HIDDEN_CLASS = "prank-cursor-hidden";
+
 /** Outside a stage nothing pranks. */
 export const NO_PRANKS: PrankApi = { offer() {}, allowsTrick: () => false };
 export const PrankContext = createContext<PrankApi>(NO_PRANKS);

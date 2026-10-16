@@ -134,12 +134,9 @@ export function itemHandlers(
   onClick?: (event: MouseEvent<Element>) => void;
 } {
   if (key !== "switch") return { onSelect: run };
-  return {
-    onClick: (e) =>
-      offerAfter(prank, "nibble-cursor", e, () => {
-        if (!disabled) run();
-      }),
-  };
+  // A disabled switch item does nothing: it neither switches nor offers.
+  if (disabled) return {};
+  return { onClick: (e) => offerAfter(prank, "nibble-cursor", e, run) };
 }
 
 export function AccountsTable({

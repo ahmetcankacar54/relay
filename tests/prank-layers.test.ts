@@ -57,7 +57,8 @@ test("besideRect puts the box 4 px right of the rect, centred on it, and flips l
 
 test("the wheel is a 28 px walking panda in its wheel, right of the button and centred on it", () => {
   const html = renderToStaticMarkup(createElement(WheelLayer, { play: play("wheel", { rect }), done: noop }));
-  assert.match(html, /^<div class="absolute" style="left:134px;top:21px"><svg /);
+  // The wrapper's class is what the stylesheet speeds the legs up by: the panda runs in its wheel.
+  assert.match(html, /^<div class="absolute prank-wheel" style="left:134px;top:21px"><svg /);
   const tag = rigTag(html);
   for (const attribute of ['width="28"', 'height="28"', 'data-pose="walk"', 'data-props="wheel"', 'data-motion="walk"'])
     assert.ok(tag.includes(attribute), attribute);
@@ -682,6 +683,24 @@ test("the stylesheet drops leaves with motion on, draws them still and unseen wi
   assert.equal(delays.length, 14);
   assert.ok(Number.isFinite(fall) && fall > 0);
   assert.ok(Math.max(...delays) + fall <= CONFETTI_MS / 1000, `${Math.max(...delays)} s + ${fall} s`);
+});
+
+test("the stylesheet makes the wheel's panda run: its legs step in 0.2 s, only in the wheel and only with motion on, and the wheel itself stays still", () => {
+  const css = readFileSync("src/styles/pranks.css", "utf8");
+  const motion = mediaBlock(css, "(prefers-reduced-motion: no-preference)");
+  const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "");
+  // Both legs, under the wrapper's class; the extra class beats the plain walk rule's shorthand (src/styles/panda.css), whatever order the sheets load in.
+  assert.match(
+    code(motion),
+    /\.prank-wheel \.panda\[data-motion~="walk"\] \[data-part="leg-front"\],\s*\.prank-wheel \.panda\[data-motion~="walk"\] \[data-part="leg-back"\]\s*\{[^}]*animation-duration:\s*0\.2s;/,
+  );
+  // It only changes the pace: the plain walk (0.5 s) is what runs everywhere else, and the keyframes stay the walk's.
+  const plain = readFileSync("src/styles/panda.css", "utf8");
+  assert.match(plain, /\[data-motion~="walk"\] \[data-part="leg-front"\] \{\s*animation: panda-step 0\.5s /);
+  assert.doesNotMatch(code(motion), /\.prank-wheel[^{]*\{[^}]*animation-name/);
+  // Not one animation outside the no-preference block, and nothing animates the wheel's own drawing.
+  assert.doesNotMatch(code(css.replace(motion, "")), /\.prank-wheel/);
+  assert.doesNotMatch(code(css), /data-prop="wheel"/);
 });
 
 test("mediaBlock ignores a comment that names the query or holds a brace, and returns the block as written", () => {

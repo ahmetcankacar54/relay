@@ -1,4 +1,5 @@
 import {
+  Component,
   useCallback,
   useEffect,
   useMemo,
@@ -9,7 +10,7 @@ import {
 } from "react";
 import type { PrankLevel } from "../../shared/types";
 import { prankDecision, readPrankHistory, recordPrank, type PrankKind } from "./budget";
-import { PrankContext, type PrankApi, type PrankEvent } from "./context";
+import { CURSOR_HIDDEN_CLASS, PrankContext, type PrankApi, type PrankEvent } from "./context";
 import { prankBlocked, type PrankGate } from "./gate";
 import { PRANK_LAYERS } from "./registry";
 
@@ -73,9 +74,25 @@ export function playFor(id: number, kind: PrankKind, anchor: Element | null, eve
 }
 
 /** A layer may hide the real cursor with this class on <html>; the stage takes it off when the play ends. */
-const CURSOR_HIDDEN = "prank-cursor-hidden";
 function showCursor(): void {
-  document.documentElement.classList.remove(CURSOR_HIDDEN);
+  document.documentElement.classList.remove(CURSOR_HIDDEN_CLASS);
+}
+
+/**
+ * Holds one play's layer. A layer that throws (while rendering, or in an effect) draws nothing and ends
+ * its play through `onError`, so the app around the stage stays up and the real cursor comes back.
+ */
+class LayerBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    this.props.onError();
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }
 
 const UNAVAILABLE: PrankStorage = {
@@ -187,7 +204,11 @@ export function PrankStage(props: PrankStageProps) {
     <PrankContext.Provider value={api}>
       {children}
       <div data-prank-stage className="pointer-events-none fixed inset-0 z-[100] overflow-hidden">
-        {play && Layer && <Layer key={play.id} play={play} done={done} />}
+        {play && Layer && (
+          <LayerBoundary key={play.id} onError={done}>
+            <Layer play={play} done={done} />
+          </LayerBoundary>
+        )}
       </div>
     </PrankContext.Provider>
   );

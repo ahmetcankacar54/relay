@@ -1,12 +1,13 @@
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { act, createElement, useLayoutEffect, type MouseEvent } from "react";
+import { readFileSync, readdirSync } from "node:fs";
+import { act, createElement, useLayoutEffect, useState, type MouseEvent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PRANK_HISTORY_KEY, type PrankKind } from "../src/pranks/budget";
 import type { PrankGate } from "../src/pranks/gate";
 import { PrankStage, decideOffer, offerAfter, playFor, usePrank, type PrankApi } from "../src/pranks/PrankStage";
 import { RelayPrankStage, stagePropsFrom } from "../src/pranks/RelayPrankStage";
+import { CURSOR_HIDDEN_CLASS } from "../src/pranks/context";
 import { PRANK_LAYERS, type PrankLayer } from "../src/pranks/registry";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { DEFAULT_SETTINGS } from "../shared/types";
@@ -406,6 +407,111 @@ test("the real cursor comes back when a play ends or the stage unmounts, whateve
     await act(async () => root.unmount());
     assert.equal(dom.cursorHidden(), false);
   } finally {
+    if (original) PRANK_LAYERS.wheel = original;
+    else delete PRANK_LAYERS.wheel;
+    dom.uninstall();
+  }
+});
+
+test("the cursor-hiding class is named once, in the context module, and LimitMeter reads the context without the stage", () => {
+  assert.equal(CURSOR_HIDDEN_CLASS, "prank-cursor-hidden");
+  const code = (file: string) =>
+    readFileSync(file, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+  const sources = readdirSync("src/pranks").map((name) => `src/pranks/${name}`);
+  assert.ok(sources.includes("src/pranks/context.ts") && sources.includes("src/pranks/NibbleCursor.tsx"));
+  for (const file of sources)
+    assert.equal(code(file).match(/prank-cursor-hidden/g)?.length ?? 0, file === "src/pranks/context.ts" ? 1 : 0, file);
+  // The two that used to keep a copy each take it from there.
+  for (const file of ["src/pranks/PrankStage.tsx", "src/pranks/NibbleCursor.tsx"])
+    assert.match(code(file), /import \{[^}]*\bCURSOR_HIDDEN_CLASS\b[^}]*\} from "\.\/context"/, file);
+  const meter = code("src/components/LimitMeter.tsx");
+  assert.match(meter, /import \{ usePrank \} from "@\/pranks\/context";/);
+  assert.doesNotMatch(meter, /@\/pranks\/PrankStage/);
+});
+
+test("a layer that throws is contained: the app stays up, the real cursor comes back, and the next offer plays", async () => {
+  const dom = fakeDom();
+  dom.install();
+  const original = PRANK_LAYERS.wheel;
+  // React reports an error that a boundary caught through console.error. Keep the suite's output clean, but see it is React's report.
+  const reported: unknown[][] = [];
+  const consoleError = mock.method(console, "error", (...args: unknown[]) => void reported.push(args));
+  // The test-only way in is the registry, a plain object that the tests above swap layers in as well.
+  let finish: (() => void) | undefined;
+  let plays = 0;
+  // Hides the cursor in a layout effect, as the nibble does, and fails on the render that effect asks for.
+  const hidingThenThrowing: PrankLayer = ({ done }) => {
+    const [armed, arm] = useState(false);
+    finish = done;
+    useLayoutEffect(() => {
+      plays++;
+      document.documentElement.classList.add("prank-cursor-hidden");
+      arm(true);
+    }, []);
+    if (armed) throw new Error("the layer broke");
+    return createElement("span", { "data-layer": "" });
+  };
+  const healthy: PrankLayer = ({ done }) => {
+    finish = done;
+    return createElement("span", { "data-layer": "" });
+  };
+  const throwingAtOnce: PrankLayer = () => {
+    throw new Error("the layer broke");
+  };
+  try {
+    // Loaded after the stubs, so react-dom sees a DOM.
+    const { createRoot } = await import("react-dom/client");
+    let api: PrankApi | undefined;
+    const Probe = () => {
+      api = usePrank();
+      return createElement("main", { "data-app": "" });
+    };
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(createElement(PrankStage, { ...idle, ignoreLimits: true, children: createElement(Probe) })));
+    assert.ok(api);
+    const click = { clientX: 1, clientY: 2, detail: 1 };
+    type Node = { tagName: string; attributes: Map<string, string>; childNodes: Node[] };
+    const all = (node: Node = dom.container as unknown as Node): Node[] => [node, ...node.childNodes.flatMap((child) => all(child))];
+    const appDrawn = () => all().some((n) => n.attributes.has("data-app"));
+    const layerDrawn = () => all().some((n) => n.attributes.has("data-layer"));
+    const stageIsEmpty = () => all().find((n) => n.attributes.has("data-prank-stage"))?.childNodes.length === 0;
+    const offer = () => act(async () => api!.offer("wheel", null, click));
+
+    // The layer hides the cursor and then throws: its play ends, the app is still there and the cursor is back.
+    PRANK_LAYERS.wheel = hidingThenThrowing;
+    await offer();
+    assert.equal(plays, 1, "the layer did start, and hide the cursor");
+    assert.equal(dom.cursorHidden(), false, "the real cursor is back");
+    assert.ok(appDrawn(), "the app still renders");
+    assert.equal(layerDrawn(), false, "the broken layer draws nothing");
+    assert.equal(stageIsEmpty(), true, "the play has ended");
+    assert.ok(reported.length > 0, "React reports the error itself");
+    for (const args of reported) assert.ok(args.some((arg) => String(arg).includes("the layer broke")), "only React's own report of it");
+
+    // The next offer plays: a new play, a fresh boundary.
+    PRANK_LAYERS.wheel = healthy;
+    await offer();
+    assert.equal(layerDrawn(), true, "the next play is drawn");
+    assert.ok(appDrawn());
+    await act(async () => finish!());
+    assert.equal(stageIsEmpty(), true);
+
+    // A layer that fails in its very first render ends its play at once as well, and the offer after it still plays.
+    PRANK_LAYERS.wheel = throwingAtOnce;
+    await offer();
+    assert.ok(appDrawn());
+    assert.equal(stageIsEmpty(), true);
+    assert.equal(dom.cursorHidden(), false);
+    PRANK_LAYERS.wheel = healthy;
+    await offer();
+    assert.equal(layerDrawn(), true);
+
+    await act(async () => root.unmount());
+    assert.equal(dom.cursorHidden(), false);
+  } finally {
+    consoleError.mock.restore();
     if (original) PRANK_LAYERS.wheel = original;
     else delete PRANK_LAYERS.wheel;
     dom.uninstall();

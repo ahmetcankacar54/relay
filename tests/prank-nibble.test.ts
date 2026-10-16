@@ -25,7 +25,9 @@ import { PRANK_LAYERS } from "../src/pranks/registry";
 import { I18nContext } from "../src/data/i18n";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { itemHandlers } from "../src/pages/accounts/AccountsTable";
+import { Panel } from "../src/panel/Panel";
 import { PanelAccounts } from "../src/panel/PanelAccounts";
+import { PrankContext } from "../src/pranks/context";
 import {
   DEFAULT_SETTINGS,
   type Account,
@@ -37,9 +39,11 @@ import {
   NIBBLE_MAX_MS,
   NIBBLE_MS,
   NIBBLE_SIZE,
+  nibbleAborts,
   nibbleFrame,
   nibbleLayout,
   type NibblePhase,
+  type NibbleRect,
 } from "../src/pranks/timing";
 import { mediaBlock } from "./css";
 import { fakeDom } from "./fake-dom";
@@ -212,14 +216,15 @@ test("the drawn cursor is a decorative arrow in theme classes; nothing takes a c
 
 // --- the controller: the real cursor always comes back ----------------------
 
-/** A fake classList, a fake clock and a fake scheduler, so no test waits for real time. */
-function harness() {
+/** A fake classList, a fake clock and a fake scheduler, so no test waits for real time. `rect` is the clicked control's box. */
+function harness(rect?: NibbleRect) {
   const classes = new Set<string>();
   const calls = { add: 0, remove: 0, done: 0 };
   const timers: { fn: () => void; ms: number; cleared: boolean }[] = [];
   let clock = 1_000;
   const controller = nibbleController({
     now: () => clock,
+    rect,
     classList: {
       add: (name) => {
         calls.add++;
@@ -374,6 +379,144 @@ test("the controller remembers where the pointer last was, for the bitten cursor
     clientY: 100 + NIBBLE_ABORT_PX + 1,
   });
   assert.equal(h.hidden(), false);
+});
+
+// --- leaving the clicked control ends the nibble too -------------------------
+
+/**
+ * The panel row's "Geç" as laid out in the 360 px panel: about 40 x 22 px, clicked at (324, 200). The inline
+ * confirmation opens right under it, so "Onayla" is some 50 px away: inside the 80 px rule, outside the button.
+ */
+const GEC_RECT: NibbleRect = { left: 304, top: 189, width: 40, height: 22 };
+const GEC_CLICK = { x: 324, y: 200 };
+const moveTo = (clientX: number, clientY: number) => ({
+  type: "pointermove",
+  clientX,
+  clientY,
+});
+
+test("a move that stays inside the clicked control's box grown by 8 px, and within 80 px, does not abort", () => {
+  // The grown box is x 296..352, y 181..219; its edges still count as inside.
+  for (const [x, y] of [
+    [324, 200],
+    [330, 215],
+    [296, 181],
+    [352, 219],
+    [352, 181],
+    [296, 219],
+  ])
+    assert.equal(
+      nibbleAborts(GEC_CLICK, moveTo(x, y), GEC_RECT),
+      false,
+      `${x},${y}`,
+    );
+});
+
+test("a move 1 px outside the grown box aborts, even though it is well within 80 px", () => {
+  for (const [x, y] of [
+    [295, 200],
+    [353, 200],
+    [324, 180],
+    [324, 220],
+  ])
+    assert.equal(
+      nibbleAborts(GEC_CLICK, moveTo(x, y), GEC_RECT),
+      true,
+      `${x},${y}`,
+    );
+  // The panel's geometry: straight down toward "Onayla", about 55 px from the click.
+  const toConfirm = moveTo(300, 250);
+  assert.ok(
+    Math.hypot(300 - GEC_CLICK.x, 250 - GEC_CLICK.y) < NIBBLE_ABORT_PX,
+  );
+  assert.equal(
+    nibbleAborts(GEC_CLICK, toConfirm),
+    false,
+    "the 80 px rule alone lets it go on",
+  );
+  assert.equal(nibbleAborts(GEC_CLICK, toConfirm, GEC_RECT), true);
+});
+
+test("a move beyond 80 px still aborts, whatever the box", () => {
+  const wide: NibbleRect = { left: 0, top: 0, width: 1_000, height: 800 };
+  assert.equal(
+    nibbleAborts(GEC_CLICK, moveTo(324 + NIBBLE_ABORT_PX, 200), wide),
+    false,
+  );
+  assert.equal(
+    nibbleAborts(GEC_CLICK, moveTo(324 + NIBBLE_ABORT_PX + 1, 200), wide),
+    true,
+  );
+  assert.equal(
+    nibbleAborts(GEC_CLICK, moveTo(324 + NIBBLE_ABORT_PX + 1, 200), GEC_RECT),
+    true,
+  );
+});
+
+test("with no box, only the 80 px rule applies", () => {
+  assert.equal(nibbleAborts(GEC_CLICK, moveTo(300, 250)), false);
+  assert.equal(nibbleAborts(GEC_CLICK, moveTo(300, 250), undefined), false);
+  assert.equal(
+    nibbleAborts(GEC_CLICK, moveTo(324, 200 + NIBBLE_ABORT_PX + 1)),
+    true,
+  );
+});
+
+test("the box rule is only for moves: a release, a focus and a visible document leave the nibble alone", () => {
+  for (const type of ["pointerup", "focus"])
+    assert.equal(
+      nibbleAborts(GEC_CLICK, { type, clientX: 0, clientY: 0 }, GEC_RECT),
+      false,
+      type,
+    );
+  assert.equal(
+    nibbleAborts(
+      GEC_CLICK,
+      { type: "visibilitychange", hidden: false },
+      GEC_RECT,
+    ),
+    false,
+  );
+  // A move without coordinates says nothing about where the pointer is.
+  assert.equal(
+    nibbleAborts(GEC_CLICK, { type: "pointermove" }, GEC_RECT),
+    false,
+  );
+});
+
+test("the controller ends the nibble the moment the pointer leaves the box: cursor back, done once, cap cleared", () => {
+  const h = harness(GEC_RECT);
+  h.controller.start(GEC_CLICK);
+  h.at(400);
+  h.controller.tick();
+  // Moving about inside the button goes on.
+  h.controller.event(moveTo(330, 214));
+  assert.equal(h.hidden(), true);
+  assert.equal(h.calls.done, 0);
+  // Down toward "Onayla": out of the box, within 80 px of the click.
+  h.controller.event(moveTo(300, 250));
+  assert.equal(h.hidden(), false);
+  assert.equal(h.controller.cursorHidden, false);
+  assert.equal(h.calls.done, 1);
+  assert.equal(h.calls.remove, 1);
+  assert.equal(h.timers[0].cleared, true, "the 3 s cap is cleared");
+  // Nothing is left to end twice.
+  h.controller.event(moveTo(300, 260));
+  h.controller.tick();
+  h.timers[0].fn();
+  assert.equal(h.calls.done, 1);
+  assert.equal(h.calls.remove, 1);
+});
+
+test("a controller made without a box ends only by the 80 px rule", () => {
+  const h = harness();
+  h.controller.start(GEC_CLICK);
+  h.controller.event(moveTo(300, 250));
+  assert.equal(h.hidden(), true);
+  assert.equal(h.calls.done, 0);
+  h.controller.event(moveTo(324, 200 + NIBBLE_ABORT_PX + 1));
+  assert.equal(h.hidden(), false);
+  assert.equal(h.calls.done, 1);
 });
 
 test("(c) if no frame ever runs, the 3 s cap still brings the cursor back", () => {
@@ -961,6 +1104,101 @@ test("inside the stage the nibble plays, ends at 1 500 ms and the stage takes th
   }
 });
 
+test("inside the stage, a pointer that leaves the clicked button ends the nibble at once: the cursor class is gone and the stage is empty", async () => {
+  const dom = fakeDom();
+  dom.install();
+  const frames = fakeFrames();
+  const now = mock.method(performance, "now", () => 0);
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const caps = trackCaps();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    let api: PrankApi | undefined;
+    const Probe = () => {
+      api = usePrank();
+      return null;
+    };
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(PrankStage, {
+          level: "sometimes",
+          desktopBusy: false,
+          errorShown: false,
+          dialogOpen: false,
+          ignoreLimits: true,
+          children: createElement(Probe),
+        }),
+      ),
+    );
+    const stageIsEmpty = () =>
+      dom.container.childNodes[0]?.childNodes.length === 0;
+    // The row's Geç: the stage reads its box at offer time, as the click is made.
+    const button = {
+      getBoundingClientRect: () => ({ ...GEC_RECT }),
+    } as unknown as Element;
+    const move = (x: number, y: number) =>
+      act(async () =>
+        window.dispatchEvent(
+          Object.assign(new Event("pointermove"), { clientX: x, clientY: y }),
+        ),
+      );
+    const offer = () =>
+      act(async () =>
+        api!.offer("nibble-cursor", button, {
+          clientX: GEC_CLICK.x,
+          clientY: GEC_CLICK.y,
+          detail: 1,
+        }),
+      );
+
+    await offer();
+    assert.equal(dom.cursorHidden(), true);
+    assert.equal(stageIsEmpty(), false);
+    // Moving about on the button, and a little off it (within its grown box), goes on.
+    await move(330, 214);
+    await move(300, 215);
+    assert.equal(dom.cursorHidden(), true);
+    assert.equal(stageIsEmpty(), false);
+    // Down toward "Onayla": 1 px past the grown box, 55 px from the click.
+    await move(300, 220);
+    assert.equal(dom.cursorHidden(), false, "the real cursor is back at once");
+    assert.equal(stageIsEmpty(), true, "the layer is gone");
+    assert.equal(frames.pending(), 0);
+    assert.equal(caps.armed.size, 0, "the 3 s cap is cleared");
+    for (const type of ["pointermove", "pointerdown", "keydown", "blur"])
+      assert.equal(dom.windowListeners(type), 0, type);
+    assert.equal(dom.documentListeners("visibilitychange"), 0);
+
+    // The next play starts fresh, with its own box.
+    await offer();
+    assert.equal(dom.cursorHidden(), true);
+    await move(324, 200 + NIBBLE_ABORT_PX + 1);
+    assert.equal(dom.cursorHidden(), false);
+    assert.equal(stageIsEmpty(), true);
+
+    // A play with no anchor has no box: moving 55 px from the click does not end it.
+    await act(async () =>
+      api!.offer("nibble-cursor", null, {
+        clientX: GEC_CLICK.x,
+        clientY: GEC_CLICK.y,
+        detail: 1,
+      }),
+    );
+    await move(300, 250);
+    assert.equal(dom.cursorHidden(), true);
+    assert.equal(stageIsEmpty(), false);
+    await act(async () => root.unmount());
+    assert.equal(dom.cursorHidden(), false);
+  } finally {
+    caps.restore();
+    mock.timers.reset();
+    now.mock.restore();
+    frames.restore();
+    dom.uninstall();
+  }
+});
+
 test("the layer hides the cursor in a layout effect, so it is hidden before the first paint", () => {
   const source = readFileSync("src/pranks/NibbleCursor.tsx", "utf8");
   assert.match(source, /useLayoutEffect\(\(\) => \{\s*\/\/ Nothing to nibble/);
@@ -1003,7 +1241,11 @@ test("the nibble's slides, flight and transition animate only with motion on", (
   assert.equal(nibbleFrame(450).phase, "chew");
   assert.equal(nibbleFrame(1_049).phase, "chew");
   assert.equal(nibbleFrame(1_050).phase, "fly-out");
-  assert.equal((1_050 - 450) / 200, 3);
+  // The bites that fit: the chew phase's length in the timeline, over the bite's duration read from the stylesheet.
+  const chewMs = Array.from({ length: NIBBLE_MS }, (_, ms) => nibbleFrame(ms).phase).filter((phase) => phase === "chew").length;
+  const biteMs = Number(/\[data-part="held"\]\s*\{[^}]*animation-duration:\s*(\d+)ms/.exec(motion)?.[1]);
+  assert.ok(Number.isFinite(biteMs) && biteMs > 0, "the bite's duration is in the stylesheet");
+  assert.equal(chewMs / biteMs, 3);
   for (const name of [
     "prank-nibble-peek",
     "prank-nibble-withdraw",
@@ -1052,9 +1294,10 @@ test("each trigger still runs its own action, and the Accounts menu's items keep
     /open\s*\?\s*setConfirmId\(undefined\)\s*:\s*offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(account\.id\),?\s*\)/,
   );
   const panel = readFileSync("src/panel/Panel.tsx", "utf8");
+  // The suggestion's Geç only offers when this click opens the confirmation (the mounted Panel test below drives it).
   assert.match(
     panel,
-    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(suggestion\.id\),?\s*\)/,
+    /if \(confirmId !== suggestion\.id\)\s*offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(suggestion\.id\),?\s*\)/,
   );
   const card = readFileSync("src/pages/overview/AccountsCard.tsx", "utf8");
   assert.match(
@@ -1074,9 +1317,11 @@ test("each trigger still runs its own action, and the Accounts menu's items keep
     /\{\.\.\.itemHandlers\(\{ key, disabled, run \}, prank\)\}/,
   );
   assert.doesNotMatch(table, /onSelect=\{run\}/);
+  // A disabled switch item gets no handler at all, so there is nothing to run and nothing to offer.
+  assert.match(table, /if \(disabled\) return \{\};/);
   assert.match(
     table,
-    /offerAfter\(prank, "nibble-cursor", e, \(\) => \{\s*if \(!disabled\) run\(\);\s*\}\)/,
+    /onClick: \(e\) => offerAfter\(prank, "nibble-cursor", e, run\)/,
   );
   assert.match(table, /if \(key !== "switch"\) return \{ onSelect: run \};/);
 });
@@ -1116,24 +1361,19 @@ test("the Accounts menu's switch item runs once and before the offer, whether th
   }
 });
 
-test("a disabled switch item does not run, and every other item keeps onSelect and never offers", () => {
+test("a disabled switch item does nothing: no run and no offer; every other item keeps onSelect and never offers", () => {
   let runs = 0;
   const prank: PrankApi = {
-    offer: () => assert.fail("only the switch item offers"),
+    offer: () => assert.fail("only an enabled switch item offers"),
     allowsTrick: () => false,
   };
-  // A disabled switch item's click never switches (Radix would not select it either); the stage gates its offer.
-  const offered: string[] = [];
-  const spy: PrankApi = {
-    offer: (kind) => void offered.push(kind),
-    allowsTrick: () => false,
-  };
-  itemHandlers(
+  // A disabled switch item has no handler at all: its click neither switches (Radix would not select it either) nor offers.
+  const disabled = itemHandlers(
     { key: "switch", disabled: true, run: () => void runs++ },
-    spy,
-  ).onClick?.(clickOn(1));
+    prank,
+  );
+  assert.deepEqual(Object.keys(disabled), []);
   assert.equal(runs, 0);
-  assert.deepEqual(offered, ["nibble-cursor"]);
   for (const key of [
     "open",
     "cli",
@@ -1244,12 +1484,13 @@ const readyUsage = (id: string): AccountUsage => ({
   sevenDay: { usedPercent: 31, resetsAt: iso(NOW + 4 * 86_400_000) },
 });
 
-test("the panel row's Geç offers the nibble when it opens the confirmation and not when it closes it", async () => {
+/** The panel's relay: an active account and one more that can be switched to, `extra` laid over it. */
+function panelRelay(extra: Partial<Relay> = {}): Relay {
   const active = linkedAccount("active", "Kişisel");
   const vertex = linkedAccount("vertex", "Vertex");
   const accounts = [active, vertex];
   const usage = { active: readyUsage("active"), vertex: readyUsage("vertex") };
-  const relay = {
+  return {
     api: {},
     preview: false,
     error: "",
@@ -1280,7 +1521,12 @@ test("the panel row's Geç offers the nibble when it opens the confirmation and 
     setSetupId() {},
     refreshUsage: async () => {},
     action: async () => {},
+    ...extra,
   } as unknown as Relay;
+}
+
+test("the panel row's Geç offers the nibble when it opens the confirmation and not when it closes it", async () => {
+  const relay = panelRelay();
   const tree = createElement(
     I18nContext.Provider,
     { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
@@ -1318,6 +1564,76 @@ test("the panel row's Geç offers the nibble when it opens the confirmation and 
       assert.equal(plays.size, 1);
     });
   });
+});
+
+test("the suggestion's Geç offers the nibble when it opens the confirmation and not when it is already open", async () => {
+  const vertex = panelRelay().accounts[1];
+  const relay = panelRelay({
+    suggestion: vertex,
+    api: { setPanelHeight() {}, closePanel() {} } as unknown as Relay["api"],
+  });
+  // A recording stage: a real one would refuse a second offer while the first nibble plays, hiding a wrong offer.
+  const offered: (string | undefined)[] = [];
+  const spy: PrankApi = {
+    offer: (kind, _anchor, event) => void offered.push(`${kind} ${event?.detail}`),
+    allowsTrick: () => false,
+  };
+  const tree = createElement(
+    I18nContext.Provider,
+    { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+    createElement(
+      RelayContext.Provider,
+      { value: relay },
+      createElement(
+        PrankContext.Provider,
+        { value: spy },
+        createElement(Panel, { now: NOW }),
+      ),
+    ),
+  );
+  Object.assign(globalThis, {
+    ResizeObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+  });
+  try {
+    await inFakeBrowser(tree, async ({ dom }) => {
+      const all = () => nodes(dom.container as unknown as FakeNode);
+      // The row's Geç shows the state; the suggestion's is the unlabelled button before it.
+      const row = all().find((n) => n.attributes.has("aria-expanded"));
+      assert.ok(row, "the row's Geç button is drawn");
+      const suggestion = all().filter(
+        (n) =>
+          n.tagName === "button" &&
+          !n.attributes.has("aria-label") &&
+          !n.attributes.has("aria-expanded"),
+      )[0];
+      assert.ok(suggestion, "the suggestion's Geç button is drawn");
+      const click = (button: FakeNode) =>
+        act(async () =>
+          dom.dispatch(button, "click", { clientX: 10, clientY: 20, detail: 1 }),
+        );
+      assert.equal(row.attributes.get("aria-expanded"), "false");
+      // Opening the confirmation is the switch request: it opens, and the nibble is offered.
+      await click(suggestion);
+      assert.equal(row.attributes.get("aria-expanded"), "true");
+      assert.deepEqual(offered, ["nibble-cursor 1"]);
+      // Pressed again with the confirmation already open, it asks for nothing and the confirmation stays.
+      await click(suggestion);
+      assert.equal(row.attributes.get("aria-expanded"), "true");
+      assert.deepEqual(offered, ["nibble-cursor 1"]);
+      // The row's Geç closes it (a cancel), and the suggestion's opens it again with an offer.
+      await click(row);
+      assert.equal(row.attributes.get("aria-expanded"), "false");
+      assert.deepEqual(offered, ["nibble-cursor 1"]);
+      await click(suggestion);
+      assert.equal(row.attributes.get("aria-expanded"), "true");
+      assert.deepEqual(offered, ["nibble-cursor 1", "nibble-cursor 1"]);
+    });
+  } finally {
+    Reflect.deleteProperty(globalThis, "ResizeObserver");
+  }
 });
 
 test("only a switch request nibbles: no confirmation button offers it", () => {
