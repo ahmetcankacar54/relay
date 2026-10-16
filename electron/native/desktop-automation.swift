@@ -330,6 +330,20 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         current = try observe()
         return ["ok": true, "acceptedVisible": current.fields["composerEmpty"] as? Bool == true && markerPresent(current, marker)]
     }
+    if command == "write-draft" {
+        // Re-types an unsent draft. It never presses Send and adds no marker. The
+        // guard above already required the same account/session/mode, a stopped
+        // conversation and an empty composer, so a user's own text is never overwritten.
+        guard let text = request["text"] as? String, !text.isEmpty, text.utf8.count <= 65536, !text.contains("\0"),
+              current.composer != nil else { try fail("desktop-ui-unsupported") }
+        try writeComposer(current, text)
+        current = try observe()
+        try validateGuard(current, expected, allowComposer: true)
+        // One guarded attempt, never retried: a composer that does not read back
+        // exactly is ambiguous, not a reason to type again.
+        guard current.composer?.value == text else { try fail("delivery-ambiguous") }
+        return ["ok": true, "snapshot": current.fields]
+    }
     try fail("desktop-ui-unsupported")
 }
 

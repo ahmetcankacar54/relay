@@ -78,6 +78,16 @@ export interface DesktopAutomation {
     text: string,
   ): Promise<{ acceptedVisible: boolean }>;
   hasRequestMarker(requestId: string): Promise<boolean>;
+  /**
+   * Types `text` into the open conversation's empty composer and never presses
+   * Send. One guarded attempt: a non-empty composer is `composer-not-empty`, a
+   * moved context is `context-changed`, an unverifiable result is
+   * `delivery-ambiguous`. Resolves with the snapshot taken after the write.
+   */
+  writeDraft(
+    guard: DesktopAutomationGuard,
+    text: string,
+  ): Promise<DesktopAutomationSnapshot>;
 }
 
 export interface DesktopContinuationObservation extends ContinuationState {
@@ -117,6 +127,8 @@ export interface DesktopContinuationEvidence {
 const LOCAL =
   /^local_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const REQUEST = /^[A-Za-z0-9._:-]{1,128}$/;
+/** Longest unsent draft Relay re-types; longer ones are left for Copy. */
+const MAX_DRAFT_LENGTH = 16_384;
 const MODES = new Set(["Manual", "Auto", "Plan", "Accept edits"]);
 const knownIssues = new Set<DesktopAutomationIssue>([
   "accessibility-permission-required",
@@ -268,6 +280,13 @@ export function nativeDesktopAutomation(
         text,
       });
       return { acceptedVisible: r.acceptedVisible === true };
+    },
+    writeDraft: async (expected, text) => {
+      if (!text || text.length > MAX_DRAFT_LENGTH || text.includes("\0"))
+        throw new DesktopAutomationError("desktop-ui-unsupported");
+      return snapshot(
+        await call({ command: "write-draft", guard: expected, text }),
+      );
     },
     hasRequestMarker: async (requestId) => {
       if (!REQUEST.test(requestId))

@@ -83,6 +83,7 @@ function fixture() {
       return { acceptedVisible: true };
     },
     hasRequestMarker: async () => false,
+    writeDraft: async () => ({ ...ui }),
   };
   const evidence: DesktopContinuationEvidence = {
     read: async () => structuredClone(observed),
@@ -331,4 +332,90 @@ test("native transport validates exact IDs and never uses last-session navigatio
     blocked("desktop-ui-unsupported"),
   );
   assert.equal(commands.length, 1);
+});
+
+const draftGuard = () => ({
+  pid: 456,
+  localSessionId: localId,
+  accountLabel: "Test User Company",
+  permissionMode: "Auto",
+  contextFingerprint: "a".repeat(64),
+});
+test("writeDraft sends the write-draft command with the guard and text", async () => {
+  const commands: unknown[] = [];
+  const written = { ...snapshot(), composerEmpty: false };
+  const adapter = nativeDesktopAutomation("/unused", async (input) => {
+    commands.push(input);
+    return { ok: true, snapshot: written };
+  });
+  const result = await adapter.writeDraft(draftGuard(), "Merhaba\nDünya");
+  assert.deepEqual(commands, [
+    { command: "write-draft", guard: draftGuard(), text: "Merhaba\nDünya" },
+  ]);
+  assert.deepEqual(result, written);
+  // The 16 384 character limit is inclusive.
+  await adapter.writeDraft(draftGuard(), "a".repeat(16_384));
+  assert.equal(commands.length, 2);
+});
+test("writeDraft refuses empty, NUL and over-long text without calling the helper", async () => {
+  const commands: unknown[] = [];
+  const adapter = nativeDesktopAutomation("/unused", async (input) => {
+    commands.push(input);
+    return { ok: true, snapshot: snapshot() };
+  });
+  for (const text of ["", "a\0b", "a".repeat(16_385)])
+    await assert.rejects(
+      adapter.writeDraft(draftGuard(), text),
+      blocked("desktop-ui-unsupported"),
+    );
+  assert.deepEqual(commands, []);
+});
+test("writeDraft maps composer-not-empty and context-changed", async () => {
+  for (const issue of [
+    "composer-not-empty",
+    "context-changed",
+    "delivery-ambiguous",
+    "accessibility-permission-required",
+  ] as const) {
+    const adapter = nativeDesktopAutomation("/unused", async () => ({
+      ok: false,
+      issue,
+    }));
+    await assert.rejects(
+      adapter.writeDraft(draftGuard(), "draft"),
+      blocked(issue),
+    );
+  }
+  const unknown = nativeDesktopAutomation("/unused", async () => ({
+    ok: false,
+    issue: "draft text echoed back",
+  }));
+  await assert.rejects(
+    unknown.writeDraft(draftGuard(), "draft"),
+    blocked("desktop-ui-unsupported"),
+  );
+  // A reply without a valid snapshot cannot prove what is in the composer.
+  const noSnapshot = nativeDesktopAutomation("/unused", async () => ({
+    ok: true,
+  }));
+  await assert.rejects(
+    noSnapshot.writeDraft(draftGuard(), "draft"),
+    blocked("desktop-ui-unsupported"),
+  );
+});
+test("writeDraft never sends: the request has no requestId", async () => {
+  const commands: Record<string, unknown>[] = [];
+  const adapter = nativeDesktopAutomation("/unused", async (input) => {
+    commands.push(input as Record<string, unknown>);
+    return { ok: true, snapshot: snapshot() };
+  });
+  await adapter.writeDraft(draftGuard(), "draft");
+  assert.equal(commands.length, 1);
+  assert.deepEqual(Object.keys(commands[0]).sort(), [
+    "command",
+    "guard",
+    "text",
+  ]);
+  assert.equal(commands[0].command, "write-draft");
+  assert.equal("requestId" in commands[0], false);
 });

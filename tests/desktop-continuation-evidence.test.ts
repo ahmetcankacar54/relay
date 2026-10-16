@@ -463,6 +463,7 @@ async function fixture() {
     setPermission: async (_g, mode) => ({ ...ui, permissionMode: mode }),
     send: async () => ({ acceptedVisible: false }),
     hasRequestMarker: async () => false,
+    writeDraft: async () => ({ ...ui }),
   };
   const desktop = {
     snapshot: async () => ({
