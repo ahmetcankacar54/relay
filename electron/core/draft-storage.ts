@@ -32,9 +32,14 @@ async function realDirectory(target: string, name: string): Promise<boolean> {
   return true;
 }
 
-/** Removes what an earlier restore left in Local Storage. Never throws. */
-async function sweepLeftovers(storage: string): Promise<void> {
+/**
+ * Removes what an earlier restore left in Local Storage. Never throws.
+ * Only runs while `live` is a real directory: when it is missing, a
+ * `leveldb.relay-old-*` may be the only copy of Claude's data left on disk.
+ */
+async function sweepLeftovers(storage: string, live: string): Promise<void> {
   try {
+    if (!(await fs.lstat(live)).isDirectory()) return;
     for (const name of await fs.readdir(storage))
       if (name.startsWith(LEFTOVER))
         await fs
@@ -88,7 +93,7 @@ export async function backupLocalStorage(
  * renames (live aside, copy into place), so after any single failure live is
  * either the original or fully replaced, never half deleted. The old directory
  * is removed last; if that fails it is left as a stray `leveldb.relay-old-*`
- * for the next restore to sweep. `ops.rename` is a seam for tests.
+ * for a later restore to sweep (once leveldb is in place again). `ops.rename` is a seam for tests.
  */
 export async function restoreLocalStorage(
   root: string,
@@ -103,9 +108,9 @@ export async function restoreLocalStorage(
   const storage = path.join(root, LOCAL_STORAGE);
   if (!(await realDirectory(storage, LOCAL_STORAGE)))
     await fs.mkdir(storage, { recursive: true, mode: 0o700 });
-  await sweepLeftovers(storage);
-
   const live = path.join(root, LEVELDB);
+  await sweepLeftovers(storage, live);
+
   const tag = randomUUID();
   const copy = path.join(storage, `${LEFTOVER}${tag}`);
   const old = path.join(storage, `${LEFTOVER}old-${tag}`);

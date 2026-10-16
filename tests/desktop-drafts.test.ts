@@ -747,11 +747,37 @@ test("a failed put-back does not hide the error, and the next restore recovers",
   const names = await fs.readdir(storage);
   assert.equal(names.length, 1);
   assert.match(names[0], /^leveldb\.relay-old-/);
-  assert.deepEqual(await snapshot(path.join(storage, names[0])), damaged);
+  const old = path.join(storage, names[0]);
+  assert.deepEqual(await snapshot(old), damaged);
 
+  // Live was missing, so the only copy of the original is not swept away.
   await restoreLocalStorage(root, backup);
   assert.deepEqual(await snapshot(leveldb), backedUp);
+  assert.deepEqual(await snapshot(old), damaged);
+  // Once live is in place again, the next restore sweeps it.
+  await restoreLocalStorage(root, backup);
   assert.deepEqual(await fs.readdir(storage), ["leveldb"]);
+});
+
+test("a restore with no live leveldb leaves a leftover sibling alone", async (t) => {
+  const { root, leveldb, vault } = await storageFixture(t);
+  const backup = (await backupLocalStorage(root, vault, new Date()))!;
+  const backedUp = await snapshot(leveldb);
+  const storage = path.join(root, LOCAL_STORAGE);
+  // The only on-disk copy of something, left beside a leveldb that is gone.
+  const leftover = path.join(storage, "leveldb.relay-old-0123");
+  await fs.rename(leveldb, leftover);
+  await fs.mkdir(path.join(storage, "leveldb.relay-4567"));
+
+  await restoreLocalStorage(root, backup);
+
+  assert.deepEqual(await snapshot(leveldb), backedUp);
+  assert.deepEqual(await snapshot(leftover), backedUp);
+  assert.deepEqual((await fs.readdir(storage)).sort(), [
+    "leveldb",
+    "leveldb.relay-4567",
+    "leveldb.relay-old-0123",
+  ]);
 });
 
 test(
