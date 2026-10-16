@@ -1,0 +1,6 @@
+/* The prank stage (src/pranks/PrankStage.tsx). Every animation goes inside @media (prefers-reduced-motion: no-preference). */
+/* The nibble prank hides the real cursor while a drawn one flies; the stage always takes this class off again. */
+.prank-cursor-hidden,
+.prank-cursor-hidden * {
+  cursor: none !important;
+}

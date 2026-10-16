@@ -12,6 +12,7 @@ import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
 import { Planning } from "@/pages/Planning";
 import relayIcon from "../../assets/icon.png";
+import { RelayPrankStage } from "@/pranks/RelayPrankStage";
 import { Sidebar } from "./Sidebar";
 import { DesktopActionDialog } from "./DesktopActionDialog";
 import { shortcutPage } from "./routes";
@@ -50,39 +51,41 @@ export function Shell() {
   const active = relay.active;
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex h-screen overflow-hidden bg-background text-foreground">
-        <Sidebar
-          page={page}
-          go={go}
-          t={t}
-          compact={compact}
-          icon={relayIcon}
-          status={sidebarStatus(relay.data)}
-          summary={
-            active && {
-              name: active.name,
-              running: !!relay.desktop?.running,
-              fiveHour: relay.data?.usage[active.id]?.fiveHour?.usedPercent,
+      <RelayPrankStage>
+        <div className="flex h-screen overflow-hidden bg-background text-foreground">
+          <Sidebar
+            page={page}
+            go={go}
+            t={t}
+            compact={compact}
+            icon={relayIcon}
+            status={sidebarStatus(relay.data)}
+            summary={
+              active && {
+                name: active.name,
+                running: !!relay.desktop?.running,
+                fiveHour: relay.data?.usage[active.id]?.fiveHour?.usedPercent,
+              }
             }
-          }
-        />
-        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          {/* In the 56 px rail the macOS traffic lights overhang into this column; keep it clear. */}
-          <div
-            className={cn(
-              "shrink-0 [-webkit-app-region:drag]",
-              compact ? "h-8" : "h-2",
-            )}
           />
-          {page === "genel" && <Overview go={go} />}
-          {page === "hesaplar" && <Accounts />}
-          {page === "kullanim" && <Usage />}
-          {page === "planlama" && <Planning />}
-          {page === "gecis" && <Switching />}
-          {page === "ayarlar" && <Settings />}
-        </main>
-      </div>
-      <DesktopActionDialog />
+          <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+            {/* In the 56 px rail the macOS traffic lights overhang into this column; keep it clear. */}
+            <div
+              className={cn(
+                "shrink-0 [-webkit-app-region:drag]",
+                compact ? "h-8" : "h-2",
+              )}
+            />
+            {page === "genel" && <Overview go={go} />}
+            {page === "hesaplar" && <Accounts />}
+            {page === "kullanim" && <Usage />}
+            {page === "planlama" && <Planning />}
+            {page === "gecis" && <Switching />}
+            {page === "ayarlar" && <Settings />}
+          </main>
+        </div>
+        <DesktopActionDialog />
+      </RelayPrankStage>
     </TooltipProvider>
   );
 }
