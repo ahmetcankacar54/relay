@@ -534,4 +534,30 @@ test("the generated rig module was rendered from the committed sources", async (
   const header = SOURCES_HEADER.exec(module.slice(0, module.indexOf("export ")));
   assert.ok(header, "the generated module must name its sources' hash; run npm run mascot");
   assert.equal(header[1], await sourcesHash(RIG), "assets/mascot/source/rig changed since the module was generated; run npm run mascot");
+  for (const pose of PANDA_POSES)
+    assert.equal(
+      PANDA_RIG[pose],
+      rigMarkup(await readFile(path.join(RIG, `${pose}.svg`), "utf8")),
+      `${pose}: the generated markup differs from what the generator makes of the committed source; run npm run mascot`,
+    );
+});
+
+test("rig markup marks a url() reference whatever the case of the function name", () => {
+  assert.equal(
+    rigMarkup('<svg viewBox="0 0 512 512"><g clip-path="URL(#a)" style="fill:Url( \'#b\' )"/></svg>'),
+    `<g clip-path="URL(#${T}a)" style="fill:Url( '#${T}b' )"/>`,
+  );
+});
+
+test("rig markup ends at the root's closing tag, however it is spaced", () => {
+  for (const end of ["</svg>", "</svg >", "</svg\n\t>"])
+    assert.equal(rigMarkup(`<svg viewBox="0 0 512 512"><g data-part="x"/>${end}\n`), '<g data-part="x"/>', JSON.stringify(end));
+});
+
+test("rig markup is the same for CRLF and LF sources, as the sources hash is", () => {
+  const lf = '<svg viewBox="0 0 512 512">\n  <g data-part="tail"\n     data-pivot="1 2">\n    <path d="M0 0"/>\n  </g>\n</svg>\n';
+  const crlf = lf.replaceAll("\n", "\r\n");
+  assert.doesNotMatch(crlf.replaceAll("\r\n", ""), /\r/);
+  assert.equal(rigMarkup(crlf), rigMarkup(lf));
+  assert.doesNotMatch(rigMarkup(crlf), /\r/);
 });

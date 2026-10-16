@@ -312,7 +312,8 @@ export async function checkMascotSources(source: string): Promise<string[]> {
   ];
 }
 
-const urls = (value: string) => value.replace(/url\(\s*(['"]?)#/g, `url($1#${RIG_ID_TOKEN}`);
+/** CSS function names are case-insensitive, so `URL(#id)` is marked too; the name stays as written. */
+const urls = (value: string) => value.replace(/(url\(\s*['"]?)#/gi, `$1#${RIG_ID_TOKEN}`);
 /** A style without `display:none`; empty when nothing else is left. */
 const withoutHiding = (style: string) =>
   style.split(";").map((d) => d.trim()).filter((d) => d && !/^display\s*:\s*none$/i.test(d)).join(";");
@@ -322,11 +323,15 @@ const withoutHiding = (style: string) =>
  * transform origin, expression and prop groups lose their default hiding (the
  * component's CSS decides), and every id and id reference gets the instance token.
  */
-export function rigMarkup(text: string): string {
+export function rigMarkup(source: string): string {
+  // The sources hash ignores SVG line endings, so the markup must too.
+  const text = source.replace(/\r\n/g, "\n");
   let inner = "";
   for (const tag of text.matchAll(ROOT_TAG)) {
     if (tag[1] === undefined) continue; // a comment or declaration before the root
-    inner = text.slice(tag.index + tag[0].length, text.lastIndexOf("</svg>"));
+    // The root's own end tag is the last one, spaced as the validator allows.
+    const end = [...text.matchAll(/<\/svg[ \t\n\f\r]*>/g)].pop()?.index ?? text.length;
+    inner = text.slice(tag.index + tag[0].length, end);
     break;
   }
   return inner
