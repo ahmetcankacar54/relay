@@ -135,7 +135,11 @@ function draftHelperCommand() {
 
 /**
  * The draft helper against real Chromium, on fixture data in <root>/appdata/Claude-drafts-fixture
- * only. It never switches Desktop accounts: desktopHost() would drive the real Claude.app.
+ * only. The helper only reads: it returns every `composer-draft:` key of Local Storage with its
+ * raw value and writes nothing. The job points straight at the fixture's Local Storage, so a
+ * dump afterwards proves the helper itself leaves the data untouched. (In production Relay hands
+ * it a private copy, a second layer on top of that.) It never switches Desktop accounts:
+ * desktopHost() would drive the real Claude.app.
  */
 async function proveDraftHelper() {
   const fixtureScript = path.join(__dirname, "fixtures/local-storage.cjs");
@@ -173,7 +177,7 @@ async function proveDraftHelper() {
     return JSON.parse(fs.readFileSync(out, "utf8"));
   };
 
-  const [A, B, C, x, y, z] = Array.from({ length: 6 }, () => randomUUID());
+  const [A, C, x, z] = Array.from({ length: 4 }, () => randomUUID());
   const conversationKey = (alias) => `composer-draft:epitaxy-local_${alias}`;
   const newSessionKey = "composer-draft:epitaxy-draft";
   const draft = (text, owner) =>
@@ -206,17 +210,6 @@ async function proveDraftHelper() {
     storage: path.join(claudeDir, "Local Storage"),
     scratch: path.join(work, "helper"),
     result: path.join(work, "result.json"),
-    from: A,
-    to: B,
-    conversations: [
-      {
-        targetAlias: y,
-        members: [
-          { alias: x, accountUuid: A },
-          { alias: y, accountUuid: B },
-        ],
-      },
-    ],
     // The same Electron as the helper's, so its version check lets it run.
     claudeElectron: process.versions.electron,
   };
@@ -234,48 +227,25 @@ async function proveDraftHelper() {
     () => ` Result: ${resultText()}`,
     helper.command,
   );
+  // Every `composer-draft:` key, whoever owns it (choosing by owner is Relay's job, not the
+  // helper's), and nothing else: not `relay-smoke-keep`.
   assert.deepEqual(JSON.parse(resultText()), {
     ok: true,
-    moved: 1,
-    owned: 1,
-    skipped: 0,
+    drafts: {
+      [conversationKey(x)]: seeded[conversationKey(x)],
+      [newSessionKey]: seeded[newSessionKey],
+      [conversationKey(z)]: seeded[conversationKey(z)],
+    },
   });
 
-  // 3. What a fresh Chromium reads from the disk afterwards.
+  // 3. What a fresh Chromium reads from the disk afterwards: the same keys with byte-identical
+  //    values, so the helper wrote nothing.
   const after = await dump("dump-after");
   assert.deepEqual(
-    Object.keys(after).sort(),
-    [
-      conversationKey(y),
-      conversationKey(z),
-      newSessionKey,
-      "relay-smoke-keep",
-    ].sort(),
-    "the helper must leave exactly the moved, foreign and unrelated keys",
+    after,
+    seeded,
+    "the helper must leave Local Storage exactly as it was seeded",
   );
-  assert.deepEqual(JSON.parse(after[conversationKey(y)]), {
-    text: "Taslak ğüş",
-    files: [],
-    snippets: [],
-    owner: B,
-  });
-  assert.equal(
-    Object.hasOwn(after, conversationKey(x)),
-    false,
-    "A's draft must be moved, not copied",
-  );
-  assert.deepEqual(JSON.parse(after[newSessionKey]), {
-    text: "Yeni oturum taslağı",
-    files: [],
-    snippets: [],
-    owner: B,
-  });
-  assert.equal(
-    after[conversationKey(z)],
-    seeded[conversationKey(z)],
-    "another account's draft stays as it was",
-  );
-  assert.equal(after["relay-smoke-keep"], "1", "an unrelated key stays");
 
   // 4. The helper let go of the LevelDB lock: another process opens it and sees the same data.
   assert.deepEqual(await dump("dump-again"), after);
@@ -687,7 +657,7 @@ app.whenReady().then(async () => {
             "A to B to A handoff",
             "cooldown",
             "desktop consent",
-            "Desktop drafts follow the switch (helper)",
+            "Desktop drafts are captured (helper)",
             "IPC validation",
           ],
           sessionsPreserved: 3,
