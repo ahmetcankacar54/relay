@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Link2, Monitor, Plus, Search } from "lucide-react";
+import { Link2, Plus, Search } from "lucide-react";
+import { Panda } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -214,28 +215,7 @@ export function Accounts() {
             }}
           />
         ) : (
-          <div className="grid justify-items-center gap-1.5 rounded-xl border border-dashed px-6 py-10 text-center">
-            <Monitor className="size-6 text-muted-foreground" />
-            <h3 className="font-semibold">
-              {accounts.length
-                ? t("Eşleşen hesap yok", "No matching accounts")
-                : t(
-                    "Tek panel. Tüm hesapların.",
-                    "One panel. All your accounts.",
-                  )}
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              {accounts.length
-                ? t(
-                    "Aramayı veya filtreyi değiştir.",
-                    "Try a different search or filter.",
-                  )
-                : t(
-                    "Önce Claude’da açık hesabını kaydet; ardından diğerlerini ekle.",
-                    "Save the account open in Claude, then add your other accounts.",
-                  )}
-            </p>
-          </div>
+          <AccountsEmpty hasAccounts={accounts.length > 0} />
         )}
       </div>
       <AddAccountDialog
@@ -263,5 +243,28 @@ export function Accounts() {
         }}
       />
     </PageFrame>
+  );
+}
+
+/** The empty table: a greeting before any account, a lookout when a filter hides them all. */
+export function AccountsEmpty({ hasAccounts }: { hasAccounts: boolean }) {
+  const { t } = useI18n();
+  return (
+    <div className="grid justify-items-center gap-1.5 rounded-xl border border-dashed px-6 py-10 text-center">
+      <Panda scene={hasAccounts ? "lookout" : "welcome"} size={72} />
+      <h3 className="font-semibold">
+        {hasAccounts
+          ? t("Eşleşen hesap yok", "No matching accounts")
+          : t("Tek panel. Tüm hesapların.", "One panel. All your accounts.")}
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        {hasAccounts
+          ? t("Aramayı veya filtreyi değiştir.", "Try a different search or filter.")
+          : t(
+              "Önce Claude’da açık hesabını kaydet; ardından diğerlerini ekle.",
+              "Save the account open in Claude, then add your other accounts.",
+            )}
+      </p>
+    </div>
   );
 }

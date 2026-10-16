@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Accounts } from "../src/pages/Accounts";
+import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
 import { AccountSheetBody } from "../src/pages/accounts/AccountSheet";
 import { rowActions } from "../src/pages/accounts/AccountsTable";
 import { filterAccounts, groupName, planLabel } from "../src/pages/accounts/accountLabels";
@@ -90,6 +90,7 @@ test("the accounts page lists accounts with their connection states", () => {
 test("the accounts page shows the empty state", () => {
   const html = wrap(relayFor({ accounts: [], active: undefined }), createElement(Accounts));
   assert.match(html, /Tek panel. Tüm hesapların./);
+  assert.match(html, /data-scene="welcome"/);
 });
 
 test("the account sheet shows identity, connections, usage and history", () => {
@@ -144,4 +145,11 @@ test("row actions follow the Desktop link state and the switch lock", () => {
     assert.equal(sw?.disabled, true);
   }
   assert.equal(rowActions(a, relay, t).find((x) => x.label === "Claude’u aç")?.disabled, false);
+});
+
+test("the accounts empty state looks out when a filter hides every account", () => {
+  const html = wrap(relayFor(), createElement(AccountsEmpty, { hasAccounts: true }));
+  assert.match(html, /data-scene="lookout"/);
+  assert.match(html, /Eşleşen hesap yok/);
+  assert.doesNotMatch(html, /data-scene="welcome"/);
 });

@@ -389,3 +389,14 @@ test("statistics cards reuse their number and date formatters", (t) => {
   assert.equal(numbers.mock.callCount(), 0);
   assert.equal(dates.mock.callCount(), 0);
 });
+
+test("statistics messages carry the panda for their state, none while loading", () => {
+  const scene = (state: Parameters<typeof UsageStatisticsSection>[0]["state"], accountId?: string) =>
+    /data-scene="([^"]+)"/.exec(render(createElement(UsageStatisticsSection, { state, accounts, zone: ZONE, accountId })))?.[1];
+  assert.equal(scene({ loading: false, error: "boom" }), "trouble");
+  assert.equal(scene({ view: emptyView("unavailable"), loading: false }), "trouble");
+  assert.equal(scene({ view: emptyView("empty"), loading: false }), "collecting");
+  assert.equal(scene({ view: emptyView("empty"), loading: false }, "c"), "lookout");
+  assert.equal(scene({ loading: false }), "lookout");
+  assert.equal(scene({ loading: true }), undefined);
+});

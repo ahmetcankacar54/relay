@@ -1,6 +1,7 @@
 import { dayPlan, planContext } from "../../../shared/day-plan";
 import { localDate } from "../../../shared/planning";
 import { fallbackTempo } from "../../../shared/tempo";
+import { Panda } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useI18n } from "@/data/i18n";
@@ -36,6 +37,7 @@ export function TodayCard({
     tempo,
   });
   const planned = plannedSettings(settings, accounts);
+  const unplanned = settings.autoStart && !planned.accounts.length;
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
   const plannedToday = dayPlan(
     localDate(now, zone),
@@ -85,7 +87,10 @@ export function TodayCard({
           {t("Planlama →", "Planning →")}
         </Button>
       </div>
-      <div className="mb-2 text-xs text-muted-foreground">{summary}</div>
+      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+        {unplanned && <Panda scene="lookout" size={40} />}
+        <span>{summary}</span>
+      </div>
       <div className="grid gap-1.5 text-xs">
         <div className="grid grid-cols-[84px_1fr] items-center gap-2">
           <span className="truncate text-muted-foreground">

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { LimitMeter } from "@/components/LimitMeter";
+import { Panda } from "@/components/Panda";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -115,27 +116,38 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
   const relay = useRelay();
   const { t } = useI18n();
   const { desktop, accounts, hasUnclaimedDesktop } = relay;
+  const first = !accounts.length;
   return (
     <Card className="gap-0 px-4 py-3.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className={eyebrow}>CLAUDE DESKTOP</div>
-          <div className="mt-0.5 text-lg font-bold">
-            {hasUnclaimedDesktop
-              ? t("Desktop hesabı eşleştirilmedi", "Desktop account not linked")
-              : t("İlk hesabını bağla", "Connect your first account")}
+        <div className="flex min-w-0 items-center gap-3">
+          <Panda scene={first ? "welcome" : "lookout"} size={first ? 120 : 72} />
+          <div className="min-w-0">
+            <div className={eyebrow}>CLAUDE DESKTOP</div>
+            <div className="mt-0.5 text-lg font-bold">
+              {first
+                ? t("Merhaba, ben Relay’in kuryesiyim", "Hi, I’m Relay’s courier")
+                : hasUnclaimedDesktop
+                  ? t("Desktop hesabı eşleştirilmedi", "Desktop account not linked")
+                  : t("İlk hesabını bağla", "Connect your first account")}
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {hasUnclaimedDesktop
+                ? t(
+                    "Claude’da açık hesabı bir Relay profiliyle eşleştir. CLI bağlantısı bu adımı tamamlamaz.",
+                    "Link the account open in Claude to a Relay profile. A CLI connection does not complete this step.",
+                  )
+                : first
+                  ? t(
+                      "İlk hesabını bağlayalım. Her Desktop hesabını bir kez bağla; sonrasında buradan değiştir.",
+                      "Let’s connect your first account. Connect each Desktop account once; switch between them here.",
+                    )
+                  : t(
+                      "Her Desktop hesabını bir kez bağla. Sonrasında buradan değiştir.",
+                      "Connect each Desktop account once. Switch between them here.",
+                    )}
+            </p>
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {hasUnclaimedDesktop
-              ? t(
-                  "Claude’da açık hesabı bir Relay profiliyle eşleştir. CLI bağlantısı bu adımı tamamlamaz.",
-                  "Link the account open in Claude to a Relay profile. A CLI connection does not complete this step.",
-                )
-              : t(
-                  "Her Desktop hesabını bir kez bağla. Sonrasında buradan değiştir.",
-                  "Connect each Desktop account once. Switch between them here.",
-                )}
-          </p>
         </div>
         <Button
           disabled={

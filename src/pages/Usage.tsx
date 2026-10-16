@@ -5,12 +5,14 @@ import { historyIdentity } from "../../shared/usage-statistics";
 import { Banner } from "@/app/Banners";
 import { PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
+import { Panda } from "@/components/Panda";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatPercent } from "@/lib/meter";
+import type { PandaScene } from "@/mascot/scenes";
 import { AccountBalance } from "./usage/AccountBalance";
 import { DailyChart } from "./usage/DailyChart";
 import { LimitHits } from "./usage/LimitHits";
@@ -24,19 +26,26 @@ import {
 
 const cardClass = "gap-0 px-5 py-4";
 
-/** A card with one message instead of the statistics. */
+/** A card with one message instead of the statistics; the panda reflects the state. */
 function StatisticsMessage({
   title,
   description,
   alert,
+  scene,
 }: {
   title: string;
   description: string;
   alert?: boolean;
+  scene?: PandaScene;
 }) {
   return (
     <Card className={cardClass} role={alert ? "alert" : undefined}>
-      <SectionHeading title={title} description={description} />
+      <div className="flex items-center gap-4">
+        {scene && <Panda scene={scene} size={72} />}
+        <div className="min-w-0 flex-1">
+          <SectionHeading title={title} description={description} />
+        </div>
+      </div>
     </Card>
   );
 }
@@ -59,6 +68,7 @@ export function UsageStatisticsSection(props: SectionProps) {
     return (
       <StatisticsMessage
         alert
+        scene="trouble"
         title={t("İstatistikler alınamadı", "Could not load statistics")}
         description={error}
       />
@@ -86,6 +96,7 @@ function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
   if (selected && !historyIdentity(selected))
     return (
       <StatisticsMessage
+        scene="lookout"
         title={t(
           "Bu hesap için kullanım kaydı yok",
           "No usage record for this account",
@@ -99,6 +110,7 @@ function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
   if (!view)
     return (
       <StatisticsMessage
+        scene={loading ? undefined : "lookout"}
         title={t("İstatistikler", "Statistics")}
         description={
           loading
@@ -110,6 +122,7 @@ function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
   if (view.status === "unavailable")
     return (
       <StatisticsMessage
+        scene="trouble"
         title={t("Kayıt okunamadı", "Usage history could not be read")}
         description={t(
           "Kullanım istatistikleri gösterilemiyor. Canlı limitler çalışmaya devam eder.",
@@ -120,6 +133,7 @@ function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
   if (view.status === "empty")
     return (
       <StatisticsMessage
+        scene="collecting"
         title={t("Veri birikiyor", "Collecting data")}
         description={t(
           "Relay açıkken limitler yenilendikçe istatistikler oluşur.",

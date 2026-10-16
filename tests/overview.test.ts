@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Overview } from "../src/pages/Overview";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot } from "../shared/types";
+import { DEFAULT_PLANNING, DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot } from "../shared/types";
 
 const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -79,7 +79,9 @@ test("overview shows the active account, limits, accounts, today and automation"
 
 test("overview without an active account offers onboarding", () => {
   const emptyHtml = render(relayFor(undefined, [], {}));
-  assert.match(emptyHtml, /İlk hesabını bağla/);
+  assert.match(emptyHtml, /Merhaba, ben Relay’in kuryesiyim/);
+  assert.match(emptyHtml, /İlk hesabını bağlayalım/);
+  assert.match(/<svg[^>]*data-scene="welcome"[^>]*>/.exec(emptyHtml)?.[0] ?? "", /width="120"/);
   assert.match(emptyHtml, /Hesap ekle/);
   assert.match(emptyHtml, /Başka hesap yok/);
   assert.doesNotMatch(emptyHtml, /CLAUDE DESKTOP’TA AÇIK/);
@@ -160,4 +162,22 @@ test("stale and unlinked accounts are never recommended", () => {
   assert.equal(rowsOf(html).length, 2);
   assert.doesNotMatch(html, /Önerilen/);
   assert.match(html, /Limit verisi eski/);
+});
+
+test("onboarding with saved accounts but none open looks out instead of greeting", () => {
+  const other = acct("other", "Studio", "pro");
+  const html = render(relayFor(undefined, [other], {}, { hasUnclaimedDesktop: true }));
+  assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="72"/);
+  assert.doesNotMatch(html, /data-scene="welcome"|Merhaba, ben Relay’in kuryesiyim/);
+  assert.match(html, /Desktop hesabı eşleştirilmedi/);
+});
+
+test("today's card shows a lookout panda when automatic start has no planned account", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const usage = { active: use("active", 10, 10) };
+  const settings = { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_PLANNING, autoStart: true, accounts: [] } };
+  const html = render(relayFor(active, [active], usage, { settings }));
+  assert.match(html, /Plana hesap eklenmedi/);
+  assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="40"/);
+  assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-scene="lookout"/);
 });
