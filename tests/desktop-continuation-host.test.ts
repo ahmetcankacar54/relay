@@ -72,8 +72,13 @@ function fixture() {
   const calls: string[] = [];
   const automation: DesktopAutomation = {
     inspect: async () => ({ ...ui }),
-    openSession: async (alias) => {
-      calls.push(`open:${alias}`);
+    openSession: async (alias, options) => {
+      // Continuation never asks the helper to check the user: it opens as before.
+      calls.push(
+        options === undefined
+          ? `open:${alias}`
+          : `open:${alias}:${JSON.stringify(options)}`,
+      );
     },
     setPermission: async (_guard, mode) => {
       calls.push(`mode:${mode}`);
@@ -404,6 +409,32 @@ test("native transport validates exact IDs and never uses last-session navigatio
   );
   assert.equal(commands.length, 1);
 });
+test("openSession asks the helper to check the user only when asked", async () => {
+  const commands: unknown[] = [];
+  const adapter = nativeDesktopAutomation("/unused", async (input) => {
+    commands.push(input);
+    return { ok: true };
+  });
+  await adapter.openSession(localId);
+  await adapter.openSession(localId, { requireIdle: true });
+  await adapter.openSession(localId, { requireIdle: false });
+  await adapter.openSession(localId, {});
+  assert.deepEqual(commands, [
+    { command: "open-session", localSessionId: localId },
+    { command: "open-session", localSessionId: localId, requireIdle: true },
+    { command: "open-session", localSessionId: localId },
+    { command: "open-session", localSessionId: localId },
+  ]);
+  // The helper's refusal comes through as itself.
+  const refused = nativeDesktopAutomation("/unused", async () => ({
+    ok: false,
+    issue: "user-active",
+  }));
+  await assert.rejects(
+    refused.openSession(localId, { requireIdle: true }),
+    blocked("user-active"),
+  );
+});
 
 const draftGuard = () => ({
   pid: 456,
@@ -570,6 +601,28 @@ test("the Swift write-draft branch checks the user, then re-reads the composer a
     /guard claudeFrontmost\(current\.app\), idleMilliseconds\(\) >= 3000 else \{ try fail\("user-active"\) \}/,
   );
   assert.doesNotMatch(check, /current\.fields/);
+});
+test("the Swift open-session checks the user right before opening, and only when asked", () => {
+  const block = swiftBlock('if command == "open-session" {');
+  const at = (text: string) => block.indexOf(text);
+  const observed = at("let observation = try observe()");
+  const flag = at('if request["requireIdle"] as? Bool == true {');
+  const check = at(
+    'guard claudeFrontmost(observation.app), idleMilliseconds() >= 3000 else { try fail("user-active") }',
+  );
+  const open = at("NSWorkspace.shared.open(url)");
+  for (const [name, i] of Object.entries({ observed, flag, check, open }))
+    assert.notEqual(i, -1, name);
+  // After its observe() and right before the open, read fresh, never from the observation.
+  assert.ok(observed < flag && flag < check && check < open);
+  assert.doesNotMatch(block, /observation\.fields/);
+  // The check sits inside the flag's branch: without the flag nothing new runs.
+  assert.match(
+    block,
+    /if request\["requireIdle"\] as\? Bool == true \{\s*guard claudeFrontmost\(observation\.app\), idleMilliseconds\(\) >= 3000 else \{ try fail\("user-active"\) \}\s*\}/,
+  );
+  // Nothing else opens a URL in that block.
+  assert.equal(block.split("NSWorkspace.shared.open(").length - 1, 1);
 });
 test("the Swift snapshot reports frontmost and idleMs outside the fingerprint", () => {
   const body = swiftBlock("func observe()");

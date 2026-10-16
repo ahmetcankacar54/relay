@@ -322,9 +322,14 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
     if command == "open-session" {
         guard let id = request["localSessionId"] as? String, match(id, localPattern) else { try fail("exact-session-not-observed") }
         // Inspect first: opening a protocol URL must never launch a closed app.
-        _ = try observe()
-        guard let url = URL(string: "claude://code/continue?session=\(id)"),
-              NSWorkspace.shared.open(url) else { try fail("desktop-ui-unsupported") }
+        let observation = try observe()
+        guard let url = URL(string: "claude://code/continue?session=\(id)") else { try fail("desktop-ui-unsupported") }
+        // Opening brings Claude forward. A caller that asks opens only into a Claude
+        // already in front with no input for 3 s, read now, after the long observe().
+        if request["requireIdle"] as? Bool == true {
+            guard claudeFrontmost(observation.app), idleMilliseconds() >= 3000 else { try fail("user-active") }
+        }
+        guard NSWorkspace.shared.open(url) else { try fail("desktop-ui-unsupported") }
         return ["ok": true]
     }
     if command == "lookup" {

@@ -233,9 +233,11 @@ export async function restoreDrafts(
     try {
       await locked(deps, async () => {
         await confirm(deps, run);
-        await deps.automation.openSession(run.returnTo!).catch(() => {
-          // The user can go back by hand.
-        });
+        await deps.automation
+          .openSession(run.returnTo!, { requireIdle: true })
+          .catch(() => {
+            // The user can go back by hand, and one who is active stays where they are.
+          });
       });
     } catch (error) {
       if (!(error instanceof Stop)) throw error;
@@ -406,12 +408,14 @@ const shows = (view: Snapshot, target: string) =>
 
 /**
  * Waits, every 500 ms for up to 30 s, until `target` shows with a composer that can be
- * guarded, or busy. It opens `target` only while the screen still shows the conversation
- * Relay last saw there, or is loading, and sends the link again every 5 s while it does; it
- * never opens a target already on screen. Any other conversation means the user moved: it
- * stops, and never takes them back. It opens nothing unless Claude is in front and the user
- * idle, and gives way to a Desktop operation waiting for the lock. Resolves with the target's
- * last view when it shows by then, guardable or not, and undefined when it never shows.
+ * guarded, or busy. Until the target has appeared, it opens `target` only while the screen
+ * still shows the conversation Relay last saw there, or is loading, and sends the link again
+ * every 5 s while it does; it never opens a target already on screen, and never sends the
+ * link again once the target has appeared. Any other conversation, and after the target has
+ * appeared any conversation but the target, means the user moved: it stops, and never takes
+ * them back. It opens nothing unless Claude is in front and the user idle, and gives way to a
+ * Desktop operation waiting for the lock. Resolves with the target's last view when it shows
+ * by then, guardable or not, and undefined when it is not on screen at the end.
  */
 async function show(
   deps: RestorerDeps,
@@ -420,20 +424,24 @@ async function show(
 ): Promise<Snapshot | undefined> {
   const deadline = deps.now() + SHOWN_MS;
   let openedAt: number | undefined;
+  /** The target has been on screen: from then on only it, or loading, is waited for. */
+  let appeared = false;
   for (;;) {
     yieldTo(deps);
     const view = await look(deps);
     if (view?.localSessionId === target) {
+      appeared = true;
       if (shows(view, target) || deps.now() >= deadline) return view;
     } else if (
       view?.localSessionId !== undefined &&
-      view.localSessionId !== run.lastSeen
+      (appeared || view.localSessionId !== run.lastSeen)
     ) {
       throw new Stop("pending", "moved");
     } else if (deps.now() >= deadline) {
       return undefined;
     } else if (
       // Without a view nothing says Relay may act: it looks again first.
+      !appeared &&
       view &&
       (openedAt === undefined || deps.now() - openedAt >= RESEND_MS)
     ) {
@@ -458,11 +466,14 @@ async function look(deps: RestorerDeps): Promise<Snapshot | undefined> {
   }
 }
 
+/** Opens `target`, the helper checking right before it that the user is idle. */
 async function open(deps: RestorerDeps, target: string): Promise<void> {
   try {
-    await deps.automation.openSession(target);
+    await deps.automation.openSession(target, { requireIdle: true });
   } catch (error) {
-    // A link that did not take is sent again; showing the conversation is what counts.
     haltOn(error);
+    // Nothing was opened: the drafts wait for the user to pause.
+    if (issueOf(error) === "user-active") throw new Stop("pending", "active");
+    // A link that did not take is sent again; showing the conversation is what counts.
   }
 }

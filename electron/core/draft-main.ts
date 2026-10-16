@@ -16,6 +16,11 @@ import type { DraftSummary } from "./draft-vault";
 export const RETRY_MS = 10_000;
 /** How long retries wait after a run in which Desktop's UI never answered. */
 export const NOT_READY_BACKOFF_MS = 2 * 60_000;
+/**
+ * How long retries wait after a run that found the user working, in Claude or elsewhere, so
+ * Desktop's UI is not inspected every 10 s while they do.
+ */
+export const ACTIVE_BACKOFF_MS = 60_000;
 /** Runs in a row that may try a pending draft and move nothing, before it is left for Copy. */
 export const MAX_STALLS = 3;
 
@@ -121,7 +126,8 @@ function interval(fn: () => void, ms: number): () => void {
 /**
  * Runs the draft restorer after every switch, and every 10 s while a draft is pending, one
  * run at a time. After a run in which Desktop's UI never answered, the 10 s retries wait
- * 2 minutes; a switch does not. A pending draft that `MAX_STALLS` runs in a row tried and
+ * 2 minutes, and after one that found the user active, 60 s; a switch does not. A pending
+ * draft that `MAX_STALLS` runs in a row tried and
  * stopped on is left for Copy with the last stop reason, so none stays pending for ever.
  * Runs never throw.
  */
@@ -208,6 +214,8 @@ export class DraftScheduler {
     }
     if (result.reason === "not-ready")
       this.notBefore = restorer.now() + NOT_READY_BACKOFF_MS;
+    else if (result.reason === "active")
+      this.notBefore = restorer.now() + ACTIVE_BACKOFF_MS;
     // A run with nothing for this account changed nothing.
     const after = result.status === "idle" ? before : await this.read();
     const tally = tallyStalls(this.stalls, { before, after, account, result });

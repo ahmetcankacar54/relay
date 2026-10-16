@@ -118,6 +118,8 @@ function harness(
     idleMs: 60_000,
   };
   const calls: string[] = [];
+  /** The options of each openSession call, in order. */
+  const openOptions: unknown[] = [];
   const sleeps: number[] = [];
   const marks: Array<[string, DraftState, string | undefined]> = [];
   const removed: string[] = [];
@@ -165,10 +167,17 @@ function harness(
         if (error) throw error;
         return view();
       },
-      openSession: async (id) => {
+      openSession: async (id, options) => {
         touch(`open:${id}`);
+        openOptions.push(options);
         const outcome = hooks.open?.(id);
         if (outcome instanceof Error) throw outcome;
+        // As the helper, asked to, refuses before it opens anything while the user is active.
+        if (
+          options?.requireIdle &&
+          !(activity.frontmost === true && (activity.idleMs ?? 0) >= 3_000)
+        )
+          throw issue("user-active");
         if (outcome !== "ignored") shown = id;
       },
       writeDraft: async (guard, text) => {
@@ -249,6 +258,7 @@ function harness(
     patch,
     activity,
     calls,
+    openOptions,
     sleeps,
     marks,
     removed,
@@ -1223,6 +1233,92 @@ test("a Desktop operation waiting for the lock stops the restore before Relay op
   rewrite.hooks.yielding = () => wiped;
   assert.equal((await restoreDrafts(rewrite.deps)).restored, 1);
   assert.equal(rewrite.writes().length, 2);
+});
+
+test("every link the restorer sends asks the helper to check the user right before opening", async () => {
+  const h = harness({ records: [record(1), record(2)] });
+  // The first link does not take, so it is sent again; then the user is taken back.
+  let first = true;
+  h.hooks.open = (id) => {
+    if (id !== target(1) || !first) return;
+    first = false;
+    return "ignored";
+  };
+  assert.equal((await restoreDrafts(h.deps)).restored, 2);
+  assert.deepEqual(h.opens(), [
+    `open:${target(1)}`,
+    `open:${target(1)}`,
+    `open:${target(2)}`,
+    `open:${HOME}`,
+  ]);
+  assert.deepEqual(
+    h.openOptions,
+    h.opens().map(() => ({ requireIdle: true })),
+  );
+});
+
+test("the helper refusing a link because the user is active stops the run with nothing typed", async () => {
+  const h = harness({ records: [record(1), record(2)] });
+  h.hooks.open = () => issue("user-active");
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 2,
+    reason: "active",
+  });
+  assert.deepEqual(h.opens(), [`open:${target(1)}`]);
+  assert.deepEqual(h.writes(), []);
+  assert.deepEqual(h.marks, []);
+  assert.deepEqual(h.notes, []);
+  // The user starts typing between Relay's look and the helper's own, just before it opens.
+  const racing = harness();
+  racing.hooks.open = () => {
+    racing.activity.idleMs = 50;
+  };
+  assert.equal((await restoreDrafts(racing.deps)).reason, "active");
+  assert.equal(racing.shown, HOME);
+  assert.deepEqual(racing.writes(), []);
+  assert.deepEqual(racing.marks, []);
+  // At the return the drafts are done: a refusal leaves the user where they are.
+  const back = harness();
+  back.hooks.open = (id) => (id === HOME ? issue("user-active") : undefined);
+  assert.deepEqual(await restoreDrafts(back.deps), {
+    status: "done",
+    restored: 1,
+    left: 0,
+  });
+});
+
+test("once the target has appeared, any other conversation means the user moved, and no link is sent again", async () => {
+  // The target shows before it can be guarded; the user goes back to where they were.
+  const h = harness();
+  h.patch.permissionMode = undefined;
+  let slept = 0;
+  h.hooks.sleep = (ms) => {
+    if (ms === 500 && ++slept === 2) h.setShown(HOME);
+  };
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 1,
+    reason: "moved",
+  });
+  assert.deepEqual(h.opens(), [`open:${target(1)}`]);
+  assert.deepEqual(h.writes(), []);
+  assert.deepEqual(h.marks, []);
+  assert.equal(h.shown, HOME);
+  // The screen loads again after the target appeared: Relay waits, and never sends it again.
+  const reloading = harness();
+  reloading.patch.permissionMode = undefined;
+  let naps = 0;
+  reloading.hooks.sleep = (ms) => {
+    if (ms === 500 && ++naps === 2) reloading.setShown(undefined);
+  };
+  await restoreDrafts(reloading.deps);
+  assert.deepEqual(reloading.opens(), [`open:${target(1)}`]);
+  assert.deepEqual(reloading.marks, [
+    ["draft-1", "needs-copy", "exact-session-not-observed"],
+  ]);
 });
 
 test("the restorer never sends and waits only through its deps", () => {

@@ -19,7 +19,10 @@ export type DesktopAutomationIssue =
   | "desktop-work-active"
   | "delivery-ambiguous"
   | "desktop-observation-incomplete"
-  /** `write-draft` refused before typing: Claude is not in front, or the user had input in the last 3 s. */
+  /**
+   * `write-draft`, or `open-session` asked to check, refused before acting: Claude is not
+   * in front, or the user had input in the last 3 s.
+   */
   | "user-active";
 
 export class DesktopAutomationError extends Error {
@@ -69,8 +72,16 @@ export interface DesktopAutomation {
   /** Explicit user action only. Ordinary inspection never triggers an OS prompt. */
   requestAccessibility?(): Promise<boolean>;
   inspect(): Promise<DesktopAutomationSnapshot>;
-  /** Opens an exact saved conversation. Success still requires inspection. */
-  openSession(localSessionId: string): Promise<void>;
+  /**
+   * Opens an exact saved conversation. Success still requires inspection. With
+   * `requireIdle`, the helper first checks, right before it opens, that Claude is in
+   * front and the user has had no input for 3 s, and otherwise opens nothing:
+   * `user-active`.
+   */
+  openSession(
+    localSessionId: string,
+    options?: { requireIdle?: boolean },
+  ): Promise<void>;
   /** Chooses the prior explicit permission mode; it never approves a tool dialog. */
   setPermission(
     guard: DesktopAutomationGuard,
@@ -268,10 +279,14 @@ export function nativeDesktopAutomation(
       (await call({ command: "request-accessibility" }))
         .accessibilityGranted === true,
     inspect: async () => snapshot(await call({ command: "inspect" })),
-    openSession: async (localSessionId) => {
+    openSession: async (localSessionId, options) => {
       if (!LOCAL.test(localSessionId))
         throw new DesktopAutomationError("exact-session-not-observed");
-      await call({ command: "open-session", localSessionId });
+      await call({
+        command: "open-session",
+        localSessionId,
+        ...(options?.requireIdle === true ? { requireIdle: true } : {}),
+      });
     },
     setPermission: async (expected, mode) => {
       if (!MODES.has(mode))
