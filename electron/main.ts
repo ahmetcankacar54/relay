@@ -17,12 +17,12 @@ import { z } from "zod";
 import { DesktopManager } from "./core/desktop";
 import { desktopHost } from "./core/desktop-host";
 import { identity, readObject } from "./core/desktop-files";
+import { DesktopLock } from "./core/desktop-lock";
 import {
   DraftScheduler,
   draftActions,
   draftNotice,
   draftSummaries,
-  tryDesktopLock,
 } from "./core/draft-main";
 import { Service } from "./core/service";
 import { UsageManager } from "./core/usage";
@@ -95,46 +95,21 @@ let continuation: DesktopContinuationManager;
 let fleet: FleetContinuation;
 let automation: ReturnType<typeof nativeDesktopAutomation>;
 let draftRestore: DraftScheduler;
-let desktopTail: Promise<void> = Promise.resolve();
-let desktopTransactionActive = false;
-/** Desktop transactions begun so far; with DesktopManager's own count it marks a Desktop read that overlapped an operation as busy. */
-let desktopTransactions = 0;
-/** Callers holding the Desktop lock or waiting for it; the draft restorer takes only a free lock. */
-let desktopLockCallers = 0;
-async function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
-  const before = desktopTail;
-  let release!: () => void;
-  desktopTail = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  desktopLockCallers++;
-  await before;
-  desktopTransactionActive = true;
-  desktopTransactions++;
-  try {
-    // Show the operation in the menu bar now rather than at the next poll.
-    void tray?.update();
-    return await action();
-  } finally {
-    desktopTransactionActive = false;
-    desktopLockCallers--;
-    release();
-    // And its end, for operations no caller refreshes the tray after.
-    void tray?.update();
-  }
+/**
+ * One Desktop operation at a time. The menu bar shows each as it begins rather than at the
+ * next poll, and its end, for operations no caller refreshes the tray after.
+ */
+const desktopLock = new DesktopLock(() => void tray?.update());
+function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
+  return desktopLock.run(action);
 }
+/** A Desktop action the user started: refused during another operation, queued behind a restored draft. */
 function manualDesktopLock<T>(action: () => Promise<T>): Promise<T> {
-  if (desktopTransactionActive)
-    return Promise.reject(
-      new Error(
-        "Finish the Desktop handoff before starting another Desktop operation.",
-      ),
-    );
-  if (usageCredentialRefresher?.anyActive)
-    return Promise.reject(
-      new Error("Wait for the account connection refresh to finish."),
-    );
-  return withDesktopLock(action);
+  return desktopLock.manual(action, () =>
+    usageCredentialRefresher?.anyActive
+      ? new Error("Wait for the account connection refresh to finish.")
+      : undefined,
+  );
 }
 function pendingAuth() {
   return (
@@ -234,7 +209,7 @@ else {
             (item) => item.id === account.id,
           );
           return (
-            !desktopTransactionActive &&
+            !desktopLock.active &&
             !service.auth.active(account.id) &&
             !service.runner
               .list()
@@ -283,10 +258,7 @@ else {
             identity(await readObject(desktop.root, "config.json")),
           running: () => host.running(),
           uptimeMs: () => desktop.claudeUptimeMs(),
-          withLock: tryDesktopLock(
-            () => desktopLockCallers === 0 && !desktop.isBusy,
-            withDesktopLock,
-          ),
+          withLock: (fn) => desktopLock.restore(fn, () => !desktop.isBusy),
           notify: notifyDrafts,
           sleep: (ms) =>
             new Promise<void>((resolve) => setTimeout(resolve, ms)),
@@ -445,7 +417,7 @@ else {
         }),
         desktop: async () => ({
           ...(observedDesktop = await desktop.snapshot()),
-          busy: desktop.isBusy || desktopTransactionActive,
+          busy: desktop.isBusy || desktopLock.active,
         }),
         busy: () =>
           pendingAuth() ||
@@ -478,7 +450,7 @@ else {
       observedDesktop = await desktop.snapshot();
       const keeperBlocked = () =>
         !observedDesktop ||
-        desktopTransactionActive ||
+        desktopLock.active ||
         observedDesktop.busy ||
         observedDesktop.recoveryRequired ||
         !!observedDesktop.pendingProfileId ||
@@ -565,8 +537,8 @@ else {
         getSnapshot: async () => {
           const read = await readDesktopForTray({
             read: () => desktop.snapshot(),
-            busy: () => desktop.isBusy || desktopTransactionActive,
-            operations: () => desktopTransactions + desktop.operations,
+            busy: () => desktop.isBusy || desktopLock.busy,
+            operations: () => desktopLock.operations + desktop.operations,
           });
           observedDesktop = read.state;
           return {
@@ -922,7 +894,7 @@ function bindIPC() {
     tray?.update();
   });
   handle("account-planning", (accountId, input) => {
-    if (desktop.isBusy || desktopTransactionActive)
+    if (desktop.isBusy || desktopLock.busy)
       throw new Error(
         "Finish the Desktop operation before changing preferences.",
       );
@@ -940,7 +912,7 @@ function bindIPC() {
     ...(await desktop.snapshot()),
     busy:
       desktop.isBusy ||
-      desktopTransactionActive ||
+      desktopLock.busy ||
       usageCredentialRefresher?.anyActive,
   }));
   handle("dismiss-desktop-error", (revision) =>
@@ -1021,7 +993,7 @@ function bindIPC() {
   handle("open-desktop", () => manualDesktopLock(() => desktop.open()));
   handle("recover-desktop", () => manualDesktopLock(() => desktop.recover()));
   handle("update-settings", (input) => {
-    if (desktop.isBusy || desktopTransactionActive)
+    if (desktop.isBusy || desktopLock.busy)
       throw new Error(
         "Finish the Desktop operation before changing preferences.",
       );
@@ -1051,7 +1023,7 @@ function bindIPC() {
     return service.store.state.settings;
   });
   handle("update-planning", (input) => {
-    if (desktop.isBusy || desktopTransactionActive)
+    if (desktop.isBusy || desktopLock.busy)
       throw new Error(
         "Finish the Desktop operation before changing preferences.",
       );
@@ -1123,7 +1095,7 @@ function bindIPC() {
     }),
   );
   handle("login", (accountId) => {
-    if (desktopTransactionActive)
+    if (desktopLock.busy)
       throw new Error("Finish the Desktop handoff before signing in.");
     return service.transaction(() => {
       const account = id.parse(accountId);
@@ -1237,7 +1209,7 @@ app.on("before-quit", (event) => {
     return;
   }
   if (quitting) return;
-  if (desktop?.isBusy || desktopTransactionActive) {
+  if (desktop?.isBusy || desktopLock.busy) {
     event.preventDefault();
     return;
   }

@@ -49,10 +49,14 @@ test("the panel entry does not add an unused root class", () => {
 });
 
 test("every Desktop operation refreshes the tray inside the lock when it begins and when it ends", () => {
+  // The lock tells its listener inside the lock, at each begin and end
+  // (tests/desktop-lock.test.ts); main's listener is the tray.
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
-  const lock = main.slice(main.indexOf("async function withDesktopLock"), main.indexOf("function manualDesktopLock"));
-  assert.match(lock, /try \{(?:\s*\/\/[^\n]*)*\s*void tray\?\.update\(\);[\s\S]*?\} finally \{[\s\S]*?desktopTransactionActive = false;[\s\S]*?void tray\?\.update\(\);[\s\S]*?\}/);
-  assert.doesNotMatch(lock.slice(0, lock.indexOf("try {")), /tray\?\.update/);
+  assert.match(main, /const desktopLock = new DesktopLock\(\(\) => void tray\?\.update\(\)\);/);
+  const lock = readFileSync(new URL("../electron/core/desktop-lock.ts", import.meta.url), "utf8");
+  const hold = lock.slice(lock.indexOf("private async hold"));
+  assert.match(hold, /await before;[\s\S]*?try \{\s*this\.tell\(\);[\s\S]*?\} finally \{[\s\S]*?this\.holder = undefined;[\s\S]*?release\(\);\s*this\.tell\(\);/);
+  assert.doesNotMatch(hold.slice(0, hold.indexOf("await before;")), /this\.tell\(\)/);
 });
 
 test("an error from a background refresh clears once a refresh succeeds; other errors stay", () => {

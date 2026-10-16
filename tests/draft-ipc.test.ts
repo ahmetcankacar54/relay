@@ -6,20 +6,14 @@ import path from "node:path";
 import os from "node:os";
 import { Store } from "../electron/core/store";
 import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
-import { DraftVault, type DraftRecord, type DraftSummary } from "../electron/core/draft-vault";
-import {
-  restoreDrafts,
-  type RestorerDeps,
-  type RestoreResult,
-} from "../electron/core/draft-restorer";
-import type { DesktopAutomationSnapshot } from "../electron/core/desktop-continuation-host";
+import { DraftVault, type DraftSummary } from "../electron/core/draft-vault";
+import type { RestorerDeps, RestoreResult } from "../electron/core/draft-restorer";
 import {
   DraftScheduler,
   draftActions,
   draftNotice,
   draftSummaries,
   tallyStalls,
-  tryDesktopLock,
 } from "../electron/core/draft-main";
 
 const ACCOUNT = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
@@ -109,6 +103,8 @@ test("copy-draft writes the clipboard in main and removes the record", async (t)
     changed: () => changed++,
   });
   const [conversation, newSession] = f.records;
+  await f.manager.markDraft(conversation.id, "needs-copy", "moved");
+  await f.manager.markDraft(newSession.id, "needs-copy", "manual");
 
   // Nothing comes back for the renderer: the text stays in main.
   assert.equal(await actions.copy(conversation.id), undefined);
@@ -121,56 +117,85 @@ test("copy-draft writes the clipboard in main and removes the record", async (t)
 
   // A record that is gone copies nothing, and says so.
   await assert.rejects(actions.copy(conversation.id), /no longer/);
+  await assert.rejects(actions.dismiss(conversation.id), /no longer/);
   assert.deepEqual(clipboard, [TEXT]);
-  assert.equal(changed, 2);
+  assert.equal(changed, 3);
 
   assert.equal(await actions.dismiss(newSession.id), undefined);
   assert.deepEqual(await f.manager.pendingDrafts(), []);
   assert.deepEqual(clipboard, [TEXT]);
-  assert.equal(changed, 3);
+  assert.equal(changed, 4);
 });
+
+test("copy and dismiss leave a draft still waiting to be restored alone", async (t) => {
+  const f = await vaultFixture(t);
+  const clipboard: string[] = [];
+  const actions = draftActions({
+    drafts: f.manager,
+    writeClipboard: (text) => clipboard.push(text),
+    changed: () => {},
+  });
+  for (const record of f.records) {
+    await assert.rejects(actions.copy(record.id), /still waiting/);
+    await assert.rejects(actions.dismiss(record.id), /still waiting/);
+  }
+  assert.deepEqual(clipboard, []);
+  assert.deepEqual(
+    (await f.manager.pendingDrafts()).map((draft) => [draft.id, draft.state]),
+    f.records.map((record) => [record.id, "pending"]),
+  );
+});
+
+/** Fake drafts with one record left for copy, recording each step. */
+function fakeDrafts(steps: string[], over: { dismiss?: () => Promise<void> } = {}) {
+  return {
+    pendingDrafts: async () => {
+      steps.push("list");
+      return [summary(DRAFT_ID, { state: "needs-copy", reason: "moved" })];
+    },
+    draftText: async (id: string) => {
+      steps.push(`read ${id}`);
+      return TEXT;
+    },
+    dismissDraft:
+      over.dismiss ??
+      (async (id: string) => {
+        steps.push(`dismiss ${id}`);
+      }),
+  };
+}
+const DRAFT_ID = "11111111-1111-4111-8111-111111111111";
 
 test("copy writes the clipboard before the record goes, and keeps it when the clipboard fails", async () => {
   const steps: string[] = [];
   let fail = false;
   const actions = draftActions({
-    drafts: {
-      draftText: async (id) => {
-        steps.push(`read ${id}`);
-        return TEXT;
-      },
-      dismissDraft: async (id) => {
-        steps.push(`dismiss ${id}`);
-      },
-    },
+    drafts: fakeDrafts(steps),
     writeClipboard: (text) => {
       if (fail) throw new Error("clipboard");
       steps.push(`write ${text}`);
     },
     changed: () => steps.push("changed"),
   });
-  const id = "11111111-1111-4111-8111-111111111111";
-  await actions.copy(id);
-  assert.deepEqual(steps, [`read ${id}`, `write ${TEXT}`, `dismiss ${id}`, "changed"]);
+  await actions.copy(DRAFT_ID);
+  assert.deepEqual(steps, [
+    "list",
+    `read ${DRAFT_ID}`,
+    `write ${TEXT}`,
+    `dismiss ${DRAFT_ID}`,
+    "changed",
+  ]);
   steps.length = 0;
   fail = true;
-  await assert.rejects(actions.copy(id), /clipboard/);
-  assert.deepEqual(steps, [`read ${id}`, "changed"]);
+  await assert.rejects(actions.copy(DRAFT_ID), /clipboard/);
+  assert.deepEqual(steps, ["list", `read ${DRAFT_ID}`, "changed"]);
 });
 
 test("copy and dismiss take only a draft id", async () => {
-  let reads = 0;
+  const steps: string[] = [];
   let changed = 0;
   const actions = draftActions({
-    drafts: {
-      draftText: async () => {
-        reads++;
-        return TEXT;
-      },
-      dismissDraft: async () => {
-        reads++;
-      },
-    },
+    drafts: fakeDrafts(steps),
     writeClipboard: () => assert.fail("nothing is copied"),
     changed: () => changed++,
   });
@@ -178,12 +203,13 @@ test("copy and dismiss take only a draft id", async () => {
     await assert.rejects(actions.copy(bad));
     await assert.rejects(actions.dismiss(bad));
   }
-  assert.equal(reads, 0);
+  assert.deepEqual(steps, []);
   assert.equal(changed, 0);
 });
 
 test("a vault that cannot be read or changed is a normal error, never a crash", async (t) => {
   const f = await vaultFixture(t);
+  await f.manager.markDraft(f.records[0].id, "needs-copy", "moved");
   // The sealed file turns into something that cannot be read.
   await fs.rm(path.join(f.vault, "drafts", "pending.bin"));
   await fs.mkdir(path.join(f.vault, "drafts", "pending.bin"));
@@ -199,131 +225,17 @@ test("a vault that cannot be read or changed is a normal error, never a crash", 
   assert.deepEqual(clipboard, []);
   assert.equal(changed, 2);
   assert.deepEqual(await draftSummaries(f.manager), []);
-});
-
-/** A lock like main's withDesktopLock: queued, counted, released in `finally`. */
-function desktopLock() {
-  let tail = Promise.resolve();
-  let callers = 0;
-  async function withLock<T>(action: () => Promise<T>): Promise<T> {
-    const before = tail;
-    let release!: () => void;
-    tail = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    callers++;
-    await before;
-    try {
-      return await action();
-    } finally {
-      callers--;
-      release();
-    }
-  }
-  return { withLock, callers: () => callers };
-}
-
-test("the restorer's lock is refused at once while Desktop is busy, and lets anything thrown through unchanged", async () => {
-  const lock = desktopLock();
-  let managerBusy = false;
-  const withLock = tryDesktopLock(
-    () => lock.callers() === 0 && !managerBusy,
-    lock.withLock,
-  );
-  assert.equal(await withLock(async () => 7), 7);
-
-  // Another Desktop operation holds the lock: undefined at once, without running or waiting.
-  let release!: () => void;
-  const held = lock.withLock(
-    () =>
-      new Promise<void>((resolve) => {
-        release = resolve;
-      }),
-  );
-  let ran = false;
-  const answer = await Promise.race([
-    withLock(async () => {
-      ran = true;
+  // The vault's own change failing is an ordinary rejection too.
+  const steps: string[] = [];
+  const failing = draftActions({
+    drafts: fakeDrafts(steps, {
+      dismiss: () => Promise.reject(new Error("EIO")),
     }),
-    new Promise((resolve) => setTimeout(() => resolve("waited"), 50)),
-  ]);
-  assert.equal(answer, undefined);
-  assert.equal(ran, false);
-  release();
-  await held;
-
-  managerBusy = true;
-  assert.equal(
-    await withLock(async () => {
-      ran = true;
-    }),
-    undefined,
-  );
-  assert.equal(ran, false);
-  managerBusy = false;
-
-  // What is thrown comes out as it went in, Error or not, and the lock is free after it.
-  const stop = { leaves: "pending", reason: "changed" };
-  await assert.rejects(
-    withLock(async () => {
-      throw stop;
-    }),
-    (thrown) => thrown === stop,
-  );
-  assert.equal(lock.callers(), 0);
-  const error = new Error("helper");
-  await assert.rejects(
-    withLock(async () => {
-      throw error;
-    }),
-    (thrown) => thrown === error,
-  );
-  assert.equal(lock.callers(), 0);
-  assert.equal(await withLock(async () => "again"), "again");
-});
-
-test("the restorer's own stop passes through the lock adapter", async () => {
-  // Under the lock the account has changed: the restorer throws its Stop through withLock.
-  const lock = desktopLock();
-  let accountReads = 0;
-  const record: DraftRecord = {
-    id: "draft-1",
-    to: ACCOUNT,
-    targetAlias: ALIAS,
-    title: "Fix login",
-    text: TEXT,
-    attachments: false,
-    capturedAt: new Date(0).toISOString(),
-    state: "pending",
-  };
-  const view = {
-    pid: 7,
-    localSessionId: "local_ffffffff-ffff-4fff-8fff-ffffffffffff",
-  } as DesktopAutomationSnapshot;
-  const result = await restoreDrafts({
-    automation: {
-      inspect: async () => view,
-      openSession: async () => assert.fail("nothing is opened"),
-      writeDraft: async () => assert.fail("nothing is typed"),
-    },
-    pending: async () => [record],
-    mark: async () => assert.fail("nothing is left for copy"),
-    remove: async () => assert.fail("nothing is removed"),
-    currentAccount: async () => (accountReads++ === 0 ? ACCOUNT : OTHER),
-    running: async () => true,
-    uptimeMs: async () => 60_000,
-    withLock: tryDesktopLock(() => lock.callers() === 0, lock.withLock),
-    notify: () => assert.fail("nothing to tell"),
-    sleep: async () => {},
-    now: () => 0,
+    writeClipboard: () => {},
+    changed: () => {},
   });
-  assert.deepEqual(result, {
-    status: "waiting",
-    restored: 0,
-    left: 1,
-    reason: "changed",
-  });
-  assert.equal(lock.callers(), 0);
+  await assert.rejects(failing.copy(DRAFT_ID), /EIO/);
+  await assert.rejects(failing.dismiss(DRAFT_ID), /EIO/);
 });
 
 function summary(id: string, over: Partial<DraftSummary> = {}): DraftSummary {
@@ -357,7 +269,7 @@ test("a draft is counted only by runs that tried it and moved nothing", () => {
   let tally = run(new Map(), stopped("moved"));
   assert.deepEqual([...tally.counts], [["mine", 1]]);
   assert.deepEqual(tally.giveUp, []);
-  tally = run(tally.counts, stopped("busy"), ACCOUNT.toUpperCase());
+  tally = run(tally.counts, stopped("not-ready"), ACCOUNT.toUpperCase());
   assert.deepEqual([...tally.counts], [["mine", 2]]);
   // A run that tried nothing (Claude closed or just started: no reason) changes no count.
   tally = run(tally.counts, { status: "waiting", restored: 0, left: 1 });
@@ -412,6 +324,33 @@ test("a run that moves any draft starts every count again", () => {
   assert.deepEqual([...tally.counts], [["one", 1]]);
 });
 
+test("a busy lock never counts; every other stop, and a restore that throws, does", () => {
+  const mine = summary("mine");
+  const run = (reason: string) =>
+    tallyStalls(new Map([["mine", 2]]), {
+      before: [mine],
+      after: [mine],
+      account: ACCOUNT,
+      result: stopped(reason),
+    });
+  // Another Desktop operation held the lock: the draft was never tried.
+  const busy = run("busy");
+  assert.deepEqual(busy.giveUp, []);
+  assert.deepEqual([...busy.counts], [["mine", 2]]);
+  for (const reason of [
+    "not-ready",
+    "moved",
+    "changed",
+    "claude-not-running",
+    "budget",
+    "error",
+  ]) {
+    const tally = run(reason);
+    assert.deepEqual(tally.giveUp, ["mine"], reason);
+    assert.deepEqual([...tally.counts], [], reason);
+  }
+});
+
 /** A scheduler over fake drafts, a fake 10 s timer and a scripted restore. */
 function harness(
   over: {
@@ -432,23 +371,34 @@ function harness(
     tick: undefined as (() => void) | undefined,
     /** Runs inside the scripted restore, as the restorer changing the vault. */
     during: undefined as (() => void) | undefined,
+    /** What fails: reading the drafts, marking one, the notification, telling the panel. */
+    fail: new Set<"read" | "mark" | "notify" | "changed">(),
   };
   const restorer = {
     currentAccount: async () => ACCOUNT,
     mark: async (id: string, next: DraftSummary["state"], reason?: string) => {
       state.marks.push([id, next, reason]);
+      if (state.fail.has("mark")) throw new Error("EIO");
       state.drafts = state.drafts.map((draft) =>
         draft.id === id ? { ...draft, state: next, reason } : draft,
       );
     },
-    notify: (notice: { restored: number; left: number }) =>
-      state.notices.push(notice),
+    notify: (notice: { restored: number; left: number }) => {
+      state.notices.push(notice);
+      if (state.fail.has("notify")) throw new Error("notification");
+    },
     now: () => state.clock,
   } as unknown as RestorerDeps;
   const scheduler = new DraftScheduler({
     restorer,
-    drafts: async () => state.drafts,
-    changed: () => state.changed++,
+    drafts: async () => {
+      if (state.fail.has("read")) throw new Error("EIO");
+      return state.drafts;
+    },
+    changed: () => {
+      state.changed++;
+      if (state.fail.has("changed")) throw new Error("renderer");
+    },
     restore:
       over.restore ??
       (async (deps) => {
@@ -517,7 +467,7 @@ test("restores never overlap", async () => {
 
 test("a draft stopped three runs in a row is left for Copy with the last reason", async () => {
   const { scheduler, state } = harness();
-  state.results.push(stopped("busy"), stopped("moved"), stopped("moved"));
+  state.results.push(stopped("changed"), stopped("moved"), stopped("moved"));
   await scheduler.afterSwitch();
   assert.equal(state.armed, 1);
   state.tick!();
@@ -595,13 +545,104 @@ test("the 10 s retries run only while a draft is pending", async () => {
   assert.equal(h.state.armed, 2);
 });
 
-test("a restore that throws ends its run, and the next one runs", async () => {
+test("a restore that throws ends its run, and three in a row leave the draft for Copy", async () => {
   const { scheduler, state } = harness();
   state.results.push(new Error("unexpected"), stopped("moved"));
   await scheduler.afterSwitch();
   await scheduler.tick();
   assert.equal(state.runs, 2);
   assert.deepEqual(state.marks, []);
+  // A failure that repeats is given up rather than retried every 10 s for a week.
+  state.results.push(new Error("unexpected"));
+  await scheduler.tick();
+  assert.deepEqual(state.marks, [["one", "needs-copy", "error"]]);
+  assert.equal(state.cancelled, 1);
+});
+
+test("busy runs never give a draft up, however many there are", async () => {
+  const { scheduler, state } = harness();
+  for (let i = 0; i < 5; i++) state.results.push(stopped("busy"));
+  await scheduler.afterSwitch();
+  for (let i = 0; i < 4; i++) await scheduler.tick();
+  assert.equal(state.runs, 5);
+  assert.deepEqual(state.marks, []);
+  assert.equal(state.cancelled, 0);
+});
+
+test("a run that finds nothing pending turns the retries off before anything else", async () => {
+  const { scheduler, state } = harness();
+  await scheduler.start();
+  assert.equal(state.armed, 1);
+  // The last pending draft went another way, between two ticks.
+  state.drafts = [summary("one", { state: "needs-copy" })];
+  await scheduler.tick();
+  assert.equal(state.cancelled, 1);
+  assert.equal(state.runs, 0);
+  // A vault that cannot be read holds nothing to run for either.
+  state.drafts = [summary("two")];
+  await scheduler.afterSwitch();
+  assert.equal(state.armed, 2);
+  state.fail.add("read");
+  await scheduler.tick();
+  assert.equal(state.runs, 1);
+  assert.equal(state.cancelled, 2);
+});
+
+test("a mark that fails keeps the draft pending, and a failing notice or refresh changes nothing", async () => {
+  const { scheduler, state } = harness();
+  state.fail.add("mark");
+  state.results.push(stopped("moved"), stopped("moved"), stopped("moved"));
+  await scheduler.afterSwitch();
+  await scheduler.tick();
+  await scheduler.tick();
+  assert.deepEqual(state.marks, [["one", "needs-copy", "moved"]]);
+  // Nothing was left for copy: no notice, nothing changed, and the retries go on.
+  assert.deepEqual(state.notices, []);
+  assert.equal(state.changed, 0);
+  assert.equal(state.cancelled, 0);
+
+  state.fail.clear();
+  state.fail.add("notify");
+  state.fail.add("changed");
+  state.results.push(stopped("moved"), stopped("moved"), stopped("moved"));
+  for (let i = 0; i < 3; i++) await scheduler.tick();
+  assert.deepEqual(state.marks.at(-1), ["one", "needs-copy", "moved"]);
+  assert.deepEqual(state.notices, [{ restored: 0, left: 1 }]);
+  assert.equal(state.changed, 1);
+  // The draft is left for copy all the same, and the retries stop.
+  assert.equal(state.drafts[0].state, "needs-copy");
+  assert.equal(state.cancelled, 1);
+});
+
+test("stop during a run drops the run a switch asked for after it", async () => {
+  let calls = 0;
+  const gates: (() => void)[] = [];
+  const { scheduler } = harness({
+    restore: async () => {
+      // Only the first run waits, so a run that should not happen shows instead of hanging.
+      if (++calls === 1)
+        await new Promise<void>((resolve) => gates.push(resolve));
+      return { status: "waiting", restored: 0, left: 1 };
+    },
+  });
+  const first = scheduler.afterSwitch();
+  await flush();
+  const second = scheduler.afterSwitch();
+  scheduler.stop();
+  gates.shift()!();
+  await Promise.all([first, second]);
+  assert.equal(calls, 1);
+});
+
+test("a run that fails where nothing should leaves the scheduler able to run again", async () => {
+  const { scheduler, state } = harness();
+  // Not a list: reading it throws inside the run itself.
+  state.drafts = null as unknown as DraftSummary[];
+  await scheduler.afterSwitch();
+  assert.equal(state.runs, 0);
+  state.drafts = [summary("one")];
+  await scheduler.afterSwitch();
+  assert.equal(state.runs, 1);
 });
 
 test("the restore notification counts drafts and never names them", () => {
@@ -642,15 +683,41 @@ test("every switch schedules a restore through one hook, on the Desktop lock", (
   assert.match(deps, /notify: notifyDrafts,/);
   assert.match(
     deps,
-    /withLock: tryDesktopLock\(\s*\(\) => desktopLockCallers === 0 && !desktop\.isBusy,\s*withDesktopLock,\s*\),/,
+    /withLock: \(fn\) => desktopLock\.restore\(fn, \(\) => !desktop\.isBusy\),/,
   );
-  // The count the adapter reads covers holders and waiters, and always comes back down.
-  const lock = main.slice(
-    main.indexOf("async function withDesktopLock"),
-    main.indexOf("function manualDesktopLock"),
+});
+
+test("main runs every Desktop operation on one lock, and a restore record refuses none of the user's actions", () => {
+  const main = source("../electron/main.ts");
+  assert.match(
+    main,
+    /const desktopLock = new DesktopLock\(\(\) => void tray\?\.update\(\)\);/,
   );
-  assert.match(lock, /desktopLockCallers\+\+;\s*await before;/);
-  assert.match(lock, /\} finally \{[\s\S]*?desktopLockCallers--;[\s\S]*?release\(\);/);
+  assert.match(
+    main,
+    /function withDesktopLock<T>\(action: \(\) => Promise<T>\): Promise<T> \{\s*return desktopLock\.run\(action\);\s*\}/,
+  );
+  assert.match(
+    main,
+    /function manualDesktopLock<T>\(action: \(\) => Promise<T>\): Promise<T> \{\s*return desktopLock\.manual\(action, \(\) =>\s*usageCredentialRefresher\?\.anyActive/,
+  );
+  assert.doesNotMatch(
+    main,
+    /desktopTransactionActive|desktopTransactions|desktopLockCallers/,
+  );
+  // While a restore holds the lock, preferences, sign-in and quitting are not refused,
+  // and neither the windows nor the menu bar show Desktop as busy.
+  for (const name of ["account-planning", "update-settings", "update-planning", "login"])
+    assert.match(handler(main, name), /if \((?:desktop\.isBusy \|\| )?desktopLock\.busy\)/, name);
+  assert.match(handler(main, "desktop-snapshot"), /desktop\.isBusy \|\|\s*desktopLock\.busy \|\|/);
+  assert.match(
+    main.slice(main.indexOf('app.on("before-quit"')),
+    /if \(desktop\?\.isBusy \|\| desktopLock\.busy\) \{/,
+  );
+  assert.match(
+    main,
+    /busy: \(\) => desktop\.isBusy \|\| desktopLock\.busy,\s*operations: \(\) => desktopLock\.operations \+ desktop\.operations,/,
+  );
 });
 
 test("no IPC handler returns draft text", () => {

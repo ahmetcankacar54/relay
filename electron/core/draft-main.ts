@@ -7,8 +7,9 @@ import {
 import type { DraftSummary } from "./draft-vault";
 
 /**
- * The main process's side of draft restore: when the restorer runs, the lock and the
- * notification it is given, and what the panel may do with a draft. Draft text stays here.
+ * The main process's side of draft restore: when the restorer runs, the notification it is
+ * given, and what the panel may do with a draft. Draft text stays here. Its lock is
+ * DesktopLock's `restore`.
  */
 
 /** How often pending drafts are tried again while any wait. */
@@ -17,20 +18,6 @@ export const RETRY_MS = 10_000;
 export const NOT_READY_BACKOFF_MS = 2 * 60_000;
 /** Runs in a row that may try a pending draft and move nothing, before it is left for Copy. */
 export const MAX_STALLS = 3;
-
-/**
- * The restorer's `withLock` on Relay's Desktop lock. When `free()` says another Desktop
- * operation holds the lock or waits for it, it answers undefined at once, without running
- * `fn`. Otherwise `lock` runs `fn`, releases in `finally`, and whatever `fn` throws, an Error
- * or not, comes out unchanged.
- */
-export function tryDesktopLock(
-  free: () => boolean,
-  lock: <T>(fn: () => Promise<T>) => Promise<T>,
-): RestorerDeps["withLock"] {
-  return async <T>(fn: () => Promise<T>): Promise<T | undefined> =>
-    free() ? lock(fn) : undefined;
-}
 
 /** The notification after a restore: counts only, never a draft's text or title. */
 export function draftNotice(
@@ -55,6 +42,9 @@ export function draftNotice(
   return parts.length ? parts.join(" · ") : undefined;
 }
 
+/** The stop a restore that throws is counted as. */
+export const RESTORE_ERROR = "error";
+
 const sameAccount = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const pendingIds = (drafts: readonly DraftSummary[]) =>
   new Set(drafts.filter((d) => d.state === "pending").map((d) => d.id));
@@ -63,8 +53,10 @@ const pendingIds = (drafts: readonly DraftSummary[]) =>
  * Counts, per pending draft, the runs in a row that tried it and moved no draft at all: none
  * restored, none left for copy or otherwise gone. A run tries the drafts that were pending for
  * the account it ran for, and only a run that stopped with a reason counts: one without
- * (Claude closed or not up long enough, nothing pending for the account) tried nothing. A run
- * that moved any draft starts every count again. A draft counted `MAX_STALLS` times is given up.
+ * (Claude closed or not up long enough, nothing pending for the account) tried nothing, and
+ * one stopped `busy` found another Desktop operation holding the lock, so tried nothing either.
+ * Every other stop counts, a restore that threw (`error`) included. A run that moved any draft
+ * starts every count again. A draft counted `MAX_STALLS` times is given up.
  */
 export function tallyStalls(
   counts: ReadonlyMap<string, number>,
@@ -89,7 +81,8 @@ export function tallyStalls(
   }
   const giveUp: string[] = [];
   const account = run.account;
-  if (!run.result.reason || !account) return { counts: next, giveUp };
+  const { reason } = run.result;
+  if (!reason || reason === "busy" || !account) return { counts: next, giveUp };
   for (const draft of after) {
     if (!before.has(draft.id) || !sameAccount(draft.to, account)) continue;
     const count = (next.get(draft.id) ?? 0) + 1;
@@ -183,7 +176,9 @@ export class DraftScheduler {
       } finally {
         this.running = false;
       }
-    })();
+    })().catch(() => {
+      // A run never throws; should one, the next tick or switch runs again.
+    });
     return this.flight;
   }
 
@@ -206,8 +201,8 @@ export class DraftScheduler {
         },
       });
     } catch {
-      // A failure the restorer did not expect tried nothing that counts.
-      result = { status: "waiting", restored: 0, left: 0 };
+      // A failure the restorer did not expect: counted, so one that repeats is given up.
+      result = { status: "waiting", restored: 0, left: 0, reason: RESTORE_ERROR };
     }
     if (result.reason === "not-ready")
       this.notBefore = restorer.now() + NOT_READY_BACKOFF_MS;
@@ -261,14 +256,19 @@ export function draftSummaries(source: {
   return source.pendingDrafts().catch(() => []);
 }
 
+const GONE = "This draft is no longer there.";
+
 /**
- * The panel's Copy and Dismiss, by record id. Copy writes the text to the clipboard here, in
- * main, and then removes the record; neither ever resolves with anything, so no text travels
- * back to a renderer. A failure, a vault that cannot be read included, rejects as an ordinary
- * error. Either way the renderers are told to read the drafts again.
+ * The panel's Copy and Dismiss, by record id, for a draft left for copy only: one still
+ * waiting to be restored, or gone, is left as it is and the call rejects. Copy writes the text
+ * to the clipboard here, in main, and then removes the record; neither ever resolves with
+ * anything, so no text travels back to a renderer. A failure, a vault that cannot be read
+ * included, rejects as an ordinary error. Either way the renderers are told to read the
+ * drafts again.
  */
 export function draftActions(deps: {
   drafts: {
+    pendingDrafts(): Promise<DraftSummary[]>;
     draftText(id: string): Promise<string | undefined>;
     dismissDraft(id: string): Promise<void>;
   };
@@ -276,13 +276,20 @@ export function draftActions(deps: {
   changed(): void;
 }) {
   const draftId = z.uuid();
+  /** Throws unless draft `id` waits to be copied by hand. */
+  const leftForCopy = async (id: string) => {
+    const draft = (await deps.drafts.pendingDrafts()).find((d) => d.id === id);
+    if (!draft) throw new Error(GONE);
+    if (draft.state !== "needs-copy")
+      throw new Error("This draft is still waiting to be restored.");
+  };
   return {
     async copy(raw: unknown): Promise<void> {
       const id = draftId.parse(raw);
       try {
+        await leftForCopy(id);
         const text = await deps.drafts.draftText(id);
-        if (text === undefined)
-          throw new Error("This draft is no longer there.");
+        if (text === undefined) throw new Error(GONE);
         deps.writeClipboard(text);
         await deps.drafts.dismissDraft(id);
       } finally {
@@ -292,6 +299,7 @@ export function draftActions(deps: {
     async dismiss(raw: unknown): Promise<void> {
       const id = draftId.parse(raw);
       try {
+        await leftForCopy(id);
         await deps.drafts.dismissDraft(id);
       } finally {
         deps.changed();
