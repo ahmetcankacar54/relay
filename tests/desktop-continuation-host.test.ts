@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   DesktopAutomationError,
   DesktopContinuationHost,
+  isLocalSessionId,
   nativeDesktopAutomation,
   type DesktopAutomation,
   type DesktopAutomationSnapshot,
@@ -307,6 +308,35 @@ test("native reply validation hides arbitrary helper output and requires selecte
     blocked("desktop-ui-unsupported"),
   );
 });
+test("a snapshot's composerPresent is optional, and a boolean when given", async () => {
+  const reply = (extra: Record<string, unknown>) =>
+    nativeDesktopAutomation("/unused", async () => ({
+      ok: true,
+      snapshot: { ...snapshot(), ...extra },
+    }));
+  assert.equal(
+    (await reply({ composerPresent: true }).inspect()).composerPresent,
+    true,
+  );
+  assert.equal(
+    (await reply({ composerPresent: false }).inspect()).composerPresent,
+    false,
+  );
+  // An older helper does not report it.
+  assert.equal((await reply({}).inspect()).composerPresent, undefined);
+  await assert.rejects(
+    reply({ composerPresent: "yes" }).inspect(),
+    blocked("desktop-ui-unsupported"),
+  );
+});
+test("only an exact local session id passes isLocalSessionId", () => {
+  assert.equal(isLocalSessionId(localId), true);
+  // The id is matched whatever the case of its hex digits.
+  const upper = `local_${id.toUpperCase()}`;
+  assert.equal(isLocalSessionId(upper), true);
+  for (const bad of [id, `local_${id}x`, `local_../${id}`, "local_", ""])
+    assert.equal(isLocalSessionId(bad), false, bad);
+});
 test("native transport validates exact IDs and never uses last-session navigation", async () => {
   const commands: unknown[] = [];
   const adapter = nativeDesktopAutomation("/unused", async (input) => {
@@ -475,6 +505,11 @@ test("the Swift pre-write composer re-read shares observe's definition of an emp
   assert.match(
     swiftBlock("func observe()"),
     /"composerEmpty": composer\?\.value\.isEmpty == true/,
+  );
+  // A missing composer reads as not empty, so the snapshot says whether there is one.
+  assert.match(
+    swiftBlock("func observe()"),
+    /"composerPresent": composer != nil/,
   );
   const branch = swiftBlock('if command == "write-draft" {');
   assert.match(

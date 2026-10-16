@@ -39,6 +39,8 @@ export interface DesktopAutomationSnapshot {
   permissionMode?: string;
   status: "stopped" | "running" | "waiting" | "unknown";
   quotaStopped: boolean;
+  /** False when no composer was found, which also reads as not empty. Older helpers omit it. */
+  composerPresent?: boolean;
   composerEmpty: boolean;
   sendEnabled: boolean;
   quotaAutoResume?: boolean;
@@ -126,6 +128,8 @@ export interface DesktopContinuationEvidence {
 
 const LOCAL =
   /^local_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Whether `id` is an exact Desktop conversation id, the only kind `openSession` opens. */
+export const isLocalSessionId = (id: string) => LOCAL.test(id);
 const REQUEST = /^[A-Za-z0-9._:-]{1,128}$/;
 /** Longest unsent draft Relay re-types; longer ones are left for Copy. */
 const MAX_DRAFT_LENGTH = 16_384;
@@ -167,6 +171,8 @@ function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
     (v.permissionMode === undefined || MODES.has(v.permissionMode)) &&
     ["stopped", "running", "waiting", "unknown"].includes(v.status) &&
     typeof v.quotaStopped === "boolean" &&
+    (v.composerPresent === undefined ||
+      typeof v.composerPresent === "boolean") &&
     typeof v.composerEmpty === "boolean" &&
     typeof v.sendEnabled === "boolean" &&
     (v.quotaAutoResume === undefined ||

@@ -201,6 +201,8 @@ func observe() throws -> Observation {
         "pid": Int(app.processIdentifier), "status": status,
         "quotaStopped": quota && status == "stopped",
         "composerEmpty": composer?.value.isEmpty == true,
+        // composerEmpty is false without a composer, so say whether there is one.
+        "composerPresent": composer != nil,
         "sendEnabled": send?.enabled == true,
         "visibleActiveTasks": visibleActive,
         "visibleWaitingTasks": visibleWaiting,

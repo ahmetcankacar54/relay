@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
@@ -20,6 +21,8 @@ const alias = (n: number) =>
 const target = (n: number) => `local_${alias(n)}`;
 /** The conversation the user is on when the restore starts. */
 const HOME = "local_ffffffff-ffff-4fff-8fff-ffffffffffff";
+/** A conversation the user moves to by hand. */
+const ELSEWHERE = "local_cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 function record(n: number, over: Partial<DraftRecord> = {}): DraftRecord {
   return {
@@ -36,8 +39,10 @@ function record(n: number, over: Partial<DraftRecord> = {}): DraftRecord {
 }
 const issue = (name: DesktopAutomationIssue) =>
   new DesktopAutomationError(name);
+const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
 
-type Status = DesktopAutomationSnapshot["status"];
+type Snapshot = DesktopAutomationSnapshot;
+type Status = Snapshot["status"];
 interface Hooks {
   /** Runs before the nth inspect; an error is thrown from it. */
   inspect?: (n: number) => Error | void;
@@ -51,16 +56,31 @@ interface Hooks {
   uptime?: (n: number) => number | undefined;
   /** Runs before the nth read of the records; an error is thrown from it. */
   pending?: (n: number) => Error | void;
+  /** True when the nth lock is held by another Desktop operation. */
+  busy?: (n: number) => boolean;
 }
+
+/** The helper's fingerprint: a hash of the snapshot's stable fields. */
+const fingerprint = (stable: Record<string, unknown>) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify(
+        Object.keys(stable)
+          .sort()
+          .map((k) => [k, stable[k]]),
+      ),
+    )
+    .digest("hex");
 
 /**
  * A fake Desktop: one composer per conversation, the view on one of them, a clock that only
- * `sleep` moves. Its write refuses like the helper does: a moved view, a non-empty composer.
+ * `sleep` moves. It reports what the helper reports: a missing composer is not empty, and a
+ * write must match the screen's pid, conversation, account, mode and fingerprint, with the
+ * conversation stopped and its composer there and empty.
  */
 function harness(
   options: {
     records?: DraftRecord[];
-    account?: string;
     running?: boolean;
     uptime?: number;
     noUptime?: boolean;
@@ -68,19 +88,25 @@ function harness(
     shown?: string;
     composers?: Record<string, string>;
     statuses?: Record<string, Status>;
+    noComposer?: string[];
   } = {},
 ) {
   let clock = 1_000_000;
-  let account: string | undefined = options.account ?? ACCOUNT;
+  let account: string | undefined = ACCOUNT;
   let records = (options.records ?? [record(1)]).map((r) => ({ ...r }));
   let shown: string | undefined = "shown" in options ? options.shown : HOME;
+  let pid = 456;
   let held = false;
   let inspects = 0;
   let writes = 0;
+  let locks = 0;
   let pendingReads = 0;
   let uptimeReads = 0;
   const composers = new Map(Object.entries(options.composers ?? {}));
   const statuses = new Map(Object.entries(options.statuses ?? {}));
+  const noComposer = new Set(options.noComposer ?? []);
+  /** Fields forced onto every snapshot. */
+  const patch: Partial<Snapshot> = {};
   const calls: string[] = [];
   const sleeps: number[] = [];
   const marks: Array<[string, DraftState, string | undefined]> = [];
@@ -88,20 +114,31 @@ function harness(
   const notes: Array<{ restored: number; left: number }> = [];
   const outsideLock: string[] = [];
   const hooks: Hooks = {};
-  const view = (): DesktopAutomationSnapshot => {
+  const view = (): Snapshot => {
+    const present = !!shown && !noComposer.has(shown);
     const text = shown ? composers.get(shown) : undefined;
-    return {
-      observedAt: clock,
-      pid: 456,
+    const stable = {
+      pid,
       ...(shown ? { localSessionId: shown } : {}),
       accountLabel: "Test User",
       permissionMode: "Auto",
-      status: (shown && statuses.get(shown)) || "stopped",
+      status:
+        (shown && statuses.get(shown)) || (present ? "stopped" : "unknown"),
+      composerPresent: present,
+      // As the helper: no composer reads as not empty.
+      composerEmpty: present && !text,
+      sendEnabled: present && !!text,
+      ...patch,
+    } as Omit<
+      Snapshot,
+      "observedAt" | "quotaStopped" | "coverage" | "contextFingerprint"
+    >;
+    return {
+      ...stable,
+      observedAt: clock,
       quotaStopped: false,
-      composerEmpty: !text,
-      sendEnabled: !!text,
-      contextFingerprint: (shown ?? "none").slice(-12).padStart(64, "0"),
       coverage: "active-conversation-only",
+      contextFingerprint: fingerprint(stable),
     };
   };
   const touch = (call: string) => {
@@ -128,10 +165,20 @@ function harness(
         touch(`write:${guard.localSessionId}`);
         const error = hooks.write?.(writes);
         if (error) throw error;
-        if (!shown || guard.localSessionId !== shown)
+        // As the helper validates a guard before it types anything.
+        const now = view();
+        if (
+          guard.pid !== now.pid ||
+          guard.localSessionId !== now.localSessionId ||
+          guard.accountLabel !== now.accountLabel ||
+          guard.permissionMode !== now.permissionMode ||
+          guard.contextFingerprint !== now.contextFingerprint
+        )
           throw issue("context-changed");
-        if (composers.get(shown)) throw issue("composer-not-empty");
-        composers.set(shown, text);
+        if (now.status !== "stopped") throw issue("desktop-work-active");
+        if (!now.composerPresent) throw issue("desktop-ui-unsupported");
+        if (!now.composerEmpty) throw issue("composer-not-empty");
+        composers.set(shown!, text);
         return view();
       },
     },
@@ -162,7 +209,8 @@ function harness(
       return options.noUptime ? undefined : (options.uptime ?? 20_000);
     },
     withLock: async (fn) => {
-      if (options.lockBusy) return undefined;
+      locks++;
+      if (options.lockBusy || hooks.busy?.(locks)) return undefined;
       held = true;
       try {
         return await fn();
@@ -183,6 +231,7 @@ function harness(
   return {
     deps,
     hooks,
+    patch,
     calls,
     sleeps,
     marks,
@@ -191,8 +240,11 @@ function harness(
     outsideLock,
     composers,
     statuses,
+    noComposer,
     opens: () => calls.filter((c) => c.startsWith("open:")),
     writes: () => calls.filter((c) => c.startsWith("write:")),
+    /** Desktop actions taken without the lock. Only inspecting may happen outside it. */
+    actionsOutsideLock: () => outsideLock.filter((c) => c !== "inspect"),
     get inspects() {
       return inspects;
     },
@@ -201,6 +253,9 @@ function harness(
     },
     setAccount(id: string | undefined) {
       account = id;
+    },
+    setPid(value: number) {
+      pid = value;
     },
   };
 }
@@ -272,8 +327,8 @@ test("restores one draft and returns to the user's conversation", async () => {
   assert.deepEqual(h.notes, [{ restored: 1, left: 0 }]);
   // The text is checked again 5 s after it was written.
   assert.ok(h.sleeps.includes(5_000));
-  // Relay holds its Desktop lock for every step it takes in Desktop.
-  assert.deepEqual(h.outsideLock, []);
+  // Only the wait for Desktop's UI inspects outside the lock; every action is under it.
+  assert.deepEqual(h.outsideLock, ["inspect"]);
 });
 
 test("a non-empty composer is never written", async () => {
@@ -304,6 +359,25 @@ test("a busy conversation is never written", async () => {
     assert.deepEqual(h.writes(), []);
     assert.deepEqual(h.marks, [["draft-1", "needs-copy", "busy"]]);
   }
+});
+
+test("a conversation shown without a composer is never written", async () => {
+  // "Claude finished the response" is on screen, so the helper says stopped.
+  const h = harness({
+    noComposer: [target(1)],
+    statuses: { [target(1)]: "stopped" },
+  });
+  assert.equal((await restoreDrafts(h.deps)).left, 1);
+  assert.deepEqual(h.writes(), []);
+  assert.deepEqual(h.marks, [["draft-1", "needs-copy", "no-composer"]]);
+  // It is given the full 30 s to show its composer.
+  assert.equal(sum(h.sleeps), 30_000);
+  // An older helper that does not report composerPresent proves no composer either.
+  const older = harness();
+  older.patch.composerPresent = undefined;
+  await restoreDrafts(older.deps);
+  assert.deepEqual(older.writes(), []);
+  assert.deepEqual(older.marks, [["draft-1", "needs-copy", "no-composer"]]);
 });
 
 test("missing accessibility stops at once", async () => {
@@ -385,45 +459,73 @@ test("text wiped once is written once more and kept", async () => {
   assert.deepEqual(h.removed, ["draft-1"]);
 });
 
-test("the rewrite needs the same conversation, stopped, with an empty composer", async () => {
-  // The user moved to another conversation during the re-check.
-  const moved = harness();
-  moved.hooks.sleep = (ms) => {
-    if (ms === 5_000) moved.setShown(HOME);
-  };
-  await restoreDrafts(moved.deps);
-  assert.equal(moved.writes().length, 1);
-  assert.deepEqual(moved.marks, [["draft-1", "needs-copy", "context-changed"]]);
-  // The composer emptied because the conversation started running: perhaps the user sent it.
-  const sent = harness();
-  sent.hooks.sleep = (ms) => {
-    if (ms === 5_000) {
-      sent.composers.delete(target(1));
-      sent.statuses.set(target(1), "running");
-    }
-  };
-  await restoreDrafts(sent.deps);
-  assert.equal(sent.writes().length, 1);
-  assert.deepEqual(sent.marks, [["draft-1", "needs-copy", "busy"]]);
+test("a re-check that cannot confirm the text leaves it for copy and never writes again", async () => {
+  const cases: Array<[string, (h: ReturnType<typeof harness>) => void]> = [
+    // The reviewer's probe: no composer, "finished" on screen, so stopped and not empty.
+    [
+      "no composer, stopped",
+      (h) => {
+        h.composers.delete(target(1));
+        h.noComposer.add(target(1));
+        h.statuses.set(target(1), "stopped");
+      },
+    ],
+    [
+      "no composer, unknown",
+      (h) => {
+        h.noComposer.add(target(1));
+      },
+    ],
+    ["running with text", (h) => void h.statuses.set(target(1), "running")],
+    ["waiting with text", (h) => void h.statuses.set(target(1), "waiting")],
+    [
+      "emptied while running: perhaps sent",
+      (h) => {
+        h.composers.delete(target(1));
+        h.statuses.set(target(1), "running");
+      },
+    ],
+    ["another conversation", (h) => h.setShown(ELSEWHERE)],
+    ["another Claude process", (h) => h.setPid(789)],
+  ];
+  for (const [name, change] of cases) {
+    const h = harness();
+    h.hooks.sleep = (ms) => {
+      if (ms === 5_000) change(h);
+    };
+    assert.deepEqual(
+      await restoreDrafts(h.deps),
+      { status: "done", restored: 0, left: 1 },
+      name,
+    );
+    assert.equal(h.writes().length, 1, name);
+    assert.deepEqual(h.removed, [], name);
+    assert.deepEqual(h.marks, [["draft-1", "needs-copy", "unconfirmed"]], name);
+  }
 });
 
-test("a re-check with no composer on screen is not taken as restored", async () => {
-  // The helper reads a missing composer as not empty, with an unknown status.
-  const h = harness();
+test("a re-check inspect that fails leaves the draft unconfirmed and goes on", async () => {
+  const h = harness({ records: [record(1), record(2)] });
+  let failNext = false;
   h.hooks.sleep = (ms) => {
-    if (ms === 5_000) h.statuses.set(target(1), "unknown");
+    if (ms === 5_000 && h.writes().length === 1) failNext = true;
+  };
+  h.hooks.inspect = () => {
+    if (!failNext) return;
+    failNext = false;
+    return issue("desktop-ui-unsupported");
   };
   assert.deepEqual(await restoreDrafts(h.deps), {
     status: "done",
-    restored: 0,
+    restored: 1,
     left: 1,
   });
-  assert.equal(h.writes().length, 1);
-  assert.deepEqual(h.removed, []);
-  assert.deepEqual(h.marks, [["draft-1", "needs-copy", "busy"]]);
+  assert.deepEqual(h.marks, [["draft-1", "needs-copy", "unconfirmed"]]);
+  assert.deepEqual(h.removed, ["draft-2"]);
 });
 
 test("context-changed leaves the record for copy and continues with the next", async () => {
+  // The screen still shows the conversation Relay opened: it goes on.
   const h = harness({ records: [record(1), record(2)] });
   h.hooks.write = (n) => (n === 1 ? issue("context-changed") : undefined);
   assert.deepEqual(await restoreDrafts(h.deps), {
@@ -440,6 +542,21 @@ test("context-changed leaves the record for copy and continues with the next", a
     `open:${HOME}`,
   ]);
   assert.deepEqual(h.notes, [{ restored: 1, left: 1 }]);
+  // The context changed because the user moved: it stops there and leaves them be.
+  const moved = harness({ records: [record(1), record(2)] });
+  moved.hooks.write = (n) => {
+    if (n !== 1) return;
+    moved.setShown(ELSEWHERE);
+    return issue("context-changed");
+  };
+  assert.deepEqual(await restoreDrafts(moved.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 2,
+    reason: "moved",
+  });
+  assert.deepEqual(moved.marks, [["draft-1", "needs-copy", "context-changed"]]);
+  assert.deepEqual(moved.opens(), [`open:${target(1)}`]);
 });
 
 test("a write that may have typed something is never retried", async () => {
@@ -456,48 +573,115 @@ test("a write that may have typed something is never retried", async () => {
   }
 });
 
-test("the conditions are read again under the lock", async () => {
-  // A switch relaunched Claude between the first look and the lock: Desktop's wipe is not over.
+test("the user moving between drafts stops the restore and is never sent back", async () => {
+  // After the first draft the user opens another conversation.
+  const h = harness({ records: [record(1), record(2)] });
+  h.hooks.vault = (op) => {
+    if (op === "remove") h.setShown(ELSEWHERE);
+  };
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "waiting",
+    restored: 1,
+    left: 1,
+    reason: "moved",
+  });
+  assert.deepEqual(h.opens(), [`open:${target(1)}`]);
+  assert.deepEqual(h.notes, [{ restored: 1, left: 0 }]);
+  // After the last draft: it is done, and does not take the user back.
+  const last = harness();
+  last.hooks.vault = (op) => {
+    if (op === "remove") last.setShown(ELSEWHERE);
+  };
+  assert.deepEqual(await restoreDrafts(last.deps), {
+    status: "done",
+    restored: 1,
+    left: 0,
+  });
+  assert.deepEqual(last.opens(), [`open:${target(1)}`]);
+  // A look at the screen that fails counts as the user moving.
+  const unseen = harness({ records: [record(1), record(2)] });
+  let failNext = false;
+  unseen.hooks.vault = (op) => {
+    if (op === "remove") failNext = true;
+  };
+  unseen.hooks.inspect = () => {
+    if (!failNext) return;
+    failNext = false;
+    return issue("desktop-ui-unsupported");
+  };
+  assert.deepEqual(await restoreDrafts(unseen.deps), {
+    status: "waiting",
+    restored: 1,
+    left: 1,
+    reason: "moved",
+  });
+  assert.deepEqual(unseen.opens(), [`open:${target(1)}`]);
+  // The user moving between the wait for the UI and the first lock: nothing is touched.
+  const early = harness();
+  let looks = 0;
+  // The ready look sees HOME; by the first lock's look the user is elsewhere.
+  early.hooks.inspect = () => {
+    if (++looks === 2) early.setShown(ELSEWHERE);
+  };
+  assert.equal((await restoreDrafts(early.deps)).reason, "moved");
+  assert.deepEqual(early.opens(), []);
+});
+
+test("the conditions are read again under each lock", async () => {
+  const changes: Array<[string, (h: ReturnType<typeof harness>) => void]> = [
+    ["the account", (h) => h.setAccount(OTHER)],
+    ["Claude's pid", (h) => h.setPid(789)],
+    [
+      "Claude's uptime",
+      (h) => {
+        h.hooks.uptime = () => 3_000;
+      },
+    ],
+  ];
+  for (const [name, change] of changes) {
+    const h = harness({ records: [record(1), record(2)] });
+    h.hooks.vault = (op) => {
+      if (op === "remove") change(h);
+    };
+    assert.deepEqual(
+      await restoreDrafts(h.deps),
+      { status: "waiting", restored: 1, left: 1, reason: "changed" },
+      name,
+    );
+    assert.deepEqual(h.opens(), [`open:${target(1)}`], name);
+  }
+  // A switch relaunched Claude between the first look and the first lock.
   const relaunched = harness();
   relaunched.hooks.uptime = (n) => (n === 1 ? 20_000 : 3_000);
   assert.deepEqual(await restoreDrafts(relaunched.deps), {
     status: "waiting",
     restored: 0,
     left: 1,
+    reason: "changed",
   });
-  assert.deepEqual(relaunched.calls, []);
-  // The switch left Desktop on another account: nothing is this account's any more.
-  const switched = harness();
-  switched.hooks.uptime = () => {
-    switched.setAccount(OTHER);
-    return 20_000;
-  };
-  assert.equal((await restoreDrafts(switched.deps)).status, "idle");
-  assert.deepEqual(switched.calls, []);
+  assert.deepEqual(relaunched.opens(), []);
 });
 
-test("a failed read of the drafts or the account leaves everything waiting", async () => {
-  for (const n of [1, 2]) {
-    const h = harness();
-    h.hooks.pending = (read) =>
-      read === n ? new Error("vault unreadable") : undefined;
-    assert.equal((await restoreDrafts(h.deps)).status, "waiting");
-    assert.deepEqual(h.calls, []);
-    assert.deepEqual(h.marks, []);
-  }
-  // The account read before each draft fails: the restore stops there.
-  const h = harness({ records: [record(1), record(2)] });
+test("a failed read before or under the lock leaves the drafts pending", async () => {
+  const h = harness();
+  h.hooks.pending = () => new Error("vault unreadable");
+  assert.equal((await restoreDrafts(h.deps)).status, "waiting");
+  assert.deepEqual(h.calls, []);
+  assert.deepEqual(h.marks, []);
+  // The account read under the second lock fails.
+  const later = harness({ records: [record(1), record(2)] });
   let reads = 0;
-  h.deps.currentAccount = async () => {
-    if (++reads > 3) throw new Error("config unreadable");
+  later.deps.currentAccount = async () => {
+    if (++reads > 2) throw new Error("config unreadable");
     return ACCOUNT;
   };
-  assert.deepEqual(await restoreDrafts(h.deps), {
+  assert.deepEqual(await restoreDrafts(later.deps), {
     status: "waiting",
     restored: 1,
     left: 1,
+    reason: "changed",
   });
-  assert.deepEqual(h.opens(), [`open:${target(1)}`]);
+  assert.deepEqual(later.opens(), [`open:${target(1)}`]);
 });
 
 test("a busy Desktop (withLock gives undefined) does nothing", async () => {
@@ -506,11 +690,62 @@ test("a busy Desktop (withLock gives undefined) does nothing", async () => {
     status: "waiting",
     restored: 0,
     left: 1,
+    reason: "busy",
   });
-  assert.deepEqual(h.calls, []);
+  // It may have looked at the screen; it took no action in Desktop or the vault.
+  assert.deepEqual(h.opens(), []);
+  assert.deepEqual(h.writes(), []);
   assert.deepEqual(h.marks, []);
   assert.deepEqual(h.removed, []);
   assert.deepEqual(h.notes, []);
+  // A switch takes the lock after the first draft: the rest stay pending.
+  const switching = harness({ records: [record(1), record(2), record(3)] });
+  switching.hooks.busy = (n) => n === 2;
+  assert.deepEqual(await restoreDrafts(switching.deps), {
+    status: "waiting",
+    restored: 1,
+    left: 2,
+    reason: "busy",
+  });
+  assert.deepEqual(switching.opens(), [`open:${target(1)}`]);
+  assert.deepEqual(switching.marks, []);
+  assert.deepEqual(switching.notes, [{ restored: 1, left: 0 }]);
+});
+
+test("the whole restore stops after 5 minutes", async () => {
+  // No conversation ever shows, so each draft takes its full 30 s.
+  const h = harness({
+    records: Array.from({ length: 12 }, (_, i) => record(i + 1)),
+  });
+  h.hooks.open = () => "ignored";
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 12,
+    reason: "budget",
+  });
+  assert.equal(h.marks.length, 10);
+  assert.ok(
+    h.marks.every(([, , reason]) => reason === "exact-session-not-observed"),
+  );
+  assert.equal(sum(h.sleeps), 300_000);
+});
+
+test("a target shown without a guard stops the restore and leaves the rest as unsupported", async () => {
+  const h = harness({ records: [record(1), record(2), record(3)] });
+  h.patch.accountLabel = undefined;
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 0,
+    left: 3,
+  });
+  assert.deepEqual(h.writes(), []);
+  assert.deepEqual(h.opens(), [`open:${target(1)}`]);
+  assert.deepEqual(h.marks, [
+    ["draft-1", "needs-copy", "unsupported"],
+    ["draft-2", "needs-copy", "unsupported"],
+    ["draft-3", "needs-copy", "unsupported"],
+  ]);
 });
 
 test("the new-session draft goes straight to copy", async () => {
@@ -518,17 +753,19 @@ test("the new-session draft goes straight to copy", async () => {
     records: [
       record(3, { targetAlias: undefined, newSession: true }),
       record(4, { text: "x".repeat(16_385) }),
+      record(6, { targetAlias: "../not-a-uuid" }),
       record(5, { text: "y".repeat(16_384) }),
     ],
   });
   assert.deepEqual(await restoreDrafts(h.deps), {
     status: "done",
     restored: 1,
-    left: 2,
+    left: 3,
   });
   assert.deepEqual(h.marks, [
     ["draft-3", "needs-copy", "manual"],
     ["draft-4", "needs-copy", "manual"],
+    ["draft-6", "needs-copy", "manual"],
   ]);
   // Only the draft that fits is typed; the limit is inclusive.
   assert.deepEqual(h.writes(), [`write:${target(5)}`]);
@@ -549,12 +786,12 @@ test("a UI that is not ready in 60 s leaves every draft pending", async () => {
     status: "waiting",
     restored: 0,
     left: 1,
+    reason: "not-ready",
   });
   assert.ok(h.sleeps.every((ms) => ms === 500));
-  assert.equal(
-    h.sleeps.reduce((a, b) => a + b, 0),
-    60_000,
-  );
+  assert.equal(sum(h.sleeps), 60_000);
+  // The wait holds no lock and takes no action.
+  assert.deepEqual(h.actionsOutsideLock(), []);
   assert.deepEqual(h.opens(), []);
   assert.deepEqual(h.marks, []);
   assert.deepEqual(h.notes, []);
@@ -573,12 +810,29 @@ test("a conversation that never shows is left for copy after 30 s", async () => 
   ]);
   // The link is sent again every 5 s, for up to 30 s.
   assert.equal(h.opens().filter((c) => c === `open:${target(1)}`).length, 6);
-  const shownWait = h.sleeps.slice(0, h.sleeps.indexOf(5_000));
-  assert.equal(
-    shownWait.reduce((a, b) => a + b, 0),
-    30_000,
-  );
+  assert.equal(sum(h.sleeps.slice(0, h.sleeps.indexOf(5_000))), 30_000);
   assert.deepEqual(h.writes(), [`write:${target(2)}`]);
+});
+
+test("an open that fails without halting is sent again", async () => {
+  const h = harness();
+  let opens = 0;
+  h.hooks.open = () =>
+    ++opens === 1 ? issue("desktop-ui-unsupported") : undefined;
+  assert.equal((await restoreDrafts(h.deps)).restored, 1);
+  assert.deepEqual(h.opens().slice(0, 2), [
+    `open:${target(1)}`,
+    `open:${target(1)}`,
+  ]);
+  // One that always fails is left for copy once the 30 s are over.
+  const never = harness();
+  never.hooks.open = (id) =>
+    id === target(1) ? issue("desktop-ui-unsupported") : undefined;
+  await restoreDrafts(never.deps);
+  assert.deepEqual(never.marks, [
+    ["draft-1", "needs-copy", "exact-session-not-observed"],
+  ]);
+  assert.deepEqual(never.writes(), []);
 });
 
 test("Claude quitting mid-restore stops, and the rest stay pending", async () => {
@@ -589,11 +843,13 @@ test("Claude quitting mid-restore stops, and the rest stay pending", async () =>
     status: "waiting",
     restored: 1,
     left: 2,
+    reason: "claude-not-running",
   });
   assert.deepEqual(h.removed, ["draft-1"]);
   assert.deepEqual(h.marks, []);
   assert.equal(h.calls.at(-1), `open:${target(2)}`);
-  assert.deepEqual(h.notes, []);
+  // What was restored is still told.
+  assert.deepEqual(h.notes, [{ restored: 1, left: 0 }]);
 });
 
 test("Claude quitting during a write leaves that draft for copy, never for a blind retry", async () => {
@@ -603,24 +859,10 @@ test("Claude quitting during a write leaves that draft for copy, never for a bli
     status: "waiting",
     restored: 0,
     left: 2,
+    reason: "claude-not-running",
   });
   assert.deepEqual(h.marks, [["draft-1", "needs-copy", "claude-not-running"]]);
   assert.equal(h.calls.at(-1), `write:${target(1)}`);
-});
-
-test("a switch of Desktop's account mid-restore stops at the next draft", async () => {
-  const h = harness({ records: [record(1), record(2)] });
-  h.hooks.vault = (op) => {
-    if (op === "remove") h.setAccount(OTHER);
-  };
-  assert.deepEqual(await restoreDrafts(h.deps), {
-    status: "waiting",
-    restored: 1,
-    left: 1,
-  });
-  assert.deepEqual(h.removed, ["draft-1"]);
-  assert.deepEqual(h.opens(), [`open:${target(1)}`]);
-  assert.deepEqual(h.marks, []);
 });
 
 test("a vault that fails to mark or remove does not stop the other drafts", async () => {
@@ -636,11 +878,11 @@ test("a vault that fails to mark or remove does not stop the other drafts", asyn
     status: "done",
     restored: 2,
     left: 1,
-    vaultErrors: 2,
   });
   assert.deepEqual(h.writes(), [`write:${target(2)}`, `write:${target(3)}`]);
   assert.deepEqual(h.removed, ["draft-3"]);
-  assert.equal(h.notes.length, 1);
+  // The draft the vault would not mark is not in the panel, so it is not told as left there.
+  assert.deepEqual(h.notes, [{ restored: 2, left: 0 }]);
 });
 
 test("the return point is used only when it was seen and differs from the last conversation", async () => {
@@ -661,6 +903,15 @@ test("the return point is used only when it was seen and differs from the last c
     restored: 1,
     left: 0,
   });
+  // Desktop busy at the return: the drafts are done, the user stays where they are.
+  const busy = harness();
+  busy.hooks.busy = (n) => n === 2;
+  assert.deepEqual(await restoreDrafts(busy.deps), {
+    status: "done",
+    restored: 1,
+    left: 0,
+  });
+  assert.deepEqual(busy.opens(), [`open:${target(1)}`]);
 });
 
 test("the restorer never sends and waits only through its deps", () => {
