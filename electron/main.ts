@@ -634,10 +634,26 @@ function showWindow() {
   if (!initialized) return;
   if (!window && service) createWindow();
   if (window) {
+    // Cmd+Q hides the dock icon with the window; opening it again brings it back.
+    if (process.platform === "darwin") void app.dock?.show();
     if (window.isMinimized()) window.restore();
     window.show();
     window.focus();
   }
+}
+/**
+ * Cmd+Q: close the window and keep Relay running in the menu bar. Without a
+ * tray there is nothing to stay for, so it quits. The switch window is not
+ * touched; it follows the menu bar panel and the switch story.
+ */
+function closeToTray() {
+  if (!tray) {
+    app.quit();
+    return;
+  }
+  window?.hide();
+  trayPanel?.hide();
+  if (process.platform === "darwin") app.dock?.hide();
 }
 /** Menu-bar switch: one native confirmation, then the normal saved-login switch. */
 async function traySwitch(profileId: string) {
@@ -774,7 +790,16 @@ function createWindow() {
                 { role: "about" as const },
                 { type: "separator" as const },
                 { role: "hide" as const },
-                { role: "quit" as const },
+                {
+                  label: "Relay penceresini kapat",
+                  accelerator: "CmdOrCtrl+Q",
+                  click: () => closeToTray(),
+                },
+                {
+                  label: "Relay’den çık",
+                  accelerator: "Alt+CmdOrCtrl+Q",
+                  click: () => app.quit(),
+                },
               ],
             },
           ]
