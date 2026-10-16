@@ -24,6 +24,14 @@ import {
   pruneDraftBackups,
   restoreLocalStorage,
 } from "../electron/core/draft-storage";
+import {
+  DRAFT_WORKER_FLAG,
+  draftJobPath,
+  parseDraftJob,
+  runDraftJob,
+  type DraftJob,
+  type DraftPage,
+} from "../electron/draft-job";
 
 // A fake Claude root with two accounts and nothing else: planHistory only reads
 // `claude-code-sessions/<acct>/<org>/` records and the optional projects files.
@@ -977,4 +985,266 @@ test("a symlinked drafts directory is refused by backup and prune", async (t) =>
   await assert.rejects(backupLocalStorage(root, vault, new Date()));
   await assert.rejects(pruneDraftBackups(vault, 0));
   assert.deepEqual(await fs.readdir(outside), ["2026-10-01T12-00-00-000Z"]);
+});
+
+test("the job flag's value is the path after it", () => {
+  assert.equal(DRAFT_WORKER_FLAG, "--relay-draft-worker=");
+  assert.equal(
+    draftJobPath(["/Relay", `${DRAFT_WORKER_FLAG}/tmp/relay-job/job.json`]),
+    "/tmp/relay-job/job.json",
+  );
+  // A dev launch passes the script first; a path may contain "=".
+  assert.equal(
+    draftJobPath([
+      "electron",
+      "draft-worker.cjs",
+      `${DRAFT_WORKER_FLAG}/a=b/job.json`,
+    ]),
+    "/a=b/job.json",
+  );
+});
+
+test("no job flag means this is the normal app", () => {
+  assert.equal(draftJobPath([]), undefined);
+  assert.equal(
+    draftJobPath(["/Relay", "--inspect", "/tmp/job.json"]),
+    undefined,
+  );
+  assert.equal(
+    draftJobPath(["/Relay", "--relay-draft-worker-other=/tmp/job.json"]),
+    undefined,
+  );
+});
+
+test("a job flag with an empty value is ignored", () => {
+  assert.equal(draftJobPath(["/Relay", DRAFT_WORKER_FLAG]), undefined);
+  assert.equal(
+    draftJobPath([
+      "/Relay",
+      DRAFT_WORKER_FLAG,
+      `${DRAFT_WORKER_FLAG}/tmp/job.json`,
+    ]),
+    "/tmp/job.json",
+  );
+});
+
+// A job whose storage is never opened: runDraftJob only talks to the page.
+const ALIAS_X = "aaaaaaaa-0000-4000-8000-0000000000a1";
+const ALIAS_Y = "bbbbbbbb-0000-4000-8000-0000000000b2";
+function job(): DraftJob {
+  return {
+    storage: "/claude/Local Storage",
+    scratch: "/tmp/relay-draft-job",
+    result: "/tmp/relay-draft-job/result.json",
+    from: A,
+    to: B,
+    conversations: [
+      {
+        targetAlias: ALIAS_Y,
+        members: [
+          { alias: ALIAS_X, accountUuid: A },
+          { alias: ALIAS_Y, accountUuid: B },
+        ],
+      },
+    ],
+  };
+}
+
+// A page backed by a plain object, recording what the runner asks of it. `stuck` keys ignore
+// being set or removed, like a write that never reached storage.
+function fakePage(
+  initial: Record<string, string>,
+  options: {
+    stuck?: string[];
+    failAt?: "read" | "apply" | "flush";
+    failWith?: unknown;
+  } = {},
+) {
+  const store = { ...initial };
+  const calls: string[] = [];
+  const applied: unknown[] = [];
+  const stuck = new Set(options.stuck ?? []);
+  const trip = (at: "read" | "apply" | "flush") => {
+    if (options.failAt === at)
+      throw "failWith" in options
+        ? options.failWith
+        : new Error(`${at} failed`);
+  };
+  const page: DraftPage = {
+    async read() {
+      calls.push("read");
+      trip("read");
+      return { ...store };
+    },
+    async apply(ops) {
+      calls.push("apply");
+      applied.push(ops);
+      trip("apply");
+      for (const [key, value] of Object.entries(ops.set))
+        if (!stuck.has(key)) store[key] = value;
+      for (const key of ops.remove) if (!stuck.has(key)) delete store[key];
+    },
+    async flush() {
+      calls.push("flush");
+      trip("flush");
+    },
+  };
+  return { page, store, calls, applied };
+}
+
+test("the job applies the planned ops and reports the counts", async () => {
+  const j = job();
+  const initial = {
+    [P + ALIAS_X]: draft(A, "from A"),
+    [P + ALIAS_Y]: draft(B, "B's own"),
+    "composer-draft:other-surface": draft(A, "never touched"),
+  };
+  const fake = fakePage(initial);
+  const result = await runDraftJob(j, fake.page);
+  assert.deepEqual(result, { ok: true, moved: 1, owned: 0, skipped: 0 });
+  const planned = planDraftMoves({
+    drafts: initial,
+    from: A,
+    to: B,
+    conversations: j.conversations,
+  });
+  assert.equal(fake.applied.length, 1);
+  assert.deepEqual(fake.applied[0], planned);
+  assert.deepEqual(fake.store, {
+    [P + ALIAS_Y]: draft(B, "from A"),
+    "composer-draft:other-surface": draft(A, "never touched"),
+  });
+  // Read, change, persist, then read again to verify.
+  assert.deepEqual(fake.calls, ["read", "apply", "flush", "read"]);
+});
+
+test("the new-session draft is counted as owned", async () => {
+  const fake = fakePage({ [NEW_SESSION_DRAFT]: draft(A) });
+  assert.deepEqual(await runDraftJob(job(), fake.page), {
+    ok: true,
+    moved: 0,
+    owned: 1,
+    skipped: 0,
+  });
+  assert.equal(fake.store[NEW_SESSION_DRAFT], draft(B));
+});
+
+test("with nothing to change the job applies nothing and is still ok", async () => {
+  const fake = fakePage({
+    [P + ALIAS_X]: draft(C),
+    [P + ALIAS_Y]: "not json",
+  });
+  const before = { ...fake.store };
+  const result = await runDraftJob(job(), fake.page);
+  assert.deepEqual(result, { ok: true, moved: 0, owned: 0, skipped: 1 });
+  assert.ok(!fake.calls.includes("apply"));
+  assert.deepEqual(fake.store, before);
+  // No drafts at all is not an error either.
+  const empty = fakePage({});
+  assert.deepEqual(await runDraftJob(job(), empty.page), {
+    ok: true,
+    moved: 0,
+    owned: 0,
+    skipped: 0,
+  });
+  assert.ok(!empty.calls.includes("apply"));
+});
+
+test("a value that did not stick fails verification", async () => {
+  const fake = fakePage(
+    { [P + ALIAS_X]: draft(A), [NEW_SESSION_DRAFT]: draft(A) },
+    { stuck: [NEW_SESSION_DRAFT] },
+  );
+  assert.deepEqual(await runDraftJob(job(), fake.page), {
+    ok: false,
+    error: "verification failed",
+  });
+});
+
+test("a key that was not removed fails verification", async () => {
+  const fake = fakePage({ [P + ALIAS_X]: draft(A) }, { stuck: [P + ALIAS_X] });
+  assert.deepEqual(await runDraftJob(job(), fake.page), {
+    ok: false,
+    error: "verification failed",
+  });
+});
+
+test("a page that throws is reported, not thrown", async () => {
+  for (const failAt of ["read", "apply", "flush"] as const) {
+    const fake = fakePage({ [P + ALIAS_X]: draft(A) }, { failAt });
+    assert.deepEqual(
+      await runDraftJob(job(), fake.page),
+      { ok: false, error: `${failAt} failed` },
+      failAt,
+    );
+  }
+  // Something that is not an Error still becomes a message.
+  const odd = fakePage({}, { failAt: "read", failWith: "plain string" });
+  assert.deepEqual(await runDraftJob(job(), odd.page), {
+    ok: false,
+    error: "plain string",
+  });
+});
+
+test("a job file is checked before the helper uses it", () => {
+  const good = { ...job() };
+  assert.deepEqual(parseDraftJob(JSON.parse(JSON.stringify(good))), good);
+  // Unknown fields are not carried along.
+  assert.deepEqual(parseDraftJob({ ...good, extra: 1 }), good);
+  const bad = (change: Record<string, unknown>) =>
+    assert.throws(() => parseDraftJob({ ...good, ...change }), Error);
+  for (const key of ["storage", "scratch", "result", "from", "to"]) {
+    bad({ [key]: undefined });
+    bad({ [key]: "" });
+    bad({ [key]: 7 });
+  }
+  // Relative paths would resolve against whatever directory the helper starts in.
+  for (const key of ["storage", "scratch", "result"])
+    bad({ [key]: "relative/dir" });
+  bad({ conversations: undefined });
+  bad({ conversations: {} });
+  bad({ conversations: [null] });
+  bad({ conversations: [{ targetAlias: ALIAS_Y }] });
+  bad({ conversations: [{ targetAlias: "", members: [] }] });
+  bad({
+    conversations: [{ targetAlias: ALIAS_Y, members: [{ alias: ALIAS_X }] }],
+  });
+  bad({
+    conversations: [
+      { targetAlias: ALIAS_Y, members: [{ alias: 1, accountUuid: A }] },
+    ],
+  });
+  for (const value of [null, undefined, "job", 3, []])
+    assert.throws(() => parseDraftJob(value), Error);
+  assert.deepEqual(parseDraftJob({ ...good, conversations: [] }), {
+    ...good,
+    conversations: [],
+  });
+});
+
+test("the build bundles the entry and the helper", async () => {
+  const build = await fs.readFile(
+    path.join(import.meta.dirname, "../scripts/build.mjs"),
+    "utf8",
+  );
+  const list = /entryPoints:\s*\[([^\]]*)\]/.exec(build)?.[1] ?? "";
+  const entries = [...list.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  for (const entry of [
+    "electron/main.ts",
+    "electron/preload.ts",
+    "electron/switch-preload.ts",
+    "electron/entry.ts",
+    "electron/draft-worker.ts",
+  ])
+    assert.ok(entries.includes(entry), `${entry} is built`);
+});
+
+test("the package runs the entry", async () => {
+  const pkg = JSON.parse(
+    await fs.readFile(
+      path.join(import.meta.dirname, "../package.json"),
+      "utf8",
+    ),
+  );
+  assert.equal(pkg.main, "dist-electron/entry.cjs");
 });

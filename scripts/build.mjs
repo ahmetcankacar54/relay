@@ -3,7 +3,14 @@ import { copyFile } from "node:fs/promises";
 import { buildNativeHelpers } from "./build-native.mjs";
 await import("./icon.mjs");
 await build({
-  entryPoints: ["electron/main.ts", "electron/preload.ts", "electron/switch-preload.ts"],
+  entryPoints: [
+    "electron/main.ts",
+    "electron/preload.ts",
+    "electron/switch-preload.ts",
+    // package.json's "main": picks the app or, for the draft helper flag, the helper.
+    "electron/entry.ts",
+    "electron/draft-worker.ts",
+  ],
   bundle: true,
   platform: "node",
   target: "node22",
