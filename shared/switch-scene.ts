@@ -63,6 +63,19 @@ function returning(state: SwitchSceneState, at: number, pick: (previous?: Disgui
   return { ...state, stage: "returning", since: at, disguise, lastDisguise: disguise ?? state.lastDisguise };
 }
 
+/** Finishes every stage whose time is up at `now`; a late timer skips what it slept through. */
+function catchUp(state: SwitchSceneState, now: number, pick: (previous?: Disguise) => Disguise): SwitchSceneState {
+  let next = state;
+  for (let deadline = sceneDeadline(next); deadline !== undefined && deadline <= now; deadline = sceneDeadline(next)) {
+    if (next.stage === "leaving")
+      next = next.outcome ? returning(next, deadline, pick) : { ...next, stage: "waiting", since: deadline };
+    else if (next.stage === "waiting") next = { ...next, stage: "stalled", since: deadline };
+    else if (next.stage === "returning") next = { ...next, stage: "closing", since: deadline };
+    else next = { ...next, stage: "hidden", since: deadline };
+  }
+  return next;
+}
+
 /** One step of the story: a restart report or a timer tick at `now`. */
 export function switchScene(
   state: SwitchSceneState,
@@ -79,22 +92,15 @@ export function switchScene(
       profileId: event.profileId,
       lastDisguise: state.lastDisguise,
     };
+  const current = catchUp(state, now, pick);
   if (event.phase === "end") {
+    // The timer may not have run yet, so the end first sees the stage it really arrives in.
     const outcome: SwitchOutcome = !event.ok ? "failed" : event.kind === "switch" ? "switched" : "back";
-    if (state.stage === "leaving") return { ...state, outcome };
-    if (state.stage === "waiting" || state.stage === "stalled") return returning({ ...state, outcome }, now, pick);
-    return state; // an end without its start
+    if (current.stage === "leaving") return { ...current, outcome };
+    if (current.stage === "waiting" || current.stage === "stalled") return returning({ ...current, outcome }, now, pick);
+    return current; // an end without its start
   }
-  // A tick finishes every stage whose time is up; a late timer skips what it slept through.
-  let next = state;
-  for (let deadline = sceneDeadline(next); deadline !== undefined && deadline <= now; deadline = sceneDeadline(next)) {
-    if (next.stage === "leaving")
-      next = next.outcome ? returning(next, deadline, pick) : { ...next, stage: "waiting", since: deadline };
-    else if (next.stage === "waiting") next = { ...next, stage: "stalled", since: deadline };
-    else if (next.stage === "returning") next = { ...next, stage: "closing", since: deadline };
-    else next = { ...next, stage: "hidden", since: deadline };
-  }
-  return next;
+  return current;
 }
 
 export type SwitchLanguage = "tr" | "en";

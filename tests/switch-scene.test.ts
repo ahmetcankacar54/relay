@@ -49,6 +49,15 @@ test("an operation that ends while the panda still walks returns once the walk i
   assert.equal(returning.since, LEAVING_MS);
 });
 
+test("an end that arrives before the leaving timer has run still plays its return from now", () => {
+  const [, returning] = run([[0, start], [5_000, ended()]]);
+  assert.equal(returning.stage, "returning");
+  assert.equal(returning.since, 5_000);
+  assert.equal(returning.outcome, "switched");
+  assert.equal(returning.disguise, "fedora");
+  assert.equal(sceneDeadline(returning), 5_000 + RETURNING_MS.switched);
+});
+
 test("after a minute of waiting the window hides, and a late end still plays the return", () => {
   const [, waiting, stalled, returning] = run([
     [0, start], [LEAVING_MS, tick], [LEAVING_MS + WAITING_LIMIT_MS, tick], [90_000, ended()],
@@ -84,6 +93,23 @@ test("a disguise is random but never the previous one", () => {
   for (const previous of all)
     for (const r of [0, 0.49, 0.5, 0.999]) assert.notEqual(pickDisguise(previous, () => r), previous);
   assert.deepEqual(new Set([0, 0.4, 0.8].map((r) => pickDisguise(undefined, () => r))), new Set(all));
+});
+
+test("each switched story asks the picker to avoid the disguise worn in the story before", () => {
+  const seen: (Disguise | undefined)[] = [];
+  const worn: Disguise[] = ["sunglasses", "deerstalker"];
+  const pick = (previous?: Disguise) => {
+    seen.push(previous);
+    return worn[seen.length - 1];
+  };
+  let state = INITIAL_SCENE;
+  const steps: [number, SwitchSceneEvent][] = [
+    [0, start], [LEAVING_MS, tick], [2_000, ended()], [10_000, tick],
+    [11_000, start], [11_000 + LEAVING_MS, tick], [13_000, ended()],
+  ];
+  for (const [at, event] of steps) state = switchScene(state, event, at, pick);
+  assert.deepEqual(seen, [undefined, "sunglasses"]);
+  assert.equal(state.disguise, "deerstalker");
 });
 
 test("the line names the target and the result, in Turkish and English", () => {
@@ -172,6 +198,21 @@ test("the story times its stages and publishes each change", () => {
   c.fire();
   assert.deepEqual(shown, ["leaving", "waiting", "returning", "closing", "hidden"]);
   assert.equal(c.timers.length, 0);
+});
+
+test("an end reported before the leaving timer has run still plays the return", () => {
+  const c = clock();
+  const shown: [string, number][] = [];
+  const story = new SwitchStory({ ...c, pick: () => "sunglasses", show: (state) => void shown.push([state.stage, state.since]) });
+  story.report({ phase: "start", kind: "switch", profileId: "b" });
+  c.set(5_000); // the leaving timer is overdue but has not fired
+  story.report({ phase: "end", kind: "switch", profileId: "b", ok: true });
+  assert.equal(story.current.stage, "returning");
+  assert.equal(story.current.since, 5_000);
+  assert.deepEqual(c.timers.map((t) => t.at), [5_000 + RETURNING_MS.switched]);
+  c.fire();
+  c.fire();
+  assert.deepEqual(shown, [["leaving", 0], ["returning", 5_000], ["closing", 5_000 + RETURNING_MS.switched], ["hidden", 5_000 + RETURNING_MS.switched + CLOSING_MS]]);
 });
 
 test("a failing view never stops the story, and destroy clears its timer", () => {
