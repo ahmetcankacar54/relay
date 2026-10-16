@@ -40,6 +40,7 @@ import {
   DraftVault,
   summarize,
   type DraftRecord,
+  type DraftSlots,
 } from "../electron/core/draft-vault";
 import {
   DRAFT_WORKER_FLAG,
@@ -580,34 +581,27 @@ test("a copy of leveldb is byte-exact and private, and Claude's stays as it was"
   await assert.rejects(copyLocalStorage(root, storage), { code: "EEXIST" });
 });
 
-test("a relative symlink in leveldb stays relative in the copy", async (t) => {
-  const fx = await storageFixture(t);
-  await fs.symlink("LOCK", path.join(fx.leveldb, "link"));
-  await fs.symlink("../CURRENT", path.join(fx.leveldb, "nested", "up"));
-  const storage = await copyTarget(fx);
-  assert.equal(await copyLocalStorage(fx.root, storage), true);
-  // Resolved against the copy, so they lead into the copy and never to Claude's files.
-  assert.equal(await fs.readlink(path.join(storage, "leveldb", "link")), "LOCK");
-  assert.equal(
-    await fs.readlink(path.join(storage, "leveldb", "nested", "up")),
-    "../CURRENT",
-  );
-});
-
-test("a link that would lead the copy out of itself fails it", async (t) => {
-  // Followed from the copy, either would reach Claude's own files or something else.
-  for (const target of ["ABSOLUTE", "../outside", "nested/../../escape"]) {
+test("a link anywhere in leveldb fails the copy", async (t) => {
+  // Chromium's leveldb holds none. Followed from the copy, a link could reach Claude's own files,
+  // so not even one that stays inside is copied.
+  const cases: [string, string, string][] = [
+    ["link", "LOCK", "Local Storage/leveldb/link"],
+    ["nested/up", "../CURRENT", "Local Storage/leveldb/nested/up"],
+    ["link", "ABSOLUTE", "Local Storage/leveldb/link"],
+    ["link", "../outside", "Local Storage/leveldb/link"],
+    ["nested/escape", "../../escape", "Local Storage/leveldb/nested/escape"],
+  ];
+  for (const [name, target, shown] of cases) {
     const fx = await storageFixture(t);
-    const link = path.join(fx.leveldb, "link");
     await fs.symlink(
       target === "ABSOLUTE" ? path.join(fx.leveldb, "CURRENT") : target,
-      link,
+      path.join(fx.leveldb, name),
     );
     const before = await snapshot(path.join(fx.root, LOCAL_STORAGE));
     await assert.rejects(
       copyLocalStorage(fx.root, await copyTarget(fx)),
-      /leads out of Local Storage\/leveldb/,
-      target,
+      { message: `${shown} is a symbolic link.` },
+      `${name} -> ${target}`,
     );
     assert.deepEqual(
       await snapshot(path.join(fx.root, LOCAL_STORAGE)),
@@ -1098,6 +1092,8 @@ const CAPTURED: CapturedDraft[] = [
   { targetAlias: ALIAS_X, title: "Fix login", text: UNSENT, attachments: false },
   { newSession: true, title: "", text: NEW_SESSION_TEXT, attachments: true },
 ];
+// The slots a successful read covers for B: each carried conversation, and the new session.
+const READ_SLOTS: DraftSlots = { aliases: [ALIAS_X, ALIAS_Y], newSession: true };
 
 async function lastOutcome(vault: string) {
   return JSON.parse(
@@ -1154,7 +1150,8 @@ async function capture(
   run: (job: DraftJob) => Promise<DraftResult>,
   extra: Partial<Parameters<typeof captureDrafts>[0]> = {},
 ) {
-  const stored: { to: string; drafts: CapturedDraft[] }[] = [];
+  const stored: { to: string; drafts: CapturedDraft[]; slots: DraftSlots }[] =
+    [];
   const outcome = await captureDrafts({
     root: fx.root,
     from: A,
@@ -1165,8 +1162,8 @@ async function capture(
     ],
     titles: { [ALIAS_X]: "Fix login", [ALIAS_Y]: "B's work" },
     run,
-    store: async (to, drafts) => {
-      stored.push({ to, drafts });
+    store: async (to, drafts, slots) => {
+      stored.push({ to, drafts, slots });
     },
     lastJson: path.join(fx.vault, "drafts", "last.json"),
     now: NOW,
@@ -1211,7 +1208,8 @@ test("captures A's drafts and never changes Claude's leveldb", async (t) => {
   const { outcome, stored } = await capture(fx, run);
 
   assert.deepEqual(outcome, { status: "captured", count: 2 });
-  assert.deepEqual(stored, [{ to: B, drafts: CAPTURED }]);
+  // With every slot the step read: the carried conversations and the new-session draft.
+  assert.deepEqual(stored, [{ to: B, drafts: CAPTURED, slots: READ_SLOTS }]);
   assert.equal(jobs.length, 1);
   // Byte for byte as it was, and nothing was made beside it.
   assert.deepEqual(await snapshot(path.join(fx.root, LOCAL_STORAGE)), before);
@@ -1496,7 +1494,7 @@ test("a leveldb that cannot be copied fails, and the helper never runs", async (
   assert.equal(jobs.length, 0);
 });
 
-test("without drafts worth keeping, nothing is stored", async (t) => {
+test("without drafts worth keeping, no draft is stored but the slots read are", async (t) => {
   const fx = await storageFixture(t);
   const { run } = fakeRun({
     ok: true,
@@ -1506,8 +1504,95 @@ test("without drafts worth keeping, nothing is stored", async (t) => {
   const { outcome, stored } = await capture(fx, run);
 
   assert.deepEqual(outcome, { status: "captured", count: 0 });
-  assert.deepEqual(stored, []);
+  // So the vault can drop an older draft A no longer has in them.
+  assert.deepEqual(stored, [{ to: B, drafts: [], slots: READ_SLOTS }]);
   assert.equal((await lastOutcome(fx.vault)).count, 0);
+});
+
+test("Claude opening after the copy stops the step before the run", async (t) => {
+  // Asked once, after the copy. A check that throws counts as running.
+  const cases: [string, () => Promise<boolean>][] = [
+    ["running", async () => true],
+    [
+      "unknown",
+      async () => {
+        throw new Error("ps failed");
+      },
+    ],
+  ];
+  for (const [name, running] of cases) {
+    const fx = await storageFixture(t);
+    const before = await snapshot(path.join(fx.root, LOCAL_STORAGE));
+    const seen: string[][] = [];
+    const { run, jobs } = fakeRun();
+
+    const { outcome, stored } = await capture(fx, run, {
+      running: async () => {
+        // What the step's scratch dir holds when it asks.
+        for (const scratch of await fs.readdir(fx.tmp))
+          seen.push(await fs.readdir(path.join(fx.tmp, scratch)));
+        return running();
+      },
+    });
+
+    const expected = { status: "skipped", reason: "Claude is running" };
+    assert.deepEqual(outcome, expected, name);
+    // Asked once, with the copy made.
+    assert.deepEqual(seen, [["copy"]], name);
+    assert.equal(jobs.length, 0, name);
+    assert.deepEqual(stored, [], name);
+    // The copy is gone, and Claude's leveldb is as it was.
+    assert.deepEqual(await fs.readdir(fx.tmp), [], name);
+    assert.deepEqual(
+      await snapshot(path.join(fx.root, LOCAL_STORAGE)),
+      before,
+      name,
+    );
+    assert.deepEqual(
+      await lastOutcome(fx.vault),
+      { at: NOW.toISOString(), from: A, to: B, ...expected },
+      name,
+    );
+  }
+  // Still closed: the run goes ahead.
+  const fx = await storageFixture(t);
+  const { run, jobs } = fakeRun();
+  const { outcome } = await capture(fx, run, { running: async () => false });
+  assert.equal(outcome.status, "captured");
+  assert.equal(jobs.length, 1);
+});
+
+test("a link inside leveldb fails the step, and the helper never runs", async (t) => {
+  const fx = await storageFixture(t);
+  await fs.symlink("LOCK", path.join(fx.leveldb, "link"));
+  const { run, jobs } = fakeRun();
+
+  const { outcome } = await capture(fx, run);
+
+  assert.deepEqual(outcome, {
+    status: "failed",
+    error: "Local Storage/leveldb/link is a symbolic link.",
+  });
+  assert.equal(jobs.length, 0);
+  assert.deepEqual(await fs.readdir(fx.tmp), []);
+});
+
+test("a long error is cut to 300 characters", async (t) => {
+  const fx = await storageFixture(t);
+  const long = "e".repeat(299) + "Ω" + "tail".repeat(250);
+  const { run } = fakeRun({ ok: false, error: long });
+
+  const { outcome } = await capture(fx, run);
+
+  assert.deepEqual(outcome, { status: "failed", error: long.slice(0, 300) });
+  assert.equal((await lastOutcome(fx.vault)).error, long.slice(0, 300));
+  // A blocked reason, which may be any error Relay caught, is cut the same way.
+  const blocked = await storageFixture(t);
+  const { outcome: skipped } = await capture(blocked, fakeRun().run, {
+    blocked: long,
+  });
+  assert.deepEqual(skipped, { status: "skipped", reason: long.slice(0, 300) });
+  assert.equal((await lastOutcome(blocked.vault)).reason, long.slice(0, 300));
 });
 
 test("last.json is never written through a linked drafts dir", async (t) => {
@@ -1751,6 +1836,92 @@ test("a corrupt vault file reads as empty", async (t) => {
     (await v.drafts.list()).map((record) => record.targetAlias),
     [ALIAS_Y],
   );
+});
+
+test("a vault file that cannot be read is never overwritten", async (t) => {
+  const v = await vaultFixture(t);
+  await v.drafts.add(B, [conversationDraft(ALIAS_X)]);
+  const before = await fs.readFile(v.file);
+  const [record] = await v.drafts.list();
+  // The read fails for a reason that says nothing about what the file holds.
+  const readFile = fs.readFile;
+  t.after(() => {
+    fs.readFile = readFile;
+  });
+  fs.readFile = (async (target: any, ...rest: any[]) => {
+    if (target === v.file)
+      throw Object.assign(new Error("injected read failure"), { code: "EIO" });
+    return (readFile as any)(target, ...rest);
+  }) as typeof fs.readFile;
+
+  await assert.rejects(v.drafts.add(B, [conversationDraft(ALIAS_Y)]), {
+    code: "EIO",
+  });
+  await assert.rejects(v.drafts.update(record.id, { state: "needs-copy" }), {
+    code: "EIO",
+  });
+  await assert.rejects(v.drafts.remove(record.id), { code: "EIO" });
+  // A read for the panel or the restorer shows nothing and changes nothing.
+  assert.deepEqual(await v.drafts.list(), []);
+  fs.readFile = readFile;
+
+  assert.deepEqual(await fs.readFile(v.file), before);
+  assert.deepEqual(await v.drafts.list(), [record]);
+});
+
+test("a capture that read a slot and found nothing drops the stale draft there", async (t) => {
+  const v = await vaultFixture(t);
+  const newSession: CapturedDraft = {
+    newSession: true,
+    title: "",
+    text: NEW_SESSION_TEXT,
+    attachments: false,
+  };
+  const alias = randomUUID();
+  await v.drafts.add(B, [
+    conversationDraft(ALIAS_X),
+    conversationDraft(ALIAS_Y),
+    conversationDraft(alias),
+    newSession,
+  ]);
+  // The same slots for another account, which a capture for B never touches.
+  await v.drafts.add(C, [conversationDraft(ALIAS_X), newSession]);
+  // Y waits to be copied by hand: it is never re-typed, so it is not stale.
+  const y = (await v.drafts.list()).find(
+    (record) => record.to === B && record.targetAlias === ALIAS_Y,
+  )!;
+  await v.drafts.update(y.id, { state: "needs-copy", reason: "lost" });
+  v.advance(1000);
+  const slots = (records: DraftRecord[]) =>
+    records
+      .map((record) => `${record.to === B ? "B" : "C"}/${record.targetAlias ?? "new"}`)
+      .sort();
+
+  // A conversation the capture read and A had no draft in.
+  await v.drafts.add(B, [], { aliases: [ALIAS_X, ALIAS_Y], newSession: false });
+  assert.deepEqual(slots(await v.drafts.list()), [
+    `B/${ALIAS_Y}`,
+    `B/${alias}`,
+    "B/new",
+    `C/${ALIAS_X}`,
+    "C/new",
+  ].sort());
+
+  // The new-session screen, read and found empty.
+  await v.drafts.add(B, [conversationDraft(alias, "newer")], {
+    aliases: [alias],
+    newSession: true,
+  });
+  const records = await v.drafts.list();
+  assert.deepEqual(slots(records), [`B/${ALIAS_Y}`, `B/${alias}`, `C/${ALIAS_X}`, "C/new"].sort());
+  assert.equal(
+    records.find((record) => record.to === B && record.targetAlias === alias)!.text,
+    "newer",
+  );
+  // A capture that read nothing (no slots given) drops nothing.
+  const file = await fs.readFile(v.file);
+  await v.drafts.add(B, []);
+  assert.deepEqual(await fs.readFile(v.file), file);
 });
 
 test("vault changes made at the same time all land", async (t) => {

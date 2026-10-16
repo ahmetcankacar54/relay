@@ -25,7 +25,11 @@ import {
 } from "../../shared/history-policy";
 import { summarizeHistory } from "./desktop-history";
 import { errorMessage, type DraftJob, type DraftResult } from "../draft-job";
-import { captureDrafts } from "./draft-transfer";
+import {
+  CLAUDE_RUNNING,
+  captureDrafts,
+  sweepStaleDraftScratch,
+} from "./draft-transfer";
 import { removeLegacyDraftBackups } from "./draft-storage";
 import {
   DraftVault,
@@ -129,6 +133,8 @@ export class DesktopManager {
     await fs.mkdir(this.vault, { recursive: true, mode: 0o700 });
     // The first design kept plaintext copies of Claude's Local Storage there.
     await removeLegacyDraftBackups(this.vault);
+    // A draft step that stopped with Relay leaves a copy and the helper's result behind.
+    await sweepStaleDraftScratch(this.host.draftScratchDir ?? os.tmpdir());
     const pending = await readObject(this.vault, "pending.json");
     if (pending && uuid.safeParse(pending.profileId).success)
       this.pending = pending as Pending;
@@ -564,7 +570,7 @@ export class DesktopManager {
       try {
         blocked = (await host.draftsBlocked?.()) || undefined;
         // The copy is made while Claude is closed; one Claude is writing could be torn.
-        if (!blocked && (await host.running())) blocked = "Claude is running";
+        if (!blocked && (await host.running())) blocked = CLAUDE_RUNNING;
         if (!blocked) claudeElectron = await host.claudeElectron?.();
       } catch (error) {
         blocked = errorMessage(error);
@@ -580,11 +586,14 @@ export class DesktopManager {
             ? {}
             : await this.draftTitles(target, conversations),
         run: (job) => host.readDrafts!(job),
-        store: (account, drafts) => this.drafts.add(account, drafts),
+        store: (account, drafts, slots) =>
+          this.drafts.add(account, drafts, slots),
         lastJson: path.join(this.vault, "drafts", "last.json"),
         now: new Date(),
         blocked,
         claudeElectron,
+        // Asked again once the copy is made: Claude can be opened meanwhile.
+        running: () => host.running(),
         tmp: host.draftScratchDir,
       });
     } catch {

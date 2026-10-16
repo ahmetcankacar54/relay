@@ -44,6 +44,8 @@ async function fixture(t: any) {
     seal: (s) =>
       Buffer.from("TEST-ENCRYPTED:" + Buffer.from(s).toString("base64")),
     unseal: (b) => Buffer.from(b.toString().slice(15), "base64").toString(),
+    // Swept at startup: never the real os.tmpdir().
+    draftScratchDir: path.join(temp, "tmp"),
   };
   const transcriptRoot = path.join(temp, ".claude");
   const manager = new DesktopManager(root, store, host, transcriptRoot);
@@ -1396,6 +1398,59 @@ test("the draft methods work by id, and summaries carry no text", async (t) => {
   assert.deepEqual(await d.drafts(), ["last.json"]);
 });
 
+test("a later capture that finds no draft drops the stale one", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A"); // A is open in Claude
+  const shared = randomUUID();
+  await session(f.root, a, shared, { lastActivityAt: 100 });
+  await session(f.root, b, shared, { lastActivityAt: 300, title: "Fix login" });
+  let drafts: Record<string, string> = {
+    [CONVERSATION_DRAFT_PREFIX + shared]: draftOf(a.desktop!.accountUuid, UNSENT),
+    [NEW_SESSION_DRAFT]: draftOf(a.desktop!.accountUuid, "a new start"),
+  };
+  const d = await withDraftHelper(f, async () => ({ ok: true, drafts }));
+  await f.manager.switchTo(b.id);
+  assert.equal((await f.manager.pendingDraftRecords()).length, 2);
+
+  // Back on A, the user sends the draft and clears the new-session screen, then switches again.
+  drafts = {};
+  await f.manager.switchTo(a.id);
+  await f.manager.switchTo(b.id);
+
+  // What would have been re-typed is no longer A's draft: it is gone, the file with it.
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.deepEqual(await f.manager.pendingDraftRecords(), []);
+  assert.deepEqual(await d.drafts(), ["last.json"]);
+  assert.equal((await d.last())!.count, 0);
+});
+
+test("initialize removes stale draft scratch dirs, and keeps fresh ones", async (t) => {
+  const f = await fixture(t);
+  const tmp = f.host.draftScratchDir!;
+  await fs.mkdir(tmp, { recursive: true });
+  // What a Relay that stopped mid-step left: its copy and the helper's text-bearing result.
+  const stale = await fs.mkdtemp(path.join(tmp, "relay-drafts-"));
+  await fs.mkdir(path.join(stale, "copy", "leveldb"), { recursive: true });
+  await fs.writeFile(path.join(stale, "result.json"), UNSENT);
+  // Younger than ten minutes: it may belong to a step still running.
+  const fresh = await fs.mkdtemp(path.join(tmp, "relay-drafts-"));
+  // Not a scratch dir, however old.
+  const other = path.join(tmp, "someone-else");
+  await fs.mkdir(other);
+  const eleven = new Date(Date.now() - 11 * 60_000);
+  await fs.utimes(stale, eleven, eleven);
+  await fs.utimes(other, eleven, eleven);
+
+  await new DesktopManager(f.root, f.store, f.host, f.transcriptRoot).initialize();
+
+  await assert.rejects(fs.lstat(stale), { code: "ENOENT" });
+  assert.deepEqual((await fs.readdir(tmp)).sort(), [
+    path.basename(fresh),
+    "someone-else",
+  ].sort());
+});
+
 test("an A→B switch runs the draft helper once, on a private copy", async (t) => {
   const f = await fixture(t);
   const b = await f.account("B");
@@ -1570,6 +1625,23 @@ test("drafts are not captured once Claude is running again", async (t) => {
   assert.equal(d.jobs.length, 0);
   assert.equal((await d.last())!.reason, "Claude is running");
   assert.deepEqual(await d.drafts(), ["last.json"]);
+  assert.deepEqual(await fs.readdir(d.tmp), []);
+});
+
+test("Claude opening once the copy is under way stops the step before the helper", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f);
+  // Asked after the first running check, so only the one after the copy sees Claude open.
+  f.host.claudeElectron = async () => {
+    f.setRunning(true);
+    return "44.7.2";
+  };
+  await f.manager.switchTo(b.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 0);
+  assert.equal((await d.last())!.reason, "Claude is running");
   assert.deepEqual(await fs.readdir(d.tmp), []);
 });
 

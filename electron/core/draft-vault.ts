@@ -28,6 +28,16 @@ export interface DraftSummary {
   capturedAt: string;
 }
 
+/**
+ * The slots a capture read for an account: its carried conversations, by alias, and the
+ * new-session screen. A pending record in one of them that the capture did not fill is stale:
+ * the account no longer has that draft, so it must not be re-typed.
+ */
+export interface DraftSlots {
+  aliases: string[];
+  newSession: boolean;
+}
+
 /** Inside the vault. Sealed, so the text is never on disk as it is. */
 const FILE = "drafts/pending.bin";
 const MAX_RECORDS = 20;
@@ -87,8 +97,10 @@ function parseRecord(value: unknown): DraftRecord | undefined {
  * The drafts captured at switches, sealed with `seal` in `<vault>/drafts/pending.bin`.
  *
  * It keeps at most 20 records, newest first, and only the newest per account and conversation.
- * Records older than seven days are dropped when read. A file that cannot be read or unsealed
- * reads as empty. Changes run one at a time, so none is lost to another.
+ * Records older than seven days are dropped when read. A file that cannot be unsealed or
+ * parsed reads as empty. A file that cannot be read at all fails every change, so a change
+ * never overwrites records it could not see. Changes run one at a time, so none is lost to
+ * another.
  */
 export class DraftVault {
   private queue: Promise<unknown> = Promise.resolve();
@@ -99,28 +111,40 @@ export class DraftVault {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** Every record, newest first, with its text. Never throws. */
+  /**
+   * Every record, newest first, with its text. Never throws: when the file cannot be read it
+   * answers with none, and leaves the file as it is.
+   */
   list(): Promise<DraftRecord[]> {
     return this.serial(async () => {
-      const { records, expired } = await this.load();
+      let loaded;
+      try {
+        loaded = await this.load();
+      } catch {
+        return [];
+      }
       // The text of an expired record does not stay on disk either.
-      if (expired) await this.save(records).catch(() => {});
-      return records;
+      if (loaded.expired) await this.save(loaded.records).catch(() => {});
+      return loaded.records;
     });
   }
 
-  /** Keeps `drafts` for account `to`, each replacing an older one in its slot. */
-  add(to: string, drafts: CapturedDraft[]): Promise<void> {
+  /**
+   * Keeps `drafts` for account `to`, each replacing an older one in its slot, whatever its
+   * state. With `slots`, the slots the capture read, a pending record of `to` in one of them
+   * that `drafts` does not fill is dropped too: the newest capture wins, even an empty one.
+   */
+  add(to: string, drafts: CapturedDraft[], slots?: DraftSlots): Promise<void> {
     return this.serial(async () => {
       const capturedAt = new Date(this.now()).toISOString();
-      const slots = new Set<string>();
+      const filled = new Set<string>();
       const fresh: DraftRecord[] = [];
       for (const draft of drafts) {
         // Neither a conversation's nor the new-session draft: there is nowhere to re-type it.
         if (!draft.newSession && !draft.targetAlias) continue;
         const key = slot(to, draft.newSession ? undefined : draft.targetAlias);
-        if (slots.has(key)) continue;
-        slots.add(key);
+        if (filled.has(key)) continue;
+        filled.add(key);
         fresh.push({
           id: randomUUID(),
           to,
@@ -134,11 +158,18 @@ export class DraftVault {
           state: "pending",
         });
       }
-      if (fresh.length === 0) return;
+      const read = new Set([
+        ...(slots?.aliases ?? []).map((alias) => slot(to, alias)),
+        ...(slots?.newSession ? [slot(to, undefined)] : []),
+      ]);
+      if (fresh.length === 0 && read.size === 0) return;
       const { records } = await this.load();
-      const kept = records.filter(
-        (record) => !slots.has(slot(record.to, record.targetAlias)),
-      );
+      const kept = records.filter((record) => {
+        const key = slot(record.to, record.targetAlias);
+        // A record waiting to be copied by hand is never re-typed, so it is not stale.
+        return !filled.has(key) && !(record.state === "pending" && read.has(key));
+      });
+      if (fresh.length === 0 && kept.length === records.length) return;
       await this.save([...fresh, ...kept].slice(0, MAX_RECORDS));
     });
   }
@@ -177,12 +208,17 @@ export class DraftVault {
     return run;
   }
 
-  /** The valid, unexpired records on disk, newest first; `expired` when any were dropped. */
+  /**
+   * The valid, unexpired records on disk, newest first; `expired` when any were dropped. A
+   * missing file, or one that cannot be unsealed or parsed, holds none. Throws when the file
+   * cannot be read at all: what it holds is then unknown, and must not be written over.
+   */
   private async load(): Promise<{ records: DraftRecord[]; expired: boolean }> {
+    // Throws on any failure but a missing file, a link included.
+    const data = await readBytes(this.vault, FILE);
+    if (!data) return { records: [], expired: false };
     let raw: unknown;
     try {
-      const data = await readBytes(this.vault, FILE);
-      if (!data) return { records: [], expired: false };
       raw = JSON.parse(this.unseal(data));
     } catch {
       return { records: [], expired: false };

@@ -506,6 +506,8 @@ async function closedDesktopFixture(t: any) {
     },
     seal: (text) => Buffer.from(text),
     unseal: (bytes) => bytes.toString(),
+    // Swept at startup: never the real os.tmpdir().
+    draftScratchDir: path.join(temp, "tmp"),
   };
   const manager = new DesktopManager(root, store, host);
   await manager.initialize();

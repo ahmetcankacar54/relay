@@ -48,9 +48,8 @@ async function leveldbInPlace(root: string): Promise<boolean> {
  * Copies `<root>/Local Storage/leveldb` to `<storage>/leveldb`, making `storage` (mode 0700;
  * one that exists already is never copied into). Returns false, making nothing, when Local
  * Storage or leveldb is missing. Throws when either is a symlink or not a directory, and when
- * leveldb holds a link that would lead the copy out of itself: an absolute one, or a relative
- * one that climbs out of leveldb. Followed from the copy, either could reach Claude's own
- * files. Relative links inside are copied as they are, so they lead into the copy.
+ * leveldb holds a symlink anywhere: Chromium's leveldb has none, and followed from the copy a
+ * link could reach Claude's own files.
  */
 export async function copyLocalStorage(
   root: string,
@@ -67,21 +66,9 @@ export async function copyLocalStorage(
     errorOnExist: true,
     verbatimSymlinks: true,
     filter: async (source) => {
-      if (!(await fs.lstat(source)).isSymbolicLink()) return true;
-      const target = await fs.readlink(source);
-      const inside = path.relative(
-        live,
-        path.resolve(path.dirname(source), target),
-      );
-      if (
-        path.isAbsolute(target) ||
-        inside === "" ||
-        inside === ".." ||
-        inside.startsWith(`..${path.sep}`) ||
-        path.isAbsolute(inside)
-      )
+      if ((await fs.lstat(source)).isSymbolicLink())
         throw new Error(
-          `${LEVELDB}/${path.relative(live, source)} leads out of ${LEVELDB}.`,
+          `${LEVELDB}/${path.relative(live, source)} is a symbolic link.`,
         );
       return true;
     },

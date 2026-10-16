@@ -13,6 +13,7 @@ import {
   type CapturedDraft,
 } from "./drafts";
 import { copyLocalStorage, sweepDraftLeftovers } from "./draft-storage";
+import type { DraftSlots } from "./draft-vault";
 import {
   DRAFT_WORKER_FLAG,
   electronMajor,
@@ -28,6 +29,10 @@ const SCRATCH_PREFIX = "relay-drafts-";
 /** A scratch dir older than this was left by a Relay that stopped mid-step: the helper gets 10 s. */
 const STALE_SCRATCH_MS = 10 * 60_000;
 const ELECTRON_UNKNOWN = "Claude Desktop's Electron version is unknown";
+/** Why a step stops when Claude is open: a copy of a leveldb Claude is writing could be torn. */
+export const CLAUDE_RUNNING = "Claude is running";
+/** Most characters of an error or reason `last.json` keeps. */
+const MAX_REASON_CHARS = 300;
 
 export type CaptureOutcome =
   | { status: "captured"; count: number }
@@ -48,11 +53,15 @@ export type CaptureOutcome =
  * `blocked`, when set, says why drafts cannot be read now. `claudeElectron` is the Electron
  * version the same gate read from Claude.app; the helper refuses to open the copy under another
  * major. With `blocked`, or without `claudeElectron`, the step is skipped before anything is
- * swept or copied.
+ * swept or copied. `running`, when given, is asked once the copy is made: a Claude that opened
+ * meanwhile, or a check that throws, skips the step before the run, and the copy is dropped.
+ *
+ * After a successful read, `store` gets the drafts kept, possibly none, and the slots read for
+ * `to`: every carried conversation and the new-session screen.
  *
  * A run that fails, throws or answers nothing, and a copy or a store that fails, end the step
  * as failed. The outcome is written to `lastJson` (`<vault>/drafts/last.json`) with counts and
- * reasons, never draft text. Never throws.
+ * reasons cut to 300 characters, never draft text. Never throws.
  */
 export async function captureDrafts(input: {
   root: string;
@@ -61,11 +70,12 @@ export async function captureDrafts(input: {
   conversations: CarriedConversation[];
   titles: Record<string, string>;
   run: (job: DraftJob) => Promise<DraftResult>;
-  store: (to: string, drafts: CapturedDraft[]) => Promise<void>;
+  store: (to: string, drafts: CapturedDraft[], slots: DraftSlots) => Promise<void>;
   lastJson: string;
   now: Date;
   blocked?: string;
   claudeElectron?: string;
+  running?: () => Promise<boolean>;
   tmp?: string;
 }): Promise<CaptureOutcome> {
   let outcome: CaptureOutcome;
@@ -74,6 +84,11 @@ export async function captureDrafts(input: {
   } catch (error) {
     outcome = { status: "failed", error: errorMessage(error) };
   }
+  // Whatever produced an error or a reason, only its start is kept.
+  if (outcome.status === "failed")
+    outcome = { ...outcome, error: outcome.error.slice(0, MAX_REASON_CHARS) };
+  else if (outcome.status === "skipped")
+    outcome = { ...outcome, reason: outcome.reason.slice(0, MAX_REASON_CHARS) };
   try {
     // Written as `drafts/last.json` under the vault, so a linked drafts dir is refused too.
     const drafts = path.dirname(input.lastJson);
@@ -101,7 +116,7 @@ async function capture(
   const claudeElectron = input.claudeElectron;
   if (!claudeElectron) return { status: "skipped", reason: ELECTRON_UNKNOWN };
   const tmp = input.tmp ?? os.tmpdir();
-  await sweepStaleScratch(tmp);
+  await sweepStaleDraftScratch(tmp);
   await sweepDraftLeftovers(input.root);
 
   const scratch = await fs.mkdtemp(path.join(tmp, SCRATCH_PREFIX));
@@ -109,6 +124,13 @@ async function capture(
     const storage = path.join(scratch, "copy");
     if (!(await copyLocalStorage(input.root, storage)))
       return { status: "skipped", reason: "no Local Storage" };
+    if (input.running) {
+      let running = true; // Unknown counts as running.
+      try {
+        running = await input.running();
+      } catch {}
+      if (running) return { status: "skipped", reason: CLAUDE_RUNNING };
+    }
     const result: DraftResult | undefined = await input.run({
       storage,
       scratch,
@@ -127,7 +149,11 @@ async function capture(
       conversations: input.conversations,
       titles: input.titles,
     });
-    if (drafts.length) await input.store(input.to, drafts);
+    // Even with none kept: an older draft in a slot read here is no longer the account's.
+    await input.store(input.to, drafts, {
+      aliases: input.conversations.map(({ targetAlias }) => targetAlias),
+      newSession: true,
+    });
     return { status: "captured", count: drafts.length };
   } finally {
     // The helper leaves a link to the copy in here. rm removes the link itself, never what it
@@ -138,9 +164,10 @@ async function capture(
 
 /**
  * Removes the helper scratch dirs in `tmp` that are older than ten minutes: a Relay that crashed
- * or was killed mid-step leaves one behind, with its copy and its link. Never throws.
+ * or was killed mid-step leaves one behind, with its copy, its link and the helper's result.
+ * Run before every step and when Relay starts. Never throws.
  */
-async function sweepStaleScratch(tmp: string): Promise<void> {
+export async function sweepStaleDraftScratch(tmp: string): Promise<void> {
   try {
     for (const entry of await fs.readdir(tmp, { withFileTypes: true })) {
       if (!entry.isDirectory() || !entry.name.startsWith(SCRATCH_PREFIX))
