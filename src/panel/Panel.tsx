@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RefreshCw, Settings2 } from "lucide-react";
 import { maxUsedPercent } from "../../shared/usage";
 import { Button } from "@/components/ui/button";
+import { Panda } from "@/components/Panda";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { panelRowState } from "@/lib/account-row";
@@ -11,16 +12,14 @@ import { RelayErrorAlert } from "@/app/Banners";
 import { PanelActiveCard } from "./PanelActiveCard";
 import { PanelAccounts, panelRows, switchingId } from "./PanelAccounts";
 import { PanelAutomation } from "./PanelAutomation";
+import { panelHead } from "./panel-head";
 
 /** The menu bar popover: active account, other accounts, automation. */
 export function Panel({
   now = Date.now(),
-  icon,
 }: {
   /** Injected by tests; the panel re-renders with the snapshot poll. */
   now?: number;
-  /** App icon URL, passed in by the entry so tests need no asset import. */
-  icon?: string;
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
@@ -68,11 +67,7 @@ export function Panel({
     >
       <header className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
         <span className="flex items-center gap-2 font-bold">
-          {icon ? (
-            <img src={icon} alt="" className="size-[18px] rounded-[5px]" />
-          ) : (
-            <span className="size-[18px] rounded-[5px] bg-brand" />
-          )}
+          <Panda scene={panelHead(relay.data, relay.desktop, now)} size={18} />
           Relay
         </span>
         <span className="flex items-center gap-0.5">

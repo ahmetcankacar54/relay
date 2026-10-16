@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Panel } from "../src/panel/Panel";
+import { panelHead } from "../src/panel/panel-head";
 import { PanelAccounts, confirmSwitch } from "../src/panel/PanelAccounts";
 import { relayAction } from "../src/data/relay-action";
 import { panelRowState, accountRowSubtitle } from "../src/lib/account-row";
@@ -260,4 +261,22 @@ test("the planning pill names the adopted start while the plan is adapted", () =
     pill(keeper(deferred), { ...settings, planning: { ...settings.planning, adaptive: false } }),
     /Uyarlandı/,
   );
+});
+
+test("the panel header shows the panda head for the menu bar pose", () => {
+  const active = acct("active", "Kişisel");
+  const scene = (usage: Record<string, AccountUsage>, extra: Partial<Relay> = {}) =>
+    /<header[\s\S]*?data-scene="([^"]+)"/.exec(render(relayFor(active, [active], usage, extra)))?.[1];
+  assert.equal(scene({ active: use("active", 20, 10) }), "head-idle");
+  assert.equal(scene({ active: use("active", 95, 10) }), "head-hungry");
+  assert.equal(scene({ active: use("active", 100, 10) }), "head-sleep");
+  assert.equal(
+    scene({ active: use("active", 20, 10) }, { desktop: { ...desktopState("active"), recoveryRequired: true } }),
+    "head-alert",
+  );
+});
+
+test("the panel head rests on idle until the panel has data", () => {
+  assert.equal(panelHead(undefined, desktopState("a"), NOW), "head-idle");
+  assert.equal(panelHead({ accounts: [], usage: {} }, desktopState(), NOW), "head-idle");
 });
