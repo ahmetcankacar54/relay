@@ -12,14 +12,20 @@ import {
   readObject,
   writeBytes,
   jsonBytes,
-  planHistory,
+  planHistoryDetailed,
   scopePath,
   uuid,
+  type CarriedConversation,
   type JsonObject,
 } from "./desktop-files";
 import type { Account, DesktopOperationKind, DesktopRestartEvent, DesktopState } from "../../shared/types";
-import { historySources } from "../../shared/history-policy";
+import {
+  allowedHistoryPair,
+  historySources,
+} from "../../shared/history-policy";
 import { summarizeHistory } from "./desktop-history";
+import { errorMessage, type DraftJob, type DraftResult } from "../draft-job";
+import { preserveDrafts } from "./draft-transfer";
 
 export interface DesktopHost {
   available(): Promise<boolean>;
@@ -28,6 +34,13 @@ export interface DesktopHost {
   launch(): Promise<void>;
   seal(data: string): Buffer;
   unseal(data: Buffer): string;
+  /**
+   * Runs the draft helper on `job` while Claude is closed, and resolves only once the helper
+   * has exited or been killed. Without it, drafts never move.
+   */
+  moveDrafts?(job: DraftJob): Promise<DraftResult>;
+  /** Why drafts cannot move on this machine, or undefined when they can. */
+  draftsBlocked?(): Promise<string | undefined>;
 }
 interface SavedLogin {
   accountUuid: string;
@@ -75,6 +88,8 @@ export class DesktopManager {
   private lastBackup?: string;
   private vault: string;
   private pendingHistorySeen?: Buffer;
+  /** The conversations the last `historyPlan` carries into its target. */
+  private carried: CarriedConversation[] = [];
   /**
    * Told right before an operation first quits Claude, and when that operation
    * ends; operations that never quit Claude report nothing.
@@ -337,6 +352,7 @@ export class DesktopManager {
           if (key in saved.auth) config[key] = saved.auth[key];
         }
         const changes = await this.historyPlan(target);
+        const carried = this.carried;
         if (current !== saved.accountUuid) {
           changes.set("config.json", jsonBytes(config));
           for (const f of COOKIE_FILES)
@@ -352,6 +368,9 @@ export class DesktopManager {
           closedOnly: options.closedOnly,
           canProceed: options.canProceed,
         });
+        // Still inside `change`, so a restart relaunches Claude only once the helper is gone.
+        if (current && current !== saved.accountUuid)
+          await this.carryDrafts(current, saved.accountUuid, target, carried);
       };
       if (options.closedOnly) await change();
       else await this.restart(change, options.canProceed, options.beforeQuit);
@@ -446,6 +465,7 @@ export class DesktopManager {
     target: Account,
   ): Promise<Map<string, Buffer | null>> {
     this.pendingHistorySeen = undefined;
+    this.carried = [];
     if (
       !target.desktop ||
       this.store.state.settings.desktopHistoryTransfer === "off"
@@ -471,7 +491,7 @@ export class DesktopManager {
       this.store.state.accounts,
       this.store.state.settings,
     );
-    const plan = await planHistory(
+    const { writes: plan, conversations } = await planHistoryDetailed(
       this.root,
       target.desktop,
       sources.map((a) => a.desktop!),
@@ -491,7 +511,52 @@ export class DesktopManager {
     const next = { ...previous, [key]: seen };
     if (JSON.stringify(next) !== JSON.stringify(previous))
       this.pendingHistorySeen = jsonBytes(next);
+    this.carried = conversations;
     return new Map(plan);
+  }
+  /**
+   * Moves the unsent drafts of the account being left (`from`) to the one switched to (`to`),
+   * once the switch's files are written and while Claude is still closed. Drafts follow the
+   * history policy: nothing moves when it is off or does not allow this pair. Never throws, so
+   * a draft can never fail, roll back or hold up a switch.
+   */
+  private async carryDrafts(
+    from: string,
+    to: string,
+    target: Account,
+    conversations: CarriedConversation[],
+  ) {
+    try {
+      const host = this.host;
+      if (!host.moveDrafts) return;
+      const settings = this.store.state.settings;
+      if (settings.desktopHistoryTransfer === "off") return;
+      const source = this.store.state.accounts.find(
+        (a) => a.desktop?.accountUuid === from,
+      );
+      if (!source || !allowedHistoryPair(source, target, settings)) return;
+      let blocked: string | undefined;
+      try {
+        // The helper must never open Local Storage while Claude has it open.
+        blocked =
+          (await host.draftsBlocked?.()) ||
+          ((await host.running()) ? "Claude is running" : undefined);
+      } catch (error) {
+        blocked = errorMessage(error);
+      }
+      await preserveDrafts({
+        root: this.root,
+        vault: this.vault,
+        from,
+        to,
+        conversations,
+        run: (job) => host.moveDrafts!(job),
+        now: new Date(),
+        blocked,
+      });
+    } catch {
+      // Drafts never change how a switch ends.
+    }
   }
   async recover() {
     return this.exclusive({ kind: "restore" }, async () => {

@@ -49,6 +49,22 @@ async function sweepLeftovers(storage: string, live: string): Promise<void> {
 }
 
 /**
+ * Removes what an earlier restore left beside `<root>/Local Storage/leveldb`.
+ * Never throws. Does nothing unless Local Storage is a real directory and
+ * leveldb is in place, so it never reaches through a link and never removes
+ * what may be the only copy of Claude's data.
+ */
+export async function sweepRestoreLeftovers(root: string): Promise<void> {
+  const storage = path.join(root, LOCAL_STORAGE);
+  try {
+    if (!(await fs.lstat(storage)).isDirectory()) return;
+  } catch {
+    return;
+  }
+  await sweepLeftovers(storage, path.join(root, LEVELDB));
+}
+
+/**
  * Copies `<root>/Local Storage/leveldb` to `<vault>/drafts/<stamp>/leveldb`
  * and returns `<vault>/drafts/<stamp>`, or undefined when leveldb is missing.
  * Throws when leveldb (or Local Storage) is a symlink or not a directory, and

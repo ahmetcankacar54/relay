@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { randomBytes, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
+import type { ChildProcess } from "node:child_process";
 import {
   jsonBytes,
   planHistory,
@@ -23,7 +25,16 @@ import {
   backupLocalStorage,
   pruneDraftBackups,
   restoreLocalStorage,
+  sweepRestoreLeftovers,
 } from "../electron/core/draft-storage";
+import {
+  awaitHelper,
+  draftsBlockedReason,
+  electronMismatch,
+  helperOutcome,
+  preserveDrafts,
+  type HelperExit,
+} from "../electron/core/draft-transfer";
 import {
   DRAFT_WORKER_FLAG,
   EMPTY_STORAGE,
@@ -33,6 +44,7 @@ import {
   runDraftJob,
   type DraftJob,
   type DraftPage,
+  type DraftResult,
 } from "../electron/draft-job";
 
 // A fake Claude root with two accounts and nothing else: planHistory only reads
@@ -1305,4 +1317,658 @@ test("the package runs the entry", async () => {
     ),
   );
   assert.equal(pkg.main, "dist-electron/entry.cjs");
+});
+
+// --- The draft step of a switch ---------------------------------------------------
+
+const NOW = new Date("2026-10-16T10:00:00.000Z");
+const NOW_STAMP = "2026-10-16T10-00-00-000Z";
+
+// The backup directories under <vault>/drafts, oldest first.
+async function backupsIn(vault: string) {
+  let names: string[] = [];
+  try {
+    names = await fs.readdir(path.join(vault, "drafts"));
+  } catch (e: any) {
+    if (e.code !== "ENOENT") throw e;
+  }
+  return names.filter((name) => /^\d{4}-\d{2}-\d{2}T/.test(name)).sort();
+}
+
+async function lastOutcome(vault: string) {
+  return JSON.parse(
+    await fs.readFile(path.join(vault, "drafts", "last.json"), "utf8"),
+  );
+}
+
+// A stand-in for the helper: it leaves its scratch dir the way the real one does (a root
+// whose "Local Storage" links to Claude's, and a userData), then does `effect` and answers.
+// The default answer carries a stray `text` field, which must never reach last.json.
+function fakeRun(
+  effect?: (job: DraftJob) => Promise<DraftResult | void>,
+  answer = {
+    ok: true,
+    moved: 1,
+    owned: 1,
+    skipped: 0,
+    text: "an unsent draft",
+  } as DraftResult,
+) {
+  const jobs: DraftJob[] = [];
+  const run = async (job: DraftJob): Promise<DraftResult> => {
+    jobs.push(job);
+    await fs.mkdir(path.join(job.scratch, "root"), { recursive: true });
+    await fs.symlink(
+      job.storage,
+      path.join(job.scratch, "root", "Local Storage"),
+    );
+    await fs.mkdir(path.join(job.scratch, "userData"), { recursive: true });
+    await fs.writeFile(path.join(job.scratch, "userData", "Preferences"), "{}");
+    return (await effect?.(job)) ?? answer;
+  };
+  return { run, jobs };
+}
+
+function transfer(
+  fx: { root: string; vault: string },
+  run: (job: DraftJob) => Promise<DraftResult>,
+  extra: { now?: Date; blocked?: string } = {},
+) {
+  return preserveDrafts({
+    root: fx.root,
+    vault: fx.vault,
+    from: A,
+    to: B,
+    conversations: [carried(ALIAS_X, [ALIAS_X, A], [ALIAS_X, B])],
+    run,
+    now: NOW,
+    ...extra,
+  });
+}
+
+async function assertGone(target: string) {
+  await assert.rejects(fs.lstat(target), { code: "ENOENT" }, target);
+}
+
+test("a successful run reports moved and keeps a backup", async (t) => {
+  const fx = await storageFixture(t);
+  const before = await snapshot(fx.leveldb);
+  const { run, jobs } = fakeRun();
+
+  const outcome = await transfer(fx, run);
+
+  assert.deepEqual(outcome, {
+    status: "moved",
+    moved: 1,
+    owned: 1,
+    skipped: 0,
+  });
+  assert.equal(jobs.length, 1);
+  const [job] = jobs;
+  assert.equal(job.storage, path.join(fx.root, LOCAL_STORAGE));
+  assert.equal(path.dirname(job.scratch), os.tmpdir());
+  assert.equal(job.result, path.join(job.scratch, "result.json"));
+  assert.equal(job.from, A);
+  assert.equal(job.to, B);
+  assert.deepEqual(job.conversations, [
+    carried(ALIAS_X, [ALIAS_X, A], [ALIAS_X, B]),
+  ]);
+  assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
+  assert.deepEqual(
+    await snapshot(path.join(fx.vault, "drafts", NOW_STAMP, "leveldb")),
+    before,
+  );
+  // The scratch dir is gone, and removing it did not follow its link into Claude's data.
+  await assertGone(job.scratch);
+  assert.deepEqual(await snapshot(fx.leveldb), before);
+
+  const last = await lastOutcome(fx.vault);
+  assert.deepEqual(last, {
+    at: NOW.toISOString(),
+    from: A,
+    to: B,
+    status: "moved",
+    moved: 1,
+    owned: 1,
+    skipped: 0,
+  });
+  const raw = await fs.readFile(
+    path.join(fx.vault, "drafts", "last.json"),
+    "utf8",
+  );
+  assert.ok(!raw.includes("text"), raw);
+  assert.ok(!raw.includes("an unsent draft"), raw);
+});
+
+test("a failed run restores Local Storage byte for byte", async (t) => {
+  const fx = await storageFixture(t);
+  const before = await snapshot(fx.leveldb);
+  const { run, jobs } = fakeRun(async (job) => {
+    const leveldb = path.join(job.storage, "leveldb");
+    await fs.writeFile(path.join(leveldb, "000005.ldb"), "half written");
+    await fs.writeFile(path.join(leveldb, "000009.log"), "new");
+    await fs.rm(path.join(leveldb, "LOCK"));
+    return { ok: false, error: "verification failed" };
+  });
+
+  const outcome = await transfer(fx, run);
+
+  assert.deepEqual(outcome, {
+    status: "failed",
+    error: "verification failed",
+    restored: true,
+  });
+  assert.deepEqual(await snapshot(fx.leveldb), before);
+  assert.deepEqual(await fs.readdir(path.join(fx.root, LOCAL_STORAGE)), [
+    "leveldb",
+  ]);
+  // The backup stays, in case it is ever needed by hand.
+  assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
+  await assertGone(jobs[0].scratch);
+  assert.deepEqual(await lastOutcome(fx.vault), {
+    at: NOW.toISOString(),
+    from: A,
+    to: B,
+    status: "failed",
+    error: "verification failed",
+    restored: true,
+  });
+});
+
+test("a throwing run is a failed outcome", async (t) => {
+  const fx = await storageFixture(t);
+  const before = await snapshot(fx.leveldb);
+  const { run, jobs } = fakeRun(async (job) => {
+    await fs.writeFile(
+      path.join(job.storage, "leveldb", "CURRENT"),
+      "MANIFEST-000099\n",
+    );
+    throw new Error("helper crashed");
+  });
+
+  const outcome = await transfer(fx, run);
+
+  assert.deepEqual(outcome, {
+    status: "failed",
+    error: "helper crashed",
+    restored: true,
+  });
+  assert.deepEqual(await snapshot(fx.leveldb), before);
+  await assertGone(jobs[0].scratch);
+  assert.equal((await lastOutcome(fx.vault)).status, "failed");
+});
+
+test("a run that answers nothing is a failure and is restored", async (t) => {
+  const fx = await storageFixture(t);
+  const before = await snapshot(fx.leveldb);
+  const { run, jobs } = fakeRun(async (job) => {
+    await fs.writeFile(path.join(job.storage, "leveldb", "CURRENT"), "x");
+  });
+  const shrug = async (job: DraftJob) => {
+    await run(job);
+    return undefined as unknown as DraftResult;
+  };
+
+  assert.deepEqual(await transfer(fx, shrug), {
+    status: "failed",
+    error: "no result",
+    restored: true,
+  });
+  assert.deepEqual(await snapshot(fx.leveldb), before);
+  await assertGone(jobs[0].scratch);
+});
+
+test("no Local Storage → skipped, run not called", async (t) => {
+  const fx = await storageFixture(t);
+  await fs.rm(fx.leveldb, { recursive: true });
+  const { run, jobs } = fakeRun();
+
+  const outcome = await transfer(fx, run);
+
+  assert.deepEqual(outcome, { status: "skipped", reason: "no Local Storage" });
+  assert.equal(jobs.length, 0);
+  assert.deepEqual(await backupsIn(fx.vault), []);
+  assert.deepEqual(await lastOutcome(fx.vault), {
+    at: NOW.toISOString(),
+    from: A,
+    to: B,
+    status: "skipped",
+    reason: "no Local Storage",
+  });
+});
+
+test("a run first sweeps what an earlier restore left, but only while leveldb is in place", async (t) => {
+  const fx = await storageFixture(t);
+  const storage = path.join(fx.root, LOCAL_STORAGE);
+  await fs.mkdir(path.join(storage, "leveldb.relay-old-1234"));
+  await fs.mkdir(path.join(storage, "leveldb.relay-5678"));
+  const seen: string[][] = [];
+  const { run } = fakeRun(async (job) => {
+    seen.push((await fs.readdir(job.storage)).sort());
+  });
+
+  await transfer(fx, run);
+  assert.deepEqual(seen, [["leveldb"]]);
+
+  // With leveldb gone, a leftover may be the only copy of Claude's data: it stays.
+  await fs.rename(fx.leveldb, path.join(storage, "leveldb.relay-old-9999"));
+  assert.deepEqual(
+    await transfer(fx, run, { now: new Date("2026-10-16T11:00:00.000Z") }),
+    { status: "skipped", reason: "no Local Storage" },
+  );
+  assert.deepEqual(await fs.readdir(storage), ["leveldb.relay-old-9999"]);
+});
+
+test("the sweep never reaches through a symlinked Local Storage", async (t) => {
+  const fx = await storageFixture(t);
+  const storage = path.join(fx.root, LOCAL_STORAGE);
+  const elsewhere = path.join(fx.base, "elsewhere");
+  await fs.rename(storage, elsewhere);
+  await fs.mkdir(path.join(elsewhere, "leveldb.relay-old-1234"));
+  await fs.symlink(elsewhere, storage);
+
+  await sweepRestoreLeftovers(fx.root);
+
+  assert.deepEqual((await fs.readdir(elsewhere)).sort(), [
+    "leveldb",
+    "leveldb.relay-old-1234",
+  ]);
+});
+
+test("old backups are pruned before the new one, so at most three ever exist", async (t) => {
+  const fx = await storageFixture(t);
+  const counts: number[] = [];
+  const { run } = fakeRun(async () => {
+    counts.push((await backupsIn(fx.vault)).length);
+  });
+  for (const day of [1, 2, 3, 4, 5])
+    await transfer(fx, run, { now: new Date(Date.UTC(2026, 9, day, 12)) });
+  assert.deepEqual(counts, [1, 2, 3, 3, 3]);
+  assert.deepEqual(await backupsIn(fx.vault), [
+    "2026-10-03T12-00-00-000Z",
+    "2026-10-04T12-00-00-000Z",
+    "2026-10-05T12-00-00-000Z",
+  ]);
+});
+
+test("the backup a run depends on survives a clock that went back", async (t) => {
+  const fx = await storageFixture(t);
+  // Three backups made while the clock was years ahead.
+  for (const day of [1, 2, 3])
+    await backupLocalStorage(
+      fx.root,
+      fx.vault,
+      new Date(Date.UTC(2030, 0, day)),
+    );
+  const before = await snapshot(fx.leveldb);
+  const during: string[][] = [];
+  const { run } = fakeRun(async (job) => {
+    during.push(await backupsIn(fx.vault));
+    await fs.writeFile(path.join(job.storage, "leveldb", "CURRENT"), "x");
+    return { ok: false, error: "verification failed" };
+  });
+
+  const outcome = await transfer(fx, run);
+
+  const kept = [
+    NOW_STAMP,
+    "2030-01-02T00-00-00-000Z",
+    "2030-01-03T00-00-00-000Z",
+  ];
+  assert.deepEqual(during, [kept]);
+  assert.deepEqual(outcome, {
+    status: "failed",
+    error: "verification failed",
+    restored: true,
+  });
+  assert.deepEqual(await snapshot(fx.leveldb), before);
+  assert.deepEqual(await backupsIn(fx.vault), kept);
+});
+
+test("a backup that cannot be made is a skip, and the helper never runs", async (t) => {
+  const { run, jobs } = fakeRun();
+
+  // leveldb is a link.
+  const linked = await storageFixture(t);
+  const real = path.join(linked.base, "real-leveldb");
+  await fs.rename(linked.leveldb, real);
+  await fs.symlink(real, linked.leveldb);
+  assert.deepEqual(await transfer(linked, run), {
+    status: "skipped",
+    reason: "Local Storage/leveldb is a symbolic link.",
+  });
+  assert.deepEqual(await backupsIn(linked.vault), []);
+  assert.equal((await lastOutcome(linked.vault)).status, "skipped");
+
+  // leveldb is a file.
+  const file = await storageFixture(t);
+  await fs.rm(file.leveldb, { recursive: true });
+  await fs.writeFile(file.leveldb, "not a directory");
+  assert.deepEqual(await transfer(file, run), {
+    status: "skipped",
+    reason: "Local Storage/leveldb is not a directory.",
+  });
+
+  // A backup with this stamp already exists.
+  const taken = await storageFixture(t);
+  await fs.mkdir(path.join(taken.vault, "drafts", NOW_STAMP), {
+    recursive: true,
+  });
+  const outcome = await transfer(taken, run);
+  assert.equal(outcome.status, "skipped");
+  assert.match((outcome as { reason: string }).reason, /EEXIST/);
+  assert.deepEqual(
+    await fs.readdir(path.join(taken.vault, "drafts", NOW_STAMP)),
+    [],
+  );
+
+  // The drafts directory is a link: nothing is written through it, last.json included.
+  const outside = await storageFixture(t);
+  const target = path.join(outside.base, "outside");
+  await fs.mkdir(target);
+  await fs.symlink(target, path.join(outside.vault, "drafts"));
+  assert.equal((await transfer(outside, run)).status, "skipped");
+  assert.deepEqual(await fs.readdir(target), []);
+
+  assert.equal(jobs.length, 0);
+});
+
+// Makes `fs.rename` fail on the given calls (1-based) from now on, until the returned undo.
+function failRenames(...failing: number[]) {
+  const original = fs.rename;
+  let calls = 0;
+  fs.rename = (async (from: any, to: any) => {
+    calls += 1;
+    if (failing.includes(calls))
+      throw Object.assign(new Error(`injected failure ${calls}`), {
+        code: "EIO",
+      });
+    return original(from, to);
+  }) as typeof fs.rename;
+  return () => {
+    fs.rename = original;
+  };
+}
+
+test("a restore that leaves leveldb missing copies the backup straight back", async (t) => {
+  const fx = await storageFixture(t);
+  const before = await snapshot(fx.leveldb);
+  let undo = () => {};
+  t.after(() => undo());
+  const { run } = fakeRun(async (job) => {
+    await fs.writeFile(path.join(job.storage, "leveldb", "000005.ldb"), "half");
+    // The restore moves live aside (1), then fails to put the copy in (2) and the original back (3).
+    undo = failRenames(2, 3);
+    return { ok: false, error: "verification failed" };
+  });
+
+  const outcome = await transfer(fx, run);
+  undo();
+
+  assert.equal(outcome.status, "failed");
+  assert.equal((outcome as { restored: boolean }).restored, true);
+  assert.match((outcome as { error: string }).error, /^verification failed/);
+  assert.deepEqual(await snapshot(fx.leveldb), before);
+  // The helper's leveldb waits beside it for the next run to sweep.
+  const names = (await fs.readdir(path.join(fx.root, LOCAL_STORAGE))).sort();
+  assert.equal(names.length, 2);
+  assert.equal(names[0], "leveldb");
+  assert.match(names[1], /^leveldb\.relay-old-/);
+  assert.equal((await lastOutcome(fx.vault)).restored, true);
+});
+
+test("a restore that fails with leveldb still in place leaves it and is not restored", async (t) => {
+  const fx = await storageFixture(t);
+  let undo = () => {};
+  t.after(() => undo());
+  let damaged: Record<string, string | null> = {};
+  const { run } = fakeRun(async (job) => {
+    await fs.writeFile(path.join(job.storage, "leveldb", "000005.ldb"), "half");
+    damaged = await snapshot(path.join(job.storage, "leveldb"));
+    // The restore cannot even move live aside.
+    undo = failRenames(1);
+    return { ok: false, error: "verification failed" };
+  });
+
+  const outcome = await transfer(fx, run);
+  undo();
+
+  assert.equal(outcome.status, "failed");
+  assert.equal((outcome as { restored: boolean }).restored, false);
+  assert.match((outcome as { error: string }).error, /injected failure 1/);
+  // Live is never overwritten by the last-resort copy.
+  assert.deepEqual(await snapshot(fx.leveldb), damaged);
+  assert.deepEqual(await backupsIn(fx.vault), [NOW_STAMP]);
+  assert.equal((await lastOutcome(fx.vault)).restored, false);
+});
+
+test("a blocked step records why, without a backup or a run", async (t) => {
+  const fx = await storageFixture(t);
+  const before = await snapshot(fx.leveldb);
+  const { run, jobs } = fakeRun();
+  const reason = "Claude Desktop runs Electron 45.0.0, Relay 44.7.0";
+
+  assert.deepEqual(await transfer(fx, run, { blocked: reason }), {
+    status: "skipped",
+    reason,
+  });
+
+  assert.equal(jobs.length, 0);
+  assert.deepEqual(await backupsIn(fx.vault), []);
+  assert.deepEqual(await snapshot(fx.leveldb), before);
+  // last.json is private to Relay, and so is the directory made for it.
+  const drafts = path.join(fx.vault, "drafts");
+  assert.equal((await fs.stat(drafts)).mode & 0o777, 0o700);
+  assert.equal(
+    (await fs.stat(path.join(drafts, "last.json"))).mode & 0o777,
+    0o600,
+  );
+  assert.deepEqual(await lastOutcome(fx.vault), {
+    at: NOW.toISOString(),
+    from: A,
+    to: B,
+    status: "skipped",
+    reason,
+  });
+});
+
+// --- Waiting for the helper process -----------------------------------------------
+
+// A child process that exits only when the test says so, and records the signals it gets.
+// A child that never started has no pid.
+function fakeChild(started = true) {
+  const signals: string[] = [];
+  const emitter = Object.assign(new EventEmitter(), {
+    pid: started ? 4242 : undefined,
+    kill(signal: string) {
+      signals.push(signal);
+      return true;
+    },
+  });
+  return { child: emitter as unknown as ChildProcess, emitter, signals };
+}
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test("a helper that exits in time gives its code and signal", async () => {
+  const { child, emitter, signals } = fakeChild();
+  const exit = awaitHelper(child, 1000);
+  emitter.emit("exit", 1, null);
+  assert.deepEqual(await exit, { code: 1, signal: null, timedOut: false });
+  assert.deepEqual(signals, []);
+});
+
+test("a helper past its time is killed, and waited for until it is gone", async () => {
+  const { child, emitter, signals } = fakeChild();
+  let settled = false;
+  const exit = awaitHelper(child, 20).then((value) => {
+    settled = true;
+    return value;
+  });
+  await pause(80);
+  assert.deepEqual(signals, ["SIGKILL"]);
+  // Killed is not gone: until it exits it may still hold Claude's LevelDB lock.
+  assert.equal(settled, false);
+  emitter.emit("exit", null, "SIGKILL");
+  assert.deepEqual(await exit, {
+    code: null,
+    signal: "SIGKILL",
+    timedOut: true,
+  });
+});
+
+test("a helper that never started is not waited for", async () => {
+  const { child, emitter } = fakeChild(false);
+  const exit = awaitHelper(child, 1000);
+  emitter.emit("error", new Error("spawn ENOENT"));
+  assert.deepEqual(await exit, {
+    code: null,
+    signal: null,
+    timedOut: false,
+    error: "spawn ENOENT",
+  });
+});
+
+test("an error from a running helper does not end the wait", async () => {
+  const { child, emitter } = fakeChild();
+  let settled = false;
+  const exit = awaitHelper(child, 1000).then((value) => {
+    settled = true;
+    return value;
+  });
+  emitter.emit("error", new Error("kill EPERM"));
+  await pause(20);
+  assert.equal(settled, false);
+  emitter.emit("exit", 0, null);
+  assert.deepEqual(await exit, { code: 0, signal: null, timedOut: false });
+});
+
+// --- Reading the helper's answer --------------------------------------------------
+
+const written = JSON.stringify({ ok: true, moved: 2, owned: 1, skipped: 3 });
+const exited = (
+  code: number | null,
+  signal: NodeJS.Signals | null = null,
+): HelperExit => ({ code, signal, timedOut: false });
+
+test("a written success counts only with exit code 0", () => {
+  assert.deepEqual(helperOutcome(exited(0), written), {
+    ok: true,
+    moved: 2,
+    owned: 1,
+    skipped: 3,
+  });
+  assert.deepEqual(helperOutcome(exited(1), written), {
+    ok: false,
+    error: "the helper exited with code 1",
+  });
+  assert.deepEqual(helperOutcome(exited(null, "SIGTERM"), written), {
+    ok: false,
+    error: "the helper was stopped by SIGTERM",
+  });
+});
+
+test("a written failure is passed on", () => {
+  const failure = JSON.stringify({ ok: false, error: "verification failed" });
+  for (const code of [0, 1])
+    assert.deepEqual(helperOutcome(exited(code), failure), {
+      ok: false,
+      error: "verification failed",
+    });
+});
+
+test("only the result's own fields are kept", () => {
+  const extra = JSON.stringify({
+    ok: true,
+    moved: 1,
+    owned: 0,
+    skipped: 0,
+    text: "an unsent draft",
+  });
+  assert.deepEqual(helperOutcome(exited(0), extra), {
+    ok: true,
+    moved: 1,
+    owned: 0,
+    skipped: 0,
+  });
+});
+
+test("a helper that timed out failed, whatever it wrote", () => {
+  assert.deepEqual(
+    helperOutcome({ code: null, signal: "SIGKILL", timedOut: true }, written),
+    { ok: false, error: "timed out" },
+  );
+});
+
+test("a helper that could not start says why", () => {
+  assert.deepEqual(
+    helperOutcome(
+      { code: null, signal: null, timedOut: false, error: "spawn ENOENT" },
+      undefined,
+    ),
+    { ok: false, error: "spawn ENOENT" },
+  );
+});
+
+test("a missing or invalid result is no result", () => {
+  for (const text of [
+    undefined,
+    "",
+    "not json",
+    "null",
+    "[]",
+    '"ok"',
+    '{"ok":true}',
+    '{"ok":"yes","moved":1,"owned":0,"skipped":0}',
+    '{"ok":true,"moved":"1","owned":0,"skipped":0}',
+    '{"ok":true,"moved":-1,"owned":0,"skipped":0}',
+    '{"ok":true,"moved":1.5,"owned":0,"skipped":0}',
+    '{"ok":false}',
+    '{"ok":false,"error":""}',
+  ])
+    for (const code of [0, 1])
+      assert.deepEqual(
+        helperOutcome(exited(code), text),
+        { ok: false, error: "no result" },
+        `${text} with code ${code}`,
+      );
+});
+
+// --- Whether drafts can move on this machine --------------------------------------
+
+test("drafts move only between the same Electron major version", () => {
+  assert.equal(electronMismatch("44.7.2", "44.7.0"), undefined);
+  assert.equal(electronMismatch("44.7.2\n", "44.7.0"), undefined);
+  assert.equal(electronMismatch("44", "44.7.0"), undefined);
+  assert.equal(
+    electronMismatch("45.0.0", "44.7.0"),
+    "Claude Desktop runs Electron 45.0.0, Relay 44.7.0",
+  );
+  assert.equal(
+    electronMismatch("4.7.0", "44.7.0"),
+    "Claude Desktop runs Electron 4.7.0, Relay 44.7.0",
+  );
+  for (const unknown of [undefined, "", "  ", "abc", "v44.7.2", ".44"])
+    assert.equal(
+      electronMismatch(unknown, "44.7.0"),
+      "Claude Desktop's Electron version is unknown",
+      String(unknown),
+    );
+  assert.equal(
+    electronMismatch("44.7.2", undefined),
+    "Relay's Electron version is unknown",
+  );
+});
+
+test("drafts move only on macOS", () => {
+  for (const platform of ["linux", "win32"])
+    assert.equal(
+      draftsBlockedReason(platform, "44.7.2", "44.7.0"),
+      "drafts move only on macOS",
+    );
+  assert.equal(draftsBlockedReason("darwin", "44.7.2", "44.7.0"), undefined);
+  assert.equal(
+    draftsBlockedReason("darwin", undefined, "44.7.0"),
+    "Claude Desktop's Electron version is unknown",
+  );
 });

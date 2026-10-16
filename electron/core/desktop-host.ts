@@ -1,4 +1,4 @@
-import { safeStorage } from "electron";
+import { app, safeStorage } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -6,6 +6,12 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import type { DesktopHost } from "./desktop";
 import { macDesktopPids } from "./desktop-processes";
+import { DRAFT_WORKER_FLAG } from "../draft-job";
+import {
+  awaitHelper,
+  draftsBlockedReason,
+  helperOutcome,
+} from "./draft-transfer";
 const exec = promisify(execFile);
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function desktopHost(): DesktopHost {
@@ -61,6 +67,29 @@ export function desktopHost(): DesktopHost {
       )
       .map((p) => Number(p.Id))
       .filter(Number.isSafeInteger);
+  };
+  /** The Electron version inside Claude.app, or undefined when it cannot be read. macOS only. */
+  const claudeElectron = async (): Promise<string | undefined> => {
+    if (!executable) return undefined;
+    const bundle = executable.slice(0, executable.indexOf(".app/") + 4);
+    try {
+      const { stdout } = await exec(
+        "/usr/bin/plutil",
+        [
+          "-extract",
+          "CFBundleVersion",
+          "raw",
+          path.join(
+            bundle,
+            "Contents/Frameworks/Electron Framework.framework/Versions/A/Resources/Info.plist",
+          ),
+        ],
+        { timeout: 5000 },
+      );
+      return stdout.trim();
+    } catch {
+      return undefined;
+    }
   };
   return {
     available: async () => !!executable,
@@ -129,6 +158,39 @@ export function desktopHost(): DesktopHost {
       if (!safeStorage.isEncryptionAvailable())
         throw new Error("System encryption is unavailable.");
       return safeStorage.decryptString(data);
+    },
+    draftsBlocked: async () =>
+      draftsBlockedReason(
+        process.platform,
+        process.platform === "darwin" ? await claudeElectron() : undefined,
+        process.versions.electron,
+      ),
+    moveDrafts: async (job) => {
+      const jobPath = path.join(job.scratch, "job.json");
+      await fs.promises.writeFile(jobPath, JSON.stringify(job), {
+        mode: 0o600,
+        flag: "wx",
+      });
+      const flag = DRAFT_WORKER_FLAG + jobPath;
+      const env = { ...process.env };
+      // Set, it would start Relay's Electron as plain Node instead of as the helper.
+      delete env.ELECTRON_RUN_AS_NODE;
+      // Packaged, the entry picks the helper from the flag; in development the script is given.
+      const child = spawn(
+        process.execPath,
+        app.isPackaged
+          ? [flag]
+          : [path.join(__dirname, "draft-worker.cjs"), flag],
+        { stdio: "ignore", env },
+      );
+      const exit = await awaitHelper(child);
+      let text: string | undefined;
+      try {
+        text = await fs.promises.readFile(job.result, "utf8");
+      } catch {
+        // No result file: helperOutcome reports it.
+      }
+      return helperOutcome(exit, text);
     },
   };
 }

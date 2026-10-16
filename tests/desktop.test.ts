@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { Store } from "../electron/core/store";
 import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
 import type { DesktopRestartEvent } from "../shared/types";
+import type { DraftJob, DraftResult } from "../electron/draft-job";
 import {
   duplicateSessions,
   readObject,
@@ -1234,4 +1235,234 @@ test("a failing restart listener never breaks the Desktop operation", async (t) 
   };
   await f.manager.switchTo(a.id);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+});
+
+// Gives the fixture's Claude a Local Storage and its host a draft helper that records each job,
+// answering with `move`. Launches are recorded too, to see what happens in which order.
+async function withDraftHelper(
+  f: Awaited<ReturnType<typeof fixture>>,
+  move: (job: DraftJob) => Promise<DraftResult> = async () => ({
+    ok: true,
+    moved: 0,
+    owned: 0,
+    skipped: 0,
+  }),
+) {
+  const leveldb = path.join(f.root, "Local Storage", "leveldb");
+  await fs.mkdir(leveldb, { recursive: true });
+  await fs.writeFile(path.join(leveldb, "CURRENT"), "MANIFEST-000001\n");
+  const jobs: DraftJob[] = [];
+  const events: string[] = [];
+  f.host.moveDrafts = async (job) => {
+    jobs.push(job);
+    events.push("moveDrafts:start");
+    try {
+      return await move(job);
+    } finally {
+      events.push("moveDrafts:end");
+    }
+  };
+  const launch = f.host.launch;
+  f.host.launch = async () => {
+    events.push("launch");
+    await launch();
+  };
+  const vault = path.join(f.store.root, "desktop-vault");
+  return {
+    jobs,
+    events,
+    leveldb,
+    last: () => readObject(vault, "drafts/last.json"),
+    drafts: async () => fs.readdir(path.join(vault, "drafts")).catch(() => []),
+  };
+}
+
+test("an A→B switch moves drafts once with A, B and the carried conversations", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A"); // A is open in Claude
+  const shared = randomUUID();
+  await session(f.root, a, shared, { lastActivityAt: 300 });
+  await session(f.root, b, shared, { lastActivityAt: 100 });
+  const d = await withDraftHelper(f);
+
+  await f.manager.switchTo(b.id);
+
+  assert.equal(d.jobs.length, 1);
+  const [job] = d.jobs;
+  assert.equal(job.from, a.desktop!.accountUuid);
+  assert.equal(job.to, b.desktop!.accountUuid);
+  assert.equal(job.storage, path.join(f.root, "Local Storage"));
+  assert.ok(job.conversations.length > 0);
+  const conversation = job.conversations.find((c) => c.targetAlias === shared);
+  assert.ok(conversation, "the shared conversation is carried");
+  assert.deepEqual(
+    conversation.members.map((m) => m.accountUuid).sort(),
+    [a.desktop!.accountUuid, b.desktop!.accountUuid].sort(),
+  );
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal((await d.last())!.status, "moved");
+});
+
+test("a switch that carries no conversation still runs the helper, with none", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f);
+  await f.manager.switchTo(b.id);
+  assert.equal(d.jobs.length, 1);
+  // The new-session draft can still change owner.
+  assert.deepEqual(d.jobs[0].conversations, []);
+});
+
+test("Claude relaunches only after the draft helper finished", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f, async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    return { ok: true, moved: 0, owned: 0, skipped: 0 };
+  });
+  await f.manager.switchTo(b.id);
+  assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end", "launch"]);
+});
+
+test("a throwing moveDrafts still switches", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A");
+  const d = await withDraftHelper(f, async (job) => {
+    await fs.writeFile(path.join(job.storage, "leveldb", "CURRENT"), "x");
+    throw new Error("helper crashed");
+  });
+  const starts = f.starts();
+
+  await f.manager.switchTo(b.id);
+
+  const state = await f.manager.snapshot();
+  assert.equal(state.activeProfileId, b.id);
+  assert.equal(state.error, undefined);
+  assert.equal(state.recoveryRequired, false);
+  assert.equal(f.starts(), starts + 1);
+  assert.equal(
+    await fs.readFile(path.join(d.leveldb, "CURRENT"), "utf8"),
+    "MANIFEST-000001\n",
+  );
+  const { at, ...last } = (await d.last())!;
+  assert.ok(!Number.isNaN(Date.parse(at)));
+  assert.deepEqual(last, {
+    from: a.desktop!.accountUuid,
+    to: b.desktop!.accountUuid,
+    status: "failed",
+    error: "helper crashed",
+    restored: true,
+  });
+});
+
+test("no drafts move when history transfer is off", async (t) => {
+  const f = await fixture(t);
+  f.store.update((s) => {
+    s.settings.desktopHistoryTransfer = "off";
+  });
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f);
+  await f.manager.switchTo(b.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 0);
+  assert.equal(await d.last(), null);
+  assert.deepEqual(await d.drafts(), []);
+});
+
+test("no drafts move when the pair is not allowed", async (t) => {
+  const f = await fixture(t);
+  f.store.update((s) => {
+    s.settings.desktopHistoryTransfer = "same-group";
+  });
+  const b = await f.account("B", "other");
+  await f.account("A", "team");
+  const d = await withDraftHelper(f);
+  await f.manager.switchTo(b.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 0);
+  assert.equal(await d.last(), null);
+});
+
+test("no drafts move when switching to the same account", async (t) => {
+  const f = await fixture(t);
+  await f.account("B");
+  const a = await f.account("A");
+  const d = await withDraftHelper(f);
+  await f.manager.switchTo(a.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+  assert.equal(d.jobs.length, 0);
+  assert.deepEqual(d.events, ["launch"]);
+});
+
+test("the closedOnly switch moves drafts too", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A");
+  f.setRunning(false);
+  const d = await withDraftHelper(f);
+  await f.manager.switchTo(b.id, {
+    closedOnly: true,
+    expectedActiveProfileId: a.id,
+  });
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 1);
+  assert.equal(d.jobs[0].from, a.desktop!.accountUuid);
+  assert.equal(d.jobs[0].to, b.desktop!.accountUuid);
+  // Claude stays closed.
+  assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end"]);
+});
+
+test("a host that cannot move drafts records why and moves nothing", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f);
+  const reason = "Claude Desktop runs Electron 45.0.0, Relay 44.7.0";
+  f.host.draftsBlocked = async () => reason;
+  await f.manager.switchTo(b.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 0);
+  assert.equal((await d.last())!.status, "skipped");
+  assert.equal((await d.last())!.reason, reason);
+  // No backup was made.
+  assert.deepEqual(await d.drafts(), ["last.json"]);
+});
+
+test("drafts are not moved once Claude is running again", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f);
+  // Claude is opened right after the switch's files are written.
+  f.host.draftsBlocked = async () => {
+    f.setRunning(true);
+    return undefined;
+  };
+  await f.manager.switchTo(b.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 0);
+  assert.equal((await d.last())!.reason, "Claude is running");
+  assert.deepEqual(await d.drafts(), ["last.json"]);
+});
+
+test("a failure deciding whether drafts can move never reaches the switch", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f);
+  f.host.draftsBlocked = async () => {
+    throw new Error("plutil failed");
+  };
+  await f.manager.switchTo(b.id);
+  const state = await f.manager.snapshot();
+  assert.equal(state.activeProfileId, b.id);
+  assert.equal(state.error, undefined);
+  assert.equal(d.jobs.length, 0);
+  assert.equal((await d.last())!.reason, "plutil failed");
+  assert.deepEqual(d.events, ["launch"]);
 });
