@@ -87,7 +87,7 @@ let fleet: FleetContinuation;
 let automation: ReturnType<typeof nativeDesktopAutomation>;
 let desktopTail: Promise<void> = Promise.resolve();
 let desktopTransactionActive = false;
-/** Desktop transactions begun so far; with DesktopManager's own count it tells the panda. */
+/** Desktop transactions begun so far; with DesktopManager's own count it marks a Desktop read that overlapped an operation as busy. */
 let desktopTransactions = 0;
 async function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
   const before = desktopTail;
@@ -506,7 +506,13 @@ else {
         trayPanel = new TrayPanel({
           preload: path.join(__dirname, "preload.cjs"),
           load: (win) => loadPage(win, "panel.html"),
-          onVisibilityChange: () => switchWindow?.sync(),
+          onVisibilityChange: () => {
+            try {
+              switchWindow?.sync();
+            } catch {
+              // The switch window never affects the menu bar panel.
+            }
+          },
         });
       /** Unreadable attempts only cost the panda its warm-up, never the tray. */
       const recentKeeperAttempts = () => {
@@ -547,29 +553,37 @@ else {
           ),
       });
       if (process.platform === "darwin") {
-        switchWindow = new SwitchWindow({
-          preload: path.join(__dirname, "switch-preload.cjs"),
-          load: (win) => loadPage(win, "switch.html"),
-          anchor: () => tray?.bounds(),
-          enabled: () => service.store.state.settings.switchWindow !== false,
-          panelOpen: () => !!trayPanel?.isOpen(),
-        });
-        const story = new SwitchStory({
-          show: (state) =>
-            switchWindow?.show(
-              sceneView(state, {
-                language: trayLanguage,
-                name: (id) =>
-                  service.store.state.accounts.find((a) => a.id === id)?.name,
-                motion: motionAllowed(service.store.state.settings, () =>
-                  systemPreferences.getAnimationSettings(),
-                ),
-              }),
-            ),
-        });
-        switchStory = story;
-        // Real restarts only: lock holders that never quit Claude stay silent.
-        desktop.onRestart = (event) => story.report(event);
+        // The story is decoration: if it cannot start, Relay starts without it.
+        try {
+          switchWindow = new SwitchWindow({
+            preload: path.join(__dirname, "switch-preload.cjs"),
+            load: (win) => loadPage(win, "switch.html"),
+            anchor: () => tray?.bounds(),
+            enabled: () => service.store.state.settings.switchWindow !== false,
+            panelOpen: () => !!trayPanel?.isOpen(),
+          });
+          const story = new SwitchStory({
+            show: (state) =>
+              switchWindow?.show(
+                sceneView(state, {
+                  language: trayLanguage,
+                  name: (id) =>
+                    service.store.state.accounts.find((a) => a.id === id)?.name,
+                  motion: motionAllowed(service.store.state.settings, () =>
+                    systemPreferences.getAnimationSettings(),
+                  ),
+                }),
+              ),
+          });
+          switchStory = story;
+          // Real restarts only: lock holders that never quit Claude stay silent.
+          desktop.onRestart = (event) => story.report(event);
+        } catch {
+          switchWindow?.destroy();
+          switchWindow = undefined;
+          switchStory = undefined;
+          desktop.onRestart = undefined;
+        }
       }
       trayTimer = setInterval(() => tray?.update(), 5000);
       trayTimer.unref();
@@ -938,9 +952,13 @@ function bindIPC() {
   ipcMain.on("relay:panel-close", (event) => {
     if (fromPanel(event)) trayPanel?.hide();
   });
-  ipcMain.on("relay:switch-ready", (event) =>
-    switchWindow?.ready(event.sender, event.senderFrame),
-  );
+  ipcMain.on("relay:switch-ready", (event) => {
+    try {
+      switchWindow?.ready(event.sender, event.senderFrame);
+    } catch {
+      // Ignore: the story is skipped, nothing else depends on it.
+    }
+  });
   handle("sync-desktop-history", (profileId) =>
     manualDesktopLock(() => desktop.syncHistory(id.parse(profileId))),
   );

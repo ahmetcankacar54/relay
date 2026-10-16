@@ -280,3 +280,15 @@ test("the panel head rests on idle until the panel has data", () => {
   assert.equal(panelHead(undefined, desktopState("a"), NOW), "head-idle");
   assert.equal(panelHead({ accounts: [], usage: {} }, desktopState(), NOW), "head-idle");
 });
+
+test("the panel head follows the keeper's attempts like the menu bar", () => {
+  const active = acct("active", "Kişisel");
+  const data = { accounts: [active], usage: { active: use("active", 95, 10) } };
+  // Without an attempt the active account at 95% is hungry.
+  assert.equal(panelHead(data, desktopState("active"), NOW), "head-hungry");
+  // A window warm-up shows the warming pose, whose head is idle.
+  const attempts = [
+    { id: "1", accountId: "active", identityKey: "k", at: iso(NOW - 30_000), status: "started" as const },
+  ];
+  assert.equal(panelHead({ ...data, planning: { attempts } }, desktopState("active"), NOW), "head-idle");
+});

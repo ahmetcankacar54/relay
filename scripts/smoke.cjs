@@ -148,6 +148,21 @@ app.whenReady().then(async () => {
         await switcher.webContents.executeJavaScript("typeof window.relaySwitch?.onScene"),
         "function",
       );
+      // One scene through the real channel and the built page.
+      switcher.webContents.send("relay:switch-scene", {
+        visible: true,
+        stage: "waiting",
+        story: 1,
+        line: "smoke",
+        motion: false,
+      });
+      await eventually(async () =>
+        Boolean(
+          await switcher.webContents.executeJavaScript(
+            'document.querySelector(\'[data-switch-stage="waiting"] [data-pose="door"]\') !== null',
+          ),
+        ),
+      );
       await call("openPage", "genel");
       await eventually(
         async () =>
