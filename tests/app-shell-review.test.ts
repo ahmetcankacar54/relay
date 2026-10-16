@@ -263,6 +263,8 @@ test("a confirmed Desktop action shows the travelling panda until it finishes", 
   const request = { accountId: "b", kind: "switch" as const };
   const running = wrap(relayFor({ desktopRequest: request, busy: "desktop-action:b", desktopBusy: true }), createElement(DesktopActionBody));
   assert.match(/<svg[^>]*data-scene="travel"[^>]*>/.exec(running)?.[0] ?? "", /width="110"/);
+  // The travelling panda is not playful: a click on it does nothing.
+  assert.doesNotMatch(running, /data-playful/);
   assert.match(running, /Studio hesabına geçiliyor/);
   assert.match(running, /Claude kapanıp yeniden açılıyor…/);
   assert.doesNotMatch(running, /type="checkbox"/);

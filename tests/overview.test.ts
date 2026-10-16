@@ -181,3 +181,18 @@ test("today's card shows a lookout panda when automatic start has no planned acc
   assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="40"/);
   assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-scene="lookout"/);
 });
+
+test("the onboarding and the today lookout pandas are playful, the welcome and the lookouts alike", () => {
+  const playful = (scene: string, size: number) =>
+    new RegExp(`<span data-playful="true" class="inline-block shrink-0 overflow-hidden" style="width:${size}px;height:${size}px"><svg[^>]*data-scene="${scene}"`);
+  // The welcome (no account yet) is 120 px and the pairing lookout 72 px.
+  assert.match(render(relayFor(undefined, [], {})), playful("welcome", 120));
+  assert.match(render(relayFor(undefined, [acct("other", "Studio", "pro")], {}, { hasUnclaimedDesktop: true })), playful("lookout", 72));
+  // Today's lookout is 40 px.
+  const active = acct("active", "Kişisel · Max", "max5");
+  const usage = { active: use("active", 10, 10) };
+  const settings = { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_PLANNING, autoStart: true, accounts: [] } };
+  assert.match(render(relayFor(active, [active], usage, { settings })), playful("lookout", 40));
+  // An overview with an account open and a plan has no panda to click.
+  assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-playful/);
+});

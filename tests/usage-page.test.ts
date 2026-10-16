@@ -400,3 +400,17 @@ test("statistics messages carry the panda for their state, none while loading", 
   assert.equal(scene({ loading: false }), "lookout");
   assert.equal(scene({ loading: true }), undefined);
 });
+
+test("every statistics message panda is playful: a click on it plays a trick", () => {
+  const html = (state: Parameters<typeof UsageStatisticsSection>[0]["state"], accountId?: string) =>
+    render(createElement(UsageStatisticsSection, { state, accounts, zone: ZONE, accountId }));
+  const playful = /<span data-playful="true" class="inline-block shrink-0 overflow-hidden" style="width:72px;height:72px"><svg[^>]*data-scene="([^"]+)"/;
+  assert.equal(playful.exec(html({ loading: false, error: "boom" }))?.[1], "trouble");
+  assert.equal(playful.exec(html({ view: emptyView("unavailable"), loading: false }))?.[1], "trouble");
+  assert.equal(playful.exec(html({ view: emptyView("empty"), loading: false }))?.[1], "collecting");
+  assert.equal(playful.exec(html({ view: emptyView("empty"), loading: false }, "c"))?.[1], "lookout");
+  assert.equal(playful.exec(html({ loading: false }))?.[1], "lookout");
+  // Loading draws no panda, and a statistics view has none to click.
+  assert.doesNotMatch(html({ loading: true }), /data-playful/);
+  assert.doesNotMatch(html({ view, loading: false }), /data-playful/);
+});

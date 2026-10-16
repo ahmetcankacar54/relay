@@ -121,7 +121,7 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
     <Card className="gap-0 px-4 py-3.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Panda scene={first ? "welcome" : "lookout"} size={first ? 120 : 72} />
+          <Panda scene={first ? "welcome" : "lookout"} size={first ? 120 : 72} playful />
           <div className="min-w-0">
             <div className={eyebrow}>CLAUDE DESKTOP</div>
             <div className="mt-0.5 text-lg font-bold">

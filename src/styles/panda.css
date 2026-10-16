@@ -59,6 +59,27 @@
   .panda[data-motion~="breathe"] [data-part="body"] {
     animation: panda-breathe 3.2s ease-in-out infinite;
   }
+
+  /*
+   * Tricks: a click on a playful panda (src/components/Panda.tsx) sets data-trick for 1.2 s. These rules
+   * come after the plain motions they replace on the same part (same specificity, so the later one wins).
+   */
+  .panda[data-trick="swish"] [data-part="tail"] {
+    animation: panda-tail 0.15s ease-in-out 8 alternate;
+  }
+  /* The wave runs once. The keyframes idle for their first half, so it starts half-way in: a 2.4 s wave, 1.2 s early. */
+  .panda[data-trick="wave"] [data-part="arm-left"] {
+    animation: panda-wave 2.4s ease-in-out -1.2s 1;
+  }
+  .panda[data-trick="grumpy"] {
+    animation: panda-grumpy 1.2s ease-in-out 1;
+  }
+  .panda[data-trick="hide"] {
+    animation: panda-hide 1.2s ease-in-out 1;
+  }
+  .panda[data-trick="rawr"] {
+    animation: panda-rawr 1.2s ease-out 1;
+  }
 }
 @keyframes panda-blink {
   0%, 92%, 100% { transform: scaleY(1); }
@@ -101,4 +122,21 @@
 @keyframes panda-breathe {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.03); }
+}
+/*
+ * Tricks that move the whole puppet: its root turns about its own centre, and the playful box around it
+ * clips what slides out. The stand pose has about 6% of free canvas above its ears, which the hop stays within.
+ */
+@keyframes panda-grumpy {
+  0%, 100% { transform: scaleX(1); }
+  15%, 85% { transform: scaleX(-1); }
+}
+@keyframes panda-hide {
+  0%, 100% { transform: translateY(0); }
+  20%, 80% { transform: translateY(78%); }
+}
+@keyframes panda-rawr {
+  0%, 50%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-5%); }
+  75% { transform: translateY(-3%); }
 }

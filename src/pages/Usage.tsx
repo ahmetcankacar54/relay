@@ -41,7 +41,7 @@ function StatisticsMessage({
   return (
     <Card className={cardClass} role={alert ? "alert" : undefined}>
       <div className="flex items-center gap-4">
-        {scene && <Panda scene={scene} size={72} />}
+        {scene && <Panda scene={scene} size={72} playful />}
         <div className="min-w-0 flex-1">
           <SectionHeading title={title} description={description} />
         </div>

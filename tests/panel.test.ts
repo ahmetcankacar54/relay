@@ -274,6 +274,10 @@ test("the panel header shows the panda head for the menu bar pose", () => {
     scene({ active: use("active", 20, 10) }, { desktop: { ...desktopState("active"), recoveryRequired: true } }),
     "head-alert",
   );
+  // The 18 px head is not playful: a click on it does nothing.
+  const html = render(relayFor(active, [active], { active: use("active", 20, 10) }));
+  assert.match(html, /<header[\s\S]*?data-scene="head-idle"/);
+  assert.doesNotMatch(html, /data-playful/);
 });
 
 test("the panel head rests on idle until the panel has data", () => {

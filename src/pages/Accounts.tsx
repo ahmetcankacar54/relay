@@ -251,7 +251,7 @@ export function AccountsEmpty({ hasAccounts }: { hasAccounts: boolean }) {
   const { t } = useI18n();
   return (
     <div className="grid justify-items-center gap-1.5 rounded-xl border border-dashed px-6 py-10 text-center">
-      <Panda scene={hasAccounts ? "lookout" : "welcome"} size={72} />
+      <Panda scene={hasAccounts ? "lookout" : "welcome"} size={72} playful />
       <h3 className="font-semibold">
         {hasAccounts
           ? t("Eşleşen hesap yok", "No matching accounts")

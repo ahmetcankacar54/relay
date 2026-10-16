@@ -88,7 +88,7 @@ export function TodayCard({
         </Button>
       </div>
       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-        {unplanned && <Panda scene="lookout" size={40} />}
+        {unplanned && <Panda scene="lookout" size={40} playful />}
         <span>{summary}</span>
       </div>
       <div className="grid gap-1.5 text-xs">

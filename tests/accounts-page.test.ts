@@ -153,3 +153,14 @@ test("the accounts empty state looks out when a filter hides every account", () 
   assert.match(html, /Eşleşen hesap yok/);
   assert.doesNotMatch(html, /data-scene="welcome"/);
 });
+
+test("the accounts empty state's panda is playful, the greeting and the lookout alike", () => {
+  const playful = (scene: string) =>
+    new RegExp(`<span data-playful="true" class="inline-block shrink-0 overflow-hidden" style="width:72px;height:72px"><svg[^>]*data-scene="${scene}"`);
+  assert.match(wrap(relayFor(), createElement(AccountsEmpty, { hasAccounts: false })), playful("welcome"));
+  assert.match(wrap(relayFor(), createElement(AccountsEmpty, { hasAccounts: true })), playful("lookout"));
+  // And on the page itself, with no accounts at all.
+  assert.match(wrap(relayFor({ accounts: [], active: undefined }), createElement(Accounts)), playful("welcome"));
+  // A page with accounts has no panda to click.
+  assert.doesNotMatch(wrap(relayFor(), createElement(Accounts)), /data-playful/);
+});
