@@ -1,7 +1,5 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -11,15 +9,13 @@ import {
 } from "react";
 import type { PrankLevel } from "../../shared/types";
 import { prankDecision, readPrankHistory, recordPrank, type PrankKind } from "./budget";
+import { PrankContext, type PrankApi, type PrankEvent } from "./context";
 import { prankBlocked, type PrankGate } from "./gate";
 import { PRANK_LAYERS } from "./registry";
 
-/** The part of a click the stage needs: where the pointer was, and `detail` 0 for a keyboard click. */
-export interface PrankEvent {
-  clientX: number;
-  clientY: number;
-  detail: number;
-}
+// The context lives in ./context (so a panda can read it without importing the stage); these keep the old import path.
+export { usePrank } from "./context";
+export type { PrankApi, PrankEvent } from "./context";
 
 /** The prank that is playing, with where its trigger was when it was offered. */
 export interface PrankPlay {
@@ -27,21 +23,6 @@ export interface PrankPlay {
   kind: PrankKind;
   rect?: { left: number; top: number; width: number; height: number };
   point?: { x: number; y: number };
-}
-
-export interface PrankApi {
-  /** Offers a prank; the stage decides. `anchor` and `event` are read now, not when the layer draws. */
-  offer(kind: PrankKind, anchor: Element | null, event?: PrankEvent): void;
-  /** Whether a click on a playful panda may start a trick. Tricks have no budget. */
-  allowsTrick(event: { detail: number }): boolean;
-}
-
-/** Outside a stage nothing pranks. */
-const NO_PRANKS: PrankApi = { offer() {}, allowsTrick: () => false };
-const PrankContext = createContext<PrankApi>(NO_PRANKS);
-
-export function usePrank(): PrankApi {
-  return useContext(PrankContext);
 }
 
 /** Runs the button's own action first, then offers the prank: a click never waits for it. */

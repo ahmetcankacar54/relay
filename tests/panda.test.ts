@@ -1,11 +1,13 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { StrictMode, act, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Panda, PandaRig, pandaClick } from "../src/components/Panda";
 import { MOTION_PARTS, PANDA_SCENES, type PandaMotion } from "../src/mascot/scenes";
-import { PrankStage, type PrankApi } from "../src/pranks/PrankStage";
+import { usePrank as contextUsePrank } from "../src/pranks/context";
+import { PrankStage, usePrank as stageUsePrank, type PrankApi } from "../src/pranks/PrankStage";
 import { TRICK_MS, TRICK_RESET_MS, trickFor, type Trick } from "../src/pranks/tricks";
 import { PANDA_EXPRESSIONS, POSE_PARTS, POSE_PROPS, RIG_ID_TOKEN } from "../shared/panda-poses";
 import { mediaBlock } from "./css";
@@ -121,37 +123,128 @@ test("panda.css plays each trick for 1.2 s, and only without Reduce motion", () 
   // Comments are stripped before looking, so one cannot satisfy a guard.
   const motion = stripBlockComments(block);
   const outside = stripBlockComments(css.replace(block, ""));
-  for (const trick of ["swish", "wave", "grumpy", "hide", "rawr"]) {
+  for (const trick of ["swish", "wave", "happy", "grumpy", "hide", "rawr"]) {
     assert.ok(motion.includes(`.panda[data-trick="${trick}"]`), `${trick} is inside the no-preference block`);
     assert.ok(!outside.includes(`data-trick="${trick}"`), `${trick} is not outside it`);
   }
-  // Happy only changes the expression: the CSS has nothing to move.
-  assert.ok(!stripBlockComments(css).includes('data-trick="happy"'));
   const rule = (trick: string) => new RegExp(`\\.panda\\[data-trick="${trick}"\\][^{]*\\{([^}]*)\\}`).exec(motion)?.[1] ?? "";
-  // 8 swishes of 0.15 s; the wave's 2.4 s start 1.2 s in, so its idle first half is skipped and it waves at once; one turn of 1.2 s for the rest.
-  assert.match(rule("swish"), /animation:\s*panda-tail 0\.15s ease-in-out 8 alternate;/);
-  assert.match(rule("wave"), /animation:\s*panda-wave 2\.4s ease-in-out -1\.2s 1;/);
+  // 8 swishes of 0.15 s; every other trick is one run of 1.2 s.
+  assert.match(rule("swish"), /animation:\s*panda-swish 0\.15s ease-in-out 8 alternate;/);
+  assert.match(rule("wave"), /animation:\s*panda-wave-once 1\.2s ease-in-out 1;/);
+  assert.match(rule("happy"), /animation:\s*panda-happy 1\.2s ease-in-out 1;/);
   assert.match(rule("grumpy"), /animation:\s*panda-grumpy 1\.2s ease-in-out 1;/);
   assert.match(rule("hide"), /animation:\s*panda-hide 1\.2s ease-in-out 1;/);
   assert.match(rule("rawr"), /animation:\s*panda-rawr 1\.2s ease-out 1;/);
   assert.equal(Math.round(0.15 * 8 * 1_000), TRICK_MS);
-  assert.equal(Math.round((2.4 - 1.2) * 1_000), TRICK_MS);
-  // The swish moves the tail and the wave the arm, as their motions do; the others turn the whole puppet.
+  // The swish moves the tail and the wave the arm, as their motions do; the others move the whole puppet.
   assert.match(motion, /\.panda\[data-trick="swish"\] \[data-part="tail"\]/);
   assert.match(motion, /\.panda\[data-trick="wave"\] \[data-part="arm-left"\]/);
-  for (const trick of ["grumpy", "hide", "rawr"]) assert.match(motion, new RegExp(`\\.panda\\[data-trick="${trick}"\\] \\{`), trick);
+  for (const trick of ["happy", "grumpy", "hide", "rawr"]) assert.match(motion, new RegExp(`\\.panda\\[data-trick="${trick}"\\] \\{`), trick);
   const keyframes = (name: string) => new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(stripBlockComments(css))?.[1] ?? "";
   assert.match(keyframes("panda-grumpy"), /scaleX\(-1\)/);
   assert.match(keyframes("panda-hide"), /translateY\(78%\)/);
   assert.match(keyframes("panda-rawr"), /translateY\(-\d+(\.\d+)?%\)/);
-  // A trick rule beats the plain motion it replaces on the same part: same specificity, later in the block.
-  assert.ok(motion.indexOf('.panda[data-trick="swish"]') > motion.indexOf('.panda[data-motion~="tail"]'));
-  assert.ok(motion.indexOf('.panda[data-trick="wave"]') > motion.indexOf('.panda[data-motion~="wave"]'));
+  // The swish swings wider than the idle tail, so it reads at 40 px; the wave raises the arm and comes back to rest.
+  const angles = (name: string) => [...keyframes(name).matchAll(/rotate\((-?\d+(?:\.\d+)?)deg\)/g)].map((m) => Number(m[1]));
+  assert.ok(Math.max(...angles("panda-swish").map(Math.abs)) > Math.max(...angles("panda-tail").map(Math.abs)));
+  assert.match(keyframes("panda-wave-once"), /0%,\s*100%\s*\{[^}]*rotate\(0deg\)/);
+  assert.ok(Math.max(...angles("panda-wave-once")) >= Math.max(...angles("panda-wave")));
+  // The happy bounce is smaller than rawr's hop, and both stay within the 5.9% of free canvas above the stand pose's ears.
+  const lift = (name: string) => Math.max(...[...keyframes(name).matchAll(/translateY\(-(\d+(?:\.\d+)?)%\)/g)].map((m) => Number(m[1])));
+  assert.ok(lift("panda-happy") > 0 && lift("panda-happy") < lift("panda-rawr"));
+  assert.ok(lift("panda-rawr") < 5.9);
+  assert.match(keyframes("panda-happy"), /0%,[^{]*100%\s*\{[^}]*translateY\(0\)/);
   // Every scene that plays tricks has the tail and the arm the swish and the wave move.
   for (const scene of ["welcome", "lookout", "collecting", "trouble"] as const) {
     assert.ok(POSE_PARTS[PANDA_SCENES[scene].pose].includes("tail"), `${scene} has a tail`);
     assert.ok(POSE_PARTS[PANDA_SCENES[scene].pose].includes("arm-left"), `${scene} has a left arm`);
   }
+});
+
+/**
+ * The trick rules that run a keyframes name a motion rule already runs on the same part ("(root)" for the
+ * svg itself), as "trick → part: name". A rule change that keeps an animation's name updates the running
+ * animation in place and keeps its start time, so a finite trick would count as long finished and the part
+ * would snap to rest instead of playing. Comments are stripped first. Every animation here starts with its name.
+ */
+function sharedKeyframes(source: string): string[] {
+  const names = (selector: string, attribute: "data-trick" | "data-motion~") => {
+    const trick = new RegExp(`\\[${attribute}="([^"]+)"\\]`).exec(selector)?.[1];
+    return trick === undefined ? undefined : { kind: trick, part: /\[data-part="([^"]+)"\]/.exec(selector)?.[1] ?? "(root)" };
+  };
+  const motions = new Map<string, Set<string>>();
+  const tricks: { trick: string; part: string; name: string }[] = [];
+  for (const [, selectors, body] of stripBlockComments(source).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const name = /animation(?:-name)?\s*:\s*([A-Za-z_][\w-]*)/.exec(body)?.[1];
+    if (name === undefined) continue;
+    for (const selector of selectors.split(",")) {
+      const motion = names(selector, "data-motion~");
+      if (motion) motions.set(motion.part, (motions.get(motion.part) ?? new Set()).add(name));
+      const trick = names(selector, "data-trick");
+      if (trick) tricks.push({ trick: trick.kind, part: trick.part, name });
+    }
+  }
+  return tricks.filter((t) => motions.get(t.part)?.has(t.name)).map((t) => `${t.trick} → ${t.part}: ${t.name}`);
+}
+
+test("no trick runs a keyframes name that a plain motion already runs on the same part", () => {
+  assert.deepEqual(sharedKeyframes(css), []);
+  // The guard itself: it flags the tricks that reused panda-tail and panda-wave, and nothing else.
+  const reused = `@media (prefers-reduced-motion: no-preference) {
+    .panda[data-motion~="tail"] [data-part="tail"] { animation: panda-tail 3.2s ease-in-out infinite alternate; }
+    .panda[data-motion~="wave"] [data-part="arm-left"] { animation: panda-wave 4s ease-in-out infinite; }
+    .panda[data-trick="swish"] [data-part="tail"] { animation: panda-tail 0.15s ease-in-out 8 alternate; }
+    .panda[data-trick="wave"] [data-part="arm-left"] { animation: panda-wave 2.4s ease-in-out -1.2s 1; }
+    .panda[data-trick="hide"] { animation: panda-hide 1.2s ease-in-out 1; }
+  }`;
+  assert.deepEqual(sharedKeyframes(reused), ["swish → tail: panda-tail", "wave → arm-left: panda-wave"]);
+  // A commented-out rule is not looked at, and the same name on another part is no reuse.
+  assert.deepEqual(
+    sharedKeyframes(`.panda[data-motion~="nod"] [data-part="head"] { animation: panda-nod 3s infinite; }
+    /* .panda[data-trick="x"] [data-part="head"] { animation: panda-nod 1s; } */
+    .panda[data-trick="x"] [data-part="eyes"] { animation: panda-nod 1s; }`),
+    [],
+  );
+  // The whole puppet counts as a part too: a root motion and a root trick must not share a name.
+  assert.deepEqual(
+    sharedKeyframes(`.panda[data-motion~="m"] { animation: a 1s; } .panda[data-trick="t"] { animation: a 1s; }`),
+    ["t → (root): a"],
+  );
+});
+
+test("Panda reaches the prank context without the stage, so no import cycle runs through it", () => {
+  /** The files a file imports for a value (type-only imports are erased at build time). */
+  const valueImports = (file: string): string[] => {
+    const code = stripBlockComments(readFileSync(file, "utf8"));
+    const found: string[] = [];
+    for (const [, from] of code.matchAll(/^(?:import\s+(?!type\s)|export\s+(?=[*{]))[^;]*?\sfrom\s+"([^"]+)"/gm)) {
+      const base = from.startsWith("@/") ? `src/${from.slice(2)}` : from.startsWith(".") ? join(dirname(file), from) : undefined;
+      const resolved = base && [`${base}.ts`, `${base}.tsx`, `${base}/index.ts`].find((candidate) => existsSync(candidate));
+      if (resolved) found.push(resolved);
+    }
+    return found;
+  };
+  const reach = (from: string): Set<string> => {
+    const seen = new Set<string>();
+    const pending = [from];
+    for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+      for (const next of valueImports(file)) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        pending.push(next);
+      }
+    }
+    return seen;
+  };
+  const panda = join("src", "components", "Panda.tsx");
+  const reached = reach(panda);
+  assert.ok(reached.has(join("src", "pranks", "context.ts")), "Panda gets usePrank from the context module");
+  assert.ok(reached.has(join("src", "pranks", "tricks.ts")));
+  assert.ok(!reached.has(panda), "nothing Panda imports imports Panda back");
+  for (const heavy of ["PrankStage.tsx", "registry.ts", "layers.tsx", "NibbleCursor.tsx"])
+    assert.ok(!reached.has(join("src", "pranks", heavy)), `Panda does not pull in ${heavy}`);
+  // The stage keeps exporting what it always did, from the same context.
+  assert.equal(stageUsePrank, contextUsePrank);
 });
 
 // pandaClick: the pure contract (no stage, no clock, no dice).

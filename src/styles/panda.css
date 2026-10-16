@@ -63,13 +63,17 @@
   /*
    * Tricks: a click on a playful panda (src/components/Panda.tsx) sets data-trick for 1.2 s. These rules
    * come after the plain motions they replace on the same part (same specificity, so the later one wins).
+   * Each trick has keyframes of its own: a rule change that keeps the animation's name would update the
+   * running motion in place, keeping its old start time, and the finished trick would snap the part to rest.
    */
   .panda[data-trick="swish"] [data-part="tail"] {
-    animation: panda-tail 0.15s ease-in-out 8 alternate;
+    animation: panda-swish 0.15s ease-in-out 8 alternate;
   }
-  /* The wave runs once. The keyframes idle for their first half, so it starts half-way in: a 2.4 s wave, 1.2 s early. */
   .panda[data-trick="wave"] [data-part="arm-left"] {
-    animation: panda-wave 2.4s ease-in-out -1.2s 1;
+    animation: panda-wave-once 1.2s ease-in-out 1;
+  }
+  .panda[data-trick="happy"] {
+    animation: panda-happy 1.2s ease-in-out 1;
   }
   .panda[data-trick="grumpy"] {
     animation: panda-grumpy 1.2s ease-in-out 1;
@@ -123,10 +127,26 @@
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.03); }
 }
+/* Tricks that move one part: a wider, faster swing than the idle tail's, to read at 40 px. */
+@keyframes panda-swish {
+  from { transform: rotate(-14deg); }
+  to { transform: rotate(16deg); }
+}
+/* One raise-and-wave of the arm over the trick's 1.2 s: up, two waggles, down to rest. */
+@keyframes panda-wave-once {
+  0%, 100% { transform: rotate(0deg); }
+  15%, 55% { transform: rotate(80deg); }
+  35% { transform: rotate(60deg); }
+}
 /*
  * Tricks that move the whole puppet: its root turns about its own centre, and the playful box around it
- * clips what slides out. The stand pose has about 6% of free canvas above its ears, which the hop stays within.
+ * clips what slides out. The stand pose has about 6% of free canvas above its ears, which the hops stay within.
  */
+/* A small bounce, smaller than rawr's hop; it shows even when the panda already looks happy. */
+@keyframes panda-happy {
+  0%, 50%, 100% { transform: translateY(0); }
+  25%, 75% { transform: translateY(-2.5%); }
+}
 @keyframes panda-grumpy {
   0%, 100% { transform: scaleX(1); }
   15%, 85% { transform: scaleX(-1); }

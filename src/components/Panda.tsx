@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type MouseEvent } from "re
 import { PANDA_RIG } from "@/mascot/panda-rig";
 import { PANDA_SCENES, type PandaMotion, type PandaScene } from "@/mascot/scenes";
 import { cn } from "@/lib/utils";
-import { usePrank, type PrankApi } from "@/pranks/PrankStage";
+import { usePrank, type PrankApi } from "@/pranks/context";
 import { TRICK_MS, nextClick, trickFor, trickLook, type Trick } from "@/pranks/tricks";
 import {
   PANDA_CANVAS,
