@@ -6,18 +6,28 @@ const HTML = "http://www.w3.org/1999/xhtml";
 
 type Listener = (event: Event) => void;
 
-/** An EventTarget that knows which listeners are attached, so a test can check an unmount let go of them all. */
+const isCapture = (options?: AddEventListenerOptions | EventListenerOptions | boolean) =>
+  typeof options === "object" ? options.capture === true : options === true;
+
+/**
+ * An EventTarget that knows which listeners are attached, so a test can check an unmount let go of them all.
+ * As in a browser, a listener is told apart by its type, its function and its capture flag: removing one with
+ * the wrong flag leaves it attached.
+ */
 function eventTarget() {
   const target = new EventTarget();
-  const attached: { type: string; listener: Listener }[] = [];
+  const attached: { type: string; listener: Listener; capture: boolean }[] = [];
   return {
     attached,
     addEventListener(type: string, listener: Listener, options?: AddEventListenerOptions | boolean) {
-      if (!attached.some((a) => a.type === type && a.listener === listener)) attached.push({ type, listener });
+      const capture = isCapture(options);
+      if (!attached.some((a) => a.type === type && a.listener === listener && a.capture === capture))
+        attached.push({ type, listener, capture });
       target.addEventListener(type, listener, options);
     },
     removeEventListener(type: string, listener: Listener, options?: EventListenerOptions | boolean) {
-      const at = attached.findIndex((a) => a.type === type && a.listener === listener);
+      const capture = isCapture(options);
+      const at = attached.findIndex((a) => a.type === type && a.listener === listener && a.capture === capture);
       if (at >= 0) attached.splice(at, 1);
       target.removeEventListener(type, listener, options);
     },
@@ -140,6 +150,8 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     cursorHidden: () => hidden.has("prank-cursor-hidden"),
     /** The window's listeners of one type, and the document's of one type. */
     windowListeners: (type: string) => windowEvents.attached.filter((a) => a.type === type).length,
+    /** How many of the window's listeners of one type listen on the capture phase. */
+    windowCaptureListeners: (type: string) => windowEvents.attached.filter((a) => a.type === type && a.capture).length,
     documentListeners: (type: string) => documentEvents.attached.filter((a) => a.type === type).length,
     /** Sends an event to the window, as the browser does for pointer and key activity. */
     emit: (type: string) => windowEvents.dispatchEvent(new Event(type)),

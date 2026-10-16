@@ -301,9 +301,16 @@ export function NibbleCursorLayer({ play, done }: LayerProps) {
         type: "visibilitychange",
         hidden: document.visibilityState === "hidden",
       });
-    const TYPES = ["pointermove", "pointerdown", "keydown", "blur"] as const;
-    for (const type of TYPES)
-      window.addEventListener(type, onEvent, { passive: true });
+    // A press or a key that some handler stopped (a menu stops its keydown) must still end the
+    // nibble, so those two listen on the way down, before anything can stop them.
+    const TYPES = [
+      { type: "pointermove", capture: false },
+      { type: "pointerdown", capture: true },
+      { type: "keydown", capture: true },
+      { type: "blur", capture: false },
+    ] as const;
+    for (const { type, capture } of TYPES)
+      window.addEventListener(type, onEvent, { passive: true, capture });
     document.addEventListener("visibilitychange", onVisibility);
     request = requestAnimationFrame(frames);
     // Last, so nothing above can fail after the cursor is hidden and leave it hidden.
@@ -311,7 +318,8 @@ export function NibbleCursorLayer({ play, done }: LayerProps) {
     return () => {
       live = false;
       if (request !== undefined) cancelAnimationFrame(request);
-      for (const type of TYPES) window.removeEventListener(type, onEvent);
+      for (const { type, capture } of TYPES)
+        window.removeEventListener(type, onEvent, { capture });
       document.removeEventListener("visibilitychange", onVisibility);
       controller.stop();
     };

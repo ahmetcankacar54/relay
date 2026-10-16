@@ -1,7 +1,13 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { StrictMode, act, createElement, type ReactElement } from "react";
+import {
+  StrictMode,
+  act,
+  createElement,
+  type MouseEvent,
+  type ReactElement,
+} from "react";
 import type { Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
@@ -16,6 +22,16 @@ import {
   type PrankPlay,
 } from "../src/pranks/PrankStage";
 import { PRANK_LAYERS } from "../src/pranks/registry";
+import { I18nContext } from "../src/data/i18n";
+import { RelayContext, type Relay } from "../src/data/relay-context";
+import { itemHandlers } from "../src/pages/accounts/AccountsTable";
+import { PanelAccounts } from "../src/panel/PanelAccounts";
+import {
+  DEFAULT_SETTINGS,
+  type Account,
+  type AccountUsage,
+  type Snapshot,
+} from "../shared/types";
 import {
   NIBBLE_ABORT_PX,
   NIBBLE_MAX_MS,
@@ -496,7 +512,43 @@ function fakeFrames() {
 
 const PLAY: PrankPlay = { id: 1, kind: "nibble-cursor", point: START };
 
-/** Mounts something in a fake browser with a fake frame clock; `run` gets the DOM, the crank, the clock and the root. */
+/**
+ * Wraps the global timers (the mocked ones, so call it after `mock.timers.enable`) to see which 3 s
+ * caps are armed: set and not yet cleared or fired. `restore` before `mock.timers.reset`.
+ */
+function trackCaps() {
+  const armed = new Set<unknown>();
+  const { setTimeout: set, clearTimeout: clear } = globalThis;
+  globalThis.setTimeout = ((
+    callback: () => void,
+    ms?: number,
+    ...rest: unknown[]
+  ) => {
+    const handle = set(
+      () => {
+        armed.delete(handle);
+        callback();
+      },
+      ms,
+      ...rest,
+    );
+    if (ms === NIBBLE_MAX_MS) armed.add(handle);
+    return handle;
+  }) as unknown as typeof setTimeout;
+  globalThis.clearTimeout = ((handle: Parameters<typeof clear>[0]) => {
+    armed.delete(handle);
+    clear(handle);
+  }) as typeof clearTimeout;
+  return {
+    armed,
+    restore() {
+      globalThis.setTimeout = set;
+      globalThis.clearTimeout = clear;
+    },
+  };
+}
+
+/** Mounts something in a fake browser with a fake frame clock; `run` gets the DOM, the crank, the clock, the root and the armed caps. */
 async function inFakeBrowser(
   element: ReactElement,
   run: (env: {
@@ -504,6 +556,8 @@ async function inFakeBrowser(
     frames: ReturnType<typeof fakeFrames>;
     root: Root;
     at: (ms: number) => void;
+    /** How many 3 s caps are armed right now. */
+    caps: () => number;
   }) => Promise<void>,
 ) {
   const dom = fakeDom();
@@ -512,13 +566,21 @@ async function inFakeBrowser(
   let clock = 5_000;
   const now = mock.method(performance, "now", () => clock);
   mock.timers.enable({ apis: ["setTimeout"] });
+  const caps = trackCaps();
   try {
     // Loaded after the stubs, so react-dom sees a DOM.
     const { createRoot } = await import("react-dom/client");
     const root = createRoot(dom.container as unknown as Element);
     await act(async () => root.render(element));
-    await run({ dom, frames, root, at: (ms) => void (clock = 5_000 + ms) });
+    await run({
+      dom,
+      frames,
+      root,
+      at: (ms) => void (clock = 5_000 + ms),
+      caps: () => caps.armed.size,
+    });
     await act(async () => root.unmount());
+    assert.equal(caps.armed.size, 0, "no cap is left armed after the unmount");
     // However the test went, an unmounted layer leaves the cursor, the listeners and the frames behind it clean.
     assert.equal(
       dom.cursorHidden(),
@@ -530,6 +592,7 @@ async function inFakeBrowser(
       assert.equal(dom.windowListeners(type), 0, type);
     assert.equal(dom.documentListeners("visibilitychange"), 0);
   } finally {
+    caps.restore();
     mock.timers.reset();
     now.mock.restore();
     frames.restore();
@@ -557,6 +620,29 @@ test("the layer hides the cursor before paint and draws the peeking panda and th
       for (const type of ["pointermove", "pointerdown", "keydown", "blur"])
         assert.equal(dom.windowListeners(type), 1, type);
       assert.equal(dom.documentListeners("visibilitychange"), 1);
+    },
+  );
+});
+
+test("a press and a key end the nibble even when a handler stops them: those two listen on the capture phase", async () => {
+  await inFakeBrowser(
+    createElement(NibbleCursorLayer, { play: PLAY, done() {} }),
+    async ({ dom }) => {
+      assert.equal(dom.windowCaptureListeners("pointerdown"), 1);
+      assert.equal(dom.windowCaptureListeners("keydown"), 1);
+      // The other two have no use for it: a move is only tracked, a blur happens to the window itself.
+      assert.equal(dom.windowCaptureListeners("pointermove"), 0);
+      assert.equal(dom.windowCaptureListeners("blur"), 0);
+      assert.equal(
+        dom.windowListeners("pointerdown"),
+        1,
+        "not also in the bubble phase",
+      );
+      assert.equal(
+        dom.windowListeners("keydown"),
+        1,
+        "not also in the bubble phase",
+      );
     },
   );
 });
@@ -699,13 +785,13 @@ test("an unmount mid-play restores the cursor, lets go of everything and does no
       await frame(env);
       assert.equal(env.dom.cursorHidden(), true);
       assert.equal(env.frames.pending(), 1);
+      assert.equal(env.caps(), 1, "the 3 s cap is armed while it plays");
       await act(async () => env.root.unmount());
       assert.equal(env.dom.cursorHidden(), false);
       assert.equal(env.frames.pending(), 0);
       assert.equal(done, 0);
-      // The cap timer went with it: nothing fires later.
-      await act(async () => mock.timers.tick(2 * NIBBLE_MAX_MS));
-      assert.equal(done, 0);
+      // The cap went with it: one left armed would fire a finished controller's timer for nothing.
+      assert.equal(env.caps(), 0, "the cap is cleared by the unmount");
     },
   );
 });
@@ -780,6 +866,7 @@ test("inside the stage the nibble plays, ends at 1 500 ms and the stage takes th
   let clock = 0;
   const now = mock.method(performance, "now", () => clock);
   mock.timers.enable({ apis: ["setTimeout"] });
+  const caps = trackCaps();
   try {
     const { createRoot } = await import("react-dom/client");
     let api: PrankApi | undefined;
@@ -815,12 +902,18 @@ test("inside the stage the nibble plays, ends at 1 500 ms and the stage takes th
     assert.equal(dom.cursorHidden(), true);
     assert.equal(stageIsEmpty(), false);
     assert.equal(drawn(dom).pose, "peek");
+    assert.equal(caps.armed.size, 1);
 
     clock = NIBBLE_MS;
     await act(async () => frames.run());
     assert.equal(dom.cursorHidden(), false);
     assert.equal(stageIsEmpty(), true);
     assert.equal(frames.pending(), 0);
+    assert.equal(
+      caps.armed.size,
+      0,
+      "the cap is cleared when the timeline ends",
+    );
 
     // A press mid-play ends it too, through the stage.
     clock = 0;
@@ -835,6 +928,7 @@ test("inside the stage the nibble plays, ends at 1 500 ms and the stage takes th
     await act(async () => dom.emit("pointerdown"));
     assert.equal(dom.cursorHidden(), false);
     assert.equal(stageIsEmpty(), true);
+    assert.equal(caps.armed.size, 0, "the cap is cleared when a press ends it");
 
     // A nibble offered without a point (no event) is over at once.
     await act(async () => api!.offer("nibble-cursor", null));
@@ -853,7 +947,13 @@ test("inside the stage the nibble plays, ends at 1 500 ms and the stage takes th
     await act(async () => root.unmount());
     assert.equal(dom.cursorHidden(), false);
     assert.equal(frames.pending(), 0);
+    assert.equal(
+      caps.armed.size,
+      0,
+      "the cap is cleared when the stage goes away",
+    );
   } finally {
+    caps.restore();
     mock.timers.reset();
     now.mock.restore();
     frames.restore();
@@ -893,6 +993,17 @@ test("the nibble's slides, flight and transition animate only with motion on", (
     motion,
     /\.prank-cursor\[data-flight="out"\]\s*\{[^}]*animation-name:\s*prank-cursor-fly-out/,
   );
+  // Three bites fit the chew phase's 600 ms only at 200 ms a cycle, not the plain motion's 0.33 s; the extra class
+  // beats the plain rule's shorthand.
+  assert.match(
+    motion,
+    /\.prank-nibble-panda \.panda\[data-motion~="chew"\] \[data-part="head"\],\s*\.prank-nibble-panda \.panda\[data-motion~="chew"\] \[data-part="held"\]\s*\{[^}]*animation-duration:\s*200ms/,
+  );
+  assert.equal(nibbleFrame(449).phase, "fly-in");
+  assert.equal(nibbleFrame(450).phase, "chew");
+  assert.equal(nibbleFrame(1_049).phase, "chew");
+  assert.equal(nibbleFrame(1_050).phase, "fly-out");
+  assert.equal((1_050 - 450) / 200, 3);
   for (const name of [
     "prank-nibble-peek",
     "prank-nibble-withdraw",
@@ -933,11 +1044,12 @@ test("every nibble trigger goes through offerAfter, so the button's own action r
   }
 });
 
-test("each trigger still runs its own action, and the Accounts menu keeps onSelect", () => {
+test("each trigger still runs its own action, and the Accounts menu's items keep theirs", () => {
   const panelAccounts = readFileSync("src/panel/PanelAccounts.tsx", "utf8");
+  // Opening the confirmation is the switch request and offers; closing it is a cancel and does not.
   assert.match(
     panelAccounts,
-    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(open \? undefined : account\.id\),?\s*\)/,
+    /open\s*\?\s*setConfirmId\(undefined\)\s*:\s*offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(account\.id\),?\s*\)/,
   );
   const panel = readFileSync("src/panel/Panel.tsx", "utf8");
   assert.match(
@@ -954,11 +1066,258 @@ test("each trigger still runs its own action, and the Accounts menu keeps onSele
     overview,
     /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(suggestion, "switch"\),?\s*\)/,
   );
+  // The menu's items take their handlers from itemHandlers: the switch item switches from its click, through
+  // offerAfter, and every other item keeps onSelect. No item has a bare `onSelect={run}` any more.
   const table = readFileSync("src/pages/accounts/AccountsTable.tsx", "utf8");
-  assert.match(table, /onSelect=\{run\}/);
-  // Only the switch item offers; the offer carries no action of its own, since onSelect already runs `run`.
-  assert.match(table, /offerAfter\(prank, "nibble-cursor", e, \(\) => \{\}\)/);
-  assert.match(table, /onClick=\{key === "switch" \? nibble : undefined\}/);
+  assert.match(
+    table,
+    /\{\.\.\.itemHandlers\(\{ key, disabled, run \}, prank\)\}/,
+  );
+  assert.doesNotMatch(table, /onSelect=\{run\}/);
+  assert.match(
+    table,
+    /offerAfter\(prank, "nibble-cursor", e, \(\) => \{\s*if \(!disabled\) run\(\);\s*\}\)/,
+  );
+  assert.match(table, /if \(key !== "switch"\) return \{ onSelect: run \};/);
+});
+
+/** A fake click for a handler to take: the element it was on, where, and `detail` (0 for a keyboard click). */
+const clickOn = (detail: number) =>
+  ({
+    currentTarget: {
+      getBoundingClientRect: () => ({ left: 1, top: 2, width: 3, height: 4 }),
+    },
+    clientX: 5,
+    clientY: 6,
+    detail,
+  }) as unknown as MouseEvent<Element>;
+
+test("the Accounts menu's switch item runs once and before the offer, whether the click is a mouse's or a keyboard's", () => {
+  for (const detail of [1, 0]) {
+    const log: string[] = [];
+    const prank: PrankApi = {
+      offer: (kind, _anchor, event) =>
+        void log.push(`offer ${kind} ${event?.detail}`),
+      allowsTrick: () => false,
+    };
+    const { onSelect, onClick } = itemHandlers(
+      { key: "switch", disabled: false, run: () => void log.push("run") },
+      prank,
+    );
+    // Radix sends a mouse click, Enter, Space and a release over the item all through its click: no onSelect to run twice.
+    assert.equal(onSelect, undefined);
+    assert.ok(onClick);
+    onClick(clickOn(detail));
+    assert.deepEqual(
+      log,
+      ["run", `offer nibble-cursor ${detail}`],
+      `detail ${detail}`,
+    );
+  }
+});
+
+test("a disabled switch item does not run, and every other item keeps onSelect and never offers", () => {
+  let runs = 0;
+  const prank: PrankApi = {
+    offer: () => assert.fail("only the switch item offers"),
+    allowsTrick: () => false,
+  };
+  // A disabled switch item's click never switches (Radix would not select it either); the stage gates its offer.
+  const offered: string[] = [];
+  const spy: PrankApi = {
+    offer: (kind) => void offered.push(kind),
+    allowsTrick: () => false,
+  };
+  itemHandlers(
+    { key: "switch", disabled: true, run: () => void runs++ },
+    spy,
+  ).onClick?.(clickOn(1));
+  assert.equal(runs, 0);
+  assert.deepEqual(offered, ["nibble-cursor"]);
+  for (const key of [
+    "open",
+    "cli",
+    "desktop-reconnect",
+    "desktop-link",
+    "refresh",
+  ] as const) {
+    const { onSelect, onClick } = itemHandlers(
+      { key, disabled: false, run: () => void runs++ },
+      prank,
+    );
+    assert.equal(onClick, undefined, key);
+    onSelect?.();
+  }
+  assert.equal(runs, 5);
+});
+
+/** Swaps the nibble's layer for one that only records that a play was drawn, for the length of `run`. */
+async function withSpyLayer(
+  log: string[],
+  run: (plays: Set<number>) => Promise<void>,
+) {
+  const original = PRANK_LAYERS["nibble-cursor"];
+  const plays = new Set<number>();
+  PRANK_LAYERS["nibble-cursor"] = ({ play }) => {
+    if (!plays.has(play.id)) log.push("play");
+    plays.add(play.id);
+    return null;
+  };
+  try {
+    await run(plays);
+  } finally {
+    PRANK_LAYERS["nibble-cursor"] = original;
+  }
+}
+
+/** A stage with the real gates and a budget that always says yes, so only the gates decide. */
+const stageOf = (children: ReactElement) => {
+  const map = new Map<string, string>();
+  return createElement(PrankStage, {
+    level: "sometimes",
+    desktopBusy: false,
+    errorShown: false,
+    dialogOpen: false,
+    storage: {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => void map.set(key, value),
+    },
+    random: () => 0,
+    children,
+  });
+};
+
+test("through a real stage, the switch item runs once before the nibble starts; a keyboard click still switches and the gate refuses its nibble", async () => {
+  for (const [detail, played] of [
+    [1, 1],
+    [0, 0],
+  ] as const) {
+    const log: string[] = [];
+    await withSpyLayer(log, async (plays) => {
+      let api: PrankApi | undefined;
+      const Probe = () => {
+        api = usePrank();
+        return null;
+      };
+      await inFakeBrowser(stageOf(createElement(Probe)), async () => {
+        const { onClick } = itemHandlers(
+          { key: "switch", disabled: false, run: () => void log.push("run") },
+          api!,
+        );
+        await act(async () => onClick!(clickOn(detail)));
+        assert.deepEqual(
+          log,
+          played ? ["run", "play"] : ["run"],
+          `detail ${detail}`,
+        );
+        assert.equal(plays.size, played, `detail ${detail}`);
+      });
+    });
+  }
+});
+
+// --- the panel row's "Geç": opening the confirmation nibbles, closing it does not ---
+
+const NOW = Date.parse("2026-10-14T10:00:00Z");
+const iso = (ms: number) => new Date(ms).toISOString();
+const linkedAccount = (id: string, name: string): Account => ({
+  id,
+  name,
+  kind: "personal",
+  group: "personal",
+  color: "olive",
+  createdAt: iso(NOW),
+  planning: { plan: "pro", capacityWeight: 1 },
+  desktop: {
+    accountUuid: "00000000-0000-4000-8000-000000000001",
+    orgId: "00000000-0000-4000-8000-000000000002",
+    savedAt: iso(NOW),
+    email: `${id}@example.com`,
+  },
+});
+const readyUsage = (id: string): AccountUsage => ({
+  accountId: id,
+  status: "ready",
+  stale: false,
+  checkedAt: iso(NOW - 60_000),
+  fiveHour: { usedPercent: 12 },
+  sevenDay: { usedPercent: 31, resetsAt: iso(NOW + 4 * 86_400_000) },
+});
+
+test("the panel row's Geç offers the nibble when it opens the confirmation and not when it closes it", async () => {
+  const active = linkedAccount("active", "Kişisel");
+  const vertex = linkedAccount("vertex", "Vertex");
+  const accounts = [active, vertex];
+  const usage = { active: readyUsage("active"), vertex: readyUsage("vertex") };
+  const relay = {
+    api: {},
+    preview: false,
+    error: "",
+    notice: "",
+    accounts,
+    active,
+    settings: DEFAULT_SETTINGS,
+    busy: "",
+    usageBusy: new Set<string>(),
+    desktopBusy: false,
+    hasUnclaimedDesktop: false,
+    desktop: {
+      available: true,
+      running: true,
+      organizations: [],
+      busy: false,
+      recoveryRequired: false,
+      errorRevision: 0,
+      activeProfileId: "active",
+    },
+    data: {
+      settings: DEFAULT_SETTINGS,
+      usage,
+      accounts,
+      authFlows: [],
+    } as unknown as Snapshot,
+    requestDesktop() {},
+    setSetupId() {},
+    refreshUsage: async () => {},
+    action: async () => {},
+  } as unknown as Relay;
+  const tree = createElement(
+    I18nContext.Provider,
+    { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+    createElement(
+      RelayContext.Provider,
+      { value: relay },
+      stageOf(
+        createElement(PanelAccounts, { now: NOW, initialConfirm: "vertex" }),
+      ),
+    ),
+  );
+  const log: string[] = [];
+  await withSpyLayer(log, async (plays) => {
+    await inFakeBrowser(tree, async ({ dom }) => {
+      const button = nodes(dom.container as unknown as FakeNode).find((n) =>
+        n.attributes.has("aria-expanded"),
+      );
+      assert.ok(button, "the row's Geç button is drawn");
+      assert.equal(
+        button.attributes.get("aria-expanded"),
+        "true",
+        "it starts open",
+      );
+      const click = (detail: number) =>
+        act(async () =>
+          dom.dispatch(button, "click", { clientX: 10, clientY: 20, detail }),
+        );
+      // Closing the open confirmation is a cancel: it closes, and nothing is offered.
+      await click(1);
+      assert.equal(button.attributes.get("aria-expanded"), "false");
+      assert.equal(plays.size, 0);
+      // Opening it is the switch request: it opens, and the nibble plays.
+      await click(1);
+      assert.equal(button.attributes.get("aria-expanded"), "true");
+      assert.equal(plays.size, 1);
+    });
+  });
 });
 
 test("only a switch request nibbles: no confirmation button offers it", () => {

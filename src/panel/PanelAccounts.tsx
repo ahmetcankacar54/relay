@@ -134,9 +134,12 @@ export function PanelAccounts({
                   disabled={!canSwitch || !!switching}
                   aria-expanded={open}
                   onClick={(e) =>
-                    offerAfter(prank, "nibble-cursor", e, () =>
-                      setConfirmId(open ? undefined : account.id),
-                    )
+                    // Closing an open confirmation is a cancel, not a switch request: no prank.
+                    open
+                      ? setConfirmId(undefined)
+                      : offerAfter(prank, "nibble-cursor", e, () =>
+                          setConfirmId(account.id),
+                        )
                   }
                 >
                   {t("Geç", "Switch")}

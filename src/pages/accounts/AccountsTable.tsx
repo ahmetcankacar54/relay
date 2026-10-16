@@ -32,7 +32,7 @@ import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
-import { offerAfter, usePrank } from "@/pranks/PrankStage";
+import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
 import { formatPercent } from "@/lib/meter";
 import { avatarClass, planLabel } from "./accountLabels";
@@ -119,6 +119,29 @@ export function rowActions(
   return items;
 }
 
+/**
+ * What choosing a menu item does. Every item runs from `onSelect`, except the switch: Radix runs an
+ * item's own `onClick` before its `onSelect`, so a click that only offered the prank would offer
+ * before it switched. The switch item therefore switches from its click, through `offerAfter`, which
+ * runs it first and offers after. Radix sends a mouse click, Enter and Space, and a release over the
+ * item all through that click, and still closes the menu once it has run.
+ */
+export function itemHandlers(
+  { key, disabled, run }: Pick<RowAction, "key" | "disabled" | "run">,
+  prank: PrankApi,
+): {
+  onSelect?: () => void;
+  onClick?: (event: MouseEvent<Element>) => void;
+} {
+  if (key !== "switch") return { onSelect: run };
+  return {
+    onClick: (e) =>
+      offerAfter(prank, "nibble-cursor", e, () => {
+        if (!disabled) run();
+      }),
+  };
+}
+
 export function AccountsTable({
   accounts,
   selected,
@@ -136,9 +159,6 @@ export function AccountsTable({
   const prank = usePrank();
   const { t, language } = useI18n();
   const { data, desktop, active } = relay;
-  // The switch item's `onSelect` runs the switch; its click only offers the prank, with nothing of its own to run.
-  const nibble = (e: MouseEvent<Element>) =>
-    offerAfter(prank, "nibble-cursor", e, () => {});
   return (
     <Table>
       <TableHeader>
@@ -269,8 +289,7 @@ export function AccountsTable({
                           {key === "refresh" && <DropdownMenuSeparator />}
                           <DropdownMenuItem
                             disabled={disabled}
-                            onSelect={run}
-                            onClick={key === "switch" ? nibble : undefined}
+                            {...itemHandlers({ key, disabled, run }, prank)}
                           >
                             <Icon />
                             {label}

@@ -41,6 +41,12 @@
     animation-timing-function: ease-in;
     animation-fill-mode: forwards;
   }
+  /* Three nibbles fit the chew phase's 600 ms only at 200 ms a bite; the plain chew motion (src/styles/panda.css) takes
+     0.33 s. The extra class wins over its shorthand, whatever order the sheets load in. */
+  .prank-nibble-panda .panda[data-motion~="chew"] [data-part="head"],
+  .prank-nibble-panda .panda[data-motion~="chew"] [data-part="held"] {
+    animation-duration: 200ms;
+  }
   /* The drawn cursor flies to the panda over the fly-in's 200 ms (the same element moves), and back from the panda's
      hand over the fly-out's 250 ms (a new element, so it starts from a custom property). */
   .prank-cursor[data-flight="in"] {
