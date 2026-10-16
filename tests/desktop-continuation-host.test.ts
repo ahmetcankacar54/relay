@@ -329,6 +329,43 @@ test("a snapshot's composerPresent is optional, and a boolean when given", async
     blocked("desktop-ui-unsupported"),
   );
 });
+test("a snapshot keeps frontmost and idleMs, which are optional and well-formed when given", async () => {
+  const reply = (extra: Record<string, unknown>) =>
+    nativeDesktopAutomation("/unused", async () => ({
+      ok: true,
+      snapshot: { ...snapshot(), ...extra },
+    }));
+  const kept = await reply({ frontmost: true, idleMs: 4_250 }).inspect();
+  assert.equal(kept.frontmost, true);
+  assert.equal(kept.idleMs, 4_250);
+  const behind = await reply({ frontmost: false, idleMs: 0 }).inspect();
+  assert.equal(behind.frontmost, false);
+  assert.equal(behind.idleMs, 0);
+  // An older helper reports neither.
+  const older = await reply({}).inspect();
+  assert.equal(older.frontmost, undefined);
+  assert.equal(older.idleMs, undefined);
+  for (const bad of [
+    { frontmost: "yes" },
+    { frontmost: 1 },
+    { idleMs: -1 },
+    { idleMs: 1.5 },
+    { idleMs: "60000" },
+    { idleMs: Number.POSITIVE_INFINITY },
+  ])
+    await assert.rejects(
+      reply(bad).inspect(),
+      blocked("desktop-ui-unsupported"),
+      JSON.stringify(bad),
+    );
+  // writeDraft's snapshot is read the same way.
+  const written = await nativeDesktopAutomation("/unused", async () => ({
+    ok: true,
+    snapshot: { ...snapshot(), frontmost: true, idleMs: 9_000 },
+  })).writeDraft(draftGuard(), "draft");
+  assert.equal(written.frontmost, true);
+  assert.equal(written.idleMs, 9_000);
+});
 test("only an exact local session id passes isLocalSessionId", () => {
   assert.equal(isLocalSessionId(localId), true);
   // The id is matched whatever the case of its hex digits.
@@ -410,6 +447,8 @@ test("writeDraft maps composer-not-empty and context-changed", async () => {
     "context-changed",
     "delivery-ambiguous",
     "accessibility-permission-required",
+    // The helper refused before typing: the user is active or Claude is not in front.
+    "user-active",
   ] as const) {
     const adapter = nativeDesktopAutomation("/unused", async () => ({
       ok: false,
@@ -474,33 +513,92 @@ function swiftBlock(header: string): string {
   }
   throw new Error(`${header} is not closed`);
 }
-test("the Swift write-draft branch never presses a button, adds a marker or reads a requestId", () => {
+test("the Swift write-draft branch and writeComposer never press, send or add a marker", () => {
   const branch = swiftBlock('if command == "write-draft" {');
+  const composer = swiftBlock("func writeComposer(");
   assert.match(branch, /writeComposer\(/);
-  assert.doesNotMatch(branch, /press\(/);
   assert.doesNotMatch(branch, /marker/i);
   assert.doesNotMatch(branch, /requestId/i);
-  // writeComposer is shared with send: it must only type, never press Send.
-  assert.doesNotMatch(swiftBlock("func writeComposer("), /press\(/);
+  // writeComposer is shared with send: it must only type, never press a button or Return.
+  for (const [name, block] of [
+    ["write-draft", branch],
+    ["writeComposer", composer],
+  ]) {
+    for (const forbidden of [
+      "press(",
+      "AXUIElementPerformAction",
+      "kAXPressAction",
+      "virtualKey: 36",
+      "virtualKey: 76",
+    ])
+      assert.equal(block.includes(forbidden), false, `${name}: ${forbidden}`);
+    // Return (36) and keypad Enter (76) send, however the call is spaced.
+    assert.doesNotMatch(block, /virtualKey:\s*(?:36|76)\b/, name);
+  }
+  // Its only key is V (9), for the paste.
+  const keys = [...composer.matchAll(/virtualKey:\s*([^,)\s]+)/g)].map(
+    (m) => m[1],
+  );
+  assert.ok(keys.length > 0);
+  assert.deepEqual([...new Set(keys)], ["9"]);
+  // send presses its button outside both blocks, and still does.
+  assert.match(swiftBlock('if command == "send" {'), /try press\(send\)/);
 });
-test("the Swift write-draft branch re-reads the composer and conversation right before writing", () => {
+test("the Swift write-draft branch checks the user, then re-reads the composer and conversation, right before writing", () => {
   const branch = swiftBlock('if command == "write-draft" {');
-  const write = branch.indexOf("writeComposer(");
+  const at = (text: string) => branch.indexOf(text);
+  const guarded = at("let composer = current.composer");
+  const active = at('fail("user-active")');
+  const write = at("writeComposer(");
+  assert.ok(guarded !== -1 && active !== -1 && write !== -1);
+  // First the text and composer guard, then whether the user is active, then the re-reads.
+  assert.ok(guarded < active);
   for (const before of [
-    "valueText(composer.element).isEmpty",
+    "composerReadsEmpty(composer.element)",
     'fail("composer-not-empty")',
     "liveSessionIDs(",
     'fail("context-changed")',
   ]) {
-    const at = branch.indexOf(before);
-    assert.ok(at !== -1 && at < write, `${before} must precede writeComposer`);
+    const i = at(before);
+    assert.ok(i > active, `${before} must follow the user check`);
+    assert.ok(i < write, `${before} must precede writeComposer`);
   }
+  // Read fresh, never from the observation: Claude in front and 3 s without input.
+  const check = branch.slice(guarded, at("composerReadsEmpty("));
+  assert.match(
+    check,
+    /guard claudeFrontmost\(current\.app\), idleMilliseconds\(\) >= 3000 else \{ try fail\("user-active"\) \}/,
+  );
+  assert.doesNotMatch(check, /current\.fields/);
 });
-test("the Swift pre-write composer re-read shares observe's definition of an empty composer", () => {
-  // observe() derives composerEmpty from Node.value, which nodes() reads with
-  // valueText: a missing or non-text AXValue is "". The re-read must use the same
-  // helper, not its own raw attribute read, or the two could disagree about
-  // whether a composer that reports no value is empty.
+test("the Swift snapshot reports frontmost and idleMs outside the fingerprint", () => {
+  const body = swiftBlock("func observe()");
+  const stable = body.slice(
+    body.indexOf("var stable: [String: Any] = ["),
+    body.indexOf("let serialized"),
+  );
+  assert.ok(stable.length > 0);
+  assert.doesNotMatch(stable, /frontmost|idleMs/);
+  const fingerprint = body.indexOf('fields["contextFingerprint"]');
+  for (const field of [
+    'fields["frontmost"] = claudeFrontmost(app)',
+    'fields["idleMs"] = idleMilliseconds()',
+  ]) {
+    const i = body.indexOf(field);
+    assert.ok(i !== -1 && i > fingerprint, field);
+  }
+  assert.match(
+    swiftBlock("func claudeFrontmost("),
+    /NSWorkspace\.shared\.frontmostApplication\?\.processIdentifier == app\.processIdentifier/,
+  );
+  assert.match(
+    swiftBlock("func idleMilliseconds("),
+    /CGEventSource\.secondsSinceLastEventType\(\.combinedSessionState, eventType: CGEventType\(rawValue: ~0\)!\)/,
+  );
+});
+test("the Swift pre-write composer re-read counts only a readable empty value as empty", () => {
+  // observe() still derives composerEmpty from Node.value, which nodes() reads with
+  // valueText: a missing or non-text AXValue is "".
   assert.match(swiftBlock("func nodes("), /value: valueText\(element\)/);
   assert.match(
     swiftBlock("func observe()"),
@@ -511,12 +609,36 @@ test("the Swift pre-write composer re-read shares observe's definition of an emp
     swiftBlock("func observe()"),
     /"composerPresent": composer != nil/,
   );
+  // The re-read right before the write is stricter: an AX error is not an empty composer.
   const branch = swiftBlock('if command == "write-draft" {');
   assert.match(
     branch,
-    /guard valueText\(composer\.element\)\.isEmpty else \{ try fail\("composer-not-empty"\) \}/,
+    /guard composerReadsEmpty\(composer\.element\) else \{ try fail\("composer-not-empty"\) \}/,
   );
+  assert.doesNotMatch(branch, /valueText\(/);
   assert.doesNotMatch(branch, /kAXValueAttribute/);
+  const read = swiftBlock("func composerReadsEmpty(");
+  assert.match(
+    read,
+    /AXUIElementCopyAttributeValue\(element, kAXValueAttribute as CFString, &value\)/,
+  );
+  assert.match(read, /case \.success: return \(value as\? String\)\?\.isEmpty == true/);
+  assert.match(read, /case \.noValue: return true/);
+  assert.match(read, /default: return false/);
+});
+test("the Swift writeComposer marks its clipboard text transient and concealed before it is owned", () => {
+  const body = swiftBlock("func writeComposer(");
+  const at = (text: string) => body.indexOf(text);
+  const string = at("board.setString(body, forType: .string)");
+  const marks = [
+    'board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))',
+    'board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))',
+  ].map(at);
+  const owned = at("let owned = board.changeCount");
+  const paste = at("down.post(");
+  assert.ok(string !== -1 && owned !== -1 && paste !== -1);
+  for (const mark of marks) assert.ok(mark > string && mark < owned);
+  assert.ok(owned < paste);
 });
 test("the Swift writeComposer re-checks focus after its re-observe and before the clipboard write", () => {
   const body = swiftBlock("func writeComposer(");

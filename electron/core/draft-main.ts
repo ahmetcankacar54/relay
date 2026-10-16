@@ -54,7 +54,8 @@ const pendingIds = (drafts: readonly DraftSummary[]) =>
  * restored, none left for copy or otherwise gone. A run tries the drafts that were pending for
  * the account it ran for, and only a run that stopped with a reason counts: one without
  * (Claude closed or not up long enough, nothing pending for the account) tried nothing, and
- * one stopped `busy` found another Desktop operation holding the lock, so tried nothing either.
+ * neither did one stopped `busy`, which found another Desktop operation holding the lock or
+ * waiting for it, or `active`, which found the user working in Claude or Claude not in front.
  * Every other stop counts, a restore that threw (`error`) included. A run that moved any draft
  * starts every count again. A draft counted `MAX_STALLS` times is given up.
  */
@@ -82,7 +83,8 @@ export function tallyStalls(
   const giveUp: string[] = [];
   const account = run.account;
   const { reason } = run.result;
-  if (!reason || reason === "busy" || !account) return { counts: next, giveUp };
+  if (!reason || reason === "busy" || reason === "active" || !account)
+    return { counts: next, giveUp };
   for (const draft of after) {
     if (!before.has(draft.id) || !sameAccount(draft.to, account)) continue;
     const count = (next.get(draft.id) ?? 0) + 1;

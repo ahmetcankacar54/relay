@@ -366,6 +366,22 @@ test("a new-session draft is named Yeni oturum and an empty title is Adsız konu
   assert.match(html, /Yeni oturum/);
   assert.match(html, /Adsız konuşma/);
   assert.doesNotMatch(html, /should not show/);
+  // A title of only spaces is no title either, and a real one is shown trimmed.
+  const blank = drafts(withDrafts([draft({ title: " \t\n " })]));
+  assert.match(blank, /title="Adsız konuşma"[^>]*>Adsız konuşma</);
+  const padded = drafts(withDrafts([draft({ title: "  Fix login  " })]));
+  assert.match(padded, /title="Fix login"[^>]*>Fix login</);
+});
+
+test("a draft's reason wraps while its name stays on one line", () => {
+  const html = drafts(withDrafts([draft({ title: "Fix the login bug", reason: "maybe-typed" })]));
+  const classOf = (text: string) =>
+    new RegExp(`<div class="([^"]*)"[^>]*>${text}</div>`).exec(html)?.[1];
+  const name = classOf("Fix the login bug");
+  const reason = classOf("Konuşmaya yazılmış olabilir, yapıştırmadan önce bakın");
+  assert.ok(name !== undefined && reason !== undefined);
+  assert.ok(name.split(" ").includes("truncate"));
+  assert.ok(!reason.split(" ").includes("truncate"));
 });
 
 test("the attachment note shows only when attachments could not be restored", () => {
@@ -376,17 +392,32 @@ test("the attachment note shows only when attachments could not be restored", ()
 test("draftReason words every reason in both languages, with a fallback", () => {
   const tr = (a: string) => a;
   const en = (_a: string, b: string) => b;
+  const maybeTyped: [string, string] = [
+    "Konuşmaya yazılmış olabilir, yapıştırmadan önce bakın",
+    "It may already be in the conversation; check before pasting",
+  ];
+  const unsupported: [string, string] = [
+    "Desktop arayüzü desteklenmiyor",
+    "Desktop's interface is not supported",
+  ];
+  const busy: [string, string] = ["Konuşma meşguldü", "The conversation was busy"];
   const labels: Record<string, [string, string]> = {
     accessibility: ["Erişilebilirlik izni yok", "Accessibility permission missing"],
     "composer-not-empty": ["Mesaj kutusu doluydu", "The message box was not empty"],
     "context-changed": ["Ekran değişti", "The screen changed"],
     lost: ["Desktop taslağı sildi", "Desktop cleared the draft"],
-    busy: ["Konuşma meşguldü", "The conversation was busy"],
+    busy,
     manual: ["Elle yapıştırın", "Paste it yourself"],
     error: ["Geri yazılamadı", "Could not be restored"],
-    unconfirmed: ["Yazıldığı doğrulanamadı", "Could not confirm it was typed"],
+    // A draft that may already be in its composer says so, whichever way that came about.
+    "maybe-typed": maybeTyped,
+    unconfirmed: maybeTyped,
+    "delivery-ambiguous": maybeTyped,
     "no-composer": ["Mesaj kutusu bulunamadı", "No message box was found"],
-    unsupported: ["Desktop arayüzü desteklenmiyor", "Desktop's interface is not supported"],
+    unsupported,
+    // The helper's own issue names read as the restorer's.
+    "desktop-ui-unsupported": unsupported,
+    "desktop-work-active": busy,
     "exact-session-not-observed": ["Konuşma açılamadı", "The conversation could not be opened"],
     "not-ready": ["Desktop hazır değildi", "Desktop was not ready"],
     moved: ["Başka bir konuşmaya geçtiniz", "You moved to another conversation"],

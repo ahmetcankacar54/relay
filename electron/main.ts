@@ -259,6 +259,8 @@ else {
           running: () => host.running(),
           uptimeMs: () => desktop.claudeUptimeMs(),
           withLock: (fn) => desktopLock.restore(fn, () => !desktop.isBusy),
+          // The restore holds the lock as one caller: any more are waiting for it.
+          yielding: () => desktopLock.callers > 1,
           notify: notifyDrafts,
           sleep: (ms) =>
             new Promise<void>((resolve) => setTimeout(resolve, ms)),

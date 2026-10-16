@@ -4,21 +4,33 @@ import { useRelay, type Relay } from "@/data/relay-context";
 import type { DraftSummary } from "../../shared/types";
 import { panelCard, panelEyebrow } from "./PanelActiveCard";
 
+/** A draft Relay tried to type: it may be in its composer already. */
+const MAYBE_TYPED = [
+  "Konuşmaya yazılmış olabilir, yapıştırmadan önce bakın",
+  "It may already be in the conversation; check before pasting",
+] as const;
+const BUSY = ["Konuşma meşguldü", "The conversation was busy"] as const;
+const UNSUPPORTED = [
+  "Desktop arayüzü desteklenmiyor",
+  "Desktop's interface is not supported",
+] as const;
+
 const REASONS: Record<string, readonly [string, string]> = {
   accessibility: ["Erişilebilirlik izni yok", "Accessibility permission missing"],
   "composer-not-empty": ["Mesaj kutusu doluydu", "The message box was not empty"],
   "context-changed": ["Ekran değişti", "The screen changed"],
   changed: ["Ekran değişti", "The screen changed"],
   lost: ["Desktop taslağı sildi", "Desktop cleared the draft"],
-  busy: ["Konuşma meşguldü", "The conversation was busy"],
+  busy: BUSY,
+  "desktop-work-active": BUSY,
   manual: ["Elle yapıştırın", "Paste it yourself"],
   error: ["Geri yazılamadı", "Could not be restored"],
-  unconfirmed: ["Yazıldığı doğrulanamadı", "Could not confirm it was typed"],
+  "maybe-typed": MAYBE_TYPED,
+  unconfirmed: MAYBE_TYPED,
+  "delivery-ambiguous": MAYBE_TYPED,
   "no-composer": ["Mesaj kutusu bulunamadı", "No message box was found"],
-  unsupported: [
-    "Desktop arayüzü desteklenmiyor",
-    "Desktop's interface is not supported",
-  ],
+  unsupported: UNSUPPORTED,
+  "desktop-ui-unsupported": UNSUPPORTED,
   "exact-session-not-observed": [
     "Konuşma açılamadı",
     "The conversation could not be opened",
@@ -55,7 +67,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   const { t } = useI18n();
   const name = draft.newSession
     ? t("Yeni oturum", "New session")
-    : draft.title || t("Adsız konuşma", "Untitled conversation");
+    : draft.title.trim() || t("Adsız konuşma", "Untitled conversation");
   const reason = draftReason(draft.reason, t);
   const needsPermission = draft.reason === "accessibility";
   const running = [
@@ -70,7 +82,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
           {name}
         </div>
         <div
-          className="min-w-0 truncate text-[10.5px] text-muted-foreground"
+          className="min-w-0 text-[10.5px] text-muted-foreground"
           title={reason}
         >
           {reason}

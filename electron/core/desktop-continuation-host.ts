@@ -18,7 +18,9 @@ export type DesktopAutomationIssue =
   | "context-changed"
   | "desktop-work-active"
   | "delivery-ambiguous"
-  | "desktop-observation-incomplete";
+  | "desktop-observation-incomplete"
+  /** `write-draft` refused before typing: Claude is not in front, or the user had input in the last 3 s. */
+  | "user-active";
 
 export class DesktopAutomationError extends Error {
   constructor(
@@ -49,6 +51,10 @@ export interface DesktopAutomationSnapshot {
   visibleScheduledTasks?: number;
   contextFingerprint: string;
   coverage: "active-conversation-only";
+  /** Claude is the app in front. Outside the fingerprint; older helpers omit it. */
+  frontmost?: boolean;
+  /** Milliseconds since the user's last input of any kind. Outside the fingerprint; older helpers omit it. */
+  idleMs?: number;
 }
 
 export interface DesktopAutomationGuard {
@@ -84,7 +90,9 @@ export interface DesktopAutomation {
    * Types `text` into the open conversation's empty composer and never presses
    * Send. One guarded attempt: a non-empty composer is `composer-not-empty`, a
    * moved context is `context-changed`, an unverifiable result is
-   * `delivery-ambiguous`. Resolves with the snapshot taken after the write.
+   * `delivery-ambiguous`. Claude not in front, or input from the user in the
+   * last 3 s, is `user-active`, before anything is typed. Resolves with the
+   * snapshot taken after the write.
    */
   writeDraft(
     guard: DesktopAutomationGuard,
@@ -145,6 +153,7 @@ const knownIssues = new Set<DesktopAutomationIssue>([
   "desktop-work-active",
   "delivery-ambiguous",
   "desktop-observation-incomplete",
+  "user-active",
 ]);
 
 type NativeReply = {
@@ -186,7 +195,9 @@ function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
         count === undefined || (Number.isSafeInteger(count) && count >= 0),
     ) &&
     /^[0-9a-f]{64}$/.test(v.contextFingerprint) &&
-    v.coverage === "active-conversation-only"
+    v.coverage === "active-conversation-only" &&
+    (v.frontmost === undefined || typeof v.frontmost === "boolean") &&
+    (v.idleMs === undefined || (Number.isSafeInteger(v.idleMs) && v.idleMs >= 0))
   );
 }
 

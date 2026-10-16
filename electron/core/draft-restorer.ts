@@ -21,6 +21,8 @@ export interface RestorerDeps {
   uptimeMs(): Promise<number | undefined>;
   /** Runs `fn` holding Relay's Desktop lock; undefined, without running it, when busy. */
   withLock<T>(fn: () => Promise<T>): Promise<T | undefined>;
+  /** True when another caller waits for the Desktop lock while the restore holds it. */
+  yielding(): boolean;
   notify(summary: { restored: number; left: number }): void;
   sleep(ms: number): Promise<void>;
   now(): number;
@@ -35,7 +37,9 @@ export type RestoreResult = {
   /**
    * Why a run stopped with drafts still pending:
    * - `not-ready`: Desktop's UI never answered;
-   * - `busy`: another Desktop operation held the lock;
+   * - `busy`: another Desktop operation held the lock, or waited for it;
+   * - `active`: Claude was not in front, or the user had input in the last 3 s, so Relay
+   *   did not open or type anything;
    * - `moved`: the user went to another conversation;
    * - `changed`: Claude's account, uptime or process changed;
    * - `claude-not-running`;
@@ -60,10 +64,13 @@ const RECHECK_MS = 5_000;
 const BUDGET_MS = 5 * 60_000;
 /** The longest draft `writeDraft` takes. Longer ones are left for Copy. */
 const MAX_TEXT = 16_384;
+/** How long the user must have left the keyboard and mouse alone before Relay acts. */
+const IDLE_MS = 3_000;
 
 /**
  * Ends a run. With `pending`, the draft in hand and those after it stay pending, unless the
- * draft in hand was being typed. With `copy`, they are all left for copy with `reason`.
+ * draft in hand was being typed: that one is left for copy as `maybe-typed`. With `copy`, they
+ * are all left for copy with `reason`.
  */
 class Stop {
   constructor(
@@ -86,6 +93,25 @@ function haltOn(error: unknown): void {
 const sameAccount = (a: string | undefined, b: string) =>
   !!a && a.toLowerCase() === b.toLowerCase();
 
+/**
+ * Claude is in front and the user has not touched the keyboard or mouse for 3 s, so nothing
+ * Relay opens or types meets the user's keystrokes. A view that does not say is not one.
+ */
+const letsAct = (view: Snapshot) =>
+  view.frontmost === true && (view.idleMs ?? 0) >= IDLE_MS;
+
+/**
+ * Why a draft is left for copy once a write was tried: it may be in its composer, unless
+ * Desktop wiped it twice or the helper found the composer not empty and typed nothing.
+ */
+const afterWrite = (reason: string) =>
+  reason === "lost" || reason === "composer-not-empty" ? reason : "maybe-typed";
+
+/** Another Desktop operation waits for the lock: let it go first. */
+function yieldTo(deps: RestorerDeps): void {
+  if (deps.yielding()) throw new Stop("pending", "busy");
+}
+
 /** What a run holds to: Desktop's account and Claude's process, and where the user is. */
 interface Run {
   account: string;
@@ -104,9 +130,11 @@ interface Run {
  * they were on. It never sends, and never writes into a composer that is not empty.
  *
  * It waits for Desktop's UI without the Desktop lock, then takes the lock for each draft and
- * re-checks Claude under it. It stops, leaving the rest pending, when the lock is busy, the
- * user moves, Claude changes or the run passes 5 minutes. A draft it cannot type, or cannot
- * see in its composer afterwards, is marked `needs-copy` with the reason.
+ * re-checks Claude under it. It acts only while Claude is in front and the user has left it
+ * alone for 3 s. It stops, leaving the rest pending, when the lock is busy or another
+ * operation waits for it, the user is active or moves, Claude changes or the run passes 5
+ * minutes. A draft it cannot type, or cannot see in its composer afterwards, is marked
+ * `needs-copy` with the reason: `maybe-typed` once a write was tried.
  */
 export async function restoreDrafts(
   deps: RestorerDeps,
@@ -198,7 +226,7 @@ export async function restoreDrafts(
       return end("done");
     }
     // A draft being typed may be in its composer: copy, never type it again.
-    if (typing.wrote) await leave(records[next], error.reason);
+    if (typing.wrote) await leave(records[next], "maybe-typed");
     return end("waiting", error.reason);
   }
   if (run.anchored && run.returnTo && run.returnTo !== run.lastSeen)
@@ -248,8 +276,8 @@ async function locked<T>(deps: RestorerDeps, fn: () => Promise<T>): Promise<T> {
 
 /**
  * Under the lock, before Relay acts: Desktop is on the run's account, Claude is the same
- * process and has run 15 s, and the screen shows what Relay last saw there. The first lock's
- * look is where the user is taken back to.
+ * process and has run 15 s, the screen shows what Relay last saw there, and Claude is in
+ * front with the user idle. The first lock's look is where the user is taken back to.
  */
 async function confirm(deps: RestorerDeps, run: Run): Promise<void> {
   const account = await deps.currentAccount().catch(() => undefined);
@@ -272,6 +300,7 @@ async function confirm(deps: RestorerDeps, run: Run): Promise<void> {
   }
   if (view.pid !== run.pid) throw new Stop("pending", "changed");
   if (view.localSessionId !== run.lastSeen) throw new Stop("pending", "moved");
+  if (!letsAct(view)) throw new Stop("pending", "active");
   if (!run.anchored) {
     run.anchored = true;
     run.returnTo = view.localSessionId;
@@ -308,7 +337,8 @@ function guardOf(view: Snapshot): DesktopAutomationGuard {
 /**
  * Types one draft into its conversation's empty composer and reads it again 5 s later.
  * Resolves with why it is left for copy, or undefined when it was restored. `typing.wrote`
- * tells whether a write was attempted, so the caller knows it may be in a composer.
+ * tells whether a write was attempted, so the caller knows it may be in a composer; once it
+ * was, every reason but `lost` and `composer-not-empty` is `maybe-typed`.
  */
 async function restoreOne(
   deps: RestorerDeps,
@@ -317,7 +347,7 @@ async function restoreOne(
   text: string,
   typing: { wrote: boolean },
 ): Promise<string | undefined> {
-  let view = await show(deps, target);
+  let view = await show(deps, run, target);
   if (!view) return "exact-session-not-observed";
   run.lastSeen = target;
   if (view.status === "running" || view.status === "waiting") return "busy";
@@ -327,13 +357,20 @@ async function restoreOne(
   // One write, and one more only when the same composer is seen there and empty again.
   for (let again = false; ; again = true) {
     const guard = guardOf(view);
+    // Before the first write only: a rewrite finishes what the first one started.
+    if (!typing.wrote) yieldTo(deps);
     try {
       typing.wrote = true;
       await deps.automation.writeDraft(guard, text);
     } catch (error) {
       haltOn(error);
+      if (issueOf(error) === "user-active") {
+        // Refused before anything was typed: the draft waits for the user to pause.
+        typing.wrote = false;
+        throw new Stop("pending", "active");
+      }
       // Past its guard a failed write may have typed the text: never type it blindly again.
-      return issueOf(error);
+      return afterWrite(issueOf(error));
     }
     await deps.sleep(RECHECK_MS);
     let fresh: Snapshot;
@@ -341,43 +378,73 @@ async function restoreOne(
       fresh = await deps.automation.inspect();
     } catch (error) {
       haltOn(error);
-      return "unconfirmed";
+      return afterWrite("unconfirmed");
     }
-    if (!composing(fresh, run, target)) return "unconfirmed";
+    if (!composing(fresh, run, target)) return afterWrite("unconfirmed");
     if (!fresh.composerEmpty) return undefined;
     if (again) return "lost";
     view = fresh;
   }
 }
 
+/** A guard can be built from `view`, so a draft can be typed into it. */
+function guardable(view: Snapshot): boolean {
+  try {
+    automationGuard(view);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** `view` shows `target` with a composer a draft can be typed into, or busy. */
+const shows = (view: Snapshot, target: string) =>
+  view.localSessionId === target &&
+  ((view.composerPresent === true && guardable(view)) ||
+    view.status === "running" ||
+    view.status === "waiting");
+
 /**
- * Opens `target` and waits, every 500 ms for up to 30 s and sending the link again every 5 s,
- * until it shows with its composer or busy. Resolves with the last view when it shows by
- * then, with or without one, and undefined when it never shows.
+ * Waits, every 500 ms for up to 30 s, until `target` shows with a composer that can be
+ * guarded, or busy. It opens `target` only while the screen still shows the conversation
+ * Relay last saw there, or is loading, and sends the link again every 5 s while it does; it
+ * never opens a target already on screen. Any other conversation means the user moved: it
+ * stops, and never takes them back. It opens nothing unless Claude is in front and the user
+ * idle, and gives way to a Desktop operation waiting for the lock. Resolves with the target's
+ * last view when it shows by then, guardable or not, and undefined when it never shows.
  */
 async function show(
   deps: RestorerDeps,
+  run: Run,
   target: string,
 ): Promise<Snapshot | undefined> {
   const deadline = deps.now() + SHOWN_MS;
-  let openedAt = deps.now();
-  await open(deps, target);
+  let openedAt: number | undefined;
   for (;;) {
+    yieldTo(deps);
     const view = await look(deps);
-    const shown = view?.localSessionId === target ? view : undefined;
-    if (
-      shown &&
-      (shown.composerPresent === true ||
-        shown.status === "running" ||
-        shown.status === "waiting")
-    )
-      return shown;
-    if (deps.now() >= deadline) return shown;
-    await deps.sleep(POLL_MS);
-    if (deps.now() - openedAt >= RESEND_MS && deps.now() < deadline) {
+    if (view?.localSessionId === target) {
+      if (shows(view, target) || deps.now() >= deadline) return view;
+    } else if (
+      view?.localSessionId !== undefined &&
+      view.localSessionId !== run.lastSeen
+    ) {
+      throw new Stop("pending", "moved");
+    } else if (deps.now() >= deadline) {
+      return undefined;
+    } else if (
+      // Without a view nothing says Relay may act: it looks again first.
+      view &&
+      (openedAt === undefined || deps.now() - openedAt >= RESEND_MS)
+    ) {
+      if (!letsAct(view)) throw new Stop("pending", "active");
+      yieldTo(deps);
       openedAt = deps.now();
       await open(deps, target);
+      // Look again at once: Desktop may already be there.
+      continue;
     }
+    await deps.sleep(POLL_MS);
   }
 }
 

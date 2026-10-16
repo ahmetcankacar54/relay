@@ -37,10 +37,29 @@ func stringAttribute(_ element: AXUIElement, _ name: String) -> String {
     if let value = attribute(element, name) as? URL { return value.absoluteString }
     return ""
 }
-// The one definition of an element's text: a missing or non-text AXValue is "".
-// observe() derives composerEmpty from it (via Node.value) and the pre-write
-// composer re-read uses it directly, so they cannot disagree about "empty".
+// An element's text for observation: a missing or non-text AXValue is "".
+// observe() derives composerEmpty from it (via Node.value).
 func valueText(_ element: AXUIElement) -> String { stringAttribute(element, kAXValueAttribute) }
+// The pre-write composer re-read is stricter than valueText: the composer is empty
+// only when AX answers with an empty string, or says it has no value. Any other
+// error, or a value that is not text, may hide the user's text: not empty.
+func composerReadsEmpty(_ element: AXUIElement) -> Bool {
+    var value: CFTypeRef?
+    switch AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) {
+    case .success: return (value as? String)?.isEmpty == true
+    case .noValue: return true
+    default: return false
+    }
+}
+// Whether Claude is the app in front, read now.
+func claudeFrontmost(_ app: NSRunningApplication) -> Bool {
+    NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier
+}
+// Milliseconds since the user's last input of any kind (keys, mouse, scroll), read now.
+// The raw value ~0 is kCGAnyInputEventType.
+func idleMilliseconds() -> Int {
+    Int(CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!) * 1000)
+}
 struct Node {
     let element: AXUIElement
     let role: String
@@ -217,6 +236,9 @@ func observe() throws -> Observation {
     var fields = stable
     fields["contextFingerprint"] = SHA256.hash(data: serialized).map { String(format: "%02x", $0) }.joined()
     fields["observedAt"] = Int(Date().timeIntervalSince1970 * 1000)
+    // What the user is doing, not what the conversation is: outside the fingerprint.
+    fields["frontmost"] = claudeFrontmost(app)
+    fields["idleMs"] = idleMilliseconds()
     return Observation(app: app, tree: tree, composer: composer, send: send, permission: permission, fields: fields)
 }
 func validateGuard(_ observation: Observation, _ expected: [String: Any], allowComposer: Bool = false) throws {
@@ -269,6 +291,10 @@ func writeComposer(_ observation: Observation, _ body: String) throws {
     }
     board.clearContents()
     guard board.setString(body, forType: .string) else { try fail("desktop-ui-unsupported") }
+    // Clipboard managers skip transient and concealed content (nspasteboard.org), so
+    // the text never lands in a clipboard history.
+    board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+    board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
     let owned = board.changeCount
     defer {
         if board.changeCount == owned {
@@ -363,7 +389,11 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         // or switching conversations; it cannot close it, as AX has no atomic lock.
         guard let text = request["text"] as? String, !text.isEmpty, text.utf8.count <= 65536, !text.contains("\0"),
               let composer = current.composer else { try fail("desktop-ui-unsupported") }
-        guard valueText(composer.element).isEmpty else { try fail("composer-not-empty") }
+        // The user's keystrokes, a Return included, must never land in a composer
+        // Relay types into: write only into a Claude in front that has had no input
+        // for 3 s. Read now, not from the observation, before anything is written.
+        guard claudeFrontmost(current.app), idleMilliseconds() >= 3000 else { try fail("user-active") }
+        guard composerReadsEmpty(composer.element) else { try fail("composer-not-empty") }
         let sessions = liveSessionIDs(current)
         guard sessions.count == 1, sessions.first == expected["localSessionId"] as? String else { try fail("context-changed") }
         try writeComposer(current, text)

@@ -324,7 +324,7 @@ test("a run that moves any draft starts every count again", () => {
   assert.deepEqual([...tally.counts], [["one", 1]]);
 });
 
-test("a busy lock never counts; every other stop, and a restore that throws, does", () => {
+test("a busy lock or an active user never counts; every other stop, and a restore that throws, does", () => {
   const mine = summary("mine");
   const run = (reason: string) =>
     tallyStalls(new Map([["mine", 2]]), {
@@ -333,10 +333,13 @@ test("a busy lock never counts; every other stop, and a restore that throws, doe
       account: ACCOUNT,
       result: stopped(reason),
     });
-  // Another Desktop operation held the lock: the draft was never tried.
-  const busy = run("busy");
-  assert.deepEqual(busy.giveUp, []);
-  assert.deepEqual([...busy.counts], [["mine", 2]]);
+  // Another Desktop operation held the lock, or the user was working in Claude: the draft
+  // was never tried.
+  for (const reason of ["busy", "active"]) {
+    const tally = run(reason);
+    assert.deepEqual(tally.giveUp, [], reason);
+    assert.deepEqual([...tally.counts], [["mine", 2]], reason);
+  }
   for (const reason of [
     "not-ready",
     "moved",
@@ -560,13 +563,15 @@ test("a restore that throws ends its run, and three in a row leave the draft for
 });
 
 test("busy runs never give a draft up, however many there are", async () => {
-  const { scheduler, state } = harness();
-  for (let i = 0; i < 5; i++) state.results.push(stopped("busy"));
-  await scheduler.afterSwitch();
-  for (let i = 0; i < 4; i++) await scheduler.tick();
-  assert.equal(state.runs, 5);
-  assert.deepEqual(state.marks, []);
-  assert.equal(state.cancelled, 0);
+  for (const reason of ["busy", "active"]) {
+    const { scheduler, state } = harness();
+    for (let i = 0; i < 5; i++) state.results.push(stopped(reason));
+    await scheduler.afterSwitch();
+    for (let i = 0; i < 4; i++) await scheduler.tick();
+    assert.equal(state.runs, 5, reason);
+    assert.deepEqual(state.marks, [], reason);
+    assert.equal(state.cancelled, 0, reason);
+  }
 });
 
 test("a run that finds nothing pending turns the retries off before anything else", async () => {
@@ -685,6 +690,8 @@ test("every switch schedules a restore through one hook, on the Desktop lock", (
     deps,
     /withLock: \(fn\) => desktopLock\.restore\(fn, \(\) => !desktop\.isBusy\),/,
   );
+  // Another caller waiting behind the restore's own hold makes it yield.
+  assert.match(deps, /yielding: \(\) => desktopLock\.callers > 1,/);
 });
 
 test("main runs every Desktop operation on one lock, and a restore record refuses none of the user's actions", () => {

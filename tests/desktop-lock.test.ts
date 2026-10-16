@@ -157,6 +157,8 @@ test("a switch asked for during a restored draft stops the restore after that dr
     sendEnabled: !!views.get(shown),
     contextFingerprint: `fp:${shown}:${views.get(shown) ?? ""}`,
     coverage: "active-conversation-only",
+    frontmost: true,
+    idleMs: 60_000,
   });
   let manual: Promise<string> | undefined;
   let waitedFor = false;
@@ -185,6 +187,7 @@ test("a switch asked for during a restored draft stops the restore after that dr
     running: async () => true,
     uptimeMs: async () => 60_000,
     withLock: (fn) => lock.restore(fn),
+    yielding: () => lock.callers > 1,
     notify: () => {},
     sleep: async (ms) => {
       // The 5 s re-check of the first draft, inside its lock: the user asks for a switch.
@@ -218,6 +221,73 @@ test("a switch asked for during a restored draft stops the restore after that dr
     calls.filter((call) => call.startsWith("write:")),
     [`write:local_${alias(1)}`],
   );
+  assert.equal(lock.callers, 0);
+});
+
+test("a switch asked for while the restore waits for its target is let through before anything is typed", { timeout: 5_000 }, async () => {
+  const lock = new DesktopLock();
+  const calls: string[] = [];
+  const marks: string[] = [];
+  let clock = 0;
+  let manual: Promise<string> | undefined;
+  const result = await restoreDrafts({
+    automation: {
+      // Desktop is slow to follow the link: the screen stays where the user was.
+      inspect: async () => ({
+        observedAt: 1,
+        pid: 7,
+        localSessionId: HOME,
+        accountLabel: "Test User",
+        permissionMode: "Auto",
+        status: "stopped",
+        quotaStopped: false,
+        composerPresent: true,
+        composerEmpty: true,
+        sendEnabled: false,
+        contextFingerprint: "fp",
+        coverage: "active-conversation-only",
+        frontmost: true,
+        idleMs: 60_000,
+      }),
+      openSession: async (id) => {
+        calls.push(`open:${id}`);
+      },
+      writeDraft: async () => assert.fail("nothing is typed"),
+    },
+    pending: async () => [record(1), record(2)],
+    mark: async (id) => {
+      marks.push(id);
+    },
+    remove: async () => assert.fail("nothing is removed"),
+    currentAccount: async () => ACCOUNT,
+    running: async () => true,
+    uptimeMs: async () => 60_000,
+    withLock: (fn) => lock.restore(fn),
+    yielding: () => lock.callers > 1,
+    notify: () => {},
+    sleep: async (ms) => {
+      clock += ms;
+      // The user asks for a switch while Relay waits for the first draft's conversation.
+      if (ms === 500 && !manual) {
+        manual = lock.manual(async () => {
+          calls.push("switch");
+          return "switched";
+        });
+        await flush();
+      }
+    },
+    now: () => clock,
+  });
+  assert.deepEqual(result, {
+    status: "waiting",
+    restored: 0,
+    left: 2,
+    reason: "busy",
+  });
+  assert.equal(await manual, "switched");
+  // One link, then the switch: no link sent again, nothing typed, nothing left for copy.
+  assert.deepEqual(calls, [`open:local_${alias(1)}`, "switch"]);
+  assert.deepEqual(marks, []);
   assert.equal(lock.callers, 0);
 });
 
@@ -284,7 +354,12 @@ test("the restorer's own stop passes through the lock", { timeout: 5_000 }, asyn
   const result = await restoreDrafts({
     automation: {
       inspect: async () =>
-        ({ pid: 7, localSessionId: HOME }) as DesktopAutomationSnapshot,
+        ({
+          pid: 7,
+          localSessionId: HOME,
+          frontmost: true,
+          idleMs: 60_000,
+        }) as DesktopAutomationSnapshot,
       openSession: async () => assert.fail("nothing is opened"),
       writeDraft: async () => assert.fail("nothing is typed"),
     },
@@ -295,6 +370,7 @@ test("the restorer's own stop passes through the lock", { timeout: 5_000 }, asyn
     running: async () => true,
     uptimeMs: async () => 60_000,
     withLock: (fn) => lock.restore(fn),
+    yielding: () => lock.callers > 1,
     notify: () => assert.fail("nothing to tell"),
     sleep: async () => {},
     now: () => 0,
