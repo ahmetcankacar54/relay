@@ -166,6 +166,7 @@ export function Switching() {
             value={settings}
             accounts={accounts}
             autoSwitch={data?.autoSwitch}
+            fleetEnabled={!!data?.fleet?.enabled}
             platform={platform}
             update={update}
             disabled={disabled}

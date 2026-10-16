@@ -116,6 +116,8 @@ type Props = {
   accounts: Account[];
   active?: Account;
   autoSwitch?: AutoSwitchState;
+  /** Continue at quota is on, so preparing on quit waits for it. */
+  fleetEnabled?: boolean;
   platform: string;
   update: (patch: Partial<RelaySettings>) => void;
   disabled: boolean;
@@ -258,13 +260,21 @@ export function AfterExitPreferences({
   value,
   accounts,
   autoSwitch,
+  fleetEnabled,
   platform,
   update,
   disabled,
   t,
 }: Pick<
   Props,
-  "value" | "accounts" | "autoSwitch" | "platform" | "update" | "disabled" | "t"
+  | "value"
+  | "accounts"
+  | "autoSwitch"
+  | "fleetEnabled"
+  | "platform"
+  | "update"
+  | "disabled"
+  | "t"
 >) {
   const supported = platform === "darwin" || platform === "preview";
   return (
@@ -302,6 +312,14 @@ export function AfterExitPreferences({
           ]}
         />
       </SettingRow>
+      {value.autoSwitchMode === "after-exit" && fleetEnabled && (
+        <Note>
+          {t(
+            "Kota dolunca devam açıkken bu geçiş bekler; kota dolan konuşmalar Claude açıldığında devam ettirilir.",
+            "While Continue at quota is on, this switch waits; conversations stopped at quota are continued when Claude opens.",
+          )}
+        </Note>
+      )}
       {!supported && (
         <Note>
           {t(

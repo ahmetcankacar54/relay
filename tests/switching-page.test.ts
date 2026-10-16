@@ -26,13 +26,17 @@ const a: Account = {
   auth: { loggedIn: true, email: "a@example.com", checkedAt: iso(NOW) },
 };
 const accounts = [a];
-const settings = {
+const baseSettings = {
   ...DEFAULT_SETTINGS,
   autoSwitchMode: "off" as const,
   desktopHistoryTransfer: "all" as const,
 };
 
-function relayFor(data: Record<string, unknown> = {}): Relay {
+function relayFor(
+  data: Record<string, unknown> = {},
+  settingsOverride: Record<string, unknown> = {},
+): Relay {
+  const settings = { ...baseSettings, ...settingsOverride };
   return {
     api: {},
     preview: false,
@@ -117,4 +121,17 @@ test("the single-conversation watch card appears only while a legacy watch needs
     }),
   );
   assert.match(html, /Bu konuşmayı izle|İzlemeyi kapat/);
+});
+
+test("while Continue at quota is on, the prepare-on-quit row says the switch waits", () => {
+  const hold =
+    /Kota dolunca devam açıkken bu geçiş bekler; kota dolan konuşmalar Claude açıldığında devam ettirilir\./;
+  const afterExit = { autoSwitchMode: "after-exit" as const };
+  assert.match(render(relayFor({}, afterExit)), hold);
+  // Not while the fleet is off, and not when the switch itself is off.
+  assert.doesNotMatch(
+    render(relayFor({ fleet: { enabled: false, status: "off", stopped: 0 } }, afterExit)),
+    hold,
+  );
+  assert.doesNotMatch(render(relayFor()), hold);
 });

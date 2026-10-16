@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -750,4 +751,85 @@ test("the target is the soonest reset that holds half an hour at the tempo", asy
   rate = 200;
   await manager.tick();
   assert.equal(manager.snapshot().targetId, f.b.id);
+});
+test("a continuation that owns the stopped conversations holds preparation with its own reason, and a browser sign-in alone still says browser-sign-in", () => {
+  const f = scenario();
+  const decide = (pendingAuth: boolean, continuationOwns: boolean) =>
+    autoSwitchDecision(
+      f.settings,
+      [f.a, f.b],
+      f.desktop,
+      f.usage,
+      NOW,
+      pendingAuth,
+      true,
+      undefined,
+      continuationOwns,
+    ).state;
+  assert.equal(decide(false, false).reason, "quota-exhausted");
+  const held = decide(false, true);
+  assert.equal(held.status, "blocked");
+  assert.equal(held.reason, "continuation-active");
+  const signIn = decide(true, false);
+  assert.equal(signIn.status, "blocked");
+  assert.equal(signIn.reason, "browser-sign-in");
+  // Continuation is checked right before the browser sign-in.
+  assert.equal(decide(true, true).reason, "continuation-active");
+  // Desktop's own sign-in is checked before both.
+  f.desktop.pendingProfileId = f.b.id;
+  assert.equal(decide(true, true).reason, "desktop-sign-in");
+});
+test("the manager reads continuationOwns and pendingAuth separately on every decision and never switches while either holds", async (t) => {
+  const f = await managerFixture(t);
+  let owns = true,
+    auth = false,
+    switches = 0;
+  const manager = new AutoSwitchManager(
+    f.store,
+    {
+      snapshot: async () => structuredClone(f.desktop),
+      switchTo: async () => {
+        switches++;
+      },
+    },
+    { snapshot: () => f.usage },
+    {
+      now: () => NOW + 60_000,
+      platformSupported: true,
+      continuationOwns: () => owns,
+      pendingAuth: () => auth,
+    },
+  );
+  await manager.tick();
+  assert.equal(manager.snapshot().reason, "continuation-active");
+  owns = false;
+  auth = true;
+  await manager.tick();
+  assert.equal(manager.snapshot().reason, "browser-sign-in");
+  auth = false;
+  await manager.tick();
+  assert.equal(manager.snapshot().reason, "exit-settling");
+  assert.equal(switches, 0);
+});
+test("main passes the fleet and continuation conditions to continuationOwns, and only the sign-in check to pendingAuth", () => {
+  const main = readFileSync(
+    new URL("../electron/main.ts", import.meta.url),
+    "utf8",
+  );
+  const start = main.indexOf("autoSwitch = new AutoSwitchManager(");
+  assert.ok(start >= 0);
+  const block = main.slice(start, main.indexOf("changed: broadcastChanged", start));
+  const owns = block.slice(
+    block.indexOf("continuationOwns:"),
+    block.indexOf("pendingAuth:"),
+  );
+  assert.match(owns, /fleet\?\.enabled/);
+  assert.match(owns, /continuation\.snapshot\(\)\.enabled/);
+  assert.match(owns, /status === "reconciliation-required"/);
+  assert.match(owns, /reason === "continuation-state-unreadable"/);
+  assert.ok(block.indexOf("continuationOwns:") < block.indexOf("pendingAuth:"));
+  const pending = block.slice(block.indexOf("pendingAuth:"));
+  assert.match(pending, /pendingAuth: \(\) => pendingAuth\(\),/);
+  assert.doesNotMatch(pending, /fleet/);
+  assert.doesNotMatch(pending, /continuation\./);
 });

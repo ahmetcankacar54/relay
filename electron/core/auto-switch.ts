@@ -31,6 +31,8 @@ interface Decision {
 interface Dependencies {
   now?: () => number;
   pendingAuth?: () => boolean;
+  /** Continue at quota owns the stopped conversations; preparing waits for it. */
+  continuationOwns?: () => boolean;
   changed?: () => void;
   platformSupported?: boolean;
   withDesktopLock?: <T>(action: () => Promise<T>) => Promise<T>;
@@ -120,6 +122,8 @@ export function autoSwitchDecision(
   platformSupported = process.platform === "darwin",
   /** Pro units per hour now (the tempo), for the switch rule's threshold. */
   rate?: number,
+  /** A continuation or the fleet owns quota-stopped conversations. */
+  continuationOwns = false,
 ): Decision {
   const state = (
     status: AutoSwitchState["status"],
@@ -141,6 +145,7 @@ export function autoSwitchDecision(
   if (desktop.recoveryRequired) return state("blocked", "desktop-recovery");
   if (desktop.busy) return state("blocked", "desktop-busy");
   if (desktop.pendingProfileId) return state("blocked", "desktop-sign-in");
+  if (continuationOwns) return state("blocked", "continuation-active");
   if (pendingAuth) return state("blocked", "browser-sign-in");
   const source = accounts.find(
     (account) => account.id === desktop.activeProfileId,
@@ -265,6 +270,7 @@ export class AutoSwitchManager {
       this.dependencies.pendingAuth?.() ?? false,
       this.platformSupported,
       this.dependencies.tempoRate?.(),
+      this.dependencies.continuationOwns?.() ?? false,
     );
   }
   private prune(now: number) {

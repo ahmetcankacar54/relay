@@ -393,6 +393,7 @@ export type AutoSwitchReason =
   | "desktop-recovery"
   | "desktop-sign-in"
   | "browser-sign-in"
+  | "continuation-active"
   | "unknown-active"
   | "source-not-ready"
   | "usage-not-fresh"

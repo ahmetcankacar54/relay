@@ -47,8 +47,12 @@ export function AutoSwitchStatus({
       "Complete the Desktop sign-in first.",
     ],
     "browser-sign-in": [
-      "Tarayıcı girişi tamamlanmalı.",
-      "Complete the browser sign-in first.",
+      "Bir hesabın tarayıcı girişi sürüyor. Hesaplar sayfasında girişi tamamla veya iptal et.",
+      "An account's browser sign-in is in progress. Finish or cancel it on the Accounts page.",
+    ],
+    "continuation-active": [
+      "Kota dolunca devam açık. Kotası dolan konuşmaları o devam ettirir; bu sırada Claude kapanınca hazırlama beklemede.",
+      "Continue at quota is on. It continues conversations stopped at quota; preparing on quit waits meanwhile.",
     ],
     "unknown-active": [
       "Açık Desktop hesabını bir Relay profiline bağla.",

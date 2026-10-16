@@ -326,12 +326,14 @@ else {
       autoSwitch = new AutoSwitchManager(service.store, desktop, usage, {
         withDesktopLock,
         tempoRate: currentTempoRate,
-        pendingAuth: () =>
-          fleet?.enabled ||
+        // Continue at quota owns conversations stopped at quota while it or a
+        // continuation is on; preparing waits for it, with its own reason.
+        continuationOwns: () =>
+          !!fleet?.enabled ||
           continuation.snapshot().enabled ||
           continuation.snapshot().status === "reconciliation-required" ||
-          continuation.snapshot().reason === "continuation-state-unreadable" ||
-          pendingAuth(),
+          continuation.snapshot().reason === "continuation-state-unreadable",
+        pendingAuth: () => pendingAuth(),
         changed: broadcastChanged,
       });
       /** Reopen one stopped conversation on the target, verify it and send once. */
