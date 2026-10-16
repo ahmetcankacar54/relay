@@ -7,6 +7,7 @@ import {
   DesktopAutomationError,
   type DesktopAutomationIssue,
   type DesktopAutomationSnapshot,
+  type DesktopDraftGuard,
 } from "../electron/core/desktop-continuation-host";
 import type { DraftRecord, DraftState } from "../electron/core/draft-vault";
 import {
@@ -23,6 +24,8 @@ const target = (n: number) => `local_${alias(n)}`;
 const HOME = "local_ffffffff-ffff-4fff-8fff-ffffffffffff";
 /** A conversation the user moves to by hand. */
 const ELSEWHERE = "local_cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+/** Code's new-session screen, as the fake shows it and its calls name it. */
+const NEW = "new-session";
 
 function record(n: number, over: Partial<DraftRecord> = {}): DraftRecord {
   return {
@@ -37,6 +40,9 @@ function record(n: number, over: Partial<DraftRecord> = {}): DraftRecord {
     ...over,
   };
 }
+/** The draft of a session that does not exist yet, for the new-session screen. */
+const fresh = (n: number, over: Partial<DraftRecord> = {}): DraftRecord =>
+  record(n, { targetAlias: undefined, newSession: true, title: "", ...over });
 const issue = (name: DesktopAutomationIssue) =>
   new DesktopAutomationError(name);
 const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
@@ -75,10 +81,11 @@ const fingerprint = (stable: Record<string, unknown>) =>
     .digest("hex");
 
 /**
- * A fake Desktop: one composer per conversation, the view on one of them, a clock that only
- * `sleep` moves. It reports what the helper reports: a missing composer is not empty, and a
- * write must match the screen's pid, conversation, account, mode and fingerprint, with the
- * conversation stopped and its composer there and empty.
+ * A fake Desktop: one composer per conversation and one for the new-session screen (NEW),
+ * the view on one of them, a clock that only `sleep` moves. It reports what the helper
+ * reports: a missing composer is not empty, the new-session screen has no conversation id,
+ * and a write must match the screen's pid, conversation or new-session screen, account,
+ * mode and fingerprint, with the screen stopped and its composer there and empty.
  */
 function harness(
   options: {
@@ -109,6 +116,8 @@ function harness(
   const noComposer = new Set(options.noComposer ?? []);
   /** Fields forced onto every snapshot. */
   const patch: Partial<Snapshot> = {};
+  /** Fields forced onto the snapshots of one screen, after `patch`. */
+  const screenPatch = new Map<string, Partial<Snapshot>>();
   /**
    * Whether Claude is in front and how long the user has been idle. Outside the fingerprint,
    * as in the helper. By default the user lets Relay act.
@@ -118,8 +127,10 @@ function harness(
     idleMs: 60_000,
   };
   const calls: string[] = [];
-  /** The options of each openSession call, in order. */
+  /** The options of each openSession and openNewSession call, in order. */
   const openOptions: unknown[] = [];
+  /** Every guard a write was given, in order. */
+  const guards: DesktopDraftGuard[] = [];
   const sleeps: number[] = [];
   const marks: Array<[string, DraftState, string | undefined]> = [];
   const removed: string[] = [];
@@ -131,7 +142,11 @@ function harness(
     const text = shown ? composers.get(shown) : undefined;
     const stable = {
       pid,
-      ...(shown ? { localSessionId: shown } : {}),
+      ...(shown === NEW
+        ? { newSession: true }
+        : shown
+          ? { localSessionId: shown }
+          : {}),
       accountLabel: "Test User",
       permissionMode: "Auto",
       status:
@@ -141,6 +156,7 @@ function harness(
       composerEmpty: present && !text,
       sendEnabled: present && !!text,
       ...patch,
+      ...(shown ? screenPatch.get(shown) : {}),
     } as Omit<
       Snapshot,
       "observedAt" | "quotaStopped" | "coverage" | "contextFingerprint"
@@ -158,6 +174,23 @@ function harness(
     calls.push(call);
     if (!held) outsideLock.push(call);
   };
+  /** Desktop following a link to `id`, a conversation or NEW. */
+  const follow = async (
+    id: string,
+    options: { requireIdle?: boolean } | undefined,
+  ) => {
+    touch(`open:${id}`);
+    openOptions.push(options);
+    const outcome = hooks.open?.(id);
+    if (outcome instanceof Error) throw outcome;
+    // As the helper, asked to, refuses before it opens anything while the user is active.
+    if (
+      options?.requireIdle &&
+      !(activity.frontmost === true && (activity.idleMs ?? 0) >= 3_000)
+    )
+      throw issue("user-active");
+    if (outcome !== "ignored") shown = id;
+  };
   const deps: RestorerDeps = {
     automation: {
       inspect: async () => {
@@ -167,29 +200,23 @@ function harness(
         if (error) throw error;
         return view();
       },
-      openSession: async (id, options) => {
-        touch(`open:${id}`);
-        openOptions.push(options);
-        const outcome = hooks.open?.(id);
-        if (outcome instanceof Error) throw outcome;
-        // As the helper, asked to, refuses before it opens anything while the user is active.
-        if (
-          options?.requireIdle &&
-          !(activity.frontmost === true && (activity.idleMs ?? 0) >= 3_000)
-        )
-          throw issue("user-active");
-        if (outcome !== "ignored") shown = id;
-      },
+      openSession: (id, options) => follow(id, options),
+      openNewSession: (options) => follow(NEW, options),
       writeDraft: async (guard, text) => {
         writes++;
-        touch(`write:${guard.localSessionId}`);
+        guards.push(guard);
+        const newSession = "newSession" in guard;
+        touch(`write:${newSession ? NEW : guard.localSessionId}`);
         const error = hooks.write?.(writes);
         if (error) throw error;
-        // As the helper validates a guard before it types anything.
+        // As the helper validates a guard before it types anything. The new-session screen
+        // is named without an id, and its mode matches when absent on both sides.
         const now = view();
         if (
           guard.pid !== now.pid ||
-          guard.localSessionId !== now.localSessionId ||
+          (newSession
+            ? now.newSession !== true || now.localSessionId !== undefined
+            : guard.localSessionId !== now.localSessionId) ||
           guard.accountLabel !== now.accountLabel ||
           guard.permissionMode !== now.permissionMode ||
           guard.contextFingerprint !== now.contextFingerprint
@@ -256,9 +283,11 @@ function harness(
     deps,
     hooks,
     patch,
+    screenPatch,
     activity,
     calls,
     openOptions,
+    guards,
     sleeps,
     marks,
     removed,
@@ -825,35 +854,287 @@ test("a target shown without a guard stops the restore and leaves the rest as un
   ]);
 });
 
-test("the new-session draft goes straight to copy", async () => {
+test("drafts too long, with a NUL or without a valid alias go straight to copy", async () => {
   const h = harness({
     records: [
-      record(3, { targetAlias: undefined, newSession: true }),
+      fresh(3, { text: "x".repeat(16_385) }),
       record(4, { text: "x".repeat(16_385) }),
       record(6, { targetAlias: "../not-a-uuid" }),
       record(5, { text: "y".repeat(16_384) }),
+      fresh(7, { text: "a\0b" }),
     ],
   });
   assert.deepEqual(await restoreDrafts(h.deps), {
     status: "done",
     restored: 1,
-    left: 3,
+    left: 4,
   });
   assert.deepEqual(h.marks, [
     ["draft-3", "needs-copy", "manual"],
     ["draft-4", "needs-copy", "manual"],
     ["draft-6", "needs-copy", "manual"],
+    ["draft-7", "needs-copy", "manual"],
   ]);
   // Only the draft that fits is typed; the limit is inclusive.
   assert.deepEqual(h.writes(), [`write:${target(5)}`]);
   assert.deepEqual(h.opens(), [`open:${target(5)}`, `open:${HOME}`]);
   // Nothing to open, nothing to return from.
-  const alone = harness({
-    records: [record(3, { targetAlias: undefined, newSession: true })],
-  });
+  const alone = harness({ records: [fresh(3, { text: "x".repeat(16_385) })] });
   await restoreDrafts(alone.deps);
   assert.deepEqual(alone.opens(), []);
   assert.deepEqual(alone.marks, [["draft-3", "needs-copy", "manual"]]);
+});
+
+test("the new-session draft is typed into the new-session screen, and the user is taken back", async () => {
+  const h = harness({ records: [fresh(3)] });
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 1,
+    left: 0,
+  });
+  assert.deepEqual(h.opens(), [`open:${NEW}`, `open:${HOME}`]);
+  assert.deepEqual(h.writes(), [`write:${NEW}`]);
+  assert.equal(h.composers.get(NEW), "draft 3");
+  assert.deepEqual(h.removed, ["draft-3"]);
+  assert.deepEqual(h.marks, []);
+  assert.deepEqual(h.notes, [{ restored: 1, left: 0 }]);
+  // It is read again 5 s later, as a conversation's is.
+  assert.ok(h.sleeps.includes(5_000));
+  // Every link asks the helper to check the user right before it opens.
+  assert.deepEqual(h.openOptions, [
+    { requireIdle: true },
+    { requireIdle: true },
+  ]);
+  // Only the wait for Desktop's UI inspects outside the lock.
+  assert.deepEqual(h.outsideLock, ["inspect"]);
+  // Its guard names the screen, never a conversation.
+  assert.equal("localSessionId" in h.guards[0], false);
+  assert.equal((h.guards[0] as { newSession?: true }).newSession, true);
+});
+
+test("a new-session draft goes in with the conversations' drafts, one screen after another", async () => {
+  const h = harness({ records: [record(1), fresh(3), record(2)] });
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 3,
+    left: 0,
+  });
+  assert.deepEqual(h.opens(), [
+    `open:${target(1)}`,
+    `open:${NEW}`,
+    `open:${target(2)}`,
+    `open:${HOME}`,
+  ]);
+  assert.deepEqual(h.writes(), [
+    `write:${target(1)}`,
+    `write:${NEW}`,
+    `write:${target(2)}`,
+  ]);
+  assert.deepEqual(h.removed, ["draft-1", "draft-3", "draft-2"]);
+});
+
+test("on the new-session screen already, the draft is typed where the user is", async () => {
+  const h = harness({ records: [fresh(3)], shown: NEW });
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 1,
+    left: 0,
+  });
+  assert.deepEqual(h.opens(), []);
+  assert.deepEqual(h.writes(), [`write:${NEW}`]);
+  // A user who started there is taken back there after a conversation's draft.
+  const back = harness({ records: [record(1)], shown: NEW });
+  assert.equal((await restoreDrafts(back.deps)).restored, 1);
+  assert.deepEqual(back.opens(), [`open:${target(1)}`, `open:${NEW}`]);
+  assert.equal(back.shown, NEW);
+});
+
+test("a new-session composer with the user's own text is never written", async () => {
+  for (const shown of [HOME, NEW]) {
+    const h = harness({
+      records: [fresh(3)],
+      shown,
+      composers: { [NEW]: "a session the user is starting" },
+    });
+    assert.deepEqual(await restoreDrafts(h.deps), {
+      status: "done",
+      restored: 0,
+      left: 1,
+    });
+    assert.deepEqual(h.writes(), []);
+    assert.equal(h.composers.get(NEW), "a session the user is starting");
+    assert.deepEqual(h.marks, [
+      ["draft-3", "needs-copy", "composer-not-empty"],
+    ]);
+  }
+});
+
+test("the new-session screen needs no permission mode, but its account", async () => {
+  // The mode may not be read there: the guard is built without it.
+  const modeless = harness({ records: [fresh(3)] });
+  modeless.screenPatch.set(NEW, { permissionMode: undefined });
+  assert.equal((await restoreDrafts(modeless.deps)).restored, 1);
+  assert.deepEqual(Object.keys(modeless.guards[0]).sort(), [
+    "accountLabel",
+    "contextFingerprint",
+    "newSession",
+    "pid",
+  ]);
+  // Without its account no guard can be built: only that draft is left for copy, after the
+  // 30 s it is given to show one, and the conversations' drafts go on.
+  const h = harness({ records: [fresh(3), record(1)] });
+  h.screenPatch.set(NEW, { accountLabel: undefined });
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 1,
+    left: 1,
+  });
+  assert.deepEqual(h.marks, [["draft-3", "needs-copy", "unsupported"]]);
+  assert.deepEqual(h.writes(), [`write:${target(1)}`]);
+  assert.deepEqual(h.opens(), [
+    `open:${NEW}`,
+    `open:${target(1)}`,
+    `open:${HOME}`,
+  ]);
+  assert.equal(sum(h.sleeps.slice(0, h.sleeps.indexOf(5_000))), 30_000);
+});
+
+test("a new-session screen that never shows is left for copy after 30 s, with the link sent every 5 s", async () => {
+  const h = harness({ records: [fresh(3), record(1)] });
+  h.hooks.open = (id) => (id === NEW ? "ignored" : undefined);
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 1,
+    left: 1,
+  });
+  assert.deepEqual(h.marks, [
+    ["draft-3", "needs-copy", "exact-session-not-observed"],
+  ]);
+  assert.equal(h.opens().filter((c) => c === `open:${NEW}`).length, 6);
+  assert.deepEqual(h.writes(), [`write:${target(1)}`]);
+});
+
+test("text wiped from the new-session composer is written once more; a screen that changed is maybe typed", async () => {
+  const h = harness({ records: [fresh(3)] });
+  let wiped = false;
+  h.hooks.sleep = (ms) => {
+    if (ms === 5_000 && !wiped) {
+      wiped = true;
+      h.composers.delete(NEW);
+    }
+  };
+  assert.equal((await restoreDrafts(h.deps)).restored, 1);
+  assert.deepEqual(h.writes(), [`write:${NEW}`, `write:${NEW}`]);
+  assert.equal(h.composers.get(NEW), "draft 3");
+  // Wiped twice: not there, and the panel says so.
+  const lost = harness({ records: [fresh(3)] });
+  lost.hooks.sleep = (ms) => {
+    if (ms === 5_000) lost.composers.delete(NEW);
+  };
+  await restoreDrafts(lost.deps);
+  assert.deepEqual(lost.marks, [["draft-3", "needs-copy", "lost"]]);
+  // A conversation on screen at the re-check: typed, perhaps still there; never typed again.
+  const moved = harness({ records: [fresh(3)] });
+  moved.hooks.sleep = (ms) => {
+    if (ms === 5_000) moved.setShown(ELSEWHERE);
+  };
+  await restoreDrafts(moved.deps);
+  assert.equal(moved.writes().length, 1);
+  assert.deepEqual(moved.marks, [["draft-3", "needs-copy", "maybe-typed"]]);
+  // The guard lost at the re-check, then the composer emptied: typed once, maybe still there.
+  const unguarded = harness({ records: [fresh(3)] });
+  unguarded.hooks.sleep = (ms) => {
+    if (ms !== 5_000) return;
+    unguarded.composers.delete(NEW);
+    unguarded.screenPatch.set(NEW, { accountLabel: undefined });
+  };
+  await restoreDrafts(unguarded.deps);
+  assert.equal(unguarded.writes().length, 1);
+  assert.deepEqual(unguarded.marks, [["draft-3", "needs-copy", "maybe-typed"]]);
+});
+
+test("the user active leaves the new-session draft pending, and the helper refusing its link opens nothing", async () => {
+  const h = harness({ records: [fresh(3)] });
+  h.activity.idleMs = 1_000;
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 1,
+    reason: "active",
+  });
+  assert.deepEqual(h.opens(), []);
+  assert.deepEqual(h.marks, []);
+  // The user starts typing between Relay's look and the helper's own, just before it opens.
+  const racing = harness({ records: [fresh(3)] });
+  racing.hooks.open = (id) => (id === NEW ? issue("user-active") : undefined);
+  assert.deepEqual(await restoreDrafts(racing.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 1,
+    reason: "active",
+  });
+  assert.deepEqual(racing.opens(), [`open:${NEW}`]);
+  assert.equal(racing.shown, HOME);
+  assert.deepEqual(racing.writes(), []);
+  assert.deepEqual(racing.marks, []);
+  // A write refused because the user is active: still pending, nothing typed.
+  const typing = harness({ records: [fresh(3)] });
+  typing.hooks.write = () => issue("user-active");
+  assert.equal((await restoreDrafts(typing.deps)).reason, "active");
+  assert.equal(typing.composers.get(NEW), undefined);
+  assert.deepEqual(typing.marks, []);
+});
+
+test("the user going to the new-session screen while a conversation loads has moved, and is left there", async () => {
+  // The link is sent, and before Desktop follows it the user opens the new-session screen.
+  const h = harness({ records: [record(1), record(2)] });
+  h.hooks.open = (id) => {
+    if (id !== target(1)) return;
+    h.setShown(NEW);
+    return "ignored";
+  };
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 2,
+    reason: "moved",
+  });
+  // No second link, nothing typed, and no return.
+  assert.deepEqual(h.opens(), [`open:${target(1)}`]);
+  assert.deepEqual(h.writes(), []);
+  assert.deepEqual(h.marks, []);
+  assert.equal(h.shown, NEW);
+  // The user goes there 4 s into a slow load: the 5 s re-send never comes.
+  const late = harness();
+  late.hooks.open = () => "ignored";
+  let slept = 0;
+  late.hooks.sleep = (ms) => {
+    if (ms === 500 && ++slept === 8) late.setShown(NEW);
+  };
+  assert.equal((await restoreDrafts(late.deps)).reason, "moved");
+  assert.deepEqual(late.opens(), [`open:${target(1)}`]);
+  // And from the new-session screen's wait to a conversation, the same.
+  const away = harness({ records: [fresh(3)] });
+  away.hooks.open = (id) => {
+    if (id !== NEW) return;
+    away.setShown(ELSEWHERE);
+    return "ignored";
+  };
+  assert.equal((await restoreDrafts(away.deps)).reason, "moved");
+  assert.deepEqual(away.opens(), [`open:${NEW}`]);
+  assert.equal(away.shown, ELSEWHERE);
+  // Between drafts, too: after the first, the user opens the new-session screen.
+  const between = harness({ records: [record(1), record(2)] });
+  between.hooks.vault = (op) => {
+    if (op === "remove") between.setShown(NEW);
+  };
+  assert.deepEqual(await restoreDrafts(between.deps), {
+    status: "waiting",
+    restored: 1,
+    left: 1,
+    reason: "moved",
+  });
+  assert.deepEqual(between.opens(), [`open:${target(1)}`]);
 });
 
 test("a UI that is not ready in 60 s leaves every draft pending", async () => {

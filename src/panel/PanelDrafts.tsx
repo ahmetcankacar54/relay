@@ -36,18 +36,50 @@ const REASONS: Record<string, readonly [string, string]> = {
     "The conversation could not be opened",
   ],
   "not-ready": ["Desktop hazır değildi", "Desktop was not ready"],
-  moved: ["Başka bir konuşmaya geçtiniz", "You moved to another conversation"],
+  moved: ["Başka bir ekrana geçtiniz", "You went to another screen"],
   "claude-not-running": ["Claude çalışmıyordu", "Claude was not running"],
   budget: ["Süre doldu", "Ran out of time"],
 };
 const UNKNOWN_REASON = REASONS.error;
 
-/** Why a draft is waiting for the user; a missing or unknown reason reads as a failed restore. */
-export function draftReason(reason: string | undefined, t: T): string {
+/** A new-session draft goes to Code's new-session screen, not a conversation. */
+const NEW_SESSION_MAYBE_TYPED = [
+  "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bakın",
+  "It may already be on the new-session screen; check before pasting",
+] as const;
+const NEW_SESSION_BUSY = [
+  "Yeni oturum ekranı meşguldü",
+  "The new-session screen was busy",
+] as const;
+const NEW_SESSION_REASONS: Record<string, readonly [string, string]> = {
+  "maybe-typed": NEW_SESSION_MAYBE_TYPED,
+  unconfirmed: NEW_SESSION_MAYBE_TYPED,
+  "delivery-ambiguous": NEW_SESSION_MAYBE_TYPED,
+  busy: NEW_SESSION_BUSY,
+  "desktop-work-active": NEW_SESSION_BUSY,
+  "exact-session-not-observed": [
+    "Yeni oturum ekranı açılamadı",
+    "The new-session screen could not be opened",
+  ],
+};
+
+/**
+ * Why a draft is waiting for the user, worded for the new-session screen when it is that
+ * screen's draft; a missing or unknown reason reads as a failed restore.
+ */
+export function draftReason(
+  reason: string | undefined,
+  t: T,
+  newSession = false,
+): string {
+  const known = (table: Record<string, readonly [string, string]>) =>
+    reason !== undefined && Object.hasOwn(table, reason)
+      ? table[reason]
+      : undefined;
   const [tr, en] =
-    reason !== undefined && Object.hasOwn(REASONS, reason)
-      ? REASONS[reason]
-      : UNKNOWN_REASON;
+    (newSession ? known(NEW_SESSION_REASONS) : undefined) ??
+    known(REASONS) ??
+    UNKNOWN_REASON;
   return t(tr, en);
 }
 
@@ -68,7 +100,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   const name = draft.newSession
     ? t("Yeni oturum", "New session")
     : draft.title.trim() || t("Adsız konuşma", "Untitled conversation");
-  const reason = draftReason(draft.reason, t);
+  const reason = draftReason(draft.reason, t, draft.newSession);
   const needsPermission = draft.reason === "accessibility";
   const running = [
     `draft-copy:${draft.id}`,

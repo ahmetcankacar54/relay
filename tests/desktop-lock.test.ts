@@ -172,6 +172,7 @@ test("a switch asked for during a restored draft stops the restore after that dr
         calls.push(`open:${id}`);
         shown = id;
       },
+      openNewSession: async () => assert.fail("no new-session draft"),
       writeDraft: async (_guard, text) => {
         calls.push(`write:${shown}`);
         views.set(shown, text);
@@ -252,6 +253,7 @@ test("a switch asked for while the restore waits for its target is let through b
       openSession: async (id) => {
         calls.push(`open:${id}`);
       },
+      openNewSession: async () => assert.fail("no new-session draft"),
       writeDraft: async () => assert.fail("nothing is typed"),
     },
     pending: async () => [record(1), record(2)],
@@ -361,6 +363,7 @@ test("the restorer's own stop passes through the lock", { timeout: 5_000 }, asyn
           idleMs: 60_000,
         }) as DesktopAutomationSnapshot,
       openSession: async () => assert.fail("nothing is opened"),
+      openNewSession: async () => assert.fail("nothing is opened"),
       writeDraft: async () => assert.fail("nothing is typed"),
     },
     pending: async () => [record(1)],

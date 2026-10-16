@@ -154,13 +154,36 @@ func epitaxySessionIDs(_ strings: [String]) -> Set<String> {
     }
     return ids
 }
+// Whether every claude.ai/epitaxy URL among a web area's strings is Code's bare
+// new-session screen, https://claude.ai/epitaxy (a trailing "/" and a query allowed),
+// and there is at least one. Desktop's own claude://code/new opens that path. A
+// conversation, another Code screen, or epitaxy text that is not such a URL: false.
+func epitaxyNewSession(_ strings: [String]) -> Bool {
+    var seen = false
+    for text in strings where text.contains("claude.ai/epitaxy") {
+        guard let url = URLComponents(string: text), url.scheme == "https", url.host == "claude.ai",
+              url.path == "/epitaxy" || url.path == "/epitaxy/" else { return false }
+        seen = true
+    }
+    return seen
+}
+// What the web areas show: one conversation, by its id, or Code's new-session screen,
+// which has none. Neither for several conversations, another screen, or a load.
+func screenOf(_ strings: [String]) -> (localSessionId: String?, newSession: Bool) {
+    let ids = epitaxySessionIDs(strings)
+    return (ids.count == 1 ? ids.first : nil, ids.isEmpty && epitaxyNewSession(strings))
+}
 // Cheap re-read of only the web areas an earlier observe() already found: a few
 // attribute reads, no tree walk. Used right before a write that replaces text.
-func liveSessionIDs(_ observation: Observation) -> Set<String> {
+func liveScreen(_ observation: Observation) -> (localSessionId: String?, newSession: Bool) {
     let strings = observation.tree.filter { $0.role == "AXWebArea" }.flatMap { node in
         [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute, "AXURL"].map { stringAttribute(node.element, $0) }
     }
-    return epitaxySessionIDs(strings.filter { !$0.isEmpty })
+    return screenOf(strings.filter { !$0.isEmpty })
+}
+// One field of two observations, absent on both sides counting as the same.
+func sameField(_ a: [String: Any], _ b: [String: Any], _ field: String) -> Bool {
+    a[field].map { String(describing: $0) } == b[field].map { String(describing: $0) }
 }
 func observe() throws -> Observation {
     guard AXIsProcessTrusted() else { try fail("accessibility-permission-required") }
@@ -170,10 +193,10 @@ func observe() throws -> Observation {
     let root = AXUIElementCreateApplication(app.processIdentifier)
     let tree = try nodes(root)
     let webAreas = tree.filter { $0.role == "AXWebArea" }
-    let localIDs = epitaxySessionIDs(webAreas.flatMap { $0.strings })
     // Several web surfaces, ambiguous aliases or unsupported URL exposure block
     // targeting. A title or a sidebar card is never a conversation identity.
-    let localID = localIDs.count == 1 ? localIDs.first : nil
+    let screen = screenOf(webAreas.flatMap { $0.strings })
+    let localID = screen.localSessionId
     let composers = tree.filter {
         ["AXTextArea", "AXTextField"].contains($0.role) &&
         ($0.description == "Prompt" || $0.title == "Prompt")
@@ -229,6 +252,7 @@ func observe() throws -> Observation {
         "coverage": "active-conversation-only"
     ]
     if let id = localID { stable["localSessionId"] = id }
+    if screen.newSession { stable["newSession"] = true }
     if let label = account { stable["accountLabel"] = label }
     if let value = mode { stable["permissionMode"] = value }
     if let checked = autoChecked { stable["quotaAutoResume"] = checked }
@@ -241,8 +265,17 @@ func observe() throws -> Observation {
     fields["idleMs"] = idleMilliseconds()
     return Observation(app: app, tree: tree, composer: composer, send: send, permission: permission, fields: fields)
 }
-func validateGuard(_ observation: Observation, _ expected: [String: Any], allowComposer: Bool = false) throws {
-    for field in ["pid", "localSessionId", "accountLabel", "permissionMode"] {
+// A guard names its screen by a conversation id or, for write-draft only
+// (allowNewSession), as Code's new-session screen, which has none. That screen may
+// show no single permission selector: its mode is the same when absent on both sides.
+func validateGuard(_ observation: Observation, _ expected: [String: Any], allowComposer: Bool = false, allowNewSession: Bool = false) throws {
+    let named = expected["newSession"] != nil
+    if named {
+        guard allowNewSession, expected["newSession"] as? Bool == true, expected["localSessionId"] == nil,
+              observation.fields["newSession"] as? Bool == true, observation.fields["localSessionId"] == nil,
+              sameField(expected, observation.fields, "permissionMode") else { try fail("context-changed") }
+    }
+    for field in named ? ["pid", "accountLabel"] : ["pid", "localSessionId", "accountLabel", "permissionMode"] {
         guard let want = expected[field], let actual = observation.fields[field],
               String(describing: want) == String(describing: actual) else { try fail("context-changed") }
     }
@@ -278,9 +311,16 @@ func writeComposer(_ observation: Observation, _ body: String) throws {
     }
     guard focusHeld() else { try fail("context-changed") }
     let focused = try observe()
-    for field in ["pid", "localSessionId", "accountLabel", "permissionMode", "status", "composerEmpty"] {
+    // The new-session screen is named without an id, and may show no mode.
+    let required = observation.fields["newSession"] as? Bool == true
+        ? ["pid", "newSession", "accountLabel", "status", "composerEmpty"]
+        : ["pid", "localSessionId", "accountLabel", "permissionMode", "status", "composerEmpty"]
+    for field in required {
         guard let before = observation.fields[field], let after = focused.fields[field],
               String(describing: before) == String(describing: after) else { try fail("context-changed") }
+    }
+    for field in ["localSessionId", "newSession", "permissionMode"] {
+        guard sameField(observation.fields, focused.fields, field) else { try fail("context-changed") }
     }
     // The re-observe walks the whole tree and takes time; focus or the frontmost
     // app may have moved meanwhile. Check again right before the paste.
@@ -319,11 +359,20 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         return ["ok": true, "accessibilityGranted": trusted]
     }
     if command == "inspect" { return ["ok": true, "snapshot": try observe().fields] }
-    if command == "open-session" {
-        guard let id = request["localSessionId"] as? String, match(id, localPattern) else { try fail("exact-session-not-observed") }
+    if command == "open-session" || command == "open-new-session" {
+        let link: String
+        if command == "open-session" {
+            guard let id = request["localSessionId"] as? String, match(id, localPattern) else { try fail("exact-session-not-observed") }
+            link = "claude://code/continue?session=\(id)"
+        } else {
+            // Desktop's own "New Claude Code Session" link. It only shows Code's
+            // new-session screen (claude.ai/epitaxy): it starts no session and picks
+            // no folder.
+            link = "claude://code/new"
+        }
         // Inspect first: opening a protocol URL must never launch a closed app.
         let observation = try observe()
-        guard let url = URL(string: "claude://code/continue?session=\(id)") else { try fail("desktop-ui-unsupported") }
+        guard let url = URL(string: link) else { try fail("desktop-ui-unsupported") }
         // Opening brings Claude forward. A caller that asks opens only into a Claude
         // already in front with no input for 3 s, read now, after the long observe().
         if request["requireIdle"] as? Bool == true {
@@ -338,7 +387,9 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
     }
     guard let expected = request["guard"] as? [String: Any] else { try fail("context-changed") }
     var current = try observe()
-    try validateGuard(current, expected)
+    // Only a draft is ever typed into the new-session screen: nothing else may act there.
+    let draft = command == "write-draft"
+    try validateGuard(current, expected, allowNewSession: draft)
     if command == "cancel-quota-resume" {
         let controls = current.tree.filter { $0.role == "AXCheckBox" && $0.strings.contains("Auto-continue when limits reset") }
         guard current.fields["quotaStopped"] as? Bool == true,
@@ -386,12 +437,13 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         return ["ok": true, "acceptedVisible": current.fields["composerEmpty"] as? Bool == true && markerPresent(current, marker)]
     }
     if command == "write-draft" {
-        // Re-types an unsent draft. It never presses Send and adds no marker. The
-        // guard above required the same account/session/mode, a stopped conversation
-        // and an empty composer, but that was sampled during the observe() tree walk,
-        // which can be long. Re-read the composer value and the conversation id
-        // directly right before the write. This narrows the race with a user typing
-        // or switching conversations; it cannot close it, as AX has no atomic lock.
+        // Re-types an unsent draft, into a conversation or Code's new-session screen.
+        // It never presses Send and adds no marker. The guard above required the same
+        // account/screen/mode, a stopped screen and an empty composer, but that was
+        // sampled during the observe() tree walk, which can be long. Re-read the
+        // composer value and the screen directly right before the write. This narrows
+        // the race with a user typing or switching screens; it cannot close it, as AX
+        // has no atomic lock.
         guard let text = request["text"] as? String, !text.isEmpty, text.utf8.count <= 65536, !text.contains("\0"),
               let composer = current.composer else { try fail("desktop-ui-unsupported") }
         // The user's keystrokes, a Return included, must never land in a composer
@@ -399,11 +451,15 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         // for 3 s. Read now, not from the observation, before anything is written.
         guard claudeFrontmost(current.app), idleMilliseconds() >= 3000 else { try fail("user-active") }
         guard composerReadsEmpty(composer.element) else { try fail("composer-not-empty") }
-        let sessions = liveSessionIDs(current)
-        guard sessions.count == 1, sessions.first == expected["localSessionId"] as? String else { try fail("context-changed") }
+        let live = liveScreen(current)
+        if expected["newSession"] as? Bool == true {
+            guard live.newSession else { try fail("context-changed") }
+        } else {
+            guard let id = live.localSessionId, id == expected["localSessionId"] as? String else { try fail("context-changed") }
+        }
         try writeComposer(current, text)
         current = try observe()
-        try validateGuard(current, expected, allowComposer: true)
+        try validateGuard(current, expected, allowComposer: true, allowNewSession: true)
         // One guarded attempt, never retried: a composer that does not read back
         // exactly is ambiguous, not a reason to type again.
         guard current.composer?.value == text else { try fail("delivery-ambiguous") }
@@ -414,15 +470,23 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
 
 #if RELAY_AX_SELECTOR_FIXTURE
 // This compilation mode deliberately has no live AX dispatcher. Fixtures may
-// only call the pure selector; they cannot request permission or inspect apps.
+// only call the pure selectors; they cannot request permission or inspect apps.
+// An array of nodes picks the account popup; {"webAreaStrings": [...]} names
+// the screen those web area strings show.
 do {
     let input = FileHandle.standardInput.readDataToEndOfFile()
-    guard input.count <= 65536,
-          let values = try JSONSerialization.jsonObject(with: input) as? [[String: String]] else { try fail("desktop-ui-unsupported") }
-    let tree = values.map {
-        AccountSelectorNode(role: $0["role"] ?? "", title: $0["title"] ?? "", description: $0["description"] ?? "", value: $0["value"] ?? "", path: $0["path"] ?? "")
-    }
-    let result: [String: Any] = ["accountPath": accountPopupPath(tree) as Any? ?? NSNull()]
+    guard input.count <= 65536 else { try fail("desktop-ui-unsupported") }
+    let json = try JSONSerialization.jsonObject(with: input)
+    let result: [String: Any]
+    if let values = json as? [[String: String]] {
+        let tree = values.map {
+            AccountSelectorNode(role: $0["role"] ?? "", title: $0["title"] ?? "", description: $0["description"] ?? "", value: $0["value"] ?? "", path: $0["path"] ?? "")
+        }
+        result = ["accountPath": accountPopupPath(tree) as Any? ?? NSNull()]
+    } else if let object = json as? [String: Any], let strings = object["webAreaStrings"] as? [String] {
+        let screen = screenOf(strings)
+        result = ["localSessionId": screen.localSessionId as Any? ?? NSNull(), "newSession": screen.newSession]
+    } else { try fail("desktop-ui-unsupported") }
     FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]))
 } catch {
     FileHandle.standardOutput.write(Data("{\"error\":\"invalid-fixture\"}".utf8))

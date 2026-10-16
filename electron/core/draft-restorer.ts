@@ -2,15 +2,19 @@ import {
   automationGuard,
   DesktopAutomationError,
   isLocalSessionId,
+  newSessionGuard,
   type DesktopAutomation,
-  type DesktopAutomationGuard,
   type DesktopAutomationIssue,
   type DesktopAutomationSnapshot,
+  type DesktopDraftGuard,
 } from "./desktop-continuation-host";
 import type { DraftRecord, DraftState } from "./draft-vault";
 
 export interface RestorerDeps {
-  automation: Pick<DesktopAutomation, "inspect" | "openSession" | "writeDraft">;
+  automation: Pick<
+    DesktopAutomation,
+    "inspect" | "openSession" | "openNewSession" | "writeDraft"
+  >;
   /** Records with text, main process only. */
   pending(): Promise<DraftRecord[]>;
   mark(id: string, state: DraftState, reason?: string): Promise<void>;
@@ -40,7 +44,7 @@ export type RestoreResult = {
    * - `busy`: another Desktop operation held the lock, or waited for it;
    * - `active`: Claude was not in front, or the user had input in the last 3 s, so Relay
    *   did not open or type anything;
-   * - `moved`: the user went to another conversation;
+   * - `moved`: the user went to another conversation or screen;
    * - `changed`: Claude's account, uptime or process changed;
    * - `claude-not-running`;
    * - `budget`: the run took 5 minutes.
@@ -49,6 +53,17 @@ export type RestoreResult = {
 };
 
 type Snapshot = DesktopAutomationSnapshot;
+
+/** Code's new-session screen, where the draft of a session that does not exist yet goes. */
+const NEW_SESSION = "new-session";
+/** Where a draft goes, or where the user is: a conversation's `local_` id, or NEW_SESSION. */
+type Place = string;
+/**
+ * The place `view` shows: a conversation, the new-session screen, or undefined while Desktop
+ * loads or shows a screen Relay does not name.
+ */
+const placeOf = (view: Snapshot): Place | undefined =>
+  view.localSessionId ?? (view.newSession === true ? NEW_SESSION : undefined);
 
 /** Desktop wipes its drafts about 6 s after an account loads. Restore only well after that. */
 const MIN_UPTIME_MS = 15_000;
@@ -118,16 +133,17 @@ interface Run {
   pid: number;
   /** Set by the first lock's look at the screen. */
   anchored: boolean;
-  /** The conversation the user was on, to take them back to. */
-  returnTo?: string;
-  /** The conversation Relay last saw on screen. Anything else means the user moved. */
-  lastSeen?: string;
+  /** The place the user was on, to take them back to. */
+  returnTo?: Place;
+  /** The place Relay last saw on screen. Anything else means the user moved. */
+  lastSeen?: Place;
 }
 
 /**
- * Types the drafts captured for Desktop's current account back into their conversations'
- * empty composers, once Claude has run 15 s, and takes the user back to the conversation
- * they were on. It never sends, and never writes into a composer that is not empty.
+ * Types the drafts captured for Desktop's current account back into the empty composers of
+ * their conversations, and of Code's new-session screen for the draft of a session that does
+ * not exist yet, once Claude has run 15 s, and takes the user back to where they were. It
+ * never sends, and never writes into a composer that is not empty.
  *
  * It waits for Desktop's UI without the Desktop lock, then takes the lock for each draft and
  * re-checks Claude under it. It acts only while Claude is in front and the user has left it
@@ -192,7 +208,7 @@ export async function restoreDrafts(
       account,
       pid: first.pid,
       anchored: false,
-      lastSeen: first.localSessionId,
+      lastSeen: placeOf(first),
     };
     for (; next < records.length; next++) {
       typing.wrote = false;
@@ -233,11 +249,9 @@ export async function restoreDrafts(
     try {
       await locked(deps, async () => {
         await confirm(deps, run);
-        await deps.automation
-          .openSession(run.returnTo!, { requireIdle: true })
-          .catch(() => {
-            // The user can go back by hand, and one who is active stays where they are.
-          });
+        await go(deps, run.returnTo!).catch(() => {
+          // The user can go back by hand, and one who is active stays where they are.
+        });
       });
     } catch (error) {
       if (!(error instanceof Stop)) throw error;
@@ -253,17 +267,15 @@ async function claudeReady(deps: RestorerDeps): Promise<boolean> {
   return uptime !== undefined && uptime >= MIN_UPTIME_MS;
 }
 
-/** The `local_` id to open for `record`, or undefined when it can only be copied by hand. */
-function typeable(record: DraftRecord): string | undefined {
+/**
+ * Where `record` is typed: its conversation's `local_` id, or the new-session screen for the
+ * draft of a session that does not exist yet. Undefined when it can only be copied by hand.
+ */
+function typeable(record: DraftRecord): Place | undefined {
   const { text, targetAlias, newSession } = record;
-  if (
-    newSession ||
-    !targetAlias ||
-    !text ||
-    text.length > MAX_TEXT ||
-    text.includes("\0")
-  )
-    return undefined;
+  if (!text || text.length > MAX_TEXT || text.includes("\0")) return undefined;
+  if (newSession) return NEW_SESSION;
+  if (!targetAlias) return undefined;
   const target = `local_${targetAlias}`;
   return isLocalSessionId(target) ? target : undefined;
 }
@@ -301,11 +313,11 @@ async function confirm(deps: RestorerDeps, run: Run): Promise<void> {
     throw new Stop("pending", "moved");
   }
   if (view.pid !== run.pid) throw new Stop("pending", "changed");
-  if (view.localSessionId !== run.lastSeen) throw new Stop("pending", "moved");
+  if (placeOf(view) !== run.lastSeen) throw new Stop("pending", "moved");
   if (!letsAct(view)) throw new Stop("pending", "active");
   if (!run.anchored) {
     run.anchored = true;
-    run.returnTo = view.localSessionId;
+    run.returnTo = placeOf(view);
   }
 }
 
@@ -321,17 +333,26 @@ async function uiReady(deps: RestorerDeps): Promise<Snapshot | undefined> {
 }
 
 /** `target` is on screen in the run's Claude, stopped, with its composer there. */
-const composing = (view: Snapshot, run: Run, target: string) =>
-  view.localSessionId === target &&
+const composing = (view: Snapshot, run: Run, target: Place) =>
+  placeOf(view) === target &&
   view.pid === run.pid &&
   view.status === "stopped" &&
   view.composerPresent === true;
 
-/** A guard from a view that shows the target. Without one, no draft can be typed. */
-function guardOf(view: Snapshot): DesktopAutomationGuard {
+/** The guard for typing into `target`, from a view that shows it; throws without one. */
+const guardFor = (view: Snapshot, target: Place): DesktopDraftGuard =>
+  target === NEW_SESSION ? newSessionGuard(view) : automationGuard(view);
+
+/**
+ * A guard from a view that shows the target. Without one no draft can be typed there. A
+ * conversation without one means none can be guarded, which stops the run; the new-session
+ * screen is a screen of its own, so undefined leaves only its draft for copy.
+ */
+function guardOf(view: Snapshot, target: Place): DesktopDraftGuard | undefined {
   try {
-    return automationGuard(view);
+    return guardFor(view, target);
   } catch {
+    if (target === NEW_SESSION) return undefined;
     throw new Stop("copy", "unsupported");
   }
 }
@@ -345,7 +366,7 @@ function guardOf(view: Snapshot): DesktopAutomationGuard {
 async function restoreOne(
   deps: RestorerDeps,
   run: Run,
-  target: string,
+  target: Place,
   text: string,
   typing: { wrote: boolean },
 ): Promise<string | undefined> {
@@ -358,7 +379,8 @@ async function restoreOne(
   if (!view.composerEmpty) return "composer-not-empty";
   // One write, and one more only when the same composer is seen there and empty again.
   for (let again = false; ; again = true) {
-    const guard = guardOf(view);
+    const guard = guardOf(view, target);
+    if (!guard) return typing.wrote ? afterWrite("unsupported") : "unsupported";
     // Before the first write only: a rewrite finishes what the first one started.
     if (!typing.wrote) yieldTo(deps);
     try {
@@ -389,10 +411,10 @@ async function restoreOne(
   }
 }
 
-/** A guard can be built from `view`, so a draft can be typed into it. */
-function guardable(view: Snapshot): boolean {
+/** A guard for `target` can be built from `view`, so a draft can be typed into it. */
+function guardable(view: Snapshot, target: Place): boolean {
   try {
-    automationGuard(view);
+    guardFor(view, target);
     return true;
   } catch {
     return false;
@@ -400,27 +422,28 @@ function guardable(view: Snapshot): boolean {
 }
 
 /** `view` shows `target` with a composer a draft can be typed into, or busy. */
-const shows = (view: Snapshot, target: string) =>
-  view.localSessionId === target &&
-  ((view.composerPresent === true && guardable(view)) ||
+const shows = (view: Snapshot, target: Place) =>
+  placeOf(view) === target &&
+  ((view.composerPresent === true && guardable(view, target)) ||
     view.status === "running" ||
     view.status === "waiting");
 
 /**
  * Waits, every 500 ms for up to 30 s, until `target` shows with a composer that can be
  * guarded, or busy. Until the target has appeared, it opens `target` only while the screen
- * still shows the conversation Relay last saw there, or is loading, and sends the link again
- * every 5 s while it does; it never opens a target already on screen, and never sends the
- * link again once the target has appeared. Any other conversation, and after the target has
- * appeared any conversation but the target, means the user moved: it stops, and never takes
- * them back. It opens nothing unless Claude is in front and the user idle, and gives way to a
- * Desktop operation waiting for the lock. Resolves with the target's last view when it shows
- * by then, guardable or not, and undefined when it is not on screen at the end.
+ * still shows the place Relay last saw there, or is loading, and sends the link again every
+ * 5 s while it does; it never opens a target already on screen, and never sends the link
+ * again once the target has appeared. Any other place, a conversation or the new-session
+ * screen, and after the target has appeared any place but the target, means the user moved:
+ * it stops, and never takes them back. It opens nothing unless Claude is in front and the
+ * user idle, and gives way to a Desktop operation waiting for the lock. Resolves with the
+ * target's last view when it shows by then, guardable or not, and undefined when it is not
+ * on screen at the end.
  */
 async function show(
   deps: RestorerDeps,
   run: Run,
-  target: string,
+  target: Place,
 ): Promise<Snapshot | undefined> {
   const deadline = deps.now() + SHOWN_MS;
   let openedAt: number | undefined;
@@ -429,13 +452,11 @@ async function show(
   for (;;) {
     yieldTo(deps);
     const view = await look(deps);
-    if (view?.localSessionId === target) {
+    const place = view && placeOf(view);
+    if (view && place === target) {
       appeared = true;
       if (shows(view, target) || deps.now() >= deadline) return view;
-    } else if (
-      view?.localSessionId !== undefined &&
-      (appeared || view.localSessionId !== run.lastSeen)
-    ) {
+    } else if (place !== undefined && (appeared || place !== run.lastSeen)) {
       throw new Stop("pending", "moved");
     } else if (deps.now() >= deadline) {
       return undefined;
@@ -466,10 +487,16 @@ async function look(deps: RestorerDeps): Promise<Snapshot | undefined> {
   }
 }
 
+/** Sends the link to `place`, the helper checking right before it that the user is idle. */
+const go = (deps: RestorerDeps, place: Place) =>
+  place === NEW_SESSION
+    ? deps.automation.openNewSession({ requireIdle: true })
+    : deps.automation.openSession(place, { requireIdle: true });
+
 /** Opens `target`, the helper checking right before it that the user is idle. */
-async function open(deps: RestorerDeps, target: string): Promise<void> {
+async function open(deps: RestorerDeps, target: Place): Promise<void> {
   try {
-    await deps.automation.openSession(target, { requireIdle: true });
+    await go(deps, target);
   } catch (error) {
     haltOn(error);
     // Nothing was opened: the drafts wait for the user to pause.

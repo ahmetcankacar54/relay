@@ -7,6 +7,7 @@ import {
   DesktopContinuationHost,
   isLocalSessionId,
   nativeDesktopAutomation,
+  newSessionGuard,
   type DesktopAutomation,
   type DesktopAutomationSnapshot,
   type DesktopContinuationEvidence,
@@ -91,6 +92,9 @@ function fixture() {
       return { acceptedVisible: true };
     },
     hasRequestMarker: async () => false,
+    openNewSession: async () => {
+      throw new Error("openNewSession must not be called here");
+    },
     writeDraft: async () => {
       throw new Error("writeDraft must not be called here");
     },
@@ -507,6 +511,112 @@ test("writeDraft maps composer-not-empty and context-changed", async () => {
     blocked("desktop-ui-unsupported"),
   );
 });
+test("a snapshot's newSession is optional, a boolean, and never comes with a conversation id", async () => {
+  const reply = (extra: Record<string, unknown>) =>
+    nativeDesktopAutomation("/unused", async () => ({
+      ok: true,
+      snapshot: { ...snapshot(), ...extra },
+    }));
+  const { localSessionId: _, ...screen } = snapshot();
+  assert.equal(
+    (
+      await reply({
+        ...screen,
+        localSessionId: undefined,
+        newSession: true,
+      }).inspect()
+    ).newSession,
+    true,
+  );
+  assert.equal(
+    (await reply({ newSession: false }).inspect()).newSession,
+    false,
+  );
+  // An older helper does not report it.
+  assert.equal((await reply({}).inspect()).newSession, undefined);
+  for (const bad of [
+    { newSession: "yes" },
+    { newSession: 1 },
+    // A conversation is not the new-session screen.
+    { newSession: true },
+  ])
+    await assert.rejects(
+      reply(bad).inspect(),
+      blocked("desktop-ui-unsupported"),
+      JSON.stringify(bad),
+    );
+});
+const newSessionView = (
+  over: Partial<DesktopAutomationSnapshot> = {},
+): DesktopAutomationSnapshot => {
+  const { localSessionId: _, ...rest } = snapshot();
+  return { ...rest, newSession: true, ...over };
+};
+test("newSessionGuard names the new-session screen, with its mode only when one was read", () => {
+  assert.deepEqual(newSessionGuard(newSessionView()), {
+    pid: 456,
+    newSession: true,
+    accountLabel: "Test User Company",
+    permissionMode: "Auto",
+    contextFingerprint: "a".repeat(64),
+  });
+  const modeless = newSessionGuard(
+    newSessionView({ permissionMode: undefined }),
+  );
+  assert.equal("permissionMode" in modeless, false);
+  // A conversation, or a screen that is neither, is not the new-session screen.
+  for (const view of [
+    snapshot(),
+    { ...snapshot(), localSessionId: undefined },
+    newSessionView({ newSession: false }),
+    newSessionView({ localSessionId: localId }),
+  ])
+    assert.throws(
+      () => newSessionGuard(view),
+      blocked("exact-session-not-observed"),
+    );
+  // Without its account the screen cannot be told apart from another account's.
+  assert.throws(
+    () => newSessionGuard(newSessionView({ accountLabel: undefined })),
+    blocked("desktop-ui-unsupported"),
+  );
+});
+test("openNewSession sends open-new-session, asking the helper to check the user only when asked", async () => {
+  const commands: unknown[] = [];
+  const adapter = nativeDesktopAutomation("/unused", async (input) => {
+    commands.push(input);
+    return { ok: true };
+  });
+  await adapter.openNewSession();
+  await adapter.openNewSession({ requireIdle: true });
+  await adapter.openNewSession({ requireIdle: false });
+  assert.deepEqual(commands, [
+    { command: "open-new-session" },
+    { command: "open-new-session", requireIdle: true },
+    { command: "open-new-session" },
+  ]);
+  const refused = nativeDesktopAutomation("/unused", async () => ({
+    ok: false,
+    issue: "user-active",
+  }));
+  await assert.rejects(
+    refused.openNewSession({ requireIdle: true }),
+    blocked("user-active"),
+  );
+});
+test("writeDraft passes a new-session guard to the helper as it is", async () => {
+  const commands: unknown[] = [];
+  const adapter = nativeDesktopAutomation("/unused", async (input) => {
+    commands.push(input);
+    return { ok: true, snapshot: newSessionView({ composerEmpty: false }) };
+  });
+  const guard = newSessionGuard(newSessionView({ permissionMode: undefined }));
+  const result = await adapter.writeDraft(guard, "draft");
+  assert.deepEqual(commands, [
+    { command: "write-draft", guard, text: "draft" },
+  ]);
+  assert.equal(result.newSession, true);
+});
 test("writeDraft never sends: the request has no requestId", async () => {
   const commands: Record<string, unknown>[] = [];
   const adapter = nativeDesktopAutomation("/unused", async (input) => {
@@ -587,7 +697,7 @@ test("the Swift write-draft branch checks the user, then re-reads the composer a
   for (const before of [
     "composerReadsEmpty(composer.element)",
     'fail("composer-not-empty")',
-    "liveSessionIDs(",
+    "liveScreen(",
     'fail("context-changed")',
   ]) {
     const i = at(before);
@@ -603,7 +713,9 @@ test("the Swift write-draft branch checks the user, then re-reads the composer a
   assert.doesNotMatch(check, /current\.fields/);
 });
 test("the Swift open-session checks the user right before opening, and only when asked", () => {
-  const block = swiftBlock('if command == "open-session" {');
+  const block = swiftBlock(
+    'if command == "open-session" || command == "open-new-session" {',
+  );
   const at = (text: string) => block.indexOf(text);
   const observed = at("let observation = try observe()");
   const flag = at('if request["requireIdle"] as? Bool == true {');
@@ -623,6 +735,56 @@ test("the Swift open-session checks the user right before opening, and only when
   );
   // Nothing else opens a URL in that block.
   assert.equal(block.split("NSWorkspace.shared.open(").length - 1, 1);
+  // Its only links: an exact conversation, and Desktop's own new-session link with nothing
+  // after it, so no text ever travels in a URL (its ?q= would prefill the composer). Read
+  // from the source as it is: stripping `//` comments would cut the links too.
+  const raw = swiftSource.slice(
+    swiftSource.indexOf('if command == "open-session" ||'),
+    swiftSource.indexOf('if command == "lookup" {'),
+  );
+  const links = [...raw.matchAll(/"(claude:\/\/[^"]*)"/g)].map((m) => m[1]);
+  assert.deepEqual(links, [
+    "claude://code/continue?session=\\(id)",
+    "claude://code/new",
+  ]);
+});
+test("the Swift helper accepts a new-session guard for write-draft only", () => {
+  // validateGuard takes a guard without a conversation id only when allowed to.
+  const check = swiftBlock("func validateGuard(");
+  assert.match(check, /if named \{\s*guard allowNewSession,/);
+  const handler = swiftBlock("func handle(");
+  assert.match(handler, /let draft = command == "write-draft"/);
+  assert.match(
+    handler,
+    /try validateGuard\(current, expected, allowNewSession: draft\)/,
+  );
+  // No other command's branch allows it.
+  for (const command of ["cancel-quota-resume", "set-permission", "send"])
+    assert.doesNotMatch(
+      swiftBlock(`if command == "${command}" {`),
+      /allowNewSession/,
+      command,
+    );
+  // write-draft re-reads the screen right before writing: still the new-session screen.
+  assert.match(
+    swiftBlock('if command == "write-draft" {'),
+    /if expected\["newSession"\] as\? Bool == true \{\s*guard live\.newSession else \{ try fail\("context-changed"\) \}/,
+  );
+});
+test("the Swift snapshot names the new-session screen inside the fingerprint", () => {
+  const body = swiftBlock("func observe()");
+  const stable = body.indexOf("var stable: [String: Any] = [");
+  const flag = body.indexOf(
+    'if screen.newSession { stable["newSession"] = true }',
+  );
+  const serialized = body.indexOf("let serialized");
+  assert.ok(stable !== -1 && flag > stable && flag < serialized);
+  // The same pure classifier names the conversation, so the two cannot disagree.
+  assert.match(
+    body,
+    /let screen = screenOf\(webAreas\.flatMap \{ \$0\.strings \}\)/,
+  );
+  assert.match(body, /let localID = screen\.localSessionId/);
 });
 test("the Swift snapshot reports frontmost and idleMs outside the fingerprint", () => {
   const body = swiftBlock("func observe()");
@@ -675,7 +837,10 @@ test("the Swift pre-write composer re-read counts only a readable empty value as
     read,
     /AXUIElementCopyAttributeValue\(element, kAXValueAttribute as CFString, &value\)/,
   );
-  assert.match(read, /case \.success: return \(value as\? String\)\?\.isEmpty == true/);
+  assert.match(
+    read,
+    /case \.success: return \(value as\? String\)\?\.isEmpty == true/,
+  );
   assert.match(read, /case \.noValue: return true/);
   assert.match(read, /default: return false/);
 });

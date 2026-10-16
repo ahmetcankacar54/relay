@@ -460,6 +460,9 @@ async function fixture() {
   const automation: DesktopAutomation = {
     inspect: async () => ({ ...ui }),
     openSession: async () => {},
+    openNewSession: async () => {
+      throw new Error("openNewSession must not be called here");
+    },
     setPermission: async (_g, mode) => ({ ...ui, permissionMode: mode }),
     send: async () => ({ acceptedVisible: false }),
     hasRequestMarker: async () => false,

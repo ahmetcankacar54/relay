@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 type SelectorNode = {
   role: string;
@@ -45,34 +45,56 @@ const liveShape = (): SelectorNode[] => [
   popup("Usage", "root/1/3/9"),
 ];
 
+/**
+ * The helper built in fixture mode, which has no live AX dispatcher: it only runs the pure
+ * selectors on the JSON it is given. Built once, for every test here.
+ */
+let fixture: Promise<string> | undefined;
+let directory: string | undefined;
+function fixtureBinary(): Promise<string> {
+  fixture ??= (async () => {
+    directory = await mkdtemp(path.join(tmpdir(), "relay-ax-selector-"));
+    const binary = path.join(directory, "selector-fixture");
+    execFileSync(
+      "/usr/bin/xcrun",
+      [
+        "swiftc",
+        "electron/native/desktop-automation.swift",
+        "-D",
+        "RELAY_AX_SELECTOR_FIXTURE",
+        "-o",
+        binary,
+        "-module-cache-path",
+        path.join(directory, "module-cache"),
+      ],
+      { timeout: 60_000, stdio: "pipe" },
+    );
+    return binary;
+  })();
+  return fixture;
+}
+after(async () => {
+  if (directory) await rm(directory, { recursive: true, force: true });
+});
+const runFixture = (binary: string, input: unknown): unknown =>
+  JSON.parse(
+    execFileSync(binary, [], {
+      input: JSON.stringify(input),
+      encoding: "utf8",
+      timeout: 5_000,
+    }),
+  );
+
 test(
   "native account selector isolates the Sidebar and blocks ambiguous AX fixtures",
   { skip: process.platform !== "darwin" },
   async () => {
-    const directory = await mkdtemp(path.join(tmpdir(), "relay-ax-selector-"));
-    const binary = path.join(directory, "selector-fixture");
-    try {
-      execFileSync(
-        "/usr/bin/xcrun",
-        [
-          "swiftc",
-          "electron/native/desktop-automation.swift",
-          "-D",
-          "RELAY_AX_SELECTOR_FIXTURE",
-          "-o",
-          binary,
-          "-module-cache-path",
-          path.join(directory, "module-cache"),
-        ],
-        { timeout: 60_000, stdio: "pipe" },
-      );
+    const binary = await fixtureBinary();
+    {
       const select = (nodes: SelectorNode[]): string | null => {
-        const result = execFileSync(binary, [], {
-          input: JSON.stringify(nodes),
-          encoding: "utf8",
-          timeout: 5_000,
-        });
-        const parsed = JSON.parse(result) as { accountPath: string | null };
+        const parsed = runFixture(binary, nodes) as {
+          accountPath: string | null;
+        };
         assert.equal(Object.hasOwn(parsed, "accountPath"), true);
         return parsed.accountPath;
       };
@@ -164,8 +186,76 @@ test(
         accountPath,
         "known controls remain excluded inside the Sidebar",
       );
-    } finally {
-      await rm(directory, { recursive: true, force: true });
     }
+  },
+);
+
+const conversation = "local_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const other = "local_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+test(
+  "native screen names one conversation, or Code's bare new-session screen, from web area strings",
+  { skip: process.platform !== "darwin" },
+  async () => {
+    const binary = await fixtureBinary();
+    const screen = (webAreaStrings: string[]) =>
+      runFixture(binary, { webAreaStrings }) as {
+        localSessionId: string | null;
+        newSession: boolean;
+      };
+    const none = { localSessionId: null, newSession: false };
+    const newSession = { localSessionId: null, newSession: true };
+    // The path Desktop's own claude://code/new opens, with a trailing slash or a query.
+    for (const url of [
+      "https://claude.ai/epitaxy",
+      "https://claude.ai/epitaxy/",
+      "https://claude.ai/epitaxy?folder=%2FUsers%2Fme%2Fproject",
+    ])
+      assert.deepEqual(screen([url]), newSession, url);
+    // A page title beside it changes nothing.
+    assert.deepEqual(
+      screen(["Claude", "https://claude.ai/epitaxy"]),
+      newSession,
+      "title",
+    );
+    // A conversation is named by its id, and is not the new-session screen, even beside it:
+    // one conversation among the web areas names the screen, as before.
+    for (const strings of [
+      [`https://claude.ai/epitaxy/${conversation}`],
+      [
+        "https://claude.ai/epitaxy",
+        `https://claude.ai/epitaxy/${conversation}`,
+      ],
+    ])
+      assert.deepEqual(
+        screen(strings),
+        { localSessionId: conversation, newSession: false },
+        strings.join(" "),
+      );
+    for (const [name, strings] of [
+      ["no web area", []],
+      ["no epitaxy URL", ["Claude", "https://claude.ai/new"]],
+      ["scheduled", ["https://claude.ai/epitaxy/scheduled"]],
+      ["new", ["https://claude.ai/epitaxy/new"]],
+      ["a draft route", ["https://claude.ai/epitaxy/draft_abc"]],
+      ["a project", ["https://claude.ai/epitaxy/project/p1"]],
+      [
+        "beside another Code screen",
+        ["https://claude.ai/epitaxy", "https://claude.ai/epitaxy/scheduled"],
+      ],
+      ["not a URL", ["claude.ai/epitaxy"]],
+      ["plain http", ["http://claude.ai/epitaxy"]],
+      ["another host", ["https://evil.example/claude.ai/epitaxy"]],
+      ["a look-alike host", ["https://claude.ai.example/epitaxy"]],
+      ["a longer path", ["https://claude.ai/epitaxyx"]],
+      [
+        "two conversations",
+        [
+          `https://claude.ai/epitaxy/${conversation}`,
+          `https://claude.ai/epitaxy/${other}`,
+        ],
+      ],
+    ] as const)
+      assert.deepEqual(screen([...strings]), none, name);
   },
 );
