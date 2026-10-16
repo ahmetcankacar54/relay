@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Sidebar } from "../src/app/Sidebar";
@@ -151,4 +153,13 @@ test("compact rail centres its icon buttons", () => {
   );
   for (const b of html.match(/<button[^>]*>/g) ?? [])
     assert.match(b, /justify-center/);
+});
+
+// Hidden `sr-only` labels are absolutely positioned. If the page scroller is not their containing
+// block they escape it and stretch the window, which then scrolls the whole shell into empty space.
+test("the page scroller contains absolutely positioned page content", () => {
+  const shell = fs.readFileSync(path.join(import.meta.dirname, "../src/app/Shell.tsx"), "utf8");
+  const main = shell.match(/<main className="([^"]*)"/)?.[1].split(/\s+/) ?? [];
+  assert.ok(main.includes("overflow-y-auto"));
+  assert.ok(main.includes("relative"));
 });
