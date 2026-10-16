@@ -1,5 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Panda } from "@/components/Panda";
+import { PANDA_SCENES, type PandaScene } from "@/mascot/scenes";
+import { SwitchStage } from "@/switch/SwitchStage";
 import { BLINK_FRAME, POSE_FRAME, type MascotFrame } from "../../shared/mascot-frames";
+import {
+  DISGUISES,
+  SwitchStory,
+  WAITING_LIMIT_MS,
+  sceneView,
+  type Disguise,
+  type SwitchSceneView,
+} from "../../shared/switch-scene";
 
 type Frames = Record<MascotFrame, readonly { scaleFactor: number; png: string }[]>;
 interface StripSpec {
@@ -63,6 +74,98 @@ function Strip({ spec, frames }: { spec: StripSpec; frames: Frames }) {
   );
 }
 
+/** Every in-app scene on a light and a dark ground; heads also at their real 18 px. */
+function SceneSheet() {
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-lg font-bold">Uygulama içi sahneler</h2>
+      <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4">
+        {(Object.keys(PANDA_SCENES) as PandaScene[]).map((scene) => (
+          <div key={scene} className="grid gap-1.5">
+            <div className="text-sm font-semibold">{scene}</div>
+            <div className="flex gap-2">
+              {(["light", "dark"] as const).map((tone) => (
+                <div
+                  key={tone}
+                  data-tone={tone}
+                  className={
+                    tone === "light"
+                      ? "flex items-center gap-2 rounded-lg bg-neutral-100 p-2"
+                      : "flex items-center gap-2 rounded-lg bg-neutral-900 p-2"
+                  }
+                >
+                  <Panda scene={scene} size={scene.startsWith("head-") ? 48 : 96} />
+                  {scene.startsWith("head-") && <Panda scene={scene} size={18} />}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+type Demo = { label: string; outcome: "switched" | "back" | "failed" | "stalled"; disguise?: Disguise };
+const DEMOS: Demo[] = [
+  ...(Object.keys(DISGUISES) as Disguise[]).map((disguise): Demo => ({ label: `Geçiş · ${disguise}`, outcome: "switched", disguise })),
+  { label: "Yeniden açıldı", outcome: "back" },
+  { label: "Başarısız", outcome: "failed" },
+  { label: "60 sn sınırı", outcome: "stalled" },
+];
+/** How long a demo operation runs before it ends. */
+const DEMO_OPERATION_MS = 2_000;
+
+/** Plays the switch window story at real size; the limit demo moves the story's clock instead of waiting a minute. */
+function SwitchDemo() {
+  const [view, setView] = useState<SwitchSceneView>();
+  const [motion, setMotion] = useState(true);
+  const skipped = useRef(0);
+  const disguise = useRef<Disguise>("fedora");
+  const story = useMemo(
+    () =>
+      new SwitchStory({
+        now: () => Date.now() + skipped.current,
+        pick: () => disguise.current,
+        show: (state) => setView(sceneView(state, { language: "tr", name: () => "Vertex", motion: true })),
+      }),
+    [],
+  );
+  useEffect(() => () => story.destroy(), [story]);
+  const play = (demo: Demo) => {
+    disguise.current = demo.disguise ?? "fedora";
+    const kind = demo.outcome === "back" ? "merge" : "switch";
+    story.report({ phase: "start", kind, profileId: "demo" });
+    window.setTimeout(() => {
+      if (demo.outcome === "stalled") {
+        skipped.current += WAITING_LIMIT_MS;
+        story.tick();
+      } else story.report({ phase: "end", kind, profileId: "demo", ok: demo.outcome !== "failed" });
+    }, DEMO_OPERATION_MS);
+  };
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-lg font-bold">Geçiş penceresi</h2>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {DEMOS.map((demo) => (
+          <button key={demo.label} type="button" className="rounded-md border px-2.5 py-1 text-sm" onClick={() => play(demo)}>{demo.label}</button>
+        ))}
+        <label className="ml-2 flex items-center gap-1.5 text-sm">
+          <input type="checkbox" checked={motion} onChange={(e) => setMotion(e.target.checked)} />
+          Hareket
+        </label>
+      </div>
+      <div data-switch-preview="" className="mt-3 grid h-[190px] w-[280px] place-items-center rounded-xl bg-neutral-300">
+        {view?.visible ? (
+          <SwitchStage view={{ ...view, motion }} />
+        ) : (
+          <span className="text-xs text-neutral-700">{view?.stage === "stalled" ? "Pencere gizlendi (60 sn)" : "Pencere kapalı"}</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Development-only review sheet for the mascot artwork (?scenario=mascot). */
 export function MascotGallery({ frames }: { frames: Frames }) {
   const strips: StripSpec[] = [
@@ -73,7 +176,7 @@ export function MascotGallery({ frames }: { frames: Frames }) {
     <div className="min-h-screen bg-background p-6 text-foreground">
       <h1 className="font-display text-xl font-bold">Relay maskot galerisi</h1>
       <p className="mb-4 text-sm text-muted-foreground">
-        Menü çubuğu kareleri gerçek boyutta (açık ve koyu) ve 1x pikselleri 4 kat büyütülmüş.
+        Menü çubuğu kareleri gerçek boyutta (açık ve koyu) ve 1x pikselleri 4 kat büyütülmüş; altında uygulama içi sahneler ve geçiş penceresi.
         macOS gibi yalnızca saydamlık çizilir; renkli ya da beyaz dolgular siluetin içinde kaybolur.
       </p>
       <section className="divide-y">
@@ -81,6 +184,8 @@ export function MascotGallery({ frames }: { frames: Frames }) {
           <Strip key={s.label} spec={s} frames={frames} />
         ))}
       </section>
+      <SceneSheet />
+      <SwitchDemo />
     </div>
   );
 }

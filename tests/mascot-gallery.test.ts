@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MascotGallery } from "../src/dev/MascotGallery";
 import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
+import { PANDA_SCENES } from "../src/mascot/scenes";
 
 const frames = Object.fromEntries(
   MASCOT_FRAMES.map((f) => [f, [1, 2, 3].map((scaleFactor) => ({ scaleFactor, png: "AAAA" }))]),
@@ -33,4 +34,19 @@ test("the gallery draws every frame from its alpha only, as the menu bar does", 
   for (const c of light) assert.ok(c.includes("brightness-0") && !c.some((x) => x.includes("invert")), c.join(" "));
   for (const c of dark) assert.ok(c.includes("brightness-0") && c.includes("invert"), c.join(" "));
   for (const c of zoomed) assert.ok(c.includes("brightness-0") && c.includes("dark:invert"), c.join(" "));
+});
+
+test("the gallery shows every in-app scene on light and dark grounds", () => {
+  const html = renderToStaticMarkup(createElement(MascotGallery, { frames }));
+  for (const scene of Object.keys(PANDA_SCENES)) assert.match(html, new RegExp(`data-scene="${scene}"`), scene);
+  assert.match(html, /data-tone="light"/);
+  assert.match(html, /data-tone="dark"/);
+});
+
+test("the gallery offers a switch window demo for every outcome", () => {
+  const html = renderToStaticMarkup(createElement(MascotGallery, { frames }));
+  for (const label of ["Geçiş · fedora", "Geçiş · sunglasses", "Geçiş · deerstalker", "Yeniden açıldı", "Başarısız", "60 sn sınırı"])
+    assert.match(html, new RegExp(`>${label}<`), label);
+  assert.match(html, /data-switch-preview/);
+  assert.match(html, /Hareket/);
 });
