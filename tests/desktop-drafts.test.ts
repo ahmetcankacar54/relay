@@ -493,7 +493,7 @@ async function storageFixture(t: any) {
     LOG: Buffer.from("2026/10/16-12:00:00.000 Delete type=3 #1\n"),
     "MANIFEST-000001": Buffer.from([0, 255, 1, 254, 2, 253, 0, 0]),
     "000003.log": randomBytes(4096),
-    // Bigger than a single copy chunk, like a real table file.
+    // A few MB, so a short or truncated copy cannot pass by accident.
     "000005.ldb": randomBytes(3 * 1024 * 1024),
     "nested/inner.bin": randomBytes(777),
     "nested/empty": Buffer.alloc(0),
@@ -615,6 +615,180 @@ test("restore refuses a symlinked Local Storage", async (t) => {
   );
 });
 
+test("restore refuses a backup directory that is a symlink", async (t) => {
+  const { root, vault, leveldb, base } = await storageFixture(t);
+  const backup = (await backupLocalStorage(root, vault, new Date()))!;
+  await fs.writeFile(path.join(leveldb, "CURRENT"), "changed\n");
+  const before = await snapshot(leveldb);
+  const link = path.join(base, "backup-link");
+  await fs.symlink(backup, link);
+  await assert.rejects(restoreLocalStorage(root, link));
+  assert.deepEqual(await snapshot(leveldb), before);
+});
+
+test("a relative symlink stays relative in the backup and after a restore", async (t) => {
+  const { root, vault, leveldb } = await storageFixture(t);
+  await fs.symlink("LOCK", path.join(leveldb, "link"));
+  const backup = (await backupLocalStorage(root, vault, new Date()))!;
+  assert.equal(await fs.readlink(path.join(backup, "leveldb", "link")), "LOCK");
+  await fs.rm(path.join(leveldb, "link"));
+  await restoreLocalStorage(root, backup);
+  assert.equal(await fs.readlink(path.join(leveldb, "link")), "LOCK");
+});
+
+// A root user ignores file modes, so the chmod-based tests prove nothing there.
+const needsPermissions = {
+  skip: process.getuid?.() === 0 && "root can read a mode 0 file",
+};
+
+test(
+  "restore from an unreadable backup leaves the live directory alone",
+  needsPermissions,
+  async (t) => {
+    const { root, vault, leveldb } = await storageFixture(t);
+    const backup = (await backupLocalStorage(root, vault, new Date()))!;
+    await fs.writeFile(path.join(leveldb, "CURRENT"), "changed since\n");
+    const before = await snapshot(leveldb);
+    const file = path.join(backup, "leveldb", "000003.log");
+    await fs.chmod(file, 0);
+    try {
+      await assert.rejects(restoreLocalStorage(root, backup), {
+        code: "EACCES",
+      });
+    } finally {
+      await fs.chmod(file, 0o600);
+    }
+    assert.deepEqual(await snapshot(leveldb), before);
+    // The half-made copy is gone too.
+    assert.deepEqual(await fs.readdir(path.join(root, LOCAL_STORAGE)), [
+      "leveldb",
+    ]);
+  },
+);
+
+test(
+  "an unreadable leveldb file fails the backup and leaves no stamp directory",
+  needsPermissions,
+  async (t) => {
+    const { root, vault, leveldb } = await storageFixture(t);
+    const file = path.join(leveldb, "000003.log");
+    await fs.chmod(file, 0);
+    try {
+      await assert.rejects(backupLocalStorage(root, vault, new Date()), {
+        code: "EACCES",
+      });
+    } finally {
+      await fs.chmod(file, 0o600);
+    }
+    assert.deepEqual(await fs.readdir(path.join(vault, "drafts")), []);
+  },
+);
+
+// A `rename` that fails on the given calls (1-based) and otherwise works.
+function renameFailingOn(...failing: number[]) {
+  let calls = 0;
+  const rename: typeof fs.rename = async (from, to) => {
+    calls += 1;
+    if (failing.includes(calls))
+      throw Object.assign(new Error(`injected failure ${calls}`), {
+        code: "EIO",
+      });
+    return fs.rename(from, to);
+  };
+  return { ops: { rename }, calls: () => calls };
+}
+
+async function changedLive(t: any) {
+  const fx = await storageFixture(t);
+  const backup = (await backupLocalStorage(fx.root, fx.vault, new Date()))!;
+  const backedUp = await snapshot(fx.leveldb);
+  // What the helper left behind: live no longer matches the backup.
+  await fs.writeFile(path.join(fx.leveldb, "000005.ldb"), "half written");
+  await fs.writeFile(path.join(fx.leveldb, "000009.log"), "new");
+  await fs.rm(path.join(fx.leveldb, "LOCK"));
+  return { ...fx, backup, backedUp, damaged: await snapshot(fx.leveldb) };
+}
+
+test("a failure moving the live directory aside leaves it as it was", async (t) => {
+  const { root, leveldb, backup, damaged } = await changedLive(t);
+  const seam = renameFailingOn(1);
+  await assert.rejects(restoreLocalStorage(root, backup, seam.ops), {
+    message: "injected failure 1",
+  });
+  assert.equal(seam.calls(), 1);
+  assert.deepEqual(await snapshot(leveldb), damaged);
+  assert.deepEqual(await fs.readdir(path.join(root, LOCAL_STORAGE)), [
+    "leveldb",
+  ]);
+});
+
+test("a failure putting the copy in place puts the original back", async (t) => {
+  const { root, leveldb, backup, damaged } = await changedLive(t);
+  const seam = renameFailingOn(2);
+  await assert.rejects(restoreLocalStorage(root, backup, seam.ops), {
+    message: "injected failure 2",
+  });
+  assert.equal(seam.calls(), 3); // aside, copy in (fails), original back
+  assert.deepEqual(await snapshot(leveldb), damaged);
+  // Neither the copy nor the old directory is left beside it.
+  assert.deepEqual(await fs.readdir(path.join(root, LOCAL_STORAGE)), [
+    "leveldb",
+  ]);
+});
+
+test("a failed put-back does not hide the error, and the next restore recovers", async (t) => {
+  const { root, leveldb, backup, backedUp, damaged } = await changedLive(t);
+  const storage = path.join(root, LOCAL_STORAGE);
+  const seam = renameFailingOn(2, 3);
+  await assert.rejects(restoreLocalStorage(root, backup, seam.ops), {
+    message: "injected failure 2",
+  });
+  // Live is gone, but the original is intact beside it and the copy is deleted.
+  const names = await fs.readdir(storage);
+  assert.equal(names.length, 1);
+  assert.match(names[0], /^leveldb\.relay-old-/);
+  assert.deepEqual(await snapshot(path.join(storage, names[0])), damaged);
+
+  await restoreLocalStorage(root, backup);
+  assert.deepEqual(await snapshot(leveldb), backedUp);
+  assert.deepEqual(await fs.readdir(storage), ["leveldb"]);
+});
+
+test(
+  "a live directory that cannot be fully deleted is still replaced whole",
+  needsPermissions,
+  async (t) => {
+    const { root, leveldb, backup, backedUp } = await changedLive(t);
+    const storage = path.join(root, LOCAL_STORAGE);
+    // A read-only subdirectory makes a recursive delete fail partway through.
+    const locked = path.join(leveldb, "locked");
+    await fs.mkdir(locked);
+    await fs.writeFile(path.join(locked, "inside"), "x");
+    await fs.chmod(locked, 0o555);
+    // So the temp dir can be removed wherever the directory ended up.
+    const unlock = async () => {
+      for (const name of await fs.readdir(storage))
+        await fs
+          .chmod(path.join(storage, name, "locked"), 0o755)
+          .catch(() => {});
+    };
+    try {
+      await restoreLocalStorage(root, backup);
+      // Live is complete, even though the old directory could not be deleted.
+      assert.deepEqual(await snapshot(leveldb), backedUp);
+      const stray = (await fs.readdir(storage)).filter((n) => n !== "leveldb");
+      assert.equal(stray.length, 1);
+      assert.match(stray[0], /^leveldb\.relay-old-/);
+    } finally {
+      await unlock();
+    }
+    // The next restore sweeps the stray directory.
+    await restoreLocalStorage(root, backup);
+    assert.deepEqual(await snapshot(leveldb), backedUp);
+    assert.deepEqual(await fs.readdir(storage), ["leveldb"]);
+  },
+);
+
 test("a missing leveldb gives no backup", async (t) => {
   const { root, vault } = await storageFixture(t);
   await fs.rm(path.join(root, LEVELDB), { recursive: true });
@@ -726,16 +900,45 @@ test("pruning never follows a symlink that looks like a backup", async (t) => {
   await fs.mkdir(drafts);
   for (const day of [1, 2, 3, 4])
     await fs.mkdir(path.join(drafts, `2026-10-0${day}T12-00-00-000Z`));
-  await fs.symlink(outside, path.join(drafts, "2026-09-01T12-00-00-000Z"));
+  // The newest stamp of all, so if it counted as a backup it would push a real
+  // one out of the three kept, and it would be among those removed when it did not.
+  const link = "2026-11-01T12-00-00-000Z";
+  await fs.symlink(outside, path.join(drafts, link));
   await pruneDraftBackups(vault);
   assert.equal(
     await fs.readFile(path.join(outside, "precious"), "utf8"),
     "mine",
   );
+  // The link itself is not a backup, so it is neither counted nor removed.
   assert.equal(
-    (await fs.readdir(drafts)).includes("2026-10-01T12-00-00-000Z"),
-    false,
+    (await fs.lstat(path.join(drafts, link))).isSymbolicLink(),
+    true,
   );
+  assert.deepEqual((await fs.readdir(drafts)).sort(), [
+    "2026-10-02T12-00-00-000Z",
+    "2026-10-03T12-00-00-000Z",
+    "2026-10-04T12-00-00-000Z",
+    link,
+  ]);
+});
+
+test("pruning orders stamps across a year boundary and by the millisecond", async (t) => {
+  const { root, vault } = await storageFixture(t);
+  const drafts = path.join(vault, "drafts");
+  const at = (iso: string) => backupLocalStorage(root, vault, new Date(iso));
+  await at("2025-12-31T23:59:59.999Z");
+  await at("2026-01-01T00:00:00.000Z");
+  await pruneDraftBackups(vault, 1);
+  assert.deepEqual(await fs.readdir(drafts), ["2026-01-01T00-00-00-000Z"]);
+
+  await at("2026-10-16T08:00:00.000Z");
+  await at("2026-10-16T08:00:00.001Z");
+  await at("2026-10-16T07:59:59.999Z");
+  await pruneDraftBackups(vault, 2);
+  assert.deepEqual((await fs.readdir(drafts)).sort(), [
+    "2026-10-16T08-00-00-000Z",
+    "2026-10-16T08-00-00-001Z",
+  ]);
 });
 
 test("a symlinked drafts directory is refused by backup and prune", async (t) => {
