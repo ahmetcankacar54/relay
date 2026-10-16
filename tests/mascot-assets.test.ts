@@ -1,15 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import {
-  checkMascotSources, checkRigSources, checkTraySources, renderMascot, renderTrayFrame, traySourcesHash, writeMascot,
+  checkMascotSources, checkRigSources, checkTraySources, renderMascot, renderTrayFrame, rigMarkup, sourcesHash, writeMascot,
 } from "../scripts/mascot-assets";
 import { mascotTrayFrames } from "../electron/mascot-tray-frames";
 import { MASCOT_FRAMES } from "../shared/mascot-frames";
-import { PANDA_POSES, type PandaPose } from "../shared/panda-poses";
+import { PANDA_RIG } from "../src/mascot/panda-rig";
+import { PANDA_POSES, RIG_ID_TOKEN, type PandaPose } from "../shared/panda-poses";
 
 const root = path.resolve(import.meta.dirname, "..");
 const RIG = path.join(root, "assets/mascot/source/rig");
@@ -216,7 +217,7 @@ test("the generated tray module was rendered from the committed sources", async 
   assert.ok(header, "the generated module must name its sources' hash; run npm run mascot");
   assert.equal(
     header[1],
-    await traySourcesHash(path.join(root, "assets/mascot/source/tray")),
+    await sourcesHash(path.join(root, "assets/mascot/source/tray")),
     "assets/mascot/source/tray changed since the module was generated; run npm run mascot",
   );
 });
@@ -227,16 +228,16 @@ test("the sources hash follows file names and contents and ignores hidden files"
   try {
     await writeFile(path.join(tray, "idle.svg"), svg());
     await writeFile(path.join(tray, "blink.svg"), svg());
-    const first = await traySourcesHash(tray);
+    const first = await sourcesHash(tray);
     assert.match(first, /^sha256-[0-9a-f]{64}$/);
     await writeFile(path.join(tray, ".DS_Store"), "finder");
-    assert.equal(await traySourcesHash(tray), first);
+    assert.equal(await sourcesHash(tray), first);
     await writeFile(path.join(tray, "blink.svg"), svg('opacity="0.5"'));
-    const changed = await traySourcesHash(tray);
+    const changed = await sourcesHash(tray);
     assert.notEqual(changed, first);
     await rm(path.join(tray, "blink.svg"));
     await writeFile(path.join(tray, "hungry.svg"), svg('opacity="0.5"'));
-    assert.notEqual(await traySourcesHash(tray), changed);
+    assert.notEqual(await sourcesHash(tray), changed);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -246,10 +247,12 @@ test("the generator writes the sources hash into the module header", async () =>
   const dir = await trayDir();
   try {
     for (const frame of MASCOT_FRAMES) await writeFile(path.join(dir, "tray", `${frame}.svg`), svg());
-    await mkdir(path.join(dir, "electron"));
+    await cp(RIG, path.join(dir, "rig"), { recursive: true });
     await writeMascot(await renderMascot(dir), dir);
-    const module = await readFile(path.join(dir, "electron/mascot-tray-frames.ts"), "utf8");
-    assert.equal(SOURCES_HEADER.exec(module)?.[1], await traySourcesHash(path.join(dir, "tray")));
+    const tray = await readFile(path.join(dir, "electron/mascot-tray-frames.ts"), "utf8");
+    assert.equal(SOURCES_HEADER.exec(tray)?.[1], await sourcesHash(path.join(dir, "tray")));
+    const rig = await readFile(path.join(dir, "src/mascot/panda-rig.ts"), "utf8");
+    assert.equal(SOURCES_HEADER.exec(rig)?.[1], await sourcesHash(path.join(dir, "rig")));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -262,7 +265,7 @@ test("the sources hash ignores SVG line endings, as a Windows checkout writes th
     const multiline = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20">\n  <rect x="2" y="2" width="20" height="16"/>\n</svg>\n';
     await writeFile(path.join(lf, "tray", "idle.svg"), multiline);
     await writeFile(path.join(crlf, "tray", "idle.svg"), multiline.replaceAll("\n", "\r\n"));
-    assert.equal(await traySourcesHash(path.join(crlf, "tray")), await traySourcesHash(path.join(lf, "tray")));
+    assert.equal(await sourcesHash(path.join(crlf, "tray")), await sourcesHash(path.join(lf, "tray")));
   } finally {
     await rm(lf, { recursive: true, force: true });
     await rm(crlf, { recursive: true, force: true });
@@ -489,4 +492,46 @@ test("an xlink:href that leaves the file is refused", async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+const T = RIG_ID_TOKEN;
+
+test("rig markup turns pivots into transform origins, drops default hiding and marks every id", () => {
+  const text =
+    '<?xml version="1.0"?><!-- <svg viewBox="0 0 1 1"> --><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
+    '<defs><clipPath id="panda-clip"><rect width="5" height="5"/></clipPath>' +
+    '<linearGradient id="panda-fade" href="#panda-base"/></defs>' +
+    '<g data-part="tail" data-pivot="100 200" clip-path="url(#panda-clip)"><path d="M0 0" style="fill:url(\'#panda-fade\')"/></g>' +
+    '<g data-prop="bang" style="opacity:0.5;display:none" data-pivot="10.5 20"/>' +
+    '<g data-expression="wide" style="display: none"><circle r="2"/></g>' +
+    '<g style="display:none"><circle r="1"/></g></svg>\n';
+  assert.equal(
+    rigMarkup(text),
+    `<defs><clipPath id="${T}panda-clip"><rect width="5" height="5"/></clipPath>` +
+      `<linearGradient id="${T}panda-fade" href="#${T}panda-base"/></defs>` +
+      `<g data-part="tail" data-pivot="100 200" clip-path="url(#${T}panda-clip)" style="transform-origin:100px 200px;transform-box:view-box">` +
+      `<path d="M0 0" style="fill:url('#${T}panda-fade')"/></g>` +
+      `<g data-prop="bang" style="opacity:0.5;transform-origin:10.5px 20px;transform-box:view-box" data-pivot="10.5 20"/>` +
+      `<g data-expression="wide"><circle r="2"/></g>` +
+      // Only expression and prop groups lose their hiding.
+      `<g style="display:none"><circle r="1"/></g>`,
+  );
+});
+
+test("the generated rig module holds every pose, ready to draw", () => {
+  assert.deepEqual(Object.keys(PANDA_RIG).sort(), [...PANDA_POSES].sort());
+  for (const pose of PANDA_POSES) {
+    const markup = PANDA_RIG[pose];
+    assert.doesNotMatch(markup, /<svg[\s>]/, pose);
+    assert.match(markup, /transform-box:view-box/, pose);
+    assert.doesNotMatch(markup, /<g[^>]*data-(?:expression|prop)="[^"]*"[^>]*display:\s*none/, pose);
+    for (const [, id] of markup.matchAll(/\sid="([^"]*)"/g)) assert.ok(id.startsWith(T), `${pose}: ${id}`);
+  }
+});
+
+test("the generated rig module was rendered from the committed sources", async () => {
+  const module = await readFile(path.join(root, "src/mascot/panda-rig.ts"), "utf8");
+  const header = SOURCES_HEADER.exec(module.slice(0, module.indexOf("export ")));
+  assert.ok(header, "the generated module must name its sources' hash; run npm run mascot");
+  assert.equal(header[1], await sourcesHash(RIG), "assets/mascot/source/rig changed since the module was generated; run npm run mascot");
 });

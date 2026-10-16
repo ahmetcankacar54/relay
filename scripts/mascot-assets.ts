@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { MASCOT_FRAME_SIZE, MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
 import {
-  DISGUISE_PROPS, PANDA_CANVAS, PANDA_EXPRESSIONS, PANDA_POSES, POSE_NESTING, POSE_PARTS, POSE_PROPS,
+  DISGUISE_PROPS, PANDA_CANVAS, PANDA_EXPRESSIONS, PANDA_POSES, POSE_NESTING, POSE_PARTS, POSE_PROPS, RIG_ID_TOKEN,
   type PandaPose,
 } from "../shared/panda-poses";
 
@@ -312,6 +312,48 @@ export async function checkMascotSources(source: string): Promise<string[]> {
   ];
 }
 
+const urls = (value: string) => value.replace(/url\(\s*(['"]?)#/g, `url($1#${RIG_ID_TOKEN}`);
+/** A style without `display:none`; empty when nothing else is left. */
+const withoutHiding = (style: string) =>
+  style.split(";").map((d) => d.trim()).filter((d) => d && !/^display\s*:\s*none$/i.test(d)).join(";");
+
+/**
+ * The inside of a rig file as Relay draws it: each pivot also becomes the CSS
+ * transform origin, expression and prop groups lose their default hiding (the
+ * component's CSS decides), and every id and id reference gets the instance token.
+ */
+export function rigMarkup(text: string): string {
+  let inner = "";
+  for (const tag of text.matchAll(ROOT_TAG)) {
+    if (tag[1] === undefined) continue; // a comment or declaration before the root
+    inner = text.slice(tag.index + tag[0].length, text.lastIndexOf("</svg>"));
+    break;
+  }
+  return inner
+    .replace(TAG, (tag, slash: string | undefined, name: string | undefined, rest: string | undefined) => {
+      if (name === undefined || slash) return tag;
+      const attributes = [...attributesOf(rest!)];
+      const pivot = attributes.find(([n]) => n === "data-pivot")?.[1];
+      const grouped = attributes.some(([n]) => n === "data-expression" || n === "data-prop");
+      let style = attributes.find(([n]) => n === "style")?.[1]?.replace(/;\s*$/, "");
+      if (style !== undefined && grouped) style = withoutHiding(style);
+      if (pivot !== undefined) {
+        const [x, y] = pivot.trim().split(/[\s,]+/);
+        style = [style, `transform-origin:${x}px ${y}px;transform-box:view-box`].filter(Boolean).join(";");
+      }
+      const out: [string, string][] = attributes.flatMap(([n, v]): [string, string][] => {
+        if (n === "style") return style ? [[n, urls(style)]] : [];
+        if (n === "id") return [[n, RIG_ID_TOKEN + v]];
+        if ((n === "href" || n === "xlink:href") && v.startsWith("#")) return [[n, `#${RIG_ID_TOKEN}${v.slice(1)}`]];
+        return [[n, urls(v)]];
+      });
+      if (style && !attributes.some(([n]) => n === "style")) out.push(["style", urls(style)]);
+      const source = out.map(([n, v]) => ` ${n}="${v.replaceAll('"', "&quot;")}"`).join("");
+      return `<${name}${source}${/\/\s*$/.test(rest!) ? "/" : ""}>`;
+    })
+    .trim();
+}
+
 /** One frame as 1x/2x/3x PNGs; an SVG's own width/height never changes the result. */
 export async function renderTrayFrame(trayDir: string, frame: MascotFrame): Promise<TrayRepresentation[]> {
   const text = await readFile(path.join(trayDir, `${frame}.svg`), "utf8").catch(() => undefined);
@@ -336,13 +378,13 @@ export async function renderTrayFrame(trayDir: string, frame: MascotFrame): Prom
 }
 
 /**
- * A hash of the delivered tray files (sorted names and contents, hidden files
- * skipped); the generated module records it so a test can catch stale output.
+ * A hash of the delivered files in one folder (sorted names and contents, hidden
+ * files skipped); a generated module records it so a test can catch stale output.
  */
-export async function traySourcesHash(trayDir: string) {
+export async function sourcesHash(dir: string) {
   const hash = createHash("sha256");
-  for (const file of (await list(trayDir)).sort()) {
-    const raw = await readFile(path.join(trayDir, file));
+  for (const file of (await list(dir)).sort()) {
+    const raw = await readFile(path.join(dir, file));
     // Git on Windows checks text out with CRLF; the artwork is the same.
     const content = file.endsWith(".svg") ? Buffer.from(raw.toString("utf8").replace(/\r\n/g, "\n")) : raw;
     hash.update(`${file}\0${content.length}\0`);
@@ -353,13 +395,16 @@ export async function traySourcesHash(trayDir: string) {
 
 export async function renderMascot(source: string) {
   const trayDir = path.join(source, "tray");
-  const sources = await traySourcesHash(trayDir);
+  const rigDir = path.join(source, "rig");
   const tray = {} as Record<MascotFrame, TrayRepresentation[]>;
   for (const frame of MASCOT_FRAMES) tray[frame] = await renderTrayFrame(trayDir, frame);
-  return { tray, sources };
+  const rig = {} as Record<PandaPose, string>;
+  for (const pose of PANDA_POSES) rig[pose] = rigMarkup(await readFile(path.join(rigDir, `${pose}.svg`), "utf8"));
+  return { tray, sources: await sourcesHash(trayDir), rig, rigSources: await sourcesHash(rigDir) };
 }
 
 export async function writeMascot(rendered: Awaited<ReturnType<typeof renderMascot>>, root: string) {
+  await mkdir(path.join(root, "electron"), { recursive: true });
   await writeFile(
     path.join(root, "electron/mascot-tray-frames.ts"),
     "// Generated by scripts/mascot.ts from assets/mascot/source/tray.\n" +
@@ -368,5 +413,14 @@ export async function writeMascot(rendered: Awaited<ReturnType<typeof renderMasc
       'import type { MascotFrame } from "../shared/mascot-frames";\n' +
       "export const mascotTrayFrames: Record<\n  MascotFrame,\n  readonly { scaleFactor: number; png: string }[]\n> = " +
       `${JSON.stringify(rendered.tray, null, 2)};\n`,
+  );
+  await mkdir(path.join(root, "src/mascot"), { recursive: true });
+  await writeFile(
+    path.join(root, "src/mascot/panda-rig.ts"),
+    "// Generated by scripts/mascot.ts from assets/mascot/source/rig.\n" +
+      "// Regenerate with npm run mascot; replace the sources instead.\n" +
+      `// Sources: ${rendered.rigSources}\n` +
+      'import type { PandaPose } from "../../shared/panda-poses";\n' +
+      `export const PANDA_RIG: Record<PandaPose, string> = ${JSON.stringify(rendered.rig, null, 2)};\n`,
   );
 }

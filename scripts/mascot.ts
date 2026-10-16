@@ -11,7 +11,7 @@ async function main() {
     process.exit(1);
   }
   await writeMascot(await renderMascot(source), root);
-  console.log("Generated the mascot tray frames.");
+  console.log("Generated the mascot tray frames and the puppet rig.");
 }
 main().catch((error) => {
   console.error(error);

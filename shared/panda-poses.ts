@@ -44,3 +44,6 @@ export const POSE_NESTING: Partial<Record<PandaPose, Readonly<Record<string, rea
   chew: { bamboo: ["held"], cursor: ["held"], "cursor-bitten": ["held"] },
   door: { knob: ["leaf"] },
 };
+
+/** Marks every id in the generated rig; each drawn panda replaces it with its own prefix. */
+export const RIG_ID_TOKEN = "__PANDA_ID__";
