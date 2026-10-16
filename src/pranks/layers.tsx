@@ -122,18 +122,22 @@ export function DozeLayer({ done, startled: startledAtFirst = false }: LayerProp
   );
 }
 
-/** Bamboo leaves fall over the window. Their places and delays are fixed, so every shower looks the same. */
+/**
+ * Bamboo leaves fall over the window. Their places and delays are fixed, so every shower looks the
+ * same. The delays reach 0.715 s and a leaf falls for 1.2 s (src/styles/pranks.css), so the last one
+ * has landed before CONFETTI_MS ends the layer.
+ */
 export function ConfettiLayer({ done }: LayerProps) {
   useEndAfter(done, CONFETTI_MS);
   return (
-    <div className="prank-confetti">
+    <>
       {Array.from({ length: LEAVES }, (_, i) => (
         <div
           key={i}
           className="prank-leaf"
-          style={{ left: `${(i * 37) % 100}%`, animationDelay: `${(i * 0.11).toFixed(2)}s` }}
+          style={{ left: `${(i * 37) % 100}%`, animationDelay: `${(i * 0.055).toFixed(3)}s` }}
         />
       ))}
-    </div>
+    </>
   );
 }

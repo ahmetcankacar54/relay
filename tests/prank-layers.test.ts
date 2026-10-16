@@ -98,8 +98,8 @@ test("the confetti is 14 leaves at fixed places with fixed delays", () => {
   assert.deepEqual(
     leaves,
     [
-      [0, "0.00"], [37, "0.11"], [74, "0.22"], [11, "0.33"], [48, "0.44"], [85, "0.55"], [22, "0.66"],
-      [59, "0.77"], [96, "0.88"], [33, "0.99"], [70, "1.10"], [7, "1.21"], [44, "1.32"], [81, "1.43"],
+      [0, "0.000"], [37, "0.055"], [74, "0.110"], [11, "0.165"], [48, "0.220"], [85, "0.275"], [22, "0.330"],
+      [59, "0.385"], [96, "0.440"], [33, "0.495"], [70, "0.550"], [7, "0.605"], [44, "0.660"], [81, "0.715"],
     ].map(([left, delay]) => `left:${left}%;animation-delay:${delay}s`),
   );
   // The same markup every time: no randomness at render.
@@ -129,6 +129,15 @@ interface FakeNode {
   tagName: string;
   attributes: Map<string, string>;
   childNodes: FakeNode[];
+  box: { left: number; top: number; width: number; height: number };
+}
+function findNode(node: FakeNode, matches: (node: FakeNode) => boolean): FakeNode | undefined {
+  if (matches(node)) return node;
+  for (const child of node.childNodes) {
+    const found = findNode(child, matches);
+    if (found) return found;
+  }
+  return undefined;
 }
 function drawnRig(node: FakeNode): Map<string, string> | undefined {
   if (node.tagName === "svg") return node.attributes;
@@ -283,18 +292,23 @@ const mainWindow = (count: number, loaded: boolean) =>
   createElement(RelayContext.Provider, { value: relayWith(count, loaded) }, createElement(RelayPrankStage, null, createElement(MainWindowPranks)));
 
 /** Swaps layers for ones that only record that they were drawn, for the length of `run`. */
-async function withSpyLayers(kinds: PrankPlay["kind"][], run: (drawn: PrankPlay["kind"][], finish: () => void) => Promise<void>) {
+async function withSpyLayers(
+  kinds: PrankPlay["kind"][],
+  run: (drawn: PrankPlay["kind"][], finish: () => void, plays: PrankPlay[]) => Promise<void>,
+) {
   const original = { ...PRANK_LAYERS };
   const drawn: PrankPlay["kind"][] = [];
+  const plays: PrankPlay[] = [];
   let finish = noop;
   const spy: PrankLayer = ({ play: current, done }) => {
     drawn.push(current.kind);
+    plays.push(current);
     finish = done;
     return null;
   };
   for (const kind of kinds) PRANK_LAYERS[kind] = spy;
   try {
-    await run(drawn, () => finish());
+    await run(drawn, () => finish(), plays);
   } finally {
     for (const kind of kinds) {
       if (original[kind]) PRANK_LAYERS[kind] = original[kind];
@@ -308,7 +322,7 @@ function memoryStorage(initial: Record<string, string> = {}) {
   return { map, getItem: (key: string) => map.get(key) ?? null, setItem: (key: string, value: string) => void map.set(key, value) };
 }
 
-test("the main window dozes off after 10 idle minutes, only while visible, and never twice within the gap", async () => {
+test("the main window dozes off after 10 idle visible minutes, and never twice within the gap", async () => {
   const storage = memoryStorage();
   await withSpyLayers(["doze"], async (drawn, finish) => {
     await inFakeBrowser(
@@ -320,12 +334,6 @@ test("the main window dozes off after 10 idle minutes, only while visible, and n
         await act(async () => dom.emit("pointermove"));
         await tick(10 * MIN - DOZE_CHECK_MS);
         assert.deepEqual(drawn, []);
-        // Due, but the window is hidden: not offered.
-        dom.setVisibility("hidden");
-        await tick(DOZE_CHECK_MS * 2);
-        assert.deepEqual(drawn, []);
-        // Visible again at the next check: it dozes.
-        dom.setVisibility("visible");
         await tick(DOZE_CHECK_MS);
         assert.deepEqual(drawn, ["doze"]);
         assert.deepEqual(JSON.parse(storage.map.get(PRANK_HISTORY_KEY) ?? "[]").length, 1);
@@ -342,6 +350,28 @@ test("the main window dozes off after 10 idle minutes, only while visible, and n
   });
 });
 
+test("a window shown again after hours hidden starts its 10 minutes over", async () => {
+  await withSpyLayers(["doze"], async (drawn) => {
+    await inFakeBrowser(
+      mainWindow(1, true),
+      async (dom) => {
+        dom.setVisibility("hidden");
+        await tick(5 * 60 * MIN);
+        assert.deepEqual(drawn, []);
+        dom.setVisibility("visible");
+        // Reopened after hours: no doze at the next check, nor until 10 visible minutes have passed.
+        await tick(DOZE_CHECK_MS);
+        assert.deepEqual(drawn, []);
+        await tick(10 * MIN - 2 * DOZE_CHECK_MS);
+        assert.deepEqual(drawn, []);
+        await tick(DOZE_CHECK_MS);
+        assert.deepEqual(drawn, ["doze"]);
+      },
+      { localStorage: () => memoryStorage() },
+    );
+  });
+});
+
 test("the doze check does not ask while the window is hidden, whatever the stage would say", async () => {
   // A stage that ignores its gates, so only the hook's own check can keep a hidden window from dozing.
   const open = { level: "sometimes", desktopBusy: false, errorShown: false, dialogOpen: false, ignoreLimits: true } as const;
@@ -352,6 +382,8 @@ test("the doze check does not ask while the window is hidden, whatever the stage
       await tick(11 * MIN);
       assert.deepEqual(drawn, []);
       dom.setVisibility("visible");
+      await tick(10 * MIN - DOZE_CHECK_MS);
+      assert.deepEqual(drawn, []);
       await tick(DOZE_CHECK_MS);
       assert.deepEqual(drawn, ["doze"]);
     });
@@ -364,8 +396,10 @@ test("the main window stops checking for the doze when it closes", async () => {
       mainWindow(1, true),
       async (dom, root) => {
         for (const type of DOZE_ACTIVITY_EVENTS) assert.equal(dom.windowListeners(type), 1, type);
+        assert.equal(dom.documentListeners("visibilitychange"), 1);
         await act(async () => root.unmount());
         for (const type of DOZE_ACTIVITY_EVENTS) assert.equal(dom.windowListeners(type), 0, type);
+        assert.equal(dom.documentListeners("visibilitychange"), 0);
         await tick(60 * MIN);
         assert.deepEqual(drawn, []);
       },
@@ -511,15 +545,128 @@ test("a meter rests on its bar for 0.6 s only above 90%, and leaving cancels the
   }
 });
 
-test("a meter draws exactly what it drew before: the hover adds no markup", () => {
-  const html = renderToStaticMarkup(createElement(LimitMeter, { label: "5 saat", percent: 95 }));
-  assert.match(html, /role="meter"[^>]*aria-valuenow="95"/);
-  assert.doesNotMatch(html, /pointer|onPointer/);
+/** What a hover test drives: a LimitMeter in a stage with the real gates and a budget it can read, and the plays it drew. */
+interface MeterRig {
+  /** The coloured fill: the element the nibble must anchor on. */
+  fill: FakeNode;
+  plays: PrankPlay[];
+  /** How many offers the stage accepted, counted in its budget history, so a meter that is gone is still seen offering. */
+  offers(): number;
+  enter(): Promise<void>;
+  leave(): Promise<void>;
+  /** The pointer moves from the bar onto the label, still inside the meter. */
+  moveWithin(): Promise<void>;
+  unmount(): Promise<void>;
+}
+const FILL_BOX = { left: 40, top: 100, width: 190, height: 6 };
+
+/** Mounts a meter, sets a recognisable box on its fill, and lets the test hover it through React's own pointer events. */
+async function withMeter(percent: number | undefined, run: (meter: MeterRig) => Promise<void>) {
+  const storage = memoryStorage();
+  const stage = { level: "sometimes", desktopBusy: false, errorShown: false, dialogOpen: false, storage, random: () => 0 } as const;
+  const tree = createElement(PrankStage, { ...stage, children: createElement(LimitMeter, { label: "5 saat", percent }) });
+  await withSpyLayers(["nibble-bar"], async (_drawn, _finish, plays) => {
+    await inFakeBrowser(tree, async (dom, root) => {
+      const top = dom.container as unknown as FakeNode;
+      const track = findNode(top, (n) => n.attributes.get("role") === "meter");
+      const fill = findNode(top, (n) => (n.attributes.get("class") ?? "").includes("h-full"));
+      const label = findNode(top, (n) => n.tagName === "span");
+      assert.ok(track && fill && label, "the meter's bar, fill and label are drawn");
+      fill.box = FILL_BOX;
+      await run({
+        fill,
+        plays,
+        offers: () => (JSON.parse(storage.map.get(PRANK_HISTORY_KEY) ?? "[]") as number[]).length,
+        enter: () => act(async () => dom.dispatch(track, "pointerover")),
+        leave: () => act(async () => dom.dispatch(track, "pointerout")),
+        moveWithin: async () => {
+          await act(async () => dom.dispatch(track, "pointerout", { relatedTarget: label }));
+          await act(async () => dom.dispatch(label, "pointerover", { relatedTarget: track }));
+        },
+        unmount: () => act(async () => root.unmount()),
+      });
+    });
+  });
+}
+
+test("a mouse that rests 0.6 s on a meter above 90% offers the nibble, anchored on the coloured fill", async () => {
+  await withMeter(95, async (meter) => {
+    await meter.enter();
+    await tick(NIBBLE_BAR_HOVER_MS - 1);
+    assert.equal(meter.offers(), 0);
+    await tick(1);
+    assert.equal(meter.offers(), 1);
+    assert.equal(meter.plays[0].kind, "nibble-bar");
+    // The rect is the fill's, not the meter's or the bar's (those answer all zeros here).
+    assert.deepEqual(meter.plays[0].rect, FILL_BOX);
+    assert.equal(meter.plays[0].point, undefined);
+  });
 });
 
-test("the stylesheet drops leaves with motion on, and draws them still and unseen without", () => {
-  // Comments may name the media query; only the real block counts.
-  const css = readFileSync("src/styles/pranks.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+test("a pointer that leaves before 0.6 s cancels the nibble, and coming back starts the wait again", async () => {
+  await withMeter(100, async (meter) => {
+    await meter.enter();
+    await tick(300);
+    await meter.leave();
+    await tick(2_000);
+    assert.equal(meter.offers(), 0);
+    await meter.enter();
+    await tick(NIBBLE_BAR_HOVER_MS - 1);
+    assert.equal(meter.offers(), 0);
+    await tick(1);
+    assert.equal(meter.offers(), 1);
+  });
+});
+
+test("entering a meter again while a wait is running restarts it instead of stacking a second", async () => {
+  await withMeter(95, async (meter) => {
+    await meter.enter();
+    await tick(300);
+    await meter.enter();
+    await tick(NIBBLE_BAR_HOVER_MS - 1);
+    assert.equal(meter.offers(), 0);
+    await tick(1);
+    assert.equal(meter.offers(), 1);
+  });
+});
+
+test("a pointer moving between a meter's own parts keeps resting, so the wait is not restarted or cancelled", async () => {
+  await withMeter(95, async (meter) => {
+    await meter.enter();
+    await tick(300);
+    await meter.moveWithin();
+    await tick(300);
+    assert.equal(meter.offers(), 1);
+  });
+});
+
+test("a meter that goes away while the mouse rests on it offers nothing", async () => {
+  await withMeter(95, async (meter) => {
+    await meter.enter();
+    await tick(300);
+    await meter.unmount();
+    await tick(2_000);
+    assert.equal(meter.offers(), 0);
+  });
+});
+
+test("a meter at 90% or below, or without a value, never offers", async () => {
+  for (const percent of [90, 89.9, 50, 0, undefined]) {
+    await withMeter(percent, async (meter) => {
+      await meter.enter();
+      await tick(5_000);
+      assert.equal(meter.offers(), 0, String(percent));
+    });
+  }
+  await withMeter(90.1, async (meter) => {
+    await meter.enter();
+    await tick(NIBBLE_BAR_HOVER_MS);
+    assert.equal(meter.offers(), 1);
+  });
+});
+
+test("the stylesheet drops leaves with motion on, draws them still and unseen without, and lands every leaf in time", () => {
+  const css = readFileSync("src/styles/pranks.css", "utf8");
   const motion = mediaBlock(css, "(prefers-reduced-motion: no-preference)");
   assert.match(motion, /\.prank-leaf\s*\{/);
   // Every animation property, longhands included, sits inside the no-preference block.
@@ -528,6 +675,24 @@ test("the stylesheet drops leaves with motion on, and draws them still and unsee
   assert.match(css, /@keyframes prank-leaf-fall\s*\{/);
   assert.match(css, /\.prank-leaf\s*\{[^}]*position:\s*absolute/);
   assert.match(css, /\.prank-leaf\s*\{[^}]*opacity:\s*0/);
+  // The last leaf starts at its delay and falls for the animation's duration: both fit in the layer's time.
+  const fall = Number(/animation-duration:\s*([\d.]+)s/.exec(motion)?.[1]);
+  const html = renderToStaticMarkup(createElement(ConfettiLayer, { play: play("confetti"), done: noop }));
+  const delays = [...html.matchAll(/animation-delay:([\d.]+)s/g)].map((m) => Number(m[1]));
+  assert.equal(delays.length, 14);
+  assert.ok(Number.isFinite(fall) && fall > 0);
+  assert.ok(Math.max(...delays) + fall <= CONFETTI_MS / 1000, `${Math.max(...delays)} s + ${fall} s`);
+});
+
+test("mediaBlock ignores a comment that names the query or holds a brace, and returns the block as written", () => {
+  const css = '/* @media (prefers-reduced-motion: no-preference) { */\n.a { animation: x 1s; }\n@media (prefers-reduced-motion: no-preference) {\n  /* a } brace */\n  .b { animation: y 1s; }\n}\n.c { color: red; }';
+  const block = mediaBlock(css, "(prefers-reduced-motion: no-preference)");
+  assert.match(block, /\.b \{ animation: y 1s; \}/);
+  assert.ok(block.includes("/* a } brace */"));
+  assert.doesNotMatch(block, /\.a|\.c/);
+  assert.doesNotMatch(css.replace(block, ""), /animation: y/);
+  assert.match(css.replace(block, ""), /animation: x/);
+  assert.equal(mediaBlock("/* @media (min-width: 1px) { .a { color: red } } */ .b {}", "(min-width: 1px)"), "");
 });
 
 test("the main window mounts its doze and confetti hooks inside the stage, and the refresh buttons offer the wheel after their action", () => {

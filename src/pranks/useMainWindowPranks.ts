@@ -8,8 +8,9 @@ import { CONFETTI_KEY, confettiDue, dozeDue } from "./timing";
 export const DOZE_CHECK_MS = 30_000;
 
 /**
- * Offers the doze when the window is visible and has had no activity for 10 minutes. The stage still
- * decides (the budget's gap and daily limit apply); this only keeps the idle clock and asks.
+ * Offers the doze when the window is visible and has had no activity for 10 visible minutes: the idle
+ * clock restarts when the window is shown, so one reopened after hours hidden does not doze at once.
+ * The stage still decides (the budget's gap and daily limit apply); this only keeps the clock and asks.
  */
 export function useDoze(): void {
   const prank = usePrank();
@@ -18,12 +19,17 @@ export function useDoze(): void {
     const active = () => {
       lastActivity = Date.now();
     };
+    const shown = () => {
+      if (document.visibilityState === "visible") active();
+    };
     for (const type of DOZE_ACTIVITY_EVENTS) window.addEventListener(type, active, { passive: true });
+    document.addEventListener("visibilitychange", shown);
     const timer = setInterval(() => {
       if (document.visibilityState === "visible" && dozeDue(lastActivity, Date.now())) prank.offer("doze", null);
     }, DOZE_CHECK_MS);
     return () => {
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", shown);
       for (const type of DOZE_ACTIVITY_EVENTS) window.removeEventListener(type, active);
     };
   }, [prank]);

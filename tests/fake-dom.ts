@@ -26,6 +26,8 @@ function eventTarget() {
 }
 
 export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?: boolean } = {}) {
+  /** The classes on <html>, as far as the prank stage cares. */
+  const hidden = new Set<string>();
   const documentEvents = eventTarget();
   const windowEvents = eventTarget();
   const doc: Record<string, unknown> = {
@@ -43,6 +45,10 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     readonly style = {};
     innerHTML = "";
     parentNode: FakeElement | null = null;
+    /** What getBoundingClientRect answers; a test sets it on the element it wants to tell apart. */
+    box = { left: 0, top: 0, width: 0, height: 0 };
+    /** The listeners React puts on its root container. */
+    readonly listeners: { type: string; listener: Listener; capture: boolean }[] = [];
     constructor(
       readonly tagName: string,
       readonly namespaceURI: string = HTML,
@@ -83,13 +89,21 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     removeAttribute(name: string) {
       this.attributes.delete(name);
     }
-    addEventListener() {}
-    removeEventListener() {}
+    getBoundingClientRect() {
+      return { ...this.box };
+    }
+    addEventListener(type: string, listener: Listener, options?: AddEventListenerOptions | boolean) {
+      const capture = typeof options === "object" ? options.capture === true : options === true;
+      this.listeners.push({ type, listener, capture });
+    }
+    removeEventListener(type: string, listener: Listener) {
+      const at = this.listeners.findIndex((l) => l.type === type && l.listener === listener);
+      if (at >= 0) this.listeners.splice(at, 1);
+    }
   }
 
   const documentElement = Object.assign(new FakeElement("html"), {
-    // The stage takes its cursor-hiding class off <html> when a play ends.
-    classList: { add() {}, remove() {} },
+    classList: { add: (name: string) => void hidden.add(name), remove: (name: string) => void hidden.delete(name) },
   });
   Object.assign(doc, {
     documentElement,
@@ -111,13 +125,28 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     },
   };
 
+  doc.defaultView = window;
+  const container = new FakeElement("div");
+
   return {
-    container: new FakeElement("div"),
+    container,
+    /** Whether the stage's cursor-hiding class is on <html>. */
+    cursorHidden: () => hidden.has("prank-cursor-hidden"),
     /** The window's listeners of one type, and the document's of one type. */
     windowListeners: (type: string) => windowEvents.attached.filter((a) => a.type === type).length,
     documentListeners: (type: string) => documentEvents.attached.filter((a) => a.type === type).length,
     /** Sends an event to the window, as the browser does for pointer and key activity. */
     emit: (type: string) => windowEvents.dispatchEvent(new Event(type)),
+    /**
+     * Sends a native event for `target` to the root container, as the browser does: React's own
+     * listeners there turn it into synthetic events (`pointerover` makes `onPointerEnter`, `pointerout` with
+     * no `relatedTarget` makes `onPointerLeave`). Capture listeners run first.
+     */
+    dispatch: (target: object, type: string, init: Record<string, unknown> = {}) => {
+      const event = { type, target, relatedTarget: null, timeStamp: 0, defaultPrevented: false, preventDefault() {}, stopPropagation() {}, ...init };
+      const heard = container.listeners.filter((l) => l.type === type);
+      for (const l of [...heard.filter((h) => h.capture), ...heard.filter((h) => !h.capture)]) l.listener(event as unknown as Event);
+    },
     /** Changes the document's visibility and tells its listeners. */
     setVisibility: (state: "visible" | "hidden") => {
       doc.visibilityState = state;

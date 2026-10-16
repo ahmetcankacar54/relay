@@ -11,6 +11,7 @@ import { PRANK_LAYERS, type PrankLayer } from "../src/pranks/registry";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import { mediaBlock } from "./css";
+import { fakeDom } from "./fake-dom";
 
 /** Local noon, so the daily limit sees the same day on every time zone. */
 const NOW = new Date(2026, 9, 16, 12, 0).getTime();
@@ -353,86 +354,6 @@ test("the stylesheet hides the cursor on request, and animates only with motion 
   assert.ok(theme.indexOf('@import "./switch-stage.css";') >= 0);
   assert.ok(theme.indexOf('@import "./pranks.css";') > theme.indexOf('@import "./switch-stage.css";'));
 });
-
-/** Just enough of a DOM for react-dom/client to mount a stage under node (the repo has no jsdom). */
-function fakeDom() {
-  const hidden = new Set<string>();
-  const doc = { visibilityState: "visible" } as Record<string, unknown>;
-  class FakeElement {
-    readonly nodeType: number = 1;
-    readonly namespaceURI = "http://www.w3.org/1999/xhtml";
-    readonly ownerDocument = doc;
-    readonly childNodes: FakeElement[] = [];
-    readonly attributes = new Map<string, string>();
-    readonly style = {};
-    parentNode: FakeElement | null = null;
-    constructor(readonly tagName: string) {}
-    get nodeName() {
-      return this.tagName.toUpperCase();
-    }
-    get firstChild() {
-      return this.childNodes[0] ?? null;
-    }
-    get lastChild() {
-      return this.childNodes[this.childNodes.length - 1] ?? null;
-    }
-    get nextSibling() {
-      return this.parentNode?.childNodes[this.parentNode.childNodes.indexOf(this) + 1] ?? null;
-    }
-    set textContent(_: string) {
-      for (const child of this.childNodes) child.parentNode = null;
-      this.childNodes.length = 0;
-    }
-    appendChild(child: FakeElement) {
-      return this.insertBefore(child, null);
-    }
-    insertBefore(child: FakeElement, before: FakeElement | null) {
-      child.parentNode?.removeChild(child);
-      this.childNodes.splice(before ? this.childNodes.indexOf(before) : this.childNodes.length, 0, child);
-      child.parentNode = this;
-      return child;
-    }
-    removeChild(child: FakeElement) {
-      this.childNodes.splice(this.childNodes.indexOf(child), 1);
-      child.parentNode = null;
-      return child;
-    }
-    setAttribute(name: string, value: string) {
-      this.attributes.set(name, String(value));
-    }
-    removeAttribute(name: string) {
-      this.attributes.delete(name);
-    }
-    addEventListener() {}
-    removeEventListener() {}
-  }
-  const documentElement = Object.assign(new FakeElement("html"), {
-    classList: { add: (name: string) => void hidden.add(name), remove: (name: string) => void hidden.delete(name) },
-  });
-  Object.assign(doc, {
-    documentElement,
-    createElement: (tag: string) => new FakeElement(tag),
-    createTextNode: (text: string) => Object.assign(new FakeElement("#text"), { nodeType: 3, data: text }),
-    addEventListener() {},
-    removeEventListener() {},
-  });
-  const window = {
-    document: doc,
-    event: undefined,
-    HTMLIFrameElement: class {},
-    matchMedia: () => ({ matches: false }),
-    addEventListener() {},
-    removeEventListener() {},
-  };
-  return {
-    container: new FakeElement("div"),
-    cursorHidden: () => hidden.has("prank-cursor-hidden"),
-    install: () => Object.assign(globalThis, { window, document: doc, IS_REACT_ACT_ENVIRONMENT: true }),
-    uninstall: () => {
-      for (const name of ["window", "document", "IS_REACT_ACT_ENVIRONMENT"]) Reflect.deleteProperty(globalThis, name);
-    },
-  };
-}
 
 test("the real cursor comes back when a play ends or the stage unmounts, whatever its layer did", async () => {
   const dom = fakeDom();

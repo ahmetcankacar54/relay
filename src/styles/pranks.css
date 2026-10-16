@@ -5,7 +5,8 @@
   cursor: none !important;
 }
 
-/* The confetti: bamboo leaves above the window, each placed and delayed by its inline style. Without motion they stay unseen. */
+/* The confetti: bamboo leaves above the window, each placed and delayed by its inline style. The delays reach 0.715 s,
+   so with a 1.2 s fall the last leaf lands within CONFETTI_MS. Without motion the leaves stay unseen. */
 .prank-leaf {
   position: absolute;
   top: -24px;
@@ -25,18 +26,10 @@
     animation-timing-function: ease-in;
     animation-fill-mode: backwards;
   }
-  /* The shower lasts CONFETTI_MS (src/pranks/timing.ts); it fades out as the layer goes. */
-  .prank-confetti {
-    animation: prank-confetti-fade 2s linear forwards;
-  }
 }
 @keyframes prank-leaf-fall {
   from { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
   40% { transform: translate3d(14px, 40vh, 0) rotate(150deg); }
   70% { transform: translate3d(-10px, 75vh, 0) rotate(260deg); }
   to { transform: translate3d(6px, 110vh, 0) rotate(380deg); opacity: 1; }
-}
-@keyframes prank-confetti-fade {
-  0%, 85% { opacity: 1; }
-  100% { opacity: 0; }
 }
