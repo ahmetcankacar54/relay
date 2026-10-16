@@ -47,6 +47,7 @@ export function DesktopActionBody() {
     <>
       {/* The page banners sit under the overlay; failures of this action show here. */}
       <RelayErrorAlert />
+      {/* confirmDesktopAction runs under this key; another Desktop job never shows the panda here. */}
       <DesktopActionReview
         key={`${request.accountId}:${request.kind}`}
         account={account}
@@ -56,6 +57,7 @@ export function DesktopActionBody() {
           account ? historySources(account, relay.accounts, relay.settings) : []
         }
         busy={!!relay.desktopBusy}
+        running={relay.busy === `desktop-action:${request.accountId}`}
         t={t}
         cancel={relay.cancelDesktopRequest}
         confirm={relay.confirmDesktopAction}

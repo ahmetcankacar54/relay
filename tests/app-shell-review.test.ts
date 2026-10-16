@@ -6,6 +6,7 @@ import path from "node:path";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DesktopActionBody } from "../src/app/DesktopActionDialog";
+import type { DesktopActionKind } from "../src/features/DesktopActionReview";
 import { Banners, reconnectIssues } from "../src/app/Banners";
 import { shortcutPage } from "../src/app/routes";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
@@ -256,4 +257,28 @@ test("limit percentages read %45 in Turkish and 45% in English", () => {
     wrap(relayFor({}, usage), createElement(AccountsTable, { accounts, open() {}, link() {} }), language);
   assert.match(table("tr"), /%38 · %78/);
   assert.match(table("en"), /38% · 78%/);
+});
+
+test("a confirmed Desktop action shows the travelling panda until it finishes", () => {
+  const request = { accountId: "b", kind: "switch" as const };
+  const running = wrap(relayFor({ desktopRequest: request, busy: "desktop-action:b", desktopBusy: true }), createElement(DesktopActionBody));
+  assert.match(/<svg[^>]*data-scene="travel"[^>]*>/.exec(running)?.[0] ?? "", /width="110"/);
+  assert.match(running, /Studio hesabına geçiliyor/);
+  assert.match(running, /Claude kapanıp yeniden açılıyor…/);
+  assert.doesNotMatch(running, /type="checkbox"/);
+  // Desktop is busy with something else: the review stays as it is, without the panda.
+  const elsewhere = wrap(relayFor({ desktopRequest: request, desktopBusy: true }), createElement(DesktopActionBody));
+  assert.doesNotMatch(elsewhere, /data-scene="travel"/);
+  assert.match(elsewhere, /type="checkbox"/);
+});
+
+test("the travelling panda names what each Desktop action is doing", () => {
+  const line = (kind: DesktopActionKind) =>
+    wrap(relayFor({ desktopRequest: { accountId: "b", kind }, busy: "desktop-action:b", desktopBusy: true }), createElement(DesktopActionBody));
+  assert.match(line("history"), /Ortak geçmiş birleştiriliyor/);
+  assert.match(line("cancel"), /Yedek geri yükleniyor/);
+  assert.match(line("recover"), /Yedek geri yükleniyor/);
+  assert.match(line("capture"), /Açık hesap kaydediliyor/);
+  assert.match(line("login"), /Desktop bağlantısı kuruluyor/);
+  assert.match(line("reconnect"), /Desktop bağlantısı kuruluyor/);
 });

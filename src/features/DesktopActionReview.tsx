@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Panda } from "@/components/Panda";
 import { ArrowLeftRight, LoaderCircle, RefreshCw, X } from "lucide-react";
 import type { Account } from "../../shared/types";
 
@@ -25,6 +26,7 @@ export function DesktopActionReview({
   confirm,
   cancel,
   historyAccounts = [],
+  running = false,
 }: {
   account?: Account;
   active?: Account;
@@ -34,6 +36,8 @@ export function DesktopActionReview({
   confirm: () => void;
   cancel: () => void;
   historyAccounts?: Account[];
+  /** Confirmed here and still running: the panda replaces the confirmation. */
+  running?: boolean;
 }) {
   const [ready, setReady] = useState(false);
   const title =
@@ -54,6 +58,16 @@ export function DesktopActionReview({
                   "Save the open Desktop account",
                 )
               : t("Desktop bağlantısını kur", "Connect Desktop");
+  const progress =
+    kind === "switch"
+      ? t(`${account?.name} hesabına geçiliyor`, `Switching to ${account?.name}`)
+      : kind === "history"
+        ? t("Ortak geçmiş birleştiriliyor", "Merging shared history")
+        : kind === "cancel" || kind === "recover"
+          ? t("Yedek geri yükleniyor", "Restoring the backup")
+          : kind === "capture"
+            ? t("Açık hesap kaydediliyor", "Saving the open account")
+            : t("Desktop bağlantısı kuruluyor", "Connecting Desktop");
   return (
     <section
       className="grid gap-3"
@@ -84,54 +98,66 @@ export function DesktopActionReview({
             : account?.name}
         </strong>
       </div>
-      <p className="text-sm text-muted-foreground">
-        {kind === "history"
-          ? t(
-              "Seçilen hesapların yerel Code oturumları ve proje kayıtları açık hesapla birleştirilir. Claude yeniden başlatılır; hesap değişmez.",
-              "Local Code sessions and project records from the chosen accounts are merged into the current account. Claude restarts; the account stays the same.",
-            )
-          : kind === "cancel" || kind === "recover"
-            ? t(
-                "Önceki bağlantı yedekten geri yüklenir. Claude yeniden başlatılır; açık işler durabilir.",
-                "Your previous connection is restored from backup. Claude restarts; active work may stop.",
-              )
-            : kind === "switch"
-              ? t(
-                  "Kaydedilmiş Desktop bağlantısı açılır. Claude yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
-                  "Your saved Desktop connection opens. Claude restarts; active responses and background tasks may stop.",
-                )
-              : kind === "capture"
-                ? t(
-                    "Claude’da açık olan hesap bu profile kaydedilir. Kaydetmek için Claude yeniden başlatılır.",
-                    "The account currently open in Claude is saved to this profile. Saving restarts Claude.",
-                  )
-                : t(
-                    "Claude yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yaptıktan sonra Relay’e dönüp bağlantıyı kaydet.",
-                    "Claude restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the connection.",
-                  )}
-      </p>
-      {(kind === "history" || kind === "switch") &&
-        historyAccounts.length > 0 && (
-          <p className="text-sm">
-            <strong>
-              {t("Geçmiş alınacak hesaplar", "History sources")}:{" "}
-            </strong>
-            {historyAccounts.map((a) => a.name).join(", ")}
+      {running ? (
+        <div className="grid justify-items-center gap-1 py-1 text-center">
+          <Panda scene="travel" size={110} />
+          <p className="text-sm font-semibold">{progress}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("Claude kapanıp yeniden açılıyor…", "Claude is quitting and reopening…")}
           </p>
-        )}
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          className="mt-0.5 size-4 shrink-0 accent-primary"
-          type="checkbox"
-          checked={ready}
-          disabled={busy}
-          onChange={(e) => setReady(e.target.checked)}
-        />
-        {t(
-          "Çalışan işlerimi bitirdim; Claude yeniden başlatılabilir.",
-          "My running work is finished; Claude can restart.",
-        )}
-      </label>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            {kind === "history"
+              ? t(
+                  "Seçilen hesapların yerel Code oturumları ve proje kayıtları açık hesapla birleştirilir. Claude yeniden başlatılır; hesap değişmez.",
+                  "Local Code sessions and project records from the chosen accounts are merged into the current account. Claude restarts; the account stays the same.",
+                )
+              : kind === "cancel" || kind === "recover"
+                ? t(
+                    "Önceki bağlantı yedekten geri yüklenir. Claude yeniden başlatılır; açık işler durabilir.",
+                    "Your previous connection is restored from backup. Claude restarts; active work may stop.",
+                  )
+                : kind === "switch"
+                  ? t(
+                      "Kaydedilmiş Desktop bağlantısı açılır. Claude yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
+                      "Your saved Desktop connection opens. Claude restarts; active responses and background tasks may stop.",
+                    )
+                  : kind === "capture"
+                    ? t(
+                        "Claude’da açık olan hesap bu profile kaydedilir. Kaydetmek için Claude yeniden başlatılır.",
+                        "The account currently open in Claude is saved to this profile. Saving restarts Claude.",
+                      )
+                    : t(
+                        "Claude yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yaptıktan sonra Relay’e dönüp bağlantıyı kaydet.",
+                        "Claude restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the connection.",
+                      )}
+          </p>
+          {(kind === "history" || kind === "switch") &&
+            historyAccounts.length > 0 && (
+              <p className="text-sm">
+                <strong>
+                  {t("Geçmiş alınacak hesaplar", "History sources")}:{" "}
+                </strong>
+                {historyAccounts.map((a) => a.name).join(", ")}
+              </p>
+            )}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              className="mt-0.5 size-4 shrink-0 accent-primary"
+              type="checkbox"
+              checked={ready}
+              disabled={busy}
+              onChange={(e) => setReady(e.target.checked)}
+            />
+            {t(
+              "Çalışan işlerimi bitirdim; Claude yeniden başlatılabilir.",
+              "My running work is finished; Claude can restart.",
+            )}
+          </label>
+        </>
+      )}
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" disabled={!ready || busy} onClick={confirm}>
           {busy ? (
