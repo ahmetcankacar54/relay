@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./panda.css";
+@import "./switch-stage.css";
 
 :root {
   color-scheme: light;

@@ -12,6 +12,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
         panel: fileURLToPath(new URL("./panel.html", import.meta.url)),
+        switch: fileURLToPath(new URL("./switch.html", import.meta.url)),
       },
     },
   },

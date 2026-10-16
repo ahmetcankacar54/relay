@@ -1,0 +1,92 @@
+/* The switch window story (src/switch/SwitchStage.tsx). */
+@media (prefers-reduced-motion: no-preference) {
+  .switch-stage:not([data-still])[data-switch-stage="leaving"] .switch-panda {
+    animation: switch-walk-in 1.2s ease-in-out forwards;
+  }
+  .switch-stage:not([data-still])[data-switch-stage="leaving"] .switch-door [data-part="leaf"] {
+    animation: switch-leaf-pass 1.2s ease-in-out forwards;
+  }
+  .switch-stage:not([data-still])[data-switch-stage="waiting"] .switch-door [data-part="knob"] {
+    animation: switch-knob 2.6s ease-in-out infinite;
+  }
+  /* The return keeps playing through the fade, so tossed props stay gone. */
+  .switch-stage:not([data-still]):is([data-switch-stage="returning"], [data-switch-stage="closing"]) .switch-door [data-part="leaf"] {
+    animation: switch-leaf-open 0.9s ease-in-out forwards;
+  }
+  .switch-stage:not([data-still]):is([data-switch-stage="returning"], [data-switch-stage="closing"]) .switch-panda {
+    animation: switch-step-out 0.6s ease-out 0.2s both;
+  }
+  .switch-stage:not([data-still]):is([data-switch-stage="returning"], [data-switch-stage="closing"])[data-outcome="switched"] .switch-panda {
+    animation:
+      switch-step-out 0.6s ease-out 0.2s both,
+      switch-look 0.7s ease-in-out 0.8s forwards;
+  }
+  .switch-stage:not([data-still]):is([data-switch-stage="returning"], [data-switch-stage="closing"])[data-outcome="switched"] .switch-panda :is([data-prop="fedora"], [data-prop="sunglasses"], [data-prop="deerstalker"]) {
+    animation: switch-toss-right 0.6s ease-in 1.5s forwards;
+  }
+  .switch-stage:not([data-still]):is([data-switch-stage="returning"], [data-switch-stage="closing"])[data-outcome="switched"] .switch-panda :is([data-prop="mustache"], [data-prop="scarf"], [data-prop="coat"]) {
+    animation: switch-toss-left 0.6s ease-in 1.55s forwards;
+  }
+  .switch-stage:not([data-still]):is([data-switch-stage="returning"], [data-switch-stage="closing"])[data-outcome="switched"] .switch-panda [data-part="head"] {
+    animation: switch-bow 0.4s ease-in-out 2.05s both;
+  }
+  .switch-stage:not([data-still]):is([data-switch-stage="returning"], [data-switch-stage="closing"])[data-outcome="back"] .switch-panda [data-part="arm-left"] {
+    animation: switch-wave 0.9s ease-in-out 0.5s both;
+  }
+  .switch-stage:not([data-still])[data-switch-stage="closing"] {
+    animation: switch-fade 0.3s ease-in forwards;
+  }
+}
+/* Still frames: the panda that came back waves with its paw up. */
+.switch-stage[data-still][data-outcome="back"] .switch-panda [data-part="arm-left"] {
+  transform: rotate(130deg);
+}
+
+@keyframes switch-walk-in {
+  from { transform: translateX(-8px); }
+  70% { transform: translateX(92px); opacity: 1; }
+  to { transform: translateX(108px) scale(0.85); opacity: 0; }
+}
+@keyframes switch-leaf-pass {
+  0%, 30% { transform: scaleX(1); }
+  50%, 82% { transform: scaleX(0.1); }
+  100% { transform: scaleX(1); }
+}
+@keyframes switch-leaf-open {
+  0% { transform: scaleX(1); }
+  25%, 70% { transform: scaleX(0.1); }
+  100% { transform: scaleX(1); }
+}
+@keyframes switch-knob {
+  0%, 80%, 100% { transform: rotate(0deg); }
+  86% { transform: rotate(-35deg); }
+  92% { transform: rotate(10deg); }
+}
+@keyframes switch-step-out {
+  from { transform: translateX(68px) scale(0.85); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes switch-look {
+  0%, 100% { transform: none; }
+  30% { transform: rotate(-4deg); }
+  70% { transform: rotate(4deg); }
+}
+/* Prop transforms are in canvas units (512 per side). */
+@keyframes switch-toss-right {
+  to { transform: translate(150px, -170px) rotate(200deg); opacity: 0; }
+}
+@keyframes switch-toss-left {
+  to { transform: translate(-150px, -120px) rotate(-200deg); opacity: 0; }
+}
+@keyframes switch-bow {
+  0%, 100% { transform: none; }
+  50% { transform: rotate(8deg) translateY(10px); }
+}
+@keyframes switch-wave {
+  0%, 100% { transform: rotate(0deg); }
+  30%, 70% { transform: rotate(130deg); }
+  50% { transform: rotate(105deg); }
+}
+@keyframes switch-fade {
+  to { opacity: 0; }
+}

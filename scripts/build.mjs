@@ -3,7 +3,7 @@ import { copyFile } from "node:fs/promises";
 import { buildNativeHelpers } from "./build-native.mjs";
 await import("./icon.mjs");
 await build({
-  entryPoints: ["electron/main.ts", "electron/preload.ts"],
+  entryPoints: ["electron/main.ts", "electron/preload.ts", "electron/switch-preload.ts"],
   bundle: true,
   platform: "node",
   target: "node22",

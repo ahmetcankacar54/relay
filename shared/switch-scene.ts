@@ -225,3 +225,15 @@ export class SwitchStory {
     }
   }
 }
+
+/** The switch window's preload API: scenes in, one ready signal out. */
+export interface RelaySwitchAPI {
+  onScene(callback: (view: SwitchSceneView) => void): () => void;
+  /** The page listens; send the story so far. */
+  ready(): void;
+}
+declare global {
+  interface Window {
+    relaySwitch?: RelaySwitchAPI;
+  }
+}
