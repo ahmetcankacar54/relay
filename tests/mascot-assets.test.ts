@@ -381,3 +381,112 @@ test("the rig viewBox counts on the root element, and a file needs one", async (
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("rig markup the browser would read differently is refused: tokens, end tags and attribute text", async () => {
+  const NOT_ALLOWED = "comments, processing instructions, CDATA and DOCTYPE are not allowed";
+  const dir = await rigDir({
+    sit: (s) => inject(s, '<!-- hi --><g id="a"onclick="x"></g>'),
+    stand: (s) => inject(s, '<?pi x="1"?><g/onclick="x"></g>'),
+    walk: (s) => inject(s.replace('viewBox="0 0 512 512"', 'viewBox="0 0 512 512"x="1"'), "<!DOCTYPE svg>"),
+    curl: (s) => inject(s, "<![CDATA[x]]>").replace(/<\/svg>\s*$/, "</svg></g>"),
+    // Before the root all of these are fine, as an artist's editor writes them.
+    peek: (s) => `<?xml version="1.0" encoding="UTF-8"?><!-- before --><!DOCTYPE svg>${s}`,
+    head: (s) => s.replace(/<\/svg>\s*$/, "</svg junk>"),
+    chew: (s) => inject(s, "<g></rect>"),
+    door: (s) => s.replace(/<\/svg>\s*$/, "<g>"),
+  });
+  try {
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      "rig/chew.svg: </rect> does not close <g>",
+      `rig/curl.svg: ${NOT_ALLOWED}`,
+      "rig/curl.svg: </g> has no open element to close",
+      "rig/door.svg: <g> is never closed",
+      "rig/door.svg: <svg> is never closed",
+      "rig/head.svg: malformed end tag </svg>",
+      `rig/sit.svg: ${NOT_ALLOWED}`,
+      "rig/sit.svg: malformed attributes in <g>",
+      `rig/stand.svg: ${NOT_ALLOWED}`,
+      "rig/stand.svg: malformed attributes in <g>",
+      `rig/walk.svg: ${NOT_ALLOWED}`,
+      "rig/walk.svg: malformed attributes in <svg>",
+    ].sort());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("rig attribute names the browser lower-cases and values it decodes are refused", async () => {
+  const dir = await rigDir({
+    sit: (s) => inject(s, '<linearGradient id="panda-g" HREF="#x"/>'),
+    stand: (s) => s.replace('data-part="head"', 'data-part="head" TRANSFORM="translate(1 1)"'),
+    walk: (s) => inject(s, '<rect width="4" height="4" fill="url&#40;https://example.com/x.svg#p)"/>'),
+    curl: (s) => inject(s, '<rect width="4" height="4" style="fill:\\75rl(https://example.com/x.svg#p)"/>'),
+    head: (s) => inject(s, '<g ID="h" DATA-extra="1"/>'),
+  });
+  try {
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      "rig/curl.svg: style uses a character reference or escape; write the value plainly",
+      "rig/head.svg: attribute DATA-extra must be written in lower case",
+      "rig/head.svg: attribute ID must be written in lower case",
+      "rig/sit.svg: attribute HREF must be written in lower case",
+      "rig/stand.svg: attribute TRANSFORM must be written in lower case",
+      "rig/walk.svg: fill uses a character reference or escape; write the value plainly",
+    ].sort());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("rig pivots are two plain numbers, an inline style counts as a transform, and names are unique", async () => {
+  const dir = await rigDir({
+    sit: (s) => s.replace('data-pivot="405 454"', 'data-pivot=",5"'),
+    stand: (s) => s.replace('data-pivot="256 91"', 'data-pivot="0x10 20"'),
+    walk: (s) => s.replace('data-part="tail"', 'data-part="tail" style="fill:red; transform : rotate(3deg)"'),
+    curl: (s) => inject(s, '<g data-part="tail" data-pivot="1 1"/>'),
+    head: (s) => inject(s, '<g data-prop="z" data-pivot="1 1"/>'),
+    // Attribute and style together are one problem.
+    chew: (s) => s.replace('data-part="head"', 'data-part="head" transform="scale(1)" style="TRANSFORM:none"'),
+    // A comma pivot and a style without a transform declaration are fine.
+    door: (s) => s.replace('data-part="knob"', 'data-part="knob" data-pivot="1,2" style="transform-origin:1px 1px"'),
+  });
+  try {
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      'rig/chew.svg: part "head" has its own transform; move it to an inner group',
+      'rig/curl.svg: part "tail" appears more than once',
+      'rig/head.svg: prop "z" appears more than once',
+      'rig/sit.svg: prop "bowl" needs data-pivot="x y" inside the 512×512 canvas',
+      'rig/stand.svg: prop "fedora" needs data-pivot="x y" inside the 512×512 canvas',
+      'rig/walk.svg: part "tail" has its own transform; move it to an inner group',
+    ].sort());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a prop that may sit in either of two parts names both when it sits in neither", async () => {
+  const dir = await rigDir({
+    sit: (s) => s.replace('data-part="arm-left"', 'data-part="arm-lft"').replace('data-part="arm-right"', 'data-part="arm-rgt"'),
+  });
+  try {
+    assert.deepEqual((await checkRigSources(dir)).sort(), [
+      'rig/sit.svg: missing part "arm-left"',
+      'rig/sit.svg: missing part "arm-right"',
+      'rig/sit.svg: prop "bamboo" must be inside part "arm-left" or "arm-right"',
+    ].sort());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an xlink:href that leaves the file is refused", async () => {
+  const dir = await rigDir({
+    head: (s) => inject(s, '<linearGradient id="panda-x" xlink:href="https://example.com/x"/>'),
+  });
+  try {
+    assert.deepEqual(await checkRigSources(dir), [
+      'rig/head.svg: xlink:href="https://example.com/x" must point to an #id in the same file',
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -175,40 +175,73 @@ function labelOf(attributes: Map<string, string>) {
   return undefined;
 }
 
-/** The root's attributes and every element inside it, with the labelled groups around each. */
-function readRig(text: string): { root?: Map<string, string>; nodes: RigNode[] } {
+/** Whether the attribute text holds nothing but attributes the reader understood. */
+function attributesReadable(source: string) {
+  return source.replace(ATTRIBUTE, "").replace(/\s*\/?\s*$/, "") === "";
+}
+
+/**
+ * The root's attributes and every element inside it, with the labelled groups
+ * around each, and the structural problems (without the file name) along the way.
+ */
+function readRig(text: string): { root?: Map<string, string>; nodes: RigNode[]; issues: string[] } {
   const nodes: RigNode[] = [];
-  const stack: (string | undefined)[] = [];
+  const issues = new Set<string>();
+  /** The open elements, root included; `label` is the part, prop or expression group an element is. */
+  const stack: { name: string; label?: string }[] = [];
   let root: Map<string, string> | undefined;
   for (const [, slash, name, rest] of text.matchAll(TAG)) {
-    if (name === undefined) continue; // a comment, declaration or CDATA
+    if (name === undefined) {
+      // A comment, declaration or CDATA; the browser's parser reads these differently from this one.
+      if (root) issues.add("comments, processing instructions, CDATA and DOCTYPE are not allowed");
+      continue;
+    }
     if (slash) {
-      stack.pop();
+      if (!/^[ \t\n\f\r]*$/.test(rest)) issues.add(`malformed end tag </${name}>`);
+      const open = stack.pop();
+      if (!open) issues.add(`</${name}> has no open element to close`);
+      else if (open.name !== name) issues.add(`</${name}> does not close <${open.name}>`);
       continue;
     }
     const attributes = attributesOf(rest);
+    if (!attributesReadable(rest)) issues.add(`malformed attributes in <${name}>`);
+    const selfClosing = /\/\s*$/.test(rest);
     if (!root) {
-      if (name !== "svg") return { nodes };
+      if (name !== "svg") return { nodes, issues: [] };
       root = attributes;
+      if (!selfClosing) stack.push({ name });
       continue;
     }
-    nodes.push({ name, attributes, within: stack.filter((label): label is string => !!label) });
-    if (!/\/\s*$/.test(rest)) stack.push(labelOf(attributes));
+    nodes.push({ name, attributes, within: stack.flatMap((open) => (open.label ? [open.label] : [])) });
+    if (!selfClosing) stack.push({ name, label: labelOf(attributes) });
   }
-  return { root, nodes };
+  for (const open of stack) issues.add(`<${open.name}> is never closed`);
+  return { root, nodes, issues: [...issues] };
 }
 
+/** Exactly two plain decimal numbers, split by whitespace and/or one comma, each inside the canvas. */
 function pivotInside(value: string) {
-  const numbers = value.trim().split(/[\s,]+/).map(Number);
-  return numbers.length === 2 && numbers.every((n) => Number.isFinite(n) && n >= 0 && n <= PANDA_CANVAS);
+  const match = /^\s*(\d+(?:\.\d+)?)(?:\s*,\s*|\s+)(\d+(?:\.\d+)?)\s*$/.exec(value);
+  return !!match && match.slice(1).every((n) => Number(n) <= PANDA_CANVAS);
 }
+
+/** Whether an inline style declares `property`, CSS comments ignored. */
+function declares(style: string | undefined, property: string) {
+  return (style ?? "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(";")
+    .some((declaration) => declaration.split(":")[0].trim().toLowerCase() === property);
+}
+
+/** Attributes the browser's parser lower-cases, so a validator reading the written case could be fooled. */
+const LOWER_CASE_ATTRIBUTE = /^(?:id|href|xlink:href|style|transform)$|^data-/i;
 
 /** Every problem with one rig file; each distinct problem once. */
 function rigProblems(pose: PandaPose, text: string): string[] {
   const file = `rig/${pose}.svg`;
-  const { root, nodes } = readRig(text);
+  const { root, nodes, issues } = readRig(text);
   if (!root) return [`${file}: no <svg> root element`];
-  const problems = new Set<string>();
+  const problems = new Set<string>(issues.map((issue) => `${file}: ${issue}`));
   if (!RIG_VIEWBOX.test(root.get("viewBox") ?? "")) problems.add(`${file}: viewBox must be "0 0 512 512"`);
   if (/javascript:/i.test(text)) problems.add(`${file}: javascript: is not allowed`);
   const parts = new Map<string, RigNode>();
@@ -217,6 +250,10 @@ function rigProblems(pose: PandaPose, text: string): string[] {
     if (node.attributes !== root && !RIG_ELEMENTS.has(node.name)) problems.add(`${file}: <${node.name}> is not allowed`);
     for (const [name, value] of node.attributes) {
       if (/^on/i.test(name)) problems.add(`${file}: event attribute ${name} is not allowed`);
+      if (name !== name.toLowerCase() && LOWER_CASE_ATTRIBUTE.test(name))
+        problems.add(`${file}: attribute ${name} must be written in lower case`);
+      if (/[&\\]/.test(value))
+        problems.add(`${file}: ${name} uses a character reference or escape; write the value plainly`);
       if ((name === "href" || name === "xlink:href") && !value.startsWith("#"))
         problems.add(`${file}: ${name}="${value}" must point to an #id in the same file`);
       for (const [, target] of value.matchAll(URL_TARGET))
@@ -226,10 +263,11 @@ function rigProblems(pose: PandaPose, text: string): string[] {
     const prop = node.attributes.get("data-prop");
     if (part === undefined && prop === undefined) continue;
     const label = part !== undefined ? `part "${part}"` : `prop "${prop}"`;
-    if (part !== undefined) parts.set(part, node);
-    else props.set(prop!, node);
-    // A CSS transform replaces the element's own transform attribute while it animates.
-    if (node.attributes.has("transform"))
+    const named = part !== undefined ? parts : props;
+    if (named.has(part ?? prop!)) problems.add(`${file}: ${label} appears more than once`);
+    named.set(part ?? prop!, node);
+    // A CSS transform replaces the element's own transform, attribute or inline style, while it animates.
+    if (node.attributes.has("transform") || declares(node.attributes.get("style"), "transform"))
       problems.add(`${file}: ${label} has its own transform; move it to an inner group`);
     const pivot = node.attributes.get("data-pivot");
     const needsPivot = part !== undefined || (DISGUISE_PROPS as readonly string[]).includes(prop!);
