@@ -64,7 +64,7 @@ export function desktopHost(): DesktopHost {
       .filter(Number.isSafeInteger);
   };
   /** The Electron version inside Claude.app, or undefined when it cannot be read. macOS only. */
-  const claudeElectron = async (): Promise<string | undefined> => {
+  const readClaudeElectron = async (): Promise<string | undefined> => {
     if (!executable) return undefined;
     const bundle = executable.slice(0, executable.indexOf(".app/") + 4);
     try {
@@ -157,9 +157,11 @@ export function desktopHost(): DesktopHost {
     draftsBlocked: async () =>
       draftsBlockedReason(
         process.platform,
-        process.platform === "darwin" ? await claudeElectron() : undefined,
+        process.platform === "darwin" ? await readClaudeElectron() : undefined,
         process.versions.electron,
       ),
+    claudeElectron: async () =>
+      process.platform === "darwin" ? readClaudeElectron() : undefined,
     moveDrafts: (job) =>
       runHelper(job, {
         execPath: process.execPath,

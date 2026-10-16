@@ -7,7 +7,10 @@ import { planDraftMoves, type DraftOps } from "./core/drafts";
 export const DRAFT_WORKER_FLAG = "--relay-draft-worker=";
 
 export interface DraftJob {
-  /** Absolute path of Claude's "Local Storage" directory. */
+  /**
+   * Absolute path of the directory the helper opens as Local Storage: the working dir that holds
+   * a copy of Claude's leveldb, `<Claude>/Local Storage/.relay-work-<uuid>`.
+   */
   storage: string;
   /** Scratch dir the helper owns: root/ (symlink "Local Storage" -> storage) and userData/. */
   scratch: string;
@@ -16,6 +19,8 @@ export interface DraftJob {
   from: string;
   to: string;
   conversations: CarriedConversation[];
+  /** The Electron version Relay read from Claude.app. The helper's own must have its major. */
+  claudeElectron: string;
 }
 
 export type DraftResult =
@@ -34,6 +39,28 @@ export function draftJobPath(argv: string[]): string | undefined {
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** The major version of an Electron version such as "44.7.2", or undefined when it has none. */
+export function electronMajor(version: string | undefined): number | undefined {
+  const match = /^(\d+)(?:\.|$)/.exec(version?.trim() ?? "");
+  return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * Why the helper must not open the job's Local Storage, or undefined when it may: its own
+ * Electron (`helper`) must have the major of the one Relay read from Claude.app (`claude`), or
+ * its Chromium could migrate or rebuild the database. Relay checks its main process before the
+ * switch; this checks the process that opens the database.
+ */
+export function helperElectronMismatch(
+  claude: string,
+  helper: string | undefined,
+): string | undefined {
+  const major = electronMajor(claude);
+  return major !== undefined && major === electronMajor(helper)
+    ? undefined
+    : `helper Electron ${helper} differs from Claude Desktop ${claude}`;
 }
 
 function field(value: unknown, name: string, absolute = false): string {
@@ -79,6 +106,7 @@ export function parseDraftJob(value: unknown): DraftJob {
         }),
       };
     }),
+    claudeElectron: field(raw.claudeElectron, "claudeElectron"),
   };
 }
 

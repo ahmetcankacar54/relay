@@ -8,16 +8,19 @@ import {
   type CarriedConversation,
 } from "./desktop-files";
 import {
-  LEVELDB,
-  LOCAL_STORAGE,
+  archiveOldLeveldb,
   backupLocalStorage,
-  copyBackupIntoPlace,
+  discardWorkingCopy,
+  leveldbInPlace,
+  makeWorkingCopy,
   pruneDraftBackups,
-  restoreLocalStorage,
-  sweepRestoreLeftovers,
+  swapInWorkingCopy,
+  sweepDraftLeftovers,
+  syncWorkingCopy,
 } from "./draft-storage";
 import {
   DRAFT_WORKER_FLAG,
+  electronMajor,
   errorMessage,
   type DraftJob,
   type DraftResult,
@@ -25,23 +28,34 @@ import {
 
 /** How long Relay waits for the draft helper before it kills it. */
 const HELPER_TIMEOUT_MS = 10_000;
+/** The helper's scratch dirs are `<os.tmpdir()>/relay-drafts-*`. */
+const SCRATCH_PREFIX = "relay-drafts-";
+/** A scratch dir older than this was left by a Relay that stopped mid-step: the helper gets 10 s. */
+const STALE_SCRATCH_MS = 10 * 60_000;
+const ELECTRON_UNKNOWN = "Claude Desktop's Electron version is unknown";
 
 export type DraftOutcome =
   | { status: "moved"; moved: number; owned: number; skipped: number }
   | { status: "skipped"; reason: string }
+  /** `restored` is true when Claude's leveldb is as it was, false when it may not be. */
   | { status: "failed"; error: string; restored: boolean };
 
 /**
  * Moves `from`'s unsent drafts to `to` in Claude's Local Storage, while Claude is closed.
  *
- * Local Storage is backed up first, and the backup is put back when `run` fails or throws.
- * `blocked`, when set, says why drafts cannot move on this machine: the step is then recorded
- * as skipped, with no backup and no run.
+ * Local Storage is backed up to the vault, then copied to a working dir beside Claude's leveldb,
+ * and `run` edits only that copy. When `run` succeeds and Claude is still closed, the copy
+ * replaces Claude's leveldb by two renames and the old leveldb moves into the vault. Any failure
+ * drops the copy and leaves Claude's leveldb as it was.
  *
- * `running` says whether Claude is running; a check that throws counts as running. It is
- * asked at the start, after the backup just before `run`, before the restore and before the
- * last-resort copy. Once Claude runs, nothing in its Local Storage is touched any more: like
- * `apply()`, the step never rolls back under a running Claude. The backup stays in the vault.
+ * `blocked`, when set, says why drafts cannot move on this machine. `claudeElectron` is the
+ * Electron version the same gate read from Claude.app; the helper refuses to open the copy under
+ * another major. With `blocked`, or without `claudeElectron`, the step is recorded as skipped,
+ * with no backup and no run.
+ *
+ * `running` says whether Claude is running; a check that throws counts as running. It is asked
+ * at the start, just before `run`, and just before the swap. Once Claude runs, nothing in its
+ * Local Storage is replaced any more.
  *
  * The outcome is written to `<vault>/drafts/last.json`, with counts or a reason but never
  * draft text. Never throws.
@@ -55,6 +69,7 @@ export async function preserveDrafts(input: {
   run: (job: DraftJob) => Promise<DraftResult>;
   now: Date;
   blocked?: string;
+  claudeElectron?: string;
   running: () => Promise<boolean>;
 }): Promise<DraftOutcome> {
   let outcome: DraftOutcome;
@@ -92,16 +107,23 @@ async function transfer(
       return true; // Unknown is treated as running.
     }
   };
-  // Both before the sweep, so a skipped step deletes nothing in Claude's Local Storage.
+  // All before the sweeps, so a skipped step deletes nothing in Claude's Local Storage.
   if (input.blocked) return { status: "skipped", reason: input.blocked };
+  const claudeElectron = input.claudeElectron;
+  if (!claudeElectron) return { status: "skipped", reason: ELECTRON_UNKNOWN };
   if (await running()) return claudeRunning();
-  await sweepRestoreLeftovers(root);
+  await sweepStaleScratch();
+  await sweepDraftLeftovers(root);
 
-  let backup: string | undefined;
   try {
     // Pruned before the new backup is made, so the backup this run depends on is never among
-    // those removed, even when the clock went back, and no more than three ever exist.
+    // those removed, even when the clock went back.
     await pruneDraftBackups(vault, 2);
+  } catch {
+    // Old backups stay a little longer; the step goes on.
+  }
+  let backup: string | undefined;
+  try {
     backup = await backupLocalStorage(root, vault, input.now);
   } catch (error) {
     // Nothing has been touched yet, and nothing runs without a backup.
@@ -109,40 +131,93 @@ async function transfer(
   }
   if (!backup) return { status: "skipped", reason: "no Local Storage" };
 
-  let scratch: string;
+  let work: string;
   try {
-    scratch = await fs.mkdtemp(path.join(os.tmpdir(), "relay-drafts-"));
+    work = await makeWorkingCopy(root);
   } catch (error) {
     return { status: "skipped", reason: errorMessage(error) };
   }
   try {
-    // The helper must never open Local Storage while Claude has it open.
+    return await moveInCopy(input, work, claudeElectron, running);
+  } finally {
+    // Empty after a swap. Kept only when Claude's leveldb is missing.
+    await discardWorkingCopy(root, work);
+  }
+}
+
+/**
+ * Runs the helper on the working copy in `work` and, once it succeeded and Claude is still
+ * closed, swaps the copy in for Claude's leveldb.
+ */
+async function moveInCopy(
+  input: Parameters<typeof preserveDrafts>[0],
+  work: string,
+  claudeElectron: string,
+  running: () => Promise<boolean>,
+): Promise<DraftOutcome> {
+  let scratch: string;
+  try {
+    scratch = await fs.mkdtemp(path.join(os.tmpdir(), SCRATCH_PREFIX));
+  } catch (error) {
+    return { status: "skipped", reason: errorMessage(error) };
+  }
+  try {
     if (await running()) return claudeRunning();
     let result: DraftResult | undefined;
     try {
       result = await input.run({
-        storage: path.join(root, LOCAL_STORAGE),
+        storage: work,
         scratch,
         result: path.join(scratch, "result.json"),
         from: input.from,
         to: input.to,
         conversations: input.conversations,
+        claudeElectron,
       });
     } catch (error) {
       result = { ok: false, error: errorMessage(error) };
     }
-    // Field by field, so nothing else the run answered reaches last.json.
-    if (result?.ok === true)
+    // Claude's leveldb was never touched: the copy is dropped.
+    if (result?.ok !== true)
       return {
-        status: "moved",
-        moved: result.moved,
-        owned: result.owned,
-        skipped: result.skipped,
+        status: "failed",
+        error: result?.error || "no result",
+        restored: true,
       };
-    return await putBack(root, backup, result?.error || "no result", running);
+    try {
+      // Before the last check, so only the two renames follow it.
+      await syncWorkingCopy(work);
+    } catch (error) {
+      return { status: "failed", error: errorMessage(error), restored: true };
+    }
+    if (await running())
+      return {
+        status: "failed",
+        error: "Claude opened, so the drafts were not applied",
+        restored: true,
+      };
+    let old: string;
+    try {
+      old = await swapInWorkingCopy(input.root, work);
+    } catch (error) {
+      // Claude's leveldb is missing only when putting the original back failed too.
+      return {
+        status: "failed",
+        error: errorMessage(error),
+        restored: await leveldbInPlace(input.root),
+      };
+    }
+    await archiveOldLeveldb(input.vault, old, new Date());
+    // Field by field, so nothing else the run answered reaches last.json.
+    return {
+      status: "moved",
+      moved: result.moved,
+      owned: result.owned,
+      skipped: result.skipped,
+    };
   } finally {
-    // The helper leaves a link to Claude's Local Storage in here. rm removes the link itself,
-    // never what it points to.
+    // The helper leaves a link to the working copy in here. rm removes the link itself, never
+    // what it points to.
     await fs.rm(scratch, { recursive: true, force: true }).catch(() => {});
   }
 }
@@ -152,55 +227,27 @@ const claudeRunning = (): DraftOutcome => ({
   reason: "Claude is running",
 });
 
-/** A failed run whose Local Storage is left as it is, because Claude opened meanwhile. */
-const claudeOpened = (error: string): DraftOutcome => ({
-  status: "failed",
-  error: `${error}; Claude opened, so Local Storage was not restored`,
-  restored: false,
-});
-
-/** Puts `backup` back in place of Claude's leveldb after a failed run, unless Claude opened. */
-async function putBack(
-  root: string,
-  backup: string,
-  error: string,
-  running: () => Promise<boolean>,
-): Promise<DraftOutcome> {
-  if (await running()) return claudeOpened(error);
+/**
+ * Removes the helper scratch dirs in the temp dir that are older than ten minutes: a Relay that
+ * crashed or was killed mid-step leaves one behind, with its link. Never throws.
+ */
+async function sweepStaleScratch(): Promise<void> {
+  const tmp = os.tmpdir();
   try {
-    await restoreLocalStorage(root, backup);
-    return { status: "failed", error, restored: true };
-  } catch (restoreError) {
-    const why = `${error}; the restore failed: ${errorMessage(restoreError)}`;
-    const live = path.join(root, LEVELDB);
-    // A leveldb that is there is left as it is. Two failed renames can leave none at all, and
-    // Claude would then start with an empty Local Storage: put a copy of the backup in place.
-    if (!(await missing(live)))
-      return { status: "failed", error: why, restored: false };
-    if (await running()) return claudeOpened(why);
-    try {
-      await copyBackupIntoPlace(root, backup);
-      return {
-        status: "failed",
-        error: why,
-        restored: (await fs.lstat(live)).isDirectory(),
-      };
-    } catch (copyError) {
-      return {
-        status: "failed",
-        error: `${why}; the copy failed: ${errorMessage(copyError)}`,
-        restored: false,
-      };
+    for (const entry of await fs.readdir(tmp, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith(SCRATCH_PREFIX))
+        continue;
+      const dir = path.join(tmp, entry.name);
+      try {
+        if (Date.now() - (await fs.lstat(dir)).mtimeMs > STALE_SCRATCH_MS)
+          // rm removes the link inside, never what it points to.
+          await fs.rm(dir, { recursive: true, force: true });
+      } catch {
+        // The next one may still go.
+      }
     }
-  }
-}
-
-async function missing(target: string): Promise<boolean> {
-  try {
-    await fs.lstat(target);
-    return false;
-  } catch (error: any) {
-    return error?.code === "ENOENT";
+  } catch {
+    // The temp dir cannot be listed: nothing to remove.
   }
 }
 
@@ -353,11 +400,6 @@ export function helperOutcome(
   };
 }
 
-const major = (version: string | undefined) => {
-  const match = /^(\d+)(?:\.|$)/.exec(version?.trim() ?? "");
-  return match ? Number(match[1]) : undefined;
-};
-
 /**
  * Why Relay's Electron must not open Claude's Local Storage, or undefined when it may. Relay's
  * Chromium reads and writes Claude's LevelDB itself, so both must be the same major version:
@@ -367,10 +409,9 @@ export function electronMismatch(
   claudeVersion: string | undefined,
   relayVersion: string | undefined,
 ): string | undefined {
-  const claude = major(claudeVersion);
-  if (claude === undefined)
-    return "Claude Desktop's Electron version is unknown";
-  const relay = major(relayVersion);
+  const claude = electronMajor(claudeVersion);
+  if (claude === undefined) return ELECTRON_UNKNOWN;
+  const relay = electronMajor(relayVersion);
   if (relay === undefined) return "Relay's Electron version is unknown";
   if (claude !== relay)
     return `Claude Desktop runs Electron ${claudeVersion!.trim()}, Relay ${relayVersion!.trim()}`;

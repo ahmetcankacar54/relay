@@ -57,6 +57,9 @@ export function planDraftMoves(input: {
   const ops: DraftOps = { set: {}, remove: [], moved: 0, owned: 0, skipped: 0 };
   if (from === to) return ops;
 
+  // Account UUIDs compare without case; the owner written is `to` as given.
+  const fromKey = from.toLowerCase();
+  const isFrom = (draft: Draft) => draft.owner.toLowerCase() === fromKey;
   const seen = new Set<string>();
   /** The parsed draft at `key` when it is in scope and a draft is stored there, else undefined. */
   const read = (key: string): Draft | null | undefined => {
@@ -81,7 +84,7 @@ export function planDraftMoves(input: {
     const mine: { key: string; draft: Draft }[] = [];
     for (const key of keys) {
       const draft = read(key);
-      if (draft && draft.owner === from) mine.push({ key, draft });
+      if (draft && isFrom(draft)) mine.push({ key, draft });
     }
     // Overwriting a value Relay cannot read would lose it, so the conversation stays as it is.
     const targetRaw = drafts[targetKey];
@@ -95,7 +98,7 @@ export function planDraftMoves(input: {
   }
 
   const newSession = read(NEW_SESSION_DRAFT);
-  if (newSession && newSession.owner === from) {
+  if (newSession && isFrom(newSession)) {
     ops.set[NEW_SESSION_DRAFT] = JSON.stringify({ ...newSession, owner: to });
     ops.owned = 1;
   }

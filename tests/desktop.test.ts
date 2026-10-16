@@ -1267,6 +1267,7 @@ async function withDraftHelper(
     events.push("launch");
     await launch();
   };
+  f.host.claudeElectron = async () => "44.7.2";
   const vault = path.join(f.store.root, "desktop-vault");
   return {
     jobs,
@@ -1292,7 +1293,10 @@ test("an A→B switch moves drafts once with A, B and the carried conversations"
   const [job] = d.jobs;
   assert.equal(job.from, a.desktop!.accountUuid);
   assert.equal(job.to, b.desktop!.accountUuid);
-  assert.equal(job.storage, path.join(f.root, "Local Storage"));
+  // A working copy beside Claude's leveldb, never Claude's own Local Storage.
+  assert.equal(path.dirname(job.storage), path.join(f.root, "Local Storage"));
+  assert.match(path.basename(job.storage), /^\.relay-work-/);
+  assert.equal(job.claudeElectron, "44.7.2");
   assert.ok(job.conversations.length > 0);
   const conversation = job.conversations.find((c) => c.targetAlias === shared);
   assert.ok(conversation, "the shared conversation is carried");
@@ -1448,6 +1452,45 @@ test("drafts are not moved once Claude is running again", async (t) => {
   assert.equal(d.jobs.length, 0);
   assert.equal((await d.last())!.reason, "Claude is running");
   assert.deepEqual(await d.drafts(), ["last.json"]);
+});
+
+test("a host that cannot read Claude's Electron version moves nothing", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f);
+  f.host.claudeElectron = async () => undefined;
+  await f.manager.switchTo(b.id);
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 0);
+  assert.equal(
+    (await d.last())!.reason,
+    "Claude Desktop's Electron version is unknown",
+  );
+  assert.deepEqual(await d.drafts(), ["last.json"]);
+});
+
+test("what a successful helper wrote is Claude's leveldb after the switch", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  await f.account("A");
+  const d = await withDraftHelper(f, async (job) => {
+    await fs.writeFile(
+      path.join(job.storage, "leveldb", "CURRENT"),
+      "MANIFEST-000002\n",
+    );
+    return { ok: true, moved: 1, owned: 0, skipped: 0 };
+  });
+  await f.manager.switchTo(b.id);
+  assert.deepEqual(d.events, ["moveDrafts:start", "moveDrafts:end", "launch"]);
+  assert.equal(
+    await fs.readFile(path.join(d.leveldb, "CURRENT"), "utf8"),
+    "MANIFEST-000002\n",
+  );
+  assert.deepEqual(await fs.readdir(path.join(f.root, "Local Storage")), [
+    "leveldb",
+  ]);
+  assert.equal((await d.last())!.status, "moved");
 });
 
 test("a failure deciding whether drafts can move never reaches the switch", async (t) => {

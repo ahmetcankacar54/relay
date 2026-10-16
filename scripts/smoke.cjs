@@ -69,10 +69,11 @@ async function eventually(fn) {
 const DRAFT_WORKER_FLAG = "--relay-draft-worker=";
 const CHILD_TIMEOUT_MS = 20_000;
 /**
- * Runs this Electron binary with `args` as a child process and resolves once it has exited, with
- * its exit code and what it printed. A child still running after 20 s is killed and rejects.
+ * Runs `command`, by default this Electron binary, with `args` as a child process and resolves
+ * once it has exited, with its exit code and what it printed. A child still running after 20 s
+ * is killed and rejects.
  */
-function runElectron(name, args, log) {
+function runElectron(name, args, log, command = process.execPath) {
   const env = { ...process.env };
   // A leftover ELECTRON_RUN_AS_NODE would make the child a plain Node with no `app`.
   delete env.ELECTRON_RUN_AS_NODE;
@@ -80,7 +81,7 @@ function runElectron(name, args, log) {
   const output = fs.openSync(log, "w");
   const printed = () => fs.readFileSync(log, "utf8").slice(-2000);
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, {
+    const child = spawn(command, args, {
       env,
       stdio: ["ignore", output, output],
     });
@@ -104,13 +105,46 @@ function runElectron(name, args, log) {
 }
 
 /**
+ * How the smoke starts the draft helper, the way Relay does. Packaged (`--packaged`, so
+ * RELAY_SMOKE_MAIN is set): the packaged binary with only the flag, so its app.asar entry
+ * dispatches. Otherwise: this Electron with dist-electron/entry.cjs. `entry` is the file the
+ * dispatch relies on, which must contain the flag.
+ */
+function draftHelperCommand() {
+  const packagedMain = process.env.RELAY_SMOKE_MAIN;
+  if (!packagedMain) {
+    const entry = path.join(__dirname, "../dist-electron/entry.cjs");
+    assert(
+      fs.existsSync(entry),
+      `${entry} is missing: run npm run build first.`,
+    );
+    return { command: process.execPath, args: [entry], entry };
+  }
+  let bundle = path.resolve(packagedMain);
+  while (!bundle.endsWith(".app")) {
+    const parent = path.dirname(bundle);
+    assert.notEqual(parent, bundle, `${packagedMain} is not inside a .app.`);
+    bundle = parent;
+  }
+  return {
+    command: path.join(bundle, "Contents/MacOS/Relay"),
+    args: [],
+    entry: path.join(bundle, "Contents/Resources/app.asar"),
+  };
+}
+
+/**
  * The draft helper against real Chromium, on fixture data in <root>/appdata/Claude-drafts-fixture
  * only. It never switches Desktop accounts: desktopHost() would drive the real Claude.app.
  */
 async function proveDraftHelper() {
   const fixtureScript = path.join(__dirname, "fixtures/local-storage.cjs");
-  const entry = path.join(__dirname, "../dist-electron/entry.cjs");
-  assert(fs.existsSync(entry), `${entry} is missing: run npm run build first.`);
+  const helper = draftHelperCommand();
+  // A grep is enough for app.asar: it stores its files uncompressed.
+  assert(
+    fs.readFileSync(helper.entry).includes(DRAFT_WORKER_FLAG),
+    `${helper.entry} does not contain ${DRAFT_WORKER_FLAG}, so the helper would start Relay itself.`,
+  );
   const claudeDir = path.join(
     path.resolve(root),
     "appdata",
@@ -119,8 +153,13 @@ async function proveDraftHelper() {
   const work = path.join(path.resolve(root), "drafts-smoke");
   fs.mkdirSync(work);
   /** Runs one child to the end and fails the step unless it exits 0. */
-  const exitsClean = async (name, args, extra = () => "") => {
-    const run = await runElectron(name, args, path.join(work, `${name}.log`));
+  const exitsClean = async (name, args, extra = () => "", command) => {
+    const run = await runElectron(
+      name,
+      args,
+      path.join(work, `${name}.log`),
+      command,
+    );
     assert.equal(
       run.code,
       0,
@@ -166,7 +205,8 @@ async function proveDraftHelper() {
     "the seed left no Local Storage/leveldb",
   );
 
-  // 2. The helper, started the way a packaged Relay starts it: this Electron, entry.cjs, the flag.
+  // 2. The helper, started the way Relay starts it: the packaged binary with only the flag, or
+  //    in development this Electron with entry.cjs and the flag.
   const job = {
     storage: path.join(claudeDir, "Local Storage"),
     scratch: path.join(work, "helper"),
@@ -182,6 +222,8 @@ async function proveDraftHelper() {
         ],
       },
     ],
+    // The same Electron as the helper's, so its version check lets it run.
+    claudeElectron: process.versions.electron,
   };
   const jobFile = path.join(work, "job.json");
   // Relay hands the helper an existing scratch directory, and the helper makes the rest.
@@ -193,8 +235,9 @@ async function proveDraftHelper() {
       : "(no result file)";
   await exitsClean(
     "helper",
-    [entry, DRAFT_WORKER_FLAG + jobFile],
+    [...helper.args, DRAFT_WORKER_FLAG + jobFile],
     () => ` Result: ${resultText()}`,
+    helper.command,
   );
   assert.deepEqual(JSON.parse(resultText()), {
     ok: true,

@@ -10,8 +10,12 @@ export const LEVELDB = "Local Storage/leveldb";
 const DRAFTS = "drafts";
 // `now.toISOString()` with `:` and `.` replaced by `-`.
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/;
-// What a restore leaves beside `leveldb` while it works (and when it cannot clean up).
-const LEFTOVER = `${path.basename(LEVELDB)}.relay-`;
+// An unfinished copy beside `leveldb`, `leveldb.relay-<uuid>`, as an earlier restore left them.
+const COPY = `${path.basename(LEVELDB)}.relay-`;
+// Where a swap sets Claude's previous leveldb aside. Relay never deletes one.
+const OLD = `${COPY}old-`;
+// The working dir beside `leveldb` that holds the copy the helper edits: `.relay-work-<uuid>/leveldb`.
+const WORK = ".relay-work-";
 const stamp = (now: Date) => now.toISOString().replace(/[:.]/g, "-");
 
 /**
@@ -32,36 +36,36 @@ async function realDirectory(target: string, name: string): Promise<boolean> {
   return true;
 }
 
-/**
- * Removes what an earlier restore left in Local Storage. Never throws.
- * Only runs while `live` is a real directory: when it is missing, a
- * `leveldb.relay-old-*` may be the only copy of Claude's data left on disk.
- */
-async function sweepLeftovers(storage: string, live: string): Promise<void> {
+/** True when `<root>/Local Storage/leveldb` is a real directory. Never throws. */
+export async function leveldbInPlace(root: string): Promise<boolean> {
   try {
-    if (!(await fs.lstat(live)).isDirectory()) return;
+    return (await fs.lstat(path.join(root, LEVELDB))).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Removes what an earlier draft step left beside `<root>/Local Storage/leveldb`: working dirs
+ * (`.relay-work-*`) and unfinished copies (`leveldb.relay-<uuid>`). Never throws, and never
+ * deletes a `leveldb.relay-old-*`, which holds a leveldb Claude used. Does nothing unless Local
+ * Storage is a real directory and leveldb is in place, so it never reaches through a link and
+ * never removes what may be the only copy of Claude's data.
+ */
+export async function sweepDraftLeftovers(root: string): Promise<void> {
+  const storage = path.join(root, LOCAL_STORAGE);
+  try {
+    if (!(await fs.lstat(storage)).isDirectory()) return;
+    if (!(await leveldbInPlace(root))) return;
     for (const name of await fs.readdir(storage))
-      if (name.startsWith(LEFTOVER))
+      if (
+        name.startsWith(WORK) ||
+        (name.startsWith(COPY) && !name.startsWith(OLD))
+      )
         await fs
           .rm(path.join(storage, name), { recursive: true, force: true })
           .catch(() => {});
   } catch {}
-}
-
-/**
- * Removes what an earlier restore left beside `<root>/Local Storage/leveldb`.
- * Never throws. Does nothing unless Local Storage is a real directory and
- * leveldb is in place, so it never reaches through a link and never removes
- * what may be the only copy of Claude's data.
- */
-export async function sweepRestoreLeftovers(root: string): Promise<void> {
-  const storage = path.join(root, LOCAL_STORAGE);
-  try {
-    if (!(await fs.lstat(storage)).isDirectory()) return;
-  } catch {
-    return;
-  }
-  await sweepLeftovers(storage, path.join(root, LEVELDB));
 }
 
 /**
@@ -102,88 +106,122 @@ export async function backupLocalStorage(
 }
 
 /**
- * Replaces `<root>/Local Storage/leveldb` with an exact copy of
- * `<backup>/leveldb`, where `backup` is what `backupLocalStorage` returned.
- *
- * The copy is made beside the live directory first, then swapped in by two
- * renames (live aside, copy into place), so after any single failure live is
- * either the original or fully replaced, never half deleted. The old directory
- * is removed last; if that fails it is left as a stray `leveldb.relay-old-*`
- * for a later restore to sweep (once leveldb is in place again). `ops.rename` is a seam for tests.
+ * Copies `<root>/Local Storage/leveldb` to a new working dir beside it,
+ * `<root>/Local Storage/.relay-work-<uuid>/leveldb`, and returns the working dir. Claude never
+ * opens it. Throws when Local Storage or leveldb is missing or not a real directory, and when
+ * the copy fails, after removing what it copied.
  */
-export async function restoreLocalStorage(
-  root: string,
-  backup: string,
-  ops: Pick<typeof fs, "rename"> = fs,
-): Promise<void> {
-  if (!(await realDirectory(backup, "The backup")))
-    throw new Error("The backup does not exist.");
-  const source = path.join(backup, "leveldb");
-  if (!(await realDirectory(source, "The backup's leveldb")))
-    throw new Error("The backup has no leveldb directory.");
+export async function makeWorkingCopy(root: string): Promise<string> {
   const storage = path.join(root, LOCAL_STORAGE);
-  if (!(await realDirectory(storage, LOCAL_STORAGE)))
-    await fs.mkdir(storage, { recursive: true, mode: 0o700 });
   const live = path.join(root, LEVELDB);
-  await sweepLeftovers(storage, live);
-
-  const tag = randomUUID();
-  const copy = path.join(storage, `${LEFTOVER}${tag}`);
-  const old = path.join(storage, `${LEFTOVER}old-${tag}`);
-  let swapped = false;
+  if (
+    !(await realDirectory(storage, LOCAL_STORAGE)) ||
+    !(await realDirectory(live, LEVELDB))
+  )
+    throw new Error(`${LEVELDB} is missing.`);
+  const work = path.join(storage, `${WORK}${randomUUID()}`);
+  await fs.mkdir(work, { mode: 0o700 });
   try {
-    await fs.cp(source, copy, {
+    await fs.cp(live, path.join(work, "leveldb"), {
       recursive: true,
       force: false,
       errorOnExist: true,
       verbatimSymlinks: true,
     });
-    let aside = false;
-    try {
-      await ops.rename(live, old);
-      aside = true;
-    } catch (e: any) {
-      if (e.code !== "ENOENT") throw e; // nothing live to move: fine
-    }
-    try {
-      await ops.rename(copy, live);
-      swapped = true;
-    } catch (e) {
-      // Put the original back. Failing to is not allowed to hide `e`.
-      if (aside) await ops.rename(old, live).catch(() => {});
-      throw e;
-    }
-    await fs.rm(old, { recursive: true, force: true }).catch(() => {});
+  } catch (e) {
+    // A half copy must never be swapped in.
+    await fs.rm(work, { recursive: true, force: true }).catch(() => {});
+    throw e;
+  }
+  return work;
+}
+
+/**
+ * Writes the working copy to disk: every regular file in `<work>/leveldb`, then the directory
+ * itself. After a crash, the leveldb a swap put in place is then not one only the page cache held.
+ */
+export async function syncWorkingCopy(work: string): Promise<void> {
+  const copy = path.join(work, "leveldb");
+  for (const entry of await fs.readdir(copy, { withFileTypes: true }))
+    if (entry.isFile()) await syncPath(path.join(copy, entry.name));
+  await syncPath(copy);
+}
+
+async function syncPath(target: string): Promise<void> {
+  const handle = await fs.open(target, "r");
+  try {
+    await handle.sync();
   } finally {
-    if (!swapped)
-      await fs.rm(copy, { recursive: true, force: true }).catch(() => {});
+    await handle.close();
   }
 }
 
 /**
- * The last resort after a restore that left no `<root>/Local Storage/leveldb` at
- * all: copies `<backup>/leveldb` beside it, then renames the copy into place, so
- * a copy that breaks partway never sits where Claude looks. Only for a missing
- * leveldb. Throws on failure, after removing its own copy.
+ * Puts `<work>/leveldb` in place of `<root>/Local Storage/leveldb` by two renames: live aside to
+ * `leveldb.relay-old-<uuid>`, then the copy into its place. Returns where the old leveldb is now.
+ *
+ * After any single failure live is either the original or fully replaced, never half deleted:
+ * when the second rename fails, the original is renamed back. Throws when the swap did not
+ * happen. Live is then missing only when putting it back failed too; the original is in the
+ * `leveldb.relay-old-*` beside it, and the copy is still in `work`. `ops.rename` is a seam for tests.
  */
-export async function copyBackupIntoPlace(
+export async function swapInWorkingCopy(
   root: string,
-  backup: string,
-): Promise<void> {
-  const storage = path.join(root, LOCAL_STORAGE);
-  if (!(await realDirectory(storage, LOCAL_STORAGE)))
-    await fs.mkdir(storage, { recursive: true, mode: 0o700 });
-  const copy = path.join(storage, `${LEFTOVER}${randomUUID()}`);
+  work: string,
+  ops: Pick<typeof fs, "rename"> = fs,
+): Promise<string> {
+  const live = path.join(root, LEVELDB);
+  const old = path.join(root, LOCAL_STORAGE, `${OLD}${randomUUID()}`);
+  await ops.rename(live, old);
   try {
-    await fs.cp(path.join(backup, "leveldb"), copy, {
-      recursive: true,
-      verbatimSymlinks: true,
-    });
-    await fs.rename(copy, path.join(root, LEVELDB));
-  } catch (error) {
-    await fs.rm(copy, { recursive: true, force: true }).catch(() => {});
-    throw error;
+    await ops.rename(path.join(work, "leveldb"), live);
+  } catch (e) {
+    // Put the original back. Failing to is not allowed to hide `e`.
+    await ops.rename(old, live).catch(() => {});
+    throw e;
   }
+  return old;
+}
+
+/**
+ * Moves `old`, a leveldb that a swap set aside, into the vault as `<vault>/drafts/<stamp>/leveldb`,
+ * where it is kept and rotated like a backup. Never throws and never deletes it: when it cannot
+ * move (another volume, a stamp already taken), it stays where it is. `ops.rename` is a seam for tests.
+ */
+export async function archiveOldLeveldb(
+  vault: string,
+  old: string,
+  now: Date,
+  ops: Pick<typeof fs, "rename"> = fs,
+): Promise<void> {
+  const drafts = path.join(vault, DRAFTS);
+  const dir = path.join(drafts, stamp(now));
+  try {
+    if (!(await realDirectory(drafts, "The drafts directory"))) return;
+    // Not recursive: a stamp that is taken is not mixed into.
+    await fs.mkdir(dir, { mode: 0o700 });
+  } catch {
+    return;
+  }
+  try {
+    await ops.rename(old, path.join(dir, "leveldb"));
+  } catch {
+    // rmdir only removes the empty directory made above.
+    await fs.rmdir(dir).catch(() => {});
+  }
+}
+
+/**
+ * Removes a working dir made by `makeWorkingCopy`. Never throws. Like the sweep, it does
+ * nothing while Claude's leveldb is missing: after a swap that could not put the original
+ * back, the working copy and the `leveldb.relay-old-*` beside it are all there is.
+ */
+export async function discardWorkingCopy(
+  root: string,
+  work: string,
+): Promise<void> {
+  if (!(await leveldbInPlace(root))) return;
+  await fs.rm(work, { recursive: true, force: true }).catch(() => {});
 }
 
 /**

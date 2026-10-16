@@ -5,6 +5,7 @@ import {
   assertLocalStorage,
   draftJobPath,
   errorMessage,
+  helperElectronMismatch,
   parseDraftJob,
   runDraftJob,
   type DraftJob,
@@ -13,8 +14,9 @@ import {
 } from "./draft-job";
 
 // Relay's Electron, started by `entry.ts` as `--relay-draft-worker=<job.json>` while Claude is
-// closed. It opens Claude's Chromium Local Storage through a scratch session root, so Chromium
-// itself reads and writes its own LevelDB, and moves drafts with the real `localStorage` API.
+// closed. It opens a working copy of Claude's Chromium Local Storage (`job.storage`) through a
+// scratch session root, so Chromium itself reads and writes its own LevelDB, and moves drafts
+// with the real `localStorage` API. Relay swaps the copy in afterwards, only on success.
 // It never imports `main.ts`: nothing here may start the tray, a window or the network.
 
 /** Every draft Claude keeps in Local Storage starts with this. */
@@ -58,7 +60,7 @@ function pageFor(win: BrowserWindow, ses: Session): DraftPage {
   };
 }
 
-/** Makes `<scratch>/root` hold a `Local Storage` link to Claude's, and returns the root. */
+/** Makes `<scratch>/root` hold a `Local Storage` link to the job's storage, and returns the root. */
 function linkLocalStorage(job: DraftJob): string {
   // Chromium would create a missing `leveldb` inside Claude's directory.
   assertLocalStorage(job.storage);
@@ -122,6 +124,12 @@ function main(): void {
       let win: BrowserWindow | undefined;
       let result: DraftResult;
       try {
+        // Before Chromium opens anything: another major could migrate or rebuild the database.
+        const skew = helperElectronMismatch(
+          job.claudeElectron,
+          process.versions.electron,
+        );
+        if (skew) throw new Error(skew);
         const ses = session.fromPath(linkLocalStorage(job));
         // Every https request, even claude.ai itself, gets a blank page: no network is used.
         ses.protocol.handle(

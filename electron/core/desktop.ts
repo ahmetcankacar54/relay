@@ -41,6 +41,8 @@ export interface DesktopHost {
   moveDrafts?(job: DraftJob): Promise<DraftResult>;
   /** Why drafts cannot move on this machine, or undefined when they can. */
   draftsBlocked?(): Promise<string | undefined>;
+  /** The Electron version inside Claude.app, which the draft helper checks its own against. */
+  claudeElectron?(): Promise<string | undefined>;
 }
 interface SavedLogin {
   accountUuid: string;
@@ -536,8 +538,10 @@ export class DesktopManager {
       );
       if (!source || !allowedHistoryPair(source, target, settings)) return;
       let blocked: string | undefined;
+      let claudeElectron: string | undefined;
       try {
         blocked = (await host.draftsBlocked?.()) || undefined;
+        if (!blocked) claudeElectron = await host.claudeElectron?.();
       } catch (error) {
         blocked = errorMessage(error);
       }
@@ -550,7 +554,8 @@ export class DesktopManager {
         run: (job) => host.moveDrafts!(job),
         now: new Date(),
         blocked,
-        // Asked again before the run and before any restore: Claude can be opened meanwhile.
+        claudeElectron,
+        // Asked again before the run and before the swap: Claude can be opened meanwhile.
         running: () => host.running(),
       });
     } catch {
