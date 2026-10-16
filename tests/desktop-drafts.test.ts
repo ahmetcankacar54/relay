@@ -26,6 +26,8 @@ import {
 } from "../electron/core/draft-storage";
 import {
   DRAFT_WORKER_FLAG,
+  EMPTY_STORAGE,
+  assertLocalStorage,
   draftJobPath,
   parseDraftJob,
   runDraftJob,
@@ -1051,12 +1053,14 @@ function job(): DraftJob {
 }
 
 // A page backed by a plain object, recording what the runner asks of it. `stuck` keys ignore
-// being set or removed, like a write that never reached storage.
+// being set or removed, like a write that never reached storage. `size` is how many keys the
+// whole origin holds: Claude keeps plenty besides drafts, so it defaults to a non-empty origin.
 function fakePage(
   initial: Record<string, string>,
   options: {
     stuck?: string[];
-    failAt?: "read" | "apply" | "flush";
+    size?: number;
+    failAt?: "size" | "read" | "apply" | "flush";
     failWith?: unknown;
   } = {},
 ) {
@@ -1064,13 +1068,18 @@ function fakePage(
   const calls: string[] = [];
   const applied: unknown[] = [];
   const stuck = new Set(options.stuck ?? []);
-  const trip = (at: "read" | "apply" | "flush") => {
+  const trip = (at: "size" | "read" | "apply" | "flush") => {
     if (options.failAt === at)
       throw "failWith" in options
         ? options.failWith
         : new Error(`${at} failed`);
   };
   const page: DraftPage = {
+    async size() {
+      calls.push("size");
+      trip("size");
+      return options.size ?? Object.keys(store).length + 2;
+    },
     async read() {
       calls.push("read");
       trip("read");
@@ -1114,8 +1123,8 @@ test("the job applies the planned ops and reports the counts", async () => {
     [P + ALIAS_Y]: draft(B, "from A"),
     "composer-draft:other-surface": draft(A, "never touched"),
   });
-  // Read, change, persist, then read again to verify.
-  assert.deepEqual(fake.calls, ["read", "apply", "flush", "read"]);
+  // Check the origin has data, read, change, persist, then read again to verify.
+  assert.deepEqual(fake.calls, ["size", "read", "apply", "flush", "read"]);
 });
 
 test("the new-session draft is counted as owned", async () => {
@@ -1150,6 +1159,18 @@ test("with nothing to change the job applies nothing and is still ok", async () 
   assert.ok(!empty.calls.includes("apply"));
 });
 
+test("an empty origin is a failure, not a success", async () => {
+  // Chromium rebuilt or could not open Claude's database: nothing to move, and nothing to trust.
+  const fake = fakePage({}, { size: 0 });
+  assert.deepEqual(await runDraftJob(job(), fake.page), {
+    ok: false,
+    error: "Claude's Local Storage opened empty",
+  });
+  assert.equal(EMPTY_STORAGE, "Claude's Local Storage opened empty");
+  // The helper stops there: it reads and writes nothing.
+  assert.deepEqual(fake.calls, ["size"]);
+});
+
 test("a value that did not stick fails verification", async () => {
   const fake = fakePage(
     { [P + ALIAS_X]: draft(A), [NEW_SESSION_DRAFT]: draft(A) },
@@ -1170,7 +1191,7 @@ test("a key that was not removed fails verification", async () => {
 });
 
 test("a page that throws is reported, not thrown", async () => {
-  for (const failAt of ["read", "apply", "flush"] as const) {
+  for (const failAt of ["size", "read", "apply", "flush"] as const) {
     const fake = fakePage({ [P + ALIAS_X]: draft(A) }, { failAt });
     assert.deepEqual(
       await runDraftJob(job(), fake.page),
@@ -1184,6 +1205,43 @@ test("a page that throws is reported, not thrown", async () => {
     ok: false,
     error: "plain string",
   });
+});
+
+test("Local Storage is opened only when it and its leveldb are real directories", async (t) => {
+  const { root, base, leveldb } = await storageFixture(t);
+  const storage = path.join(root, LOCAL_STORAGE);
+  assert.doesNotThrow(() => assertLocalStorage(storage));
+
+  // Missing: Chromium would create it inside Claude's directory.
+  assert.throws(
+    () => assertLocalStorage(path.join(base, "nowhere")),
+    /Local Storage is not a real directory/,
+  );
+  const outside = path.join(base, "outside");
+  await fs.mkdir(path.join(outside, "leveldb"), { recursive: true });
+  const link = path.join(base, "link");
+  await fs.symlink(outside, link);
+  assert.throws(() => assertLocalStorage(link), /Local Storage is not a real/);
+  const plain = path.join(base, "plain-file");
+  await fs.writeFile(plain, "x");
+  assert.throws(() => assertLocalStorage(plain), /Local Storage is not a real/);
+
+  // A Local Storage without a leveldb, a linked leveldb, a leveldb that is a file.
+  const bare = path.join(base, "bare");
+  await fs.mkdir(bare);
+  assert.throws(
+    () => assertLocalStorage(bare),
+    /Local Storage\/leveldb is not a real directory/,
+  );
+  await fs.symlink(leveldb, path.join(bare, "leveldb"));
+  assert.throws(() => assertLocalStorage(bare), /leveldb is not a real/);
+  const filed = path.join(base, "filed");
+  await fs.mkdir(filed);
+  await fs.writeFile(path.join(filed, "leveldb"), "x");
+  assert.throws(() => assertLocalStorage(filed), /leveldb is not a real/);
+  // Nothing was created or changed by the checks.
+  assert.deepEqual(await fs.readdir(bare), ["leveldb"]);
+  assert.deepEqual(await fs.readdir(outside), ["leveldb"]);
 });
 
 test("a job file is checked before the helper uses it", () => {

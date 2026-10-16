@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { CarriedConversation } from "./core/desktop-files";
 import { planDraftMoves, type DraftOps } from "./core/drafts";
@@ -83,23 +84,55 @@ export function parseDraftJob(value: unknown): DraftJob {
 
 /** The helper's window onto Claude's Local Storage. Only `composer-draft:` keys ever pass through it. */
 export interface DraftPage {
+  /** How many keys the origin holds, of any kind. 0 means Chromium did not open Claude's data. */
+  size(): Promise<number>;
   /** Every `composer-draft:` key with its value. */
   read(): Promise<Record<string, string>>;
   /** Sets every `ops.set` key, then removes every `ops.remove` key. */
   apply(ops: DraftOps): Promise<void>;
-  /** Persists what was written. */
+  /** Asks Chromium to commit what was written. It schedules the commit; it does not wait for the disk. */
   flush(): Promise<void>;
 }
 
+/** Why a job fails when Chromium gave the helper no data to work on. */
+export const EMPTY_STORAGE = "Claude's Local Storage opened empty";
+
 /**
- * Moves the drafts of `job.from` to `job.to` through `page`, then reads them back to check
- * that every write and removal took. Never throws.
+ * Throws unless `storage` is a real directory holding a real `leveldb` directory. A link or a
+ * missing path is refused, so Chromium is never pointed at something it would create or
+ * rebuild inside Claude's directory.
+ */
+export function assertLocalStorage(storage: string): void {
+  for (const [dir, name] of [
+    [storage, "Local Storage"],
+    [path.join(storage, "leveldb"), "Local Storage/leveldb"],
+  ]) {
+    let real = false;
+    try {
+      // lstat, so a link is not followed.
+      real = fs.lstatSync(dir).isDirectory();
+    } catch {
+      // Missing or unreadable: not a real directory.
+    }
+    if (!real) throw new Error(`${name} is not a real directory.`);
+  }
+}
+
+/**
+ * Moves the drafts of `job.from` to `job.to` through `page`, then reads them back. The read-back
+ * shows Chromium's view of Local Storage after the writes, not the disk, so it catches a write
+ * that did not take but cannot prove the commit. Never throws.
+ *
+ * An origin with no keys at all is a failure: when Chromium cannot open Claude's database it
+ * deletes and recreates it, or falls back to memory, and either way the job would otherwise
+ * report success over nothing.
  */
 export async function runDraftJob(
   job: DraftJob,
   page: DraftPage,
 ): Promise<DraftResult> {
   try {
+    if ((await page.size()) === 0) return { ok: false, error: EMPTY_STORAGE };
     const ops = planDraftMoves({
       drafts: await page.read(),
       from: job.from,

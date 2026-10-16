@@ -2,6 +2,7 @@ import { app, BrowserWindow, session, type Session } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import {
+  assertLocalStorage,
   draftJobPath,
   errorMessage,
   parseDraftJob,
@@ -20,12 +21,17 @@ import {
 const DRAFT_KEY_PREFIX = "composer-draft:";
 /** The origin Claude's Local Storage belongs to. */
 const ORIGIN = "https://claude.ai/";
+/** Below the caller's 10 000 ms kill, so the helper can report why it stopped and exit itself. */
+const DEADLINE_MS = 8_000;
 
 /** The page's side of a call: a script that gets JSON in as text and gives JSON back as text. */
 function pageFor(win: BrowserWindow, ses: Session): DraftPage {
   const run = (script: string): Promise<unknown> =>
     win.webContents.executeJavaScript(script);
   return {
+    async size() {
+      return Number(await run("localStorage.length"));
+    },
     async read() {
       const json = await run(`(() => {
         const drafts = {};
@@ -54,9 +60,8 @@ function pageFor(win: BrowserWindow, ses: Session): DraftPage {
 
 /** Makes `<scratch>/root` hold a `Local Storage` link to Claude's, and returns the root. */
 function linkLocalStorage(job: DraftJob): string {
-  // lstat, so a link or a missing directory is refused instead of followed or created.
-  if (!fs.lstatSync(job.storage).isDirectory())
-    throw new Error("Local Storage is not a directory.");
+  // Chromium would create a missing `leveldb` inside Claude's directory.
+  assertLocalStorage(job.storage);
   const root = path.join(job.scratch, "root");
   fs.mkdirSync(root, { recursive: true });
   fs.symlinkSync(
@@ -103,6 +108,7 @@ function main(): void {
   // Otherwise Electron would show an error dialog and wait for it.
   process.on("uncaughtException", fail);
   process.on("unhandledRejection", fail);
+  setTimeout(() => fail(new Error("helper timed out")), DEADLINE_MS);
 
   app.setPath("userData", path.join(job.scratch, "userData"));
   app.disableHardwareAcceleration();
@@ -127,8 +133,12 @@ function main(): void {
         );
         win = new BrowserWindow({
           show: false,
-          webPreferences: { session: ses },
+          // No dictionary download is ever attempted.
+          webPreferences: { session: ses, spellcheck: false },
         });
+        win.webContents.on("render-process-gone", () =>
+          fail(new Error("renderer gone")),
+        );
         await win.loadURL(ORIGIN);
         result = await runDraftJob(job, pageFor(win, ses));
       } catch (error) {
