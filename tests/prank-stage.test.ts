@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createElement, type MouseEvent } from "react";
+import { act, createElement, useLayoutEffect, type MouseEvent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PRANK_HISTORY_KEY, type PrankKind } from "../src/pranks/budget";
 import type { PrankGate } from "../src/pranks/gate";
 import { PrankStage, decideOffer, offerAfter, playFor, usePrank, type PrankApi } from "../src/pranks/PrankStage";
-import { RelayPrankStage } from "../src/pranks/RelayPrankStage";
-import { PRANK_LAYERS } from "../src/pranks/registry";
+import { RelayPrankStage, stagePropsFrom } from "../src/pranks/RelayPrankStage";
+import { PRANK_LAYERS, type PrankLayer } from "../src/pranks/registry";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import { mediaBlock } from "./css";
@@ -305,6 +305,33 @@ test("RelayPrankStage reads the level, busy, error and dialog from the relay", (
   assert.equal(trickAllowedFor(relayFor({ desktopRequest: { kind: "switch" } as Relay["desktopRequest"] })), false);
 });
 
+test("RelayPrankStage's levels differ: with a prank 1 h ago, sometimes plays and rarely waits out its 2 h gap", () => {
+  const prankedAnHourAgo = () => memoryStorage({ [PRANK_HISTORY_KEY]: JSON.stringify([NOW - 60 * MIN]) });
+  const offerFor = (relay: Relay) => {
+    const { level } = stagePropsFrom(relay);
+    return offer({ storage: prankedAnHourAgo(), level, gate: { ...open, level }, random: () => 0 });
+  };
+  assert.equal(offerFor(relayFor({ settings: { ...DEFAULT_SETTINGS, pranks: "sometimes" } })), true);
+  assert.equal(offerFor(relayFor({ settings: { ...DEFAULT_SETTINGS, pranks: "rarely" } })), false);
+  assert.equal(offerFor(relayFor({ settings: { ...DEFAULT_SETTINGS, pranks: "off" } })), false);
+  // A missing setting is "sometimes", and is read, never written.
+  const missing = { ...DEFAULT_SETTINGS };
+  delete missing.pranks;
+  assert.equal(stagePropsFrom(relayFor({ settings: missing })).level, "sometimes");
+  assert.equal(offerFor(relayFor({ settings: missing })), true);
+  assert.equal("pranks" in missing, false);
+});
+
+test("stagePropsFrom maps busy, error, desktop error and the open dialog", () => {
+  const idle = { level: "sometimes", desktopBusy: false, errorShown: false, dialogOpen: false };
+  assert.deepEqual(stagePropsFrom(relayFor()), idle);
+  assert.deepEqual(stagePropsFrom(relayFor({ desktopBusy: true })), { ...idle, desktopBusy: true });
+  assert.deepEqual(stagePropsFrom(relayFor({ error: "Bağlantı koptu" })), { ...idle, errorShown: true });
+  assert.deepEqual(stagePropsFrom(relayFor({ desktop: { error: "Desktop açılamadı" } as Relay["desktop"] })), { ...idle, errorShown: true });
+  assert.deepEqual(stagePropsFrom(relayFor({ desktop: {} as Relay["desktop"] })), idle);
+  assert.deepEqual(stagePropsFrom(relayFor({ desktopRequest: { kind: "switch" } as Relay["desktopRequest"] })), { ...idle, dialogOpen: true });
+});
+
 test("the layer table is an object literal the later tasks fill in", () => {
   assert.equal(Object.getPrototypeOf(PRANK_LAYERS), Object.prototype);
 });
@@ -325,4 +352,141 @@ test("the stylesheet hides the cursor on request, and animates only with motion 
   const theme = readFileSync("src/styles/theme.css", "utf8");
   assert.ok(theme.indexOf('@import "./switch-stage.css";') >= 0);
   assert.ok(theme.indexOf('@import "./pranks.css";') > theme.indexOf('@import "./switch-stage.css";'));
+});
+
+/** Just enough of a DOM for react-dom/client to mount a stage under node (the repo has no jsdom). */
+function fakeDom() {
+  const hidden = new Set<string>();
+  const doc = { visibilityState: "visible" } as Record<string, unknown>;
+  class FakeElement {
+    readonly nodeType: number = 1;
+    readonly namespaceURI = "http://www.w3.org/1999/xhtml";
+    readonly ownerDocument = doc;
+    readonly childNodes: FakeElement[] = [];
+    readonly attributes = new Map<string, string>();
+    readonly style = {};
+    parentNode: FakeElement | null = null;
+    constructor(readonly tagName: string) {}
+    get nodeName() {
+      return this.tagName.toUpperCase();
+    }
+    get firstChild() {
+      return this.childNodes[0] ?? null;
+    }
+    get lastChild() {
+      return this.childNodes[this.childNodes.length - 1] ?? null;
+    }
+    get nextSibling() {
+      return this.parentNode?.childNodes[this.parentNode.childNodes.indexOf(this) + 1] ?? null;
+    }
+    set textContent(_: string) {
+      for (const child of this.childNodes) child.parentNode = null;
+      this.childNodes.length = 0;
+    }
+    appendChild(child: FakeElement) {
+      return this.insertBefore(child, null);
+    }
+    insertBefore(child: FakeElement, before: FakeElement | null) {
+      child.parentNode?.removeChild(child);
+      this.childNodes.splice(before ? this.childNodes.indexOf(before) : this.childNodes.length, 0, child);
+      child.parentNode = this;
+      return child;
+    }
+    removeChild(child: FakeElement) {
+      this.childNodes.splice(this.childNodes.indexOf(child), 1);
+      child.parentNode = null;
+      return child;
+    }
+    setAttribute(name: string, value: string) {
+      this.attributes.set(name, String(value));
+    }
+    removeAttribute(name: string) {
+      this.attributes.delete(name);
+    }
+    addEventListener() {}
+    removeEventListener() {}
+  }
+  const documentElement = Object.assign(new FakeElement("html"), {
+    classList: { add: (name: string) => void hidden.add(name), remove: (name: string) => void hidden.delete(name) },
+  });
+  Object.assign(doc, {
+    documentElement,
+    createElement: (tag: string) => new FakeElement(tag),
+    createTextNode: (text: string) => Object.assign(new FakeElement("#text"), { nodeType: 3, data: text }),
+    addEventListener() {},
+    removeEventListener() {},
+  });
+  const window = {
+    document: doc,
+    event: undefined,
+    HTMLIFrameElement: class {},
+    matchMedia: () => ({ matches: false }),
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  return {
+    container: new FakeElement("div"),
+    cursorHidden: () => hidden.has("prank-cursor-hidden"),
+    install: () => Object.assign(globalThis, { window, document: doc, IS_REACT_ACT_ENVIRONMENT: true }),
+    uninstall: () => {
+      for (const name of ["window", "document", "IS_REACT_ACT_ENVIRONMENT"]) Reflect.deleteProperty(globalThis, name);
+    },
+  };
+}
+
+test("the real cursor comes back when a play ends or the stage unmounts, whatever its layer did", async () => {
+  const dom = fakeDom();
+  dom.install();
+  const original = PRANK_LAYERS.wheel;
+  let finish: (() => void) | undefined;
+  const hiding: PrankLayer = ({ done }) => {
+    // Layers hide the cursor in a layout effect, before the browser paints.
+    useLayoutEffect(() => {
+      document.documentElement.classList.add("prank-cursor-hidden");
+    }, []);
+    finish = done;
+    return createElement("span", { "data-layer": "" });
+  };
+  PRANK_LAYERS.wheel = hiding;
+  try {
+    // Loaded after the stubs, so react-dom sees a DOM.
+    const { createRoot } = await import("react-dom/client");
+    let api: PrankApi | undefined;
+    const Probe = () => {
+      api = usePrank();
+      return null;
+    };
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(createElement(PrankStage, { ...idle, ignoreLimits: true, children: createElement(Probe) })));
+    assert.ok(api);
+    const click = { clientX: 1, clientY: 2, detail: 1 };
+    const stageIsEmpty = () => dom.container.childNodes[0]?.childNodes.length === 0;
+    assert.equal(dom.cursorHidden(), false);
+
+    // A play starts: the layer's own hiding survives the stage's safety net.
+    await act(async () => api!.offer("wheel", null, click));
+    assert.equal(dom.cursorHidden(), true);
+    assert.equal(stageIsEmpty(), false);
+
+    // The layer finishes: the cursor is back and the layer is gone.
+    const firstDone = finish!;
+    await act(async () => firstDone());
+    assert.equal(dom.cursorHidden(), false);
+    assert.equal(stageIsEmpty(), true);
+
+    // A late done() from that finished play changes nothing in the one playing now.
+    await act(async () => api!.offer("wheel", null, click));
+    assert.equal(dom.cursorHidden(), true);
+    await act(async () => firstDone());
+    assert.equal(dom.cursorHidden(), true);
+    assert.equal(stageIsEmpty(), false);
+
+    // The stage goes away mid-play: the cursor comes back.
+    await act(async () => root.unmount());
+    assert.equal(dom.cursorHidden(), false);
+  } finally {
+    if (original) PRANK_LAYERS.wheel = original;
+    else delete PRANK_LAYERS.wheel;
+    dom.uninstall();
+  }
 });

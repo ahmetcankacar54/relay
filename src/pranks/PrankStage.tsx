@@ -91,6 +91,12 @@ export function playFor(id: number, kind: PrankKind, anchor: Element | null, eve
   return play;
 }
 
+/** A layer may hide the real cursor with this class on <html>; the stage takes it off when the play ends. */
+const CURSOR_HIDDEN = "prank-cursor-hidden";
+function showCursor(): void {
+  document.documentElement.classList.remove(CURSOR_HIDDEN);
+}
+
 const UNAVAILABLE: PrankStorage = {
   getItem() {
     throw new Error("localStorage is unavailable");
@@ -151,8 +157,10 @@ export function PrankStage(props: PrankStageProps) {
   const lastId = useRef(0);
 
   const end = useCallback((id: number) => {
+    // A late `done` from an earlier play must not end, or uncover the cursor of, the one playing now.
     if (current.current?.id !== id) return;
     current.current = undefined;
+    showCursor();
     setPlay(undefined);
   }, []);
 
@@ -191,8 +199,8 @@ export function PrankStage(props: PrankStageProps) {
   useEffect(() => {
     if (play && !Layer) end(play.id);
   }, [play, Layer, end]);
-  // However a play ends, or the window goes away, the real cursor comes back.
-  useEffect(() => () => document.documentElement.classList.remove("prank-cursor-hidden"), [play]);
+  // However a play ends (above), or the window goes away, the real cursor comes back.
+  useEffect(() => showCursor, []);
 
   return (
     <PrankContext.Provider value={api}>
