@@ -5,12 +5,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Panel } from "../src/panel/Panel";
 import { panelHead } from "../src/panel/panel-head";
 import { PanelAccounts, confirmSwitch } from "../src/panel/PanelAccounts";
+import { PanelDrafts, allowAccessibilityAction, copyDraftAction, dismissDraftAction, draftReason } from "../src/panel/PanelDrafts";
 import { relayAction } from "../src/data/relay-action";
 import { panelRowState, accountRowSubtitle } from "../src/lib/account-row";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import type { OverviewRow } from "../src/data/selectors";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type DesktopState, type KeeperAdaptation, type KeeperSnapshot, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type DesktopState, type DraftSummary, type KeeperAdaptation, type KeeperSnapshot, type Snapshot } from "../shared/types";
 
 const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -295,4 +296,151 @@ test("the panel head follows the keeper's attempts like the menu bar", () => {
     { id: "1", accountId: "active", identityKey: "k", at: iso(NOW - 30_000), status: "started" as const },
   ];
   assert.equal(panelHead({ ...data, planning: { attempts } }, desktopState("active"), NOW), "head-idle");
+});
+
+const draft = (over: Partial<DraftSummary> = {}): DraftSummary => ({
+  id: "d1", to: "vertex", title: "Fix the login bug", newSession: false, attachments: false,
+  state: "needs-copy", reason: "lost", capturedAt: iso(NOW), ...over,
+});
+const withDrafts = (drafts: DraftSummary[] | undefined, extra: Partial<Relay> = {}): Relay => {
+  const relay = relayFor(active, [active, vertex], baseUsage, extra);
+  relay.data = { ...relay.data, ...(drafts ? { drafts } : {}) } as Snapshot;
+  return relay;
+};
+const drafts = (relay: Relay) => wrap(relay, createElement(PanelDrafts));
+
+test("the rescued drafts section lists only needs-copy records with reason, Copy and Dismiss", () => {
+  const html = drafts(withDrafts([
+    draft({ title: "Fix the login bug", reason: "lost" }),
+    draft({ id: "d2", title: "Waiting for its turn", state: "pending", reason: undefined }),
+  ]));
+  assert.match(html, /Kurtarılan taslaklar/);
+  assert.match(html, /Fix the login bug/);
+  assert.match(html, /Desktop taslağı sildi/);
+  assert.match(html, />Kopyala</);
+  assert.match(html, />Kapat</);
+  assert.equal((html.match(/>Kopyala</g) ?? []).length, 1);
+  assert.doesNotMatch(html, /Waiting for its turn/);
+  assert.doesNotMatch(html, /İzin ver/);
+});
+
+test("an accessibility reason offers the permission button", () => {
+  const html = drafts(withDrafts([draft({ reason: "accessibility" })]));
+  assert.match(html, /Erişilebilirlik izni yok/);
+  assert.match(html, />İzin ver</);
+  assert.match(html, />Kopyala</);
+});
+
+test("pending records show only the count line", () => {
+  const html = drafts(withDrafts([
+    draft({ id: "a", title: "First secret", state: "pending", reason: undefined }),
+    draft({ id: "b", to: "other", title: "Second secret", state: "pending", reason: undefined }),
+  ]));
+  assert.match(html, /Kurtarılan taslaklar/);
+  assert.match(html, /2 taslak geri yazılmayı bekliyor/);
+  assert.doesNotMatch(html, /First secret|Second secret|Kopyala|Kapat/);
+});
+
+test("no drafts render nothing", () => {
+  assert.equal(drafts(withDrafts(undefined)), "");
+  assert.equal(drafts(withDrafts([])), "");
+  assert.doesNotMatch(render(withDrafts([])), /Kurtarılan taslaklar/);
+});
+
+test("pending and needs-copy records show the count line and the rows together", () => {
+  const html = drafts(withDrafts([
+    draft({ id: "a", state: "pending", reason: undefined }),
+    draft({ id: "b", title: "Rescued one", reason: "busy" }),
+  ]));
+  assert.match(html, /1 taslak geri yazılmayı bekliyor/);
+  assert.match(html, /Rescued one/);
+  assert.match(html, /Konuşma meşguldü/);
+  assert.equal((html.match(/Kurtarılan taslaklar/g) ?? []).length, 1);
+});
+
+test("a new-session draft is named Yeni oturum and an empty title is Adsız konuşma", () => {
+  const html = drafts(withDrafts([
+    draft({ id: "n", newSession: true, title: "should not show" }),
+    draft({ id: "e", title: "" }),
+  ]));
+  assert.match(html, /Yeni oturum/);
+  assert.match(html, /Adsız konuşma/);
+  assert.doesNotMatch(html, /should not show/);
+});
+
+test("the attachment note shows only when attachments could not be restored", () => {
+  assert.match(drafts(withDrafts([draft({ attachments: true })])), /Ekleri geri yüklenemedi/);
+  assert.doesNotMatch(drafts(withDrafts([draft({ attachments: false })])), /Ekleri geri yüklenemedi/);
+});
+
+test("draftReason words every reason in both languages, with a fallback", () => {
+  const tr = (a: string) => a;
+  const en = (_a: string, b: string) => b;
+  const labels: Record<string, [string, string]> = {
+    accessibility: ["Erişilebilirlik izni yok", "Accessibility permission missing"],
+    "composer-not-empty": ["Mesaj kutusu doluydu", "The message box was not empty"],
+    "context-changed": ["Ekran değişti", "The screen changed"],
+    lost: ["Desktop taslağı sildi", "Desktop cleared the draft"],
+    busy: ["Konuşma meşguldü", "The conversation was busy"],
+    manual: ["Elle yapıştırın", "Paste it yourself"],
+    error: ["Geri yazılamadı", "Could not be restored"],
+    unconfirmed: ["Yazıldığı doğrulanamadı", "Could not confirm it was typed"],
+    "no-composer": ["Mesaj kutusu bulunamadı", "No message box was found"],
+    unsupported: ["Desktop arayüzü desteklenmiyor", "Desktop's interface is not supported"],
+    "exact-session-not-observed": ["Konuşma açılamadı", "The conversation could not be opened"],
+    "not-ready": ["Desktop hazır değildi", "Desktop was not ready"],
+    moved: ["Başka bir konuşmaya geçtiniz", "You moved to another conversation"],
+    changed: ["Ekran değişti", "The screen changed"],
+    "claude-not-running": ["Claude çalışmıyordu", "Claude was not running"],
+    budget: ["Süre doldu", "Ran out of time"],
+  };
+  for (const [reason, [turkish, english]] of Object.entries(labels)) {
+    assert.equal(draftReason(reason, tr), turkish, reason);
+    assert.equal(draftReason(reason, en), english, reason);
+  }
+  for (const reason of [undefined, "", "something-new"]) {
+    assert.equal(draftReason(reason, tr), "Geri yazılamadı");
+    assert.equal(draftReason(reason, en), "Could not be restored");
+  }
+});
+
+test("the panel places rescued drafts after the suggestion and before the accounts", () => {
+  const html = render(withDrafts([draft()], { suggestion: vertex }));
+  const at = (re: RegExp) => html.search(re);
+  assert.ok(at(/Limit dolmak üzere/) >= 0);
+  assert.ok(at(/Limit dolmak üzere/) < at(/Kurtarılan taslaklar/));
+  assert.ok(at(/Kurtarılan taslaklar/) < at(/>Hesaplar</));
+});
+
+test("a draft row's buttons are disabled while that row's action runs", () => {
+  const both = [draft({ id: "d1", reason: "accessibility" }), draft({ id: "d2", title: "Other draft" })];
+  const disabledCount = (busy: string) => {
+    const html = drafts(withDrafts(both, { busy }));
+    return (html.match(/disabled=""/g) ?? []).length;
+  };
+  assert.equal(disabledCount(""), 0);
+  // d1 shows Allow, Copy and Dismiss; d2 shows Copy and Dismiss.
+  assert.equal(disabledCount("draft-copy:d1"), 3);
+  assert.equal(disabledCount("draft-dismiss:d2"), 2);
+  // The permission key belongs to every row that offers it: here only d1.
+  assert.equal(disabledCount("draft-accessibility"), 3);
+  assert.equal(disabledCount("switch:vertex"), 0);
+});
+
+test("copy, dismiss and permission go through relay.action by record id", async () => {
+  const calls: string[] = [];
+  const keys: string[] = [];
+  const relay = relayFor(active, [active, vertex], baseUsage, {
+    action: async (key: string, fn: () => Promise<unknown>) => { keys.push(key); await fn(); },
+    api: {
+      copyDraft: async (id: string) => void calls.push(`copy:${id}`),
+      dismissDraft: async (id: string) => void calls.push(`dismiss:${id}`),
+      requestDesktopAccessibility: async () => { calls.push("accessibility"); return true; },
+    } as unknown as Relay["api"],
+  });
+  await copyDraftAction(relay, "d1");
+  await dismissDraftAction(relay, "d2");
+  await allowAccessibilityAction(relay);
+  assert.deepEqual(keys, ["draft-copy:d1", "draft-dismiss:d2", "draft-accessibility"]);
+  assert.deepEqual(calls, ["copy:d1", "dismiss:d2", "accessibility"]);
 });

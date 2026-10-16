@@ -13,6 +13,7 @@ import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { PanelActiveCard } from "./PanelActiveCard";
 import { PanelAccounts, panelRows, switchingId } from "./PanelAccounts";
 import { PanelAutomation } from "./PanelAutomation";
+import { PanelDrafts } from "./PanelDrafts";
 import { panelHead } from "./panel-head";
 
 /** The menu bar popover: active account, other accounts, automation. */
@@ -122,6 +123,7 @@ export function Panel({
           </Button>
         </div>
       )}
+      <PanelDrafts />
       <PanelAccounts
         now={now}
         confirmId={confirmId}
