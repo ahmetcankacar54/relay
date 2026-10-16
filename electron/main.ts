@@ -29,6 +29,8 @@ import { accountPlanningSchema } from "./core/store";
 import { RelayTray } from "./tray";
 import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
 import { TrayPanel } from "./tray-panel";
+import { SwitchWindow } from "./switch-window";
+import { SwitchStory, sceneView } from "../shared/switch-scene";
 import { PAGES } from "../src/app/routes";
 import { UsageHistory } from "./core/usage-history";
 import { usageStatisticsInput } from "./core/usage-statistics-input";
@@ -70,6 +72,8 @@ let usageCredentialRefresher: UsageCredentialRefresher;
 let autoSwitch: AutoSwitchManager;
 let tray: RelayTray | undefined;
 let trayPanel: TrayPanel | undefined;
+let switchWindow: SwitchWindow | undefined;
+let switchStory: SwitchStory | undefined;
 let usageHistory: UsageHistory;
 let tempo: TempoTracker;
 let trayTimer: ReturnType<typeof setInterval> | undefined;
@@ -502,6 +506,7 @@ else {
         trayPanel = new TrayPanel({
           preload: path.join(__dirname, "preload.cjs"),
           load: (win) => loadPage(win, "panel.html"),
+          onVisibilityChange: () => switchWindow?.sync(),
         });
       /** Unreadable attempts only cost the panda its warm-up, never the tray. */
       const recentKeeperAttempts = () => {
@@ -541,6 +546,31 @@ else {
             systemPreferences.getAnimationSettings(),
           ),
       });
+      if (process.platform === "darwin") {
+        switchWindow = new SwitchWindow({
+          preload: path.join(__dirname, "switch-preload.cjs"),
+          load: (win) => loadPage(win, "switch.html"),
+          anchor: () => tray?.bounds(),
+          enabled: () => service.store.state.settings.switchWindow !== false,
+          panelOpen: () => !!trayPanel?.isOpen(),
+        });
+        const story = new SwitchStory({
+          show: (state) =>
+            switchWindow?.show(
+              sceneView(state, {
+                language: trayLanguage,
+                name: (id) =>
+                  service.store.state.accounts.find((a) => a.id === id)?.name,
+                motion: motionAllowed(service.store.state.settings, () =>
+                  systemPreferences.getAnimationSettings(),
+                ),
+              }),
+            ),
+        });
+        switchStory = story;
+        // Real restarts only: lock holders that never quit Claude stay silent.
+        desktop.onRestart = (event) => story.report(event);
+      }
       trayTimer = setInterval(() => tray?.update(), 5000);
       trayTimer.unref();
       void service
@@ -664,7 +694,10 @@ function broadcastChanged() {
   trayPanel?.webContents()?.send("relay:changed");
 }
 /** Loads a Vite entry from the dev server in development, else from dist. */
-function loadPage(win: BrowserWindow, page: "index.html" | "panel.html") {
+function loadPage(
+  win: BrowserWindow,
+  page: "index.html" | "panel.html" | "switch.html",
+) {
   const devURL = !app.isPackaged && process.env.RELAY_DEV_URL;
   if (devURL === "http://127.0.0.1:5173")
     void win.loadURL(page === "index.html" ? devURL : `${devURL}/${page}`);
@@ -905,6 +938,9 @@ function bindIPC() {
   ipcMain.on("relay:panel-close", (event) => {
     if (fromPanel(event)) trayPanel?.hide();
   });
+  ipcMain.on("relay:switch-ready", (event) =>
+    switchWindow?.ready(event.sender, event.senderFrame),
+  );
   handle("sync-desktop-history", (profileId) =>
     manualDesktopLock(() => desktop.syncHistory(id.parse(profileId))),
   );
@@ -1178,6 +1214,8 @@ app.on("will-quit", () => {
   if (trayTimer) clearInterval(trayTimer);
   tray?.destroy();
   trayPanel?.destroy();
+  switchStory?.destroy();
+  switchWindow?.destroy();
   usage?.stop();
   autoSwitch?.stop();
   keeper?.stop();

@@ -101,6 +101,11 @@ export class RelayTray {
     void this.update();
   }
 
+  /** The menu bar icon, for windows that open under it. */
+  bounds(): Rectangle | undefined {
+    return this.destroyed || this.tray.isDestroyed() ? undefined : this.tray.getBounds();
+  }
+
   update() {
     const revision = ++this.revision;
     return refreshTray<TraySnapshot>({

@@ -67,9 +67,9 @@ app.whenReady().then(async () => {
   let win;
   try {
     await eventually(() => {
-      // The macOS menu bar panel is a second window; pick the main one.
+      // The macOS menu bar panel and switch window are extra windows; pick the main one.
       win = BrowserWindow.getAllWindows().find(
-        (w) => !w.webContents.getURL().endsWith("panel.html"),
+        (w) => !/(panel|switch)\.html$/.test(w.webContents.getURL()),
       );
       return win && win.webContents.getURL() && !win.webContents.isLoading();
     });
@@ -125,6 +125,28 @@ app.whenReady().then(async () => {
         panel.getContentSize()[1],
         333,
         "the main window cannot resize the panel",
+      );
+      let switcher;
+      await eventually(() => {
+        switcher = BrowserWindow.getAllWindows().find((w) =>
+          w.webContents.getURL().endsWith("switch.html"),
+        );
+        return switcher && !switcher.webContents.isLoading();
+      });
+      assert.equal(switcher.isVisible(), false, "the switch window starts hidden");
+      assert.equal(switcher.isFocusable(), false, "the switch window never takes focus");
+      assert.equal(
+        await switcher.webContents.executeJavaScript("typeof require"),
+        "undefined",
+      );
+      assert.equal(
+        await switcher.webContents.executeJavaScript("typeof window.relay"),
+        "undefined",
+        "the switch window gets no Relay API",
+      );
+      assert.equal(
+        await switcher.webContents.executeJavaScript("typeof window.relaySwitch?.onScene"),
+        "function",
       );
       await call("openPage", "genel");
       await eventually(

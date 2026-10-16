@@ -14,6 +14,8 @@ export interface TrayPanelOptions {
   preload: string;
   /** Loads panel.html (dev server or built file) into the window. */
   load(win: BrowserWindow): void;
+  /** The panel was shown or hidden. */
+  onVisibilityChange?(): void;
   now?: () => number;
 }
 
@@ -25,9 +27,11 @@ export class TrayPanel {
   private load = INITIAL_PANEL_LOAD;
   private readonly guard = new ToggleGuard();
   private readonly now: () => number;
+  private readonly onVisibilityChange?: () => void;
 
   constructor(options: TrayPanelOptions) {
     this.now = options.now ?? Date.now;
+    this.onVisibilityChange = options.onVisibilityChange;
     const win = new BrowserWindow({
       width: PANEL_WIDTH,
       height: 520,
@@ -95,6 +99,7 @@ export class TrayPanel {
     // forward).
     win.showInactive();
     win.focus();
+    this.onVisibilityChange?.();
   }
 
   hide() {
@@ -104,6 +109,12 @@ export class TrayPanel {
     // window. Focus returns to the previous app because Relay never activated.
     win.hide();
     this.guard.hidden(this.now());
+    this.onVisibilityChange?.();
+  }
+
+  /** Whether the panel is on screen. */
+  isOpen() {
+    return !!this.live()?.isVisible();
   }
 
   /** The renderer's size report; the first one marks the panel as painted. */
