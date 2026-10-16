@@ -3,7 +3,7 @@ import type { PandaExpression, PandaProp } from "../../shared/panda-poses";
 import { DISGUISES, type SwitchSceneView } from "../../shared/switch-scene";
 
 /** Both rigs share one canvas scale, so the panda stands as tall as the door. */
-const RIG_SIZE = 104;
+const RIG_SIZE = 100;
 
 /** How the panda comes back, by outcome. */
 function returningPanda(view: SwitchSceneView): { expression: PandaExpression; props: PandaProp[] } {
@@ -22,7 +22,7 @@ export function SwitchStage({ view }: { view: SwitchSceneView }) {
   return (
     <div
       key={view.story}
-      className="switch-stage grid h-[150px] w-[240px] grid-rows-[1fr_auto] overflow-hidden rounded-2xl border bg-popover/95 px-3 pt-2 pb-2.5 text-popover-foreground"
+      className="switch-stage grid h-[150px] w-[240px] grid-rows-[102px_30px] overflow-hidden rounded-2xl border bg-popover/95 px-3 pt-2 pb-2.5 text-popover-foreground"
       data-switch-stage={view.stage}
       data-outcome={back ? view.outcome : undefined}
       data-still={view.motion ? undefined : ""}
@@ -39,12 +39,14 @@ export function SwitchStage({ view }: { view: SwitchSceneView }) {
           />
         )}
         {back && (
-          <PandaRig pose="stand" size={RIG_SIZE} {...returningPanda(view)} className="switch-panda absolute bottom-0 left-12" />
+          <PandaRig pose="stand" size={RIG_SIZE} {...returningPanda(view)} className="switch-panda absolute bottom-0 left-6" />
         )}
       </div>
-      <p className="switch-line truncate text-center text-[12.5px] font-semibold" title={view.line}>
-        {view.line}
-      </p>
+      <div className="grid place-items-center">
+        <p className="switch-line line-clamp-2 text-center text-[12px] leading-[15px] font-semibold" title={view.line}>
+          {view.line}
+        </p>
+      </div>
     </div>
   );
 }

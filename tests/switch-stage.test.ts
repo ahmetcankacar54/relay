@@ -54,9 +54,11 @@ test("a hidden or stalled story draws nothing", () => {
   assert.equal(draw(view({ visible: false, stage: "stalled", line: "" })), "");
 });
 
-test("a long account name stays on one line", () => {
+test("a long line wraps to at most two lines without pushing the scene", () => {
   const line = `${"Çok uzun bir hesap adı ".repeat(6)}hesabına geçiliyor`;
-  assert.match(draw(view({ line })), /<p class="switch-line truncate[^"]*" title="Çok uzun/);
+  const html = draw(view({ line }));
+  assert.match(html, /<p class="switch-line line-clamp-2[^"]*" title="Çok uzun/);
+  assert.match(/<div class="switch-stage[^"]*"/.exec(html)?.[0] ?? "", /grid-rows-\[102px_30px\]/);
 });
 
 test("stage animations run only with motion on, never under Reduce motion, and last through the fade", () => {

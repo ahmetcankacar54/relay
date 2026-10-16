@@ -131,12 +131,21 @@ function SwitchDemo() {
       }),
     [],
   );
-  useEffect(() => () => story.destroy(), [story]);
+  /** The pending end of the demo that is playing; a new demo cancels it so it cannot end the new story. */
+  const ending = useRef<number | undefined>(undefined);
+  useEffect(
+    () => () => {
+      window.clearTimeout(ending.current);
+      story.destroy();
+    },
+    [story],
+  );
   const play = (demo: Demo) => {
+    window.clearTimeout(ending.current);
     disguise.current = demo.disguise ?? "fedora";
     const kind = demo.outcome === "back" ? "merge" : "switch";
     story.report({ phase: "start", kind, profileId: "demo" });
-    window.setTimeout(() => {
+    ending.current = window.setTimeout(() => {
       if (demo.outcome === "stalled") {
         skipped.current += WAITING_LIMIT_MS;
         story.tick();

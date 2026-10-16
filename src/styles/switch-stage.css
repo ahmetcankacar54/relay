@@ -39,7 +39,7 @@
 }
 /* Still frames: the panda that came back waves with its paw up. */
 .switch-stage[data-still][data-outcome="back"] .switch-panda [data-part="arm-left"] {
-  transform: rotate(130deg);
+  transform: rotate(70deg);
 }
 
 @keyframes switch-walk-in {
@@ -63,7 +63,7 @@
   92% { transform: rotate(10deg); }
 }
 @keyframes switch-step-out {
-  from { transform: translateX(68px) scale(0.85); opacity: 0; }
+  from { transform: translateX(92px) scale(0.85); opacity: 0; }
   to { transform: none; opacity: 1; }
 }
 @keyframes switch-look {
@@ -84,8 +84,8 @@
 }
 @keyframes switch-wave {
   0%, 100% { transform: rotate(0deg); }
-  30%, 70% { transform: rotate(130deg); }
-  50% { transform: rotate(105deg); }
+  30%, 70% { transform: rotate(70deg); }
+  50% { transform: rotate(52deg); }
 }
 @keyframes switch-fade {
   to { opacity: 0; }
