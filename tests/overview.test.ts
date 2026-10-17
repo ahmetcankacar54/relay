@@ -5,13 +5,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Overview } from "../src/pages/Overview";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { DEFAULT_PLANNING, DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot } from "../shared/types";
+import { DEFAULT_PLANNING, DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type Snapshot, type UsageIssue } from "../shared/types";
 
 const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
 const acct = (id: string, name: string, plan: "pro" | "max5", desktop = true): Account => ({
   id, name, kind: "personal", group: "personal", color: "olive", createdAt: iso(NOW),
   planning: { plan, capacityWeight: 1 },
+  // Usage is read through the usage sign-in, so a healthy account has one.
+  auth: { loggedIn: true, email: `${id}@example.com`, checkedAt: iso(NOW) },
   ...(desktop ? { desktop: { accountUuid: "00000000-0000-4000-8000-000000000001", orgId: "00000000-0000-4000-8000-000000000002", savedAt: iso(NOW), email: `${id}@example.com` } } : {}),
 });
 const use = (id: string, five: number, week: number, reset?: number): AccountUsage => ({
@@ -170,6 +172,30 @@ test("stale and unlinked accounts are never recommended", () => {
   assert.equal(rowsOf(html).length, 2);
   assert.doesNotMatch(html, /Önerilen/);
   assert.match(html, /Limit verisi eski/);
+});
+
+test("overview rows show the account's status where something is wrong, and stale healthy rows keep theirs", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const other = acct("other", "Vertex", "pro");
+  const failed = (issue: UsageIssue): AccountUsage => ({ accountId: "other", status: "error", stale: true, issue });
+  const stale = { ...use("other", 1, 1), checkedAt: iso(NOW - 3_600_000) };
+  const subtitle = (account: Account, usage: AccountUsage, extra: Partial<Relay> = {}) =>
+    /<div class="truncate text-xs text-muted-foreground">([^<]*)<\/div>/.exec(
+      rowFor(render(relayFor(active, [active, account], { active: use("active", 10, 10), other: usage }, extra)), "Vertex"),
+    )?.[1];
+  assert.equal(subtitle(other, failed("expired")), "Pro · Limit okuma girişi gerekli");
+  assert.equal(subtitle(other, failed("keychain-locked")), "Pro · Anahtarlık izni gerekli");
+  assert.equal(subtitle(other, failed("renewal-required")), "Pro · Bağlantı yenilenmeli");
+  assert.equal(subtitle(other, { ...use("other", 1, 1), connectionRenewalRequired: true }), "Pro · Bağlantı yenilenmeli");
+  assert.equal(subtitle({ ...other, auth: undefined }, stale), "Pro · Limit okuma girişi yok");
+  // A browser approval in progress for that account.
+  const flows = { authFlows: [{ id: "f", accountId: "other", status: "waiting" }] as unknown as AuthFlow[] };
+  const waiting = relayFor(active, [active, other], { active: use("active", 10, 10), other: stale });
+  Object.assign(waiting.data as Snapshot, flows);
+  assert.match(rowFor(render(waiting), "Vertex"), /Tarayıcı onayı bekleniyor/);
+  // Stale but healthy: the old text.
+  assert.equal(subtitle(other, stale), "Pro · Limit verisi eski");
+  assert.equal(subtitle(other, use("other", 1, 1)), "Pro · Hazır · dönem başlamadı");
 });
 
 test("onboarding with saved accounts but none open looks out instead of greeting", () => {

@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { LimitMeter } from "@/components/LimitMeter";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { overviewAccounts, tempoRateNow } from "@/data/selectors";
+import { overviewAccounts, pendingFlow, tempoRateNow } from "@/data/selectors";
 import { accountRowSubtitle } from "@/lib/account-row";
 import type { PageId } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
@@ -86,7 +86,18 @@ export function AccountsCard({
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {plan ? `${plan} · ` : ""}
-                    {accountRowSubtitle(row, t, language, zone, now)}
+                    {accountRowSubtitle(
+                      row,
+                      t,
+                      language,
+                      zone,
+                      now,
+                      pendingFlow(
+                        relay.data?.authFlows.find(
+                          (f) => f.accountId === account.id,
+                        ),
+                      ),
+                    )}
                   </div>
                 </div>
                 <LimitMeter

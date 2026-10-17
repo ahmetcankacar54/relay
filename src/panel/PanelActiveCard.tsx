@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react";
+import { KeyRound, RefreshCw } from "lucide-react";
 import { freshUsage } from "../../shared/usage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,8 @@ import { LimitMeter } from "@/components/LimitMeter";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
-import { usageWindowRows } from "@/data/selectors";
+import { pendingFlow, usageWindowRows } from "@/data/selectors";
+import { accountHealth, renewalIssue } from "@/lib/account-health";
 import { formatReset } from "@/lib/time";
 import { planLabel } from "../pages/accounts/accountLabels";
 
@@ -26,6 +27,23 @@ export function PanelActiveCard({ now }: { now: number }) {
   const running = !!desktop?.running;
   const usage = active ? relay.data?.usage[active.id] : undefined;
   const plan = active && planLabel(active);
+  // The account's status, the one the Accounts page shows, explains limits that cannot be read.
+  const health =
+    active &&
+    accountHealth(
+      active,
+      usage,
+      {
+        active: true,
+        desktopRunning: running,
+        waiting: pendingFlow(
+          relay.data?.authFlows.find((f) => f.accountId === active.id),
+        ),
+      },
+      t,
+    );
+  // A plain refresh cannot clear a locked Keychain or a connection to renew: it has to prompt.
+  const renew = health?.fix === "renew";
   const openRelay = () => void relay.api.openPage("genel");
   return (
     <section className="px-3 py-1.5">
@@ -83,16 +101,38 @@ export function PanelActiveCard({ now }: { now: number }) {
               </div>
             ) : (
               <div className="mt-1 flex items-center gap-1 text-muted-foreground">
-                {t("Limit verisi eski", "Usage data is out of date")} ·
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t("Limitleri yenile", "Refresh limits")}
-                  disabled={relay.usageBusy.has(active.id)}
-                  onClick={() => void relay.refreshUsage(active)}
-                >
-                  <RefreshCw />
-                </Button>
+                {health && health.tone !== "ok"
+                  ? health.label
+                  : t("Limit verisi eski", "Usage data is out of date")}{" "}
+                ·
+                {renew ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={
+                      renewalIssue(usage) === "keychain-locked"
+                        ? t(
+                            "Anahtarlık erişimine izin ver",
+                            "Allow Keychain access",
+                          )
+                        : t("Bağlantıyı yenile", "Renew connection")
+                    }
+                    disabled={relay.usageBusy.has(active.id)}
+                    onClick={() => void relay.refreshUsage(active, true)}
+                  >
+                    <KeyRound />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t("Limitleri yenile", "Refresh limits")}
+                    disabled={relay.usageBusy.has(active.id)}
+                    onClick={() => void relay.refreshUsage(active)}
+                  >
+                    <RefreshCw />
+                  </Button>
+                )}
               </div>
             )}
           </>

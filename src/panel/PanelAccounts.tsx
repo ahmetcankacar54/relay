@@ -8,6 +8,7 @@ import type { Relay } from "@/data/relay-context";
 import { useRelay } from "@/data/relay-context";
 import {
   overviewAccounts,
+  pendingFlow,
   tempoRateNow,
   type OverviewRow,
 } from "@/data/selectors";
@@ -91,7 +92,10 @@ export function PanelAccounts({
             const plan = planLabel(account);
             const { canSwitch } = panelRowState(row, relay);
             const open = confirmId === account.id;
-            const subtitle = `${plan ? `${plan} · ` : ""}${accountRowSubtitle(row, t, language, zone, now)}`;
+            const waiting = pendingFlow(
+              relay.data?.authFlows.find((f) => f.accountId === account.id),
+            );
+            const subtitle = `${plan ? `${plan} · ` : ""}${accountRowSubtitle(row, t, language, zone, now, waiting)}`;
             return (
               <div
                 key={account.id}

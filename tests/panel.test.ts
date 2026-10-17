@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement, type ReactElement } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Panel } from "../src/panel/Panel";
 import { panelHead } from "../src/panel/panel-head";
@@ -8,16 +8,20 @@ import { PanelAccounts, confirmSwitch } from "../src/panel/PanelAccounts";
 import { PanelDrafts, allowAccessibilityAction, copyDraftAction, dismissDraftAction, draftReason } from "../src/panel/PanelDrafts";
 import { relayAction } from "../src/data/relay-action";
 import { panelRowState, accountRowSubtitle } from "../src/lib/account-row";
+import { PanelActiveCard } from "../src/panel/PanelActiveCard";
+import { fakeDom } from "./fake-dom";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import type { OverviewRow } from "../src/data/selectors";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type DesktopState, type DraftSummary, type KeeperAdaptation, type KeeperSnapshot, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type DesktopState, type DraftSummary, type KeeperAdaptation, type KeeperSnapshot, type Snapshot, type UsageIssue } from "../shared/types";
 
 const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
 const acct = (id: string, name: string, plan: "pro" | "max5" = "pro", desktop = true): Account => ({
   id, name, kind: "personal", group: "personal", color: "olive", createdAt: iso(NOW),
   planning: { plan, capacityWeight: 1 },
+  // Usage is read through the usage sign-in, so a healthy account has one.
+  auth: { loggedIn: true, email: `${id}@example.com`, checkedAt: iso(NOW) },
   ...(desktop ? { desktop: { accountUuid: "00000000-0000-4000-8000-000000000001", orgId: "00000000-0000-4000-8000-000000000002", savedAt: iso(NOW), email: `${id}@example.com` } } : {}),
 });
 const use = (id: string, five: number, week: number, reset?: number): AccountUsage => ({
@@ -86,6 +90,120 @@ test("accountRowSubtitle keeps the overview wording", () => {
   assert.equal(accountRowSubtitle(row("ready"), t, "tr", "UTC", NOW), "Hazır · dönem başlamadı");
   assert.equal(accountRowSubtitle(row("not-linked"), t, "tr", "UTC", NOW), "Claude uygulaması girişi yok");
   assert.equal(accountRowSubtitle(row("unknown"), t, "tr", "UTC", NOW), "Limit verisi eski");
+});
+
+/** Usage that failed with an issue, and so is no longer fresh. */
+const failed = (id: string, issue: UsageIssue): AccountUsage => ({ accountId: id, status: "error", stale: true, issue });
+/** A row in each state the account's status reports, with the label it must show. */
+const problemRows = (): [string, OverviewRow, string, string][] => {
+  const x = acct("x", "X");
+  const stale = { ...use("x", 1, 1), checkedAt: iso(NOW - 3_600_000) };
+  return [
+    ["no usage sign-in", { account: { ...x, auth: undefined }, usage: stale, state: "unknown", recommended: false }, "Limit okuma girişi yok", "No usage sign-in"],
+    ["expired usage sign-in", { account: x, usage: failed("x", "expired"), state: "unknown", recommended: false }, "Limit okuma girişi gerekli", "Usage sign-in needed"],
+    ["locked Keychain", { account: x, usage: failed("x", "keychain-locked"), state: "unknown", recommended: false }, "Anahtarlık izni gerekli", "Keychain access needed"],
+    ["connection to renew", { account: x, usage: failed("x", "renewal-required"), state: "unknown", recommended: false }, "Bağlantı yenilenmeli", "Connection needs renewing"],
+    // Fresh limits, but the connection must be renewed before the next read: not "Hazır".
+    ["connection flag on fresh limits", { account: x, usage: { ...use("x", 1, 1), connectionRenewalRequired: true }, state: "ready", recommended: false }, "Bağlantı yenilenmeli", "Connection needs renewing"],
+  ];
+};
+
+test("accountRowSubtitle shows the account's status when something is wrong", () => {
+  const tr = (a: string) => a;
+  const en = (_: string, b: string) => b;
+  for (const [name, r, trLabel, enLabel] of problemRows()) {
+    assert.equal(accountRowSubtitle(r, tr, "tr", "UTC", NOW), trLabel, name);
+    assert.equal(accountRowSubtitle(r, en, "en", "UTC", NOW), enLabel, name);
+  }
+  // A pending browser approval says so.
+  assert.equal(accountRowSubtitle(row("unknown"), tr, "tr", "UTC", NOW, true), "Tarayıcı onayı bekleniyor");
+  // A stale but healthy row keeps its old text, and so do the other healthy states.
+  const staleHealthy: OverviewRow = { account: acct("x", "X"), usage: { ...use("x", 1, 1), checkedAt: iso(NOW - 3_600_000) }, state: "unknown", recommended: false };
+  assert.equal(accountRowSubtitle(staleHealthy, tr, "tr", "UTC", NOW), "Limit verisi eski");
+  assert.equal(accountRowSubtitle(staleHealthy, en, "en", "UTC", NOW), "Usage data is out of date");
+  assert.equal(accountRowSubtitle({ ...staleHealthy, usage: use("x", 1, 1), state: "ready" }, tr, "tr", "UTC", NOW), "Hazır · dönem başlamadı");
+});
+
+test("panel rows show the account's status when something is wrong", () => {
+  for (const [name, r, label] of problemRows()) {
+    const other = { ...r.account, id: "other", name: "Other" };
+    const html = wrap(
+      relayFor(active, [active, other], { active: use("active", 10, 10), other: { ...r.usage!, accountId: "other" } }),
+      createElement(PanelAccounts, { now: NOW }),
+    );
+    assert.match(html, new RegExp(`title="Pro · ${label}"`), name);
+    assert.doesNotMatch(html, /Limit verisi eski|Hazır · dönem başlamadı/, name);
+  }
+  // A browser approval in progress for that account.
+  const flows = [{ id: "f", accountId: "vertex", status: "waiting" }] as unknown as AuthFlow[];
+  const waiting = relayFor(active, [active, vertex], baseUsage);
+  (waiting.data as Snapshot).authFlows = flows;
+  assert.match(wrap(waiting, createElement(PanelAccounts, { now: NOW })), /title="Pro · Tarayıcı onayı bekleniyor"/);
+});
+
+/** The active card's stale line, as the panel draws it. */
+const activeCard = (usage: AccountUsage, account: Account = active, extra: Partial<Relay> = {}) =>
+  wrap(relayFor(account, [account], { [account.id]: usage }, extra), createElement(PanelActiveCard, { now: NOW }));
+
+test("the panel's active card names what is wrong instead of out-of-date data", () => {
+  const staleActive = { ...use("active", 1, 1), checkedAt: iso(NOW - 3_600_000) };
+  // Healthy but stale: today's text and refresh.
+  const healthy = activeCard(staleActive);
+  assert.match(healthy, /Limit verisi eski ·/);
+  assert.match(healthy, /aria-label="Limitleri yenile"/);
+  for (const [issue, label, button] of [
+    ["keychain-locked", "Anahtarlık izni gerekli", "Anahtarlık erişimine izin ver"],
+    ["renewal-required", "Bağlantı yenilenmeli", "Bağlantıyı yenile"],
+  ] as const) {
+    const html = activeCard(failed("active", issue));
+    assert.match(html, new RegExp(`${label} ·`), issue);
+    assert.match(html, new RegExp(`aria-label="${button}"`), issue);
+    assert.doesNotMatch(html, /Limit verisi eski|aria-label="Limitleri yenile"/, issue);
+  }
+  // An expired usage sign-in names it; its button is today's refresh.
+  const expired = activeCard(failed("active", "expired"));
+  assert.match(expired, /Limit okuma girişi gerekli ·/);
+  assert.match(expired, /aria-label="Limitleri yenile"/);
+  assert.match(activeCard(staleActive, { ...active, auth: undefined }), /Limit okuma girişi yok ·/);
+});
+
+test("the panel's active card renews with a prompt, and refreshes without one otherwise", async () => {
+  const calls: unknown[][] = [];
+  const refreshUsage = async (...args: unknown[]) => void calls.push(args);
+  const dom = fakeDom();
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    const press = async (usage: AccountUsage, label: string) => {
+      await act(async () =>
+        root.render(
+          createElement(
+            I18nContext.Provider,
+            { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+            createElement(
+              RelayContext.Provider,
+              { value: relayFor(active, [active], { active: usage }, { refreshUsage } as Partial<Relay>) },
+              createElement(PanelActiveCard, { now: NOW }),
+            ),
+          ),
+        ),
+      );
+      type Node = { tagName: string; attributes: Map<string, string>; childNodes: Node[] };
+      const all = (n: Node): Node[] => [n, ...n.childNodes.flatMap(all)];
+      const button = all(dom.container as unknown as Node).find((n) => n.tagName === "button" && n.attributes.get("aria-label") === label);
+      assert.ok(button, label);
+      await act(async () => dom.dispatch(button, "click", { detail: 1 }));
+    };
+    await press(failed("active", "keychain-locked"), "Anahtarlık erişimine izin ver");
+    await press(failed("active", "renewal-required"), "Bağlantıyı yenile");
+    await press({ ...use("active", 1, 1), checkedAt: iso(NOW - 3_600_000) }, "Limitleri yenile");
+    await press(failed("active", "expired"), "Limitleri yenile");
+    assert.deepEqual(calls, [[active, true], [active, true], [active], [active]]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
 });
 
 const active = acct("active", "Kişisel · Max", "max5");

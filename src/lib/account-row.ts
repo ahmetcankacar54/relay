@@ -1,16 +1,28 @@
 import type { Language, T } from "@/data/i18n";
 import type { Relay } from "@/data/relay-context";
 import type { OverviewRow } from "@/data/selectors";
+import { accountHealth } from "@/lib/account-health";
 import { formatClock, formatReset } from "@/lib/time";
 
-/** Status line under an account name (Overview and the menu bar panel). */
+/**
+ * Status line under an account name (Overview and the menu bar panel). When something is wrong it is
+ * the account's status, the one the Accounts page shows; `waiting` is a browser approval in progress.
+ */
 export function accountRowSubtitle(
   row: OverviewRow,
   t: T,
   language: Language,
   zone: string,
   now: number,
+  waiting = false,
 ): string {
+  const health = accountHealth(
+    row.account,
+    row.usage,
+    { active: false, desktopRunning: false, waiting },
+    t,
+  );
+  if (health.tone !== "ok") return health.label;
   switch (row.state) {
     case "window-open": {
       const reset = row.usage?.fiveHour?.resetsAt;
