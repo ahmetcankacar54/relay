@@ -148,7 +148,9 @@ export function SharedHistoryPreferences({
   | "t"
 >) {
   const sources = active ? historySources(active, accounts, value) : [];
-  // What the chosen scope shares; "same-group" and "off" are explained by their labels.
+  // "Paylaşma": nothing is shared, so nothing may say it is.
+  const off = value.desktopHistoryTransfer === "off";
+  // What the chosen scope shares; "same-group" is explained by its label.
   const scope =
     value.desktopHistoryTransfer === "all"
       ? t(
@@ -173,10 +175,17 @@ export function SharedHistoryPreferences({
       <SettingRow
         label={t("Geçmişi paylaş", "Share history")}
         htmlFor="history-transfer"
-        description={t(
-          "Her hesap geçişinde birleştirilir.",
-          "Merged on every account switch.",
-        )}
+        description={
+          off
+            ? t(
+                "Hesaplar arasında birleştirilmez.",
+                "Not merged between accounts.",
+              )
+            : t(
+                "Her hesap geçişinde birleştirilir.",
+                "Merged on every account switch.",
+              )
+        }
       >
         <OptionSelect
           id="history-transfer"
@@ -206,27 +215,30 @@ export function SharedHistoryPreferences({
         />
       </SettingRow>
       <Note>
-        {[
-          scope,
-          t(
-            "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.",
-            "Only local Code history is shared; Chat and cloud sessions are not synced.",
-          ),
-        ]
-          .filter(Boolean)
-          .join(" ")}
+        {off
+          ? t(
+              "Code geçmişi hesaplar arasında paylaşılmaz.",
+              "Code history is not shared between accounts.",
+            )
+          : [
+              scope,
+              t(
+                "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.",
+                "Only local Code history is shared; Chat and cloud sessions are not synced.",
+              ),
+            ]
+              .filter(Boolean)
+              .join(" ")}
       </Note>
       {value.desktopHistoryTransfer === "selected" && (
-        <>
-          <AccountSelection
-            accounts={accounts}
-            selected={value.desktopHistoryAccounts}
-            update={(ids) => update({ desktopHistoryAccounts: ids })}
-            disabled={disabled}
-            label={t("Geçmişi paylaşan hesaplar", "Accounts sharing history")}
-            t={t}
-          />
-        </>
+        <AccountSelection
+          accounts={accounts}
+          selected={value.desktopHistoryAccounts}
+          update={(ids) => update({ desktopHistoryAccounts: ids })}
+          disabled={disabled}
+          label={t("Geçmişi paylaşan hesaplar", "Accounts sharing history")}
+          t={t}
+        />
       )}
       <div className="mt-1 flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
         <p className="text-[13px]">

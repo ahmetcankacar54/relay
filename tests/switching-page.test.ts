@@ -124,14 +124,59 @@ test("the history scope and its local-only limit are one note", () => {
   assert.deepEqual(selected, [
     `Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır. ${local}`,
   ]);
-  for (const mode of ["same-group", "off"]) {
-    const html = render(relayFor({}, { desktopHistoryTransfer: mode }));
-    assert.deepEqual(historyNotes(html), [local], mode);
-  }
+  assert.deepEqual(
+    historyNotes(render(relayFor({}, { desktopHistoryTransfer: "same-group" }))),
+    [local],
+  );
   assert.doesNotMatch(
     render(relayFor()),
     /Yalnızca yerel Code geçmişi; Chat/,
   );
+});
+
+/** The description under "Geçmişi paylaş". */
+const shareDescription = (html: string) =>
+  /for="history-transfer"[^>]*>Geçmişi paylaş<\/label><p[^>]*>([^<]*)<\/p>/.exec(html)?.[1];
+
+test("Paylaşma says history is not shared, and never that it is", () => {
+  const off = render(relayFor({}, { desktopHistoryTransfer: "off" }));
+  const notes = [
+    ...off.matchAll(/<p class="text-\[13px\] text-muted-foreground">([^<]*)<\/p>/g),
+  ]
+    .map(([, text]) => text)
+    .filter((text) => /Code geçmişi/.test(text));
+  assert.deepEqual(notes, ["Code geçmişi hesaplar arasında paylaşılmaz."]);
+  assert.equal(shareDescription(off), "Hesaplar arasında birleştirilmez.");
+  assert.doesNotMatch(off, /paylaşılır/);
+  assert.doesNotMatch(off, /Her hesap geçişinde birleştirilir/);
+  // In English too.
+  const en = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      {
+        value: {
+          language: "en",
+          setLanguage() {},
+          t: (_: string, en: string) => en,
+        },
+      },
+      createElement(
+        RelayContext.Provider,
+        { value: relayFor({}, { desktopHistoryTransfer: "off" }) },
+        createElement(Switching),
+      ),
+    ),
+  );
+  assert.match(en, /Code history is not shared between accounts\./);
+  assert.match(en, /Not merged between accounts\./);
+  assert.doesNotMatch(en, /Only local Code history is shared|Merged on every account switch/);
+  // The sharing modes keep their wording.
+  for (const mode of ["all", "same-group", "selected"]) {
+    const html = render(relayFor({}, { desktopHistoryTransfer: mode }));
+    assert.equal(shareDescription(html), "Her hesap geçişinde birleştirilir.", mode);
+    assert.match(html, /Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez\./, mode);
+    assert.doesNotMatch(html, /hesaplar arasında paylaşılmaz|Hesaplar arasında birleştirilmez/, mode);
+  }
 });
 
 test("the single-conversation watch card appears only while a legacy watch needs attention", () => {
