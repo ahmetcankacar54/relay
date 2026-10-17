@@ -339,7 +339,9 @@ export function automationStatus(
       vars,
     );
 
+  // A saved-enabled fleet is published without a reason before its first check.
   const reason = fleet.reason ?? "";
+  if (!reason) return show(waiting(CHECKING));
   const last = fleet.last;
   // Switching now is offered only for the account the fleet is watching, and
   // only once fresh usage says it is full.
@@ -349,7 +351,6 @@ export function automationStatus(
     fleet.sourceId === active?.id &&
     isFull(active && usage[active.id]);
   const switchTo = offer ? fleet.targetId : undefined;
-  const hurry = offer ? SWITCH_NOW_SUFFIX : undefined;
 
   if (reason === "continued" && last)
     return show(
@@ -366,14 +367,18 @@ export function automationStatus(
     );
   if (reason === "continued") return show(ok(WATCHING));
   if (reason === "awaiting-quota-stop") {
-    if (offer)
-      return show(waiting(FULL_NOTHING_STOPPED), vars, switchTo, hurry);
+    if (offer) return show(waiting(FULL_NOTHING_STOPPED), vars, switchTo);
     if (!fleet.targetId && isFull(active && usage[active.id]))
       return show(waiting(FULL_NOTHING_READY));
     return show(ok(WATCHING));
   }
   if (reason.startsWith("not-quiescent:") || reason === "quiescence-unverified")
-    return show(waiting(OTHER_WORK), vars, switchTo, hurry);
+    return show(
+      waiting(OTHER_WORK),
+      vars,
+      switchTo,
+      switchTo ? SWITCH_NOW_SUFFIX : undefined,
+    );
   if (reason.startsWith("switch-failed:"))
     return show(
       attention([

@@ -94,6 +94,23 @@ test("the dative reads the other digits, the Turkish capitals and trailing marks
     ["Hat 7", "Hat 7’ye"], // yedi
     ["Hat 8", "Hat 8’e"], // sekiz
     ["Hat 9", "Hat 9’a"], // dokuz
+    ["Max 20×", "Max 20×’ye"], // yirmi
+    ["Pro 50", "Pro 50’ye"], // elli
+    ["Pro 100", "Pro 100’e"], // yüz
+    ["Pro 80", "Pro 80’e"], // seksen
+    ["Pro 30", "Pro 30’a"], // otuz
+    ["Team 0", "Team 0’a"], // sıfır, a lone zero
+    ["Pro 10", "Pro 10’a"], // on
+    ["Pro 40", "Pro 40’a"], // kırk
+    ["Pro 60", "Pro 60’a"], // altmış
+    ["Pro 70", "Pro 70’e"], // yetmiş
+    ["Pro 90", "Pro 90’a"], // doksan
+    ["Pro 110", "Pro 110’a"], // on, the tens digit decides
+    ["Pro 200", "Pro 200’e"], // yüz
+    ["Pro 1000", "Pro 1000’e"], // bin
+    ["Pro 2000", "Pro 2000’e"], // bin
+    ["Pro 12", "Pro 12’ye"], // the last digit decides: iki
+    ["Team 20 X", "Team 20 X’e"], // a consonant after a round number: yirmi, no buffer y
     ["ISIK", "ISIK’a"], // I is dotless: ı
     ["İZMİR", "İZMİR’e"], // İ is dotted: i
     ["Okul ·", "Okul ·’a"], // the mark is skipped; the suffix still ends the name

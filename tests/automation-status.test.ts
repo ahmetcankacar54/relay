@@ -186,6 +186,11 @@ test("quiescence-unverified reads like other work running", () => {
     input({ fleet: fleet("quiescence-unverified") }),
   );
   assert.match(status.text[0], /Claude’da başka iş çalışıyor/);
+  assert.match(status.text[0], /Şimdi geçersen devam mesajını sen yazarsın\.$/);
+  assert.match(
+    status.text[1],
+    /If you switch now, you type the continue message yourself\.$/,
+  );
   assert.equal(status.switchTo, b.id);
 });
 
@@ -198,23 +203,20 @@ test("fleet with a full account and nothing stopped offers the target", () => {
   assert.equal(full.switchTo, b.id);
   assert.equal(full.banner, true);
   assert.equal(full.tone, "waiting");
-  assert.match(
+  // Nothing stopped, so there is no continue message to warn about.
+  assert.equal(
     full.text[0],
-    /^Kişisel · Max %100 · Kota doldu ama kota yüzünden duran konuşma yok, devam ettirecek bir şey yok\. İstersen şimdi Kişisel · İkinci’ye geç\./,
+    "Kişisel · Max %100 · Kota doldu ama kota yüzünden duran konuşma yok, devam ettirecek bir şey yok. İstersen şimdi Kişisel · İkinci’ye geç.",
   );
-  assert.match(
+  assert.equal(
     full.text[1],
-    /^Kişisel · Max 100% · Quota is out but no conversation stopped at the limit, so there is nothing to continue\. You can switch to Kişisel · İkinci now\./,
+    "Kişisel · Max 100% · Quota is out but no conversation stopped at the limit, so there is nothing to continue. You can switch to Kişisel · İkinci now.",
   );
 
   const notFull = automationStatus(
     input(
       {
-        fleet: fleet("awaiting-quota-stop", {
-          status: "watching",
-          stopped: 0,
-          targetId: undefined,
-        }),
+        fleet: fleet("awaiting-quota-stop", { status: "watching", stopped: 0 }),
       },
       70,
     ),
@@ -436,6 +438,26 @@ test("quota mode shows checking while the fleet has not started", () => {
   assert.equal(status.mode, "quota");
   assert.deepEqual(status.text, ["Kontrol ediliyor…", "Checking…"]);
   assert.equal(status.tone, "waiting");
+});
+
+test("a fleet published before its first check reads like checking", () => {
+  for (const reason of [undefined, ""]) {
+    const status = automationStatus(
+      input({ fleet: fleet(reason, { status: "watching" }) }),
+    );
+    assert.equal(status.mode, "quota", String(reason));
+    assert.equal(status.tone, "waiting", String(reason));
+    assert.equal(status.banner, false, String(reason));
+    assert.equal(status.switchTo, undefined, String(reason));
+    assert.deepEqual(
+      status.text,
+      [
+        "Kişisel · Max %100 · Kontrol ediliyor…",
+        "Kişisel · Max 100% · Checking…",
+      ],
+      String(reason),
+    );
+  }
 });
 
 test("a switch and a continuation in progress say where", () => {
