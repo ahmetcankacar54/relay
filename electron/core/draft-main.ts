@@ -162,6 +162,43 @@ export class DraftScheduler {
     return this.run(false);
   }
 
+  /**
+   * Accessibility is granted: every draft left for Copy only because it was missing goes back
+   * to pending, with its reason and its count of stops cleared, and the 10 s retries are armed.
+   * Resolves with how many drafts moved. Never throws: a vault that cannot be read or changed
+   * moves none.
+   */
+  async retryAccessibility(): Promise<number> {
+    if (this.stopped) return 0;
+    let moved = 0;
+    try {
+      const waiting = (await this.read()).filter(
+        (d) => d.state === "needs-copy" && d.reason === "accessibility",
+      );
+      for (const draft of waiting)
+        try {
+          await this.deps.restorer.mark(draft.id, "pending");
+          this.stalls.delete(draft.id);
+          moved++;
+        } catch {
+          // A vault that cannot be changed leaves the draft for Copy.
+        }
+      if (!moved) return 0;
+      try {
+        this.deps.changed();
+      } catch {
+        // The panel reads the drafts again on its next refresh.
+      }
+      // A run in flight may have read the drafts before this and turn the retries off as it
+      // ends: arm them after it.
+      await this.flight;
+      this.arm();
+    } catch {
+      // Nothing here is expected to throw; the drafts stay as they are.
+    }
+    return moved;
+  }
+
   /** No more runs or retries; one in flight ends as it would. */
   stop(): void {
     this.stopped = true;

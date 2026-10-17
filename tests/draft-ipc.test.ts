@@ -374,6 +374,8 @@ function harness(
     tick: undefined as (() => void) | undefined,
     /** Runs inside the scripted restore, as the restorer changing the vault. */
     during: undefined as (() => void) | undefined,
+    /** Runs right after a mark changed a draft. */
+    afterMark: undefined as ((id: string) => void | Promise<void>) | undefined,
     /** What fails: reading the drafts, marking one, the notification, telling the panel. */
     fail: new Set<"read" | "mark" | "notify" | "changed">(),
   };
@@ -385,6 +387,7 @@ function harness(
       state.drafts = state.drafts.map((draft) =>
         draft.id === id ? { ...draft, state: next, reason } : draft,
       );
+      await state.afterMark?.(id);
     },
     notify: (notice: { restored: number; left: number }) => {
       state.notices.push(notice);
@@ -676,6 +679,166 @@ test("a run that fails where nothing should leaves the scheduler able to run aga
   state.drafts = [summary("one")];
   await scheduler.afterSwitch();
   assert.equal(state.runs, 1);
+});
+
+const forAccess = (id: string) =>
+  summary(id, { state: "needs-copy", reason: "accessibility" });
+
+test("a granted accessibility permission sets the drafts it left for Copy back to pending", async () => {
+  const { scheduler, state } = harness({
+    drafts: [
+      forAccess("a"),
+      summary("m", { state: "needs-copy", reason: "manual" }),
+      forAccess("b"),
+    ],
+  });
+  assert.equal(await scheduler.retryAccessibility(), 2);
+  // Only the accessibility ones moved, the reason is gone with the state, and the panel is told.
+  assert.deepEqual(state.marks, [
+    ["a", "pending", undefined],
+    ["b", "pending", undefined],
+  ]);
+  assert.deepEqual(
+    state.drafts.map((d) => [d.id, d.state, d.reason]),
+    [
+      ["a", "pending", undefined],
+      ["m", "needs-copy", "manual"],
+      ["b", "pending", undefined],
+    ],
+  );
+  assert.equal(state.changed, 1);
+  // The 10 s retries are on, and the next one runs a restore.
+  assert.equal(state.armed, 1);
+  assert.equal(state.runs, 0);
+  state.tick!();
+  await flush();
+  assert.equal(state.runs, 1);
+  // With none left for it, a second call moves nothing and says nothing.
+  assert.equal(await scheduler.retryAccessibility(), 0);
+  assert.equal(state.changed, 1);
+});
+
+test("the drafts moved back start with no stops counted", async () => {
+  const { scheduler, state } = harness();
+  state.results.push(stopped("moved"), stopped("moved"), stopped("moved"));
+  await scheduler.afterSwitch();
+  await scheduler.tick();
+  // Two stops are counted. The draft is then left for Copy some other way, and moved back.
+  state.drafts = [forAccess("one")];
+  assert.equal(await scheduler.retryAccessibility(), 1);
+  // One more stop is the first again, not the third.
+  await scheduler.tick();
+  assert.equal(state.runs, 3);
+  assert.deepEqual(state.marks, [["one", "pending", undefined]]);
+  assert.equal(state.drafts[0].state, "pending");
+});
+
+test("retrying after accessibility never throws and moves nothing it cannot", async () => {
+  // A vault that cannot be read: no drafts, none moved.
+  let h = harness({ drafts: [forAccess("one")] });
+  h.state.fail.add("read");
+  assert.equal(await h.scheduler.retryAccessibility(), 0);
+  assert.deepEqual(h.state.marks, []);
+  assert.equal(h.state.changed, 0);
+  assert.equal(h.state.armed, 0);
+
+  // A change that fails leaves that draft for Copy, and the others go on.
+  h = harness({ drafts: [forAccess("a"), forAccess("b")] });
+  h.state.fail.add("mark");
+  assert.equal(await h.scheduler.retryAccessibility(), 0);
+  assert.equal(h.state.changed, 0);
+  assert.equal(h.state.armed, 0);
+  assert.deepEqual(
+    h.state.drafts.map((d) => d.state),
+    ["needs-copy", "needs-copy"],
+  );
+
+  // A panel that cannot be told changes nothing about the drafts.
+  h = harness({ drafts: [forAccess("one")] });
+  h.state.fail.add("changed");
+  assert.equal(await h.scheduler.retryAccessibility(), 1);
+  assert.equal(h.state.armed, 1);
+
+  // Once stopped, nothing is retried.
+  h = harness({ drafts: [forAccess("one")] });
+  h.scheduler.stop();
+  assert.equal(await h.scheduler.retryAccessibility(), 0);
+  assert.deepEqual(h.state.marks, []);
+});
+
+test("retrying after accessibility leaves the retries on when a run in flight turns them off", async () => {
+  const { scheduler, state } = harness({
+    drafts: [summary("p"), forAccess("q")],
+  });
+  state.results.push(stopped("moved"), stopped("moved"), stopped("moved"));
+  await scheduler.afterSwitch();
+  await scheduler.tick();
+  assert.equal(state.armed, 1);
+  // The third stop gives `p` up. While that is written, the permission is granted: `q` is set
+  // pending, and the run, which read the drafts before, then finds nothing pending.
+  let retry: Promise<number> | undefined;
+  state.afterMark = async (id) => {
+    if (id !== "p") return;
+    retry = scheduler.retryAccessibility();
+    await flush();
+  };
+  await scheduler.tick();
+  assert.equal(await retry, 1);
+  assert.deepEqual(state.marks.at(-1), ["q", "pending", undefined]);
+  assert.equal(state.drafts.find((d) => d.id === "q")?.state, "pending");
+  // The run turned the retries off, and the retry turned them on again after it.
+  assert.equal(state.cancelled, 1);
+  assert.equal(state.armed, 2);
+  assert.ok(state.tick);
+});
+
+test("granting accessibility, or coming back to Relay with it granted, retries the drafts left for Copy", () => {
+  const main = source("../electron/main.ts");
+  const request = handler(main, "request-desktop-accessibility");
+  const granted = request.indexOf("const granted =");
+  const retry = request.indexOf("if (granted) void draftRestore.retryAccessibility();");
+  assert.ok(granted >= 0 && retry > granted);
+  assert.ok(retry < request.indexOf("return granted;"));
+
+  // A window or the panel gaining focus looks once in 30 s, on macOS only, and never asks.
+  assert.match(main, /const ACCESSIBILITY_CHECK_MS = 30_000;/);
+  const focus = main.slice(
+    main.indexOf("function retryDraftsOnFocus"),
+    main.indexOf('app.on("browser-window-focus"'),
+  );
+  assert.ok(focus.length > 0);
+  assert.match(focus, /process\.platform !== "darwin"/);
+  assert.match(
+    focus,
+    /now - accessibilityCheckedAt < ACCESSIBILITY_CHECK_MS\) return;\s*accessibilityCheckedAt = now;/,
+  );
+  assert.match(
+    focus,
+    /if \(systemPreferences\.isTrustedAccessibilityClient\(false\)\)\s*void draftRestore\?\.retryAccessibility\(\);/,
+  );
+  assert.match(main, /app\.on\("browser-window-focus", retryDraftsOnFocus\);/);
+  // The only call that asks is the explicit request in the handler.
+  assert.equal(main.match(/isTrustedAccessibilityClient\(true\)/g)?.length, 1);
+  assert.equal(main.match(/isTrustedAccessibilityClient\(false\)/g)?.length, 1);
+  assert.ok(request.includes("isTrustedAccessibilityClient(true)"));
+});
+
+test("setting a draft back to pending removes its reason in the vault", async (t) => {
+  const f = await vaultFixture(t);
+  const [conversation, newSession] = f.records;
+  await f.manager.markDraft(conversation.id, "needs-copy", "accessibility");
+  await f.manager.markDraft(newSession.id, "needs-copy", "manual");
+  await f.manager.markDraft(conversation.id, "pending");
+  const drafts = await f.manager.pendingDrafts();
+  const back = drafts.find((d) => d.id === conversation.id)!;
+  assert.equal(back.state, "pending");
+  assert.ok(!("reason" in back));
+  assert.deepEqual(
+    drafts.find((d) => d.id === newSession.id)?.reason,
+    "manual",
+  );
+  // Its text is as it was captured.
+  assert.equal(await f.manager.draftText(conversation.id), TEXT);
 });
 
 test("the restore notification counts drafts and never names them", () => {

@@ -910,6 +910,8 @@ function bindIPC() {
     // The child still verifies its real access; the main-process result alone
     // must never authorize Desktop inspection or any automation.
     const granted = (await automation.requestAccessibility?.()) ?? false;
+    // Drafts left for Copy for want of access go back to waiting for the next run.
+    if (granted) void draftRestore.retryAccessibility();
     if (process.platform === "darwin" && !granted)
       await shell.openExternal(
         "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
@@ -1223,6 +1225,26 @@ function bindIPC() {
 app.on("activate", () => {
   showWindow();
 });
+/** The least often a window gaining focus looks for a newly granted accessibility permission. */
+const ACCESSIBILITY_CHECK_MS = 30_000;
+let accessibilityCheckedAt = -Infinity;
+/**
+ * Someone who grants accessibility in System Settings comes back to Relay's window or panel:
+ * look, never asking, and retry the drafts left for Copy for want of it.
+ */
+function retryDraftsOnFocus() {
+  if (process.platform !== "darwin" || !initialized) return;
+  const now = Date.now();
+  if (now - accessibilityCheckedAt < ACCESSIBILITY_CHECK_MS) return;
+  accessibilityCheckedAt = now;
+  try {
+    if (systemPreferences.isTrustedAccessibilityClient(false))
+      void draftRestore?.retryAccessibility();
+  } catch {
+    // A focus change never fails because of this check.
+  }
+}
+app.on("browser-window-focus", retryDraftsOnFocus);
 app.on("window-all-closed", () => {
   if (!tray && process.platform !== "darwin") app.quit();
 });
