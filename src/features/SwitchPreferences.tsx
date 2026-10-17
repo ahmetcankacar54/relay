@@ -167,10 +167,17 @@ export function SharedHistoryPreferences({
     <div className="grid gap-1">
       <SectionHeading
         title={t("Ortak Code geçmişi", "Shared Code history")}
-        description={t(
-          "Geçişten sonra Code konuşmaların diğer hesapta da görünür.",
-          "After a switch, your Code conversations appear in the other account too.",
-        )}
+        description={
+          off
+            ? t(
+                "Code konuşmaların her hesapta ayrı kalır.",
+                "Your Code conversations stay separate in each account.",
+              )
+            : t(
+                "Geçişten sonra Code konuşmaların diğer hesapta da görünür.",
+                "After a switch, your Code conversations appear in the other account too.",
+              )
+        }
       />
       <SettingRow
         label={t("Geçmişi paylaş", "Share history")}

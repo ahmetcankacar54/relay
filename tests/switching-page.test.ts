@@ -149,6 +149,8 @@ test("Paylaşma says history is not shared, and never that it is", () => {
   assert.equal(shareDescription(off), "Hesaplar arasında birleştirilmez.");
   assert.doesNotMatch(off, /paylaşılır/);
   assert.doesNotMatch(off, /Her hesap geçişinde birleştirilir/);
+  assert.match(off, /Code konuşmaların her hesapta ayrı kalır\./);
+  assert.doesNotMatch(off, /diğer hesapta da görünür/);
   // In English too.
   const en = renderToStaticMarkup(
     createElement(
@@ -176,6 +178,7 @@ test("Paylaşma says history is not shared, and never that it is", () => {
     assert.equal(shareDescription(html), "Her hesap geçişinde birleştirilir.", mode);
     assert.match(html, /Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez\./, mode);
     assert.doesNotMatch(html, /hesaplar arasında paylaşılmaz|Hesaplar arasında birleştirilmez/, mode);
+    assert.match(html, /Geçişten sonra Code konuşmaların diğer hesapta da görünür\./, mode);
   }
 });
 
