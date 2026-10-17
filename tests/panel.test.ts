@@ -436,7 +436,7 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     "desktop-work-active": busy,
     "exact-session-not-observed": ["Konuşma açılamadı", "The conversation could not be opened"],
     "not-ready": ["Desktop hazır değildi", "Desktop was not ready"],
-    moved: ["Başka bir konuşmaya geçtiniz", "You moved to another conversation"],
+    moved: ["Başka bir ekrana geçtiniz", "You went to another screen"],
     changed: ["Ekran değişti", "The screen changed"],
     "claude-not-running": ["Claude çalışmıyordu", "Claude was not running"],
     budget: ["Süre doldu", "Ran out of time"],
@@ -449,6 +449,42 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     assert.equal(draftReason(reason, tr), "Geri yazılamadı");
     assert.equal(draftReason(reason, en), "Could not be restored");
   }
+  // A new-session draft's reasons name its screen where a conversation's would mislead.
+  const maybeOnScreen: [string, string] = [
+    "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bakın",
+    "It may already be on the new-session screen; check before pasting",
+  ];
+  const screenBusy: [string, string] = [
+    "Yeni oturum ekranı meşguldü",
+    "The new-session screen was busy",
+  ];
+  const fresh: Record<string, [string, string]> = {
+    ...labels,
+    "maybe-typed": maybeOnScreen,
+    unconfirmed: maybeOnScreen,
+    "delivery-ambiguous": maybeOnScreen,
+    busy: screenBusy,
+    "desktop-work-active": screenBusy,
+    "exact-session-not-observed": [
+      "Yeni oturum ekranı açılamadı",
+      "The new-session screen could not be opened",
+    ],
+  };
+  for (const [reason, [turkish, english]] of Object.entries(fresh)) {
+    assert.equal(draftReason(reason, tr, true), turkish, reason);
+    assert.equal(draftReason(reason, en, true), english, reason);
+  }
+  for (const reason of [undefined, "", "something-new"])
+    assert.equal(draftReason(reason, tr, true), "Geri yazılamadı");
+});
+
+test("a new-session draft's row words its reason for the new-session screen", () => {
+  const html = drafts(withDrafts([
+    draft({ id: "n", newSession: true, title: "", reason: "maybe-typed" }),
+    draft({ id: "c", title: "A conversation", reason: "maybe-typed" }),
+  ]));
+  assert.match(html, /Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bakın/);
+  assert.match(html, /Konuşmaya yazılmış olabilir, yapıştırmadan önce bakın/);
 });
 
 test("the panel places rescued drafts after the suggestion and before the accounts", () => {

@@ -40,6 +40,11 @@ export interface DesktopAutomationSnapshot {
   observedAt: number;
   pid: number;
   localSessionId?: string;
+  /**
+   * Code's new-session screen is on screen: it has no `localSessionId`. Inside the
+   * fingerprint; older helpers omit it.
+   */
+  newSession?: boolean;
   accountLabel?: string;
   permissionMode?: string;
   status: "stopped" | "running" | "waiting" | "unknown";
@@ -68,6 +73,22 @@ export interface DesktopAutomationGuard {
   contextFingerprint: string;
 }
 
+/**
+ * Code's new-session screen, for `writeDraft` only: the helper refuses it for any other
+ * command. That screen may show no single permission selector, so the mode is kept only
+ * when one was read.
+ */
+export interface DesktopNewSessionGuard {
+  pid: number;
+  newSession: true;
+  accountLabel: string;
+  permissionMode?: string;
+  contextFingerprint: string;
+}
+
+/** The screens a draft can be typed into: a conversation, or Code's new-session screen. */
+export type DesktopDraftGuard = DesktopAutomationGuard | DesktopNewSessionGuard;
+
 export interface DesktopAutomation {
   /** Explicit user action only. Ordinary inspection never triggers an OS prompt. */
   requestAccessibility?(): Promise<boolean>;
@@ -82,6 +103,11 @@ export interface DesktopAutomation {
     localSessionId: string,
     options?: { requireIdle?: boolean },
   ): Promise<void>;
+  /**
+   * Shows Code's new-session screen through Desktop's own `claude://code/new`, which starts
+   * no session. Success still requires inspection. `requireIdle` as for `openSession`.
+   */
+  openNewSession(options?: { requireIdle?: boolean }): Promise<void>;
   /** Chooses the prior explicit permission mode; it never approves a tool dialog. */
   setPermission(
     guard: DesktopAutomationGuard,
@@ -98,15 +124,15 @@ export interface DesktopAutomation {
   ): Promise<{ acceptedVisible: boolean }>;
   hasRequestMarker(requestId: string): Promise<boolean>;
   /**
-   * Types `text` into the open conversation's empty composer and never presses
-   * Send. One guarded attempt: a non-empty composer is `composer-not-empty`, a
-   * moved context is `context-changed`, an unverifiable result is
-   * `delivery-ambiguous`. Claude not in front, or input from the user in the
-   * last 3 s, is `user-active`, before anything is typed. Resolves with the
-   * snapshot taken after the write.
+   * Types `text` into the empty composer of the open conversation, or of Code's
+   * new-session screen, and never presses Send. One guarded attempt: a non-empty
+   * composer is `composer-not-empty`, a moved context is `context-changed`, an
+   * unverifiable result is `delivery-ambiguous`. Claude not in front, or input from
+   * the user in the last 3 s, is `user-active`, before anything is typed. Resolves
+   * with the snapshot taken after the write.
    */
   writeDraft(
-    guard: DesktopAutomationGuard,
+    guard: DesktopDraftGuard,
     text: string,
   ): Promise<DesktopAutomationSnapshot>;
 }
@@ -186,6 +212,9 @@ function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
     Number.isSafeInteger(v.pid) &&
     v.pid > 0 &&
     (v.localSessionId === undefined || LOCAL.test(v.localSessionId)) &&
+    (v.newSession === undefined || typeof v.newSession === "boolean") &&
+    // The new-session screen has no conversation id.
+    !(v.newSession === true && v.localSessionId !== undefined) &&
     (v.accountLabel === undefined ||
       (typeof v.accountLabel === "string" && v.accountLabel.length <= 512)) &&
     (v.permissionMode === undefined || MODES.has(v.permissionMode)) &&
@@ -227,6 +256,25 @@ function guard(snapshot: DesktopAutomationSnapshot): DesktopAutomationGuard {
 }
 
 export const automationGuard = guard;
+
+/** A guard for Code's new-session screen, from a snapshot that shows it. */
+export function newSessionGuard(
+  snapshot: DesktopAutomationSnapshot,
+): DesktopNewSessionGuard {
+  if (snapshot.newSession !== true || snapshot.localSessionId !== undefined)
+    throw new DesktopAutomationError("exact-session-not-observed");
+  if (!snapshot.accountLabel)
+    throw new DesktopAutomationError("desktop-ui-unsupported");
+  return {
+    pid: snapshot.pid,
+    newSession: true,
+    accountLabel: snapshot.accountLabel,
+    ...(snapshot.permissionMode !== undefined
+      ? { permissionMode: snapshot.permissionMode }
+      : {}),
+    contextFingerprint: snapshot.contextFingerprint,
+  };
+}
 
 /** The helper never starts Claude, reads credentials or invokes a CLI. */
 export function nativeDesktopAutomation(
@@ -285,6 +333,12 @@ export function nativeDesktopAutomation(
       await call({
         command: "open-session",
         localSessionId,
+        ...(options?.requireIdle === true ? { requireIdle: true } : {}),
+      });
+    },
+    openNewSession: async (options) => {
+      await call({
+        command: "open-new-session",
         ...(options?.requireIdle === true ? { requireIdle: true } : {}),
       });
     },
