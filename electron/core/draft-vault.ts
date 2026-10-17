@@ -38,6 +38,46 @@ export interface DraftSlots {
   newSession: boolean;
 }
 
+/** Where a read of the vault went wrong: its file, its seal, or its JSON. */
+export type DraftReadStage = "read" | "unseal" | "parse";
+
+/**
+ * Diagnosis hooks. Each is told only what it may log: a stage, a fixed label and indexes,
+ * never a record's text or a message that could echo it. None may throw into the vault.
+ */
+export interface DraftVaultHooks {
+  /**
+   * The file could not be read, unsealed or parsed, or does not hold a list. Told once per
+   * change: the same failure on the next read is not told again, and a read that works
+   * starts it over.
+   */
+  onReadError?: (stage: DraftReadStage, message: string) => void;
+  /** The entry at `index` of the list is not a record the vault wrote. Told once per change. */
+  onRecordRejected?: (index: number) => void;
+  /** `list()` answered with `count` records, when that differs from its last answer. */
+  onList?: (count: number) => void;
+}
+
+/**
+ * A fixed label for a failed read or unseal, never the error's own message: a message from
+ * unsealing may carry a piece of the data (and one from parsing does, so a parse failure has
+ * its own fixed label). An errno code, or a fixed word for a refusal of this code, tells what
+ * happened.
+ */
+function readLabel(stage: "read" | "unseal", error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (stage === "unseal")
+    return /encryption is unavailable/i.test(message)
+      ? "encryption-unavailable"
+      : "unseal-failed";
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === "string" && /^[A-Z][A-Z0-9_]{1,30}$/.test(code))
+    return code;
+  if (/symbolic links|Invalid Desktop path/.test(message)) return "unsafe-path";
+  if (/Unsupported Desktop file/.test(message)) return "unsupported-file";
+  return "read-failed";
+}
+
 /** Inside the vault. Sealed, so the text is never on disk as it is. */
 const FILE = "drafts/pending.bin";
 const MAX_RECORDS = 20;
@@ -109,7 +149,25 @@ export class DraftVault {
     private readonly seal: (text: string) => Buffer,
     private readonly unseal: (data: Buffer) => string,
     private readonly now: () => number = Date.now,
+    private readonly hooks: DraftVaultHooks = {},
   ) {}
+  /** What the diagnosis hooks were last told, so an unchanged state is told once. */
+  private told: { read?: string; rejected?: string; count?: number } = {};
+
+  /** Runs a diagnosis hook; one that throws changes nothing about the vault. */
+  private tell(fn: () => void): void {
+    try {
+      fn();
+    } catch {
+      // A diagnosis must never disturb the drafts.
+    }
+  }
+  private readFailed(stage: DraftReadStage, message: string): void {
+    const signature = `${stage}:${message}`;
+    if (this.told.read === signature) return;
+    this.told.read = signature;
+    this.tell(() => this.hooks.onReadError?.(stage, message));
+  }
 
   /**
    * Every record, newest first, with its text. Never throws: when the file cannot be read it
@@ -121,12 +179,20 @@ export class DraftVault {
       try {
         loaded = await this.load();
       } catch {
+        this.counted(0);
         return [];
       }
       // The text of an expired record does not stay on disk either.
       if (loaded.expired) await this.save(loaded.records).catch(() => {});
+      this.counted(loaded.records.length);
       return loaded.records;
     });
+  }
+
+  private counted(count: number): void {
+    if (this.told.count === count) return;
+    this.told.count = count;
+    this.tell(() => this.hooks.onList?.(count));
   }
 
   /**
@@ -215,26 +281,57 @@ export class DraftVault {
    */
   private async load(): Promise<{ records: DraftRecord[]; expired: boolean }> {
     // Throws on any failure but a missing file, a link included.
-    const data = await readBytes(this.vault, FILE);
-    if (!data) return { records: [], expired: false };
-    let raw: unknown;
+    let data: Buffer | null;
     try {
-      raw = JSON.parse(this.unseal(data));
-    } catch {
+      data = await readBytes(this.vault, FILE);
+    } catch (error) {
+      this.readFailed("read", readLabel("read", error));
+      throw error;
+    }
+    if (!data) {
+      this.told.read = undefined;
       return { records: [], expired: false };
     }
-    if (!Array.isArray(raw)) return { records: [], expired: false };
+    let sealed: string;
+    try {
+      sealed = this.unseal(data);
+    } catch (error) {
+      this.readFailed("unseal", readLabel("unseal", error));
+      return { records: [], expired: false };
+    }
+    let raw: unknown;
+    try {
+      raw = JSON.parse(sealed);
+    } catch {
+      this.readFailed("parse", "invalid-json");
+      return { records: [], expired: false };
+    }
+    if (!Array.isArray(raw)) {
+      this.readFailed("parse", "not-an-array");
+      return { records: [], expired: false };
+    }
+    this.told.read = undefined;
     const now = this.now();
     let expired = false;
     const records: DraftRecord[] = [];
-    for (const value of raw) {
+    const rejected: number[] = [];
+    raw.forEach((value, index) => {
       const record = parseRecord(value);
-      if (!record) continue;
-      if (now - Date.parse(record.capturedAt) > MAX_AGE_MS) expired = true;
+      if (!record) rejected.push(index);
+      else if (now - Date.parse(record.capturedAt) > MAX_AGE_MS) expired = true;
       else records.push(record);
-    }
+    });
+    this.rejected(rejected);
     records.sort((a, b) => Date.parse(b.capturedAt) - Date.parse(a.capturedAt));
     return { records: records.slice(0, MAX_RECORDS), expired };
+  }
+
+  private rejected(indexes: number[]): void {
+    const signature = indexes.join(",");
+    if ((this.told.rejected ?? "") === signature) return;
+    this.told.rejected = signature;
+    for (const index of indexes)
+      this.tell(() => this.hooks.onRecordRejected?.(index));
   }
 
   private async save(records: DraftRecord[]): Promise<void> {

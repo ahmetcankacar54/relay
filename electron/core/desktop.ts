@@ -29,7 +29,10 @@ import {
   CLAUDE_RUNNING,
   captureDrafts,
   sweepStaleDraftScratch,
+  type CaptureOutcome,
 } from "./draft-transfer";
+import { safeMessage, shortId } from "./draft-diagnostics";
+import type { CapturedDraft } from "./drafts";
 import { removeLegacyDraftBackups } from "./draft-storage";
 import {
   DraftVault,
@@ -90,6 +93,32 @@ interface Operation {
   kind: DesktopOperationKind;
   profileId?: string;
 }
+/**
+ * What a capture says in the diagnosis log: the outcome, and per kept draft where it goes and
+ * how long it is, as `alias8:length`, or `new:length` for the new-session screen. Never text.
+ */
+function captureFields(
+  from: string,
+  to: string,
+  outcome: CaptureOutcome,
+  captured: CapturedDraft[],
+) {
+  return {
+    from,
+    to,
+    status: outcome.status,
+    count: captured.length,
+    ...(outcome.status === "failed" ? { error: safeMessage(outcome.error) } : {}),
+    ...(outcome.status === "skipped" ? { reason: safeMessage(outcome.reason) } : {}),
+    drafts: captured
+      .map(
+        (draft) =>
+          `${draft.newSession ? "new" : (shortId(draft.targetAlias) ?? "none")}:${draft.text.length}`,
+      )
+      .join(","),
+  };
+}
+
 export class DesktopManager {
   private busy = false;
   get isBusy() {
@@ -119,6 +148,11 @@ export class DesktopManager {
    * fails: one that fails late may already have changed the account and captured drafts.
    */
   onSwitched?: () => void;
+  /**
+   * Told what the draft steps did, for a diagnosis log: an event name and fields that are ids,
+   * states, reasons, counts and times, never a draft's text. May throw; nothing depends on it.
+   */
+  onDraftEvent?: (event: string, fields?: Record<string, unknown>) => void;
   /** The running operation, and whether it has reported its restart. */
   private operation?: Operation & { restarted: boolean };
   /** The drafts captured at switches, sealed, until they are re-typed or dismissed. */
@@ -134,7 +168,23 @@ export class DesktopManager {
       this.vault,
       (text) => this.host.seal(text),
       (data) => this.host.unseal(data),
+      undefined,
+      {
+        onReadError: (stage, message) =>
+          this.diagnose("vault-read-failed", { stage, message }),
+        onRecordRejected: (index) =>
+          this.diagnose("vault-record-rejected", { index }),
+        onList: (count) => this.diagnose("vault-list", { count }),
+      },
     );
+  }
+  /** One diagnosis event; a log that fails changes nothing about the drafts. */
+  private diagnose(event: string, fields?: Record<string, unknown>) {
+    try {
+      this.onDraftEvent?.(event, fields);
+    } catch {
+      // The log is an aid, never a part of a switch.
+    }
   }
   async initialize() {
     await fs.mkdir(this.vault, { recursive: true, mode: 0o700 });
@@ -569,15 +619,19 @@ export class DesktopManager {
     target: Account,
     conversations: CarriedConversation[],
   ) {
+    /** Why no capture was tried, for the diagnosis log: nothing else says. */
+    const notRun = (reason: string) =>
+      this.diagnose("capture", { from, to, status: "not-run", reason });
     try {
       const host = this.host;
-      if (!host.readDrafts) return;
+      if (!host.readDrafts) return notRun("no-draft-reader");
       const settings = this.store.state.settings;
-      if (settings.desktopHistoryTransfer === "off") return;
+      if (settings.desktopHistoryTransfer === "off") return notRun("history-off");
       const source = this.store.state.accounts.find(
         (a) => a.desktop?.accountUuid === from,
       );
-      if (!source || !allowedHistoryPair(source, target, settings)) return;
+      if (!source || !allowedHistoryPair(source, target, settings))
+        return notRun("pair-not-allowed");
       let blocked: string | undefined;
       let claudeElectron: string | undefined;
       try {
@@ -588,7 +642,8 @@ export class DesktopManager {
       } catch (error) {
         blocked = errorMessage(error);
       }
-      await captureDrafts({
+      let captured: CapturedDraft[] = [];
+      const outcome = await captureDrafts({
         root: this.root,
         from,
         to,
@@ -599,8 +654,10 @@ export class DesktopManager {
             ? {}
             : await this.draftTitles(target, conversations),
         run: (job) => host.readDrafts!(job),
-        store: (account, drafts, slots) =>
-          this.drafts.add(account, drafts, slots),
+        store: (account, drafts, slots) => {
+          captured = drafts;
+          return this.drafts.add(account, drafts, slots);
+        },
         lastJson: path.join(this.vault, "drafts", "last.json"),
         now: new Date(),
         blocked,
@@ -609,8 +666,10 @@ export class DesktopManager {
         running: () => host.running(),
         tmp: host.draftScratchDir,
       });
+      this.diagnose("capture", captureFields(from, to, outcome, captured));
     } catch {
       // Drafts never change how a switch ends.
+      this.diagnose("capture", { from, to, status: "threw" });
     }
   }
   /**

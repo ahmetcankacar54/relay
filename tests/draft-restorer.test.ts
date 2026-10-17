@@ -137,6 +137,8 @@ function harness(
   const removed: string[] = [];
   const notes: Array<{ restored: number; left: number }> = [];
   const outsideLock: string[] = [];
+  /** Every event the restorer logged, in order, as the log would hold it. */
+  const logs: Array<Record<string, unknown>> = [];
   const hooks: Hooks = {};
   const view = (): Snapshot => {
     const present = !!shown && !noComposer.has(shown);
@@ -273,6 +275,9 @@ function harness(
     notify: (summary) => {
       notes.push(summary);
     },
+    log: (event, fields) => {
+      logs.push({ event, ...fields });
+    },
     sleep: async (ms) => {
       sleeps.push(ms);
       clock += ms;
@@ -294,6 +299,7 @@ function harness(
     removed,
     notes,
     outsideLock,
+    logs,
     composers,
     statuses,
     noComposer,
@@ -1654,6 +1660,321 @@ test("once the target has appeared, any other conversation means the user moved,
   assert.deepEqual(reloading.marks, [
     ["draft-1", "needs-copy", "exact-session-not-observed"],
   ]);
+});
+
+// --- The diagnosis log: what the restorer says, and never a draft's text -------------
+
+/** Drafts whose words no id, state or reason could contain by chance. */
+const SECRET = "quartz zebra marmalade ONE";
+const SECRET_NEW = "lantern pickle walrus TWO";
+const SECRET_WORDS = [...SECRET.split(" "), ...SECRET_NEW.split(" ")].filter(
+  (word) => word.length >= 5,
+);
+const names = (logs: Array<Record<string, unknown>>) =>
+  logs.map((entry) => entry.event);
+const entry = (logs: Array<Record<string, unknown>>, event: string) => {
+  const found = logs.filter((e) => e.event === event);
+  assert.equal(found.length, 1, `exactly one ${event}`);
+  return found[0];
+};
+/** Every value of every logged event holds neither a draft's text nor a word of it. */
+function assertNoText(logs: Array<Record<string, unknown>>) {
+  assert.ok(logs.length > 0);
+  for (const logged of logs)
+    for (const [key, value] of Object.entries(logged)) {
+      assert.notEqual(key.toLowerCase(), "text");
+      const shown = String(value);
+      for (const secret of [SECRET, SECRET_NEW])
+        assert.ok(!shown.includes(secret), `${key}: ${shown}`);
+      for (const word of SECRET_WORDS)
+        assert.ok(!shown.includes(word), `${key}: ${shown}`);
+      // Only plain values: a nested one could hold anything.
+      assert.ok(
+        ["string", "number", "boolean"].includes(typeof value) || value === null,
+        key,
+      );
+    }
+  assert.ok(!JSON.stringify(logs).includes(SECRET));
+  assert.ok(!JSON.stringify(logs).includes(SECRET_NEW));
+}
+
+test("a restored draft logs each step of its run, and no text", async () => {
+  const h = harness({
+    records: [
+      record(1, { text: SECRET }),
+      fresh(2, { text: SECRET_NEW }),
+    ],
+  });
+  assert.equal((await restoreDrafts(h.deps)).restored, 2);
+
+  assert.deepEqual(names(h.logs), [
+    "restore-start",
+    "record-start",
+    "shown",
+    "write",
+    "recheck",
+    "restored",
+    "record-start",
+    "shown",
+    "write",
+    "recheck",
+    "restored",
+    "restore-end",
+  ]);
+  assert.deepEqual(h.logs[0], {
+    event: "restore-start",
+    account: ACCOUNT,
+    records: 2,
+    all: 2,
+    ready: true,
+  });
+  assert.deepEqual(h.logs[1], {
+    event: "record-start",
+    id: "draft-1",
+    target: "00000001",
+    newSession: false,
+  });
+  assert.deepEqual(h.logs[2], {
+    event: "shown",
+    id: "draft-1",
+    matched: true,
+    status: "stopped",
+    composerPresent: true,
+    composerEmpty: true,
+    frontmost: true,
+    idleMs: 60_000,
+    guardable: true,
+    sessionMatches: true,
+  });
+  assert.deepEqual(h.logs[3], { event: "write", id: "draft-1", ok: true, attempt: 1 });
+  assert.deepEqual(h.logs[4], {
+    event: "recheck",
+    id: "draft-1",
+    composerPresent: true,
+    composerEmpty: false,
+    status: "stopped",
+    pidSame: true,
+    sessionMatches: true,
+  });
+  assert.deepEqual(h.logs[5], { event: "restored", id: "draft-1", removed: true });
+  // The new-session draft has no alias to name, and is on its own screen.
+  assert.deepEqual(h.logs[6], {
+    event: "record-start",
+    id: "draft-2",
+    target: null,
+    newSession: true,
+  });
+  assert.equal(h.logs[7].sessionMatches, true);
+  assert.deepEqual(h.logs.at(-1), {
+    event: "restore-end",
+    status: "done",
+    restored: 2,
+    left: 0,
+    reason: null,
+  });
+  assertNoText(h.logs);
+});
+
+test("a write the helper refuses logs the issue, the leave and the end, and no text", async () => {
+  const h = harness({ records: [record(1, { text: SECRET })] });
+  h.hooks.write = () => issue("delivery-ambiguous");
+  assert.equal((await restoreDrafts(h.deps)).left, 1);
+
+  assert.deepEqual(names(h.logs), [
+    "restore-start",
+    "record-start",
+    "shown",
+    "write",
+    "leave",
+    "restore-end",
+  ]);
+  assert.deepEqual(h.logs[3], {
+    event: "write",
+    id: "draft-1",
+    ok: false,
+    attempt: 1,
+    issue: "delivery-ambiguous",
+  });
+  assert.deepEqual(h.logs[4], {
+    event: "leave",
+    id: "draft-1",
+    reason: "maybe-typed",
+    marked: true,
+  });
+  assert.deepEqual(h.logs[5], {
+    event: "restore-end",
+    status: "done",
+    restored: 0,
+    left: 1,
+    reason: null,
+  });
+  assertNoText(h.logs);
+});
+
+test("a text wiped after writing logs both writes and both re-checks", async () => {
+  const h = harness({ records: [record(1, { text: SECRET })] });
+  h.hooks.sleep = (ms) => {
+    if (ms === 5_000) h.composers.delete(target(1));
+  };
+  await restoreDrafts(h.deps);
+  assert.deepEqual(
+    h.logs.filter((e) => e.event === "write" || e.event === "recheck").map((e) => [e.event, e.attempt ?? e.composerEmpty]),
+    [
+      ["write", 1],
+      ["recheck", true],
+      ["write", 2],
+      ["recheck", true],
+    ],
+  );
+  assert.deepEqual(entry(h.logs, "leave"), {
+    event: "leave",
+    id: "draft-1",
+    reason: "lost",
+    marked: true,
+  });
+  assertNoText(h.logs);
+});
+
+test("a conversation that never shows logs the timeout with the last view", async () => {
+  const h = harness({ records: [record(1, { text: SECRET })] });
+  h.hooks.open = () => "ignored";
+  await restoreDrafts(h.deps);
+
+  assert.deepEqual(entry(h.logs, "shown-timeout"), {
+    event: "shown-timeout",
+    id: "draft-1",
+    sessionMatches: false,
+    seen: HOME.slice(6, 14),
+    status: "stopped",
+    composerPresent: true,
+  });
+  assert.equal(h.logs.some((e) => e.event === "shown"), false);
+  assert.equal(entry(h.logs, "leave").reason, "exact-session-not-observed");
+  assertNoText(h.logs);
+});
+
+test("a stop logs what leaves, and why", async () => {
+  // The user moves to another conversation after the first draft.
+  const moved = harness({
+    records: [record(1, { text: SECRET }), record(2, { text: SECRET_NEW })],
+  });
+  moved.hooks.vault = (op) => {
+    if (op === "remove") moved.setShown(ELSEWHERE);
+  };
+  await restoreDrafts(moved.deps);
+  assert.deepEqual(entry(moved.logs, "stop"), {
+    event: "stop",
+    leaves: "pending",
+    reason: "moved",
+    wrote: false,
+    phase: "records",
+  });
+  assert.deepEqual(moved.logs.at(-1), {
+    event: "restore-end",
+    status: "waiting",
+    restored: 1,
+    left: 1,
+    reason: "moved",
+  });
+  assertNoText(moved.logs);
+
+  // Accessibility lost: every draft is left for copy.
+  const blind = harness({
+    records: [record(1, { text: SECRET }), record(2, { text: SECRET_NEW })],
+  });
+  blind.hooks.write = () => issue("accessibility-permission-required");
+  await restoreDrafts(blind.deps);
+  assert.deepEqual(entry(blind.logs, "stop"), {
+    event: "stop",
+    leaves: "copy",
+    reason: "accessibility",
+    wrote: false,
+    phase: "records",
+  });
+  assert.deepEqual(
+    blind.logs.filter((e) => e.event === "leave").map((e) => [e.id, e.reason]),
+    [
+      ["draft-1", "accessibility"],
+      ["draft-2", "accessibility"],
+    ],
+  );
+  assert.equal(entry(blind.logs, "write").issue, "accessibility-permission-required");
+  assertNoText(blind.logs);
+});
+
+test("a re-check that cannot look is logged without a view", async () => {
+  const h = harness({ records: [record(1, { text: SECRET })] });
+  h.hooks.sleep = (ms) => {
+    if (ms === 5_000) h.hooks.inspect = () => issue("desktop-ui-unsupported");
+  };
+  await restoreDrafts(h.deps);
+  assert.deepEqual(entry(h.logs, "recheck"), {
+    event: "recheck",
+    id: "draft-1",
+    inspected: false,
+    issue: "desktop-ui-unsupported",
+  });
+  assert.equal(entry(h.logs, "leave").reason, "maybe-typed");
+  assertNoText(h.logs);
+});
+
+test("a run that finds Claude not ready logs it, and one with nothing to restore logs why", async () => {
+  const early = harness({ uptime: 1_000, records: [record(1, { text: SECRET })] });
+  await restoreDrafts(early.deps);
+  assert.deepEqual(early.logs, [
+    { event: "restore-start", account: ACCOUNT, records: 1, all: 1, ready: false },
+    { event: "restore-end", status: "waiting", restored: 0, left: 1, reason: null },
+  ]);
+  // Pending drafts of another account: Desktop is not on theirs.
+  const other = harness({ records: [record(1, { to: OTHER, text: SECRET })] });
+  await restoreDrafts(other.deps);
+  assert.deepEqual(other.logs, [
+    { event: "restore-start", account: ACCOUNT, records: 0, all: 1, ready: null },
+    { event: "restore-end", status: "idle", restored: 0, left: 0, reason: null },
+  ]);
+  // No Desktop account at all.
+  const signedOut = harness({ records: [record(1, { text: SECRET })] });
+  signedOut.setAccount(undefined);
+  await restoreDrafts(signedOut.deps);
+  assert.deepEqual(signedOut.logs[0], {
+    event: "restore-start",
+    account: null,
+    records: 0,
+    all: null,
+    ready: null,
+  });
+  assertNoText([...early.logs, ...other.logs, ...signedOut.logs]);
+});
+
+test("a restore that throws logs its end with the error's name, never its message", async () => {
+  const h = harness({ records: [record(1, { text: SECRET })] });
+  h.deps.withLock = async () => {
+    throw new Error(`the lock failed on ${SECRET}`);
+  };
+  await assert.rejects(restoreDrafts(h.deps), /the lock failed/);
+  assert.deepEqual(h.logs.at(-1), {
+    event: "restore-end",
+    status: "threw",
+    error: "Error",
+  });
+  assertNoText(h.logs);
+});
+
+test("a log that throws never disturbs a restore", async () => {
+  const h = harness({ records: [record(1, { text: SECRET })] });
+  h.deps.log = () => {
+    throw new Error("the log failed");
+  };
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 1,
+    left: 0,
+  });
+  assert.deepEqual(h.removed, ["draft-1"]);
+  // And a restorer without a log is the one every other test runs.
+  const bare = harness();
+  delete bare.deps.log;
+  assert.equal((await restoreDrafts(bare.deps)).restored, 1);
 });
 
 test("the restorer never sends and waits only through its deps", () => {

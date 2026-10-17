@@ -1405,6 +1405,101 @@ test("an A→B switch captures A's draft of a shared conversation for B", async 
   assert.deepEqual(await fs.readdir(d.tmp), []);
 });
 
+test("a capture is logged with its slots and lengths, never its text", async (t) => {
+  const { f, a, b, shared } = await sharedConversation(t);
+  const events: Array<[string, Record<string, unknown> | undefined]> = [];
+  f.manager.onDraftEvent = (event, fields) => void events.push([event, fields]);
+
+  await f.manager.switchTo(b.id);
+
+  assert.deepEqual(events.filter(([event]) => event === "capture"), [
+    [
+      "capture",
+      {
+        from: a.desktop!.accountUuid,
+        to: b.desktop!.accountUuid,
+        status: "captured",
+        count: 2,
+        drafts: `${shared.slice(0, 8)}:${UNSENT.length},new:${"a new start".length}`,
+      },
+    ],
+  ]);
+  const logged = JSON.stringify(events);
+  assert.ok(!logged.includes(UNSENT));
+  assert.ok(!logged.includes("a new start"));
+});
+
+test("a capture that fails or is skipped is logged with its reason, and a log that throws changes nothing", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A");
+  await withDraftHelper(f, async () => {
+    throw new Error(`Unexpected token 'x', "${UNSENT}" is not valid JSON`);
+  });
+  const events: Array<[string, Record<string, unknown> | undefined]> = [];
+  f.manager.onDraftEvent = (event, fields) => {
+    events.push([event, fields]);
+    throw new Error("the log failed");
+  };
+
+  await f.manager.switchTo(b.id);
+
+  // The switch ends as it would, and the message that quotes data is not logged as it is.
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.deepEqual(events, [
+    [
+      "capture",
+      {
+        from: a.desktop!.accountUuid,
+        to: b.desktop!.accountUuid,
+        status: "failed",
+        count: 0,
+        error: "parse-error",
+        drafts: "",
+      },
+    ],
+  ]);
+  assert.ok(!JSON.stringify(events).includes(UNSENT));
+  // Claude open when the copy would be made skips the step, and says why.
+  const g = await fixture(t);
+  const second = await g.account("B");
+  await g.account("A");
+  await withDraftHelper(g);
+  g.host.draftsBlocked = async () => "Drafts are not supported here";
+  const skipped: Array<[string, Record<string, unknown> | undefined]> = [];
+  g.manager.onDraftEvent = (event, fields) => void skipped.push([event, fields]);
+  await g.manager.switchTo(second.id);
+  assert.equal(skipped.length, 1);
+  assert.equal(skipped[0][1]!.status, "skipped");
+  assert.equal(skipped[0][1]!.reason, "Drafts are not supported here");
+});
+
+test("a switch whose history policy forbids drafts logs that no capture was tried", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A");
+  await withDraftHelper(f);
+  f.store.update((state) => {
+    state.settings.desktopHistoryTransfer = "off";
+  });
+  const events: Array<[string, Record<string, unknown> | undefined]> = [];
+  f.manager.onDraftEvent = (event, fields) => void events.push([event, fields]);
+
+  await f.manager.switchTo(b.id);
+
+  assert.deepEqual(events, [
+    [
+      "capture",
+      {
+        from: a.desktop!.accountUuid,
+        to: b.desktop!.accountUuid,
+        status: "not-run",
+        reason: "history-off",
+      },
+    ],
+  ]);
+});
+
 test("the draft methods work by id, and summaries carry no text", async (t) => {
   const { f, b, d } = await sharedConversation(t);
   await f.manager.switchTo(b.id);

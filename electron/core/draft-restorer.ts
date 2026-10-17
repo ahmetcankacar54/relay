@@ -8,6 +8,7 @@ import {
   type DesktopAutomationSnapshot,
   type DesktopDraftGuard,
 } from "./desktop-continuation-host";
+import { logDraft, shortId, type DraftLog } from "./draft-diagnostics";
 import type { DraftRecord, DraftState } from "./draft-vault";
 
 export interface RestorerDeps {
@@ -30,6 +31,12 @@ export interface RestorerDeps {
   notify(summary: { restored: number; left: number }): void;
   sleep(ms: number): Promise<void>;
   now(): number;
+  /**
+   * A diagnosis log: each step of a run, as an event and fields that are ids (cut to 8
+   * characters), states, reasons, issue codes, counts and booleans. Never a draft's text or
+   * title, and never an error's message. A log that throws changes nothing about the run.
+   */
+  log?: DraftLog;
 }
 
 export type RestoreResult = {
@@ -64,6 +71,13 @@ type Place = string;
  */
 const placeOf = (view: Snapshot): Place | undefined =>
   view.localSessionId ?? (view.newSession === true ? NEW_SESSION : undefined);
+/** A place for the diagnosis log: a conversation's alias cut to 8 characters, or the screen. */
+const placeLabel = (place: Place | undefined): string | null =>
+  place === undefined
+    ? null
+    : place === NEW_SESSION
+      ? place
+      : shortId(place.replace(/^local_/, ""));
 
 /** Desktop wipes its drafts about 6 s after an account loads. Restore only well after that. */
 const MIN_UPTIME_MS = 15_000;
@@ -156,32 +170,79 @@ interface Run {
 export async function restoreDrafts(
   deps: RestorerDeps,
 ): Promise<RestoreResult> {
+  let result: RestoreResult;
+  try {
+    result = await restore(deps);
+  } catch (error) {
+    // Its name only: a message could hold anything, a draft's text included.
+    logDraft(deps.log, "restore-end", {
+      status: "threw",
+      error: error instanceof Error ? error.name : "unknown",
+      ...(error instanceof DesktopAutomationError
+        ? { issue: error.issue }
+        : {}),
+    });
+    throw error;
+  }
+  logDraft(deps.log, "restore-end", {
+    status: result.status,
+    restored: result.restored,
+    left: result.left,
+    reason: result.reason ?? null,
+  });
+  return result;
+}
+
+async function restore(deps: RestorerDeps): Promise<RestoreResult> {
   const started = deps.now();
   let account: string | undefined;
   let records: DraftRecord[] = [];
+  /** Every record read, whatever its account or state; undefined before they are read. */
+  let all: number | undefined;
   let ready: boolean;
+  const start = (ready: boolean | null, error?: string) =>
+    logDraft(deps.log, "restore-start", {
+      account: account ?? null,
+      records: records.length,
+      all: all ?? null,
+      ready,
+      ...(error ? { error } : {}),
+    });
   try {
     account = await deps.currentAccount();
-    if (!account) return { status: "idle", restored: 0, left: 0 };
-    records = (await deps.pending()).filter(
+    if (!account) {
+      start(null);
+      return { status: "idle", restored: 0, left: 0 };
+    }
+    const read = await deps.pending();
+    all = read.length;
+    records = read.filter(
       (record) => record.state === "pending" && sameAccount(account, record.to),
     );
-    if (!records.length) return { status: "idle", restored: 0, left: 0 };
+    if (!records.length) {
+      start(null);
+      return { status: "idle", restored: 0, left: 0 };
+    }
     ready = await claudeReady(deps);
   } catch {
+    start(false, "start-failed");
     return { status: "waiting", restored: 0, left: records.length };
   }
+  start(ready);
   if (!ready) return { status: "waiting", restored: 0, left: records.length };
 
   let restored = 0;
   let copied = 0;
   const leave = async (record: DraftRecord, reason: string) => {
+    let marked = false;
     try {
       await deps.mark(record.id, "needs-copy", reason);
       copied++;
+      marked = true;
     } catch {
       // A vault that cannot be read fails a change; the other drafts go on.
     }
+    logDraft(deps.log, "leave", { id: shortId(record.id), reason, marked });
   };
   const end = (status: RestoreResult["status"], reason?: string) => {
     if (restored + copied > 0)
@@ -216,6 +277,12 @@ export async function restoreDrafts(
       if (deps.now() - started >= BUDGET_MS)
         throw new Stop("pending", "budget");
       const record = records[next];
+      const id = shortId(record.id);
+      logDraft(deps.log, "record-start", {
+        id,
+        target: shortId(record.targetAlias),
+        newSession: record.newSession === true,
+      });
       const target = typeable(record);
       if (!target) {
         await leave(record, "manual");
@@ -223,20 +290,29 @@ export async function restoreDrafts(
       }
       const reason = await locked(deps, async () => {
         await confirm(deps, run);
-        return restoreOne(deps, run, target, record.text, typing);
+        return restoreOne(deps, run, target, record.text, typing, id);
       });
       if (reason !== undefined) await leave(record, reason);
       else {
         restored++;
+        let removed = true;
         try {
           await deps.remove(record.id);
         } catch {
           // As above: the next drafts go on.
+          removed = false;
         }
+        logDraft(deps.log, "restored", { id, removed });
       }
     }
   } catch (error) {
     if (!(error instanceof Stop)) throw error;
+    logDraft(deps.log, "stop", {
+      leaves: error.leaves,
+      reason: error.reason,
+      wrote: typing.wrote,
+      phase: "records",
+    });
     // A draft being typed may be in its composer: copy, never type it again. As `maybe-typed`,
     // so no retry after accessibility sets it back to pending.
     if (error.leaves === "copy") {
@@ -261,6 +337,12 @@ export async function restoreDrafts(
     } catch (error) {
       if (!(error instanceof Stop)) throw error;
       // The user moved, or Desktop is busy: the drafts are done, the user stays.
+      logDraft(deps.log, "stop", {
+        leaves: error.leaves,
+        reason: error.reason,
+        wrote: false,
+        phase: "return",
+      });
     }
   return end("done");
 }
@@ -375,9 +457,33 @@ async function restoreOne(
   target: Place,
   text: string,
   typing: { wrote: boolean },
+  /** The draft's id, cut to 8 characters, for the diagnosis log. */
+  id: string | null,
 ): Promise<string | undefined> {
-  let view = await show(deps, run, target);
-  if (!view) return "exact-session-not-observed";
+  const seen: { view?: Snapshot } = {};
+  let view = await show(deps, run, target, seen);
+  if (!view) {
+    const last = seen.view;
+    logDraft(deps.log, "shown-timeout", {
+      id,
+      sessionMatches: !!last && placeOf(last) === target,
+      seen: last ? placeLabel(placeOf(last)) : null,
+      status: last?.status ?? null,
+      composerPresent: last?.composerPresent ?? null,
+    });
+    return "exact-session-not-observed";
+  }
+  logDraft(deps.log, "shown", {
+    id,
+    matched: shows(view, target),
+    status: view.status,
+    composerPresent: view.composerPresent ?? null,
+    composerEmpty: view.composerEmpty,
+    frontmost: view.frontmost ?? null,
+    idleMs: view.idleMs ?? null,
+    guardable: guardable(view, target),
+    sessionMatches: placeOf(view) === target,
+  });
   run.lastSeen = target;
   if (view.status === "running" || view.status === "waiting") return "busy";
   if (view.composerPresent !== true || view.status !== "stopped")
@@ -389,10 +495,18 @@ async function restoreOne(
     if (!guard) return typing.wrote ? afterWrite("unsupported") : "unsupported";
     // Before the first write only: a rewrite finishes what the first one started.
     if (!typing.wrote) yieldTo(deps);
+    const attempt = again ? 2 : 1;
     try {
       typing.wrote = true;
       await deps.automation.writeDraft(guard, text);
+      logDraft(deps.log, "write", { id, ok: true, attempt });
     } catch (error) {
+      logDraft(deps.log, "write", {
+        id,
+        ok: false,
+        attempt,
+        issue: issueOf(error),
+      });
       // Without accessibility the helper can neither read nor type into Desktop's UI, so
       // nothing reached a composer: the draft stays retryable once access is granted.
       if (issueOf(error) === "accessibility-permission-required")
@@ -411,9 +525,22 @@ async function restoreOne(
     try {
       fresh = await deps.automation.inspect();
     } catch (error) {
+      logDraft(deps.log, "recheck", {
+        id,
+        inspected: false,
+        issue: issueOf(error),
+      });
       haltOn(error);
       return afterWrite("unconfirmed");
     }
+    logDraft(deps.log, "recheck", {
+      id,
+      composerPresent: fresh.composerPresent ?? null,
+      composerEmpty: fresh.composerEmpty,
+      status: fresh.status,
+      pidSame: fresh.pid === run.pid,
+      sessionMatches: placeOf(fresh) === target,
+    });
     if (!composing(fresh, run, target)) return afterWrite("unconfirmed");
     if (!fresh.composerEmpty) return undefined;
     if (again) return "lost";
@@ -454,6 +581,8 @@ async function show(
   deps: RestorerDeps,
   run: Run,
   target: Place,
+  /** Set to the last view seen, for the diagnosis log when the target never shows. */
+  seen: { view?: Snapshot },
 ): Promise<Snapshot | undefined> {
   const deadline = deps.now() + SHOWN_MS;
   let openedAt: number | undefined;
@@ -462,6 +591,7 @@ async function show(
   for (;;) {
     yieldTo(deps);
     const view = await look(deps);
+    if (view) seen.view = view;
     const place = view && placeOf(view);
     if (view && place === target) {
       appeared = true;

@@ -380,6 +380,8 @@ function harness(
     fail: new Set<"read" | "mark" | "notify" | "changed">(),
     /** The drafts whose mark fails, one by one. */
     failMark: new Set<string>(),
+    /** Every event the scheduler and the restorer's deps logged, in order. */
+    logs: [] as Array<Record<string, unknown>>,
   };
   const restorer = {
     currentAccount: async () => ACCOUNT,
@@ -397,6 +399,9 @@ function harness(
       if (state.fail.has("notify")) throw new Error("notification");
     },
     now: () => state.clock,
+    log: (event: string, fields?: Record<string, unknown>) => {
+      state.logs.push({ event, ...fields });
+    },
   } as unknown as RestorerDeps;
   const scheduler = new DraftScheduler({
     restorer,
@@ -434,6 +439,125 @@ function harness(
   });
   return { scheduler, state };
 }
+
+test("each run logs its stall tally, and a give-up logs the draft and why", async () => {
+  const { scheduler, state } = harness();
+  state.results.push(stopped("changed"), stopped("moved"), stopped("moved"));
+  await scheduler.afterSwitch();
+  await scheduler.tick();
+  await scheduler.tick();
+  assert.deepEqual(
+    state.logs.filter((e) => e.event === "stalls" || e.event === "give-up"),
+    [
+      { event: "stalls", giveUp: 0, reason: "changed", status: "waiting" },
+      { event: "stalls", giveUp: 0, reason: "moved", status: "waiting" },
+      { event: "stalls", giveUp: 1, reason: "moved", status: "waiting" },
+      { event: "give-up", id: "one", reason: "moved", marked: true },
+    ],
+  );
+  // A draft that cannot be marked is logged as given up and not marked.
+  const failing = harness();
+  failing.state.failMark.add("one");
+  failing.state.results.push(stopped("moved"), stopped("moved"), stopped("moved"));
+  await failing.scheduler.afterSwitch();
+  await failing.scheduler.tick();
+  await failing.scheduler.tick();
+  assert.deepEqual(failing.state.logs.find((e) => e.event === "give-up"), {
+    event: "give-up",
+    id: "one",
+    reason: "moved",
+    marked: false,
+  });
+});
+
+test("an idle run, and one that threw, log their tally with a fixed reason", async () => {
+  const idle = harness();
+  await idle.scheduler.afterSwitch();
+  assert.deepEqual(idle.state.logs, [
+    { event: "stalls", giveUp: 0, reason: null, status: "idle" },
+  ]);
+  const threw = harness();
+  threw.state.results.push(new Error("a message that must never be logged"));
+  await threw.scheduler.afterSwitch();
+  assert.deepEqual(threw.state.logs, [
+    { event: "stalls", giveUp: 0, reason: "error", status: "waiting" },
+  ]);
+});
+
+test("each retry after accessibility logs how many drafts it moved", async () => {
+  const { scheduler, state } = harness({ drafts: [forAccess("a"), forAccess("b")] });
+  await scheduler.retryAccessibility();
+  await scheduler.retryAccessibility({ once: true });
+  assert.deepEqual(
+    state.logs.filter((e) => e.event === "retry-accessibility"),
+    [
+      { event: "retry-accessibility", moved: 2, once: false },
+      { event: "retry-accessibility", moved: 0, once: true },
+    ],
+  );
+  // A scheduler without a log is the one every other test runs, and a log that throws is fine.
+  const bare = harness({ drafts: [forAccess("a")] });
+  (bare.scheduler as any).deps.restorer.log = () => {
+    throw new Error("the log failed");
+  };
+  assert.equal(await bare.scheduler.retryAccessibility(), 1);
+  await bare.scheduler.afterSwitch();
+});
+
+test("copy and dismiss log the draft's id and how they ended, never its text", async () => {
+  const logs: Array<[string, Record<string, unknown> | undefined]> = [];
+  const actions = draftActions({
+    drafts: fakeDrafts([]),
+    writeClipboard: () => {},
+    changed: () => {},
+    log: (event, fields) => void logs.push([event, fields]),
+  });
+  await actions.copy(DRAFT_ID);
+  await actions.dismiss(DRAFT_ID);
+  assert.deepEqual(logs, [
+    ["draft-copy", { id: DRAFT_ID.slice(0, 8), ok: true }],
+    ["draft-dismiss", { id: DRAFT_ID.slice(0, 8), ok: true }],
+  ]);
+  // A refusal by this code says why; any other failure is a fixed word, never its message.
+  const refused = draftActions({
+    drafts: {
+      pendingDrafts: async () => [summary(DRAFT_ID)],
+      draftText: async () => TEXT,
+      dismissDraft: async () => {
+        throw new Error(`EIO ${TEXT}`);
+      },
+    },
+    writeClipboard: () => {},
+    changed: () => {},
+    log: (event, fields) => void logs.push([event, fields]),
+  });
+  logs.length = 0;
+  await assert.rejects(refused.copy(DRAFT_ID), /still waiting/);
+  await assert.rejects(refused.dismiss(DRAFT_ID), /still waiting/);
+  const broken = draftActions({
+    drafts: {
+      pendingDrafts: async () => [summary(DRAFT_ID, { state: "needs-copy" })],
+      draftText: async () => TEXT,
+      dismissDraft: async () => {
+        throw new Error(`EIO ${TEXT}`);
+      },
+    },
+    writeClipboard: () => {},
+    changed: () => {},
+    log: (event, fields) => {
+      logs.push([event, fields]);
+      throw new Error("the log failed");
+    },
+  });
+  await assert.rejects(broken.copy(DRAFT_ID), /EIO/);
+  const id = DRAFT_ID.slice(0, 8);
+  assert.deepEqual(logs, [
+    ["draft-copy", { id, ok: false, reason: "This draft is still waiting to be restored." }],
+    ["draft-dismiss", { id, ok: false, reason: "This draft is still waiting to be restored." }],
+    ["draft-copy", { id, ok: false, reason: "failed" }],
+  ]);
+  assert.ok(!JSON.stringify(logs).includes(TEXT));
+});
 
 test("restores never overlap", async () => {
   let active = 0;
@@ -1055,7 +1179,7 @@ test("no IPC handler returns draft text", () => {
   // Copy and Dismiss go through the trusted wrapper and resolve with nothing.
   assert.match(
     ipc,
-    /const draft = draftActions\(\{\s*drafts: desktop,\s*writeClipboard: \(text\) => clipboard\.writeText\(text\),\s*changed: broadcastChanged,\s*\}\);/,
+    /const draft = draftActions\(\{\s*drafts: desktop,\s*writeClipboard: \(text\) => clipboard\.writeText\(text\),\s*changed: broadcastChanged,\s*log: logDraftEvent,\s*\}\);/,
   );
   assert.match(handler(main, "copy-draft"), /^handle\("copy-draft", \(draftId\) => draft\.copy\(draftId\)\);/);
   assert.match(handler(main, "dismiss-draft"), /^handle\("dismiss-draft", \(draftId\) =>\s*draft\.dismiss\(draftId\),?\s*\);/);

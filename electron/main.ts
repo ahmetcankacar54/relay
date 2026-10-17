@@ -72,6 +72,7 @@ import { CONTINUATION_TEXT } from "./core/continuation";
 import { FleetContinuation, type FleetResult } from "./core/fleet-continuation";
 import { UsageCredentialRefresher } from "./core/usage-refresh";
 import { appendUsageIssue } from "./core/usage-issue-log";
+import { appendDraftEvent, draftEventFilter } from "./core/draft-diagnostics";
 import { UsageError } from "./core/usage-credentials";
 
 let window: BrowserWindow | null = null;
@@ -96,6 +97,25 @@ let continuation: DesktopContinuationManager;
 let fleet: FleetContinuation;
 let automation: ReturnType<typeof nativeDesktopAutomation>;
 let draftRestore: DraftScheduler;
+/** Whether a draft event is worth logging: a run that does nothing says so once. */
+const draftEventAllowed = draftEventFilter();
+/**
+ * One event of the draft restore, for `draft-events.json` in the user data folder, a short
+ * private log that finds where a restore broke. Fields are ids, states, reasons and counts,
+ * never a draft's text. Never throws: a log must not disturb a restore.
+ */
+function logDraftEvent(event: string, fields?: Record<string, unknown>) {
+  try {
+    if (!draftEventAllowed(event, fields)) return;
+    appendDraftEvent(
+      path.join(app.getPath("userData"), "draft-events.json"),
+      { ...fields, event },
+      Date.now(),
+    );
+  } catch {
+    // The log is an aid, never a part of a restore.
+  }
+}
 /**
  * One Desktop operation at a time. The menu bar shows each as it begins rather than at the
  * next poll, and its end, for operations no caller refreshes the tray after.
@@ -167,6 +187,8 @@ else {
         service.store,
         host,
       );
+      // The captures and the vault's reads go to the same log as the restore.
+      desktop.onDraftEvent = logDraftEvent;
       await desktop.initialize();
       usageHistory = new UsageHistory(app.getPath("userData"));
       tempo = new TempoTracker({
@@ -273,6 +295,7 @@ else {
           sleep: (ms) =>
             new Promise<void>((resolve) => setTimeout(resolve, ms)),
           now: Date.now,
+          log: logDraftEvent,
         },
         drafts: () => desktop.pendingDrafts(),
         changed: broadcastChanged,
@@ -922,6 +945,7 @@ function bindIPC() {
     drafts: desktop,
     writeClipboard: (text) => clipboard.writeText(text),
     changed: broadcastChanged,
+    log: logDraftEvent,
   });
   handle("copy-draft", (draftId) => draft.copy(draftId));
   handle("dismiss-draft", (draftId) => draft.dismiss(draftId));

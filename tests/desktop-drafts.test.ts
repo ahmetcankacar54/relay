@@ -1838,6 +1838,156 @@ test("a corrupt vault file reads as empty", async (t) => {
   );
 });
 
+/** A vault on `v`'s files that tells its diagnosis hooks' calls to `calls`. */
+function watchedVault(v: { vault: string }, unsealWith = unseal) {
+  const calls = {
+    errors: [] as Array<[string, string]>,
+    rejected: [] as number[],
+    listed: [] as number[],
+  };
+  const drafts = new DraftVault(v.vault, seal, unsealWith, undefined, {
+    onReadError: (stage, message) => calls.errors.push([stage, message]),
+    onRecordRejected: (index) => calls.rejected.push(index),
+    onList: (count) => calls.listed.push(count),
+  });
+  return { drafts, calls };
+}
+const validRecord = () => ({
+  id: randomUUID(),
+  to: B,
+  targetAlias: ALIAS_X,
+  title: "",
+  text: UNSENT,
+  attachments: false,
+  capturedAt: NOW.toISOString(),
+  state: "pending",
+});
+
+test("onReadError says whether the file could not be unsealed or parsed, with a label that holds no text", async (t) => {
+  const v = await vaultFixture(t);
+  await fs.mkdir(path.dirname(v.file), { recursive: true });
+  const { drafts, calls } = watchedVault(v);
+  // Unsealing throws.
+  await fs.writeFile(v.file, Buffer.from("not sealed at all"));
+  assert.deepEqual(await drafts.list(), []);
+  assert.deepEqual(calls.errors, [["unseal", "unseal-failed"]]);
+  // The same failure on the next read is not told again.
+  await drafts.list();
+  assert.equal(calls.errors.length, 1);
+  // Bad JSON. The parser's own message quotes the data, so a fixed label is told instead.
+  await fs.writeFile(v.file, seal(`not json, ${UNSENT}`));
+  await drafts.list();
+  assert.deepEqual(calls.errors.at(-1), ["parse", "invalid-json"]);
+  // Valid JSON that is not a list.
+  await fs.writeFile(v.file, seal(JSON.stringify({ text: UNSENT })));
+  await drafts.list();
+  assert.deepEqual(calls.errors.at(-1), ["parse", "not-an-array"]);
+  await fs.writeFile(v.file, seal("null"));
+  await drafts.list();
+  assert.equal(calls.errors.length, 3);
+  // A read that works starts it over: the same failure after it is told again.
+  await fs.writeFile(v.file, seal(JSON.stringify([validRecord()])));
+  assert.equal((await drafts.list()).length, 1);
+  await fs.writeFile(v.file, seal("not json"));
+  await drafts.list();
+  assert.equal(calls.errors.length, 4);
+  assert.equal(JSON.stringify(calls).includes(UNSENT), false);
+});
+
+test("onReadError never carries the message of an unseal that throws, or of a read that fails", async (t) => {
+  const v = await vaultFixture(t);
+  await v.drafts.add(B, [conversationDraft(ALIAS_X)]);
+  // An unseal whose message quotes what it was given.
+  const quoting = watchedVault(v, (data) => {
+    throw new Error(`cannot unseal ${data.toString()} ${UNSENT}`);
+  });
+  await quoting.drafts.list();
+  assert.deepEqual(quoting.calls.errors, [["unseal", "unseal-failed"]]);
+  assert.equal(JSON.stringify(quoting.calls).includes(UNSENT), false);
+  // Without system encryption the label says so.
+  const locked = watchedVault(v, () => {
+    throw new Error("System encryption is unavailable.");
+  });
+  await locked.drafts.list();
+  assert.deepEqual(locked.calls.errors, [["unseal", "encryption-unavailable"]]);
+  // A file that cannot be read at all: the errno, never the message with its path.
+  const unreadable = watchedVault(v);
+  const readFile = fs.readFile;
+  t.after(() => {
+    fs.readFile = readFile;
+  });
+  fs.readFile = (async (target: any, ...rest: any[]) => {
+    if (target === v.file)
+      throw Object.assign(new Error(`EIO: injected, open '${v.file}'`), {
+        code: "EIO",
+      });
+    return (readFile as any)(target, ...rest);
+  }) as typeof fs.readFile;
+  assert.deepEqual(await unreadable.drafts.list(), []);
+  await assert.rejects(unreadable.drafts.remove("x"), { code: "EIO" });
+  assert.deepEqual(unreadable.calls.errors, [["read", "EIO"]]);
+  fs.readFile = readFile;
+});
+
+test("onRecordRejected is told the index of each entry that is not a record, once per change", async (t) => {
+  const v = await vaultFixture(t);
+  await fs.mkdir(path.dirname(v.file), { recursive: true });
+  const { drafts, calls } = watchedVault(v);
+  const valid = validRecord();
+  await fs.writeFile(
+    v.file,
+    seal(JSON.stringify([valid, { ...valid, id: "" }, "junk", { ...valid, state: "sent" }, null])),
+  );
+  assert.deepEqual(await drafts.list(), [valid]);
+  assert.deepEqual(calls.rejected, [1, 2, 3, 4]);
+  // The next read of the same file says nothing more.
+  await drafts.list();
+  assert.deepEqual(calls.rejected, [1, 2, 3, 4]);
+  assert.deepEqual(calls.errors, []);
+  // A file with every entry valid, and then a malformed one again, is told again.
+  await fs.writeFile(v.file, seal(JSON.stringify([valid])));
+  await drafts.list();
+  await fs.writeFile(v.file, seal(JSON.stringify([valid, 7])));
+  await drafts.list();
+  assert.deepEqual(calls.rejected, [1, 2, 3, 4, 1]);
+  assert.equal(JSON.stringify(calls).includes(UNSENT), false);
+});
+
+test("onList is told the count only when it differs from the last one told", async (t) => {
+  const v = await vaultFixture(t);
+  const { drafts, calls } = watchedVault(v);
+  await drafts.list();
+  await drafts.list();
+  assert.deepEqual(calls.listed, [0]);
+  await drafts.add(B, [conversationDraft(ALIAS_X)]);
+  await drafts.list();
+  await drafts.list();
+  assert.deepEqual(calls.listed, [0, 1]);
+  await drafts.add(B, [conversationDraft(ALIAS_Y)]);
+  await drafts.list();
+  assert.deepEqual(calls.listed, [0, 1, 2]);
+  const [record] = await drafts.list();
+  await drafts.remove(record.id);
+  await drafts.list();
+  assert.deepEqual(calls.listed, [0, 1, 2, 1]);
+});
+
+test("a hook that throws never disturbs the vault", async (t) => {
+  const v = await vaultFixture(t);
+  const boom = () => {
+    throw new Error("diagnosis failed");
+  };
+  const drafts = new DraftVault(v.vault, seal, unseal, undefined, {
+    onReadError: boom,
+    onRecordRejected: boom,
+    onList: boom,
+  });
+  await drafts.add(B, [conversationDraft(ALIAS_X)]);
+  assert.equal((await drafts.list()).length, 1);
+  await fs.writeFile(v.file, "garbage");
+  assert.deepEqual(await drafts.list(), []);
+});
+
 test("a vault file that cannot be read is never overwritten", async (t) => {
   const v = await vaultFixture(t);
   await v.drafts.add(B, [conversationDraft(ALIAS_X)]);

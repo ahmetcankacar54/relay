@@ -4,6 +4,7 @@ import {
   type RestorerDeps,
   type RestoreResult,
 } from "./draft-restorer";
+import { logDraft, shortId, type DraftLog } from "./draft-diagnostics";
 import type { DraftSummary } from "./draft-vault";
 
 /**
@@ -177,9 +178,12 @@ export class DraftScheduler {
    * moved. Never throws: a vault that cannot be read or changed moves none.
    */
   retryAccessibility(options?: { once?: boolean }): Promise<number> {
-    const turn = this.retrying.then(() =>
-      this.moveBack(options?.once === true),
-    );
+    const once = options?.once === true;
+    const turn = this.retrying.then(async () => {
+      const moved = await this.moveBack(once);
+      logDraft(this.deps.restorer.log, "retry-accessibility", { moved, once });
+      return moved;
+    });
     this.retrying = turn;
     return turn;
   }
@@ -278,14 +282,27 @@ export class DraftScheduler {
     const after = result.status === "idle" ? before : await this.read();
     const tally = tallyStalls(this.stalls, { before, after, account, result });
     this.stalls = tally.counts;
+    logDraft(restorer.log, "stalls", {
+      giveUp: tally.giveUp.length,
+      reason: result.reason ?? null,
+      status: result.status,
+    });
     const given = new Set<string>();
-    for (const id of tally.giveUp)
+    for (const id of tally.giveUp) {
+      let marked = false;
       try {
         await restorer.mark(id, "needs-copy", result.reason);
         given.add(id);
+        marked = true;
       } catch {
         // A vault that cannot be changed keeps the draft pending; the next run tries again.
       }
+      logDraft(restorer.log, "give-up", {
+        id: shortId(id),
+        reason: result.reason ?? null,
+        marked,
+      });
+    }
     if (given.size)
       try {
         restorer.notify({ restored: 0, left: given.size });
@@ -325,6 +342,7 @@ export function draftSummaries(source: {
 }
 
 const GONE = "This draft is no longer there.";
+const WAITING = "This draft is still waiting to be restored.";
 
 /**
  * The panel's Copy and Dismiss, by record id, for a draft left for copy only: one still
@@ -342,14 +360,21 @@ export function draftActions(deps: {
   };
   writeClipboard(text: string): void;
   changed(): void;
+  /** A diagnosis log: the draft's id cut to 8 characters and how the action ended, never text. */
+  log?: DraftLog;
 }) {
   const draftId = z.uuid();
+  /** How an action ended, for the log: this code's own refusals say why, anything else does not. */
+  const outcome = (error: unknown) =>
+    error instanceof Error && (error.message === GONE || error.message === WAITING)
+      ? { ok: false, reason: error.message }
+      : { ok: false, reason: "failed" };
   /** Throws unless draft `id` waits to be copied by hand. */
   const leftForCopy = async (id: string) => {
     const draft = (await deps.drafts.pendingDrafts()).find((d) => d.id === id);
     if (!draft) throw new Error(GONE);
     if (draft.state !== "needs-copy")
-      throw new Error("This draft is still waiting to be restored.");
+      throw new Error(WAITING);
   };
   return {
     async copy(raw: unknown): Promise<void> {
@@ -360,6 +385,10 @@ export function draftActions(deps: {
         if (text === undefined) throw new Error(GONE);
         deps.writeClipboard(text);
         await deps.drafts.dismissDraft(id);
+        logDraft(deps.log, "draft-copy", { id: shortId(id), ok: true });
+      } catch (error) {
+        logDraft(deps.log, "draft-copy", { id: shortId(id), ...outcome(error) });
+        throw error;
       } finally {
         deps.changed();
       }
@@ -369,6 +398,13 @@ export function draftActions(deps: {
       try {
         await leftForCopy(id);
         await deps.drafts.dismissDraft(id);
+        logDraft(deps.log, "draft-dismiss", { id: shortId(id), ok: true });
+      } catch (error) {
+        logDraft(deps.log, "draft-dismiss", {
+          id: shortId(id),
+          ...outcome(error),
+        });
+        throw error;
       } finally {
         deps.changed();
       }
