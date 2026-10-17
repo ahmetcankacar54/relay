@@ -235,8 +235,8 @@ export function Settings() {
           </Note>
           <Note className="mt-2">
             {t(
-              "Relay kayıtlı girişleri macOS Anahtarlık’ta şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
-              "Relay encrypts saved sign-ins in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
+              "Relay kayıtlı girişleri macOS Anahtarlık’ta tuttuğu bir anahtarla şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
+              "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
             )}
           </Note>
         </Card>

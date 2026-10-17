@@ -153,3 +153,31 @@ test("the reset line and the remaining-quota note are set in text-xs, not 11 px"
     assert.doesNotMatch(html, /text-\[11px\]/, language);
   }
 });
+
+test("the status phrase may wrap, and only the percentage stays on one line", () => {
+  // The weekly window is not reported: its phrase is the longest the card shows.
+  const usage: AccountUsage = {
+    accountId: "a",
+    status: "ready",
+    stale: false,
+    checkedAt,
+    fiveHour: { usedPercent: 20, resetsAt: later },
+  };
+  for (const language of ["en", "tr"]) {
+    const html = render(usage, language);
+    const strongs = html.match(/<strong[^>]*>/g) ?? [];
+    assert.equal(strongs.length, 2, language);
+    for (const tag of strongs)
+      assert.doesNotMatch(tag, /whitespace-nowrap/, language);
+    assert.match(
+      html,
+      /<span class="whitespace-nowrap">80%<\/span> <small class="text-xs font-normal text-muted-foreground">(left|kaldı)<\/small>/,
+      language,
+    );
+    assert.match(
+      html,
+      /<span class="whitespace-nowrap">—<\/span> <small class="text-xs font-normal text-muted-foreground">(No limit reported|Limit bildirilmiyor)<\/small>/,
+      language,
+    );
+  }
+});

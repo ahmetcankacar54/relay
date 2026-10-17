@@ -94,6 +94,45 @@ test("a connection flag left over from before is no alert while the service is r
   );
 });
 
+test("a usage sign-in that belongs to another account alerts on the active account, whatever the read says", () => {
+  const stamp = iso(NOW);
+  const desktopId = { accountUuid: "u-desktop", orgId: "o-1", savedAt: stamp };
+  const mismatched = {
+    ...account("a"),
+    desktop: desktopId,
+    auth: { loggedIn: true, accountUuid: "u-other", orgId: "o-1", checkedAt: stamp },
+  } as Account;
+  const matching = {
+    ...account("a"),
+    desktop: desktopId,
+    auth: { loggedIn: true, accountUuid: "u-desktop", orgId: "o-1", checkedAt: stamp },
+  } as Account;
+  for (const extra of [{}, { issue: "keychain-locked" as const }, { issue: "rate-limited" as const }])
+    assert.equal(
+      mascotPose(input({ accounts: [mismatched, account("b")], usage: { a: usage("a", 20, 10, extra), b: usage("b", 30) } }), NOW),
+      "alert",
+      JSON.stringify(extra),
+    );
+  assert.equal(mascotPose(input({ accounts: [matching, account("b")] }), NOW), "idle");
+  // A mismatch on an account that is not active is no alert.
+  assert.equal(
+    mascotPose(input({ accounts: [account("a"), { ...mismatched, id: "b", name: "b" }] }), NOW),
+    "idle",
+  );
+});
+
+test("a locked Keychain is a sign-in problem, with or without a retained flag", () => {
+  for (const extra of [
+    { issue: "keychain-locked" as const },
+    { issue: "keychain-locked" as const, connectionRenewalRequired: true },
+  ])
+    assert.equal(
+      mascotPose(input({ usage: { a: usage("a", 20, 10, extra), b: usage("b", 30) } }), NOW),
+      "alert",
+      JSON.stringify(extra),
+    );
+});
+
 test("the panel head follows the pose", () => {
   assert.deepEqual(
     (["alert", "away", "warming", "sleeping", "hungry", "idle"] as const).map(headFor),

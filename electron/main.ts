@@ -1225,24 +1225,29 @@ function bindIPC() {
 app.on("activate", () => {
   showWindow();
 });
-/** The least often a window gaining focus looks for a newly granted accessibility permission. */
-const ACCESSIBILITY_CHECK_MS = 30_000;
-let accessibilityCheckedAt = -Infinity;
+/** The least often a window gaining focus retries the drafts left for want of accessibility. */
+const ACCESSIBILITY_RETRY_MS = 30_000;
+let accessibilityRetriedAt = -Infinity;
 /**
  * Someone who grants accessibility in System Settings comes back to Relay's window or panel:
- * look, never asking, and retry the drafts left for Copy for want of it.
+ * look, never asking, and once it is granted retry the drafts left for Copy for want of it,
+ * each at most once while Relay runs. Looking is cheap, so every focus looks; only a retry
+ * waits 30 s for the next.
  */
 function retryDraftsOnFocus() {
   if (process.platform !== "darwin" || !initialized) return;
-  const now = Date.now();
-  if (now - accessibilityCheckedAt < ACCESSIBILITY_CHECK_MS) return;
-  accessibilityCheckedAt = now;
+  let trusted: boolean;
   try {
-    if (systemPreferences.isTrustedAccessibilityClient(false))
-      void draftRestore?.retryAccessibility();
+    trusted = systemPreferences.isTrustedAccessibilityClient(false);
   } catch {
     // A focus change never fails because of this check.
+    return;
   }
+  if (trusted !== true) return;
+  const now = Date.now();
+  if (now - accessibilityRetriedAt < ACCESSIBILITY_RETRY_MS) return;
+  accessibilityRetriedAt = now;
+  void draftRestore?.retryAccessibility({ once: true });
 }
 app.on("browser-window-focus", retryDraftsOnFocus);
 app.on("window-all-closed", () => {

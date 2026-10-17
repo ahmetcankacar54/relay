@@ -83,9 +83,9 @@ const MAX_TEXT = 16_384;
 const IDLE_MS = 3_000;
 
 /**
- * Ends a run. With `pending`, the draft in hand and those after it stay pending, unless the
- * draft in hand was being typed: that one is left for copy as `maybe-typed`. With `copy`, they
- * are all left for copy with `reason`.
+ * Ends a run. With `pending`, the draft in hand and those after it stay pending; with `copy`,
+ * they are all left for copy with `reason`. Either way a draft in hand that was being typed
+ * is left for copy as `maybe-typed`.
  */
 class Stop {
   constructor(
@@ -236,12 +236,16 @@ export async function restoreDrafts(
     }
   } catch (error) {
     if (!(error instanceof Stop)) throw error;
+    // A draft being typed may be in its composer: copy, never type it again. As `maybe-typed`,
+    // so no retry after accessibility sets it back to pending.
     if (error.leaves === "copy") {
-      for (const record of records.slice(next))
-        await leave(record, error.reason);
+      for (let i = next; i < records.length; i++)
+        await leave(
+          records[i],
+          i === next && typing.wrote ? "maybe-typed" : error.reason,
+        );
       return end("done");
     }
-    // A draft being typed may be in its composer: copy, never type it again.
     if (typing.wrote) await leave(records[next], "maybe-typed");
     return end("waiting", error.reason);
   }

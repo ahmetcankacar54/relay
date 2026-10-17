@@ -1,5 +1,5 @@
 import type { Account, AccountUsage, DesktopState, UsageIssue, WindowAttempt } from "./types";
-import { displayedIssue } from "./account-state";
+import { desktopCliMismatch, displayedIssue } from "./account-state";
 import { freshUsage, maxUsedPercent } from "./usage";
 
 export type MascotPose = "alert" | "away" | "warming" | "sleeping" | "hungry" | "idle";
@@ -19,6 +19,7 @@ export const WARMING_MS = 2 * 60_000;
 /** Same threshold the menu bar title used for its warning. */
 export const HUNGRY_PERCENT = 90;
 const SIGN_IN_ISSUES: ReadonlySet<UsageIssue> = new Set([
+  "keychain-locked",
   "renewal-required",
   "expired",
   "identity-mismatch",
@@ -34,6 +35,11 @@ export function mascotPose(input: MascotInput, now = Date.now()): MascotPose {
   if (desktop && (desktop.recoveryRequired || !!desktop.error || !desktop.available))
     return "alert";
   if (issue && SIGN_IN_ISSUES.has(issue)) return "alert";
+  // A usage sign-in of another account is a sign-in problem, whatever its last read says.
+  const activeAccount = activeId
+    ? accounts.find((a) => a.id === activeId)
+    : undefined;
+  if (activeAccount && desktopCliMismatch(activeAccount)) return "alert";
   if (desktop?.busy) return "away";
   if (
     input.attempts?.some((a) => {

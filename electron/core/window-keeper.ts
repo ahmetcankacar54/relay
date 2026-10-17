@@ -32,11 +32,12 @@ export const KEEPER_COOLDOWN_MS = 15 * 60_000;
 export const KEEPER_DAILY_LIMIT = 8;
 const FRESH_MS = 5 * 60_000;
 const NOTIFY_MS = 60 * 60_000;
+/** Usage issues that pass on their own: they wait for a fresh read, never block. */
+const TRANSIENT_ISSUES = new Set(["rate-limited", "unavailable"]);
 /**
  * Refusals that repeat on every attempt (administrator policy, an unsupported
  * system or CLI). They stop the account until the plan changes.
  */
-const TRANSIENT_ISSUES = new Set(["rate-limited", "unavailable"]);
 export const KEEPER_STOP_REASONS = new Set([
   "routine-policy-unverified",
   "routine-platform-unsupported",

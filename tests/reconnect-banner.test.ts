@@ -825,6 +825,35 @@ test("the mismatch banner is dismissed by its own key, and a matching identity h
   );
 });
 
+test("a dismissed mismatch outlives every read and goes once the identities match", async () => {
+  restart([dismissalKey("m", "identity-mismatch")]);
+  const dom = fakeDom({ localStorage: () => storage() });
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    const mount = (accounts: Account[], u: AccountUsage) =>
+      act(async () => root.render(tree(relayFor({ m: u }, accounts), "tr")));
+    const keys = () => [...getDismissals()].sort();
+    // Whatever the read says, the usage sign-in is still another account's.
+    for (const u of [
+      ready("m"),
+      usage("rate-limited", "m"),
+      usage("keychain-locked", "m"),
+    ]) {
+      await mount([other()], u);
+      assert.deepEqual(keys(), ["m:identity-mismatch"], String(u.issue));
+    }
+    assert.equal(writes, 0, "nothing was pruned or written");
+    // The usage sign-in is the Claude app's again: the dismissal has nothing left to hide.
+    await mount([sameIdentity("m", "Ek · Pro")], ready("m"));
+    assert.deepEqual(keys(), []);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
 test("a mismatched account counts in the grouped banner and its row says why", () => {
   const html = render(
     relayFor({ a: usage("expired", "a"), m: ready("m") }, [max, other()]),

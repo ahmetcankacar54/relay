@@ -129,7 +129,9 @@ function interval(fn: () => void, ms: number): () => void {
  * 2 minutes, and after one that found the user active, 60 s; a switch does not. A pending
  * draft that `MAX_STALLS` runs in a row tried and
  * stopped on is left for Copy with the last stop reason, so none stays pending for ever.
- * Runs never throw.
+ * Once accessibility is granted, `retryAccessibility` sets the drafts left for Copy for want
+ * of it back to pending, one call at a time: from the user's grant every one, and from a
+ * window gaining focus each at most once while Relay runs. Runs never throw.
  */
 export class DraftScheduler {
   private running = false;
@@ -140,6 +142,10 @@ export class DraftScheduler {
   private notBefore = -Infinity;
   private stalls = new Map<string, number>();
   private stopped = false;
+  /** The drafts `retryAccessibility` set back to pending while Relay runs. */
+  private retried = new Set<string>();
+  /** The `retryAccessibility` call in progress; the next one waits for it. */
+  private retrying: Promise<unknown> = Promise.resolve();
   constructor(private readonly deps: DraftSchedulerDeps) {}
 
   /** Turns the 10 s retries on when drafts wait from before, as after Relay restarts. */
@@ -165,20 +171,35 @@ export class DraftScheduler {
   /**
    * Accessibility is granted: every draft left for Copy only because it was missing goes back
    * to pending, with its reason and its count of stops cleared, and the 10 s retries are armed.
-   * Resolves with how many drafts moved. Never throws: a vault that cannot be read or changed
-   * moves none.
+   * With `once`, as when a window gains focus, a draft this already set back while Relay runs
+   * stays for Copy; without, as after the user grants the permission, every one goes back. A
+   * call waits for the one before it, then reads the drafts. Resolves with how many drafts
+   * moved. Never throws: a vault that cannot be read or changed moves none.
    */
-  async retryAccessibility(): Promise<number> {
+  retryAccessibility(options?: { once?: boolean }): Promise<number> {
+    const turn = this.retrying.then(() =>
+      this.moveBack(options?.once === true),
+    );
+    this.retrying = turn;
+    return turn;
+  }
+
+  /** One `retryAccessibility`, with none other in progress. */
+  private async moveBack(once: boolean): Promise<number> {
     if (this.stopped) return 0;
     let moved = 0;
     try {
       const waiting = (await this.read()).filter(
-        (d) => d.state === "needs-copy" && d.reason === "accessibility",
+        (d) =>
+          d.state === "needs-copy" &&
+          d.reason === "accessibility" &&
+          !(once && this.retried.has(d.id)),
       );
       for (const draft of waiting)
         try {
           await this.deps.restorer.mark(draft.id, "pending");
           this.stalls.delete(draft.id);
+          this.retried.add(draft.id);
           moved++;
         } catch {
           // A vault that cannot be changed leaves the draft for Copy.

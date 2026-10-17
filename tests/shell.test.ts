@@ -160,7 +160,7 @@ test("compact rail centres its icon buttons", () => {
 // block they escape it and stretch the window, which then scrolls the whole shell into empty space.
 test("the page scroller contains absolutely positioned page content", () => {
   const shell = fs.readFileSync(path.join(import.meta.dirname, "../src/app/Shell.tsx"), "utf8");
-  const main = shell.match(/<main className="([^"]*)"/)?.[1].split(/\s+/) ?? [];
+  const main = shell.match(/<main\s+className="([^"]*)"/)?.[1].split(/\s+/) ?? [];
   assert.ok(main.includes("overflow-y-auto"));
   assert.ok(main.includes("relative"));
 });

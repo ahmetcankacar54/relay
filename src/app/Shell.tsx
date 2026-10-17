@@ -75,7 +75,10 @@ export function Shell() {
               }
             }
           />
-          <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto" ref={mainRef}>
+          <main
+            className="relative flex min-w-0 flex-1 flex-col overflow-y-auto"
+            ref={mainRef}
+          >
             {/* In the 56 px rail the macOS traffic lights overhang into this column; keep it clear. */}
             <div
               className={cn(

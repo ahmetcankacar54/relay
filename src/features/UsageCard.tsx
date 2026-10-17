@@ -154,13 +154,16 @@ export function UsageCard({
           <span>{title}</span>
           <strong
             className={cn(
-              "text-sm whitespace-nowrap tabular-nums",
+              "text-sm tabular-nums",
               warning ? "text-crit" : "text-foreground",
             )}
           >
-            {left === undefined
-              ? "—"
-              : `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(left)}%`}{" "}
+            {/* The phrase after it may wrap; the percentage never breaks. */}
+            <span className="whitespace-nowrap">
+              {left === undefined
+                ? "—"
+                : `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(left)}%`}
+            </span>{" "}
             <small className="text-xs font-normal text-muted-foreground">
               {left !== undefined
                 ? t("kaldı", "left")

@@ -14,6 +14,7 @@ import {
   restoreDrafts,
   type RestorerDeps,
 } from "../electron/core/draft-restorer";
+import { DraftScheduler } from "../electron/core/draft-main";
 
 const ACCOUNT = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const OTHER = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
@@ -474,12 +475,64 @@ test("accessibility lost mid-restore stops at once and leaves the rest for copy"
     left: 2,
   });
   assert.deepEqual(h.removed, ["draft-1"]);
+  // The write that failed may have typed part of its draft, so that one is never typed again.
   assert.deepEqual(h.marks, [
-    ["draft-2", "needs-copy", "accessibility"],
+    ["draft-2", "needs-copy", "maybe-typed"],
     ["draft-3", "needs-copy", "accessibility"],
   ]);
   // Nothing more is tried in Desktop: no third conversation, no return.
   assert.equal(h.calls.at(-1), `write:${target(2)}`);
+});
+
+test("accessibility revoked at the re-check after a write leaves that draft maybe-typed, so a grant moves back only the rest", async () => {
+  const h = harness({ records: [record(1), record(2), record(3)] });
+  let revoked = false;
+  h.hooks.sleep = (ms) => {
+    if (ms === 5_000) revoked = true;
+  };
+  h.hooks.inspect = () =>
+    revoked ? issue("accessibility-permission-required") : undefined;
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 0,
+    left: 3,
+  });
+  assert.deepEqual(h.writes(), [`write:${target(1)}`]);
+  assert.deepEqual(h.marks, [
+    ["draft-1", "needs-copy", "maybe-typed"],
+    ["draft-2", "needs-copy", "accessibility"],
+    ["draft-3", "needs-copy", "accessibility"],
+  ]);
+  // Granted again: the draft that may be in its composer is never typed a second time.
+  const scheduler = new DraftScheduler({
+    restorer: h.deps,
+    drafts: async () =>
+      (await h.deps.pending()).map((r) => ({
+        id: r.id,
+        to: r.to,
+        title: r.title,
+        newSession: !!r.newSession,
+        attachments: r.attachments,
+        state: r.state,
+        reason: r.reason,
+        capturedAt: r.capturedAt,
+      })),
+    changed: () => {},
+    every: () => () => {},
+  });
+  assert.equal(await scheduler.retryAccessibility(), 2);
+  assert.deepEqual(h.marks.slice(3), [
+    ["draft-2", "pending", undefined],
+    ["draft-3", "pending", undefined],
+  ]);
+  assert.deepEqual(
+    (await h.deps.pending()).map((r) => [r.id, r.state]),
+    [
+      ["draft-1", "needs-copy"],
+      ["draft-2", "pending"],
+      ["draft-3", "pending"],
+    ],
+  );
 });
 
 test("text wiped after writing is written once more, then left for copy", async () => {

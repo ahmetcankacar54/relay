@@ -155,14 +155,14 @@ test("Settings explains the Keychain prompt in Turkish and English, under the te
   const note = (html: string) => /<p class="[^"]*text-muted-foreground[^"]*">(Relay [^<]*(?:Anahtarlık|Keychain)[^<]*)<\/p>/.exec(html)?.[1];
   assert.equal(
     note(tr),
-    "Relay kayıtlı girişleri macOS Anahtarlık’ta şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
+    "Relay kayıtlı girişleri macOS Anahtarlık’ta tuttuğu bir anahtarla şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
   );
   assert.equal(
     note(en),
-    "Relay encrypts saved sign-ins in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
+    "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
   );
   // It belongs to the technical details card, after the existing notes.
-  assert.ok(tr.indexOf("Teknik bilgiler") < tr.indexOf("Anahtarlık’ta şifreler"));
-  assert.ok(tr.indexOf("Limit okuma girişi resmi Claude Code") < tr.indexOf("Anahtarlık’ta şifreler"));
-  assert.ok(tr.indexOf("Anahtarlık’ta şifreler") < tr.indexOf("Yerelde saklanır"));
+  assert.ok(tr.indexOf("Teknik bilgiler") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
+  assert.ok(tr.indexOf("Limit okuma girişi resmi Claude Code") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
+  assert.ok(tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler") < tr.indexOf("Yerelde saklanır"));
 });
