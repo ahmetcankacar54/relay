@@ -66,8 +66,8 @@ export function DesktopSetup({
               "Link the account open in Claude to the matching Relay profile. The email and workspace must belong to that account.",
             )
           : t(
-              "Bu profil henüz Desktop’a bağlı değil. Tarayıcı girişi kullanım limitlerini bağlar; Desktop geçişi için bir kez Claude’da da giriş yapman gerekir.",
-              "This profile is not connected to Desktop yet. Browser sign-in connects usage limits; switching in Desktop requires one sign-in inside Claude too.",
+              "Bu profilin Claude uygulaması girişi henüz kayıtlı değil. Limit okuma girişi kullanım limitlerini okur; hesap geçişi için bir kez Claude uygulaması girişi de gerekir.",
+              "This profile has no saved Claude app sign-in yet. The usage sign-in reads usage limits; switching also needs one Claude app sign-in.",
             )}
       </p>
       {!account && (

@@ -106,7 +106,7 @@ export function DesktopPendingPanel() {
         <div className="min-w-0">
           <h3 className="font-semibold">
             {pendingDesktop.name} ·{" "}
-            {t("Desktop bağlantısı", "Desktop connection")}
+            {t("Claude uygulaması girişi", "Claude app sign-in")}
           </h3>
           <p className="text-sm text-muted-foreground">
             {t(
@@ -191,14 +191,13 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
         )}
         <div className="min-w-0">
           <h3 className="font-semibold">
-            {flowAccount?.name} ·{" "}
-            {t("Tarayıcı bağlantısı", "Browser connection")}
+            {flowAccount?.name} · {t("Limit okuma girişi", "Usage sign-in")}
           </h3>
           <p className="text-sm text-muted-foreground">
             {flow.status === "connected"
               ? t(
-                  "Tarayıcı bağlantısı tamamlandı. Bu hesaba ait kullanım limitleri okunabilir.",
-                  "Browser sign-in completed. Usage limits for this account can now be read.",
+                  "Limit okuma girişi tamamlandı. Bu hesaba ait kullanım limitleri okunabilir.",
+                  "Usage sign-in completed. Usage limits for this account can now be read.",
                 )
               : flow.status === "verifying"
                 ? t(

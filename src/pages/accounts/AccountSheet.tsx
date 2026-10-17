@@ -192,8 +192,8 @@ export function AccountSheetBody({
           className="rounded-lg border border-crit/40 bg-crit/10 px-3 py-2 text-sm"
         >
           {t(
-            "Desktop ve limit bağlantısı farklı hesaplara ait. Bu profilin doğru hesabıyla tarayıcı girişini yenile.",
-            "Desktop and usage are connected to different accounts. Reconnect browser sign-in with the correct account for this profile.",
+            "Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Limit okuma girişini bu profilin hesabıyla yenile.",
+            "The Claude app sign-in and the usage sign-in belong to different accounts. Renew the usage sign-in with this profile’s account.",
           )}
         </p>
       )}
@@ -212,10 +212,10 @@ export function AccountSheetBody({
       <Section title={t("Bağlantılar", "Connections")}>
         <ConnectionRow
           icon={<Monitor />}
-          title="Claude Desktop"
+          title={t("Claude uygulaması girişi", "Claude app sign-in")}
           tone={a.desktop ? "ok" : "off"}
           status={
-            a.desktop
+            (a.desktop
               ? t(
                   "Kaydedildi · hesap geçişine hazır",
                   "Saved · ready to switch",
@@ -223,7 +223,11 @@ export function AccountSheetBody({
               : t(
                   "İlk kurulum gerekli · henüz geçiş yapılamaz",
                   "Setup required · switching is not ready yet",
-                )
+                )) +
+            t(
+              " · Claude’u bu hesapla açmak için kaydedilir.",
+              " · Saved to open Claude with this account.",
+            )
           }
           actions={
             a.desktop ? (
@@ -233,7 +237,10 @@ export function AccountSheetBody({
                 disabled={desktopBusy || !!pendingDesktop}
                 onClick={() => relay.requestDesktop(a, "reconnect")}
               >
-                {t("Desktop girişini yenile…", "Reconnect Desktop…")}
+                {t(
+                  "Claude uygulaması girişini yenile…",
+                  "Renew Claude app sign-in…",
+                )}
               </Button>
             ) : (
               <Button
@@ -250,7 +257,10 @@ export function AccountSheetBody({
                   relay.cancelDesktopRequest();
                 }}
               >
-                {t("Desktop’a bağla", "Connect Desktop")}
+                {t(
+                  "Claude uygulaması girişini kaydet",
+                  "Save Claude app sign-in",
+                )}
               </Button>
             )
           }
@@ -273,10 +283,7 @@ export function AccountSheetBody({
         )}
         <ConnectionRow
           icon={<Globe2 />}
-          title={t(
-            "Kullanım limitleri · tarayıcı girişi",
-            "Usage limits · browser sign-in",
-          )}
+          title={t("Limit okuma girişi", "Usage sign-in")}
           tone={waiting ? "warn" : reconnect ? "crit" : "ok"}
           status={
             (waiting
@@ -284,7 +291,11 @@ export function AccountSheetBody({
               : reconnect
                 ? t("Giriş yenilenmeli", "Sign-in needs renewal")
                 : t("Bağlı", "Connected")) +
-            (a.auth?.email ? ` · ${a.auth.email}` : "")
+            (a.auth?.email ? ` · ${a.auth.email}` : "") +
+            t(
+              " · Limitleri okumak için tarayıcıda onaylanır.",
+              " · Approved in the browser to read limits.",
+            )
           }
           actions={
             <>
@@ -297,8 +308,8 @@ export function AccountSheetBody({
                 {waiting
                   ? t("Bağlanıyor…", "Connecting…")
                   : a.auth?.email
-                    ? t("Girişi yenile", "Reconnect")
-                    : t("Tarayıcıda bağla", "Connect in browser")}
+                    ? t("Limit okuma girişini yenile", "Renew usage sign-in")
+                    : t("Limit okuma girişi yap", "Sign in to read usage")}
               </Button>
               <Button
                 size="icon-sm"
@@ -319,8 +330,8 @@ export function AccountSheetBody({
                             `${a.name} · ${checked.auth.email ?? ""} connection verified.`,
                           )
                         : t(
-                            "Giriş doğrulanamadı. Tarayıcı girişini yenile.",
-                            "Could not verify sign-in. Reconnect in the browser.",
+                            "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.",
+                            "Could not verify the usage sign-in. Renew the usage sign-in.",
                           ),
                     );
                   })

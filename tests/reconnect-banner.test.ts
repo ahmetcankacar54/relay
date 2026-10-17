@@ -140,21 +140,21 @@ test("the sign-in banner says what is wrong and what Reconnect does", () => {
   const tr = render(relayFor({ a: usage("expired") }));
   assert.match(
     tr,
-    /Kişisel · Max · tarayıcı girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./,
   );
   assert.match(
     tr,
-    /Yeniden bağlan, tarayıcıda bu hesabın Claude girişini açar\. Girişi onaylayınca uyarı kapanır\./,
+    /Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar\. Onaylayınca uyarı kapanır\./,
   );
   assert.match(tr, /<button[^>]*>Yeniden bağlan<\/button>/);
   const en = render(relayFor({ a: usage("scope") }), "en");
   assert.match(
     en,
-    /Kişisel · Max · the browser sign-in needs to be renewed: the sign-in cannot read usage\./,
+    /Kişisel · Max · the usage sign-in needs to be renewed: the sign-in cannot read usage\./,
   );
   assert.match(
     en,
-    /Reconnect opens this account’s Claude sign-in in the browser\. The warning closes once you approve it\./,
+    /Reconnect opens this account’s usage sign-in in the browser\. The warning closes once you approve it\./,
   );
 });
 

@@ -90,7 +90,7 @@ test("the add-account dialog walks the Desktop and limit steps for the created p
   assert.match(capture, /Code çalışma alanı/);
   assert.match(capture, /org-2/);
   const limitStep = wrap(relayFor(), createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }));
-  assert.match(limitStep, /Tarayıcıda bağla/);
+  assert.match(limitStep, /Limit okuma girişi yap/);
   assert.match(limitStep, /Bitti/);
 });
 
@@ -112,7 +112,7 @@ test("connection panels keep their ids, live regions and copy", () => {
   const html = wrap(relayFor({ pendingDesktop: b, flow, flowAccount: b }), createElement(ConnectionPanels));
   assert.match(html, /id="desktop-pending-panel"[^>]*aria-live="polite"|aria-live="polite"[^>]*id="desktop-pending-panel"/);
   assert.match(html, /id="cli-connection-panel"/);
-  assert.match(html, /Studio · Desktop bağlantısı/);
+  assert.match(html, /Studio · Claude uygulaması girişi/);
   assert.match(html, /Claude’u yeniden aç/);
   assert.match(html, /Tarayıcı onayı bekleniyor/);
   assert.match(html, /Tarayıcıyı yeniden aç/);

@@ -40,10 +40,13 @@ const pairs: [string, string][] = [
     "This Desktop profile is already connected.",
   ],
   [
-    "Kayıtlı Desktop girişi eksik. Hesabı yeniden bağla.",
+    "Kayıtlı Claude uygulaması girişi eksik. Hesabı yeniden bağla.",
     "Saved Desktop sign-in is missing. Connect this account again.",
   ],
-  ["Kayıtlı Desktop girişi geçersiz.", "Invalid saved Desktop sign-in."],
+  [
+    "Kayıtlı Claude uygulaması girişi geçersiz.",
+    "Invalid saved Desktop sign-in.",
+  ],
   [
     "Claude hâlâ açık. Dosyalar değiştirilmedi.",
     "Claude is still running. No files were changed.",
@@ -158,7 +161,7 @@ const pairs: [string, string][] = [
     "Save the current Desktop account before switching.",
   ],
   [
-    "Önce devam eden Desktop girişini tamamla veya iptal et.",
+    "Önce devam eden Claude uygulaması girişini tamamla veya iptal et.",
     "Finish or cancel the current Desktop sign-in first.",
   ],
   [
@@ -187,11 +190,26 @@ const pairs: [string, string][] = [
     "Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.",
   ],
   [
-    "İşletim sistemi şifrelemesi kullanılamıyor. Desktop girişi kaydedilmedi.",
+    "İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.",
     "System encryption is unavailable. Desktop sign-in was not saved.",
   ],
 ];
+/**
+ * The English text of a pair is also the lookup key: it is the backend error, word for word (see
+ * electron/core). Where the English display names the sign-in differently from the backend, the
+ * display lives here, keyed by that backend text, so the key stays equal to the error.
+ */
+const englishDisplay: Record<string, string> = {
+  "Saved Desktop sign-in is missing. Connect this account again.":
+    "Saved Claude app sign-in is missing. Connect this account again.",
+  "Invalid saved Desktop sign-in.": "Invalid saved Claude app sign-in.",
+  "Finish or cancel the current Desktop sign-in first.":
+    "Finish or cancel the current Claude app sign-in first.",
+  "System encryption is unavailable. Desktop sign-in was not saved.":
+    "System encryption is unavailable. Claude app sign-in was not saved.",
+};
 export function localizeError(message: string, language: "tr" | "en") {
   const pair = pairs.find((p) => p.includes(message));
-  return pair ? pair[language === "tr" ? 0 : 1] : message;
+  if (!pair) return message;
+  return language === "tr" ? pair[0] : (englishDisplay[pair[1]] ?? pair[1]);
 }

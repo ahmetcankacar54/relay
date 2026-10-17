@@ -83,7 +83,7 @@ export function rowActions(
     });
   items.push({
     key: "cli",
-    label: t("Girişi yenile", "Reconnect"),
+    label: t("Limit okuma girişini yenile", "Renew usage sign-in"),
     icon: Globe2,
     disabled: !!relay.busy || pendingFlow(authFlow),
     run: () => void relay.startCli(a),
@@ -92,14 +92,20 @@ export function rowActions(
     a.desktop
       ? {
           key: "desktop-reconnect",
-          label: t("Desktop girişini yenile…", "Reconnect Desktop…"),
+          label: t(
+            "Claude uygulaması girişini yenile…",
+            "Renew Claude app sign-in…",
+          ),
           icon: Monitor,
           disabled: desktopBusy || !!pendingDesktop,
           run: () => relay.requestDesktop(a, "reconnect"),
         }
       : {
           key: "desktop-link",
-          label: t("Desktop’a bağla", "Connect Desktop"),
+          label: t(
+            "Claude uygulaması girişini kaydet",
+            "Save Claude app sign-in",
+          ),
           icon: Monitor,
           disabled:
             desktopBusy ||
@@ -162,9 +168,9 @@ export function AccountsTable({
         <TableRow className="hover:bg-transparent">
           <TableHead>{t("Hesap", "Account")}</TableHead>
           <TableHead>{t("Plan", "Plan")}</TableHead>
-          <TableHead>Desktop</TableHead>
+          <TableHead>{t("Claude uygulaması", "Claude app")}</TableHead>
           <TableHead className="hidden md:table-cell">
-            {t("Limit bağlantısı", "Usage connection")}
+            {t("Limit okuma", "Usage")}
           </TableHead>
           <TableHead>{t("5 sa · hafta", "5 h · week")}</TableHead>
           <TableHead className="w-10">

@@ -237,14 +237,14 @@ export function Banners() {
               <div className="min-w-0">
                 <span>
                   {t(
-                    `${a.name} · tarayıcı girişinin yenilenmesi gerekiyor: ${cause}.`,
-                    `${a.name} · the browser sign-in needs to be renewed: ${cause}.`,
+                    `${a.name} · limit okuma girişinin yenilenmesi gerekiyor: ${cause}.`,
+                    `${a.name} · the usage sign-in needs to be renewed: ${cause}.`,
                   )}
                 </span>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {t(
-                    "Yeniden bağlan, tarayıcıda bu hesabın Claude girişini açar. Girişi onaylayınca uyarı kapanır.",
-                    "Reconnect opens this account’s Claude sign-in in the browser. The warning closes once you approve it.",
+                    "Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar. Onaylayınca uyarı kapanır.",
+                    "Reconnect opens this account’s usage sign-in in the browser. The warning closes once you approve it.",
                   )}
                 </p>
               </div>

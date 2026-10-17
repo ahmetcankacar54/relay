@@ -229,8 +229,8 @@ export function Settings() {
           </Note>
           <Note>
             {t(
-              "Giriş kayıtları bu cihazda işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. CLI girişi resmi Claude Code üzerinden tamamlanır.",
-              "Saved Desktop sign-ins are encrypted on this device using the operating system. Every switch creates a backup. CLI sign-in uses the official Claude Code.",
+              "Claude uygulaması girişleri bu cihazda işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. Limit okuma girişi resmi Claude Code üzerinden tamamlanır.",
+              "Claude app sign-ins are encrypted on this device using the operating system. Every switch creates a backup. The usage sign-in uses the official Claude Code.",
             )}
           </Note>
         </Card>

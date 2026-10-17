@@ -80,6 +80,8 @@ test("the accounts page lists accounts with their connection states", () => {
   assert.match(html, /placeholder="Hesap, e-posta veya grup ara…"/);
   for (const name of ["Kişisel · Max", "Studio", "Şirket"]) assert.match(html, new RegExp(name));
   assert.match(html, /Max 5×/);
+  assert.match(html, /<th[^>]*>Claude uygulaması<\/th>/);
+  assert.match(html, /<th[^>]*>Limit okuma<\/th>/);
   assert.match(html, /Açık/);
   assert.match(html, /Bağlı değil/);
   assert.match(html, /Süresi doldu/);
@@ -97,10 +99,12 @@ test("the account sheet shows identity, connections, usage and history", () => {
   const sheetHtml = wrap(relayFor(), createElement(AccountSheetBody, { account: a, now: NOW }));
   assert.match(sheetHtml, /a@example.com/);
   assert.match(sheetHtml, /Bağlantılar/);
-  assert.match(sheetHtml, /Claude Desktop/);
-  assert.match(sheetHtml, /Desktop girişini yenile…/);
+  assert.match(sheetHtml, /Claude uygulaması girişi/);
+  assert.match(sheetHtml, /Limit okuma girişi/);
+  assert.match(sheetHtml, /Claude uygulaması girişini yenile…/);
   assert.match(sheetHtml, /Code geçmişi/);
-  assert.match(sheetHtml, /Girişi yenile/);
+  assert.match(sheetHtml, /Limit okuma girişini yenile/);
+  assert.doesNotMatch(sheetHtml, /Desktop girişi|tarayıcı girişi|Tarayıcı girişi/);
   assert.match(sheetHtml, /aria-label="CLI bağlantısını doğrula"/);
   assert.match(sheetHtml, /5 saatlik/);
 });
@@ -109,7 +113,7 @@ test("the account sheet shows Desktop setup for the account being linked", () =>
   const relay = relayFor({ setupId: "b" });
   const sheetHtml = wrap(relay, createElement(AccountSheetBody, { account: b, now: NOW }));
   assert.match(sheetHtml, /Desktop ilk kurulumu/);
-  assert.match(sheetHtml, /Desktop’a bağla/);
+  assert.match(sheetHtml, /Claude uygulaması girişini kaydet/);
   assert.doesNotMatch(sheetHtml, /Yerel Code geçmişi/);
   const warnings = wrap(
     relayFor(),
@@ -118,19 +122,31 @@ test("the account sheet shows Desktop setup for the account being linked", () =>
       now: NOW,
     }),
   );
-  assert.match(warnings, /Desktop ve limit bağlantısı farklı hesaplara ait/);
+  assert.match(
+    warnings,
+    /Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait\. Limit okuma girişini bu profilin hesabıyla yenile\./,
+  );
 });
 
 test("row actions follow the Desktop link state and the switch lock", () => {
   const t = (tr: string) => tr;
   const labels = (acct: Account, relay: Relay) => rowActions(acct, relay, t).map((x) => x.label);
   const relay = relayFor();
-  assert.deepEqual(labels(a, relay), ["Claude’u aç", "Girişi yenile", "Desktop girişini yenile…", "Limitleri yenile"]);
-  assert.deepEqual(labels(b, relay), ["Girişi yenile", "Desktop’a bağla", "Limitleri yenile"]);
+  assert.deepEqual(labels(a, relay), [
+    "Claude’u aç",
+    "Limit okuma girişini yenile",
+    "Claude uygulaması girişini yenile…",
+    "Limitleri yenile",
+  ]);
+  assert.deepEqual(labels(b, relay), [
+    "Limit okuma girişini yenile",
+    "Claude uygulaması girişini kaydet",
+    "Limitleri yenile",
+  ]);
   const unlinkedActive = { ...a, desktop: undefined };
   const labelsUnlinked = labels(unlinkedActive, relayFor({ active: unlinkedActive }));
   assert.ok(!labelsUnlinked.includes("Claude’u aç"));
-  assert.ok(labelsUnlinked.includes("Desktop’a bağla"));
+  assert.ok(labelsUnlinked.includes("Claude uygulaması girişini kaydet"));
   const linked = { ...b, id: "c", desktop };
   assert.ok(labels(linked, relay).includes("Geçiş yap"));
   for (const extra of [

@@ -12,12 +12,12 @@ import { cn } from "@/lib/utils";
 type T = (tr: string, en: string) => string;
 const issues: Record<UsageIssue, [string, string]> = {
   "connect-cli": [
-    "Limitleri görmek için hesabını tarayıcıdan bağla.",
-    "Connect your account in the browser to see usage limits.",
+    "Limitleri görmek için limit okuma girişini yap.",
+    "Sign in to read usage to see usage limits.",
   ],
   "credentials-missing": [
-    "Bu profilin giriş bilgisi okunamadı. Tarayıcı girişini yenile.",
-    "This profile’s sign-in is unavailable. Reconnect in the browser.",
+    "Bu profilin giriş bilgisi okunamadı. Limit okuma girişini yenile.",
+    "This profile’s sign-in is unavailable. Renew the usage sign-in.",
   ],
   "keychain-locked": [
     "Limitleri okumak için Anahtarlık erişimi gerekiyor.",
@@ -28,12 +28,12 @@ const issues: Record<UsageIssue, [string, string]> = {
     "The connection needs to be renewed.",
   ],
   expired: [
-    "Limit bağlantısı yenilenemedi. Tarayıcıdan yeniden bağlan.",
-    "The usage connection could not be renewed. Reconnect in the browser.",
+    "Limit okuma girişi yenilenemedi. Limit okuma girişini yenile.",
+    "The usage sign-in could not be renewed. Renew the usage sign-in.",
   ],
   scope: [
-    "Bu giriş kullanım verisine erişemiyor. Tarayıcı girişini yenile.",
-    "This sign-in cannot access usage. Reconnect in the browser.",
+    "Bu giriş kullanım verisine erişemiyor. Limit okuma girişini yenile.",
+    "This sign-in cannot access usage. Renew the usage sign-in.",
   ],
   "identity-mismatch": [
     "Giriş kimliği bu profille eşleşmiyor. Bağlantıyı kontrol et.",
@@ -234,7 +234,7 @@ export function UsageCard({
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground">
         <span>{t(...issues["connect-cli"])}</span>
         <Button size="sm" variant="outline" disabled={connectBusy} onClick={connect}>
-          {t("Tarayıcıda bağla", "Connect in browser")}
+          {t("Limit okuma girişi yap", "Sign in to read usage")}
         </Button>
       </div>
     );
@@ -268,7 +268,7 @@ export function UsageCard({
             disabled={loading || connectBusy}
             onClick={connect}
           >
-            {t("Girişi yenile", "Reconnect")}
+            {t("Limit okuma girişini yenile", "Renew usage sign-in")}
           </Button>
         ) : displayedIssue === "keychain-locked" ||
           displayedIssue === "renewal-required" ? (

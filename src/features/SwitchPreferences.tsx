@@ -94,12 +94,15 @@ export function AccountSelection({
                 <StatusDot tone={ready ? "ok" : "warn"} />
                 {desktopCliMismatch(a)
                   ? t(
-                      "Bağlantı kimlikleri farklı",
-                      "Connection identities differ",
+                      "Girişler farklı hesaplara ait",
+                      "Sign-ins belong to different accounts",
                     )
                   : a.desktop
-                    ? t("Desktop bağlı", "Desktop connected")
-                    : t("Desktop kurulumu gerekli", "Desktop setup required")}
+                    ? t("Claude uygulaması kayıtlı", "Claude app saved")
+                    : t(
+                        "Claude uygulaması girişi gerekli",
+                        "Claude app sign-in needed",
+                      )}
               </Badge>
             </label>
           );

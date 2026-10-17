@@ -316,8 +316,8 @@ export function AddAccountSteps({
         <>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Tarayıcı girişi bu hesabın kullanım limitlerini bağlar.",
-              "Browser sign-in connects this account’s usage limits.",
+              "Limit okuma girişi bu hesabın kullanım limitlerini okur.",
+              "The usage sign-in reads this account’s usage limits.",
             )}
           </p>
           {/* The page-frame panel sits under the overlay; finish the sign-in here. */}
@@ -337,7 +337,7 @@ export function AddAccountSteps({
                 onClick={() => void relay.startCli(account)}
               >
                 <Globe2 />
-                {t("Tarayıcıda bağla", "Connect in browser")}
+                {t("Limit okuma girişi yap", "Sign in to read usage")}
               </Button>
             )}
             <Button onClick={close}>{t("Bitti", "Done")}</Button>

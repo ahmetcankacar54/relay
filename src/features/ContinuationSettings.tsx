@@ -212,8 +212,8 @@ const explanations: Record<string, [string, string]> = {
     "These accounts are outside the shared history scope. Update the scope in account switching settings.",
   ],
   "browser-sign-in": [
-    "Bir hesabın tarayıcı girişi sürüyor. Giriş tamamlanana kadar geçiş bekler.",
-    "An account’s browser sign-in is in progress. Switching waits until sign-in finishes.",
+    "Bir hesabın limit okuma girişi sürüyor. Giriş tamamlanana kadar geçiş bekler.",
+    "An account’s usage sign-in is in progress. Switching waits until sign-in finishes.",
   ],
   "guarded-native-policy-required": [
     "Bu izleme için yeni devam onayı gerekli. İzlemeyi kapatıp yeniden etkinleştir.",

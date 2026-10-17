@@ -192,3 +192,29 @@ test("a fresh recheck rejects a target when Desktop changes after menu creation"
   s.desktop!.activeProfileId = "target";
   assert.equal(canRequestTraySwitch(s, "target"), false);
 });
+
+test("tray names the two sign-ins the way the app does while one is unfinished", () => {
+  const labelFor = (patch: Partial<TraySnapshot>, language: "tr" | "en") => {
+    const menu = buildTrayMenu({ ...snapshot(), ...patch }, language, now);
+    return menu.flatMap((item) =>
+      item.type === "separator" || item.enabled ? [] : [item.label],
+    );
+  };
+  const pending = { desktop: { ...desktop, pendingProfileId: "target" } };
+  assert.ok(
+    labelFor(pending, "tr").includes("Önce Claude uygulaması girişini tamamla"),
+  );
+  assert.ok(
+    labelFor(pending, "en").includes("Finish the Claude app sign-in first"),
+  );
+  assert.ok(
+    labelFor({ authBusy: true }, "tr").includes(
+      "Önce limit okuma girişini tamamla",
+    ),
+  );
+  assert.ok(
+    labelFor({ authBusy: true }, "en").includes(
+      "Finish the usage sign-in first",
+    ),
+  );
+});
