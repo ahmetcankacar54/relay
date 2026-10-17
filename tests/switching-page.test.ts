@@ -103,11 +103,35 @@ test("Switching shows automatic switching, shared history and suggestions in sep
   assert.match(html, /Tüm hesaplar arasında/);
   assert.match(html, /Açık hesapla birleştir/);
   assert.match(html, /Limit yaklaşınca hesap öner/);
-  assert.match(
-    html,
-    /Menü çubuğundan bir hesap seçip tek onayla geçebilirsin. Pencere kapanınca Relay menü çubuğunda çalışmaya devam eder./,
-  );
+  assert.doesNotMatch(html, /Menü çubuğundan bir hesap seçip/);
+  assert.doesNotMatch(html, /Pencere kapanınca Relay/);
   assert.doesNotMatch(html, /Bu konuşmayı izle/);
+});
+
+test("the history scope and its local-only limit are one note", () => {
+  const historyNotes = (html: string) =>
+    [...html.matchAll(/<p class="text-\[13px\] text-muted-foreground">([^<]*)<\/p>/g)]
+      .map(([, text]) => text)
+      .filter((text) => /Code geçmişi/.test(text));
+  const local =
+    "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.";
+  assert.deepEqual(historyNotes(render(relayFor())), [
+    `Claude uygulaması girişi kayıtlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır. ${local}`,
+  ]);
+  const selected = historyNotes(
+    render(relayFor({}, { desktopHistoryTransfer: "selected" })),
+  );
+  assert.deepEqual(selected, [
+    `Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır. ${local}`,
+  ]);
+  for (const mode of ["same-group", "off"]) {
+    const html = render(relayFor({}, { desktopHistoryTransfer: mode }));
+    assert.deepEqual(historyNotes(html), [local], mode);
+  }
+  assert.doesNotMatch(
+    render(relayFor()),
+    /Yalnızca yerel Code geçmişi; Chat/,
+  );
 });
 
 test("the single-conversation watch card appears only while a legacy watch needs attention", () => {

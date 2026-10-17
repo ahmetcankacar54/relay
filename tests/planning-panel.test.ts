@@ -93,6 +93,18 @@ test("the panel shows the switch, both hour rows and automatic first starts", ()
   assert.doesNotMatch(html, />Elle</);
 });
 
+test("today's plan comes first, above the early-start card", () => {
+  const html = render({ accounts: [{ id: a.id }, { id: b.id }] });
+  const today = html.indexOf(">Bugün<");
+  const early = html.indexOf("Limit dönemlerini önceden başlat");
+  const hours = html.indexOf("Hafta içi");
+  const accountRows = html.indexOf("ilk başlangıç</label>");
+  assert.ok(today >= 0, "Bugün is drawn");
+  assert.ok(today < early, "Bugün before the early-start card");
+  assert.ok(early < hours, "early start before the working hours");
+  assert.ok(hours < accountRows, "working hours before the accounts");
+});
+
 test("a manual first start is marked and can return to automatic", () => {
   const accounts = [{ id: a.id, firstStart: "07:00" }, { id: b.id }];
   const html = render({ accounts });

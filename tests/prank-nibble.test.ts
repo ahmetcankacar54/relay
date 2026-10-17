@@ -1271,7 +1271,6 @@ test("every nibble trigger goes through offerAfter, so the button's own action r
     "src/panel/PanelAccounts.tsx",
     "src/panel/Panel.tsx",
     "src/pages/overview/AccountsCard.tsx",
-    "src/pages/Overview.tsx",
     "src/pages/accounts/AccountsTable.tsx",
   ];
   for (const file of files) {
@@ -1304,10 +1303,10 @@ test("each trigger still runs its own action, and the Accounts menu's items keep
     card,
     /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(account, "switch"\),?\s*\)/,
   );
-  const overview = readFileSync("src/pages/Overview.tsx", "utf8");
-  assert.match(
-    overview,
-    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(suggestion, "switch"\),?\s*\)/,
+  // The Overview's suggestion band offers no switch of its own: the suggested row above carries it.
+  assert.doesNotMatch(
+    readFileSync("src/pages/Overview.tsx", "utf8"),
+    /nibble-cursor/,
   );
   // The menu's items take their handlers from itemHandlers: the switch item switches from its click, through
   // offerAfter, and every other item keeps onSelect. No item has a bare `onSelect={run}` any more.
@@ -1646,7 +1645,6 @@ test("only a switch request nibbles: no confirmation button offers it", () => {
   for (const file of [
     "src/panel/Panel.tsx",
     "src/pages/overview/AccountsCard.tsx",
-    "src/pages/Overview.tsx",
     "src/pages/accounts/AccountsTable.tsx",
   ])
     assert.equal(

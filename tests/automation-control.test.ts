@@ -387,7 +387,7 @@ test("Overview hides the suggestion band while automation offers a switch", () =
     overview,
   );
   assert.match(suggested, /uyarı eşiğini geçti/);
-  assert.match(suggested, /Geçişi incele/);
+  assert.doesNotMatch(suggested, /Geçişi incele/);
   assert.equal(count(suggested, SWITCH_NOW), 0);
 });
 

@@ -67,8 +67,10 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Haftalık · tüm modeller/);
   assert.match(html, /Haftalık · Opus/);
   assert.match(html, /Önerilen/);
-  assert.match(html, /Geçişi incele/);
-  assert.match(html, /Geçiş yap/);
+  // The suggestion band keeps its text; the suggested row's own "Geçiş yap" is the one switch offer.
+  assert.match(html, /Kişisel · Max limiti uyarı eşiğini geçti\. Önerilen: <b>Vertex<\/b>/);
+  assert.doesNotMatch(html, /Geçişi incele/);
+  assert.equal(html.match(/Geçiş yap/g)?.length, 1);
   assert.match(html, /Bugün/);
   assert.match(html, /Önceden başlatma kapalı/);
   assert.doesNotMatch(html, /Otomatik başlatma/);

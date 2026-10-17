@@ -148,6 +148,19 @@ export function SharedHistoryPreferences({
   | "t"
 >) {
   const sources = active ? historySources(active, accounts, value) : [];
+  // What the chosen scope shares; "same-group" and "off" are explained by their labels.
+  const scope =
+    value.desktopHistoryTransfer === "all"
+      ? t(
+          "Claude uygulaması girişi kayıtlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
+          "All accounts with a saved Claude app sign-in, personal or work, share Code history.",
+        )
+      : value.desktopHistoryTransfer === "selected"
+        ? t(
+            "Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır.",
+            "Selected accounts share Code history, even across companies.",
+          )
+        : "";
   return (
     <div className="grid gap-1">
       <SectionHeading
@@ -192,22 +205,19 @@ export function SharedHistoryPreferences({
           ]}
         />
       </SettingRow>
-      {value.desktopHistoryTransfer === "all" && (
-        <Note>
-          {t(
-            "Claude uygulaması girişi kayıtlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
-            "All accounts with a saved Claude app sign-in, personal or work, share Code history.",
-          )}
-        </Note>
-      )}
+      <Note>
+        {[
+          scope,
+          t(
+            "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.",
+            "Only local Code history is shared; Chat and cloud sessions are not synced.",
+          ),
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      </Note>
       {value.desktopHistoryTransfer === "selected" && (
         <>
-          <Note>
-            {t(
-              "Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır.",
-              "Selected accounts share Code history, even across companies.",
-            )}
-          </Note>
           <AccountSelection
             accounts={accounts}
             selected={value.desktopHistoryAccounts}
@@ -245,12 +255,6 @@ export function SharedHistoryPreferences({
           {t("Açık hesapla birleştir…", "Merge into current account…")}
         </Button>
       </div>
-      <Note>
-        {t(
-          "Yalnızca yerel Code geçmişi; Chat ve bulut oturumları eşitlenmez.",
-          "Local Code history only; Chat and cloud sessions are not synced.",
-        )}
-      </Note>
     </div>
   );
 }

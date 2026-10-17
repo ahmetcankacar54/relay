@@ -73,22 +73,7 @@ export function Overview({
       <div className="grid gap-3 px-6 pb-6">
         <ActiveAccountCard go={go} now={now} />
         {suggestion && active && !automationOffer && (
-          <Banner
-            tone="warn"
-            action={
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={(e) =>
-                  offerAfter(prank, "nibble-cursor", e, () =>
-                    relay.requestDesktop(suggestion, "switch"),
-                  )
-                }
-              >
-                {t("Geçişi incele", "Review switch")}
-              </Button>
-            }
-          >
+          <Banner tone="warn">
             <span>
               {t(
                 `${active.name} limiti uyarı eşiğini geçti. Önerilen: `,

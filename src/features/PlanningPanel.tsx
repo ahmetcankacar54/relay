@@ -399,6 +399,17 @@ export function PlanningPanel({
           );
   return (
     <div className="grid gap-3">
+      <PlanTimeline
+        settings={planned}
+        accounts={accounts}
+        usage={usage}
+        now={now}
+        tempo={tempo}
+        activeId={activeId}
+        adaptation={adaptation}
+        t={t}
+      />
+
       <Card
         className={cn(
           cardClass,
@@ -513,17 +524,6 @@ export function PlanningPanel({
           )}
         </p>
       </Card>
-
-      <PlanTimeline
-        settings={planned}
-        accounts={accounts}
-        usage={usage}
-        now={now}
-        tempo={tempo}
-        activeId={activeId}
-        adaptation={adaptation}
-        t={t}
-      />
 
       <Card className={cn(cardClass, "@container")}>
         <SectionHeading
