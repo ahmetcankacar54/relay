@@ -66,3 +66,57 @@ export function clockFieldKey(value: string, key: string): string | null {
       return null;
   }
 }
+
+/** The clock a step starts from: a valid typed draft, else the saved value. */
+export function clockStart(draft: string, value: string): string {
+  const typed = parseLooseClock(draft);
+  return typed ? formatPickerClock(typed) : value;
+}
+
+/**
+ * Whether the draft should snap back to the saved value. Never while the field
+ * is being edited, and never while an action is running: the saved value is
+ * stale until that action finishes, and the draft is what the user just typed.
+ */
+export function shouldResyncDraft(
+  activeIsInput: boolean,
+  disabled: boolean,
+): boolean {
+  return !activeIsInput && !disabled;
+}
+
+/**
+ * How the input is locked. A focused field that becomes busy turns read-only
+ * rather than disabled, because a disabled element would drop focus.
+ */
+export function timeFieldAccess(
+  disabled: boolean,
+  focused: boolean,
+): { disabled: boolean; readOnly: boolean } {
+  return { disabled: disabled && !focused, readOnly: disabled && focused };
+}
+
+export type WheelState = { total: number; at: number };
+
+const WHEEL_STEP_PX = 40;
+const WHEEL_IDLE_MS = 200;
+
+/**
+ * Turns wheel deltas into at most one step per event. Deltas add up while the
+ * wheel keeps moving the same way; a pause of 200 ms or a reversal starts over,
+ * and the remainder is dropped after a step so trackpad momentum cannot run on.
+ * `steps` follows the sign of deltaY (positive = scrolled down).
+ */
+export function wheelSteps(
+  state: WheelState,
+  deltaY: number,
+  now: number,
+): { steps: number; state: WheelState } {
+  const keep =
+    now - state.at <= WHEEL_IDLE_MS &&
+    (state.total === 0 || Math.sign(state.total) === Math.sign(deltaY));
+  const total = (keep ? state.total : 0) + deltaY;
+  if (Math.abs(total) >= WHEEL_STEP_PX)
+    return { steps: Math.sign(total), state: { total: 0, at: now } };
+  return { steps: 0, state: { total, at: now } };
+}

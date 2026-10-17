@@ -5,10 +5,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TimePicker } from "../src/features/TimePicker";
 import {
   clockFieldKey,
+  clockStart,
   formatPickerClock,
   parseLooseClock,
   parsePickerClock,
+  shouldResyncDraft,
   stepClock,
+  timeFieldAccess,
+  wheelSteps,
+  type WheelState,
 } from "../shared/time-picker";
 
 test("manual clock entry preserves every minute and canonicalizes a short hour", () => {
@@ -89,4 +94,82 @@ test("the inline field is a labelled spinbutton with no popover", () => {
   assert.doesNotMatch(markup, /aria-expanded/);
   assert.doesNotMatch(markup, /Uygula|Apply/);
   assert.equal(commits, 0);
+});
+
+test("a disabled picker that is not focused is a real disabled input", () => {
+  const html = (disabled: boolean) =>
+    renderToStaticMarkup(
+      createElement(TimePicker, {
+        id: "end",
+        label: "End",
+        value: "18:00",
+        disabled,
+        onChange: () => {},
+        t: (_tr, en) => en,
+      }),
+    );
+  assert.match(html(true), /\sdisabled=""/);
+  assert.match(html(true), /\saria-disabled="true"/);
+  assert.doesNotMatch(html(true), /\sreadOnly=""/);
+  assert.doesNotMatch(
+    html(false),
+    /\sdisabled=""|\saria-disabled=|\sreadOnly=/,
+  );
+});
+
+test("a busy field keeps focus read-only instead of turning disabled", () => {
+  assert.deepEqual(timeFieldAccess(false, false), {
+    disabled: false,
+    readOnly: false,
+  });
+  assert.deepEqual(timeFieldAccess(false, true), {
+    disabled: false,
+    readOnly: false,
+  });
+  assert.deepEqual(timeFieldAccess(true, false), {
+    disabled: true,
+    readOnly: false,
+  });
+  assert.deepEqual(timeFieldAccess(true, true), {
+    disabled: false,
+    readOnly: true,
+  });
+});
+
+test("the draft follows the saved value only while the field is idle", () => {
+  assert.equal(shouldResyncDraft(false, false), true);
+  assert.equal(shouldResyncDraft(true, false), false);
+  assert.equal(shouldResyncDraft(false, true), false);
+  assert.equal(shouldResyncDraft(true, true), false);
+});
+
+test("steps start from a valid typed draft, else from the saved value", () => {
+  assert.equal(clockStart("9:30", "18:00"), "09:30");
+  assert.equal(clockStart("17", "18:00"), "17:00");
+  assert.equal(clockStart("ab", "18:00"), "18:00");
+  assert.equal(clockStart("", "18:00"), "18:00");
+});
+
+test("wheel gives at most one step per event and forgets idle scrolling", () => {
+  const fresh: WheelState = { total: 0, at: -Infinity };
+  // A 100 px notch is one step, in the direction of deltaY.
+  const notch = wheelSteps(fresh, 100, 1000);
+  assert.equal(notch.steps, 1);
+  assert.equal(wheelSteps(fresh, -100, 1000).steps, -1);
+  // A huge delta is still one step.
+  assert.equal(wheelSteps(fresh, 4000, 1000).steps, 1);
+  // The remainder is dropped, so back-to-back notches stay one step each.
+  assert.equal(wheelSteps(notch.state, 100, 1050).steps, 1);
+  // Two small events close together add up to one step...
+  const first = wheelSteps(fresh, 30, 1000);
+  assert.equal(first.steps, 0);
+  assert.equal(wheelSteps(first.state, 30, 1150).steps, 1);
+  // ...but not when the first one is more than 200 ms old.
+  assert.equal(wheelSteps(first.state, 30, 1250).steps, 0);
+  // Reversing direction starts over.
+  assert.equal(wheelSteps(first.state, -30, 1100).steps, 0);
+  assert.equal(
+    wheelSteps(wheelSteps(first.state, -30, 1100).state, -30, 1150).steps,
+    -1,
+  );
 });
