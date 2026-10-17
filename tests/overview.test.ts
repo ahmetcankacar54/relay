@@ -94,7 +94,9 @@ test("unlinked accounts offer a Desktop link instead of a switch", () => {
   const other = acct("other", "Studio", "pro", false);
   const html = render(relayFor(active, [active, other], { active: use("active", 10, 10) }));
   assert.match(html, /Claude uygulaması girişi yok/);
-  assert.match(html, /Claude uygulaması girişini kaydet/);
+  assert.match(html, />Girişi kaydet</);
+  assert.match(html, /aria-label="Claude uygulaması girişini kaydet"/);
+  assert.match(html, /title="Claude uygulaması girişini kaydet"/);
 });
 
 const rowsOf = (html: string) => html.split("grid-cols-[1.2fr_1fr_1fr_auto]").slice(1);
