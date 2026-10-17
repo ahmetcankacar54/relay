@@ -95,6 +95,8 @@ const render = (relay: Relay) =>
 
 test("Switching shows automatic switching, shared history and suggestions in separate cards", () => {
   const html = render(relayFor());
+  assert.match(html, /Otomatik geçiş, ortak geçmiş ve hesap önerileri/);
+  assert.doesNotMatch(html, /kapanınca hazırlama/);
   assert.match(html, /Otomatik geçiş/);
   assert.match(html, /role="radiogroup"/);
   assert.match(html, /Ortak Code geçmişi/);

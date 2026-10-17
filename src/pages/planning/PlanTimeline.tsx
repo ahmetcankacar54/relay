@@ -296,8 +296,8 @@ export function PlanTimeline({
       )}
       <p className={cn(noteClass, "mt-2.5")}>
         {t(
-          "Kullanım şeridi Relay’in tahmini: hangi saatte hangi hesapla çalışacağın. Dikey çizgiler geçiş, taralı kırmızı kotasız. Alttaki çubuklar 5 saatlik pencereler; çubuğun sonu sıfırlanma. Soluk kısım planın tahmini, canlı kısım şu anki kullanımdan hesaplanır.",
-          "The usage lane is Relay’s forecast of which account you work on when. Vertical lines are switches, striped red is no quota. The bars below are five-hour windows; a bar ends at the reset. The faded part is the plan’s forecast; the solid part is computed from current usage.",
+          "Kullanım şeridi Relay’in tahmini: hangi saatte hangi hesapla çalışacağın. Dikey çizgiler geçiş, taralı kırmızı kotasız. Alttaki çubuklar 5 saatlik dönemler; çubuğun sonu sıfırlanma. Soluk kısım planın tahmini, canlı kısım şu anki kullanımdan hesaplanır.",
+          "The usage lane is Relay’s forecast of which account you work on when. Vertical lines are switches, striped red is no quota. The bars below are five-hour periods; a bar ends at the reset. The faded part is the plan’s forecast; the solid part is computed from current usage.",
         )}
       </p>
       {comparison && (

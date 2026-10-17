@@ -345,8 +345,8 @@ function buildInsight(
   if (sparse) {
     const n = Math.round(sparse.view.averageFill!);
     return {
-      tr: `${label(sparse)} pencerelerinin ortalama yalnızca %${n} kadarını dolduruyor.`,
-      en: `${label(sparse)} fills only ${n}% of its windows.`,
+      tr: `${label(sparse)} dönemlerinin ortalama yalnızca %${n} kadarını dolduruyor.`,
+      en: `${label(sparse)} fills only ${n}% of its periods.`,
     };
   }
   const full = candidates

@@ -34,8 +34,8 @@ export function AccountBalance({
         </h3>
         <span className="text-xs text-muted-foreground">
           {t(
-            "payı · ortalama pencere doluluğu · boşta gün",
-            "share · average window fill · idle days",
+            "payı · ortalama dönem doluluğu · boşta gün",
+            "share · average period fill · idle days",
           )}
         </span>
       </div>

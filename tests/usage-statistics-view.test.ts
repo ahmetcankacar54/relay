@@ -203,8 +203,8 @@ function insightRollups(maxFills: number[], proFills: number[]) {
 test("insight rule 1: highest-capacity account barely fills five or more windows", () => {
   const view = build({ rollups: insightRollups([10, 10, 10, 10, 20], [90]) });
   assert.deepEqual(view.insight, {
-    tr: "Max (Max 5×) pencerelerinin ortalama yalnızca %12 kadarını dolduruyor.",
-    en: "Max (Max 5×) fills only 12% of its windows.",
+    tr: "Max (Max 5×) dönemlerinin ortalama yalnızca %12 kadarını dolduruyor.",
+    en: "Max (Max 5×) fills only 12% of its periods.",
   });
 });
 

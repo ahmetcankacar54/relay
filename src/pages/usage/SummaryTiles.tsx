@@ -77,7 +77,7 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
         detail={versus}
       />
       <Tile
-        label={t("Başlayan pencere", "Windows started")}
+        label={t("Başlayan dönem", "Periods started")}
         value={formatNumber(totals.windows, language)}
         detail={t(`günde ortalama ${perDay}`, `${perDay} per day on average`)}
       />

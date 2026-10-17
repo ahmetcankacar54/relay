@@ -43,8 +43,8 @@ export function Switching() {
     <PageFrame
       title={t("Geçiş", "Switching")}
       description={t(
-        "Kota dolunca geçiş, kapanınca hazırlama, ortak geçmiş",
-        "Switch when quota runs out, prepare on quit, shared history",
+        "Otomatik geçiş, ortak geçmiş ve hesap önerileri",
+        "Automatic switching, shared history and account suggestions",
       )}
     >
       <div className="grid gap-3 px-6 pb-6">

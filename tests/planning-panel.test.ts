@@ -78,7 +78,7 @@ function render(settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot) {
 test("the panel shows the switch, both hour rows and automatic first starts", () => {
   const accounts = [{ id: a.id }, { id: b.id }];
   const html = render({ accounts });
-  assert.match(html, /Otomatik pencere başlatma/);
+  assert.match(html, /Limit dönemlerini önceden başlat/);
   assert.match(html, /Hafta içi/);
   assert.match(html, /Hafta sonu/);
   const [first, second] = todayPlan({ accounts }).accounts;
@@ -128,7 +128,7 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
     { autoStart: true, accounts: [{ id: a.id }, { id: randomUUID() }] },
     keeper,
   );
-  assert.match(html, /Pencere açık · Sıfırlanma 15:15/);
+  assert.match(html, /Dönem açık · Sıfırlanma 15:15/);
   assert.match(html, /text-ok-foreground/);
   // Today's count comes from the plan itself; the next start comes from the
   // keeper's live view. The deleted account takes no slot: the plan is the one
@@ -490,12 +490,12 @@ test("the hours card shows the learned tempo and how long a window lasts at it",
   // unplanned Team account is not listed.
   assert.ok(
     html.includes(
-      "Bu tempoyla bir pencere: Max 5× ~2 sa 25 dk · Pro ~30 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk · Pro ~30 dk yeter.",
     ),
   );
   assert.ok(
     renderScenario(automatic, wednesday("08:00")).includes(
-      "Bu tempoyla bir pencere: Max 5× ~2 sa 25 dk · Team · 2 ~1 sa · Pro ~30 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk · Team · 2 ~1 sa · Pro ~30 dk yeter.",
     ),
   );
 });
@@ -508,7 +508,7 @@ test("the default and a fixed tempo say so, and the toggle shows the choice", ()
   assert.match(toggleItem(fallback, "Otomatik"), /data-state="on"/);
   assert.ok(
     fallback.includes(
-      "Bu tempoyla bir pencere: Max 5× ~10 sa · Pro ~2 sa yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~10 sa · Pro ~2 sa yeter.",
     ),
   );
   const heavy = renderPlanning({ planned: [a, pro], choice: "heavy" });
@@ -518,7 +518,7 @@ test("the default and a fixed tempo say so, and the toggle shows the choice", ()
   assert.match(toggleItem(heavy, "Otomatik"), /data-state="off"/);
   assert.ok(
     heavy.includes(
-      "Bu tempoyla bir pencere: Max 5× ~4 sa 10 dk · Pro ~50 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~4 sa 10 dk · Pro ~50 dk yeter.",
     ),
   );
 });
@@ -620,15 +620,15 @@ test("each planned account says how long its window lasts and when it works toda
     );
   assert.match(
     html,
-    line("Pencere ~2 sa 25 dk yeter · bugün 09:00–11:09, 14:13–18:00"),
+    line("Bir dönem ~2 sa 25 dk yeter · bugün 09:00–11:09, 14:13–18:00"),
   );
-  assert.match(html, line("Pencere ~1 sa yeter · bugün 11:55–14:13"));
-  assert.match(html, line("Pencere ~30 dk yeter · bugün 11:09–11:55"));
+  assert.match(html, line("Bir dönem ~1 sa yeter · bugün 11:55–14:13"));
+  assert.match(html, line("Bir dönem ~30 dk yeter · bugün 11:09–11:55"));
   // At 10:00 Max's block runs across now: the planned and the live part read
   // as one range.
   assert.ok(
     renderScenario(automatic, wednesday("10:00")).includes(
-      "Pencere ~2 sa 25 dk yeter · bugün 09:00–14:03, 16:15–18:00",
+      "Bir dönem ~2 sa 25 dk yeter · bugün 09:00–14:03, 16:15–18:00",
     ),
   );
   // An account without a chosen plan asks for one instead.
@@ -643,7 +643,7 @@ test("each planned account says how long its window lasts and when it works toda
     ),
     2,
   );
-  assert.equal(count(unknown, />Pencere ~/g), 1);
+  assert.equal(count(unknown, />Bir dönem ~/g), 1);
 });
 
 test("the notes explain the order and the warm-ups", () => {
@@ -683,11 +683,11 @@ test("on a weekend work day the tempo row and the account rows use the weekend r
   );
   assert.ok(
     html.includes(
-      "Bu tempoyla bir pencere: Max 5× ~8 sa 20 dk · Pro ~1 sa 40 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~8 sa 20 dk · Pro ~1 sa 40 dk yeter.",
     ),
   );
-  assert.ok(html.includes("Pencere ~8 sa 20 dk yeter · bugün 11:00–17:00"));
-  assert.ok(html.includes(">Pencere ~1 sa 40 dk yeter<"));
+  assert.ok(html.includes("Bir dönem ~8 sa 20 dk yeter · bugün 11:00–17:00"));
+  assert.ok(html.includes(">Bir dönem ~1 sa 40 dk yeter<"));
   assert.doesNotMatch(html, /205 Pro birimi|~2 sa 25 dk/);
   // A weekend that learned no rate of its own reads as the busy day.
   assert.ok(
@@ -728,7 +728,9 @@ test("after work the pill and the rows describe the next work day", () => {
   assert.ok(html.includes("Hafta sonu yoğun gün ≈ 60 Pro birimi/sa"));
   // The window lasts as on Saturday; today's ranges are still today's.
   assert.ok(
-    html.includes("Pencere ~8 sa 20 dk yeter · bugün 09:00–11:09, 14:13–18:00"),
+    html.includes(
+      "Bir dönem ~8 sa 20 dk yeter · bugün 09:00–11:09, 14:13–18:00",
+    ),
   );
 });
 
@@ -742,10 +744,10 @@ test("a fixed tempo applies at once, before the keeper reports it", () => {
   assert.ok(html.includes("Sabit tempo ≈ 120 Pro birimi/sa"));
   assert.ok(
     html.includes(
-      "Bu tempoyla bir pencere: Max 5× ~4 sa 10 dk · Pro ~50 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~4 sa 10 dk · Pro ~50 dk yeter.",
     ),
   );
-  assert.match(html, />Pencere ~4 sa 10 dk yeter/);
+  assert.match(html, />Bir dönem ~4 sa 10 dk yeter/);
   assert.match(html, />Sabit tempoyla</);
   assert.doesNotMatch(html, /Yoğun gün|~2 sa 25 dk/);
   const settings = scenarioSettings([{ id: a.id }, { id: pro.id }]);
@@ -935,12 +937,12 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
   );
   // Each window lasts as long as it does at today's pace (1.6 × 205 an
   // hour); the tempo row keeps the plan's own.
-  assert.match(html, />Pencere ~1 sa 30 dk yeter · bugün /);
-  assert.match(html, />Pencere ~35 dk yeter/);
-  assert.match(html, />Pencere ~20 dk yeter/);
+  assert.match(html, />Bir dönem ~1 sa 30 dk yeter · bugün /);
+  assert.match(html, />Bir dönem ~35 dk yeter/);
+  assert.match(html, />Bir dönem ~20 dk yeter/);
   assert.match(
     html,
-    /Bu tempoyla bir pencere: Max 5× ~2 sa 25 dk · Team · 2 ~1 sa · Pro ~30 dk yeter\./,
+    /Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk · Team · 2 ~1 sa · Pro ~30 dk yeter\./,
   );
 });
 
@@ -1027,8 +1029,8 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
     off,
     /<small class="text-xs text-muted-foreground">Sonraki başlatma 13:30</,
   );
-  assert.match(off, />Pencere ~30 dk yeter/);
-  assert.doesNotMatch(off, />Pencere ~20 dk yeter/);
+  assert.match(off, />Bir dönem ~30 dk yeter/);
+  assert.doesNotMatch(off, />Bir dönem ~20 dk yeter/);
   assert.match(off, /><\/i>Bugün kalan: 16:02–16:15 kotasız · 3 geçiş</);
   assert.doesNotMatch(
     renderScenario(automatic, wednesday("12:00")),

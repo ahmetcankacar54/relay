@@ -57,7 +57,7 @@ export function AccountWindowLine({
     .join(", ");
   return (
     <small className="text-xs text-muted-foreground">
-      {t(`Pencere ${duration} yeter`, `A window lasts ${duration}`) +
+      {t(`Bir dönem ${duration} yeter`, `A period lasts ${duration}`) +
         (ranges ? t(` · bugün ${ranges}`, ` · today ${ranges}`) : "")}
     </small>
   );

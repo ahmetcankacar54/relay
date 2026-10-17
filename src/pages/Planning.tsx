@@ -10,7 +10,10 @@ export function Planning() {
   return (
     <PageFrame
       title={t("Planlama", "Planning")}
-      description={t("Otomatik pencere başlatma", "Automatic window start")}
+      description={t(
+        "Limit dönemlerini önceden başlat",
+        "Start limit periods early",
+      )}
     >
       <div className="px-6 pb-6">
         <PlanningPanel

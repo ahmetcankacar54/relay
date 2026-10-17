@@ -116,10 +116,7 @@ export function TempoRow({
         <p className="text-[13px]">{summary}</p>
         {parts.length > 0 && (
           <p className={noteClass}>
-            {t(
-              "Bu tempoyla bir pencere: ",
-              "At this tempo one window lasts: ",
-            ) +
+            {t("Bu tempoyla bir dönem: ", "At this tempo one period lasts: ") +
               parts.join(" · ") +
               t(" yeter.", ".")}
           </p>

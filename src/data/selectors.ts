@@ -65,7 +65,7 @@ export function sidebarStatus(snapshot: Snapshot | undefined) {
 export function usageWindowRows(usage?: AccountUsage) {
   if (!usage) return [];
   const rows: { key: string; label: { tr: string; en: string }; usedPercent: number; resetsAt?: string }[] = [];
-  if (usage.fiveHour) rows.push({ key: "five_hour", label: { tr: "5 saatlik pencere", en: "5-hour window" }, ...usage.fiveHour });
+  if (usage.fiveHour) rows.push({ key: "five_hour", label: { tr: "5 saatlik dönem", en: "5-hour period" }, ...usage.fiveHour });
   if (usage.sevenDay) rows.push({ key: "seven_day", label: { tr: "Haftalık · tüm modeller", en: "Weekly · all models" }, ...usage.sevenDay });
   for (const w of usage.modelWindows ?? [])
     rows.push({

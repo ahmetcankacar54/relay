@@ -67,7 +67,7 @@ test("a switched-away account keeps dated resets in English and Turkish without 
     },
   };
   const en = render(usage);
-  assert.match(en, /Previous window/);
+  assert.match(en, /Previous period/);
   assert.match(en, /Last known reset/);
   assert.match(en, /Last verified/);
   assert.match(en, new RegExp(`dateTime="${earlier}"`, "i"));
@@ -95,7 +95,7 @@ test("fresh server quota supersedes historical reset copy, while a missing weekl
   assert.match(en, />Resets /);
   assert.match(en, /80%/);
   assert.match(en, /Last known reset/);
-  assert.doesNotMatch(en, /Previous window/);
+  assert.doesNotMatch(en, /Previous period/);
   assert.doesNotMatch(en, new RegExp(`dateTime="${earlier}"`, "i"));
 });
 
@@ -119,7 +119,7 @@ test("stale future dates and a passed reset retain their actual dates and observ
     checkedAt,
     fiveHour: { usedPercent: 100, resetsAt: earlier },
   });
-  assert.match(past, /Previous window/);
+  assert.match(past, /Previous period/);
   assert.match(past, new RegExp(`dateTime="${earlier}"`, "i"));
   assert.match(past, new RegExp(`dateTime="${checkedAt}"`, "i"));
 });

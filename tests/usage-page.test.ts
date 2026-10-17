@@ -80,7 +80,7 @@ const view: UsageStatisticsView = {
     { former: true, name: "Eski hesap", kind: "weekly", at: "2026-10-12T08:05:00.000Z" },
   ],
   insight: {
-    tr: "Vertex (Team) pencerelerinin ortalama yalnızca %9 kadarını dolduruyor.",
+    tr: "Vertex (Team) dönemlerinin ortalama yalnızca %9 kadarını dolduruyor.",
     en: "Vertex (Team) fills only 9% of its windows.",
   },
 };
@@ -122,7 +122,7 @@ test("summary tiles format totals, change, windows, hits and the busiest time", 
   const html = text(render(createElement(SummaryTiles, { view })));
   assert.match(html, /1\.840 Pro birimi/);
   assert.match(html, /önceki 30 güne göre \+12%/);
-  assert.match(html, /Başlayan pencere/);
+  assert.match(html, /Başlayan dönem/);
   assert.match(html, /96/);
   assert.match(html, /günde ortalama 3,2/);
   assert.match(html, /Limite takılma7/);
@@ -164,7 +164,7 @@ test("account balance lists names, plan badges, share, fill, idle days and the i
   assert.match(plain, /boşta 2 gün/);
   assert.match(plain, /Eski hesap/);
   assert.match(plain, /doluluk —/);
-  assert.match(plain, /Vertex \(Team\) pencerelerinin ortalama yalnızca %9 kadarını dolduruyor\./);
+  assert.match(plain, /Vertex \(Team\) dönemlerinin ortalama yalnızca %9 kadarını dolduruyor\./);
   // Share bars use the account tones, in account order; former rows after every account.
   assert.match(html, /bg-tone-1[^"]*" style="width:58%"/);
   assert.match(html, /bg-tone-2[^"]*" style="width:27%"/);

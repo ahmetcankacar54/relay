@@ -59,7 +59,7 @@ export function PanelAutomation({ now }: { now: number }) {
         )
       : undefined;
   const planLabel = !planning.autoStart
-    ? t("Otomatik başlatma kapalı", "Automatic start off")
+    ? t("Önceden başlatma kapalı", "Early start off")
     : deferred
       ? t(
           `Uyarlandı · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
@@ -70,7 +70,7 @@ export function PanelAutomation({ now }: { now: number }) {
             `Sonraki başlatma ${clock(next.at)} · ${name(next.accountId)}`,
             `Next start ${clock(next.at)} · ${name(next.accountId)}`,
           )
-        : t("Otomatik başlatma açık", "Automatic start on");
+        : t("Önceden başlatma açık", "Early start on");
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>

@@ -63,7 +63,7 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Kişisel · Max/);
   assert.match(html, /Max 5×/);
   assert.match(html, /Çalışıyor/);
-  assert.match(html, /5 saatlik pencere/);
+  assert.match(html, /5 saatlik dönem/);
   assert.match(html, /Haftalık · tüm modeller/);
   assert.match(html, /Haftalık · Opus/);
   assert.match(html, /Önerilen/);
@@ -73,7 +73,7 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Otomatik başlatma kapalı/);
   assert.match(html, /<label[^>]*for="automation-mode"[^>]*>Otomatik geçiş<\/label>/);
   assert.match(html, /Kapalı\. Kota dolunca hesabı sen değiştirirsin\./);
-  assert.match(html, /Otomatik pencere başlatma/);
+  assert.match(html, /Limit dönemlerini önceden başlat/);
   assert.doesNotMatch(html, /Claude kapanınca hazırla/);
   assert.match(html, /Limitleri yenile/);
 });

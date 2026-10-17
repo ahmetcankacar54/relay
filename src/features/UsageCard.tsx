@@ -200,7 +200,7 @@ export function UsageCard({
           ) : historical ? (
             <>
               {Date.parse(historical.resetsAt) <= now
-                ? t("Önceki dönem", "Previous window")
+                ? t("Önceki dönem", "Previous period")
                 : t("Son bilinen yenilenme", "Last known reset")}{" "}
               <time dateTime={historical.resetsAt} title={historical.resetsAt}>
                 {clock(historical.resetsAt)}

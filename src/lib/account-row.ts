@@ -16,12 +16,12 @@ export function accountRowSubtitle(
       const reset = row.usage?.fiveHour?.resetsAt;
       const left = reset ? formatReset(reset, now, language, zone) : "";
       return t(
-        `Pencere açık${left ? ` · ${left}` : ""}`,
-        `Window open${left ? ` · ${left}` : ""}`,
+        `Dönem açık${left ? ` · ${left}` : ""}`,
+        `Period open${left ? ` · ${left}` : ""}`,
       );
     }
     case "ready":
-      return t("Hazır · pencere yok", "Ready · no window");
+      return t("Hazır · dönem başlamadı", "Ready · no period started");
     case "exhausted": {
       const at = row.availableAt
         ? formatClock(row.availableAt, language, zone)

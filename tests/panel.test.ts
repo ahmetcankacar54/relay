@@ -83,7 +83,7 @@ test("panelRowState explains why a switch is unavailable", () => {
 
 test("accountRowSubtitle keeps the overview wording", () => {
   const t = (tr: string) => tr;
-  assert.equal(accountRowSubtitle(row("ready"), t, "tr", "UTC", NOW), "Hazır · pencere yok");
+  assert.equal(accountRowSubtitle(row("ready"), t, "tr", "UTC", NOW), "Hazır · dönem başlamadı");
   assert.equal(accountRowSubtitle(row("not-linked"), t, "tr", "UTC", NOW), "Desktop’a bağlı değil");
   assert.equal(accountRowSubtitle(row("unknown"), t, "tr", "UTC", NOW), "Limit verisi eski");
 });
@@ -101,17 +101,17 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(html, /Kişisel · Max/);
   assert.match(html, /Max 5×/);
   assert.match(html, /Çalışıyor/);
-  assert.match(html, /5 saatlik pencere/);
+  assert.match(html, /5 saatlik dönem/);
   assert.match(html, /Haftalık · Opus/);
   assert.match(html, /Limit dolmak üzere/);
   assert.match(html, /Önerilen/);
   // The name has its own line; the badge sits on the subtitle line so names stay readable.
   assert.match(html, /title="Vertex"[^>]*>Vertex<\/div><div[^>]*>.*Önerilen/);
-  assert.match(html, /title="Pro · Hazır · pencere yok"/);
+  assert.match(html, /title="Pro · Hazır · dönem başlamadı"/);
   assert.match(html, /Hesaplar/);
   assert.match(html, /Otomatik geçiş · Kapalı/);
   assert.match(html, /title="Kişisel · Max %78 · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."/);
-  assert.match(html, /Otomatik başlatma kapalı/);
+  assert.match(html, /Önceden başlatma kapalı/);
   assert.doesNotMatch(html, /Kapanınca hazırla/);
   assert.match(html, /Relay’i aç/);
   assert.match(html, /Güncellendi 1 dk önce/);
@@ -127,7 +127,7 @@ test("panel without an active account points to Relay", () => {
 test("stale usage on the active card says so", () => {
   const html = render(relayFor(active, [active], { active: { ...use("active", 1, 1), checkedAt: iso(NOW - 3_600_000) } }));
   assert.match(html, /Limit verisi eski/);
-  assert.doesNotMatch(html, /5 saatlik pencere/);
+  assert.doesNotMatch(html, /5 saatlik dönem/);
 });
 
 test("more than six other accounts collapse into an overflow line", () => {
@@ -257,6 +257,21 @@ test("the planning pill names the adopted start while the plan is adapted", () =
   assert.match(
     pill(keeper({ factor: 1, schedule: [{ accountId: "vertex", startAt: "later" }] })),
     />Sonraki başlatma 13:00 · Kişisel · Max</,
+  );
+  // Switched on with nothing planned: the pill says early start, not automatic start.
+  assert.match(
+    pill(
+      { ...keeper(), next: undefined },
+      { ...settings, planning: { ...settings.planning, accounts: [] } },
+    ),
+    />Önceden başlatma açık</,
+  );
+  assert.match(
+    pill(keeper(), {
+      ...settings,
+      planning: { ...settings.planning, autoStart: false },
+    }),
+    />Önceden başlatma kapalı</,
   );
   // Adaptation turned off applies at once.
   assert.doesNotMatch(

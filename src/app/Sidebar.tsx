@@ -194,7 +194,7 @@ export function Sidebar({
           </button>
           <div className="mt-1.5">
             <LimitMeter
-              label={t("5 saatlik pencere", "5-hour window")}
+              label={t("5 saatlik dönem", "5-hour period")}
               percent={summary.fiveHour}
               size="sm"
             />

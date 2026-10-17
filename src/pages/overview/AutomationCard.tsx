@@ -86,7 +86,10 @@ export function AutomationCard({
           <AutomationStatusLine status={automation.status} compact />
         </div>
         <Row
-          title={t("Otomatik pencere başlatma", "Automatic window start")}
+          title={t(
+            "Limit dönemlerini önceden başlat",
+            "Start limit periods early",
+          )}
           status={
             !planning.autoStart
               ? t("Kapalı", "Off")
@@ -100,8 +103,8 @@ export function AutomationCard({
           control={
             <Switch
               aria-label={t(
-                "Otomatik pencere başlatma",
-                "Automatic window start",
+                "Limit dönemlerini önceden başlat",
+                "Start limit periods early",
               )}
               checked={planning.autoStart}
               disabled={disabled}

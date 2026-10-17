@@ -515,8 +515,8 @@ else {
             title: "Relay",
             body:
               trayLanguage === "en"
-                ? `Could not start ${account.name}'s usage window (${reason}).`
-                : `${account.name} kullanım penceresi başlatılamadı (${reason}).`,
+                ? `Could not start ${account.name}'s limit period (${reason}).`
+                : `${account.name} limit dönemi başlatılamadı (${reason}).`,
           }).show();
         },
         adapted: notifyAdapted,

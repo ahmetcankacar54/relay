@@ -108,8 +108,8 @@ function statusText(
         : t("Planlı başlatma yok", "No planned start");
     case "active":
       return t(
-        `Pencere açık · Sıfırlanma ${clock(status.resetsAt!, zone)}`,
-        `Window open · Resets ${clock(status.resetsAt!, zone)}`,
+        `Dönem açık · Sıfırlanma ${clock(status.resetsAt!, zone)}`,
+        `Period open · Resets ${clock(status.resetsAt!, zone)}`,
       );
     case "due":
       return t("Başlatılıyor…", "Starting…");
@@ -380,8 +380,8 @@ export function PlanningPanel({
   const upcoming = nextPlannedWindow(settings, accounts, keeper, now);
   const summary = !settings.autoStart
     ? t(
-        "Kapalı. Açınca Relay pencereleri planlanan saatlerde başlatır ve gün boyu canlı tutar.",
-        "Off. When on, Relay starts windows at the planned times and keeps them running.",
+        "Kapalı. Açınca Relay 5 saatlik limit dönemlerini planlanan saatlerde başlatır ve gün boyu canlı tutar.",
+        "Off. When on, Relay starts 5-hour limit periods at the planned times and keeps them running.",
       )
     : !included.length
       ? t(
@@ -419,7 +419,7 @@ export function PlanningPanel({
         </span>
         <div className="min-w-0 flex-1">
           <strong className="font-display text-[15px] font-semibold">
-            {t("Otomatik pencere başlatma", "Automatic window start")}
+            {t("Limit dönemlerini önceden başlat", "Start limit periods early")}
           </strong>
           <p className="mt-0.5 text-[13px]">{summary}</p>
           {settings.autoStart && forecast && (
@@ -445,7 +445,10 @@ export function PlanningPanel({
         <Switch
           checked={settings.autoStart}
           disabled={disabled}
-          aria-label={t("Otomatik pencere başlatma", "Automatic window start")}
+          aria-label={t(
+            "Limit dönemlerini önceden başlat",
+            "Start limit periods early",
+          )}
           onCheckedChange={(autoStart) => update({ autoStart })}
         />
       </Card>

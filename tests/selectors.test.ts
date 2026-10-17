@@ -69,7 +69,7 @@ test("sidebar status reflects automation switches", () => {
 test("usage rows include model windows after the main ones", () => {
   const rows = usageWindowRows({ ...use("a", 38, 78), modelWindows: [{ key: "seven_day_opus", label: "Opus", usedPercent: 7 }] });
   assert.deepEqual(rows.map((r) => [r.key, r.label.tr, r.usedPercent]), [
-    ["five_hour", "5 saatlik pencere", 38],
+    ["five_hour", "5 saatlik dönem", 38],
     ["seven_day", "Haftalık · tüm modeller", 78],
     ["seven_day_opus", "Haftalık · Opus", 7],
   ]);
