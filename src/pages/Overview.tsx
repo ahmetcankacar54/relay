@@ -7,8 +7,9 @@ import { formatRelative } from "@/lib/time";
 import { formatPercent } from "@/lib/meter";
 import { PageFrame } from "@/app/PageFrame";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
-import { Banner } from "@/app/Banners";
+import { Banner } from "@/components/Banner";
 import type { PageId } from "@/app/routes";
+import { useAutomation } from "../features/useAutomation";
 import { ActiveAccountCard } from "./overview/ActiveAccountCard";
 import { AccountsCard } from "./overview/AccountsCard";
 import { TodayCard } from "./overview/TodayCard";
@@ -43,8 +44,11 @@ export function Overview({
     : date;
   const refreshing = usageBusy.size > 0;
   const suggestedUse = suggestion && maxUsedPercent(usage[suggestion.id]);
+  // One offer at a time: automatic switching's switch-now wins over the suggestion.
+  const automationOffer = !!useAutomation(now).status.switchTo;
   return (
     <PageFrame
+      automationInline
       title={t("Genel bakış", "Overview")}
       description={description}
       actions={
@@ -68,7 +72,7 @@ export function Overview({
     >
       <div className="grid gap-3 px-6 pb-6">
         <ActiveAccountCard go={go} now={now} />
-        {suggestion && active && (
+        {suggestion && active && !automationOffer && (
           <Banner
             tone="warn"
             action={

@@ -41,6 +41,7 @@ export function Switching() {
       continuation.reason === "accessibility-permission-required");
   return (
     <PageFrame
+      automationInline
       title={t("Geçiş", "Switching")}
       description={t(
         "Otomatik geçiş, ortak geçmiş ve hesap önerileri",

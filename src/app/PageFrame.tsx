@@ -8,17 +8,20 @@ export function PageFrame({
   title,
   description,
   actions,
+  automationInline,
   children,
 }: {
   title: string;
   description?: string;
   actions?: ReactNode;
+  /** The page shows the automation status and its offer itself, so the banner would repeat them. */
+  automationInline?: boolean;
   children: ReactNode;
 }) {
   return (
     <>
       <PageHeader title={title} description={description} actions={actions} />
-      <Banners />
+      <Banners automation={!automationInline} />
       <ConnectionPanels />
       {children}
     </>

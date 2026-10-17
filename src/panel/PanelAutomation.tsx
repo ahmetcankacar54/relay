@@ -8,8 +8,8 @@ import type { PageId } from "@/app/routes";
 import {
   AUTOMATION_DOT,
   automationModeCopy,
-} from "../features/AutomationControl";
-import { useAutomation } from "../features/useAutomation";
+  useAutomation,
+} from "../features/useAutomation";
 import { panelEyebrow } from "./PanelActiveCard";
 
 function Pill({

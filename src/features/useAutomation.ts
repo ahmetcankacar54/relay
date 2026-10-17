@@ -1,15 +1,33 @@
 import { useRelay } from "@/data/relay-context";
 import {
+  AUTOMATION_MODES,
   automationMode,
   type AutomationMode,
 } from "../../shared/automation-mode";
 import {
   automationStatus,
   type AutomationStatus,
+  type AutomationTone,
 } from "../../shared/automation-status";
 import { applyAutomationMode } from "./automation-actions";
 
-/** The one automatic-switching choice, its status and its two actions. */
+/** The status dot for each automation tone. */
+export const AUTOMATION_DOT: Record<
+  AutomationTone,
+  "ok" | "warn" | "crit" | "off"
+> = {
+  ok: "ok",
+  waiting: "warn",
+  attention: "crit",
+  off: "off",
+};
+
+/** The labels and description of one choice. */
+export function automationModeCopy(mode: AutomationMode) {
+  return AUTOMATION_MODES.find((m) => m.value === mode) ?? AUTOMATION_MODES[0];
+}
+
+/** The one automatic-switching choice, its status and how to change it. */
 export function useAutomation(now?: number): {
   mode: AutomationMode;
   status: AutomationStatus;
@@ -18,7 +36,6 @@ export function useAutomation(now?: number): {
   /** This platform can switch on its own. */
   supported: boolean;
   setMode(mode: AutomationMode): void;
-  switchNow(): void;
 } {
   const relay = useRelay();
   const { api, accounts, settings, data, desktop } = relay;
@@ -55,10 +72,6 @@ export function useAutomation(now?: number): {
             continuation.status !== "reconciliation-required",
         }),
       );
-    },
-    switchNow() {
-      const target = accounts.find((a) => a.id === status.switchTo);
-      if (target) relay.requestDesktop(target, "switch");
     },
   };
 }

@@ -8,7 +8,7 @@ import { useRelay } from "@/data/relay-context";
 import { panelRowState } from "@/lib/account-row";
 import { formatPercent } from "@/lib/meter";
 import { formatRelative } from "@/lib/time";
-import { RelayErrorAlert } from "@/app/Banners";
+import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { PanelActiveCard } from "./PanelActiveCard";
 import { PanelAccounts, panelRows, switchingId } from "./PanelAccounts";

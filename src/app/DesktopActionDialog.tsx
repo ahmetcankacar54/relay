@@ -8,7 +8,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { historySources } from "../../shared/history-policy";
 import { DesktopActionReview } from "../features/DesktopActionReview";
-import { RelayErrorAlert } from "./Banners";
+import { RelayErrorAlert } from "./RelayErrorAlert";
 
 /** Confirms every Desktop action (switch, sign-in, recovery…) on whatever page is open. */
 export function DesktopActionDialog() {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { Account } from "../../shared/types";
 import type { StatisticsRange } from "../../shared/usage-statistics-view";
 import { historyIdentity } from "../../shared/usage-statistics";
-import { Banner } from "@/app/Banners";
+import { Banner } from "@/components/Banner";
 import { PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
 import { Panda } from "@/components/Panda";

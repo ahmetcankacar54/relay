@@ -18,7 +18,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { DesktopSetup } from "../../features/DesktopSetup";
 import { CliFlowPanel, DesktopPendingActions } from "@/app/ConnectionPanels";
-import { RelayErrorAlert } from "@/app/Banners";
+import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 
 type Kind = "personal" | "work";
 type Step = 1 | 2 | 3;

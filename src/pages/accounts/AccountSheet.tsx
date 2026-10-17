@@ -21,7 +21,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { CliFlowPanel } from "@/app/ConnectionPanels";
-import { RelayErrorAlert } from "@/app/Banners";
+import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { UsageCard } from "../../features/UsageCard";
 import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";

@@ -19,6 +19,12 @@ export interface AutomationStatus {
   tone: AutomationTone;
   /** One sentence: what Relay does, why it waits, what to do. */
   text: [tr: string, en: string];
+  /**
+   * The "<account> %n · " that `text` starts with (empty without a reading).
+   * It changes with every usage reading, so the UI keeps it out of live
+   * announcements.
+   */
+  prefix: [tr: string, en: string];
   /** Account id offered as "Şimdi <hesap>’e geç". */
   switchTo?: string;
   /** Show in the page-top banner. */
@@ -315,6 +321,7 @@ export function automationStatus(
         `${prefix[0]}${tr}${suffix?.[0] ?? ""}`,
         `${prefix[1]}${en}${suffix?.[1] ?? ""}`,
       ],
+      prefix,
       ...(switchTo ? { switchTo } : {}),
       banner: row.banner || !!switchTo,
     };

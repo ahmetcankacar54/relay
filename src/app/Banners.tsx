@@ -1,13 +1,13 @@
-import { useState, type ReactNode } from "react";
-import { Check, Monitor, X } from "lucide-react";
+import { useState } from "react";
+import { Check, Monitor } from "lucide-react";
 import type { Account, AccountUsage } from "../../shared/types";
 import { cliNeedsReconnect } from "../../shared/account-state";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Banner } from "@/components/Banner";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { localizeError } from "../messages";
 import { AutomationBanner } from "../features/AutomationControl";
+import { RelayErrorAlert } from "./RelayErrorAlert";
 
 export interface ReconnectIssue {
   account: Account;
@@ -75,70 +75,12 @@ export function reconnectCause(
   }
 }
 
-/** The current Relay or Desktop error, for surfaces (dialogs) that cover the page banners. */
-export function RelayErrorAlert() {
-  const relay = useRelay();
-  const { t, language } = useI18n();
-  const message = relay.error || relay.desktop?.error;
-  if (!message) return null;
-  return (
-    <Banner
-      tone="error"
-      role="alert"
-      onDismiss={() => void relay.dismissError()}
-      dismissLabel={t("Hatayı kapat", "Dismiss error")}
-    >
-      <span>{localizeError(message, language)}</span>
-    </Banner>
-  );
-}
-
-export function Banner({
-  tone,
-  children,
-  action,
-  onDismiss,
-  dismissLabel,
-  role,
+export function Banners({
+  automation = true,
 }: {
-  tone: "info" | "warn" | "error";
-  children: ReactNode;
-  action?: ReactNode;
-  onDismiss?: () => void;
-  dismissLabel?: string;
-  role?: "alert" | "status";
+  /** False on pages that show the automation status inline. */
+  automation?: boolean;
 }) {
-  return (
-    <div
-      role={role}
-      className={cn(
-        "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm",
-        tone === "error" && "border-destructive/30 bg-destructive/10",
-        tone === "warn" && "border-warn/40 bg-warn/10",
-        tone === "info" && "bg-accent",
-      )}
-    >
-      <div className="flex min-w-0 items-center gap-2">{children}</div>
-      {(action || onDismiss) && (
-        <div className="flex shrink-0 items-center gap-1">
-          {action}
-          {onDismiss && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={dismissLabel}
-              onClick={onDismiss}
-            >
-              <X />
-            </Button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function Banners() {
   const relay = useRelay();
   const { t } = useI18n();
   const { desktop, notice, accounts, active } = relay;
@@ -173,7 +115,7 @@ export function Banners() {
           <span>{notice}</span>
         </Banner>
       )}
-      <AutomationBanner />
+      {automation && <AutomationBanner />}
       {desktop?.recoveryRequired && (
         <Banner
           tone="error"

@@ -1,9 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { applyAutomationMode } from "../src/features/automation-actions";
 import { Switching } from "../src/pages/Switching";
+import { Overview } from "../src/pages/Overview";
+import { Planning } from "../src/pages/Planning";
 import { Banners } from "../src/app/Banners";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -277,9 +281,11 @@ test("the Switching card shows one choice with the status and a switch-now butto
     ["Kota dolunca"],
   );
   assert.ok(
-    html.includes(
-      "Kişisel · Max %100 · 2 konuşma kota yüzünden durdu. Claude’da başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
-    ),
+    html
+      .replace(/<[^>]+>/g, "")
+      .includes(
+        "Kişisel · Max %100 · 2 konuşma kota yüzünden durdu. Claude’da başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+      ),
   );
   assert.ok(html.includes("Şimdi Kişisel · İkinci’ye geç"));
   assert.doesNotMatch(html, /Kota dolunca geçiş ve devam/);
@@ -341,4 +347,97 @@ test("the banner appears only when the status asks for it", () => {
   );
   assert.match(waiting, /Otomatik geçiş ·/);
   assert.ok(waiting.includes("Şimdi Kişisel · İkinci’ye geç"));
+});
+
+const SWITCH_NOW = "Şimdi Kişisel · İkinci’ye geç";
+const count = (html: string, text: string) => html.split(text).length - 1;
+const overview = createElement(Overview, { go() {}, now: NOW });
+
+test("Switching and Overview show the offer inline, not in the page banner", () => {
+  const relay = relayFor({ fleet: otherWork, usage: fullUsage });
+  for (const [label, element] of [
+    ["Switching", createElement(Switching)],
+    ["Overview", overview],
+  ] as const) {
+    const html = render(relay, element);
+    assert.doesNotMatch(html, /Otomatik geçiş ·/, label);
+    assert.equal(count(html, SWITCH_NOW), 1, label);
+    assert.equal(count(html, "2 konuşma kota yüzünden durdu."), 1, label);
+  }
+  // Pages without the inline status keep the banner.
+  const planning = render(relay, createElement(Planning));
+  assert.match(planning, /Otomatik geçiş ·/);
+  assert.equal(count(planning, SWITCH_NOW), 1);
+});
+
+test("Overview hides the suggestion band while automation offers a switch", () => {
+  const offered = render(
+    { ...relayFor({ fleet: otherWork, usage: fullUsage }), suggestion: b },
+    overview,
+  );
+  assert.doesNotMatch(offered, /uyarı eşiğini geçti/);
+  assert.doesNotMatch(offered, /Geçişi incele/);
+  assert.equal(count(offered, SWITCH_NOW), 1);
+  // Without an automation offer the suggestion band stays.
+  const suggested = render(
+    {
+      ...relayFor({ usage: { a: usage("a", 90), b: usage("b", 10) } }),
+      suggestion: b,
+    },
+    overview,
+  );
+  assert.match(suggested, /uyarı eşiğini geçti/);
+  assert.match(suggested, /Geçişi incele/);
+  assert.equal(count(suggested, SWITCH_NOW), 0);
+});
+
+test("the status line keeps the usage prefix out of the live announcement", () => {
+  const html = render(relayFor({ fleet: otherWork, usage: fullUsage }));
+  const live = [
+    ...html.matchAll(/<span role="status" aria-live="polite">(.*?)<\/span>/g),
+  ].map(([, text]) => text);
+  assert.deepEqual(live, [
+    "2 konuşma kota yüzünden durdu. Claude’da başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+  ]);
+  // The prefix is still shown, just outside the live region.
+  assert.ok(html.includes('Kişisel · Max %100 · <span role="status"'));
+});
+
+/** Source files (posix paths) the static, non-type imports reach from `entry`. */
+function imported(entry: string): Set<string> {
+  const root = path.resolve(import.meta.dirname, "..");
+  const seen = new Set<string>();
+  const visit = (file: string) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const source = fs.readFileSync(path.join(root, file), "utf8");
+    for (const [, spec] of source.matchAll(
+      /^(?:import|export)\s+(?!type\s)(?:[^"';]*?\sfrom\s+)?["']([^"']+)["']/gm,
+    )) {
+      const base = spec.startsWith("@/")
+        ? path.posix.join("src", spec.slice(2))
+        : spec.startsWith(".")
+          ? path.posix.join(path.posix.dirname(file), spec)
+          : undefined;
+      if (base === undefined) continue;
+      const found = [".ts", ".tsx"]
+        .map((ext) => base + ext)
+        .find((f) => fs.existsSync(path.join(root, f)));
+      if (found) visit(found);
+    }
+  };
+  visit(entry);
+  return seen;
+}
+
+test("the menu bar panel does not bundle the Switching card", () => {
+  const panel = imported("src/panel/main.tsx");
+  assert.ok(panel.has("src/panel/PanelAutomation.tsx"));
+  assert.ok(panel.has("src/features/useAutomation.ts"));
+  assert.ok(!panel.has("src/features/AutomationControl.tsx"));
+  assert.ok(!panel.has("src/features/SwitchPreferences.tsx"));
+  // The page banners and the automation card no longer import each other.
+  assert.ok(
+    !imported("src/features/AutomationControl.tsx").has("src/app/Banners.tsx"),
+  );
 });

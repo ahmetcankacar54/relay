@@ -1,9 +1,9 @@
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Banner } from "@/components/Banner";
 import { Note, SectionHeading } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
-import { Banner } from "@/app/Banners";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import {
@@ -13,26 +13,13 @@ import {
 import {
   switchNowLabel,
   type AutomationStatus,
-  type AutomationTone,
 } from "../../shared/automation-status";
 import { AccountSelection } from "./SwitchPreferences";
-import { useAutomation } from "./useAutomation";
-
-/** The status dot for each automation tone. */
-export const AUTOMATION_DOT: Record<
-  AutomationTone,
-  "ok" | "warn" | "crit" | "off"
-> = {
-  ok: "ok",
-  waiting: "warn",
-  attention: "crit",
-  off: "off",
-};
-
-/** The labels and description of one choice. */
-export function automationModeCopy(mode: AutomationMode) {
-  return AUTOMATION_MODES.find((m) => m.value === mode) ?? AUTOMATION_MODES[0];
-}
+import {
+  AUTOMATION_DOT,
+  automationModeCopy,
+  useAutomation,
+} from "./useAutomation";
 
 /** "Şimdi <hesap>’e geç": opens the confirmed switch review for the target. */
 function SwitchNowButton({
@@ -44,7 +31,6 @@ function SwitchNowButton({
 }) {
   const relay = useRelay();
   const { t } = useI18n();
-  const { switchNow } = useAutomation();
   const target = relay.accounts.find((a) => a.id === status.switchTo);
   if (!target) return null;
   return (
@@ -58,10 +44,27 @@ function SwitchNowButton({
         !!relay.pendingDesktop ||
         !!relay.desktop?.recoveryRequired
       }
-      onClick={switchNow}
+      onClick={() => relay.requestDesktop(target, "switch")}
     >
       {t(...switchNowLabel(target.name))}
     </Button>
+  );
+}
+
+/**
+ * The status sentence with its "<account> %n · " prefix outside the live
+ * region, so a usage refresh alone is not announced again.
+ */
+function StatusText({ status }: { status: AutomationStatus }) {
+  const { t } = useI18n();
+  const prefix = t(...status.prefix);
+  return (
+    <>
+      {prefix}
+      <span role="status" aria-live="polite">
+        {t(...status.text).slice(prefix.length)}
+      </span>
+    </>
   );
 }
 
@@ -74,11 +77,8 @@ export function AutomationStatusLine({
   /** Overview: smaller text that wraps, no box. */
   compact?: boolean;
 }) {
-  const { t } = useI18n();
   return (
     <div
-      role="status"
-      aria-live="polite"
       className={
         compact
           ? "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
@@ -90,7 +90,9 @@ export function AutomationStatusLine({
           tone={AUTOMATION_DOT[status.tone]}
           className={compact ? "mt-1" : "mt-1.5"}
         />
-        <span>{t(...status.text)}</span>
+        <span>
+          <StatusText status={status} />
+        </span>
       </p>
       {status.switchTo && (
         <SwitchNowButton status={status} size={compact ? "xs" : "sm"} />
@@ -219,7 +221,6 @@ export function AutomationBanner() {
   return (
     <Banner
       tone={status.tone === "attention" ? "warn" : "info"}
-      role="status"
       action={
         status.switchTo ? (
           <SwitchNowButton status={status} size="sm" />
@@ -227,7 +228,8 @@ export function AutomationBanner() {
       }
     >
       <span>
-        {`${t("Otomatik geçiş", "Automatic switching")} · ${t(...status.text)}`}
+        {`${t("Otomatik geçiş", "Automatic switching")} · `}
+        <StatusText status={status} />
       </span>
     </Banner>
   );
