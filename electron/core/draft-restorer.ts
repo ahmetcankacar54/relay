@@ -150,7 +150,8 @@ interface Run {
  * alone for 3 s. It stops, leaving the rest pending, when the lock is busy or another
  * operation waits for it, the user is active or moves, Claude changes or the run passes 5
  * minutes. A draft it cannot type, or cannot see in its composer afterwards, is marked
- * `needs-copy` with the reason: `maybe-typed` once a write was tried.
+ * `needs-copy` with the reason: `maybe-typed` once a write was tried, except a write the
+ * helper refused for want of accessibility, which typed nothing and stays `accessibility`.
  */
 export async function restoreDrafts(
   deps: RestorerDeps,
@@ -365,7 +366,8 @@ function guardOf(view: Snapshot, target: Place): DesktopDraftGuard | undefined {
  * Types one draft into its conversation's empty composer and reads it again 5 s later.
  * Resolves with why it is left for copy, or undefined when it was restored. `typing.wrote`
  * tells whether a write was attempted, so the caller knows it may be in a composer; once it
- * was, every reason but `lost` and `composer-not-empty` is `maybe-typed`.
+ * was, every reason but `lost` and `composer-not-empty` is `maybe-typed`. A write refused for
+ * want of accessibility or because the user was active typed nothing and resets it.
  */
 async function restoreOne(
   deps: RestorerDeps,
