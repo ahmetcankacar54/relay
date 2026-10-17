@@ -59,6 +59,11 @@ const clock = (time: number) =>
 /** Badges with exactly this text (the tempo toggle also reads "Otomatik"). */
 const badges = (html: string, text: string) =>
   html.match(new RegExp(`data-slot="badge"[^>]*>${text}<`, "g"))?.length ?? 0;
+/** The hh:mm shown in an account's first-start field, found by its label. */
+const firstStart = (html: string, account: string) =>
+  new RegExp(
+    `>${account} ilk başlangıç</label>.*?role="spinbutton".*?\\svalue="(\\d\\d:\\d\\d)"`,
+  ).exec(html)?.[1];
 function render(settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot) {
   return renderToStaticMarkup(
     createElement(PlanningPanel, {
@@ -82,10 +87,8 @@ test("the panel shows the switch, both hour rows and automatic first starts", ()
   assert.match(html, /Hafta içi/);
   assert.match(html, /Hafta sonu/);
   const [first, second] = todayPlan({ accounts }).accounts;
-  assert.ok(
-    html.includes(`Kişisel - Max ilk başlangıç, ${clock(first.firstStart)}`),
-  );
-  assert.ok(html.includes(`Vertex ilk başlangıç, ${clock(second.firstStart)}`));
+  assert.equal(firstStart(html, "Kişisel - Max"), clock(first.firstStart));
+  assert.equal(firstStart(html, "Vertex"), clock(second.firstStart));
   assert.equal(badges(html, "Otomatik"), 2);
   assert.doesNotMatch(html, />Elle</);
 });
@@ -93,15 +96,13 @@ test("the panel shows the switch, both hour rows and automatic first starts", ()
 test("a manual first start is marked and can return to automatic", () => {
   const accounts = [{ id: a.id, firstStart: "07:00" }, { id: b.id }];
   const html = render({ accounts });
-  assert.match(html, /Kişisel - Max ilk başlangıç, 07:00/);
+  assert.equal(firstStart(html, "Kişisel - Max"), "07:00");
   assert.match(html, />Elle</);
   assert.equal(badges(html, "Otomatik"), 1);
   assert.match(html, /Otomatiğe dön/);
   const automatic = todayPlan({ accounts }).accounts[1];
   assert.equal(automatic.manual, false);
-  assert.ok(
-    html.includes(`Vertex ilk başlangıç, ${clock(automatic.firstStart)}`),
-  );
+  assert.equal(firstStart(html, "Vertex"), clock(automatic.firstStart));
 });
 
 test("keeper status, an empty plan and deleted accounts render safely", () => {
@@ -139,9 +140,7 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
       `Bugün ${alone.windows.length} başlatma planlı · sonraki 17:45 Vertex`,
     ),
   );
-  assert.ok(
-    html.includes(`Kişisel - Max ilk başlangıç, ${clock(alone.firstStart)}`),
-  );
+  assert.equal(firstStart(html, "Kişisel - Max"), clock(alone.firstStart));
   const empty = render({
     accounts: [{ id: a.id }],
     weekday: { enabled: false, start: "09:00", end: "21:00" },
@@ -734,10 +733,9 @@ test("after work the pill and the rows describe the next work day", () => {
   });
   assert.match(html, /><\/i>Yarın tahmini: Kesintisiz · geçiş yok</);
   assert.doesNotMatch(html, /Tahmin: /);
-  assert.ok(
-    html.includes(
-      `Kişisel - Max ilk başlangıç, ${clock(saturday.accounts[0].firstStart)}`,
-    ),
+  assert.equal(
+    firstStart(html, "Kişisel - Max"),
+    clock(saturday.accounts[0].firstStart),
   );
   assert.ok(html.includes("Hafta sonu yoğun gün ≈ 60 Pro birimi/sa"));
   // The window lasts as on Saturday; today's ranges are still today's.

@@ -1,28 +1,20 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { ChevronDown, Clock3 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Clock3 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
+  clockFieldKey,
   formatPickerClock,
-  moveTimeGridCursor,
+  parseLooseClock,
   parsePickerClock,
-  type ClockParts,
+  stepClock,
 } from "../../shared/time-picker";
 
 type T = (tr: string, en: string) => string;
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
-const pad = (n: number) => String(n).padStart(2, "0");
-/** Popover width: 336 px, or the window less a 12 px margin each side. */
-const popoverWidth = () =>
-  typeof window === "undefined" ? 336 : Math.min(336, window.innerWidth - 24);
+/** One wheel step per this many pixels of scroll. */
+const WHEEL_STEP_PX = 40;
 
+/** An inline hh:mm field: type a time, or step it with the arrows and wheel. */
 export function TimePicker({
   id,
   label,
@@ -38,348 +30,156 @@ export function TimePicker({
   onChange: (value: string) => void;
   t: T;
 }) {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const bodyRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const hourRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const minuteRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  // Whether closing returns focus to the trigger (Radix does it unless prevented).
-  const restoreFocus = useRef(true);
-  const [open, setOpen] = useState(false);
+  const wheelDelta = useRef(0);
+  const wheelStep = useRef<(steps: number) => void>(() => {});
   const [draft, setDraft] = useState(value);
-  const [hourCursor, setHourCursor] = useState(0);
-  const [minuteCursor, setMinuteCursor] = useState(0);
-  const [columns, setColumns] = useState(6);
+  const [focused, setFocused] = useState(false);
   const [showError, setShowError] = useState(false);
-  const parsed = parsePickerClock(draft);
+  const shown = parseLooseClock(draft) ?? parsePickerClock(value);
+  const minutes = shown ? shown.hour * 60 + shown.minute : 0;
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
 
-  function close(returnFocus: boolean) {
-    restoreFocus.current = returnFocus;
-    setOpen(false);
-    setShowError(false);
-  }
-
-  function begin() {
-    if (disabled) return;
-    const seed = parsePickerClock(value);
+  // Follow the saved value whenever the field is not being edited.
+  useEffect(() => {
+    if (focused && !disabled) return;
     setDraft(value);
-    setHourCursor(seed?.hour ?? 0);
-    setMinuteCursor(Math.floor((seed?.minute ?? 0) / 5));
-    setColumns(popoverWidth() < 320 ? 4 : 6);
     setShowError(false);
-    restoreFocus.current = true;
-    setOpen(true);
+  }, [value, focused, disabled]);
+
+  /** The clock a step starts from: a valid typed draft, else the saved value. */
+  function startingFrom(text: string) {
+    const typed = parseLooseClock(text);
+    return typed ? formatPickerClock(typed) : value;
   }
 
-  function apply() {
-    if (disabled) return close(false);
-    if (!parsed) {
-      setShowError(true);
-      inputRef.current?.focus({ preventScroll: true });
+  function show(next: string) {
+    setDraft(next);
+    setShowError(false);
+  }
+
+  function commit(): boolean {
+    const parts = parseLooseClock(draft);
+    if (!parts) return false;
+    const next = formatPickerClock(parts);
+    if (next !== value) onChange(next);
+    show(next);
+    return true;
+  }
+
+  function restore() {
+    show(value);
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (!commit()) setShowError(true);
       return;
     }
-    onChange(formatPickerClock(parsed));
-    close(true);
-  }
-
-  function choose(part: keyof ClockParts, selected: number) {
-    const base = parsed ?? parsePickerClock(value) ?? { hour: 0, minute: 0 };
-    setDraft(formatPickerClock({ ...base, [part]: selected }));
-    setShowError(false);
-    if (part === "hour") setHourCursor(selected);
-    else setMinuteCursor(selected / 5);
-  }
-
-  function focusAfterTrigger() {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const controls = Array.from(
-      document.querySelectorAll<HTMLElement>(
-        'a[href],button,input,select,textarea,[tabindex],[contenteditable="true"]',
-      ),
-    ).filter(
-      (element) =>
-        element.tabIndex >= 0 &&
-        !element.matches(":disabled") &&
-        !element.closest('[inert],[hidden],[aria-hidden="true"]') &&
-        !panelRef.current?.contains(element) &&
-        element.getClientRects().length > 0 &&
-        getComputedStyle(element).visibility !== "hidden",
-    );
-    const index = controls.indexOf(trigger);
-    const next = controls[index + 1] ?? controls[0];
-    close(false);
-    next?.focus();
-  }
-
-  function revealOption(element: HTMLButtonElement | null) {
-    const body = bodyRef.current;
-    if (!body || !element) return;
-    const bounds = body.getBoundingClientRect();
-    const option = element.getBoundingClientRect();
-    if (option.top < bounds.top) body.scrollTop -= bounds.top - option.top;
-    else if (option.bottom > bounds.bottom)
-      body.scrollTop += option.bottom - bounds.bottom;
-  }
-
-  function move(
-    event: KeyboardEvent<HTMLButtonElement>,
-    index: number,
-    part: keyof ClockParts,
-  ) {
-    const options = part === "hour" ? HOURS : MINUTES;
-    const next = moveTimeGridCursor(index, event.key, options.length, columns);
+    if (event.key === "Escape") {
+      if (draft !== value || showError) {
+        event.preventDefault();
+        restore();
+      }
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const next = clockFieldKey(startingFrom(draft), event.key);
     if (next === null) return;
     event.preventDefault();
-    if (part === "hour") {
-      setHourCursor(next);
-      hourRefs.current[next]?.focus({ preventScroll: true });
-    } else {
-      setMinuteCursor(next);
-      minuteRefs.current[next]?.focus({ preventScroll: true });
-    }
+    show(next);
   }
 
+  // React's onWheel is passive, so it cannot cancel the page scroll. Listen
+  // natively; the step reads the latest draft through a state updater, so
+  // wheel events that arrive before a re-render still add up.
   useEffect(() => {
-    if (disabled && open) close(false);
-  }, [disabled, open]);
-
-  const option = (
-    part: keyof ClockParts,
-    n: number,
-    index: number,
-    refs: typeof hourRefs,
-    cursor: number,
-    setCursor: (n: number) => void,
-  ) => {
-    const selected = parsed?.[part] === n;
-    const name = part === "hour" ? t("Saat", "Hour") : t("Dakika", "Minute");
-    return (
-      <Button
-        key={n}
-        ref={(element: HTMLButtonElement | null) => {
-          refs.current[index] = element;
-        }}
-        type="button"
-        variant={selected ? "default" : "ghost"}
-        size="sm"
-        className={cn("h-8 px-0 tabular-nums", !selected && "font-normal")}
-        tabIndex={cursor === index ? 0 : -1}
-        aria-label={`${name} ${pad(n)}`}
-        aria-pressed={selected}
-        data-selected={selected || undefined}
-        onClick={() => choose(part, n)}
-        onFocus={() => {
-          setCursor(index);
-          revealOption(refs.current[index]);
-        }}
-        onKeyDown={(event) => move(event, index, part)}
-      >
-        {pad(n)}
-      </Button>
-    );
-  };
-  const grid = { gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` };
+    wheelStep.current = (steps) => {
+      setDraft((current) => stepClock(startingFrom(current), steps));
+      setShowError(false);
+    };
+  });
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const onWheel = (event: WheelEvent) => {
+      if (document.activeElement !== input || input.disabled) return;
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      const scale =
+        event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1;
+      wheelDelta.current += event.deltaY * scale;
+      const steps = Math.trunc(wheelDelta.current / WHEEL_STEP_PX);
+      if (steps === 0) return;
+      wheelDelta.current -= steps * WHEEL_STEP_PX;
+      wheelStep.current(-steps);
+    };
+    input.addEventListener("wheel", onWheel, { passive: false });
+    return () => input.removeEventListener("wheel", onWheel);
+  }, []);
 
   return (
-    <div className="grid min-w-0 gap-1">
-      {/* The row names each picker; the label stays for assistive tech. */}
+    <div className="relative min-w-0">
+      {/* The row names each field; the label stays for assistive tech. */}
       <label htmlFor={id} className="sr-only">
         {label}
       </label>
-      <Popover
-        open={open}
-        onOpenChange={(next) => (next ? begin() : close(true))}
-      >
-        <PopoverTrigger asChild>
-          <Button
-            id={id}
-            ref={triggerRef}
-            type="button"
-            variant="outline"
-            className="w-full justify-start gap-2 px-2.5 font-normal"
-            disabled={disabled}
-            aria-label={`${label}, ${value}, ${t("24 saat", "24-hour")}`}
-          >
-            <Clock3 className="text-muted-foreground" aria-hidden="true" />
-            <span className="text-base font-medium tabular-nums">{value}</span>
-            <ChevronDown
-              className="ml-auto text-muted-foreground"
-              aria-hidden="true"
-            />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          ref={panelRef}
-          align="start"
-          collisionPadding={12}
-          aria-modal="false"
-          aria-labelledby={`${id}-heading`}
-          className="flex max-h-[min(480px,var(--radix-popover-content-available-height))] flex-col gap-0 p-0"
-          style={{ width: popoverWidth() }}
-          onOpenAutoFocus={(event) => {
-            event.preventDefault();
-            inputRef.current?.focus({ preventScroll: true });
-            inputRef.current?.select();
-          }}
-          onCloseAutoFocus={(event) => {
-            if (!restoreFocus.current) event.preventDefault();
-            restoreFocus.current = true;
-          }}
+      <Clock3
+        className={cn(
+          "pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground",
+          disabled && "opacity-50",
+        )}
+        aria-hidden="true"
+      />
+      <Input
+        id={id}
+        ref={inputRef}
+        role="spinbutton"
+        inputMode="numeric"
+        autoComplete="off"
+        spellCheck={false}
+        maxLength={5}
+        className="pr-2 pl-8 font-medium tabular-nums md:text-base"
+        value={draft}
+        disabled={disabled}
+        aria-valuemin={0}
+        aria-valuemax={1439}
+        aria-valuenow={minutes}
+        aria-valuetext={formatPickerClock(shown ?? { hour: 0, minute: 0 })}
+        aria-invalid={showError || undefined}
+        aria-describedby={`${hintId}${showError ? ` ${errorId}` : ""}`}
+        onChange={(event) => show(event.target.value)}
+        onFocus={() => {
+          wheelDelta.current = 0;
+          setFocused(true);
+        }}
+        onBlur={() => {
+          wheelDelta.current = 0;
+          if (!commit()) restore();
+          setFocused(false);
+        }}
+        onKeyDown={onKeyDown}
+      />
+      <small id={hintId} className="sr-only">
+        {t(
+          "↑↓ 15 dk, PageUp/PageDown 1 saat",
+          "↑↓ 15 min, PageUp/PageDown 1 hour",
+        )}
+      </small>
+      {showError && (
+        <p
+          id={errorId}
+          role="alert"
+          className="absolute top-full left-0 z-10 mt-1 w-max max-w-64 rounded-md border border-destructive/40 bg-popover px-2 py-1 text-xs font-medium text-destructive shadow-md"
         >
-          <div className="flex items-baseline justify-between gap-2 border-b px-4 pt-3 pb-2">
-            <span id={`${id}-heading`} className="text-sm font-semibold">
-              {label}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t("24 saat biçimi", "24-hour format")}
-            </span>
-          </div>
-          <div className="grid gap-1 border-b px-4 py-3">
-            <label
-              htmlFor={`${id}-entry`}
-              className="block text-xs font-medium text-muted-foreground"
-            >
-              {t("Tam saati gir", "Enter exact time")}
-            </label>
-            <Input
-              id={`${id}-entry`}
-              ref={inputRef}
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              spellCheck={false}
-              maxLength={5}
-              placeholder="HH:mm"
-              className="h-9 text-base tabular-nums"
-              value={draft}
-              aria-invalid={showError || undefined}
-              aria-describedby={`${id}-hint${showError ? ` ${id}-error` : ""}`}
-              onChange={(event) => {
-                const next = event.target.value;
-                setDraft(next);
-                setShowError(false);
-                const parts = parsePickerClock(next);
-                if (parts) {
-                  setHourCursor(parts.hour);
-                  setMinuteCursor(Math.floor(parts.minute / 5));
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Tab" && event.shiftKey) {
-                  event.preventDefault();
-                  close(true);
-                  return;
-                }
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                apply();
-              }}
-            />
-            <small id={`${id}-hint`} className="text-xs text-muted-foreground">
-              {t(
-                "00:00–23:59 · Her dakika seçilebilir.",
-                "00:00–23:59 · Any minute is available.",
-              )}
-            </small>
-            {showError && (
-              <p
-                id={`${id}-error`}
-                className="text-xs font-medium text-destructive"
-                role="alert"
-              >
-                {t(
-                  "Geçerli bir saat gir. Örnek: 09:17.",
-                  "Enter a valid time, such as 09:17.",
-                )}
-              </p>
-            )}
-          </div>
-          <div
-            className="grid min-h-0 flex-1 gap-3 overflow-y-auto px-4 py-3"
-            ref={bodyRef}
-          >
-            <section className="grid gap-1.5">
-              <h4
-                id={`${id}-hours`}
-                className="text-xs font-semibold text-muted-foreground"
-              >
-                {t("Saat", "Hour")}
-              </h4>
-              <div
-                className="grid gap-1"
-                style={grid}
-                role="group"
-                aria-labelledby={`${id}-hours`}
-              >
-                {HOURS.map((hour) =>
-                  option(
-                    "hour",
-                    hour,
-                    hour,
-                    hourRefs,
-                    hourCursor,
-                    setHourCursor,
-                  ),
-                )}
-              </div>
-            </section>
-            <section className="grid gap-1.5">
-              <h4
-                id={`${id}-minutes`}
-                className="flex items-center justify-between text-xs font-semibold text-muted-foreground"
-              >
-                {t("Dakika", "Minute")}
-                {parsed && parsed.minute % 5 !== 0 && (
-                  <span className="font-medium text-foreground">
-                    {t("Özel", "Custom")} · {pad(parsed.minute)}
-                  </span>
-                )}
-              </h4>
-              <div
-                className="grid gap-1"
-                style={grid}
-                role="group"
-                aria-labelledby={`${id}-minutes`}
-              >
-                {MINUTES.map((minute, index) =>
-                  option(
-                    "minute",
-                    minute,
-                    index,
-                    minuteRefs,
-                    minuteCursor,
-                    setMinuteCursor,
-                  ),
-                )}
-              </div>
-            </section>
-          </div>
-          <div className="flex justify-end gap-2 border-t px-4 py-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => close(true)}
-            >
-              {t("Vazgeç", "Cancel")}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={apply}
-              onKeyDown={(event) => {
-                if (event.key !== "Tab" || event.shiftKey) return;
-                event.preventDefault();
-                focusAfterTrigger();
-              }}
-            >
-              {t("Uygula", "Apply")}
-            </Button>
-          </div>
-        </PopoverContent>
-      </Popover>
+          {t(
+            "Geçerli bir saat gir. Örnek: 09:30.",
+            "Enter a valid time, such as 09:30.",
+          )}
+        </p>
+      )}
     </div>
   );
 }
