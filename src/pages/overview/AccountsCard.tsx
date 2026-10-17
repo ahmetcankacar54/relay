@@ -43,11 +43,6 @@ export function AccountsCard({
     !relay.desktop?.available ||
     !!relay.pendingDesktop ||
     !!relay.desktop?.recoveryRequired;
-  // The visible button text is short; the full name stays in aria-label and title.
-  const saveSignInLabel = t(
-    "Claude uygulaması girişini kaydet",
-    "Save Claude app sign-in",
-  );
   return (
     <Card className="gap-0 px-4 py-3.5">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -109,8 +104,10 @@ export function AccountsCard({
                     size="sm"
                     variant="ghost"
                     disabled={linkBlocked}
-                    aria-label={saveSignInLabel}
-                    title={saveSignInLabel}
+                    title={t(
+                      "Claude uygulaması girişini kaydet",
+                      "Save Claude app sign-in",
+                    )}
                     onClick={() => {
                       relay.setSetupId(account.id);
                       go("hesaplar");

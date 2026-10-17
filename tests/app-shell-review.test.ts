@@ -186,7 +186,9 @@ test("leaving the accounts page forgets the setup target", () => {
 test("the overview Desktop link is disabled while Desktop cannot start a setup", () => {
   const usage: Record<string, AccountUsage> = { a: { accountId: "a", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 10 }, sevenDay: { usedPercent: 10 } } };
   const link = (extra: Partial<Relay>) =>
-    wrap(relayFor(extra, usage), createElement(AccountsCard, { go() {}, now: NOW })).match(/<button[^>]*aria-label="Claude uygulaması girişini kaydet"[^>]*>Girişi kaydet<\/button>/)?.[0] ?? "";
+    wrap(relayFor(extra, usage), createElement(AccountsCard, { go() {}, now: NOW })).match(/<button[^>]*title="Claude uygulaması girişini kaydet"[^>]*>Girişi kaydet<\/button>/)?.[0] ?? "";
+  assert.match(link({}), /title="Claude uygulaması girişini kaydet"/);
+  assert.doesNotMatch(link({}), /aria-label=/);
   assert.doesNotMatch(link({}), /disabled=""/);
   for (const extra of [
     { desktopBusy: true },
