@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
 import { AccountSheetBody } from "../src/pages/accounts/AccountSheet";
@@ -9,7 +9,8 @@ import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
 import { filterAccounts, groupName, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot, type UsageIssue } from "../shared/types";
+import { fakeDom } from "./fake-dom";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type Snapshot, type UsageIssue } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -129,6 +130,8 @@ test("the accounts table has one Durum column with a fix button only where somet
   assert.match(critRow, /Limit okuma girişi gerekli/);
   assert.match(critRow, /title="Claude uygulaması girişi: Kayıtlı · Limit okuma girişi: Gerekli"/);
   assert.match(critRow, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*>Limit okuma girişini yenile<\/button>/);
+  // The button's name starts with its visible label and says which account it is for.
+  assert.match(critRow, /<button[^>]*aria-label="Limit okuma girişini yenile · Yenilenecek"[^>]*>Limit okuma girişini yenile<\/button>/);
   // An off row offers to save the Claude app sign-in.
   assert.match(offRow, /Claude uygulaması girişi yok/);
   assert.match(offRow, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*>Claude uygulaması girişini kaydet<\/button>/);
@@ -138,6 +141,134 @@ test("the accounts table has one Durum column with a fix button only where somet
   // The labels follow the language.
   assert.match(table([critical], "en"), /Usage sign-in needed/);
   assert.match(table([critical], "en"), /data-size="xs"[^>]*>Renew usage sign-in<\/button>/);
+});
+
+/** An account's usage, as the relay's snapshot reports it. */
+const usageOf = (id: string, issue?: UsageIssue, extra: Partial<AccountUsage> = {}): AccountUsage =>
+  ({ accountId: id, status: issue ? "error" : "ready", stale: !!issue, issue, ...extra }) as AccountUsage;
+const relayWithUsage = (id: string, value: AccountUsage | undefined, extra: Partial<Relay> = {}) =>
+  relayFor({
+    data: { settings: DEFAULT_SETTINGS, usage: { [id]: value }, accounts, authFlows: [] } as unknown as Snapshot,
+    ...extra,
+  });
+
+test("the menu offers a prompting renewal only while the Keychain or the connection needs it", () => {
+  const en = (_: string, english: string) => english;
+  const keys = (relay: Relay) => rowActions(a, relay, en).map((x) => x.key);
+  const renew = (relay: Relay, t: (tr: string, en: string) => string = (tr) => tr) =>
+    rowActions(a, relay, t).find((x) => x.key === "renew");
+  for (const value of [undefined, usageOf("a"), usageOf("a", "expired"), usageOf("a", "scope"), usageOf("a", "rate-limited"), usageOf("a", "unavailable")])
+    assert.ok(!keys(relayWithUsage("a", value)).includes("renew"), String(value?.issue));
+  // Offered for a locked Keychain, with its own wording.
+  const keychain = renew(relayWithUsage("a", usageOf("a", "keychain-locked")));
+  assert.equal(keychain?.label, "Anahtarlık erişimine izin ver");
+  assert.equal(renew(relayWithUsage("a", usageOf("a", "keychain-locked")), en)?.label, "Allow Keychain access");
+  // Offered for a connection to renew, however it is reported.
+  for (const value of [usageOf("a", "renewal-required"), usageOf("a", undefined, { connectionRenewalRequired: true })]) {
+    assert.equal(renew(relayWithUsage("a", value))?.label, "Bağlantıyı yenile");
+    assert.equal(renew(relayWithUsage("a", value), en)?.label, "Renew connection");
+  }
+  // It sits with the sign-in items, before Refresh limits.
+  assert.deepEqual(keys(relayWithUsage("a", usageOf("a", "renewal-required"))), [
+    "open", "cli", "renew", "desktop-reconnect", "refresh",
+  ]);
+  // It asks the Keychain, where Refresh limits does not: the prompt is the fix.
+  const calls: unknown[][] = [];
+  const relay = relayWithUsage("a", usageOf("a", "keychain-locked"), {
+    refreshUsage: async (...args: unknown[]) => void calls.push(args),
+  } as Partial<Relay>);
+  const items = rowActions(a, relay, (tr) => tr);
+  items.find((x) => x.key === "renew")!.run();
+  items.find((x) => x.key === "refresh")!.run();
+  assert.deepEqual(calls, [[a, true], [a]]);
+  // It is disabled exactly when Refresh limits is.
+  for (const usageBusy of [new Set<string>(), new Set(["a"])]) {
+    const busy = rowActions(a, relayWithUsage("a", usageOf("a", "keychain-locked"), { usageBusy }), (tr) => tr);
+    assert.equal(busy.find((x) => x.key === "renew")?.disabled, usageBusy.has("a"));
+    assert.equal(busy.find((x) => x.key === "renew")?.disabled, busy.find((x) => x.key === "refresh")?.disabled);
+  }
+});
+
+test("a row with a locked Keychain or a connection to renew offers that renewal inline, by account name", () => {
+  const row = (value: AccountUsage, language: "tr" | "en" = "tr") =>
+    renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        createElement(
+          RelayContext.Provider,
+          { value: relayWithUsage("a", value) },
+          createElement(AccountsTable, { accounts: [a], open() {}, link() {} }),
+        ),
+      ),
+    );
+  const keychain = row(usageOf("a", "keychain-locked"));
+  assert.match(keychain, /Anahtarlık izni gerekli/);
+  assert.match(
+    keychain,
+    /<button[^>]*data-size="xs"[^>]*aria-label="Anahtarlık erişimine izin ver · Kişisel · Max"[^>]*>Anahtarlık erişimine izin ver<\/button>/,
+  );
+  const renewing = row(usageOf("a", "renewal-required"));
+  assert.match(renewing, /Bağlantı yenilenmeli/);
+  assert.match(renewing, /aria-label="Bağlantıyı yenile · Kişisel · Max"[^>]*>Bağlantıyı yenile<\/button>/);
+  assert.match(row(usageOf("a", undefined, { connectionRenewalRequired: true }), "en"), /aria-label="Renew connection · Kişisel · Max"[^>]*>Renew connection<\/button>/);
+});
+
+/** The drawn tree, read from the fake DOM. */
+interface FakeNode {
+  tagName: string;
+  attributes: Map<string, string>;
+  childNodes: FakeNode[];
+}
+const drawn = (node: FakeNode, found: FakeNode[] = []): FakeNode[] => {
+  found.push(node);
+  for (const child of node.childNodes) drawn(child, found);
+  return found;
+};
+
+test("the inline fix button runs its action and does not also open the sheet", async () => {
+  const critical: Account = { ...a, id: "k", name: "Yenilenecek" };
+  const started: string[] = [];
+  const opened: string[] = [];
+  const relay = relayWithUsage("k", usageOf("k", "expired"), {
+    accounts: [critical],
+    startCli: async (account: Account) => void started.push(account.id),
+  } as Partial<Relay>);
+  const dom = fakeDom();
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(
+            RelayContext.Provider,
+            { value: relay },
+            createElement(AccountsTable, { accounts: [critical], open: (id) => void opened.push(id), link() {} }),
+          ),
+        ),
+      ),
+    );
+    const all = drawn(dom.container as unknown as FakeNode);
+    const fix = all.find((n) => n.tagName === "button" && n.attributes.get("data-size") === "xs");
+    assert.ok(fix, "the inline fix button is drawn");
+    assert.equal(fix.attributes.get("aria-label"), "Limit okuma girişini yenile · Yenilenecek");
+    await act(async () => dom.dispatch(fix, "click", { detail: 1 }));
+    assert.deepEqual(started, ["k"], "it runs the row action");
+    assert.deepEqual(opened, [], "and the click stops at the button");
+    // The same click on the row itself opens the sheet, so the check above is not vacuous.
+    const row = all.find((n) => n.tagName === "tr" && n.attributes.has("tabindex"));
+    assert.ok(row, "the row is drawn");
+    await act(async () => dom.dispatch(row, "click", { detail: 1 }));
+    assert.deepEqual(opened, ["k"]);
+    assert.deepEqual(started, ["k"]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
 });
 
 test("an account without a plan shows muted Plan yok text, not a badge", () => {
@@ -236,6 +367,55 @@ test("the sheet header shows the health label and one primary action", () => {
   assert.doesNotMatch(active, /<button/);
   // The same single status the table shows.
   assert.match(active, /Claude uygulaması girişi: Açık · Limit okuma girişi: Bağlı/);
+});
+
+test("a locked Keychain or a connection to renew is fixed from the header, and the usage row agrees with it", () => {
+  const keychain = sheetFor(c, {}, { c: usageOf("c", "keychain-locked") });
+  const keychainHead = statusBlock(keychain);
+  assert.match(keychainHead, /Anahtarlık izni gerekli/);
+  assert.equal(keychainHead.match(/<button/g)?.length, 1);
+  assert.match(keychainHead, /<button[^>]*>Anahtarlık erişimine izin ver<\/button>/);
+  const renewing = sheetFor(c, {}, { c: usageOf("c", "renewal-required") });
+  const renewingHead = statusBlock(renewing);
+  assert.match(renewingHead, /Bağlantı yenilenmeli/);
+  assert.match(renewingHead, /<button[^>]*>Bağlantıyı yenile<\/button>/);
+  // The usage sign-in row says what the header says, not "Bağlı" under a green dot.
+  const usageRow = (html: string) =>
+    /Limit okuma girişi<\/div><div[^>]*><span[^>]*class="[^"]*(bg-\w+)[^"]*"[^>]*><\/span><span[^>]*>([^<]*)/.exec(html);
+  assert.deepEqual(usageRow(renewing)?.slice(1), ["bg-warn", "Yenilenmeli · a@example.com · Limitleri okumak için tarayıcıda onaylanır."]);
+  assert.doesNotMatch(renewing, /Bağlı/);
+  assert.match(usageRow(keychain)?.[2] ?? "", /^Bağlı · Anahtarlık izni gerekli · a@example\.com/);
+  assert.equal(usageRow(keychain)?.[1], "bg-warn");
+  assert.deepEqual(usageRow(sheetFor(c, {}, expiredC))?.slice(1, 2), ["bg-crit"]);
+  assert.match(usageRow(sheetFor(c, {}, expiredC))?.[2] ?? "", /^Gerekli · /);
+  // A connection reported only by the flag reads the same.
+  assert.match(
+    usageRow(sheetFor(c, {}, { c: usageOf("c", undefined, { connectionRenewalRequired: true }) }))?.[2] ?? "",
+    /^Yenilenmeli · /,
+  );
+  // A healthy account's row (open here only because its sign-in flow is) is green and says Bağlı.
+  const flow = { id: "f", accountId: "c", status: "connected" } as unknown as AuthFlow;
+  const healthy = usageRow(sheetFor(c, { flow, flowAccount: c }, { c: usageOf("c") }));
+  assert.equal(healthy?.[1], "bg-ok");
+  assert.match(healthy?.[2] ?? "", /^Bağlı · a@example\.com/);
+});
+
+test("the sign-in flow panel keeps the connections open, even for a healthy account", () => {
+  const failed = { id: "f", accountId: "a", status: "failed", error: "Sign-in failed badly" } as unknown as AuthFlow;
+  // `a` is healthy: running, signed in, usage read.
+  assert.equal(disclosureState(sheetFor(a), "Bağlantılar"), "false");
+  const withFlow = sheetFor(a, { flow: failed, flowAccount: a });
+  assert.equal(disclosureState(withFlow, "Bağlantılar"), "true");
+  assert.match(withFlow, /Sign-in failed badly/);
+  for (const status of ["cancelled", "connected"])
+    assert.equal(
+      disclosureState(sheetFor(a, { flow: { ...failed, status } as unknown as AuthFlow, flowAccount: a }), "Bağlantılar"),
+      "true",
+      status,
+    );
+  // Another account's flow does not open this one.
+  const other = sheetFor(a, { flow: { ...failed, accountId: "b" } as unknown as AuthFlow, flowAccount: b });
+  assert.equal(disclosureState(other, "Bağlantılar"), "false");
 });
 
 test("the sheet's connections and history are disclosures, open only when the account needs attention", () => {

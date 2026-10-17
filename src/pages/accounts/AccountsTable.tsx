@@ -4,6 +4,7 @@ import {
   type LucideIcon,
   ArrowUpRight,
   Globe2,
+  KeyRound,
   Monitor,
   MoreHorizontal,
   RefreshCw,
@@ -33,7 +34,7 @@ import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
-import { accountHealth } from "@/lib/account-health";
+import { accountHealth, renewalIssue } from "@/lib/account-health";
 import { formatPercent } from "@/lib/meter";
 import { avatarClass, planLabel } from "./accountLabels";
 
@@ -42,6 +43,7 @@ export interface RowAction {
     | "switch"
     | "open"
     | "cli"
+    | "renew"
     | "desktop-reconnect"
     | "desktop-link"
     | "refresh";
@@ -90,6 +92,19 @@ export function rowActions(
     disabled: !!relay.busy || pendingFlow(authFlow),
     run: () => void relay.startCli(a),
   });
+  // Only a refresh that may prompt clears these, so it is its own item, apart from "Refresh limits".
+  const renewal = renewalIssue(relay.data?.usage[a.id]);
+  if (renewal)
+    items.push({
+      key: "renew",
+      label:
+        renewal === "keychain-locked"
+          ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+          : t("Bağlantıyı yenile", "Renew connection"),
+      icon: KeyRound,
+      disabled: relay.usageBusy.has(a.id),
+      run: () => void relay.refreshUsage(a, true),
+    });
   items.push(
     a.desktop
       ? {
@@ -253,6 +268,7 @@ export function AccountsTable({
                     <Button
                       size="xs"
                       variant="ghost"
+                      aria-label={`${fix.label} · ${a.name}`}
                       disabled={fix.disabled}
                       onClick={(e) => {
                         e.stopPropagation();

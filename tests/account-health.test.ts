@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { accountHealth } from "../src/lib/account-health";
+import { accountHealth, usageSignInStatus } from "../src/lib/account-health";
 import { Disclosure } from "../src/components/Disclosure";
 import type { Account, AccountUsage } from "../shared/types";
 
@@ -65,16 +65,16 @@ test("3. a usage sign-in that needs renewing is critical and offers the usage si
   assert.equal(health(loggedOut, issue("keychain-locked")).label, "Limit okuma girişi gerekli");
 });
 
-test("4. a locked Keychain is a warning that refreshing fixes", () => {
+test("4. a locked Keychain is a warning that a prompting renewal fixes", () => {
   const h = health(base, issue("keychain-locked"));
-  assert.deepEqual([h.tone, h.label, h.fix], ["warn", "Anahtarlık izni gerekli", "refresh"]);
+  assert.deepEqual([h.tone, h.label, h.fix], ["warn", "Anahtarlık izni gerekli", "renew"]);
   assert.equal(health(base, issue("keychain-locked"), {}, "en").label, "Keychain access needed");
 });
 
-test("5. a connection that needs renewing is a warning that refreshing fixes", () => {
+test("5. a connection that needs renewing is a warning that a prompting renewal fixes", () => {
   for (const usage of [issue("renewal-required"), { ...ready, connectionRenewalRequired: true }]) {
     const h = health(base, usage);
-    assert.deepEqual([h.tone, h.label, h.fix], ["warn", "Bağlantı yenilenmeli", "refresh"]);
+    assert.deepEqual([h.tone, h.label, h.fix], ["warn", "Bağlantı yenilenmeli", "renew"]);
   }
   assert.equal(health(base, issue("renewal-required"), {}, "en").label, "Connection needs renewing");
   // It outranks a missing usage sign-in.
@@ -146,6 +146,40 @@ test("detail names both sign-ins for each usage sign-in state", () => {
     health(base, issue("expired"), { waiting: true }).detail,
     "Claude uygulaması girişi: Kayıtlı · Limit okuma girişi: Gerekli",
   );
+});
+
+test("the usage sign-in row's status agrees with the header's tone and the detail's usage state", () => {
+  const status = (
+    account: Account,
+    usage: AccountUsage | undefined,
+    waiting = false,
+    language: "tr" | "en" = "tr",
+  ) => usageSignInStatus(account, usage, waiting, tr(language));
+  const loggedOut: Account = { ...base, auth: { loggedIn: false, checkedAt: iso(NOW) } };
+  const cases: [string, Account, AccountUsage | undefined, string, string][] = [
+    ["row 3", base, issue("expired"), "Gerekli", "Needed"],
+    ["row 3, logged out", loggedOut, ready, "Gerekli", "Needed"],
+    ["row 4", base, issue("keychain-locked"), "Bağlı · Anahtarlık izni gerekli", "Connected · Keychain access needed"],
+    ["row 5", base, issue("renewal-required"), "Yenilenmeli", "Needs renewing"],
+    ["row 5, connection flag", base, { ...ready, connectionRenewalRequired: true }, "Yenilenmeli", "Needs renewing"],
+    ["row 6", noAuth, undefined, "Yok", "None"],
+  ];
+  for (const [name, account, usage, trLabel, enLabel] of cases) {
+    const h = health(account, usage);
+    const row = status(account, usage);
+    assert.ok(h.tone !== "ok" && h.tone !== "off", name);
+    // The row and the header never disagree about how bad it is.
+    assert.equal(row.tone, h.tone, name);
+    assert.equal(row.label, trLabel, name);
+    assert.equal(status(account, usage, false, "en").label, enLabel, name);
+    // Where the detail names the state in one word, the row starts with that word.
+    assert.ok(h.detail.endsWith(`Limit okuma girişi: ${row.label.split(" · ")[0]}`), name);
+  }
+  assert.deepEqual(status(base, ready), { tone: "ok", label: "Bağlı" });
+  assert.deepEqual(status(base, undefined, false, "en"), { tone: "ok", label: "Connected" });
+  // A pending approval says so, whatever the sign-in's state.
+  assert.deepEqual(status(base, issue("expired"), true), { tone: "warn", label: "Tarayıcı onayı bekleniyor" });
+  assert.equal(status(base, ready, true, "en").label, "Waiting for browser approval");
 });
 
 test("a disclosure is a button that opens its content, and renders nothing while closed", () => {

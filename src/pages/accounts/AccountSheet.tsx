@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Globe2, Monitor, RefreshCw } from "lucide-react";
 import type { Account } from "../../../shared/types";
 import {
-  cliNeedsReconnect,
   desktopCliMismatch,
   duplicateCliAccount,
 } from "../../../shared/account-state";
@@ -23,7 +22,7 @@ import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { CliFlowPanel } from "@/app/ConnectionPanels";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
-import { accountHealth } from "@/lib/account-health";
+import { accountHealth, usageSignInStatus } from "@/lib/account-health";
 import { UsageCard } from "../../features/UsageCard";
 import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
@@ -142,7 +141,6 @@ export function AccountSheetBody({
   const usage = data?.usage[a.id];
   const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
   const waiting = pendingFlow(authFlow);
-  const reconnect = cliNeedsReconnect(a, usage);
   const mismatch = desktopCliMismatch(a);
   const duplicate = duplicateCliAccount(a, accounts);
   const health = accountHealth(
@@ -155,6 +153,9 @@ export function AccountSheetBody({
     },
     t,
   );
+  const signIn = usageSignInStatus(a, usage, waiting, t);
+  // A sign-in flow of this account (even a failed or finished one) shows its panel in the connections.
+  const attention = health.tone !== "ok" || relay.flow?.accountId === a.id;
   // One primary action: the fix, else the switch (which the active account does not have).
   const primary = rowActions(a, relay, t, (id) => {
     setSetupId(id);
@@ -259,9 +260,9 @@ export function AccountSheetBody({
       </Section>
       {/* Remounted when the account starts or stops needing attention, so a new problem opens it. */}
       <Disclosure
-        key={health.tone === "ok" ? "calm" : "attention"}
+        key={attention ? "attention" : "calm"}
         title={t("Bağlantılar", "Connections")}
-        defaultOpen={health.tone !== "ok"}
+        defaultOpen={attention}
       >
         <ConnectionRow
           icon={<Monitor />}
@@ -337,13 +338,9 @@ export function AccountSheetBody({
         <ConnectionRow
           icon={<Globe2 />}
           title={t("Limit okuma girişi", "Usage sign-in")}
-          tone={waiting ? "warn" : reconnect ? "crit" : "ok"}
+          tone={signIn.tone}
           status={
-            (waiting
-              ? t("Tarayıcı onayı bekleniyor", "Waiting for browser approval")
-              : reconnect
-                ? t("Giriş yenilenmeli", "Sign-in needs renewal")
-                : t("Bağlı", "Connected")) +
+            signIn.label +
             (a.auth?.email ? ` · ${a.auth.email}` : "") +
             t(
               " · Limitleri okumak için tarayıcıda onaylanır.",
