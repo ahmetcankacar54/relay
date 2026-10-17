@@ -13,6 +13,7 @@ import {
   clockFieldKey,
   clockStart,
   formatPickerClock,
+  leaveClockField,
   parseLooseClock,
   parsePickerClock,
   shouldResyncDraft,
@@ -46,6 +47,9 @@ export function TimePicker({
   const latest = useRef({ value, disabled, onChange });
   // A click that focuses the field selects its text; its mouseup must not undo that.
   const keepSelection = useRef(false);
+  // The user typed, stepped or scrolled since focus or the last save. Only then
+  // is the draft saved: an untouched draft may be older than the saved value.
+  const edited = useRef(false);
   const [draft, setDraft] = useState(value);
   // Only decides how a busy field is locked (see timeFieldAccess).
   const [holdsFocus, setHoldsFocus] = useState(false);
@@ -65,6 +69,7 @@ export function TimePicker({
   useEffect(() => {
     const active = document.activeElement === inputRef.current;
     if (!shouldResyncDraft(active, disabled)) return;
+    edited.current = false;
     setDraft(value);
     setShowError(false);
   }, [value, disabled]);
@@ -74,12 +79,17 @@ export function TimePicker({
     setShowError(false);
   }
 
-  function commit(): boolean {
-    const parts = parseLooseClock(draft);
-    if (!parts) return false;
-    const next = formatPickerClock(parts);
-    if (next !== value) onChange(next);
+  function edit(next: string) {
+    edited.current = true;
     show(next);
+  }
+
+  function commit(): boolean {
+    if (edited.current && !parseLooseClock(draft)) return false;
+    const next = leaveClockField(draft, value, edited.current);
+    edited.current = false;
+    if (next.save !== undefined) onChange(next.save);
+    show(next.draft);
     return true;
   }
 
@@ -93,6 +103,7 @@ export function TimePicker({
     if (event.key === "Escape") {
       if (draft !== value || showError) {
         event.preventDefault();
+        edited.current = false;
         show(value);
       }
       return;
@@ -101,7 +112,7 @@ export function TimePicker({
     const next = clockFieldKey(clockStart(draft, value), event.key);
     if (next === null) return;
     event.preventDefault();
-    show(next);
+    edit(next);
   }
 
   function onBlur() {
@@ -110,17 +121,18 @@ export function TimePicker({
     // While an action runs the saved value is stale: leave the draft alone and
     // let it settle when the action ends.
     if (disabled) return;
-    const parts = parseLooseClock(draft);
-    if (!parts) return show(value);
-    const next = formatPickerClock(parts);
-    show(next);
+    const next = leaveClockField(draft, value, edited.current);
+    edited.current = false;
+    show(next.draft);
+    const save = next.save;
+    if (save === undefined) return;
     // Saving makes every picker busy. Doing that inside the blur would disable
     // the field the user is moving to before it receives focus, so wait for
     // the browser to finish moving focus.
     setTimeout(() => {
       const now = latest.current;
-      if (now.disabled || next === now.value) return;
-      now.onChange(next);
+      if (now.disabled || save === now.value) return;
+      now.onChange(save);
     }, 0);
   }
 
@@ -153,6 +165,7 @@ export function TimePicker({
       );
       wheel.current = turn.state;
       if (turn.steps === 0) return;
+      edited.current = true;
       // Scrolling up (negative deltaY) moves the time forward.
       setDraft((current) =>
         stepClock(clockStart(current, latest.current.value), -turn.steps),
@@ -196,10 +209,11 @@ export function TimePicker({
         aria-invalid={showError || undefined}
         aria-describedby={`${hintId}${showError ? ` ${errorId}` : ""}`}
         onChange={(event) => {
-          if (!disabled) show(event.target.value);
+          if (!disabled) edit(event.target.value);
         }}
         onFocus={(event) => {
           wheel.current = { total: 0, at: -Infinity };
+          edited.current = false;
           setHoldsFocus(true);
           event.currentTarget.select();
         }}

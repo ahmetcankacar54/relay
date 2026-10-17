@@ -7,6 +7,7 @@ import {
   clockFieldKey,
   clockStart,
   formatPickerClock,
+  leaveClockField,
   parseLooseClock,
   parsePickerClock,
   shouldResyncDraft,
@@ -141,6 +142,22 @@ test("the draft follows the saved value only while the field is idle", () => {
   assert.equal(shouldResyncDraft(true, false), false);
   assert.equal(shouldResyncDraft(false, true), false);
   assert.equal(shouldResyncDraft(true, true), false);
+});
+
+test("leaving the field saves only a draft the user edited", () => {
+  // Untouched: the saved value may have changed while the field had focus
+  // (the automatic first start, say), so it is shown and nothing is written.
+  assert.deepEqual(leaveClockField("09:00", "09:30", false), {
+    draft: "09:30",
+  });
+  // Edited: the canonical clock is saved when it differs.
+  assert.deepEqual(leaveClockField("9", "09:30", true), {
+    draft: "09:00",
+    save: "09:00",
+  });
+  assert.deepEqual(leaveClockField("9.30", "09:30", true), { draft: "09:30" });
+  // An edited draft that is not a time reverts.
+  assert.deepEqual(leaveClockField("ab", "09:30", true), { draft: "09:30" });
 });
 
 test("steps start from a valid typed draft, else from the saved value", () => {

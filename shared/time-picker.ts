@@ -74,6 +74,23 @@ export function clockStart(draft: string, value: string): string {
 }
 
 /**
+ * What leaving the field shows and saves. Only a draft the user edited since
+ * focus or the last save is saved, so an untouched field never writes its old
+ * text over a value that changed while it had focus (the automatic first
+ * start, say). An edited draft that is not a time reverts.
+ */
+export function leaveClockField(
+  draft: string,
+  value: string,
+  edited: boolean,
+): { draft: string; save?: string } {
+  const parts = edited ? parseLooseClock(draft) : null;
+  if (!parts) return { draft: value };
+  const next = formatPickerClock(parts);
+  return next === value ? { draft: next } : { draft: next, save: next };
+}
+
+/**
  * Whether the draft should snap back to the saved value. Never while the field
  * is being edited, and never while an action is running: the saved value is
  * stale until that action finishes, and the draft is what the user just typed.
