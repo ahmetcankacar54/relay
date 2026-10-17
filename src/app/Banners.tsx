@@ -11,9 +11,10 @@ import {
 } from "@/data/dismissals";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { pendingFlow } from "@/data/selectors";
+import { displayedIssue, renewalIssue } from "@/lib/account-health";
 import { AutomationBanner } from "../features/AutomationControl";
 import { RelayErrorAlert } from "./RelayErrorAlert";
-import { displayedIssue, renewalIssue } from "@/lib/account-health";
 
 export interface ReconnectIssue {
   account: Account;
@@ -104,15 +105,15 @@ export function Banners({
   // Every current issue, dismissed or not: a dismissal lives while its issue does.
   const currentKeys = reconnectIssues(accounts, usage, NONE).map(issueKey);
   // Accounts whose usage was not read yet: right after a launch the cache is empty, so
-  // each logged-in account is idle with no issue. Their dismissals must outlive that.
+  // each logged-in account is idle with no issue. Their dismissals must outlive that, and
+  // a read the service turned away for now (down or rate-limited) tells no more.
   const unread = accounts
     .filter((a) => {
       const u = usage[a.id];
-      return (
-        a.auth?.loggedIn &&
-        !u?.issue &&
-        (!u || u.status === "idle" || u.status === "loading")
-      );
+      if (!a.auth?.loggedIn) return false;
+      if (u?.issue === "unavailable" || u?.issue === "rate-limited")
+        return true;
+      return !u?.issue && (!u || u.status === "idle" || u.status === "loading");
     })
     .map((a) => a.id);
   const signature = JSON.stringify([currentKeys, unread]);
@@ -123,45 +124,71 @@ export function Banners({
     if (loaded) pruneDismissals(currentKeys, unread);
   }, [loaded, signature]);
 
-  const issueAction = ({ account: a, issue, action }: ReconnectIssue) =>
-    action === "login" ? (
+  // The same check the accounts table makes: a browser approval of this account is in progress.
+  const waiting = (a: Account) =>
+    pendingFlow(relay.data?.authFlows.find((f) => f.accountId === a.id));
+  const explanation = (
+    <p className="mt-0.5 text-xs text-muted-foreground">
+      {t(
+        "Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar. Onaylayınca uyarı kapanır.",
+        "Reconnect opens this account’s usage sign-in in the browser. The warning closes once you approve it.",
+      )}
+    </p>
+  );
+  /** A warning's button. In the group, `named` adds the account to its name, after the visible label. */
+  const issueAction = (
+    { account: a, issue, action }: ReconnectIssue,
+    named = false,
+  ) => {
+    const label =
+      action === "login"
+        ? t("Yeniden bağlan", "Reconnect")
+        : issue === "keychain-locked"
+          ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+          : t("Bağlantıyı yenile", "Renew connection");
+    return action === "login" ? (
       <Button
         size="sm"
         variant="outline"
-        disabled={!!relay.busy}
+        aria-label={named ? `${label} · ${a.name}` : undefined}
+        disabled={!!relay.busy || waiting(a)}
         onClick={() => void relay.startCli(a)}
       >
-        {t("Yeniden bağlan", "Reconnect")}
+        {label}
       </Button>
     ) : (
       <Button
         size="sm"
         variant="outline"
+        aria-label={named ? `${label} · ${a.name}` : undefined}
         disabled={relay.usageBusy.has(a.id)}
         onClick={() => void relay.refreshUsage(a, true)}
       >
-        {issue === "keychain-locked"
-          ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
-          : t("Bağlantıyı yenile", "Renew connection")}
+        {label}
       </Button>
     );
-  const issueText = ({ account: a, issue, action }: ReconnectIssue) => {
+  };
+  /** A warning's text. The group explains Reconnect once, under its list, so its rows leave it out. */
+  const issueText = (
+    { account: a, issue, action }: ReconnectIssue,
+    explain = true,
+  ) => {
     if (action === "login") {
       const cause = reconnectCause(a, relay.data?.usage?.[a.id], t);
       return (
         <div className="min-w-0">
           <span>
-            {t(
-              `${a.name} · limit okuma girişinin yenilenmesi gerekiyor: ${cause}.`,
-              `${a.name} · the usage sign-in needs to be renewed: ${cause}.`,
-            )}
+            {waiting(a)
+              ? t(
+                  `${a.name} · tarayıcı onayı bekleniyor.`,
+                  `${a.name} · waiting for browser approval.`,
+                )
+              : t(
+                  `${a.name} · limit okuma girişinin yenilenmesi gerekiyor: ${cause}.`,
+                  `${a.name} · the usage sign-in needs to be renewed: ${cause}.`,
+                )}
           </span>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t(
-              "Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar. Onaylayınca uyarı kapanır.",
-              "Reconnect opens this account’s usage sign-in in the browser. The warning closes once you approve it.",
-            )}
-          </p>
+          {explain && explanation}
         </div>
       );
     }
@@ -256,43 +283,47 @@ export function Banners({
           }
           detail={
             expanded ? (
-              <ul
-                id={listId}
-                className="flex flex-col gap-1.5 border-t border-warn/20 pt-2"
-              >
-                {reconnect.map((item) => {
-                  const key = issueKey(item);
-                  return (
-                    <li
-                      key={key}
-                      className="flex items-center justify-between gap-3"
-                    >
-                      <div className="min-w-0">{issueText(item)}</div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {issueAction(item)}
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label={t(
-                            `${item.account.name} uyarısını kapat`,
-                            `Dismiss warning for ${item.account.name}`,
-                          )}
-                          onClick={() => dismiss(key)}
-                        >
-                          <X />
-                        </Button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <>
+                <ul
+                  id={listId}
+                  className="flex flex-col gap-1.5 border-t border-warn/20 pt-2"
+                >
+                  {reconnect.map((item) => {
+                    const key = issueKey(item);
+                    return (
+                      <li
+                        key={key}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">{issueText(item, false)}</div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {issueAction(item, true)}
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={t(
+                              `${item.account.name} uyarısını kapat`,
+                              `Dismiss warning for ${item.account.name}`,
+                            )}
+                            onClick={() => dismiss(key)}
+                          >
+                            <X />
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {reconnect.some((item) => item.action === "login") &&
+                  explanation}
+              </>
             ) : null
           }
         >
           <span>
             {t(
-              `${reconnect.length} hesabın girişi ilgi bekliyor.`,
-              `${reconnect.length} accounts need sign-in attention.`,
+              `${reconnect.length} hesabın limit okuma girişi ilgi bekliyor.`,
+              `${reconnect.length} accounts need usage sign-in attention.`,
             )}
           </span>
         </Banner>

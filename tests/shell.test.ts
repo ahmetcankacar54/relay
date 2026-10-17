@@ -97,6 +97,7 @@ test("banners read an injected relay and offer reconnect for expired usage sign-
           checkedAt: "2026-10-14T00:00:00Z",
         },
       },
+      authFlows: [],
     },
   } as unknown as Relay;
   const i18n = {
