@@ -154,6 +154,24 @@ test("off does nothing; without a quota stop or confirmation it waits", async ()
   assert.deepEqual(f.state.switches, []);
 });
 
+test("a full account with no stopped conversation names a target without switching", async () => {
+  const f = setup();
+  const fleet = new FleetContinuation(f.deps);
+  fleet.setEnabled(true);
+  f.state.stops.set(f.a.id, []);
+  f.state.usage[f.a.id] = usage(f.a, 100);
+  const full = await fleet.tick();
+  assert.equal(full.reason, "awaiting-quota-stop");
+  assert.equal(full.targetId, f.b.id);
+  assert.equal(full.stopped, 0);
+  assert.deepEqual(f.state.switches, []);
+  f.state.usage[f.a.id] = usage(f.a, 70);
+  const room = await fleet.tick();
+  assert.equal(room.reason, "awaiting-quota-stop");
+  assert.equal(room.targetId, undefined);
+  assert.deepEqual(f.state.switches, []);
+});
+
 test("other running work, a missing target or missing automation keep Claude untouched", async () => {
   const f = setup();
   const fleet = new FleetContinuation(f.deps);

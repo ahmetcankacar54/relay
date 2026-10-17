@@ -242,15 +242,22 @@ export class FleetContinuation {
     const stops = (await this.deps.stops(source)).filter(
       (stop) => !this.saved.handled.includes(stopKey(source, stop)),
     );
-    if (!stops.length)
+    const now = this.now();
+    if (!stops.length) {
+      // Name the account the fleet would pick while the active one is full, so
+      // the UI can offer it. Nothing switches until a conversation stops.
+      const target = sourceExhausted(usage[source.id], now)
+        ? chooseTarget(source, accounts, settings, usage, now, tempoRate)
+        : undefined;
       return this.publish({
         status: "watching",
         reason: "awaiting-quota-stop",
         sourceId: source.id,
         stopped: 0,
+        ...(target ? { targetId: target.id } : {}),
       });
+    }
     const base = { sourceId: source.id, stopped: stops.length };
-    const now = this.now();
     if (!sourceExhausted(usage[source.id], now))
       return this.publish({
         ...base,
