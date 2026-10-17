@@ -391,6 +391,10 @@ async function restoreOne(
       typing.wrote = true;
       await deps.automation.writeDraft(guard, text);
     } catch (error) {
+      // Without accessibility the helper can neither read nor type into Desktop's UI, so
+      // nothing reached a composer: the draft stays retryable once access is granted.
+      if (issueOf(error) === "accessibility-permission-required")
+        typing.wrote = false;
       haltOn(error);
       if (issueOf(error) === "user-active") {
         // Refused before anything was typed: the draft waits for the user to pause.

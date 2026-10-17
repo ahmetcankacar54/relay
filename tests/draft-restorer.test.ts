@@ -475,9 +475,10 @@ test("accessibility lost mid-restore stops at once and leaves the rest for copy"
     left: 2,
   });
   assert.deepEqual(h.removed, ["draft-1"]);
-  // The write that failed may have typed part of its draft, so that one is never typed again.
+  // Without accessibility the helper could not touch the UI, so nothing was typed: both stay
+  // retryable once access is granted.
   assert.deepEqual(h.marks, [
-    ["draft-2", "needs-copy", "maybe-typed"],
+    ["draft-2", "needs-copy", "accessibility"],
     ["draft-3", "needs-copy", "accessibility"],
   ]);
   // Nothing more is tried in Desktop: no third conversation, no return.
