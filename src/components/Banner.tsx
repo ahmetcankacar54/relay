@@ -3,7 +3,10 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-/** One page-top line: a message with an optional action and dismiss button. */
+/**
+ * One page-top line: a message with an optional action and dismiss button.
+ * `detail` adds a block under that line, inside the same banner.
+ */
 export function Banner({
   tone,
   children,
@@ -11,6 +14,7 @@ export function Banner({
   onDismiss,
   dismissLabel,
   role,
+  detail,
 }: {
   tone: "info" | "warn" | "error";
   children: ReactNode;
@@ -18,17 +22,10 @@ export function Banner({
   onDismiss?: () => void;
   dismissLabel?: string;
   role?: "alert" | "status";
+  detail?: ReactNode;
 }) {
-  return (
-    <div
-      role={role}
-      className={cn(
-        "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm",
-        tone === "error" && "border-destructive/30 bg-destructive/10",
-        tone === "warn" && "border-warn/40 bg-warn/10",
-        tone === "info" && "bg-accent",
-      )}
-    >
+  const line = (
+    <>
       <div className="flex min-w-0 items-center gap-2">{children}</div>
       {(action || onDismiss) && (
         <div className="flex shrink-0 items-center gap-1">
@@ -45,6 +42,27 @@ export function Banner({
           )}
         </div>
       )}
+    </>
+  );
+  const box = "rounded-lg border px-3 py-2 text-sm";
+  const tones = cn(
+    tone === "error" && "border-destructive/30 bg-destructive/10",
+    tone === "warn" && "border-warn/40 bg-warn/10",
+    tone === "info" && "bg-accent",
+  );
+  if (!detail)
+    return (
+      <div
+        role={role}
+        className={cn("flex items-center justify-between gap-3", box, tones)}
+      >
+        {line}
+      </div>
+    );
+  return (
+    <div role={role} className={cn("flex flex-col gap-2", box, tones)}>
+      <div className="flex items-center justify-between gap-3">{line}</div>
+      {detail}
     </div>
   );
 }

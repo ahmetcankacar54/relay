@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { Check, Monitor } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Monitor, X } from "lucide-react";
 import type { Account, AccountUsage } from "../../shared/types";
 import { cliNeedsReconnect } from "../../shared/account-state";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/Banner";
+import { dismissalKey, pruneDismissals, useDismissals } from "@/data/dismissals";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { AutomationBanner } from "../features/AutomationControl";
@@ -16,9 +17,12 @@ export interface ReconnectIssue {
   action: "login" | "renew";
 }
 
+const NONE: ReadonlySet<string> = new Set();
+const issueKey = (i: ReconnectIssue) => dismissalKey(i.account.id, i.issue);
+
 /**
  * Signed-in accounts whose usage sign-in needs attention, minus the ones the
- * user dismissed this session (keyed `accountId:issue`). Mirrors UsageCard.
+ * user dismissed (keyed `accountId:issue`, see `dismissalKey`). Mirrors UsageCard.
  */
 export function reconnectIssues(
   accounts: Account[],
@@ -36,7 +40,7 @@ export function reconnectIssues(
       : issue === "renewal-required" || issue === "keychain-locked"
         ? "renew"
         : undefined;
-    if (!action || dismissed.has(`${account.id}:${issue}`)) continue;
+    if (!action || dismissed.has(dismissalKey(account.id, issue))) continue;
     result.push({ account, issue, action });
   }
   return result;
@@ -77,19 +81,86 @@ export function reconnectCause(
 
 export function Banners({
   automation = true,
+  initialExpanded = false,
 }: {
   /** False on pages that show the automation status inline. */
   automation?: boolean;
+  /** Whether the grouped sign-in warning starts open. For tests. */
+  initialExpanded?: boolean;
 }) {
   const relay = useRelay();
   const { t } = useI18n();
   const { desktop, notice, accounts, active } = relay;
-  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
-  const reconnect = reconnectIssues(
-    accounts,
-    relay.data?.usage ?? {},
-    dismissed,
-  );
+  const { dismissed, dismiss } = useDismissals();
+  const [expanded, setExpanded] = useState(initialExpanded);
+  const usage = relay.data?.usage ?? {};
+  const reconnect = reconnectIssues(accounts, usage, dismissed);
+  // Every current issue, dismissed or not: a dismissal lives while its issue does.
+  const currentKeys = reconnectIssues(accounts, usage, NONE).map(issueKey);
+  const signature = JSON.stringify(currentKeys);
+  const loaded = relay.data !== undefined;
+  useEffect(() => {
+    // Before the first snapshot no issue is known, so everything would look gone.
+    // `currentKeys` is the list `signature` was made from: it runs when that changes.
+    if (loaded) pruneDismissals(currentKeys);
+  }, [loaded, signature]);
+
+  const issueAction = ({ account: a, issue, action }: ReconnectIssue) =>
+    action === "login" ? (
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={!!relay.busy}
+        onClick={() => void relay.startCli(a)}
+      >
+        {t("Yeniden bağlan", "Reconnect")}
+      </Button>
+    ) : (
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={relay.usageBusy.has(a.id)}
+        onClick={() => void relay.refreshUsage(a, true)}
+      >
+        {issue === "keychain-locked"
+          ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+          : t("Bağlantıyı yenile", "Renew connection")}
+      </Button>
+    );
+  const issueText = ({ account: a, issue, action }: ReconnectIssue) => {
+    if (action === "login") {
+      const cause = reconnectCause(a, relay.data?.usage?.[a.id], t);
+      return (
+        <div className="min-w-0">
+          <span>
+            {t(
+              `${a.name} · limit okuma girişinin yenilenmesi gerekiyor: ${cause}.`,
+              `${a.name} · the usage sign-in needs to be renewed: ${cause}.`,
+            )}
+          </span>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {t(
+              "Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar. Onaylayınca uyarı kapanır.",
+              "Reconnect opens this account’s usage sign-in in the browser. The warning closes once you approve it.",
+            )}
+          </p>
+        </div>
+      );
+    }
+    return (
+      <span>
+        {issue === "keychain-locked"
+          ? t(
+              `${a.name} · limitleri okumak için Anahtarlık erişimi gerekiyor.`,
+              `${a.name} · Keychain access is needed to read usage limits.`,
+            )
+          : t(
+              `${a.name} · limit okuma girişinin yenilenmesi gerekiyor.`,
+              `${a.name} · the usage sign-in needs to be renewed.`,
+            )}
+      </span>
+    );
+  };
   return (
     <div className="flex flex-col gap-2 px-6 pb-3 empty:hidden">
       {relay.preview && (
@@ -138,74 +209,72 @@ export function Banners({
           </span>
         </Banner>
       )}
-      {reconnect.map(({ account: a, issue, action }) => {
-        const cause = reconnectCause(a, relay.data?.usage?.[a.id], t);
-        return (
-          <Banner
-            key={`${a.id}:${issue}`}
-            tone="warn"
-            onDismiss={() =>
-              setDismissed((prev) => new Set(prev).add(`${a.id}:${issue}`))
-            }
-            dismissLabel={t("Uyarıyı kapat", "Dismiss warning")}
-            action={
-              action === "login" ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!!relay.busy}
-                  onClick={() => void relay.startCli(a)}
-                >
-                  {t("Yeniden bağlan", "Reconnect")}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={relay.usageBusy.has(a.id)}
-                  onClick={() => void relay.refreshUsage(a, true)}
-                >
-                  {issue === "keychain-locked"
-                    ? t(
-                        "Anahtarlık erişimine izin ver",
-                        "Allow Keychain access",
-                      )
-                    : t("Bağlantıyı yenile", "Renew connection")}
-                </Button>
-              )
-            }
-          >
-            {action === "login" ? (
-              <div className="min-w-0">
-                <span>
-                  {t(
-                    `${a.name} · limit okuma girişinin yenilenmesi gerekiyor: ${cause}.`,
-                    `${a.name} · the usage sign-in needs to be renewed: ${cause}.`,
-                  )}
-                </span>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {t(
-                    "Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar. Onaylayınca uyarı kapanır.",
-                    "Reconnect opens this account’s usage sign-in in the browser. The warning closes once you approve it.",
-                  )}
-                </p>
-              </div>
-            ) : (
-              <span>
-                {issue === "keychain-locked"
-                  ? t(
-                      `${a.name} · limitleri okumak için Anahtarlık erişimi gerekiyor.`,
-                      `${a.name} · Keychain access is needed to read usage limits.`,
-                    )
-                  : t(
-                      `${a.name} · limit okuma girişinin yenilenmesi gerekiyor.`,
-                      `${a.name} · the usage sign-in needs to be renewed.`,
-                    )}
-              </span>
+      {reconnect.length === 1 && (
+        <Banner
+          key={issueKey(reconnect[0])}
+          tone="warn"
+          onDismiss={() => dismiss(issueKey(reconnect[0]))}
+          dismissLabel={t("Uyarıyı kapat", "Dismiss warning")}
+          action={issueAction(reconnect[0])}
+        >
+          {issueText(reconnect[0])}
+        </Banner>
+      )}
+      {reconnect.length >= 2 && (
+        <Banner
+          tone="warn"
+          onDismiss={() => reconnect.forEach((i) => dismiss(issueKey(i)))}
+          dismissLabel={t("Tüm uyarıları kapat", "Dismiss all warnings")}
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              aria-expanded={expanded}
+              onClick={() => setExpanded((open) => !open)}
+            >
+              {expanded ? t("Gizle", "Hide") : t("Göster", "Show")}
+            </Button>
+          }
+          detail={
+            expanded && (
+              <ul className="flex flex-col gap-1.5 border-t border-warn/20 pt-2">
+                {reconnect.map((item) => {
+                  const key = issueKey(item);
+                  return (
+                    <li
+                      key={key}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0">{issueText(item)}</div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {issueAction(item)}
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          aria-label={t(
+                            `${item.account.name} uyarısını kapat`,
+                            `Dismiss warning for ${item.account.name}`,
+                          )}
+                          onClick={() => dismiss(key)}
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          }
+        >
+          <span>
+            {t(
+              `${reconnect.length} hesabın girişi ilgi bekliyor.`,
+              `${reconnect.length} accounts need sign-in attention.`,
             )}
-          </Banner>
-        );
-      })}
+          </span>
+        </Banner>
+      )}
     </div>
   );
 }
