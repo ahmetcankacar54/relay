@@ -13,6 +13,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { AutomationBanner } from "../features/AutomationControl";
 import { RelayErrorAlert } from "./RelayErrorAlert";
+import { displayedIssue, renewalIssue } from "@/lib/account-health";
 
 export interface ReconnectIssue {
   account: Account;
@@ -26,7 +27,8 @@ const issueKey = (i: ReconnectIssue) => dismissalKey(i.account.id, i.issue);
 
 /**
  * Signed-in accounts whose usage sign-in needs attention, minus the ones the
- * user dismissed (keyed `accountId:issue`, see `dismissalKey`). Mirrors UsageCard.
+ * user dismissed (keyed `accountId:issue`, see `dismissalKey`). It reads the
+ * issue as the status and UsageCard do (`displayedIssue`, `renewalIssue`).
  */
 export function reconnectIssues(
   accounts: Account[],
@@ -37,11 +39,10 @@ export function reconnectIssues(
   for (const account of accounts) {
     if (!account.auth?.loggedIn) continue;
     const u = usage[account.id];
-    const issue =
-      u?.issue ?? (u?.connectionRenewalRequired ? "renewal-required" : "");
+    const issue = displayedIssue(u) ?? "";
     const action = cliNeedsReconnect(account, u)
       ? "login"
-      : issue === "renewal-required" || issue === "keychain-locked"
+      : renewalIssue(u)
         ? "renew"
         : undefined;
     if (!action || dismissed.has(dismissalKey(account.id, issue))) continue;

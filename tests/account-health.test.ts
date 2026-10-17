@@ -2,9 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { accountHealth, usageSignInStatus } from "../src/lib/account-health";
+import { accountHealth, displayedIssue, renewalIssue, usageSignInStatus } from "../src/lib/account-health";
 import { Disclosure } from "../src/components/Disclosure";
-import type { Account, AccountUsage } from "../shared/types";
+import { reconnectIssues } from "../src/app/Banners";
+import { UsageCard } from "../src/features/UsageCard";
+import { rowActions } from "../src/pages/accounts/AccountsTable";
+import type { Relay } from "../src/data/relay-context";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type UsageIssue } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -201,4 +205,73 @@ test("a disclosure is a button that opens its content, and renders nothing while
   const id = /aria-controls="([^"]+)"/.exec(open)?.[1];
   assert.ok(id);
   assert.ok(open.includes(`id="${id}"`));
+});
+
+test("displayedIssue reads the issue, else a connection to renew", () => {
+  assert.equal(displayedIssue(undefined), undefined);
+  assert.equal(displayedIssue(ready), undefined);
+  assert.equal(displayedIssue({ ...ready, connectionRenewalRequired: true }), "renewal-required");
+  assert.equal(displayedIssue(issue("expired")), "expired");
+  // A reported issue wins over the flag: it is what the last read hit.
+  assert.equal(displayedIssue({ ...issue("rate-limited"), connectionRenewalRequired: true }), "rate-limited");
+  assert.equal(displayedIssue({ ...issue("keychain-locked"), connectionRenewalRequired: true }), "keychain-locked");
+});
+
+test("a connection flag left over from before does not ask for a renewal while the service is rate-limited or down", () => {
+  for (const value of ["rate-limited", "unavailable"] as const) {
+    const usage: AccountUsage = { ...issue(value), connectionRenewalRequired: true };
+    assert.equal(renewalIssue(usage), undefined, value);
+    // Renewing cannot run then, so the status falls through to the next rows.
+    const h = health(base, usage);
+    assert.deepEqual([h.tone, h.label, h.fix], ["ok", "Hazır", undefined], value);
+    assert.equal(h.detail, "Claude uygulaması girişi: Kayıtlı · Limit okuma girişi: Bağlı", value);
+    assert.equal(health(noAuth, usage).label, "Limit okuma girişi yok", value);
+    assert.deepEqual(usageSignInStatus(base, usage, false, tr("tr")), { tone: "ok", label: "Bağlı" }, value);
+  }
+  // Without the service problem, the flag still asks for the renewal.
+  assert.equal(health(base, { ...ready, connectionRenewalRequired: true }).label, "Bağlantı yenilenmeli");
+});
+
+test("the status, the banner, the usage card and the row menu read the same issue", () => {
+  const issues: UsageIssue[] = [
+    "connect-cli", "credentials-missing", "keychain-locked", "renewal-required", "expired",
+    "scope", "identity-mismatch", "rate-limited", "unavailable", "unsupported",
+  ];
+  const usages: [string, AccountUsage | undefined][] = [
+    ["no usage", undefined],
+    ["ready", ready],
+    ["ready + flag", { ...ready, connectionRenewalRequired: true }],
+    ...issues.flatMap((value): [string, AccountUsage][] => [
+      [value, issue(value)],
+      [`${value} + flag`, { ...issue(value), connectionRenewalRequired: true }],
+    ]),
+  ];
+  const relay = (usage: AccountUsage | undefined) =>
+    ({
+      desktop: { available: true, running: false, recoveryRequired: false },
+      desktopBusy: false,
+      busy: "",
+      usageBusy: new Set<string>(),
+      data: { usage: { a: usage }, authFlows: [] },
+    }) as unknown as Relay;
+  const card = (usage: AccountUsage | undefined) =>
+    renderToStaticMarkup(
+      createElement(UsageCard, {
+        usage,
+        settings: DEFAULT_SETTINGS,
+        now: NOW,
+        language: "en",
+        t: (_tr: string, en: string) => en,
+        refresh() {},
+        connect() {},
+      }),
+    );
+  for (const [name, usage] of usages) {
+    const renew = health(base, usage).fix === "renew";
+    const banner = reconnectIssues([base], { a: usage }, new Set())[0];
+    assert.equal(banner?.action === "renew", renew, `banner: ${name}`);
+    if (banner) assert.equal(banner.issue, displayedIssue(usage), `banner key: ${name}`);
+    assert.equal(/>(Renew connection|Allow Keychain access)<\/button>/.test(card(usage)), renew, `usage card: ${name}`);
+    assert.equal(rowActions(base, relay(usage), (t) => t).some((x) => x.key === "renew"), renew, `row menu: ${name}`);
+  }
 });

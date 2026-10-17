@@ -7,6 +7,7 @@ import type {
 } from "../../shared/types";
 import { remaining } from "../../shared/usage";
 import { Button } from "@/components/ui/button";
+import { displayedIssue, renewalIssue } from "@/lib/account-health";
 import { meterClass, meterTone } from "@/lib/meter";
 import { cn } from "@/lib/utils";
 type T = (tr: string, en: string) => string;
@@ -74,9 +75,9 @@ export function UsageCard({
   now?: number;
 }) {
   const loading = busy || usage?.status === "loading";
-  const displayedIssue =
-    usage?.issue ??
-    (usage?.connectionRenewalRequired ? "renewal-required" : undefined);
+  // The same reading as the account's status and the banners.
+  const shownIssue = displayedIssue(usage);
+  const renewal = renewalIssue(usage);
   const reconnect = [
     "expired",
     "credentials-missing",
@@ -249,15 +250,14 @@ export function UsageCard({
           {usage?.stale && <b className="font-semibold text-warn-foreground">{t("Eski veri · ", "Stale data · ")}</b>}
           {loading
             ? t("Limitler okunuyor…", "Reading usage…")
-            : displayedIssue
-              ? t(...issues[displayedIssue])
+            : shownIssue
+              ? t(...issues[shownIssue])
               : usage?.checkedAt
                 ? `${t("Güncellendi", "Updated")} ${clock(usage.checkedAt)}`
                 : t("Henüz sorgulanmadı", "Not checked yet")}
           {retry &&
             !reconnect &&
-            usage?.issue !== "keychain-locked" &&
-            displayedIssue !== "renewal-required" &&
+            !renewal &&
             ` ${t("Tekrar", "Retry")} ${clock(usage!.retryAt!)}`}
         </span>
         {reconnect ? (
@@ -270,8 +270,7 @@ export function UsageCard({
           >
             {t("Limit okuma girişini yenile", "Renew usage sign-in")}
           </Button>
-        ) : displayedIssue === "keychain-locked" ||
-          displayedIssue === "renewal-required" ? (
+        ) : renewal ? (
           <Button
             size="sm"
             variant="link"
@@ -279,7 +278,7 @@ export function UsageCard({
             disabled={loading}
             onClick={() => refresh(true)}
           >
-            {displayedIssue === "renewal-required"
+            {renewal === "renewal-required"
               ? t("Bağlantıyı yenile", "Renew connection")
               : t("Anahtarlık erişimine izin ver", "Allow Keychain access")}
           </Button>

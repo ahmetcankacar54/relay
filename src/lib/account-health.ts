@@ -1,4 +1,4 @@
-import type { Account, AccountUsage } from "../../shared/types";
+import type { Account, AccountUsage, UsageIssue } from "../../shared/types";
 import { cliNeedsReconnect } from "../../shared/account-state";
 
 /** The key of the row action (`rowActions`) that fixes the problem. */
@@ -17,16 +17,30 @@ type T = (tr: string, en: string) => string;
 type Words = readonly [tr: string, en: string];
 
 /**
+ * The usage issue every surface shows: the one the last read reported, else a connection to renew.
+ * The status, the banners and the usage card all read it, so they cannot disagree.
+ */
+export function displayedIssue(
+  usage?: AccountUsage,
+): UsageIssue | "renewal-required" | undefined {
+  return (
+    usage?.issue ??
+    (usage?.connectionRenewalRequired ? "renewal-required" : undefined)
+  );
+}
+
+/**
  * What the usage connection waits for the user to do, when only a prompting refresh (`renew`) can clear it:
- * allow the Keychain, or renew the connection however it was reported.
+ * allow the Keychain, or renew the connection however it was reported. While the service is rate-limited
+ * or down, a renewal cannot run, so a flag left from before does not count.
  */
 export function renewalIssue(
   usage: AccountUsage | undefined,
 ): "keychain-locked" | "renewal-required" | undefined {
-  if (usage?.issue === "keychain-locked") return "keychain-locked";
-  if (usage?.issue === "renewal-required" || usage?.connectionRenewalRequired)
-    return "renewal-required";
-  return undefined;
+  const issue = displayedIssue(usage);
+  return issue === "keychain-locked" || issue === "renewal-required"
+    ? issue
+    : undefined;
 }
 
 /** The usage sign-in's own state; `accountHealth`'s detail and the sheet's usage row both read it. */
