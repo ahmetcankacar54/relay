@@ -48,8 +48,8 @@ const failure: Record<string, [string, string]> = {
     "Claude CLI version not supported",
   ],
   "routine-credentials-unavailable": [
-    "limit bağlantısının süresi dolmuş",
-    "usage connection expired",
+    "limit okuma girişinin süresi dolmuş",
+    "usage sign-in expired",
   ],
   "routine-platform-unsupported": [
     "bu sistemde desteklenmiyor",
@@ -145,7 +145,7 @@ function statusText(
           "Bugünkü deneme sınırı doldu",
           "Today's attempt limit reached",
         );
-      return t("Limit bağlantısı gerekli", "Usage connection required");
+      return t("Limit okuma girişi gerekli", "Usage sign-in required");
   }
 }
 

@@ -84,7 +84,7 @@ test("panelRowState explains why a switch is unavailable", () => {
 test("accountRowSubtitle keeps the overview wording", () => {
   const t = (tr: string) => tr;
   assert.equal(accountRowSubtitle(row("ready"), t, "tr", "UTC", NOW), "Hazır · dönem başlamadı");
-  assert.equal(accountRowSubtitle(row("not-linked"), t, "tr", "UTC", NOW), "Desktop’a bağlı değil");
+  assert.equal(accountRowSubtitle(row("not-linked"), t, "tr", "UTC", NOW), "Claude uygulaması girişi yok");
   assert.equal(accountRowSubtitle(row("unknown"), t, "tr", "UTC", NOW), "Limit verisi eski");
 });
 
@@ -179,7 +179,7 @@ test("the active name keeps a tooltip when truncated", () => {
 
 test("a pending Desktop connection explains itself and links to accounts", () => {
   const html = render(relayFor(active, [active, vertex], baseUsage, { pendingDesktop: vertex }));
-  assert.match(html, /Desktop bağlantısı tamamlanmayı bekliyor/);
+  assert.match(html, /Claude uygulaması girişi tamamlanmayı bekliyor/);
   const opened: string[] = [];
   const relay = relayFor(active, [active, vertex], baseUsage, {
     pendingDesktop: vertex,

@@ -17,7 +17,7 @@ export interface ReconnectIssue {
 }
 
 /**
- * Signed-in accounts whose usage connection needs attention, minus the ones the
+ * Signed-in accounts whose usage sign-in needs attention, minus the ones the
  * user dismissed this session (keyed `accountId:issue`). Mirrors UsageCard.
  */
 export function reconnectIssues(
@@ -256,8 +256,8 @@ export function Banners() {
                       `${a.name} · Keychain access is needed to read usage limits.`,
                     )
                   : t(
-                      `${a.name} · kullanım bağlantısının yenilenmesi gerekiyor.`,
-                      `${a.name} · the usage connection needs to be renewed.`,
+                      `${a.name} · limit okuma girişinin yenilenmesi gerekiyor.`,
+                      `${a.name} · the usage sign-in needs to be renewed.`,
                     )}
               </span>
             )}

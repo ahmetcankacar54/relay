@@ -121,8 +121,8 @@ export function PanelActiveCard({ now }: { now: number }) {
       ) : relay.pendingDesktop ? (
         <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11.5px] text-muted-foreground">
           {t(
-            "Desktop bağlantısı tamamlanmayı bekliyor",
-            "Desktop connection is waiting to be completed",
+            "Claude uygulaması girişi tamamlanmayı bekliyor",
+            "Claude app sign-in is waiting to be completed",
           )}{" "}
           ·
           <Button

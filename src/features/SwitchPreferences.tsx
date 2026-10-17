@@ -195,8 +195,8 @@ export function SharedHistoryPreferences({
       {value.desktopHistoryTransfer === "all" && (
         <Note>
           {t(
-            "Desktop’a bağlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
-            "All Desktop-connected accounts, personal or work, share Code history.",
+            "Claude uygulaması girişi kayıtlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
+            "All accounts with a saved Claude app sign-in, personal or work, share Code history.",
           )}
         </Note>
       )}

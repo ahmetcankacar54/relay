@@ -254,13 +254,13 @@ function useRelayState(
               )
             : request.kind === "capture"
               ? t(
-                  `${account?.name} · Desktop bağlantısı kaydedildi.`,
-                  `${account?.name} · Desktop connection saved.`,
+                  `${account?.name} · Claude uygulaması girişi kaydedildi.`,
+                  `${account?.name} · Claude app sign-in saved.`,
                 )
               : request.kind === "cancel" || request.kind === "recover"
                 ? t(
-                    "Önceki Desktop bağlantısı geri yüklendi.",
-                    "The previous Desktop connection was restored.",
+                    "Önceki Claude uygulaması girişi geri yüklendi.",
+                    "The previous Claude app sign-in was restored.",
                   )
                 : t(
                     "Claude’da bu hesabın girişini tamamla, ardından Relay’e dön.",

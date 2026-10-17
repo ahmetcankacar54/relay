@@ -1,4 +1,10 @@
-const pairs: [string, string][] = [
+/**
+ * [tr, en, enDisplay?]. `en` is the backend error, word for word (see electron/core), and is the
+ * lookup key together with `tr`: never reword it. When the English shown to the user should differ
+ * from the backend text, `enDisplay` carries it.
+ */
+type Pair = [tr: string, en: string, enDisplay?: string];
+const pairs: Pair[] = [
   [
     "Tercihleri değiştirmeden önce Desktop işlemini tamamla.",
     "Finish the Desktop operation before changing preferences.",
@@ -42,10 +48,12 @@ const pairs: [string, string][] = [
   [
     "Kayıtlı Claude uygulaması girişi eksik. Hesabı yeniden bağla.",
     "Saved Desktop sign-in is missing. Connect this account again.",
+    "Saved Claude app sign-in is missing. Connect this account again.",
   ],
   [
     "Kayıtlı Claude uygulaması girişi geçersiz.",
     "Invalid saved Desktop sign-in.",
+    "Invalid saved Claude app sign-in.",
   ],
   [
     "Claude hâlâ açık. Dosyalar değiştirilmedi.",
@@ -163,6 +171,7 @@ const pairs: [string, string][] = [
   [
     "Önce devam eden Claude uygulaması girişini tamamla veya iptal et.",
     "Finish or cancel the current Desktop sign-in first.",
+    "Finish or cancel the current Claude app sign-in first.",
   ],
   [
     "Desktop’ta bir işlem devam ediyor.",
@@ -192,24 +201,11 @@ const pairs: [string, string][] = [
   [
     "İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.",
     "System encryption is unavailable. Desktop sign-in was not saved.",
+    "System encryption is unavailable. Claude app sign-in was not saved.",
   ],
 ];
-/**
- * The English text of a pair is also the lookup key: it is the backend error, word for word (see
- * electron/core). Where the English display names the sign-in differently from the backend, the
- * display lives here, keyed by that backend text, so the key stays equal to the error.
- */
-const englishDisplay: Record<string, string> = {
-  "Saved Desktop sign-in is missing. Connect this account again.":
-    "Saved Claude app sign-in is missing. Connect this account again.",
-  "Invalid saved Desktop sign-in.": "Invalid saved Claude app sign-in.",
-  "Finish or cancel the current Desktop sign-in first.":
-    "Finish or cancel the current Claude app sign-in first.",
-  "System encryption is unavailable. Desktop sign-in was not saved.":
-    "System encryption is unavailable. Claude app sign-in was not saved.",
-};
 export function localizeError(message: string, language: "tr" | "en") {
-  const pair = pairs.find((p) => p.includes(message));
+  const pair = pairs.find((p) => p[0] === message || p[1] === message);
   if (!pair) return message;
-  return language === "tr" ? pair[0] : (englishDisplay[pair[1]] ?? pair[1]);
+  return language === "tr" ? pair[0] : (pair[2] ?? pair[1]);
 }

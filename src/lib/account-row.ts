@@ -29,7 +29,7 @@ export function accountRowSubtitle(
       return t(`Açılış ${at}`, `Opens ${at}`);
     }
     case "not-linked":
-      return t("Desktop’a bağlı değil", "Not linked to Desktop");
+      return t("Claude uygulaması girişi yok", "No Claude app sign-in");
     default:
       return t("Limit verisi eski", "Usage data is out of date");
   }

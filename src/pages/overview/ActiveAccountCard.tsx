@@ -134,8 +134,8 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
             <p className="mt-0.5 text-sm text-muted-foreground">
               {hasUnclaimedDesktop
                 ? t(
-                    "Claude’da açık hesabı bir Relay profiliyle eşleştir. CLI bağlantısı bu adımı tamamlamaz.",
-                    "Link the account open in Claude to a Relay profile. A CLI connection does not complete this step.",
+                    "Claude’da açık hesabı bir Relay profiliyle eşleştir. Limit okuma girişi bu adımı tamamlamaz.",
+                    "Link the account open in Claude to a Relay profile. The usage sign-in does not complete this step.",
                   )
                 : first
                   ? t(

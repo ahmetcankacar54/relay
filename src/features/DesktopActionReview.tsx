@@ -57,7 +57,10 @@ export function DesktopActionReview({
                   "Açık Desktop hesabını kaydet",
                   "Save the open Desktop account",
                 )
-              : t("Desktop bağlantısını kur", "Connect Desktop");
+              : t(
+                  "Claude uygulaması girişini kur",
+                  "Set up Claude app sign-in",
+                );
   const progress =
     kind === "switch"
       ? t(`${account?.name} hesabına geçiliyor`, `Switching to ${account?.name}`)
@@ -67,7 +70,10 @@ export function DesktopActionReview({
           ? t("Yedek geri yükleniyor", "Restoring the backup")
           : kind === "capture"
             ? t("Açık hesap kaydediliyor", "Saving the open account")
-            : t("Desktop bağlantısı kuruluyor", "Connecting Desktop");
+            : t(
+                "Claude uygulaması girişi kuruluyor",
+                "Setting up Claude app sign-in",
+              );
   return (
     <section
       className="grid gap-3"
@@ -94,7 +100,10 @@ export function DesktopActionReview({
         <ArrowLeftRight size={15} className="shrink-0 text-muted-foreground" />
         <strong className="font-semibold">
           {kind === "cancel" || kind === "recover"
-            ? t("Önceki Desktop bağlantısı", "Previous Desktop connection")
+            ? t(
+                "Önceki Claude uygulaması girişi",
+                "Previous Claude app sign-in",
+              )
             : account?.name}
         </strong>
       </div>
@@ -121,8 +130,8 @@ export function DesktopActionReview({
                   )
                 : kind === "switch"
                   ? t(
-                      "Kaydedilmiş Desktop bağlantısı açılır. Claude yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
-                      "Your saved Desktop connection opens. Claude restarts; active responses and background tasks may stop.",
+                      "Kayıtlı Claude uygulaması girişi açılır. Claude yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
+                      "Your saved Claude app sign-in opens. Claude restarts; active responses and background tasks may stop.",
                     )
                   : kind === "capture"
                     ? t(

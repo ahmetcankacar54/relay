@@ -4,11 +4,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
 import { AccountSheetBody } from "../src/pages/accounts/AccountSheet";
+import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { rowActions } from "../src/pages/accounts/AccountsTable";
 import { filterAccounts, groupName, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot, type UsageIssue } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -75,7 +76,7 @@ test("planLabel and groupName describe an account", () => {
 test("the accounts page lists accounts with their connection states", () => {
   const html = wrap(relayFor(), createElement(Accounts));
   assert.match(html, /<h1[^>]*>Hesaplar/);
-  assert.match(html, /3 hesap · 1’i Desktop’a bağlı/);
+  assert.match(html, /3 hesap · 1 hesapta Claude uygulaması girişi kayıtlı/);
   assert.match(html, /Hesap ekle/);
   assert.match(html, /placeholder="Hesap, e-posta veya grup ara…"/);
   for (const name of ["Kişisel · Max", "Studio", "Şirket"]) assert.match(html, new RegExp(name));
@@ -105,14 +106,14 @@ test("the account sheet shows identity, connections, usage and history", () => {
   assert.match(sheetHtml, /Code geçmişi/);
   assert.match(sheetHtml, /Limit okuma girişini yenile/);
   assert.doesNotMatch(sheetHtml, /Desktop girişi|tarayıcı girişi|Tarayıcı girişi/);
-  assert.match(sheetHtml, /aria-label="CLI bağlantısını doğrula"/);
+  assert.match(sheetHtml, /aria-label="Limit okuma girişini doğrula"/);
   assert.match(sheetHtml, /5 saatlik/);
 });
 
 test("the account sheet shows Desktop setup for the account being linked", () => {
   const relay = relayFor({ setupId: "b" });
   const sheetHtml = wrap(relay, createElement(AccountSheetBody, { account: b, now: NOW }));
-  assert.match(sheetHtml, /Desktop ilk kurulumu/);
+  assert.match(sheetHtml, /İlk Claude uygulaması girişi/);
   assert.match(sheetHtml, /Claude uygulaması girişini kaydet/);
   assert.doesNotMatch(sheetHtml, /Yerel Code geçmişi/);
   const warnings = wrap(
@@ -139,7 +140,7 @@ test("row actions follow the Desktop link state and the switch lock", () => {
     "Limitleri yenile",
   ]);
   assert.deepEqual(labels(b, relay), [
-    "Limit okuma girişini yenile",
+    "Limit okuma girişi yap",
     "Claude uygulaması girişini kaydet",
     "Limitleri yenile",
   ]);
@@ -179,4 +180,137 @@ test("the accounts empty state's panda is playful, the greeting and the lookout 
   assert.match(wrap(relayFor({ accounts: [], active: undefined }), createElement(Accounts)), playful("welcome"));
   // A page with accounts has no panda to click.
   assert.doesNotMatch(wrap(relayFor(), createElement(Accounts)), /data-playful/);
+});
+
+// The old Desktop / connection / CLI wording must not come back next to the two sign-in names.
+const OLD_TR =
+  /Desktop bağlantı|Desktop’a bağla|Desktop ve limit|kullanım bağlantı|CLI bağlantı|Limit bağlantısı|Desktop girişi|tarayıcı girişi|Desktop ilk kurulumu/i;
+const OLD_EN =
+  /Desktop connection|Connect Desktop|Link to Desktop|Desktop sign-in|browser sign-in|usage connection|limit connection|CLI connection|First Desktop setup/i;
+
+test("no view mixes the old Desktop and connection wording with the two sign-in names", () => {
+  const issues: UsageIssue[] = [
+    "connect-cli",
+    "credentials-missing",
+    "renewal-required",
+    "expired",
+    "scope",
+    "identity-mismatch",
+  ];
+  const render = (
+    language: "tr" | "en",
+    relay: Relay,
+    child: ReturnType<typeof createElement>,
+  ) =>
+    renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        {
+          value: {
+            language,
+            setLanguage() {},
+            t: (tr: string, en: string) => (language === "tr" ? tr : en),
+          },
+        },
+        createElement(RelayContext.Provider, { value: relay }, child),
+      ),
+    );
+  for (const [language, forbidden] of [
+    ["tr", OLD_TR],
+    ["en", OLD_EN],
+  ] as const) {
+    const views: [string, string][] = [
+      ["accounts page", render(language, relayFor(), createElement(Accounts))],
+      [
+        "accounts page, unclaimed Desktop",
+        render(
+          language,
+          relayFor({ hasUnclaimedDesktop: true }),
+          createElement(Accounts),
+        ),
+      ],
+      [
+        "sheet, saved",
+        render(
+          language,
+          relayFor(),
+          createElement(AccountSheetBody, { account: a, now: NOW }),
+        ),
+      ],
+      [
+        "sheet, mismatch",
+        render(
+          language,
+          relayFor(),
+          createElement(AccountSheetBody, {
+            account: {
+              ...a,
+              auth: {
+                loggedIn: true,
+                accountUuid: "other",
+                checkedAt: iso(NOW),
+              },
+            },
+            now: NOW,
+          }),
+        ),
+      ],
+      [
+        "sheet, first sign-in open",
+        render(
+          language,
+          relayFor({ setupId: "b" }),
+          createElement(AccountSheetBody, { account: b, now: NOW }),
+        ),
+      ],
+      [
+        "sheet, sign-in pending",
+        render(
+          language,
+          relayFor({ pendingDesktop: b }),
+          createElement(AccountSheetBody, { account: b, now: NOW }),
+        ),
+      ],
+      ...[1, 2, 3].map((step): [string, string] => [
+        `add dialog, step ${step}`,
+        render(
+          language,
+          relayFor(),
+          createElement(AddAccountSteps, {
+            close() {},
+            initial: { step: step as 1 | 2 | 3, id: "b" },
+          }),
+        ),
+      ]),
+      ...issues.map((issue): [string, string] => [
+        `sheet, usage issue ${issue}`,
+        render(
+          language,
+          relayFor({
+            data: {
+              settings: DEFAULT_SETTINGS,
+              usage: {
+                b: { accountId: "b", status: "error", issue, stale: true },
+              },
+              accounts,
+              authFlows: [],
+            } as unknown as Snapshot,
+          }),
+          createElement(AccountSheetBody, {
+            account: {
+              ...b,
+              auth: {
+                loggedIn: true,
+                email: "b@example.com",
+                checkedAt: iso(NOW),
+              },
+            },
+            now: NOW,
+          }),
+        ),
+      ]),
+    ];
+    for (const [name, html] of views)
+      assert.doesNotMatch(html, forbidden, `${language}: ${name}`);
+  }
 });

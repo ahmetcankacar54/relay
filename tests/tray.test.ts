@@ -115,7 +115,8 @@ test("tray only offers saved Desktop identities and blocks mismatched CLI identi
   assert.equal(canRequestTraySwitch(s, "target"), true);
   assert.ok(
     buildTrayMenu(s).some(
-      (i) => i.type !== "separator" && i.label.includes("Connect Desktop"),
+      (i) =>
+        i.type !== "separator" && i.label.includes("Save Claude app sign-in"),
     ),
   );
 });

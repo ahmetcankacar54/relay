@@ -40,12 +40,12 @@ export function DesktopSetup({
       className={
         bare ? "grid gap-3" : "grid gap-3 rounded-lg border bg-card p-3"
       }
-      aria-label={t("Desktop ilk kurulumu", "First Desktop setup")}
+      aria-label={t("İlk Claude uygulaması girişi", "First Claude app sign-in")}
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold">
           <Monitor className="size-4 text-brand" />
-          {t("Desktop ilk kurulumu", "First Desktop setup")}
+          {t("İlk Claude uygulaması girişi", "First Claude app sign-in")}
         </h3>
         {!bare && (
           <Button
@@ -126,7 +126,10 @@ export function DesktopSetup({
           >
             {unclaimed
               ? t("Bu hesabı eşleştir…", "Link this account…")
-              : t("Desktop bağlantısını başlat…", "Start Desktop connection…")}
+              : t(
+                  "Claude uygulaması girişini başlat…",
+                  "Start Claude app sign-in…",
+                )}
           </Button>
           <small className="text-xs text-muted-foreground">
             {t(

@@ -315,10 +315,13 @@ export function AccountSheetBody({
                 size="icon-sm"
                 variant="ghost"
                 aria-label={t(
-                  "CLI bağlantısını doğrula",
-                  "Verify CLI connection",
+                  "Limit okuma girişini doğrula",
+                  "Verify usage sign-in",
                 )}
-                title={t("Bağlantıyı kontrol et", "Check connection")}
+                title={t(
+                  "Limit okuma girişini doğrula",
+                  "Verify usage sign-in",
+                )}
                 disabled={!!busy || waiting}
                 onClick={() =>
                   void action(`verify:${a.id}`, async () => {
@@ -326,8 +329,8 @@ export function AccountSheetBody({
                     setNotice(
                       checked.auth?.loggedIn
                         ? t(
-                            `${a.name} · ${checked.auth.email ?? ""} bağlantısı doğrulandı.`,
-                            `${a.name} · ${checked.auth.email ?? ""} connection verified.`,
+                            `${a.name} · ${checked.auth.email ?? ""} limit okuma girişi doğrulandı.`,
+                            `${a.name} · ${checked.auth.email ?? ""} usage sign-in verified.`,
                           )
                         : t(
                             "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.",

@@ -186,7 +186,7 @@ test("leaving the accounts page forgets the setup target", () => {
 test("the overview Desktop link is disabled while Desktop cannot start a setup", () => {
   const usage: Record<string, AccountUsage> = { a: { accountId: "a", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 10 }, sevenDay: { usedPercent: 10 } } };
   const link = (extra: Partial<Relay>) =>
-    wrap(relayFor(extra, usage), createElement(AccountsCard, { go() {}, now: NOW })).match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Desktop’a bağla<\/button>/)?.[0] ?? "";
+    wrap(relayFor(extra, usage), createElement(AccountsCard, { go() {}, now: NOW })).match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Claude uygulaması girişini kaydet<\/button>/)?.[0] ?? "";
   assert.doesNotMatch(link({}), /disabled=""/);
   for (const extra of [
     { desktopBusy: true },
@@ -281,6 +281,6 @@ test("the travelling panda names what each Desktop action is doing", () => {
   assert.match(line("cancel"), /Yedek geri yükleniyor/);
   assert.match(line("recover"), /Yedek geri yükleniyor/);
   assert.match(line("capture"), /Açık hesap kaydediliyor/);
-  assert.match(line("login"), /Desktop bağlantısı kuruluyor/);
-  assert.match(line("reconnect"), /Desktop bağlantısı kuruluyor/);
+  assert.match(line("login"), /Claude uygulaması girişi kuruluyor/);
+  assert.match(line("reconnect"), /Claude uygulaması girişi kuruluyor/);
 });

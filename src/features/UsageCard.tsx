@@ -13,7 +13,7 @@ type T = (tr: string, en: string) => string;
 const issues: Record<UsageIssue, [string, string]> = {
   "connect-cli": [
     "Limitleri görmek için limit okuma girişini yap.",
-    "Sign in to read usage to see usage limits.",
+    "Complete the usage sign-in to see your usage limits.",
   ],
   "credentials-missing": [
     "Bu profilin giriş bilgisi okunamadı. Limit okuma girişini yenile.",
@@ -24,11 +24,11 @@ const issues: Record<UsageIssue, [string, string]> = {
     "Keychain access is needed to read usage limits.",
   ],
   "renewal-required": [
-    "Bağlantının yenilenmesi gerekiyor.",
-    "The connection needs to be renewed.",
+    "Limit okuma girişinin yenilenmesi gerekiyor.",
+    "The usage sign-in needs to be renewed.",
   ],
   expired: [
-    "Limit okuma girişi yenilenemedi. Limit okuma girişini yenile.",
+    "Yenilenemedi. Limit okuma girişini yenile.",
     "The usage sign-in could not be renewed. Renew the usage sign-in.",
   ],
   scope: [
@@ -36,8 +36,8 @@ const issues: Record<UsageIssue, [string, string]> = {
     "This sign-in cannot access usage. Renew the usage sign-in.",
   ],
   "identity-mismatch": [
-    "Giriş kimliği bu profille eşleşmiyor. Bağlantıyı kontrol et.",
-    "The sign-in identity does not match this profile. Check the connection.",
+    "Limit okuma girişi bu profilin hesabına ait değil. Limit okuma girişini yenile.",
+    "The usage sign-in does not belong to this profile’s account. Renew the usage sign-in.",
   ],
   "rate-limited": [
     "Kullanım servisi beklememizi istiyor.",

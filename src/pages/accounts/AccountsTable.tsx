@@ -83,7 +83,9 @@ export function rowActions(
     });
   items.push({
     key: "cli",
-    label: t("Limit okuma girişini yenile", "Renew usage sign-in"),
+    label: a.auth?.email
+      ? t("Limit okuma girişini yenile", "Renew usage sign-in")
+      : t("Limit okuma girişi yap", "Sign in to read usage"),
     icon: Globe2,
     disabled: !!relay.busy || pendingFlow(authFlow),
     run: () => void relay.startCli(a),

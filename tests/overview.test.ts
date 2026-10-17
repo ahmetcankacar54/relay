@@ -93,8 +93,8 @@ test("unlinked accounts offer a Desktop link instead of a switch", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const other = acct("other", "Studio", "pro", false);
   const html = render(relayFor(active, [active, other], { active: use("active", 10, 10) }));
-  assert.match(html, /Desktop’a bağlı değil/);
-  assert.match(html, /Desktop’a bağla/);
+  assert.match(html, /Claude uygulaması girişi yok/);
+  assert.match(html, /Claude uygulaması girişini kaydet/);
 });
 
 const rowsOf = (html: string) => html.split("grid-cols-[1.2fr_1fr_1fr_auto]").slice(1);

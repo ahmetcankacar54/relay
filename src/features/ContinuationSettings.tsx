@@ -196,16 +196,16 @@ const explanations: Record<string, [string, string]> = {
     "No connected account in the shared history scope has fresh, sufficient quota. Will check again when usage is refreshed; Claude is left alone.",
   ],
   "automatic-target-enrollment-unavailable": [
-    "Otomatik geçiş için başka bir hesabın Desktop ve limit bağlantılarını aynı kimlikle tamamla.",
-    "Complete matching Desktop and usage connections for another account to enable automatic switching.",
+    "Otomatik geçiş için başka bir hesabın Claude uygulaması ve limit okuma girişlerini aynı kimlikle tamamla.",
+    "Complete matching Claude app and usage sign-ins for another account to enable automatic switching.",
   ],
   "target-cooldown": [
     "Hedef hesabın bekleme süresi bitmedi. Süre bitince yeniden kontrol edilecek.",
     "The target account is still in its cooldown period. Will check again when it ends.",
   ],
   "identity-not-enrolled": [
-    "Açık ve hedef hesapların Desktop ve limit bağlantıları aynı kimlikle doğrulanmalı.",
-    "The current and target accounts need matching, verified Desktop and usage connections.",
+    "Açık ve hedef hesapların Claude uygulaması ve limit okuma girişleri aynı kimlikle doğrulanmalı.",
+    "The current and target accounts need matching, verified Claude app and usage sign-ins.",
   ],
   "history-boundary": [
     "Bu iki hesap ortak geçmiş kapsamında değil. Hesap geçişi ayarlarından kapsamı düzenle.",
@@ -274,12 +274,12 @@ const readinessExplanations: Record<
   [string, string]
 > = {
   "source-not-enrolled": [
-    "Kaynak hesabın eşleşen Desktop ve limit bağlantısı doğrulanmalı.",
-    "Verify matching Desktop and usage connections for the source account.",
+    "Kaynak hesabın eşleşen Claude uygulaması ve limit okuma girişleri doğrulanmalı.",
+    "Verify matching Claude app and usage sign-ins for the source account.",
   ],
   "identity-not-enrolled": [
-    "Eşleşen Desktop ve limit bağlantısı gerekli.",
-    "Matching Desktop and usage connections are required.",
+    "Eşleşen Claude uygulaması ve limit okuma girişleri gerekli.",
+    "Matching Claude app and usage sign-ins are required.",
   ],
   "duplicate-identity": [
     "Kaynakla aynı hesap; alternatif olarak kullanılamaz.",
@@ -513,7 +513,10 @@ export function ContinuationSettings({
           </strong>
           <small className={caption}>
             {source?.desktop?.email ??
-              t("Desktop bağlantısı gerekli", "Desktop connection required")}
+              t(
+                "Claude uygulaması girişi gerekli",
+                "Claude app sign-in required",
+              )}
           </small>
         </div>
         <ArrowRight
@@ -544,8 +547,8 @@ export function ContinuationSettings({
           {!hasTarget && (
             <small className={caption}>
               {t(
-                "Başka bir hesabın Desktop ve limit bağlantısını tamamla.",
-                "Complete another account’s Desktop and usage connections.",
+                "Başka bir hesabın Claude uygulaması ve limit okuma girişlerini tamamla.",
+                "Complete another account’s Claude app and usage sign-ins.",
               )}
             </small>
           )}

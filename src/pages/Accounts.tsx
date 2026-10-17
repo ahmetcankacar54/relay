@@ -117,7 +117,7 @@ export function Accounts() {
     window.addEventListener("hashchange", read);
     return () => window.removeEventListener("hashchange", read);
   }, []);
-  // Arriving with a setup target (e.g. "Desktop’a bağla" on Overview) opens that
+  // Arriving with a setup target (e.g. "Claude uygulaması girişini kaydet" on Overview) opens that
   // account; the add dialog sets one too but keeps the setup inside the dialog.
   useEffect(() => {
     if (setupId && !adding) setSelected(setupId);
@@ -134,8 +134,8 @@ export function Accounts() {
     <PageFrame
       title={t("Hesaplar", "Accounts")}
       description={t(
-        `${accounts.length} hesap · ${linked}’i Desktop’a bağlı`,
-        `${accounts.length} accounts · ${linked} linked to Desktop`,
+        `${accounts.length} hesap · ${linked} hesapta Claude uygulaması girişi kayıtlı`,
+        `${accounts.length} accounts · ${linked} with a saved Claude app sign-in`,
       )}
       actions={
         <>
@@ -194,7 +194,7 @@ export function Accounts() {
             <SelectContent>
               <SelectItem value="all">{t("Tümü", "All accounts")}</SelectItem>
               <SelectItem value="connected">
-                {t("Desktop bağlı", "Desktop connected")}
+                {t("Claude uygulaması kayıtlı", "Claude app saved")}
               </SelectItem>
               <SelectItem value="personal">
                 {t("Kişisel", "Personal")}

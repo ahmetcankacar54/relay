@@ -50,8 +50,8 @@ export function AddAccountDialog({
           <DialogTitle>{t("Hesap ekle", "Add account")}</DialogTitle>
           <DialogDescription>
             {t(
-              "Profil oluştur, ardından Desktop ve kullanım limitlerini bağla.",
-              "Create a profile, then connect Desktop and usage limits.",
+              "Profil oluştur, ardından Claude uygulaması girişini ve limit okuma girişini yap.",
+              "Create a profile, then add the Claude app sign-in and the usage sign-in.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -66,8 +66,8 @@ function StepIndicator({ step }: { step: Step }) {
   const { t } = useI18n();
   const titles = [
     t("Profil", "Profile"),
-    t("Desktop bağlantısı", "Desktop connection"),
-    t("Limit bağlantısı", "Limit connection"),
+    t("Claude uygulaması girişi", "Claude app sign-in"),
+    t("Limit okuma girişi", "Usage sign-in"),
   ];
   return (
     <ol
@@ -261,7 +261,10 @@ export function AddAccountSteps({
         <>
           {account.desktop ? (
             <StatusLine tone="ok" icon={<Monitor />}>
-              {t("Desktop’a bağlandı.", "Connected to Desktop.")}
+              {t(
+                "Claude uygulaması girişi kaydedildi.",
+                "Claude app sign-in saved.",
+              )}
             </StatusLine>
           ) : pendingDesktop?.id === account.id ? (
             <div className="grid gap-3">

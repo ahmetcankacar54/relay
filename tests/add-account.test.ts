@@ -57,8 +57,8 @@ test("routeQuery reads the intent after the page id", () => {
 test("the add-account dialog shows the three steps and the profile form", () => {
   const html = wrap(relayFor(), createElement(AddAccountSteps, { close() {} }));
   assert.match(html, /Profil/);
-  assert.match(html, /Desktop bağlantısı/);
-  assert.match(html, /Limit bağlantısı/);
+  assert.match(html, /Claude uygulaması girişi/);
+  assert.match(html, /Limit okuma girişi/);
   assert.match(html, /Hesap adı/);
   assert.match(html, /placeholder="Örn. Kişisel Max"/);
   assert.match(html, /Kişisel/);
@@ -70,8 +70,8 @@ test("the add-account dialog shows the three steps and the profile form", () => 
 
 test("the add-account dialog walks the Desktop and limit steps for the created profile", () => {
   const desktopStep = wrap(relayFor(), createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }));
-  assert.match(desktopStep, /Desktop ilk kurulumu/);
-  assert.match(desktopStep, /Desktop bağlantısını başlat…/);
+  assert.match(desktopStep, /İlk Claude uygulaması girişi/);
+  assert.match(desktopStep, /Claude uygulaması girişini başlat…/);
   assert.match(desktopStep, /Atla/);
   const pending = wrap(relayFor({ pendingDesktop: b }), createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }));
   assert.match(pending, /Claude’da giriş bekleniyor/);

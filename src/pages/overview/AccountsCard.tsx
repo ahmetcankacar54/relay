@@ -37,7 +37,7 @@ export function AccountsCard({
     relay.desktopBusy ||
     !!relay.pendingDesktop ||
     !!relay.desktop?.recoveryRequired;
-  // Same lock as the Accounts row and sheet “Connect Desktop” buttons.
+  // Same lock as the Accounts row and sheet “Save Claude app sign-in” buttons.
   const linkBlocked =
     relay.desktopBusy ||
     !relay.desktop?.available ||
@@ -109,7 +109,10 @@ export function AccountsCard({
                       go("hesaplar");
                     }}
                   >
-                    {t("Desktop’a bağla", "Link to Desktop")}
+                    {t(
+                      "Claude uygulaması girişini kaydet",
+                      "Save Claude app sign-in",
+                    )}
                   </Button>
                 ) : (
                   <Button
