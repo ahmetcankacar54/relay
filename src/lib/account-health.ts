@@ -1,8 +1,12 @@
-import type { Account, AccountUsage, UsageIssue } from "../../shared/types";
+import type { Account, AccountUsage } from "../../shared/types";
 import {
   cliNeedsReconnect,
   desktopCliMismatch,
+  displayedIssue,
 } from "../../shared/account-state";
+
+// The helper lives in shared/ so the tray and the keeper read it too; the app keeps importing it from here.
+export { displayedIssue };
 
 /** The key of the row action (`rowActions`) that fixes the problem. */
 export type AccountFix = "desktop-link" | "cli" | "renew";
@@ -17,19 +21,6 @@ export interface AccountHealth {
 
 type T = (tr: string, en: string) => string;
 type Words = readonly [tr: string, en: string];
-
-/**
- * The usage issue every surface shows: the one the last read reported, else a connection to renew.
- * The status, the banners and the usage card all read it, so they cannot disagree.
- */
-export function displayedIssue(
-  usage?: AccountUsage,
-): UsageIssue | "renewal-required" | undefined {
-  return (
-    usage?.issue ??
-    (usage?.connectionRenewalRequired ? "renewal-required" : undefined)
-  );
-}
 
 /**
  * What the usage connection waits for the user to do, when only a prompting refresh (`renew`) can clear it:

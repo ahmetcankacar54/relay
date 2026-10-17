@@ -9,6 +9,7 @@ import type {
   PlanningSettings,
   WindowAttempt,
 } from "../../shared/types";
+import { displayedIssue } from "../../shared/account-state";
 import { localDate, planningIdentity } from "../../shared/planning";
 import {
   dayPlan,
@@ -139,12 +140,14 @@ export function keeperDecision(
       ...(next ? { nextStartAt: new Date(next).toISOString() } : {}),
     };
   }
-  if (!fresh(usage, now))
-    // A connection that needs the user is reported, not shown as refreshing.
-    return usage?.connectionRenewalRequired ||
-      (usage?.issue && !TRANSIENT_ISSUES.has(usage.issue))
+  if (!fresh(usage, now)) {
+    // A connection that needs the user is reported, not shown as refreshing. The issue is the one
+    // every surface shows, so a flag left under a rate-limit or an outage does not block.
+    const issue = displayedIssue(usage);
+    return issue && !TRANSIENT_ISSUES.has(issue)
       ? { ...base, state: "blocked", reason: "usage-connection", refresh: true }
       : { ...base, state: "waiting", reason: "usage-stale", refresh: true };
+  }
   const reset = Date.parse(usage!.fiveHour?.resetsAt ?? "");
   if (Number.isFinite(reset) && reset > now)
     return {

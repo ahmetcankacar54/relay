@@ -1,4 +1,5 @@
 import type { Account, AccountUsage, DesktopState, UsageIssue, WindowAttempt } from "./types";
+import { displayedIssue } from "./account-state";
 import { freshUsage, maxUsedPercent } from "./usage";
 
 export type MascotPose = "alert" | "away" | "warming" | "sleeping" | "hungry" | "idle";
@@ -28,10 +29,11 @@ export function mascotPose(input: MascotInput, now = Date.now()): MascotPose {
   const { desktop, accounts, usage } = input;
   const activeId = desktop?.activeProfileId;
   const active = activeId ? usage[activeId] : undefined;
+  // The issue every surface shows: a flag left under a rate-limit or an outage is no sign-in problem.
+  const issue = displayedIssue(active);
   if (desktop && (desktop.recoveryRequired || !!desktop.error || !desktop.available))
     return "alert";
-  if (active && (active.connectionRenewalRequired || (!!active.issue && SIGN_IN_ISSUES.has(active.issue))))
-    return "alert";
+  if (issue && SIGN_IN_ISSUES.has(issue)) return "alert";
   if (desktop?.busy) return "away";
   if (
     input.attempts?.some((a) => {

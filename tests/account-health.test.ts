@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { accountHealth, displayedIssue, renewalIssue, usageSignInStatus } from "../src/lib/account-health";
+import { displayedIssue as sharedDisplayedIssue } from "../shared/account-state";
 import { Disclosure } from "../src/components/Disclosure";
 import { reconnectIssues } from "../src/app/Banners";
 import { UsageCard } from "../src/features/UsageCard";
@@ -216,6 +217,14 @@ test("displayedIssue reads the issue, else a connection to renew", () => {
   // A reported issue wins over the flag: it is what the last read hit.
   assert.equal(displayedIssue({ ...issue("rate-limited"), connectionRenewalRequired: true }), "rate-limited");
   assert.equal(displayedIssue({ ...issue("keychain-locked"), connectionRenewalRequired: true }), "keychain-locked");
+});
+
+test("displayedIssue lives in shared/ and the app's helper is the same function", () => {
+  assert.equal(typeof sharedDisplayedIssue, "function");
+  assert.equal(sharedDisplayedIssue, displayedIssue);
+  assert.equal(sharedDisplayedIssue({ ...ready, connectionRenewalRequired: true }), "renewal-required");
+  assert.equal(sharedDisplayedIssue({ ...issue("rate-limited"), connectionRenewalRequired: true }), "rate-limited");
+  assert.equal(sharedDisplayedIssue(undefined), undefined);
 });
 
 test("a connection flag left over from before does not ask for a renewal while the service is rate-limited or down", () => {

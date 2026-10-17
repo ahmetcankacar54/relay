@@ -1,7 +1,10 @@
 import { useEffect, useId, useState } from "react";
 import { Check, Monitor, X } from "lucide-react";
 import type { Account, AccountUsage } from "../../shared/types";
-import { cliNeedsReconnect } from "../../shared/account-state";
+import {
+  cliNeedsReconnect,
+  desktopCliMismatch,
+} from "../../shared/account-state";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/Banner";
 import {
@@ -30,6 +33,10 @@ const issueKey = (i: ReconnectIssue) => dismissalKey(i.account.id, i.issue);
  * Signed-in accounts whose usage sign-in needs attention, minus the ones the
  * user dismissed (keyed `accountId:issue`, see `dismissalKey`). It reads the
  * issue as the status and UsageCard do (`displayedIssue`, `renewalIssue`).
+ * A usage sign-in of another account than the Claude app sign-in reads the wrong
+ * limits, so it needs a new sign-in whatever the last read said: it gets a
+ * `login` warning of its own (`identity-mismatch`) unless the read reported a
+ * sign-in problem already, and it outranks a renewal, which cannot fix it.
  */
 export function reconnectIssues(
   accounts: Account[],
@@ -40,12 +47,15 @@ export function reconnectIssues(
   for (const account of accounts) {
     if (!account.auth?.loggedIn) continue;
     const u = usage[account.id];
-    const issue = displayedIssue(u) ?? "";
-    const action = cliNeedsReconnect(account, u)
-      ? "login"
-      : renewalIssue(u)
-        ? "renew"
-        : undefined;
+    const reported = cliNeedsReconnect(account, u);
+    const mismatch = !reported && desktopCliMismatch(account);
+    const issue = mismatch ? "identity-mismatch" : (displayedIssue(u) ?? "");
+    const action =
+      reported || mismatch
+        ? "login"
+        : renewalIssue(u)
+          ? "renew"
+          : undefined;
     if (!action || dismissed.has(dismissalKey(account.id, issue))) continue;
     result.push({ account, issue, action });
   }
@@ -54,7 +64,9 @@ export function reconnectIssues(
 
 /**
  * Why an account's CLI sign-in cannot be used, in a few words for the sign-in
- * banner. The first matching row wins; anything unlisted is a lost connection.
+ * banner. The first matching row wins; a sign-in of another account than the
+ * Claude app's is named even when the read reported nothing; anything else
+ * unlisted is a lost connection.
  */
 export function reconnectCause(
   account: Account,
@@ -62,6 +74,8 @@ export function reconnectCause(
   t: (tr: string, en: string) => string,
 ): string {
   if (!account.auth?.loggedIn) return t("giriş yapılmamış", "not signed in");
+  const another = () =>
+    t("giriş başka bir hesaba ait", "the sign-in belongs to another account");
   switch (usage?.issue) {
     case "expired":
       return t(
@@ -76,12 +90,11 @@ export function reconnectCause(
         "the sign-in cannot read usage",
       );
     case "identity-mismatch":
-      return t(
-        "giriş başka bir hesaba ait",
-        "the sign-in belongs to another account",
-      );
+      return another();
     default:
-      return t("bağlantı kullanılamıyor", "the connection is unavailable");
+      return desktopCliMismatch(account)
+        ? another()
+        : t("bağlantı kullanılamıyor", "the connection is unavailable");
   }
 }
 

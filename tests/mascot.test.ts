@@ -75,6 +75,25 @@ test("only the active account needing sign-in raises the alert", () => {
   assert.equal(mascotPose(input({ usage: { a: usage("a", 20, 10, { issue: "rate-limited" }), b: usage("b", 30) } }), NOW), "idle");
 });
 
+test("a connection flag left over from before is no alert while the service is rate-limited or down", () => {
+  for (const issue of ["rate-limited", "unavailable"] as const)
+    assert.equal(
+      mascotPose(input({ usage: { a: usage("a", 20, 10, { issue, connectionRenewalRequired: true }), b: usage("b", 30) } }), NOW),
+      "idle",
+      issue,
+    );
+  // The flag alone, with no reported issue, still asks for a sign-in.
+  assert.equal(
+    mascotPose(input({ usage: { a: usage("a", 20, 10, { connectionRenewalRequired: true }), b: usage("b", 30) } }), NOW),
+    "alert",
+  );
+  // A reported sign-in issue is an alert with or without the flag.
+  assert.equal(
+    mascotPose(input({ usage: { a: usage("a", 20, 10, { issue: "expired", connectionRenewalRequired: true }), b: usage("b", 30) } }), NOW),
+    "alert",
+  );
+});
+
 test("the panel head follows the pose", () => {
   assert.deepEqual(
     (["alert", "away", "warming", "sleeping", "hungry", "idle"] as const).map(headFor),

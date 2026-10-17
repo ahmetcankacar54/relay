@@ -2,7 +2,7 @@ import test, { afterEach, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Banners, reconnectCause } from "../src/app/Banners";
+import { Banners, reconnectCause, reconnectIssues } from "../src/app/Banners";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import {
@@ -738,6 +738,103 @@ test("while a browser approval is pending, the sign-in banner says so and Reconn
     group,
     /disabled=""[^>]*>Bağlantıyı yenile|disabled=""[^>]*>Anahtarlık erişimine izin ver/,
   );
+});
+
+// A usage sign-in of another account than the Claude app's reads the wrong limits, whatever the last read said.
+const SAVED = {
+  accountUuid: "00000000-0000-4000-8000-000000000001",
+  orgId: "00000000-0000-4000-8000-000000000002",
+  savedAt: iso(NOW),
+};
+const other = (id = "m", name = "Ek · Pro"): Account => ({
+  ...account(true, id, name),
+  desktop: SAVED,
+  auth: {
+    loggedIn: true,
+    email: "a@example.com",
+    checkedAt: iso(NOW),
+    accountUuid: "00000000-0000-4000-8000-0000000000ff",
+    orgId: SAVED.orgId,
+  },
+});
+const sameIdentity = (id = "s", name = "Aynı · Max"): Account => ({
+  ...other(id, name),
+  auth: { ...other(id, name).auth!, accountUuid: SAVED.accountUuid },
+});
+
+test("a usage sign-in of another account than the Claude app sign-in gets the sign-in banner", () => {
+  for (const u of [undefined, ready("m"), usage("rate-limited", "m"), usage("keychain-locked", "m"), usage("renewal-required", "m")]) {
+    const found = reconnectIssues([other()], { m: u }, new Set());
+    assert.equal(found.length, 1, String(u?.issue));
+    assert.deepEqual([found[0].issue, found[0].action], ["identity-mismatch", "login"], String(u?.issue));
+    const tr = render(relayFor(u ? { m: u } : {}, [other()]));
+    assert.equal(banners(tr), 1);
+    assert.match(
+      tr,
+      /Ek · Pro · limit okuma girişinin yenilenmesi gerekiyor: giriş başka bir hesaba ait\./,
+    );
+    assert.match(tr, /<button[^>]*>Yeniden bağlan<\/button>/);
+    assert.doesNotMatch(tr, /Bağlantıyı yenile|Anahtarlık erişimine izin ver/);
+    assert.match(tr, /aria-label="Uyarıyı kapat"/);
+  }
+  const en = render(relayFor({ m: ready("m") }, [other()]), "en");
+  assert.match(
+    en,
+    /Ek · Pro · the usage sign-in needs to be renewed: the sign-in belongs to another account\./,
+  );
+  assert.match(en, /<button[^>]*>Reconnect<\/button>/);
+  // A different organization is a mismatch too.
+  const otherOrg: Account = {
+    ...other(),
+    auth: { ...other().auth!, accountUuid: SAVED.accountUuid, orgId: "00000000-0000-4000-8000-0000000000ee" },
+  };
+  assert.equal(reconnectIssues([otherOrg], {}, new Set()).length, 1);
+});
+
+test("the mismatch banner is not repeated when the read already reports a sign-in problem", () => {
+  const same = reconnectIssues([other()], { m: usage("identity-mismatch", "m") }, new Set());
+  assert.deepEqual(same.map((i) => [i.issue, i.action]), [["identity-mismatch", "login"]]);
+  assert.equal(banners(render(relayFor({ m: usage("identity-mismatch", "m") }, [other()]))), 1);
+  // Another sign-in problem keeps its own issue and cause.
+  const expired = reconnectIssues([other()], { m: usage("expired", "m") }, new Set());
+  assert.deepEqual(expired.map((i) => [i.issue, i.action]), [["expired", "login"]]);
+  assert.match(
+    render(relayFor({ m: usage("expired", "m") }, [other()])),
+    /oturumun süresi doldu ve yenilenemedi/,
+  );
+});
+
+test("the mismatch banner is dismissed by its own key, and a matching identity has none", () => {
+  const relay = relayFor({ m: ready("m") }, [other()]);
+  assert.equal(banners(render(relay)), 1);
+  restart([dismissalKey("m", "identity-mismatch")]);
+  assert.equal(banners(render(relay)), 0);
+  // Another issue's dismissal does not hide it.
+  restart([dismissalKey("m", "expired")]);
+  assert.equal(banners(render(relay)), 1);
+  assert.deepEqual(
+    reconnectIssues([other()], { m: ready("m") }, new Set([dismissalKey("m", "identity-mismatch")])),
+    [],
+  );
+  // The same identity, no desktop link, or a signed-out account: nothing to warn about.
+  assert.deepEqual(reconnectIssues([sameIdentity()], { s: ready("s") }, new Set()), []);
+  assert.deepEqual(reconnectIssues([account(true, "a")], { a: ready("a") }, new Set()), []);
+  assert.deepEqual(
+    reconnectIssues([{ ...other(), auth: { ...other().auth!, loggedIn: false } }], {}, new Set()),
+    [],
+  );
+});
+
+test("a mismatched account counts in the grouped banner and its row says why", () => {
+  const html = render(
+    relayFor({ a: usage("expired", "a"), m: ready("m") }, [max, other()]),
+    "tr",
+    { initialExpanded: true },
+  );
+  assert.equal(banners(html), 1);
+  assert.match(html, /2 hesabın limit okuma girişi ilgi bekliyor\./);
+  assert.match(html, /Ek · Pro · limit okuma girişinin yenilenmesi gerekiyor: giriş başka bir hesaba ait\./);
+  assert.match(html, /aria-label="Ek · Pro uyarısını kapat"/);
 });
 
 test("a read that fails for a moment does not prune the dismissals of that account", async () => {
