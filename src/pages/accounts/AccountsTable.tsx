@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import type { Account } from "../../../shared/types";
 import type { Relay } from "@/data/relay-context";
-import { cliNeedsReconnect } from "../../../shared/account-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +33,7 @@ import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
+import { accountHealth } from "@/lib/account-health";
 import { formatPercent } from "@/lib/meter";
 import { avatarClass, planLabel } from "./accountLabels";
 
@@ -170,10 +170,7 @@ export function AccountsTable({
         <TableRow className="hover:bg-transparent">
           <TableHead>{t("Hesap", "Account")}</TableHead>
           <TableHead>{t("Plan", "Plan")}</TableHead>
-          <TableHead>{t("Claude uygulaması", "Claude app")}</TableHead>
-          <TableHead className="hidden md:table-cell">
-            {t("Limit okuma", "Usage")}
-          </TableHead>
+          <TableHead>{t("Durum", "Status")}</TableHead>
           <TableHead>{t("5 sa · hafta", "5 h · week")}</TableHead>
           <TableHead className="w-10">
             <span className="sr-only">{t("İşlemler", "Actions")}</span>
@@ -187,28 +184,15 @@ export function AccountsTable({
           const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
           const waiting = pendingFlow(authFlow);
           const plan = planLabel(a);
-          const desktopState =
-            isActive && desktop?.running
-              ? { tone: "ok" as const, label: t("Açık", "Running") }
-              : a.desktop
-                ? { tone: "ok" as const, label: t("Kayıtlı", "Saved") }
-                : {
-                    tone: "off" as const,
-                    label: t("Bağlı değil", "Not linked"),
-                  };
-          const usageState = waiting
-            ? {
-                tone: "warn" as const,
-                label: t(
-                  "Tarayıcı onayı bekleniyor",
-                  "Waiting for browser approval",
-                ),
-              }
-            : !a.auth
-              ? { tone: "off" as const, label: "—" }
-              : cliNeedsReconnect(a, usage)
-                ? { tone: "crit" as const, label: t("Süresi doldu", "Expired") }
-                : { tone: "ok" as const, label: t("Bağlı", "Connected") };
+          const health = accountHealth(
+            a,
+            usage,
+            { active: isActive, desktopRunning: !!desktop?.running, waiting },
+            t,
+          );
+          const actions = rowActions(a, relay, t, link);
+          // The inline fix is the matching ⋯ menu item: same label, same handler.
+          const fix = health.fix && actions.find((x) => x.key === health.fix);
           const five = usage?.fiveHour?.usedPercent;
           const week = usage?.sevenDay?.usedPercent;
           return (
@@ -248,21 +232,37 @@ export function AccountsTable({
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant={plan ? "secondary" : "outline"}>
-                  {plan ?? t("Plan seç", "Choose plan")}
-                </Badge>
+                {plan ? (
+                  <Badge variant="secondary">{plan}</Badge>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {t("Plan yok", "No plan")}
+                  </span>
+                )}
               </TableCell>
               <TableCell>
-                <span className="inline-flex items-center gap-1.5">
-                  <StatusDot tone={desktopState.tone} />
-                  {desktopState.label}
-                </span>
-              </TableCell>
-              <TableCell className="hidden md:table-cell">
-                <span className="inline-flex items-center gap-1.5">
-                  <StatusDot tone={usageState.tone} />
-                  {usageState.label}
-                </span>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span
+                    title={health.detail}
+                    className="inline-flex items-center gap-1.5"
+                  >
+                    <StatusDot tone={health.tone} />
+                    {health.label}
+                  </span>
+                  {health.tone !== "ok" && fix && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      disabled={fix.disabled}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fix.run();
+                      }}
+                    >
+                      {fix.label}
+                    </Button>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="tabular-nums">
                 {five === undefined && week === undefined
@@ -288,7 +288,7 @@ export function AccountsTable({
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   >
-                    {rowActions(a, relay, t, link).map(
+                    {actions.map(
                       ({ key, label, icon: Icon, disabled, run }) => (
                         <Fragment key={key}>
                           {key === "refresh" && <DropdownMenuSeparator />}

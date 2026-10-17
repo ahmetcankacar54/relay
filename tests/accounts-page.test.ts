@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
 import { AccountSheetBody } from "../src/pages/accounts/AccountSheet";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
-import { rowActions } from "../src/pages/accounts/AccountsTable";
+import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
 import { filterAccounts, groupName, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -81,13 +81,86 @@ test("the accounts page lists accounts with their connection states", () => {
   assert.match(html, /placeholder="Hesap, e-posta veya grup ara…"/);
   for (const name of ["Kişisel · Max", "Studio", "Şirket"]) assert.match(html, new RegExp(name));
   assert.match(html, /Max 5×/);
-  assert.match(html, /<th[^>]*>Claude uygulaması<\/th>/);
-  assert.match(html, /<th[^>]*>Limit okuma<\/th>/);
+  assert.match(html, /<th[^>]*>Durum<\/th>/);
+  assert.doesNotMatch(html, /<th[^>]*>(Claude uygulaması|Limit okuma)<\/th>/);
   assert.match(html, /Açık/);
-  assert.match(html, /Bağlı değil/);
-  assert.match(html, /Süresi doldu/);
+  assert.match(html, /Claude uygulaması girişi yok/);
+  assert.doesNotMatch(html, /Bağlı değil|Süresi doldu/);
   assert.match(html, /%38 · %78/);
   assert.match(html, /aria-label="Studio işlemleri"/);
+});
+
+test("the accounts table has one Durum column with a fix button only where something is wrong", () => {
+  const critical: Account = { ...a, id: "k", name: "Yenilenecek" };
+  const table = (list: Account[], language: "tr" | "en" = "tr", relay: Partial<Relay> = {}) =>
+    renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        createElement(
+          RelayContext.Provider,
+          {
+            value: relayFor({
+              data: {
+                settings: DEFAULT_SETTINGS,
+                usage: { ...usage, k: { accountId: "k", status: "error", issue: "expired", stale: true } },
+                accounts: list,
+                authFlows: [],
+              } as unknown as Snapshot,
+              ...relay,
+            }),
+          },
+          createElement(AccountsTable, { accounts: list, open() {}, link() {} }),
+        ),
+      ),
+    );
+  const html = table([a, critical, b]);
+  assert.equal(html.match(/<th[ >]/g)?.length, 5);
+  assert.match(html, /<th[^>]*>Durum<\/th>/);
+  assert.doesNotMatch(html, /<th[^>]*>(Limit okuma|Claude uygulaması)<\/th>/);
+  assert.match(table([a], "en"), /<th[^>]*>Status<\/th>/);
+  const rows = html.split("<tr").slice(2);
+  const [okRow, critRow, offRow] = rows;
+  // An ok row shows its label and no inline button; only the ⋯ menu button is there.
+  assert.match(okRow, /Açık/);
+  assert.doesNotMatch(okRow, /data-size="xs"/);
+  assert.match(okRow, /title="Claude uygulaması girişi: Açık · Limit okuma girişi: Bağlı"/);
+  // A crit row shows its label and the matching row action's label as a small ghost button.
+  assert.match(critRow, /Limit okuma girişi gerekli/);
+  assert.match(critRow, /title="Claude uygulaması girişi: Kayıtlı · Limit okuma girişi: Gerekli"/);
+  assert.match(critRow, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*>Limit okuma girişini yenile<\/button>/);
+  // An off row offers to save the Claude app sign-in.
+  assert.match(offRow, /Claude uygulaması girişi yok/);
+  assert.match(offRow, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*>Claude uygulaması girişini kaydet<\/button>/);
+  // The inline button takes the row action's disabled state.
+  const locked = table([critical], "tr", { busy: "x" });
+  assert.match(locked, /<button[^>]*disabled=""[^>]*data-size="xs"|<button[^>]*data-size="xs"[^>]*disabled=""/);
+  // The labels follow the language.
+  assert.match(table([critical], "en"), /Usage sign-in needed/);
+  assert.match(table([critical], "en"), /data-size="xs"[^>]*>Renew usage sign-in<\/button>/);
+});
+
+test("an account without a plan shows muted Plan yok text, not a badge", () => {
+  const noPlan: Account = { ...b, planning: undefined };
+  const html = (language: "tr" | "en") =>
+    renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        createElement(
+          RelayContext.Provider,
+          { value: relayFor() },
+          createElement(AccountsTable, { accounts: [noPlan, a], open() {}, link() {} }),
+        ),
+      ),
+    );
+  const tr = html("tr");
+  assert.match(tr, /<span[^>]*class="[^"]*text-muted-foreground[^"]*"[^>]*>Plan yok<\/span>/);
+  assert.doesNotMatch(tr, /data-slot="badge"[^>]*>Plan yok/);
+  assert.doesNotMatch(tr, /Plan seç/);
+  assert.match(html("en"), /<span[^>]*text-muted-foreground[^>]*>No plan<\/span>/);
+  // A chosen plan is still a badge.
+  assert.match(tr, /data-slot="badge"[^>]*>Max 5×/);
 });
 
 test("the accounts page shows the empty state", () => {
@@ -96,18 +169,89 @@ test("the accounts page shows the empty state", () => {
   assert.match(html, /data-scene="welcome"/);
 });
 
-test("the account sheet shows identity, connections, usage and history", () => {
+test("the account sheet shows identity, one status, usage and, once opened, connections and history", () => {
   const sheetHtml = wrap(relayFor(), createElement(AccountSheetBody, { account: a, now: NOW }));
   assert.match(sheetHtml, /a@example.com/);
   assert.match(sheetHtml, /Bağlantılar/);
-  assert.match(sheetHtml, /Claude uygulaması girişi/);
-  assert.match(sheetHtml, /Limit okuma girişi/);
-  assert.match(sheetHtml, /Claude uygulaması girişini yenile…/);
   assert.match(sheetHtml, /Code geçmişi/);
-  assert.match(sheetHtml, /Limit okuma girişini yenile/);
-  assert.doesNotMatch(sheetHtml, /Desktop girişi|tarayıcı girişi|Tarayıcı girişi/);
-  assert.match(sheetHtml, /aria-label="Limit okuma girişini doğrula"/);
   assert.match(sheetHtml, /5 saatlik/);
+  assert.match(sheetHtml, /Claude uygulaması girişi: Açık · Limit okuma girişi: Bağlı/);
+  // Both disclosures start closed for a healthy account, so their contents are not rendered.
+  assert.doesNotMatch(sheetHtml, /Claude uygulaması girişini yenile…|Limit okuma girişini yenile|Limit okuma girişini doğrula/);
+  // An account that needs attention opens its connections.
+  const needsSignIn = wrap(
+    relayFor({ data: { settings: DEFAULT_SETTINGS, usage: { a: usage.w }, accounts, authFlows: [] } as unknown as Snapshot }),
+    createElement(AccountSheetBody, { account: a, now: NOW }),
+  );
+  assert.match(needsSignIn, /Claude uygulaması girişi/);
+  assert.match(needsSignIn, /Limit okuma girişi/);
+  assert.match(needsSignIn, /Claude uygulaması girişini yenile…/);
+  assert.match(needsSignIn, /Limit okuma girişini yenile/);
+  assert.match(needsSignIn, /aria-label="Limit okuma girişini doğrula"/);
+  assert.doesNotMatch(needsSignIn, /Desktop girişi|tarayıcı girişi|Tarayıcı girişi/);
+});
+
+// A second account with its Claude app sign-in saved, so it can be switched to; `a` stays the active one.
+const c: Account = { ...a, id: "c", name: "Üçüncü" };
+const sheetFor = (account: Account, extra: Partial<Relay> = {}, usageFor: Record<string, AccountUsage> = {}, authFlows: unknown[] = []) =>
+  wrap(
+    relayFor({
+      data: { settings: DEFAULT_SETTINGS, usage: { ...usage, ...usageFor }, accounts: [...accounts, c], authFlows } as unknown as Snapshot,
+      accounts: [...accounts, c],
+      ...extra,
+    }),
+    createElement(AccountSheetBody, { account, now: NOW }),
+  );
+/** The status block at the top of the sheet: the health label and its one action. */
+const statusBlock = (html: string) => {
+  const from = html.indexOf('data-slot="account-status"');
+  assert.ok(from >= 0, "the sheet has a status block");
+  return html.slice(from, html.indexOf("<dl", from));
+};
+const disclosureState = (html: string, title: string) =>
+  new RegExp(`<button[^>]*aria-expanded="(true|false)"[^>]*><span[^>]*>${title}</span>`).exec(html)?.[1];
+const expiredC: Record<string, AccountUsage> = { c: { accountId: "c", status: "error", issue: "expired", stale: true } };
+
+test("the sheet header shows the health label and one primary action", () => {
+  // A fix wins: the fix's row-action label.
+  const crit = statusBlock(sheetFor(c, {}, expiredC));
+  assert.match(crit, /Limit okuma girişi gerekli/);
+  assert.equal(crit.match(/<button/g)?.length, 1);
+  assert.match(crit, /<button[^>]*>Limit okuma girişini yenile<\/button>/);
+  const unlinked = statusBlock(sheetFor(b));
+  assert.match(unlinked, /Claude uygulaması girişi yok/);
+  assert.match(unlinked, /<button[^>]*>Claude uygulaması girişini kaydet<\/button>/);
+  // No fix and not the active account: switch.
+  const ready = statusBlock(sheetFor(c, {}, { c: { ...usage.a, accountId: "c" } }));
+  assert.match(ready, /Hazır/);
+  assert.equal(ready.match(/<button/g)?.length, 1);
+  assert.match(ready, /<button[^>]*>Geçiş yap<\/button>/);
+  // A pending approval has no fix either, so it offers the switch.
+  const waiting = statusBlock(sheetFor(c, {}, {}, [{ accountId: "c", status: "waiting" }]));
+  assert.match(waiting, /Tarayıcı onayı bekleniyor/);
+  assert.match(waiting, /<button[^>]*>Geçiş yap<\/button>/);
+  // No fix and the active account: nothing to do.
+  const active = statusBlock(sheetFor(a));
+  assert.match(active, /Açık/);
+  assert.doesNotMatch(active, /<button/);
+  // The same single status the table shows.
+  assert.match(active, /Claude uygulaması girişi: Açık · Limit okuma girişi: Bağlı/);
+});
+
+test("the sheet's connections and history are disclosures, open only when the account needs attention", () => {
+  const ok = sheetFor(a);
+  assert.equal(disclosureState(ok, "Bağlantılar"), "false");
+  assert.equal(disclosureState(ok, "Code geçmişi"), "false");
+  for (const [name, html] of [
+    ["crit", sheetFor(c, {}, expiredC)],
+    ["warn", sheetFor(c, {}, { c: { accountId: "c", status: "error", issue: "keychain-locked", stale: true } })],
+    ["off", sheetFor(b)],
+  ] as const) {
+    assert.equal(disclosureState(html, "Bağlantılar"), "true", name);
+    assert.match(html, /aria-label="Limit okuma girişini doğrula"/, name);
+  }
+  // History stays closed either way.
+  assert.equal(disclosureState(sheetFor(c, {}, expiredC), "Code geçmişi"), "false");
 });
 
 test("the account sheet shows Desktop setup for the account being linked", () => {

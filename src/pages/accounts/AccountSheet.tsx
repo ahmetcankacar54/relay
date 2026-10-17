@@ -16,16 +16,19 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Disclosure } from "@/components/Disclosure";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { CliFlowPanel } from "@/app/ConnectionPanels";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
+import { accountHealth } from "@/lib/account-health";
 import { UsageCard } from "../../features/UsageCard";
 import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
 import { PlanEditor } from "../../features/PlanEditor";
+import { rowActions } from "./AccountsTable";
 import { groupName, planLabel } from "./accountLabels";
 
 export function AccountSheet({
@@ -142,10 +145,42 @@ export function AccountSheetBody({
   const reconnect = cliNeedsReconnect(a, usage);
   const mismatch = desktopCliMismatch(a);
   const duplicate = duplicateCliAccount(a, accounts);
+  const health = accountHealth(
+    a,
+    usage,
+    {
+      active: a.id === relay.active?.id,
+      desktopRunning: !!desktop?.running,
+      waiting,
+    },
+    t,
+  );
+  // One primary action: the fix, else the switch (which the active account does not have).
+  const primary = rowActions(a, relay, t, (id) => {
+    setSetupId(id);
+    relay.cancelDesktopRequest();
+  }).find((x) => x.key === (health.fix ?? "switch"));
   return (
     <div className="grid gap-5 px-4 pb-6">
       {/* The page banners sit under the sheet; failures of its actions show here. */}
       <RelayErrorAlert />
+      <div
+        data-slot="account-status"
+        className="grid gap-1.5 rounded-lg border p-3"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+            <StatusDot tone={health.tone} />
+            <span className="min-w-0 break-words">{health.label}</span>
+          </div>
+          {primary && (
+            <Button size="sm" disabled={primary.disabled} onClick={primary.run}>
+              {primary.label}
+            </Button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{health.detail}</p>
+      </div>
       <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-1 text-sm">
         <dt className="text-muted-foreground">{t("E-posta", "Email")}</dt>
         <dd className="min-w-0 break-words">
@@ -209,7 +244,25 @@ export function AccountSheetBody({
           }
         />
       </Section>
-      <Section title={t("Bağlantılar", "Connections")}>
+      <Section title={t("Limitler", "Limits")}>
+        <UsageCard
+          usage={usage}
+          busy={usageBusy.has(a.id)}
+          connectBusy={!!busy || waiting}
+          settings={settings}
+          t={t}
+          language={language}
+          now={now}
+          refresh={(allowPrompt) => void relay.refreshUsage(a, allowPrompt)}
+          connect={() => void relay.startCli(a)}
+        />
+      </Section>
+      {/* Remounted when the account starts or stops needing attention, so a new problem opens it. */}
+      <Disclosure
+        key={health.tone === "ok" ? "calm" : "attention"}
+        title={t("Bağlantılar", "Connections")}
+        defaultOpen={health.tone !== "ok"}
+      >
         <ConnectionRow
           icon={<Monitor />}
           title={t("Claude uygulaması girişi", "Claude app sign-in")}
@@ -347,20 +400,9 @@ export function AccountSheetBody({
         />
         {/* The page-frame panel sits under the sheet; finish the sign-in here. */}
         {relay.flow?.accountId === a.id && <CliFlowPanel embedded />}
-        <UsageCard
-          usage={usage}
-          busy={usageBusy.has(a.id)}
-          connectBusy={!!busy || waiting}
-          settings={settings}
-          t={t}
-          language={language}
-          now={now}
-          refresh={(allowPrompt) => void relay.refreshUsage(a, allowPrompt)}
-          connect={() => void relay.startCli(a)}
-        />
-      </Section>
+      </Disclosure>
       {a.desktop && (
-        <Section title={t("Code geçmişi", "Code history")}>
+        <Disclosure title={t("Code geçmişi", "Code history")}>
           <HistorySummary
             key={`${a.id}:${historyRevision}`}
             account={a}
@@ -368,7 +410,7 @@ export function AccountSheetBody({
             api={api}
             t={t}
           />
-        </Section>
+        </Disclosure>
       )}
     </div>
   );
