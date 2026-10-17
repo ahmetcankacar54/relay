@@ -164,3 +164,41 @@ test("the page scroller contains absolutely positioned page content", () => {
   assert.ok(main.includes("overflow-y-auto"));
   assert.ok(main.includes("relative"));
 });
+
+// A short fade between pages. The wrapper is keyed by the page so the animation replays on every switch,
+// keeps the page's flex column so nothing shifts, and stands still when the system asks for less motion.
+test("the shell fades the current page in inside a keyed wrapper, below the drag region", () => {
+  const shell = fs.readFileSync(path.join(import.meta.dirname, "../src/app/Shell.tsx"), "utf8");
+  const wrapper = /<div\s+key=\{page\}\s+className="([^"]*)"\s*>/.exec(shell);
+  assert.ok(wrapper, "pages sit in a <div key={page}> wrapper");
+  const classes = wrapper[1].split(/\s+/);
+  for (const c of ["flex", "flex-1", "flex-col", "animate-in", "fade-in-0", "duration-150", "motion-reduce:animate-none"])
+    assert.ok(classes.includes(c), c);
+  const drag = shell.indexOf("[-webkit-app-region:drag]");
+  const open = wrapper.index;
+  const close = shell.indexOf("</div>", shell.indexOf("{page === \"ayarlar\""));
+  assert.ok(drag >= 0 && drag < open, "the drag region stays outside the wrapper");
+  for (const page of ["genel", "hesaplar", "kullanim", "planlama", "gecis", "ayarlar"]) {
+    const at = shell.indexOf(`{page === "${page}"`);
+    assert.ok(at > open && at < close, `${page} renders inside the wrapper`);
+  }
+});
+
+// <main> is the page scroller and outlives the page, so it would keep the old page's scroll position.
+test("the shell starts each page at the top by resetting the scroller when the page changes", () => {
+  const shell = fs.readFileSync(path.join(import.meta.dirname, "../src/app/Shell.tsx"), "utf8");
+  assert.match(shell, /<main\s+className="[^"]*"\s+ref=\{mainRef\}/);
+  assert.match(shell, /useRef<HTMLElement>\(null\)/);
+  assert.match(
+    shell,
+    /useLayoutEffect\(\(\) => \{\s*if \(mainRef\.current\) mainRef\.current\.scrollTop = 0;\s*\}, \[page\]\);/,
+  );
+});
+
+test("muted text is one step darker in light and lighter in dark", () => {
+  const css = fs.readFileSync(path.join(import.meta.dirname, "../src/styles/theme.css"), "utf8");
+  const [light, dark] = css.split("@media (prefers-color-scheme: dark)");
+  assert.match(light, /--muted-foreground:\s*#685d52;/);
+  assert.match(dark, /--muted-foreground:\s*#b3a89b;/);
+  assert.doesNotMatch(css, /#73685c|#a3988c/);
+});

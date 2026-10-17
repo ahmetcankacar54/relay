@@ -25,7 +25,7 @@ function Row({
     <div className="flex items-center justify-between gap-3 border-t py-2 first:border-0">
       <div className="min-w-0">
         <div className="text-sm font-semibold">{title}</div>
-        <div className="truncate text-[11px] text-muted-foreground">
+        <div className="truncate text-xs text-muted-foreground">
           {status}
         </div>
       </div>

@@ -137,3 +137,19 @@ test("invalid or future-dated observation metadata does not present an invented 
   assert.doesNotMatch(en, /Invalid Date|Last known reset|Last verified|2099/);
   assert.match(en, /Reset time unavailable/);
 });
+
+test("the reset line and the remaining-quota note are set in text-xs, not 11 px", () => {
+  const usage: AccountUsage = {
+    accountId: "a",
+    status: "ready",
+    stale: false,
+    checkedAt,
+    fiveHour: { usedPercent: 20, resetsAt: later },
+  };
+  for (const language of ["en", "tr"]) {
+    const html = render(usage, language);
+    assert.match(html, /<div class="mt-1 text-xs text-muted-foreground">(Resets|Yenilenir)/, language);
+    assert.match(html, /<small class="text-xs font-normal text-muted-foreground">(left|kaldı)<\/small>/, language);
+    assert.doesNotMatch(html, /text-\[11px\]/, language);
+  }
+});

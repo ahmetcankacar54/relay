@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useI18n } from "@/data/i18n";
@@ -26,9 +26,14 @@ export function Shell() {
   const [page, go] = useHashRoute();
   const compact = useMediaQuery("(max-width: 839px)");
   const relayRef = useRef(relay);
+  const mainRef = useRef<HTMLElement>(null);
   useEffect(() => {
     relayRef.current = relay;
   });
+  // <main> is the scroller and outlives the page, so without this a page opens where the last one was left.
+  useLayoutEffect(() => {
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+  }, [page]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const target = shortcutPage(
@@ -70,7 +75,7 @@ export function Shell() {
               }
             }
           />
-          <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
+          <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto" ref={mainRef}>
             {/* In the 56 px rail the macOS traffic lights overhang into this column; keep it clear. */}
             <div
               className={cn(
@@ -78,12 +83,17 @@ export function Shell() {
                 compact ? "h-8" : "h-2",
               )}
             />
-            {page === "genel" && <Overview go={go} />}
-            {page === "hesaplar" && <Accounts />}
-            {page === "kullanim" && <Usage />}
-            {page === "planlama" && <Planning />}
-            {page === "gecis" && <Switching />}
-            {page === "ayarlar" && <Settings />}
+            <div
+              key={page}
+              className="flex flex-1 flex-col animate-in fade-in-0 duration-150 motion-reduce:animate-none"
+            >
+              {page === "genel" && <Overview go={go} />}
+              {page === "hesaplar" && <Accounts />}
+              {page === "kullanim" && <Usage />}
+              {page === "planlama" && <Planning />}
+              {page === "gecis" && <Switching />}
+              {page === "ayarlar" && <Settings />}
+            </div>
           </main>
         </div>
         <DesktopActionDialog />

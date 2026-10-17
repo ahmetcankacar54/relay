@@ -233,6 +233,12 @@ export function Settings() {
               "Claude app sign-ins are encrypted on this device using the operating system. Every switch creates a backup. The usage sign-in uses the official Claude Code.",
             )}
           </Note>
+          <Note className="mt-2">
+            {t(
+              "Relay kayıtlı girişleri macOS Anahtarlık’ta şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
+              "Relay encrypts saved sign-ins in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
+            )}
+          </Note>
         </Card>
         <p className="px-1 text-center text-[13px] text-muted-foreground">
           {t(

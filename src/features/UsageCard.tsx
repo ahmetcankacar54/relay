@@ -161,7 +161,7 @@ export function UsageCard({
             {left === undefined
               ? "—"
               : `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(left)}%`}{" "}
-            <small className="text-[11px] font-normal text-muted-foreground">
+            <small className="text-xs font-normal text-muted-foreground">
               {left !== undefined
                 ? t("kaldı", "left")
                 : notReported
@@ -188,7 +188,7 @@ export function UsageCard({
             style={{ width: `${left ?? 0}%` }}
           />
         </div>
-        <div className="mt-1 text-[11px] text-muted-foreground">
+        <div className="mt-1 text-xs text-muted-foreground">
           {currentResetIsFresh ? (
             <>
               {t("Yenilenir", "Resets")}{" "}

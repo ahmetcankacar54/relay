@@ -140,3 +140,29 @@ test("Settings shows the panda pranks setting in English", () => {
   for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Rare pranks; they never delay anything\./])
     assert.match(html, re);
 });
+
+test("Settings explains the Keychain prompt in Turkish and English, under the technical details", () => {
+  const render = (language: "tr" | "en") =>
+    renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        createElement(RelayContext.Provider, { value: relayFor() }, createElement(Settings)),
+      ),
+    );
+  const tr = render("tr");
+  const en = render("en");
+  const note = (html: string) => /<p class="[^"]*text-muted-foreground[^"]*">(Relay [^<]*(?:Anahtarlık|Keychain)[^<]*)<\/p>/.exec(html)?.[1];
+  assert.equal(
+    note(tr),
+    "Relay kayıtlı girişleri macOS Anahtarlık’ta şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
+  );
+  assert.equal(
+    note(en),
+    "Relay encrypts saved sign-ins in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
+  );
+  // It belongs to the technical details card, after the existing notes.
+  assert.ok(tr.indexOf("Teknik bilgiler") < tr.indexOf("Anahtarlık’ta şifreler"));
+  assert.ok(tr.indexOf("Limit okuma girişi resmi Claude Code") < tr.indexOf("Anahtarlık’ta şifreler"));
+  assert.ok(tr.indexOf("Anahtarlık’ta şifreler") < tr.indexOf("Yerelde saklanır"));
+});

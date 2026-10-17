@@ -291,3 +291,11 @@ test("the onboarding and the today lookout pandas are playful, the welcome and t
   // An overview with an account open and a plan has no panda to click.
   assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-playful/);
 });
+
+test("the automation card's status lines are set in text-xs, not 11 px", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const html = render(relayFor(active, [active], { active: use("active", 10, 10) }));
+  const card = html.slice(html.indexOf("Limit dönemlerini önceden başlat"));
+  assert.match(card, /<div class="truncate text-xs text-muted-foreground">Kapalı<\/div>/);
+  assert.doesNotMatch(card, /text-\[11px\]/);
+});
