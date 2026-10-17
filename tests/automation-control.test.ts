@@ -21,8 +21,8 @@ type AutomationApi = Pick<
   "setFleetContinuation" | "updateSettings" | "disarmContinuation"
 >;
 
-/** Records every write in order; `refuse` makes the fleet write fail. */
-function fakeApi(refuse?: Error) {
+/** Records every write in order; `refuse` makes the fleet write fail, `refuseSettings` the settings write. */
+function fakeApi(refuse?: Error, refuseSettings?: Error) {
   const calls: string[] = [];
   const api = {
     async setFleetContinuation(enabled: boolean) {
@@ -32,6 +32,7 @@ function fakeApi(refuse?: Error) {
     },
     async updateSettings(patch: Partial<RelaySettings>) {
       calls.push(`updateSettings:${patch.autoSwitchMode}`);
+      if (refuseSettings) throw refuseSettings;
       return { ...DEFAULT_SETTINGS, ...patch };
     },
     async disarmContinuation() {
@@ -73,6 +74,44 @@ test("a refused fleet leaves prepare-on-quit untouched", async () => {
   assert.ok(!calls.some((call) => call.startsWith("updateSettings")));
 });
 
+test("applying after-exit turns prepare-on-quit on, then the fleet off", async () => {
+  const { api, calls } = fakeApi();
+  await applyAutomationMode(api, "after-exit", {
+    fleetEnabled: true,
+    autoSwitchMode: "off",
+    legacyWatch: false,
+  });
+  // Both on for a moment still reads as Kota dolunca: the fleet wins.
+  assert.deepEqual(calls, [
+    "updateSettings:after-exit",
+    "setFleetContinuation:false",
+  ]);
+});
+
+test("a refused prepare-on-quit write leaves the fleet on", async () => {
+  const refused = new Error("settings-write-failed");
+  const { api, calls } = fakeApi(undefined, refused);
+  await assert.rejects(
+    applyAutomationMode(api, "after-exit", {
+      fleetEnabled: true,
+      autoSwitchMode: "off",
+      legacyWatch: false,
+    }),
+    (error) => error === refused,
+  );
+  assert.deepEqual(calls, ["updateSettings:after-exit"]);
+});
+
+test("applying off turns the fleet off, then prepare-on-quit", async () => {
+  const { api, calls } = fakeApi();
+  await applyAutomationMode(api, "off", {
+    fleetEnabled: true,
+    autoSwitchMode: "after-exit",
+    legacyWatch: false,
+  });
+  assert.deepEqual(calls, ["setFleetContinuation:false", "updateSettings:off"]);
+});
+
 test("choosing a mode turns the legacy watch off first", async () => {
   const first = fakeApi();
   await applyAutomationMode(first.api, "after-exit", {
@@ -82,8 +121,8 @@ test("choosing a mode turns the legacy watch off first", async () => {
   });
   assert.deepEqual(first.calls, [
     "disarmContinuation",
-    "setFleetContinuation:false",
     "updateSettings:after-exit",
+    "setFleetContinuation:false",
   ]);
   // Turning the fleet on disarms the legacy watch in main already.
   const quota = fakeApi();

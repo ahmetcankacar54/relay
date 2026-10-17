@@ -7,8 +7,10 @@ import {
 
 /**
  * Writes one automatic-switching choice to its two records, skipping the
- * ones already right. The fleet goes first: when it is refused (for example
- * Keychain access was denied), prepare-on-quit stays as it was.
+ * ones already right. The record being turned on goes first, so a refused
+ * first write changes nothing, and a moment with both on still reads as
+ * "Kota dolunca" (the fleet wins). Turning the fleet on can be refused (for
+ * example Keychain access was denied); prepare-on-quit then stays as it was.
  */
 export async function applyAutomationMode(
   api: Pick<
@@ -26,8 +28,15 @@ export async function applyAutomationMode(
   const writes = automationModeWrites(mode);
   // Main already disarms the legacy watch when the fleet turns on.
   if (current.legacyWatch && mode !== "quota") await api.disarmContinuation();
-  if (writes.fleet !== current.fleetEnabled)
-    await api.setFleetContinuation(writes.fleet);
-  if (writes.autoSwitchMode !== current.autoSwitchMode)
-    await api.updateSettings({ autoSwitchMode: writes.autoSwitchMode });
+  const fleet = async () => {
+    if (writes.fleet !== current.fleetEnabled)
+      await api.setFleetContinuation(writes.fleet);
+  };
+  const prepare = async () => {
+    if (writes.autoSwitchMode !== current.autoSwitchMode)
+      await api.updateSettings({ autoSwitchMode: writes.autoSwitchMode });
+  };
+  // Only after-exit turns prepare-on-quit on; quota and off start with the fleet.
+  const order = mode === "after-exit" ? [prepare, fleet] : [fleet, prepare];
+  for (const write of order) await write();
 }
