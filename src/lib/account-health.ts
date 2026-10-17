@@ -1,9 +1,11 @@
 import type { Account, AccountUsage, UsageIssue } from "../../shared/types";
-import { cliNeedsReconnect } from "../../shared/account-state";
+import {
+  cliNeedsReconnect,
+  desktopCliMismatch,
+} from "../../shared/account-state";
 
 /** The key of the row action (`rowActions`) that fixes the problem. */
-export type AccountFix =
-  "desktop-link" | "desktop-reconnect" | "cli" | "refresh" | "renew";
+export type AccountFix = "desktop-link" | "cli" | "renew";
 
 export interface AccountHealth {
   tone: "ok" | "warn" | "crit" | "off";
@@ -43,10 +45,14 @@ export function renewalIssue(
     : undefined;
 }
 
-/** The usage sign-in's own state; `accountHealth`'s detail and the sheet's usage row both read it. */
+/**
+ * The usage sign-in's own state; `accountHealth`'s detail and the sheet's usage row both read it.
+ * A usage sign-in of another account than the Claude app sign-in reads the wrong limits: it is needed again.
+ */
 function signInState(account: Account, usage: AccountUsage | undefined) {
   if (!account.auth) return "none";
-  if (cliNeedsReconnect(account, usage)) return "needed";
+  if (cliNeedsReconnect(account, usage) || desktopCliMismatch(account))
+    return "needed";
   const renewal = renewalIssue(usage);
   if (renewal === "keychain-locked") return "keychain";
   return renewal ? "renewing" : "connected";
@@ -99,7 +105,8 @@ export function usageSignInStatus(
 /**
  * The one status an account shows, in the table and in the details sheet. The first problem found wins,
  * in this order: a browser approval in progress, no Claude app sign-in, a usage sign-in that must be
- * renewed, a locked Keychain, a connection to renew, no usage sign-in. Otherwise the account is ready.
+ * renewed (or belongs to another account), a locked Keychain, a connection to renew, no usage sign-in.
+ * Otherwise the account is running in Claude, or ready.
  */
 export function accountHealth(
   account: Account,
@@ -114,7 +121,7 @@ export function accountHealth(
   const app: Words = !account.desktop
     ? ["Yok", "None"]
     : running
-      ? ["Açık", "Running"]
+      ? ["Çalışıyor", "Running"]
       : ["Kayıtlı", "Saved"];
   const signIn = SIGN_IN_WORDS[state];
   const detail = t(
@@ -164,5 +171,5 @@ export function accountHealth(
       ["Limit okuma girişi yok", "No usage sign-in"],
       "cli",
     );
-  return result("ok", running ? ["Açık", "Running"] : ["Hazır", "Ready"]);
+  return result("ok", running ? ["Çalışıyor", "Running"] : ["Hazır", "Ready"]);
 }

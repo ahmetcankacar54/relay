@@ -8,6 +8,7 @@ import { reconnectIssues } from "../src/app/Banners";
 import { UsageCard } from "../src/features/UsageCard";
 import { rowActions } from "../src/pages/accounts/AccountsTable";
 import type { Relay } from "../src/data/relay-context";
+import type { AccountFix } from "../src/lib/account-health";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type UsageIssue } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
@@ -93,7 +94,7 @@ test("6. no usage sign-in is a warning that offers the usage sign-in", () => {
 
 test("7. the active account with Claude open is running", () => {
   const h = health(base, ready, { active: true, desktopRunning: true });
-  assert.deepEqual([h.tone, h.label, h.fix], ["ok", "Açık", undefined]);
+  assert.deepEqual([h.tone, h.label, h.fix], ["ok", "Çalışıyor", undefined]);
   assert.equal(health(base, ready, { active: true, desktopRunning: true }, "en").label, "Running");
 });
 
@@ -116,7 +117,7 @@ test("detail names both sign-ins for each Claude app state", () => {
     health(account, ready, context, language).detail;
   assert.equal(
     app(base, { active: true, desktopRunning: true }),
-    "Claude uygulaması girişi: Açık · Limit okuma girişi: Bağlı",
+    "Claude uygulaması girişi: Çalışıyor · Limit okuma girişi: Bağlı",
   );
   assert.equal(app(base, {}), "Claude uygulaması girişi: Kayıtlı · Limit okuma girişi: Bağlı");
   assert.equal(app(noDesktop, {}), "Claude uygulaması girişi: Yok · Limit okuma girişi: Bağlı");
@@ -274,4 +275,39 @@ test("the status, the banner, the usage card and the row menu read the same issu
     assert.equal(/>(Renew connection|Allow Keychain access)<\/button>/.test(card(usage)), renew, `usage card: ${name}`);
     assert.equal(rowActions(base, relay(usage), (t) => t).some((x) => x.key === "renew"), renew, `row menu: ${name}`);
   }
+});
+
+test("3. a usage sign-in of another account than the Claude app's is critical, before the lesser problems", () => {
+  const other = { accountUuid: "00000000-0000-4000-8000-0000000000ff" };
+  const mismatched: Account = { ...base, auth: { ...base.auth!, ...other } };
+  const otherOrg: Account = { ...base, auth: { ...base.auth!, orgId: "00000000-0000-4000-8000-0000000000ee" } };
+  for (const [name, account] of [["account", mismatched], ["organization", otherOrg]] as const)
+    for (const usage of [ready, undefined, issue("keychain-locked"), issue("renewal-required"), { ...ready, connectionRenewalRequired: true }]) {
+      const h = health(account, usage, { active: true, desktopRunning: true });
+      assert.deepEqual([h.tone, h.label, h.fix], ["crit", "Limit okuma girişi gerekli", "cli"], `${name}: ${usage?.issue}`);
+      assert.match(h.detail, /Limit okuma girişi: Gerekli$/, name);
+      // The sheet's usage sign-in row agrees.
+      assert.deepEqual(usageSignInStatus(account, usage, false, tr("tr")), { tone: "crit", label: "Gerekli" }, name);
+    }
+  assert.equal(health(mismatched, ready, {}, "en").label, "Usage sign-in needed");
+  // A pending approval and a missing Claude app sign-in still come first.
+  assert.equal(health(mismatched, ready, { waiting: true }).label, "Tarayıcı onayı bekleniyor");
+  // The same identity is no mismatch.
+  const same: Account = { ...base, auth: { ...base.auth!, accountUuid: desktop.accountUuid, orgId: desktop.orgId } };
+  assert.equal(health(same, ready).label, "Hazır");
+});
+
+test("the status names only the fixes its rows produce", () => {
+  // The fixes are only the ones a status row produces: Save, the usage sign-in and the prompting renew.
+  const fixes: Record<AccountFix, true> = { "desktop-link": true, cli: true, renew: true };
+  const produced = new Set(
+    [
+      health(noDesktop, ready),
+      health(base, issue("expired")),
+      health(base, issue("keychain-locked")),
+      health(base, issue("renewal-required")),
+      health(noAuth, undefined),
+    ].map((h) => h.fix),
+  );
+  assert.deepEqual([...produced].sort(), Object.keys(fixes).sort());
 });

@@ -84,7 +84,7 @@ test("the accounts page lists accounts with their connection states", () => {
   assert.match(html, /Max 5×/);
   assert.match(html, /<th[^>]*>Durum<\/th>/);
   assert.doesNotMatch(html, /<th[^>]*>(Claude uygulaması|Limit okuma)<\/th>/);
-  assert.match(html, /Açık/);
+  assert.match(html, /Çalışıyor/);
   assert.match(html, /Claude uygulaması girişi yok/);
   assert.doesNotMatch(html, /Bağlı değil|Süresi doldu/);
   assert.match(html, /%38 · %78/);
@@ -123,9 +123,9 @@ test("the accounts table has one Durum column with a fix button only where somet
   const rows = html.split("<tr").slice(2);
   const [okRow, critRow, offRow] = rows;
   // An ok row shows its label and no inline button; only the ⋯ menu button is there.
-  assert.match(okRow, /Açık/);
+  assert.match(okRow, /Çalışıyor/);
   assert.doesNotMatch(okRow, /data-size="xs"/);
-  assert.match(okRow, /title="Claude uygulaması girişi: Açık · Limit okuma girişi: Bağlı"/);
+  assert.match(okRow, /title="Claude uygulaması girişi: Çalışıyor · Limit okuma girişi: Bağlı"/);
   // A crit row shows its label and the matching row action's label as a small ghost button.
   assert.match(critRow, /Limit okuma girişi gerekli/);
   assert.match(critRow, /title="Claude uygulaması girişi: Kayıtlı · Limit okuma girişi: Gerekli"/);
@@ -306,7 +306,7 @@ test("the account sheet shows identity, one status, usage and, once opened, conn
   assert.match(sheetHtml, /Bağlantılar/);
   assert.match(sheetHtml, /Code geçmişi/);
   assert.match(sheetHtml, /5 saatlik/);
-  assert.match(sheetHtml, /Claude uygulaması girişi: Açık · Limit okuma girişi: Bağlı/);
+  assert.match(sheetHtml, /Claude uygulaması girişi: Çalışıyor · Limit okuma girişi: Bağlı/);
   // Both disclosures start closed for a healthy account, so their contents are not rendered.
   assert.doesNotMatch(sheetHtml, /Claude uygulaması girişini yenile…|Limit okuma girişini yenile|Limit okuma girişini doğrula/);
   // An account that needs attention opens its connections.
@@ -363,10 +363,10 @@ test("the sheet header shows the health label and one primary action", () => {
   assert.match(waiting, /<button[^>]*>Geçiş yap<\/button>/);
   // No fix and the active account: nothing to do.
   const active = statusBlock(sheetFor(a));
-  assert.match(active, /Açık/);
+  assert.match(active, /Çalışıyor/);
   assert.doesNotMatch(active, /<button/);
   // The same single status the table shows.
-  assert.match(active, /Claude uygulaması girişi: Açık · Limit okuma girişi: Bağlı/);
+  assert.match(active, /Claude uygulaması girişi: Çalışıyor · Limit okuma girişi: Bağlı/);
 });
 
 test("a locked Keychain or a connection to renew is fixed from the header, and the usage row agrees with it", () => {
@@ -564,6 +564,21 @@ test("the account sheet shows Desktop setup for the account being linked", () =>
     warnings,
     /Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait\. Limit okuma girişini bu profilin hesabıyla yenile\./,
   );
+  // The header says the same, and offers the usage sign-in (this one has no email, so "yap").
+  const head = statusBlock(warnings);
+  assert.match(head, /Limit okuma girişi gerekli/);
+  assert.match(head, /<button[^>]*>Limit okuma girişi yap<\/button>/);
+  assert.match(head, /Limit okuma girişi: Gerekli/);
+});
+
+test("a table row whose sign-ins belong to different accounts needs the usage sign-in", () => {
+  const mismatched: Account = { ...c, auth: { loggedIn: true, email: "c@example.com", accountUuid: "other", checkedAt: iso(NOW) } };
+  const html = wrap(
+    relayFor({ accounts: [mismatched], data: { settings: DEFAULT_SETTINGS, usage: { c: { ...usage.a, accountId: "c" } }, accounts: [mismatched], authFlows: [] } as unknown as Snapshot }),
+    createElement(AccountsTable, { accounts: [mismatched], open() {}, link() {} }),
+  );
+  assert.match(html, /Limit okuma girişi gerekli/);
+  assert.match(html, /aria-label="Limit okuma girişini yenile · Üçüncü"[^>]*>Limit okuma girişini yenile<\/button>/);
 });
 
 test("row actions follow the Desktop link state and the switch lock", () => {
