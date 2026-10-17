@@ -368,6 +368,30 @@ if (scenario === "auto-waiting" || scenario === "auto-prepared") {
     desktop.currentAccountUuid = ids[1];
   }
 }
+// Continue at quota with the open account full: other work keeps it waiting,
+// or nothing stopped at the limit. Claude stays open in both.
+if (scenario === "fleet-waiting" || scenario === "fleet-idle-full") {
+  state.usage[ids[0]].fiveHour!.usedPercent = 100;
+  desktop.running = true;
+  state.fleet =
+    scenario === "fleet-waiting"
+      ? {
+          enabled: true,
+          status: "waiting",
+          reason: "not-quiescent:busyWorkers",
+          sourceId: ids[0],
+          targetId: ids[1],
+          stopped: 2,
+        }
+      : {
+          enabled: true,
+          status: "watching",
+          reason: "awaiting-quota-stop",
+          sourceId: ids[0],
+          targetId: ids[1],
+          stopped: 0,
+        };
+}
 export const previewApi: RelayAPI = {
   inspectContinuation: async () => ({
     status: "off",
@@ -378,8 +402,19 @@ export const previewApi: RelayAPI = {
     observationReason: "preview-only",
   }),
   armContinuation: desktopOnly,
-  disarmContinuation: desktopOnly,
-  setFleetContinuation: desktopOnly,
+  disarmContinuation: () => previewApi.inspectContinuation(),
+  setFleetContinuation: async (enabled) => {
+    state.fleet = enabled
+      ? {
+          enabled: true,
+          status: "watching",
+          reason: "awaiting-quota-stop",
+          sourceId: desktop.activeProfileId,
+          stopped: 0,
+        }
+      : { enabled: false, status: "off" };
+    return structuredClone(state.fleet);
+  },
   reconcileContinuation: desktopOnly,
   abandonContinuation: desktopOnly,
   requestDesktopAccessibility: desktopOnly,

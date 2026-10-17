@@ -2,11 +2,14 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { OptionSelect } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatClock } from "@/lib/time";
 import type { PageId } from "@/app/routes";
-import { fleetStatusLabel } from "../../features/FleetSettings";
+import { AutomationStatusLine } from "../../features/AutomationControl";
+import { useAutomation } from "../../features/useAutomation";
+import { AUTOMATION_MODES } from "../../../shared/automation-mode";
 import { nextPlannedWindow } from "@/lib/day-timeline";
 
 function Row({
@@ -43,19 +46,11 @@ export function AutomationCard({
   const { api, accounts, settings, action } = relay;
   const disabled = !!relay.busy || !!relay.desktop?.busy;
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
-  const fleet = relay.data?.fleet;
-  // As in FleetSettings: a handoff in progress cannot be turned off midway.
-  const fleetWorking =
-    !!fleet?.enabled &&
-    (fleet.status === "switching" || fleet.status === "continuing");
+  const automation = useAutomation(now);
   const planning = settings.planning;
   const next = planning.autoStart
     ? nextPlannedWindow(planning, accounts, relay.data?.planning, now)
     : undefined;
-  const prepare = settings.autoSwitchMode !== "off";
-  // Same platform gate as the Geçiş page's "after exit" option.
-  const platform = relay.data?.diagnostics?.platform;
-  const prepareSupported = platform === "darwin" || platform === "preview";
   return (
     <Card className="gap-0 px-4 py-3.5">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -70,26 +65,26 @@ export function AutomationCard({
         </Button>
       </div>
       <div>
-        <Row
-          title={t(
-            "Kota dolunca geçiş ve devam",
-            "Switch and continue at quota",
-          )}
-          status={fleetStatusLabel(fleet, name, t)}
-          control={
-            <Switch
-              aria-label={t(
-                "Kota dolunca geçiş ve devam",
-                "Switch and continue at quota",
-              )}
-              checked={!!fleet?.enabled}
-              disabled={disabled || fleetWorking}
-              onCheckedChange={(v) =>
-                void action("fleet", () => api.setFleetContinuation(v))
-              }
+        <div className="grid gap-1 border-t py-2 first:border-0">
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="automation-mode" className="text-sm font-semibold">
+              {t("Otomatik geçiş", "Automatic switching")}
+            </label>
+            <OptionSelect
+              id="automation-mode"
+              className="min-w-36"
+              value={automation.mode}
+              disabled={automation.locked}
+              onChange={automation.setMode}
+              options={AUTOMATION_MODES.map((m) => ({
+                value: m.value,
+                label: t(...m.label),
+                disabled: m.value !== "off" && !automation.supported,
+              }))}
             />
-          }
-        />
+          </div>
+          <AutomationStatusLine status={automation.status} compact />
+        </div>
         <Row
           title={t("Otomatik pencere başlatma", "Automatic window start")}
           status={
@@ -113,27 +108,6 @@ export function AutomationCard({
               onCheckedChange={(v) =>
                 void action("planning", () =>
                   api.updatePlanning({ autoStart: v }),
-                )
-              }
-            />
-          }
-        />
-        <Row
-          title={t("Claude kapanınca hazırla", "Prepare when Claude quits")}
-          status={prepare ? t("Açık", "On") : t("Kapalı", "Off")}
-          control={
-            <Switch
-              aria-label={t(
-                "Claude kapanınca hazırla",
-                "Prepare when Claude quits",
-              )}
-              checked={prepare}
-              disabled={disabled || (!prepare && !prepareSupported)}
-              onCheckedChange={(v) =>
-                void action("settings", () =>
-                  api.updateSettings({
-                    autoSwitchMode: v ? "after-exit" : "off",
-                  }),
                 )
               }
             />

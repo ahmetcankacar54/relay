@@ -5,12 +5,9 @@ import { Switch } from "@/components/ui/switch";
 import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import {
-  AfterExitPreferences,
-  SharedHistoryPreferences,
-} from "../features/SwitchPreferences";
+import { SharedHistoryPreferences } from "../features/SwitchPreferences";
 import { ContinuationSettings } from "../features/ContinuationSettings";
-import { FleetSettings } from "../features/FleetSettings";
+import { AutomationSettings } from "../features/AutomationControl";
 
 const cardClass = "gap-0 px-5 py-4";
 
@@ -38,7 +35,6 @@ export function Switching() {
     void action("continuation-permission", () =>
       api.requestDesktopAccessibility(),
     );
-  const platform = data?.diagnostics.platform ?? "unknown";
   const accessibilityNeeded =
     continuation?.enabled &&
     (continuation.observationReason === "accessibility-permission-required" ||
@@ -59,16 +55,7 @@ export function Switching() {
           )}
         </Note>
         <Card className={cardClass}>
-          <FleetSettings
-            value={data?.fleet}
-            accounts={accounts}
-            busy={disabled}
-            t={t}
-            onToggle={(enabled) =>
-              void action("fleet", () => api.setFleetContinuation(enabled))
-            }
-            requestAccessibility={requestAccessibility}
-          />
+          <AutomationSettings />
         </Card>
         {/* A single-conversation watch from earlier versions stays visible until it is off. */}
         {(continuation?.enabled ||
@@ -161,18 +148,6 @@ export function Switching() {
             )}
           </Card>
         )}
-        <Card className={cardClass}>
-          <AfterExitPreferences
-            value={settings}
-            accounts={accounts}
-            autoSwitch={data?.autoSwitch}
-            fleetEnabled={!!data?.fleet?.enabled}
-            platform={platform}
-            update={update}
-            disabled={disabled}
-            t={t}
-          />
-        </Card>
         <Card className={cardClass}>
           <SharedHistoryPreferences
             value={settings}

@@ -5,16 +5,20 @@ import { useRelay } from "@/data/relay-context";
 import { nextPlannedWindow } from "@/lib/day-timeline";
 import { formatClock } from "@/lib/time";
 import type { PageId } from "@/app/routes";
-import { fleetStatusLabel } from "../features/FleetSettings";
+import {
+  AUTOMATION_DOT,
+  automationModeCopy,
+} from "../features/AutomationControl";
+import { useAutomation } from "../features/useAutomation";
 import { panelEyebrow } from "./PanelActiveCard";
 
 function Pill({
-  on,
+  tone,
   label,
   title,
   page,
 }: {
-  on: boolean;
+  tone: "ok" | "warn" | "crit" | "off";
   label: string;
   title?: string;
   page: PageId;
@@ -28,7 +32,7 @@ function Pill({
       className="h-auto max-w-full rounded-full px-2 py-0.5 text-[11px] font-normal"
       onClick={() => void relay.api.openPage(page)}
     >
-      <StatusDot tone={on ? "ok" : "off"} className="size-[7px]" />
+      <StatusDot tone={tone} className="size-[7px]" />
       <span className="truncate">{label}</span>
     </Button>
   );
@@ -40,7 +44,7 @@ export function PanelAutomation({ now }: { now: number }) {
   const { t, language } = useI18n();
   const { accounts, settings } = relay;
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
-  const fleet = relay.data?.fleet;
+  const automation = useAutomation(now);
   const planning = settings.planning;
   const clock = (time: string) =>
     formatClock(time, language, planning.timeZone);
@@ -74,16 +78,15 @@ export function PanelAutomation({ now }: { now: number }) {
       </div>
       <div className="flex flex-wrap gap-1.5">
         <Pill
-          on={!!fleet?.enabled}
-          label={t("Kota dolunca devam", "Continue at quota")}
-          title={fleetStatusLabel(fleet, name, t)}
+          tone={AUTOMATION_DOT[automation.status.tone]}
+          label={`${t("Otomatik geçiş", "Automatic switching")} · ${t(...automationModeCopy(automation.mode).label)}`}
+          title={t(...automation.status.text)}
           page="gecis"
         />
-        <Pill on={planning.autoStart} label={planLabel} page="planlama" />
         <Pill
-          on={settings.autoSwitchMode !== "off"}
-          label={t("Kapanınca hazırla", "Prepare on quit")}
-          page="gecis"
+          tone={planning.autoStart ? "ok" : "off"}
+          label={planLabel}
+          page="planlama"
         />
       </div>
     </section>

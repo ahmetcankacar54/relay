@@ -15,6 +15,7 @@ import type {
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { suggestedAccount } from "../../shared/usage";
 import { desktopCliMismatch } from "../../shared/account-state";
+import { staleManualSwitch } from "../../shared/automation-status";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
 import { previewApi } from "../preview";
 import packageInfo from "../../package.json";
@@ -208,8 +209,30 @@ function useRelayState(
       else {
         if (!account)
           throw new Error(t("Hesap bulunamadı.", "Account not found."));
-        if (request.kind === "switch") await api.switchDesktop(account.id);
-        else if (request.kind === "history")
+        if (request.kind === "switch") {
+          // Automation may have switched while the review was open.
+          const [status, snapshot] = await Promise.all([
+            api.desktopSnapshot(),
+            api.panelSnapshot(),
+          ]);
+          const stale = staleManualSwitch(account.id, status, snapshot.fleet);
+          if (stale) {
+            setDesktopRequest(undefined);
+            setNotice(
+              stale === "already-active"
+                ? t(
+                    `${account.name} zaten açık hesap; geçişe gerek kalmadı.`,
+                    `${account.name} is already the open account; no switch needed.`,
+                  )
+                : t(
+                    "Relay şu anda kendisi geçiyor; elle geçiş yapılmadı.",
+                    "Relay is switching on its own right now; no manual switch was made.",
+                  ),
+            );
+            return;
+          }
+          await api.switchDesktop(account.id);
+        } else if (request.kind === "history")
           await api.syncDesktopHistory(account.id);
         else if (request.kind === "capture")
           await api.captureDesktop(account.id, targetOrg);

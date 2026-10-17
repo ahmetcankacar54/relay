@@ -71,9 +71,10 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Geçiş yap/);
   assert.match(html, /Bugün/);
   assert.match(html, /Otomatik başlatma kapalı/);
-  assert.match(html, /Kota dolunca geçiş ve devam/);
+  assert.match(html, /<label[^>]*for="automation-mode"[^>]*>Otomatik geçiş<\/label>/);
+  assert.match(html, /Kapalı\. Kota dolunca hesabı sen değiştirirsin\./);
   assert.match(html, /Otomatik pencere başlatma/);
-  assert.match(html, /Claude kapanınca hazırla/);
+  assert.doesNotMatch(html, /Claude kapanınca hazırla/);
   assert.match(html, /Limitleri yenile/);
 });
 
@@ -100,19 +101,20 @@ const rowFor = (html: string, name: string) => rowsOf(html).find((r) => r.includ
 const switchButtons = (html: string) =>
   (html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Geçiş yap<\/button>/g) ?? []);
 
-test("fleet switch is locked while a handoff is switching or continuing", () => {
+test("the automation choice is locked while a handoff is switching or continuing", () => {
   const active = acct("active", "Kişisel · Max", "max5");
+  const select = (html: string) => html.match(/<button[^>]*id="automation-mode"[^>]*>/)?.[0] ?? "";
   for (const status of ["switching", "continuing"] as const) {
     const relay = relayFor(active, [active], { active: use("active", 10, 10) });
     (relay.data as Snapshot).fleet = { enabled: true, status, sourceId: "active", targetId: "active" };
-    const html = render(relay);
-    const tag = html.match(/<button[^>]*aria-label="Kota dolunca geçiş ve devam"[^>]*>/)?.[0] ?? "";
-    assert.match(tag, /disabled=""/, status);
+    assert.match(select(render(relay)), /disabled=""/, status);
   }
   const relay = relayFor(active, [active], { active: use("active", 10, 10) });
   (relay.data as Snapshot).fleet = { enabled: true, status: "watching" };
-  const tag = render(relay).match(/<button[^>]*aria-label="Kota dolunca geçiş ve devam"[^>]*>/)?.[0] ?? "";
-  assert.doesNotMatch(tag, /disabled=""/);
+  const html = render(relay);
+  assert.ok(select(html), "the automation-mode select renders");
+  assert.doesNotMatch(select(html), /disabled=""/);
+  assert.match(html, /Kota dolunca/);
 });
 
 test("the suggested account carries the badge even when ranking prefers another", () => {

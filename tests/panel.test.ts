@@ -109,9 +109,10 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(html, /title="Vertex"[^>]*>Vertex<\/div><div[^>]*>.*Önerilen/);
   assert.match(html, /title="Pro · Hazır · pencere yok"/);
   assert.match(html, /Hesaplar/);
-  assert.match(html, /Kota dolunca devam/);
+  assert.match(html, /Otomatik geçiş · Kapalı/);
+  assert.match(html, /title="Kişisel · Max %78 · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."/);
   assert.match(html, /Otomatik başlatma kapalı/);
-  assert.match(html, /Kapanınca hazırla/);
+  assert.doesNotMatch(html, /Kapanınca hazırla/);
   assert.match(html, /Relay’i aç/);
   assert.match(html, /Güncellendi 1 dk önce/);
   assert.match(html, /Çık/);

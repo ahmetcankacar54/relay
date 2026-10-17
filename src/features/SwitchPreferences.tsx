@@ -1,6 +1,5 @@
-import type { Account, AutoSwitchState, RelaySettings } from "../../shared/types";
+import type { Account, RelaySettings } from "../../shared/types";
 import { historySources } from "../../shared/history-policy";
-import { AutoSwitchStatus } from "./AutoSwitchStatus";
 import { desktopCliMismatch } from "../../shared/account-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +13,9 @@ import {
 import { StatusDot } from "@/components/StatusDot";
 
 type T = (tr: string, en: string) => string;
-function AccountSelection({
+
+/** A switch per account, with select-all and clear. */
+export function AccountSelection({
   accounts,
   selected,
   update,
@@ -115,10 +116,6 @@ type Props = {
   value: RelaySettings;
   accounts: Account[];
   active?: Account;
-  autoSwitch?: AutoSwitchState;
-  /** Continue at quota is on, so preparing on quit waits for it. */
-  fleetEnabled?: boolean;
-  platform: string;
   update: (patch: Partial<RelaySettings>) => void;
   disabled: boolean;
   syncDisabled: boolean;
@@ -251,127 +248,6 @@ export function SharedHistoryPreferences({
           "Local Code history only; Chat and cloud sessions are not synced.",
         )}
       </Note>
-    </div>
-  );
-}
-
-/** After-exit preparation: when to switch, which accounts, and its status. */
-export function AfterExitPreferences({
-  value,
-  accounts,
-  autoSwitch,
-  fleetEnabled,
-  platform,
-  update,
-  disabled,
-  t,
-}: Pick<
-  Props,
-  | "value"
-  | "accounts"
-  | "autoSwitch"
-  | "fleetEnabled"
-  | "platform"
-  | "update"
-  | "disabled"
-  | "t"
->) {
-  const supported = platform === "darwin" || platform === "preview";
-  return (
-    <div className="grid gap-1">
-      <SectionHeading
-        title={t(
-          "Claude kapanınca sıradaki hesabı hazırla",
-          "Prepare the next account after Claude exits",
-        )}
-        description={t(
-          "Kota dolduğunda sonraki hesabı hazırla.",
-          "Prepare the next account when a quota is exhausted.",
-        )}
-      />
-      <SettingRow
-        label={t("Geçiş zamanı", "When to switch")}
-        htmlFor="auto-switch-mode"
-        description={t(
-          "Kota dolup Claude kapandığında sıradaki hesabı hazırlar. Claude’u kendisi açıp kapatmaz.",
-          "When quota runs out and Claude has exited, prepares the next account. Never opens or quits Claude.",
-        )}
-      >
-        <OptionSelect
-          id="auto-switch-mode"
-          value={value.autoSwitchMode}
-          disabled={disabled}
-          onChange={(autoSwitchMode) => update({ autoSwitchMode })}
-          options={[
-            { value: "off", label: t("Kapalı", "Off") },
-            {
-              value: "after-exit",
-              label: t("Claude kapandıktan sonra", "After Claude exits"),
-              disabled: !supported,
-            },
-          ]}
-        />
-      </SettingRow>
-      {value.autoSwitchMode === "after-exit" && fleetEnabled && (
-        <Note>
-          {t(
-            "Kota dolunca devam açıkken bu geçiş bekler; kota dolan konuşmalar Claude açıldığında devam ettirilir.",
-            "While Continue at quota is on, this switch waits; conversations stopped at quota are continued when Claude opens.",
-          )}
-        </Note>
-      )}
-      {!supported && (
-        <Note>
-          {t(
-            "Otomatik geçiş bu sürümde macOS’ta kullanılabilir.",
-            "Automatic switching is available on macOS in this release.",
-          )}
-        </Note>
-      )}
-      {value.autoSwitchMode !== "off" && (
-        <>
-          <AccountSelection
-            accounts={accounts}
-            selected={value.autoSwitchAccounts}
-            update={(ids) => update({ autoSwitchAccounts: ids })}
-            disabled={disabled}
-            label={t(
-              "Otomatik geçişe dahil hesaplar",
-              "Accounts eligible for automatic switching",
-            )}
-            t={t}
-          />
-          <Note>
-            {t(
-              "Açık ve hedef hesapları seç. Hedefte en az %10 limit kalmalı.",
-              "Select the current and target accounts. The target needs at least 10% quota left.",
-            )}
-          </Note>
-          {value.usageRefreshMinutes === 0 && (
-            <Note>
-              {t(
-                "Otomatik geçiş için düzenli limit yenilemeyi aç.",
-                "Enable regular usage refresh for automatic switching.",
-              )}
-            </Note>
-          )}
-          <AutoSwitchStatus value={autoSwitch} accounts={accounts} t={t} />
-        </>
-      )}
-      <div className="mt-1 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-        <strong className="text-sm font-semibold">
-          {t(
-            "Çalışan görevler tamamlanmayı bekler",
-            "Running tasks must finish first",
-          )}
-        </strong>
-        <Note>
-          {t(
-            "Başka iş çalışırken Claude yeniden başlatılmaz.",
-            "Claude is not restarted while other work runs.",
-          )}
-        </Note>
-      </div>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { localizeError } from "../messages";
-import { AutoSwitchStatus } from "../features/AutoSwitchStatus";
+import { AutomationBanner } from "../features/AutomationControl";
 
 export interface ReconnectIssue {
   account: Account;
@@ -141,7 +141,7 @@ export function Banner({
 export function Banners() {
   const relay = useRelay();
   const { t } = useI18n();
-  const { desktop, notice, settings, accounts, active } = relay;
+  const { desktop, notice, accounts, active } = relay;
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
   const reconnect = reconnectIssues(
     accounts,
@@ -173,13 +173,7 @@ export function Banners() {
           <span>{notice}</span>
         </Banner>
       )}
-      {settings.autoSwitchMode !== "off" && (
-        <AutoSwitchStatus
-          value={relay.data?.autoSwitch}
-          accounts={accounts}
-          t={t}
-        />
-      )}
+      <AutomationBanner />
       {desktop?.recoveryRequired && (
         <Banner
           tone="error"
