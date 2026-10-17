@@ -112,7 +112,9 @@ test("no redundant writes", async () => {
 });
 
 // The relay fixture from tests/switching-page.test.ts, with a second account.
-const NOW = Date.parse("2026-10-14T10:00:00Z");
+// The pages read the clock, and only a reading under 15 minutes old confirms
+// a full account, so the fixture is dated now.
+const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
 const linked = (n: number, email: string) => ({
   accountUuid: `00000000-0000-4000-8000-00000000000${n}`,

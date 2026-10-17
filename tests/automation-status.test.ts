@@ -249,6 +249,50 @@ test("a full account with nothing stopped and no target says nothing is ready", 
   );
 });
 
+test("a full reading too old to confirm the quota waits for fresh data", () => {
+  const aged = (minutes: number) => ({
+    [a.id]: usage(a.id, 100, { checkedAt: at(NOW - minutes * 60_000) }),
+    [b.id]: usage(b.id, 20),
+  });
+  const awaiting = (targetId?: string) =>
+    fleet("awaiting-quota-stop", { status: "watching", stopped: 0, targetId });
+  // The fleet confirms a full source only from a reading under 15 minutes old.
+  for (const targetId of [b.id, undefined]) {
+    const old = automationStatus(
+      input({ fleet: awaiting(targetId), usage: aged(20) }),
+    );
+    assert.deepEqual(
+      old.text,
+      [
+        "Kişisel · Max %100 · Güncel limit verisi bekliyorum.",
+        "Kişisel · Max 100% · Waiting for fresh usage data.",
+      ],
+      String(targetId),
+    );
+    assert.equal(old.switchTo, undefined, String(targetId));
+    assert.equal(old.banner, false, String(targetId));
+    assert.equal(old.tone, "waiting", String(targetId));
+  }
+  const offered = automationStatus(
+    input({ fleet: awaiting(b.id), usage: aged(5) }),
+  );
+  assert.equal(offered.switchTo, b.id);
+  assert.match(offered.text[0], /İstersen şimdi Kişisel · İkinci’ye geç\.$/);
+  const nothingReady = automationStatus(
+    input({ fleet: awaiting(undefined), usage: aged(5) }),
+  );
+  assert.equal(
+    nothingReady.text[0],
+    "Kişisel · Max %100 · Kota doldu; duran konuşma ve hazır hesap yok.",
+  );
+  // Other work running: the sentence stays, the switch waits for fresh data.
+  const otherWork = automationStatus(
+    input({ fleet: fleet("not-quiescent:busyWorkers"), usage: aged(20) }),
+  );
+  assert.equal(otherWork.switchTo, undefined);
+  assert.match(otherWork.text[0], /Claude’da başka iş çalışıyor/);
+});
+
 test("a fresh full account is judged from the other limits too", () => {
   const weeklyFull = automationStatus(
     input({
@@ -373,6 +417,32 @@ test("the prepared and quota-exhausted sentences name the target", () => {
   assert.deepEqual(exhausted.text, [
     "Kişisel · İkinci hazırlanıyor…",
     "Preparing Kişisel · İkinci…",
+  ]);
+});
+
+test("prepared does not repeat the account the prefix already names", () => {
+  const here = automationStatus(
+    input({
+      settings: settings("after-exit"),
+      autoSwitch: autoSwitch("prepared"),
+      desktop: desktop(b.id),
+    }),
+  );
+  assert.deepEqual(here.text, [
+    "Kişisel · İkinci %20 · Hazır. Claude’u açıp konuşmanı sürdür.",
+    "Kişisel · İkinci 20% · Ready. Open Claude and continue your conversation.",
+  ]);
+  assert.equal(here.tone, "ok");
+  assert.equal(here.banner, true);
+  const elsewhere = automationStatus(
+    input({
+      settings: settings("after-exit"),
+      autoSwitch: autoSwitch("prepared"),
+    }),
+  );
+  assert.deepEqual(elsewhere.text, [
+    "Kişisel · Max %100 · Kişisel · İkinci hazır. Claude’u açıp konuşmanı sürdür.",
+    "Kişisel · Max 100% · Kişisel · İkinci is ready. Open Claude and continue your conversation.",
   ]);
 });
 
@@ -609,12 +679,25 @@ test("an interrupted legacy handoff wins over every mode", () => {
     ).text[0],
     /^Kişisel · Max %100 · Yarım kalan bir konuşma devri var/,
   );
-  assert.equal(
-    automationStatus(
-      input({ continuation: { enabled: true, status: "armed" } }),
-    ).tone,
-    "off",
+});
+
+test("off with the old single-conversation watch still armed says so", () => {
+  const status = automationStatus(
+    input({ continuation: { enabled: true, status: "armed" } }, 40),
   );
+  assert.equal(status.mode, "off");
+  assert.equal(status.tone, "attention");
+  assert.equal(status.banner, true);
+  assert.equal(status.switchTo, undefined);
+  assert.deepEqual(status.text, [
+    "Kişisel · Max %40 · Kapalı, ama eski tek konuşma izlemesi açık; Geçiş sayfasındaki kartından kapat.",
+    "Kişisel · Max 40% · Off, but the old single-conversation watch is on; turn it off on the Switching page.",
+  ]);
+  const disarmed = automationStatus(
+    input({ continuation: { enabled: false, status: "off" } }, 40),
+  );
+  assert.equal(disarmed.tone, "off");
+  assert.equal(disarmed.banner, false);
 });
 
 const AFTER_EXIT: Record<AutoSwitchReason, true> = {

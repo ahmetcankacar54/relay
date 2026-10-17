@@ -9,12 +9,15 @@ import type {
 } from "../../shared/types";
 import { continuationTargetReadinessReason } from "../../shared/continuation-readiness";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
+import { sourceExhausted } from "../../shared/usage";
 import {
   privateJournalDirectory,
   readPrivateJson,
   writePrivateJson,
 } from "./continuation-journal";
 import type { QuotaStop } from "./desktop-continuation-evidence";
+
+export { sourceExhausted } from "../../shared/usage";
 
 /** Outcome of one conversation's continuation. "unknown" is never retried. */
 export type FleetResult = "started" | "accepted" | "unknown" | "skipped";
@@ -73,31 +76,8 @@ interface Saved {
   last?: FleetContinuationState["last"];
 }
 
-const SOURCE_FRESH_MS = 15 * 60_000;
 const stopKey = (account: Account, stop: QuotaStop) =>
   `${account.desktop!.accountUuid.toLowerCase()}:${stop.cliSessionId}:${stop.turnId}`;
-
-/** The usage service confirms the source is out of quota (any window or a model limit). */
-export function sourceExhausted(usage: AccountUsage | undefined, now: number) {
-  const checked = Date.parse(usage?.checkedAt ?? "");
-  if (
-    !usage ||
-    usage.status !== "ready" ||
-    usage.stale ||
-    !Number.isFinite(checked) ||
-    now - checked > SOURCE_FRESH_MS
-  )
-    return false;
-  return (
-    usage.otherLimitReached === true ||
-    [usage.fiveHour, usage.sevenDay].some(
-      (window) =>
-        !!window &&
-        window.usedPercent >= 100 &&
-        (!window.resetsAt || Date.parse(window.resetsAt) > now),
-    )
-  );
-}
 
 /**
  * Best eligible target: the open window resetting soonest among accounts with

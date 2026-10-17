@@ -23,6 +23,30 @@ export function freshUsage(
     )
   );
 }
+/** How old a reading may be to confirm that the active account is out of quota. */
+export const SOURCE_FRESH_MS = 15 * 60_000;
+
+/** The usage service confirms the source is out of quota (any window or a model limit). */
+export function sourceExhausted(usage: AccountUsage | undefined, now: number) {
+  const checked = Date.parse(usage?.checkedAt ?? "");
+  if (
+    !usage ||
+    usage.status !== "ready" ||
+    usage.stale ||
+    !Number.isFinite(checked) ||
+    now - checked > SOURCE_FRESH_MS
+  )
+    return false;
+  return (
+    usage.otherLimitReached === true ||
+    [usage.fiveHour, usage.sevenDay].some(
+      (window) =>
+        !!window &&
+        window.usedPercent >= 100 &&
+        (!window.resetsAt || Date.parse(window.resetsAt) > now),
+    )
+  );
+}
 export function remaining(w?: UsageWindow) {
   return w ? Math.max(0, 100 - w.usedPercent) : undefined;
 }

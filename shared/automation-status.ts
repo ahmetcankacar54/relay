@@ -10,7 +10,7 @@ import type {
 } from "./types";
 import { automationMode, type AutomationMode } from "./automation-mode";
 import { withDative } from "./tr-dative";
-import { maxUsedPercent } from "./usage";
+import { maxUsedPercent, sourceExhausted } from "./usage";
 
 export type AutomationTone = "off" | "ok" | "waiting" | "attention";
 
@@ -73,9 +73,18 @@ const UNKNOWN_ACTIVE: Copy = [
   "The account open in Claude is not linked in Relay. Link it on Accounts.",
 ];
 
+const USAGE_NOT_FRESH: Copy = [
+  "Güncel limit verisi bekliyorum.",
+  "Waiting for fresh usage data.",
+];
+
 const OFF: Copy = [
   "Kapalı. Kota dolunca hesabı sen değiştirirsin.",
   "Off. You switch accounts yourself when a quota runs out.",
+];
+const OFF_LEGACY_WATCH: Copy = [
+  "Kapalı, ama eski tek konuşma izlemesi açık; Geçiş sayfasındaki kartından kapat.",
+  "Off, but the old single-conversation watch is on; turn it off on the Switching page.",
 ];
 const HANDOFF_INTERRUPTED: Copy = [
   "Yarım kalan bir konuşma devri var; Geçiş sayfasındaki kartından sürdür veya iptal et.",
@@ -98,10 +107,7 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
     "Bir hesabın limit okuma girişi veya yenilemesi sürüyor; bitince yeniden bakarım.",
     "An account’s usage sign-in or renewal is in progress; I’ll check again after it.",
   ]),
-  "usage-not-fresh": waiting([
-    "Güncel limit verisi bekliyorum.",
-    "Waiting for fresh usage data.",
-  ]),
+  "usage-not-fresh": waiting(USAGE_NOT_FRESH),
   "exit-settling": waiting([
     "Claude kapandı; kapanışın oturmasını bekliyorum.",
     "Claude quit; waiting for the exit to settle.",
@@ -172,6 +178,14 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
     "The account was prepared, but the automation record could not be saved; repeat protection lasts for this run only.",
   ]),
 };
+/** `prepared` when the prefix already names the target. */
+const PREPARED_HERE = ok(
+  [
+    "Hazır. Claude’u açıp konuşmanı sürdür.",
+    "Ready. Open Claude and continue your conversation.",
+  ],
+  true,
+);
 
 /**
  * Continue at quota, by exact reason. `{n}` is the stopped conversations,
@@ -244,8 +258,8 @@ const holdsSwitch = (reason: string) =>
   reason === "quiescence-unverified" ||
   reason === "awaiting-quota-stop";
 
-/** A fresh reading with a limit reached: the account cannot do more work. */
-function isFull(u: AccountUsage | undefined) {
+/** A ready reading that shows a limit reached, however long ago it was taken. */
+function readsFull(u: AccountUsage | undefined) {
   return (
     u?.status === "ready" &&
     !u.stale &&
@@ -308,11 +322,21 @@ export function automationStatus(
 
   if (continuation?.status === "reconciliation-required")
     return show(attention(HANDOFF_INTERRUPTED));
-  if (mode === "off") return show({ tone: "off", banner: false, copy: OFF });
+  if (mode === "off")
+    return show(
+      // An interrupted watch was handled above; an armed one still runs.
+      continuation?.enabled
+        ? attention(OFF_LEGACY_WATCH)
+        : { tone: "off", banner: false, copy: OFF },
+    );
 
   if (mode === "after-exit") {
     const row =
-      AFTER_EXIT[autoSwitch?.reason ?? "disabled"] ?? AFTER_EXIT.disabled;
+      autoSwitch?.reason === "prepared" &&
+      prefix[0] !== "" &&
+      active?.id === autoSwitch.targetId
+        ? PREPARED_HERE
+        : (AFTER_EXIT[autoSwitch?.reason ?? "disabled"] ?? AFTER_EXIT.disabled);
     return show(
       row,
       { tgt: name(autoSwitch?.targetId) },
@@ -343,13 +367,17 @@ export function automationStatus(
   const reason = fleet.reason ?? "";
   if (!reason) return show(waiting(CHECKING));
   const last = fleet.last;
+  const activeUsage = active && usage[active.id];
+  // The fleet's own rule: only a reading under 15 minutes old confirms a full
+  // account. An older one that reads full waits for a fresh reading.
+  const full = sourceExhausted(activeUsage, input.now);
   // Switching now is offered only for the account the fleet is watching, and
   // only once fresh usage says it is full.
   const offer =
     holdsSwitch(reason) &&
     !!fleet.targetId &&
     fleet.sourceId === active?.id &&
-    isFull(active && usage[active.id]);
+    full;
   const switchTo = offer ? fleet.targetId : undefined;
 
   if (reason === "continued" && last)
@@ -368,8 +396,8 @@ export function automationStatus(
   if (reason === "continued") return show(ok(WATCHING));
   if (reason === "awaiting-quota-stop") {
     if (offer) return show(waiting(FULL_NOTHING_STOPPED), vars, switchTo);
-    if (!fleet.targetId && isFull(active && usage[active.id]))
-      return show(waiting(FULL_NOTHING_READY));
+    if (!fleet.targetId && full) return show(waiting(FULL_NOTHING_READY));
+    if (!full && readsFull(activeUsage)) return show(waiting(USAGE_NOT_FRESH));
     return show(ok(WATCHING));
   }
   if (reason.startsWith("not-quiescent:") || reason === "quiescence-unverified")

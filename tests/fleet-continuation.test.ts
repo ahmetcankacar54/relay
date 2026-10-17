@@ -6,6 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   FleetContinuation,
+  sourceExhausted as fleetSourceExhausted,
   type FleetDeps,
   type FleetResult,
 } from "../electron/core/fleet-continuation";
@@ -16,6 +17,7 @@ import {
   type AccountUsage,
   type DesktopState,
 } from "../shared/types";
+import { SOURCE_FRESH_MS, sourceExhausted } from "../shared/usage";
 
 const NOW = Date.parse("2026-10-13T20:00:00.000Z");
 function account(name: string, plan: "max5" | "pro" = "max5"): Account {
@@ -170,6 +172,22 @@ test("a full account with no stopped conversation names a target without switchi
   assert.equal(room.reason, "awaiting-quota-stop");
   assert.equal(room.targetId, undefined);
   assert.deepEqual(f.state.switches, []);
+});
+
+test("the source is confirmed full only by a reading under 15 minutes old", () => {
+  // The renderer reads the same rule from shared/usage.
+  assert.equal(fleetSourceExhausted, sourceExhausted);
+  assert.equal(SOURCE_FRESH_MS, 15 * 60_000);
+  const a = account("A");
+  const read = (ageMs: number): AccountUsage => ({
+    ...usage(a, 100),
+    checkedAt: new Date(NOW - ageMs).toISOString(),
+  });
+  assert.equal(sourceExhausted(read(5 * 60_000), NOW), true);
+  assert.equal(sourceExhausted(read(SOURCE_FRESH_MS), NOW), true);
+  assert.equal(sourceExhausted(read(SOURCE_FRESH_MS + 1), NOW), false);
+  assert.equal(sourceExhausted(read(20 * 60_000), NOW), false);
+  assert.equal(sourceExhausted(usage(a, 70), NOW), false);
 });
 
 test("other running work, a missing target or missing automation keep Claude untouched", async () => {
