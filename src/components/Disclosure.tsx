@@ -1,19 +1,28 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** A titled section that starts open or closed. The content is not rendered while it is closed. */
+/**
+ * A titled section that starts open or closed. The content is not rendered while it is closed.
+ * `openKey` names what the section must show: each time it changes to a new, non-empty value, the
+ * section opens. It never closes by itself, and the user can still close it.
+ */
 export function Disclosure({
   title,
   defaultOpen = false,
+  openKey,
   children,
 }: {
   title: string;
   defaultOpen?: boolean;
+  openKey?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
+  useEffect(() => {
+    if (openKey) setOpen(true);
+  }, [openKey]);
   return (
     <section className="grid">
       <h3>

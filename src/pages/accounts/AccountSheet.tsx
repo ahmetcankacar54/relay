@@ -154,8 +154,16 @@ export function AccountSheetBody({
     t,
   );
   const signIn = usageSignInStatus(a, usage, waiting, t);
-  // A sign-in flow of this account (even a failed or finished one) shows its panel in the connections.
-  const attention = health.tone !== "ok" || relay.flow?.accountId === a.id;
+  // What the connections must show, so a new one opens them: a sign-in flow of this account (even a
+  // failed or finished one, whose panel sits there), the Claude app setup, or a problem.
+  const connectionsKey =
+    relay.flow?.accountId === a.id
+      ? `flow:${relay.flow.id}`
+      : setupId === a.id
+        ? "setup"
+        : health.tone !== "ok"
+          ? "attention"
+          : undefined;
   // One primary action: the fix, else the switch (which the active account does not have).
   const primary = rowActions(a, relay, t, (id) => {
     setSetupId(id);
@@ -258,11 +266,10 @@ export function AccountSheetBody({
           connect={() => void relay.startCli(a)}
         />
       </Section>
-      {/* Remounted when the account starts or stops needing attention, so a new problem opens it. */}
       <Disclosure
-        key={attention ? "attention" : "calm"}
         title={t("Bağlantılar", "Connections")}
-        defaultOpen={attention}
+        defaultOpen={!!connectionsKey}
+        openKey={connectionsKey}
       >
         <ConnectionRow
           icon={<Monitor />}

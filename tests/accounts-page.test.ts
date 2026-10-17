@@ -434,6 +434,119 @@ test("the sheet's connections and history are disclosures, open only when the ac
   assert.equal(disclosureState(sheetFor(c, {}, expiredC), "Code geçmişi"), "false");
 });
 
+test("the connections open while the Claude app setup is open for this account, even a healthy one", () => {
+  const healthy = { c: { ...usage.a, accountId: "c" } };
+  assert.equal(disclosureState(sheetFor(c, {}, healthy), "Bağlantılar"), "false");
+  const setup = sheetFor(c, { setupId: "c" }, healthy);
+  assert.equal(disclosureState(setup, "Bağlantılar"), "true");
+  assert.match(setup, /İlk Claude uygulaması girişi/);
+  // Another account's setup does not open this one.
+  assert.equal(disclosureState(sheetFor(c, { setupId: "b" }, healthy), "Bağlantılar"), "false");
+});
+
+/** Mounts the sheet in the fake DOM; `show` renders it again with another relay state. */
+async function mountSheet() {
+  const dom = fakeDom();
+  dom.install();
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(dom.container as unknown as Element);
+  const show = (account: Account, extra: Partial<Relay> = {}, usageFor: Record<string, AccountUsage> = {}) =>
+    act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(
+            RelayContext.Provider,
+            {
+              value: relayFor({
+                data: { settings: DEFAULT_SETTINGS, usage: { ...usage, ...usageFor }, accounts: [...accounts, c], authFlows: [] } as unknown as Snapshot,
+                accounts: [...accounts, c],
+                ...extra,
+              }),
+            },
+            createElement(AccountSheetBody, { account, now: NOW }),
+          ),
+        ),
+      ),
+    );
+  /** The Bağlantılar toggle: the first disclosure button (a button directly under an h3). */
+  const toggle = () => {
+    const found = drawn(dom.container as unknown as FakeNode).find(
+      (n) => n.tagName === "button" && (n as FakeNode & { parentNode?: FakeNode }).parentNode?.tagName === "h3",
+    );
+    assert.ok(found, "the connections toggle is drawn");
+    return found;
+  };
+  const click = (node: FakeNode) => act(async () => dom.dispatch(node, "click", { detail: 1 }));
+  const done = async () => {
+    await act(async () => root.unmount());
+    dom.uninstall();
+  };
+  return { show, toggle, click, done, dom };
+}
+
+test("the connections toggle stays the same button when the account starts needing attention", async () => {
+  const sheet = await mountSheet();
+  try {
+    await sheet.show(c, {}, { c: { ...usage.a, accountId: "c" } });
+    const calm = sheet.toggle();
+    assert.equal(calm.attributes.get("aria-expanded"), "false");
+    await sheet.show(c, {}, expiredC);
+    // `ok`, not `equal`: a failing `equal` would print the whole drawn tree.
+    assert.ok(sheet.toggle() === calm, "not remounted, so it keeps focus");
+    assert.equal(calm.attributes.get("aria-expanded"), "true", "a new problem opens it");
+  } finally {
+    await sheet.done();
+  }
+});
+
+test("a connections section the user closed opens again for a new sign-in flow or setup, and only then", async () => {
+  const sheet = await mountSheet();
+  try {
+    await sheet.show(c, {}, expiredC);
+    const button = sheet.toggle();
+    assert.equal(button.attributes.get("aria-expanded"), "true");
+    // The user closes it; the same problem does not reopen it.
+    await sheet.click(button);
+    assert.equal(button.attributes.get("aria-expanded"), "false");
+    await sheet.show(c, {}, expiredC);
+    assert.equal(button.attributes.get("aria-expanded"), "false", "still closed");
+    // A sign-in flow for this account starts: it opens.
+    const flow = (id: string) => ({ flow: { id, accountId: "c", status: "waiting" } as unknown as AuthFlow, flowAccount: c });
+    await sheet.show(c, flow("f1"), expiredC);
+    assert.ok(sheet.toggle() === button, "the same button");
+    assert.equal(button.attributes.get("aria-expanded"), "true");
+    // The user can still close it, and the same flow leaves it closed.
+    await sheet.click(button);
+    await sheet.show(c, flow("f1"), expiredC);
+    assert.equal(button.attributes.get("aria-expanded"), "false");
+    // A new flow of its own opens it again.
+    await sheet.show(c, flow("f2"), expiredC);
+    assert.equal(button.attributes.get("aria-expanded"), "true");
+  } finally {
+    await sheet.done();
+  }
+});
+
+test("a connections section the user closed opens again when the Claude app setup starts", async () => {
+  const sheet = await mountSheet();
+  try {
+    // No Claude app sign-in: open for attention, and the user closes it.
+    await sheet.show(b);
+    const button = sheet.toggle();
+    assert.equal(button.attributes.get("aria-expanded"), "true");
+    await sheet.click(button);
+    assert.equal(button.attributes.get("aria-expanded"), "false");
+    // The header's "Claude uygulaması girişini kaydet" starts the setup.
+    await sheet.show(b, { setupId: "b" });
+    assert.ok(sheet.toggle() === button, "the same button");
+    assert.equal(button.attributes.get("aria-expanded"), "true");
+  } finally {
+    await sheet.done();
+  }
+});
+
 test("the account sheet shows Desktop setup for the account being linked", () => {
   const relay = relayFor({ setupId: "b" });
   const sheetHtml = wrap(relay, createElement(AccountSheetBody, { account: b, now: NOW }));

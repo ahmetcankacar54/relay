@@ -80,6 +80,15 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     get nextSibling(): FakeElement | null {
       return this.parentNode?.childNodes[this.parentNode.childNodes.indexOf(this) + 1] ?? null;
     }
+    /** The nearest element, this one included, with a tag name: all the selector Radix asks for ("form"). */
+    closest(tag: string): FakeElement | null {
+      for (let node: FakeElement | null = this; node; node = node.parentNode) if (node.tagName === tag) return node;
+      return null;
+    }
+    /** A <select>'s options, which React walks to mark the chosen one (Radix Select draws a native one). */
+    get options(): FakeElement[] {
+      return this.childNodes.filter((child) => child.tagName === "option");
+    }
     set textContent(_: string) {
       for (const child of this.childNodes) child.parentNode = null;
       this.childNodes.length = 0;
@@ -132,6 +141,17 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     innerWidth: 1_000,
     innerHeight: 800,
     HTMLIFrameElement: class {},
+    // Radix Select draws a native <select>: it reads the native value setter, looks for a form to reset
+    // with, and times its typeahead. A stand-in for each is enough.
+    HTMLSelectElement: class {
+      get value() {
+        return "";
+      }
+      set value(_: string) {}
+    },
+    HTMLFormElement: class {},
+    setTimeout: (handler: () => void, ms?: number) => globalThis.setTimeout(handler, ms),
+    clearTimeout: (id?: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(id),
     matchMedia: (query: string) => ({ matches: options.reducedMotion === true && query.includes("reduce") }),
     addEventListener: windowEvents.addEventListener,
     removeEventListener: windowEvents.removeEventListener,
@@ -170,9 +190,16 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
       doc.visibilityState = state;
       documentEvents.dispatchEvent(new Event("visibilitychange"));
     },
-    install: () => Object.assign(globalThis, { window, document: doc, IS_REACT_ACT_ENVIRONMENT: true }),
+    install: () =>
+      Object.assign(globalThis, {
+        window,
+        document: doc,
+        IS_REACT_ACT_ENVIRONMENT: true,
+        HTMLFormElement: window.HTMLFormElement,
+      }),
     uninstall: () => {
-      for (const name of ["window", "document", "IS_REACT_ACT_ENVIRONMENT"]) Reflect.deleteProperty(globalThis, name);
+      for (const name of ["window", "document", "IS_REACT_ACT_ENVIRONMENT", "HTMLFormElement"])
+        Reflect.deleteProperty(globalThis, name);
     },
   };
 }
