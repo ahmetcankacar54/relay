@@ -70,7 +70,8 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Geçişi incele/);
   assert.match(html, /Geçiş yap/);
   assert.match(html, /Bugün/);
-  assert.match(html, /Otomatik başlatma kapalı/);
+  assert.match(html, /Önceden başlatma kapalı/);
+  assert.doesNotMatch(html, /Otomatik başlatma/);
   assert.match(html, /<label[^>]*for="automation-mode"[^>]*>Otomatik geçiş<\/label>/);
   assert.match(html, /Kapalı\. Kota dolunca hesabı sen değiştirirsin\./);
   assert.match(html, /Limit dönemlerini önceden başlat/);
@@ -182,6 +183,67 @@ test("today's card shows a lookout panda when automatic start has no planned acc
   assert.match(html, /Plana hesap eklenmedi/);
   assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="40"/);
   assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-scene="lookout"/);
+});
+
+test("today's card calls automatic start early start in both languages", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const vertex = acct("vertex", "Vertex", "pro");
+  const usage = {
+    active: use("active", 10, 10),
+    vertex: use("vertex", 10, 10),
+  };
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    planning: {
+      ...DEFAULT_PLANNING,
+      autoStart: true,
+      accounts: [{ id: "active" }, { id: "vertex" }],
+    },
+  };
+  const planning = {
+    enabled: true,
+    running: false,
+    accounts: [],
+    attempts: [],
+    plannedToday: 2,
+    next: { accountId: "vertex", at: iso(NOW + 3_600_000) },
+  };
+  const relay = relayFor(active, [active, vertex], usage, {
+    settings,
+    data: {
+      settings,
+      usage,
+      accounts: [active, vertex],
+      authFlows: [],
+      planning,
+    } as unknown as Snapshot,
+  });
+  const html = render(relay);
+  assert.match(html, /Önceden başlatma açık · sonraki \d\d:\d\d Vertex/);
+  assert.doesNotMatch(html, /Otomatik başlatma/);
+  const en = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      {
+        value: {
+          language: "en",
+          setLanguage() {},
+          t: (_tr: string, en: string) => en,
+        },
+      },
+      createElement(
+        RelayContext.Provider,
+        { value: relay },
+        createElement(Overview, { go: () => {}, now: NOW }),
+      ),
+    ),
+  );
+  assert.match(en, /Early start on · next/);
+  assert.doesNotMatch(en, /Automatic start/);
+  const off = render(
+    relayFor(active, [active], { active: use("active", 10, 10) }),
+  );
+  assert.match(off, /Önceden başlatma kapalı/);
 });
 
 test("the onboarding and the today lookout pandas are playful, the welcome and the lookouts alike", () => {

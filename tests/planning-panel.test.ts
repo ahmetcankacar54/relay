@@ -149,6 +149,19 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
   assert.match(empty, /Bu gün için plan yok/);
 });
 
+test("an account the keeper has switched off says early start is off", () => {
+  const keeper: KeeperSnapshot = {
+    enabled: false,
+    running: false,
+    plannedToday: 0,
+    attempts: [],
+    accounts: [{ accountId: a.id, state: "off" }],
+  };
+  const html = render({ autoStart: false, accounts: [{ id: a.id }] }, keeper);
+  assert.match(html, />Önceden başlatma kapalı</);
+  assert.doesNotMatch(html, /Otomatik başlatma/);
+});
+
 test("without a keeper view the summary is drawn from the plan", () => {
   const accounts = [{ id: a.id }, { id: b.id }];
   const html = render({ autoStart: true, accounts });
@@ -402,8 +415,9 @@ test("with automatic start off the comparison says nothing is warmed up", () => 
   assert.match(html, />Bu plan</);
   assert.match(html, /class="block [^"]*font-semibold">Kesintisiz · 3 geçiş</);
   assert.match(html, />14:18–14:50 kotasız · 5 geçiş</);
-  assert.equal(count(html, />Otomatik başlatma kapalı; ısıtma yapılmaz</g), 2);
+  assert.equal(count(html, />Önceden başlatma kapalı; ısıtma yapılmaz</g), 2);
   assert.doesNotMatch(html, /Isıtma/);
+  assert.doesNotMatch(html, /Otomatik başlatma/);
 });
 
 test("an all-manual plan shows its gap on the lane and no comparison", () => {

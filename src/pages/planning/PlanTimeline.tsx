@@ -100,8 +100,8 @@ export function PlanTimeline({
   const warmUpLine = (ids: string[], times: number[]) => {
     if (!settings.autoStart)
       return t(
-        "Otomatik başlatma kapalı; ısıtma yapılmaz",
-        "Automatic start is off; no warm-ups",
+        "Önceden başlatma kapalı; ısıtma yapılmaz",
+        "Early start is off; no warm-ups",
       );
     const list = times
       .map((time, i) => `${name(ids[i])} ${clock(time)}`)

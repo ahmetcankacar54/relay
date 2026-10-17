@@ -98,7 +98,7 @@ function statusText(
   if (!status) return t("Durum bekleniyor", "Waiting for status");
   switch (status.state) {
     case "off":
-      return t("Otomatik başlatma kapalı", "Automatic start is off");
+      return t("Önceden başlatma kapalı", "Early start is off");
     case "outside":
       return status.nextStartAt
         ? t(

@@ -220,7 +220,7 @@ export function Usage() {
             }
             description={t(
               "Beş saatlik veya haftalık kullanım için geçerli.",
-              "Applies to either the 5-hour or weekly usage window.",
+              "Applies to either the 5-hour or weekly usage limit.",
             )}
           >
             <ToggleGroup

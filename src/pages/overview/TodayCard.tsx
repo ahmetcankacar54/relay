@@ -52,13 +52,13 @@ export function TodayCard({
   );
   const clock = (time: number | string) => formatClock(time, language, zone);
   const summary = !settings.autoStart
-    ? t("Otomatik başlatma kapalı", "Automatic start is off")
+    ? t("Önceden başlatma kapalı", "Early start is off")
     : !planned.accounts.length
       ? t("Plana hesap eklenmedi", "No accounts in the plan")
       : upcoming
         ? t(
-            `Otomatik başlatma açık · sonraki ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
-            `Automatic start on · next ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
+            `Önceden başlatma açık · sonraki ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
+            `Early start on · next ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
           )
         : t(
             `Bugün ${plannedToday} başlatma planlı`,

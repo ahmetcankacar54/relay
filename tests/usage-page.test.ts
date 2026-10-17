@@ -312,6 +312,12 @@ test("Usage composes the header, loading statistics and the warning preferences 
   assert.ok(html.indexOf("İstatistikler yükleniyor") < html.indexOf("Uyarılar"));
 });
 
+test("Usage calls the warning threshold's scope a limit, not a window, in English", () => {
+  const html = text(render(createElement(Usage), "en"));
+  assert.match(html, /Applies to either the 5-hour or weekly usage limit\./);
+  assert.doesNotMatch(html, /usage window/);
+});
+
 test("Usage leaves the refresh interval and suggestions to other pages", () => {
   const html = render(createElement(Usage));
   assert.doesNotMatch(html, /Limit yaklaşınca hesap öner/);
