@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  dismissalAccountId,
   dismissalKey,
   getDismissals,
   pruneDismissals,
@@ -60,6 +61,13 @@ test("a dismissal key joins the account and the issue", () => {
   assert.equal(dismissalKey("a1", "expired"), "a1:expired");
 });
 
+test("the account id is the part of a key before the first colon", () => {
+  assert.equal(dismissalAccountId(dismissalKey("a1", "expired")), "a1");
+  assert.equal(dismissalAccountId("a1:renewal-required"), "a1");
+  assert.equal(dismissalAccountId("a1:odd:issue"), "a1");
+  assert.equal(dismissalAccountId("no-colon"), "no-colon");
+});
+
 test("a dismissed key survives a remount and a reload", () => {
   const storage = fakeStorage();
   install(storage);
@@ -107,7 +115,11 @@ test("a prune that changes nothing neither writes nor tells anyone", () => {
   const before = getDismissals();
   pruneDismissals([]);
   assert.equal(told, 1);
-  assert.notEqual(getDismissals(), before, "a change gives React a new snapshot");
+  assert.notEqual(
+    getDismissals(),
+    before,
+    "a change gives React a new snapshot",
+  );
   stop();
   mount().dismiss("x:scope");
   assert.equal(told, 1, "an unsubscribed listener hears nothing");
@@ -118,7 +130,11 @@ test("every dismissal tells the subscribers once and gives a new snapshot", () =
   let told = 0;
   const stop = subscribeDismissals(() => void told++);
   const before = getDismissals();
-  assert.equal(getDismissals(), before, "the snapshot is stable between changes");
+  assert.equal(
+    getDismissals(),
+    before,
+    "the snapshot is stable between changes",
+  );
   mount().dismiss("a:expired");
   assert.equal(told, 1);
   assert.notEqual(getDismissals(), before);
@@ -134,7 +150,11 @@ test("a storage that throws falls back to memory", () => {
       throw new Error("full");
     },
   };
-  for (const storage of [broken, new Error("no storage in this window"), undefined]) {
+  for (const storage of [
+    broken,
+    new Error("no storage in this window"),
+    undefined,
+  ]) {
     resetDismissalsForTests();
     install(storage);
     mount().dismiss("a:expired");
@@ -151,10 +171,20 @@ test("a window without a localStorage property keeps working in memory", () => {
 });
 
 test("a stored value that is not a list of keys is ignored", () => {
-  for (const raw of ["not json", "{}", "42", "null", '["a:expired",3,null,{"k":1}]']) {
+  for (const raw of [
+    "not json",
+    "{}",
+    "42",
+    "null",
+    '["a:expired",3,null,{"k":1}]',
+  ]) {
     resetDismissalsForTests();
     install(fakeStorage({ [STORAGE_KEY]: raw }));
-    assert.deepEqual([...mount().dismissed], raw.startsWith("[") ? ["a:expired"] : [], raw);
+    assert.deepEqual(
+      [...mount().dismissed],
+      raw.startsWith("[") ? ["a:expired"] : [],
+      raw,
+    );
   }
 });
 
@@ -165,4 +195,64 @@ test("resetting the store does not touch the storage", () => {
   resetDismissalsForTests();
   assert.equal(storage.writes.length, 0);
   assert.equal(storage.items.get(STORAGE_KEY), '["a:expired"]');
+});
+
+test("prune keeps the keys of accounts whose issue is not known yet", () => {
+  const storage = fakeStorage();
+  install(storage);
+  for (const key of [
+    "a:expired",
+    "b:renewal-required",
+    "c:scope",
+    "d:keychain-locked",
+  ])
+    mount().dismiss(key);
+  // a and b have not been read yet: their keys stay, whatever the current list says.
+  pruneDismissals(["d:keychain-locked"], ["a", "b"]);
+  assert.deepEqual([...mount().dismissed].sort(), [
+    "a:expired",
+    "b:renewal-required",
+    "d:keychain-locked",
+  ]);
+  resetDismissalsForTests();
+  assert.deepEqual([...mount().dismissed].sort(), [
+    "a:expired",
+    "b:renewal-required",
+    "d:keychain-locked",
+  ]);
+  // Once a is read, it prunes like any other account.
+  pruneDismissals(["d:keychain-locked"], ["b"]);
+  assert.deepEqual([...mount().dismissed].sort(), [
+    "b:renewal-required",
+    "d:keychain-locked",
+  ]);
+  // Without the list it prunes everything that is not current, as before.
+  pruneDismissals([]);
+  assert.deepEqual([...mount().dismissed], []);
+});
+
+test("dismissMany adds several keys with one write and one notification", () => {
+  const storage = fakeStorage();
+  install(storage);
+  mount().dismiss("a:expired");
+  const writes = storage.writes.length;
+  let told = 0;
+  const stop = subscribeDismissals(() => void told++);
+  mount().dismissMany(["a:expired", "b:scope", "c:keychain-locked", "b:scope"]);
+  assert.deepEqual(
+    [...mount().dismissed],
+    ["a:expired", "b:scope", "c:keychain-locked"],
+  );
+  assert.equal(storage.writes.length, writes + 1);
+  assert.equal(told, 1);
+  assert.equal(
+    storage.items.get(STORAGE_KEY),
+    JSON.stringify(["a:expired", "b:scope", "c:keychain-locked"]),
+  );
+  // Nothing new, nothing written or told.
+  mount().dismissMany(["a:expired", "c:keychain-locked"]);
+  mount().dismissMany([]);
+  assert.equal(storage.writes.length, writes + 1);
+  assert.equal(told, 1);
+  stop();
 });

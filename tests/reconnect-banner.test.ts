@@ -22,7 +22,11 @@ import {
 
 const NOW = Date.parse("2026-10-17T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
-const account = (loggedIn = true, id = "a", name = "Kişisel · Max"): Account => ({
+const account = (
+  loggedIn = true,
+  id = "a",
+  name = "Kişisel · Max",
+): Account => ({
   id,
   name,
   kind: "personal",
@@ -135,7 +139,11 @@ function relayFor(
     dismissError: async () => {},
   } as unknown as Relay;
 }
-const tree = (relay: Relay, language: Language, props: { initialExpanded?: boolean } = {}) =>
+const tree = (
+  relay: Relay,
+  language: Language,
+  props: { initialExpanded?: boolean } = {},
+) =>
   createElement(
     I18nContext.Provider,
     { value: { language, setLanguage() {}, t: pick(language) } },
@@ -145,8 +153,11 @@ const tree = (relay: Relay, language: Language, props: { initialExpanded?: boole
       createElement(Banners, props),
     ),
   );
-const render = (relay: Relay, language: Language = "tr", props: { initialExpanded?: boolean } = {}) =>
-  renderToStaticMarkup(tree(relay, language, props));
+const render = (
+  relay: Relay,
+  language: Language = "tr",
+  props: { initialExpanded?: boolean } = {},
+) => renderToStaticMarkup(tree(relay, language, props));
 
 test("the sign-in banner says what is wrong and what Reconnect does", () => {
   const tr = render(relayFor({ a: usage("expired") }));
@@ -180,13 +191,19 @@ test("the explanation belongs to the sign-in banner only, not to the renewal ban
 // Grouping and dismissal. The dismissal store is shared by every Banners, so each test starts empty.
 const KEY = "relay.dismissed.v1";
 let stored = new Map<string, string>();
+/** How many times the store was written since the restart. */
+let writes = 0;
 const storage = () => ({
   getItem: (key: string) => stored.get(key) ?? null,
-  setItem: (key: string, value: string) => void stored.set(key, value),
+  setItem: (key: string, value: string) => {
+    writes++;
+    stored.set(key, value);
+  },
 });
 /** A fresh window and an empty store, as a restart gives. `seed` is what the last run left behind. */
 const restart = (seed: string[] = []) => {
   stored = new Map(seed.length > 0 ? [[KEY, JSON.stringify(seed)]] : []);
+  writes = 0;
   Object.assign(globalThis, { window: { localStorage: storage() } });
   resetDismissalsForTests();
 };
@@ -200,7 +217,11 @@ const max = account(true, "a", "Kişisel · Max");
 const team = account(true, "b", "İş · Team");
 const pro = account(true, "c", "Ek · Pro");
 const healthy = account(true, "ok", "Sağlam");
-const ready = (id: string): AccountUsage => ({ accountId: id, status: "ready", stale: false });
+const ready = (id: string): AccountUsage => ({
+  accountId: id,
+  status: "ready",
+  stale: false,
+});
 const all3 = {
   a: usage("expired", "a"),
   b: usage("renewal-required", "b"),
@@ -209,14 +230,22 @@ const all3 = {
 const banners = (html: string) => html.split("bg-warn/10").length - 1;
 
 test("one warning renders as a single banner, even beside healthy accounts", () => {
-  const html = render(relayFor({ a: usage("expired"), ok: ready("ok") }, [max, healthy]));
+  const html = render(
+    relayFor({ a: usage("expired"), ok: ready("ok") }, [max, healthy]),
+  );
   assert.equal(banners(html), 1);
-  assert.match(html, /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./);
+  assert.match(
+    html,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./,
+  );
   assert.match(html, /<button[^>]*>Yeniden bağlan<\/button>/);
   assert.match(html, /aria-label="Uyarıyı kapat"/);
   assert.doesNotMatch(html, /ilgi bekliyor|aria-expanded|Göster/);
   const renew = render(relayFor({ b: usage("renewal-required", "b") }, [team]));
-  assert.match(renew, /İş · Team · limit okuma girişinin yenilenmesi gerekiyor\./);
+  assert.match(
+    renew,
+    /İş · Team · limit okuma girişinin yenilenmesi gerekiyor\./,
+  );
   assert.match(renew, /<button[^>]*>Bağlantıyı yenile<\/button>/);
   assert.doesNotMatch(renew, /ilgi bekliyor|aria-expanded/);
 });
@@ -228,7 +257,10 @@ test("two or more warnings share one banner with a count and a Show button", () 
   assert.match(html, /<button[^>]*aria-expanded="false"[^>]*>Göster<\/button>/);
   assert.equal(html.split('aria-label="Tüm uyarıları kapat"').length - 1, 1);
   // Collapsed, none of the rows are drawn.
-  assert.doesNotMatch(html, /Kişisel · Max|Yeniden bağlan|Bağlantıyı yenile|Anahtarlık erişimine izin ver/);
+  assert.doesNotMatch(
+    html,
+    /Kişisel · Max|Yeniden bağlan|Bağlantıyı yenile|Anahtarlık erişimine izin ver/,
+  );
   const en = render(relayFor(all3, [max, team, pro]), "en");
   assert.match(en, /3 accounts need sign-in attention\./);
   assert.match(en, /<button[^>]*aria-expanded="false"[^>]*>Show<\/button>/);
@@ -238,20 +270,44 @@ test("two or more warnings share one banner with a count and a Show button", () 
 });
 
 test("the expanded group lists a row per warning with today's text, button and dismiss", () => {
-  const html = render(relayFor(all3, [max, team, pro]), "tr", { initialExpanded: true });
+  const html = render(relayFor(all3, [max, team, pro]), "tr", {
+    initialExpanded: true,
+  });
   assert.equal(banners(html), 1, "the rows live inside the one banner");
   assert.match(html, /3 hesabın girişi ilgi bekliyor\./);
   assert.match(html, /<button[^>]*aria-expanded="true"[^>]*>Gizle<\/button>/);
-  assert.match(html, /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./);
-  assert.match(html, /Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar\./);
-  assert.match(html, /İş · Team · limit okuma girişinin yenilenmesi gerekiyor\./);
-  assert.match(html, /Ek · Pro · limitleri okumak için Anahtarlık erişimi gerekiyor\./);
-  for (const label of ["Yeniden bağlan", "Bağlantıyı yenile", "Anahtarlık erişimine izin ver"])
+  assert.match(
+    html,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./,
+  );
+  assert.match(
+    html,
+    /Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar\./,
+  );
+  assert.match(
+    html,
+    /İş · Team · limit okuma girişinin yenilenmesi gerekiyor\./,
+  );
+  assert.match(
+    html,
+    /Ek · Pro · limitleri okumak için Anahtarlık erişimi gerekiyor\./,
+  );
+  for (const label of [
+    "Yeniden bağlan",
+    "Bağlantıyı yenile",
+    "Anahtarlık erişimine izin ver",
+  ])
     assert.equal(html.split(`>${label}</button>`).length - 1, 1, label);
   for (const name of ["Kişisel · Max", "İş · Team", "Ek · Pro"])
-    assert.match(html, new RegExp(`aria-label="${name} uyarısını kapat"`), name);
+    assert.match(
+      html,
+      new RegExp(`aria-label="${name} uyarısını kapat"`),
+      name,
+    );
   assert.match(html, /aria-label="Tüm uyarıları kapat"/);
-  const en = render(relayFor(all3, [max, team, pro]), "en", { initialExpanded: true });
+  const en = render(relayFor(all3, [max, team, pro]), "en", {
+    initialExpanded: true,
+  });
   assert.match(en, /<button[^>]*aria-expanded="true"[^>]*>Hide<\/button>/);
   assert.match(en, /aria-label="Dismiss warning for İş · Team"/);
   assert.match(en, /Allow Keychain access/);
@@ -272,10 +328,16 @@ test("dismissed warnings leave the group, and the group gives way to a single ba
   const relay = relayFor(all3, [max, team, pro]);
   restart([dismissalKey("a", "expired")]);
   assert.match(render(relay), /2 hesabın girişi ilgi bekliyor\./);
-  restart([dismissalKey("a", "expired"), dismissalKey("b", "renewal-required")]);
+  restart([
+    dismissalKey("a", "expired"),
+    dismissalKey("b", "renewal-required"),
+  ]);
   const one = render(relay);
   assert.equal(banners(one), 1);
-  assert.match(one, /Ek · Pro · limitleri okumak için Anahtarlık erişimi gerekiyor\./);
+  assert.match(
+    one,
+    /Ek · Pro · limitleri okumak için Anahtarlık erişimi gerekiyor\./,
+  );
   assert.doesNotMatch(one, /ilgi bekliyor|aria-expanded/);
   restart(["a:expired", "b:renewal-required", "c:keychain-locked"]);
   assert.equal(banners(render(relay)), 0);
@@ -317,7 +379,9 @@ const toggle = (container: unknown) =>
 /** The small outline buttons in the rows: each warning's own Reconnect, Renew or Keychain. */
 const rowActions = (container: unknown) =>
   buttonsIn(container).filter(
-    (b) => b.attributes.get("data-size") === "sm" && !b.attributes.has("aria-expanded"),
+    (b) =>
+      b.attributes.get("data-size") === "sm" &&
+      !b.attributes.has("aria-expanded"),
   );
 
 test("Banners prunes dismissals of issues that went away, but never while loading", async () => {
@@ -327,7 +391,8 @@ test("Banners prunes dismissals of issues that went away, but never while loadin
   try {
     const { createRoot } = await import("react-dom/client");
     const root = createRoot(dom.container as unknown as Element);
-    const mount = (relay: Relay) => act(async () => root.render(tree(relay, "tr")));
+    const mount = (relay: Relay) =>
+      act(async () => root.render(tree(relay, "tr")));
     // The first snapshot has not arrived: no issues are known, and none may be pruned.
     await mount(relayFor({}, [], false));
     assert.deepEqual([...getDismissals()].sort(), ["a:expired", "gone:scope"]);
@@ -335,7 +400,11 @@ test("Banners prunes dismissals of issues that went away, but never while loadin
     await mount(relayFor({ a: usage("expired") }));
     assert.deepEqual([...getDismissals()], ["a:expired"]);
     assert.equal(stored.get(KEY), JSON.stringify(["a:expired"]));
-    assert.equal(labelled(dom.container, "Uyarıyı kapat"), undefined, "still dismissed");
+    assert.equal(
+      labelled(dom.container, "Uyarıyı kapat"),
+      undefined,
+      "still dismissed",
+    );
     // The issue goes away, and the dismissal goes with it.
     await mount(relayFor({ a: ready("a") }));
     assert.deepEqual([...getDismissals()], []);
@@ -368,7 +437,11 @@ test("the group opens and closes, and its dismiss buttons clear one row or all",
     // Collapsed: the group's own buttons, and no rows.
     assert.equal(toggle(c)?.attributes.get("aria-expanded"), "false");
     assert.ok(labelled(c, "Tüm uyarıları kapat"));
-    assert.equal(labelled(c, "Uyarıyı kapat"), undefined, "not the single banner");
+    assert.equal(
+      labelled(c, "Uyarıyı kapat"),
+      undefined,
+      "not the single banner",
+    );
     assert.equal(rowActions(c).length, 0);
     // Show lists a row per warning; Hide takes them away again.
     await click(toggle(c));
@@ -395,8 +468,14 @@ test("the group opens and closes, and its dismiss buttons clear one row or all",
     // The issues go away and return (a prune), so the group is back; its dismiss clears every warning.
     await act(async () => pruneDismissals([]));
     assert.ok(toggle(c));
+    const before = writes;
     await click(labelled(c, "Tüm uyarıları kapat"));
-    assert.deepEqual([...getDismissals()].sort(), ["a:expired", "b:renewal-required", "c:keychain-locked"]);
+    assert.equal(writes, before + 1, "dismissing all writes once");
+    assert.deepEqual([...getDismissals()].sort(), [
+      "a:expired",
+      "b:renewal-required",
+      "c:keychain-locked",
+    ]);
     assert.equal(toggle(c), undefined);
     assert.equal(labelled(c, "Uyarıyı kapat"), undefined);
     assert.equal(stored.get(KEY), JSON.stringify([...getDismissals()]));
@@ -411,4 +490,141 @@ test("the group opens and closes, and its dismiss buttons clear one row or all",
   } finally {
     dom.uninstall();
   }
+});
+
+const idle = (id: string): AccountUsage => ({
+  accountId: id,
+  status: "idle",
+  stale: false,
+});
+const loading = (id: string): AccountUsage => ({
+  accountId: id,
+  status: "loading",
+  stale: false,
+});
+
+test("a restart keeps the dismissals until each account's first read settles", async () => {
+  // The usage cache is in memory: right after launch every logged-in account is idle, with no issue.
+  restart(["a:expired", "b:renewal-required", "c:scope"]);
+  const dom = fakeDom({ localStorage: () => storage() });
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    const mount = (usages: Record<string, AccountUsage>) =>
+      act(async () =>
+        root.render(tree(relayFor(usages, [max, team, pro]), "tr")),
+      );
+    const keys = () => [...getDismissals()].sort();
+    // Idle, loading and no record at all are all "not read yet".
+    await mount({ a: idle("a"), b: loading("b") });
+    assert.deepEqual(keys(), ["a:expired", "b:renewal-required", "c:scope"]);
+    assert.equal(
+      stored.get(KEY),
+      JSON.stringify(["a:expired", "b:renewal-required", "c:scope"]),
+    );
+    assert.equal(writes, 0, "nothing was pruned or written");
+    // a is read and has no issue any more: only its key goes. b is still unread.
+    await mount({ a: ready("a"), b: idle("b") });
+    assert.deepEqual(keys(), ["b:renewal-required", "c:scope"]);
+    // c is read and still has its issue: it stays dismissed, and b is still waiting.
+    await mount({ a: ready("a"), b: idle("b"), c: usage("scope", "c") });
+    assert.deepEqual(keys(), ["b:renewal-required", "c:scope"]);
+    // b fails with another issue: its old key goes, and the new warning shows.
+    await mount({
+      a: ready("a"),
+      b: usage("scope", "b"),
+      c: usage("scope", "c"),
+    });
+    assert.deepEqual(keys(), ["c:scope"]);
+    assert.ok(
+      labelled(dom.container, "Uyarıyı kapat"),
+      "b's new warning shows alone",
+    );
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("an account signed out is not waiting for a read, so its dismissals are pruned", async () => {
+  restart(["a:expired"]);
+  const dom = fakeDom({ localStorage: () => storage() });
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        tree(relayFor({ a: idle("a") }, [account(false, "a")]), "tr"),
+      ),
+    );
+    assert.deepEqual([...getDismissals()], []);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("the grouped banner keeps the same buttons when it opens and closes", async () => {
+  const dom = fakeDom({ localStorage: () => storage() });
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const c = dom.container;
+    const root = createRoot(c as unknown as Element);
+    await act(async () =>
+      root.render(tree(relayFor(all3, [max, team, pro]), "tr")),
+    );
+    const showHide = toggle(c);
+    const dismissAll = labelled(c, "Tüm uyarıları kapat");
+    assert.ok(showHide && dismissAll);
+    const click = (node: FakeNode) =>
+      act(async () => dom.dispatch(node, "click", { detail: 1 }));
+    await click(showHide);
+    assert.equal(showHide.attributes.get("aria-expanded"), "true");
+    assert.equal(
+      toggle(c),
+      showHide,
+      "the button survives opening, so it keeps focus",
+    );
+    assert.equal(labelled(c, "Tüm uyarıları kapat"), dismissAll);
+    await click(showHide);
+    assert.equal(showHide.attributes.get("aria-expanded"), "false");
+    assert.equal(toggle(c), showHide, "and closing");
+    assert.equal(labelled(c, "Tüm uyarıları kapat"), dismissAll);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("the Show button points at the list it opens", () => {
+  const closed = render(relayFor(all3, [max, team, pro]));
+  const id = /<button[^>]*aria-controls="([^"]+)"[^>]*>Göster<\/button>/.exec(
+    closed,
+  )?.[1];
+  assert.ok(id, "the toggle names a list");
+  const open = render(relayFor(all3, [max, team, pro]), "tr", {
+    initialExpanded: true,
+  });
+  assert.ok(open.includes(`aria-controls="${id}"`));
+  assert.match(
+    open,
+    new RegExp(`<ul[^>]*id="${id.replace(/[^\w-]/g, "\\$&")}"`),
+  );
+  // A single warning has no list and no toggle.
+  assert.doesNotMatch(
+    render(relayFor({ a: usage("expired") })),
+    /aria-controls/,
+  );
+});
+
+test("a single warning keeps its flat one-line layout", () => {
+  const html = render(relayFor({ a: usage("expired") }));
+  assert.match(
+    html,
+    /class="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm border-warn\/40 bg-warn\/10"/,
+  );
+  assert.doesNotMatch(html, /flex-col gap-2 rounded-lg/);
 });

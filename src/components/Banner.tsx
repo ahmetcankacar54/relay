@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 
 /**
  * One page-top line: a message with an optional action and dismiss button.
- * `detail` adds a block under that line, inside the same banner.
+ * `detail` adds a block under that line, inside the same banner. The banner
+ * changes shape when `detail` is given, even as `null`, never when it flips
+ * between a node and `null`: a caller that opens and closes the block passes
+ * `null` while closed, so the buttons keep their place in the tree and their focus.
  */
 export function Banner({
   tone,
@@ -50,7 +53,7 @@ export function Banner({
     tone === "warn" && "border-warn/40 bg-warn/10",
     tone === "info" && "bg-accent",
   );
-  if (!detail)
+  if (detail === undefined)
     return (
       <div
         role={role}

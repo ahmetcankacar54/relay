@@ -6,6 +6,12 @@ const STORAGE_KEY = "relay.dismissed.v1";
 export const dismissalKey = (accountId: string, issue: string): string =>
   `${accountId}:${issue}`;
 
+/** The account a key belongs to: everything before the first colon. */
+export const dismissalAccountId = (key: string): string => {
+  const colon = key.indexOf(":");
+  return colon < 0 ? key : key.slice(0, colon);
+};
+
 /**
  * The dismissed keys, shared by every mounted `Banners` (one per page) so a
  * dismissal holds across pages. Loaded from storage on first use; replaced, never
@@ -55,34 +61,47 @@ export function subscribeDismissals(listener: () => void): () => void {
   return () => void listeners.delete(listener);
 }
 
-function dismiss(key: string): void {
+function dismissMany(add: readonly string[]): void {
   const keys = getDismissals();
-  if (!keys.has(key)) replace(new Set(keys).add(key));
+  if (add.some((key) => !keys.has(key))) replace(new Set([...keys, ...add]));
 }
+
+const dismiss = (key: string): void => dismissMany([key]);
 
 /**
  * Forgets dismissals whose issue is no longer current, so an issue that goes
  * away and comes back shows again. `currentKeys` is every issue now present,
  * dismissed or not. Call it only once the data is loaded: before that no issue is
  * known yet and everything would be pruned.
+ *
+ * `keepAccountIds` are accounts whose usage has not been read yet (right after a
+ * launch every account is idle, with no issue): their keys stay until that read
+ * settles, so a restart does not wipe their dismissals.
  */
-export function pruneDismissals(currentKeys: readonly string[]): void {
-  const keep = new Set(currentKeys);
+export function pruneDismissals(
+  currentKeys: readonly string[],
+  keepAccountIds: readonly string[] = [],
+): void {
+  const present = new Set(currentKeys);
+  const unread = new Set(keepAccountIds);
   const keys = getDismissals();
-  const kept = [...keys].filter((k) => keep.has(k));
+  const kept = [...keys].filter(
+    (key) => present.has(key) || unread.has(dismissalAccountId(key)),
+  );
   if (kept.length !== keys.size) replace(new Set(kept));
 }
 
 export function useDismissals(): {
   dismissed: ReadonlySet<string>;
   dismiss(key: string): void;
+  dismissMany(keys: readonly string[]): void;
 } {
   const dismissed = useSyncExternalStore(
     subscribeDismissals,
     getDismissals,
     getDismissals,
   );
-  return { dismissed, dismiss };
+  return { dismissed, dismiss, dismissMany };
 }
 
 /** Forgets what is in memory, so the next read loads from storage again, as a restart does. */

@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Check, Monitor, X } from "lucide-react";
 import type { Account, AccountUsage } from "../../shared/types";
 import { cliNeedsReconnect } from "../../shared/account-state";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/Banner";
-import { dismissalKey, pruneDismissals, useDismissals } from "@/data/dismissals";
+import {
+  dismissalKey,
+  pruneDismissals,
+  useDismissals,
+} from "@/data/dismissals";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { AutomationBanner } from "../features/AutomationControl";
@@ -91,18 +95,31 @@ export function Banners({
   const relay = useRelay();
   const { t } = useI18n();
   const { desktop, notice, accounts, active } = relay;
-  const { dismissed, dismiss } = useDismissals();
+  const { dismissed, dismiss, dismissMany } = useDismissals();
   const [expanded, setExpanded] = useState(initialExpanded);
+  const listId = useId();
   const usage = relay.data?.usage ?? {};
   const reconnect = reconnectIssues(accounts, usage, dismissed);
   // Every current issue, dismissed or not: a dismissal lives while its issue does.
   const currentKeys = reconnectIssues(accounts, usage, NONE).map(issueKey);
-  const signature = JSON.stringify(currentKeys);
+  // Accounts whose usage was not read yet: right after a launch the cache is empty, so
+  // each logged-in account is idle with no issue. Their dismissals must outlive that.
+  const unread = accounts
+    .filter((a) => {
+      const u = usage[a.id];
+      return (
+        a.auth?.loggedIn &&
+        !u?.issue &&
+        (!u || u.status === "idle" || u.status === "loading")
+      );
+    })
+    .map((a) => a.id);
+  const signature = JSON.stringify([currentKeys, unread]);
   const loaded = relay.data !== undefined;
   useEffect(() => {
     // Before the first snapshot no issue is known, so everything would look gone.
-    // `currentKeys` is the list `signature` was made from: it runs when that changes.
-    if (loaded) pruneDismissals(currentKeys);
+    // `currentKeys` and `unread` are the lists `signature` was made from.
+    if (loaded) pruneDismissals(currentKeys, unread);
   }, [loaded, signature]);
 
   const issueAction = ({ account: a, issue, action }: ReconnectIssue) =>
@@ -223,21 +240,25 @@ export function Banners({
       {reconnect.length >= 2 && (
         <Banner
           tone="warn"
-          onDismiss={() => reconnect.forEach((i) => dismiss(issueKey(i)))}
+          onDismiss={() => dismissMany(reconnect.map(issueKey))}
           dismissLabel={t("Tüm uyarıları kapat", "Dismiss all warnings")}
           action={
             <Button
               size="sm"
               variant="outline"
               aria-expanded={expanded}
+              aria-controls={listId}
               onClick={() => setExpanded((open) => !open)}
             >
               {expanded ? t("Gizle", "Hide") : t("Göster", "Show")}
             </Button>
           }
           detail={
-            expanded && (
-              <ul className="flex flex-col gap-1.5 border-t border-warn/20 pt-2">
+            expanded ? (
+              <ul
+                id={listId}
+                className="flex flex-col gap-1.5 border-t border-warn/20 pt-2"
+              >
                 {reconnect.map((item) => {
                   const key = issueKey(item);
                   return (
@@ -264,7 +285,7 @@ export function Banners({
                   );
                 })}
               </ul>
-            )
+            ) : null
           }
         >
           <span>
