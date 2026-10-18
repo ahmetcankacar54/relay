@@ -19,7 +19,8 @@ export interface DesktopActionRequest {
 
 /**
  * Saving a Claude app sign-in is when Relay first uses its Keychain key, and a new Relay build
- * asks again: said wherever a sign-in is saved.
+ * asks again: said wherever a sign-in is saved, and on a switch, which unseals the saved one
+ * (most likely the first use after an update).
  */
 export const KEYCHAIN_HINT = [
   "macOS bir kez Mac parolanı isteyebilir (Relay Safe Storage); “Her Zaman İzin Ver”i seç.",
@@ -152,7 +153,10 @@ export function DesktopActionReview({
                         "The Claude app restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the connection.",
                       )}
           </p>
-          {(kind === "capture" || kind === "login" || kind === "reconnect") && (
+          {(kind === "capture" ||
+            kind === "login" ||
+            kind === "reconnect" ||
+            kind === "switch") && (
             <p className="text-xs text-muted-foreground">
               {t(...KEYCHAIN_HINT)}
             </p>

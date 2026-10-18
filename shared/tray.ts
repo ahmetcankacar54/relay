@@ -45,6 +45,7 @@ const labels = {
     unlinked: "Save Claude app sign-in",
     mismatch: "Sign-ins belong to different accounts",
     outdated: "outdated",
+    fiveHour: "5h",
     week: "wk",
   },
   tr: {
@@ -64,6 +65,7 @@ const labels = {
     unlinked: "Claude uygulaması girişini kaydet",
     mismatch: "Girişler farklı hesaplara ait",
     outdated: "güncel değil",
+    fiveHour: "5 sa",
     week: "hafta",
   },
 };
@@ -93,8 +95,8 @@ export function trayUsageLabel(
     freshUsage(usage, now) &&
     Date.parse(usage.checkedAt!) <= now + 60_000;
   if (!valid)
-    return `5h ? · ${t.week} ?${usage?.checkedAt ? ` · ${t.outdated}` : ""}`;
-  return `5h ${quotaLeft(usage.fiveHour?.usedPercent, language)} · ${t.week} ${quotaLeft(usage.sevenDay?.usedPercent, language)}`;
+    return `${t.fiveHour} ? · ${t.week} ?${usage?.checkedAt ? ` · ${t.outdated}` : ""}`;
+  return `${t.fiveHour} ${quotaLeft(usage.fiveHour?.usedPercent, language)} · ${t.week} ${quotaLeft(usage.sevenDay?.usedPercent, language)}`;
 }
 
 function blockedLabel(snapshot: TraySnapshot, language: TrayLanguage) {

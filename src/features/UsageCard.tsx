@@ -298,10 +298,7 @@ export function UsageCard({
             size="icon-xs"
             variant="ghost"
             className="shrink-0"
-            aria-label={t(
-              "Kullanım limitlerini yenile",
-              "Refresh usage limits",
-            )}
+            aria-label={t("Limitleri yenile", "Refresh limits")}
             disabled={loading || !!retry}
             onClick={() => refresh()}
           >

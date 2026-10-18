@@ -33,10 +33,10 @@ function Tile({
   );
 }
 
-/** "+12%" / "−8%" against the previous period of the same length. */
-function change(current: number, previous: number) {
+/** "+%12" / "−%8" ("+12%" / "−8%" in English) against the previous period of the same length. */
+function change(current: number, previous: number, language: string) {
   const pct = Math.round(((current - previous) / previous) * 100);
-  return `${pct > 0 ? "+" : pct < 0 ? "−" : ""}${Math.abs(pct)}%`;
+  return `${pct > 0 ? "+" : pct < 0 ? "−" : ""}${formatPercent(Math.abs(pct), language)}`;
 }
 
 export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
@@ -48,8 +48,8 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
       ? t(`son ${range} gün`, `last ${range} days`)
       : previous > 0
         ? t(
-            `önceki ${range} güne göre ${change(totals.proUnits, previous)}`,
-            `${change(totals.proUnits, previous)} vs the previous ${range} days`,
+            `önceki ${range} güne göre ${change(totals.proUnits, previous, "tr")}`,
+            `${change(totals.proUnits, previous, "en")} vs the previous ${range} days`,
           )
         : t(
             `önceki ${range} günde veri yok`,

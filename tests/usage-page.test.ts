@@ -121,7 +121,7 @@ const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "
 test("summary tiles format totals, change, windows, hits and the busiest time", () => {
   const html = text(render(createElement(SummaryTiles, { view })));
   assert.match(html, /1\.840 Pro birimi/);
-  assert.match(html, /önceki 30 güne göre \+12%/);
+  assert.match(html, /önceki 30 güne göre \+%12/);
   assert.match(html, /Başlayan dönem/);
   assert.match(html, /96/);
   assert.match(html, /günde ortalama 3,2/);
@@ -149,7 +149,8 @@ test("summary tiles explain a missing previous period and a range without one", 
   assert.match(html, /son 90 gün/);
   assert.doesNotMatch(html, /önceki/);
   const lower = { ...view, totals: { ...view.totals, previousProUnits: 2000 } };
-  assert.match(text(render(createElement(SummaryTiles, { view: lower }))), /−8%/);
+  assert.match(text(render(createElement(SummaryTiles, { view: lower }))), /−%8/);
+  assert.match(text(render(createElement(SummaryTiles, { view: lower }), "en")), /−8% vs the previous/);
 });
 
 test("account balance lists names, plan badges, share, fill, idle days and the insight", () => {

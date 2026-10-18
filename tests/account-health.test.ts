@@ -105,7 +105,30 @@ test("8. everything else that works is ready", () => {
     const h = health(base, ready, context);
     assert.deepEqual([h.tone, h.label, h.fix], ["ok", "Hazır", undefined]);
   }
-  assert.equal(health(base, undefined, idle, "en").label, "Ready");
+  assert.equal(health(base, ready, idle, "en").label, "Ready");
+});
+
+test("an account never read yet says there is no usage data, wherever it is shown", () => {
+  for (const usage of [
+    undefined,
+    { accountId: "a", status: "idle" as const, stale: false },
+    { accountId: "a", status: "loading" as const, stale: false },
+  ]) {
+    const name = usage?.status ?? "none";
+    const h = health(base, usage);
+    assert.deepEqual([h.tone, h.label, h.fix], ["off", "Limit verisi yok", undefined], name);
+    assert.equal(health(base, usage, {}, "en").label, "No usage data yet", name);
+    // Not "Çalışıyor" either while the account is open in Claude.
+    assert.equal(health(base, usage, { active: true, desktopRunning: true }).label, "Limit verisi yok", name);
+    // The Overview and the panel rows read the same status.
+    const row = { account: base, usage, state: "unknown" as const, recommended: false };
+    assert.equal(accountRowSubtitle(row, tr("tr"), "tr", "UTC", NOW), "Limit verisi yok", name);
+    assert.equal(accountRowSubtitle(row, tr("en"), "en", "UTC", NOW), "No usage data yet", name);
+  }
+  // A sign-in problem still outranks it.
+  assert.equal(health(noAuth, undefined).label, "Limit okuma girişi yok");
+  // Loading again over an earlier reading stays ready.
+  assert.equal(health(base, { ...ready, status: "loading" }).label, "Hazır");
 });
 
 test("a failed or old usage read is out of date, not ready, wherever the account is shown", () => {
@@ -134,9 +157,8 @@ test("a failed or old usage read is out of date, not ready, wherever the account
   assert.equal(health(base, studio, { active: true, desktopRunning: true }).label, "Limit verisi eski");
   // A sign-in problem still outranks it.
   assert.equal(health(noAuth, studio).label, "Limit okuma girişi yok");
-  // A fresh read and no read yet stay ready.
+  // A fresh read stays ready, also while the next one loads.
   assert.equal(health(base, ready).label, "Hazır");
-  assert.equal(health(base, undefined).label, "Hazır");
   assert.equal(health(base, { ...ready, status: "loading" }).label, "Hazır");
 });
 

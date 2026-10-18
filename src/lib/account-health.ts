@@ -22,6 +22,9 @@ export interface AccountHealth {
 type T = (tr: string, en: string) => string;
 type Words = readonly [tr: string, en: string];
 
+/** An account with no usage reading yet, in the Accounts page, the Overview and the panel. */
+const NO_USAGE_DATA: Words = ["Limit verisi yok", "No usage data yet"];
+
 /**
  * What the usage connection waits for the user to do, when only a prompting refresh (`renew`) can clear it:
  * allow the Keychain, or renew the connection however it was reported. While the service is rate-limited
@@ -167,5 +170,7 @@ export function accountHealth(
   // keeps the previous limits, marked stale). The Overview names it the same way.
   if (usage && (usage.stale || usage.status === "error"))
     return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
+  // Never read (idle, or the first read still loading): neither "Ready" nor "out of date".
+  if (!usage?.checkedAt) return result("off", NO_USAGE_DATA);
   return result("ok", running ? ["Çalışıyor", "Running"] : ["Hazır", "Ready"]);
 }

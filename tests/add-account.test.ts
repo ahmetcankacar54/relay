@@ -176,7 +176,7 @@ test("saving a Claude app sign-in warns that macOS may ask for the Mac password 
   const hint = /macOS bir kez Mac parolanı isteyebilir \(Relay Safe Storage\); “Her Zaman İzin Ver”i seç\./;
   // The add-account dialog's sign-in step, before the sign-in is saved.
   assert.match(step(2, relayFor()), hint);
-  // The confirmations that save a sign-in say it; a switch does not.
+  // The confirmations that save a sign-in say it, and so does a switch, which unseals one.
   const review = (kind: DesktopActionKind, language: "tr" | "en" = "tr") =>
     renderToStaticMarkup(
       createElement(DesktopActionReview, {
@@ -187,8 +187,8 @@ test("saving a Claude app sign-in warns that macOS may ask for the Mac password 
         cancel() {},
       }),
     );
-  for (const kind of ["capture", "login", "reconnect"] as const) assert.match(review(kind), hint, kind);
-  assert.doesNotMatch(review("switch"), hint);
+  for (const kind of ["capture", "login", "reconnect", "switch"] as const) assert.match(review(kind), hint, kind);
+  for (const kind of ["history", "cancel", "recover"] as const) assert.doesNotMatch(review(kind), hint, kind);
   assert.match(
     review("capture", "en"),
     /macOS may ask for your Mac password once \(Relay Safe Storage\); choose “Always Allow”\./,

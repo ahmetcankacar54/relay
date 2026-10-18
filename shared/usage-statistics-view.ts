@@ -1,4 +1,5 @@
 import type { Account } from "./types";
+import { formatPercent } from "./percent";
 import { localDate, planCapacity, wallTime } from "./planning";
 import { historyIdentity, identityOwners } from "./usage-statistics";
 import type { UsageRollups } from "./usage-rollups";
@@ -343,10 +344,10 @@ function buildInsight(
     )
     .sort((a, b) => b.row.capacity - a.row.capacity)[0];
   if (sparse) {
-    const n = Math.round(sparse.view.averageFill!);
+    const fill = sparse.view.averageFill;
     return {
-      tr: `${label(sparse)} dönemlerinin ortalama yalnızca %${n} kadarını dolduruyor.`,
-      en: `${label(sparse)} fills only ${n}% of its periods.`,
+      tr: `${label(sparse)} dönemlerinin ortalama yalnızca ${formatPercent(fill, "tr")} kadarını dolduruyor.`,
+      en: `${label(sparse)} fills only ${formatPercent(fill, "en")} of its periods.`,
     };
   }
   const full = candidates

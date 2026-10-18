@@ -118,8 +118,11 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
   const { t } = useI18n();
   const { accounts, hasUnclaimedDesktop } = relay;
   const first = !accounts.length;
-  // With no profile yet, the account open in Claude is added (and linked in the dialog).
-  const linking = hasUnclaimedDesktop && !first;
+  // The account open in Claude belongs to no profile yet.
+  const unlinked = hasUnclaimedDesktop && !first;
+  // The button links it only to a profile without a Claude app sign-in; otherwise it is added
+  // (and linked in the dialog). The label and the click both follow this.
+  const linking = hasUnclaimedDesktop && accounts.some((a) => !a.desktop);
   const block = desktopBlock(relay);
   const reason = blockReason(block, t);
   return (
@@ -128,11 +131,11 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
         <div className="flex min-w-0 items-center gap-3">
           <Panda scene={first ? "welcome" : "lookout"} size={first ? 120 : 72} playful />
           <div className="min-w-0">
-            <div className={eyebrow}>CLAUDE UYGULAMASI</div>
+            <div className={eyebrow}>{t("CLAUDE UYGULAMASI", "THE CLAUDE APP")}</div>
             <div className="mt-0.5 text-lg font-bold">
               {first
                 ? t("Merhaba, ben Relay’in kuryesiyim", "Hi, I’m Relay’s courier")
-                : linking
+                : unlinked
                   ? t("Claude uygulaması hesabı eşleştirilmedi", "Claude app account not linked")
                   : t("İlk hesabını bağla", "Connect your first account")}
             </div>
@@ -145,7 +148,7 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
               </p>
             )}
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {linking
+              {unlinked
                 ? t(
                     "Claude uygulamasında açık hesabı bir Relay profiliyle eşleştir. Limit okuma girişi bu adımı tamamlamaz.",
                     "Link the account open in the Claude app to a Relay profile. The usage sign-in does not complete this step.",
@@ -167,10 +170,9 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
             disabled={!!block}
             onClick={() => {
               // The Accounts page opens the matching dialog for the query.
-              window.location.hash =
-                hasUnclaimedDesktop && accounts.some((a) => !a.desktop)
-                  ? "#/hesaplar?eslestir"
-                  : intentHash("hesaplar", "ekle");
+              window.location.hash = linking
+                ? "#/hesaplar?eslestir"
+                : intentHash("hesaplar", "ekle");
             }}
           >
             <Plus />

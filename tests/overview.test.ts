@@ -209,6 +209,9 @@ test("onboarding with saved accounts but none open looks out instead of greeting
   assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="72"/);
   assert.doesNotMatch(html, /data-scene="welcome"|Merhaba, ben Relay’in kuryesiyim/);
   assert.match(html, /Claude uygulaması hesabı eşleştirilmedi/);
+  // Every profile has a Claude app sign-in, so the button adds, as its click does.
+  assert.match(html, /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle<\/button>/);
+  assert.doesNotMatch(html, /Hesabı eşleştir</);
 });
 
 test("today's card shows a lookout panda when automatic start has no planned account", () => {

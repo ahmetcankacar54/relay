@@ -66,7 +66,7 @@ const wrap = (relay: Relay, el: ReactElement) =>
   );
 const render = (relay: Relay) => wrap(relay, createElement(Panel, { now: NOW }));
 
-const row = (state: OverviewRow["state"]): OverviewRow => ({ account: acct("x", "X"), state, recommended: false });
+const row = (state: OverviewRow["state"]): OverviewRow => ({ account: acct("x", "X"), usage: use("x", 1, 1), state, recommended: false });
 const idle = { desktopBusy: false, pendingDesktop: undefined, desktop: desktopState("active") } as Pick<Relay, "desktopBusy" | "pendingDesktop" | "desktop">;
 
 test("panelRowState explains why a switch is unavailable", () => {
