@@ -143,15 +143,22 @@ function setup() {
 
 test("off does nothing; without a quota stop or confirmation it waits", async () => {
   const f = setup();
-  const fleet = new FleetContinuation(f.deps);
+  let clock = NOW;
+  const fleet = new FleetContinuation({ ...f.deps, now: () => clock });
   assert.equal((await fleet.tick()).status, "off");
   assert.deepEqual(f.state.switches, []);
   fleet.setEnabled(true);
-  f.state.usage[f.a.id] = usage(f.a, 70);
+  // Full, but read too long ago to confirm it.
+  f.state.usage[f.a.id] = {
+    ...usage(f.a, 100),
+    checkedAt: new Date(NOW - SOURCE_FRESH_MS - 1).toISOString(),
+  };
   const unconfirmed = await fleet.tick();
   assert.equal(unconfirmed.reason, "source-quota-unconfirmed");
   assert.equal(unconfirmed.stopped, 2);
   f.state.stops.set(f.a.id, []);
+  // The next scan is a minute after the last one.
+  clock += 60_000;
   assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
   assert.deepEqual(f.state.switches, []);
 });
@@ -367,4 +374,69 @@ test("the windows are told only when the fleet state changed, not for a new chec
   await fleet.tick();
   await fleet.tick();
   assert.equal(told, 3);
+});
+
+test("no scan while the source has quota; once it is out, a scan at once and then at most once a minute", async () => {
+  const f = setup();
+  let clock = NOW;
+  let scans = 0;
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    now: () => clock,
+    stops: async (account) => {
+      scans++;
+      return f.state.stops.get(account.id) ?? [];
+    },
+  });
+  fleet.setEnabled(true);
+  f.state.usage[f.a.id] = usage(f.a, 70);
+  for (let i = 0; i < 3; i++, clock += 10_000)
+    assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
+  assert.equal(scans, 0);
+  // Out of quota: scanned at once, nothing stopped yet.
+  f.state.stops.set(f.a.id, []);
+  f.state.usage[f.a.id] = usage(f.a, 100);
+  assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
+  assert.equal(scans, 1);
+  // A conversation stops: seen at the next scan, a minute after the last.
+  f.state.stops.set(f.a.id, [stop(0)]);
+  f.state.automation = "accessibility-permission-required";
+  clock += 50_000;
+  assert.equal((await fleet.tick()).stopped, 0);
+  assert.equal(scans, 1);
+  clock += 10_000;
+  assert.equal((await fleet.tick()).stopped, 1);
+  assert.equal(scans, 2);
+  // A change of quota state scans again at once.
+  f.state.usage[f.a.id] = {
+    ...usage(f.a, 100),
+    checkedAt: new Date(NOW - SOURCE_FRESH_MS - 1).toISOString(),
+  };
+  clock += 10_000;
+  assert.equal((await fleet.tick()).reason, "source-quota-unconfirmed");
+  assert.equal(scans, 3);
+  assert.deepEqual(f.state.switches, []);
+});
+
+test("the switch acts on the conversations as scanned under the lock, not on an earlier scan", async () => {
+  const f = setup();
+  let clock = NOW;
+  const first = stop(0);
+  // A meta row appended after the stop: the same turn, a longer transcript.
+  const grown = { ...first, transcriptBytes: 20, transcriptSha256: "b".repeat(64) };
+  f.state.stops.set(f.a.id, [first]);
+  f.state.automation = "accessibility-permission-required";
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    now: () => clock,
+    unchanged: (s) => s.transcriptBytes === 20,
+  });
+  fleet.setEnabled(true);
+  await fleet.tick();
+  f.state.stops.set(f.a.id, [grown]);
+  f.state.automation = undefined;
+  clock += 10_000;
+  const done = await fleet.tick();
+  assert.deepEqual(f.state.switches, [f.b.id]);
+  assert.equal(done.reason, "continued");
 });

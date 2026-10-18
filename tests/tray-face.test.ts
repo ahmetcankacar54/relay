@@ -40,7 +40,11 @@ test("the tray's title, tooltip and image are set only when they change", () => 
   face.setTitle(" 40%");
   face.setToolTip("Relay · A");
   face.setImage("idle", image("idle"));
-  assert.deepEqual(fake.calls, ["title: 40%", "tooltip:Relay · A", "image:idle.png"]);
+  assert.deepEqual(fake.calls, [
+    "title: 40%",
+    "tooltip:Relay · A",
+    "image:idle.png",
+  ]);
   assert.equal(built, 1);
   face.setTitle(" 41%");
   face.setImage("blink", image("blink"));
@@ -61,7 +65,10 @@ test("a value the tray refused is set again next time", () => {
 });
 
 test("the menu bar tray sets its title, tooltip and panda through the face", () => {
-  const tray = readFileSync(new URL("../electron/tray.ts", import.meta.url), "utf8");
+  const tray = readFileSync(
+    new URL("../electron/tray.ts", import.meta.url),
+    "utf8",
+  );
   assert.doesNotMatch(tray, /this\.tray\.set(Title|ToolTip|Image)\(/);
   assert.match(tray, /this\.face\.setTitle\(/);
   assert.match(tray, /this\.face\.setToolTip\(/);

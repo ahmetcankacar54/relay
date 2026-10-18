@@ -789,3 +789,59 @@ test("quota-stop polling follows a growing transcript and refuses a malformed on
     await fs.rm(f.root, { recursive: true, force: true });
   }
 });
+
+/** The fixture with its conversation active within the quota-stop window. */
+async function recentFixture() {
+  const f = await fixture();
+  const metadataFile = path.join(
+    f.root,
+    "desktop",
+    "claude-code-sessions",
+    f.source.id,
+    f.org,
+    `local_${uuid}.json`,
+  );
+  const metadata = JSON.parse(await fs.readFile(metadataFile, "utf8"));
+  metadata.lastActivityAt = Date.parse("2026-10-13T14:00:00.000Z");
+  await fs.writeFile(metadataFile, JSON.stringify(metadata));
+  return f;
+}
+test("a known conversation's project folder is looked up alone, without listing every folder", async () => {
+  const f = await recentFixture();
+  const projects = path.join(f.root, "transcripts", "projects");
+  try {
+    const account = f.store.account(f.source.id);
+    assert.equal((await f.evidence.quotaStops(account)).length, 1);
+    // The project list cannot be read now; the folder found before still can.
+    await fs.chmod(projects, 0o333);
+    const [stop] = await f.evidence.quotaStops(account);
+    assert.equal(stop?.transcriptRelative, `projects/-test/${uuid}.jsonl`);
+  } finally {
+    await fs.chmod(projects, 0o755);
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
+test("a conversation no folder holds is probed again only after a minute", async () => {
+  const f = await recentFixture();
+  const aside = `${f.transcriptFile}.aside`;
+  try {
+    const account = f.store.account(f.source.id);
+    await fs.rename(f.transcriptFile, aside);
+    assert.equal((await f.evidence.quotaStops(account)).length, 0);
+    await fs.rename(aside, f.transcriptFile);
+    f.ui.observedAt += 30_000;
+    assert.equal((await f.evidence.quotaStops(account)).length, 0);
+    f.ui.observedAt += 30_000;
+    assert.equal((await f.evidence.quotaStops(account)).length, 1);
+    // A folder that lost the transcript is forgotten and probed again.
+    await fs.mkdir(path.join(f.root, "transcripts", "projects", "-moved"));
+    await fs.rename(
+      f.transcriptFile,
+      path.join(f.root, "transcripts", "projects", "-moved", `${uuid}.jsonl`),
+    );
+    const [moved] = await f.evidence.quotaStops(account);
+    assert.equal(moved?.transcriptRelative, `projects/-moved/${uuid}.jsonl`);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});

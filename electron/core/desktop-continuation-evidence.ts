@@ -274,6 +274,8 @@ const LIVE_TRANSCRIPT_MS = 2 * 60 * 60_000;
 /** CPU seconds a process may use between observations and still count as idle. */
 const IDLE_CPU_SECONDS = 0.3;
 const TAIL_BYTES = 512 * 1024;
+/** A conversation no project folder held is probed across every folder at most this often. */
+const FOLDER_PROBE_MS = 60_000;
 
 function transcriptTail(data: Buffer) {
   const start = Math.max(0, data.length - TAIL_BYTES);
@@ -454,6 +456,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   private cpu?: { at: number; times: Map<number, number> };
   private family = new Set<number>();
   private readonly scanner = new TranscriptScanner();
+  /** Each conversation's project folder, from a probe of every folder that found it in one. */
+  private readonly projectFolders = new Map<string, string>();
+  /** When each conversation no single folder held was last probed. */
+  private readonly unplaced = new Map<string, number>();
   /** Count other recently written transcripts whose turn is unfinished. */
   private busyTranscripts(excluded: ReadonlySet<string>) {
     const root = path.join(this.options.transcriptRoot, "projects");
@@ -582,8 +588,40 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     folders: () => Promise<string[]>,
     scanned: Set<string>,
   ) {
-    const found: { relative: string; summary: TranscriptSummary }[] = [];
-    for (const folder of await folders()) {
+    // The folder a probe found it in alone is looked at first, and alone.
+    const known = this.projectFolders.get(cliId);
+    if (known !== undefined) {
+      const found = await this.scannedIn([known], cliId, cwd, scanned);
+      if (found.length === 1) return found[0];
+      this.projectFolders.delete(cliId);
+    }
+    const now = this.now();
+    for (const [id, at] of this.unplaced)
+      if (now - at >= FOLDER_PROBE_MS || now < at) this.unplaced.delete(id);
+    if (this.unplaced.has(cliId))
+      throw new DesktopAutomationError("exact-session-not-observed");
+    // A transcript still being written fails here and is probed again next time.
+    const found = await this.scannedIn(await folders(), cliId, cwd, scanned);
+    if (found.length !== 1) {
+      this.unplaced.set(cliId, now);
+      throw new DesktopAutomationError("exact-session-not-observed");
+    }
+    this.projectFolders.set(cliId, found[0].folder);
+    return found[0];
+  }
+  /** The transcripts of `cliId` in `folders`, each scanned and added to `scanned`. */
+  private async scannedIn(
+    folders: string[],
+    cliId: string,
+    cwd: string,
+    scanned: Set<string>,
+  ) {
+    const found: {
+      folder: string;
+      relative: string;
+      summary: TranscriptSummary;
+    }[] = [];
+    for (const folder of folders) {
       const relative = `projects/${folder}/${cliId}.jsonl`;
       const file = path.resolve(this.options.transcriptRoot, relative);
       try {
@@ -598,11 +636,9 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       const summary = await this.scanner.scan(file);
       if (!summary.cwds.has(path.resolve(cwd)))
         throw new DesktopAutomationError("exact-session-not-observed");
-      found.push({ relative, summary });
+      found.push({ folder, relative, summary });
     }
-    if (found.length !== 1)
-      throw new DesktopAutomationError("exact-session-not-observed");
-    return found[0];
+    return found;
   }
   /**
    * Local Code conversations of `account` whose latest turn ended with a usage
