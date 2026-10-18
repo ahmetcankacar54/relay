@@ -11,6 +11,10 @@ import {
   systemPreferences,
 } from "electron";
 import { themeSource } from "./core/appearance";
+import { appMenuTemplate } from "./app-menu";
+import { pick } from "./language";
+import { routineFailureNotice } from "../shared/routine-failure";
+import { localizeError } from "../src/messages";
 import path from "node:path";
 import os from "node:os";
 import { z } from "zod";
@@ -91,7 +95,8 @@ let usageHistory: UsageHistory;
 let tempo: TempoTracker;
 let trayTimer: ReturnType<typeof setInterval> | undefined;
 let trayLanguage: "tr" | "en" = "tr";
-let traySwitchRequest: string | null = null;
+/** Main's own copy (menus, dialogs, notifications) in the app's language. */
+const say = (tr: string, en: string) => pick(trayLanguage)(tr, en);
 let keeper: WindowKeeper;
 let observedDesktop: DesktopState | undefined;
 let initialized = false;
@@ -538,10 +543,7 @@ else {
           if (!Notification.isSupported()) return;
           new Notification({
             title: "Relay",
-            body:
-              trayLanguage === "en"
-                ? `Could not start ${account.name}'s limit period (${reason}).`
-                : `${account.name} limit dönemi başlatılamadı (${reason}).`,
+            body: routineFailureNotice(account.name, reason, trayLanguage),
           }).show();
         },
         adapted: notifyAdapted,
@@ -659,7 +661,7 @@ else {
         .catch(() => {});
     })
     .catch((error) => {
-      dialog.showErrorBox("Relay açılamadı", String(error));
+      dialog.showErrorBox(say("Relay açılamadı", "Relay could not start"), String(error));
       app.exit(1);
     });
 }
@@ -694,21 +696,25 @@ function closeToTray() {
 async function traySwitch(profileId: string) {
   const account = service.store.state.accounts.find((a) => a.id === profileId);
   if (!account) return;
-  const en = trayLanguage === "en";
   const { response } = await dialog.showMessageBox({
     type: "question",
     buttons: [
-      en ? "Switch and restart Claude" : "Geç ve Claude’u yeniden başlat",
-      en ? "Cancel" : "Vazgeç",
+      say(
+        "Geç ve Claude uygulamasını yeniden başlat",
+        "Switch and restart the Claude app",
+      ),
+      say("Vazgeç", "Cancel"),
     ],
     defaultId: 0,
     cancelId: 1,
-    message: en
-      ? `Switch Claude to ${account.name}?`
-      : `Claude, ${account.name} hesabına geçsin mi?`,
-    detail: en
-      ? "Claude quits and reopens with this account. Let running replies finish first; your conversations stay in Claude."
-      : "Claude kapanıp bu hesapla yeniden açılır. Çalışan yanıtlar varsa önce bitmelerini bekle; konuşmaların Claude’da kalır.",
+    message: say(
+      `Claude uygulaması ${account.name} hesabına geçsin mi?`,
+      `Switch the Claude app to ${account.name}?`,
+    ),
+    detail: say(
+      "Claude uygulaması kapanıp bu hesapla yeniden açılır. Çalışan yanıtlar varsa önce bitmelerini bekle; konuşmaların Claude uygulamasında kalır.",
+      "The Claude app quits and reopens with this account. Let running replies finish first; your conversations stay in the Claude app.",
+    ),
   });
   if (response !== 0) return;
   try {
@@ -716,8 +722,11 @@ async function traySwitch(profileId: string) {
     notifySwitched(account.name);
   } catch (error) {
     dialog.showErrorBox(
-      en ? "Switch failed" : "Geçiş yapılamadı",
-      error instanceof Error ? error.message : String(error),
+      say("Geçiş yapılamadı", "Switch failed"),
+      localizeError(
+        error instanceof Error ? error.message : String(error),
+        trayLanguage,
+      ),
     );
   } finally {
     void tray?.update();
@@ -729,10 +738,10 @@ function notifySwitched(name: string) {
   if (!Notification.isSupported()) return;
   new Notification({
     title: "Relay",
-    body:
-      trayLanguage === "en"
-        ? `Claude switched to ${name}.`
-        : `Claude, ${name} hesabına geçti.`,
+    body: say(
+      `Claude uygulaması ${name} hesabına geçti.`,
+      `The Claude app switched to ${name}.`,
+    ),
   }).show();
 }
 /** After a draft restore: how many drafts were typed back, and how many wait in the panel. */
@@ -819,53 +828,7 @@ function createWindow() {
     (_contents, _permission, callback) => callback(false),
   );
   window.webContents.session.setPermissionCheckHandler(() => false);
-  Menu.setApplicationMenu(
-    Menu.buildFromTemplate([
-      ...(process.platform === "darwin"
-        ? [
-            {
-              label: "Relay",
-              submenu: [
-                { role: "about" as const },
-                { type: "separator" as const },
-                { role: "hide" as const },
-                {
-                  label: "Relay penceresini kapat",
-                  accelerator: "CmdOrCtrl+Q",
-                  click: () => closeToTray(),
-                },
-                {
-                  label: "Relay’den çık",
-                  accelerator: "Alt+CmdOrCtrl+Q",
-                  click: () => app.quit(),
-                },
-              ],
-            },
-          ]
-        : []),
-      {
-        label: "Düzenle",
-        submenu: [
-          { role: "undo" },
-          { role: "redo" },
-          { type: "separator" },
-          { role: "cut" },
-          { role: "copy" },
-          { role: "paste" },
-          { role: "selectAll" },
-        ],
-      },
-      {
-        label: "Görünüm",
-        submenu: [
-          { role: "resetZoom" },
-          { role: "zoomIn" },
-          { role: "zoomOut" },
-          { role: "togglefullscreen" },
-        ],
-      },
-    ]),
-  );
+  applyAppMenu();
   loadPage(window, "index.html");
   window.on("closed", () => {
     window = null;
@@ -876,6 +839,28 @@ function createWindow() {
       window?.hide();
     }
   });
+}
+/** The application menu in the app's language; main rebuilds it when the language changes. */
+function applyAppMenu() {
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate(
+      appMenuTemplate(trayLanguage, {
+        closeToTray: () => closeToTray(),
+        quit: () => app.quit(),
+        closeWindow: () => closeFocusedWindow(),
+      }),
+    ),
+  );
+}
+/**
+ * Cmd+W. The main window closes as its close button does: it hides and Relay stays in the menu
+ * bar. The menu bar panel hides; other windows are left alone.
+ */
+function closeFocusedWindow() {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (!focused || focused.isDestroyed()) return;
+  if (focused === window) focused.close();
+  else if (focused.webContents === trayPanel?.webContents()) trayPanel?.hide();
 }
 /** Only the main frames of the main window and the menu bar panel may call Relay. */
 function trusted(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent) {
@@ -957,13 +942,11 @@ function bindIPC() {
   });
   handle("copy-draft", (draftId) => draft.copy(draftId));
   handle("dismiss-draft", (draftId) => draft.dismiss(draftId));
-  handle("consume-tray-switch", () => {
-    const requested = traySwitchRequest;
-    traySwitchRequest = null;
-    return requested;
-  });
   handle("tray-language", (value) => {
-    trayLanguage = z.enum(["tr", "en"]).parse(value);
+    const language = z.enum(["tr", "en"]).parse(value);
+    const changed = language !== trayLanguage;
+    trayLanguage = language;
+    if (changed) applyAppMenu();
     tray?.update();
   });
   handle("account-planning", (accountId, input) => {
@@ -1202,14 +1185,17 @@ function bindIPC() {
   handle("pick-folder", async () => {
     const result = await dialog.showOpenDialog(window!, {
       properties: ["openDirectory"],
-      title: "Proje klasörünü seç",
+      title: say("Proje klasörünü seç", "Choose the project folder"),
     });
     return result.canceled ? null : result.filePaths[0];
   });
   handle("pick-executable", async () => {
     const result = await dialog.showOpenDialog(window!, {
       properties: ["openFile"],
-      title: "Claude native çalıştırılabilir dosyasını seç",
+      title: say(
+        "Claude Code CLI dosyasını seç",
+        "Choose the Claude Code CLI file",
+      ),
     });
     if (!result.canceled) {
       service.store.update((s) => {
@@ -1296,15 +1282,15 @@ app.on("before-quit", (event) => {
     showWindow();
     void dialog.showMessageBox({
       type: "info",
-      message:
-        trayLanguage === "en"
-          ? "Refreshing the account connection."
-          : "Hesap bağlantısı yenileniyor.",
-      detail:
-        trayLanguage === "en"
-          ? "Relay stayed open to finish the connection safely. Quit again after it completes. Claude and its tasks are unaffected."
-          : "Bağlantıyı yarım bırakmamak için Relay açık kaldı. İşlem tamamlandıktan sonra yeniden çıkabilirsin. Claude ve görevleri etkilenmez.",
-      buttons: [trayLanguage === "en" ? "OK" : "Tamam"],
+      message: say(
+        "Hesap bağlantısı yenileniyor.",
+        "Refreshing the account connection.",
+      ),
+      detail: say(
+        "Bağlantıyı yarım bırakmamak için Relay açık kaldı. İşlem tamamlandıktan sonra yeniden çıkabilirsin. Claude uygulaması ve görevleri etkilenmez.",
+        "Relay stayed open to finish the connection safely. Quit again after it completes. The Claude app and its tasks are unaffected.",
+      ),
+      buttons: [say("Tamam", "OK")],
     });
     return;
   }
@@ -1334,12 +1320,22 @@ app.on("before-quit", (event) => {
   void dialog
     .showMessageBox({
       type: "question",
-      buttons: ["Uygulamaya dön", "Oturumları durdur ve çık"],
+      buttons: [
+        say("Relay’e dön", "Back to Relay"),
+        say("Oturumları durdur ve çık", "Stop the sessions and quit"),
+      ],
       defaultId: 0,
       cancelId: 0,
-      message: `${active.length} terminal çalışıyor.`,
-      detail:
+      message: say(
+        `${active.length} terminal çalışıyor.`,
+        active.length === 1
+          ? "1 terminal is running."
+          : `${active.length} terminals are running.`,
+      ),
+      detail: say(
         "Çıkışta bu işlemler durur. Kaydedilmiş konuşmalar oturum kataloğunda kalır.",
+        "Quitting stops them. Saved conversations stay in the session catalogue.",
+      ),
     })
     .then(async (result) => {
       if (result.response !== 1) return;
@@ -1349,7 +1345,10 @@ app.on("before-quit", (event) => {
         quitting = true;
         app.quit();
       } catch (error) {
-        dialog.showErrorBox("Çıkış tamamlanmadı", String(error));
+        dialog.showErrorBox(
+          say("Çıkış tamamlanmadı", "Quit did not finish"),
+          String(error),
+        );
       }
     });
 });

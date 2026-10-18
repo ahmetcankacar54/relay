@@ -1,7 +1,8 @@
 /**
- * [tr, en, enDisplay?]. `en` is the backend error, word for word (see electron/core), and is the
- * lookup key together with `tr`: never reword it. When the English shown to the user should differ
- * from the backend text, `enDisplay` carries it.
+ * [tr, en, enDisplay?]. `en` is the backend error, word for word (see electron/core and
+ * electron/main.ts), and is the lookup key together with `tr`: never reword it. When the English
+ * shown to the user should differ from the backend text, `enDisplay` carries it. A backend error
+ * thrown in Turkish whose wording changed sits in `en` too, with its English in `enDisplay`.
  */
 type Pair = [tr: string, en: string, enDisplay?: string];
 const pairs: Pair[] = [
@@ -244,6 +245,106 @@ const pairs: Pair[] = [
     "İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.",
     "System encryption is unavailable. Desktop sign-in was not saved.",
     "System encryption is unavailable. Claude app sign-in was not saved.",
+  ],
+  // electron/main.ts and the Desktop lock.
+  [
+    "Hesap bağlantısının yenilenmesi bitene kadar bekle.",
+    "Wait for the account connection refresh to finish.",
+  ],
+  [
+    "Giriş yapmadan önce Claude uygulamasındaki işlemin bitmesini bekle.",
+    "Finish the Desktop handoff before signing in.",
+    "Wait for the Claude app operation to finish before signing in.",
+  ],
+  [
+    "Claude uygulamasındaki işlemin bitmesini bekle, sonra yenisini başlat.",
+    "Finish the Desktop handoff before starting another Desktop operation.",
+    "Wait for the Claude app operation to finish before starting another.",
+  ],
+  ["Geçersiz IPC kaynağı.", "Invalid IPC source."],
+  // electron/core/desktop.ts: automatic preparation refused.
+  [
+    "Otomatik hazırlıktan önce Claude uygulamasında açık hesap bilinmeli.",
+    "The active Desktop account must be known before automatic preparation.",
+    "The account open in the Claude app must be known before automatic preparation.",
+  ],
+  [
+    "Otomatik hazırlıktan önce Claude uygulamasındaki hesap değişti.",
+    "Desktop account changed before automatic preparation.",
+    "The account in the Claude app changed before automatic preparation.",
+  ],
+  [
+    "Otomatik hazırlığa artık izin yok.",
+    "Automatic preparation is no longer authorized.",
+  ],
+  [
+    "Otomatik hazırlıktan önce seçilen hesap değişti.",
+    "The selected Desktop account changed before automatic preparation.",
+    "The selected account changed before automatic preparation.",
+  ],
+  [
+    "Otomatik geçiş, yeniden başlatmadan önce iptal edildi.",
+    "Automatic Desktop switch was cancelled before restart.",
+    "The automatic switch was cancelled before the restart.",
+  ],
+  ["Code kaydı bulunamadı.", "Missing Code record."],
+  ["İşlem listesi okunamadı.", "The process list could not be read."],
+  ["Claude CLI giriş durumu geçersiz.", "Invalid CLI authentication status."],
+  // Thrown in Turkish by electron/core/service.ts and runner.ts; their English follows.
+  [
+    "Claude uygulamasında doğru hesabın açık olduğunu doğrula.",
+    "Desktop’ta doğru hesabın açık olduğunu doğrula.",
+    "Check that the right account is open in the Claude app.",
+  ],
+  [
+    "Claude uygulamasına aktarım bu platformda veya CLI sürümünde desteklenmiyor.",
+    "Desktop aktarımı bu platform veya CLI sürümünde desteklenmiyor.",
+    "Sending to the Claude app is not supported on this platform or CLI version.",
+  ],
+  [
+    "Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Claude uygulamasına gönder.",
+    "Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Desktop’a gönder.",
+    "Continue with the chosen account in Relay first, then send that session to the Claude app.",
+  ],
+  [
+    "Önce bu hesabın giriş işlemini tamamla veya iptal et.",
+    "Önce bu hesabın giriş işlemini tamamla veya iptal et.",
+    "Finish or cancel this account’s sign-in first.",
+  ],
+  [
+    "Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.",
+    "Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.",
+    "This account is on hold. Lift the hold on Accounts or choose another account.",
+  ],
+  [
+    "Proje klasörü bulunamadı. Klasörü yeniden seç.",
+    "Proje klasörü bulunamadı. Klasörü yeniden seç.",
+    "The project folder was not found. Choose it again.",
+  ],
+  [
+    "Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.",
+    "Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.",
+    "Stop this project’s running session on the Live tab first.",
+  ],
+  [
+    "Hesap bulunamadı.",
+    "Hesap bulunamadı.",
+    "Account not found.",
+  ],
+  [
+    "Terminal bulunamadı.",
+    "Terminal bulunamadı.",
+    "Terminal not found.",
+  ],
+  [
+    "Önce çalışan oturumu durdur.",
+    "Önce çalışan oturumu durdur.",
+    "Stop the running session first.",
+  ],
+  [
+    "En fazla 20 canlı terminal açılabilir.",
+    "En fazla 20 canlı terminal açılabilir.",
+    "You can open up to 20 live terminals.",
   ],
 ];
 export function localizeError(message: string, language: "tr" | "en") {

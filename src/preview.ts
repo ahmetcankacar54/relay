@@ -203,7 +203,6 @@ const desktop: DesktopState = {
   recoveryRequired: false,
   errorRevision: 0,
 };
-let trayRequested = false;
 // Local development scenarios exercise UI states without touching real accounts.
 const scenario = import.meta.env.DEV
   ? new URLSearchParams(location.search).get("scenario")
@@ -447,14 +446,7 @@ export const previewApi: RelayAPI = {
     account.planning = input;
     return structuredClone(account);
   },
-  consumeTraySwitchRequest: async () => {
-    // `?scenario=tray-switch` simulates one menu-bar switch request.
-    if (scenario !== "tray-switch" || trayRequested) return null;
-    trayRequested = true;
-    return ids[1];
-  },
   setTrayLanguage: async () => {},
-  onTraySwitch: () => () => {},
   onChanged: () => () => {},
   openPage: async (page, intent) => {
     location.hash = intentHash(page, intent);

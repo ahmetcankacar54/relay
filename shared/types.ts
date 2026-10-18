@@ -181,9 +181,7 @@ export interface RelayAPI {
     accountId: string,
     input: AccountPlanning,
   ): Promise<Account>;
-  consumeTraySwitchRequest(): Promise<string | null>;
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
-  onTraySwitch(callback: () => void): () => void;
   /** Main broadcast `relay:changed`: Relay state changed in another window or the tray. */
   onChanged(callback: () => void): () => void;
   /** Shows the main window on a page, with the intent its page acts on (and hides the menu bar panel). */

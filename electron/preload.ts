@@ -16,8 +16,6 @@ const api: RelayAPI = {
   dismissDraft: (id) => ipcRenderer.invoke("relay:dismiss-draft", id),
   updateAccountPlanning: (id, input) =>
     ipcRenderer.invoke("relay:account-planning", id, input),
-  consumeTraySwitchRequest: () =>
-    ipcRenderer.invoke("relay:consume-tray-switch"),
   setTrayLanguage: (language) =>
     ipcRenderer.invoke("relay:tray-language", language),
   openPage: (page, intent) =>
@@ -31,11 +29,6 @@ const api: RelayAPI = {
   setPanelHeight: (height) => ipcRenderer.send("relay:panel-size", height),
   closePanel: () => ipcRenderer.send("relay:panel-close"),
   quit: () => ipcRenderer.invoke("relay:quit"),
-  onTraySwitch: (callback) => {
-    const listener = () => callback();
-    ipcRenderer.on("relay:tray-switch", listener);
-    return () => ipcRenderer.removeListener("relay:tray-switch", listener);
-  },
   onChanged: (callback) => {
     const listener = () => callback();
     ipcRenderer.on("relay:changed", listener);

@@ -1,17 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import {
-  errorAfterRefresh,
-  shouldConsumeTraySwitch,
-  shouldPoll,
-} from "../src/data/relay-action";
+import { errorAfterRefresh, shouldPoll } from "../src/data/relay-action";
 import { languageFromStorage } from "../src/data/language";
 
-test("the tray switch request is consumed unless the caller opts out", () => {
-  assert.equal(shouldConsumeTraySwitch({}), true);
-  assert.equal(shouldConsumeTraySwitch({ consumeTraySwitch: true }), true);
-  assert.equal(shouldConsumeTraySwitch({ consumeTraySwitch: false }), false);
+test("the never-sent tray switch request is gone end to end", () => {
+  // The menu bar switches through its own confirmation (traySwitch in main); nothing queues a
+  // request for a renderer to take.
+  for (const file of [
+    "../electron/main.ts",
+    "../electron/preload.ts",
+    "../shared/types.ts",
+    "../src/data/useRelay.ts",
+    "../src/data/relay-action.ts",
+    "../src/panel/main.tsx",
+    "../src/preview.ts",
+  ]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /consumeTraySwitch|consume-tray-switch|traySwitchRequest|onTraySwitch|relay:tray-switch/, file);
+  }
 });
 
 test("vite builds both the main window and the menu bar panel", () => {

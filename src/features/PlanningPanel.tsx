@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, CalendarClock, Play } from "lucide-react";
+import { routineFailure } from "../../shared/routine-failure";
 import type {
   Account,
   AccountPlanning,
@@ -37,29 +38,8 @@ import { ForecastBadges } from "../pages/planning/ForecastBadges";
 import { AccountWindowLine } from "../pages/planning/AccountWindowLine";
 
 type T = (tr: string, en: string) => string;
-const failure: Record<string, [string, string]> = {
-  "routine-policy-unverified": [
-    "yönetici politikası veya kimlik doğrulanamadı",
-    "administrator policy or identity not verified",
-  ],
-  "routine-cli-unavailable": ["Claude CLI bulunamadı", "Claude CLI not found"],
-  "routine-cli-unsupported": [
-    "Claude CLI sürümü desteklenmiyor",
-    "Claude CLI version not supported",
-  ],
-  "routine-credentials-unavailable": [
-    "limit okuma girişinin süresi dolmuş",
-    "usage sign-in expired",
-  ],
-  "routine-platform-unsupported": [
-    "bu sistemde desteklenmiyor",
-    "not supported on this system",
-  ],
-  "routine-settings-changed": ["ayarlar değişti", "settings changed"],
-  interrupted: ["Relay kapandı", "Relay quit"],
-};
 const failureText = (reason: string | undefined, t: T) =>
-  t(...(failure[reason ?? ""] ?? ["istek başarısız", "request failed"]));
+  t(...(routineFailure(reason) ?? ["istek başarısız", "request failed"]));
 
 /** Refusals that stop an account until the plan changes (see the keeper). */
 const stopReason = (status?: KeeperAccountStatus) =>

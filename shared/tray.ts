@@ -36,6 +36,7 @@ const labels = {
     empty: "Add an account in Relay",
     review: "Remaining quota · select an account to switch",
     unavailable: "Claude app connection unavailable",
+    statusUnavailable: "Claude app status unavailable",
     loading: "Checking the Claude app connection…",
     busy: "Claude app operation in progress",
     pending: "Finish the Claude app sign-in first",
@@ -54,6 +55,7 @@ const labels = {
     empty: "Relay’de hesap ekle",
     review: "Kalan limit · geçmek için hesap seç",
     unavailable: "Claude uygulaması bağlantısı kullanılamıyor",
+    statusUnavailable: "Claude uygulamasının durumu okunamadı",
     loading: "Claude uygulaması bağlantısı kontrol ediliyor…",
     busy: "Claude uygulaması işlemi sürüyor",
     pending: "Önce Claude uygulaması girişini tamamla",
@@ -118,6 +120,22 @@ export function canRequestTraySwitch(
     !desktopCliMismatch(account) &&
     snapshot.desktop?.activeProfileId !== profileId
   );
+}
+
+/**
+ * The menu when a snapshot could not be read: opening Relay and quitting stay; no account
+ * action is offered against unknown Claude app state.
+ */
+export function unavailableTrayMenu(
+  language: TrayLanguage = "en",
+): TrayMenuItem[] {
+  const t = labels[language];
+  return [
+    { type: "normal", label: t.show, enabled: true, command: { type: "show" } },
+    { type: "normal", label: t.statusUnavailable, enabled: false },
+    { type: "separator" },
+    { type: "normal", label: t.quit, enabled: true, command: { type: "quit" } },
+  ];
 }
 
 /** These commands only open a review. Executing a Desktop switch is deliberately

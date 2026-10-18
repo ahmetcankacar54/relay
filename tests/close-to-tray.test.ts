@@ -19,20 +19,25 @@ test("the app menu has no stock quit role, so Cmd+Q cannot quit Relay by itself"
 });
 
 test("Cmd+Q closes the window to the menu bar and Alt+Cmd+Q quits Relay", () => {
+  // The template itself is tested in tests/app-menu.test.ts; main hands it these actions.
   assert.match(
     main,
-    /\{\s*label: "Relay penceresini kapat",\s*accelerator: "CmdOrCtrl\+Q",\s*click: \(\) => closeToTray\(\),\s*\}/,
+    /appMenuTemplate\(trayLanguage, \{\s*closeToTray: \(\) => closeToTray\(\),\s*quit: \(\) => app\.quit\(\),\s*closeWindow: \(\) => closeFocusedWindow\(\),\s*\}\)/,
   );
-  assert.match(
-    main,
-    /\{\s*label: "Relay’den çık",\s*accelerator: "Alt\+CmdOrCtrl\+Q",\s*click: \(\) => app\.quit\(\),\s*\}/,
-  );
-  // The two items sit in the macOS app menu, next to the other Relay items.
-  const menu = main.slice(main.indexOf('label: "Relay",'));
-  assert.ok(
-    menu.indexOf("closeToTray()") > 0 &&
-      menu.indexOf("closeToTray()") < menu.indexOf('label: "Düzenle"'),
-  );
+});
+
+test("the menu is rebuilt when the language changes", () => {
+  const handler = main.slice(main.indexOf('handle("tray-language"'));
+  assert.match(handler, /if \(changed\) applyAppMenu\(\);/);
+  assert.ok(handler.indexOf("applyAppMenu()") < handler.indexOf("\n  });"));
+});
+
+test("Cmd+W hides the main window as its close button does, and hides the panel", () => {
+  const body = topLevel("closeFocusedWindow");
+  assert.match(body, /if \(focused === window\) focused\.close\(\);/);
+  assert.match(body, /trayPanel\?\.hide\(\)/);
+  // The main window's close is what hides it while the menu bar keeps Relay running.
+  assert.match(main, /window\.on\("close", \(event\) => \{\s*if \(!quitting && tray\) \{\s*event\.preventDefault\(\);\s*window\?\.hide\(\);/);
 });
 
 test("closeToTray quits without a tray; otherwise it hides the window, the panel and the dock", () => {

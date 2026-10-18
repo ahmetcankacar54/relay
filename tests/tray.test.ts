@@ -6,6 +6,7 @@ import {
   trayAccountName,
   trayTooltip,
   trayUsageLabel,
+  unavailableTrayMenu,
   type TraySnapshot,
 } from "../shared/tray";
 import type { Account, AccountUsage, DesktopState } from "../shared/types";
@@ -240,5 +241,16 @@ test("tray names the two sign-ins the way the app does while one is unfinished",
     labelFor({ authBusy: true }, "en").includes(
       "Finish the usage sign-in first",
     ),
+  );
+});
+
+test("the fallback menu follows the language and offers only Open and Quit", () => {
+  const labels = (language: "tr" | "en") =>
+    unavailableTrayMenu(language).map((item) => (item.type === "separator" ? "-" : item.label));
+  assert.deepEqual(labels("en"), ["Open Relay", "Claude app status unavailable", "-", "Quit Relay"]);
+  assert.deepEqual(labels("tr"), ["Relay’i aç", "Claude uygulamasının durumu okunamadı", "-", "Relay’den çık"]);
+  assert.deepEqual(
+    unavailableTrayMenu("tr").flatMap((item) => (item.type === "normal" && item.command ? [item.command.type] : [])),
+    ["show", "quit"],
   );
 });

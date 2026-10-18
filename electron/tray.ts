@@ -4,11 +4,13 @@ import {
   canRequestTraySwitch,
   trayTitle,
   trayTooltip,
+  unavailableTrayMenu,
   type TrayCommand,
   type TrayLanguage,
   type TrayMenuItem,
   type TraySnapshot,
 } from "../shared/tray";
+import { pick } from "./language";
 import { TrayMenuLifecycle } from "./core/tray-menu-lifecycle";
 import { trayIcons } from "./tray-icons";
 import { trayClickAction } from "../shared/tray-panel";
@@ -131,22 +133,7 @@ export class RelayTray {
    * menu must not offer an action against unknown Desktop state.
    */
   private showUnavailable() {
-    const items: TrayMenuItem[] = [
-      {
-        type: "normal",
-        label: "Open Relay",
-        enabled: true,
-        command: { type: "show" },
-      },
-      { type: "normal", label: "Desktop status unavailable", enabled: false },
-      { type: "separator" },
-      {
-        type: "normal",
-        label: "Quit Relay",
-        enabled: true,
-        command: { type: "quit" },
-      },
-    ];
+    const items = unavailableTrayMenu(this.options.language?.() ?? "en");
     try {
       if (process.platform === "darwin") this.tray.setTitle("");
       this.menuLifecycle.update(items, JSON.stringify(items));
@@ -160,16 +147,16 @@ export class RelayTray {
   /** Right click in panel mode: open the main window or quit. */
   private popUpShortMenu() {
     if (this.destroyed) return;
-    const en = (this.options.language?.() ?? "en") === "en";
+    const t = pick(this.options.language?.() ?? "en");
     this.tray.popUpContextMenu(
       Menu.buildFromTemplate([
         {
-          label: en ? "Open Relay" : "Relay’i aç",
+          label: t("Relay’i aç", "Open Relay"),
           click: () => this.options.showWindow(),
         },
         { type: "separator" },
         {
-          label: en ? "Quit Relay" : "Çık",
+          label: t("Relay’den çık", "Quit Relay"),
           click: () => this.options.quit(),
         },
       ]),

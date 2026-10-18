@@ -14,7 +14,6 @@ import type {
 } from "../../shared/types";
 import { DEFAULT_SETTINGS } from "../../shared/types";
 import { suggestedAccount } from "../../shared/usage";
-import { desktopCliMismatch } from "../../shared/account-state";
 import { staleManualSwitch } from "../../shared/automation-status";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
 import { previewApi } from "../preview";
@@ -26,7 +25,6 @@ import { pendingFlow, tempoRateNow } from "./selectors";
 import {
   errorAfterRefresh,
   relayAction,
-  shouldConsumeTraySwitch,
   shouldPoll,
 } from "./relay-action";
 import { RelayContext, useRelay, type Relay } from "./relay-context";
@@ -38,10 +36,7 @@ export const api: RelayAPI = injected ?? previewApi;
 export const preview = !injected;
 export const APP_VERSION: string = packageInfo.version;
 
-function useRelayState(
-  options: { consumeTraySwitch?: boolean; pollWhenHidden?: boolean } = {},
-): Relay {
-  const consumeTraySwitch = shouldConsumeTraySwitch(options);
+function useRelayState(options: { pollWhenHidden?: boolean } = {}): Relay {
   const pollWhenHidden = options.pollWhenHidden !== false;
   const { t } = useI18n();
   const [data, setData] = useState<Snapshot>();
@@ -58,7 +53,6 @@ function useRelayState(
   const [dismissed, setDismissed] = useState<string>();
   const lock = useRef(false);
   const sequence = useRef(0);
-  const queuedTrayTarget = useRef<string | null>(null);
   const showError = useCallback((e: unknown) => setError(errorMessage(e)), []);
   // A background refresh that failed once (a busy moment) must not leave its error behind
   // after refreshes work again.
@@ -83,39 +77,11 @@ function useRelayState(
         setError((current) => errorAfterRefresh(current, stale));
       }
     }
-    if (request !== sequence.current) return { snapshot, status };
-    if (!consumeTraySwitch) return { snapshot, status };
-    const requested = await api.consumeTraySwitchRequest();
-    if (requested) queuedTrayTarget.current = requested;
-    if (request !== sequence.current) return { snapshot, status };
-    const trayTarget = queuedTrayTarget.current;
-    if (trayTarget) {
-      const target = snapshot.accounts.find((a) => a.id === trayTarget);
-      if (
-        !target?.desktop ||
-        desktopCliMismatch(target) ||
-        status.activeProfileId === trayTarget
-      )
-        queuedTrayTarget.current = null;
-      else if (
-        !lock.current &&
-        !status.busy &&
-        !status.recoveryRequired &&
-        !status.pendingProfileId &&
-        !snapshot.authFlows.some(pendingFlow)
-      ) {
-        queuedTrayTarget.current = null;
-        setDesktopRequest({ accountId: trayTarget, kind: "switch" });
-      }
-    }
     return { snapshot, status };
-  }, [consumeTraySwitch]);
+  }, []);
   useEffect(() => {
     void refresh().catch(showRefreshError);
     const off = api.onAuth(() => {
-      void refresh().catch(showRefreshError);
-    });
-    const offTray = api.onTraySwitch(() => {
       void refresh().catch(showRefreshError);
     });
     const offChanged = api.onChanged(() => {
@@ -136,7 +102,6 @@ function useRelayState(
     document.addEventListener("visibilitychange", visible);
     return () => {
       off();
-      offTray();
       offChanged();
       clearInterval(timer);
       window.removeEventListener("focus", focus);
@@ -341,15 +306,12 @@ function useRelayState(
 /** Owns the app state once and shares it with every page through context. */
 export function RelayProvider({
   children,
-  consumeTraySwitch = true,
   pollWhenHidden = true,
 }: {
   children: ReactNode;
-  /** The menu bar panel passes false so only the main window takes tray requests. */
-  consumeTraySwitch?: boolean;
   /** The menu bar panel passes false: no 4 s poll while it is hidden. */
   pollWhenHidden?: boolean;
 }) {
-  const relay = useRelayState({ consumeTraySwitch, pollWhenHidden });
+  const relay = useRelayState({ pollWhenHidden });
   return createElement(RelayContext.Provider, { value: relay }, children);
 }
