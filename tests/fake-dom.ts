@@ -203,3 +203,42 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     },
   };
 }
+
+// The fake browser keeps no text of its own: a lone string child goes through `textContent`, and a text
+// node's update through `nodeValue`. `readableText` (after `install`) makes both readable to `textOf`.
+export type Fake = Record<string, unknown> & { childNodes: Fake[]; tagName: string };
+export function readableText() {
+  const doc = globalThis.document as unknown as Record<string, (...args: unknown[]) => Fake>;
+  const element = doc.createElement;
+  const textNode = doc.createTextNode;
+  doc.createElement = (tag) => {
+    const el = element.call(doc, tag);
+    let text = "";
+    Object.defineProperty(el, "textContent", {
+      get: () => text,
+      set(value: string) {
+        text = value;
+        el.childNodes.length = 0;
+      },
+    });
+    return el;
+  };
+  doc.createTextNode = (value) => {
+    const node = textNode.call(doc, value);
+    Object.defineProperty(node, "nodeValue", { get: () => node.data, set: (v: string) => void (node.data = v) });
+    return node;
+  };
+}
+/** A node's text, its children's included; no-break spaces read as plain ones. */
+export const textOf = (node: unknown): string => {
+  const n = node as { data?: string; childNodes?: unknown[]; textContent?: string };
+  return ((n.data ?? "") + (typeof n.textContent === "string" ? n.textContent : "") + (n.childNodes ?? []).map(textOf).join("")).replace(/\u00a0/g, " ");
+};
+/** The first node, depth first, that `match` accepts. */
+export const find = (node: Fake, match: (node: Fake) => boolean): Fake | undefined =>
+  match(node) ? node : node.childNodes.map((child) => find(child, match)).find(Boolean);
+/** The detail box a day chart shows beside its active bar, as text; undefined while none is shown. */
+export const dayTip = (container: Fake) => {
+  const node = find(container, (n) => (n as { attributes?: Map<string, string> }).attributes?.get?.("data-slot") === "day-tooltip");
+  return node ? textOf(node) : undefined;
+};

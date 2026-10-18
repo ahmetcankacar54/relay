@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { act, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Usage } from "../src/pages/Usage";
-import { TokenUsage, TokenUsageCard } from "../src/pages/usage/TokenUsage";
+import { DayTable, TokenUsage, TokenUsageCard, tokenColumns } from "../src/pages/usage/TokenUsage";
 import { TOKEN_SCAN_POLL_MS } from "../src/pages/usage/useTokenUsage";
 import { formatTokens } from "../src/pages/usage/format";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type RelayAPI, type Snapshot } from "../shared/types";
 import { TOKEN_ROW_LABELS, type TokenCounts, type TokenRow, type TokenUsageView } from "../shared/token-usage-view";
-import { fakeDom } from "./fake-dom";
+import { dayTip, fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const ZONE = "Europe/Istanbul";
@@ -92,6 +92,9 @@ const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "
 const card = (state: Parameters<typeof TokenUsageCard>[0]["state"], language: Language = "tr") =>
   render(createElement(TokenUsageCard, { state, accounts }), language);
 const shown = (language: Language = "tr") => card({ view, loading: false }, language);
+/** The day table on its own: the card folds it under "Gün gün tablo". */
+const dayTable = (language: Language = "tr") =>
+  render(createElement(DayTable, { view, columns: tokenColumns(view, accounts, i18n(language).t), metric: "total" }), language);
 /** Markup as seen on screen: without the text only screen readers hear. */
 const visible = (html: string) => text(html.replace(/<span class="sr-only">[^<]*<\/span>/g, ""));
 
@@ -172,32 +175,29 @@ test("a segment's height follows the day's share of the busiest day", () => {
   assert.ok(near((1_000_000 / 2_175_000) * plot));
 });
 
-test("a day's tooltip lists each account's value with ≈ when estimated, and the model mix", () => {
+test("the legend sums each row over the range, ≈ when any of its days was estimated", () => {
   const html = shown();
-  const title = (date: string) => {
-    const label = text(html).includes(date) ? date : date;
-    return new RegExp(`<title>${label}\\n([^<]*)</title>`).exec(html)?.[1] ?? "";
-  };
-  const fourteenth = title("14 Eki");
-  assert.match(fourteenth, /Kişisel · Max 2,1 Mn/);
-  assert.match(fourteenth, /Vertex 125 B/);
-  assert.doesNotMatch(fourteenth, /≈/);
-  const thirteenth = title("13 Eki");
-  assert.match(thirteenth, /Kişisel · Max ≈1 Mn/);
-  const twelfth = title("12 Eki");
-  assert.match(twelfth, /Hesabı bilinmeyen 45 B/);
-  assert.match(twelfth, /Relay dışı terminal 3 B/);
-  assert.match(fourteenth, /Aralıktaki modeller: claude-opus-4 %80 · claude-sonnet-4 %20/);
-  assert.match(html, /<title>8 Eki<\/title>/);
+  const legend = text(html.slice(html.indexOf("<ul"), html.indexOf("</ul>")));
+  assert.match(legend, /Kişisel · Max≈3,1 Mn/);
+  assert.match(legend, /Vertex125 B/);
+  assert.match(legend, /Hesabı bilinmeyen45 B/);
+  assert.match(legend, /Relay dışı terminal3 B/);
+});
 
-  const en = shown("en");
-  assert.match(en, /Former account 8k/);
-  assert.match(en, /Models in this range: claude-opus-4 80% · claude-sonnet-4 20%/);
-  assert.match(en, /Outside-Relay terminal 3k/);
+test("the range's model mix sits under the chart, and the day table is folded", () => {
+  const plain = text(shown());
+  assert.match(plain, /Aralıktaki modeller: claude-opus-4 %80 · claude-sonnet-4 %20/);
+  assert.match(text(shown("en")), /Models in this range: claude-opus-4 80% · claude-sonnet-4 20%/);
+  // The table is one click away, under its own heading.
+  assert.match(plain, /Gün gün tablo/);
+  assert.match(shown(), /aria-expanded="false"/);
+  assert.doesNotMatch(shown(), /<table/);
+  // The browser's own slow tooltip is gone: the chart draws its own.
+  assert.doesNotMatch(shown(), /<title>/);
 });
 
 test("the table lists days newest first with the rows from the view, then the total", () => {
-  const html = shown();
+  const html = dayTable();
   const table = html.slice(html.indexOf("<table"), html.indexOf("</table>"));
   const head = [...table.slice(0, table.indexOf("<tbody")).matchAll(/<th(?:\s[^>]*)?>([^<]*)</g)].map((m) => m[1]);
   assert.deepEqual(head, ["Gün", "Kişisel · Max", "Vertex", "Eski hesap", "Hesabı bilinmeyen", "Relay dışı terminal", "Toplam"]);
@@ -216,28 +216,29 @@ test("the table lists days newest first with the rows from the view, then the to
 });
 
 test("only estimated cells carry the ≈ tooltip", () => {
-  const html = shown();
+  const html = dayTable();
   const tooltip = "Limit ölçümlerinden tahmin edildi";
   const estimated = [...html.matchAll(/<td[^>]*title="Limit ölçümlerinden tahmin edildi"[^>]*>(.*?)<\/td>/g)];
   // The 13th's account cell and its total.
   assert.deepEqual(estimated.map((c) => visible(c[1])), ["≈1 Mn", "≈1 Mn"]);
   assert.equal(html.split(tooltip).length - 1, 2);
-  assert.match(shown("en"), /title="Estimated from limit samples"/);
+  assert.match(dayTable("en"), /title="Estimated from limit samples"/);
 });
 
 test("estimated cells and chart days tell screen readers they are estimated, not only the tooltip", () => {
-  const html = shown();
+  const html = dayTable();
   const cells = [...html.matchAll(/<td[^>]*title="Limit ölçümlerinden tahmin edildi"[^>]*>(.*?)<\/td>/g)].map((m) => m[1]);
   assert.equal(cells.length, 2);
   // The ≈ is hidden from screen readers, which hear "tahmini" instead.
   for (const cell of cells) assert.equal(cell, '<span aria-hidden="true">≈</span><span class="sr-only">tahmini </span>1 Mn');
-  assert.match(shown("en"), /<span aria-hidden="true">≈<\/span><span class="sr-only">estimated <\/span>1m<\/td>/);
+  assert.match(dayTable("en"), /<span aria-hidden="true">≈<\/span><span class="sr-only">estimated <\/span>1m<\/td>/);
   // Exact cells say nothing of the kind.
   assert.equal(html.split('class="sr-only"').length - 1, 2);
   // Each chart day names its rows, the estimated ones as such.
-  assert.match(html, /<g[^>]*role="img"[^>]*aria-label="13 Eki: 1 Mn; Kişisel · Max tahmini 1 Mn"/);
-  assert.match(html, /<g[^>]*role="img"[^>]*aria-label="14 Eki: 2,2 Mn; Kişisel · Max 2,1 Mn; Vertex 125 B"/);
-  assert.match(html, /<g[^>]*role="img"[^>]*aria-label="8 Eki: 0"/);
+  const chart = shown();
+  assert.match(chart, /<g[^>]*role="img"[^>]*aria-label="13 Eki: 1 Mn; Kişisel · Max tahmini 1 Mn"/);
+  assert.match(chart, /<g[^>]*role="img"[^>]*aria-label="14 Eki: 2,2 Mn; Kişisel · Max 2,1 Mn; Vertex 125 B"/);
+  assert.match(chart, /<g[^>]*role="img"[^>]*aria-label="8 Eki: 0"/);
   assert.match(shown("en"), /aria-label="13 Oct: 1m; Kişisel · Max estimated 1m"/);
 });
 
@@ -347,37 +348,6 @@ function apiStub() {
   } as unknown as RelayAPI;
   return { api, calls, changed: () => changed?.(), listening: () => changed !== undefined };
 }
-// The fake browser keeps no text of its own: a lone string child goes through `textContent`, and a text
-// node's update through `nodeValue`. This makes both readable.
-type Fake = Record<string, unknown> & { childNodes: Fake[]; tagName: string };
-function readableText() {
-  const doc = globalThis.document as unknown as Record<string, (...args: unknown[]) => Fake>;
-  const element = doc.createElement;
-  const textNode = doc.createTextNode;
-  doc.createElement = (tag) => {
-    const el = element.call(doc, tag);
-    let text = "";
-    Object.defineProperty(el, "textContent", {
-      get: () => text,
-      set(value: string) {
-        text = value;
-        el.childNodes.length = 0;
-      },
-    });
-    return el;
-  };
-  doc.createTextNode = (value) => {
-    const node = textNode.call(doc, value);
-    Object.defineProperty(node, "nodeValue", { get: () => node.data, set: (v: string) => void (node.data = v) });
-    return node;
-  };
-}
-const textOf = (node: unknown): string => {
-  const n = node as { data?: string; childNodes?: unknown[]; textContent?: string };
-  return plainSpaces((n.data ?? "") + (typeof n.textContent === "string" ? n.textContent : "") + (n.childNodes ?? []).map(textOf).join(""));
-};
-const find = (node: Fake, match: (node: Fake) => boolean): Fake | undefined =>
-  match(node) ? node : node.childNodes.map((child) => find(child, match)).find(Boolean);
 
 test("TokenUsage loads on mount, on a new range or account, and follows its Relay", async () => {
   const stub = apiStub();
@@ -452,6 +422,7 @@ test("choosing a metric redraws the chart and the table for it; cache is write p
       return act(async () => dom.dispatch(item, "click", { detail: 1 }));
     };
     const table = () => textOf(find(dom.container as unknown as Fake, (n) => n.tagName === "table"));
+    await click("Gün gün tablo");
     assert.match(table(), /14 Eki2,1 Mn125 B———2,2 Mn/);
     // 14th: a has 800 000 read + 50 000 written, b 5 000 read. The 13th had none, and the terminal 3 000 read.
     await click("Önbellek");
@@ -460,6 +431,74 @@ test("choosing a metric redraws the chart and the table for it; cache is write p
     assert.match(table(), /14 Eki200 B20 B———220 B13 Eki≈tahmini 100 B————≈tahmini 100 B12 Eki———5 B—5 B11 Eki——1 B——1 B/);
     await click("Girdi");
     assert.match(table(), /14 Eki1 Mn100 B———1,1 Mn13 Eki≈tahmini 900 B————≈tahmini 900 B/);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("pointing at a day details it beside the bar: each row's value and share, and only that day stays lit", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
+    const container = dom.container as unknown as Fake;
+    const svg = find(container, (n) => n.tagName === "svg") as Fake & { box: { left: number; top: number; width: number; height: number } };
+    // The chart is drawn 1:1 with its 640-unit viewBox.
+    svg.box = { left: 0, top: 0, width: 640, height: 146 };
+    // Days drawn faint while another one is detailed.
+    const dimmed = (node: Fake = container): number =>
+      ((node as { attributes?: Map<string, string> }).attributes?.get?.("class")?.includes("opacity-40") ? 1 : 0) +
+      (node.childNodes ?? []).reduce((sum, child) => sum + dimmed(child), 0);
+    assert.equal(dayTip(container), undefined);
+    // The right edge is the last day, the 14th (a Wednesday).
+    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 639, clientY: 60 }));
+    assert.equal(dayTip(container), "14 Ekim ÇarşambaToplam2,2 MnKişisel · Max2,1 Mn%94Vertex125 B%6");
+    assert.equal(dimmed(), 6);
+    // Left of the first bar is no day.
+    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 2, clientY: 60 }));
+    assert.equal(dayTip(container), undefined);
+    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 639, clientY: 60 }));
+    await act(async () => dom.dispatch(svg, "pointerout", { relatedTarget: null }));
+    assert.equal(dayTip(container), undefined);
+    assert.equal(dimmed(), 0);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("the arrow keys walk the days, the detail marks estimates and empty days, and Escape lets go", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
+    const container = dom.container as unknown as Fake;
+    const svg = find(container, (n) => n.tagName === "svg") as Fake;
+    assert.equal((svg as unknown as { attributes: Map<string, string> }).attributes.get("tabindex"), "0");
+    const tip = () => dayTip(container);
+    const key = (k: string) => act(async () => dom.dispatch(svg, "keydown", { key: k }));
+    // From nothing, ← starts at the newest day.
+    await key("ArrowLeft");
+    assert.match(tip() ?? "", /^14 Ekim Çarşamba/);
+    await key("ArrowLeft");
+    assert.equal(tip(), "13 Ekim SalıToplam≈1 MnKişisel · Max≈1 Mn%100≈ Limit ölçümlerinden tahmin edildi");
+    await key("Home");
+    assert.equal(tip(), "8 Ekim PerşembeToplam0Bu gün token yok.");
+    await key("ArrowLeft");
+    assert.match(tip() ?? "", /^8 Ekim/);
+    await key("End");
+    assert.match(tip() ?? "", /^14 Ekim/);
+    await key("ArrowRight");
+    assert.match(tip() ?? "", /^14 Ekim/);
+    await key("Escape");
+    assert.equal(tip(), undefined);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
