@@ -10,3 +10,4 @@ output/
 config/local-signing.json
 .superpowers/
 .claude/worktrees/
+cli/dist/
