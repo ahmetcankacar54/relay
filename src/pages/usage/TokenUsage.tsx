@@ -512,7 +512,7 @@ export function TokenUsageCard({
   const title = t("Token kullanımı", "Token usage");
   return (
     <Card
-      className="gap-3 px-5 py-4"
+      className="min-w-0 gap-3 px-5 py-4"
       role={error && !view ? "alert" : undefined}
       aria-busy={(loading && view !== undefined) || undefined}
     >
