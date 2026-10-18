@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { ProcessLock } from "./process-lock";
 import {
   DEFAULT_PLANNING,
   DEFAULT_SETTINGS,
@@ -173,8 +174,15 @@ export const settingsPatchSchema = settingsSchema
 // A new install starts with DEFAULT_SETTINGS' "same-group". A saved registry that never
 // wrote the mode shared across all accounts, and keeps doing so.
 const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
+/**
+ * The registry layout this build writes. Bumped whenever a field is added anywhere in it, so a
+ * build that knows less never writes a file a newer build wrote and silently drops its fields.
+ * A file without the field was written before 0.12 and counts as 1.
+ */
+export const STATE_SCHEMA = 2;
 const stateSchema = z.object({
   version: z.literal(1),
+  schema: z.number().int().min(1).optional(),
   settings: z
     .preprocess((value) => {
       if (!value || typeof value !== "object") return value;
@@ -211,6 +219,49 @@ export const createAccountSchema = z
   })
   .strict();
 
+/** Why a registry write was refused: the file is newer than this build, or older than 0.12. */
+export class StoreWriteRefused extends Error {
+  constructor(readonly reason: "newer-schema" | "unversioned") {
+    super(
+      reason === "newer-schema"
+        ? "Relay's account list was written by a newer version. Update this copy of Relay before changing it."
+        : "Relay's account list was written by Relay 0.11 or older. Update Relay.app to 0.12 or later and open it once.",
+    );
+  }
+}
+
+export interface StoreOptions {
+  /** Keep a copy of the registry at open (state-backups/, newest 20). Default true. */
+  backupOnOpen?: boolean;
+  /** Run open-time migrations, and stamp a missing schema. Default true. */
+  migrateOnOpen?: boolean;
+  /** Write over a file without a schema (pre-0.12). Default true. */
+  adoptUnversioned?: boolean;
+  /** How long a write waits for another process's write. Default 2000 ms. */
+  lockWaitMs?: number;
+  by?: "app" | "cli";
+}
+
+/**
+ * Parses a registry a newer build wrote: its unknown keys are dropped, in strict objects too.
+ * Only a reader that never writes uses it.
+ */
+function parseNewer(raw: unknown): State {
+  const value = structuredClone(raw) as Record<string, any>;
+  for (let round = 0; round < 50; round++) {
+    const result = stateSchema.safeParse(value);
+    if (result.success) return result.data;
+    const unknown = result.error.issues.filter((i) => i.code === "unrecognized_keys");
+    if (!unknown.length) throw result.error;
+    for (const issue of unknown) {
+      let at: any = value;
+      for (const key of issue.path) at = at?.[key as any];
+      for (const key of (issue as { keys: string[] }).keys) delete at?.[key];
+    }
+  }
+  throw new Error("Invalid settings file.");
+}
+
 export function privateDir(dir: string) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   if (fs.lstatSync(dir).isSymbolicLink())
@@ -219,28 +270,47 @@ export function privateDir(dir: string) {
 }
 export class Store {
   readonly file: string;
-  state: State;
-  constructor(readonly root: string) {
+  state!: State;
+  /** The schema of the file as last read; 1 for a file without one. */
+  fileSchema = STATE_SCHEMA;
+  private readonly options: Required<StoreOptions>;
+  private readonly lock: ProcessLock;
+  /** The file as last read or written, to notice another process's write. */
+  private seen?: { ino: number; size: number; mtimeMs: number };
+  constructor(
+    readonly root: string,
+    options: StoreOptions = {},
+  ) {
+    this.options = {
+      backupOnOpen: true,
+      migrateOnOpen: true,
+      adoptUnversioned: true,
+      lockWaitMs: 2000,
+      by: "app",
+      ...options,
+    };
     privateDir(root);
     this.file = path.join(root, "state.json");
+    this.lock = new ProcessLock(path.join(root, "state.lock"), this.options.by);
     if (fs.existsSync(this.file)) {
-      if (fs.lstatSync(this.file).isSymbolicLink())
-        throw new Error("Geçersiz ayar dosyası.");
-      // Fail closed: a corrupt registry must never silently discard saved profiles.
-      this.state = stateSchema.parse(
-        JSON.parse(fs.readFileSync(this.file, "utf8")),
-      );
-      this.backup();
-      // Before version 2, history stayed inside a sharing group unless accounts were
-      // picked, and that group choice moved to sharing across all connected accounts.
-      // An explicit "selected" or "off" choice is kept. A new install starts in
-      // "same-group" (no state file, below), so this never touches one.
-      if (this.state.settings.historyPolicyVersion !== 2)
-        this.update((state) => {
-          if (state.settings.desktopHistoryTransfer === "same-group")
-            state.settings.desktopHistoryTransfer = "all";
-          state.settings.historyPolicyVersion = 2;
-        });
+      this.load();
+      if (this.options.backupOnOpen) this.backup();
+      if (this.options.migrateOnOpen) {
+        // Before version 2, history stayed inside a sharing group unless accounts were
+        // picked, and that group choice moved to sharing across all connected accounts.
+        // An explicit "selected" or "off" choice is kept. A new install starts in
+        // "same-group" (no state file, below), so this never touches one.
+        if (this.state.settings.historyPolicyVersion !== 2)
+          this.update((state) => {
+            if (state.settings.desktopHistoryTransfer === "same-group")
+              state.settings.desktopHistoryTransfer = "all";
+            state.settings.historyPolicyVersion = 2;
+          });
+        // A registry from 0.11 or older gets its schema now, so a CLI next to this app
+        // knows the app has been updated.
+        if (this.options.adoptUnversioned && this.fileSchema < STATE_SCHEMA)
+          this.update(() => {});
+      }
     } else {
       this.state = {
         version: 1,
@@ -253,6 +323,36 @@ export class Store {
       };
     }
     privateDir(path.join(root, "profiles"));
+  }
+  /** Reads the file. Fail closed: a corrupt registry must never silently discard saved profiles. */
+  private load() {
+    const before = fs.lstatSync(this.file);
+    if (before.isSymbolicLink()) throw new Error("Geçersiz ayar dosyası.");
+    const raw = JSON.parse(fs.readFileSync(this.file, "utf8"));
+    const schema =
+      raw && Number.isSafeInteger(raw.schema) && raw.schema >= 1 ? raw.schema : 1;
+    this.state = schema > STATE_SCHEMA ? parseNewer(raw) : stateSchema.parse(raw);
+    this.fileSchema = schema;
+    this.seen = { ino: before.ino, size: before.size, mtimeMs: before.mtimeMs };
+  }
+  /** Re-reads the file when another process changed it; true when it did. */
+  reload(): boolean {
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(this.file);
+    } catch {
+      return false;
+    }
+    const seen = this.seen;
+    if (
+      seen &&
+      seen.ino === stat.ino &&
+      seen.size === stat.size &&
+      seen.mtimeMs === stat.mtimeMs
+    )
+      return false;
+    this.load();
+    return true;
   }
   /**
    * Keep the registry as it was at each start (last 20). Another Relay build can
@@ -273,25 +373,45 @@ export class Store {
       // A backup must never prevent Relay from starting.
     }
   }
+  /**
+   * Changes the registry: under a lock shared with Relay's other processes, it re-reads the
+   * file when another process wrote it, applies `fn`, and writes the result with this build's
+   * schema. A file newer than this build, or one from 0.11 or older when adopting is off, is
+   * never written.
+   */
   update(fn: (state: State) => void) {
-    const next = structuredClone(this.state);
-    fn(next);
-    stateSchema.parse(next);
-    const tmp = `${this.file}.${randomUUID()}.tmp`;
+    this.lock.acquireSync("state", this.options.lockWaitMs);
     try {
-      const fd = fs.openSync(tmp, "wx", 0o600);
+      const exists = fs.existsSync(this.file);
+      if (exists) this.reload();
+      if (exists && this.fileSchema > STATE_SCHEMA)
+        throw new StoreWriteRefused("newer-schema");
+      if (exists && this.fileSchema < STATE_SCHEMA && !this.options.adoptUnversioned)
+        throw new StoreWriteRefused("unversioned");
+      const next = structuredClone(this.state);
+      fn(next);
+      next.schema = STATE_SCHEMA;
+      stateSchema.parse(next);
+      const tmp = `${this.file}.${randomUUID()}.tmp`;
       try {
-        fs.writeFileSync(fd, JSON.stringify(next, null, 2));
-        fs.fsyncSync(fd);
+        const fd = fs.openSync(tmp, "wx", 0o600);
+        try {
+          fs.writeFileSync(fd, JSON.stringify(next, null, 2));
+          fs.fsyncSync(fd);
+        } finally {
+          fs.closeSync(fd);
+        }
+        if (exists) fs.copyFileSync(this.file, `${this.file}.bak`);
+        fs.renameSync(tmp, this.file);
+        this.state = next;
+        this.fileSchema = STATE_SCHEMA;
+        const stat = fs.lstatSync(this.file);
+        this.seen = { ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs };
       } finally {
-        fs.closeSync(fd);
+        if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
       }
-      if (fs.existsSync(this.file))
-        fs.copyFileSync(this.file, `${this.file}.bak`);
-      fs.renameSync(tmp, this.file);
-      this.state = next;
     } finally {
-      if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+      this.lock.release();
     }
   }
   account(id: string): Account {
