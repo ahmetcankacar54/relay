@@ -52,6 +52,10 @@ import { readsUsage } from "../shared/cli-version";
 import { UsageHistory } from "./core/usage-history";
 import { usageStatisticsInput } from "./core/usage-statistics-input";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
+import { buildTokenUsageView } from "../shared/token-usage-view";
+import type { UsageSample } from "../shared/usage-statistics";
+import { attribute } from "./core/token-attribution";
+import { TokenLedger } from "./core/token-ledger";
 import { planningIdentity } from "../shared/planning";
 import { PACE_WINDOW_MS } from "../shared/adaptive-plan";
 import { WindowKeeper, type KeeperDeps } from "./core/window-keeper";
@@ -97,6 +101,26 @@ let usageHistory: UsageHistory;
 let activeTimeline: ActiveAccountTimeline;
 let tempo: TempoTracker;
 let trayTimer: ReturnType<typeof setInterval> | undefined;
+/** Token usage: the ledger of transcripts read so far, and the ticks that read them. */
+const TOKEN_TICK_MS = 5 * 60_000;
+/** While the first scan is incomplete, ticks run back to back at this pace. */
+const TOKEN_FIRST_SCAN_TICK_MS = 2_000;
+/** The Usage page asks for a tick first when the last one is older than this. */
+const TOKEN_FRESH_MS = 60_000;
+/** Limit samples are kept 14 days; older responses cannot be estimated from them. */
+const TOKEN_ATTRIBUTION_WINDOW_MS = 14 * 86_400_000;
+let tokenLedger: TokenLedger | undefined;
+/** `~/.claude/projects`, then the profile of each account that has written transcripts. */
+const tokenRoots: { dir: string; profileAccountId?: string }[] = [];
+let tokenTimer: ReturnType<typeof setTimeout> | undefined;
+let tokenRunning: Promise<void> | undefined;
+/** Latched: `tick()` reports incomplete again whenever a new pass starts. */
+let tokenFirstScanDone = false;
+let tokenTickFailed = false;
+let tokenTickedAt = 0;
+/** The limit samples attribution reads, taken once per tick and not once per row. */
+let tokenSamples: UsageSample[] = [];
+let tokenScanStopped = false;
 let trayLanguage: "tr" | "en" = "tr";
 /** Main's own copy (menus, dialogs, notifications) in the app's language. */
 const say = (tr: string, en: string) => pick(trayLanguage)(tr, en);
@@ -169,6 +193,79 @@ function displayUsage() {
       };
   }
   return current;
+}
+/**
+ * Roots are only ever appended, so the indexes the ledger keeps into them stay
+ * valid; an account that starts a terminal after launch is read from its next pass.
+ */
+async function addTokenRoots() {
+  for (const account of service.store.state.accounts) {
+    if (tokenRoots.some((root) => root.profileAccountId === account.id))
+      continue;
+    const dir = path.join(service.store.profile(account.id), "projects");
+    if (await fsp.stat(dir).then((stat) => stat.isDirectory(), () => false))
+      tokenRoots.push({ dir, profileAccountId: account.id });
+  }
+}
+async function tokenTickOnce() {
+  if (!tokenLedger) return;
+  try {
+    await addTokenRoots();
+    tokenSamples = usageHistory.recentSamples(
+      Date.now() - TOKEN_ATTRIBUTION_WINDOW_MS,
+    );
+    const { complete } = await tokenLedger.tick();
+    if (complete) tokenFirstScanDone = true;
+    tokenTickFailed = false;
+  } catch {
+    // A scan that fails (a full disk, a bad time zone) never disturbs Relay; it
+    // is tried again at the slow pace.
+    tokenTickFailed = true;
+  } finally {
+    tokenTickedAt = Date.now();
+  }
+}
+/** One tick at a time: a caller during a tick shares it instead of starting another. */
+function tokenTick(): Promise<void> {
+  tokenRunning ??= tokenTickOnce().finally(() => {
+    tokenRunning = undefined;
+  });
+  return tokenRunning;
+}
+/** The next tick is armed only when the last has ended, on a timer that never holds Relay open. */
+function scheduleTokenTick() {
+  if (tokenScanStopped) return;
+  if (tokenTimer) clearTimeout(tokenTimer);
+  tokenTimer = setTimeout(
+    () => {
+      tokenTimer = undefined;
+      void tokenTick().finally(scheduleTokenTick);
+    },
+    tokenFirstScanDone || tokenTickFailed
+      ? TOKEN_TICK_MS
+      : TOKEN_FIRST_SCAN_TICK_MS,
+  );
+  tokenTimer.unref();
+}
+function startTokenScan() {
+  try {
+    tokenRoots.push({ dir: path.join(os.homedir(), ".claude", "projects") });
+    tokenLedger = new TokenLedger({
+      file: path.join(app.getPath("userData"), "token-ledger.json"),
+      roots: tokenRoots,
+      attribute: (row) =>
+        attribute(row, {
+          timeline: activeTimeline,
+          samples: tokenSamples,
+          accounts: service.store.state.accounts,
+        }),
+      zone: () => service.store.state.settings.planning.timeZone,
+    });
+    scheduleTokenTick();
+  } catch {
+    // Without a ledger the Usage page's token card reports an error; Relay runs on.
+    tokenLedger = undefined;
+  }
 }
 const keeperAbort = new AbortController();
 let quitting = false;
@@ -557,6 +654,7 @@ else {
         adapted: notifyAdapted,
         changed: broadcastChanged,
       });
+      startTokenScan();
       bindIPC();
       initialized = true;
       createWindow();
@@ -1170,6 +1268,31 @@ function bindIPC() {
       now: Date.now(),
     });
   });
+  handle("token-usage", async (input) => {
+    const { range, accountId } = usageStatisticsInput.parse(input);
+    if (!tokenLedger)
+      throw new Error(
+        say("Token kaydı açılamadı.", "The token ledger could not be opened."),
+      );
+    if (Date.now() - tokenTickedAt > TOKEN_FRESH_MS) await tokenTick();
+    const snapshot = tokenLedger.snapshot();
+    const exactSince = activeTimeline.exactSince();
+    return buildTokenUsageView({
+      ledger: {
+        ...snapshot,
+        progress: {
+          ...snapshot.progress,
+          complete: tokenFirstScanDone || snapshot.progress.complete,
+        },
+      },
+      accounts: service.store.state.accounts,
+      range,
+      ...(accountId ? { accountId } : {}),
+      zone: service.store.state.settings.planning.timeZone,
+      now: Date.now(),
+      ...(exactSince === undefined ? {} : { exactSince }),
+    });
+  });
   handle("create-account", (input) =>
     service.store.create(createAccountSchema.parse(input)),
   );
@@ -1392,6 +1515,8 @@ app.on("before-quit", (event) => {
 app.on("will-quit", () => {
   keeperAbort.abort();
   if (trayTimer) clearInterval(trayTimer);
+  tokenScanStopped = true;
+  if (tokenTimer) clearTimeout(tokenTimer);
   tray?.destroy();
   trayPanel?.destroy();
   switchStory?.destroy();

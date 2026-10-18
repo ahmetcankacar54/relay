@@ -3,6 +3,9 @@ import { intentHash } from "./app/routes";
 import { usageSample, type UsageSample } from "../shared/usage-statistics";
 import { foldSamples } from "../shared/usage-rollups";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
+import { buildTokenUsageView } from "../shared/token-usage-view";
+import type { LedgerSnapshot, TokenCounts } from "../shared/token-usage-view";
+import { localDate } from "../shared/planning";
 import type {
   Account,
   AuthFlow,
@@ -137,6 +140,48 @@ function previewSamples(): UsageSample[] {
     }
   });
   return samples;
+}
+// 30 days of token usage for the first three accounts: a few days estimated
+// from limit samples, some usage in a terminal outside Relay, and some from an
+// account Relay could not tell.
+function previewTokenLedger(): LedgerSnapshot {
+  const day = 86_400_000;
+  const today = Date.parse(
+    `${localDate(Date.now(), state.settings.planning.timeZone)}T00:00:00Z`,
+  );
+  const counts = (weight: number, share: number): TokenCounts => ({
+    input: Math.round(weight * share * 12_000),
+    output: Math.round(weight * share * 95_000),
+    cacheWrite: Math.round(weight * share * 640_000),
+    cacheRead: Math.round(weight * share * 9_800_000),
+    responses: Math.round(weight * share * 140),
+  });
+  const days: LedgerSnapshot["days"] = {};
+  for (let ago = 0; ago < 30; ago++) {
+    const date = new Date(today - ago * day).toISOString().slice(0, 10);
+    const byWho: LedgerSnapshot["days"][string] = {};
+    ids.slice(0, 3).forEach((id, index) => {
+      if ((ago + index) % 5 === 4) return;
+      const weight = 1 + ((ago * 7 + index * 3) % 5);
+      const estimated = index > 0 && ago >= 12 && ago <= 16;
+      byWho[`${estimated ? "est" : "acct"}:${id}`] = {
+        "claude-opus-4-7": counts(weight, 0.65),
+        "claude-sonnet-4-6": counts(weight, 0.35),
+        ...(ago % 4 === 0
+          ? { "claude-haiku-4-5": counts(weight, 0.1) }
+          : {}),
+      };
+    });
+    if (ago % 3 === 0)
+      byWho.terminal = { "claude-opus-4-7": counts(1 + (ago % 4), 0.5) };
+    if (ago % 6 === 2)
+      byWho.unknown = { "claude-sonnet-4-6": counts(1 + (ago % 3), 0.3) };
+    days[date] = byWho;
+  }
+  return {
+    days,
+    progress: { scannedBytes: 1, totalBytes: 1, complete: true },
+  };
 }
 const state: Snapshot = {
   settings: structuredClone(DEFAULT_SETTINGS),
@@ -515,6 +560,16 @@ export const previewApi: RelayAPI = {
       ...(accountId ? { accountId } : {}),
       zone: state.settings.planning.timeZone,
       now: Date.now(),
+    }),
+  tokenUsage: async ({ range, accountId }) =>
+    buildTokenUsageView({
+      ledger: previewTokenLedger(),
+      accounts,
+      range,
+      ...(accountId ? { accountId } : {}),
+      zone: state.settings.planning.timeZone,
+      now: Date.now(),
+      exactSince: Date.now() - 12 * 86_400_000,
     }),
   snapshot: async () => structuredClone(state),
   createAccount: async (input) => {

@@ -1,5 +1,7 @@
 import type { UsageStatisticsView } from "./usage-statistics-view";
 export type { UsageStatisticsView } from "./usage-statistics-view";
+import type { TokenUsageView } from "./token-usage-view";
+export type { TokenUsageView } from "./token-usage-view";
 import type { Tempo } from "./tempo";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 import type { DraftSummary } from "../electron/core/draft-vault";
@@ -219,6 +221,10 @@ export interface RelayAPI {
     range: 7 | 30 | 90;
     accountId?: string;
   }): Promise<UsageStatisticsView>;
+  tokenUsage(input: {
+    range: 7 | 30 | 90;
+    accountId?: string;
+  }): Promise<TokenUsageView>;
   createAccount(input: CreateAccount): Promise<Account>;
   checkAuth(accountId: string): Promise<Account>;
   login(accountId: string): Promise<AuthFlow>;
