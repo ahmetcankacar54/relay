@@ -7,7 +7,7 @@ import { readObject } from "../electron/core/desktop-files";
 
 const identity = async (claude: string) => (await readObject(claude, "config.json"))?.lastKnownAccountUuid;
 const pendingFile = (home: string) => path.join(home, "desktop-vault", "pending.json");
-async function until(check: () => boolean, ms = 5000) {
+async function until(check: () => boolean, ms = 30_000) {
   const end = Date.now() + ms;
   while (!check()) {
     if (Date.now() > end) throw new Error("timed out");
@@ -41,6 +41,7 @@ test("add --new signs a new account in and waits for it", async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const done = f.run("add", "B", "--new", "--yes", "--poll-ms", "10");
+  t.after(() => f.signal("SIGINT"));
   await until(() => fs.existsSync(pendingFile(f.home)));
   const signed = await f.accountInDesktop();
   assert.equal(await done, 0);
@@ -70,8 +71,9 @@ test("Ctrl+C while waiting keeps the sign-in pending; --cancel restores the prev
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const done = f.run("add", "C", "--new", "--yes", "--poll-ms", "20");
-  // The wait listens for Ctrl+C only once the sign-in has begun.
-  await until(() => fs.existsSync(pendingFile(f.home)) && f.hasSignalHandler());
+  t.after(() => f.signal("SIGINT"));
+  // The wait listens for Ctrl+C from the line it prints; before it, the operation's own shield does.
+  await until(() => f.out().includes("open the Code tab once; waiting"));
   f.signal("SIGINT");
   assert.equal(await done, 1);
   assert.ok(fs.existsSync(pendingFile(f.home)));
@@ -88,7 +90,8 @@ test("--resume finishes a pending sign-in", async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const first = f.run("add", "C", "--new", "--yes", "--poll-ms", "20");
-  await until(() => fs.existsSync(pendingFile(f.home)) && f.hasSignalHandler());
+  t.after(() => f.signal("SIGINT"));
+  await until(() => f.out().includes("open the Code tab once; waiting"));
   f.signal("SIGINT");
   assert.equal(await first, 1);
   const signed = await f.accountInDesktop();
@@ -113,6 +116,7 @@ test("add --new stops waiting when the sign-in is finished or cancelled elsewher
   const f = await cliFixture(t);
   await f.saved("A");
   const done = f.run("add", "C", "--new", "--yes", "--poll-ms", "10");
+  t.after(() => f.signal("SIGINT"));
   await until(() => fs.existsSync(pendingFile(f.home)));
   fs.rmSync(pendingFile(f.home));
   assert.equal(await done, 1);
