@@ -20,9 +20,9 @@ export function privateJournalDirectory(directory: string) {
   if (process.platform !== "win32") fs.chmodSync(directory, 0o700);
 }
 
-export function readPrivateJson(file: string): unknown {
+export function readPrivateJson(file: string, maxBytes = MAX_BYTES): unknown {
   const before = fs.lstatSync(file);
-  if (!before.isFile() || before.isSymbolicLink() || before.size > MAX_BYTES)
+  if (!before.isFile() || before.isSymbolicLink() || before.size > maxBytes)
     throw new Error("continuation-file-invalid");
   const fd = fs.openSync(
     file,
@@ -36,17 +36,17 @@ export function readPrivateJson(file: string): unknown {
       named.isSymbolicLink() ||
       info.dev !== named.dev ||
       info.ino !== named.ino ||
-      info.size > MAX_BYTES
+      info.size > maxBytes
     )
       throw new Error("continuation-file-invalid");
-    const data = Buffer.alloc(MAX_BYTES + 1);
+    const data = Buffer.alloc(maxBytes + 1);
     let size = 0;
     while (size < data.length) {
       const count = fs.readSync(fd, data, size, data.length - size, null);
       if (count === 0) break;
       size += count;
     }
-    if (size > MAX_BYTES) throw new Error("continuation-file-too-large");
+    if (size > maxBytes) throw new Error("continuation-file-too-large");
     return JSON.parse(
       new TextDecoder("utf-8", { fatal: true }).decode(data.subarray(0, size)),
     );
@@ -56,9 +56,13 @@ export function readPrivateJson(file: string): unknown {
 }
 
 /** Resolve only after the replacement and its directory entry are durable. */
-export function writePrivateJson(file: string, value: unknown) {
+export function writePrivateJson(
+  file: string,
+  value: unknown,
+  maxBytes = MAX_BYTES,
+) {
   const data = JSON.stringify(value);
-  if (Buffer.byteLength(data) > MAX_BYTES)
+  if (Buffer.byteLength(data) > maxBytes)
     throw new Error("continuation-file-too-large");
   if (fs.existsSync(file) && fs.lstatSync(file).isSymbolicLink())
     throw new Error("continuation-file-invalid");
