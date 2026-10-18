@@ -45,6 +45,14 @@ export interface TokenLedgerOptions {
 }
 
 type Days = LedgerSnapshot["days"];
+type Usage = Omit<TokenCounts, "responses">;
+
+/** The response a transcript's last rows belong to, and what it has added so far. */
+interface LastResponse extends Usage {
+  date: string;
+  who: string;
+  model: string;
+}
 
 /** What is kept of a transcript: where reading stopped, never its text. */
 interface FileState {
@@ -55,14 +63,18 @@ interface FileState {
   /** Bytes consumed, always just after a newline. */
   offset: number;
   mtimeMs: number;
-  /** `${message.id}:${requestId}` of the last response counted. */
+  /** `${message.id}:${requestId}` of the last response read. */
   lastKey?: string;
+  /** Where that response was counted; absent when it was skipped, as a copy. */
+  last?: LastResponse;
   /** Shrunk or replaced: never read again, and its counted tokens stay. */
   broken?: true;
 }
 
 interface Saved {
   version: 1;
+  /** The time zone the days are in. */
+  zone?: string;
   files: Record<string, FileState>;
   days: Days;
   /** The length of each day's seen file that goes with these offsets. */
@@ -115,16 +127,16 @@ const SEEN_FILE = /^(\d{4}-\d{2}-\d{2})\.bin$/;
 const PERSIST_EVERY_MS = 10_000;
 /** Claude Code's own stand-in replies, not responses from the API. */
 const SYNTHETIC_MODEL = "<synthetic>";
+const MAX_MODEL_LENGTH = 100;
+/** Real ids are about 30 characters. */
+const MAX_ID_LENGTH = 200;
+const READ_FLAGS =
+  constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 const USAGE = Buffer.from('"usage"');
 const ASSISTANT = Buffer.from('"assistant"');
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const FIELDS = [
-  "input",
-  "output",
-  "cacheWrite",
-  "cacheRead",
-  "responses",
-] as const;
+const USAGE_FIELDS = ["input", "output", "cacheWrite", "cacheRead"] as const;
+const FIELDS = [...USAGE_FIELDS, "responses"] as const;
 
 const yieldToEventLoop = () =>
   new Promise<void>((resolve) => setImmediate(resolve));
@@ -137,6 +149,27 @@ function amount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
     ? value
     : 0;
+}
+
+function code(error: unknown) {
+  return (error as NodeJS.ErrnoException | undefined)?.code;
+}
+
+function isId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= MAX_ID_LENGTH
+  );
+}
+
+function usageOf(usage: Record<string, unknown>): Usage {
+  return {
+    input: amount(usage.input_tokens),
+    output: amount(usage.output_tokens),
+    cacheWrite: amount(usage.cache_creation_input_tokens),
+    cacheRead: amount(usage.cache_read_input_tokens),
+  };
 }
 
 function whoOf(attribution: Attribution): string {
@@ -184,12 +217,9 @@ function syncDirectory(directory: string) {
   }
 }
 
-function readSeenFile(file: string): Buffer {
-  const fd = fsSync.openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
-  try {
-    return fsSync.readFileSync(fd);
-  } finally {
-    fsSync.closeSync(fd);
+class SeenStoreError extends Error {
+  constructor() {
+    super("token-ledger-seen-invalid");
   }
 }
 
@@ -242,9 +272,21 @@ class SeenDays {
     this.bytes.delete(date);
     try {
       fsSync.unlinkSync(this.file(date));
-    } catch {
-      // Already gone.
+    } catch (error) {
+      if (code(error) !== "ENOENT") throw error;
     }
+  }
+
+  /** Forget everything in memory. */
+  forget() {
+    this.loaded.clear();
+    this.pending.clear();
+    this.bytes.clear();
+  }
+
+  /** Delete every seen file; a symlink in the directory's place goes, not its target. */
+  removeAll() {
+    fsSync.rmSync(this.dir, { recursive: true, force: true });
   }
 
   /** Append the new hashes durably, before any offset that read them is saved. */
@@ -258,14 +300,16 @@ class SeenDays {
         constants.O_WRONLY |
           constants.O_APPEND |
           constants.O_CREAT |
-          constants.O_NOFOLLOW,
+          constants.O_NOFOLLOW |
+          constants.O_NONBLOCK,
         0o600,
       );
       try {
-        const size = (await handle.stat()).size;
-        const whole = size - (size % HASH_BYTES);
+        const stat = await handle.stat();
+        if (!stat.isFile()) throw new SeenStoreError();
+        const whole = stat.size - (stat.size % HASH_BYTES);
         // A torn append from a crash is cut off.
-        if (whole !== size) await handle.truncate(whole);
+        if (whole !== stat.size) await handle.truncate(whole);
         await handle.appendFile(Buffer.from(hashes.join(""), "hex"));
         await handle.sync();
         created ||= whole === 0;
@@ -279,35 +323,44 @@ class SeenDays {
   }
 
   /**
-   * Cut each day's file back to the length the saved ledger knew. Hashes past
-   * it belong to rows whose counts were lost with an unsaved ledger; those
-   * rows are read again from the saved offsets, and count again, once.
+   * Cut each day's file back to the length the saved ledger knew, and make it
+   * private again. Hashes past that length belong to rows whose counts were
+   * lost with an unsaved ledger; those rows are read again from the saved
+   * offsets, and count again, once. False when the files cannot be trusted.
    */
-  restore(saved: Record<string, unknown>) {
-    let names: string[];
+  restore(saved: Record<string, unknown>): boolean {
     try {
-      names = fsSync.readdirSync(this.dir);
-    } catch {
-      return;
-    }
-    for (const name of names) {
-      const date = SEEN_FILE.exec(name)?.[1];
-      if (!date) continue;
-      const file = path.join(this.dir, name);
-      try {
-        const info = fsSync.lstatSync(file);
-        if (!info.isFile()) continue;
-        const length = Math.min(amount(saved[date]), info.size);
-        const keep = length - (length % HASH_BYTES);
-        if (keep === 0) {
-          fsSync.unlinkSync(file);
-          continue;
-        }
-        if (info.size > keep) fsSync.truncateSync(file, keep);
-        this.bytes.set(date, keep);
-      } catch {
-        // Left as it is.
+      const info = fsSync.lstatSync(this.dir);
+      if (!info.isDirectory() || info.isSymbolicLink()) return false;
+      for (const name of fsSync.readdirSync(this.dir)) {
+        const date = SEEN_FILE.exec(name)?.[1];
+        if (date && !this.restoreDay(date, amount(saved[date]))) return false;
       }
+      return true;
+    } catch (error) {
+      return code(error) === "ENOENT" && this.bytes.size === 0;
+    }
+  }
+
+  private restoreDay(date: string, saved: number): boolean {
+    const file = this.file(date);
+    try {
+      const info = fsSync.lstatSync(file);
+      if (!info.isFile()) return false;
+      const length = Math.min(saved, info.size);
+      const keep = length - (length % HASH_BYTES);
+      if (keep === 0) {
+        fsSync.unlinkSync(file);
+        return true;
+      }
+      if (info.size > keep) fsSync.truncateSync(file, keep);
+      fsSync.chmodSync(file, 0o600);
+      this.bytes.set(date, keep);
+      return true;
+    } catch (error) {
+      if (code(error) !== "ENOENT") return false;
+      this.bytes.delete(date);
+      return true;
     }
   }
 
@@ -327,20 +380,55 @@ class SeenDays {
     return set;
   }
 
+  /** Only a missing file is an empty day; any other failure fails the tick. */
   private read(date: string): Set<string> {
     const set = new Set<string>();
-    let data: Buffer | undefined;
-    try {
-      data = readSeenFile(this.file(date));
-    } catch {
-      // Nothing seen on this day yet.
-    }
+    const data = this.readFile(date);
     if (data)
       for (let at = 0; at + HASH_BYTES <= data.length; at += HASH_BYTES)
         set.add(data.toString("hex", at, at + HASH_BYTES));
     for (const hash of this.pending.get(date) ?? []) set.add(hash);
     return set;
   }
+
+  private readFile(date: string): Buffer | undefined {
+    let fd: number;
+    try {
+      const info = fsSync.lstatSync(this.dir);
+      if (!info.isDirectory() || info.isSymbolicLink())
+        throw new SeenStoreError();
+      fd = fsSync.openSync(this.file(date), READ_FLAGS);
+    } catch (error) {
+      if (code(error) === "ENOENT") return;
+      throw error;
+    }
+    try {
+      if (!fsSync.fstatSync(fd).isFile()) throw new SeenStoreError();
+      return fsSync.readFileSync(fd);
+    } finally {
+      fsSync.closeSync(fd);
+    }
+  }
+}
+
+function restoreLast(value: unknown): LastResponse | undefined {
+  if (
+    !isRecord(value) ||
+    typeof value.date !== "string" ||
+    !DATE.test(value.date) ||
+    typeof value.who !== "string" ||
+    typeof value.model !== "string"
+  )
+    return;
+  return {
+    date: value.date,
+    who: value.who,
+    model: value.model,
+    input: amount(value.input),
+    output: amount(value.output),
+    cacheWrite: amount(value.cacheWrite),
+    cacheRead: amount(value.cacheRead),
+  };
 }
 
 function restoreFile(value: unknown): FileState | undefined {
@@ -352,6 +440,8 @@ function restoreFile(value: unknown): FileState | undefined {
     )
   )
     return;
+  const last =
+    typeof lastKey === "string" ? restoreLast(value.last) : undefined;
   return {
     dev,
     ino,
@@ -359,6 +449,7 @@ function restoreFile(value: unknown): FileState | undefined {
     offset,
     mtimeMs,
     ...(typeof lastKey === "string" ? { lastKey } : {}),
+    ...(last ? { last } : {}),
     ...(broken === true ? { broken } : {}),
   };
 }
@@ -382,6 +473,10 @@ export class TokenLedger {
   private readonly files = new Map<string, FileState>();
   private readonly seen: SeenDays;
   private days: Days = Object.create(null);
+  /** The zone `days` are in; undefined until the first tick names one. */
+  private bucketZone?: string;
+  /** The seen files could not be trusted: empty everything before counting. */
+  private mustStartOver = false;
   private dirty = false;
   private lastPersist = -Infinity;
   private complete = false;
@@ -441,6 +536,15 @@ export class TokenLedger {
       // An invalid zone throws here, before anything is read.
       cutoff: localDate(started - KEEP_DAYS * DAY_MS, zone),
     };
+    if (
+      this.mustStartOver ||
+      (this.bucketZone !== undefined && this.bucketZone !== zone)
+    )
+      this.startOver(zone);
+    else if (this.bucketZone === undefined) {
+      this.bucketZone = zone;
+      this.dirty = true;
+    }
     const pass = (this.pass ??= {
       dirs: this.roots
         .map((root, index) => ({ dir: root.dir, depth: 0, root: index }))
@@ -468,6 +572,24 @@ export class TokenLedger {
     )
       this.persist();
     return { complete };
+  }
+
+  /**
+   * Empty the counts, offsets and seen files together. The empty ledger is
+   * saved before the seen files go: loading it after a crash in between
+   * deletes them anyway. Until this succeeds, every tick tries it again.
+   */
+  private startOver(zone: string) {
+    this.mustStartOver = true;
+    this.files.clear();
+    this.days = Object.create(null);
+    this.pass = undefined;
+    this.cursor = undefined;
+    this.bucketZone = zone;
+    this.seen.forget();
+    this.persist();
+    this.seen.removeAll();
+    this.mustStartOver = false;
   }
 
   /** List one directory: transcripts to read, and directories to list. */
@@ -543,7 +665,11 @@ export class TokenLedger {
     return true;
   }
 
-  /** Read a transcript from its offset; false when the budget paused it. */
+  /**
+   * Read a transcript from its offset; false when the budget paused it. A
+   * transcript that cannot be opened, inspected or read is left for the next
+   * pass, so one bad file never stalls the scan.
+   */
   private async read(
     entry: { file: string; root: number },
     tick: Tick,
@@ -555,15 +681,18 @@ export class TokenLedger {
       return true;
     let handle: fs.FileHandle;
     try {
-      handle = await fs.open(
-        entry.file,
-        constants.O_RDONLY | constants.O_NOFOLLOW,
-      );
+      handle = await fs.open(entry.file, READ_FLAGS);
     } catch {
       return true;
     }
     try {
-      const stat = await handle.stat();
+      let stat: Stats;
+      try {
+        stat = await handle.stat();
+      } catch {
+        return true;
+      }
+      if (!stat.isFile()) return true;
       if (
         stat.dev !== state.dev ||
         stat.ino !== state.ino ||
@@ -589,12 +718,17 @@ export class TokenLedger {
       const profileAccountId = this.roots[entry.root]?.profileAccountId;
       const chunk = (this.chunk ??= Buffer.allocUnsafe(CHUNK_BYTES));
       while (position < stat.size) {
-        const { bytesRead } = await handle.read(
-          chunk,
-          0,
-          Math.min(chunk.length, stat.size - position),
-          position,
-        );
+        let bytesRead: number;
+        try {
+          ({ bytesRead } = await handle.read(
+            chunk,
+            0,
+            Math.min(chunk.length, stat.size - position),
+            position,
+          ));
+        } catch {
+          return true;
+        }
         if (bytesRead === 0) break;
         position += bytesRead;
         const view = chunk.subarray(0, bytesRead);
@@ -636,11 +770,15 @@ export class TokenLedger {
       }
       return true;
     } finally {
-      await handle.close();
+      await handle.close().catch(() => undefined);
     }
   }
 
-  /** Count one complete line, if it is a response not counted yet. */
+  /**
+   * Count one complete line. A response streams as several contiguous rows
+   * with one id pair and a usage that only grows: the first row is counted,
+   * and each later one adds what grew, to the same bucket.
+   */
   private line(
     state: FileState,
     bytes: Buffer,
@@ -657,25 +795,38 @@ export class TokenLedger {
     if (!isRecord(row) || row.type !== "assistant") return;
     const message = row.message;
     if (!isRecord(message) || !isRecord(message.usage)) return;
-    if (message.model === SYNTHETIC_MODEL) return;
-    // A streamed response is several contiguous rows with one id pair.
+    if (message.model === SYNTHETIC_MODEL || typeof message.id !== "string")
+      return;
+    // Ids out of shape are counted without being deduplicated.
     const key =
-      typeof message.id === "string"
+      isId(message.id) && isId(row.requestId)
         ? `${message.id}:${row.requestId}`
         : undefined;
-    if (key !== undefined && key === state.lastKey) return;
     const time =
       typeof row.timestamp === "string" ? Date.parse(row.timestamp) : NaN;
     if (!Number.isFinite(time)) return;
+    const usage = usageOf(message.usage);
+    if (key !== undefined && key === state.lastKey) {
+      const last = state.last;
+      if (!last || last.date < tick.cutoff) return;
+      const counts = bucket(this.days, last.date, last.who, last.model);
+      for (const field of USAGE_FIELDS)
+        if (usage[field] > last[field]) {
+          counts[field] += usage[field] - last[field];
+          last[field] = usage[field];
+        }
+      return;
+    }
     const date = localDate(time, tick.zone);
-    const remember = () => {
+    const skip = () => {
       if (key === undefined) delete state.lastKey;
       else state.lastKey = key;
+      delete state.last;
     };
-    if (date < tick.cutoff) return remember();
+    if (date < tick.cutoff) return skip();
     // A copy keeps its timestamp, so it is on the same day as the original.
     const hash = key === undefined ? undefined : hashOf(key);
-    if (hash !== undefined && this.seen.has(date, hash)) return remember();
+    if (hash !== undefined && this.seen.has(date, hash)) return skip();
     const who = whoOf(
       this.attribute({
         time,
@@ -684,25 +835,30 @@ export class TokenLedger {
         profileAccountId,
       }),
     );
-    remember();
-    if (hash !== undefined) this.seen.add(date, hash);
     const model =
-      typeof message.model === "string" && message.model
+      typeof message.model === "string" &&
+      message.model.length > 0 &&
+      message.model.length <= MAX_MODEL_LENGTH
         ? message.model
         : "unknown";
-    const usage = message.usage;
     const counts = bucket(this.days, date, who, model);
-    counts.input += amount(usage.input_tokens);
-    counts.output += amount(usage.output_tokens);
-    counts.cacheWrite += amount(usage.cache_creation_input_tokens);
-    counts.cacheRead += amount(usage.cache_read_input_tokens);
+    for (const field of USAGE_FIELDS) counts[field] += usage[field];
     counts.responses += 1;
+    if (key === undefined || hash === undefined) {
+      delete state.lastKey;
+      delete state.last;
+      return;
+    }
+    state.lastKey = key;
+    state.last = { date, who, model, ...usage };
+    this.seen.add(date, hash);
   }
 
   /**
-   * Drop days older than 120 days with their seen hashes, and the state of files last written well
-   * before that. Such a file is skipped as too old if seen again, and if it was
-   * written to since, its old rows fall on dropped days, so nothing re-counts.
+   * Drop days older than 120 days with their seen hashes, and the state of
+   * files last written well before that. Such a file is skipped as too old if
+   * seen again, and if it was written to since, its old rows fall on dropped
+   * days, so nothing re-counts.
    */
   private prune(tick: Tick) {
     for (const date of Object.keys(this.days))
@@ -727,6 +883,7 @@ export class TokenLedger {
   private persist() {
     const saved: Saved = {
       version: 1,
+      ...(this.bucketZone === undefined ? {} : { zone: this.bucketZone }),
       files: Object.fromEntries(this.files),
       days: this.days,
       seen: Object.fromEntries(this.seen.bytes),
@@ -738,7 +895,8 @@ export class TokenLedger {
 
   /**
    * A ledger that cannot be read starts empty, and so do the seen hashes, or
-   * the rescan would find every response already seen.
+   * the rescan would find every response already seen. Seen files that
+   * cannot be trusted empty the ledger too, on the first tick.
    */
   private load() {
     let value: Record<string, any> = {};
@@ -748,7 +906,12 @@ export class TokenLedger {
     } catch {
       // No ledger yet, or an unreadable one.
     }
-    this.seen.restore(isRecord(value.seen) ? value.seen : {});
+    if (typeof value.zone === "string") this.bucketZone = value.zone;
+    if (!this.seen.restore(isRecord(value.seen) ? value.seen : {})) {
+      this.mustStartOver = true;
+      this.seen.forget();
+      return;
+    }
     if (isRecord(value.files))
       for (const [file, raw] of Object.entries(value.files)) {
         const state = restoreFile(raw);

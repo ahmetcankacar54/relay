@@ -73,6 +73,73 @@ export function estimateAccountAt(
   return best?.accountId;
 }
 
+export interface SampleIndex {
+  /** `estimateAccountAt(time, samples)`, for the samples indexed. */
+  estimate(time: number): string | undefined;
+}
+
+/**
+ * `estimateAccountAt` for many times over one set of samples: the samples are
+ * read and sorted once, and each time finds its pair by binary search.
+ */
+export function indexSamples(samples: readonly UsageSample[]): SampleIndex {
+  const byAccount = new Map<string, Reading[]>();
+  for (const sample of samples) {
+    const point = reading(sample);
+    if (!point) continue;
+    const list = byAccount.get(sample.accountId);
+    if (list) list.push(point);
+    else byAccount.set(sample.accountId, [point]);
+  }
+  let first = Infinity;
+  let last = -Infinity;
+  const accounts = [...byAccount].map(([accountId, points]) => {
+    points.sort((x, y) => x.at - y.at);
+    const times = points.map((point) => point.at);
+    first = Math.min(first, times[0]);
+    last = Math.max(last, times[times.length - 1]);
+    // What each consecutive pair rose by; nothing across too long a gap.
+    const rises = points
+      .slice(1)
+      .map((b, i) =>
+        b.at - points[i].at > MAX_USAGE_GAP_MS ? 0 : rise(points[i], b),
+      );
+    return { accountId, times, rises };
+  });
+  return {
+    estimate(time) {
+      if (Number.isNaN(time)) return estimateAccountAt(time, samples);
+      if (!(time >= first && time < last)) return;
+      let best: { accountId: string; rise: number } | undefined;
+      for (const { accountId, times, rises } of accounts) {
+        // The first sample after `time`; the pair starts just before it.
+        let low = 0;
+        let high = times.length;
+        while (low < high) {
+          const middle = (low + high) >>> 1;
+          if (times[middle] <= time) low = middle + 1;
+          else high = middle;
+        }
+        const amount = rises[low - 1];
+        if (amount > 0 && (!best || amount > best.rise))
+          best = { accountId, rise: amount };
+      }
+      return best?.accountId;
+    },
+  };
+}
+
+/** Each samples array is indexed once; a new array, as each tick passes, is indexed anew. */
+const indexes = new WeakMap<readonly UsageSample[], SampleIndex>();
+function indexFor(samples: readonly UsageSample[]): SampleIndex {
+  let index = indexes.get(samples);
+  if (!index) {
+    index = indexSamples(samples);
+    indexes.set(samples, index);
+  }
+  return index;
+}
+
 function sameId(a: string, b: string): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
@@ -93,7 +160,10 @@ function accountFor(
   });
 }
 
-/** Which Relay account a Claude response belongs to, or whether it is not Desktop's. */
+/**
+ * Which Relay account a Claude response belongs to, or whether it is not
+ * Desktop's. `samples` is indexed once per array and must not change after.
+ */
 export function attribute(
   row: { time: number; entrypoint?: string; profileAccountId?: string },
   deps: {
@@ -119,7 +189,7 @@ export function attribute(
       ? { kind: "account", accountId: owner.id, estimated: false }
       : { kind: "unknown" };
   }
-  const estimated = estimateAccountAt(row.time, deps.samples);
+  const estimated = indexFor(deps.samples).estimate(row.time);
   return estimated
     ? { kind: "account", accountId: estimated, estimated: true }
     : { kind: "unknown" };

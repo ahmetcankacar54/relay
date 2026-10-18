@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   attribute,
   estimateAccountAt,
+  indexSamples,
 } from "../electron/core/token-attribution";
 import { MAX_USAGE_GAP_MS, type UsageSample } from "../shared/usage-statistics";
 import type { Account } from "../shared/types";
@@ -309,4 +310,69 @@ test("the estimate does not mutate its input", () => {
   const before = JSON.stringify(samples);
   estimateAccountAt(T0 + MIN, samples);
   assert.equal(JSON.stringify(samples), before);
+});
+
+/** A small deterministic generator, so a failure names its seed. */
+function random(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+test("the indexed estimate agrees with the plain one on random samples", () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const next = random(seed);
+    const pick = (n: number) => Math.floor(next() * n);
+    const samples: UsageSample[] = [];
+    for (let i = 0; i < 120; i++) {
+      const accountId = ["a", "b", "c"][pick(3)];
+      // Coarse times so equal times and long gaps both occur.
+      const at = T0 + pick(60) * 5 * MIN + (next() < 0.2 ? 31 * MIN : 0);
+      const percent = pick(5) * 10;
+      const resetsAt = next() < 0.3 ? undefined : T0 + pick(4) * 2 * 60 * MIN;
+      const value = sample(accountId, at, percent, resetsAt);
+      if (next() < 0.05) delete value.fiveHour;
+      if (next() < 0.03) value.checkedAt = "not a date";
+      samples.push(value);
+    }
+    const index = indexSamples(samples);
+    for (let i = 0; i < 400; i++) {
+      const time =
+        i % 4 === 0
+          ? Date.parse(samples[pick(samples.length)].checkedAt) || T0
+          : T0 - 30 * MIN + (next() * 330 * 5 * MIN) / 5;
+      assert.equal(
+        index.estimate(time),
+        estimateAccountAt(time, samples),
+        `seed ${seed}, time ${time}`,
+      );
+    }
+    for (const time of [NaN, Infinity, -Infinity, T0 - 1, T0 + 1e12])
+      assert.equal(index.estimate(time), estimateAccountAt(time, samples));
+  }
+});
+
+test("attribution over 50k samples handles 10k rows in under a second", () => {
+  const samples: UsageSample[] = [];
+  for (let i = 0; i < 50_000; i++)
+    samples.push(
+      sample(
+        ["a", "b", "c", "d", "e"][i % 5],
+        T0 + Math.floor(i / 5) * MIN,
+        (i / 5) % 100,
+      ),
+    );
+  const deps = { timeline: noTimeline, samples, accounts };
+  const started = performance.now();
+  let estimated = 0;
+  for (let i = 0; i < 10_000; i++) {
+    const result = attribute({ time: T0 + i * 60_000 + 30_000 }, deps);
+    if (result.kind === "account") estimated++;
+  }
+  const elapsed = performance.now() - started;
+  assert.ok(estimated > 0);
+  assert.ok(elapsed < 1000, `took ${elapsed} ms`);
 });

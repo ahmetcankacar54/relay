@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -25,8 +25,15 @@ type Usage = {
   cache_read_input_tokens?: unknown;
 };
 
+const temporary: string[] = [];
+after(() => {
+  for (const dir of temporary) fs.rmSync(dir, { recursive: true, force: true });
+});
+
 function tempDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "relay-token-ledger-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-token-ledger-"));
+  temporary.push(dir);
+  return dir;
 }
 
 function assistant(input: {
@@ -713,4 +720,242 @@ test("while a scan spans ticks the ledger is written at most every 10 s, and alw
   assert.deepEqual(await ledger.tick(), { complete: true });
   assert.notEqual(saved(), third);
   assert.equal(JSON.parse(saved()).seen["2026-10-18"], rows.length * 8);
+});
+
+const streamed = (output: number, more: Usage = {}, at?: string) =>
+  assistant({
+    id: "msg_S",
+    req: "req_S",
+    ...(at ? { at } : {}),
+    usage: { output_tokens: output, ...more },
+  });
+
+test("a streamed response counts its largest usage, once", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(
+    path.join(root, "p", "s.jsonl"),
+    streamed(1, {
+      input_tokens: 5,
+      cache_creation_input_tokens: 10,
+      cache_read_input_tokens: 100,
+    }) +
+      streamed(1, {
+        input_tokens: 7,
+        cache_creation_input_tokens: 10,
+        cache_read_input_tokens: 300,
+      }) +
+      streamed(37, {
+        input_tokens: 6,
+        cache_creation_input_tokens: 12,
+        cache_read_input_tokens: 200,
+      }) +
+      streamed(120, {
+        input_tokens: 7,
+        cache_creation_input_tokens: 12,
+        cache_read_input_tokens: 300,
+      }),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  assert.deepEqual(totals(ledger), {
+    input: 7,
+    output: 120,
+    cacheWrite: 12,
+    cacheRead: 300,
+    responses: 1,
+  });
+});
+
+test("a streamed response split across ticks and a restart still counts its largest usage, in its first row's bucket", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const file = path.join(root, "p", "s.jsonl");
+  write(file, streamed(1) + streamed(1));
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  assert.equal(totals(ledger).output, 1);
+  fs.appendFileSync(file, streamed(37));
+  await ledger.tick();
+  assert.equal(totals(ledger).output, 37);
+
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  // The last row was written after midnight; the response stays on its day.
+  fs.appendFileSync(
+    file,
+    streamed(120, {}, "2026-10-19T00:00:05+03:00") + assistant({ id: "msg_T" }),
+  );
+  await restarted.tick();
+  assert.deepEqual(totals(restarted), {
+    input: 1 + 1,
+    output: 120 + 2,
+    cacheWrite: 3 + 3,
+    cacheRead: 4 + 4,
+    responses: 2,
+  });
+  assert.deepEqual(Object.keys(restarted.snapshot().days), ["2026-10-18"]);
+});
+
+test("a copy in another transcript is skipped even when it has more rows", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(path.join(root, "p", "a.jsonl"), streamed(1) + streamed(1));
+  write(
+    path.join(root, "p", "b.jsonl"),
+    streamed(1) + streamed(1) + streamed(37) + streamed(120),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  assert.equal(totals(ledger).output, 1);
+  assert.equal(totals(ledger).responses, 1);
+});
+
+test("ids and models out of shape: no id skips the row, odd ids skip dedupe, a long model is unknown", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const noId = JSON.parse(assistant({ id: "msg_X" }));
+  delete noId.message.id;
+  const numericId = JSON.parse(assistant({ id: "msg_Y" }));
+  numericId.message.id = 42;
+  const longRequest = assistant({ id: "msg_L", req: "r".repeat(300) });
+  write(
+    path.join(root, "p", "s.jsonl"),
+    JSON.stringify(noId) +
+      "\n" +
+      JSON.stringify(numericId) +
+      "\n" +
+      longRequest +
+      longRequest +
+      assistant({ id: "msg_M", model: "m".repeat(101) }) +
+      assistant({ id: "msg_N", model: "m".repeat(100) }),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  const byModel = ledger.snapshot().days["2026-10-18"]["acct:a1"];
+  assert.equal(byModel[MODEL].responses, 2);
+  assert.equal(byModel.unknown.responses, 1);
+  assert.equal(byModel["m".repeat(100)].responses, 1);
+  assert.equal(totals(ledger).responses, 4);
+});
+
+test("a transcript that cannot be read is skipped for the pass and read on a later one", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root reads any file");
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const locked = path.join(root, "p", "a.jsonl");
+  write(locked, assistant({ id: "msg_A" }));
+  write(path.join(root, "p", "b.jsonl"), assistant({ id: "msg_B" }));
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  fs.chmodSync(locked, 0o000);
+  try {
+    assert.deepEqual(await ledger.tick(), { complete: true });
+    assert.equal(totals(ledger).responses, 1);
+  } finally {
+    fs.chmodSync(locked, 0o600);
+  }
+  await ledger.tick();
+  assert.equal(totals(ledger).responses, 2);
+});
+
+test("a seen day that cannot be read fails the tick, and a later tick counts once", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(path.join(root, "p", "s.jsonl"), assistant({ id: "msg_A" }));
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  const day = path.join(dir, "token-ledger-seen", "2026-10-18.bin");
+  fs.mkdirSync(day, { recursive: true });
+  await assert.rejects(ledger.tick());
+  assert.equal(totals(ledger).responses, 0);
+  fs.rmdirSync(day);
+  await ledger.tick();
+  assert.equal(totals(ledger).responses, 1);
+  assert.equal(fs.statSync(day).size, 8);
+
+  // A day file that exists but cannot be opened is not an empty day.
+  if (process.getuid?.() === 0) return;
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  write(
+    path.join(root, "p", "t.jsonl"),
+    assistant({ id: "msg_A" }) + assistant({ id: "msg_B" }),
+  );
+  fs.chmodSync(day, 0o000);
+  try {
+    await assert.rejects(restarted.tick());
+    assert.equal(totals(restarted).responses, 1);
+  } finally {
+    fs.chmodSync(day, 0o600);
+  }
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 2);
+});
+
+test("seen files that cannot be restored start the ledger over, and the rescan counts once", async () => {
+  for (const damage of ["directory", "symlink", "file"] as const) {
+    const dir = tempDir();
+    const root = path.join(dir, "projects");
+    write(
+      path.join(root, "p", "s.jsonl"),
+      assistant({ id: "msg_A" }) + assistant({ id: "msg_B" }),
+    );
+    await ledgerFor(dir, [{ dir: root }]).tick();
+    const seen = path.join(dir, "token-ledger-seen");
+    const elsewhere = path.join(dir, "elsewhere");
+    if (damage === "directory") {
+      fs.rmSync(path.join(seen, "2026-10-18.bin"));
+      fs.mkdirSync(path.join(seen, "2026-10-18.bin"));
+    } else if (damage === "symlink") {
+      fs.renameSync(seen, elsewhere);
+      fs.symlinkSync(elsewhere, seen);
+    } else {
+      fs.rmSync(seen, { recursive: true });
+      fs.writeFileSync(seen, "not a directory");
+    }
+    const restarted = ledgerFor(dir, [{ dir: root }]);
+    assert.deepEqual(restarted.snapshot().days, {}, damage);
+    await restarted.tick();
+    assert.equal(totals(restarted).responses, 2, damage);
+    assert.ok(fs.lstatSync(seen).isDirectory(), damage);
+    assert.deepEqual(fs.readdirSync(seen), ["2026-10-18.bin"], damage);
+    if (damage === "symlink")
+      assert.deepEqual(fs.readdirSync(elsewhere), ["2026-10-18.bin"]);
+  }
+});
+
+test("a new time zone starts the ledger over in that zone", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(
+    path.join(root, "p", "s.jsonl"),
+    assistant({ id: "msg_A", at: "2026-10-18T01:00:00+03:00" }),
+  );
+  let zone = ZONE;
+  const ledger = ledgerFor(dir, [{ dir: root }], { zone: () => zone });
+  await ledger.tick();
+  assert.deepEqual(Object.keys(ledger.snapshot().days), ["2026-10-18"]);
+  zone = "UTC";
+  await ledger.tick();
+  assert.deepEqual(Object.keys(ledger.snapshot().days), ["2026-10-17"]);
+  assert.equal(totals(ledger).responses, 1);
+  assert.deepEqual(fs.readdirSync(path.join(dir, "token-ledger-seen")), [
+    "2026-10-17.bin",
+  ]);
+  const restarted = ledgerFor(dir, [{ dir: root }], { zone: () => zone });
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 1);
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(dir, "token-ledger.json"), "utf8"))
+      .zone,
+    "UTC",
+  );
+});
+
+test("seen files are made private again on load", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(path.join(root, "p", "s.jsonl"), assistant({ id: "msg_A" }));
+  await ledgerFor(dir, [{ dir: root }]).tick();
+  const bin = path.join(dir, "token-ledger-seen", "2026-10-18.bin");
+  fs.chmodSync(bin, 0o644);
+  ledgerFor(dir, [{ dir: root }]);
+  assert.equal(fs.statSync(bin).mode & 0o777, 0o600);
 });
