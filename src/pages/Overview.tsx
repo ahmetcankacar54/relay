@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatRelative } from "@/lib/time";
-import { formatLeft } from "@/lib/meter";
+import { formatUsed } from "@/lib/meter";
 import { overviewCards } from "@/lib/onboarding";
 import { PageFrame } from "@/app/PageFrame";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
@@ -85,7 +85,7 @@ export function Overview({
               )}
               <b>{suggestion.name}</b>
               {suggestedUse !== undefined
-                ? ` (${formatLeft(suggestedUse, language)})`
+                ? ` (${formatUsed(suggestedUse, language)})`
                 : ""}
               .
             </span>

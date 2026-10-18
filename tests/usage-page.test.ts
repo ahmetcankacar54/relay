@@ -333,17 +333,18 @@ test("Usage composes the header, loading statistics and the warning preferences 
   assert.match(html, /İstatistikler yükleniyor/);
   assert.match(html, /Limit uyarıları/);
   assert.match(html, /Uyarı eşiği/);
-  assert.match(html, /%20 kalınca/);
+  assert.match(html, /%80 kullanılınca/);
   assert.match(html, /Veri kaynağı ve sınırlar/);
   assert.ok(html.indexOf("İstatistikler yükleniyor") < html.indexOf("Uyarılar"));
 });
 
-test("the warning threshold is phrased as what is left, for the stored used values 80, 90 and 95", () => {
+test("the warning threshold is phrased as what is used, for the stored values 80, 90 and 95", () => {
   const tr = text(render(createElement(Usage)));
-  for (const left of [20, 10, 5]) assert.match(tr, new RegExp(`%${left} kalınca`));
+  for (const used of [80, 90, 95]) assert.match(tr, new RegExp(`%${used} kullanılınca`));
+  assert.doesNotMatch(tr, /kalınca|Kalan yüzde/);
   const en = text(render(createElement(Usage), "en"));
-  for (const left of [20, 10, 5]) assert.match(en, new RegExp(`At ${left}% left`));
-  assert.doesNotMatch(en, /% remaining/);
+  for (const used of [80, 90, 95]) assert.match(en, new RegExp(`At ${used}% used`));
+  assert.doesNotMatch(en, /% remaining|% left|Remaining percentage/);
 });
 
 test("Usage calls the warning threshold's scope a limit, not a window, in English", () => {

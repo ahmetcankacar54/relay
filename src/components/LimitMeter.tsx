@@ -1,12 +1,12 @@
 import { useContext, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import {
-  formatLeft,
   formatPercent,
-  leftWord,
+  formatUsed,
   meterClass,
   meterTone,
-  percentLeft,
+  percentUsed,
+  usedWord,
 } from "@/lib/meter";
 import { I18nContext } from "@/data/i18n";
 import { usePrank } from "@/pranks/context";
@@ -34,8 +34,9 @@ export function nibbleBarRest(
 }
 
 /**
- * A limit window: the bar fills with what is used, the text says what is left ("%6 kaldı").
- * `percent` is the percent USED, as everywhere else; it is turned around only for the words.
+ * A limit window: the bar fills with what is used and the number says the same ("%94"), as on
+ * Claude's usage page. The medium size adds the small word "kullanıldı" / "used"; the small size
+ * (the panel's narrow columns) shows the number alone, which still matches the bar.
  */
 export function LimitMeter({
   label,
@@ -86,11 +87,16 @@ export function LimitMeter({
           ) : (
             <>
               <span className="whitespace-nowrap">
-                {formatPercent(percentLeft(value), language)}
-              </span>{" "}
-              <small className="text-xs font-normal text-muted-foreground">
-                {leftWord(language)}
-              </small>
+                {formatPercent(percentUsed(value), language)}
+              </span>
+              {size === "md" && (
+                <>
+                  {" "}
+                  <small className="text-xs font-normal text-muted-foreground">
+                    {usedWord(language)}
+                  </small>
+                </>
+              )}
             </>
           )}
         </b>
@@ -101,7 +107,7 @@ export function LimitMeter({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={value}
-        aria-valuetext={value === undefined ? undefined : formatLeft(value, language)}
+        aria-valuetext={value === undefined ? undefined : formatUsed(value, language)}
         className={cn(
           "mt-1 overflow-hidden rounded-full bg-track",
           size === "md" ? "h-1.5" : "h-1",

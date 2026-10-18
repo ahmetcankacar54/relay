@@ -244,8 +244,8 @@ export function Usage() {
               {[80, 90, 95].map((n) => (
                 <ToggleGroupItem key={n} value={String(n)}>
                   {t(
-                    `${formatPercent(100 - n, "tr")} kalınca`,
-                    `At ${formatPercent(100 - n, "en")} left`,
+                    `${formatPercent(n, "tr")} kullanılınca`,
+                    `At ${formatPercent(n, "en")} used`,
                   )}
                 </ToggleGroupItem>
               ))}
@@ -257,8 +257,8 @@ export function Usage() {
             </summary>
             <Note className="mt-1">
               {t(
-                "Kullanım sorgusu deneysel Anthropic OAuth servisini kullanır. Relay’de bağlı CLI profili okunur; gerektiğinde bağlantıyı sen yenilersin. Bu işlem yalnız Relay profilini günceller, açık Claude uygulamasına dokunmaz. Kalan yüzde mesaj sayısı veya süre garantisi değildir.",
-                "Usage comes from an experimental Anthropic OAuth endpoint. Relay reads its connected CLI profile; you can renew the connection when needed. Renewal updates only the Relay profile and leaves the open Claude app untouched. Remaining percentage is not a message count or time guarantee.",
+                "Kullanım sorgusu deneysel Anthropic OAuth servisini kullanır. Relay’de bağlı CLI profili okunur; gerektiğinde bağlantıyı sen yenilersin. Bu işlem yalnız Relay profilini günceller, açık Claude uygulamasına dokunmaz. Kullanılan yüzde mesaj sayısı veya süre garantisi değildir.",
+                "Usage comes from an experimental Anthropic OAuth endpoint. Relay reads its connected CLI profile; you can renew the connection when needed. Renewal updates only the Relay profile and leaves the open Claude app untouched. The percentage used is not a message count or time guarantee.",
               )}
             </Note>
           </details>

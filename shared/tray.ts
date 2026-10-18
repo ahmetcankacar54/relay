@@ -1,6 +1,6 @@
 import type { Account, AccountUsage, DesktopState, WindowAttempt } from "./types";
 import { desktopCliMismatch } from "./account-state";
-import { formatLeft, formatPercent, percentLeft } from "./percent";
+import { formatPercent, formatUsed, percentUsed, usedWord } from "./percent";
 import { freshUsage } from "./usage";
 
 export interface TraySnapshot {
@@ -34,7 +34,7 @@ const labels = {
     active: "Active",
     unknownActive: "No saved account active",
     empty: "Add an account in Relay",
-    review: "Remaining quota · select an account to switch",
+    review: "Quota used · select an account to switch",
     unavailable: "Claude app connection unavailable",
     statusUnavailable: "Claude app status unavailable",
     loading: "Checking the Claude app connection…",
@@ -54,7 +54,7 @@ const labels = {
     active: "Aktif",
     unknownActive: "Kayıtlı aktif hesap yok",
     empty: "Relay’de hesap ekle",
-    review: "Kalan limit · geçmek için hesap seç",
+    review: "Kullanılan limit · geçmek için hesap seç",
     unavailable: "Claude uygulaması bağlantısı kullanılamıyor",
     statusUnavailable: "Claude uygulamasının durumu okunamadı",
     loading: "Claude uygulaması bağlantısı kontrol ediliyor…",
@@ -76,10 +76,10 @@ export function trayAccountName(name: string) {
   return name.replace(/[\r\n\t]/g, " ").replace(/&/g, "&&");
 }
 
-/** What is left of a window, with its word ("6% left"); "?" for a reading that cannot be right. */
-function quotaLeft(used: number | undefined, language: TrayLanguage) {
+/** The percent used of a window, without its word ("94%"); "?" for a reading that cannot be right. */
+function quotaUsed(used: number | undefined, language: TrayLanguage) {
   return used !== undefined && Number.isFinite(used) && used >= 0 && used <= 100
-    ? formatLeft(used, language)
+    ? formatPercent(percentUsed(used), language)
     : "?";
 }
 
@@ -96,7 +96,11 @@ export function trayUsageLabel(
     Date.parse(usage.checkedAt!) <= now + 60_000;
   if (!valid)
     return `${t.fiveHour} ? · ${t.week} ?${usage?.checkedAt ? ` · ${t.outdated}` : ""}`;
-  return `${t.fiveHour} ${quotaLeft(usage.fiveHour?.usedPercent, language)} · ${t.week} ${quotaLeft(usage.sevenDay?.usedPercent, language)}`;
+  const five = quotaUsed(usage.fiveHour?.usedPercent, language);
+  const week = quotaUsed(usage.sevenDay?.usedPercent, language);
+  // One word at the end covers both figures; with nothing to describe it is left out.
+  const word = five === "?" && week === "?" ? "" : ` ${usedWord(language)}`;
+  return `${t.fiveHour} ${five} · ${t.week} ${week}${word}`;
 }
 
 function blockedLabel(snapshot: TraySnapshot, language: TrayLanguage) {
@@ -216,7 +220,7 @@ function activeFiveHourUsed(snapshot: TraySnapshot, now: number) {
   return usage.fiveHour.usedPercent;
 }
 
-/** The account's name and, when known, what its five-hour window has left, with the word the title leaves out. */
+/** The account's name and, when known, the percent used of its five-hour window, with the word the title leaves out. */
 export function trayTooltip(
   snapshot: TraySnapshot,
   language: TrayLanguage = "en",
@@ -227,19 +231,19 @@ export function trayTooltip(
   );
   if (!active) return "Relay";
   const used = activeFiveHourUsed(snapshot, now);
-  const left = used === undefined ? "" : ` · ${formatLeft(used, language)}`;
-  return `Relay — ${active.name.replace(/[\r\n\t]/g, " ")}${left}`;
+  const figure = used === undefined ? "" : ` · ${formatUsed(used, language)}`;
+  return `Relay — ${active.name.replace(/[\r\n\t]/g, " ")}${figure}`;
 }
 
 /**
- * Menu-bar text: what the Desktop-active account's five-hour window has left, compact ("%6" / "6%";
- * the tooltip adds the word), empty when unknown. The menu bar panda shows the warning; the title stays a plain number.
+ * Menu-bar text: the percent used of the Desktop-active account's five-hour window, compact ("%94" /
+ * "94%"; the tooltip adds the word), empty when unknown. The menu bar panda shows the warning; the title stays a plain number.
  */
 export function trayTitle(
   snapshot: TraySnapshot,
   now = Date.now(),
   language: TrayLanguage = "en",
 ) {
-  const left = percentLeft(activeFiveHourUsed(snapshot, now));
-  return left === undefined ? "" : formatPercent(left, language);
+  const used = percentUsed(activeFiveHourUsed(snapshot, now));
+  return used === undefined ? "" : formatPercent(used, language);
 }

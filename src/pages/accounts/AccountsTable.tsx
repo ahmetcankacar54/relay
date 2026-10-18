@@ -35,7 +35,7 @@ import { pendingFlow } from "@/data/selectors";
 import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
 import { accountHealth, renewalIssue } from "@/lib/account-health";
-import { formatLeft } from "@/lib/meter";
+import { formatPercent, percentUsed } from "@/lib/meter";
 import { avatarClass, planColumn } from "./accountLabels";
 
 export interface RowAction {
@@ -186,7 +186,7 @@ export function AccountsTable({
           <TableHead>{t("Hesap", "Account")}</TableHead>
           <TableHead>{t("Plan", "Plan")}</TableHead>
           <TableHead>{t("Durum", "Status")}</TableHead>
-          <TableHead>{t("5 sa · hafta", "5 h · week")}</TableHead>
+          <TableHead>{t("Kullanılan · 5 sa · hafta", "Used · 5 h · week")}</TableHead>
           <TableHead className="w-10">
             <span className="sr-only">{t("İşlemler", "Actions")}</span>
           </TableHead>
@@ -293,7 +293,7 @@ export function AccountsTable({
               <TableCell className="tabular-nums">
                 {five === undefined && week === undefined
                   ? "—"
-                  : `${formatLeft(five, language)} · ${formatLeft(week, language)}`}
+                  : `${formatPercent(percentUsed(five), language)} · ${formatPercent(percentUsed(week), language)}`}
               </TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>

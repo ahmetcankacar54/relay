@@ -10,5 +10,5 @@ export const meterClass: Record<MeterTone, string> = {
   crit: "bg-crit",
   none: "bg-transparent",
 };
-// The one percentage helper (shared with the menu bar); limit figures read as what is left: `formatLeft`.
-export { formatLeft, formatPercent, leftWord, percentLeft } from "../../shared/percent";
+// The one percentage helper (shared with the menu bar); limit figures read as what is used: `formatUsed`.
+export { formatPercent, formatUsed, percentUsed, usedWord } from "../../shared/percent";

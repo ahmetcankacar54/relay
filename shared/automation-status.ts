@@ -9,7 +9,7 @@ import type {
   Snapshot,
 } from "./types";
 import { automationMode, type AutomationMode } from "./automation-mode";
-import { formatLeft } from "./percent";
+import { formatUsed } from "./percent";
 import { withDative } from "./tr-dative";
 import { maxUsedPercent, sourceExhausted } from "./usage";
 
@@ -21,7 +21,7 @@ export interface AutomationStatus {
   /** One sentence: what Relay does, why it waits, what to do. */
   text: [tr: string, en: string];
   /**
-   * The "<account> %n kaldı · " that `text` starts with (empty without a reading).
+   * The "<account> %n kullanıldı · " that `text` starts with (empty without a reading).
    * It changes with every usage reading, so the UI keeps it out of live
    * announcements.
    */
@@ -304,8 +304,8 @@ export function automationStatus(
   const prefix: Copy =
     active && typeof used === "number"
       ? [
-          `${active.name} ${formatLeft(used, "tr")} · `,
-          `${active.name} ${formatLeft(used, "en")} · `,
+          `${active.name} ${formatUsed(used, "tr")} · `,
+          `${active.name} ${formatUsed(used, "en")} · `,
         ]
       : ["", ""];
   const show = (
