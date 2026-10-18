@@ -23,3 +23,15 @@ test("ordinary paths and uuids stay readable", () => {
   assert.equal(redact(`Missing ${id}`), `Missing ${id}`);
   assert.equal(redact("/Users/x/Library/Application Support/Relay"), "/Users/x/Library/Application Support/Relay");
 });
+
+test("a JSON parse error never shows the bytes it choked on", () => {
+  let error: unknown;
+  try {
+    JSON.parse("FIXTURE-SECRET-broken {");
+  } catch (e) {
+    error = e;
+  }
+  const out = redact(error);
+  assert.ok(!out.includes("FIXTURE"));
+  assert.match(out, /invalid JSON/i);
+});
