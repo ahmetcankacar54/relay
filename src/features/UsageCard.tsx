@@ -5,10 +5,16 @@ import type {
   UsageIssue,
   UsageWindow,
 } from "../../shared/types";
-import { remaining } from "../../shared/usage";
 import { Button } from "@/components/ui/button";
 import { displayedIssue, renewalIssue } from "@/lib/account-health";
-import { meterClass, meterTone } from "@/lib/meter";
+import {
+  formatLeft,
+  formatPercent,
+  leftWord,
+  meterClass,
+  meterTone,
+  percentLeft,
+} from "@/lib/meter";
 import { cn } from "@/lib/utils";
 type T = (tr: string, en: string) => string;
 const issues: Record<UsageIssue, [string, string]> = {
@@ -97,7 +103,10 @@ export function UsageCard({
     title: string,
     key: "fiveHour" | "sevenDay",
   ) => {
-    const left = remaining(window);
+    const used = window
+      ? Math.max(0, Math.min(100, window.usedPercent))
+      : undefined;
+    const left = percentLeft(used);
     // A window with no usage yet has no reset; it starts with the next request.
     const unused =
       !!window &&
@@ -160,13 +169,11 @@ export function UsageCard({
           >
             {/* The phrase after it may wrap; the percentage never breaks. */}
             <span className="whitespace-nowrap">
-              {left === undefined
-                ? "—"
-                : `${new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(left)}%`}
+              {formatPercent(left, language)}
             </span>{" "}
             <small className="text-xs font-normal text-muted-foreground">
               {left !== undefined
-                ? t("kaldı", "left")
+                ? leftWord(language)
                 : notReported
                   ? t("Limit bildirilmiyor", "No limit reported")
                   : t("Veri yok", "No data")}
@@ -176,10 +183,11 @@ export function UsageCard({
         <div
           className="mt-1 h-1.5 overflow-hidden rounded-full bg-track"
           role={window ? "meter" : undefined}
-          aria-label={title + t(" kalan kullanım", " remaining usage")}
+          aria-label={title}
           aria-valuemin={window ? 0 : undefined}
           aria-valuemax={window ? 100 : undefined}
-          aria-valuenow={left}
+          aria-valuenow={used}
+          aria-valuetext={window ? formatLeft(used, language) : undefined}
         >
           <span
             className={cn(
@@ -188,7 +196,7 @@ export function UsageCard({
                 ? "bg-muted-foreground/40"
                 : meterClass[meterTone(window?.usedPercent)],
             )}
-            style={{ width: `${left ?? 0}%` }}
+            style={{ width: `${used ?? 0}%` }}
           />
         </div>
         <div className="mt-1 text-xs text-muted-foreground">

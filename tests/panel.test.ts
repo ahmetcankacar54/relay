@@ -223,12 +223,14 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(html, /Haftalık · Opus/);
   assert.match(html, /Limit dolmak üzere/);
   assert.match(html, /Önerilen/);
+  // The strip names what the suggested account has left, with its word.
+  assert.match(html, /<b>Vertex<\/b> \(%69 kaldı\)/);
   // The name has its own line; the badge sits on the subtitle line so names stay readable.
   assert.match(html, /title="Vertex"[^>]*>Vertex<\/div><div[^>]*>.*Önerilen/);
   assert.match(html, /title="Pro · Hazır · dönem başlamadı"/);
   assert.match(html, /Hesaplar/);
   assert.match(html, /Otomatik geçiş · Kapalı/);
-  assert.match(html, /title="Kişisel · Max %78 · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."/);
+  assert.match(html, /title="Kişisel · Max %22 kaldı · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."/);
   assert.match(html, /Önceden başlatma kapalı/);
   assert.doesNotMatch(html, /Kapanınca hazırla/);
   assert.match(html, /Relay’i aç/);
@@ -275,7 +277,7 @@ test("more than six other accounts collapse into an overflow line", () => {
   const others = Array.from({ length: 7 }, (_, i) => acct(`o${i}`, `Other ${i}`));
   const usage = Object.fromEntries([["active", use("active", 10, 10)], ...others.map((o) => [o.id, use(o.id, 10, 10)])]);
   const html = render(relayFor(active, [active, ...others], usage));
-  assert.equal(html.split("grid-cols-[1fr_72px_72px_auto]").length - 1, 6);
+  assert.equal(html.split("grid-cols-[1fr_88px_88px_auto]").length - 1, 6);
   assert.match(html, /\+1 hesap · Relay’de gör/);
 });
 

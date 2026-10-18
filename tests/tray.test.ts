@@ -55,7 +55,7 @@ test("tray account action requests a review and never bypasses restart consent",
   assert.equal(current.command, undefined);
   const target = menu.find((item) => item.type === "checkbox" && !item.checked);
   assert.ok(target && target.type === "checkbox");
-  assert.equal(target.label, "Max · 5h 77% · wk 8%");
+  assert.equal(target.label, "Max · 5h 77% left · wk 8% left");
   assert.deepEqual(target.command, {
     type: "review-switch",
     profileId: "target",
@@ -148,7 +148,7 @@ test("stale, reset, unknown and foreign quota stays unknown in the tray", () => 
       "en",
       now,
     ),
-    "5h 77% · wk ?",
+    "5h 77% left · wk ?",
   );
   assert.equal(
     trayUsageLabel(
@@ -157,7 +157,7 @@ test("stale, reset, unknown and foreign quota stays unknown in the tray", () => 
       "en",
       now,
     ),
-    "5h ? · wk 8%",
+    "5h ? · wk 8% left",
   );
 });
 
@@ -168,7 +168,7 @@ test("Turkish labels, escaped names and empty snapshots remain usable", () => {
   assert.equal(trayTooltip(s), "Relay — A&B row");
   assert.equal(
     trayUsageLabel("target", usage("target"), "tr", now),
-    "5h 77% · hf 8%",
+    "5h %77 kaldı · hf %8 kaldı",
   );
   const empty = buildTrayMenu({ accounts: [], usage: {}, desktop }, "tr", now);
   assert.ok(
@@ -179,6 +179,29 @@ test("Turkish labels, escaped names and empty snapshots remain usable", () => {
   assert.ok(
     empty.some((i) => i.type !== "separator" && i.label === "Relay’i aç"),
   );
+});
+
+test("every menu percentage is what is left, with its word, in both languages", () => {
+  const rows = (language: "tr" | "en") =>
+    buildTrayMenu(snapshot(), language, now).flatMap((item) =>
+      item.type === "checkbox" && item.label.startsWith("Max") ? [item.label] : [],
+    );
+  assert.deepEqual(rows("tr"), ["Max · 5h %77 kaldı · hf %8 kaldı"]);
+  assert.deepEqual(rows("en"), ["Max · 5h 77% left · wk 8% left"]);
+  // A number without a word is never left in a row: every digit run is followed by one.
+  for (const label of [...rows("tr"), ...rows("en")])
+    assert.doesNotMatch(label.replace(/(%\d+|\d+%) (kaldı|left)/g, ""), /\d+%|%\d+/);
+});
+
+test("the tooltip names the account and carries the remaining five-hour percent with its word", () => {
+  const s = snapshot();
+  s.desktop!.activeProfileId = "target";
+  assert.equal(trayTooltip(s, "en", now), "Relay — Max · 77% left");
+  assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %77 kaldı");
+  // No fresh reading: the name alone, as before.
+  s.usage = {};
+  assert.equal(trayTooltip(s, "en", now), "Relay — Max");
+  assert.equal(trayTooltip({ accounts: [], usage: {} }, "tr", now), "Relay");
 });
 
 test("a fresh recheck rejects a target when Desktop changes after menu creation", () => {

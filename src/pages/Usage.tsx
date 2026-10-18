@@ -241,7 +241,10 @@ export function Usage() {
             >
               {[80, 90, 95].map((n) => (
                 <ToggleGroupItem key={n} value={String(n)}>
-                  {t(`%${100 - n} kalınca`, `${100 - n}% remaining`)}
+                  {t(
+                    `${formatPercent(100 - n, "tr")} kalınca`,
+                    `At ${formatPercent(100 - n, "en")} left`,
+                  )}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>

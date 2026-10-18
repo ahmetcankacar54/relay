@@ -284,7 +284,7 @@ test("the Switching card shows one choice with the status and a switch-now butto
     html
       .replace(/<[^>]+>/g, "")
       .includes(
-        "Kişisel · Max %100 · 2 konuşma kota yüzünden durdu. Claude’da başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+        "Kişisel · Max %0 kaldı · 2 konuşma kota yüzünden durdu. Claude’da başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
       ),
   );
   assert.ok(html.includes("Şimdi Kişisel · İkinci’ye geç"));
@@ -400,7 +400,7 @@ test("the status line keeps the usage prefix out of the live announcement", () =
     "2 konuşma kota yüzünden durdu. Claude’da başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
   ]);
   // The prefix is still shown, just outside the live region.
-  assert.ok(html.includes('Kişisel · Max %100 · <span role="status"'));
+  assert.ok(html.includes('Kişisel · Max %0 kaldı · <span role="status"'));
 });
 
 /** Source files (posix paths) the static, non-type imports reach from `entry`. */

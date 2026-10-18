@@ -117,7 +117,7 @@ export function PanelAccounts({
             return (
               <div
                 key={account.id}
-                className="grid grid-cols-[1fr_72px_72px_auto] items-center gap-2 border-t px-1 py-1.5 first:border-0"
+                className="grid grid-cols-[1fr_88px_88px_auto] items-center gap-2 border-t px-1 py-1.5 first:border-0"
               >
                 <div className="min-w-0">
                   <div

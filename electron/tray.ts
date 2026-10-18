@@ -113,12 +113,13 @@ export class RelayTray {
       snapshot: () => this.options.getSnapshot(),
       mascot: this.mascot,
       show: (snapshot) => {
+        const language = this.options.language?.() ?? "en";
         if (process.platform === "darwin") {
-          const title = trayTitle(snapshot);
+          const title = trayTitle(snapshot, Date.now(), language);
           this.tray.setTitle(title ? " " + title : "");
         }
-        this.tray.setToolTip(trayTooltip(snapshot));
-        const items = buildTrayMenu(snapshot, this.options.language?.() ?? "en");
+        this.tray.setToolTip(trayTooltip(snapshot, language));
+        const items = buildTrayMenu(snapshot, language);
         this.menuLifecycle.update(items, JSON.stringify(items));
       },
       unavailable: () => this.showUnavailable(),

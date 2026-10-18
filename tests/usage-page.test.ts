@@ -312,6 +312,14 @@ test("Usage composes the header, loading statistics and the warning preferences 
   assert.ok(html.indexOf("İstatistikler yükleniyor") < html.indexOf("Uyarılar"));
 });
 
+test("the warning threshold is phrased as what is left, for the stored used values 80, 90 and 95", () => {
+  const tr = text(render(createElement(Usage)));
+  for (const left of [20, 10, 5]) assert.match(tr, new RegExp(`%${left} kalınca`));
+  const en = text(render(createElement(Usage), "en"));
+  for (const left of [20, 10, 5]) assert.match(en, new RegExp(`At ${left}% left`));
+  assert.doesNotMatch(en, /% remaining/);
+});
+
 test("Usage calls the warning threshold's scope a limit, not a window, in English", () => {
   const html = text(render(createElement(Usage), "en"));
   assert.match(html, /Applies to either the 5-hour or weekly usage limit\./);

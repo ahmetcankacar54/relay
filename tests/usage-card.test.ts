@@ -171,7 +171,9 @@ test("the status phrase may wrap, and only the percentage stays on one line", ()
       assert.doesNotMatch(tag, /whitespace-nowrap/, language);
     assert.match(
       html,
-      /<span class="whitespace-nowrap">80%<\/span> <small class="text-xs font-normal text-muted-foreground">(left|kaldı)<\/small>/,
+      language === "tr"
+        ? /<span class="whitespace-nowrap">%80<\/span> <small class="text-xs font-normal text-muted-foreground">kaldı<\/small>/
+        : /<span class="whitespace-nowrap">80%<\/span> <small class="text-xs font-normal text-muted-foreground">left<\/small>/,
       language,
     );
     assert.match(
@@ -180,4 +182,37 @@ test("the status phrase may wrap, and only the percentage stays on one line", ()
       language,
     );
   }
+});
+
+test("the card shows what is left, %80 kaldı in Turkish and 80% left in English, and its bar fills with what is used", () => {
+  const usage: AccountUsage = {
+    accountId: "a",
+    status: "ready",
+    stale: false,
+    checkedAt,
+    fiveHour: { usedPercent: 20, resetsAt: later },
+  };
+  const tr = render(usage, "tr");
+  const en = render(usage, "en");
+  assert.match(tr, />%80<\/span> <small[^>]*>kaldı<\/small>/);
+  assert.match(en, />80%<\/span> <small[^>]*>left<\/small>/);
+  // Not 80.0%, not a bare "20%": one rounded figure from the shared helper.
+  assert.doesNotMatch(tr, />\d+%</);
+  // The same direction as the Overview's meter: the fill is the used share, the text says what remains.
+  assert.match(tr, /aria-valuenow="20"/);
+  assert.match(tr, /aria-valuetext="%80 kaldı"/);
+  assert.match(en, /aria-valuetext="80% left"/);
+  assert.match(tr, /style="width:20%"/);
+  assert.doesNotMatch(tr, /style="width:80%"/);
+});
+
+test("what is left is rounded down, never claimed more than the window has", () => {
+  const html = render({
+    accountId: "a",
+    status: "ready",
+    stale: false,
+    checkedAt,
+    fiveHour: { usedPercent: 93.5, resetsAt: later },
+  });
+  assert.match(html, />6%<\/span> <small[^>]*>left<\/small>/);
 });

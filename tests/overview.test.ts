@@ -71,6 +71,8 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Önerilen/);
   // The suggestion band keeps its text; the suggested row's own "Geçiş yap" is the one switch offer.
   assert.match(html, /Kişisel · Max limiti uyarı eşiğini geçti\. Önerilen: <b>Vertex<\/b>/);
+  // The suggestion's figure is what it has left (its tightest window, 31 % used), with its word.
+  assert.match(html, /<b>Vertex<\/b> \(%69 kaldı\)\./);
   assert.doesNotMatch(html, /Geçişi incele/);
   assert.equal(html.match(/Geçiş yap/g)?.length, 1);
   assert.match(html, /Bugün/);

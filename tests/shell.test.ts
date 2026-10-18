@@ -56,7 +56,7 @@ test("compact sidebar keeps accessible names", () => {
   assert.match(html, /aria-label="Planlama"/);
 });
 
-test("limit meter shows the percent and uses the tone colour", () => {
+test("limit meter shows what is left and uses the tone colour of what is used", () => {
   const html = renderToStaticMarkup(
     createElement(LimitMeter, {
       label: "Haftalık",
@@ -64,7 +64,8 @@ test("limit meter shows the percent and uses the tone colour", () => {
       detail: "4 gün",
     }),
   );
-  assert.match(html, /%78/);
+  assert.match(html, /%22/);
+  assert.match(html, /kaldı/);
   assert.match(html, /bg-warn/);
   assert.match(html, /role="meter"/);
 });

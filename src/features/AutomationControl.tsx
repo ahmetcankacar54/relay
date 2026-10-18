@@ -52,7 +52,7 @@ function SwitchNowButton({
 }
 
 /**
- * The status sentence with its "<account> %n · " prefix outside the live
+ * The status sentence with its "<account> %n kaldı · " prefix outside the live
  * region, so a usage refresh alone is not announced again.
  */
 function StatusText({ status }: { status: AutomationStatus }) {

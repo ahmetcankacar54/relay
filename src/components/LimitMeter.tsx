@@ -1,6 +1,13 @@
 import { useContext, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { formatPercent, meterClass, meterTone } from "@/lib/meter";
+import {
+  formatLeft,
+  formatPercent,
+  leftWord,
+  meterClass,
+  meterTone,
+  percentLeft,
+} from "@/lib/meter";
 import { I18nContext } from "@/data/i18n";
 import { usePrank } from "@/pranks/context";
 
@@ -26,6 +33,10 @@ export function nibbleBarRest(
   return schedule(fire, NIBBLE_BAR_HOVER_MS);
 }
 
+/**
+ * A limit window: the bar fills with what is used, the text says what is left ("%6 kaldı").
+ * `percent` is the percent USED, as everywhere else; it is turned around only for the words.
+ */
 export function LimitMeter({
   label,
   percent,
@@ -33,6 +44,7 @@ export function LimitMeter({
   size = "md",
 }: {
   label: string;
+  /** The percent used. */
   percent?: number;
   detail?: string;
   size?: "sm" | "md";
@@ -61,7 +73,7 @@ export function LimitMeter({
       }}
       onPointerLeave={stopResting}
     >
-      <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2 text-xs text-muted-foreground">
         <span className="truncate">{label}</span>
         <b
           className={cn(
@@ -69,7 +81,18 @@ export function LimitMeter({
             size === "md" ? "text-sm" : "text-xs",
           )}
         >
-          {formatPercent(value, language)}
+          {value === undefined ? (
+            "—"
+          ) : (
+            <>
+              <span className="whitespace-nowrap">
+                {formatPercent(percentLeft(value), language)}
+              </span>{" "}
+              <small className="text-xs font-normal text-muted-foreground">
+                {leftWord(language)}
+              </small>
+            </>
+          )}
         </b>
       </div>
       <div
@@ -78,6 +101,7 @@ export function LimitMeter({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={value}
+        aria-valuetext={value === undefined ? undefined : formatLeft(value, language)}
         className={cn(
           "mt-1 overflow-hidden rounded-full bg-track",
           size === "md" ? "h-1.5" : "h-1",

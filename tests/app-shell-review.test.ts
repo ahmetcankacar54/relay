@@ -246,19 +246,34 @@ test("only the shell provides tooltips", () => {
   assert.deepEqual(users, [path.join("app", "Shell.tsx")]);
 });
 
-// 11. Percent formatting follows the language.
-test("limit percentages read %45 in Turkish and 45% in English", () => {
+// 11. Percent formatting follows the language, and every limit percentage is what is left, with its word.
+test("limit percentages read %55 kaldı in Turkish and 55% left in English", () => {
   const meter = (language: Language) =>
     renderToStaticMarkup(
       createElement(I18nContext.Provider, { value: i18n(language) }, createElement(LimitMeter, { label: "x", percent: 45 })),
     );
-  assert.match(meter("tr"), />%45</);
-  assert.match(meter("en"), />45%</);
+  const tr = meter("tr");
+  const en = meter("en");
+  assert.match(tr, />%55<\/span> <small[^>]*>kaldı<\/small>/);
+  assert.match(en, />55%<\/span> <small[^>]*>left<\/small>/);
+  // The bar keeps filling with what is used; the meter's value text says what is left.
+  assert.match(tr, /aria-valuenow="45"/);
+  assert.match(tr, /aria-valuetext="%55 kaldı"/);
+  assert.match(en, /aria-valuetext="55% left"/);
+  assert.match(tr, /style="width:45%"/);
   const usage: Record<string, AccountUsage> = { a: { accountId: "a", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 38 }, sevenDay: { usedPercent: 78 } } };
   const table = (language: Language) =>
     wrap(relayFor({}, usage), createElement(AccountsTable, { accounts, open() {}, link() {} }), language);
-  assert.match(table("tr"), /%38 · %78/);
-  assert.match(table("en"), /38% · 78%/);
+  assert.match(table("tr"), /%62 kaldı · %22 kaldı/);
+  assert.match(table("en"), /62% left · 22% left/);
+});
+
+test("a meter without a value shows a dash and no word", () => {
+  const html = renderToStaticMarkup(
+    createElement(I18nContext.Provider, { value: i18n("tr") }, createElement(LimitMeter, { label: "x" })),
+  );
+  assert.match(html, />—<\/b>/);
+  assert.doesNotMatch(html, /kaldı|aria-valuetext/);
 });
 
 test("a confirmed Desktop action shows the travelling panda until it finishes", () => {

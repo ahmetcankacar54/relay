@@ -1,5 +1,6 @@
 import type { Account, AccountUsage, DesktopState, WindowAttempt } from "./types";
 import { desktopCliMismatch } from "./account-state";
+import { formatLeft, formatPercent, percentLeft } from "./percent";
 import { freshUsage } from "./usage";
 
 export interface TraySnapshot {
@@ -71,9 +72,10 @@ export function trayAccountName(name: string) {
   return name.replace(/[\r\n\t]/g, " ").replace(/&/g, "&&");
 }
 
-function quotaPercent(used: number | undefined) {
+/** What is left of a window, with its word ("6% left"); "?" for a reading that cannot be right. */
+function quotaLeft(used: number | undefined, language: TrayLanguage) {
   return used !== undefined && Number.isFinite(used) && used >= 0 && used <= 100
-    ? `${Math.floor(100 - used)}%`
+    ? formatLeft(used, language)
     : "?";
 }
 
@@ -90,7 +92,7 @@ export function trayUsageLabel(
     Date.parse(usage.checkedAt!) <= now + 60_000;
   if (!valid)
     return `5h ? · ${t.week} ?${usage?.checkedAt ? ` · ${t.outdated}` : ""}`;
-  return `5h ${quotaPercent(usage.fiveHour?.usedPercent)} · ${t.week} ${quotaPercent(usage.sevenDay?.usedPercent)}`;
+  return `5h ${quotaLeft(usage.fiveHour?.usedPercent, language)} · ${t.week} ${quotaLeft(usage.sevenDay?.usedPercent, language)}`;
 }
 
 function blockedLabel(snapshot: TraySnapshot, language: TrayLanguage) {
@@ -183,18 +185,41 @@ export function buildTrayMenu(
   ];
 }
 
-export function trayTooltip(snapshot: TraySnapshot) {
+/** The percent used of the Desktop-active account's five-hour window; undefined while unknown or old. */
+function activeFiveHourUsed(snapshot: TraySnapshot, now: number) {
   const active = snapshot.accounts.find(
     (a) => a.id === snapshot.desktop?.activeProfileId,
   );
-  return active ? `Relay — ${active.name.replace(/[\r\n\t]/g, " ")}` : "Relay";
+  const usage = active ? snapshot.usage[active.id] : undefined;
+  if (!active || !freshUsage(usage, now) || usage.fiveHour === undefined)
+    return undefined;
+  return usage.fiveHour.usedPercent;
 }
 
-/** Menu-bar text: the Desktop-active account's five-hour percent, empty when unknown. */
-export function trayTitle(snapshot: TraySnapshot, now = Date.now()) {
-  const active = snapshot.accounts.find((a) => a.id === snapshot.desktop?.activeProfileId);
-  const usage = active ? snapshot.usage[active.id] : undefined;
-  if (!active || !freshUsage(usage, now) || usage.fiveHour === undefined) return "";
-  // The menu bar panda shows the warning; the title stays a plain percent.
-  return `${Math.round(usage.fiveHour.usedPercent)}%`;
+/** The account's name and, when known, what its five-hour window has left, with the word the title leaves out. */
+export function trayTooltip(
+  snapshot: TraySnapshot,
+  language: TrayLanguage = "en",
+  now = Date.now(),
+) {
+  const active = snapshot.accounts.find(
+    (a) => a.id === snapshot.desktop?.activeProfileId,
+  );
+  if (!active) return "Relay";
+  const used = activeFiveHourUsed(snapshot, now);
+  const left = used === undefined ? "" : ` · ${formatLeft(used, language)}`;
+  return `Relay — ${active.name.replace(/[\r\n\t]/g, " ")}${left}`;
+}
+
+/**
+ * Menu-bar text: what the Desktop-active account's five-hour window has left, compact ("%6" / "6%";
+ * the tooltip adds the word), empty when unknown. The menu bar panda shows the warning; the title stays a plain number.
+ */
+export function trayTitle(
+  snapshot: TraySnapshot,
+  now = Date.now(),
+  language: TrayLanguage = "en",
+) {
+  const left = percentLeft(activeFiveHourUsed(snapshot, now));
+  return left === undefined ? "" : formatPercent(left, language);
 }

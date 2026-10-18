@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { trayTitle, type TraySnapshot } from "../shared/tray";
+import { trayTitle, trayTooltip, type TraySnapshot } from "../shared/tray";
 import { PANEL_WIDTH, clampPanelHeight, panelPosition } from "../shared/tray-panel";
 import type { Account, AccountUsage } from "../shared/types";
 
@@ -17,12 +17,21 @@ const snap = (u?: AccountUsage, active = "a"): TraySnapshot => ({
   desktop: { available: true, running: true, organizations: [], activeProfileId: active, busy: false, recoveryRequired: false, errorRevision: 0 },
 });
 
-test("tray title shows the active account's five-hour percent", () => {
-  assert.equal(trayTitle(snap(usage(37.6)), NOW), "38%");
-  assert.equal(trayTitle(snap(usage(90)), NOW), "90%");
+test("tray title shows the active account's remaining five-hour percent, compact", () => {
+  assert.equal(trayTitle(snap(usage(37.6)), NOW), "62%");
+  assert.equal(trayTitle(snap(usage(90)), NOW), "10%");
+  assert.equal(trayTitle(snap(usage(94)), NOW, "en"), "6%");
+  assert.equal(trayTitle(snap(usage(94)), NOW, "tr"), "%6");
+  assert.equal(trayTitle(snap(usage(100)), NOW, "tr"), "%0");
   assert.equal(trayTitle(snap(usage(20, NOW - 3_600_000)), NOW), "");
   assert.equal(trayTitle(snap(undefined), NOW), "");
   assert.equal(trayTitle(snap(usage(20), "missing"), NOW), "");
+});
+
+test("the tooltip says what the title's number is", () => {
+  assert.equal(trayTooltip(snap(usage(94)), "tr", NOW), "Relay — A · %6 kaldı");
+  assert.equal(trayTooltip(snap(usage(94)), "en", NOW), "Relay — A · 6% left");
+  assert.equal(trayTooltip(snap(usage(20, NOW - 3_600_000)), "en", NOW), "Relay — A");
 });
 
 test("the panel opens under the icon and stays on screen", () => {

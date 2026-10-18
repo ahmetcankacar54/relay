@@ -6,7 +6,7 @@ import { Panda } from "@/components/Panda";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { panelRowState } from "@/lib/account-row";
-import { formatPercent } from "@/lib/meter";
+import { formatLeft } from "@/lib/meter";
 import { formatRelative } from "@/lib/time";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
@@ -105,8 +105,8 @@ export function Panel({
         <div className="mx-3 my-1.5 flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-[11.5px]">
           <span className="min-w-0">
             {t("Limit dolmak üzere", "Limit almost reached")} ·{" "}
-            {t("Önerilen", "Suggested")}: <b>{suggestion.name}</b> (
-            {formatPercent(maxUsedPercent(usage[suggestion.id]), language)})
+            {t("Önerilen", "Suggested")}: <b>{suggestion.name}</b>
+            {` (${formatLeft(maxUsedPercent(usage[suggestion.id]), language)})`}
           </span>
           <Button
             size="xs"
