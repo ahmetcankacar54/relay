@@ -21,7 +21,7 @@ import os from "node:os";
 import { z } from "zod";
 import { ActiveAccountTimeline } from "./core/active-account-timeline";
 import { DesktopManager } from "./core/desktop";
-import { desktopHost } from "./core/desktop-host";
+import { desktopHost, safeStorageSealer } from "./core/desktop-host";
 import { identity, readObject } from "./core/desktop-files";
 import { DesktopLock } from "./core/desktop-lock";
 import {
@@ -301,7 +301,7 @@ else {
         (url) => shell.openExternal(url),
       );
       nativeTheme.themeSource = themeSource(service.store.state.settings);
-      const host = desktopHost();
+      const host = desktopHost(safeStorageSealer());
       desktop = new DesktopManager(
         path.join(app.getPath("appData"), "Claude"),
         service.store,

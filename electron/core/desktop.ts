@@ -100,6 +100,13 @@ interface Operation {
   kind: DesktopOperationKind;
   profileId?: string;
 }
+/**
+ * The lock Relay's processes share so that only one of them runs a Desktop operation. `ensure`
+ * takes it, or throws when another process holds it; the function it returns gives it back.
+ */
+export interface OperationLock {
+  ensure(kind: DesktopOperationKind): () => void;
+}
 /** How long observers (the tray, the windows) share one Desktop reading. */
 export const DESKTOP_CACHE_MS = 2_500;
 /** What a Desktop reading finds on disk and in the process list; the rest is Relay's own state. */
@@ -155,6 +162,14 @@ export class DesktopManager {
   private pendingHistorySeen?: Buffer;
   /** The conversations the last `historyPlan` carries into its target. */
   private carried: CarriedConversation[] = [];
+  /** How many conversation cards the last `historyPlan` writes into its target. */
+  private written = 0;
+  /** The conversations the last switch or merge wrote into the account switched to. */
+  get carriedCount(): number {
+    return this.written;
+  }
+  /** Shared with Relay's other processes; taken around every Desktop operation when set. */
+  operationLock?: OperationLock;
   /**
    * Told right before an operation first quits Claude, and when that operation
    * ends; operations that never quit Claude report nothing.
@@ -218,12 +233,25 @@ export class DesktopManager {
     await removeLegacyDraftBackups(this.vault);
     // A draft step that stopped with Relay leaves a copy and the helper's result behind.
     await sweepStaleDraftScratch(this.host.draftScratchDir ?? os.tmpdir());
-    const pending = await readObject(this.vault, "pending.json");
-    if (pending && uuid.safeParse(pending.profileId).success)
-      this.pending = pending as Pending;
+    await this.refreshPending();
     const recovery = await readObject(this.vault, "journal.json");
     if (recovery)
       this.reportError("Desktop recovery is required before switching.");
+  }
+  /**
+   * Re-reads the pending sign-in: another Relay process sharing the vault may have begun or
+   * ended one. An unreadable file leaves what was known.
+   */
+  private async refreshPending() {
+    try {
+      const pending = await readObject(this.vault, "pending.json");
+      this.pending =
+        pending && uuid.safeParse(pending.profileId).success
+          ? (pending as Pending)
+          : undefined;
+    } catch {
+      // Keep the last known pending sign-in.
+    }
   }
   private reportError(message: string) {
     if (this.lastError !== message) this.errorRevision++;
@@ -304,6 +332,7 @@ export class DesktopManager {
       );
     }
     const recovery = !!(await readObject(this.vault, "journal.json"));
+    await this.refreshPending();
     return {
       available: await this.host.available(),
       running: await running(),
@@ -647,6 +676,7 @@ export class DesktopManager {
   ): Promise<Map<string, Buffer | null>> {
     this.pendingHistorySeen = undefined;
     this.carried = [];
+    this.written = 0;
     if (
       !target.desktop ||
       this.store.state.settings.desktopHistoryTransfer === "off"
@@ -693,6 +723,10 @@ export class DesktopManager {
     if (JSON.stringify(next) !== JSON.stringify(previous))
       this.pendingHistorySeen = jsonBytes(next);
     this.carried = conversations;
+    const targetDir = `${scopePath("claude-code-sessions", target.desktop)}/`;
+    this.written = [...plan].filter(
+      ([relative, data]) => relative.startsWith(targetDir) && data !== null,
+    ).length;
     return new Map(plan);
   }
   /**
@@ -837,11 +871,14 @@ export class DesktopManager {
     this.operation = current;
     this.invalidate();
     let ok = false;
+    let release: (() => void) | undefined;
     try {
+      release = this.operationLock?.ensure(operation.kind);
       if (!(await this.host.available()))
         throw new Error("Claude Desktop was not found on this platform.");
       if (!recovery && (await readObject(this.vault, "journal.json")))
         throw new Error("Restore the interrupted Desktop switch first.");
+      await this.refreshPending();
       const result = await fn();
       ok = true;
       return result;
@@ -849,6 +886,7 @@ export class DesktopManager {
       this.reportError(e.message);
       throw e;
     } finally {
+      release?.();
       this.busy = false;
       this.invalidate();
       this.pendingHistorySeen = undefined;

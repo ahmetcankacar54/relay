@@ -2081,3 +2081,62 @@ test("a failed Desktop read is not kept: the next observer reads again", async (
   assert.equal((await manager.cachedSnapshot()).running, true);
   assert.equal(c.checks.seems, 2);
 });
+
+test("every Desktop operation ensures the operation lock and releases it, even when it fails", async (t) => {
+  const f = await fixture(t);
+  const calls: string[] = [];
+  f.manager.operationLock = {
+    ensure: (kind) => {
+      calls.push(`+${kind}`);
+      return () => calls.push(`-${kind}`);
+    },
+  };
+  const a = await f.account("A"),
+    b = await f.account("B");
+  calls.length = 0;
+  await f.manager.switchTo(a.id);
+  f.setFailQuit();
+  await assert.rejects(f.manager.switchTo(b.id));
+  assert.deepEqual(calls, ["+switch", "-switch", "+switch", "-switch"]);
+});
+
+test("a busy operation lock refuses before Claude is quit", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  const quits = f.quits();
+  f.manager.operationLock = {
+    ensure: () => {
+      throw new Error("Relay (a terminal) is busy with switch");
+    },
+  };
+  await assert.rejects(f.manager.switchTo(a.id), /busy with switch/);
+  assert.equal(f.quits(), quits);
+  assert.equal(f.manager.isBusy, false);
+});
+
+test("a sign-in begun by another manager on the same vault is seen", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  const otherStore = new Store(f.store.root);
+  const other = new DesktopManager(f.root, otherStore, f.host, f.transcriptRoot);
+  await other.initialize();
+  const c = otherStore.create({ name: "C", kind: "personal" });
+  await other.beginLogin(c.id);
+  assert.equal((await f.manager.snapshot()).pendingProfileId, c.id);
+  await assert.rejects(f.manager.switchTo(a.id), /Finish or cancel/);
+  await other.cancelLogin();
+  assert.equal((await f.manager.snapshot()).pendingProfileId, undefined);
+  void b;
+});
+
+test("carriedCount reports the conversations the switch wrote into the target", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B"); // B is open in Claude
+  await session(f.root, b);
+  await session(f.root, b);
+  await f.manager.switchTo(a.id);
+  assert.equal(f.manager.carriedCount, 2);
+});
