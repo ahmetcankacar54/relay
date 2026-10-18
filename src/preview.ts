@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS } from "../shared/types";
+import { intentHash } from "./app/routes";
 import { usageSample, type UsageSample } from "../shared/usage-statistics";
 import { foldSamples } from "../shared/usage-rollups";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
@@ -181,6 +182,9 @@ const state: Snapshot = {
   diagnostics: {
     platform: "preview",
     desktopSupported: false,
+    // A recent CLI, so the default preview has nothing left to set up.
+    executable: "/örnek/bin/claude",
+    version: "2.1.300 (Claude Code)",
     dataDir: "Masaüstü uygulamasında yerel olarak saklanır",
   },
 };
@@ -269,6 +273,23 @@ if (scenario === "identity-mismatch") {
   accounts[1].auth!.orgId = ids[3];
 }
 if (scenario === "recovery") desktop.recoveryRequired = true;
+// A new friend's Mac: no account, no CLI, Code never opened; `first-run-no-claude` lacks the app too.
+if (scenario === "first-run" || scenario === "first-run-no-claude") {
+  accounts.splice(0);
+  state.usage = {};
+  desktop.available = scenario === "first-run";
+  desktop.running = scenario === "first-run";
+  desktop.currentAccountUuid = scenario === "first-run" ? ids[3] : undefined;
+  desktop.activeProfileId = undefined;
+  desktop.organizations = [];
+  state.diagnostics = {
+    platform: "preview",
+    desktopSupported: false,
+    dataDir: state.diagnostics.dataDir,
+    error:
+      "Claude Code bulunamadı. Resmi CLI’yi kur veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+  };
+}
 if (scenario === "planning") {
   accounts[0].planning = { plan: "max5", capacityWeight: 5 };
   accounts[1].planning = { plan: "pro", capacityWeight: 1 };
@@ -435,8 +456,8 @@ export const previewApi: RelayAPI = {
   setTrayLanguage: async () => {},
   onTraySwitch: () => () => {},
   onChanged: () => () => {},
-  openPage: async (page) => {
-    location.hash = "#/" + page;
+  openPage: async (page, intent) => {
+    location.hash = intentHash(page, intent);
   },
   onNavigate: () => () => {},
   setPanelHeight: () => {},

@@ -10,7 +10,8 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow, usageWindowRows } from "@/data/selectors";
 import { formatReset } from "@/lib/time";
-import type { PageId } from "@/app/routes";
+import { intentHash, type PageId } from "@/app/routes";
+import { blockReason, desktopBlock } from "@/lib/onboarding";
 import { UsageCard } from "../../features/UsageCard";
 import { planLabel } from "../accounts/accountLabels";
 
@@ -115,8 +116,12 @@ export function ActiveAccountCard({
 function Onboarding({ go }: { go: (page: PageId) => void }) {
   const relay = useRelay();
   const { t } = useI18n();
-  const { desktop, accounts, hasUnclaimedDesktop } = relay;
+  const { accounts, hasUnclaimedDesktop } = relay;
   const first = !accounts.length;
+  // With no profile yet, the account open in Claude is added (and linked in the dialog).
+  const linking = hasUnclaimedDesktop && !first;
+  const block = desktopBlock(relay);
+  const reason = blockReason(block, t);
   return (
     <Card className="gap-0 px-4 py-3.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -127,12 +132,20 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
             <div className="mt-0.5 text-lg font-bold">
               {first
                 ? t("Merhaba, ben Relay’in kuryesiyim", "Hi, I’m Relay’s courier")
-                : hasUnclaimedDesktop
+                : linking
                   ? t("Desktop hesabı eşleştirilmedi", "Desktop account not linked")
                   : t("İlk hesabını bağla", "Connect your first account")}
             </div>
+            {first && (
+              <p className="mt-0.5 text-sm font-medium">
+                {t(
+                  "Claude hesapların arasında tek tıkla geç; Code konuşmaların seninle gelsin.",
+                  "Switch between your Claude accounts in one click; your Code conversations come with you.",
+                )}
+              </p>
+            )}
             <p className="mt-0.5 text-sm text-muted-foreground">
-              {hasUnclaimedDesktop
+              {linking
                 ? t(
                     "Claude’da açık hesabı bir Relay profiliyle eşleştir. Limit okuma girişi bu adımı tamamlamaz.",
                     "Link the account open in Claude to a Relay profile. The usage sign-in does not complete this step.",
@@ -149,26 +162,26 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
             </p>
           </div>
         </div>
-        <Button
-          disabled={
-            relay.desktopBusy ||
-            !desktop?.available ||
-            !!relay.pendingDesktop ||
-            desktop?.recoveryRequired
-          }
-          onClick={() => {
-            // The Accounts page opens the matching dialog for the query.
-            window.location.hash =
-              hasUnclaimedDesktop && accounts.some((a) => !a.desktop)
-                ? "#/hesaplar?eslestir"
-                : "#/hesaplar?ekle";
-          }}
-        >
-          <Plus />
-          {hasUnclaimedDesktop
-            ? t("Hesabı eşleştir", "Link account")
-            : t("Hesap ekle", "Add account")}
-        </Button>
+        <div className="grid max-w-64 justify-items-end gap-1">
+          <Button
+            disabled={!!block}
+            onClick={() => {
+              // The Accounts page opens the matching dialog for the query.
+              window.location.hash =
+                hasUnclaimedDesktop && accounts.some((a) => !a.desktop)
+                  ? "#/hesaplar?eslestir"
+                  : intentHash("hesaplar", "ekle");
+            }}
+          >
+            <Plus />
+            {linking
+              ? t("Hesabı eşleştir", "Link account")
+              : t("Hesap ekle", "Add account")}
+          </Button>
+          {reason && (
+            <p className="text-right text-xs text-muted-foreground">{reason}</p>
+          )}
+        </div>
       </div>
     </Card>
   );

@@ -4,7 +4,7 @@ import type { Tempo } from "./tempo";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
-import type { PageId } from "../src/app/routes";
+import type { PageId, PageIntent } from "../src/app/routes";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
 export interface AccountPlanning {
@@ -186,10 +186,10 @@ export interface RelayAPI {
   onTraySwitch(callback: () => void): () => void;
   /** Main broadcast `relay:changed`: Relay state changed in another window or the tray. */
   onChanged(callback: () => void): () => void;
-  /** Shows the main window on a page (and hides the menu bar panel). */
-  openPage(page: PageId): Promise<void>;
-  /** Main window: a page requested from the menu bar panel. */
-  onNavigate(callback: (page: PageId) => void): () => void;
+  /** Shows the main window on a page, with the intent its page acts on (and hides the menu bar panel). */
+  openPage(page: PageId, intent?: PageIntent): Promise<void>;
+  /** Main window: a page (and intent) requested from the menu bar panel. */
+  onNavigate(callback: (page: PageId, intent?: PageIntent) => void): () => void;
   /** Menu bar panel only: reports its content height. */
   setPanelHeight(height: number): void;
   /** Menu bar panel only: hides it. */

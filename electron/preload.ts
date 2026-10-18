@@ -20,9 +20,11 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:consume-tray-switch"),
   setTrayLanguage: (language) =>
     ipcRenderer.invoke("relay:tray-language", language),
-  openPage: (page) => ipcRenderer.invoke("relay:open-page", page),
+  openPage: (page, intent) =>
+    ipcRenderer.invoke("relay:open-page", page, intent),
   onNavigate: (callback) => {
-    const listener = (_: unknown, page: string) => callback(page as never);
+    const listener = (_: unknown, page: string, intent?: string) =>
+      callback(page as never, intent as never);
     ipcRenderer.on("relay:navigate", listener);
     return () => ipcRenderer.removeListener("relay:navigate", listener);
   },

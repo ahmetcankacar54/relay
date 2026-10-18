@@ -12,6 +12,7 @@ import {
 import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import type { PrankLevel, RelaySettings } from "../../shared/types";
+import { chooseCliFile } from "../features/CliSetup";
 
 const cardClass = "gap-0 px-5 py-4";
 
@@ -204,23 +205,22 @@ export function Settings() {
                 : t("Bulunamadı / desteklenmiyor", "Not found / unsupported")}
             </span>
           </SettingRow>
+          {/* The missing-CLI error names this path: Ayarlar → Claude Code CLI → Dosyayı seç. */}
           <SettingRow label="Claude Code CLI">
-            <span className="text-sm text-muted-foreground">
-              {data?.diagnostics.version ?? t("Bulunamadı", "Not found")}
+            <span className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                {data?.diagnostics.version ?? t("Bulunamadı", "Not found")}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!!busy}
+                onClick={() => chooseCliFile({ api, action })}
+              >
+                {t("Dosyayı seç", "Choose file")}
+              </Button>
             </span>
           </SettingRow>
-          <div className="border-t border-border py-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!!busy}
-              onClick={() =>
-                void action("executable", () => api.pickExecutable())
-              }
-            >
-              {t("Claude CLI dosyasını seç", "Choose Claude CLI executable")}
-            </Button>
-          </div>
           <Note className="mb-2">
             {t(
               "Desktop geçişi, Claude’un yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",

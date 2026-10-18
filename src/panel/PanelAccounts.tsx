@@ -38,6 +38,10 @@ export function panelRows(relay: Relay, now: number): OverviewRow[] {
 export const switchingId = (busy: string) =>
   busy.startsWith("switch:") ? busy.slice("switch:".length) : undefined;
 
+/** The first account is added in the main window: Accounts, with the add dialog open. */
+export const openAddAccount = (relay: Pick<Relay, "api">) =>
+  void relay.api.openPage("hesaplar", "ekle");
+
 /** Starts the Desktop switch after the inline confirmation. */
 export function confirmSwitch(relay: Relay, id: string, done: () => void) {
   void relay
@@ -83,9 +87,23 @@ export function PanelAccounts({
       </div>
       <div className={`${panelCard} px-2 py-1`}>
         {rows.length === 0 ? (
-          <div className="py-1.5 text-muted-foreground">
-            {t("Başka hesap yok", "No other accounts")}
-          </div>
+          relay.accounts.length ? (
+            <div className="py-1.5 text-muted-foreground">
+              {t("Başka hesap yok", "No other accounts")}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-1 py-1.5 text-muted-foreground">
+              {`${t("Henüz hesap yok", "No accounts yet")} ·`}
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto px-0 text-[12.5px]"
+                onClick={() => openAddAccount(relay)}
+              >
+                {t("Hesap ekle", "Add an account")}
+              </Button>
+            </div>
+          )
         ) : (
           rows.map((row) => {
             const { account, usage } = row;

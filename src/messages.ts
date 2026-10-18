@@ -95,8 +95,9 @@ const pairs: Pair[] = [
     "System encryption is unavailable.",
   ],
   [
-    "Claude Code bulunamadı. Resmi native CLI kurulumunu yap veya çalıştırılabilir dosyayı seç.",
-    "Claude Code was not found. Install the official native CLI or choose its executable in Settings.",
+    // Thrown in Turkish by electron/core/service.ts; this text is the key there too.
+    "Claude Code bulunamadı. Resmi CLI’yi kur veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+    "Claude Code was not found. Install the official CLI or pick it in Settings → Claude Code CLI → Choose file.",
   ],
   [
     "Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.",

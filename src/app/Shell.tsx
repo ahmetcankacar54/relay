@@ -16,7 +16,7 @@ import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
 import { RelayPrankStage } from "@/pranks/RelayPrankStage";
 import { Sidebar } from "./Sidebar";
 import { DesktopActionDialog } from "./DesktopActionDialog";
-import { shortcutPage } from "./routes";
+import { intentHash, shortcutPage } from "./routes";
 import { useHashRoute } from "./useHashRoute";
 import { useMediaQuery } from "./useMediaQuery";
 
@@ -53,7 +53,15 @@ export function Shell() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [go]);
-  useEffect(() => api.onNavigate((page) => go(page)), [go]);
+  // An intent rides on the hash: the page reads it on mount or on the hash change.
+  useEffect(
+    () =>
+      api.onNavigate((page, intent) => {
+        if (intent) window.location.hash = intentHash(page, intent);
+        else go(page);
+      }),
+    [go],
+  );
   const active = relay.active;
   return (
     <TooltipProvider delayDuration={300}>

@@ -5,6 +5,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatRelative } from "@/lib/time";
 import { formatPercent } from "@/lib/meter";
+import { overviewCards } from "@/lib/onboarding";
 import { PageFrame } from "@/app/PageFrame";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { Banner } from "@/components/Banner";
@@ -14,6 +15,7 @@ import { ActiveAccountCard } from "./overview/ActiveAccountCard";
 import { AccountsCard } from "./overview/AccountsCard";
 import { TodayCard } from "./overview/TodayCard";
 import { AutomationCard } from "./overview/AutomationCard";
+import { SetupChecklist } from "./overview/SetupChecklist";
 
 export function Overview({
   go,
@@ -46,6 +48,8 @@ export function Overview({
   const suggestedUse = suggestion && maxUsedPercent(usage[suggestion.id]);
   // One offer at a time: automatic switching's switch-now wins over the suggestion.
   const automationOffer = !!useAutomation(now).status.switchTo;
+  // Today plans a connected account; automatic switching needs two.
+  const cards = overviewCards(accounts);
   return (
     <PageFrame
       automationInline
@@ -87,13 +91,18 @@ export function Overview({
             </span>
           </Banner>
         )}
-        <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr]">
-          <AccountsCard go={go} now={now} />
-          <div className="grid content-start gap-3">
-            <TodayCard go={go} now={now} />
-            <AutomationCard go={go} now={now} />
+        <SetupChecklist />
+        {cards.today ? (
+          <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr]">
+            <AccountsCard go={go} now={now} />
+            <div className="grid content-start gap-3">
+              <TodayCard go={go} now={now} />
+              {cards.automation && <AutomationCard go={go} now={now} />}
+            </div>
           </div>
-        </div>
+        ) : (
+          <AccountsCard go={go} now={now} />
+        )}
       </div>
     </PageFrame>
   );

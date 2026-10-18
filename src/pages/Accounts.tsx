@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link2, Plus, Search } from "lucide-react";
 import { Panda } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { AccountSheet } from "./accounts/AccountSheet";
 import { AddAccountDialog } from "./accounts/AddAccountDialog";
 import { LinkDesktopDialog } from "./accounts/LinkDesktopDialog";
 import { filterAccounts, type AccountFilter } from "./accounts/accountLabels";
+import { blockReason, type Block } from "@/lib/onboarding";
 
 type IntentGuards = {
   busy: boolean;
@@ -28,11 +29,22 @@ type IntentGuards = {
   unclaimed: boolean;
   unlinked: boolean;
 };
+/** Why the add / link header button is disabled; undefined while it is enabled. */
+export function intentBlock(
+  intent: "ekle" | "eslestir",
+  g: IntentGuards,
+): Block | undefined {
+  if (g.recovery) return "recovery";
+  if (g.pending) return "pending";
+  if (g.busy) return "busy";
+  if (intent === "ekle") return g.count < 50 ? undefined : "limit";
+  return g.unlinked ? undefined : "all-linked";
+}
+
 /** Whether a `?ekle` / `?eslestir` intent may open its dialog; mirrors the header buttons. */
 export function intentAllowed(intent: string, g: IntentGuards): boolean {
-  if (g.busy || g.pending || g.recovery) return false;
-  if (intent === "ekle") return g.count < 50;
-  if (intent === "eslestir") return g.unclaimed && g.unlinked;
+  if (intent === "ekle") return !intentBlock(intent, g);
+  if (intent === "eslestir") return g.unclaimed && !intentBlock(intent, g);
   return false;
 }
 
@@ -77,6 +89,8 @@ export function Accounts() {
     unclaimed: relay.hasUnclaimedDesktop,
     unlinked,
   };
+  const addBlock = intentBlock("ekle", guards);
+  const linkBlock = intentBlock("eslestir", guards);
   const guardsRef = useRef(guards);
   guardsRef.current = guards;
   const [query, setQuery] = useState("");
@@ -139,18 +153,25 @@ export function Accounts() {
       )}
       actions={
         <>
-          {relay.hasUnclaimedDesktop && (
-            <Button
-              variant="outline"
-              disabled={!intentAllowed("eslestir", guards)}
-              onClick={() => setLinking(true)}
-            >
-              <Link2 />
-              {t("Desktop hesabını eşleştir", "Link Desktop account")}
-            </Button>
+          {/* Linking needs a profile; with none, adding one links it in the dialog. */}
+          {relay.hasUnclaimedDesktop && accounts.length > 0 && (
+            <>
+              <Button
+                variant="outline"
+                disabled={!!linkBlock}
+                onClick={() => setLinking(true)}
+              >
+                <Link2 />
+                {t("Desktop hesabını eşleştir", "Link Desktop account")}
+              </Button>
+              {/* A lock both buttons share is said once, after the second. */}
+              {linkBlock && linkBlock !== addBlock && (
+                <Reason>{blockReason(linkBlock, t)}</Reason>
+              )}
+            </>
           )}
           <Button
-            disabled={!intentAllowed("ekle", guards)}
+            disabled={!!addBlock}
             onClick={() => {
               setSetupId(undefined);
               setAdding(true);
@@ -159,6 +180,7 @@ export function Accounts() {
             <Plus />
             {t("Hesap ekle", "Add account")}
           </Button>
+          {addBlock && <Reason>{blockReason(addBlock, t)}</Reason>}
         </>
       }
     >
@@ -243,6 +265,15 @@ export function Accounts() {
         }}
       />
     </PageFrame>
+  );
+}
+
+/** Why the header button before it is disabled, next to it. */
+function Reason({ children }: { children: ReactNode }) {
+  return (
+    <span className="max-w-56 self-center text-xs text-muted-foreground">
+      {children}
+    </span>
   );
 }
 

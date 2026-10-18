@@ -3,6 +3,7 @@ import os from "node:os";
 import fs from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { meetsCliMinimum } from "../../shared/cli-version";
 const execFileAsync = promisify(execFile);
 
 // Launch the real CLI directly. Never run a login shell or interpolate shell commands.
@@ -77,10 +78,5 @@ export function supportsDesktop(
 ): boolean {
   if (platform !== "darwin" && !(platform === "win32" && arch === "x64"))
     return false;
-  const match = version.match(/(\d+)\.(\d+)\.(\d+)/);
-  if (!match) return false;
-  const [major, minor, patch] = match.slice(1).map(Number);
-  return (
-    major > 2 || (major === 2 && (minor > 1 || (minor === 1 && patch >= 285)))
-  );
+  return meetsCliMinimum(version);
 }

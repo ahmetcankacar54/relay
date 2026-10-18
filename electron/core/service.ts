@@ -100,7 +100,7 @@ export class Service {
       return (this.diagnostics = {
         ...base,
         error:
-          "Claude Code bulunamadı. Resmi native CLI kurulumunu yap veya çalıştırılabilir dosyayı seç.",
+          "Claude Code bulunamadı. Resmi CLI’yi kur veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
       });
     try {
       const { stdout } = await command(

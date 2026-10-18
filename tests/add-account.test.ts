@@ -9,7 +9,7 @@ import { ConnectionPanels } from "../src/app/ConnectionPanels";
 import { routeQuery } from "../src/app/routes";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { DEFAULT_SETTINGS, type Account, type AuthFlow, type RelaySettings, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AuthFlow, type DesktopState, type Diagnostics, type RelaySettings, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -118,7 +118,7 @@ test("the add-account dialog walks the Desktop and limit steps for the created p
   );
   assert.match(capture, /Bağlantıyı tamamla/);
   assert.match(capture, /Code çalışma alanı/);
-  assert.match(capture, /org-2/);
+  assert.match(capture, /<option value="org-2">Çalışma alanı 2<\/option>/);
   const limitStep = wrap(relayFor(), createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }));
   assert.match(limitStep, /Limit okuma girişi yap/);
   assert.match(limitStep, /Bitti/);
@@ -160,4 +160,116 @@ test("hash intents open a dialog only when its header button would be enabled", 
   assert.equal(intentAllowed("eslestir", { ...base, unclaimed: false }), false);
   assert.equal(intentAllowed("eslestir", { ...base, unlinked: false }), false);
   assert.equal(intentAllowed("other", base), false);
+});
+
+const A = "6f1c2d3e-4b5a-4c6d-8e7f-001122334455";
+const B = "a1b2c3d4-0000-4000-8000-000000000002";
+const claude = (extra: Partial<DesktopState> = {}): DesktopState => ({
+  available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0, ...extra,
+});
+const withCli = (diagnostics: Partial<Diagnostics>) =>
+  ({ settings: DEFAULT_SETTINGS, usage: {}, accounts, authFlows: [], diagnostics: { platform: "darwin", dataDir: "/tmp", desktopSupported: false, ...diagnostics } }) as unknown as Snapshot;
+const step = (n: 2 | 3, relay: Relay) => wrap(relay, createElement(AddAccountSteps, { close() {}, initial: { step: n, id: "b" } }));
+
+test("without a usable CLI, step 3 is not started: the reason, the guide and Choose file instead", () => {
+  for (const diagnostics of [
+    { executable: undefined, error: "Claude Code bulunamadı." },
+    { executable: "/usr/local/bin/claude", version: "2.1.200 (Claude Code)" },
+  ]) {
+    const html = step(3, relayFor({ data: withCli(diagnostics) }));
+    assert.doesNotMatch(html, /Limit okuma girişi yap/, JSON.stringify(diagnostics));
+    assert.match(html, /Limitleri okumak için gerekir\./);
+    assert.match(html, /<a[^>]*href="https:\/\/docs\.anthropic\.com\/en\/docs\/claude-code\/setup"[^>]*target="_blank"/);
+    assert.match(html, /<button[^>]*>Dosyayı seç<\/button>/);
+    assert.match(html, /Bitti/);
+  }
+  const ready = step(3, relayFor({ data: withCli({ executable: "/usr/local/bin/claude", version: "2.1.300 (Claude Code)" }) }));
+  assert.match(ready, /Limit okuma girişi yap/);
+  assert.doesNotMatch(ready, /Dosyayı seç/);
+});
+
+test("the Claude app step says why its button is disabled, next to it", () => {
+  const reasonAfter = (html: string, label: string) => {
+    const button = new RegExp(`<button[^>]*>${label}</button>`).exec(html)?.[0] ?? "";
+    assert.match(button, /disabled=""/, label);
+    return html.slice(html.indexOf(button) + button.length);
+  };
+  assert.match(
+    reasonAfter(step(2, relayFor({ desktop: claude({ available: false }) })), "Claude uygulaması girişini başlat…"),
+    /^<small[^>]*>Claude uygulaması bulunamadı; önce onu kur\.<\/small>/,
+  );
+  // Another profile's sign-in in progress.
+  assert.match(
+    reasonAfter(step(2, relayFor({ pendingDesktop: w })), "Claude uygulaması girişini başlat…"),
+    /^<small[^>]*>Önce devam eden Claude uygulaması girişini tamamla veya iptal et\.<\/small>/,
+  );
+  // Linking with no workspace folder yet: the Code step, not an empty picker.
+  const noCode = step(2, relayFor({ hasUnclaimedDesktop: true, desktop: claude({ currentAccountUuid: "u" }) }));
+  assert.doesNotMatch(noCode, /<select/);
+  assert.doesNotMatch(noCode, /Code’u aç \/ çalışma alanı seç/);
+  assert.match(
+    reasonAfter(noCode, "Bu hesabı eşleştir…"),
+    /^<small[^>]*>Claude’da sol menüden Code’u bir kez aç; liste kendiliğinden dolar\.<\/small>/,
+  );
+  // Two folders and none picked yet.
+  assert.match(
+    reasonAfter(step(2, relayFor({ hasUnclaimedDesktop: true, desktop: claude({ currentAccountUuid: "u", organizations: [A, B] }) })), "Bu hesabı eşleştir…"),
+    /^<small[^>]*>Bir Code çalışma alanı seç\.<\/small>/,
+  );
+  // Ready: the restart note, no reason.
+  const ready = step(2, relayFor());
+  assert.match(ready, /Claude uygulaması girişini başlat…<\/button><small[^>]*>Sonraki adımda yeniden başlatmayı onaylarsın\.<\/small>/);
+});
+
+test("the workspace pickers name each workspace and never show a raw id", () => {
+  const named: Account = { ...w, auth: { loggedIn: true, orgId: B, orgName: "Vertex", checkedAt: iso(NOW) } };
+  const relay = relayFor({
+    accounts: [a, b, named], hasUnclaimedDesktop: true, pendingDesktop: b, targetOrg: A,
+    desktop: claude({ currentAccountUuid: "u", organizations: [A, B] }),
+  } as Partial<Relay>);
+  const pending = wrap(relay, createElement(ConnectionPanels));
+  const setup = step(2, relayFor({
+    accounts: [a, b, named], hasUnclaimedDesktop: true, targetOrg: "",
+    desktop: claude({ currentAccountUuid: "u", organizations: [A, B] }),
+  } as Partial<Relay>));
+  for (const html of [pending, setup]) {
+    assert.match(html, new RegExp(`<option value="${A}"[^>]*>Çalışma alanı 1</option>`));
+    assert.match(html, new RegExp(`<option value="${B}"[^>]*>Vertex</option>`));
+    // An id appears only as a value, never as text.
+    assert.doesNotMatch(html, new RegExp(`>[^<]*${A}`));
+    assert.doesNotMatch(html, new RegExp(`>[^<]*${B}`));
+  }
+  // The chosen workspace's short id, muted, at most.
+  assert.match(pending, /<span class="[^"]*text-muted-foreground[^"]*">6f1c2d3e<\/span>/);
+});
+
+test("the pending sign-in names the Code step while no workspace folder exists", () => {
+  const html = wrap(
+    relayFor({ pendingDesktop: b, hasUnclaimedDesktop: true, desktop: claude({ currentAccountUuid: "u" }) } as Partial<Relay>),
+    createElement(ConnectionPanels),
+  );
+  assert.match(html, /Claude’da sol menüden Code’u bir kez aç; liste kendiliğinden dolar\./);
+  assert.doesNotMatch(html, /Bağlantıyı tamamla<\/button>/);
+});
+
+test("with no account, the accounts header hides Desktop linking", () => {
+  const html = wrap(relayFor({ accounts: [], active: undefined, hasUnclaimedDesktop: true }), createElement(Accounts));
+  assert.doesNotMatch(html, /Desktop hesabını eşleştir/);
+  assert.match(html, /Hesap ekle/);
+});
+
+test("disabled accounts header buttons say why, next to them", () => {
+  const pending = wrap(relayFor({ pendingDesktop: b }), createElement(Accounts));
+  assert.match(pending, /<button[^>]*disabled=""[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle<\/button><span[^>]*>Önce devam eden Claude uygulaması girişini tamamla veya iptal et\.<\/span>/);
+  const linkedAll = [a, { ...b, desktop: a.desktop }, { ...w, desktop: a.desktop }];
+  const allLinked = wrap(relayFor({ accounts: linkedAll, hasUnclaimedDesktop: true }), createElement(Accounts));
+  assert.match(allLinked, /<button[^>]*disabled=""[^>]*>(?:(?!<\/button>)[\s\S])*?Desktop hesabını eşleştir<\/button><span[^>]*>Her profilin Claude uygulaması girişi kayıtlı\.<\/span>/);
+  const full = Array.from({ length: 50 }, (_, i) => ({ ...b, id: `p${i}` }));
+  assert.match(wrap(relayFor({ accounts: full }), createElement(Accounts)), /Hesap ekle<\/button><span[^>]*>En fazla 50 hesap eklenebilir\.<\/span>/);
+  // A lock both buttons share is said once, after the second.
+  const busy = wrap(relayFor({ desktopBusy: true, hasUnclaimedDesktop: true }), createElement(Accounts));
+  assert.equal(busy.match(/Claude uygulamasında bir işlem sürüyor\./g)?.length, 1);
+  assert.match(busy, /Hesap ekle<\/button><span[^>]*>Claude uygulamasında bir işlem sürüyor\.<\/span>/);
+  // Enabled buttons explain nothing.
+  assert.doesNotMatch(wrap(relayFor(), createElement(Accounts)), /Hesap ekle<\/button><span/);
 });

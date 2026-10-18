@@ -6,7 +6,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { overviewAccounts, pendingFlow, tempoRateNow } from "@/data/selectors";
 import { accountRowSubtitle } from "@/lib/account-row";
-import type { PageId } from "@/app/routes";
+import { intentHash, type PageId } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { planLabel } from "../accounts/accountLabels";
 
@@ -53,16 +53,20 @@ export function AccountsCard({
       </div>
       {rows.length === 0 ? (
         <div className="flex items-center gap-1 py-2 text-sm text-muted-foreground">
-          {t("Başka hesap yok", "No other accounts")} ·
+          {relay.accounts.length
+            ? `${t("Başka hesap yok", "No other accounts")} ·`
+            : `${t("Henüz hesap yok", "No accounts yet")} ·`}
           <Button
             variant="link"
             size="sm"
             className="h-auto px-0"
             onClick={() => {
-              window.location.hash = "#/hesaplar?ekle";
+              window.location.hash = intentHash("hesaplar", "ekle");
             }}
           >
-            {t("Hesap ekle", "Add account")}
+            {relay.accounts.length
+              ? t("Hesap ekle", "Add account")
+              : t("Hesap ekle", "Add an account")}
           </Button>
         </div>
       ) : (

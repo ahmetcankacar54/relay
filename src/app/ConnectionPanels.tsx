@@ -9,7 +9,8 @@ import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { duplicateCliAccount } from "../../shared/account-state";
 import { ConnectionProgress } from "../features/ConnectionProgress";
-import { selectClass } from "../features/DesktopSetup";
+import { WorkspaceSelect } from "../features/DesktopSetup";
+import { codeTabStep } from "@/lib/onboarding";
 import { localizeError } from "../messages";
 
 const cardClass = "gap-3 px-4 py-4";
@@ -33,26 +34,22 @@ export function DesktopPendingActions() {
     action,
   } = relay;
   if (!pendingDesktop) return null;
+  const identityReady =
+    hasUnclaimedDesktop || desktop?.activeProfileId === pendingDesktop.id;
+  const workspaces = desktop?.organizations.length ?? 0;
   return (
     <>
-      {desktop?.organizations.length! > 1 && (
-        <label className="grid gap-1.5 text-sm font-medium">
-          {t("Code çalışma alanı", "Code workspace")}
-          <select
-            className={selectClass}
-            value={targetOrg}
-            onChange={(e) => setOrg(e.target.value)}
-          >
-            <option value="">
-              {t("Çalışma alanı seç", "Choose a workspace")}
-            </option>
-            {desktop?.organizations.map((id) => (
-              <option key={id} value={id}>
-                {id}
-              </option>
-            ))}
-          </select>
-        </label>
+      {workspaces > 1 && (
+        <WorkspaceSelect
+          accounts={relay.accounts}
+          organizations={desktop!.organizations}
+          value={targetOrg}
+          onChange={setOrg}
+          t={t}
+        />
+      )}
+      {identityReady && !workspaces && (
+        <p className="text-sm text-muted-foreground">{codeTabStep(t)}</p>
       )}
       <div className={actionsClass}>
         <Button
@@ -75,17 +72,15 @@ export function DesktopPendingActions() {
             "Cancel and return to previous account",
           )}
         </Button>
-        {(hasUnclaimedDesktop ||
-          desktop?.activeProfileId === pendingDesktop.id) &&
-          targetOrg && (
-            <Button
-              size="sm"
-              disabled={desktopBusy}
-              onClick={() => relay.requestDesktop(pendingDesktop, "capture")}
-            >
-              {t("Bağlantıyı tamamla", "Complete connection")}
-            </Button>
-          )}
+        {identityReady && targetOrg && (
+          <Button
+            size="sm"
+            disabled={desktopBusy}
+            onClick={() => relay.requestDesktop(pendingDesktop, "capture")}
+          >
+            {t("Bağlantıyı tamamla", "Complete connection")}
+          </Button>
+        )}
       </div>
     </>
   );

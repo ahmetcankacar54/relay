@@ -19,6 +19,7 @@ import { staleManualSwitch } from "../../shared/automation-status";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
 import { previewApi } from "../preview";
 import packageInfo from "../../package.json";
+import { targetWorkspace } from "../lib/workspaces";
 import { errorMessage } from "./error-message";
 import { useI18n } from "./i18n";
 import { pendingFlow, tempoRateNow } from "./selectors";
@@ -170,11 +171,7 @@ function useRelayState(
   );
   const hasUnclaimedDesktop =
     !!desktop?.currentAccountUuid && !desktop.activeProfileId;
-  const targetOrg = desktop?.organizations.includes(org)
-    ? org
-    : desktop?.organizations.length === 1
-      ? desktop.organizations[0]
-      : "";
+  const targetOrg = targetWorkspace(desktop?.organizations, org);
   const desktopBusy =
     !!busy || !!desktop?.busy || data?.continuation?.status === "executing";
   const dismissError = async () => {

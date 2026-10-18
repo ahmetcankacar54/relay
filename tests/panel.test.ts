@@ -242,6 +242,29 @@ test("panel without an active account points to Relay", () => {
   assert.match(html, /Claude’da kayıtlı hesap açık değil/);
 });
 
+test("with no account yet, the panel offers adding one in the main window", async () => {
+  const html = render(relayFor(undefined, [], {}));
+  assert.match(html, /Henüz hesap yok ·\s*<button[^>]*>Hesap ekle<\/button>/);
+  assert.doesNotMatch(html, /Başka hesap yok/);
+  const en = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "en", setLanguage() {}, t: (_: string, en: string) => en } },
+      createElement(RelayContext.Provider, { value: relayFor(undefined, [], {}) }, createElement(Panel, { now: NOW })),
+    ),
+  );
+  assert.match(en, /No accounts yet ·\s*<button[^>]*>Add an account<\/button>/);
+  // With accounts but none besides the open one, it stays "no other accounts".
+  assert.match(render(relayFor(active, [active], { active: use("active", 1, 1) })), /Başka hesap yok/);
+  const opened: unknown[][] = [];
+  const relay = relayFor(undefined, [], {}, {
+    api: { openPage: async (...args: unknown[]) => void opened.push(args) } as unknown as Relay["api"],
+  });
+  const { openAddAccount } = await import("../src/panel/PanelAccounts");
+  openAddAccount(relay);
+  assert.deepEqual(opened, [["hesaplar", "ekle"]]);
+});
+
 test("stale usage on the active card says so", () => {
   const html = render(relayFor(active, [active], { active: { ...use("active", 1, 1), checkedAt: iso(NOW - 3_600_000) } }));
   assert.match(html, /Limit verisi eski/);

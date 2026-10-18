@@ -1,6 +1,8 @@
 import { Monitor, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Account, DesktopState } from "../../shared/types";
+import { codeTabStep } from "@/lib/onboarding";
+import { workspaceOptions } from "@/lib/workspaces";
 
 export const selectClass =
   "h-9 w-full rounded-md border bg-background px-2.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";
@@ -18,6 +20,7 @@ export function DesktopSetup({
   close,
   connect,
   bare = false,
+  reason,
 }: {
   account?: Account;
   accounts: Account[];
@@ -33,7 +36,11 @@ export function DesktopSetup({
   connect: () => void;
   /** Inside a dialog: no card chrome and no close button (the dialog has its own). */
   bare?: boolean;
+  /** Why `busy` disables the button, shown next to it. */
+  reason?: string;
 }) {
+  // Folders under the current sign-in appear once Code has been opened in Claude.
+  const workspaces = desktop?.organizations.length ?? 0;
   return (
     <section
       id={account ? `setup-${account.id}` : "desktop-setup-picker"}
@@ -93,28 +100,16 @@ export function DesktopSetup({
       )}
       {account &&
         unclaimed &&
-        (!org || (desktop?.organizations.length ?? 0) > 1) && (
-          <label className="grid gap-1.5 text-sm font-medium">
-            {t("Code çalışma alanı", "Code workspace")}
-            <select
-              className={selectClass}
-              value={org}
-              onChange={(e) => selectOrg(e.target.value)}
-              disabled={busy}
-            >
-              <option value="">
-                {t(
-                  "Code’u aç / çalışma alanı seç",
-                  "Open Code / choose workspace",
-                )}
-              </option>
-              {desktop?.organizations.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-          </label>
+        workspaces > 0 &&
+        (!org || workspaces > 1) && (
+          <WorkspaceSelect
+            accounts={accounts}
+            organizations={desktop?.organizations ?? []}
+            value={org}
+            onChange={selectOrg}
+            disabled={busy}
+            t={t}
+          />
         )}
       {account && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -132,13 +127,63 @@ export function DesktopSetup({
                 )}
           </Button>
           <small className="text-xs text-muted-foreground">
-            {t(
-              "Sonraki adımda yeniden başlatmayı onaylarsın.",
-              "Review the restart in the next step.",
-            )}
+            {(busy && reason) ||
+              (unclaimed && !org
+                ? workspaces
+                  ? t("Bir Code çalışma alanı seç.", "Choose a Code workspace.")
+                  : codeTabStep(t)
+                : t(
+                    "Sonraki adımda yeniden başlatmayı onaylarsın.",
+                    "Review the restart in the next step.",
+                  ))}
           </small>
         </div>
       )}
     </section>
+  );
+}
+
+/** The Code workspace choice: organization names or "Çalışma alanı N", never a raw id. */
+export function WorkspaceSelect({
+  accounts,
+  organizations,
+  value,
+  onChange,
+  disabled,
+  t,
+}: {
+  accounts: readonly Account[];
+  organizations: readonly string[];
+  value: string;
+  onChange: (id: string) => void;
+  disabled?: boolean;
+  t: (tr: string, en: string) => string;
+}) {
+  const options = workspaceOptions(organizations, accounts, t);
+  const chosen = options.find((o) => o.id === value);
+  return (
+    <label className="grid gap-1.5 text-sm font-medium">
+      <span className="flex items-baseline gap-2">
+        {t("Code çalışma alanı", "Code workspace")}
+        {chosen && (
+          <span className="font-mono text-xs font-normal text-muted-foreground">
+            {chosen.short}
+          </span>
+        )}
+      </span>
+      <select
+        className={selectClass}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      >
+        <option value="">{t("Çalışma alanı seç", "Choose a workspace")}</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

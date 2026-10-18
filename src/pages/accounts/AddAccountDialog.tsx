@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Check, Globe2, LoaderCircle, Monitor } from "lucide-react";
+import { Check, Globe2, LoaderCircle, Monitor, Terminal } from "lucide-react";
 import type { Account, CreateAccount } from "../../../shared/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +20,14 @@ import { DesktopSetup } from "../../features/DesktopSetup";
 import { CliFlowPanel, DesktopPendingActions } from "@/app/ConnectionPanels";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { historyCopy } from "./historyCopy";
+import { CliSetupActions } from "../../features/CliSetup";
+import {
+  blockReason,
+  cliBlocked,
+  cliDetail,
+  cliState,
+  desktopBlock,
+} from "@/lib/onboarding";
 
 type Kind = "personal" | "work";
 type Step = 1 | 2 | 3;
@@ -162,11 +170,9 @@ export function AddAccountSteps({
         .map((a) => a.group.slice(5)),
     ),
   ];
-  const desktopLocked =
-    desktopBusy ||
-    !desktop?.available ||
-    !!desktop?.recoveryRequired ||
-    !!pendingDesktop;
+  const desktopLock = desktopBlock({ desktop, desktopBusy, pendingDesktop });
+  // Without a usable CLI the usage sign-in would only fail: say so instead of starting it.
+  const cli = cliState(relay.data?.diagnostics);
   // A completed Desktop link moves the wizard on to the limit step.
   const linked = !!account?.desktop;
   useEffect(() => {
@@ -295,7 +301,8 @@ export function AddAccountSteps({
               desktop={desktop}
               unclaimed={relay.hasUnclaimedDesktop}
               org={relay.targetOrg}
-              busy={desktopLocked}
+              busy={!!desktopLock}
+              reason={blockReason(desktopLock, t)}
               t={t}
               selectOrg={relay.setOrg}
               close={() => setStep(3)}
@@ -336,9 +343,19 @@ export function AddAccountSteps({
               {t("Bağlı", "Connected")}
               {account.auth.email ? ` · ${account.auth.email}` : ""}
             </StatusLine>
+          ) : cliBlocked(cli) ? (
+            <div className="grid gap-2">
+              <StatusLine tone="warn" icon={<Terminal />}>
+                {`Claude Code CLI · ${cliDetail(cli, relay.data?.diagnostics.version, t)}`}
+              </StatusLine>
+              <p className="text-sm text-muted-foreground">
+                {t("Limitleri okumak için gerekir.", "Needed to read usage limits.")}
+              </p>
+              <CliSetupActions />
+            </div>
           ) : null}
           <div className="flex flex-wrap justify-end gap-2">
-            {!flow && (
+            {!flow && !cliBlocked(cli) && (
               <Button
                 variant="outline"
                 disabled={!!busy}

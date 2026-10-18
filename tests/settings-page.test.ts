@@ -31,7 +31,9 @@ test("Settings shows appearance, language, refresh interval and technical detail
   );
   for (const re of [
     /Görünüm/, /Sistem/, /Açık/, /Koyu/, /Dil/, /Türkçe/, /English/,
-    /Limitleri yenileme/, /Elle/, /Claude CLI dosyasını seç/, /Bulundu/, /2\.1\.0/,
+    /Limitleri yenileme/, /Elle/, /Bulundu/, /2\.1\.0/,
+    // The path the missing-CLI error names: Ayarlar → Claude Code CLI → Dosyayı seç.
+    /Claude Code CLI<\/[^>]+>(?:(?!<button)[\s\S])*?2\.1\.0(?:(?!<button)[\s\S])*?<button[^>]*>Dosyayı seç<\/button>/,
     /Yerelde saklanır\. Kontrol sende\./, /Bağımsız araç · 0\.\d+\.\d+/,
   ])
     assert.match(html, re);

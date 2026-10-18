@@ -40,7 +40,8 @@ import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
 import { TrayPanel } from "./tray-panel";
 import { SwitchWindow } from "./switch-window";
 import { SwitchStory, sceneView } from "../shared/switch-scene";
-import { PAGES } from "../src/app/routes";
+import { PAGE_INTENTS, PAGES } from "../src/app/routes";
+import { isExternalLink } from "../shared/external-links";
 import { UsageHistory } from "./core/usage-history";
 import { usageStatisticsInput } from "./core/usage-statistics-input";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
@@ -817,7 +818,11 @@ function createWindow() {
       webSecurity: true,
     },
   });
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  // A link opens in the browser only when it is one of the allow-listed pages; no window opens.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isExternalLink(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
   window.webContents.on("will-navigate", (event) => event.preventDefault());
   window.webContents.session.setPermissionRequestHandler(
     (_contents, _permission, callback) => callback(false),
@@ -1022,16 +1027,17 @@ function bindIPC() {
       broadcastChanged();
     }
   });
-  handle("open-page", (page) => {
+  handle("open-page", (page, intent) => {
     const target = z.enum(PAGES).parse(page);
+    const want = z.enum(PAGE_INTENTS).optional().parse(intent);
     showWindow();
     const contents = window?.webContents;
     if (contents) {
       if (contents.isLoading())
         contents.once("did-finish-load", () =>
-          contents.send("relay:navigate", target),
+          contents.send("relay:navigate", target, want),
         );
-      else contents.send("relay:navigate", target);
+      else contents.send("relay:navigate", target, want);
     }
     trayPanel?.hide();
   });
