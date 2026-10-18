@@ -1,8 +1,13 @@
 import fs from "node:fs/promises";
-import { constants, type Dirent, type Stats } from "node:fs";
+import fsSync, { constants, type Dirent, type Stats } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { localDate } from "../../shared/planning";
-import { readPrivateJson, writePrivateJson } from "./continuation-journal";
+import {
+  privateJournalDirectory,
+  readPrivateJson,
+  writePrivateJson,
+} from "./continuation-journal";
 import type { Attribution } from "./token-attribution";
 
 export interface TokenCounts {
@@ -60,6 +65,8 @@ interface Saved {
   version: 1;
   files: Record<string, FileState>;
   days: Days;
+  /** The length of each day's seen file that goes with these offsets. */
+  seen: Record<string, number>;
 }
 
 /** One walk of the roots and read of what they hold, possibly over many ticks. */
@@ -100,6 +107,14 @@ const KEEP_DAYS = 120;
  * Offsets and counts must stay in one file to be written atomically together.
  */
 const LEDGER_MAX_BYTES = 16 * 1024 * 1024;
+/** Days of seen hashes kept in memory, least recently used dropped first. */
+const SEEN_DAYS_IN_MEMORY = 16;
+const HASH_BYTES = 8;
+const SEEN_FILE = /^(\d{4}-\d{2}-\d{2})\.bin$/;
+/** While a scan spans ticks, the ledger is written at most this often. */
+const PERSIST_EVERY_MS = 10_000;
+/** Claude Code's own stand-in replies, not responses from the API. */
+const SYNTHETIC_MODEL = "<synthetic>";
 const USAGE = Buffer.from('"usage"');
 const ASSISTANT = Buffer.from('"assistant"');
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -153,6 +168,181 @@ function bucket(
   });
 }
 
+function hashOf(key: string): string {
+  return createHash("sha256")
+    .update(key)
+    .digest("hex")
+    .slice(0, HASH_BYTES * 2);
+}
+
+function syncDirectory(directory: string) {
+  const fd = fsSync.openSync(directory, "r");
+  try {
+    fsSync.fsyncSync(fd);
+  } finally {
+    fsSync.closeSync(fd);
+  }
+}
+
+function readSeenFile(file: string): Buffer {
+  const fd = fsSync.openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    return fsSync.readFileSync(fd);
+  } finally {
+    fsSync.closeSync(fd);
+  }
+}
+
+/**
+ * The responses each day already counted, across all transcripts: a resumed or
+ * forked session copies earlier rows, timestamps included, into a new file.
+ * Each day is an append-only file of 8-byte hashes of
+ * `${message.id}:${requestId}`, never any text, and only a few days are held
+ * in memory.
+ */
+class SeenDays {
+  /** The length of each day's file on disk, as of the last flush. */
+  readonly bytes = new Map<string, number>();
+  /** Loaded days, least recently used first. */
+  private readonly loaded = new Map<string, Set<string>>();
+  /** Hashes added since the last flush. */
+  private readonly pending = new Map<string, string[]>();
+
+  constructor(private readonly dir: string) {}
+
+  get inMemory() {
+    return this.loaded.size;
+  }
+
+  has(date: string, hash: string) {
+    return this.day(date).has(hash);
+  }
+
+  add(date: string, hash: string) {
+    this.day(date).add(hash);
+    const list = this.pending.get(date);
+    if (list) list.push(hash);
+    else this.pending.set(date, [hash]);
+  }
+
+  dates(): string[] {
+    return [
+      ...new Set([
+        ...this.bytes.keys(),
+        ...this.loaded.keys(),
+        ...this.pending.keys(),
+      ]),
+    ];
+  }
+
+  /** Forget a day and delete its file. */
+  drop(date: string) {
+    this.loaded.delete(date);
+    this.pending.delete(date);
+    this.bytes.delete(date);
+    try {
+      fsSync.unlinkSync(this.file(date));
+    } catch {
+      // Already gone.
+    }
+  }
+
+  /** Append the new hashes durably, before any offset that read them is saved. */
+  async flush() {
+    if (!this.pending.size) return;
+    privateJournalDirectory(this.dir);
+    let created = false;
+    for (const [date, hashes] of this.pending) {
+      const handle = await fs.open(
+        this.file(date),
+        constants.O_WRONLY |
+          constants.O_APPEND |
+          constants.O_CREAT |
+          constants.O_NOFOLLOW,
+        0o600,
+      );
+      try {
+        const size = (await handle.stat()).size;
+        const whole = size - (size % HASH_BYTES);
+        // A torn append from a crash is cut off.
+        if (whole !== size) await handle.truncate(whole);
+        await handle.appendFile(Buffer.from(hashes.join(""), "hex"));
+        await handle.sync();
+        created ||= whole === 0;
+        this.bytes.set(date, whole + hashes.length * HASH_BYTES);
+      } finally {
+        await handle.close();
+      }
+      this.pending.delete(date);
+    }
+    if (created) syncDirectory(this.dir);
+  }
+
+  /**
+   * Cut each day's file back to the length the saved ledger knew. Hashes past
+   * it belong to rows whose counts were lost with an unsaved ledger; those
+   * rows are read again from the saved offsets, and count again, once.
+   */
+  restore(saved: Record<string, unknown>) {
+    let names: string[];
+    try {
+      names = fsSync.readdirSync(this.dir);
+    } catch {
+      return;
+    }
+    for (const name of names) {
+      const date = SEEN_FILE.exec(name)?.[1];
+      if (!date) continue;
+      const file = path.join(this.dir, name);
+      try {
+        const info = fsSync.lstatSync(file);
+        if (!info.isFile()) continue;
+        const length = Math.min(amount(saved[date]), info.size);
+        const keep = length - (length % HASH_BYTES);
+        if (keep === 0) {
+          fsSync.unlinkSync(file);
+          continue;
+        }
+        if (info.size > keep) fsSync.truncateSync(file, keep);
+        this.bytes.set(date, keep);
+      } catch {
+        // Left as it is.
+      }
+    }
+  }
+
+  private file(date: string) {
+    return path.join(this.dir, `${date}.bin`);
+  }
+
+  private day(date: string): Set<string> {
+    let set = this.loaded.get(date);
+    if (set) this.loaded.delete(date);
+    else {
+      set = this.read(date);
+      if (this.loaded.size >= SEEN_DAYS_IN_MEMORY)
+        this.loaded.delete(this.loaded.keys().next().value!);
+    }
+    this.loaded.set(date, set);
+    return set;
+  }
+
+  private read(date: string): Set<string> {
+    const set = new Set<string>();
+    let data: Buffer | undefined;
+    try {
+      data = readSeenFile(this.file(date));
+    } catch {
+      // Nothing seen on this day yet.
+    }
+    if (data)
+      for (let at = 0; at + HASH_BYTES <= data.length; at += HASH_BYTES)
+        set.add(data.toString("hex", at, at + HASH_BYTES));
+    for (const hash of this.pending.get(date) ?? []) set.add(hash);
+    return set;
+  }
+}
+
 function restoreFile(value: unknown): FileState | undefined {
   if (!isRecord(value)) return;
   const { dev, ino, size, offset, mtimeMs, lastKey, broken } = value;
@@ -190,8 +380,10 @@ export class TokenLedger {
   private readonly budgetMs: number;
   private readonly maxAgeDays: number;
   private readonly files = new Map<string, FileState>();
+  private readonly seen: SeenDays;
   private days: Days = Object.create(null);
   private dirty = false;
+  private lastPersist = -Infinity;
   private complete = false;
   private pass?: Pass;
   private cursor?: Cursor;
@@ -206,7 +398,15 @@ export class TokenLedger {
     this.now = options.now ?? Date.now;
     this.budgetMs = options.budgetMs ?? 200;
     this.maxAgeDays = options.maxAgeDays ?? 90;
+    this.seen = new SeenDays(
+      path.join(path.dirname(this.file), "token-ledger-seen"),
+    );
     this.load();
+  }
+
+  /** For tests: how many days of seen hashes are in memory. */
+  get seenDaysInMemory() {
+    return this.seen.inMemory;
   }
 
   /** One budgeted pass of work; resumable. Overlapping calls share it. */
@@ -260,7 +460,13 @@ export class TokenLedger {
     if (complete) this.pass = undefined;
     this.complete = complete;
     this.prune(tick);
-    if (this.dirty) this.persist();
+    // The hashes reach the disk before any offset that read them.
+    await this.seen.flush();
+    if (
+      this.dirty &&
+      (complete || this.now() - this.lastPersist >= PERSIST_EVERY_MS)
+    )
+      this.persist();
     return { complete };
   }
 
@@ -451,6 +657,7 @@ export class TokenLedger {
     if (!isRecord(row) || row.type !== "assistant") return;
     const message = row.message;
     if (!isRecord(message) || !isRecord(message.usage)) return;
+    if (message.model === SYNTHETIC_MODEL) return;
     // A streamed response is several contiguous rows with one id pair.
     const key =
       typeof message.id === "string"
@@ -461,20 +668,24 @@ export class TokenLedger {
       typeof row.timestamp === "string" ? Date.parse(row.timestamp) : NaN;
     if (!Number.isFinite(time)) return;
     const date = localDate(time, tick.zone);
-    const who =
-      date < tick.cutoff
-        ? undefined
-        : whoOf(
-            this.attribute({
-              time,
-              entrypoint:
-                typeof row.entrypoint === "string" ? row.entrypoint : undefined,
-              profileAccountId,
-            }),
-          );
-    if (key === undefined) delete state.lastKey;
-    else state.lastKey = key;
-    if (who === undefined) return;
+    const remember = () => {
+      if (key === undefined) delete state.lastKey;
+      else state.lastKey = key;
+    };
+    if (date < tick.cutoff) return remember();
+    // A copy keeps its timestamp, so it is on the same day as the original.
+    const hash = key === undefined ? undefined : hashOf(key);
+    if (hash !== undefined && this.seen.has(date, hash)) return remember();
+    const who = whoOf(
+      this.attribute({
+        time,
+        entrypoint:
+          typeof row.entrypoint === "string" ? row.entrypoint : undefined,
+        profileAccountId,
+      }),
+    );
+    remember();
+    if (hash !== undefined) this.seen.add(date, hash);
     const model =
       typeof message.model === "string" && message.model
         ? message.model
@@ -489,7 +700,7 @@ export class TokenLedger {
   }
 
   /**
-   * Drop days older than 120 days, and the state of files last written well
+   * Drop days older than 120 days with their seen hashes, and the state of files last written well
    * before that. Such a file is skipped as too old if seen again, and if it was
    * written to since, its old rows fall on dropped days, so nothing re-counts.
    */
@@ -497,6 +708,11 @@ export class TokenLedger {
     for (const date of Object.keys(this.days))
       if (date < tick.cutoff) {
         delete this.days[date];
+        this.dirty = true;
+      }
+    for (const date of this.seen.dates())
+      if (date < tick.cutoff) {
+        this.seen.drop(date);
         this.dirty = true;
       }
     const forgetBefore =
@@ -513,19 +729,26 @@ export class TokenLedger {
       version: 1,
       files: Object.fromEntries(this.files),
       days: this.days,
+      seen: Object.fromEntries(this.seen.bytes),
     };
     writePrivateJson(this.file, saved, LEDGER_MAX_BYTES);
     this.dirty = false;
+    this.lastPersist = this.now();
   }
 
+  /**
+   * A ledger that cannot be read starts empty, and so do the seen hashes, or
+   * the rescan would find every response already seen.
+   */
   private load() {
-    let value: unknown;
+    let value: Record<string, any> = {};
     try {
-      value = readPrivateJson(this.file, LEDGER_MAX_BYTES);
+      const saved = readPrivateJson(this.file, LEDGER_MAX_BYTES);
+      if (isRecord(saved) && saved.version === 1) value = saved;
     } catch {
-      return;
+      // No ledger yet, or an unreadable one.
     }
-    if (!isRecord(value) || value.version !== 1) return;
+    this.seen.restore(isRecord(value.seen) ? value.seen : {});
     if (isRecord(value.files))
       for (const [file, raw] of Object.entries(value.files)) {
         const state = restoreFile(raw);

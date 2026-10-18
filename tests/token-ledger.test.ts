@@ -513,4 +513,204 @@ test("the ledger file holds no transcript text and is private", async () => {
   assert.ok(!text.includes(PHRASE));
   assert.ok(!text.includes("fixture-project"));
   assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+
+  // The seen files hold only 8-byte hashes of the response ids.
+  const seen = path.join(dir, "token-ledger-seen");
+  assert.equal(fs.statSync(seen).mode & 0o777, 0o700);
+  assert.deepEqual(fs.readdirSync(seen), ["2026-10-18.bin"]);
+  const bin = path.join(seen, "2026-10-18.bin");
+  const bytes = fs.readFileSync(bin);
+  assert.equal(bytes.length, 2 * 8);
+  for (const needle of [PHRASE, "msg_A", "req_msg_A", MODEL])
+    assert.equal(bytes.indexOf(needle), -1, needle);
+  assert.equal(fs.statSync(bin).mode & 0o777, 0o600);
+});
+
+test("a response copied into other transcripts counts once; another request id for the same message counts", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const response = { id: "msg_A", req: "req_1", usage: { output_tokens: 10 } };
+  write(
+    path.join(root, "p1", "s1.jsonl"),
+    assistant(response).repeat(4) + assistant({ id: "msg_B" }),
+  );
+  // A resumed or forked session that copied the history, then went on.
+  write(
+    path.join(root, "p2", "s2.jsonl"),
+    assistant(response).repeat(2) +
+      assistant({ id: "msg_B" }) +
+      assistant({ id: "msg_A", req: "req_2", usage: { output_tokens: 100 } }),
+  );
+  write(
+    path.join(root, "p2", "s2", "subagents", "agent-1.jsonl"),
+    assistant(response),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  assert.equal(totals(ledger).responses, 3);
+  assert.equal(totals(ledger).output, 10 + 2 + 100);
+});
+
+test("a restart from an older ledger, after newer seen hashes were written, counts each response exactly once", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const one = path.join(root, "p", "one.jsonl");
+  const two = path.join(root, "p", "two.jsonl");
+  const ledgerFile = path.join(dir, "token-ledger.json");
+  const seenFile = path.join(dir, "token-ledger-seen", "2026-10-18.bin");
+  const row = (id: string, output: number) =>
+    assistant({ id, usage: { output_tokens: output } });
+  write(one, row("msg_1", 1) + row("msg_2", 10));
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  const older = fs.readFileSync(ledgerFile);
+  const olderSeen = fs.statSync(seenFile).size;
+
+  fs.appendFileSync(one, row("msg_3", 100));
+  write(two, row("msg_1", 1) + row("msg_3", 100) + row("msg_4", 1000));
+  await ledger.tick();
+  assert.equal(totals(ledger).output, 1111);
+  // The crash: the seen hashes of the second tick are on disk, its ledger is not.
+  assert.ok(fs.statSync(seenFile).size > olderSeen);
+  fs.writeFileSync(ledgerFile, older, { mode: 0o600 });
+
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  assert.equal(totals(restarted).output, 11);
+  assert.deepEqual(await restarted.tick(), { complete: true });
+  assert.equal(totals(restarted).responses, 4);
+  assert.equal(totals(restarted).output, 1111);
+  // Re-reading the same bytes again changes nothing.
+  fs.writeFileSync(ledgerFile, older, { mode: 0o600 });
+  const again = ledgerFor(dir, [{ dir: root }]);
+  await again.tick();
+  assert.equal(totals(again).output, 1111);
+  assert.equal(fs.statSync(seenFile).size, 4 * 8);
+});
+
+test("a ledger that cannot be read clears the seen hashes, so a rescan counts everything once", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(
+    path.join(root, "p", "s.jsonl"),
+    assistant({ id: "msg_1" }) + assistant({ id: "msg_2" }),
+  );
+  await ledgerFor(dir, [{ dir: root }]).tick();
+  fs.writeFileSync(path.join(dir, "token-ledger.json"), "{not json");
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 2);
+});
+
+test("seen hashes are dropped with their day", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(
+    path.join(root, "p", "s.jsonl"),
+    assistant({ id: "msg_old", at: new Date(NOW - 100 * DAY).toISOString() }) +
+      assistant({ id: "msg_new" }),
+  );
+  let clock = NOW;
+  const ledger = ledgerFor(dir, [{ dir: root }], { now: () => clock });
+  await ledger.tick();
+  const seen = path.join(dir, "token-ledger-seen");
+  assert.deepEqual(fs.readdirSync(seen).sort(), [
+    "2026-07-10.bin",
+    "2026-10-18.bin",
+  ]);
+  clock = NOW + 30 * DAY;
+  await ledger.tick();
+  assert.deepEqual(Object.keys(ledger.snapshot().days), ["2026-10-18"]);
+  assert.deepEqual(fs.readdirSync(seen), ["2026-10-18.bin"]);
+  const saved = JSON.parse(
+    fs.readFileSync(path.join(dir, "token-ledger.json"), "utf8"),
+  );
+  assert.deepEqual(saved.seen, { "2026-10-18": 8 });
+});
+
+test("synthetic rows are not counted", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(
+    path.join(root, "p", "s.jsonl"),
+    assistant({ id: "msg_A" }) +
+      assistant({ id: "synthetic-1", model: "<synthetic>" }) +
+      assistant({ id: "synthetic-2", model: "<synthetic>" }),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  assert.equal(totals(ledger).responses, 1);
+  assert.deepEqual(
+    Object.keys(ledger.snapshot().days["2026-10-18"]["acct:a1"]),
+    [MODEL],
+  );
+});
+
+test("at most 16 days of seen hashes are in memory, and an evicted day still finds its copies", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const at = (k: number) => new Date(NOW - k * DAY).toISOString();
+  let original = "";
+  let copies = "";
+  for (let k = 1; k <= 20; k++) {
+    original += assistant({ id: `msg_${k}`, at: at(k) });
+    copies +=
+      assistant({ id: `msg_${k}`, at: at(k) }) +
+      assistant({ id: `msg_new_${k}`, at: at(k) });
+  }
+  write(path.join(root, "p", "a.jsonl"), original);
+  write(path.join(root, "p", "b.jsonl"), copies);
+  let peak = 0;
+  let ledger: TokenLedger;
+  const options = {
+    attribute: (): Attribution => {
+      peak = Math.max(peak, ledger.seenDaysInMemory);
+      return { kind: "account", accountId: "a1", estimated: false };
+    },
+  };
+  ledger = ledgerFor(dir, [{ dir: root }], options);
+  await ledger.tick();
+  assert.equal(totals(ledger).responses, 40);
+  assert.equal(peak, 16);
+  assert.ok(ledger.seenDaysInMemory <= 16);
+
+  // After a restart the evicted days come back from disk.
+  write(path.join(root, "p", "c.jsonl"), original);
+  ledger = ledgerFor(dir, [{ dir: root }], options);
+  await ledger.tick();
+  assert.equal(totals(ledger).responses, 40);
+  assert.ok(ledger.seenDaysInMemory <= 16);
+});
+
+test("while a scan spans ticks the ledger is written at most every 10 s, and always when a pass ends", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const ledgerFile = path.join(dir, "token-ledger.json");
+  const rows: string[] = [];
+  for (let size = 0; size < 3.5 * CHUNK;) {
+    const row = assistant({ id: `msg_${rows.length}`, pad: 1500 });
+    rows.push(row);
+    size += row.length;
+  }
+  write(path.join(root, "p", "s.jsonl"), rows.join(""));
+  let clock = NOW;
+  const ledger = ledgerFor(dir, [{ dir: root }], {
+    budgetMs: 1,
+    now: () => clock,
+    attribute: (): Attribution => {
+      clock += 0.01;
+      return { kind: "account", accountId: "a1", estimated: false };
+    },
+  });
+  const saved = () => fs.readFileSync(ledgerFile, "utf8");
+  assert.equal((await ledger.tick()).complete, false);
+  const first = saved();
+  assert.equal((await ledger.tick()).complete, false);
+  assert.equal(saved(), first);
+  clock += 10_000;
+  assert.equal((await ledger.tick()).complete, false);
+  const third = saved();
+  assert.notEqual(third, first);
+  assert.deepEqual(await ledger.tick(), { complete: true });
+  assert.notEqual(saved(), third);
+  assert.equal(JSON.parse(saved()).seen["2026-10-18"], rows.length * 8);
 });
