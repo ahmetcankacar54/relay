@@ -1,4 +1,5 @@
 import type { Command } from "../command";
+import { add } from "./add";
 import { list } from "./list";
 import { recover } from "./recover";
 import { status } from "./status";
@@ -11,4 +12,5 @@ export const COMMANDS: Record<string, Command> = {
   ls: list,
   switch: switchCommand,
   recover,
+  add,
 };
