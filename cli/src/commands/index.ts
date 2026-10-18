@@ -1,5 +1,7 @@
 import type { Command } from "../command";
 import { add } from "./add";
+import { doctor } from "./doctor";
+import { tokens } from "./tokens";
 import { run } from "./run";
 import { connect } from "./connect";
 import { usage } from "./usage";
@@ -25,4 +27,6 @@ export const COMMANDS: Record<string, Command> = {
   connect,
   usage,
   run,
+  tokens,
+  doctor,
 };

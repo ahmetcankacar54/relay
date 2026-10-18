@@ -30,6 +30,9 @@ export async function cliFixture(t: any, options: FixtureOptions = {}) {
   const home = path.join(temp, "Relay");
   const claude = path.join(temp, "Claude");
   fs.mkdirSync(claude, { recursive: true });
+  // An empty stand-in bundle, so checks that look for Claude.app find one.
+  fs.mkdirSync(path.join(temp, "Claude.app", "Contents", "MacOS"), { recursive: true });
+  fs.writeFileSync(path.join(temp, "Claude.app", "Contents", "MacOS", "Claude"), "");
   const security = fakeSecurity({});
   t.after(security.remove);
   const state = {
