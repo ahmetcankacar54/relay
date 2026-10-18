@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Account } from "../../../shared/types";
 import {
   TOKEN_ROW_LABELS,
@@ -151,6 +151,9 @@ function Tiles({ view }: { view: TokenUsageView }) {
   );
 }
 
+/** "tahmini" / "estimated": what screen readers hear in place of the ≈ mark. */
+const estimatedWord = (t: T) => t("tahmini", "estimated");
+
 /** Stacked tokens per local day, one segment per row, coloured by account. */
 function Chart({
   view,
@@ -238,12 +241,16 @@ function Chart({
         {days.map((day, i) => {
           const x = left + i * step + (step - bar) / 2;
           let y = BASE;
+          // The day's total, then each row, the estimated ones named as such.
+          const spoken = [
+            `${day.label}: ${formatTokens(dayTotal(day), language)}`,
+            ...day.parts.map(
+              (p) =>
+                `${p.column.name} ${p.estimated ? `${estimatedWord(t)} ` : ""}${formatTokens(p.value, language)}`,
+            ),
+          ].join("; ");
           return (
-            <g
-              key={day.date}
-              role="img"
-              aria-label={`${day.label}: ${formatTokens(dayTotal(day), language)}`}
-            >
+            <g key={day.date} role="img" aria-label={spoken}>
               <title>
                 {[
                   day.label,
@@ -329,9 +336,24 @@ function DayTable({
     "Limit ölçümlerinden tahmin edildi",
     "Estimated from limit samples",
   );
-  /** A cell's text: "—" for none, "≈" before a value estimated from limit samples. */
-  const show = (value: number, estimated: boolean) =>
-    value > 0 ? `${estimated ? "≈" : ""}${formatTokens(value, language)}` : "—";
+  /**
+   * A cell's text: "—" for none, "≈" before a value estimated from limit
+   * samples, which screen readers hear as "tahmini".
+   */
+  const show = (value: number, estimated: boolean): ReactNode =>
+    value > 0 ? (
+      <>
+        {estimated && (
+          <>
+            <span aria-hidden="true">≈</span>
+            <span className="sr-only">{estimatedWord(t)} </span>
+          </>
+        )}
+        {formatTokens(value, language)}
+      </>
+    ) : (
+      "—"
+    );
   return (
     <div
       role="region"
@@ -415,12 +437,19 @@ function Content({
     cache: t("Önbellek", "Cache"),
   };
   const empty = view.rows.length === 0;
+  const scanning = !view.progress.complete;
   return (
     <>
       {empty ? (
-        <p className="text-sm text-muted-foreground">
-          {t("Bu aralıkta token kaydı yok.", "No token records in this range.")}
-        </p>
+        // While the scan runs, an empty range may only not be read yet: the scanning note says so.
+        !scanning && (
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Bu aralıkta token kaydı yok.",
+              "No token records in this range.",
+            )}
+          </p>
+        )
       ) : (
         <>
           <Tiles view={view} />
@@ -450,11 +479,19 @@ function Content({
           )}
         </Note>
       )}
-      {!view.progress.complete && (
+      {scanning && (
         <Note className="text-xs">
           {t(
             `Konuşma kayıtları taranıyor… ${formatPercent(view.progress.percent, "tr")}`,
             `Scanning conversation logs… ${formatPercent(view.progress.percent, "en")}`,
+          )}
+        </Note>
+      )}
+      {view.progress.error && (
+        <Note className="text-xs">
+          {t(
+            "Token kaydı kaydedilemiyor; Relay’i yeniden başlatınca tarama baştan yapılır.",
+            "Token records cannot be saved; the scan restarts after Relay restarts.",
           )}
         </Note>
       )}

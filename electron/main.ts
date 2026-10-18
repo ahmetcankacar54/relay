@@ -55,7 +55,7 @@ import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { buildTokenUsageView } from "../shared/token-usage-view";
 import type { UsageSample } from "../shared/usage-statistics";
 import { attribute } from "./core/token-attribution";
-import { TokenLedger } from "./core/token-ledger";
+import { TokenLedger, tokenTickDelay } from "./core/token-ledger";
 import { planningIdentity } from "../shared/planning";
 import { PACE_WINDOW_MS } from "../shared/adaptive-plan";
 import { WindowKeeper, type KeeperDeps } from "./core/window-keeper";
@@ -101,25 +101,27 @@ let usageHistory: UsageHistory;
 let activeTimeline: ActiveAccountTimeline;
 let tempo: TempoTracker;
 let trayTimer: ReturnType<typeof setInterval> | undefined;
-/** Token usage: the ledger of transcripts read so far, and the ticks that read them. */
-const TOKEN_TICK_MS = 5 * 60_000;
-/** While the first scan is incomplete, ticks run back to back at this pace. */
-const TOKEN_FIRST_SCAN_TICK_MS = 2_000;
-/** The Usage page asks for a tick first when the last one is older than this. */
+// Token usage: the ledger of transcripts read so far, and the ticks that read
+// them, at the pace `tokenTickDelay` sets.
+/** The Usage page asks for ticks first when the last one is older than this. */
 const TOKEN_FRESH_MS = 60_000;
+/** How long the Usage page waits, at most, for those ticks to finish the pass. */
+const TOKEN_REFRESH_BUDGET_MS = 1_000;
 /** Limit samples are kept 14 days; older responses cannot be estimated from them. */
 const TOKEN_ATTRIBUTION_WINDOW_MS = 14 * 86_400_000;
+/** The limit samples are copied for attribution at most this often. */
+const TOKEN_SAMPLES_REFRESH_MS = 60_000;
 let tokenLedger: TokenLedger | undefined;
 /** `~/.claude/projects`, then the profile of each account that has written transcripts. */
 const tokenRoots: { dir: string; profileAccountId?: string }[] = [];
 let tokenTimer: ReturnType<typeof setTimeout> | undefined;
 let tokenRunning: Promise<void> | undefined;
-/** Latched: `tick()` reports incomplete again whenever a new pass starts. */
-let tokenFirstScanDone = false;
-let tokenTickFailed = false;
+/** How the last tick ended; before the first, as a pass yet to finish. */
+let tokenLastTick: { complete: boolean } | "failed" = { complete: false };
 let tokenTickedAt = 0;
-/** The limit samples attribution reads, taken once per tick and not once per row. */
+/** The limit samples attribution reads, copied at most once a minute and never once per row. */
 let tokenSamples: UsageSample[] = [];
+let tokenSamplesAt = -Infinity;
 let tokenScanStopped = false;
 let trayLanguage: "tr" | "en" = "tr";
 /** Main's own copy (menus, dialogs, notifications) in the app's language. */
@@ -207,20 +209,24 @@ async function addTokenRoots() {
       tokenRoots.push({ dir, profileAccountId: account.id });
   }
 }
+/** A new copy of the limit samples when the last is a minute old, or the clock went back. */
+function refreshTokenSamples() {
+  const now = Date.now();
+  const age = now - tokenSamplesAt;
+  if (age >= 0 && age < TOKEN_SAMPLES_REFRESH_MS) return;
+  tokenSamples = usageHistory.recentSamples(now - TOKEN_ATTRIBUTION_WINDOW_MS);
+  tokenSamplesAt = now;
+}
 async function tokenTickOnce() {
   if (!tokenLedger) return;
   try {
     await addTokenRoots();
-    tokenSamples = usageHistory.recentSamples(
-      Date.now() - TOKEN_ATTRIBUTION_WINDOW_MS,
-    );
-    const { complete } = await tokenLedger.tick();
-    if (complete) tokenFirstScanDone = true;
-    tokenTickFailed = false;
+    refreshTokenSamples();
+    tokenLastTick = await tokenLedger.tick();
   } catch {
     // A scan that fails (a full disk, a bad time zone) never disturbs Relay; it
     // is tried again at the slow pace.
-    tokenTickFailed = true;
+    tokenLastTick = "failed";
   } finally {
     tokenTickedAt = Date.now();
   }
@@ -241,9 +247,7 @@ function scheduleTokenTick() {
       tokenTimer = undefined;
       void tokenTick().finally(scheduleTokenTick);
     },
-    tokenFirstScanDone || tokenTickFailed
-      ? TOKEN_TICK_MS
-      : TOKEN_FIRST_SCAN_TICK_MS,
+    tokenTickDelay(tokenLastTick),
   );
   tokenTimer.unref();
 }
@@ -1274,17 +1278,19 @@ function bindIPC() {
       throw new Error(
         say("Token kaydı açılamadı.", "The token ledger could not be opened."),
       );
-    if (Date.now() - tokenTickedAt > TOKEN_FRESH_MS) await tokenTick();
-    const snapshot = tokenLedger.snapshot();
+    if (Date.now() - tokenTickedAt > TOKEN_FRESH_MS) {
+      // Ticks until the pass is complete or about a second has passed.
+      const until = Date.now() + TOKEN_REFRESH_BUDGET_MS;
+      do await tokenTick();
+      while (
+        tokenLastTick !== "failed" &&
+        !tokenLastTick.complete &&
+        Date.now() < until
+      );
+    }
     const exactSince = activeTimeline.exactSince();
     return buildTokenUsageView({
-      ledger: {
-        ...snapshot,
-        progress: {
-          ...snapshot.progress,
-          complete: tokenFirstScanDone || snapshot.progress.complete,
-        },
-      },
+      ledger: tokenLedger.snapshot(),
       accounts: service.store.state.accounts,
       range,
       ...(accountId ? { accountId } : {}),

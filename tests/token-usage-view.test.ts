@@ -294,6 +294,13 @@ test("progress is the scanned share, whole, and 100 once complete", () => {
     ledger({}, { scannedBytes: 10, totalBytes: 400, complete: true }),
   );
   assert.deepEqual(done.progress, { percent: 100, complete: true });
+  // A ledger that cannot be saved says so.
+  const unsaved = build(ledger({}, { error: true }));
+  assert.deepEqual(unsaved.progress, {
+    percent: 100,
+    complete: true,
+    error: true,
+  });
 });
 
 test("exactSince is passed on as a date in the zone", () => {
@@ -323,7 +330,7 @@ test("the view carries only counts, names and ids", () => {
 const read = (file: string) =>
   readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 
-test("main serves relay:token-usage with a validated input after a tick when stale", () => {
+test("main serves relay:token-usage with a validated input, after up to a second of ticks when stale", () => {
   const main = read("electron/main.ts");
   const start = main.indexOf('handle("token-usage"');
   assert.ok(start >= 0, "token-usage handler");
@@ -331,8 +338,14 @@ test("main serves relay:token-usage with a validated input after a tick when sta
   assert.match(handler, /usageStatisticsInput\.parse\(input\)/);
   assert.match(handler, /TOKEN_FRESH_MS/);
   assert.match(handler, /await tokenTick\(\)/);
+  // Ticks run until the pass is complete or about a second has passed.
+  assert.match(handler, /TOKEN_REFRESH_BUDGET_MS/);
+  assert.match(handler, /!tokenLastTick\.complete/);
+  // The ledger's own "complete" reaches the view, untouched.
+  assert.match(handler, /ledger: tokenLedger\.snapshot\(\)/);
   assert.match(handler, /buildTokenUsageView\(/);
   assert.match(main, /const TOKEN_FRESH_MS = 60_000;/);
+  assert.match(main, /const TOKEN_REFRESH_BUDGET_MS = 1_000;/);
   assert.match(
     read("electron/preload.ts"),
     /tokenUsage: \(input\) =>\s*ipcRenderer\.invoke\("relay:token-usage", input\)/,
@@ -343,24 +356,22 @@ test("main serves relay:token-usage with a validated input after a tick when sta
   );
 });
 
-test("main schedules ticks every 5 minutes, every 2 seconds until the first scan completes, never overlapping", () => {
+test("main ticks every 2 seconds while a pass is unfinished and every 5 minutes otherwise, never overlapping", () => {
   const main = read("electron/main.ts");
-  assert.match(main, /const TOKEN_TICK_MS = 5 \* 60_000;/);
-  assert.match(main, /const TOKEN_FIRST_SCAN_TICK_MS = 2_000;/);
+  // The ledger owns "complete"; main keeps no latch of its own.
+  assert.doesNotMatch(main, /tokenFirstScanDone/);
+  assert.match(main, /tokenLastTick = await tokenLedger\.tick\(\)/);
+  assert.match(main, /tokenLastTick = "failed"/);
+  // The pace follows how the last tick ended: tokenTickDelay is tested with the ledger.
+  assert.match(main, /tokenTickDelay\(tokenLastTick\)/);
   // One tick in flight at a time; later callers share it.
   assert.match(main, /tokenRunning \?\?= /);
-  // The first scan is latched: tick() says incomplete while a new pass runs.
-  assert.match(main, /if \(complete\) tokenFirstScanDone = true/);
-  assert.match(
-    main,
-    /tokenFirstScanDone \|\| tokenTickFailed\s*\? TOKEN_TICK_MS\s*: TOKEN_FIRST_SCAN_TICK_MS/,
-  );
-  assert.match(main, /complete: tokenFirstScanDone \|\|/);
   // The next tick is armed only when the last one has ended, on an unref'd timer.
   assert.match(main, /tokenTimer = setTimeout\(/);
   assert.match(main, /tokenTimer\.unref\(\)/);
-  // Attribution reads one sample set per tick, not a copy per row.
+  // Attribution copies the limit samples at most once a minute, not on every tick.
   assert.match(main, /usageHistory\.recentSamples\(/);
+  assert.match(main, /const TOKEN_SAMPLES_REFRESH_MS = 60_000;/);
   assert.match(main, /TOKEN_ATTRIBUTION_WINDOW_MS = 14 \* 86_400_000/);
   assert.match(main, /new TokenLedger\(/);
   assert.match(main, /os\.homedir\(\)/);

@@ -129,14 +129,30 @@ export function indexSamples(samples: readonly UsageSample[]): SampleIndex {
   };
 }
 
-/** Each samples array is indexed once; a new array, as each tick passes, is indexed anew. */
-const indexes = new WeakMap<readonly UsageSample[], SampleIndex>();
-function indexFor(samples: readonly UsageSample[]): SampleIndex {
-  let index = indexes.get(samples);
-  if (!index) {
-    index = indexSamples(samples);
-    indexes.set(samples, index);
-  }
+/**
+ * Each samples array is indexed once per set of candidates, on the first row
+ * that needs an estimate; a new array is indexed anew.
+ */
+const indexes = new WeakMap<
+  readonly UsageSample[],
+  { candidates: string; index: SampleIndex }
+>();
+function indexFor(
+  samples: readonly UsageSample[],
+  accounts: readonly Account[],
+): SampleIndex {
+  // Desktop's rows can belong only to an account Claude Desktop has signed in to.
+  const ids = accounts
+    .filter((account) => account.desktop?.accountUuid)
+    .map((account) => account.id);
+  const candidates = ids.join("\n");
+  const cached = indexes.get(samples);
+  if (cached?.candidates === candidates) return cached.index;
+  const allowed = new Set(ids);
+  const index = indexSamples(
+    samples.filter((sample) => allowed.has(sample.accountId)),
+  );
+  indexes.set(samples, { candidates, index });
   return index;
 }
 
@@ -162,7 +178,8 @@ function accountFor(
 
 /**
  * Which Relay account a Claude response belongs to, or whether it is not
- * Desktop's. `samples` is indexed once per array and must not change after.
+ * Desktop's. Only an account with a Claude app sign-in can be estimated.
+ * `samples` is indexed once per array and must not change after.
  */
 export function attribute(
   row: { time: number; entrypoint?: string; profileAccountId?: string },
@@ -189,7 +206,7 @@ export function attribute(
       ? { kind: "account", accountId: owner.id, estimated: false }
       : { kind: "unknown" };
   }
-  const estimated = indexFor(deps.samples).estimate(row.time);
+  const estimated = indexFor(deps.samples, deps.accounts).estimate(row.time);
   return estimated
     ? { kind: "account", accountId: estimated, estimated: true }
     : { kind: "unknown" };

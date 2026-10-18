@@ -194,6 +194,44 @@ test("with no timeline reading and no estimate the row is unknown", () => {
   assert.deepEqual(result, { kind: "unknown" });
 });
 
+test("only accounts with a Claude app sign-in receive estimates", () => {
+  // "c" has only a usage sign-in: Claude Desktop never had it, so its rows cannot be c's.
+  const c = account("c");
+  const samples = [
+    sample("a", T0, 10),
+    sample("a", T0 + 5 * MIN, 12),
+    sample("c", T0, 10),
+    sample("c", T0 + 5 * MIN, 60),
+  ];
+  const row = { time: T0 + MIN };
+  assert.deepEqual(
+    attribute(row, {
+      timeline: noTimeline,
+      samples,
+      accounts: [...accounts, c],
+    }),
+    { kind: "account", accountId: "a", estimated: true },
+  );
+  assert.deepEqual(
+    attribute(row, {
+      timeline: noTimeline,
+      samples: samples.filter((s) => s.accountId === "c"),
+      accounts: [...accounts, c],
+    }),
+    { kind: "unknown" },
+  );
+  // Once c signs in to the Claude app, the same samples estimate it.
+  const signedIn = account("c", "33333333-3333-4333-8333-333333333333");
+  assert.deepEqual(
+    attribute(row, {
+      timeline: noTimeline,
+      samples,
+      accounts: [...accounts, signedIn],
+    }),
+    { kind: "account", accountId: "c", estimated: true },
+  );
+});
+
 test("the account with the largest rise wins", () => {
   const samples = [
     sample("a", T0, 10),

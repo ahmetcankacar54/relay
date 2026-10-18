@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { TokenLedger, type TokenCounts } from "../electron/core/token-ledger";
+import { createHash } from "node:crypto";
+import {
+  TOKEN_FIRST_SCAN_TICK_MS,
+  TOKEN_TICK_MS,
+  TokenLedger,
+  tokenTickDelay,
+  type TokenCounts,
+} from "../electron/core/token-ledger";
 import {
   attribute,
   type Attribution,
@@ -958,4 +965,218 @@ test("seen files are made private again on load", async () => {
   fs.chmodSync(bin, 0o644);
   ledgerFor(dir, [{ dir: root }]);
   assert.equal(fs.statSync(bin).mode & 0o777, 0o600);
+});
+
+/** The key a transcript has in the ledger: the first 16 bytes of the SHA-256 of its path. */
+const keyOf = (file: string) =>
+  createHash("sha256").update(file).digest("hex").slice(0, 32);
+
+/** Rows enough for a pass over several 1 ms ticks; how many were written. */
+function bigTranscript(file: string, prefix: string): number {
+  const rows: string[] = [];
+  for (let size = 0; size < 2.5 * CHUNK;) {
+    const row = assistant({ id: `${prefix}_${rows.length}`, pad: 1500 });
+    rows.push(row);
+    size += row.length;
+  }
+  write(file, rows.join(""));
+  return rows.length;
+}
+
+/** A 1 ms budget on a fake clock that each counted response moves. */
+function slowTicks() {
+  let clock = NOW;
+  return {
+    budgetMs: 1,
+    now: () => clock,
+    attribute: (): Attribution => {
+      clock += 0.01;
+      return { kind: "account", accountId: "a1", estimated: false };
+    },
+  };
+}
+
+test("after a time zone change the ledger is incomplete until the rebuild ends, and its unfinished pass ticks every 2 s", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const rows = bigTranscript(path.join(root, "p", "s.jsonl"), "msg");
+  let zone = ZONE;
+  const ledger = ledgerFor(dir, [{ dir: root }], {
+    ...slowTicks(),
+    zone: () => zone,
+  });
+  assert.equal(ledger.snapshot().progress.complete, false);
+  let last = await ledger.tick();
+  while (!last.complete) {
+    assert.equal(ledger.snapshot().progress.complete, false);
+    assert.equal(tokenTickDelay(last), TOKEN_FIRST_SCAN_TICK_MS);
+    last = await ledger.tick();
+  }
+  assert.equal(ledger.snapshot().progress.complete, true);
+  assert.equal(tokenTickDelay(last), TOKEN_TICK_MS);
+
+  zone = "UTC";
+  let ticks = 0;
+  do {
+    last = await ledger.tick();
+    ticks++;
+    if (!last.complete) {
+      assert.equal(ledger.snapshot().progress.complete, false, `tick ${ticks}`);
+      assert.equal(tokenTickDelay(last), TOKEN_FIRST_SCAN_TICK_MS);
+    }
+    assert.ok(ticks < 20, "the rebuild never completed");
+  } while (!last.complete);
+  assert.ok(ticks >= 2, `only ${ticks} ticks`);
+  assert.equal(ledger.snapshot().progress.complete, true);
+  assert.equal(totals(ledger).responses, rows);
+  assert.equal(tokenTickDelay(last), TOKEN_TICK_MS);
+  // A failed tick backs off to the slow pace.
+  assert.equal(tokenTickDelay("failed"), TOKEN_TICK_MS);
+  assert.equal(TOKEN_TICK_MS, 5 * 60_000);
+  assert.equal(TOKEN_FIRST_SCAN_TICK_MS, 2_000);
+});
+
+test("a later pass that spans ticks keeps the 2 s pace while the ledger stays complete, and a restart after it is complete at once", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(path.join(root, "p", "a.jsonl"), assistant({ id: "msg_first" }));
+  const ledger = ledgerFor(dir, [{ dir: root }], slowTicks());
+  assert.deepEqual(await ledger.tick(), { complete: true });
+  assert.equal(ledger.snapshot().progress.complete, true);
+
+  const rows = bigTranscript(path.join(root, "p", "b.jsonl"), "msg");
+  let last: { complete: boolean };
+  let ticks = 0;
+  do {
+    last = await ledger.tick();
+    ticks++;
+    assert.equal(ledger.snapshot().progress.complete, true, `tick ${ticks}`);
+    assert.equal(
+      tokenTickDelay(last),
+      last.complete ? TOKEN_TICK_MS : TOKEN_FIRST_SCAN_TICK_MS,
+    );
+    assert.ok(ticks < 20, "the pass never completed");
+  } while (!last.complete);
+  assert.ok(ticks >= 2, `only ${ticks} ticks`);
+  assert.equal(totals(ledger).responses, rows + 1);
+  // The finished pass is saved with the counts.
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  assert.equal(restarted.snapshot().progress.complete, true);
+});
+
+test("a ledger that cannot be saved says so in its progress, and keeps counting", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(path.join(root, "p", "s.jsonl"), assistant({ id: "msg_A" }));
+  const ledger = ledgerFor(dir, [{ dir: root }], { maxBytes: 64 });
+  assert.equal(ledger.snapshot().progress.error, undefined);
+  assert.deepEqual(await ledger.tick(), { complete: true });
+  assert.equal(totals(ledger).responses, 1);
+  assert.equal(ledger.snapshot().progress.error, true);
+  assert.equal(fs.existsSync(path.join(dir, "token-ledger.json")), false);
+  fs.appendFileSync(
+    path.join(root, "p", "s.jsonl"),
+    assistant({ id: "msg_B" }),
+  );
+  assert.deepEqual(await ledger.tick(), { complete: true });
+  assert.equal(totals(ledger).responses, 2);
+  assert.equal(ledger.snapshot().progress.error, true);
+});
+
+test("a saved ledger whose seen hashes are missing starts over, and the rescan counts once", async () => {
+  for (const missing of ["file", "directory"] as const) {
+    const dir = tempDir();
+    const root = path.join(dir, "projects");
+    write(
+      path.join(root, "p", "s.jsonl"),
+      assistant({ id: "msg_A" }) + assistant({ id: "msg_B" }),
+    );
+    await ledgerFor(dir, [{ dir: root }]).tick();
+    const seen = path.join(dir, "token-ledger-seen");
+    if (missing === "file") fs.rmSync(path.join(seen, "2026-10-18.bin"));
+    else fs.rmSync(seen, { recursive: true });
+    const restarted = ledgerFor(dir, [{ dir: root }]);
+    assert.deepEqual(restarted.snapshot().days, {}, missing);
+    assert.equal(restarted.snapshot().progress.complete, false, missing);
+    // A copy of a counted response, in a new transcript, is still found.
+    write(path.join(root, "p", "copy.jsonl"), assistant({ id: "msg_A" }));
+    await restarted.tick();
+    assert.equal(totals(restarted).responses, 2, missing);
+    assert.deepEqual(fs.readdirSync(seen), ["2026-10-18.bin"], missing);
+  }
+});
+
+test("the ledger keys transcripts by a hash of their path and holds no paths", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const file = path.join(root, "secret-project-name", "s.jsonl");
+  const ledgerFile = path.join(dir, "token-ledger.json");
+  write(file, assistant({ id: "msg_A" }));
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  const text = fs.readFileSync(ledgerFile, "utf8");
+  const saved = JSON.parse(text);
+  assert.equal(saved.version, 2);
+  assert.deepEqual(Object.keys(saved.files), [keyOf(file)]);
+  assert.ok(!text.includes("secret-project-name"));
+  assert.ok(!text.includes("s.jsonl"));
+  assert.ok(!text.includes(dir));
+  // Appended rows are found again by the hashed key, also after a restart.
+  fs.appendFileSync(file, assistant({ id: "msg_B" }));
+  await ledger.tick();
+  assert.equal(totals(ledger).responses, 2);
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 2);
+  fs.appendFileSync(file, assistant({ id: "msg_C" }));
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 3);
+});
+
+test("a version 1 ledger, keyed by paths, is dropped and the rescan counts once", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const file = path.join(root, "p", "s.jsonl");
+  const ledgerFile = path.join(dir, "token-ledger.json");
+  write(file, assistant({ id: "msg_A" }) + assistant({ id: "msg_B" }));
+  await ledgerFor(dir, [{ dir: root }]).tick();
+  const saved = JSON.parse(fs.readFileSync(ledgerFile, "utf8"));
+  fs.writeFileSync(
+    ledgerFile,
+    JSON.stringify({
+      ...saved,
+      version: 1,
+      files: { [file]: Object.values(saved.files)[0] },
+    }),
+    { mode: 0o600 },
+  );
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  assert.deepEqual(restarted.snapshot().days, {});
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 2);
+  const text = fs.readFileSync(ledgerFile, "utf8");
+  assert.ok(!text.includes(file));
+  assert.equal(JSON.parse(text).version, 2);
+});
+
+test("a transcript idle for over 2 days keeps no last response", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const idle = path.join(root, "p", "idle.jsonl");
+  const fresh = path.join(root, "p", "fresh.jsonl");
+  write(idle, assistant({ id: "msg_A" }));
+  write(fresh, assistant({ id: "msg_B" }));
+  fs.utimesSync(idle, new Date(NOW - 3 * DAY), new Date(NOW - 3 * DAY));
+  fs.utimesSync(fresh, new Date(NOW - DAY), new Date(NOW - DAY));
+  await ledgerFor(dir, [{ dir: root }]).tick();
+  const saved = JSON.parse(
+    fs.readFileSync(path.join(dir, "token-ledger.json"), "utf8"),
+  );
+  const idleState = saved.files[keyOf(idle)];
+  assert.equal(idleState.offset, fs.statSync(idle).size);
+  assert.equal(idleState.lastKey, undefined);
+  assert.equal(idleState.last, undefined);
+  const freshState = saved.files[keyOf(fresh)];
+  assert.equal(freshState.lastKey, "msg_B:req_msg_B");
+  assert.equal(freshState.last.date, "2026-10-18");
 });

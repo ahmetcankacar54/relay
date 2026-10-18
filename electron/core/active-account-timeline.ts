@@ -59,6 +59,14 @@ function load(file: string): {
         ...(item.to === undefined ? {} : { to: item.to as string }),
       });
     }
+    // Saved in order; sorted anyway, by start then end, so lookups can search them.
+    const end = (segment: ActiveSegment) =>
+      segment.to === undefined ? Infinity : (isoTime(segment.to) as number);
+    segments.sort(
+      (a, b) =>
+        (isoTime(a.from) as number) - (isoTime(b.from) as number) ||
+        end(a) - end(b),
+    );
     // Only the newest segment can still be open: an older one ended when the next began.
     segments.forEach((segment, index) => {
       if (segment.to === undefined && index < segments.length - 1)
@@ -79,7 +87,12 @@ function load(file: string): {
  * disturb Desktop readings.
  */
 export class ActiveAccountTimeline {
+  /** Chronological, and by construction never overlapping. */
   private segments: ActiveSegment[];
+  /** Each segment's start in epoch ms, in step with `segments`, for binary search. */
+  private fromMs: number[] = [];
+  /** Each segment's end in epoch ms; Infinity while it is open. */
+  private toMs: number[] = [];
   private lastObservedAt?: number;
   /** The last observation the file holds. */
   private savedObservedAt?: number;
@@ -90,15 +103,15 @@ export class ActiveAccountTimeline {
   ) {
     const loaded = load(file);
     this.segments = loaded.segments;
+    for (const segment of this.segments) this.times(segment);
     this.lastObservedAt = this.savedObservedAt = loaded.lastObservedAt;
     const current = this.now();
     let changed = false;
     // A segment the last run left open ended with that run, a little after its last observation,
     // and never later than now.
-    const open = this.open();
-    if (open) {
-      const last = this.lastObservedAt ?? (isoTime(open.from) as number);
-      this.close(open, Math.min(last + ACTIVE_TIMELINE_GRACE_MS, current));
+    if (this.open()) {
+      const last = this.lastObservedAt ?? this.fromMs[this.fromMs.length - 1];
+      this.closeOpen(Math.min(last + ACTIVE_TIMELINE_GRACE_MS, current));
       changed = true;
     }
     if (this.prune(current)) changed = true;
@@ -121,24 +134,26 @@ export class ActiveAccountTimeline {
       now - this.lastObservedAt > ACTIVE_TIMELINE_GAP_MS
     ) {
       // Relay may have been closed in between: the account is not known to have stayed open.
-      this.close(open, this.lastObservedAt + ACTIVE_TIMELINE_GRACE_MS);
+      this.closeOpen(this.lastObservedAt + ACTIVE_TIMELINE_GRACE_MS);
       open = undefined;
       changed = true;
     }
     const account = state.running ? state.currentAccountUuid : undefined;
     if (!account) {
       if (open) {
-        this.close(open, now);
+        this.closeOpen(now);
         changed = true;
       }
     } else if (!open || open.accountUuid !== account) {
-      if (open) this.close(open, now);
+      if (open) this.closeOpen(now);
       const orgs = state.organizations;
-      this.segments.push({
+      const segment: ActiveSegment = {
         accountUuid: account,
         ...(orgs?.length === 1 ? { orgId: orgs[0] } : {}),
         from: new Date(now).toISOString(),
-      });
+      };
+      this.segments.push(segment);
+      this.times(segment);
       changed = true;
     }
     this.lastObservedAt = now;
@@ -156,24 +171,29 @@ export class ActiveAccountTimeline {
   accountAt(
     time: number,
   ): { accountUuid: string; orgId?: string; exact: true } | undefined {
-    for (let index = this.segments.length - 1; index >= 0; index--) {
-      const segment = this.segments[index];
-      const from = isoTime(segment.from) as number;
-      const to = segment.to === undefined ? Infinity : (isoTime(segment.to) as number);
-      if (time >= from && time < to)
-        return {
-          accountUuid: segment.accountUuid,
-          ...(segment.orgId === undefined ? {} : { orgId: segment.orgId }),
-          exact: true,
-        };
+    const since = this.exactSince();
+    if (since === undefined || !(time >= since)) return undefined;
+    // The last segment that began at or before `time`; as segments do not overlap, only it can hold it.
+    let low = 0;
+    let high = this.fromMs.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (this.fromMs[middle] <= time) low = middle + 1;
+      else high = middle;
     }
-    return undefined;
+    const index = low - 1;
+    if (!(time < this.toMs[index])) return undefined;
+    const segment = this.segments[index];
+    return {
+      accountUuid: segment.accountUuid,
+      ...(segment.orgId === undefined ? {} : { orgId: segment.orgId }),
+      exact: true,
+    };
   }
 
   /** When the timeline began to know, the start of its first segment; before it nothing is known. */
   exactSince(): number | undefined {
-    const first = this.segments[0];
-    return first ? isoTime(first.from) : undefined;
+    return this.fromMs[0];
   }
 
   private open(): ActiveSegment | undefined {
@@ -181,25 +201,34 @@ export class ActiveAccountTimeline {
     return last && last.to === undefined ? last : undefined;
   }
 
-  /** Ends `segment` at `at`, never before it began. */
-  private close(segment: ActiveSegment, at: number) {
-    segment.to = new Date(
-      Math.max(at, isoTime(segment.from) as number),
-    ).toISOString();
+  /** Appends a segment's times, read from its own ISO strings so they match a reload. */
+  private times(segment: ActiveSegment) {
+    this.fromMs.push(isoTime(segment.from) as number);
+    this.toMs.push(
+      segment.to === undefined ? Infinity : (isoTime(segment.to) as number),
+    );
+  }
+
+  /** Ends the open segment, the newest, at `at`, never before it began. */
+  private closeOpen(at: number) {
+    const index = this.segments.length - 1;
+    const segment = this.segments[index];
+    segment.to = new Date(Math.max(at, this.fromMs[index])).toISOString();
+    this.toMs[index] = isoTime(segment.to) as number;
   }
 
   /** Drops segments that ended long ago and any beyond the newest few thousand; whether any went. */
   private prune(now: number): boolean {
     const cutoff = now - ACTIVE_TIMELINE_RETENTION_MS;
     const kept = this.segments
-      .filter(
-        (segment) =>
-          segment.to === undefined || (isoTime(segment.to) as number) >= cutoff,
-      )
+      .map((_, index) => index)
+      .filter((index) => this.toMs[index] >= cutoff)
       .slice(-ACTIVE_TIMELINE_MAX_SEGMENTS);
-    const dropped = kept.length !== this.segments.length;
-    this.segments = kept;
-    return dropped;
+    if (kept.length === this.segments.length) return false;
+    this.segments = kept.map((index) => this.segments[index]);
+    this.fromMs = kept.map((index) => this.fromMs[index]);
+    this.toMs = kept.map((index) => this.toMs[index]);
+    return true;
   }
 
   private save() {

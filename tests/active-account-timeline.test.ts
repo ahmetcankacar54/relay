@@ -349,6 +349,129 @@ test("a timeline that cannot be saved keeps working in memory", (t) => {
   assert.equal(timeline.accountAt(T0)?.accountUuid, A);
 });
 
+/** A small deterministic generator, so a failure names its seed. */
+function random(seed: number) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+interface Segment {
+  accountUuid: string;
+  orgId?: string;
+  from: string;
+  to: string;
+}
+
+/** Closed segments one after another, some touching, some empty, from `start`. */
+function chronological(next: () => number, count: number, start: number): Segment[] {
+  const pick = (n: number) => Math.floor(next() * n);
+  const segments: Segment[] = [];
+  let at = start;
+  for (let i = 0; i < count; i++) {
+    const from = at + (pick(3) === 0 ? 0 : pick(30) * MINUTE + pick(1_000));
+    const to = from + (pick(5) === 0 ? 0 : 1 + pick(60) * MINUTE);
+    segments.push({
+      accountUuid: [A, B][pick(2)],
+      ...(pick(2) === 0 ? { orgId: ORG_A } : {}),
+      from: iso(from),
+      to: iso(to),
+    });
+    at = to;
+  }
+  return segments;
+}
+
+/** What the timeline answered before it kept times as numbers: every segment, newest first. */
+function linearAccountAt(segments: Segment[], time: number) {
+  for (let index = segments.length - 1; index >= 0; index--) {
+    const segment = segments[index];
+    if (time >= Date.parse(segment.from) && time < Date.parse(segment.to))
+      return {
+        accountUuid: segment.accountUuid,
+        ...(segment.orgId === undefined ? {} : { orgId: segment.orgId }),
+        exact: true,
+      };
+  }
+  return undefined;
+}
+
+function shuffled<T>(items: T[], next: () => number): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(next() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+test("lookups agree with a scan of every segment, on random timelines saved out of order", (t) => {
+  for (let seed = 1; seed <= 25; seed++) {
+    const f = fixture(t);
+    const next = random(seed);
+    const segments = chronological(next, 1 + Math.floor(next() * 150), T0);
+    const first = Date.parse(segments[0].from);
+    const last = Date.parse(segments[segments.length - 1].to);
+    fs.writeFileSync(
+      f.file,
+      JSON.stringify({ version: 1, segments: shuffled(segments, next) }),
+    );
+    f.clock.now = last + MINUTE;
+    const timeline = f.open();
+    assert.equal(timeline.exactSince(), first, `seed ${seed}`);
+    const times = [
+      first - 1,
+      ...segments.flatMap((s) => {
+        const from = Date.parse(s.from);
+        const to = Date.parse(s.to);
+        return [from - 1, from, from + 1, to - 1, to, to + 1];
+      }),
+      ...Array.from({ length: 300 }, () => first - MINUTE + next() * (last - first + 2 * MINUTE)),
+      NaN,
+      Infinity,
+      -Infinity,
+    ];
+    for (const time of times)
+      assert.deepEqual(
+        timeline.accountAt(time),
+        linearAccountAt(segments, time),
+        `seed ${seed}, time ${time}`,
+      );
+    // A segment opened after loading is found too, and closing it ends it.
+    f.clock.now = last + 2 * MINUTE;
+    timeline.observe({ running: true, currentAccountUuid: B, organizations: [ORG_B] });
+    assert.equal(timeline.accountAt(last + 3 * MINUTE)?.accountUuid, B);
+    f.clock.now = last + 4 * MINUTE;
+    timeline.observe({ running: false, organizations: [] });
+    assert.equal(timeline.accountAt(last + 3 * MINUTE)?.accountUuid, B);
+    assert.equal(timeline.accountAt(last + 4 * MINUTE), undefined);
+    assert.deepEqual(timeline.accountAt(last - 1), linearAccountAt(segments, last - 1));
+  }
+});
+
+test("5 000 segments answer 10 000 lookups in under 50 ms", (t) => {
+  const f = fixture(t);
+  const next = random(7);
+  const segments = chronological(next, ACTIVE_TIMELINE_MAX_SEGMENTS, T0);
+  const first = Date.parse(segments[0].from);
+  const last = Date.parse(segments[segments.length - 1].to);
+  fs.writeFileSync(f.file, JSON.stringify({ version: 1, segments }));
+  f.clock.now = last + MINUTE;
+  const timeline = f.open();
+  const times = Array.from({ length: 10_000 }, () => first + next() * (last - first));
+  let found = 0;
+  const started = performance.now();
+  for (const time of times) if (timeline.accountAt(time)) found++;
+  const elapsed = performance.now() - started;
+  assert.ok(found > 0);
+  assert.ok(elapsed < 50, `took ${elapsed} ms`);
+  for (const time of times.slice(0, 200))
+    assert.deepEqual(timeline.accountAt(time), linearAccountAt(segments, time));
+});
+
 /** A Desktop manager on empty files whose Claude runs as `running` says. */
 async function desktop(t: { after(fn: () => unknown): void }, account?: string) {
   const temp = await fsp.mkdtemp(path.join(os.tmpdir(), "relay-timeline-desktop-"));

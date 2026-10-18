@@ -22,7 +22,29 @@ export type BucketKey = string;
 export interface LedgerSnapshot {
   /** date → who → model → counts */
   days: Record<string, Record<string, Record<string, TokenCounts>>>;
-  progress: { scannedBytes: number; totalBytes: number; complete: boolean };
+  progress: {
+    scannedBytes: number;
+    totalBytes: number;
+    /** A full pass has finished since the counts were last emptied. */
+    complete: boolean;
+    /** The last save failed: what was counted since is lost when Relay quits. */
+    error?: true;
+  };
+}
+
+/** Between finished passes the ledger is ticked this often. */
+export const TOKEN_TICK_MS = 5 * 60_000;
+/** While a pass is unfinished, ticks run back to back at this pace. */
+export const TOKEN_FIRST_SCAN_TICK_MS = 2_000;
+
+/**
+ * The wait before the next tick: the fast pace while the last tick left its
+ * pass unfinished, the slow one after a finished pass or a tick that threw.
+ */
+export function tokenTickDelay(last: { complete: boolean } | "failed"): number {
+  return last !== "failed" && !last.complete
+    ? TOKEN_FIRST_SCAN_TICK_MS
+    : TOKEN_TICK_MS;
 }
 
 export interface TokenLedgerOptions {
@@ -42,6 +64,8 @@ export interface TokenLedgerOptions {
   budgetMs?: number;
   /** A transcript first seen untouched for longer is never read. */
   maxAgeDays?: number;
+  /** The largest ledger file written; for tests. */
+  maxBytes?: number;
 }
 
 type Days = LedgerSnapshot["days"];
@@ -54,7 +78,7 @@ interface LastResponse extends Usage {
   model: string;
 }
 
-/** What is kept of a transcript: where reading stopped, never its text. */
+/** What is kept of a transcript, under a hash of its path: where reading stopped, never its text. */
 interface FileState {
   dev: number;
   ino: number;
@@ -72,9 +96,12 @@ interface FileState {
 }
 
 interface Saved {
-  version: 1;
+  /** 2 keys files by a hash of their path; a version 1 ledger is dropped. */
+  version: 2;
   /** The time zone the days are in. */
   zone?: string;
+  /** A full pass has finished since the counts were last emptied. */
+  complete?: true;
   files: Record<string, FileState>;
   days: Days;
   /** The length of each day's seen file that goes with these offsets. */
@@ -85,8 +112,8 @@ interface Saved {
 interface Pass {
   /** Directories still to list, as a stack. */
   dirs: { dir: string; depth: number; root: number }[];
-  /** Transcripts to read, in the order found. */
-  files: { file: string; root: number }[];
+  /** Transcripts to read, in the order found; the path is only ever in memory. */
+  files: { file: string; key: string; root: number }[];
   next: number;
 }
 
@@ -115,10 +142,15 @@ const MAX_DEPTH = 4;
 const KEEP_DAYS = 120;
 /**
  * The 1 MiB default of the private JSON helpers is too small: the owner's
- * transcripts are thousands of files, each with a path and offsets here.
+ * transcripts are thousands of files, each with a key and offsets here.
  * Offsets and counts must stay in one file to be written atomically together.
  */
 const LEDGER_MAX_BYTES = 16 * 1024 * 1024;
+/** A file's key is this many bytes of the SHA-256 of its path, in hex. */
+const FILE_KEY_BYTES = 16;
+const FILE_KEY = /^[0-9a-f]{32}$/;
+/** A transcript untouched this long keeps no last response: none goes on streaming. */
+const IDLE_MS = 2 * DAY_MS;
 /** Days of seen hashes kept in memory, least recently used dropped first. */
 const SEEN_DAYS_IN_MEMORY = 16;
 const HASH_BYTES = 8;
@@ -201,11 +233,16 @@ function bucket(
   });
 }
 
-function hashOf(key: string): string {
+function hashOf(key: string, bytes = HASH_BYTES): string {
   return createHash("sha256")
     .update(key)
     .digest("hex")
-    .slice(0, HASH_BYTES * 2);
+    .slice(0, bytes * 2);
+}
+
+/** The ledger's key for a transcript, so no folder name is ever saved. */
+function fileKey(file: string): string {
+  return hashOf(file, FILE_KEY_BYTES);
 }
 
 function syncDirectory(directory: string) {
@@ -237,6 +274,8 @@ class SeenDays {
   private readonly loaded = new Map<string, Set<string>>();
   /** Hashes added since the last flush. */
   private readonly pending = new Map<string, string[]>();
+  /** Days forgotten whose files go once a ledger without them is saved. */
+  private readonly dropped = new Set<string>();
 
   constructor(private readonly dir: string) {}
 
@@ -265,15 +304,26 @@ class SeenDays {
     ];
   }
 
-  /** Forget a day and delete its file. */
+  /**
+   * Forget a day. Its file stays until a ledger that no longer counts on it is
+   * saved, so a saved ledger never names a seen file that is gone.
+   */
   drop(date: string) {
     this.loaded.delete(date);
     this.pending.delete(date);
     this.bytes.delete(date);
-    try {
-      fsSync.unlinkSync(this.file(date));
-    } catch (error) {
-      if (code(error) !== "ENOENT") throw error;
+    this.dropped.add(date);
+  }
+
+  /** Delete the files of dropped days; one that cannot go is tried again later. */
+  removeDropped() {
+    for (const date of this.dropped) {
+      try {
+        fsSync.unlinkSync(this.file(date));
+      } catch (error) {
+        if (code(error) !== "ENOENT") continue;
+      }
+      this.dropped.delete(date);
     }
   }
 
@@ -282,6 +332,7 @@ class SeenDays {
     this.loaded.clear();
     this.pending.clear();
     this.bytes.clear();
+    this.dropped.clear();
   }
 
   /** Delete every seen file; a symlink in the directory's place goes, not its target. */
@@ -326,20 +377,31 @@ class SeenDays {
    * Cut each day's file back to the length the saved ledger knew, and make it
    * private again. Hashes past that length belong to rows whose counts were
    * lost with an unsaved ledger; those rows are read again from the saved
-   * offsets, and count again, once. False when the files cannot be trusted.
+   * offsets, and count again, once. False when the files cannot be trusted,
+   * or when a day the ledger saved hashes for has no file: its copies would
+   * count again.
    */
   restore(saved: Record<string, unknown>): boolean {
+    const expected = Object.keys(saved).filter(
+      (date) => DATE.test(date) && amount(saved[date]) > 0,
+    );
+    let names: string[];
     try {
       const info = fsSync.lstatSync(this.dir);
       if (!info.isDirectory() || info.isSymbolicLink()) return false;
-      for (const name of fsSync.readdirSync(this.dir)) {
-        const date = SEEN_FILE.exec(name)?.[1];
-        if (date && !this.restoreDay(date, amount(saved[date]))) return false;
-      }
-      return true;
+      names = fsSync.readdirSync(this.dir);
     } catch (error) {
-      return code(error) === "ENOENT" && this.bytes.size === 0;
+      return code(error) === "ENOENT" && expected.length === 0;
     }
+    const found = new Set<string>();
+    for (const name of names) {
+      const date = SEEN_FILE.exec(name)?.[1];
+      if (date) found.add(date);
+    }
+    if (!expected.every((date) => found.has(date))) return false;
+    for (const date of found)
+      if (!this.restoreDay(date, amount(saved[date]))) return false;
+    return true;
   }
 
   private restoreDay(date: string, saved: number): boolean {
@@ -358,9 +420,7 @@ class SeenDays {
       this.bytes.set(date, keep);
       return true;
     } catch (error) {
-      if (code(error) !== "ENOENT") return false;
-      this.bytes.delete(date);
-      return true;
+      return code(error) === "ENOENT" && saved === 0;
     }
   }
 
@@ -460,7 +520,8 @@ function restoreFile(value: unknown): FileState | undefined {
  * so each file is read once: its offset is persisted with the counts, and a
  * later tick reads only what was appended. A tick works within a time budget
  * and yields between chunks; a first scan spreads over many ticks and resumes
- * after a restart. Only counts, model names, dates and ids are kept.
+ * after a restart. Only counts, model names, dates, ids and hashed file keys
+ * are kept; never transcript text or paths.
  */
 export class TokenLedger {
   private readonly file: string;
@@ -470,6 +531,8 @@ export class TokenLedger {
   private readonly now: () => number;
   private readonly budgetMs: number;
   private readonly maxAgeDays: number;
+  private readonly maxBytes: number;
+  /** By `fileKey` of the transcript's path. */
   private readonly files = new Map<string, FileState>();
   private readonly seen: SeenDays;
   private days: Days = Object.create(null);
@@ -479,7 +542,13 @@ export class TokenLedger {
   private mustStartOver = false;
   private dirty = false;
   private lastPersist = -Infinity;
-  private complete = false;
+  /**
+   * A full pass has finished since the counts were last emptied, so they are
+   * whole up to it; saved with them. A later pass may span ticks meanwhile.
+   */
+  private passCompleteSinceStart = false;
+  /** The last save failed. */
+  private persistFailed = false;
   private pass?: Pass;
   private cursor?: Cursor;
   private chunk?: Buffer;
@@ -493,6 +562,7 @@ export class TokenLedger {
     this.now = options.now ?? Date.now;
     this.budgetMs = options.budgetMs ?? 200;
     this.maxAgeDays = options.maxAgeDays ?? 90;
+    this.maxBytes = options.maxBytes ?? LEDGER_MAX_BYTES;
     this.seen = new SeenDays(
       path.join(path.dirname(this.file), "token-ledger-seen"),
     );
@@ -504,7 +574,10 @@ export class TokenLedger {
     return this.seen.inMemory;
   }
 
-  /** One budgeted pass of work; resumable. Overlapping calls share it. */
+  /**
+   * One budgeted step of a pass; resumable. `complete` says whether this tick
+   * finished the pass. Overlapping calls share it.
+   */
   tick(): Promise<{ complete: boolean }> {
     this.running ??= this.run().finally(() => {
       this.running = undefined;
@@ -522,7 +595,12 @@ export class TokenLedger {
     }
     return {
       days: structuredClone(this.days),
-      progress: { scannedBytes, totalBytes, complete: this.complete },
+      progress: {
+        scannedBytes,
+        totalBytes,
+        complete: this.passCompleteSinceStart,
+        ...(this.persistFailed ? { error: true as const } : {}),
+      },
     };
   }
 
@@ -561,16 +639,27 @@ export class TokenLedger {
       if (this.now() >= tick.deadline) break;
     }
     const complete = !remaining();
-    if (complete) this.pass = undefined;
-    this.complete = complete;
+    if (complete) {
+      this.pass = undefined;
+      if (!this.passCompleteSinceStart) {
+        this.passCompleteSinceStart = true;
+        this.dirty = true;
+      }
+    }
     this.prune(tick);
     // The hashes reach the disk before any offset that read them.
     await this.seen.flush();
     if (
       this.dirty &&
       (complete || this.now() - this.lastPersist >= PERSIST_EVERY_MS)
-    )
-      this.persist();
+    ) {
+      try {
+        this.persist();
+      } catch {
+        // Counting goes on in memory; the progress says the ledger is unsaved,
+        // and the save is tried again later.
+      }
+    }
     return { complete };
   }
 
@@ -581,6 +670,7 @@ export class TokenLedger {
    */
   private startOver(zone: string) {
     this.mustStartOver = true;
+    this.passCompleteSinceStart = false;
     this.files.clear();
     this.days = Object.create(null);
     this.pass = undefined;
@@ -623,18 +713,20 @@ export class TokenLedger {
     );
     files.forEach((file, index) => {
       const stat = stats[index];
-      if (stat && this.observe(file, stat, tick.started))
-        pass.files.push({ file, root: at.root });
+      if (!stat) return;
+      const key = fileKey(file);
+      if (this.observe(key, stat, tick.started))
+        pass.files.push({ file, key, root: at.root });
     });
   }
 
   /** Track a transcript found on disk; whether it has anything to read. */
-  private observe(file: string, stat: Stats, now: number): boolean {
+  private observe(key: string, stat: Stats, now: number): boolean {
     if (!stat.isFile()) return false;
-    const state = this.files.get(file);
+    const state = this.files.get(key);
     if (!state) {
       if (stat.mtimeMs < now - this.maxAgeDays * DAY_MS) return false;
-      this.files.set(file, {
+      this.files.set(key, {
         dev: stat.dev,
         ino: stat.ino,
         size: stat.size,
@@ -671,10 +763,10 @@ export class TokenLedger {
    * pass, so one bad file never stalls the scan.
    */
   private async read(
-    entry: { file: string; root: number },
+    entry: Pass["files"][number],
     tick: Tick,
   ): Promise<boolean> {
-    const state = this.files.get(entry.file);
+    const state = this.files.get(entry.key);
     const cursor = this.cursor?.file === entry.file ? this.cursor : undefined;
     this.cursor = undefined;
     if (!state || state.broken || (!cursor && state.offset >= state.size))
@@ -858,7 +950,8 @@ export class TokenLedger {
    * Drop days older than 120 days with their seen hashes, and the state of
    * files last written well before that. Such a file is skipped as too old if
    * seen again, and if it was written to since, its old rows fall on dropped
-   * days, so nothing re-counts.
+   * days, so nothing re-counts. A file read to its end and idle for 2 days
+   * keeps no last response; a copy of it found later is a seen hash anyway.
    */
   private prune(tick: Tick) {
     for (const date of Object.keys(this.days))
@@ -873,36 +966,55 @@ export class TokenLedger {
       }
     const forgetBefore =
       tick.started - (Math.max(this.maxAgeDays, KEEP_DAYS) + 2) * DAY_MS;
-    for (const [file, state] of this.files)
+    const idleBefore = tick.started - IDLE_MS;
+    for (const [key, state] of this.files)
       if (state.mtimeMs < forgetBefore) {
-        this.files.delete(file);
+        this.files.delete(key);
+        this.dirty = true;
+      } else if (
+        state.lastKey !== undefined &&
+        state.mtimeMs < idleBefore &&
+        state.offset >= state.size
+      ) {
+        delete state.lastKey;
+        delete state.last;
         this.dirty = true;
       }
   }
 
+  /** Save the counts with the offsets; throws, and says so in the progress, when it cannot. */
   private persist() {
     const saved: Saved = {
-      version: 1,
+      version: 2,
       ...(this.bucketZone === undefined ? {} : { zone: this.bucketZone }),
+      ...(this.passCompleteSinceStart ? { complete: true as const } : {}),
       files: Object.fromEntries(this.files),
       days: this.days,
       seen: Object.fromEntries(this.seen.bytes),
     };
-    writePrivateJson(this.file, saved, LEDGER_MAX_BYTES);
-    this.dirty = false;
     this.lastPersist = this.now();
+    try {
+      writePrivateJson(this.file, saved, this.maxBytes);
+    } catch (error) {
+      this.persistFailed = true;
+      throw error;
+    }
+    this.persistFailed = false;
+    this.dirty = false;
+    this.seen.removeDropped();
   }
 
   /**
    * A ledger that cannot be read starts empty, and so do the seen hashes, or
-   * the rescan would find every response already seen. Seen files that
-   * cannot be trusted empty the ledger too, on the first tick.
+   * the rescan would find every response already seen; so does one of
+   * another version, such as version 1 keyed by paths. Seen files that cannot
+   * be trusted empty the ledger too, on the first tick.
    */
   private load() {
     let value: Record<string, any> = {};
     try {
-      const saved = readPrivateJson(this.file, LEDGER_MAX_BYTES);
-      if (isRecord(saved) && saved.version === 1) value = saved;
+      const saved = readPrivateJson(this.file, this.maxBytes);
+      if (isRecord(saved) && saved.version === 2) value = saved;
     } catch {
       // No ledger yet, or an unreadable one.
     }
@@ -912,10 +1024,11 @@ export class TokenLedger {
       this.seen.forget();
       return;
     }
+    this.passCompleteSinceStart = value.complete === true;
     if (isRecord(value.files))
-      for (const [file, raw] of Object.entries(value.files)) {
-        const state = restoreFile(raw);
-        if (state) this.files.set(file, state);
+      for (const [key, raw] of Object.entries(value.files)) {
+        const state = FILE_KEY.test(key) ? restoreFile(raw) : undefined;
+        if (state) this.files.set(key, state);
       }
     if (isRecord(value.days))
       for (const [date, byWho] of Object.entries(value.days)) {

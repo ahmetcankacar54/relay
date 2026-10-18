@@ -92,6 +92,8 @@ const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "
 const card = (state: Parameters<typeof TokenUsageCard>[0]["state"], language: Language = "tr") =>
   render(createElement(TokenUsageCard, { state, accounts }), language);
 const shown = (language: Language = "tr") => card({ view, loading: false }, language);
+/** Markup as seen on screen: without the text only screen readers hear. */
+const visible = (html: string) => text(html.replace(/<span class="sr-only">[^<]*<\/span>/g, ""));
 
 test("formatTokens is compact, with the language's own units", () => {
   assert.equal(plainSpaces(formatTokens(1_234_567, "tr")), "1,2 Mn");
@@ -206,7 +208,7 @@ test("the table lists days newest first with the rows from the view, then the to
     const at = body.indexOf(`>${day}</th>`);
     return body.slice(at, body.indexOf("</tr>", at));
   };
-  const cellsOf = (day: string) => [...rowOf(day).matchAll(/<td[^>]*>([^<]*)</g)].map((m) => m[1]);
+  const cellsOf = (day: string) => [...rowOf(day).matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => visible(m[1]));
   assert.deepEqual(cellsOf("14 Eki"), ["2,1 Mn", "125 B", "—", "—", "—", "2,2 Mn"]);
   assert.deepEqual(cellsOf("13 Eki"), ["≈1 Mn", "—", "—", "—", "—", "≈1 Mn"]);
   assert.deepEqual(cellsOf("12 Eki"), ["—", "—", "—", "45 B", "3 B", "48 B"]);
@@ -216,11 +218,27 @@ test("the table lists days newest first with the rows from the view, then the to
 test("only estimated cells carry the ≈ tooltip", () => {
   const html = shown();
   const tooltip = "Limit ölçümlerinden tahmin edildi";
-  const estimated = html.match(/<td[^>]*title="Limit ölçümlerinden tahmin edildi"[^>]*>[^<]*/g) ?? [];
+  const estimated = [...html.matchAll(/<td[^>]*title="Limit ölçümlerinden tahmin edildi"[^>]*>(.*?)<\/td>/g)];
   // The 13th's account cell and its total.
-  assert.deepEqual(estimated.map((c) => c.replace(/<td[^>]*>/, "")), ["≈1 Mn", "≈1 Mn"]);
+  assert.deepEqual(estimated.map((c) => visible(c[1])), ["≈1 Mn", "≈1 Mn"]);
   assert.equal(html.split(tooltip).length - 1, 2);
   assert.match(shown("en"), /title="Estimated from limit samples"/);
+});
+
+test("estimated cells and chart days tell screen readers they are estimated, not only the tooltip", () => {
+  const html = shown();
+  const cells = [...html.matchAll(/<td[^>]*title="Limit ölçümlerinden tahmin edildi"[^>]*>(.*?)<\/td>/g)].map((m) => m[1]);
+  assert.equal(cells.length, 2);
+  // The ≈ is hidden from screen readers, which hear "tahmini" instead.
+  for (const cell of cells) assert.equal(cell, '<span aria-hidden="true">≈</span><span class="sr-only">tahmini </span>1 Mn');
+  assert.match(shown("en"), /<span aria-hidden="true">≈<\/span><span class="sr-only">estimated <\/span>1m<\/td>/);
+  // Exact cells say nothing of the kind.
+  assert.equal(html.split('class="sr-only"').length - 1, 2);
+  // Each chart day names its rows, the estimated ones as such.
+  assert.match(html, /<g[^>]*role="img"[^>]*aria-label="13 Eki: 1 Mn; Kişisel · Max tahmini 1 Mn"/);
+  assert.match(html, /<g[^>]*role="img"[^>]*aria-label="14 Eki: 2,2 Mn; Kişisel · Max 2,1 Mn; Vertex 125 B"/);
+  assert.match(html, /<g[^>]*role="img"[^>]*aria-label="8 Eki: 0"/);
+  assert.match(shown("en"), /aria-label="13 Oct: 1m; Kişisel · Max estimated 1m"/);
 });
 
 test("the coverage note says since when accounts match exactly, in both languages", () => {
@@ -252,9 +270,33 @@ test("a range without tokens shows the empty state instead of the chart and tabl
   assert.match(text(html), /Bu aralıkta token kaydı yok\./);
   assert.doesNotMatch(html, /<svg|<table/);
   assert.match(text(card({ view: empty, loading: false }, "en")), /No token records in this range\./);
-  // A first scan still running explains why.
-  const scanning = { ...empty, progress: { percent: 5, complete: false } };
-  assert.match(text(card({ view: scanning, loading: false })), /Konuşma kayıtları taranıyor… %5/);
+});
+
+test("while the scan runs, an empty range shows only the scanning note", () => {
+  const empty: TokenUsageView = {
+    ...view, days: DATES.map((date) => ({ date, byRow: {} })), rows: [], totals: counts(0, 0, 0, 0, 0), models: [],
+    progress: { percent: 5, complete: false },
+  };
+  const tr = text(card({ view: empty, loading: false }));
+  assert.match(tr, /Konuşma kayıtları taranıyor… %5/);
+  assert.doesNotMatch(tr, /Bu aralıkta token kaydı yok/);
+  assert.doesNotMatch(tr, /Kesin hesap eşleşmesi/);
+  const en = text(card({ view: empty, loading: false }, "en"));
+  assert.match(en, /Scanning conversation logs… 5%/);
+  assert.doesNotMatch(en, /No token records/);
+});
+
+test("a ledger that cannot be saved says so, in both languages", () => {
+  const unsaved: TokenUsageView = { ...view, progress: { percent: 100, complete: true, error: true } };
+  assert.match(
+    text(card({ view: unsaved, loading: false })),
+    /Token kaydı kaydedilemiyor; Relay’i yeniden başlatınca tarama baştan yapılır\./,
+  );
+  assert.match(
+    text(card({ view: unsaved, loading: false }, "en")),
+    /Token records cannot be saved; the scan restarts after Relay restarts\./,
+  );
+  assert.doesNotMatch(text(shown()), /kaydedilemiyor/);
 });
 
 test("the card shows loading and failure states, and keeps the last view under a failed refresh", () => {
@@ -415,9 +457,9 @@ test("choosing a metric redraws the chart and the table for it; cache is write p
     await click("Önbellek");
     assert.match(table(), /14 Eki850 B5 B———855 B13 Eki——————12 Eki————3 B3 B/);
     await click("Çıktı");
-    assert.match(table(), /14 Eki200 B20 B———220 B13 Eki≈100 B————≈100 B12 Eki———5 B—5 B11 Eki——1 B——1 B/);
+    assert.match(table(), /14 Eki200 B20 B———220 B13 Eki≈tahmini 100 B————≈tahmini 100 B12 Eki———5 B—5 B11 Eki——1 B——1 B/);
     await click("Girdi");
-    assert.match(table(), /14 Eki1 Mn100 B———1,1 Mn13 Eki≈900 B————≈900 B/);
+    assert.match(table(), /14 Eki1 Mn100 B———1,1 Mn13 Eki≈tahmini 900 B————≈tahmini 900 B/);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();

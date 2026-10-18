@@ -36,7 +36,8 @@ export interface TokenUsageView {
   totals: TokenCounts;
   /** Models by total, largest first. */
   models: { model: string; totals: TokenCounts }[];
-  progress: { percent: number; complete: boolean };
+  /** `complete` once a full pass has finished; `error` while the ledger cannot be saved. */
+  progress: { percent: number; complete: boolean; error?: true };
   /** The date, in the planning zone, from which Desktop accounts are matched exactly. */
   exactSince?: string;
 }
@@ -203,9 +204,9 @@ export function buildTokenUsageView(input: TokenUsageInput): TokenUsageView {
       total(b) - total(a) || (an < bn ? -1 : an > bn ? 1 : 0),
   );
 
-  const { scannedBytes, totalBytes, complete } = ledger.progress;
-  // Never 100 until the scan is done; a finished first scan stays 100 while
-  // a later pass restarts the byte counts.
+  const { scannedBytes, totalBytes, complete, error } = ledger.progress;
+  // Never 100 until a full pass is done; after one it stays 100 while a later
+  // pass restarts the byte counts.
   const percent = complete
     ? 100
     : totalBytes > 0
@@ -218,7 +219,7 @@ export function buildTokenUsageView(input: TokenUsageInput): TokenUsageView {
     rows: sorted,
     totals,
     models: byTotal.map(([model, counts]) => ({ model, totals: counts })),
-    progress: { percent, complete },
+    progress: { percent, complete, ...(error ? { error } : {}) },
     ...(input.exactSince !== undefined
       ? { exactSince: localDate(input.exactSince, zone) }
       : {}),
