@@ -329,6 +329,8 @@ else {
       const vault = await prepareVault({
         vault: vaultDir,
         legacyUnseal: (data) => legacy.unseal(data),
+        // The desktop smoke test points this at a fake; a packaged Relay never reads it.
+        tool: app.isPackaged ? undefined : process.env.RELAY_SECURITY_TOOL,
       });
       const host = desktopHost(vault.sealer);
       desktop = new DesktopManager(

@@ -1454,7 +1454,7 @@ test("main runs every Desktop operation on one lock, and a restore record refuse
   const main = source("../electron/main.ts");
   assert.match(
     main,
-    /const desktopLock = new DesktopLock\(\(\) => void tray\?\.update\(\)\);/,
+    /const desktopLock = new DesktopLock\(\(\) => void tray\?\.update\(\), \{\s*acquire: \(kind\) => operationLock\?\.tryAcquire\(kind\),\s*release: \(\) => operationLock\?\.release\(\),\s*\}\);/,
   );
   assert.match(
     main,

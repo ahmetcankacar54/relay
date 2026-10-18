@@ -48,6 +48,27 @@ else {
 `,
   { mode: 0o700 },
 );
+// The vault key goes to a fake Keychain in the test folder, never the login Keychain.
+const security = path.join(root, "fake-security");
+fs.writeFileSync(
+  security,
+  `#!/bin/sh
+dir="${root}"
+if [ "$1" = "-i" ]; then
+  value="$(cat | grep add-generic-password | sed -E 's/.* -w ([^ ]+).*/\\1/' | head -1)"
+  [ -f "$dir/vault-key" ] || printf '%s' "$value" > "$dir/vault-key"
+  exit 0
+fi
+if [ "$1" = "find-generic-password" ]; then
+  [ -f "$dir/vault-key" ] || exit 44
+  cat "$dir/vault-key"; echo
+  exit 0
+fi
+exit 9
+`,
+  { mode: 0o700 },
+);
+process.env.RELAY_SECURITY_TOOL = security;
 app.setPath("userData", path.join(root, "app"));
 fs.mkdirSync(path.join(root, "appdata"));
 app.setPath("appData", path.join(root, "appdata"));

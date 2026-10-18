@@ -59,10 +59,11 @@ test("every Desktop operation refreshes the tray inside the lock when it begins 
   // The lock tells its listener inside the lock, at each begin and end
   // (tests/desktop-lock.test.ts); main's listener is the tray.
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
-  assert.match(main, /const desktopLock = new DesktopLock\(\(\) => void tray\?\.update\(\)\);/);
+  assert.match(main, /const desktopLock = new DesktopLock\(\(\) => void tray\?\.update\(\), \{/);
   const lock = readFileSync(new URL("../electron/core/desktop-lock.ts", import.meta.url), "utf8");
   const hold = lock.slice(lock.indexOf("private async hold"));
-  assert.match(hold, /await before;[\s\S]*?try \{\s*this\.tell\(\);[\s\S]*?\} finally \{[\s\S]*?this\.holder = undefined;[\s\S]*?release\(\);\s*this\.tell\(\);/);
+  // The shared file lock is taken first: the tray hears of a holder only once it holds both.
+  assert.match(hold, /await before;[\s\S]*?this\.fileLock\?\.acquire\(kind\);[\s\S]*?this\.tell\(\);\s*return await action\(\);\s*\} finally \{[\s\S]*?this\.holder = undefined;[\s\S]*?release\(\);\s*this\.tell\(\);/);
   assert.doesNotMatch(hold.slice(0, hold.indexOf("await before;")), /this\.tell\(\)/);
 });
 
