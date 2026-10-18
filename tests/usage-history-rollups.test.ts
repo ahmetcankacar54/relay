@@ -51,12 +51,33 @@ function usage(at: number, usedPercent: number): AccountUsage {
     },
   };
 }
+/** Appending to or replacing `file` fails as on a full disk. */
+function failWrites(t: any, file: string) {
+  const open = fs.openSync;
+  const rename = fs.renameSync;
+  const full = () => Object.assign(new Error("disk full"), { code: "ENOSPC" });
+  t.mock.method(fs, "openSync", (target: fs.PathLike, ...rest: any[]) => {
+    if (String(target) === file) throw full();
+    return (open as any)(target, ...rest);
+  });
+  t.mock.method(fs, "renameSync", (from: fs.PathLike, to: fs.PathLike) => {
+    if (String(to) === file) throw full();
+    return rename(from, to);
+  });
+}
 function directory(t: any) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "relay-usage-rollups-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
 const rollupsFile = (root: string) => path.join(root, "usage-rollups.json");
+/** The samples of the raw ledger, one JSON object a line. */
+const rawSamples = (root: string): UsageSample[] =>
+  fs
+    .readFileSync(path.join(root, "usage-history.jsonl"), "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 
 test("raw retention is 14 days and at most 50,000 samples", () => {
   assert.equal(USAGE_HISTORY_DAYS, 14);
@@ -114,9 +135,7 @@ test("raw samples older than 14 days are pruned while rollup hours remain", (t) 
   history.record(account, usage(now, 20));
   now = start + 20 * day;
   history.record(account, usage(now, 30));
-  const raw = JSON.parse(
-    fs.readFileSync(path.join(root, "usage-history.json"), "utf8"),
-  ).samples;
+  const raw = rawSamples(root);
   assert.equal(raw.length, 1);
   assert.equal(raw[0].checkedAt, new Date(now).toISOString());
   const hours = history.rollups()!.hours[identity];
@@ -139,9 +158,7 @@ test("a corrupt rollups file is unavailable and never overwritten", (t) => {
   assert.equal(history.rollups(), undefined);
   history.record(account, usage(start, 10));
   history.record(account, usage(start + 5 * minute, 20));
-  const raw = JSON.parse(
-    fs.readFileSync(path.join(root, "usage-history.json"), "utf8"),
-  ).samples;
+  const raw = rawSamples(root);
   assert.equal(raw.length, 2);
   assert.equal(history.historyAvailable, true);
   assert.equal(fs.readFileSync(rollupsFile(root), "utf8"), content);
@@ -312,15 +329,10 @@ test("an unreadable raw ledger still folds new samples into the rollups", (t) =>
 
 test("a failed raw write keeps folding samples into the rollups", (t) => {
   const root = directory(t);
-  const rawFile = path.join(root, "usage-history.json");
+  const rawFile = path.join(root, "usage-history.jsonl");
   let now = start;
   const history = new UsageHistory(root, () => now);
-  const rename = fs.renameSync;
-  t.mock.method(fs, "renameSync", (from: fs.PathLike, to: fs.PathLike) => {
-    if (String(to) === rawFile)
-      throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
-    return rename(from, to);
-  });
+  failWrites(t, rawFile);
   history.record(account, usage(now, 10));
   assert.equal(history.historyAvailable, false);
   now += 5 * minute;
@@ -440,19 +452,13 @@ test("recentSamples returns clones of the samples at or after a time", (t) => {
 
 test("recentSamples is empty while the raw ledger is unavailable", (t) => {
   const root = directory(t);
-  const rawFile = path.join(root, "usage-history.json");
   let now = start;
   const history = new UsageHistory(root, () => now);
   history.record(account, usage(now, 10));
   assert.equal(history.recentSamples(start).length, 1);
   // A failed raw write leaves the ledger unavailable although the earlier
   // samples are still in memory.
-  const rename = fs.renameSync;
-  t.mock.method(fs, "renameSync", (from: fs.PathLike, to: fs.PathLike) => {
-    if (String(to) === rawFile)
-      throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
-    return rename(from, to);
-  });
+  failWrites(t, history.file);
   now += 5 * minute;
   history.record(account, usage(now, 17));
   assert.equal(history.historyAvailable, false);

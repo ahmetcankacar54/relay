@@ -266,8 +266,9 @@ test("history persists privately, reloads, and rejects duplicate/out-of-order/fu
   history.record(account, usage(now + minute, 100));
   const restored = new UsageHistory(root, () => now);
   assert.equal(restored.historyAvailable, true);
+  assert.equal(restored.recentSamples(0).length, 2);
   assert.equal(
-    JSON.parse(fs.readFileSync(restored.file, "utf8")).samples.length,
+    fs.readFileSync(restored.file, "utf8").split("\n").filter(Boolean).length,
     2,
   );
   assert.equal(totals(restored.rollups()!).observedFiveHourPoints, 10);
@@ -278,7 +279,7 @@ test("history persists privately, reloads, and rejects duplicate/out-of-order/fu
   const raw = fs.readFileSync(history.file, "utf8");
   assert.doesNotMatch(raw, /token|message|credential|name|subscription/);
   assert.deepEqual(fs.readdirSync(root).sort(), [
-    "usage-history.json",
+    "usage-history.jsonl",
     "usage-rollups.json",
   ]);
   assert.doesNotMatch(
@@ -286,7 +287,7 @@ test("history persists privately, reloads, and rejects duplicate/out-of-order/fu
     /token|message|credential|name|subscription/,
   );
 });
-test("14-day retention and maximum sample count are bounded on load and next write", (t) => {
+test("14-day retention and maximum sample count are bounded in memory and on every compaction", (t) => {
   const root = directory(t);
   let now = start;
   const oldest = now - USAGE_HISTORY_DAYS * day;
@@ -302,22 +303,33 @@ test("14-day retention and maximum sample count are bounded on load and next wri
     );
   });
   values[0].checkedAt = new Date(oldest - 1).toISOString();
-  const file = path.join(root, "usage-history.json");
-  fs.writeFileSync(file, JSON.stringify({ version: 1, samples: values }));
-  const history = new UsageHistory(root, () => now);
-  history.record(account, usage(now, 20));
-  const persisted = JSON.parse(fs.readFileSync(file, "utf8")).samples;
-  assert.equal(persisted.length, MAX_USAGE_SAMPLES);
-  assert.ok(
-    persisted.every((s: UsageSample) => Date.parse(s.checkedAt) >= oldest),
+  fs.writeFileSync(
+    path.join(root, "usage-history.json"),
+    JSON.stringify({ version: 1, samples: values }),
   );
+  const history = new UsageHistory(root, () => now);
+  const persisted = () =>
+    fs
+      .readFileSync(history.file, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as UsageSample);
+  // The expired sample was dropped when the old ledger was compacted in.
+  assert.equal(persisted().length, MAX_USAGE_SAMPLES - 1);
+  assert.ok(
+    persisted().every((s: UsageSample) => Date.parse(s.checkedAt) >= oldest),
+  );
+  history.record(account, usage(now, 20));
+  assert.equal(persisted().length, MAX_USAGE_SAMPLES);
   now += minute;
   history.record(account, usage(now, 50));
-  assert.equal(
-    JSON.parse(fs.readFileSync(file, "utf8")).samples.length,
-    MAX_USAGE_SAMPLES,
-  );
-  assert.equal(new UsageHistory(root, () => now).historyAvailable, true);
+  // The newest is appended; memory keeps the bound, the next compaction the file.
+  assert.equal(persisted().length, MAX_USAGE_SAMPLES + 1);
+  assert.equal(history.recentSamples(0).length, MAX_USAGE_SAMPLES);
+  const reopened = new UsageHistory(root, () => now);
+  assert.equal(reopened.historyAvailable, true);
+  assert.equal(persisted().length, MAX_USAGE_SAMPLES);
+  assert.deepEqual(reopened.recentSamples(0), history.recentSamples(0));
 });
 test("corrupt or oversized history fails safely without overwriting the evidence", (t) => {
   const root = directory(t);
@@ -343,13 +355,17 @@ test("symlink files and roots fail closed; write never follows a substituted sym
   const foreign = path.join(root, "foreign.json");
   const foreignContent = JSON.stringify({ version: 1, samples: [] });
   fs.writeFileSync(foreign, foreignContent);
-  const file = path.join(root, "usage-history.json");
-  fs.symlinkSync(foreign, file);
-  const linked = new UsageHistory(root, () => start + minute);
-  linked.record(account, usage(start, 10));
-  assert.equal(linked.historyAvailable, false);
-  assert.equal(fs.readFileSync(foreign, "utf8"), foreignContent);
-  fs.unlinkSync(file);
+  // The ledger, and the one from before 0.11, are never read through a link.
+  for (const name of ["usage-history.jsonl", "usage-history.json"]) {
+    const link = path.join(root, name);
+    fs.symlinkSync(foreign, link);
+    const linked = new UsageHistory(root, () => start + minute);
+    linked.record(account, usage(start, 10));
+    assert.equal(linked.historyAvailable, false);
+    assert.equal(fs.readFileSync(foreign, "utf8"), foreignContent);
+    fs.unlinkSync(link);
+  }
+  const file = path.join(root, "usage-history.jsonl");
   const substituted = new UsageHistory(root, () => start + minute);
   fs.symlinkSync(foreign, file);
   substituted.record(account, usage(start, 10));
