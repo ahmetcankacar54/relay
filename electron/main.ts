@@ -582,7 +582,8 @@ else {
       tray = new RelayTray({
         getSnapshot: async () => {
           const read = await readDesktopForTray({
-            read: () => desktop.snapshot(),
+            // Every 5 s: the shared reading, never a decision.
+            read: () => desktop.cachedSnapshot(),
             busy: () => desktop.isBusy || desktopLock.busy,
             operations: () => desktopLock.operations + desktop.operations,
           });
@@ -990,8 +991,9 @@ function bindIPC() {
     void keeper.tick();
     return service.store.account(account.id);
   });
+  // The windows show it; every switch, sign-in or recovery rechecks fresh in main.
   handle("desktop-snapshot", async () => ({
-    ...(await desktop.snapshot()),
+    ...(await desktop.cachedSnapshot()),
     busy:
       desktop.isBusy || desktopLock.busy || usageCredentialRefresher?.anyActive,
   }));
