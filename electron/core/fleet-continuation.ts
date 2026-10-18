@@ -175,17 +175,23 @@ export class FleetContinuation {
     writePrivateJson(this.file, next);
     this.saved = next;
   }
+  /** Tells the windows only when the state changed, not for a new check time alone. */
   private publish(
     fields: Partial<FleetContinuationState> &
       Pick<FleetContinuationState, "status">,
   ) {
+    const previous = { ...this.view, checkedAt: undefined };
     this.view = {
       enabled: this.saved.enabled,
       last: this.saved.last,
       checkedAt: new Date(this.now()).toISOString(),
       ...fields,
     };
-    this.deps.changed();
+    if (
+      JSON.stringify(previous) !==
+      JSON.stringify({ ...this.view, checkedAt: undefined })
+    )
+      this.deps.changed();
     return this.snapshot();
   }
   async tick(): Promise<FleetContinuationState> {

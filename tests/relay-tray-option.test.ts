@@ -20,7 +20,7 @@ test("vite builds both the main window and the menu bar panel", () => {
   assert.match(config, /panel\.html/);
 });
 
-test("the panel stops polling while hidden; the main window always polls", () => {
+test("a window skips its poll while hidden only when it opts out", () => {
   assert.equal(shouldPoll({}, "hidden"), true);
   assert.equal(shouldPoll({ pollWhenHidden: true }, "hidden"), true);
   assert.equal(shouldPoll({ pollWhenHidden: false }, "visible"), true);

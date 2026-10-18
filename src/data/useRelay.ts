@@ -25,6 +25,7 @@ import { useI18n } from "./i18n";
 import { pendingFlow, tempoRateNow } from "./selectors";
 import {
   errorAfterRefresh,
+  hiddenRefresh,
   relayAction,
   shouldConsumeTraySwitch,
   shouldPoll,
@@ -112,35 +113,33 @@ function useRelayState(
   }, [consumeTraySwitch]);
   useEffect(() => {
     void refresh().catch(showRefreshError);
-    const off = api.onAuth(() => {
-      void refresh().catch(showRefreshError);
-    });
+    // While hidden, a broadcast or a skipped poll only marks one refresh for the next show.
+    const gate = hiddenRefresh(
+      () => document.visibilityState,
+      () => void refresh().catch(showRefreshError),
+    );
+    const off = api.onAuth(() => gate.changed());
     const offTray = api.onTraySwitch(() => {
       void refresh().catch(showRefreshError);
     });
-    const offChanged = api.onChanged(() => {
-      void refresh().catch(showRefreshError);
-    });
+    const offChanged = api.onChanged(() => gate.changed());
     const timer = setInterval(() => {
       if (shouldPoll({ pollWhenHidden }, document.visibilityState))
         void refresh().catch(showRefreshError);
+      else gate.changed();
     }, 4000);
     const focus = () => {
       void refresh().catch(showRefreshError);
     };
-    const visible = () => {
-      if (document.visibilityState === "visible")
-        void refresh().catch(showRefreshError);
-    };
     window.addEventListener("focus", focus);
-    document.addEventListener("visibilitychange", visible);
+    document.addEventListener("visibilitychange", gate.shown);
     return () => {
       off();
       offTray();
       offChanged();
       clearInterval(timer);
       window.removeEventListener("focus", focus);
-      document.removeEventListener("visibilitychange", visible);
+      document.removeEventListener("visibilitychange", gate.shown);
     };
   }, [refresh, showRefreshError, pollWhenHidden]);
   const action = relayAction(lock, {

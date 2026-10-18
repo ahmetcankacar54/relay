@@ -336,3 +336,35 @@ test("the target is the soonest reset that holds half an hour at the snapshot's 
   assert.equal((await fleet.tick()).targetId, f.b.id);
   assert.deepEqual(f.state.switches, []);
 });
+
+test("the windows are told only when the fleet state changed, not for a new check time", async () => {
+  const f = setup();
+  let told = 0;
+  let clock = NOW;
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    now: () => clock,
+    changed: () => void told++,
+  });
+  fleet.setEnabled(true);
+  f.state.stops.set(f.a.id, []);
+  f.state.usage[f.a.id] = usage(f.a, 70);
+  told = 0;
+  await fleet.tick();
+  assert.equal(told, 1);
+  clock += 10_000;
+  const again = await fleet.tick();
+  assert.equal(again.checkedAt, new Date(clock).toISOString());
+  assert.equal(told, 1);
+  // A full source names a target: that is a change.
+  f.state.usage[f.a.id] = usage(f.a, 100);
+  clock += 10_000;
+  assert.equal((await fleet.tick()).targetId, f.b.id);
+  assert.equal(told, 2);
+  // Off stays off without telling anyone again.
+  fleet.setEnabled(false);
+  assert.equal(told, 3);
+  await fleet.tick();
+  await fleet.tick();
+  assert.equal(told, 3);
+});

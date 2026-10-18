@@ -5,7 +5,8 @@ import { Shell } from "./app/Shell";
 export default function App() {
   return (
     <I18nProvider api={api}>
-      <RelayProvider>
+      {/* Hidden with win.hide(), the window reads as hidden and stops polling. */}
+      <RelayProvider pollWhenHidden={false}>
         <Shell />
       </RelayProvider>
     </I18nProvider>
