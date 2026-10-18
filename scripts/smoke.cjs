@@ -400,7 +400,13 @@ app.whenReady().then(async () => {
       kind: "work",
     });
     await call("setTrayLanguage", "en");
-    assert.equal(await call("consumeTraySwitchRequest"), null);
+    // The never-assigned tray switch request was removed with its IPC.
+    assert.equal(
+      await win.webContents.executeJavaScript(
+        "typeof window.relay.consumeTraySwitchRequest",
+      ),
+      "undefined",
+    );
     await assert.rejects(call("setTrayLanguage", "invalid"));
     const initialPlanning = (await call("panelSnapshot")).settings.planning;
     assert.equal(initialPlanning.autoStart, false);
