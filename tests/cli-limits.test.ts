@@ -102,20 +102,20 @@ async function connected(t: any, opts: { expiresAt?: number; five?: number; seve
   return { f, a, claude };
 }
 
-test("usage --json shows what is left of each window", async (t) => {
+test("usage --json shows how much of each window is used, as Claude's usage page does", async (t) => {
   const { f, a } = await connected(t);
   assert.equal(await f.run("usage", "--json"), 0);
   const [row] = JSON.parse(f.out());
   assert.equal(row.id, a.id);
   assert.equal(row.status, "ready");
-  assert.equal(row.fiveHour.leftPercent, 6);
-  assert.equal(row.sevenDay.leftPercent, 60);
+  assert.equal(row.fiveHour.usedPercent, 94);
+  assert.equal(row.sevenDay.usedPercent, 40);
   f.clear();
   assert.equal(await f.run("usage"), 0);
-  assert.match(f.out(), /6% left · resets in 2 h 10 min/);
+  assert.match(f.out(), /94% used · resets in 2 h 10 min/);
   f.clear();
   await f.run("usage", "--lang", "tr");
-  assert.match(f.out(), /%6 kaldı · 2 sa 10 dk sonra yenilenir/);
+  assert.match(f.out(), /%94 kullanıldı · 2 sa 10 dk sonra yenilenir/);
   assert.ok(!(f.out() + f.err()).includes(TOKEN) && !(f.out() + f.err()).includes("FIXTURE-SECRET"));
 });
 

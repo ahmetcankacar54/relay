@@ -10,7 +10,7 @@ const LINES: [string, string, string][] = [
   ["relay recover", "Yarıda kalan bir geçişi geri al", "Restore an interrupted switch"],
   ["relay history [<name>]", "Code geçmişi paylaşımı; history mode …, history sync", "Code history sharing; history mode …, history sync"],
   ["relay connect <name>", "Limitler için hesabın Claude Code profilini bağla", "Sign the account's Claude Code profile in, for limits"],
-  ["relay usage [<name>]", "Kalan 5 saatlik ve haftalık limitler", "Remaining 5-hour and weekly limits"],
+  ["relay usage [<name>]", "5 saatlik ve haftalık limitlerin ne kadarı kullanıldı", "How much of the 5-hour and weekly limits is used"],
   ["relay run <name> [-- …]", "Claude Code'u <name> hesabıyla çalıştır", "Run Claude Code as <name>"],
   ["relay tokens", "Relay.app'in tuttuğu günlük token kullanımı", "Daily token usage recorded by Relay.app"],
   ["relay doctor", "Kurulumu denetle", "Check the setup"],

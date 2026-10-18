@@ -5,7 +5,7 @@ import { UsageError, readCredential } from "../../../electron/core/usage-credent
 import { UsageCredentialRefresher } from "../../../electron/core/usage-refresh";
 import { acquireProfileLock } from "../../../electron/core/profile-lock";
 import { readsUsage } from "../../../shared/cli-version";
-import { formatLeft, percentLeft } from "../../../shared/percent";
+import { formatUsed, percentUsed } from "../../../shared/percent";
 import type { Account, AccountUsage, UsageIssue, UsageWindow } from "../../../shared/types";
 import { resolveAccount } from "../accounts";
 import type { Command } from "../command";
@@ -41,7 +41,7 @@ function issueText(ctx: CliContext, account: Account, issue: UsageIssue | undefi
 }
 
 const window = (w: UsageWindow | undefined) =>
-  w ? { leftPercent: percentLeft(w.usedPercent), ...(w.resetsAt ? { resetsAt: w.resetsAt } : {}) } : undefined;
+  w ? { usedPercent: percentUsed(w.usedPercent), ...(w.resetsAt ? { resetsAt: w.resetsAt } : {}) } : undefined;
 
 export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
   const ctx = await openContext(io, deps, parsed.flags, { write: false, desktop: false });
@@ -101,7 +101,7 @@ export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
   const cell = (w: UsageWindow | undefined, none: string) =>
     !w
       ? none
-      : `${formatLeft(w.usedPercent, lang)}${
+      : `${formatUsed(w.usedPercent, lang)}${
           w.resetsAt ? ` · ${t(`${untilText(w.resetsAt, io.now(), t)} sonra yenilenir`, `resets in ${untilText(w.resetsAt, io.now(), t)}`)}` : ""
         }`;
   const rows = results.map(({ account, usage }) => {

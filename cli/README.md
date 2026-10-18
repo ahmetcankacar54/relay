@@ -9,7 +9,8 @@ the same switch as the Relay menu-bar app:
 3. it carries Code tab history between accounts;
 4. it reopens Claude.
 
-It can also show each account's remaining limits and run Claude Code as a given account.
+It can also show how much of each account's limits is used, and run Claude Code as a given
+account.
 
 Relay is unofficial and is not affiliated with or endorsed by Anthropic. It changes Claude
 Desktop's local files, so a Claude Desktop update can break it.
@@ -83,11 +84,11 @@ Each account needs its own Claude Code login once:
 
 ```bash
 relay connect Work      # opens the Claude Code sign-in in your browser
-relay usage             # remaining 5-hour and weekly limits
+relay usage             # how much of the 5-hour and weekly limits is used
 ```
 
-Percentages are what is left: `6% left · resets in 2 h 10 min`. A Team seat that reports no weekly
-limit shows "no limit reported".
+Percentages are the share used, as on Claude's own usage page: `94% used · resets in 2 h 10 min`.
+A Team seat that reports no weekly limit shows "no limit reported".
 
 ## Running Claude Code as an account
 
@@ -123,7 +124,7 @@ reads it. Values marked `≈` were estimated from limit samples.
 | `relay history mode <all\|same-group\|selected\|off> [--accounts a,b]` | Set how Code history is shared. |
 | `relay history sync [<name>] [--yes]` | Bring Code history into the active account now. |
 | `relay connect <name>` | Sign the account's Claude Code profile in, for limits and `run`. |
-| `relay usage [<name>] [--json]` | Remaining limits. |
+| `relay usage [<name>] [--json]` | How much of each limit is used. |
 | `relay run <name> [-- <claude args>]` | Run Claude Code as `<name>`. |
 | `relay tokens [--days 7\|30\|90] [--account <name>] [--json]` | Daily token usage recorded by Relay.app. |
 | `relay doctor [--json]` | Check the setup. |

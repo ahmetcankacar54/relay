@@ -9,8 +9,8 @@ Relay, resmî Claude masaüstü uygulamasını terminalden kayıtlı hesaplar ar
 3. Code sekmesinin geçmişini hesaplar arasında taşır;
 4. Claude'u yeniden açar.
 
-Ayrıca her hesabın kalan limitlerini gösterebilir ve Claude Code'u istediğiniz hesapla
-çalıştırabilir.
+Ayrıca her hesabın limitlerinin ne kadarının kullanıldığını gösterebilir ve Claude Code'u
+istediğiniz hesapla çalıştırabilir.
 
 Relay resmî değildir; Anthropic ile bağlantılı değildir ve Anthropic tarafından onaylanmamıştır.
 Claude Desktop'un yerel dosyalarını değiştirdiği için bir Claude Desktop güncellemesi onu
@@ -86,11 +86,12 @@ Her hesabın kendi Claude Code girişi bir kez gerekir:
 
 ```bash
 relay connect İş        # Claude Code girişini tarayıcıda açar
-relay usage             # kalan 5 saatlik ve haftalık limitler
+relay usage             # 5 saatlik ve haftalık limitlerin ne kadarı kullanıldı
 ```
 
-Yüzdeler kalanı gösterir: `%6 kaldı · 2 sa 10 dk sonra yenilenir`. Haftalık limit bildirmeyen
-Team koltukları "limit bildirilmedi" diye görünür.
+Yüzdeler, Claude'un kendi kullanım sayfasındaki gibi kullanılan payı gösterir:
+`%94 kullanıldı · 2 sa 10 dk sonra yenilenir`. Haftalık limit bildirmeyen Team koltukları "limit
+bildirilmedi" diye görünür.
 
 ## Claude Code'u bir hesapla çalıştırmak
 
@@ -126,7 +127,7 @@ yalnız okur. `≈` işaretli değerler limit ölçümlerinden tahmin edilmişti
 | `relay history mode <all\|same-group\|selected\|off> [--accounts a,b]` | Code geçmişinin nasıl paylaşılacağı. |
 | `relay history sync [<ad>] [--yes]` | Code geçmişini etkin hesaba şimdi taşı. |
 | `relay connect <ad>` | Limitler ve `run` için hesabın Claude Code profilini bağla. |
-| `relay usage [<ad>] [--json]` | Kalan limitler. |
+| `relay usage [<ad>] [--json]` | Her limitin ne kadarı kullanıldı. |
 | `relay run <ad> [-- <claude seçenekleri>]` | Claude Code'u `<ad>` hesabıyla çalıştır. |
 | `relay tokens [--days 7\|30\|90] [--account <ad>] [--json]` | Relay.app'in tuttuğu günlük token kullanımı. |
 | `relay doctor [--json]` | Kurulumu denetle. |
