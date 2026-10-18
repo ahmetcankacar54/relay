@@ -66,12 +66,29 @@ async function pickOrg(ctx: CliContext, accountUuid: string, orgs: string[]): Pr
   return orgs[answer - 1];
 }
 
+/** How long a worker (no terminal, nobody to press Ctrl+C) waits for a sign-in. */
+const WORKER_SIGNIN_LIMIT_MS = 15 * 60_000;
+
 /**
  * Waits for a new, unsaved account to be signed in to Claude Desktop with a Code workspace.
- * Ctrl+C stops waiting and leaves the sign-in pending; it then returns undefined.
+ * It stops, returning undefined, on Ctrl+C or a worker's time limit (the sign-in stays
+ * pending), and when the sign-in stops being pending for `accountId` (finished or cancelled
+ * elsewhere, in Relay.app for example).
  */
-async function waitForSignIn(ctx: CliContext): Promise<{ accountUuid: string; orgs: string[] } | undefined> {
+async function waitForSignIn(
+  ctx: CliContext,
+  accountId: string,
+): Promise<{ accountUuid: string; orgs: string[] } | undefined> {
   const { t, io } = ctx;
+  const limit = Number(io.env.RELAY_SIGNIN_LIMIT_MS);
+  const until =
+    io.env.RELAY_WORKER === "1"
+      ? io.now() + (Number.isFinite(limit) && limit > 0 ? limit : WORKER_SIGNIN_LIMIT_MS)
+      : Infinity;
+  const stillPending = t(
+    "Bekleme bırakıldı; giriş yarım kaldı. Bitirmek için: relay add --resume · İptal için: relay add --cancel",
+    "Stopped waiting; the sign-in is still pending. To finish: relay add --resume · To cancel: relay add --cancel",
+  );
   const poll = Number(ctx.flags["poll-ms"] ?? 2000);
   const pollMs = Number.isFinite(poll) && poll > 0 ? poll : 2000;
   let stop!: () => void;
@@ -90,17 +107,25 @@ async function waitForSignIn(ctx: CliContext): Promise<{ accountUuid: string; or
   try {
     for (;;) {
       const state = await ctx.desktop.snapshot();
+      if (state.pendingProfileId !== accountId) {
+        io.stdout(
+          t(
+            "Giriş artık beklemede değil (başka bir yerde bitirildi ya da iptal edildi).",
+            "The sign-in is no longer pending (it was finished or cancelled elsewhere).",
+          ),
+        );
+        return undefined;
+      }
+      if (io.now() >= until) {
+        io.stdout(stillPending);
+        return undefined;
+      }
       const uuid = state.currentAccountUuid;
       if (uuid && !ctx.store.state.accounts.some((a) => a.desktop?.accountUuid === uuid) && state.organizations.length)
         return { accountUuid: uuid, orgs: state.organizations };
       await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, pollMs))]);
       if (interrupted) {
-        io.stdout(
-          t(
-            "Bekleme bırakıldı; giriş yarım kaldı. Bitirmek için: relay add --resume · İptal için: relay add --cancel",
-            "Stopped waiting; the sign-in is still pending. To finish: relay add --resume · To cancel: relay add --cancel",
-          ),
-        );
+        io.stdout(stillPending);
         return undefined;
       }
     }
@@ -111,7 +136,7 @@ async function waitForSignIn(ctx: CliContext): Promise<{ accountUuid: string; or
 
 /** Waits for the sign-in, then saves it into `account`. */
 async function finishSignIn(ctx: CliContext, account: Account): Promise<number> {
-  const signed = await waitForSignIn(ctx);
+  const signed = await waitForSignIn(ctx, account.id);
   if (!signed) return EXIT.failed;
   const org = await pickOrg(ctx, signed.accountUuid, signed.orgs);
   await runDesktopOperation(ctx, () => ctx.desktop.capture(account.id, org));

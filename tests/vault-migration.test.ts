@@ -118,3 +118,23 @@ test("an unmarked vault whose files are all format 2 is ready", async (t) => {
   await writeBytes(vault, `accounts/${ACCOUNT}.bin`, sealer.seal("a"));
   assert.equal((await vaultState(vault)).kind, "ready");
 });
+
+test("when no old file can be opened, nothing is moved and no marker is written", async (t) => {
+  const vault = await legacyVault(t);
+  for (const file of [`accounts/${ACCOUNT}.bin`, `backups/${BACKUP}.bin`, "drafts/pending.bin"])
+    await writeBytes(vault, file, Buffer.from("v10BROKEN"));
+  await assert.rejects(migrateVault(vault, sealer, legacyUnseal), /none of/i);
+  assert.equal((await readBytes(vault, `accounts/${ACCOUNT}.bin`))!.toString(), "v10BROKEN");
+  await assert.rejects(fs.access(path.join(vault, "unreadable")));
+  assert.equal((await vaultState(vault)).kind, "legacy");
+});
+
+test("a broken journal backup stops the migration before any other file is moved", async (t) => {
+  const vault = await legacyVault(t);
+  await writeBytes(vault, `accounts/${ACCOUNT}.bin`, Buffer.from("v10BROKEN"));
+  await writeBytes(vault, `backups/${BACKUP}.bin`, Buffer.from("v10BROKEN"));
+  await writeBytes(vault, "journal.json", jsonBytes({ backup: BACKUP }));
+  await assert.rejects(migrateVault(vault, sealer, legacyUnseal), /recovery backup/);
+  assert.equal((await readBytes(vault, `accounts/${ACCOUNT}.bin`))!.toString(), "v10BROKEN");
+  await assert.rejects(fs.access(path.join(vault, "unreadable")));
+});

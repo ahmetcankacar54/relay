@@ -22,7 +22,11 @@ import os from "node:os";
 import { z } from "zod";
 import { ActiveAccountTimeline } from "./core/active-account-timeline";
 import { DesktopManager } from "./core/desktop";
-import { desktopHost, safeStorageSealer } from "./core/desktop-host";
+import {
+  desktopHost,
+  safeStorageAvailable,
+  safeStorageSealer,
+} from "./core/desktop-host";
 import { identity, readObject } from "./core/desktop-files";
 import { DesktopLock } from "./core/desktop-lock";
 import {
@@ -329,6 +333,7 @@ else {
       const vault = await prepareVault({
         vault: vaultDir,
         legacyUnseal: (data) => legacy.unseal(data),
+        legacyAvailable: safeStorageAvailable,
         // The desktop smoke test points this at a fake; a packaged Relay never reads it.
         tool: app.isPackaged ? undefined : process.env.RELAY_SECURITY_TOOL,
       });

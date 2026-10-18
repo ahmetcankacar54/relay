@@ -83,3 +83,38 @@ test("prepareVault keeps old files readable when the Keychain is locked", async 
   assert.equal(r.sealer.unseal(legacySeal("account")), "account");
   assert.equal((await vaultState(vault)).kind, "legacy");
 });
+
+test("prepareVault leaves an old vault alone while safeStorage cannot be used", async (t) => {
+  const vault = await vaultDir(t);
+  const security = fakeSecurity({});
+  t.after(security.remove);
+  await writeBytes(vault, `accounts/${ACCOUNT}.bin`, legacySeal("account"));
+  const r = await prepareVault({ vault, legacyUnseal, legacyAvailable: () => false, tool: security.tool });
+  assert.match(r.error!, /Nothing was moved/);
+  assert.equal(r.migration, undefined);
+  assert.equal((await vaultState(vault)).kind, "legacy");
+  assert.equal((await readBytes(vault, `accounts/${ACCOUNT}.bin`))!.toString(), legacySeal("account").toString());
+});
+
+test("prepareVault reports files it set aside", async (t) => {
+  const vault = await vaultDir(t);
+  const security = fakeSecurity({});
+  t.after(security.remove);
+  await writeBytes(vault, `accounts/${ACCOUNT}.bin`, legacySeal("account"));
+  await writeBytes(vault, "backups/99999999-2222-4333-8444-555555555555.bin", Buffer.from("v10broken!"));
+  const r = await prepareVault({ vault, legacyUnseal: (d) => { if (d.toString().includes("broken")) throw new Error("no"); return legacyUnseal(d); }, tool: security.tool });
+  assert.match(r.error!, /unreadable/);
+  assert.equal(r.migration!.movedAside.length, 1);
+});
+
+test("prepareVault never creates a key for a half-migrated vault", async (t) => {
+  const vault = await vaultDir(t);
+  const security = fakeSecurity({});
+  t.after(security.remove);
+  await writeBytes(vault, `accounts/${ACCOUNT}.bin`, createSealer(crypto.randomBytes(32)).seal("migrated"));
+  await writeBytes(vault, "backups/11111111-2222-4333-8444-555555555555.bin", legacySeal("old"));
+  const r = await prepareVault({ vault, legacyUnseal, tool: security.tool });
+  assert.match(r.error!, /Relay Vault Key/);
+  assert.equal(security.stdinLog(), "");
+  assert.equal((await vaultState(vault)).kind, "legacy");
+});

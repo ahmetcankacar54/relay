@@ -127,6 +127,7 @@ reads it. Values marked `≈` were estimated from limit samples.
 | `relay run <name> [-- <claude args>]` | Run Claude Code as `<name>`. |
 | `relay tokens [--days 7\|30\|90] [--account <name>] [--json]` | Daily token usage recorded by Relay.app. |
 | `relay doctor [--json]` | Check the setup. |
+| `relay reset-vault [--yes]` | Start the vault over when its Keychain key is lost. |
 
 Accounts can be named by any case. `İ`, `I` and `ı` count as the same letter. A unique prefix of
 the name or of the account id also works.
@@ -194,6 +195,19 @@ holds in `--json` too.
 
 **Network:** Relay contacts only `api.anthropic.com`, to read limits. It sends no telemetry and
 does no update check.
+
+## If the Keychain key is lost
+
+If the "Relay Vault Key" item disappears from your Keychain, the saved sign-ins can no longer be
+opened. That can happen after macOS makes a new login keychain, for example. Relay then refuses to
+switch and says so.
+
+`relay reset-vault` starts over:
+1. It sets the old files aside in `desktop-vault/lost-key-…`; nothing is deleted.
+2. It makes a new key.
+3. It clears each account's Claude Desktop link.
+
+Then save each account again with `relay add <name>` while it is signed in to Claude Desktop.
 
 ## Uninstall
 

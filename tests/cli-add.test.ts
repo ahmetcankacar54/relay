@@ -108,3 +108,21 @@ test("a duplicate name exits 2, and an unlinked account of that name is linked i
   assert.equal(linked.desktop?.accountUuid, signed.accountUuid);
   assert.equal(f.store().state.accounts.length, 2);
 });
+
+test("add --new stops waiting when the sign-in is finished or cancelled elsewhere", async (t) => {
+  const f = await cliFixture(t);
+  await f.saved("A");
+  const done = f.run("add", "C", "--new", "--yes", "--poll-ms", "10");
+  await until(() => fs.existsSync(pendingFile(f.home)));
+  fs.rmSync(pendingFile(f.home));
+  assert.equal(await done, 1);
+  assert.match(f.out() + f.err(), /no longer pending/);
+});
+
+test("a worker gives up waiting for a sign-in after its time limit", async (t) => {
+  const f = await cliFixture(t, { env: { RELAY_WORKER: "1", RELAY_SIGNIN_LIMIT_MS: "60" } });
+  await f.saved("A");
+  assert.equal(await f.run("add", "C", "--new", "--yes", "--poll-ms", "10"), 1);
+  assert.match(f.out() + f.err(), /relay add --resume/);
+  assert.ok(fs.existsSync(pendingFile(f.home)));
+});

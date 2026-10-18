@@ -14,6 +14,7 @@ const LINES: [string, string, string][] = [
   ["relay run <name> [-- …]", "Claude Code'u <name> hesabıyla çalıştır", "Run Claude Code as <name>"],
   ["relay tokens", "Relay.app'in tuttuğu günlük token kullanımı", "Daily token usage recorded by Relay.app"],
   ["relay doctor", "Kurulumu denetle", "Check the setup"],
+  ["relay reset-vault", "Keychain anahtarı kaybolduysa kasayı baştan başlat", "Start the vault over when its Keychain key is lost"],
 ];
 
 export function helpText(t: Translate): string {

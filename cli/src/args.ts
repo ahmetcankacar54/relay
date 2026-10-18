@@ -46,6 +46,7 @@ export const COMMAND_FLAGS: Record<string, string[]> = {
   run: [],
   tokens: ["json", "days", "account"],
   doctor: ["json"],
+  "reset-vault": [],
   help: [],
   __worker: [],
 };

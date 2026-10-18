@@ -68,7 +68,15 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
       await readVaultKey(ctx.deps.securityTool);
       add("key", "ok", t("Keychain'de \"Relay Vault Key\" okunabiliyor", "\"Relay Vault Key\" is readable in the Keychain"));
     } catch (error) {
-      add("key", "fail", error instanceof VaultKeyError ? error.message : String(error));
+      add(
+        "key",
+        "fail",
+        error instanceof VaultKeyError && error.reason !== "locked"
+          ? `${error.message} ${t("Baştan başlamak için: relay reset-vault", "To start over: relay reset-vault")}`
+          : error instanceof VaultKeyError
+            ? error.message
+            : String(error),
+      );
     }
   } else add("key", "ok", t("ilk hesapla oluşturulur", "made with the first account"));
   let appRunning = false;

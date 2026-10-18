@@ -106,8 +106,8 @@ export async function openContext(
       throw new CliError(
         error.reason === "missing"
           ? t(
-              `Keychain'de "${VAULT_KEY_SERVICE}" öğesi yok, bu yüzden kayıtlı girişler açılamıyor.`,
-              `The Keychain item "${VAULT_KEY_SERVICE}" is missing, so saved sign-ins cannot be opened.`,
+              `Keychain'de "${VAULT_KEY_SERVICE}" öğesi yok, bu yüzden kayıtlı girişler açılamıyor. Baştan başlamak için: relay reset-vault`,
+              `The Keychain item "${VAULT_KEY_SERVICE}" is missing, so saved sign-ins cannot be opened. To start over: relay reset-vault`,
             )
           : error.reason === "locked"
             ? t(

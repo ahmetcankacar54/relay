@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import { runDetached } from "./detached-exec";
 import type { DesktopHost } from "./desktop";
 import {
   assertProcessListing,
@@ -14,7 +15,16 @@ import {
   retryOnce,
 } from "./desktop-processes";
 import type { Sealer } from "./vault-crypto";
-const exec = promisify(execFile);
+const execFileAsync = promisify(execFile);
+/** On macOS every command runs out of the terminal's process group; see runDetached. */
+const exec = (
+  file: string,
+  args: string[],
+  options: { timeout: number; maxBuffer?: number; windowsHide?: boolean },
+): Promise<{ stdout: string }> =>
+  process.platform === "win32"
+    ? execFileAsync(file, args, { ...options, encoding: "utf8" })
+    : runDetached(file, args, options);
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /** The default Claude.app bundles, first found wins. */
 export const CLAUDE_APPS = [

@@ -130,6 +130,7 @@ yalnız okur. `≈` işaretli değerler limit ölçümlerinden tahmin edilmişti
 | `relay run <ad> [-- <claude seçenekleri>]` | Claude Code'u `<ad>` hesabıyla çalıştır. |
 | `relay tokens [--days 7\|30\|90] [--account <ad>] [--json]` | Relay.app'in tuttuğu günlük token kullanımı. |
 | `relay doctor [--json]` | Kurulumu denetle. |
+| `relay reset-vault [--yes]` | Keychain anahtarı kaybolduysa kasayı baştan başlat. |
 
 Hesap adlarında büyük/küçük harf fark etmez. `İ`, `I` ve `ı` aynı harf sayılır. Adın ya da hesap
 kimliğinin tek bir hesaba uyan başı da yeterlidir.
@@ -198,6 +199,19 @@ Keychain çıktısı. Bu `--json`'da da geçerlidir.
 
 **Ağ:** Relay yalnız limitleri okumak için `api.anthropic.com`'a bağlanır. Telemetri göndermez,
 güncelleme denetimi yapmaz.
+
+## Keychain anahtarı kaybolursa
+
+"Relay Vault Key" öğesi anahtar zincirinizden silinirse kayıtlı girişler artık açılamaz. Bu, örneğin
+macOS yeni bir oturum anahtar zinciri oluşturduğunda olabilir. Relay bu durumda geçiş yapmayı
+reddeder ve nedenini söyler.
+
+`relay reset-vault` baştan başlatır:
+1. Eski dosyaları `desktop-vault/lost-key-…` klasörüne ayırır; hiçbir şey silinmez.
+2. Yeni bir anahtar oluşturur.
+3. Hesapların Claude Desktop bağlantılarını temizler.
+
+Sonra her hesabı, Claude Desktop'ta o hesap açıkken `relay add <ad>` ile yeniden kaydedin.
 
 ## Kaldırma
 

@@ -1,5 +1,6 @@
 import type { Command } from "../command";
 import { add } from "./add";
+import { resetVault } from "./reset-vault";
 import { doctor } from "./doctor";
 import { tokens } from "./tokens";
 import { run } from "./run";
@@ -29,4 +30,5 @@ export const COMMANDS: Record<string, Command> = {
   run,
   tokens,
   doctor,
+  "reset-vault": resetVault,
 };

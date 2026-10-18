@@ -63,7 +63,8 @@ export function holderAlive(
   if (pid === process.pid) return true;
   const written = Date.parse(startedAt);
   const began = (deps.startedAt ?? processStartedAt)(pid);
-  if (began === undefined) return false;
+  // The pid runs: when its start time cannot be read, it is the holder until shown otherwise.
+  if (began === undefined) return true;
   return !(Number.isFinite(written) && began > written);
 }
 
@@ -155,7 +156,14 @@ export class ProcessLock {
       } catch (error: any) {
         if (error.code !== "EEXIST") throw error;
       }
-      const before = fs.lstatSync(this.file);
+      let before: fs.Stats;
+      try {
+        before = fs.lstatSync(this.file);
+      } catch (error: any) {
+        // Released between the create and this look: try to create it again.
+        if (error.code === "ENOENT") continue;
+        throw error;
+      }
       last = this.read();
       if (!last) {
         // Another process may be writing it this instant: look once more.
@@ -168,13 +176,29 @@ export class ProcessLock {
           throw new LockBusyError(last ?? unknownHolder(before));
       } else if (holderAlive(last.pid, last.startedAt, this.deps))
         throw new LockBusyError(last);
-      const current = fs.lstatSync(this.file);
+      let current: fs.Stats;
+      try {
+        current = fs.lstatSync(this.file);
+      } catch (error: any) {
+        if (error.code === "ENOENT") continue;
+        throw error;
+      }
       if (current.isSymbolicLink() || current.ino !== before.ino || current.dev !== before.dev)
         throw new LockBusyError(last ?? unknownHolder(current));
-      fs.unlinkSync(this.file);
+      try {
+        fs.unlinkSync(this.file);
+      } catch (error: any) {
+        if (error.code !== "ENOENT") throw error;
+      }
       syncDirectory(path.dirname(this.file));
     }
-    throw new LockBusyError(last ?? unknownHolder(fs.lstatSync(this.file)));
+    let final: fs.Stats | undefined;
+    try {
+      final = fs.lstatSync(this.file);
+    } catch {
+      // Gone again: the caller's retry will take it.
+    }
+    throw new LockBusyError(last ?? unknownHolder(final));
   }
 
   /** Takes the lock, retrying every 10 ms for up to `waitMs`; only for very short holds. */
@@ -222,12 +246,12 @@ export class ProcessLock {
   }
 }
 
-function unknownHolder(stat: fs.Stats): LockInfo {
+function unknownHolder(stat: fs.Stats | undefined): LockInfo {
   return {
     pid: 0,
     token: "",
     by: "unknown",
     kind: "unknown",
-    startedAt: new Date(stat.mtimeMs).toISOString(),
+    startedAt: new Date(stat?.mtimeMs ?? Date.now()).toISOString(),
   };
 }

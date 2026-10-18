@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   LockBusyError,
   ProcessLock,
+  holderAlive,
   processStartedAt,
 } from "../electron/core/process-lock";
 import { exited, holdInChild } from "./lock-child";
@@ -108,4 +109,32 @@ test("processStartedAt reads this process's start, before now", () => {
   const started = processStartedAt(process.pid);
   assert.ok(started !== undefined && started <= Date.now());
   assert.equal(processStartedAt(DEAD_PID), undefined);
+});
+
+test("a live pid whose start time cannot be read still counts as holding the lock", () => {
+  assert.equal(holderAlive(process.ppid, new Date().toISOString(), { startedAt: () => undefined }), true);
+  assert.equal(holderAlive(DEAD_PID, new Date().toISOString(), { startedAt: () => undefined }), false);
+});
+
+test("a holder that lets go between the failed create and the look at its file is retried, not an error", (t) => {
+  const file = tempLock(t);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ pid: process.ppid, token: "x", by: "cli", kind: "switch", startedAt: new Date().toISOString() }));
+  const original = fs.lstatSync;
+  let vanish = true;
+  (fs as any).lstatSync = (p: fs.PathLike, ...rest: any[]) => {
+    if (vanish && p === file) {
+      vanish = false;
+      fs.unlinkSync(file);
+    }
+    return (original as any)(p, ...rest);
+  };
+  try {
+    const lock = new ProcessLock(file, "app");
+    lock.tryAcquire("state");
+    assert.ok(lock.held);
+    lock.release();
+  } finally {
+    (fs as any).lstatSync = original;
+  }
 });

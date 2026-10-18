@@ -6,6 +6,9 @@ import { nodeDesktopHost } from "./desktop-host-node";
 import { draftsBlockedReason, runHelper } from "./draft-transfer";
 import type { Sealer } from "./vault-crypto";
 
+/** Whether safeStorage can be used now; false when macOS refused its key. */
+export const safeStorageAvailable = () => safeStorage.isEncryptionAvailable();
+
 /** Electron's safeStorage as a sealer: the vault's format before 0.12. */
 export function safeStorageSealer(): Sealer {
   return {

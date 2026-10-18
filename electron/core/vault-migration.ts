@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createSealer, isSealedV2, type Sealer } from "./vault-crypto";
-import { VAULT_KEY_SERVICE, loadVaultKey } from "./vault-key";
+import { VAULT_KEY_SERVICE, VaultKeyError, loadVaultKey } from "./vault-key";
 import { jsonBytes, readBytes, readObject, writeBytes } from "./desktop-files";
 
 /** The vault format this build reads and writes. */
@@ -97,9 +97,12 @@ async function moveAside(vault: string, relative: string) {
 
 /**
  * Re-seals every old file in format 2, keeping its modification time, and writes the marker
- * once none is left. A run stopped half-way resumes, since format-2 files are skipped. A file
- * the old seal cannot open is moved aside, except the backup journal.json names: recovery
- * depends on it, so the migration stops there and changes nothing more.
+ * once none is left. A run stopped half-way resumes, since format-2 files are skipped. Every old
+ * file is opened before anything changes:
+ * - none opens: the old seal is unusable this run (macOS refused it), so nothing moves and no
+ *   marker is written; the next start tries again;
+ * - the backup journal.json names does not open: recovery depends on it, so nothing moves;
+ * - otherwise each file that does not open is moved aside, never deleted.
  */
 export async function migrateVault(
   vault: string,
@@ -111,32 +114,37 @@ export async function migrateVault(
     typeof journal?.backup === "string"
       ? `backups/${journal.backup.toLowerCase()}.bin`
       : undefined;
-  let migrated = 0;
-  const movedAside: string[] = [];
+  const opened = new Map<string, string>();
+  const failed: string[] = [];
   for (const relative of await sealedFiles(vault)) {
     const data = await readBytes(vault, relative);
     if (!data || isSealedV2(data)) continue;
-    let text: string;
     try {
-      text = legacyUnseal(data);
+      opened.set(relative, legacyUnseal(data));
     } catch {
-      if (relative.toLowerCase() === recovery)
-        throw new Error(
-          "The recovery backup named in journal.json could not be opened, so the vault was not migrated further.",
-        );
-      await moveAside(vault, relative);
-      movedAside.push(relative);
-      continue;
+      failed.push(relative);
     }
+  }
+  if (failed.length && !opened.size)
+    throw new Error(
+      "None of the old vault files could be opened, so nothing was moved. Relay tries again at its next start.",
+    );
+  if (recovery && failed.some((relative) => relative.toLowerCase() === recovery))
+    throw new Error(
+      "The recovery backup named in journal.json could not be opened, so the vault was not migrated.",
+    );
+  let migrated = 0;
+  for (const [relative, text] of opened) {
     const file = path.join(vault, relative);
     const { atime, mtime } = await fs.stat(file);
     await writeBytes(vault, relative, sealer.seal(text));
     await fs.utimes(file, atime, mtime);
     migrated++;
   }
+  for (const relative of failed) await moveAside(vault, relative);
   if (!(await legacyFiles(vault, await sealedFiles(vault))).length)
     await markVaultFormat(vault);
-  return { migrated, movedAside };
+  return { migrated, movedAside: failed };
 }
 
 /** A sealer for a vault that cannot be used: every seal, and every format-2 unseal, says why. */
@@ -161,6 +169,8 @@ function refusingSealer(message: string, legacyUnseal?: (data: Buffer) => string
 export async function prepareVault(options: {
   vault: string;
   legacyUnseal: (data: Buffer) => string;
+  /** Whether the old seal can be used now; false when macOS refused its key this run. */
+  legacyAvailable?: () => boolean;
   tool?: string;
 }): Promise<{
   sealer: Sealer;
@@ -179,20 +189,46 @@ export async function prepareVault(options: {
     const message = `Relay's vault was written by a newer version (format ${state.version}). Update Relay.`;
     return { sealer: refusingSealer(message), error: message };
   }
+  // A key is only ever made for a vault no format-2 file depends on: one a migration stopped
+  // half-way through already has some, sealed with the key that is missing now.
+  let anyV2 = false;
+  if (state.kind === "legacy")
+    for (const relative of await sealedFiles(vault)) {
+      const data = await readBytes(vault, relative);
+      if (data && isSealedV2(data)) anyV2 = true;
+    }
   let key: Buffer;
   try {
-    key = await loadVaultKey({ tool, mayCreate: state.kind !== "ready" });
+    key = await loadVaultKey({
+      tool,
+      mayCreate: state.kind === "empty" || (state.kind === "legacy" && !anyV2),
+    });
   } catch (error) {
+    const lost = error instanceof VaultKeyError && error.reason !== "locked";
     const message =
-      state.kind === "ready"
-        ? `The Keychain item "${VAULT_KEY_SERVICE}" could not be read, so saved Desktop sign-ins cannot be opened. ${(error as Error).message}`
+      state.kind === "ready" || anyV2
+        ? `The Keychain item "${VAULT_KEY_SERVICE}" could not be read, so saved Desktop sign-ins cannot be opened. ${(error as Error).message}${lost ? " To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again." : ""}`
         : `The Keychain item "${VAULT_KEY_SERVICE}" could not be read. ${(error as Error).message}`;
     return { sealer: refusingSealer(message, legacyUnseal), error: message };
   }
   const sealer = createSealer(key, legacyUnseal);
   try {
-    if (state.kind === "legacy")
-      return { sealer, migration: await migrateVault(vault, sealer, legacyUnseal) };
+    if (state.kind === "legacy") {
+      if (options.legacyAvailable && !options.legacyAvailable())
+        return {
+          sealer,
+          error:
+            "Relay could not open its old vault this time (macOS did not allow access to its key). Nothing was moved; Relay tries again at its next start.",
+        };
+      const migration = await migrateVault(vault, sealer, legacyUnseal);
+      return migration.movedAside.length
+        ? {
+            sealer,
+            migration,
+            error: `${migration.movedAside.length} vault file(s) could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts again.`,
+          }
+        : { sealer, migration };
+    }
     await markVaultFormat(vault);
     return { sealer };
   } catch (error) {
