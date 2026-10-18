@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { stripVTControlCharacters } from "node:util";
 import type { AuthFlow } from "../../shared/types";
+import { ProfileLockBusyError } from "./profile-lock";
 
 export const authPending = (flow?: AuthFlow) =>
   !!flow && ["starting", "waiting", "verifying"].includes(flow.status);
@@ -55,6 +56,8 @@ export class AuthManager {
     private emit: (flow: AuthFlow) => void,
     private open: (url: string) => Promise<void>,
     private timeoutMs = 10 * 60_000,
+    /** Takes the account's exclusive profile lock, shared with Relay's other processes. */
+    private profileLock?: (accountId: string) => () => void,
   ) {}
   list() {
     return [...this.entries.values()].map((e) => ({ ...e.flow }));
@@ -73,6 +76,16 @@ export class AuthManager {
     if (previous && this.active(accountId)) return { ...previous.flow };
     if (this.list().filter(authPending).length >= 4)
       throw new Error("Önce açık hesap bağlantılarından birini tamamla.");
+    let releaseProfile: (() => void) | undefined;
+    try {
+      releaseProfile = this.profileLock?.(accountId);
+    } catch (error) {
+      if (error instanceof ProfileLockBusyError)
+        throw new Error(
+          "Bu hesap şu an başka bir Relay işleminde (terminalde) kullanılıyor; o bitince yeniden dene.",
+        );
+      throw error;
+    }
     const child = spawn(executable, ["auth", "login", "--claudeai"], {
       cwd,
       env,
@@ -140,7 +153,9 @@ export class AuthManager {
           "Claude giriş işlemi başlatılamadı. Ayarlardan Claude bağlantısını kontrol et.",
         );
     });
+    child.once("error", () => releaseProfile?.());
     child.once("close", (code) => {
+      releaseProfile?.();
       resolveClose();
       if (e.stopping || !authPending(e.flow)) return;
       e.output = "";

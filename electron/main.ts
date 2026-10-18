@@ -17,6 +17,7 @@ import { routineFailureNotice } from "../shared/routine-failure";
 import { localizeError } from "../src/messages";
 import path from "node:path";
 import fsp from "node:fs/promises";
+import fs from "node:fs";
 import os from "node:os";
 import { z } from "zod";
 import { ActiveAccountTimeline } from "./core/active-account-timeline";
@@ -83,6 +84,12 @@ import {
 import { CONTINUATION_TEXT } from "./core/continuation";
 import { FleetContinuation, type FleetResult } from "./core/fleet-continuation";
 import { UsageCredentialRefresher } from "./core/usage-refresh";
+import { ProcessLock } from "./core/process-lock";
+import { prepareVault } from "./core/vault-migration";
+import {
+  acquireProfileLock,
+  anyExclusiveProfileLock,
+} from "./core/profile-lock";
 import { appendUsageIssue } from "./core/usage-issue-log";
 import { appendDraftEvent, draftEventFilter } from "./core/draft-diagnostics";
 import { UsageError } from "./core/usage-credentials";
@@ -165,14 +172,26 @@ function logDraftEvent(event: string, fields?: Record<string, unknown>) {
  * One Desktop operation at a time. The menu bar shows each as it begins rather than at the
  * next poll, and its end, for operations no caller refreshes the tray after.
  */
-const desktopLock = new DesktopLock(() => void tray?.update());
+/**
+ * The lock Relay's processes share (the app and the relay CLI): each holder of the in-process
+ * lock takes it too, so a terminal never quits Claude in the middle of the app's work.
+ */
+let operationLock: ProcessLock | undefined;
+const desktopLock = new DesktopLock(() => void tray?.update(), {
+  acquire: (kind) => operationLock?.tryAcquire(kind),
+  release: () => operationLock?.release(),
+});
+/** Per-account profile locks, shared with the relay CLI. */
+const profileLocks = () =>
+  path.join(app.getPath("userData"), "profiles", ".locks");
 function withDesktopLock<T>(action: () => Promise<T>): Promise<T> {
   return desktopLock.run(action);
 }
 /** A Desktop action the user started: refused during another operation, queued behind a restored draft. */
 function manualDesktopLock<T>(action: () => Promise<T>): Promise<T> {
   return desktopLock.manual(action, () =>
-    usageCredentialRefresher?.anyActive
+    usageCredentialRefresher?.anyActive ||
+    anyExclusiveProfileLock(profileLocks(), process.pid)
       ? new Error("Wait for the account connection refresh to finish.")
       : undefined,
   );
@@ -299,14 +318,31 @@ else {
             window.webContents.send("relay:auth", flow);
         },
         (url) => shell.openExternal(url),
+        (accountId, kind) => acquireProfileLock(profileLocks(), accountId, kind),
       );
+      watchRegistry();
       nativeTheme.themeSource = themeSource(service.store.state.settings);
-      const host = desktopHost(safeStorageSealer());
+      const vaultDir = path.join(app.getPath("userData"), "desktop-vault");
+      operationLock = new ProcessLock(path.join(vaultDir, "operation.lock"), "app");
+      // Saved sign-ins move from safeStorage to the vault key the relay CLI can read too.
+      const legacy = safeStorageSealer();
+      const vault = await prepareVault({
+        vault: vaultDir,
+        legacyUnseal: (data) => legacy.unseal(data),
+      });
+      const host = desktopHost(vault.sealer);
       desktop = new DesktopManager(
         path.join(app.getPath("appData"), "Claude"),
         service.store,
         host,
       );
+      const lock = operationLock;
+      desktop.operationLock = {
+        ensure: (kind) => {
+          lock.tryAcquire(kind);
+          return () => lock.release();
+        },
+      };
       // The captures and the vault's reads go to the same log as the restore.
       desktop.onDraftEvent = logDraftEvent;
       // Which account was open when, from every fresh Desktop reading, set before the first one.
@@ -315,6 +351,7 @@ else {
       );
       desktop.onState = (state) => activeTimeline.observe(state);
       await desktop.initialize();
+      if (vault.error) desktop.reportVaultError(vault.error);
       usageHistory = new UsageHistory(app.getPath("userData"));
       tempo = new TempoTracker({
         available: () => usageHistory.rollupsAvailable,
@@ -334,6 +371,8 @@ else {
         readCredential(profile, allowPrompt);
       usageCredentialRefresher = new UsageCredentialRefresher({
         read: readUsageCredential,
+        profileLock: (accountId) =>
+          acquireProfileLock(profileLocks(), accountId, "exclusive"),
         executable: async () => {
           const { diagnostics } = await service.panelSnapshot();
           if (!diagnostics.executable || diagnostics.error)
@@ -896,6 +935,31 @@ function notifyAdapted(
           ? `Plan updated for today’s pace · restarts: ${list}`
           : `Plan bugünkü hızına göre güncellendi · yeniden başlatma: ${list}`,
   }).show();
+}
+/**
+ * Reloads the account list when another process (the relay CLI) writes it, and tells the
+ * windows and the menu bar. Relay's own writes are noticed and skipped by `reload`.
+ */
+function watchRegistry() {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    fs.watch(service.store.root, (_event, name) => {
+      if (name !== "state.json") return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          if (!service.store.reload()) return;
+        } catch {
+          // A file still being replaced is read at its next change.
+          return;
+        }
+        broadcastChanged();
+        void tray?.update();
+      }, 250);
+    });
+  } catch {
+    // Without a watch, another process's changes show after Relay restarts.
+  }
 }
 /** Tell every Relay renderer (main window and menu bar panel) that state changed. */
 function broadcastChanged() {

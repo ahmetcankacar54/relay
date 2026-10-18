@@ -8,6 +8,7 @@ import { profileEnvironment } from "./environment";
 import { readPrivateJson, writePrivateJson } from "./continuation-journal";
 import { requestUsageJson, verifyIdentity } from "./usage";
 import { UsageError, type UsageCredential } from "./usage-credentials";
+import { ProfileLockBusyError } from "./profile-lock";
 
 export const USAGE_REFRESH_BEFORE_MS = 5 * 60_000;
 export type RefreshUsageCredential = (
@@ -47,6 +48,11 @@ interface Dependencies {
   environment?: NodeJS.ProcessEnv;
   timeoutMs?: number;
   platform?: NodeJS.Platform;
+  /**
+   * Takes the account's exclusive profile lock, shared with Relay's other processes, and
+   * returns its release; it throws ProfileLockBusyError while another process holds it.
+   */
+  profileLock?: (accountId: string) => () => void;
 }
 interface Attempt {
   version: 1;
@@ -211,6 +217,26 @@ export class UsageCredentialRefresher {
     )
       throw new UsageError("identity-mismatch");
     await this.allowed(account, profile);
+    let releaseProfile: (() => void) | undefined;
+    try {
+      releaseProfile = this.deps.profileLock?.(account.id);
+    } catch (error) {
+      if (error instanceof ProfileLockBusyError) throw new UsageError("unavailable");
+      throw error;
+    }
+    try {
+      return await this.locked(account, profile, supplied, force, allowInteraction);
+    } finally {
+      releaseProfile?.();
+    }
+  }
+  private async locked(
+    account: Account,
+    profile: string,
+    supplied: UsageCredential,
+    force: boolean,
+    allowInteraction: boolean,
+  ) {
     return this.withProfileLock(profile, async () => {
       const file = path.join(profile, ".relay-usage-refresh.json");
       const current = await this.deps.read(profile, false);

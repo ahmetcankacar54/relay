@@ -6,6 +6,7 @@ import { z } from "zod";
 import { Store } from "./store";
 import { AuthManager } from "./auth";
 import { Runner } from "./runner";
+import type { ProfileLockKind } from "./profile-lock";
 import { authStatus, readProfileIdentity } from "./profile-identity";
 import {
   command,
@@ -79,9 +80,14 @@ export class Service {
     readonly importedRoot = path.join(os.homedir(), ".claude"),
     emitAuth: (flow: AuthFlow) => void = () => {},
     openBrowser: (url: string) => Promise<void> = async () => {},
+    /** Takes an account's profile lock, shared with Relay's other processes. */
+    profileLock?: (accountId: string, kind: ProfileLockKind) => () => void,
   ) {
     this.store = new Store(root);
-    this.runner = new Runner(emit);
+    this.runner = new Runner(
+      emit,
+      profileLock && ((id) => profileLock(id, "shared")),
+    );
     this.auth = new AuthManager(
       async (id) => {
         // A startup/status request started before login must not decide its result.
@@ -90,6 +96,8 @@ export class Service {
       },
       emitAuth,
       openBrowser,
+      undefined,
+      profileLock && ((id) => profileLock(id, "exclusive")),
     );
   }
   // Serialize operations whose checks and writes must be a single transaction.

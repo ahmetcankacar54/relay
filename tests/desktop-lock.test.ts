@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { LockBusyError } from "../electron/core/process-lock";
 import { DesktopLock } from "../electron/core/desktop-lock";
 import { restoreDrafts } from "../electron/core/draft-restorer";
 import type { DesktopAutomationSnapshot } from "../electron/core/desktop-continuation-host";
@@ -384,5 +385,51 @@ test("the restorer's own stop passes through the lock", { timeout: 5_000 }, asyn
     left: 1,
     reason: "changed",
   });
+  assert.equal(lock.callers, 0);
+});
+
+test("an operation whose file lock is busy rejects and frees the queue", async () => {
+  const holder = { pid: 1, token: "t", by: "cli" as const, kind: "switch", startedAt: new Date().toISOString() };
+  let busy = true;
+  const taken: string[] = [];
+  const lock = new DesktopLock(() => {}, {
+    acquire: (kind) => {
+      if (busy) throw new LockBusyError(holder);
+      taken.push(`+${kind}`);
+    },
+    release: () => taken.push("-"),
+  });
+  let ran = false;
+  await assert.rejects(
+    lock.run(async () => {
+      ran = true;
+    }),
+    LockBusyError,
+  );
+  assert.equal(ran, false);
+  assert.equal(lock.busy, false);
+  assert.equal(lock.active, false);
+  busy = false;
+  assert.equal(await lock.run(async () => 7), 7);
+  assert.deepEqual(taken, ["+operation", "-"]);
+});
+
+test("a draft restore gives up when another process holds the file lock", async () => {
+  const holder = { pid: 1, token: "t", by: "cli" as const, kind: "switch", startedAt: new Date().toISOString() };
+  const lock = new DesktopLock(() => {}, {
+    acquire: (kind) => {
+      if (kind === "restore") throw new LockBusyError(holder);
+    },
+    release: () => {},
+  });
+  let ran = false;
+  assert.equal(
+    await lock.restore(async () => {
+      ran = true;
+      return 1;
+    }),
+    undefined,
+  );
+  assert.equal(ran, false);
   assert.equal(lock.callers, 0);
 });

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as pty from "node-pty";
 import type { Run, TerminalEvent } from "../../shared/types";
+import { ProfileLockBusyError } from "./profile-lock";
 
 interface ProcessEntry {
   run: Run;
@@ -13,6 +14,8 @@ export class Runner {
   private entries = new Map<string, ProcessEntry>();
   constructor(
     private emit: (event: TerminalEvent & { sequence?: number }) => void,
+    /** Takes the account's shared profile lock, held while its terminal runs. */
+    private profileLock?: (accountId: string) => () => void,
   ) {}
   list() {
     return [...this.entries.values()].map((e) => ({ ...e.run }));
@@ -37,13 +40,29 @@ export class Runner {
         this.entries.delete(id);
     if (this.entries.size >= 20)
       throw new Error("En fazla 20 canlı terminal açılabilir.");
-    const proc = pty.spawn(executable, args, {
-      name: "xterm-256color",
-      cols: 110,
-      rows: 30,
-      cwd: input.cwd,
-      env,
-    });
+    let releaseProfile: (() => void) | undefined;
+    try {
+      releaseProfile = this.profileLock?.(input.accountId);
+    } catch (error) {
+      if (error instanceof ProfileLockBusyError)
+        throw new Error(
+          "Bu hesabın bağlantısı şu an başka bir Relay işleminde yenileniyor; birazdan yeniden dene.",
+        );
+      throw error;
+    }
+    let proc: pty.IPty;
+    try {
+      proc = pty.spawn(executable, args, {
+        name: "xterm-256color",
+        cols: 110,
+        rows: 30,
+        cwd: input.cwd,
+        env,
+      });
+    } catch (error) {
+      releaseProfile?.();
+      throw error;
+    }
     const run: Run = { ...input, id: randomUUID(), status: "running" };
     let resolveExit!: () => void;
     const entry: ProcessEntry = {
@@ -63,6 +82,7 @@ export class Runner {
       this.emit({ runId: run.id, data, sequence: ++entry.sequence });
     });
     proc.onExit(({ exitCode }) => {
+      releaseProfile?.();
       run.status = "exited";
       run.exitCode = exitCode;
       this.emit({ runId: run.id, exitCode });

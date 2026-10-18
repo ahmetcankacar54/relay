@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { isSealedV2, type Sealer } from "./vault-crypto";
+import { createSealer, isSealedV2, type Sealer } from "./vault-crypto";
+import { VAULT_KEY_SERVICE, loadVaultKey } from "./vault-key";
 import { jsonBytes, readBytes, readObject, writeBytes } from "./desktop-files";
 
 /** The vault format this build reads and writes. */
@@ -136,4 +137,65 @@ export async function migrateVault(
   if (!(await legacyFiles(vault, await sealedFiles(vault))).length)
     await markVaultFormat(vault);
   return { migrated, movedAside };
+}
+
+/** A sealer for a vault that cannot be used: every seal, and every format-2 unseal, says why. */
+function refusingSealer(message: string, legacyUnseal?: (data: Buffer) => string): Sealer {
+  return {
+    seal: () => {
+      throw new Error(message);
+    },
+    unseal: (data) => {
+      if (legacyUnseal && !isSealedV2(data)) return legacyUnseal(data);
+      throw new Error(message);
+    },
+  };
+}
+
+/**
+ * Readies the app's vault at startup: loads the Keychain key, creating it only while no
+ * format-2 file needs an existing one; migrates old files; marks the format. It never throws:
+ * `error` says what went wrong, and the sealer then refuses with that message, except that old
+ * files stay readable through `legacyUnseal`.
+ */
+export async function prepareVault(options: {
+  vault: string;
+  legacyUnseal: (data: Buffer) => string;
+  tool?: string;
+}): Promise<{
+  sealer: Sealer;
+  migration?: { migrated: number; movedAside: string[] };
+  error?: string;
+}> {
+  const { vault, legacyUnseal, tool } = options;
+  let state: VaultState;
+  try {
+    state = await vaultState(vault);
+  } catch (error) {
+    const message = `Relay's vault could not be read: ${(error as Error).message}`;
+    return { sealer: refusingSealer(message, legacyUnseal), error: message };
+  }
+  if (state.kind === "newer") {
+    const message = `Relay's vault was written by a newer version (format ${state.version}). Update Relay.`;
+    return { sealer: refusingSealer(message), error: message };
+  }
+  let key: Buffer;
+  try {
+    key = await loadVaultKey({ tool, mayCreate: state.kind !== "ready" });
+  } catch (error) {
+    const message =
+      state.kind === "ready"
+        ? `The Keychain item "${VAULT_KEY_SERVICE}" could not be read, so saved Desktop sign-ins cannot be opened. ${(error as Error).message}`
+        : `The Keychain item "${VAULT_KEY_SERVICE}" could not be read. ${(error as Error).message}`;
+    return { sealer: refusingSealer(message, legacyUnseal), error: message };
+  }
+  const sealer = createSealer(key, legacyUnseal);
+  try {
+    if (state.kind === "legacy")
+      return { sealer, migration: await migrateVault(vault, sealer, legacyUnseal) };
+    await markVaultFormat(vault);
+    return { sealer };
+  } catch (error) {
+    return { sealer, error: (error as Error).message };
+  }
 }

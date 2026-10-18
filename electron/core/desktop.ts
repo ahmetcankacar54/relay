@@ -257,6 +257,10 @@ export class DesktopManager {
     if (this.lastError !== message) this.errorRevision++;
     this.lastError = message;
   }
+  /** Shows a problem readying the vault at startup where Desktop errors show. */
+  reportVaultError(message: string) {
+    this.reportError(message);
+  }
   dismissError(revision: number) {
     // A late dismissal must not hide an error from a newer operation.
     if (revision === this.errorRevision) this.dismissedErrorRevision = revision;

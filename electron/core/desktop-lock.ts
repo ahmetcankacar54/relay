@@ -1,3 +1,5 @@
+import { LockBusyError } from "./process-lock";
+
 /** Why an action the user started is refused while another Desktop operation runs. */
 export const DESKTOP_HANDOFF =
   "Finish the Desktop handoff before starting another Desktop operation.";
@@ -16,8 +18,18 @@ export class DesktopLock {
   /** Of those, the ones that are not a draft restore. */
   private others = 0;
   private begun = 0;
-  /** `changed` is told inside the lock as each holder begins, and as it ends. */
-  constructor(private readonly changed: () => void = () => {}) {}
+  /**
+   * `changed` is told inside the lock as each holder begins, and as it ends. `fileLock` is the
+   * lock shared with Relay's other processes: every holder takes it as it begins and gives it
+   * back as it ends.
+   */
+  constructor(
+    private readonly changed: () => void = () => {},
+    private readonly fileLock?: {
+      acquire(kind: "operation" | "restore"): void;
+      release(): void;
+    },
+  ) {}
 
   /** Something holds the lock, a draft restore included. */
   get active(): boolean {
@@ -87,12 +99,24 @@ export class DesktopLock {
     this.count++;
     if (kind === "operation") this.others++;
     await before;
-    this.holder = kind;
-    if (kind === "operation") this.begun++;
+    let fileHeld = false;
     try {
+      try {
+        this.fileLock?.acquire(kind);
+        fileHeld = !!this.fileLock;
+      } catch (error) {
+        // Another Relay process runs a Desktop operation: a draft restore gives up, as it
+        // does for a busy lock, and anything else is refused.
+        if (kind === "restore" && error instanceof LockBusyError)
+          return undefined as T;
+        throw error;
+      }
+      this.holder = kind;
+      if (kind === "operation") this.begun++;
       this.tell();
       return await action();
     } finally {
+      if (fileHeld) this.fileLock!.release();
       this.holder = undefined;
       this.count--;
       if (kind === "operation") this.others--;
