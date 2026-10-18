@@ -8,6 +8,7 @@ import { assertCanQuitClaude, quitLines, runDesktopOperation } from "../desktop-
 import { historyModeText } from "../describe";
 import { CliError, EXIT } from "../io";
 import { printJson } from "../output";
+import { detach, insideDesktop, sessionEndsLine } from "../inside-desktop";
 
 const MODES: RelaySettings["desktopHistoryTransfer"][] = ["all", "same-group", "selected", "off"];
 
@@ -24,7 +25,7 @@ async function chosen(ctx: CliContext, query: string | undefined) {
   return account;
 }
 
-export const history: Command = async ({ io, deps, parsed, t }) => {
+export const history: Command = async ({ io, deps, parsed, t, argv }) => {
   const [sub, ...args] = parsed.positionals;
   if (sub === "mode") {
     const mode = args[0] as RelaySettings["desktopHistoryTransfer"];
@@ -50,12 +51,18 @@ export const history: Command = async ({ io, deps, parsed, t }) => {
     const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: true });
     const account = await chosen(ctx, args[0]);
     await assertCanQuitClaude(ctx);
+    const inside = await insideDesktop(ctx);
     await confirm(
       io,
       t,
-      [t(`${account.name} hesabına diğer hesapların Code geçmişi şimdi taşınacak; Claude Desktop kapanıp açılacak.`, `Code history from the other accounts will be brought into ${account.name} now; Claude Desktop will quit and reopen.`), ...quitLines(ctx)],
+      [
+        t(`${account.name} hesabına diğer hesapların Code geçmişi şimdi taşınacak; Claude Desktop kapanıp açılacak.`, `Code history from the other accounts will be brought into ${account.name} now; Claude Desktop will quit and reopen.`),
+        ...quitLines(ctx),
+        ...(inside ? [sessionEndsLine(ctx)] : []),
+      ],
       ctx.yes,
     );
+    if (inside) return detach(ctx, argv);
     await runDesktopOperation(ctx, () => ctx.desktop.syncHistory(account.id));
     const n = ctx.desktop.carriedCount;
     io.stdout(t(`${n} konuşma taşındı.`, `${n} conversation${n === 1 ? "" : "s"} carried.`));

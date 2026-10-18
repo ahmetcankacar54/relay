@@ -4,8 +4,9 @@ import { openContext } from "../context";
 import { quitLines, runDesktopOperation } from "../desktop-op";
 import { guiSessionGuard } from "../guards";
 import { CliError, EXIT } from "../io";
+import { detach, insideDesktop, sessionEndsLine } from "../inside-desktop";
 
-export const recover: Command = async ({ io, deps, parsed, t }) => {
+export const recover: Command = async ({ io, deps, parsed, t, argv }) => {
   if (parsed.positionals.length)
     throw new CliError(t("Kullanım: relay recover", "Usage: relay recover"), EXIT.usage);
   const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: true });
@@ -15,6 +16,7 @@ export const recover: Command = async ({ io, deps, parsed, t }) => {
     return EXIT.ok;
   }
   guiSessionGuard(ctx.deps, t);
+  const inside = await insideDesktop(ctx);
   await confirm(
     io,
     t,
@@ -24,9 +26,11 @@ export const recover: Command = async ({ io, deps, parsed, t }) => {
         "Claude Desktop will quit, the interrupted switch's files will be restored from its backup, and Claude will reopen.",
       ),
       ...quitLines(ctx),
+      ...(inside ? [sessionEndsLine(ctx)] : []),
     ],
     ctx.yes,
   );
+  if (inside) return detach(ctx, argv);
   await runDesktopOperation(ctx, () => ctx.desktop.recover());
   io.stdout(t("Yarıda kalan geçiş geri alındı.", "The interrupted switch was restored."));
   return EXIT.ok;

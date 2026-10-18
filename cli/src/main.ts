@@ -11,6 +11,8 @@ import { pickLang, translator, type Translate } from "./i18n";
 import { CliError, EXIT, type CliIO } from "./io";
 import { CLI_VERSION } from "./version";
 import { COMMANDS } from "./commands";
+import { runWorker } from "./inside-desktop";
+import { relayPaths } from "../../electron/core/relay-paths";
 
 /** Core errors that mean "busy or blocked" (exit 3), with what to do about each. */
 const BLOCKED: [RegExp, string, string][] = [
@@ -73,13 +75,17 @@ export async function runCli(
       io.stdout(helpText(t));
       return EXIT.ok;
     }
+    if (parsed.command === "__worker")
+      return await runWorker(relayPaths(io.env).cliOperations, parsed.positionals[0] ?? "", io, (args, workerIO) =>
+        runCli(args, workerIO, deps),
+      );
     const command = COMMANDS[parsed.command];
     if (!command)
       throw new CliError(
         t(`Bilinmeyen komut: ${parsed.command}. Komutlar için: relay help`, `Unknown command: ${parsed.command}. For the commands: relay help`),
         EXIT.usage,
       );
-    return await command({ io, deps, parsed, t, lang });
+    return await command({ io, deps, parsed, t, lang, argv });
   } catch (error) {
     const { message, code } = describeError(error, t, io.now());
     io.stderr(`relay: ${message}`);

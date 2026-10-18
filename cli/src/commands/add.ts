@@ -8,6 +8,7 @@ import { confirm } from "../confirm";
 import { openContext, type CliContext } from "../context";
 import { assertCanQuitClaude, quitLines, runDesktopOperation } from "../desktop-op";
 import { CliError, EXIT } from "../io";
+import { detach, insideDesktop, sessionEndsLine } from "../inside-desktop";
 
 /** A workspace of the signed-in account, as the user is shown it to pick one. */
 async function describeOrg(ctx: CliContext, accountUuid: string, org: string) {
@@ -124,12 +125,14 @@ function forget(ctx: CliContext, id: string) {
   });
 }
 
-export const add: Command = async ({ io, deps, parsed, t }) => {
+export const add: Command = async ({ io, deps, parsed, t, argv }) => {
   const { flags } = parsed;
   const ctx = await openContext(io, deps, flags, { write: true, desktop: true });
   const accounts = ctx.store.state.accounts;
   if (flags.cancel || flags.resume) {
     const state = await assertCanQuitClaude(ctx, { allowPending: true });
+    const inside = await insideDesktop(ctx);
+    const ends = inside ? [sessionEndsLine(ctx)] : [];
     const pending = state.pendingProfileId ? accounts.find((a) => a.id === state.pendingProfileId) : undefined;
     if (!state.pendingProfileId) {
       io.stdout(t("Yarım kalan bir giriş yok.", "No sign-in is pending."));
@@ -138,10 +141,12 @@ export const add: Command = async ({ io, deps, parsed, t }) => {
     if (flags.resume) {
       if (!pending)
         throw new CliError(t("Yarım kalan girişin hesabı bulunamadı; relay add --cancel ile iptal edin.", "The pending sign-in's account is gone; cancel it with relay add --cancel."), EXIT.failed);
-      await confirm(io, t, [t(`Giriş ${pending.name} hesabına kaydedilecek; Claude Desktop kısa bir süre kapanıp açılacak.`, `The sign-in will be saved as ${pending.name}; Claude Desktop will quit briefly and reopen.`), ...quitLines(ctx)], ctx.yes);
+      await confirm(io, t, [t(`Giriş ${pending.name} hesabına kaydedilecek; Claude Desktop kısa bir süre kapanıp açılacak.`, `The sign-in will be saved as ${pending.name}; Claude Desktop will quit briefly and reopen.`), ...quitLines(ctx), ...ends], ctx.yes);
+      if (inside) return detach(ctx, argv);
       return finishSignIn(ctx, pending);
     }
-    await confirm(io, t, [t("Yarım kalan giriş iptal edilecek: Claude Desktop kapanıp önceki hesapla yeniden açılacak.", "The pending sign-in will be cancelled: Claude Desktop will quit and reopen signed in as before."), ...quitLines(ctx)], ctx.yes);
+    await confirm(io, t, [t("Yarım kalan giriş iptal edilecek: Claude Desktop kapanıp önceki hesapla yeniden açılacak.", "The pending sign-in will be cancelled: Claude Desktop will quit and reopen signed in as before."), ...quitLines(ctx), ...ends], ctx.yes);
+    if (inside) return detach(ctx, argv);
     await runDesktopOperation(ctx, () => ctx.desktop.cancelLogin());
     if (pending && !pending.desktop && !pending.auth) forget(ctx, pending.id);
     io.stdout(t("Giriş iptal edildi.", "The sign-in was cancelled."));
@@ -154,6 +159,8 @@ export const add: Command = async ({ io, deps, parsed, t }) => {
   const existing = accounts.find((a) => foldName(a.name) === foldName(name) && !a.desktop);
   if (!existing) assertFreeName(accounts, name, t);
   const state = await assertCanQuitClaude(ctx);
+  const inside = await insideDesktop(ctx);
+  const ends = inside ? [sessionEndsLine(ctx)] : [];
   const current = state.currentAccountUuid;
   const currentSaved = !!current && accounts.some((a) => a.desktop?.accountUuid === current);
   const create = () =>
@@ -174,9 +181,12 @@ export const add: Command = async ({ io, deps, parsed, t }) => {
           `The account signed in to Claude Desktop (${current.slice(0, 8)}) will be saved as ${name}; Claude will quit briefly and reopen.`,
         ),
         ...quitLines(ctx),
+        ...ends,
       ],
       ctx.yes,
     );
+    // The worker has no terminal to pick a workspace in: it gets the one picked here.
+    if (inside) return detach(ctx, ctx.flags.org ? argv : [...argv, "--org", org]);
     const account = create();
     try {
       await runDesktopOperation(ctx, () => ctx.desktop.capture(account.id, org));
@@ -204,9 +214,11 @@ export const add: Command = async ({ io, deps, parsed, t }) => {
         "Claude Desktop will quit and reopen on its sign-in screen. Sign in with the new account and open the Code tab; this terminal waits.",
       ),
       ...quitLines(ctx),
+      ...ends,
     ],
     ctx.yes,
   );
+  if (inside) return detach(ctx, argv);
   const account = create();
   try {
     await runDesktopOperation(ctx, () => ctx.desktop.beginLogin(account.id));

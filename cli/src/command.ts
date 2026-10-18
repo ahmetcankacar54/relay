@@ -10,5 +10,7 @@ export interface CommandRun {
   parsed: ParsedCommand;
   t: Translate;
   lang: Lang;
+  /** The arguments as given, for a command handed to a worker. */
+  argv: string[];
 }
 export type Command = (run: CommandRun) => Promise<number>;

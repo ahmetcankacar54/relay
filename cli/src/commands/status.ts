@@ -3,6 +3,7 @@ import type { Command } from "../command";
 import { openContext } from "../context";
 import { historyModeText, relayAppRunning, seconds } from "../describe";
 import { paint, printJson } from "../output";
+import { lastWorkerRecord, writeWorkerRecord } from "../inside-desktop";
 
 export const status: Command = async ({ io, deps, parsed, t }) => {
   const ctx = await openContext(io, deps, parsed.flags, { write: false, desktop: false });
@@ -26,6 +27,15 @@ export const status: Command = async ({ io, deps, parsed, t }) => {
   const holder = ctx.lock.holder();
   const lock = holder ? { by: holder.by, kind: holder.kind, since: holder.startedAt } : undefined;
   const historyMode = ctx.store.state.settings.desktopHistoryTransfer;
+  const last = lastWorkerRecord(ctx.paths.cliOperations);
+  const lastOperation = last
+    ? {
+        command: last.argv.join(" "),
+        status: last.status,
+        ...(last.finishedAt ? { finishedAt: last.finishedAt } : {}),
+        ...(last.error ? { error: last.error } : {}),
+      }
+    : undefined;
   if (ctx.json) {
     printJson(io, {
       desktop: {
@@ -48,6 +58,7 @@ export const status: Command = async ({ io, deps, parsed, t }) => {
         vault: ctx.vault.kind,
         ...(lock ? { lock } : {}),
         historyMode,
+        ...(lastOperation ? { lastOperation } : {}),
       },
     });
     return 0;
@@ -99,6 +110,24 @@ export const status: Command = async ({ io, deps, parsed, t }) => {
   if (ctx.vault.kind === "newer")
     lines.push(t("Kasa: daha yeni bir Relay yazmış → relay'i güncelleyin", "Vault: written by a newer Relay → update relay"));
   lines.push(t(`Code geçmişi: ${historyModeText(historyMode, t)}`, `Code history: ${historyModeText(historyMode, t)}`));
+  // A worker's result is shown once, after it ends; while it runs, every time.
+  if (last && !last.shown) {
+    const what = `relay ${last.argv.join(" ")}`;
+    if (last.status === "pending" || last.status === "running")
+      lines.push(t(`Ayrı süreçte sürüyor: ${what}`, `Running in a separate process: ${what}`));
+    else {
+      lines.push(
+        last.status === "done"
+          ? paint(ctx.color, "green", t(`${what}: tamamlandı`, `${what}: done`))
+          : paint(ctx.color, "red", t(`${what}: başarısız — ${last.error ?? ""}`, `${what}: failed — ${last.error ?? ""}`)),
+      );
+      try {
+        writeWorkerRecord(ctx.paths.cliOperations, { ...last, shown: true });
+      } catch {
+        // Shown again next time.
+      }
+    }
+  }
   for (const line of lines) io.stdout(line);
   return 0;
 };

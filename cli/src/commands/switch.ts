@@ -6,9 +6,10 @@ import { openContext } from "../context";
 import { assertCanQuitClaude, quitLines, runDesktopOperation } from "../desktop-op";
 import { historyModeText } from "../describe";
 import { CliError, EXIT } from "../io";
+import { detach, insideDesktop, sessionEndsLine } from "../inside-desktop";
 import { paint } from "../output";
 
-export const switchCommand: Command = async ({ io, deps, parsed, t }) => {
+export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
   const query = parsed.positionals[0];
   if (!query || parsed.positionals.length > 1)
     throw new CliError(t("Kullanım: relay switch <ad>", "Usage: relay switch <name>"), EXIT.usage);
@@ -40,6 +41,7 @@ export const switchCommand: Command = async ({ io, deps, parsed, t }) => {
           `Code geçmişi şu hesaplardan gelir: ${sources.map((a) => a.name).join(", ")}.`,
           `Code history comes over from: ${sources.map((a) => a.name).join(", ")}.`,
         );
+  const inside = await insideDesktop(ctx);
   await confirm(
     io,
     t,
@@ -53,10 +55,12 @@ export const switchCommand: Command = async ({ io, deps, parsed, t }) => {
         ),
       ),
       ...quitLines(ctx),
+      ...(inside ? [sessionEndsLine(ctx)] : []),
       history,
     ],
     ctx.yes,
   );
+  if (inside) return detach(ctx, argv);
   await runDesktopOperation(ctx, () => ctx.desktop.switchTo(target.id));
   const n = ctx.desktop.carriedCount;
   io.stdout(
