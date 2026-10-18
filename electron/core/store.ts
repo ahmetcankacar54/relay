@@ -170,6 +170,9 @@ export const settingsPatchSchema = settingsSchema
     autoSwitchAccounts: settingsSchema.shape.autoSwitchAccounts.removeDefault(),
   })
   .partial();
+// A new install starts with DEFAULT_SETTINGS' "same-group". A saved registry that never
+// wrote the mode shared across all accounts, and keeps doing so.
+const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
 const stateSchema = z.object({
   version: z.literal(1),
   settings: z
@@ -177,11 +180,18 @@ const stateSchema = z.object({
       if (!value || typeof value !== "object") return value;
       // Registries before 0.11 kept a workday block; it becomes planning once.
       const { workday, ...rest } = value as Record<string, unknown>;
-      return "planning" in rest
-        ? rest
-        : { ...rest, planning: planningFromWorkday(workday) };
+      const saved =
+        rest.desktopHistoryTransfer === undefined
+          ? { ...rest, desktopHistoryTransfer: SAVED_WITHOUT_HISTORY_MODE }
+          : rest;
+      return "planning" in saved
+        ? saved
+        : { ...saved, planning: planningFromWorkday(workday) };
     }, settingsSchema)
-    .default(DEFAULT_SETTINGS),
+    .default({
+      ...DEFAULT_SETTINGS,
+      desktopHistoryTransfer: SAVED_WITHOUT_HISTORY_MODE,
+    }),
   accounts: z.array(accountSchema).max(50),
   pinned: z.array(z.string()),
   importEnabled: z.boolean(),
@@ -221,9 +231,10 @@ export class Store {
         JSON.parse(fs.readFileSync(this.file, "utf8")),
       );
       this.backup();
-      // History used to stay inside a sharing group unless accounts were picked.
-      // Sharing across all connected accounts is now the default; an explicit
-      // "selected" or "off" choice is kept.
+      // Before version 2, history stayed inside a sharing group unless accounts were
+      // picked, and that group choice moved to sharing across all connected accounts.
+      // An explicit "selected" or "off" choice is kept. A new install starts in
+      // "same-group" (no state file, below), so this never touches one.
       if (this.state.settings.historyPolicyVersion !== 2)
         this.update((state) => {
           if (state.settings.desktopHistoryTransfer === "same-group")

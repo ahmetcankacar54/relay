@@ -9,7 +9,7 @@ import { ConnectionPanels } from "../src/app/ConnectionPanels";
 import { routeQuery } from "../src/app/routes";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { DEFAULT_SETTINGS, type Account, type AuthFlow, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AuthFlow, type RelaySettings, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -66,6 +66,36 @@ test("the add-account dialog shows the three steps and the profile form", () => 
   assert.match(html, /Kişisel hesapların Code geçmişi aynı grupta korunur./);
   assert.match(html, /Profil oluştur/);
   assert.match(html, /aria-current="step"/);
+});
+
+test("the add-account dialog's group field and history note follow the sharing mode", () => {
+  const form = (
+    mode: RelaySettings["desktopHistoryTransfer"],
+    initialKind: "personal" | "work",
+  ) =>
+    wrap(
+      relayFor({ settings: { ...DEFAULT_SETTINGS, desktopHistoryTransfer: mode } }),
+      createElement(AddAccountSteps, { close() {}, initialKind }),
+    );
+  // A new install shares within groups: the field and both of its sentences are true.
+  const group = form("same-group", "work");
+  assert.match(group, /id="add-account-group"/);
+  assert.match(group, /Aynı gruptaki şirket hesapları Code geçmişini paylaşır/);
+  assert.match(group, /Boş bırakırsan bu şirket hesabı ayrı tutulur\./);
+  assert.match(form("same-group", "personal"), /Kişisel hesapların Code geçmişi aynı grupta korunur\./);
+  assert.doesNotMatch(form("same-group", "personal"), /id="add-account-group"/);
+  // Anywhere else the group is ignored, so there is no field and no group sentence.
+  for (const [mode, note] of [
+    ["all", /Code geçmişi bağlı tüm hesaplar arasında ortak\. Geçiş sayfasından değiştirebilirsin\./],
+    ["selected", /Code geçmişi yalnızca Geçiş sayfasında seçtiğin hesaplar arasında ortak\./],
+    ["off", /Code geçmişi hesaplar arasında paylaşılmıyor\./],
+  ] as const)
+    for (const kind of ["personal", "work"] as const) {
+      const html = form(mode, kind);
+      assert.doesNotMatch(html, /id="add-account-group"|add-account-groups/, `${mode} ${kind}`);
+      assert.match(html, note, `${mode} ${kind}`);
+      assert.doesNotMatch(html, /Boş bırakırsan|Aynı gruptaki|aynı grupta korunur/, `${mode} ${kind}`);
+    }
 });
 
 test("the add-account dialog walks the Desktop and limit steps for the created profile", () => {

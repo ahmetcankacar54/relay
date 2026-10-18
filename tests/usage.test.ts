@@ -487,7 +487,11 @@ test("legacy preferences migrate without losing accounts and updates survive rel
   delete old.settings;
   await fs.writeFile(f.store.file, JSON.stringify(old));
   const migrated = new Store(f.root);
-  assert.deepEqual(migrated.state.settings, DEFAULT_SETTINGS);
+  // Preferences that were never saved keep sharing across all accounts, as they did.
+  assert.deepEqual(migrated.state.settings, {
+    ...DEFAULT_SETTINGS,
+    desktopHistoryTransfer: "all",
+  });
   assert.equal(migrated.account(f.a.id).name, "A");
   migrated.update((s) => {
     s.settings.desktopHistoryTransfer = "off";

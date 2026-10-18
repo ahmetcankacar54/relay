@@ -19,6 +19,7 @@ import { useRelay } from "@/data/relay-context";
 import { DesktopSetup } from "../../features/DesktopSetup";
 import { CliFlowPanel, DesktopPendingActions } from "@/app/ConnectionPanels";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
+import { historyCopy } from "./historyCopy";
 
 type Kind = "personal" | "work";
 type Step = 1 | 2 | 3;
@@ -122,21 +123,34 @@ function StepIndicator({ step }: { step: Step }) {
 export function AddAccountSteps({
   close,
   initial,
+  initialKind,
 }: {
   close: () => void;
   /** Tests start at a later step for an existing profile. */
   initial?: { step: Step; id: string };
+  /** Tests open the form on the work type. */
+  initialKind?: Kind;
 }) {
   const relay = useRelay();
   const { t } = useI18n();
-  const { api, accounts, busy, action, desktop, desktopBusy, pendingDesktop } =
-    relay;
+  const {
+    api,
+    accounts,
+    busy,
+    action,
+    desktop,
+    desktopBusy,
+    pendingDesktop,
+    settings,
+  } = relay;
   const [step, setStep] = useState<Step>(initial?.step ?? 1);
   const [createdId, setCreatedId] = useState(initial?.id);
   const [created, setCreated] = useState<Account>();
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<Kind>("personal");
+  const [kind, setKind] = useState<Kind>(initialKind ?? "personal");
   const [group, setGroup] = useState("");
+  // Only "same-group" has a group to name; in the other modes the field would do nothing.
+  const history = historyCopy(settings.desktopHistoryTransfer, kind, t);
   // The snapshot catches up after creation; until then use the API's result.
   const account =
     accounts.find((a) => a.id === createdId) ??
@@ -171,7 +185,11 @@ export function AddAccountSteps({
             e.preventDefault();
             void action("create", async () => {
               const next = await api.createAccount(
-                profileInput(name, kind, group),
+                profileInput(
+                  name,
+                  kind,
+                  history.groupPlaceholder ? group : "",
+                ),
               );
               setCreated(next);
               relay.setSetupId(next.id);
@@ -212,7 +230,7 @@ export function AddAccountSteps({
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
-          {kind === "work" && (
+          {kind === "work" && history.groupPlaceholder && (
             <div className="grid gap-1.5">
               <Label htmlFor="add-account-group">
                 {t("Paylaşım grubu · isteğe bağlı", "Sharing group · optional")}
@@ -223,10 +241,7 @@ export function AddAccountSteps({
                 maxLength={64}
                 value={group}
                 onChange={(e) => setGroup(e.target.value)}
-                placeholder={t(
-                  "Aynı gruptaki şirket hesapları Code geçmişini paylaşır",
-                  "Work accounts in the same group share Code history",
-                )}
+                placeholder={history.groupPlaceholder}
               />
               <datalist id="add-account-groups">
                 {groups.map((g) => (
@@ -235,17 +250,7 @@ export function AddAccountSteps({
               </datalist>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">
-            {kind === "personal"
-              ? t(
-                  "Kişisel hesapların Code geçmişi aynı grupta korunur.",
-                  "Personal accounts share their local Code history.",
-                )
-              : t(
-                  "Boş bırakırsan bu şirket hesabı ayrı tutulur.",
-                  "Leave blank to keep this work account separate.",
-                )}
-          </p>
+          <p className="text-xs text-muted-foreground">{history.note}</p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={close}>
               {t("Vazgeç", "Cancel")}

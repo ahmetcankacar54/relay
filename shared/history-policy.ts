@@ -1,7 +1,9 @@
 import type { Account, RelaySettings } from "./types";
 
-// A selected set is an explicit cross-organization sharing boundary. Both
-// endpoints must be in it; account names and emails cannot grant access.
+// "same-group" (the default of a new install) keeps a work account's history
+// inside its group and shares personal accounts with each other. "all" ignores
+// groups. A selected set is an explicit cross-organization sharing boundary.
+// Both endpoints must be in it; account names and emails cannot grant access.
 export function allowedHistoryPair(
   source: Account,
   target: Account,

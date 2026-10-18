@@ -261,12 +261,16 @@ export interface RelaySettings {
   usageWarningPercent: 80 | 90 | 95;
   usageWarnings: boolean;
   suggestAccounts: boolean;
-  /** "all": every Desktop-connected account shares local Code history. */
+  /**
+   * Who shares local Code history. A new install starts with "same-group": personal accounts
+   * share with each other, a work account only inside its own group. "all" shares between every
+   * Desktop-connected account; a registry saved without this field keeps "all".
+   */
   desktopHistoryTransfer: "all" | "same-group" | "selected" | "off";
   desktopHistoryAccounts: string[];
   autoSwitchMode: "off" | "after-exit";
   autoSwitchAccounts: string[];
-  /** 2: registries before "all" existed were migrated from the old default. */
+  /** 2: registries from before "all" existed had "same-group" moved to "all" once. */
   historyPolicyVersion?: 2;
   /** Animate the menu bar panda; missing means on. */
   menuBarAnimation?: boolean;
@@ -381,7 +385,7 @@ export const DEFAULT_SETTINGS: RelaySettings = {
   usageWarningPercent: 90,
   usageWarnings: true,
   suggestAccounts: true,
-  desktopHistoryTransfer: "all",
+  desktopHistoryTransfer: "same-group",
   desktopHistoryAccounts: [],
   autoSwitchMode: "off",
   autoSwitchAccounts: [],
