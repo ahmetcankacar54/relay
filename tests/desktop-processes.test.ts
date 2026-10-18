@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   assertProcessListing,
+  ClaudeLiveness,
   macDesktopPids,
+  pidAlive,
   macMainPid,
   parseEtime,
   retryOnce,
@@ -109,4 +111,89 @@ test("ps elapsed time [[dd-]hh:]mm:ss is read as milliseconds", () => {
     "aa:bb",
   ])
     assert.equal(parseEtime(bad), undefined, bad);
+});
+
+function liveness() {
+  const state = {
+    clock: 0,
+    listings: 0,
+    pids: [] as number[],
+    main: undefined as number | undefined,
+    alive: new Set<number>(),
+    fail: false,
+  };
+  const probe = new ClaudeLiveness({
+    list: async () => {
+      state.listings++;
+      // An empty or cut-short listing throws, as macListing does.
+      if (state.fail) assertProcessListing("");
+      return { pids: [...state.pids], main: state.main };
+    },
+    alive: (pid) => state.alive.has(pid),
+    now: () => state.clock,
+  });
+  return { state, probe };
+}
+
+test("a known Claude pid that is alive answers without listing every process, for a minute", async () => {
+  const { state, probe } = liveness();
+  state.pids = [300, 301, 302];
+  state.main = 301;
+  state.alive = new Set([300, 301, 302]);
+  assert.equal(await probe.seemsRunning(), true);
+  assert.equal(state.listings, 1);
+  state.clock += 30_000;
+  assert.equal(await probe.seemsRunning(), true);
+  assert.equal(state.listings, 1);
+  // A minute after the last listing, list again.
+  state.clock += 30_000;
+  assert.equal(await probe.seemsRunning(), true);
+  assert.equal(state.listings, 2);
+});
+
+test("a dead pid, no known pid or a fresh read lists every process", async () => {
+  const { state, probe } = liveness();
+  state.pids = [300, 301];
+  state.main = 301;
+  state.alive = new Set([300, 301]);
+  assert.equal(await probe.seemsRunning(), true);
+  // The main process went away: a full listing tells.
+  state.alive.delete(301);
+  state.pids = [];
+  assert.equal(await probe.seemsRunning(), false);
+  assert.equal(state.listings, 2);
+  // Closed: no pid is known, so each read lists.
+  assert.equal(await probe.seemsRunning(), false);
+  assert.equal(state.listings, 3);
+  // Without a main pid, the first pid of the listing is the one watched.
+  state.pids = [400, 401];
+  state.main = undefined;
+  state.alive = new Set([400]);
+  assert.equal(await probe.seemsRunning(), true);
+  assert.equal(await probe.seemsRunning(), true);
+  assert.equal(state.listings, 4);
+  // Decisions never trust the pid: running() and pids() always list.
+  assert.equal(await probe.running(), true);
+  assert.deepEqual(await probe.pids(), [400, 401]);
+  assert.equal(state.listings, 6);
+});
+
+test("an empty listing still throws through the pid shortcut, never 'Claude is closed'", async () => {
+  const { state, probe } = liveness();
+  state.fail = true;
+  await assert.rejects(probe.seemsRunning(), /process list/);
+  await assert.rejects(probe.running(), /process list/);
+  // A known pid that died does not turn a failed listing into "closed".
+  state.fail = false;
+  state.pids = [300];
+  state.alive = new Set([300]);
+  assert.equal(await probe.seemsRunning(), true);
+  state.alive.clear();
+  state.fail = true;
+  await assert.rejects(probe.seemsRunning(), /process list/);
+});
+
+test("a pid is alive while its process exists", () => {
+  assert.equal(pidAlive(process.pid), true);
+  assert.equal(pidAlive(2 ** 30), false);
 });

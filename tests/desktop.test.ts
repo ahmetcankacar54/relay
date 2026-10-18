@@ -5,7 +5,11 @@ import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { Store } from "../electron/core/store";
-import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
+import {
+  DESKTOP_CACHE_MS,
+  DesktopManager,
+  type DesktopHost,
+} from "../electron/core/desktop";
 import type { DesktopRestartEvent } from "../shared/types";
 import type { DraftJob, DraftResult } from "../electron/draft-job";
 import {
@@ -1949,4 +1953,131 @@ test("initialize removes the first design's plaintext backups, and keeps the res
     "pending.bin",
   ]);
   assert.equal(await fs.readFile(path.join(drafts, "pending.bin"), "utf8"), "sealed");
+});
+
+/** A manager on the fixture's files whose host counts the process checks it makes. */
+async function counted(f: Awaited<ReturnType<typeof fixture>>) {
+  const clock = { now: 1_000_000 };
+  const checks = { running: 0, seems: 0 };
+  let hold: Promise<void> | undefined;
+  const host: DesktopHost = {
+    ...f.host,
+    // Each check sees Claude as it was when the check began.
+    running: async () => {
+      checks.running++;
+      const running = await f.host.running();
+      await hold;
+      return running;
+    },
+    seemsRunning: async () => {
+      checks.seems++;
+      const running = await f.host.running();
+      await hold;
+      return running;
+    },
+  };
+  const manager = new DesktopManager(
+    f.root,
+    f.store,
+    host,
+    f.transcriptRoot,
+    () => clock.now,
+  );
+  await manager.initialize();
+  return {
+    manager,
+    clock,
+    checks,
+    holdReads: () => {
+      let release!: () => void;
+      hold = new Promise<void>((resolve) => (release = resolve));
+      return () => {
+        hold = undefined;
+        release();
+      };
+    },
+  };
+}
+
+test("concurrent observers share one Desktop read, reused for a short while", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const c = await counted(f);
+  const release = c.holdReads();
+  const reads = Promise.all([
+    c.manager.cachedSnapshot(),
+    c.manager.cachedSnapshot(),
+    c.manager.cachedSnapshot(),
+  ]);
+  release();
+  for (const state of await reads) assert.equal(state.activeProfileId, a.id);
+  assert.deepEqual(c.checks, { running: 0, seems: 1 });
+  c.clock.now += DESKTOP_CACHE_MS - 1;
+  await c.manager.cachedSnapshot();
+  assert.equal(c.checks.seems, 1);
+  c.clock.now += 1;
+  await c.manager.cachedSnapshot();
+  assert.equal(c.checks.seems, 2);
+});
+
+test("decisions read Desktop fresh, and every Desktop operation drops the shared reading", async (t) => {
+  const f = await fixture(t);
+  await f.account("A");
+  const c = await counted(f);
+  // snapshot() is for decisions: it always reads, with the full process check.
+  await c.manager.snapshot();
+  await c.manager.snapshot();
+  assert.deepEqual(c.checks, { running: 2, seems: 0 });
+  // Claude closed in the meantime: the shared reading still says it runs…
+  f.setRunning(false);
+  assert.equal((await c.manager.cachedSnapshot()).running, true);
+  // …but opening Claude, an operation, is seen at once.
+  await c.manager.open();
+  assert.equal((await c.manager.cachedSnapshot()).running, true);
+  assert.equal(c.checks.seems, 1);
+  f.setRunning(false);
+  await c.manager.recover();
+  assert.equal((await c.manager.cachedSnapshot()).running, false);
+  assert.equal(c.checks.seems, 2);
+});
+
+test("a read that began before a Desktop operation is not kept for later observers", async (t) => {
+  const f = await fixture(t);
+  await f.account("A");
+  const c = await counted(f);
+  const release = c.holdReads();
+  const early = c.manager.cachedSnapshot();
+  f.setRunning(false);
+  await c.manager.open();
+  release();
+  await early;
+  assert.equal((await c.manager.cachedSnapshot()).running, true);
+  assert.equal(c.checks.seems, 2);
+});
+
+test("a failed Desktop read is not kept: the next observer reads again", async (t) => {
+  const f = await fixture(t);
+  await f.account("A");
+  const c = await counted(f);
+  const running = f.host.running;
+  let fail = true;
+  const manager = new DesktopManager(
+    f.root,
+    f.store,
+    {
+      ...f.host,
+      seemsRunning: async () => {
+        c.checks.seems++;
+        if (fail) throw new Error("The process list could not be read.");
+        return running();
+      },
+    },
+    f.transcriptRoot,
+    () => c.clock.now,
+  );
+  await manager.initialize();
+  await assert.rejects(manager.cachedSnapshot(), /process list/);
+  fail = false;
+  assert.equal((await manager.cachedSnapshot()).running, true);
+  assert.equal(c.checks.seems, 2);
 });

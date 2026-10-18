@@ -2,6 +2,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import type { Account, AccountUsage, RelaySettings } from "../../shared/types";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
+import { SOURCE_FRESH_MS } from "../../shared/usage";
 import {
   continuationPolicyReason,
   type ContinuationHost,
@@ -279,6 +280,34 @@ export class FileDesktopContinuationPersistence implements DesktopContinuationPe
   }
 }
 
+/** The watch looks at the conversation this often near or at the source's limit… */
+export const CONTINUATION_POLL_MS = 10_000;
+/** …and this often while the source has more than FAR_REMAINING_PERCENT left everywhere. */
+export const CONTINUATION_FAR_POLL_MS = 30_000;
+const FAR_REMAINING_PERCENT = 20;
+/**
+ * How often the watch looks: every 30 s while a reading under 15 minutes old leaves the
+ * source more than 20% on every window, else (near the limit, or no such reading) every 10 s.
+ */
+export function continuationPollMs(
+  usage: AccountUsage | undefined,
+  now: number,
+) {
+  const checked = Date.parse(usage?.checkedAt ?? "");
+  const windows = [usage?.fiveHour, usage?.sevenDay].filter((w) => !!w);
+  const far =
+    !!usage &&
+    usage.status === "ready" &&
+    !usage.stale &&
+    usage.otherLimitReached !== true &&
+    Number.isFinite(checked) &&
+    checked <= now &&
+    now - checked <= SOURCE_FRESH_MS &&
+    windows.length > 0 &&
+    windows.every((w) => 100 - w.usedPercent > FAR_REMAINING_PERCENT);
+  return far ? CONTINUATION_FAR_POLL_MS : CONTINUATION_POLL_MS;
+}
+
 /** One explicit, persisted handoff for the selected current conversation. */
 /** Reasons that resolve on their own; the monitor keeps waiting rather than blocking. */
 function waitingReason(reason: string) {
@@ -295,6 +324,8 @@ export class DesktopContinuationManager {
   private tail: Promise<void> = Promise.resolve();
   private timer?: ReturnType<typeof setInterval>;
   private polling = false;
+  /** When the timer last started a poll. */
+  private polledAt?: number;
   private now: () => number;
   private stopped = false;
   private persistenceFault = false;
@@ -351,7 +382,7 @@ export class DesktopContinuationManager {
     this.stopped = false;
     this.timer = setInterval(() => {
       this.poll();
-    }, 10_000);
+    }, CONTINUATION_POLL_MS);
     this.timer.unref();
     this.poll();
   }
@@ -362,6 +393,23 @@ export class DesktopContinuationManager {
   }
   private poll() {
     if (this.polling || this.stopped) return;
+    // Far from the limit only every third timer tick looks; half a tick of slack
+    // keeps timer jitter from skipping one more.
+    const now = this.now();
+    const arm = this.saved.pending ? undefined : this.saved.arm;
+    let every = CONTINUATION_POLL_MS;
+    try {
+      if (arm)
+        every = continuationPollMs(
+          this.deps.snapshot().usage[arm.source.profileId],
+          now,
+        );
+    } catch {
+      // Without a usage reading the watch stays quick.
+    }
+    const since = this.polledAt === undefined ? Infinity : now - this.polledAt;
+    if (since >= 0 && since < every - CONTINUATION_POLL_MS / 2) return;
+    this.polledAt = now;
     this.polling = true;
     void this.tick()
       .catch(() => {

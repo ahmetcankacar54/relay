@@ -7,9 +7,11 @@ import { promisify } from "node:util";
 import type { DesktopHost } from "./desktop";
 import {
   assertProcessListing,
+  ClaudeLiveness,
   macDesktopPids,
   macMainPid,
   parseEtime,
+  pidAlive,
   retryOnce,
 } from "./desktop-processes";
 import { draftsBlockedReason, runHelper } from "./draft-transfer";
@@ -51,10 +53,16 @@ export function desktopHost(): DesktopHost {
       assertProcessListing(stdout);
       return stdout;
     }, 250);
-  const pids = async (): Promise<number[]> => {
-    if (!executable) return [];
-    if (process.platform === "darwin")
-      return macDesktopPids(await macListing(), executable);
+  /** Claude's pids, and its main pid on macOS, from one full listing. */
+  const listClaude = async (): Promise<{ pids: number[]; main?: number }> => {
+    if (!executable) return { pids: [] };
+    if (process.platform === "darwin") {
+      const listing = await macListing();
+      return {
+        pids: macDesktopPids(listing, executable),
+        main: macMainPid(listing, executable),
+      };
+    }
     const { stdout } = await exec(
       "powershell.exe",
       [
@@ -65,17 +73,26 @@ export function desktopHost(): DesktopHost {
       ],
       { timeout: 5000, windowsHide: true },
     );
-    if (!stdout.trim()) return [];
+    if (!stdout.trim()) return { pids: [] };
     const result = JSON.parse(stdout);
-    return (Array.isArray(result) ? result : [result])
-      .filter(
-        (p) =>
-          typeof p.Path === "string" &&
-          p.Path.toLowerCase() === executable.toLowerCase(),
-      )
-      .map((p) => Number(p.Id))
-      .filter(Number.isSafeInteger);
+    return {
+      pids: (Array.isArray(result) ? result : [result])
+        .filter(
+          (p) =>
+            typeof p.Path === "string" &&
+            p.Path.toLowerCase() === executable.toLowerCase(),
+        )
+        .map((p) => Number(p.Id))
+        .filter(Number.isSafeInteger),
+    };
   };
+  // Every full listing goes through it, so the tray's check can skip most of them.
+  const liveness = new ClaudeLiveness({
+    list: listClaude,
+    alive: pidAlive,
+    now: Date.now,
+  });
+  const pids = () => liveness.pids();
   /** The Electron version inside Claude.app, or undefined when it cannot be read. macOS only. */
   const readClaudeElectron = async (): Promise<string | undefined> => {
     if (!executable) return undefined;
@@ -101,7 +118,8 @@ export function desktopHost(): DesktopHost {
   };
   return {
     available: async () => !!executable,
-    running: async () => (await pids()).length > 0,
+    running: () => liveness.running(),
+    seemsRunning: () => liveness.seemsRunning(),
     quit: async () => {
       const active = await pids();
       if (!active.length) return;

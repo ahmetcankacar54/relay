@@ -62,3 +62,55 @@ export function parseEtime(text: string): number | undefined {
   if (hours > 23 || minutes > 59 || seconds > 59) return undefined;
   return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
 }
+
+/** How long a Claude pid seen alive is trusted before the next full listing. */
+export const LIVENESS_LISTING_MS = 60_000;
+
+/**
+ * Whether Claude runs, with fewer full process listings. Every listing remembers Claude's main
+ * pid (else its first one). For display, `seemsRunning` answers from that pid while it is alive
+ * and the listing is under a minute old; it lists again when no pid is known, the pid is gone or
+ * the minute is over. Quits, launches and writes use `running` and `pids`, which always list.
+ */
+export class ClaudeLiveness {
+  private known?: { pid: number; at: number };
+  constructor(
+    private readonly deps: {
+      /** A full listing; throws when it fails or comes back empty. */
+      list(): Promise<{ pids: number[]; main?: number }>;
+      /** `process.kill(pid, 0)`: the pid exists. */
+      alive(pid: number): boolean;
+      now(): number;
+    },
+  ) {}
+  async pids(): Promise<number[]> {
+    const { pids, main } = await this.deps.list();
+    const pid = main ?? pids[0];
+    this.known = pid === undefined ? undefined : { pid, at: this.deps.now() };
+    return pids;
+  }
+  async running(): Promise<boolean> {
+    return (await this.pids()).length > 0;
+  }
+  /** For display only: may still say running for a pid reused within the minute. */
+  async seemsRunning(): Promise<boolean> {
+    const known = this.known;
+    if (
+      known &&
+      this.deps.now() - known.at < LIVENESS_LISTING_MS &&
+      this.deps.alive(known.pid)
+    )
+      return true;
+    return this.running();
+  }
+}
+
+/** `process.kill(pid, 0)` as a test: a pid that exists but is not ours still counts. */
+export function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}

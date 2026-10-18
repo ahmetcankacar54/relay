@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  continuationPollMs,
   DesktopContinuationManager,
   FileDesktopContinuationPersistence,
   type DesktopContinuationObservation,
@@ -1483,4 +1484,109 @@ test("automatic selection takes the soonest reset that holds half an hour at the
     await manager.tick();
     assert.equal(f.requests[0].target.id, f[expected].id);
   }
+});
+
+/** A fresh reading of `used` percent on the five-hour window, and `weekly` on the week. */
+function pollReading(
+  accountId: string,
+  now: number,
+  used: number,
+  weekly?: number,
+): AccountUsage {
+  return {
+    accountId,
+    status: "ready",
+    stale: false,
+    checkedAt: new Date(now - 60_000).toISOString(),
+    fiveHour: {
+      usedPercent: used,
+      resetsAt: new Date(now + 3_600_000).toISOString(),
+    },
+    ...(weekly === undefined
+      ? {}
+      : {
+          sevenDay: {
+            usedPercent: weekly,
+            resetsAt: new Date(now + 86_400_000).toISOString(),
+          },
+        }),
+  };
+}
+
+test("the watch polls every 30 s while the source has more than 20% left, else every 10 s", () => {
+  const id = "source";
+  assert.equal(continuationPollMs(pollReading(id, NOW, 50), NOW), 30_000);
+  assert.equal(continuationPollMs(pollReading(id, NOW, 79, 10), NOW), 30_000);
+  // 20% left, or less, on any window is near the limit.
+  assert.equal(continuationPollMs(pollReading(id, NOW, 80), NOW), 10_000);
+  assert.equal(continuationPollMs(pollReading(id, NOW, 10, 85), NOW), 10_000);
+  assert.equal(
+    continuationPollMs(
+      { ...pollReading(id, NOW, 10), otherLimitReached: true },
+      NOW,
+    ),
+    10_000,
+  );
+  // Without a fresh reading the watch cannot tell: it stays quick.
+  assert.equal(continuationPollMs(undefined, NOW), 10_000);
+  assert.equal(
+    continuationPollMs({ ...pollReading(id, NOW, 10), stale: true }, NOW),
+    10_000,
+  );
+  assert.equal(
+    continuationPollMs(pollReading(id, NOW - 20 * 60_000, 10), NOW),
+    10_000,
+  );
+  assert.equal(
+    continuationPollMs({ ...pollReading(id, NOW, 10), status: "error" }, NOW),
+    10_000,
+  );
+});
+
+test("an armed watch far from the limit observes every 30 s, and every 10 s once it nears it", async (t) => {
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const f = setup();
+  let clock = NOW;
+  const usage: Record<string, AccountUsage> = {};
+  let observed = 0;
+  const manager = new DesktopContinuationManager({
+    ...f.deps,
+    now: () => clock,
+    snapshot: () => ({ ...f.deps.snapshot(), usage }),
+    observe: async () => {
+      observed++;
+      const value = structuredClone(f.observation);
+      value.state.observedAt = clock;
+      return value;
+    },
+  });
+  await manager.arm({ targetAccountId: f.target.id });
+  // A changed mode is settled by the read-only look: one observation a poll.
+  f.observation.state.session.permissionMode = "Manual";
+  const settle = async () => {
+    for (let i = 0; i < 10; i++)
+      await new Promise((resolve) => setImmediate(resolve));
+  };
+  const advance = async (ms: number) => {
+    clock += ms;
+    t.mock.timers.tick(ms);
+    await settle();
+  };
+  usage[f.source.id] = pollReading(f.source.id, clock, 50);
+  const start = observed;
+  const polls = () => observed - start;
+  manager.start();
+  await settle();
+  assert.equal(polls(), 1);
+  await advance(10_000);
+  await advance(10_000);
+  assert.equal(polls(), 1);
+  await advance(10_000);
+  assert.equal(polls(), 2);
+  usage[f.source.id] = pollReading(f.source.id, clock, 85);
+  await advance(10_000);
+  assert.equal(polls(), 3);
+  await advance(10_000);
+  assert.equal(polls(), 4);
+  manager.stop();
 });

@@ -72,12 +72,20 @@ const rollupsSchema = z
     last: z.record(identityKey, sampleSchema),
   })
   .strict();
-// 50,000 samples of ~340 bytes each must stay readable after they are written.
+// 50,000 samples of ~340 bytes each, and a day of appends after them, must stay
+// readable after they are written.
 const MAX_HISTORY_BYTES = 32 * 1024 * 1024;
 const MAX_ROLLUPS_BYTES = 16 * 1024 * 1024;
+/** The ledger is rewritten with its retained window at startup and then at most this often. */
+export const USAGE_COMPACTION_MS = 86_400_000;
 
 // This ledger contains only verified quota metadata, never messages or tokens.
-// An unreadable ledger stays unavailable rather than silently overwriting it.
+// Each sample is appended to usage-history.jsonl as one line, without an fsync;
+// compaction rewrites the file atomically with the 14-day window. A line a
+// crash cut short, or one that is not a valid sample, is skipped. A ledger
+// whose lines hold no sample at all, or that cannot be read safely, stays
+// unavailable rather than silently overwriting it. usage-history.json, the
+// ledger before 0.11, is merged in once and kept as usage-history.json.migrated.
 // Rollups keep 90 days of hourly aggregates beside the 14-day raw ledger; an
 // unreadable rollups file is likewise never overwritten and never affects the
 // raw ledger or live limits. An unavailable raw ledger does not stop the
@@ -87,11 +95,16 @@ const MAX_ROLLUPS_BYTES = 16 * 1024 * 1024;
 class UnsafeUsageFileError extends Error {}
 
 export class UsageHistory {
+  /** usage-history.jsonl: one sample per line, oldest first. */
   readonly file: string;
+  /** usage-history.json, the ledger before 0.11. */
+  readonly legacyFile: string;
   readonly rollupsFile: string;
   private samples: UsageSample[] = [];
-  /** usage-history.json is readable and writable. */
+  /** The ledger is readable and writable. */
   historyAvailable = true;
+  /** When the ledger was last rewritten with its retained window. */
+  private compactedAt: number;
   private rollupsState: UsageRollups | undefined;
   /** In-memory rollups differ from usage-rollups.json. */
   private rollupsDirty = false;
@@ -100,12 +113,12 @@ export class UsageHistory {
     readonly root: string,
     private now = Date.now,
   ) {
-    this.file = path.join(root, "usage-history.json");
+    this.file = path.join(root, "usage-history.jsonl");
+    this.legacyFile = path.join(root, "usage-history.json");
     this.rollupsFile = path.join(root, "usage-rollups.json");
+    this.compactedAt = this.now();
     try {
-      const value = this.readPrivateJsonFile(this.file, MAX_HISTORY_BYTES);
-      if (value !== undefined)
-        this.samples = this.pruned(historySchema.parse(value).samples);
+      this.samples = this.load();
     } catch {
       this.historyAvailable = false;
     }
@@ -140,6 +153,100 @@ export class UsageHistory {
     }
     if (this.rollupsDirty) this.persistRollups();
   }
+  /**
+   * The retained samples of the ledger and of one from before 0.11, compacted into
+   * usage-history.jsonl. The old file is set aside only once its samples are written.
+   */
+  private load(): UsageSample[] {
+    const appended = this.readLedger(this.file);
+    const legacy = this.readPrivateJsonFile(this.legacyFile, MAX_HISTORY_BYTES);
+    if (appended === undefined && legacy === undefined) return [];
+    const samples = this.pruned([
+      ...(legacy === undefined ? [] : historySchema.parse(legacy).samples),
+      ...(appended ?? []),
+    ]);
+    this.compact(samples);
+    if (legacy !== undefined)
+      try {
+        fs.renameSync(this.legacyFile, `${this.legacyFile}.migrated`);
+      } catch {
+        // Merged again at the next start: duplicates are dropped.
+      }
+    return samples;
+  }
+  /** The valid samples of a JSONL ledger; undefined when it does not exist. */
+  private readLedger(file: string): UsageSample[] | undefined {
+    const text = this.readPrivateFile(file, MAX_HISTORY_BYTES);
+    if (text === undefined) return undefined;
+    const lines = text.split("\n");
+    // After the last newline: nothing, or a line a crash cut short.
+    lines.pop();
+    const samples: UsageSample[] = [];
+    let complete = 0;
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      complete++;
+      try {
+        const parsed = sampleSchema.safeParse(JSON.parse(line));
+        if (parsed.success) samples.push(parsed.data);
+      } catch {
+        // Not JSON: skipped.
+      }
+    }
+    // Lines, but not one sample among them: not a ledger to overwrite.
+    if (complete && !samples.length) throw new Error("Invalid usage history.");
+    return samples;
+  }
+  /** Rewrites the ledger atomically with `samples`. */
+  private compact(samples: UsageSample[]) {
+    this.writePrivateFile(
+      this.file,
+      samples.map((sample) => JSON.stringify(sample) + "\n").join(""),
+    );
+    this.compactedAt = this.now();
+  }
+  /** Appends one sample as a line; compaction, not each append, makes the file durable. */
+  private append(sample: UsageSample) {
+    privateDir(this.root);
+    try {
+      const target = fs.lstatSync(this.file);
+      if (!target.isFile() || target.isSymbolicLink())
+        throw new UnsafeUsageFileError("Invalid usage file.");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    const fd = fs.openSync(
+      this.file,
+      fs.constants.O_WRONLY |
+        fs.constants.O_APPEND |
+        fs.constants.O_CREAT |
+        (fs.constants.O_NOFOLLOW ?? 0),
+      0o600,
+    );
+    try {
+      if (!fs.fstatSync(fd).isFile())
+        throw new UnsafeUsageFileError("Invalid usage file.");
+      fs.writeFileSync(fd, JSON.stringify(sample) + "\n");
+    } finally {
+      fs.closeSync(fd);
+    }
+  }
+  /** Adds `sample` in time order and drops what the retention no longer keeps. */
+  private insert(sample: UsageSample) {
+    const at = Date.parse(sample.checkedAt);
+    let index = this.samples.length;
+    while (index > 0 && Date.parse(this.samples[index - 1].checkedAt) > at)
+      index--;
+    this.samples.splice(index, 0, sample);
+    const oldest = this.now() - USAGE_HISTORY_DAYS * 86_400_000;
+    let drop = Math.max(0, this.samples.length - MAX_USAGE_SAMPLES);
+    while (
+      drop < this.samples.length &&
+      Date.parse(this.samples[drop].checkedAt) < oldest
+    )
+      drop++;
+    if (drop) this.samples.splice(0, drop);
+  }
   private persistRollups(): void {
     if (!this.rollupsAvailable || !this.rollupsState) return;
     try {
@@ -154,6 +261,11 @@ export class UsageHistory {
   }
   /** Parsed JSON, or undefined when the file does not exist. */
   private readPrivateJsonFile(file: string, maxBytes: number): unknown {
+    const text = this.readPrivateFile(file, maxBytes);
+    return text === undefined ? undefined : JSON.parse(text);
+  }
+  /** The file's text, or undefined when it does not exist. */
+  private readPrivateFile(file: string, maxBytes: number): string | undefined {
     privateDir(this.root);
     let metadata: fs.Stats;
     try {
@@ -181,13 +293,16 @@ export class UsageHistory {
         opened.dev !== metadata.dev
       )
         throw new Error("Usage file changed while reading.");
-      return JSON.parse(fs.readFileSync(fd, "utf8"));
+      return fs.readFileSync(fd, "utf8");
     } finally {
       fs.closeSync(fd);
     }
   }
-  /** Atomic private write that refuses to replace a non-file or symlink. */
   private writePrivateJsonFile(file: string, value: unknown): void {
+    this.writePrivateFile(file, JSON.stringify(value));
+  }
+  /** Atomic private write that refuses to replace a non-file or symlink. */
+  private writePrivateFile(file: string, text: string): void {
     const temporary = `${file}.${randomUUID()}.tmp`;
     try {
       privateDir(this.root);
@@ -200,7 +315,7 @@ export class UsageHistory {
       }
       const fd = fs.openSync(temporary, "wx", 0o600);
       try {
-        fs.writeFileSync(fd, JSON.stringify(value));
+        fs.writeFileSync(fd, text);
         fs.fsyncSync(fd);
       } finally {
         fs.closeSync(fd);
@@ -236,21 +351,24 @@ export class UsageHistory {
     const sample = usageSample(account, usage);
     if (!sample || Date.parse(sample.checkedAt) > this.now()) return;
     if (this.historyAvailable) {
-      const previous = [...this.samples]
-        .reverse()
-        .find(
-          (s) =>
-            s.accountId === sample.accountId && s.identity === sample.identity,
-        );
+      let previous: UsageSample | undefined;
+      for (let i = this.samples.length - 1; i >= 0 && !previous; i--) {
+        const s = this.samples[i];
+        if (s.accountId === sample.accountId && s.identity === sample.identity)
+          previous = s;
+      }
       if (
         previous &&
         Date.parse(previous.checkedAt) >= Date.parse(sample.checkedAt)
       )
         return;
-      const next = this.pruned([...this.samples, sample]);
       try {
-        this.writePrivateJsonFile(this.file, { version: 1, samples: next });
-        this.samples = next;
+        this.insert(sample);
+        const sinceCompaction = this.now() - this.compactedAt;
+        if (sinceCompaction < 0 || sinceCompaction >= USAGE_COMPACTION_MS) {
+          this.samples = this.pruned(this.samples);
+          this.compact(this.samples);
+        } else this.append(sample);
       } catch {
         this.historyAvailable = false;
       }

@@ -19,6 +19,7 @@ import { mascotTrayFrames } from "./mascot-tray-frames";
 import { MascotPlayer } from "./core/mascot-player";
 import { TrayMascot } from "./core/tray-mascot";
 import { refreshTray } from "./core/tray-refresh";
+import { TrayFace } from "./core/tray-face";
 
 export interface RelayTrayOptions {
   getSnapshot(): TraySnapshot | Promise<TraySnapshot>;
@@ -55,6 +56,8 @@ function mascotImages() {
 
 export class RelayTray {
   private readonly tray: Tray;
+  /** Title, tooltip and image, set only when they change. */
+  private readonly face: TrayFace<Electron.NativeImage>;
   private menu?: Menu;
   private readonly mascot?: TrayMascot;
   private revision = 0;
@@ -74,11 +77,12 @@ export class RelayTray {
     // macOS shows the panda; other platforms keep the colored R.
     const frames = process.platform === "darwin" ? mascotImages() : undefined;
     this.tray = new Tray(frames ? frames.get("idle")! : image(trayIcons.color, false));
-    this.tray.setToolTip("Relay");
+    this.face = new TrayFace(this.tray);
+    this.face.setToolTip("Relay");
     if (frames)
       this.mascot = new TrayMascot(
         new MascotPlayer({
-          show: (frame) => this.tray.setImage(frames.get(frame)!),
+          show: (frame) => this.face.setImage(frame, () => frames.get(frame)!),
           motionAllowed: () => options.motionAllowed?.() ?? true,
         }),
       );
@@ -118,9 +122,9 @@ export class RelayTray {
         const language = this.options.language?.() ?? "en";
         if (process.platform === "darwin") {
           const title = trayTitle(snapshot, Date.now(), language);
-          this.tray.setTitle(title ? " " + title : "");
+          this.face.setTitle(title ? " " + title : "");
         }
-        this.tray.setToolTip(trayTooltip(snapshot, language));
+        this.face.setToolTip(trayTooltip(snapshot, language));
         const items = buildTrayMenu(snapshot, language);
         this.menuLifecycle.update(items, JSON.stringify(items));
       },
@@ -135,9 +139,9 @@ export class RelayTray {
   private showUnavailable() {
     const items = unavailableTrayMenu(this.options.language?.() ?? "en");
     try {
-      if (process.platform === "darwin") this.tray.setTitle("");
+      if (process.platform === "darwin") this.face.setTitle("");
       this.menuLifecycle.update(items, JSON.stringify(items));
-      this.tray.setToolTip("Relay");
+      this.face.setToolTip("Relay");
     } catch {
       // Retain the existing menu if even a native fallback cannot be built.
       // Every account action still rechecks Desktop state before review.

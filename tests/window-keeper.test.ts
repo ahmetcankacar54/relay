@@ -778,3 +778,22 @@ test("a failing re-plan or notification never stops the keep-alive", async () =>
     "start vertex",
   ]);
 });
+
+test("the windows are told only when the keeper's snapshot changed", async () => {
+  const f = setup();
+  let told = 0;
+  const keeper = new WindowKeeper({ ...f.deps, changed: () => void told++ });
+  // The first tick starts a window: that is news.
+  await keeper.tick();
+  assert.equal(told, 1);
+  // A minute later nothing changed.
+  f.clock.now += 60_000;
+  await keeper.tick();
+  assert.equal(told, 1);
+  // Turning auto start off changes every account's state.
+  f.settings.autoStart = false;
+  await keeper.tick();
+  assert.equal(told, 2);
+  await keeper.tick();
+  assert.equal(told, 2);
+});

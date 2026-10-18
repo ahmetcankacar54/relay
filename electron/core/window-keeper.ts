@@ -192,6 +192,8 @@ export class WindowKeeper {
   private running = false;
   private timer?: ReturnType<typeof setInterval>;
   private notified = new Map<string, number>();
+  /** The snapshot the windows were last told about, as JSON. */
+  private published?: string;
   /** Identity → the refusal that stopped it; cleared when the plan changes. */
   private stopped = new Map<string, string>();
   private readonly file: string;
@@ -402,8 +404,20 @@ export class WindowKeeper {
       );
     } finally {
       this.running = false;
-      this.deps.changed();
+      this.publish();
     }
+  }
+  /** Tells the windows only when the snapshot changed; one that cannot be built is told. */
+  private publish() {
+    let current: string | undefined;
+    try {
+      current = JSON.stringify(this.snapshot());
+    } catch {
+      current = undefined;
+    }
+    if (current !== undefined && current === this.published) return;
+    this.published = current;
+    this.deps.changed();
   }
   private async startOne(account: Account) {
     const attempt: WindowAttempt = {

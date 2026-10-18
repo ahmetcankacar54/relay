@@ -45,7 +45,13 @@ import {
 
 export interface DesktopHost {
   available(): Promise<boolean>;
+  /** Whether Claude runs, from a full process listing. */
   running(): Promise<boolean>;
+  /**
+   * Whether Claude seems to run, for display: may answer from a pid seen alive in the last
+   * minute instead of a full listing. Never used to decide a quit, launch or write.
+   */
+  seemsRunning?(): Promise<boolean>;
   quit(): Promise<void>;
   launch(): Promise<void>;
   seal(data: string): Buffer;
@@ -93,6 +99,16 @@ export interface DesktopSwitchOptions {
 interface Operation {
   kind: DesktopOperationKind;
   profileId?: string;
+}
+/** How long observers (the tray, the windows) share one Desktop reading. */
+export const DESKTOP_CACHE_MS = 2_500;
+/** What a Desktop reading finds on disk and in the process list; the rest is Relay's own state. */
+interface DesktopReading {
+  available: boolean;
+  running: boolean;
+  currentAccountUuid?: string;
+  organizations: string[];
+  recoveryRequired: boolean;
 }
 /**
  * What a capture says in the diagnosis log: the outcome, and per kept draft where it goes and
@@ -158,11 +174,14 @@ export class DesktopManager {
   private operation?: Operation & { restarted: boolean };
   /** The drafts captured at switches, sealed, until they are re-typed or dismissed. */
   private drafts: DraftVault;
+  /** The reading observers share; every Desktop operation drops it. */
+  private shared?: { at: number; reading: Promise<DesktopReading> };
   constructor(
     readonly root: string,
     private store: Store,
     private host: DesktopHost,
     private transcriptRoot = path.join(os.homedir(), ".claude"),
+    private readonly now: () => number = Date.now,
   ) {
     this.vault = path.join(store.root, "desktop-vault");
     this.drafts = new DraftVault(
@@ -208,7 +227,44 @@ export class DesktopManager {
     // A late dismissal must not hide an error from a newer operation.
     if (revision === this.errorRevision) this.dismissedErrorRevision = revision;
   }
+  /** Desktop as it is now, read fresh with a full process check: for every decision. */
   async snapshot(): Promise<DesktopState> {
+    return this.state(await this.track(this.read(() => this.host.running())));
+  }
+  /**
+   * Desktop for observers (the tray, the windows), which never decide a quit, launch or write:
+   * concurrent callers share one reading, reused for DESKTOP_CACHE_MS and dropped by every
+   * Desktop operation. Relay's own state (busy, sign-in, errors) is always current.
+   */
+  async cachedSnapshot(): Promise<DesktopState> {
+    const shared = this.shared;
+    const age = shared ? this.now() - shared.at : -1;
+    const reading =
+      shared && age >= 0 && age < DESKTOP_CACHE_MS
+        ? shared.reading
+        : this.track(
+            this.read(() =>
+              this.host.seemsRunning
+                ? this.host.seemsRunning()
+                : this.host.running(),
+            ),
+          );
+    return this.state(await reading);
+  }
+  /** Shares `reading` with observers until it fails or a Desktop operation drops it. */
+  private track(reading: Promise<DesktopReading>) {
+    const entry = { at: this.now(), reading };
+    this.shared = entry;
+    reading.catch(() => {
+      if (this.shared === entry) this.shared = undefined;
+    });
+    return reading;
+  }
+  /** Readings begun before now are not shared after it. */
+  private invalidate() {
+    this.shared = undefined;
+  }
+  private async read(running: () => Promise<boolean>): Promise<DesktopReading> {
     let currentAccountUuid: string | undefined;
     let organizations: string[] = [];
     try {
@@ -231,9 +287,19 @@ export class DesktopManager {
     const recovery = !!(await readObject(this.vault, "journal.json"));
     return {
       available: await this.host.available(),
-      running: await this.host.running(),
+      running: await running(),
       currentAccountUuid,
       organizations,
+      recoveryRequired: recovery,
+    };
+  }
+  private state(reading: DesktopReading): DesktopState {
+    const { currentAccountUuid, organizations } = reading;
+    return {
+      available: reading.available,
+      running: reading.running,
+      currentAccountUuid,
+      organizations: [...organizations],
       activeProfileId: this.store.state.accounts.find(
         (a) =>
           !!a.desktop &&
@@ -247,7 +313,7 @@ export class DesktopManager {
           ? undefined
           : this.lastError,
       errorRevision: this.errorRevision,
-      recoveryRequired: recovery,
+      recoveryRequired: reading.recoveryRequired,
       lastBackup: this.lastBackup,
     };
   }
@@ -499,7 +565,11 @@ export class DesktopManager {
     });
   }
   async open() {
-    await this.host.launch();
+    try {
+      await this.host.launch();
+    } finally {
+      this.invalidate();
+    }
   }
   /**
    * Decrypt every saved Desktop sign-in once without changing anything. After an
@@ -746,6 +816,7 @@ export class DesktopManager {
     this.lastError = undefined;
     const current = { ...operation, restarted: false };
     this.operation = current;
+    this.invalidate();
     let ok = false;
     try {
       if (!(await this.host.available()))
@@ -760,6 +831,7 @@ export class DesktopManager {
       throw e;
     } finally {
       this.busy = false;
+      this.invalidate();
       this.pendingHistorySeen = undefined;
       this.operation = undefined;
       if (current.restarted) this.report("end", current, ok);

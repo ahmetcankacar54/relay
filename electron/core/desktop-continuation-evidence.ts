@@ -274,6 +274,8 @@ const LIVE_TRANSCRIPT_MS = 2 * 60 * 60_000;
 /** CPU seconds a process may use between observations and still count as idle. */
 const IDLE_CPU_SECONDS = 0.3;
 const TAIL_BYTES = 512 * 1024;
+/** A conversation no project folder held is probed across every folder at most this often. */
+const FOLDER_PROBE_MS = 60_000;
 
 function transcriptTail(data: Buffer) {
   const start = Math.max(0, data.length - TAIL_BYTES);
@@ -315,7 +317,7 @@ export interface DesktopEvidenceOptions {
   processes?: () => Promise<string>;
   processesSync?: () => string;
   /** `ps -axo pid=,time=` output; injectable for tests. */
-  cpuTimes?: () => string;
+  cpuTimes?: () => string | Promise<string>;
   now?: () => number;
 }
 export function transcriptMessageText(row: Row) {
@@ -454,6 +456,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   private cpu?: { at: number; times: Map<number, number> };
   private family = new Set<number>();
   private readonly scanner = new TranscriptScanner();
+  /** Each conversation's project folder, from a probe of every folder that found it in one. */
+  private readonly projectFolders = new Map<string, string>();
+  /** When each conversation no single folder held was last probed. */
+  private readonly unplaced = new Map<string, number>();
   /** Count other recently written transcripts whose turn is unfinished. */
   private busyTranscripts(excluded: ReadonlySet<string>) {
     const root = path.join(this.options.transcriptRoot, "projects");
@@ -502,7 +508,19 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     return busy;
   }
   /** Processes whose CPU time advanced since the previous sample (undefined on the first). */
-  private activePids() {
+  private async activePids() {
+    const output = this.options.cpuTimes
+      ? await this.options.cpuTimes()
+      : (
+          await exec("/bin/ps", ["-axo", "pid=,time="], {
+            timeout: 3000,
+            maxBuffer: 2_097_152,
+          })
+        ).stdout;
+    return this.sampleCpu(output);
+  }
+  /** `activePids` for the synchronous checks right before a quit and each write. */
+  private activePidsSync() {
     const output = this.options.cpuTimes
       ? this.options.cpuTimes()
       : execFileSync("/bin/ps", ["-axo", "pid=,time="], {
@@ -510,6 +528,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
           maxBuffer: 2_097_152,
           encoding: "utf8",
         });
+    // An injected reading that must be awaited cannot be here: not measured.
+    return typeof output === "string" ? this.sampleCpu(output) : undefined;
+  }
+  private sampleCpu(output: string) {
     const times = parseCpuTimes(output);
     const now = this.now();
     const previous = this.cpu;
@@ -523,12 +545,23 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     }
     return active;
   }
-  private measure(excluded: string | ReadonlySet<string>): QuiescenceInputs {
+  private async measure(
+    excluded: string | ReadonlySet<string>,
+  ): Promise<QuiescenceInputs> {
+    const busyTranscripts = this.busyTranscripts(
+      typeof excluded === "string" ? new Set([excluded]) : excluded,
+    );
+    return { busyTranscripts, activePids: await this.activePids() };
+  }
+  /** `measure` for the synchronous checks right before a quit and each write. */
+  private measureSync(
+    excluded: string | ReadonlySet<string>,
+  ): QuiescenceInputs {
     return {
       busyTranscripts: this.busyTranscripts(
         typeof excluded === "string" ? new Set([excluded]) : excluded,
       ),
-      activePids: this.activePids(),
+      activePids: this.activePidsSync(),
     };
   }
   /** Remember Claude's process tree so engines orphaned by a quit are noticed. */
@@ -582,8 +615,40 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     folders: () => Promise<string[]>,
     scanned: Set<string>,
   ) {
-    const found: { relative: string; summary: TranscriptSummary }[] = [];
-    for (const folder of await folders()) {
+    // The folder a probe found it in alone is looked at first, and alone.
+    const known = this.projectFolders.get(cliId);
+    if (known !== undefined) {
+      const found = await this.scannedIn([known], cliId, cwd, scanned);
+      if (found.length === 1) return found[0];
+      this.projectFolders.delete(cliId);
+    }
+    const now = this.now();
+    for (const [id, at] of this.unplaced)
+      if (now - at >= FOLDER_PROBE_MS || now < at) this.unplaced.delete(id);
+    if (this.unplaced.has(cliId))
+      throw new DesktopAutomationError("exact-session-not-observed");
+    // A transcript still being written fails here and is probed again next time.
+    const found = await this.scannedIn(await folders(), cliId, cwd, scanned);
+    if (found.length !== 1) {
+      this.unplaced.set(cliId, now);
+      throw new DesktopAutomationError("exact-session-not-observed");
+    }
+    this.projectFolders.set(cliId, found[0].folder);
+    return found[0];
+  }
+  /** The transcripts of `cliId` in `folders`, each scanned and added to `scanned`. */
+  private async scannedIn(
+    folders: string[],
+    cliId: string,
+    cwd: string,
+    scanned: Set<string>,
+  ) {
+    const found: {
+      folder: string;
+      relative: string;
+      summary: TranscriptSummary;
+    }[] = [];
+    for (const folder of folders) {
       const relative = `projects/${folder}/${cliId}.jsonl`;
       const file = path.resolve(this.options.transcriptRoot, relative);
       try {
@@ -598,11 +663,9 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       const summary = await this.scanner.scan(file);
       if (!summary.cwds.has(path.resolve(cwd)))
         throw new DesktopAutomationError("exact-session-not-observed");
-      found.push({ relative, summary });
+      found.push({ folder, relative, summary });
     }
-    if (found.length !== 1)
-      throw new DesktopAutomationError("exact-session-not-observed");
-    return found[0];
+    return found;
   }
   /**
    * Local Code conversations of `account` whose latest turn ended with a usage
@@ -704,19 +767,28 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
    * conversations, or undefined when nothing else is running.
    */
   async quietExcept(stops: QuotaStop[]) {
+    const raw = await (this.options.processes ?? collectProcesses)();
+    const app = this.claudeApp(raw);
+    if (typeof app !== "number") return app;
     return this.quietReason(
-      await (this.options.processes ?? collectProcesses)(),
-      stops,
+      raw,
+      app,
+      await this.measure(new Set(stops.map((stop) => stop.transcriptRelative))),
     );
   }
   /** Synchronous variant for the checks immediately before quit and writes. */
   quietExceptSync(stops: QuotaStop[]) {
+    const raw = (this.options.processesSync ?? collectProcessesSync)();
+    const app = this.claudeApp(raw);
+    if (typeof app !== "number") return app;
     return this.quietReason(
-      (this.options.processesSync ?? collectProcessesSync)(),
-      stops,
+      raw,
+      app,
+      this.measureSync(new Set(stops.map((stop) => stop.transcriptRelative))),
     );
   }
-  private quietReason(raw: string, stops: QuotaStop[]) {
+  /** Claude's main pid in a census, its tree remembered; undefined while Claude is closed. */
+  private claudeApp(raw: string): number | "quiescence-unverified" | undefined {
     let rows: DesktopProcess[];
     try {
       rows = JSON.parse(raw);
@@ -729,13 +801,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     // A closed Claude cannot be interrupted.
     if (!app) return undefined;
     this.remember(raw, app.pid);
-    const q = desktopProcessQuiescence(
-      raw,
-      app.pid,
-      "",
-      true,
-      this.measure(new Set(stops.map((stop) => stop.transcriptRelative))),
-    );
+    return app.pid;
+  }
+  private quietReason(raw: string, appPid: number, inputs: QuiescenceInputs) {
+    const q = desktopProcessQuiescence(raw, appPid, "", true, inputs);
     if (q.coverage !== "guarded-local") return "quiescence-unverified";
     for (const [key, value] of Object.entries(q))
       if (key !== "coverage" && value !== 0) return `not-quiescent:${key}`;
@@ -897,7 +966,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       snapshot.pid,
       metadata.cliSessionId,
       selectedEnded,
-      this.measure(transcript.relative),
+      await this.measure(transcript.relative),
     );
     if (
       metadata.remoteSessionId ||
@@ -1086,7 +1155,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
           currentSnapshot.pid,
           current.session.id,
           true,
-          this.measure(record.transcriptRelative),
+          this.measureSync(record.transcriptRelative),
         );
         const config = JSON.parse(
           fsSync.readFileSync(

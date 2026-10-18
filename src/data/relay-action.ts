@@ -38,7 +38,31 @@ export function errorAfterRefresh(
   return refreshError !== undefined && current === refreshError ? "" : current;
 }
 
-/** The long-lived menu bar panel skips its poll while it is hidden. */
+/**
+ * Refreshes for a broadcast at once while the window is visible. A hidden window only
+ * remembers that something changed, and refreshes once when it is shown again.
+ */
+export function hiddenRefresh(
+  visibility: () => DocumentVisibilityState,
+  refresh: () => void,
+) {
+  let dirty = false;
+  return {
+    /** A broadcast, or a poll skipped while hidden. */
+    changed() {
+      if (visibility() === "hidden") dirty = true;
+      else refresh();
+    },
+    /** The visibilitychange event. */
+    shown() {
+      if (visibility() === "hidden" || !dirty) return;
+      dirty = false;
+      refresh();
+    },
+  };
+}
+
+/** A window that passes pollWhenHidden false skips its poll while it is hidden. */
 export function shouldPoll(
   options: { pollWhenHidden?: boolean },
   visibility: DocumentVisibilityState,
