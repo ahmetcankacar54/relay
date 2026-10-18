@@ -1116,7 +1116,7 @@ test("the ledger keys transcripts by a hash of their path and holds no paths", a
   await ledger.tick();
   const text = fs.readFileSync(ledgerFile, "utf8");
   const saved = JSON.parse(text);
-  assert.equal(saved.version, 2);
+  assert.equal(saved.version, 3);
   assert.deepEqual(Object.keys(saved.files), [keyOf(file)]);
   assert.ok(!text.includes("secret-project-name"));
   assert.ok(!text.includes("s.jsonl"));
@@ -1133,7 +1133,8 @@ test("the ledger keys transcripts by a hash of their path and holds no paths", a
   assert.equal(totals(restarted).responses, 3);
 });
 
-test("a version 1 ledger, keyed by paths, is dropped and the rescan counts once", async () => {
+for (const [version, why] of [[1, "keyed by paths"], [2, "attributed with the narrower estimate"]] as const)
+test(`a version ${version} ledger, ${why}, is dropped and the rescan counts once`, async () => {
   const dir = tempDir();
   const root = path.join(dir, "projects");
   const file = path.join(root, "p", "s.jsonl");
@@ -1145,8 +1146,8 @@ test("a version 1 ledger, keyed by paths, is dropped and the rescan counts once"
     ledgerFile,
     JSON.stringify({
       ...saved,
-      version: 1,
-      files: { [file]: Object.values(saved.files)[0] },
+      version,
+      files: version === 1 ? { [file]: Object.values(saved.files)[0] } : saved.files,
     }),
     { mode: 0o600 },
   );
@@ -1156,7 +1157,7 @@ test("a version 1 ledger, keyed by paths, is dropped and the rescan counts once"
   assert.equal(totals(restarted).responses, 2);
   const text = fs.readFileSync(ledgerFile, "utf8");
   assert.ok(!text.includes(file));
-  assert.equal(JSON.parse(text).version, 2);
+  assert.equal(JSON.parse(text).version, 3);
 });
 
 test("a transcript idle for over 2 days keeps no last response", async () => {

@@ -302,8 +302,8 @@ const readinessExplanations: Record<
     "The quota reset time is not current. Refresh usage on the account card.",
   ],
   "target-quota-unavailable": [
-    "5 saatlik veya haftalık kalan limit %10 ya da altında.",
-    "5-hour or weekly remaining quota is 10% or less.",
+    "5 saatlik veya haftalık limitin %90’ı ya da fazlası kullanıldı.",
+    "90% or more of the 5-hour or weekly quota is used.",
   ],
   "target-cooldown": [
     "Hesap bekleme süresinde.",

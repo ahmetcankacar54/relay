@@ -8,6 +8,7 @@ import {
 } from "../../../shared/token-usage-view";
 import type { StatisticsRange } from "../../../shared/usage-statistics-view";
 import { Banner } from "@/components/Banner";
+import { Disclosure } from "@/components/Disclosure";
 import { Note } from "@/components/SettingRow";
 import { Card } from "@/components/ui/card";
 import {
@@ -21,11 +22,12 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useI18n, type Language, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { windowTone } from "@/lib/day-timeline";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
+import { DayTipRow, DayTooltip, Swatch, useDayHover } from "./DayHover";
 import {
   formatDay,
+  formatDayLong,
   formatNumber,
   formatTokens,
   toneFill,
@@ -74,13 +76,27 @@ const LABEL_CHAR = 5.5;
 /** The model mix names at most this many models. */
 const MIX_MODELS = 3;
 
-interface Column {
+export interface Column {
   key: string;
   name: string;
   /** Colour slot of an account or the former row; undefined for the muted rows. */
   tone?: number;
   muted?: string;
 }
+
+/** The view's rows as the chart, legend and table draw them: named, and coloured by account. */
+export const tokenColumns = (
+  view: TokenUsageView,
+  accounts: Account[],
+  t: T,
+): Column[] =>
+  view.rows.map((row) => ({
+    key: row.key,
+    name: rowLabel(row, t),
+    ...(MUTED_OPACITY[row.kind] !== undefined
+      ? { muted: MUTED_OPACITY[row.kind] }
+      : { tone: toneIndex(row, accounts) }),
+  }));
 
 /** The model mix of the range under `metric`: "claude-opus-4 %75 · claude-sonnet-4 %25". */
 function modelMix(view: TokenUsageView, metric: Metric, language: Language) {
@@ -154,8 +170,16 @@ function Tiles({ view }: { view: TokenUsageView }) {
 /** "tahmini" / "estimated": what screen readers hear in place of the ≈ mark. */
 const estimatedWord = (t: T) => t("tahmini", "estimated");
 
-/** Stacked tokens per local day, one segment per row, coloured by account. */
-function Chart({
+/** A row's share of a day: "%29", "<%1" for a sliver; undefined for an empty day. */
+function shareOf(value: number, total: number, language: Language) {
+  if (total <= 0) return undefined;
+  const percent = (value / total) * 100;
+  if (percent > 0 && percent < 1) return language === "tr" ? "<%1" : "<1%";
+  return formatPercent(percent, language);
+}
+
+/** Each row's tokens over the range under `metric`, ≈ when any of its days was estimated. */
+function Legend({
   view,
   columns,
   metric,
@@ -163,6 +187,45 @@ function Chart({
   view: TokenUsageView;
   columns: Column[];
   metric: Metric;
+}) {
+  const { language } = useI18n();
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      {columns.map((column) => {
+        let value = 0;
+        let estimated = false;
+        for (const day of view.days) {
+          const cell = day.byRow[column.key];
+          const part = cell ? metricValue(cell, metric) : 0;
+          value += part;
+          estimated ||= part > 0 && cell?.estimated === true;
+        }
+        return (
+          <li key={column.key} className="flex items-center gap-1.5">
+            <Swatch tone={column.tone} muted={column.muted} />
+            <span className="text-muted-foreground">{column.name}</span>
+            <span className="font-medium tabular-nums">
+              {estimated ? "≈" : ""}
+              {formatTokens(value, language)}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Stacked tokens per local day, one segment per row, coloured by account; pointing at a day details it. */
+function Chart({
+  view,
+  columns,
+  metric,
+  metricLabel,
+}: {
+  view: TokenUsageView;
+  columns: Column[];
+  metric: Metric;
+  metricLabel: string;
 }) {
   const { t, language } = useI18n();
   const days = view.days.map((day) => ({
@@ -193,30 +256,20 @@ function Chart({
   const ticks = days.length
     ? [0, Math.floor((days.length - 1) / 2), days.length - 1]
     : [];
-  const mix = modelMix(view, metric, language);
+  const hover = useDayHover({ width: WIDTH, left, step, count: days.length });
+  const shown = hover.active === undefined ? undefined : days[hover.active];
+  const shownTotal = shown ? dayTotal(shown) : 0;
   return (
-    <div>
-      <ul className="mb-2 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-        {columns.map((column) => (
-          <li key={column.key} className="flex items-center gap-1">
-            <i
-              aria-hidden
-              className={cn(
-                "size-2.5 rounded-sm",
-                column.tone === undefined
-                  ? cn("bg-muted-foreground", column.muted)
-                  : windowTone(column.tone),
-              )}
-            />
-            {column.name}
-          </li>
-        ))}
-      </ul>
+    <div className="relative mx-auto w-full max-w-4xl">
       <svg
+        {...hover.chart}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="mx-auto h-auto w-full max-w-4xl"
+        className="h-auto w-full rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         role="group"
-        aria-label={t("Günlük token grafiği", "Daily token chart")}
+        aria-label={t(
+          "Günlük token grafiği; günler arasında ok tuşlarıyla gezilir",
+          "Daily token chart; arrow keys move between days",
+        )}
       >
         <g aria-hidden className="stroke-border" strokeWidth={1}>
           {[TOP, (TOP + BASE) / 2, BASE].map((y) => (
@@ -250,29 +303,27 @@ function Chart({
             ),
           ].join("; ");
           return (
-            <g key={day.date} role="img" aria-label={spoken}>
-              <title>
-                {[
-                  day.label,
-                  ...day.parts.map(
-                    (p) =>
-                      `${p.column.name} ${p.estimated ? "≈" : ""}${formatTokens(p.value, language)}`,
-                  ),
-                  ...(day.parts.length && mix
-                    ? [
-                        t("Aralıktaki modeller: ", "Models in this range: ") +
-                          mix,
-                      ]
-                    : []),
-                ].join("\n")}
-              </title>
-              <rect
-                x={left + i * step}
-                y={TOP}
-                width={step}
-                height={BASE - TOP}
-                fill="transparent"
-              />
+            <g
+              key={day.date}
+              role="img"
+              aria-label={spoken}
+              className={cn(
+                "transition-opacity duration-100",
+                hover.active !== undefined &&
+                  hover.active !== i &&
+                  "opacity-40",
+              )}
+            >
+              {hover.active === i && (
+                <rect
+                  data-slot="token-day-band"
+                  className="fill-muted"
+                  x={left + i * step}
+                  y={TOP}
+                  width={step}
+                  height={BASE - TOP}
+                />
+              )}
               {day.parts.map((part) => {
                 const h = part.value * scale;
                 y -= h;
@@ -317,12 +368,54 @@ function Chart({
           ))}
         </g>
       </svg>
+      <DayTooltip at={hover.at}>
+        {shown && (
+          <>
+            <div className="font-semibold">
+              {formatDayLong(shown.date, language)}
+            </div>
+            <div className="mt-0.5 flex items-baseline justify-between gap-4 border-b pb-1">
+              <span className="text-muted-foreground">{metricLabel}</span>
+              <b className="tabular-nums">
+                {shown.parts.some((p) => p.estimated) ? "≈" : ""}
+                {formatTokens(shownTotal, language)}
+              </b>
+            </div>
+            {shown.parts.length ? (
+              <ul className="mt-1.5 grid gap-1">
+                {shown.parts.map((part) => (
+                  <DayTipRow
+                    key={part.column.key}
+                    tone={part.column.tone}
+                    muted={part.column.muted}
+                    name={part.column.name}
+                    value={`${part.estimated ? "≈" : ""}${formatTokens(part.value, language)}`}
+                    share={shareOf(part.value, shownTotal, language)}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1.5 text-muted-foreground">
+                {t("Bu gün token yok.", "No tokens on this day.")}
+              </p>
+            )}
+            {shown.parts.some((p) => p.estimated) && (
+              <p className="mt-1.5 text-muted-foreground">
+                {t(
+                  "≈ Limit ölçümlerinden tahmin edildi",
+                  "≈ Estimated from limit samples",
+                )}
+              </p>
+            )}
+          </>
+        )}
+      </DayTooltip>
     </div>
   );
 }
 
 /** Days newest first, the rows from the view, then the day's total; ≈ marks values estimated from limit samples. */
-function DayTable({
+export function DayTable({
   view,
   columns,
   metric,
@@ -423,13 +516,7 @@ function Content({
 }) {
   const { t, language } = useI18n();
   const [metric, setMetric] = useState<Metric>("total");
-  const columns: Column[] = view.rows.map((row) => ({
-    key: row.key,
-    name: rowLabel(row, t),
-    ...(MUTED_OPACITY[row.kind] !== undefined
-      ? { muted: MUTED_OPACITY[row.kind] }
-      : { tone: toneIndex(row, accounts) }),
-  }));
+  const columns = tokenColumns(view, accounts, t);
   const labels: Record<Metric, string> = {
     total: t("Toplam", "Total"),
     input: t("Girdi", "Input"),
@@ -438,6 +525,7 @@ function Content({
   };
   const empty = view.rows.length === 0;
   const scanning = !view.progress.complete;
+  const mix = modelMix(view, metric, language);
   return (
     <>
       {empty ? (
@@ -453,22 +541,39 @@ function Content({
       ) : (
         <>
           <Tiles view={view} />
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            aria-label={t("Ölçü", "Metric")}
-            value={metric}
-            onValueChange={(v) => v && setMetric(v as Metric)}
-          >
-            {METRICS.map((m) => (
-              <ToggleGroupItem key={m} value={m}>
-                {labels[m]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <Chart view={view} columns={columns} metric={metric} />
-          <DayTable view={view} columns={columns} metric={metric} />
+          {/* The chart's controls: what each row adds up to, and what is counted. */}
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-3">
+            <Legend view={view} columns={columns} metric={metric} />
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              aria-label={t("Ölçü", "Metric")}
+              value={metric}
+              onValueChange={(v) => v && setMetric(v as Metric)}
+            >
+              {METRICS.map((m) => (
+                <ToggleGroupItem key={m} value={m}>
+                  {labels[m]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+          <Chart
+            view={view}
+            columns={columns}
+            metric={metric}
+            metricLabel={labels[metric]}
+          />
+          {mix && (
+            <p className="text-xs text-muted-foreground">
+              {t("Aralıktaki modeller: ", "Models in this range: ")}
+              {mix}
+            </p>
+          )}
+          <Disclosure title={t("Gün gün tablo", "Day-by-day table")}>
+            <DayTable view={view} columns={columns} metric={metric} />
+          </Disclosure>
         </>
       )}
       {view.exactSince && !empty && (

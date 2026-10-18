@@ -87,7 +87,7 @@ test("the accounts page lists accounts with their connection states", () => {
   assert.match(html, /Çalışıyor/);
   assert.match(html, /Claude uygulaması girişi yok/);
   assert.doesNotMatch(html, /Bağlı değil|Süresi doldu/);
-  assert.match(html, /%62 kaldı · %22 kaldı/);
+  assert.match(html, /%38 · %78/);
   assert.match(html, /aria-label="Studio işlemleri"/);
 });
 

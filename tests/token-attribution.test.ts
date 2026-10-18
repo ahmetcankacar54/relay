@@ -4,6 +4,7 @@ import {
   attribute,
   estimateAccountAt,
   indexSamples,
+  NEAR_RISE_MS,
 } from "../electron/core/token-attribution";
 import { MAX_USAGE_GAP_MS, type UsageSample } from "../shared/usage-statistics";
 import type { Account } from "../shared/types";
@@ -319,11 +320,49 @@ test("no rise gives undefined", () => {
   assert.equal(estimateAccountAt(T0 + MIN, samples), undefined);
 });
 
-test("a time outside every pair gives undefined", () => {
+test("a time outside every pair takes a rise up to 15 minutes away, and nothing farther", () => {
   const samples = [sample("a", T0, 10), sample("a", T0 + 5 * MIN, 30)];
-  assert.equal(estimateAccountAt(T0 - MIN, samples), undefined);
-  assert.equal(estimateAccountAt(T0 + 5 * MIN, samples), undefined);
-  assert.equal(estimateAccountAt(T0 + 6 * MIN, samples), undefined);
+  assert.equal(estimateAccountAt(T0 - MIN, samples), "a");
+  assert.equal(estimateAccountAt(T0 + 5 * MIN, samples), "a");
+  assert.equal(estimateAccountAt(T0 - NEAR_RISE_MS, samples), "a");
+  assert.equal(estimateAccountAt(T0 + 5 * MIN + NEAR_RISE_MS, samples), "a");
+  assert.equal(estimateAccountAt(T0 - NEAR_RISE_MS - 1, samples), undefined);
+  assert.equal(estimateAccountAt(T0 + 5 * MIN + NEAR_RISE_MS + 1, samples), undefined);
+  const index = indexSamples(samples);
+  assert.equal(index.estimate(T0 - NEAR_RISE_MS), "a");
+  assert.equal(index.estimate(T0 + 5 * MIN + NEAR_RISE_MS + 1), undefined);
+});
+
+test("with no rise around a response, the nearest rise within 15 minutes names the account", () => {
+  // Both accounts are flat around T0 + 1 min; a rises 4 minutes later, b 9 minutes later.
+  const samples = [
+    sample("a", T0, 20),
+    sample("a", T0 + 5 * MIN, 20),
+    sample("a", T0 + 10 * MIN, 25),
+    sample("b", T0, 30),
+    sample("b", T0 + 5 * MIN, 30),
+    sample("b", T0 + 10 * MIN, 30),
+    sample("b", T0 + 15 * MIN, 32),
+  ];
+  assert.equal(estimateAccountAt(T0 + MIN, samples), "a");
+  assert.equal(indexSamples(samples).estimate(T0 + MIN), "a");
+  // A rise in a response's own pair still wins over a nearer-looking one elsewhere.
+  assert.equal(estimateAccountAt(T0 + 12 * MIN, samples), "b");
+  assert.equal(indexSamples(samples).estimate(T0 + 12 * MIN), "b");
+});
+
+test("between two equally near rises, the larger one wins", () => {
+  const samples = [
+    sample("a", T0, 20),
+    sample("a", T0 + 5 * MIN, 20),
+    sample("a", T0 + 10 * MIN, 22),
+    sample("b", T0 - 5 * MIN, 30),
+    sample("b", T0, 40),
+    sample("b", T0 + 5 * MIN, 40),
+  ];
+  // T0 + 2.5 min: a's rise starts 2.5 minutes later, b's ended 2.5 minutes before.
+  assert.equal(estimateAccountAt(T0 + 2.5 * MIN, samples), "b");
+  assert.equal(indexSamples(samples).estimate(T0 + 2.5 * MIN), "b");
 });
 
 test("samples without a five-hour window or with a bad timestamp are skipped", () => {

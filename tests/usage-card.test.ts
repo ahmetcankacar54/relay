@@ -34,7 +34,7 @@ test("connection renewal is an explicit action and preserves verified current qu
     fiveHour: { usedPercent: 20, resetsAt: later },
   };
   const en = render(usage);
-  assert.match(en, /80%/);
+  assert.match(en, /20% used/);
   assert.match(en, /The usage sign-in needs to be renewed/);
   assert.match(en, /No limit reported/);
   assert.match(en, />Allow renewal<\/button>/);
@@ -93,7 +93,7 @@ test("fresh server quota supersedes historical reset copy, while a missing weekl
     },
   });
   assert.match(en, />Resets /);
-  assert.match(en, /80%/);
+  assert.match(en, /20% used/);
   assert.match(en, /Last known reset/);
   assert.doesNotMatch(en, /Previous period/);
   assert.doesNotMatch(en, new RegExp(`dateTime="${earlier}"`, "i"));
@@ -138,7 +138,7 @@ test("invalid or future-dated observation metadata does not present an invented 
   assert.match(en, /Reset time unavailable/);
 });
 
-test("the reset line and the remaining-quota note are set in text-xs, not 11 px", () => {
+test("the reset line and the used word are set in text-xs, not 11 px", () => {
   const usage: AccountUsage = {
     accountId: "a",
     status: "ready",
@@ -149,7 +149,7 @@ test("the reset line and the remaining-quota note are set in text-xs, not 11 px"
   for (const language of ["en", "tr"]) {
     const html = render(usage, language);
     assert.match(html, /<div class="mt-1 text-xs text-muted-foreground">(Resets|Yenilenir)/, language);
-    assert.match(html, /<small class="text-xs font-normal text-muted-foreground">(left|kaldı)<\/small>/, language);
+    assert.match(html, /<small class="text-xs font-normal text-muted-foreground">(used|kullanıldı)<\/small>/, language);
     assert.doesNotMatch(html, /text-\[11px\]/, language);
   }
 });
@@ -172,8 +172,8 @@ test("the status phrase may wrap, and only the percentage stays on one line", ()
     assert.match(
       html,
       language === "tr"
-        ? /<span class="whitespace-nowrap">%80<\/span> <small class="text-xs font-normal text-muted-foreground">kaldı<\/small>/
-        : /<span class="whitespace-nowrap">80%<\/span> <small class="text-xs font-normal text-muted-foreground">left<\/small>/,
+        ? /<span class="whitespace-nowrap">%20<\/span> <small class="text-xs font-normal text-muted-foreground">kullanıldı<\/small>/
+        : /<span class="whitespace-nowrap">20%<\/span> <small class="text-xs font-normal text-muted-foreground">used<\/small>/,
       language,
     );
     assert.match(
@@ -184,7 +184,7 @@ test("the status phrase may wrap, and only the percentage stays on one line", ()
   }
 });
 
-test("the card shows what is left, %80 kaldı in Turkish and 80% left in English, and its bar fills with what is used", () => {
+test("the card shows what is used, %20 kullanıldı in Turkish and 20% used in English, and its bar fills with the same share", () => {
   const usage: AccountUsage = {
     accountId: "a",
     status: "ready",
@@ -194,25 +194,28 @@ test("the card shows what is left, %80 kaldı in Turkish and 80% left in English
   };
   const tr = render(usage, "tr");
   const en = render(usage, "en");
-  assert.match(tr, />%80<\/span> <small[^>]*>kaldı<\/small>/);
-  assert.match(en, />80%<\/span> <small[^>]*>left<\/small>/);
-  // Not 80.0%, not a bare "20%": one rounded figure from the shared helper.
+  assert.match(tr, />%20<\/span> <small[^>]*>kullanıldı<\/small>/);
+  assert.match(en, />20%<\/span> <small[^>]*>used<\/small>/);
+  // Not 20.0%: one rounded figure from the shared helper.
   assert.doesNotMatch(tr, />\d+%</);
-  // The same direction as the Overview's meter: the fill is the used share, the text says what remains.
+  // The number and the bar say the same thing: the fill is the used share, as on Claude's usage page.
   assert.match(tr, /aria-valuenow="20"/);
-  assert.match(tr, /aria-valuetext="%80 kaldı"/);
-  assert.match(en, /aria-valuetext="80% left"/);
+  assert.match(tr, /aria-valuetext="%20 kullanıldı"/);
+  assert.match(en, /aria-valuetext="20% used"/);
   assert.match(tr, /style="width:20%"/);
   assert.doesNotMatch(tr, /style="width:80%"/);
 });
 
-test("what is left is rounded down, never claimed more than the window has", () => {
-  const html = render({
-    accountId: "a",
-    status: "ready",
-    stale: false,
-    checkedAt,
-    fiveHour: { usedPercent: 93.5, resetsAt: later },
-  });
-  assert.match(html, />6%<\/span> <small[^>]*>left<\/small>/);
+test("what is used is rounded down, so only a full window reads 100", () => {
+  const shown = (usedPercent: number) =>
+    render({
+      accountId: "a",
+      status: "ready",
+      stale: false,
+      checkedAt,
+      fiveHour: { usedPercent, resetsAt: later },
+    });
+  assert.match(shown(93.5), />93%<\/span> <small[^>]*>used<\/small>/);
+  assert.match(shown(99.9), />99%<\/span> <small[^>]*>used<\/small>/);
+  assert.match(shown(100), />100%<\/span> <small[^>]*>used<\/small>/);
 });

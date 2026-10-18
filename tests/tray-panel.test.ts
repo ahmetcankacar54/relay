@@ -17,20 +17,23 @@ const snap = (u?: AccountUsage, active = "a"): TraySnapshot => ({
   desktop: { available: true, running: true, organizations: [], activeProfileId: active, busy: false, recoveryRequired: false, errorRevision: 0 },
 });
 
-test("tray title shows the active account's remaining five-hour percent, compact", () => {
-  assert.equal(trayTitle(snap(usage(37.6)), NOW), "62%");
-  assert.equal(trayTitle(snap(usage(90)), NOW), "10%");
-  assert.equal(trayTitle(snap(usage(94)), NOW, "en"), "6%");
-  assert.equal(trayTitle(snap(usage(94)), NOW, "tr"), "%6");
-  assert.equal(trayTitle(snap(usage(100)), NOW, "tr"), "%0");
+test("tray title shows the active account's five-hour percent used, compact", () => {
+  assert.equal(trayTitle(snap(usage(37.6)), NOW), "37%");
+  assert.equal(trayTitle(snap(usage(90)), NOW), "90%");
+  assert.equal(trayTitle(snap(usage(94)), NOW, "en"), "94%");
+  assert.equal(trayTitle(snap(usage(94)), NOW, "tr"), "%94");
+  // Only a full window reads 100.
+  assert.equal(trayTitle(snap(usage(99.9)), NOW, "tr"), "%99");
+  assert.equal(trayTitle(snap(usage(100)), NOW, "tr"), "%100");
+  assert.equal(trayTitle(snap(usage(0)), NOW, "tr"), "%0");
   assert.equal(trayTitle(snap(usage(20, NOW - 3_600_000)), NOW), "");
   assert.equal(trayTitle(snap(undefined), NOW), "");
   assert.equal(trayTitle(snap(usage(20), "missing"), NOW), "");
 });
 
 test("the tooltip says what the title's number is", () => {
-  assert.equal(trayTooltip(snap(usage(94)), "tr", NOW), "Relay — A · %6 kaldı");
-  assert.equal(trayTooltip(snap(usage(94)), "en", NOW), "Relay — A · 6% left");
+  assert.equal(trayTooltip(snap(usage(94)), "tr", NOW), "Relay — A · %94 kullanıldı");
+  assert.equal(trayTooltip(snap(usage(94)), "en", NOW), "Relay — A · 94% used");
   assert.equal(trayTooltip(snap(usage(20, NOW - 3_600_000)), "en", NOW), "Relay — A");
 });
 

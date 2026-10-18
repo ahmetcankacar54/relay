@@ -96,8 +96,12 @@ interface FileState {
 }
 
 interface Saved {
-  /** 2 keys files by a hash of their path; a version 1 ledger is dropped. */
-  version: 2;
+  /**
+   * 2 keys files by a hash of their path. 3 was counted with estimates that
+   * also take the nearest rise within 15 minutes. An earlier ledger is dropped
+   * and rescanned, so its responses are attributed again.
+   */
+  version: 3;
   /** The time zone the days are in. */
   zone?: string;
   /** A full pass has finished since the counts were last emptied. */
@@ -985,7 +989,7 @@ export class TokenLedger {
   /** Save the counts with the offsets; throws, and says so in the progress, when it cannot. */
   private persist() {
     const saved: Saved = {
-      version: 2,
+      version: 3,
       ...(this.bucketZone === undefined ? {} : { zone: this.bucketZone }),
       ...(this.passCompleteSinceStart ? { complete: true as const } : {}),
       files: Object.fromEntries(this.files),
@@ -1014,7 +1018,7 @@ export class TokenLedger {
     let value: Record<string, any> = {};
     try {
       const saved = readPrivateJson(this.file, this.maxBytes);
-      if (isRecord(saved) && saved.version === 2) value = saved;
+      if (isRecord(saved) && saved.version === 3) value = saved;
     } catch {
       // No ledger yet, or an unreadable one.
     }

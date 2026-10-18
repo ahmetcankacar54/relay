@@ -8,12 +8,12 @@ import type {
 import { Button } from "@/components/ui/button";
 import { displayedIssue, renewalIssue } from "@/lib/account-health";
 import {
-  formatLeft,
   formatPercent,
-  leftWord,
+  formatUsed,
   meterClass,
   meterTone,
-  percentLeft,
+  percentUsed,
+  usedWord,
 } from "@/lib/meter";
 import { cn } from "@/lib/utils";
 type T = (tr: string, en: string) => string;
@@ -106,7 +106,7 @@ export function UsageCard({
     const used = window
       ? Math.max(0, Math.min(100, window.usedPercent))
       : undefined;
-    const left = percentLeft(used);
+    const shown = percentUsed(used);
     // A window with no usage yet has no reset; it starts with the next request.
     const unused =
       !!window &&
@@ -169,11 +169,11 @@ export function UsageCard({
           >
             {/* The phrase after it may wrap; the percentage never breaks. */}
             <span className="whitespace-nowrap">
-              {formatPercent(left, language)}
+              {formatPercent(shown, language)}
             </span>{" "}
             <small className="text-xs font-normal text-muted-foreground">
-              {left !== undefined
-                ? leftWord(language)
+              {shown !== undefined
+                ? usedWord(language)
                 : notReported
                   ? t("Limit bildirilmiyor", "No limit reported")
                   : t("Veri yok", "No data")}
@@ -187,7 +187,7 @@ export function UsageCard({
           aria-valuemin={window ? 0 : undefined}
           aria-valuemax={window ? 100 : undefined}
           aria-valuenow={used}
-          aria-valuetext={window ? formatLeft(used, language) : undefined}
+          aria-valuetext={window ? formatUsed(used, language) : undefined}
         >
           <span
             className={cn(

@@ -249,26 +249,44 @@ test("only the shell provides tooltips", () => {
   assert.deepEqual(users, [path.join("app", "Shell.tsx")]);
 });
 
-// 11. Percent formatting follows the language, and every limit percentage is what is left, with its word.
-test("limit percentages read %55 kaldı in Turkish and 55% left in English", () => {
-  const meter = (language: Language) =>
+// 11. Percent formatting follows the language, and every limit percentage is what is used, as on Claude's usage page.
+test("limit percentages read %45 kullanıldı in Turkish and 45% used in English", () => {
+  const meter = (language: Language, size?: "sm" | "md") =>
     renderToStaticMarkup(
-      createElement(I18nContext.Provider, { value: i18n(language) }, createElement(LimitMeter, { label: "x", percent: 45 })),
+      createElement(I18nContext.Provider, { value: i18n(language) }, createElement(LimitMeter, { label: "x", percent: 45, size })),
     );
   const tr = meter("tr");
   const en = meter("en");
-  assert.match(tr, />%55<\/span> <small[^>]*>kaldı<\/small>/);
-  assert.match(en, />55%<\/span> <small[^>]*>left<\/small>/);
-  // The bar keeps filling with what is used; the meter's value text says what is left.
+  assert.match(tr, />%45<\/span> <small[^>]*>kullanıldı<\/small>/);
+  assert.match(en, />45%<\/span> <small[^>]*>used<\/small>/);
+  // The number and the bar say the same thing: the fill and the meter's value are the percent used.
   assert.match(tr, /aria-valuenow="45"/);
-  assert.match(tr, /aria-valuetext="%55 kaldı"/);
-  assert.match(en, /aria-valuetext="55% left"/);
+  assert.match(tr, /aria-valuetext="%45 kullanıldı"/);
+  assert.match(en, /aria-valuetext="45% used"/);
   assert.match(tr, /style="width:45%"/);
   const usage: Record<string, AccountUsage> = { a: { accountId: "a", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 38 }, sevenDay: { usedPercent: 78 } } };
   const table = (language: Language) =>
     wrap(relayFor({}, usage), createElement(AccountsTable, { accounts, open() {}, link() {} }), language);
-  assert.match(table("tr"), /%62 kaldı · %22 kaldı/);
-  assert.match(table("en"), /62% left · 22% left/);
+  assert.match(table("tr"), /%38 · %78/);
+  assert.match(table("en"), /38% · 78%/);
+  assert.match(table("tr"), /<th[^>]*>Kullanılan · 5 sa · hafta<\/th>/);
+  assert.match(table("en"), /<th[^>]*>Used · 5 h · week<\/th>/);
+});
+
+test("the medium meter names its number with a word, the small one shows the number alone", () => {
+  const meter = (language: Language, size: "sm" | "md") =>
+    renderToStaticMarkup(
+      createElement(I18nContext.Provider, { value: i18n(language) }, createElement(LimitMeter, { label: "x", percent: 94, size })),
+    );
+  for (const [language, word, figure] of [["tr", "kullanıldı", "%94"], ["en", "used", "94%"]] as const) {
+    const md = meter(language, "md");
+    assert.match(md, new RegExp(`>${figure}</span> <small[^>]*>${word}</small>`), language);
+    const sm = meter(language, "sm");
+    assert.match(sm, new RegExp(`<b [^>]*><span class="whitespace-nowrap">${figure}</span></b>`), language);
+    assert.doesNotMatch(sm, /<small/, language);
+    // The word stays in the small meter's value text, for screen readers.
+    assert.match(sm, new RegExp(`aria-valuetext="[^"]*${word}"`), language);
+  }
 });
 
 test("a meter without a value shows a dash and no word", () => {
@@ -276,7 +294,7 @@ test("a meter without a value shows a dash and no word", () => {
     createElement(I18nContext.Provider, { value: i18n("tr") }, createElement(LimitMeter, { label: "x" })),
   );
   assert.match(html, />—<\/b>/);
-  assert.doesNotMatch(html, /kaldı|aria-valuetext/);
+  assert.doesNotMatch(html, /kullanıldı|aria-valuetext/);
 });
 
 test("a confirmed Desktop action shows the travelling panda until it finishes", () => {

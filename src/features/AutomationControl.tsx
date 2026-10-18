@@ -52,7 +52,7 @@ function SwitchNowButton({
 }
 
 /**
- * The status sentence with its "<account> %n kaldı · " prefix outside the live
+ * The status sentence with its "<account> %n kullanıldı · " prefix outside the live
  * region, so a usage refresh alone is not announced again.
  */
 function StatusText({ status }: { status: AutomationStatus }) {
@@ -168,8 +168,8 @@ export function AutomationSettings() {
           />
           <Note>
             {t(
-              "Açık ve hedef hesapları seç. Hedefte en az %10 limit kalmalı.",
-              "Select the current and target accounts. The target needs at least 10% quota left.",
+              "Açık ve hedef hesapları seç. Hedefte limitin en fazla %90’ı kullanılmış olmalı.",
+              "Select the current and target accounts. The target must have used no more than 90% of its quota.",
             )}
           </Note>
           {settings.usageRefreshMinutes === 0 && (

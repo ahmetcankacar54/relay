@@ -56,7 +56,7 @@ test("tray account action requests a review and never bypasses restart consent",
   assert.equal(current.command, undefined);
   const target = menu.find((item) => item.type === "checkbox" && !item.checked);
   assert.ok(target && target.type === "checkbox");
-  assert.equal(target.label, "Max · 5h 77% left · wk 8% left");
+  assert.equal(target.label, "Max · 5h 22% · wk 92% used");
   assert.deepEqual(target.command, {
     type: "review-switch",
     profileId: "target",
@@ -149,7 +149,7 @@ test("stale, reset, unknown and foreign quota stays unknown in the tray", () => 
       "en",
       now,
     ),
-    "5h 77% left · wk ?",
+    "5h 22% · wk ? used",
   );
   assert.equal(
     trayUsageLabel(
@@ -158,7 +158,26 @@ test("stale, reset, unknown and foreign quota stays unknown in the tray", () => 
       "en",
       now,
     ),
-    "5h ? · wk 8% left",
+    "5h ? · wk 92% used",
+  );
+  // With no reading for either window there is nothing the word could describe.
+  assert.equal(
+    trayUsageLabel(
+      "target",
+      { ...usage("target"), fiveHour: undefined, sevenDay: undefined },
+      "en",
+      now,
+    ),
+    "5h ? · wk ?",
+  );
+  assert.equal(
+    trayUsageLabel(
+      "target",
+      { ...usage("target"), fiveHour: { usedPercent: 130 }, sevenDay: { usedPercent: -1 } },
+      "tr",
+      now,
+    ),
+    "5 sa ? · hafta ?",
   );
 });
 
@@ -169,7 +188,7 @@ test("Turkish labels, escaped names and empty snapshots remain usable", () => {
   assert.equal(trayTooltip(s), "Relay — A&B row");
   assert.equal(
     trayUsageLabel("target", usage("target"), "tr", now),
-    "5 sa %77 kaldı · hafta %8 kaldı",
+    "5 sa %22 · hafta %92 kullanıldı",
   );
   const empty = buildTrayMenu({ accounts: [], usage: {}, desktop }, "tr", now);
   assert.ok(
@@ -182,23 +201,32 @@ test("Turkish labels, escaped names and empty snapshots remain usable", () => {
   );
 });
 
-test("every menu percentage is what is left, with its word, in both languages", () => {
+test("every menu row gives the percent used of both windows with its word once, in both languages", () => {
   const rows = (language: "tr" | "en") =>
     buildTrayMenu(snapshot(), language, now).flatMap((item) =>
       item.type === "checkbox" && item.label.startsWith("Max") ? [item.label] : [],
     );
-  assert.deepEqual(rows("tr"), ["Max · 5 sa %77 kaldı · hafta %8 kaldı"]);
-  assert.deepEqual(rows("en"), ["Max · 5h 77% left · wk 8% left"]);
-  // A number without a word is never left in a row: every digit run is followed by one.
-  for (const label of [...rows("tr"), ...rows("en")])
-    assert.doesNotMatch(label.replace(/(%\d+|\d+%) (kaldı|left)/g, ""), /\d+%|%\d+/);
+  assert.deepEqual(rows("tr"), ["Max · 5 sa %22 · hafta %92 kullanıldı"]);
+  assert.deepEqual(rows("en"), ["Max · 5h 22% · wk 92% used"]);
+  // The word closes the row once, never after each figure.
+  for (const label of [...rows("tr"), ...rows("en")]) {
+    assert.equal(label.match(/kullanıldı|used/g)?.length, 1, label);
+    assert.match(label, /(kullanıldı|used)$/, label);
+  }
+  // The header over the rows says the same direction.
+  const header = (language: "tr" | "en") =>
+    buildTrayMenu(snapshot(), language, now).flatMap((item) =>
+      item.type === "normal" && /limit|quota/i.test(item.label) ? [item.label] : [],
+    );
+  assert.deepEqual(header("tr"), ["Kullanılan limit · geçmek için hesap seç"]);
+  assert.deepEqual(header("en"), ["Quota used · select an account to switch"]);
 });
 
-test("the tooltip names the account and carries the remaining five-hour percent with its word", () => {
+test("the tooltip names the account and carries the five-hour percent used with its word", () => {
   const s = snapshot();
   s.desktop!.activeProfileId = "target";
-  assert.equal(trayTooltip(s, "en", now), "Relay — Max · 77% left");
-  assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %77 kaldı");
+  assert.equal(trayTooltip(s, "en", now), "Relay — Max · 22% used");
+  assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %22 kullanıldı");
   // No fresh reading: the name alone, as before.
   s.usage = {};
   assert.equal(trayTooltip(s, "en", now), "Relay — Max");

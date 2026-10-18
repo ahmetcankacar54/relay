@@ -71,6 +71,16 @@ export function formatDay(date: string, language: Language) {
   }).format(new Date(`${date}T12:00:00Z`));
 }
 
+/** "14 Ekim Salı" / "Tuesday 14 October" for a YYYY-MM-DD calendar date. */
+export function formatDayLong(date: string, language: Language) {
+  return dateFormat(language, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T12:00:00Z`));
+}
+
 /** Weekday 0 = Monday: "Salı" / "Tuesday", or "Sal" / "Tue" when short. */
 export function weekdayName(
   weekday: number,

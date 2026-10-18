@@ -1,7 +1,7 @@
 /**
- * Every percentage Relay shows for a usage limit means what is LEFT of it, and carries a word:
- * `%6 kaldı` in Turkish, `6% left` in English. Storage, colours and alert thresholds keep working
- * with the percent USED; only the text turns it around, here.
+ * Every limit percentage Relay shows is the percent USED, as on Claude's own usage page, so the number
+ * and the bar say the same thing: `%94 kullanıldı` in Turkish, `94% used` in English. Storage, colours
+ * and alert thresholds work with the same percent used; only the text is formatted here.
  */
 
 /** A rounded percentage: `%45` in Turkish, `45%` in English; `—` when unknown. */
@@ -12,23 +12,23 @@ export function formatPercent(value: number | undefined, language: string) {
 }
 
 /**
- * What is left of a window from the percent used, rounded down so it is never more than the window
- * has (93.5 used leaves 6.5, shown as 6), kept between 0 and 100; undefined when unknown.
+ * The percent used of a window for display: rounded down so only a full window reads 100 (99.9 shows
+ * 99), kept between 0 and 100; undefined when unknown.
  */
-export function percentLeft(usedPercent: number | undefined) {
+export function percentUsed(usedPercent: number | undefined) {
   if (usedPercent === undefined || !Number.isFinite(usedPercent))
     return undefined;
-  return Math.floor(Math.max(0, Math.min(100, 100 - usedPercent)));
+  return Math.floor(Math.max(0, Math.min(100, usedPercent)));
 }
 
-/** The word that follows a remaining percentage. */
-export const leftWord = (language: string) =>
-  language === "tr" ? "kaldı" : "left";
+/** The word that follows a percentage used. */
+export const usedWord = (language: string) =>
+  language === "tr" ? "kullanıldı" : "used";
 
-/** `%6 kaldı` / `6% left` from the percent used; `—` when unknown. */
-export function formatLeft(usedPercent: number | undefined, language: string) {
-  const left = percentLeft(usedPercent);
-  return left === undefined
+/** `%94 kullanıldı` / `94% used` from the percent used; `—` when unknown. */
+export function formatUsed(usedPercent: number | undefined, language: string) {
+  const used = percentUsed(usedPercent);
+  return used === undefined
     ? "—"
-    : `${formatPercent(left, language)} ${leftWord(language)}`;
+    : `${formatPercent(used, language)} ${usedWord(language)}`;
 }

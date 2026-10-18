@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement, type ReactElement } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Usage, UsageStatisticsSection } from "../src/pages/Usage";
 import { SummaryTiles } from "../src/pages/usage/SummaryTiles";
@@ -20,6 +20,7 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 import type { UsageStatisticsView } from "../shared/usage-statistics-view";
+import { dayTip, fakeDom, find, readableText, type Fake } from "./fake-dom";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const ZONE = "Europe/Istanbul";
@@ -108,14 +109,13 @@ const i18n = (language: Language) => ({
   setLanguage() {},
   t: (tr: string, en: string) => (language === "tr" ? tr : en),
 });
-const render = (child: ReactElement, language: Language = "tr") =>
-  renderToStaticMarkup(
-    createElement(
-      I18nContext.Provider,
-      { value: i18n(language) },
-      createElement(RelayContext.Provider, { value: relayFor() }, child),
-    ),
+const tree = (child: ReactElement, language: Language = "tr") =>
+  createElement(
+    I18nContext.Provider,
+    { value: i18n(language) },
+    createElement(RelayContext.Provider, { value: relayFor() }, child),
   );
+const render = (child: ReactElement, language: Language = "tr") => renderToStaticMarkup(tree(child, language));
 const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "’");
 
 test("summary tiles format totals, change, windows, hits and the busiest time", () => {
@@ -186,6 +186,30 @@ test("account balance lists names, plan badges, share, fill, idle days and the i
   assert.match(en, /Vertex \(Team\) fills only 9% of its windows\./);
 });
 
+test("pointing at a day of the daily chart details each account and a limit hit", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(tree(createElement(DailyChart, { view, accounts, zone: ZONE }))));
+    const container = dom.container as unknown as Fake;
+    const svg = find(container, (n) => n.tagName === "svg") as Fake & { box: { left: number; top: number; width: number; height: number } };
+    svg.box = { left: 0, top: 0, width: 440, height: 146 };
+    // The right edge is the newest day, the 14th, which hit a limit.
+    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 439, clientY: 60 }));
+    assert.equal(dayTip(container), "14 Ekim ÇarşambaPro birimi120Kişisel · Max80Vertex40▲ Limite takıldı");
+    await act(async () => dom.dispatch(svg, "keydown", { key: "Home" }));
+    assert.equal(dayTip(container), "15 Eylül SalıPro birimi0Bu gün kullanım yok.");
+    await act(async () => dom.dispatch(svg, "pointerout", { relatedTarget: null }));
+    assert.equal(dayTip(container), undefined);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
 test("the daily chart draws one labelled bar group per day and marks hit days", () => {
   const html = render(createElement(DailyChart, { view, accounts, zone: ZONE }));
   const groups = html.match(/<g[^>]*aria-label="[^"]+: [\d.,]+ Pro birimi[^"]*"/g) ?? [];
@@ -200,7 +224,8 @@ test("the daily chart draws one labelled bar group per day and marks hit days", 
   assert.match(html, /fill="var\(--tone-2\)"/);
   assert.match(html, /fill="var\(--tone-4\)"/);
   assert.doesNotMatch(html, /fill="var\(--tone-3\)"/);
-  assert.match(html, /<title>14 Eki · Kişisel · Max 80 · Vertex 40<\/title>/);
+  // The detail is the chart's own box on hover, not the browser's slow tooltip.
+  assert.doesNotMatch(html, /<title>/);
   const plain = text(html);
   assert.match(plain, /30 günde toplam 1\.840 Pro birimi; en yoğun gün 9 Eki \(240\)\./);
   assert.match(plain, /▲ limite takılan günleri gösterir\./);
@@ -308,17 +333,18 @@ test("Usage composes the header, loading statistics and the warning preferences 
   assert.match(html, /İstatistikler yükleniyor/);
   assert.match(html, /Limit uyarıları/);
   assert.match(html, /Uyarı eşiği/);
-  assert.match(html, /%20 kalınca/);
+  assert.match(html, /%80 kullanılınca/);
   assert.match(html, /Veri kaynağı ve sınırlar/);
   assert.ok(html.indexOf("İstatistikler yükleniyor") < html.indexOf("Uyarılar"));
 });
 
-test("the warning threshold is phrased as what is left, for the stored used values 80, 90 and 95", () => {
+test("the warning threshold is phrased as what is used, for the stored values 80, 90 and 95", () => {
   const tr = text(render(createElement(Usage)));
-  for (const left of [20, 10, 5]) assert.match(tr, new RegExp(`%${left} kalınca`));
+  for (const used of [80, 90, 95]) assert.match(tr, new RegExp(`%${used} kullanılınca`));
+  assert.doesNotMatch(tr, /kalınca|Kalan yüzde/);
   const en = text(render(createElement(Usage), "en"));
-  for (const left of [20, 10, 5]) assert.match(en, new RegExp(`At ${left}% left`));
-  assert.doesNotMatch(en, /% remaining/);
+  for (const used of [80, 90, 95]) assert.match(en, new RegExp(`At ${used}% used`));
+  assert.doesNotMatch(en, /% remaining|% left|Remaining percentage/);
 });
 
 test("Usage calls the warning threshold's scope a limit, not a window, in English", () => {
