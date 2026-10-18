@@ -4,7 +4,7 @@ Relay is a small macOS menu-bar app for people with several Claude accounts
 (personal Pro/Max and company Team/Enterprise). Your work stays in the official
 **Claude Desktop** app and its **Code** tab; Relay only switches which account
 Claude is signed in to, keeps your Code conversations available on every account
-you choose, and shows how much quota each account has left. Turkish and English.
+you choose, and shows how much of each account's quota is used. Turkish and English.
 Independent tool, not an Anthropic product.
 
 ## Screens
@@ -32,7 +32,7 @@ shortcuts are ⌘1–⌘5 and ⌘, for Settings.
   conversation is there after switching. The same conversation is never shown
   twice, and its permission mode (Manual/Auto/Plan/Accept edits) travels with it;
   Bypass never does. Chat, cloud and SSH sessions are not synchronized.
-- **Usage limits** — remaining five-hour and weekly quota with reset times for
+- **Usage limits** — five-hour and weekly quota used, with reset times for
   every account, refreshed in the background. Team/Enterprise seats that report no
   weekly window show "no limit reported" and are judged by their five-hour window.
 - **Statistics and planning** — 7/30-day observed usage; weekday and weekend work
