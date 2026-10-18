@@ -7,13 +7,9 @@ import { Store } from "./store";
 import { AuthManager } from "./auth";
 import { Runner } from "./runner";
 import type { ProfileLockKind } from "./profile-lock";
-import { authStatus, readProfileIdentity } from "./profile-identity";
-import {
-  command,
-  profileEnvironment,
-  resolveExecutable,
-  supportsDesktop,
-} from "./environment";
+import { readProfileAuth, signedOut } from "./profile-auth";
+import { diagnoseCli } from "./cli-diagnostics";
+import { command, profileEnvironment } from "./environment";
 import { readsUsage } from "../../shared/cli-version";
 import {
   scanSessions,
@@ -123,39 +119,10 @@ export class Service {
   }
   async diagnose(): Promise<Diagnostics> {
     this.diagnosedAt = this.now();
-    const executable = resolveExecutable(this.store.state.executable);
-    const base = {
-      executable,
-      platform: process.platform,
-      dataDir: this.store.root,
-      desktopSupported: false,
-    };
-    if (!executable)
-      return (this.diagnostics = {
-        ...base,
-        error:
-          "Claude Code bulunamadı. Resmi CLI’yi kur veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
-      });
-    try {
-      const { stdout } = await command(
-        executable,
-        ["--version"],
-        profileEnvironment(path.join(this.store.root, "diagnostic")),
-        this.store.root,
-      );
-      const version = stdout.trim().slice(0, 150);
-      return (this.diagnostics = {
-        ...base,
-        version,
-        desktopSupported: supportsDesktop(version),
-      });
-    } catch {
-      return (this.diagnostics = {
-        ...base,
-        error:
-          "Claude Code sürümü okunamadı. Çalıştırılabilir dosyayı kontrol et.",
-      });
-    }
+    return (this.diagnostics = await diagnoseCli(
+      this.store.state.executable,
+      this.store.root,
+    ));
   }
   async panelSnapshot(): Promise<Snapshot> {
     return {
@@ -223,34 +190,13 @@ export class Service {
     const account = this.store.account(id);
     let auth: NonNullable<Account["auth"]>;
     try {
-      const executable = await this.executable();
-      let stdout: string;
-      try {
-        stdout = (
-          await command(
-            executable,
-            ["auth", "status", "--json"],
-            profileEnvironment(this.store.profile(id)),
-            this.store.profile(id),
-          )
-        ).stdout;
-      } catch (e: any) {
-        if (typeof e.stdout !== "string" || !e.stdout.trim()) throw e;
-        stdout = e.stdout;
-      }
-      auth = authStatus(
-        JSON.parse(stdout),
+      auth = await readProfileAuth(
+        await this.executable(),
+        this.store.profile(id),
         account.auth,
-        await readProfileIdentity(this.store.profile(id)),
-        new Date().toISOString(),
       );
     } catch {
-      auth = {
-        ...account.auth,
-        loggedIn: false,
-        checkedAt: new Date().toISOString(),
-        error: "Giriş durumu doğrulanamadı. Hesabı yeniden bağla.",
-      };
+      auth = signedOut(account.auth);
     }
     this.store.update((s) => {
       s.accounts.find((a) => a.id === id)!.auth = auth;
