@@ -9,6 +9,9 @@ const APP_WINDOW_PHRASES = [
   "Relay penceresini",
   "panda penceresini",
   "Pencere kapanınca Relay",
+  // The macOS Window menu and its Close Window item, in electron/app-menu.ts.
+  't("Pencere", "Window")',
+  't("Pencereyi kapat", "Close Window")',
 ];
 
 const ROOTS = ["src", "shared", "electron"];
