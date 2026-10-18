@@ -1,5 +1,8 @@
 import type { Command } from "../command";
 import { add } from "./add";
+import { history } from "./history";
+import { remove } from "./remove";
+import { rename } from "./rename";
 import { list } from "./list";
 import { recover } from "./recover";
 import { status } from "./status";
@@ -13,4 +16,7 @@ export const COMMANDS: Record<string, Command> = {
   switch: switchCommand,
   recover,
   add,
+  remove,
+  rename,
+  history,
 };
