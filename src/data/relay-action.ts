@@ -53,11 +53,26 @@ export function hiddenRefresh(
       if (visibility() === "hidden") dirty = true;
       else refresh();
     },
-    /** The visibilitychange event. */
+    /** The visibilitychange event, or a reported show. */
     shown() {
       if (visibility() === "hidden" || !dirty) return;
       dirty = false;
       refresh();
+    },
+  };
+}
+
+/**
+ * The menu bar panel's visibility as main reports it. The panel window is created hidden, and
+ * its document reads "visible" until it is first shown, so it counts as hidden until main
+ * reports it shown, then follows each report.
+ */
+export function reportedVisibility() {
+  let shown = false;
+  return {
+    visibility: (): DocumentVisibilityState => (shown ? "visible" : "hidden"),
+    report(next: boolean) {
+      shown = next;
     },
   };
 }

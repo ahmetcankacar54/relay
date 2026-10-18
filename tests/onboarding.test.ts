@@ -253,3 +253,52 @@ test("a missing CLI error says where to choose the file, in both languages", asy
     "Claude Code was not found. Install the official CLI or pick it in Settings → Claude Code CLI → Choose file.",
   );
 });
+
+const writeVersionCli = (file: string, version: string) =>
+  fs.writeFile(file, `#!${process.execPath}\nconsole.log(${JSON.stringify(version)});\n`, { mode: 0o700 });
+
+test("a CLI installed after Relay started is noticed by a later snapshot, at most once per throttle", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-cli-late-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const service = new Service(path.join(root, "Relay"), () => {}, path.join(root, "unused"));
+  let now = 1_000_000;
+  service.now = () => now;
+  const cli = path.join(root, "claude");
+  service.store.update((s) => {
+    s.executable = cli;
+  });
+  const first = await service.panelSnapshot();
+  assert.equal(first.diagnostics.executable, undefined);
+  assert.ok(first.diagnostics.error);
+  await writeVersionCli(cli, "2.1.296 (Claude Code)");
+  // Within the throttle the cached result stands.
+  now += 5_000;
+  assert.ok((await service.panelSnapshot()).diagnostics.error);
+  now += Service.REDIAGNOSE_MS;
+  const found = (await service.panelSnapshot()).diagnostics;
+  assert.equal(found.executable, cli);
+  assert.equal(found.error, undefined);
+  assert.equal(found.version, "2.1.296 (Claude Code)");
+  assert.equal((await service.snapshot()).diagnostics.version, "2.1.296 (Claude Code)");
+  // A usable result is kept for the whole process.
+  await writeVersionCli(cli, "2.1.300 (Claude Code)");
+  now += Service.REDIAGNOSE_MS * 2;
+  assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.296 (Claude Code)");
+});
+
+test("a CLI too old to read limits is looked at again, so an update is noticed", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-cli-old-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const service = new Service(path.join(root, "Relay"), () => {}, path.join(root, "unused"));
+  let now = 1_000_000;
+  service.now = () => now;
+  const cli = path.join(root, "claude");
+  await writeVersionCli(cli, "2.1.290 (Claude Code)");
+  service.store.update((s) => {
+    s.executable = cli;
+  });
+  assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.290 (Claude Code)");
+  await writeVersionCli(cli, "2.1.296 (Claude Code)");
+  now += Service.REDIAGNOSE_MS;
+  assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.296 (Claude Code)");
+});

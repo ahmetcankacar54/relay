@@ -456,6 +456,11 @@ export const previewApi: RelayAPI = {
   onNavigate: () => () => {},
   setPanelHeight: () => {},
   closePanel: () => {},
+  // The browser preview shows the panel page as an open tab.
+  onPanelVisibility: (callback) => {
+    callback(true);
+    return () => {};
+  },
   quit: async () => {},
   updatePlanning: async (patch) => {
     state.settings.planning = { ...state.settings.planning, ...patch };

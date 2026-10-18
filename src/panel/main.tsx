@@ -13,7 +13,7 @@ document.body.style.background = "transparent";
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <I18nProvider api={api}>
-      <RelayProvider pollWhenHidden={false}>
+      <RelayProvider pollWhenHidden={false} reportsVisibility>
         <RelayPrankStage>
           <Panel />
         </RelayPrankStage>

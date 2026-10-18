@@ -194,6 +194,8 @@ export interface RelayAPI {
   setPanelHeight(height: number): void;
   /** Menu bar panel only: hides it. */
   closePanel(): void;
+  /** Menu bar panel only: main reports each time the panel is shown or hidden. */
+  onPanelVisibility(callback: (shown: boolean) => void): () => void;
   quit(): Promise<void>;
   updateSettings(input: Partial<RelaySettings>): Promise<RelaySettings>;
   updatePlanning(patch: Partial<PlanningSettings>): Promise<PlanningSettings>;

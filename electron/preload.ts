@@ -29,6 +29,11 @@ const api: RelayAPI = {
   },
   setPanelHeight: (height) => ipcRenderer.send("relay:panel-size", height),
   closePanel: () => ipcRenderer.send("relay:panel-close"),
+  onPanelVisibility: (callback) => {
+    const listener = (_: unknown, shown: unknown) => callback(shown === true);
+    ipcRenderer.on("relay:panel-visibility", listener);
+    return () => ipcRenderer.removeListener("relay:panel-visibility", listener);
+  },
   quit: () => ipcRenderer.invoke("relay:quit"),
   onChanged: (callback) => {
     const listener = () => callback();

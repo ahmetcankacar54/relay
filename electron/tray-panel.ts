@@ -99,6 +99,7 @@ export class TrayPanel {
     // forward).
     win.showInactive();
     win.focus();
+    this.reportVisibility(win, true);
     this.onVisibilityChange?.();
   }
 
@@ -109,6 +110,7 @@ export class TrayPanel {
     // window. Focus returns to the previous app because Relay never activated.
     win.hide();
     this.guard.hidden(this.now());
+    this.reportVisibility(win, false);
     this.onVisibilityChange?.();
   }
 
@@ -146,6 +148,15 @@ export class TrayPanel {
     this.hide();
     if (this.load.phase === "reloading" && before.phase !== "reloading")
       this.live()?.webContents.reload();
+  }
+
+  /**
+   * Created hidden, the panel's document reads "visible" until it is first shown, so the
+   * renderer polls by these reports instead.
+   */
+  private reportVisibility(win: BrowserWindow, shown: boolean) {
+    if (!win.webContents.isDestroyed())
+      win.webContents.send("relay:panel-visibility", shown);
   }
 
   private place(win: BrowserWindow) {

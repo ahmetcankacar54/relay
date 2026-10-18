@@ -13,6 +13,7 @@ import {
   resolveExecutable,
   supportsDesktop,
 } from "./environment";
+import { readsUsage } from "../../shared/cli-version";
 import {
   scanSessions,
   copyTranscript,
@@ -56,12 +57,21 @@ function hasVerifiedStoredIdentity(account: Account): boolean {
   );
 }
 
+/** A diagnosis that found a CLI recent enough to read limits; Relay keeps it for the process. */
+const usableDiagnostics = (d: Diagnostics) =>
+  !!d.executable && !d.error && !!d.version && readsUsage(d.version);
+
 export class Service {
   readonly store: Store;
   readonly runner: Runner;
   readonly auth: AuthManager;
   private index = new Map<string, IndexedSession>();
   private diagnostics?: Diagnostics;
+  private diagnosedAt = 0;
+  /** How long an unusable diagnosis stands before a snapshot runs it again. */
+  static readonly REDIAGNOSE_MS = 20_000;
+  /** The clock of that throttle; tests replace it. */
+  now: () => number = Date.now;
   private pending: Promise<unknown> = Promise.resolve();
   constructor(
     root: string,
@@ -88,7 +98,23 @@ export class Service {
     this.pending = result.catch(() => {});
     return result;
   }
+  /**
+   * The cached diagnosis. While it is unusable (no CLI, an error, or a CLI too old to read
+   * limits) it runs again, at most once per REDIAGNOSE_MS, so a CLI installed or updated after
+   * Relay started is noticed without a restart.
+   */
+  private async currentDiagnostics(): Promise<Diagnostics> {
+    const cached = this.diagnostics;
+    if (
+      cached &&
+      (usableDiagnostics(cached) ||
+        this.now() - this.diagnosedAt < Service.REDIAGNOSE_MS)
+    )
+      return cached;
+    return this.diagnose();
+  }
   async diagnose(): Promise<Diagnostics> {
+    this.diagnosedAt = this.now();
     const executable = resolveExecutable(this.store.state.executable);
     const base = {
       executable,
@@ -131,13 +157,13 @@ export class Service {
       authFlows: this.auth.list(),
       runs: this.runner.list(),
       sessions: [],
-      diagnostics: this.diagnostics ?? (await this.diagnose()),
+      diagnostics: await this.currentDiagnostics(),
       importEnabled: this.store.state.importEnabled,
       warnings: [],
     };
   }
   async snapshot(): Promise<Snapshot> {
-    const diagnostics = this.diagnostics ?? (await this.diagnose());
+    const diagnostics = await this.currentDiagnostics();
     const accounts = structuredClone(this.store.state.accounts);
     const sources = accounts.map((a) => ({
       root: this.store.profile(a.id),
@@ -287,7 +313,7 @@ export class Service {
       throw new Error("Desktop’ta doğru hesabın açık olduğunu doğrula.");
     if (
       input.desktop &&
-      !(this.diagnostics ?? (await this.diagnose())).desktopSupported
+      !(await this.currentDiagnostics()).desktopSupported
     )
       throw new Error(
         "Desktop aktarımı bu platform veya CLI sürümünde desteklenmiyor.",
@@ -391,7 +417,7 @@ export class Service {
     return s;
   }
   private async executable() {
-    const result = this.diagnostics ?? (await this.diagnose());
+    const result = await this.currentDiagnostics();
     if (!result.executable || result.error)
       throw new Error(result.error || "Claude Code bulunamadı.");
     return result.executable;

@@ -25,6 +25,7 @@ import {
   errorAfterRefresh,
   hiddenRefresh,
   relayAction,
+  reportedVisibility,
   shouldPoll,
 } from "./relay-action";
 import { RelayContext, useRelay, type Relay } from "./relay-context";
@@ -80,8 +81,11 @@ export const api: RelayAPI =
 export const preview = !injected;
 export const APP_VERSION: string = packageInfo.version;
 
-function useRelayState(options: { pollWhenHidden?: boolean } = {}): Relay {
+function useRelayState(
+  options: { pollWhenHidden?: boolean; reportsVisibility?: boolean } = {},
+): Relay {
   const pollWhenHidden = options.pollWhenHidden !== false;
+  const reportsVisibility = options.reportsVisibility === true;
   const { t } = useI18n();
   const [data, setData] = useState<Snapshot>();
   const [desktop, setDesktop] = useState<DesktopState>();
@@ -125,15 +129,27 @@ function useRelayState(options: { pollWhenHidden?: boolean } = {}): Relay {
   }, []);
   useEffect(() => {
     void refresh().catch(showRefreshError);
+    // The menu bar panel follows main's shown/hidden reports: its document reads "visible"
+    // while it is still hidden after launch.
+    const reported = reportsVisibility ? reportedVisibility() : undefined;
+    const visibility = reported
+      ? reported.visibility
+      : () => document.visibilityState;
     // While hidden, a broadcast or a skipped poll only marks one refresh for the next show.
     const gate = hiddenRefresh(
-      () => document.visibilityState,
+      visibility,
       () => void refresh().catch(showRefreshError),
     );
+    const offVisibility = reported
+      ? api.onPanelVisibility((shown) => {
+          reported.report(shown);
+          gate.shown();
+        })
+      : () => {};
     const off = api.onAuth(() => gate.changed());
     const offChanged = api.onChanged(() => gate.changed());
     const timer = setInterval(() => {
-      if (shouldPoll({ pollWhenHidden }, document.visibilityState))
+      if (shouldPoll({ pollWhenHidden }, visibility()))
         void refresh().catch(showRefreshError);
       else gate.changed();
     }, 4000);
@@ -143,13 +159,14 @@ function useRelayState(options: { pollWhenHidden?: boolean } = {}): Relay {
     window.addEventListener("focus", focus);
     document.addEventListener("visibilitychange", gate.shown);
     return () => {
+      offVisibility();
       off();
       offChanged();
       clearInterval(timer);
       window.removeEventListener("focus", focus);
       document.removeEventListener("visibilitychange", gate.shown);
     };
-  }, [refresh, showRefreshError, pollWhenHidden]);
+  }, [refresh, showRefreshError, pollWhenHidden, reportsVisibility]);
   const action = relayAction(lock, {
     setBusy,
     setError,
@@ -349,11 +366,14 @@ function useRelayState(options: { pollWhenHidden?: boolean } = {}): Relay {
 export function RelayProvider({
   children,
   pollWhenHidden = true,
+  reportsVisibility = false,
 }: {
   children: ReactNode;
-  /** The menu bar panel passes false: no 4 s poll while it is hidden. */
+  /** Both windows pass false: no 4 s poll while hidden. */
   pollWhenHidden?: boolean;
+  /** The menu bar panel passes true: it is hidden until main reports it shown. */
+  reportsVisibility?: boolean;
 }) {
-  const relay = useRelayState({ pollWhenHidden });
+  const relay = useRelayState({ pollWhenHidden, reportsVisibility });
   return createElement(RelayContext.Provider, { value: relay }, children);
 }

@@ -1203,8 +1203,15 @@ function bindIPC() {
     return result.canceled ? null : result.filePaths[0];
   });
   handle("pick-executable", async () => {
+    // The official installer puts `claude` in the hidden ~/.local/bin.
+    const installed = path.join(os.homedir(), ".local", "bin");
+    const opensThere = await fsp
+      .stat(installed)
+      .then((s) => s.isDirectory())
+      .catch(() => false);
     const result = await dialog.showOpenDialog(window!, {
-      properties: ["openFile"],
+      properties: ["openFile", "showHiddenFiles"],
+      ...(opensThere ? { defaultPath: installed } : {}),
       title: say(
         "Claude Code CLI dosyasını seç",
         "Choose the Claude Code CLI file",
