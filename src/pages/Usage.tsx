@@ -18,6 +18,7 @@ import { DailyChart } from "./usage/DailyChart";
 import { LimitHits } from "./usage/LimitHits";
 import { StatisticsHeader } from "./usage/StatisticsHeader";
 import { SummaryTiles } from "./usage/SummaryTiles";
+import { TokenUsage } from "./usage/TokenUsage";
 import { UsageHeatmap } from "./usage/UsageHeatmap";
 import {
   useUsageStatistics,
@@ -195,6 +196,7 @@ export function Usage() {
           accountId={accountId}
           zone={settings.planning.timeZone}
         />
+        <TokenUsage range={range} accountId={accountId} />
         <Card className={cardClass}>
           <SectionHeading title={t("Uyarılar", "Warnings")} />
           <SettingRow

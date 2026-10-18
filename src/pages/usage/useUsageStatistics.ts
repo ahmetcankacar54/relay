@@ -10,22 +10,23 @@ import { useRelay } from "@/data/relay-context";
 /** A Relay change refetches the statistics at most this often. */
 export const STATISTICS_THROTTLE_MS = 30_000;
 
-export interface UsageStatisticsState {
-  view?: UsageStatisticsView;
+/** The state of a fetched view; the token card shares it with its own view type. */
+export interface UsageStatisticsState<V = UsageStatisticsView> {
+  view?: V;
   loading: boolean;
   error?: string;
 }
 
 /** A request started: the last view and error stay until it settles. */
-export const statisticsLoading = (
-  state: UsageStatisticsState,
-): UsageStatisticsState => ({ ...state, loading: true });
+export const statisticsLoading = <V>(
+  state: UsageStatisticsState<V>,
+): UsageStatisticsState<V> => ({ ...state, loading: true });
 
 /** A request failed: the last view stays shown beside the error. */
-export const statisticsFailed = (
-  state: UsageStatisticsState,
+export const statisticsFailed = <V>(
+  state: UsageStatisticsState<V>,
   error: unknown,
-): UsageStatisticsState => ({
+): UsageStatisticsState<V> => ({
   ...(state.view ? { view: state.view } : {}),
   loading: false,
   error: errorMessage(error),

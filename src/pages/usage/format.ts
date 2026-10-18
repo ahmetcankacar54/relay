@@ -44,6 +44,20 @@ export function formatNumber(value: number, language: Language) {
   return numberFormat(language, Math.abs(value) < 10 ? 1 : 0).format(value);
 }
 
+const tokenFormats = new Map<Language, Intl.NumberFormat>();
+/** A token count in compact units: "1,2 Mn" / "1.2m", "326 B" / "326k". */
+export function formatTokens(value: number, language: Language) {
+  let f = tokenFormats.get(language);
+  if (!f) {
+    f = new Intl.NumberFormat(locale(language), {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    });
+    tokenFormats.set(language, f);
+  }
+  return f.format(value);
+}
+
 /** "1.840 Pro birimi" / "1,840 Pro units". */
 export const formatUnits = (value: number, language: Language, t: T) =>
   `${formatNumber(value, language)} ${t("Pro birimi", "Pro units")}`;
