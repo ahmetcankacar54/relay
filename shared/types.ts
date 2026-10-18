@@ -182,7 +182,7 @@ export interface RelayAPI {
     input: AccountPlanning,
   ): Promise<Account>;
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
-  /** Shows draft-events.json (or the user data folder) in Finder. Takes no path. */
+  /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;
   /** Main broadcast `relay:changed`: Relay state changed in another window or the tray. */
   onChanged(callback: () => void): () => void;

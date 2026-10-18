@@ -456,8 +456,11 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   private cpu?: { at: number; times: Map<number, number> };
   private family = new Set<number>();
   private readonly scanner = new TranscriptScanner();
-  /** Each conversation's project folder, from a probe of every folder that found it in one. */
-  private readonly projectFolders = new Map<string, string>();
+  /** Each conversation's project folder, and when a probe of every folder found it in that one alone. */
+  private readonly projectFolders = new Map<
+    string,
+    { folder: string; at: number }
+  >();
   /** When each conversation no single folder held was last probed. */
   private readonly unplaced = new Map<string, number>();
   /** Count other recently written transcripts whose turn is unfinished. */
@@ -509,6 +512,8 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   }
   /** Processes whose CPU time advanced since the previous sample (undefined on the first). */
   private async activePids() {
+    // Taken before the await: a slow `ps` must not overwrite a newer sample.
+    const at = this.now();
     const output = this.options.cpuTimes
       ? await this.options.cpuTimes()
       : (
@@ -517,10 +522,11 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
             maxBuffer: 2_097_152,
           })
         ).stdout;
-    return this.sampleCpu(output);
+    return this.sampleCpu(output, at);
   }
   /** `activePids` for the synchronous checks right before a quit and each write. */
   private activePidsSync() {
+    const at = this.now();
     const output = this.options.cpuTimes
       ? this.options.cpuTimes()
       : execFileSync("/bin/ps", ["-axo", "pid=,time="], {
@@ -529,14 +535,15 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
           encoding: "utf8",
         });
     // An injected reading that must be awaited cannot be here: not measured.
-    return typeof output === "string" ? this.sampleCpu(output) : undefined;
+    return typeof output === "string" ? this.sampleCpu(output, at) : undefined;
   }
-  private sampleCpu(output: string) {
-    const times = parseCpuTimes(output);
-    const now = this.now();
+  /** `at` is when the reading started; one older than the stored sample is dropped (not measured). */
+  private sampleCpu(output: string, at: number) {
     const previous = this.cpu;
-    this.cpu = { at: now, times };
-    if (!previous || now - previous.at > 120_000) return undefined;
+    if (previous && at < previous.at) return undefined;
+    const times = parseCpuTimes(output);
+    this.cpu = { at, times };
+    if (!previous || at - previous.at > 120_000) return undefined;
     const active = new Set<number>();
     for (const [pid, seconds] of times) {
       const before = previous.times.get(pid);
@@ -615,14 +622,17 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     folders: () => Promise<string[]>,
     scanned: Set<string>,
   ) {
-    // The folder a probe found it in alone is looked at first, and alone.
+    const now = this.now();
+    // The folder a probe found it in alone is looked at first, and alone, until that probe is
+    // FOLDER_PROBE_MS old: then every folder is probed again, so a later duplicate is noticed.
     const known = this.projectFolders.get(cliId);
-    if (known !== undefined) {
-      const found = await this.scannedIn([known], cliId, cwd, scanned);
+    if (known && (now - known.at >= FOLDER_PROBE_MS || now < known.at))
+      this.projectFolders.delete(cliId);
+    else if (known) {
+      const found = await this.scannedIn([known.folder], cliId, cwd, scanned);
       if (found.length === 1) return found[0];
       this.projectFolders.delete(cliId);
     }
-    const now = this.now();
     for (const [id, at] of this.unplaced)
       if (now - at >= FOLDER_PROBE_MS || now < at) this.unplaced.delete(id);
     if (this.unplaced.has(cliId))
@@ -633,7 +643,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       this.unplaced.set(cliId, now);
       throw new DesktopAutomationError("exact-session-not-observed");
     }
-    this.projectFolders.set(cliId, found[0].folder);
+    this.projectFolders.set(cliId, { folder: found[0].folder, at: now });
     return found[0];
   }
   /** The transcripts of `cliId` in `folders`, each scanned and added to `scanned`. */

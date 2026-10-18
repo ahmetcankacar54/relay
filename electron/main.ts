@@ -576,7 +576,9 @@ else {
       tray = new RelayTray({
         getSnapshot: async () => {
           const read = await readDesktopForTray({
-            // Every 5 s: the shared reading, never a decision.
+            // Every 5 s: the shared cached reading. Through observedDesktop it feeds
+            // keeperBlocked() and the keeper's activeId between keeper runs; the keeper's
+            // start and guard read a fresh snapshot before they act.
             read: () => desktop.cachedSnapshot(),
             busy: () => desktop.isBusy || desktopLock.busy,
             operations: () => desktopLock.operations + desktop.operations,
@@ -946,13 +948,20 @@ function bindIPC() {
   handle("dismiss-draft", (draftId) => draft.dismiss(draftId));
   // Takes no argument: the renderer cannot name a path to reveal.
   handle("show-diagnostics", async () => {
+    // Only these fixed files in the user data folder; no path comes from the renderer.
     const folder = app.getPath("userData");
-    const events = path.join(folder, "draft-events.json");
-    const exists = await fsp
-      .stat(events)
-      .then((stat) => stat.isFile())
-      .catch(() => false);
-    shell.showItemInFolder(exists ? events : folder);
+    const isFile = (file: string) =>
+      fsp
+        .stat(file)
+        .then((stat) => stat.isFile())
+        .catch(() => false);
+    for (const name of ["draft-events.json", "usage-issues.json"]) {
+      const file = path.join(folder, name);
+      if (await isFile(file)) return shell.showItemInFolder(file);
+    }
+    // Neither exists yet: open the folder itself rather than highlight it in its parent.
+    const failure = await shell.openPath(folder);
+    if (failure) throw new Error(failure);
   });
   handle("tray-language", (value) => {
     const language = z.enum(["tr", "en"]).parse(value);
