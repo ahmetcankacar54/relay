@@ -19,6 +19,7 @@ import path from "node:path";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import { z } from "zod";
+import { ActiveAccountTimeline } from "./core/active-account-timeline";
 import { DesktopManager } from "./core/desktop";
 import { desktopHost } from "./core/desktop-host";
 import { identity, readObject } from "./core/desktop-files";
@@ -93,6 +94,7 @@ let trayPanel: TrayPanel | undefined;
 let switchWindow: SwitchWindow | undefined;
 let switchStory: SwitchStory | undefined;
 let usageHistory: UsageHistory;
+let activeTimeline: ActiveAccountTimeline;
 let tempo: TempoTracker;
 let trayTimer: ReturnType<typeof setInterval> | undefined;
 let trayLanguage: "tr" | "en" = "tr";
@@ -206,6 +208,11 @@ else {
       );
       // The captures and the vault's reads go to the same log as the restore.
       desktop.onDraftEvent = logDraftEvent;
+      // Which account was open when, from every fresh Desktop reading, set before the first one.
+      activeTimeline = new ActiveAccountTimeline(
+        path.join(app.getPath("userData"), "active-account-timeline.json"),
+      );
+      desktop.onState = (state) => activeTimeline.observe(state);
       await desktop.initialize();
       usageHistory = new UsageHistory(app.getPath("userData"));
       tempo = new TempoTracker({

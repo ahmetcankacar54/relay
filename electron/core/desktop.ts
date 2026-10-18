@@ -170,6 +170,12 @@ export class DesktopManager {
    * states, reasons, counts and times, never a draft's text. May throw; nothing depends on it.
    */
   onDraftEvent?: (event: string, fields?: Record<string, unknown>) => void;
+  /**
+   * Told each Desktop state read fresh from disk and the process list, by `snapshot()` and by
+   * `cachedSnapshot()` when its shared reading had expired; never for a reused reading. May
+   * throw; nothing depends on it.
+   */
+  onState?: (state: DesktopState) => void;
   /** The running operation, and whether it has reported its restart. */
   private operation?: Operation & { restarted: boolean };
   /** The drafts captured at switches, sealed, until they are re-typed or dismissed. */
@@ -229,7 +235,9 @@ export class DesktopManager {
   }
   /** Desktop as it is now, read fresh with a full process check: for every decision. */
   async snapshot(): Promise<DesktopState> {
-    return this.state(await this.track(this.read(() => this.host.running())));
+    return this.observed(
+      this.state(await this.track(this.read(() => this.host.running()))),
+    );
   }
   /**
    * Desktop for observers (the tray, the windows), which never decide a quit, launch or write:
@@ -239,8 +247,9 @@ export class DesktopManager {
   async cachedSnapshot(): Promise<DesktopState> {
     const shared = this.shared;
     const age = shared ? this.now() - shared.at : -1;
+    const reused = !!shared && age >= 0 && age < DESKTOP_CACHE_MS;
     const reading =
-      shared && age >= 0 && age < DESKTOP_CACHE_MS
+      reused && shared
         ? shared.reading
         : this.track(
             this.read(() =>
@@ -249,7 +258,17 @@ export class DesktopManager {
                 : this.host.running(),
             ),
           );
-    return this.state(await reading);
+    const state = this.state(await reading);
+    return reused ? state : this.observed(state);
+  }
+  /** Tells `onState` about a state just read; a hook that throws changes nothing. */
+  private observed(state: DesktopState): DesktopState {
+    try {
+      this.onState?.(state);
+    } catch {
+      // The hook is an aid, never a part of reading Desktop.
+    }
+    return state;
   }
   /** Shares `reading` with observers until it fails or a Desktop operation drops it. */
   private track(reading: Promise<DesktopReading>) {
