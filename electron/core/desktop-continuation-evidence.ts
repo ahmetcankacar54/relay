@@ -317,7 +317,7 @@ export interface DesktopEvidenceOptions {
   processes?: () => Promise<string>;
   processesSync?: () => string;
   /** `ps -axo pid=,time=` output; injectable for tests. */
-  cpuTimes?: () => string;
+  cpuTimes?: () => string | Promise<string>;
   now?: () => number;
 }
 export function transcriptMessageText(row: Row) {
@@ -508,7 +508,19 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     return busy;
   }
   /** Processes whose CPU time advanced since the previous sample (undefined on the first). */
-  private activePids() {
+  private async activePids() {
+    const output = this.options.cpuTimes
+      ? await this.options.cpuTimes()
+      : (
+          await exec("/bin/ps", ["-axo", "pid=,time="], {
+            timeout: 3000,
+            maxBuffer: 2_097_152,
+          })
+        ).stdout;
+    return this.sampleCpu(output);
+  }
+  /** `activePids` for the synchronous checks right before a quit and each write. */
+  private activePidsSync() {
     const output = this.options.cpuTimes
       ? this.options.cpuTimes()
       : execFileSync("/bin/ps", ["-axo", "pid=,time="], {
@@ -516,6 +528,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
           maxBuffer: 2_097_152,
           encoding: "utf8",
         });
+    // An injected reading that must be awaited cannot be here: not measured.
+    return typeof output === "string" ? this.sampleCpu(output) : undefined;
+  }
+  private sampleCpu(output: string) {
     const times = parseCpuTimes(output);
     const now = this.now();
     const previous = this.cpu;
@@ -529,12 +545,23 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     }
     return active;
   }
-  private measure(excluded: string | ReadonlySet<string>): QuiescenceInputs {
+  private async measure(
+    excluded: string | ReadonlySet<string>,
+  ): Promise<QuiescenceInputs> {
+    const busyTranscripts = this.busyTranscripts(
+      typeof excluded === "string" ? new Set([excluded]) : excluded,
+    );
+    return { busyTranscripts, activePids: await this.activePids() };
+  }
+  /** `measure` for the synchronous checks right before a quit and each write. */
+  private measureSync(
+    excluded: string | ReadonlySet<string>,
+  ): QuiescenceInputs {
     return {
       busyTranscripts: this.busyTranscripts(
         typeof excluded === "string" ? new Set([excluded]) : excluded,
       ),
-      activePids: this.activePids(),
+      activePids: this.activePidsSync(),
     };
   }
   /** Remember Claude's process tree so engines orphaned by a quit are noticed. */
@@ -740,19 +767,28 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
    * conversations, or undefined when nothing else is running.
    */
   async quietExcept(stops: QuotaStop[]) {
+    const raw = await (this.options.processes ?? collectProcesses)();
+    const app = this.claudeApp(raw);
+    if (typeof app !== "number") return app;
     return this.quietReason(
-      await (this.options.processes ?? collectProcesses)(),
-      stops,
+      raw,
+      app,
+      await this.measure(new Set(stops.map((stop) => stop.transcriptRelative))),
     );
   }
   /** Synchronous variant for the checks immediately before quit and writes. */
   quietExceptSync(stops: QuotaStop[]) {
+    const raw = (this.options.processesSync ?? collectProcessesSync)();
+    const app = this.claudeApp(raw);
+    if (typeof app !== "number") return app;
     return this.quietReason(
-      (this.options.processesSync ?? collectProcessesSync)(),
-      stops,
+      raw,
+      app,
+      this.measureSync(new Set(stops.map((stop) => stop.transcriptRelative))),
     );
   }
-  private quietReason(raw: string, stops: QuotaStop[]) {
+  /** Claude's main pid in a census, its tree remembered; undefined while Claude is closed. */
+  private claudeApp(raw: string): number | "quiescence-unverified" | undefined {
     let rows: DesktopProcess[];
     try {
       rows = JSON.parse(raw);
@@ -765,13 +801,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     // A closed Claude cannot be interrupted.
     if (!app) return undefined;
     this.remember(raw, app.pid);
-    const q = desktopProcessQuiescence(
-      raw,
-      app.pid,
-      "",
-      true,
-      this.measure(new Set(stops.map((stop) => stop.transcriptRelative))),
-    );
+    return app.pid;
+  }
+  private quietReason(raw: string, appPid: number, inputs: QuiescenceInputs) {
+    const q = desktopProcessQuiescence(raw, appPid, "", true, inputs);
     if (q.coverage !== "guarded-local") return "quiescence-unverified";
     for (const [key, value] of Object.entries(q))
       if (key !== "coverage" && value !== 0) return `not-quiescent:${key}`;
@@ -933,7 +966,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       snapshot.pid,
       metadata.cliSessionId,
       selectedEnded,
-      this.measure(transcript.relative),
+      await this.measure(transcript.relative),
     );
     if (
       metadata.remoteSessionId ||
@@ -1122,7 +1155,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
           currentSnapshot.pid,
           current.session.id,
           true,
-          this.measure(record.transcriptRelative),
+          this.measureSync(record.transcriptRelative),
         );
         const config = JSON.parse(
           fsSync.readFileSync(

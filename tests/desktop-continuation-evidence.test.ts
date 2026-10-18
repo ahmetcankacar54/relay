@@ -845,3 +845,49 @@ test("a conversation no folder holds is probed again only after a minute", async
     await fs.rm(f.root, { recursive: true, force: true });
   }
 });
+
+test("the periodic CPU sample is read asynchronously; only the switch-time guards read synchronously", async () => {
+  const f = await recentFixture();
+  try {
+    const stops = await f.evidence.quotaStops(f.store.account(f.source.id));
+    let release!: (times: string) => void;
+    const evidence = new NativeDesktopContinuationEvidence({
+      store: f.store,
+      desktop: {} as DesktopManager,
+      automation: {} as DesktopAutomation,
+      claudeRoot: path.join(f.root, "desktop"),
+      transcriptRoot: path.join(f.root, "transcripts"),
+      processes: async () => roster(),
+      cpuTimes: () => new Promise<string>((resolve) => (release = resolve)),
+      now: () => f.ui.observedAt,
+    });
+    let settled = false;
+    const quiet = evidence.quietExcept(stops).finally(() => (settled = true));
+    // ps is still running, and the main process goes on meanwhile.
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, false);
+    release("456 0:01.00\n");
+    assert.equal(await quiet, undefined);
+    const source = await fs.readFile(
+      new URL(
+        "../electron/core/desktop-continuation-evidence.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    const body = (start: string) => {
+      const at = source.indexOf(start);
+      assert.ok(at >= 0, start);
+      return source.slice(at, source.indexOf("\n  }\n", at));
+    };
+    for (const periodic of [
+      "private async activePids(",
+      "private async measure(",
+      "async quietExcept(",
+      "async read(",
+    ])
+      assert.doesNotMatch(body(periodic), /Sync\(/, periodic);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
