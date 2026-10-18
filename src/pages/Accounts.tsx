@@ -199,7 +199,7 @@ export function Accounts() {
               onChange={(e) => setQuery(e.target.value)}
               className="pr-12 pl-8"
             />
-            <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[11px] text-muted-foreground">
+            <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-xs text-muted-foreground">
               ⌘K
             </kbd>
           </div>

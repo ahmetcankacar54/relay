@@ -12,7 +12,7 @@ import { formatReset } from "@/lib/time";
 import { planLabel } from "../pages/accounts/accountLabels";
 
 export const panelEyebrow =
-  "mb-1.5 flex items-center justify-between gap-2 text-[10.5px] font-semibold tracking-wider text-muted-foreground uppercase";
+  "mb-1.5 flex items-center justify-between gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase";
 export const panelCard = "rounded-[10px] border bg-card px-3 py-2.5";
 
 /** The pending-Desktop hint links to the accounts page, where it is completed. */
@@ -139,11 +139,11 @@ export function PanelActiveCard({ now }: { now: number }) {
         )}
       </div>
       {relay.desktopBusy ? (
-        <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+        <p className="mt-1.5 text-xs text-muted-foreground">
           {t("Claude uygulaması işlemi sürüyor", "A Claude app operation is in progress")}
         </p>
       ) : desktop?.recoveryRequired ? (
-        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11.5px] text-muted-foreground">
+        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
           {t(
             "Önce yedeği geri yükle",
             "Restore the backup first",
@@ -152,14 +152,14 @@ export function PanelActiveCard({ now }: { now: number }) {
           <Button
             variant="link"
             size="sm"
-            className="h-auto px-0 text-[11.5px]"
+            className="h-auto px-0 text-xs"
             onClick={openRelay}
           >
             {t("Relay’i aç", "Open Relay")}
           </Button>
         </p>
       ) : relay.pendingDesktop ? (
-        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11.5px] text-muted-foreground">
+        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
           {t(
             "Claude uygulaması girişi tamamlanmayı bekliyor",
             "Claude app sign-in is waiting to be completed",
@@ -168,7 +168,7 @@ export function PanelActiveCard({ now }: { now: number }) {
           <Button
             variant="link"
             size="sm"
-            className="h-auto px-0 text-[11.5px]"
+            className="h-auto px-0 text-xs"
             onClick={() => openPendingDesktop(relay)}
           >
             {t("Relay’i aç", "Open Relay")}

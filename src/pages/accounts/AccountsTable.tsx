@@ -265,7 +265,7 @@ export function AccountsTable({
                   </span>
                 )}
               </TableCell>
-              <TableCell>
+              <TableCell className="whitespace-normal">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span
                     title={health.detail}

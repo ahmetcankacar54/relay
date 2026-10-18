@@ -42,6 +42,8 @@ interface Item {
   label: string;
   tail?: number;
   on?: boolean;
+  /** What the green dot means, for screen readers: the dot alone speaks only through colour. */
+  onLabel?: string;
 }
 
 function NavItem({
@@ -61,7 +63,13 @@ function NavItem({
       type="button"
       onClick={() => go(item.id)}
       aria-current={active ? "page" : undefined}
-      aria-label={compact ? item.label : undefined}
+      aria-label={
+        compact
+          ? item.on && item.onLabel
+            ? `${item.label} · ${item.onLabel}`
+            : item.label
+          : undefined
+      }
       className={cn(
         "relative flex w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium whitespace-nowrap text-muted-foreground hover:bg-card/60 [-webkit-app-region:no-drag]",
         compact && "justify-center px-2",
@@ -72,7 +80,7 @@ function NavItem({
       <Icon className="size-4 shrink-0" aria-hidden />
       {!compact && <span className="truncate">{item.label}</span>}
       {!compact && item.tail !== undefined && (
-        <span className="ml-auto text-[11px] tabular-nums text-muted-foreground">
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
           {item.tail}
         </span>
       )}
@@ -85,6 +93,7 @@ function NavItem({
           )}
         >
           <StatusDot tone="ok" />
+          {item.onLabel && <span className="sr-only">{item.onLabel}</span>}
         </span>
       )}
     </button>
@@ -121,12 +130,14 @@ export function Sidebar({
       icon: CalendarClock,
       label: t("Planlama", "Planning"),
       on: status.planning,
+      onLabel: t("Otomatik planlama açık", "Automatic planning on"),
     },
     {
       id: "gecis",
       icon: ArrowLeftRight,
       label: t("Geçiş", "Switching"),
       on: status.switching,
+      onLabel: t("Otomatik geçiş açık", "Automatic switching on"),
     },
   ];
   const settings: Item = {

@@ -90,8 +90,9 @@ export function Panel({
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={t("Relay’i aç", "Open Relay")}
-            onClick={() => void api.openPage("genel")}
+            aria-label={t("Ayarlar", "Settings")}
+            title={t("Ayarlar", "Settings")}
+            onClick={() => void api.openPage("ayarlar")}
           >
             <Settings2 />
           </Button>
@@ -102,7 +103,7 @@ export function Panel({
       </div>
       <PanelActiveCard now={now} />
       {suggestion && relay.active && (
-        <div className="mx-3 my-1.5 flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-[11.5px]">
+        <div className="mx-3 my-1.5 flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs">
           <span className="min-w-0">
             {t("Limit dolmak üzere", "Limit almost reached")} ·{" "}
             {t("Önerilen", "Suggested")}: <b>{suggestion.name}</b>
@@ -140,7 +141,7 @@ export function Panel({
           {t("Relay’i aç", "Open Relay")}
         </Button>
         {latest && (
-          <span className="truncate text-[11.5px]">
+          <span className="truncate text-xs">
             {`${t("Güncellendi", "Updated")} ${formatRelative(latest, now, language)}`}
           </span>
         )}

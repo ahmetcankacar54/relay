@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { DEFAULT_SETTINGS } from "../shared/types";
 import { LimitMeter, NIBBLE_BAR_HOVER_MS, NIBBLE_BAR_PERCENT, nibbleBarRest } from "../src/components/LimitMeter";
 import { RelayContext, type Relay } from "../src/data/relay-context";
-import { PRANK_HISTORY_KEY } from "../src/pranks/budget";
+import { PRANK_HISTORY_KEY, PRANK_SWITCHED_KEY } from "../src/pranks/budget";
 import {
   ConfettiLayer,
   DOZE_ACTIVITY_EVENTS,
@@ -318,13 +318,15 @@ async function withSpyLayers(
   }
 }
 
+/** Day one is over (a switch happened), so the budget alone decides. */
+const DAY_ONE_OVER = { [PRANK_SWITCHED_KEY]: "1" };
 function memoryStorage(initial: Record<string, string> = {}) {
   const map = new Map(Object.entries(initial));
   return { map, getItem: (key: string) => map.get(key) ?? null, setItem: (key: string, value: string) => void map.set(key, value) };
 }
 
 test("the main window dozes off after 10 idle visible minutes, and never twice within the gap", async () => {
-  const storage = memoryStorage();
+  const storage = memoryStorage(DAY_ONE_OVER);
   await withSpyLayers(["doze"], async (drawn, finish) => {
     await inFakeBrowser(
       mainWindow(1, true),
@@ -368,7 +370,7 @@ test("a window shown again after hours hidden starts its 10 minutes over", async
         await tick(DOZE_CHECK_MS);
         assert.deepEqual(drawn, ["doze"]);
       },
-      { localStorage: () => memoryStorage() },
+      { localStorage: () => memoryStorage(DAY_ONE_OVER) },
     );
   });
 });
@@ -445,7 +447,7 @@ test("confetti never falls for a returning user: a first load that already has a
           await act(async () => root.render(mainWindow(first, true)));
           await act(async () => root.render(mainWindow(first + 1, true)));
           assert.deepEqual(drawn, [], `first load with ${first}`);
-          assert.equal(storage.map.size, 0);
+          assert.equal(storage.map.has(CONFETTI_KEY), false);
         },
         { localStorage: () => storage },
       );

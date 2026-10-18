@@ -3,6 +3,7 @@ import type { Relay } from "@/data/relay-context";
 import type { OverviewRow } from "@/data/selectors";
 import { accountHealth } from "@/lib/account-health";
 import { formatClock, formatReset } from "@/lib/time";
+import { clockLocative } from "../../shared/tr-dative";
 
 /**
  * Status line under an account name (Overview and the menu bar panel). When something is wrong it is
@@ -37,8 +38,10 @@ export function accountRowSubtitle(
     case "exhausted": {
       const at = row.availableAt
         ? formatClock(row.availableAt, language, zone)
-        : "—";
-      return t(`Açılış ${at}`, `Opens ${at}`);
+        : "";
+      return at
+        ? t(`${clockLocative(at)} açılır`, `Opens ${at}`)
+        : t("Açılış saati bilinmiyor", "Opening time unknown");
     }
     case "not-linked":
       return t("Claude uygulaması girişi yok", "No Claude app sign-in");

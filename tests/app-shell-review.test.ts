@@ -16,6 +16,7 @@ import { AccountsCard } from "../src/pages/overview/AccountsCard";
 import { forgetSetupOnLeave } from "../src/pages/Accounts";
 import { LimitMeter } from "../src/components/LimitMeter";
 import { RelayContext, type Relay } from "../src/data/relay-context";
+import { clockLocative } from "../shared/tr-dative";
 import { I18nContext, type Language } from "../src/data/i18n";
 import {
   DEFAULT_SETTINGS,
@@ -199,7 +200,7 @@ test("the overview Desktop link is disabled while Desktop cannot start a setup",
     assert.match(link(extra), /disabled=""/, JSON.stringify(extra));
 });
 
-test("an exhausted account says when it reopens without a Turkish suffix", () => {
+test("an exhausted account says when it reopens, with the suffix its time is read with", () => {
   const other: Account = { ...a, id: "o", name: "Other" };
   const reset = iso(NOW + 2 * 3_600_000);
   const usage: Record<string, AccountUsage> = {
@@ -208,8 +209,10 @@ test("an exhausted account says when it reopens without a Turkish suffix", () =>
   };
   const relay = relayFor({ accounts: [a, other] }, usage);
   const tr = wrap(relay, createElement(AccountsCard, { go() {}, now: NOW }));
-  assert.match(tr, /Açılış \d\d:\d\d/);
-  assert.doesNotMatch(tr, /&#x27;te açılır/);
+  const at = /(\d\d:\d\d)’(da|de|ta|te) açılır/.exec(tr);
+  assert.ok(at, tr);
+  assert.equal(clockLocative(at[1]), `${at[1]}’${at[2]}`);
+  assert.doesNotMatch(tr, /Açılış|&#x27;te açılır/);
   const en = wrap(relay, createElement(AccountsCard, { go() {}, now: NOW }), "en");
   assert.match(en, /Opens \d\d:\d\d/);
 });

@@ -160,7 +160,7 @@ test("Settings offers the panda pranks setting on every platform", () => {
   };
   for (const platform of ["darwin", "win32", "linux"]) {
     const html = render({ platform });
-    for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /Seyrek şakalar; hiçbir işlemi geciktirmez\./])
+    for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /Seyrek şakalar; hiçbir işlemi geciktirmez\. Panda imleci kısa süre saklayabilir\./])
       assert.match(html, re, platform);
     assert.match(html, /id="panda-pranks-label"/, platform);
     assert.deepEqual(selected(html), ["Ara sıra"], platform);
@@ -177,7 +177,7 @@ test("Settings shows the panda pranks setting in English", () => {
       createElement(RelayContext.Provider, { value: relayFor() }, createElement(Settings)),
     ),
   );
-  for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Rare pranks; they never delay anything\./])
+  for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Rare pranks; they never delay anything\. The panda may briefly hide the cursor\./])
     assert.match(html, re);
 });
 

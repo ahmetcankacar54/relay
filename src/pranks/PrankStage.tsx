@@ -105,7 +105,7 @@ const UNAVAILABLE: PrankStorage = {
 };
 
 /** Read when a prank is offered, never while rendering. A window that will not give its storage pranks nothing. */
-function windowStorage(): PrankStorage {
+export function windowStorage(): PrankStorage {
   try {
     return window.localStorage;
   } catch {
@@ -120,6 +120,8 @@ export interface PrankStageProps {
   dialogOpen: boolean;
   /** The gallery plays every prank, whatever the gates and the budget say. */
   ignoreLimits?: boolean;
+  /** Whether day one keeps pranks quiet, asked when one is offered (the app passes `quietOnDayOne`). */
+  dayOneQuiet?: (storage: PrankStorage, now: number) => boolean;
   storage?: PrankStorage;
   now?: () => number;
   random?: () => number;
@@ -136,6 +138,11 @@ function liveGate(props: PrankStageProps, event: { detail: number } | undefined)
     windowVisible: document.visibilityState === "visible",
     keyboard: event?.detail === 0,
     dialogOpen: props.dialogOpen,
+    dayOne:
+      props.dayOneQuiet?.(
+        props.storage ?? windowStorage(),
+        (props.now ?? Date.now)(),
+      ) ?? false,
   };
 }
 

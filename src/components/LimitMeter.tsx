@@ -114,7 +114,7 @@ export function LimitMeter({
         />
       </div>
       {detail && (
-        <div className="mt-1 text-[11px] text-muted-foreground">{detail}</div>
+        <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
       )}
     </div>
   );

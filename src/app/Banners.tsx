@@ -335,7 +335,7 @@ export function Banners({
         >
           <span>
             {t(
-              `${reconnect.length} hesabın limit okuma girişi ilgi bekliyor.`,
+              `${reconnect.length} hesabın limit okuma girişi dikkat istiyor.`,
               `${reconnect.length} accounts need usage sign-in attention.`,
             )}
           </span>

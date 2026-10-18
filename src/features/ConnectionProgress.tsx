@@ -22,7 +22,7 @@ export function ConnectionProgress({
             "inline-flex items-center gap-1.5 font-medium",
             state === "failed" && "text-destructive",
             state === "cancelled" && "text-muted-foreground",
-            state === "complete" && "text-brand",
+            state === "complete" && "text-primary",
           )}
         >
           {state === "working" ? (
@@ -65,11 +65,11 @@ export function ConnectionProgress({
             >
               <span
                 className={cn(
-                  "row-span-2 grid size-6 place-items-center rounded-full text-[11px] font-semibold tabular-nums",
+                  "row-span-2 grid size-6 place-items-center rounded-full text-xs font-semibold tabular-nums",
                   done
                     ? "bg-brand text-primary-foreground"
                     : active
-                      ? "border-2 border-brand text-brand"
+                      ? "border-2 border-brand text-primary"
                       : "bg-muted text-muted-foreground",
                 )}
                 aria-hidden="true"

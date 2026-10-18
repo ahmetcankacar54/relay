@@ -29,7 +29,7 @@ function Pill({
       variant="outline"
       size="xs"
       title={title}
-      className="h-auto max-w-full rounded-full px-2 py-0.5 text-[11px] font-normal"
+      className="h-auto max-w-full rounded-full px-2 py-0.5 text-xs font-normal"
       onClick={() => void relay.api.openPage(page)}
     >
       <StatusDot tone={tone} className="size-[7px]" />

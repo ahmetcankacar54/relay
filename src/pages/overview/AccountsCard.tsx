@@ -48,7 +48,7 @@ export function AccountsCard({
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="font-semibold">{t("Hesaplar", "Accounts")}</span>
         <span className="text-xs text-muted-foreground">
-          {t("en uygun önce", "best first")}
+          {t("en uygunu üstte", "best first")}
         </span>
       </div>
       {rows.length === 0 ? (

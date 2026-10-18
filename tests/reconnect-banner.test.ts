@@ -241,20 +241,20 @@ test("one warning renders as a single banner, even beside healthy accounts", () 
   );
   assert.match(html, /<button[^>]*>Limit okuma girişini yenile<\/button>/);
   assert.match(html, /aria-label="Uyarıyı kapat"/);
-  assert.doesNotMatch(html, /ilgi bekliyor|aria-expanded|Göster/);
+  assert.doesNotMatch(html, /dikkat istiyor|aria-expanded|Göster/);
   const renew = render(relayFor({ b: usage("renewal-required", "b") }, [team]));
   assert.match(
     renew,
     /İş · Team · limit okuma girişinin yenilenmesi gerekiyor\./,
   );
   assert.match(renew, /<button[^>]*>Yenilemeye izin ver<\/button>/);
-  assert.doesNotMatch(renew, /ilgi bekliyor|aria-expanded/);
+  assert.doesNotMatch(renew, /dikkat istiyor|aria-expanded/);
 });
 
 test("two or more warnings share one banner with a count and a Show button", () => {
   const html = render(relayFor(all3, [max, team, pro]));
   assert.equal(banners(html), 1);
-  assert.match(html, /3 hesabın limit okuma girişi ilgi bekliyor\./);
+  assert.match(html, /3 hesabın limit okuma girişi dikkat istiyor\./);
   assert.match(html, /<button[^>]*aria-expanded="false"[^>]*>Göster<\/button>/);
   assert.equal(html.split('aria-label="Tüm uyarıları kapat"').length - 1, 1);
   // Collapsed, none of the rows are drawn.
@@ -267,7 +267,7 @@ test("two or more warnings share one banner with a count and a Show button", () 
   assert.match(en, /<button[^>]*aria-expanded="false"[^>]*>Show<\/button>/);
   assert.match(en, /aria-label="Dismiss all warnings"/);
   const two = render(relayFor({ a: all3.a, b: all3.b }, [max, team]));
-  assert.match(two, /2 hesabın limit okuma girişi ilgi bekliyor\./);
+  assert.match(two, /2 hesabın limit okuma girişi dikkat istiyor\./);
 });
 
 test("the expanded group lists a row per warning with today's text, button and dismiss", () => {
@@ -275,7 +275,7 @@ test("the expanded group lists a row per warning with today's text, button and d
     initialExpanded: true,
   });
   assert.equal(banners(html), 1, "the rows live inside the one banner");
-  assert.match(html, /3 hesabın limit okuma girişi ilgi bekliyor\./);
+  assert.match(html, /3 hesabın limit okuma girişi dikkat istiyor\./);
   assert.match(html, /<button[^>]*aria-expanded="true"[^>]*>Gizle<\/button>/);
   assert.match(
     html,
@@ -342,7 +342,7 @@ test("a dismissed warning stays hidden after a remount and a restart", () => {
 test("dismissed warnings leave the group, and the group gives way to a single banner", () => {
   const relay = relayFor(all3, [max, team, pro]);
   restart([dismissalKey("a", "expired")]);
-  assert.match(render(relay), /2 hesabın limit okuma girişi ilgi bekliyor\./);
+  assert.match(render(relay), /2 hesabın limit okuma girişi dikkat istiyor\./);
   restart([
     dismissalKey("a", "expired"),
     dismissalKey("b", "renewal-required"),
@@ -353,7 +353,7 @@ test("dismissed warnings leave the group, and the group gives way to a single ba
     one,
     /Ek · Pro · limitleri okumak için Anahtarlık erişimi gerekiyor\./,
   );
-  assert.doesNotMatch(one, /ilgi bekliyor|aria-expanded/);
+  assert.doesNotMatch(one, /dikkat istiyor|aria-expanded/);
   restart(["a:expired", "b:renewal-required", "c:keychain-locked"]);
   assert.equal(banners(render(relay)), 0);
 });
@@ -861,7 +861,7 @@ test("a mismatched account counts in the grouped banner and its row says why", (
     { initialExpanded: true },
   );
   assert.equal(banners(html), 1);
-  assert.match(html, /2 hesabın limit okuma girişi ilgi bekliyor\./);
+  assert.match(html, /2 hesabın limit okuma girişi dikkat istiyor\./);
   assert.match(html, /Ek · Pro · limit okuma girişinin yenilenmesi gerekiyor: giriş başka bir hesaba ait\./);
   assert.match(html, /aria-label="Ek · Pro uyarısını kapat"/);
 });

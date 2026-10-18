@@ -117,13 +117,13 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
           {name}
         </div>
         <div
-          className="min-w-0 text-[10.5px] text-muted-foreground"
+          className="min-w-0 text-xs text-muted-foreground"
           title={reason}
         >
           {reason}
         </div>
         {draft.attachments && (
-          <div className="text-[10.5px] text-muted-foreground">
+          <div className="text-xs text-muted-foreground">
             {t("Ekleri geri yüklenemedi", "Attachments could not be restored")}
           </div>
         )}
@@ -179,7 +179,7 @@ export function PanelDrafts() {
           {relay.settings.draftRetype === true && (
             <Badge
               variant="outline"
-              className="px-1.5 text-[10px] text-muted-foreground"
+              className="px-1.5 text-xs text-muted-foreground"
             >
               {t("deneysel", "experimental")}
             </Badge>
@@ -188,7 +188,7 @@ export function PanelDrafts() {
       </div>
       {waiting > 0 && (
         <p
-          className={`text-[11.5px] text-muted-foreground ${rows.length > 0 ? "mb-1.5" : ""}`}
+          className={`text-xs text-muted-foreground ${rows.length > 0 ? "mb-1.5" : ""}`}
         >
           {t(
             `${waiting} taslak geri yazılmayı bekliyor`,

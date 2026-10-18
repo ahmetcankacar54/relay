@@ -39,7 +39,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
                 "Hour × day heatmap. No usage in this period.",
               )
         }
-        className="grid grid-cols-[1.75rem_repeat(24,minmax(0,1fr))] gap-0.5 text-[10px] leading-3 text-muted-foreground"
+        className="grid grid-cols-[1.75rem_repeat(24,minmax(0,1fr))] gap-0.5 text-xs leading-3 text-muted-foreground"
       >
         <span />
         {HOURS.map((hour) => (

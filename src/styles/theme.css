@@ -80,6 +80,8 @@
 @theme inline {
   --font-sans: "DM Sans", system-ui, sans-serif;
   --font-display: "Manrope", "DM Sans", system-ui, sans-serif;
+  /* The smallest text: 12.5 px, so no main-window text is smaller (panel text stays 12 px or more). */
+  --text-xs: 0.78125rem;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -125,5 +127,25 @@
   }
   h1, h2, h3 {
     @apply font-display;
+  }
+}
+/*
+ * Reduce motion turns animations and transitions off everywhere: the dialog zoom, the sheet
+ * slide, pulses and the disclosure chevron. A spinner (animate-spin, or [data-spinner]) keeps
+ * turning so a wait still shows; the panda's own rules (panda.css) already honour the setting.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin,
+  [data-spinner] {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
   }
 }

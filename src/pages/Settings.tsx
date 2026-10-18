@@ -117,8 +117,8 @@ export function Settings() {
               </span>
             }
             description={t(
-              "Seyrek şakalar; hiçbir işlemi geciktirmez.",
-              "Rare pranks; they never delay anything.",
+              "Seyrek şakalar; hiçbir işlemi geciktirmez. Panda imleci kısa süre saklayabilir.",
+              "Rare pranks; they never delay anything. The panda may briefly hide the cursor.",
             )}
           >
             <ToggleGroup

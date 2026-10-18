@@ -64,7 +64,7 @@ const labels = {
     unlinked: "Claude uygulaması girişini kaydet",
     mismatch: "Girişler farklı hesaplara ait",
     outdated: "güncel değil",
-    week: "hf",
+    week: "hafta",
   },
 };
 

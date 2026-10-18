@@ -102,11 +102,11 @@ function StepIndicator({ step }: { step: Step }) {
             )}
             <span
               className={cn(
-                "grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-semibold",
+                "grid size-5 shrink-0 place-items-center rounded-full text-xs font-semibold",
                 done
                   ? "bg-brand text-primary-foreground"
                   : active
-                    ? "border-2 border-brand text-brand"
+                    ? "border-2 border-brand text-primary"
                     : "bg-muted text-muted-foreground",
               )}
               aria-hidden="true"

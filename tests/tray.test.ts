@@ -169,7 +169,7 @@ test("Turkish labels, escaped names and empty snapshots remain usable", () => {
   assert.equal(trayTooltip(s), "Relay — A&B row");
   assert.equal(
     trayUsageLabel("target", usage("target"), "tr", now),
-    "5h %77 kaldı · hf %8 kaldı",
+    "5h %77 kaldı · hafta %8 kaldı",
   );
   const empty = buildTrayMenu({ accounts: [], usage: {}, desktop }, "tr", now);
   assert.ok(
@@ -187,7 +187,7 @@ test("every menu percentage is what is left, with its word, in both languages", 
     buildTrayMenu(snapshot(), language, now).flatMap((item) =>
       item.type === "checkbox" && item.label.startsWith("Max") ? [item.label] : [],
     );
-  assert.deepEqual(rows("tr"), ["Max · 5h %77 kaldı · hf %8 kaldı"]);
+  assert.deepEqual(rows("tr"), ["Max · 5h %77 kaldı · hafta %8 kaldı"]);
   assert.deepEqual(rows("en"), ["Max · 5h 77% left · wk 8% left"]);
   // A number without a word is never left in a row: every digit run is followed by one.
   for (const label of [...rows("tr"), ...rows("en")])

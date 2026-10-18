@@ -12,11 +12,13 @@ export interface PrankGate {
   keyboard: boolean;
   /** A Desktop-action dialog is open. */
   dialogOpen: boolean;
+  /** Day one: pranks wait 24 h after the first run, or until the first switch (`quietOnDayOne`). */
+  dayOne?: boolean;
 }
 
 /** Reduced motion and "off" block every prank; confetti, a one-off celebration, ignores the rest. */
 export function prankBlocked(kind: PrankKind | "trick", gate: PrankGate): boolean {
   if (gate.reducedMotion || gate.level === "off") return true;
   if (kind === "confetti") return false;
-  return gate.desktopBusy || gate.errorShown || !gate.windowVisible || gate.keyboard || gate.dialogOpen;
+  return gate.dayOne === true || gate.desktopBusy || gate.errorShown || !gate.windowVisible || gate.keyboard || gate.dialogOpen;
 }

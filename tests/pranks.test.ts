@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   PRANK_BUDGET, PRANK_HISTORY_KEY, PRANK_HISTORY_MS,
-  prankDecision, readPrankHistory, recordPrank,
+  PRANK_QUIET_MS, PRANK_SINCE_KEY, PRANK_SWITCHED_KEY,
+  markFirstSwitch, prankDecision, quietOnDayOne, readPrankHistory, recordPrank,
   type PrankKind,
 } from "../src/pranks/budget";
 import { prankBlocked, type PrankGate } from "../src/pranks/gate";
@@ -193,8 +194,46 @@ const blockers: Record<string, PrankGate> = {
   "window hidden": { ...clear, windowVisible: false },
   keyboard: { ...clear, keyboard: true },
   dialogOpen: { ...clear, dialogOpen: true },
+  "day one": { ...clear, dayOne: true },
 };
 const KINDS: (PrankKind | "trick")[] = ["nibble-cursor", "wheel", "nibble-bar", "doze", "confetti", "trick"];
+
+test("pranks stay quiet for the first 24 hours after Relay first runs", () => {
+  assert.equal(PRANK_QUIET_MS, 24 * HOUR);
+  const storage = memoryStorage();
+  // The first ask stores the first-run time, and is quiet.
+  assert.equal(quietOnDayOne(storage, NOW), true);
+  assert.equal(storage.getItem(PRANK_SINCE_KEY), String(NOW));
+  assert.equal(quietOnDayOne(storage, NOW + 23 * HOUR), true);
+  assert.equal(quietOnDayOne(storage, NOW + 24 * HOUR), false);
+  // The first-run time is kept, not moved forward.
+  assert.equal(storage.getItem(PRANK_SINCE_KEY), String(NOW));
+  // A time in the future (a clock set back) starts the day again.
+  const ahead = memoryStorage({ [PRANK_SINCE_KEY]: String(NOW + HOUR) });
+  assert.equal(quietOnDayOne(ahead, NOW), true);
+  assert.equal(ahead.getItem(PRANK_SINCE_KEY), String(NOW));
+});
+
+test("the first successful switch ends the quiet day early", () => {
+  const storage = memoryStorage({ [PRANK_SINCE_KEY]: String(NOW) });
+  assert.equal(quietOnDayOne(storage, NOW + HOUR), true);
+  markFirstSwitch(storage);
+  assert.equal(storage.getItem(PRANK_SWITCHED_KEY), "1");
+  assert.equal(quietOnDayOne(storage, NOW + HOUR), false);
+});
+
+test("a storage that throws keeps the pranks quiet", () => {
+  const broken = {
+    getItem: () => {
+      throw new Error("no storage");
+    },
+    setItem: () => {
+      throw new Error("no storage");
+    },
+  };
+  assert.equal(quietOnDayOne(broken, NOW), true);
+  assert.doesNotThrow(() => markFirstSwitch(broken));
+});
 
 test("every gate field blocks a wheel and a trick on its own", () => {
   for (const [name, gate] of Object.entries(blockers)) {

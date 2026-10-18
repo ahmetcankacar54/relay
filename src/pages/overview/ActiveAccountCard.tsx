@@ -17,7 +17,7 @@ import { planLabel } from "../accounts/accountLabels";
 
 
 const eyebrow =
-  "text-[11px] font-semibold tracking-wider text-muted-foreground uppercase";
+  "text-xs font-semibold tracking-wider text-muted-foreground uppercase";
 
 export function ActiveAccountCard({
   go,

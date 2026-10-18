@@ -83,7 +83,7 @@ export function PanelAccounts({
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
         <span>{t("Hesaplar", "Accounts")}</span>
-        <span>{t("en uygun önce", "best first")}</span>
+        <span>{t("en uygunu üstte", "best first")}</span>
       </div>
       <div className={`${panelCard} px-2 py-1`}>
         {rows.length === 0 ? (
@@ -126,16 +126,20 @@ export function PanelAccounts({
                   >
                     {account.name}
                   </div>
-                  <div className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                  <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                     {row.recommended && (
                       <Badge
                         variant="secondary"
-                        className="shrink-0 px-1.5 text-[10px]"
+                        className="shrink-0 px-1.5 text-xs"
                       >
                         {t("Önerilen", "Suggested")}
                       </Badge>
                     )}
-                    <span className="min-w-0 truncate" title={subtitle}>
+                    {/* Two lines, so the reason a switch is unavailable is read in full. */}
+                    <span
+                      className="line-clamp-2 min-w-0 break-words"
+                      title={subtitle}
+                    >
                       {subtitle}
                     </span>
                   </div>
@@ -169,7 +173,7 @@ export function PanelAccounts({
                 {switching === account.id ? (
                   <div
                     role="status"
-                    className="col-span-full flex items-center gap-2 rounded-lg border bg-muted px-2.5 py-1.5 text-[11.5px]"
+                    className="col-span-full flex items-center gap-2 rounded-lg border bg-muted px-2.5 py-1.5 text-xs"
                   >
                     <LoaderCircle className="size-3.5 animate-spin" />
                     {t(
@@ -180,7 +184,7 @@ export function PanelAccounts({
                 ) : (
                   open &&
                   !switching && (
-                    <div className="col-span-full flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-[11.5px] text-warn-foreground">
+                    <div className="col-span-full flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs text-warn-foreground">
                       <span>
                         {language === "tr" ? (
                           <>
@@ -226,7 +230,7 @@ export function PanelAccounts({
         <Button
           variant="link"
           size="sm"
-          className="mt-1 h-auto px-1 text-[11.5px] text-muted-foreground"
+          className="mt-1 h-auto px-1 text-xs text-muted-foreground"
           onClick={() => void relay.api.openPage("hesaplar")}
         >
           {t(

@@ -87,3 +87,26 @@ export function withDative(name: string): string {
   const suffix = vowel && BACK.includes(vowel) ? "a" : "e";
   return `${name}${APOSTROPHE}${endsInVowel ? "y" : ""}${suffix}`;
 }
+
+/** How Turkish says 0–59 on a clock, as far as the suffix needs: the last word. */
+const ONES = ["sıfır", "bir", "iki", "üç", "dört", "beş", "altı", "yedi", "sekiz", "dokuz"];
+const TEN_WORDS = ["", "on", "yirmi", "otuz", "kırk", "elli"];
+const lastWord = (n: number) =>
+  n % 10 === 0 && n > 0 ? TEN_WORDS[n / 10] : ONES[n % 10];
+
+/**
+ * A clock with the Turkish locative, for "14:00’te açılır". The clock is read as it is spoken:
+ * the hour when the minutes are zero ("on dört" → ’te), else the minutes ("otuz" → ’da). The
+ * last vowel picks a or e, and a voiceless last sound makes the suffix start with t. Anything
+ * that is not a clock comes back unchanged.
+ */
+export function clockLocative(clock: string): string {
+  const match = /^(\d{1,2})[:.](\d{2})$/.exec(clock);
+  if (!match) return clock;
+  const minutes = Number(match[2]);
+  const word = lastWord(minutes === 0 ? Number(match[1]) : minutes);
+  if (!word) return clock;
+  const vowel = [...word].reverse().find((c) => VOWELS.includes(c)) ?? "e";
+  const hard = "çfhkpsşt".includes(word.at(-1)!);
+  return `${clock}${APOSTROPHE}${hard ? "t" : "d"}${BACK.includes(vowel) ? "a" : "e"}`;
+}

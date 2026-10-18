@@ -65,3 +65,41 @@ export function recordPrank(storage: Pick<Storage, "setItem">, history: readonly
     return false;
   }
 }
+
+/** When Relay first ran, as this storage saw it (ms), and whether a switch has succeeded since. */
+export const PRANK_SINCE_KEY = "relay-pranks-since";
+export const PRANK_SWITCHED_KEY = "relay-pranks-switched";
+/** How long pranks stay quiet after the first run, unless a switch ends it sooner. */
+export const PRANK_QUIET_MS = 24 * 3_600_000;
+
+/**
+ * Whether pranks stay quiet: day one is a new friend's first look at Relay. Quiet until 24 h after
+ * the first run, or the first successful switch, whichever comes first. The first ask stores the
+ * first-run time (and a time in the future starts the day again). A storage that throws is quiet.
+ */
+export function quietOnDayOne(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  now: number,
+): boolean {
+  try {
+    if (storage.getItem(PRANK_SWITCHED_KEY) === "1") return false;
+    const raw = storage.getItem(PRANK_SINCE_KEY);
+    const since = raw === null ? NaN : Number(raw);
+    if (!Number.isFinite(since) || since > now) {
+      storage.setItem(PRANK_SINCE_KEY, String(now));
+      return true;
+    }
+    return now - since < PRANK_QUIET_MS;
+  } catch {
+    return true;
+  }
+}
+
+/** A switch succeeded: day one is over. A storage that throws changes nothing. */
+export function markFirstSwitch(storage: Pick<Storage, "setItem">): void {
+  try {
+    storage.setItem(PRANK_SWITCHED_KEY, "1");
+  } catch {
+    // Pranks then wait out the 24 hours instead.
+  }
+}

@@ -166,7 +166,7 @@ export function PlanTimeline({
       <div className="grid gap-[7px]">
         <div className={rowClass} aria-hidden="true">
           <span />
-          <div className="relative h-4 text-[11px] text-muted-foreground tabular-nums">
+          <div className="relative h-4 text-xs text-muted-foreground tabular-nums">
             {RULER.map((h, index) => (
               <span
                 key={h}
@@ -221,7 +221,7 @@ export function PlanTimeline({
               return (
                 <div
                   key={`${segment.live ? "live" : "plan"}-${segment.from}`}
-                  className="absolute inset-y-0 flex items-center justify-center-safe overflow-hidden rounded-[5px] px-1 text-[10px] font-bold"
+                  className="absolute inset-y-0 flex items-center justify-center-safe overflow-hidden rounded-[5px] px-1 text-xs font-bold"
                   title={text}
                   aria-label={text}
                   role="img"

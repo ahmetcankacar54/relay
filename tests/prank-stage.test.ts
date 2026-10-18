@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { act, createElement, useLayoutEffect, useState, type MouseEvent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PRANK_HISTORY_KEY, type PrankKind } from "../src/pranks/budget";
+import { PRANK_HISTORY_KEY, PRANK_SWITCHED_KEY, type PrankKind } from "../src/pranks/budget";
 import type { PrankGate } from "../src/pranks/gate";
 import { PrankStage, decideOffer, offerAfter, playFor, usePrank, type PrankApi } from "../src/pranks/PrankStage";
 import { RelayPrankStage, stagePropsFrom } from "../src/pranks/RelayPrankStage";
@@ -294,8 +294,23 @@ function trickAllowedFor(relay: Relay): boolean {
   };
   renderToStaticMarkup(createElement(RelayContext.Provider, { value: relay }, createElement(RelayPrankStage, null, createElement(Probe))));
   assert.ok(api);
-  return inBrowser({}, () => api!.allowsTrick({ detail: 1 }));
+  // Day one is over (a switch happened), so the relay's state alone decides.
+  const storage = memoryStorage({ [PRANK_SWITCHED_KEY]: "1" });
+  return inBrowser({ localStorage: () => storage }, () => api!.allowsTrick({ detail: 1 }));
 }
+
+test("RelayPrankStage keeps every prank quiet on day one", () => {
+  let api: PrankApi | undefined;
+  const Probe = () => {
+    api = usePrank();
+    return null;
+  };
+  renderToStaticMarkup(createElement(RelayContext.Provider, { value: relayFor() }, createElement(RelayPrankStage, null, createElement(Probe))));
+  const fresh = memoryStorage();
+  assert.equal(inBrowser({ localStorage: () => fresh }, () => api!.allowsTrick({ detail: 1 })), false);
+  const day = memoryStorage({ [PRANK_SWITCHED_KEY]: "1" });
+  assert.equal(inBrowser({ localStorage: () => day }, () => api!.allowsTrick({ detail: 1 })), true);
+});
 
 test("RelayPrankStage reads the level, busy, error and dialog from the relay", () => {
   assert.equal(trickAllowedFor(relayFor()), true);
