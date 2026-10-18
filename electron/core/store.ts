@@ -155,6 +155,7 @@ export const settingsSchema = z
     menuBarAnimation: z.boolean().optional(),
     switchWindow: z.boolean().optional(),
     pranks: z.enum(["sometimes", "rarely", "off"]).optional(),
+    draftRetype: z.boolean().optional(),
   })
   .strict();
 // Migration defaults belong to a complete saved registry, never to an IPC patch.

@@ -182,6 +182,45 @@ test("Paylaşma says history is not shared, and never that it is", () => {
   }
 });
 
+test("Switching offers draft re-typing, off unless turned on, marked experimental", () => {
+  const control = (html: string) =>
+    /<button[^>]*id="draft-retype"[^>]*>/.exec(html)?.[0] ?? "";
+  const off = render(relayFor());
+  assert.match(off, /for="draft-retype"[^>]*>[\s\S]*Taslakları Claude’a yeniden yaz/);
+  assert.match(off, />Deneysel</);
+  assert.match(
+    off,
+    /Kapalıyken taslaklar kurtarılır ve panelde Kopyala ile sunulur\. Açıkken Relay geçişten sonra konuşmayı açar ve taslağı mesaj kutusuna yazar, göndermez\. Erişilebilirlik izni ister\./,
+  );
+  assert.match(control(off), /role="switch"/);
+  assert.match(control(off), /aria-checked="false"/);
+  assert.match(control(render(relayFor({}, { draftRetype: false }))), /aria-checked="false"/);
+  assert.match(control(render(relayFor({}, { draftRetype: true }))), /aria-checked="true"/);
+  const en = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      {
+        value: {
+          language: "en",
+          setLanguage() {},
+          t: (_: string, en: string) => en,
+        },
+      },
+      createElement(
+        RelayContext.Provider,
+        { value: relayFor() },
+        createElement(Switching),
+      ),
+    ),
+  );
+  assert.match(en, /Re-type drafts into Claude/);
+  assert.match(en, />Experimental</);
+  assert.match(
+    en,
+    /While off, drafts are rescued and offered in the panel with Copy\. While on, Relay opens the conversation after a switch and types the draft into its message box without sending it\. It needs Accessibility permission\./,
+  );
+});
+
 test("the single-conversation watch card appears only while a legacy watch needs attention", () => {
   const html = render(
     relayFor({

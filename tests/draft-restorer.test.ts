@@ -525,6 +525,8 @@ test("accessibility revoked at the re-check after a write leaves that draft mayb
         capturedAt: r.capturedAt,
       })),
     changed: () => {},
+    // Re-typing on: only then does a grant move drafts back.
+    retype: () => true,
     every: () => () => {},
   });
   assert.equal(await scheduler.retryAccessibility(), 2);

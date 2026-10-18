@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
@@ -6,7 +7,7 @@ import { panelCard, panelEyebrow } from "./PanelActiveCard";
 
 /** A draft Relay tried to type: it may be in its composer already. */
 const MAYBE_TYPED = [
-  "Konuşmaya yazılmış olabilir, yapıştırmadan önce bakın",
+  "Konuşmaya yazılmış olabilir, yapıştırmadan önce bak",
   "It may already be in the conversation; check before pasting",
 ] as const;
 const BUSY = ["Konuşma meşguldü", "The conversation was busy"] as const;
@@ -23,7 +24,7 @@ const REASONS: Record<string, readonly [string, string]> = {
   lost: ["Desktop taslağı sildi", "Desktop cleared the draft"],
   busy: BUSY,
   "desktop-work-active": BUSY,
-  manual: ["Elle yapıştırın", "Paste it yourself"],
+  manual: ["Elle yapıştır", "Paste it yourself"],
   error: ["Geri yazılamadı", "Could not be restored"],
   "maybe-typed": MAYBE_TYPED,
   unconfirmed: MAYBE_TYPED,
@@ -36,7 +37,7 @@ const REASONS: Record<string, readonly [string, string]> = {
     "The conversation could not be opened",
   ],
   "not-ready": ["Desktop hazır değildi", "Desktop was not ready"],
-  moved: ["Başka bir ekrana geçtiniz", "You went to another screen"],
+  moved: ["Başka bir ekrana geçtin", "You went to another screen"],
   "claude-not-running": ["Claude çalışmıyordu", "Claude was not running"],
   budget: ["Süre doldu", "Ran out of time"],
 };
@@ -44,7 +45,7 @@ const UNKNOWN_REASON = REASONS.error;
 
 /** A new-session draft goes to Code's new-session screen, not a conversation. */
 const NEW_SESSION_MAYBE_TYPED = [
-  "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bakın",
+  "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bak",
   "It may already be on the new-session screen; check before pasting",
 ] as const;
 const NEW_SESSION_BUSY = [
@@ -101,7 +102,9 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
     ? t("Yeni oturum", "New session")
     : draft.title.trim() || t("Adsız konuşma", "Untitled conversation");
   const reason = draftReason(draft.reason, t, draft.newSession);
-  const needsPermission = draft.reason === "accessibility";
+  // Only re-typing needs the permission: with it off, nothing here asks for it.
+  const needsPermission =
+    relay.settings.draftRetype === true && draft.reason === "accessibility";
   const running = [
     `draft-copy:${draft.id}`,
     `draft-dismiss:${draft.id}`,
@@ -157,8 +160,9 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
 }
 
 /**
- * Drafts Relay rescued at a switch: the ones it could not re-type, with Copy and Dismiss, and a
- * count of those still waiting. It shows titles and reasons only, never draft text.
+ * Drafts Relay rescued at a switch: the ones it could not re-type, or with re-typing off all of
+ * them, with Copy and Dismiss, and a count of those still waiting. It shows titles and reasons
+ * only, never draft text. With re-typing on, the heading says it is experimental.
  */
 export function PanelDrafts() {
   const relay = useRelay();
@@ -170,7 +174,17 @@ export function PanelDrafts() {
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
-        <span>{t("Kurtarılan taslaklar", "Rescued drafts")}</span>
+        <span className="flex items-center gap-1.5">
+          {t("Kurtarılan taslaklar", "Rescued drafts")}
+          {relay.settings.draftRetype === true && (
+            <Badge
+              variant="outline"
+              className="px-1.5 text-[10px] text-muted-foreground"
+            >
+              {t("deneysel", "experimental")}
+            </Badge>
+          )}
+        </span>
       </div>
       {waiting > 0 && (
         <p

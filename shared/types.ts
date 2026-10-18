@@ -274,6 +274,11 @@ export interface RelaySettings {
   switchWindow?: boolean;
   /** How often the panda pranks; missing means "sometimes". */
   pranks?: PrankLevel;
+  /**
+   * Experimental: re-type the drafts rescued at a switch into Claude. Missing means off: the
+   * drafts are offered in the panel for Copy, and nothing asks for Accessibility for them.
+   */
+  draftRetype?: boolean;
 }
 export type PrankLevel = "sometimes" | "rarely" | "off";
 export interface PlanningHours {

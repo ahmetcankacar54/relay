@@ -126,6 +126,42 @@ type Props = {
   t: T;
 };
 
+/** Re-typing the drafts rescued at a switch into Claude: experimental, off unless turned on. */
+export function DraftRetypePreference({
+  value,
+  update,
+  disabled,
+  t,
+}: Pick<Props, "value" | "update" | "disabled" | "t">) {
+  return (
+    <div className="grid gap-1">
+      <SectionHeading title={t("Kurtarılan taslaklar", "Rescued drafts")} />
+      <SettingRow
+        label={
+          <span className="inline-flex items-center gap-2">
+            {t("Taslakları Claude’a yeniden yaz", "Re-type drafts into Claude")}
+            <Badge variant="outline" className="text-muted-foreground">
+              {t("Deneysel", "Experimental")}
+            </Badge>
+          </span>
+        }
+        htmlFor="draft-retype"
+        description={t(
+          "Kapalıyken taslaklar kurtarılır ve panelde Kopyala ile sunulur. Açıkken Relay geçişten sonra konuşmayı açar ve taslağı mesaj kutusuna yazar, göndermez. Erişilebilirlik izni ister.",
+          "While off, drafts are rescued and offered in the panel with Copy. While on, Relay opens the conversation after a switch and types the draft into its message box without sending it. It needs Accessibility permission.",
+        )}
+      >
+        <Switch
+          id="draft-retype"
+          checked={value.draftRetype === true}
+          disabled={disabled}
+          onCheckedChange={(draftRetype) => update({ draftRetype })}
+        />
+      </SettingRow>
+    </div>
+  );
+}
+
 /** Shared Code history: scope, selection and the merge into the open account. */
 export function SharedHistoryPreferences({
   value,

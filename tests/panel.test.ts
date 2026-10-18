@@ -442,6 +442,8 @@ const withDrafts = (drafts: DraftSummary[] | undefined, extra: Partial<Relay> = 
   return relay;
 };
 const drafts = (relay: Relay) => wrap(relay, createElement(PanelDrafts));
+/** Draft re-typing turned on in Settings; it is off unless the user turns it on. */
+const retyping: Partial<Relay> = { settings: { ...DEFAULT_SETTINGS, draftRetype: true } };
 
 test("the rescued drafts section lists only needs-copy records with reason, Copy and Dismiss", () => {
   const html = drafts(withDrafts([
@@ -458,11 +460,44 @@ test("the rescued drafts section lists only needs-copy records with reason, Copy
   assert.doesNotMatch(html, /İzin ver/);
 });
 
-test("an accessibility reason offers the permission button", () => {
-  const html = drafts(withDrafts([draft({ reason: "accessibility" })]));
+test("with re-typing on, an accessibility reason offers the permission button", () => {
+  const html = drafts(withDrafts([draft({ reason: "accessibility" })], retyping));
   assert.match(html, /Erişilebilirlik izni yok/);
   assert.match(html, />İzin ver</);
   assert.match(html, />Kopyala</);
+});
+
+test("with re-typing off, no draft asks for accessibility: Copy and Dismiss only", () => {
+  for (const settings of [DEFAULT_SETTINGS, { ...DEFAULT_SETTINGS, draftRetype: false }]) {
+    const html = drafts(withDrafts([
+      draft({ reason: "accessibility" }),
+      draft({ id: "d2", title: "Left by hand", reason: "manual" }),
+    ], { settings }));
+    assert.doesNotMatch(html, /İzin ver/);
+    assert.equal((html.match(/>Kopyala</g) ?? []).length, 2);
+    assert.equal((html.match(/>Kapat</g) ?? []).length, 2);
+    assert.match(html, /Elle yapıştır</);
+  }
+});
+
+test("the rescued drafts heading is tagged experimental only while re-typing is on", () => {
+  const eyebrow = (html: string) => /<div class="mb-1\.5 flex[^"]*">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
+  const on = eyebrow(drafts(withDrafts([draft()], retyping)));
+  assert.match(on, /Kurtarılan taslaklar/);
+  assert.match(on, />deneysel</);
+  const off = eyebrow(drafts(withDrafts([draft()])));
+  assert.match(off, /Kurtarılan taslaklar/);
+  assert.doesNotMatch(off, /deneysel/);
+  // In English too.
+  const en = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "en", setLanguage() {}, t: (_: string, en: string) => en } },
+      createElement(RelayContext.Provider, { value: withDrafts([draft()], retyping) }, createElement(PanelDrafts)),
+    ),
+  );
+  assert.match(en, /Rescued drafts/);
+  assert.match(en, />experimental</);
 });
 
 test("pending records show only the count line", () => {
@@ -512,7 +547,7 @@ test("a draft's reason wraps while its name stays on one line", () => {
   const classOf = (text: string) =>
     new RegExp(`<div class="([^"]*)"[^>]*>${text}</div>`).exec(html)?.[1];
   const name = classOf("Fix the login bug");
-  const reason = classOf("Konuşmaya yazılmış olabilir, yapıştırmadan önce bakın");
+  const reason = classOf("Konuşmaya yazılmış olabilir, yapıştırmadan önce bak");
   assert.ok(name !== undefined && reason !== undefined);
   assert.ok(name.split(" ").includes("truncate"));
   assert.ok(!reason.split(" ").includes("truncate"));
@@ -527,7 +562,7 @@ test("draftReason words every reason in both languages, with a fallback", () => 
   const tr = (a: string) => a;
   const en = (_a: string, b: string) => b;
   const maybeTyped: [string, string] = [
-    "Konuşmaya yazılmış olabilir, yapıştırmadan önce bakın",
+    "Konuşmaya yazılmış olabilir, yapıştırmadan önce bak",
     "It may already be in the conversation; check before pasting",
   ];
   const unsupported: [string, string] = [
@@ -541,7 +576,7 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     "context-changed": ["Ekran değişti", "The screen changed"],
     lost: ["Desktop taslağı sildi", "Desktop cleared the draft"],
     busy,
-    manual: ["Elle yapıştırın", "Paste it yourself"],
+    manual: ["Elle yapıştır", "Paste it yourself"],
     error: ["Geri yazılamadı", "Could not be restored"],
     // A draft that may already be in its composer says so, whichever way that came about.
     "maybe-typed": maybeTyped,
@@ -554,7 +589,7 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     "desktop-work-active": busy,
     "exact-session-not-observed": ["Konuşma açılamadı", "The conversation could not be opened"],
     "not-ready": ["Desktop hazır değildi", "Desktop was not ready"],
-    moved: ["Başka bir ekrana geçtiniz", "You went to another screen"],
+    moved: ["Başka bir ekrana geçtin", "You went to another screen"],
     changed: ["Ekran değişti", "The screen changed"],
     "claude-not-running": ["Claude çalışmıyordu", "Claude was not running"],
     budget: ["Süre doldu", "Ran out of time"],
@@ -569,7 +604,7 @@ test("draftReason words every reason in both languages, with a fallback", () => 
   }
   // A new-session draft's reasons name its screen where a conversation's would mislead.
   const maybeOnScreen: [string, string] = [
-    "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bakın",
+    "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bak",
     "It may already be on the new-session screen; check before pasting",
   ];
   const screenBusy: [string, string] = [
@@ -601,8 +636,8 @@ test("a new-session draft's row words its reason for the new-session screen", ()
     draft({ id: "n", newSession: true, title: "", reason: "maybe-typed" }),
     draft({ id: "c", title: "A conversation", reason: "maybe-typed" }),
   ]));
-  assert.match(html, /Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bakın/);
-  assert.match(html, /Konuşmaya yazılmış olabilir, yapıştırmadan önce bakın/);
+  assert.match(html, /Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bak/);
+  assert.match(html, /Konuşmaya yazılmış olabilir, yapıştırmadan önce bak/);
 });
 
 test("the panel places rescued drafts after the suggestion and before the accounts", () => {
@@ -616,11 +651,11 @@ test("the panel places rescued drafts after the suggestion and before the accoun
 test("a draft row's buttons are disabled while that row's action runs", () => {
   const both = [draft({ id: "d1", reason: "accessibility" }), draft({ id: "d2", title: "Other draft" })];
   const disabledCount = (busy: string) => {
-    const html = drafts(withDrafts(both, { busy }));
+    const html = drafts(withDrafts(both, { ...retyping, busy }));
     return (html.match(/disabled=""/g) ?? []).length;
   };
   assert.equal(disabledCount(""), 0);
-  // d1 shows Allow, Copy and Dismiss; d2 shows Copy and Dismiss.
+  // With re-typing on, d1 shows Allow, Copy and Dismiss; d2 shows Copy and Dismiss.
   assert.equal(disabledCount("draft-copy:d1"), 3);
   assert.equal(disabledCount("draft-dismiss:d2"), 2);
   // The permission key belongs to every row that offers it: here only d1.

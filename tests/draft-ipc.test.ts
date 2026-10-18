@@ -8,6 +8,7 @@ import { Store } from "../electron/core/store";
 import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
 import { DraftVault, type DraftSummary } from "../electron/core/draft-vault";
 import type { RestorerDeps, RestoreResult } from "../electron/core/draft-restorer";
+import { DesktopAutomationError } from "../electron/core/desktop-continuation-host";
 import {
   DraftScheduler,
   draftActions,
@@ -354,16 +355,24 @@ test("a busy lock or an active user never counts; every other stop, and a restor
   }
 });
 
-/** A scheduler over fake drafts, a fake 10 s timer and a scripted restore. */
+/** A scheduler over fake drafts, a fake 10 s or 60 s timer and a scripted restore. */
 function harness(
   over: {
     drafts?: DraftSummary[];
     restore?: (deps: RestorerDeps) => Promise<RestoreResult>;
+    /** Whether drafts are re-typed; on unless a test turns it off. */
+    retype?: boolean;
   } = {},
 ) {
   const state = {
     clock: 0,
     drafts: over.drafts ?? [summary("one")],
+    /** Desktop's current account, as config.json says. */
+    account: ACCOUNT as string | undefined,
+    /** How often the current account and the drafts were read. */
+    accountReads: 0,
+    reads: 0,
+    retype: over.retype ?? true,
     results: [] as (RestoreResult | Error)[],
     runs: 0,
     marks: [] as [string, string, string | undefined][],
@@ -371,6 +380,8 @@ function harness(
     changed: 0,
     armed: 0,
     cancelled: 0,
+    /** The armed timer's period: 10 s or 60 s, undefined while none is armed. */
+    every: undefined as number | undefined,
     tick: undefined as (() => void) | undefined,
     /** Runs inside the scripted restore, as the restorer changing the vault. */
     during: undefined as (() => void) | undefined,
@@ -384,7 +395,10 @@ function harness(
     logs: [] as Array<Record<string, unknown>>,
   };
   const restorer = {
-    currentAccount: async () => ACCOUNT,
+    currentAccount: async () => {
+      state.accountReads++;
+      return state.account;
+    },
     mark: async (id: string, next: DraftSummary["state"], reason?: string) => {
       state.marks.push([id, next, reason]);
       if (state.fail.has("mark") || state.failMark.has(id))
@@ -406,6 +420,7 @@ function harness(
   const scheduler = new DraftScheduler({
     restorer,
     drafts: async () => {
+      state.reads++;
       if (state.fail.has("read")) throw new Error("EIO");
       return state.drafts;
     },
@@ -413,6 +428,7 @@ function harness(
       state.changed++;
       if (state.fail.has("changed")) throw new Error("renderer");
     },
+    retype: () => state.retype,
     restore:
       over.restore ??
       (async (deps) => {
@@ -428,11 +444,15 @@ function harness(
         return next;
       }),
     every: (fn, ms) => {
-      assert.equal(ms, 10_000);
+      assert.ok(ms === 10_000 || ms === 60_000, String(ms));
+      // One timer at a time: a new one only after the last was cancelled.
+      assert.equal(state.tick, undefined);
       state.armed++;
+      state.every = ms;
       state.tick = fn;
       return () => {
         state.cancelled++;
+        state.every = undefined;
         state.tick = undefined;
       };
     },
@@ -1069,6 +1089,303 @@ test("one draft that cannot be moved back leaves the others moved, and is not co
   state.failMark.clear();
   assert.equal(await scheduler.retryAccessibility({ once: true }), 1);
   assert.deepEqual(state.marks.at(-1), ["b", "pending", undefined]);
+});
+
+test("with re-typing off, every pending draft is left for Copy at once, whatever its account", async () => {
+  const { scheduler, state } = harness({
+    retype: false,
+    drafts: [
+      summary("mine"),
+      summary("theirs", { to: OTHER }),
+      summary("done", { state: "needs-copy", reason: "lost" }),
+    ],
+  });
+  await scheduler.afterSwitch();
+  // No restore, and no need to know Desktop's account.
+  assert.equal(state.runs, 0);
+  assert.equal(state.accountReads, 0);
+  assert.deepEqual(state.marks, [
+    ["mine", "needs-copy", "manual"],
+    ["theirs", "needs-copy", "manual"],
+  ]);
+  assert.deepEqual(state.notices, [{ restored: 0, left: 2 }]);
+  assert.equal(state.changed, 1);
+  assert.equal(state.armed, 0);
+  assert.ok(state.logs.some((e) => e.event === "retype-off" && e.left === 2));
+  // Nothing is pending any more: a tick or another switch finds nothing to do.
+  await scheduler.tick();
+  await scheduler.afterSwitch();
+  assert.equal(state.marks.length, 2);
+  assert.equal(state.notices.length, 1);
+  assert.equal(state.armed, 0);
+});
+
+test("with re-typing off, drafts waiting from before go to Copy at launch", async () => {
+  const { scheduler, state } = harness({
+    retype: false,
+    drafts: [summary("old", { to: OTHER })],
+  });
+  await scheduler.start();
+  assert.deepEqual(state.marks, [["old", "needs-copy", "manual"]]);
+  assert.deepEqual(state.notices, [{ restored: 0, left: 1 }]);
+  assert.equal(state.runs, 0);
+  assert.equal(state.armed, 0);
+});
+
+test("with re-typing off, a draft whose mark fails stays pending and the next pass tries again", async () => {
+  const { scheduler, state } = harness({
+    retype: false,
+    drafts: [summary("a"), summary("b", { to: OTHER })],
+  });
+  state.failMark.add("b");
+  await scheduler.afterSwitch();
+  assert.deepEqual(
+    state.drafts.map((d) => d.state),
+    ["needs-copy", "pending"],
+  );
+  assert.deepEqual(state.notices, [{ restored: 0, left: 1 }]);
+  assert.equal(state.every, 10_000);
+  state.failMark.clear();
+  await scheduler.tick();
+  assert.deepEqual(state.marks.at(-1), ["b", "needs-copy", "manual"]);
+  assert.deepEqual(state.notices.at(-1), { restored: 0, left: 1 });
+  assert.equal(state.every, undefined);
+  assert.equal(state.runs, 0);
+});
+
+test("with re-typing off, nothing reaches Desktop: no restore, readiness check or automation", async () => {
+  const calls: string[] = [];
+  const automation = new Proxy({} as RestorerDeps["automation"], {
+    get: (_target, name) => async () => {
+      calls.push(`automation.${String(name)}`);
+      throw new DesktopAutomationError("accessibility-permission-required");
+    },
+  });
+  const make = (retype: boolean) => {
+    let drafts: DraftSummary[] = [
+      summary("mine"),
+      summary("theirs", { to: OTHER }),
+      summary("denied", { state: "needs-copy", reason: "accessibility" }),
+    ];
+    const called =
+      <T>(name: string, value: T) =>
+      async () => {
+        calls.push(name);
+        return value;
+      };
+    const scheduler = new DraftScheduler({
+      // The real restorer: only its deps are fakes.
+      restorer: {
+        automation,
+        pending: async () => {
+          calls.push("pending");
+          return drafts.map((d) => ({
+            ...d,
+            targetAlias: ALIAS,
+            text: TEXT,
+          })) as unknown as Awaited<ReturnType<RestorerDeps["pending"]>>;
+        },
+        mark: async (id, state, reason) => {
+          drafts = drafts.map((d) => (d.id === id ? { ...d, state, reason } : d));
+        },
+        remove: called("remove", undefined),
+        currentAccount: called("currentAccount", ACCOUNT),
+        running: called("running", true),
+        uptimeMs: called("uptimeMs", 60_000),
+        withLock: async (fn) => {
+          calls.push("withLock");
+          return fn();
+        },
+        yielding: () => {
+          calls.push("yielding");
+          return false;
+        },
+        notify: () => {},
+        sleep: called("sleep", undefined),
+        now: () => 0,
+      },
+      drafts: async () => drafts,
+      changed: () => {},
+      retype: () => retype,
+      every: () => () => {},
+    });
+    return { scheduler, drafts: () => drafts };
+  };
+
+  const off = make(false);
+  await off.scheduler.start();
+  await off.scheduler.afterSwitch();
+  await off.scheduler.tick();
+  await off.scheduler.retypeChanged();
+  await off.scheduler.retryAccessibility();
+  await off.scheduler.retryAccessibility({ once: true });
+  // A copy, so the assertion does not narrow `calls` for the checks below.
+  assert.deepEqual([...calls], []);
+  assert.deepEqual(
+    off.drafts().map((d) => [d.id, d.state, d.reason]),
+    [
+      ["mine", "needs-copy", "manual"],
+      ["theirs", "needs-copy", "manual"],
+      ["denied", "needs-copy", "accessibility"],
+    ],
+  );
+
+  // The same scheduler with re-typing on reaches all of them, so the check above can fail.
+  const on = make(true);
+  await on.scheduler.afterSwitch();
+  for (const name of ["currentAccount", "pending", "running", "uptimeMs", "automation.inspect"])
+    assert.ok(calls.includes(name), name);
+});
+
+test("turning re-typing off leaves the drafts still pending for Copy on the next pass", async () => {
+  // Waiting only for another account: the 60 s check is armed.
+  const { scheduler, state } = harness({ drafts: [summary("theirs", { to: OTHER })] });
+  await scheduler.afterSwitch();
+  assert.equal(state.runs, 1);
+  assert.equal(state.every, 60_000);
+  state.retype = false;
+  await scheduler.retypeChanged();
+  assert.deepEqual(state.marks, [["theirs", "needs-copy", "manual"]]);
+  assert.deepEqual(state.notices, [{ restored: 0, left: 1 }]);
+  assert.equal(state.every, undefined);
+  assert.equal(state.runs, 1);
+});
+
+test("re-typing turned off during a run leaves what that run left pending for Copy right after it", async () => {
+  let calls = 0;
+  const gates: (() => void)[] = [];
+  const { scheduler, state } = harness({
+    restore: async () => {
+      calls++;
+      await new Promise<void>((resolve) => gates.push(resolve));
+      return stopped("moved");
+    },
+  });
+  const run = scheduler.afterSwitch();
+  await flush();
+  state.retype = false;
+  const change = scheduler.retypeChanged();
+  gates.shift()!();
+  await Promise.all([run, change]);
+  assert.equal(calls, 1);
+  assert.deepEqual(state.marks, [["one", "needs-copy", "manual"]]);
+  assert.equal(state.every, undefined);
+});
+
+test("with re-typing off, retrying after accessibility moves nothing back", async () => {
+  const { scheduler, state } = harness({
+    retype: false,
+    drafts: [forAccess("a"), forAccess("b")],
+  });
+  assert.equal(await scheduler.retryAccessibility(), 0);
+  assert.equal(await scheduler.retryAccessibility({ once: true }), 0);
+  assert.deepEqual(state.marks, []);
+  assert.equal(state.reads, 0);
+  assert.equal(state.changed, 0);
+  assert.equal(state.armed, 0);
+});
+
+test("the 10 s retries arm only for a draft for Desktop's account; others get a 60 s look at the account", async () => {
+  const { scheduler, state } = harness({ drafts: [summary("theirs", { to: OTHER })] });
+  await scheduler.afterSwitch();
+  assert.equal(state.runs, 1);
+  assert.equal(state.every, 60_000);
+  // The 60 s check reads Desktop's account only: no drafts, no restore.
+  const { reads, accountReads } = state;
+  state.tick!();
+  await flush();
+  assert.equal(state.accountReads, accountReads + 1);
+  assert.equal(state.reads, reads);
+  assert.equal(state.runs, 1);
+  assert.equal(state.every, 60_000);
+  // Desktop is on the draft's account now, however it got there: a full pass, then 10 s retries.
+  state.account = OTHER.toUpperCase();
+  state.tick!();
+  await flush();
+  assert.equal(state.runs, 2);
+  assert.equal(state.every, 10_000);
+  // With nothing pending, nothing is armed.
+  state.drafts = [];
+  await scheduler.tick();
+  assert.equal(state.every, undefined);
+  assert.equal(state.runs, 2);
+});
+
+test("once Desktop's account has no draft pending, the 10 s retries give way to the 60 s check", async () => {
+  const { scheduler, state } = harness({
+    drafts: [summary("mine"), summary("theirs", { to: OTHER })],
+  });
+  await scheduler.afterSwitch();
+  assert.equal(state.every, 10_000);
+  state.results.push({ status: "done", restored: 1, left: 0 });
+  state.during = () => {
+    state.drafts = state.drafts.filter((d) => d.id !== "mine");
+  };
+  await scheduler.tick();
+  assert.equal(state.every, 60_000);
+  assert.equal(state.cancelled, 1);
+});
+
+test("at launch, drafts waiting only for other accounts arm the 60 s check, not the 10 s retries", async () => {
+  let h = harness({ drafts: [summary("theirs", { to: OTHER })] });
+  await h.scheduler.start();
+  assert.equal(h.state.every, 60_000);
+  assert.equal(h.state.runs, 0);
+  // Desktop signed out: no draft is for its account either.
+  h = harness();
+  h.state.account = undefined;
+  await h.scheduler.start();
+  assert.equal(h.state.every, 60_000);
+  assert.equal(h.state.runs, 0);
+  // Signed in to the draft's account: a full pass.
+  h.state.account = ACCOUNT;
+  h.state.tick!();
+  await flush();
+  assert.equal(h.state.runs, 1);
+  assert.equal(h.state.every, 10_000);
+});
+
+test("main gives the scheduler the re-typing setting, off unless turned on, and a change of it runs a pass", () => {
+  const main = source("../electron/main.ts");
+  assert.match(
+    main,
+    /const draftRetype = \(\) =>\s*service\.store\.state\.settings\.draftRetype === true;/,
+  );
+  const deps = main.slice(
+    main.indexOf("draftRestore = new DraftScheduler("),
+    main.indexOf("desktop.onSwitched"),
+  );
+  assert.match(deps, /retype: draftRetype,/);
+  const update = handler(main, "update-settings");
+  const order = [
+    update.search(/const retype = draftRetype\(\);/),
+    update.indexOf("service.store.update("),
+    update.search(/if \(draftRetype\(\) !== retype\) void draftRestore\.retypeChanged\(\);/),
+    update.indexOf("return service.store.state.settings;"),
+  ];
+  assert.ok(order.every((at) => at >= 0), String(order));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+});
+
+test("the accessibility request asks only while a feature that needs it is on", () => {
+  const main = source("../electron/main.ts");
+  const request = handler(main, "request-desktop-accessibility");
+  const guard = request.search(/if \(!accessibilityWanted\(\)\) return false;/);
+  assert.ok(guard >= 0);
+  assert.ok(guard < request.indexOf("isTrustedAccessibilityClient(true)"));
+  assert.ok(guard < request.indexOf("requestAccessibility?.()"));
+  assert.ok(guard < request.indexOf("shell.openExternal("));
+  // Draft re-typing, or continuing conversations at the limit; with them off nothing asks.
+  assert.match(
+    main,
+    /function accessibilityWanted\(\) \{\s*return (?:draftRetype\(\) \|\| fleet\.enabled \|\| continuation\.snapshot\(\)\.enabled|\(\s*draftRetype\(\) \|\|\s*fleet\.enabled \|\|\s*continuation\.snapshot\(\)\.enabled\s*\));\s*\}/,
+  );
+});
+
+test("the quit notice addresses the user as sen", () => {
+  const main = source("../electron/main.ts");
+  assert.doesNotMatch(main, /çıkabilirsiniz/);
+  assert.match(main, /İşlem tamamlandıktan sonra yeniden çıkabilirsin\./);
 });
 
 test("setting a draft back to pending removes its reason in the vault", async (t) => {

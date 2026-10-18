@@ -97,6 +97,15 @@ let continuation: DesktopContinuationManager;
 let fleet: FleetContinuation;
 let automation: ReturnType<typeof nativeDesktopAutomation>;
 let draftRestore: DraftScheduler;
+/** Drafts are re-typed into Claude only once the user turns it on; missing means off. */
+const draftRetype = () => service.store.state.settings.draftRetype === true;
+/**
+ * A feature that needs Accessibility is on: re-typing drafts, or continuing conversations at
+ * the limit. Only then does Relay ask for it.
+ */
+function accessibilityWanted() {
+  return draftRetype() || fleet.enabled || continuation.snapshot().enabled;
+}
 /** Whether a draft event is worth logging: a run that does nothing says so once. */
 const draftEventAllowed = draftEventFilter();
 /**
@@ -299,6 +308,7 @@ else {
         },
         drafts: () => desktop.pendingDrafts(),
         changed: broadcastChanged,
+        retype: draftRetype,
       });
       // One hook for every switch: tray, panel, automatic, continuation and fleet.
       desktop.onSwitched = () => void draftRestore.afterSwitch();
@@ -927,6 +937,8 @@ function bindIPC() {
   handle("abandon-continuation", () => continuation.abandonPending());
   handle("request-desktop-accessibility", async () => {
     if (process.platform !== "darwin") return false;
+    // With draft re-typing and continuation off, nothing needs it: never ask.
+    if (!accessibilityWanted()) return false;
     // Register the explicit permission request against the foreground Relay app.
     // A helper-only request can obscure which rebuilt app owns the OS consent.
     systemPreferences.isTrustedAccessibilityClient(true);
@@ -1077,12 +1089,15 @@ function bindIPC() {
       )
         throw new Error("Select existing Relay accounts once each.");
     }
+    const retype = draftRetype();
     service.store.update((s) => {
       Object.assign(s.settings, patch);
     });
     nativeTheme.themeSource = themeSource(service.store.state.settings);
     usage.tick();
     void autoSwitch.tick();
+    // Turned off, the drafts still pending go to Copy now, not at the next switch.
+    if (draftRetype() !== retype) void draftRestore.retypeChanged();
     return service.store.state.settings;
   });
   handle("update-planning", (input) => {
@@ -1291,7 +1306,7 @@ app.on("before-quit", (event) => {
       detail:
         trayLanguage === "en"
           ? "Relay stayed open to finish the connection safely. Quit again after it completes. Claude and its tasks are unaffected."
-          : "Bağlantıyı yarım bırakmamak için Relay açık kaldı. İşlem tamamlandıktan sonra yeniden çıkabilirsiniz. Claude ve görevleri etkilenmez.",
+          : "Bağlantıyı yarım bırakmamak için Relay açık kaldı. İşlem tamamlandıktan sonra yeniden çıkabilirsin. Claude ve görevleri etkilenmez.",
       buttons: [trayLanguage === "en" ? "OK" : "Tamam"],
     });
     return;

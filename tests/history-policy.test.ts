@@ -147,3 +147,14 @@ test("the panda pranks setting is optional and never defaulted", () => {
   assert.equal("pranks" in settingsPatchSchema.parse({ appearance: "dark" }), false);
   assert.throws(() => settingsPatchSchema.parse({ pranks: "never" }));
 });
+
+test("the draft re-typing setting is optional, never defaulted, and off when missing", () => {
+  assert.equal("draftRetype" in DEFAULT_SETTINGS, false);
+  const stored = settingsSchema.parse({ ...DEFAULT_SETTINGS });
+  assert.equal("draftRetype" in stored, false);
+  assert.equal(settingsSchema.parse({ ...DEFAULT_SETTINGS, draftRetype: true }).draftRetype, true);
+  assert.deepEqual(settingsPatchSchema.parse({ draftRetype: true }), { draftRetype: true });
+  assert.deepEqual(settingsPatchSchema.parse({ draftRetype: false }), { draftRetype: false });
+  assert.equal("draftRetype" in settingsPatchSchema.parse({ appearance: "dark" }), false);
+  assert.throws(() => settingsPatchSchema.parse({ draftRetype: "yes" }));
+});

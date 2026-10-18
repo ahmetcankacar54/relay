@@ -13,8 +13,13 @@ import type { DraftSummary } from "./draft-vault";
  * DesktopLock's `restore`.
  */
 
-/** How often pending drafts are tried again while any wait. */
+/** How often pending drafts are tried again while one waits for Desktop's current account. */
 export const RETRY_MS = 10_000;
+/**
+ * How often Desktop's account alone is read while drafts wait only for other accounts. A
+ * switch runs a pass of its own; this catches an account changed in Claude itself.
+ */
+export const ACCOUNT_CHECK_MS = 60_000;
 /** How long retries wait after a run in which Desktop's UI never answered. */
 export const NOT_READY_BACKOFF_MS = 2 * 60_000;
 /**
@@ -52,6 +57,9 @@ export function draftNotice(
 export const RESTORE_ERROR = "error";
 
 const sameAccount = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+/** Two reads of Desktop's account name the same account, or both none. */
+const sameRead = (a: string | undefined, b: string | undefined) =>
+  a === b || (!!a && !!b && sameAccount(a, b));
 const pendingIds = (drafts: readonly DraftSummary[]) =>
   new Set(drafts.filter((d) => d.state === "pending").map((d) => d.id));
 
@@ -109,6 +117,11 @@ export interface DraftSchedulerDeps {
   drafts(): Promise<DraftSummary[]>;
   /** Tells the renderers that the drafts changed. */
   changed(): void;
+  /**
+   * Whether drafts are re-typed into Claude. Off, every pending draft is left for Copy and
+   * neither the restorer nor anything of Desktop's UI is used.
+   */
+  retype(): boolean;
   /** The restore to run; restoreDrafts unless a test gives another. */
   restore?: (deps: RestorerDeps) => Promise<RestoreResult>;
   /** Calls `fn` every `ms` until the returned function is called; setInterval unless a test gives another. */
@@ -125,14 +138,19 @@ function interval(fn: () => void, ms: number): () => void {
 }
 
 /**
- * Runs the draft restorer after every switch, and every 10 s while a draft is pending, one
- * run at a time. After a run in which Desktop's UI never answered, the 10 s retries wait
- * 2 minutes, and after one that found the user active, 60 s; a switch does not. A pending
- * draft that `MAX_STALLS` runs in a row tried and
- * stopped on is left for Copy with the last stop reason, so none stays pending for ever.
+ * Runs the draft restorer after every switch, one run at a time, and every 10 s while a
+ * pending draft is for Desktop's current account. While drafts wait only for other accounts,
+ * Desktop's account alone is read every 60 s and a full pass runs once it is another; while
+ * none waits, nothing is armed. After a run in which Desktop's UI never answered, the 10 s
+ * retries wait 2 minutes, and after one that found the user active, 60 s; a switch does not.
+ * A pending draft that `MAX_STALLS` runs in a row tried and stopped on is left for Copy with
+ * the last stop reason, so none stays pending for ever.
  * Once accessibility is granted, `retryAccessibility` sets the drafts left for Copy for want
  * of it back to pending, one call at a time: from the user's grant every one, and from a
- * window gaining focus each at most once while Relay runs. Runs never throw.
+ * window gaining focus each at most once while Relay runs.
+ * With re-typing off, a pass leaves every pending draft, whatever its account, for Copy as
+ * `manual` without running the restorer, and `retryAccessibility` moves nothing. Runs never
+ * throw.
  */
 export class DraftScheduler {
   private running = false;
@@ -140,6 +158,12 @@ export class DraftScheduler {
   /** A switch came during the run: one more run after it. */
   private again = false;
   private cancel?: () => void;
+  /** The armed timer's period: RETRY_MS or ACCOUNT_CHECK_MS. */
+  private period?: number;
+  /** Desktop's account as the last pass to arm the timers read it; the 60 s check compares. */
+  private account?: string;
+  /** Passes begun, so `start` leaves the timers to a pass begun after it read the drafts. */
+  private passes = 0;
   private notBefore = -Infinity;
   private stalls = new Map<string, number>();
   private stopped = false;
@@ -149,9 +173,27 @@ export class DraftScheduler {
   private retrying: Promise<unknown> = Promise.resolve();
   constructor(private readonly deps: DraftSchedulerDeps) {}
 
-  /** Turns the 10 s retries on when drafts wait from before, as after Relay restarts. */
+  /**
+   * When drafts wait from before, as after Relay restarts: with re-typing off they are left
+   * for Copy now; on, the 10 s retries or the 60 s check are armed for them, as after a pass.
+   */
   async start(): Promise<void> {
-    if (anyPending(await this.read())) this.arm();
+    const passes = this.passes;
+    const drafts = await this.read();
+    if (!anyPending(drafts)) return;
+    if (!this.deps.retype()) return this.run(false);
+    const account = await this.currentAccount();
+    // A pass begun since the drafts were read armed for what it found: that stands.
+    if (this.running || this.passes !== passes) return;
+    this.schedule(drafts, account);
+  }
+
+  /**
+   * Draft re-typing was turned on or off: one pass now, or right after the one in flight.
+   * Turned off, it leaves every draft still pending for Copy.
+   */
+  retypeChanged(): Promise<void> {
+    return this.run(true);
   }
 
   /**
@@ -193,6 +235,8 @@ export class DraftScheduler {
     if (this.stopped) return 0;
     let moved = 0;
     try {
+      // Re-typing off: every draft left for Copy stays there, whatever left it.
+      if (!this.deps.retype()) return 0;
       const waiting = (await this.read()).filter(
         (d) =>
           d.state === "needs-copy" &&
@@ -215,9 +259,9 @@ export class DraftScheduler {
         // The panel reads the drafts again on its next refresh.
       }
       // A run in flight may have read the drafts before this and turn the retries off as it
-      // ends: arm them after it.
+      // ends: arm them after it. The next run arms for the account they wait for.
       await this.flight;
-      this.arm();
+      this.arm(RETRY_MS);
     } catch {
       // Nothing here is expected to throw; the drafts stay as they are.
     }
@@ -253,8 +297,10 @@ export class DraftScheduler {
   }
 
   private async once(): Promise<void> {
+    this.passes++;
     const before = await this.read();
     if (!anyPending(before)) return this.disarm();
+    if (!this.deps.retype()) return this.leaveAll(before);
     const { restorer } = this.deps;
     let account: string | undefined;
     let asked = false;
@@ -315,22 +361,101 @@ export class DraftScheduler {
       } catch {
         // The panel reads the drafts again on its next refresh.
       }
-    if (after.some((d) => d.state === "pending" && !given.has(d.id))) this.arm();
+    this.schedule(
+      after.filter((d) => !given.has(d.id)),
+      // The account the restorer read first; read here only when it read none.
+      asked ? account : await this.currentAccount(),
+    );
+  }
+
+  /**
+   * Re-typing is off: every pending draft, whatever its account, is left for Copy as `manual`,
+   * without the restorer or Desktop's account. One whose mark fails stays pending, and the
+   * 10 s retries try it again.
+   */
+  private async leaveAll(before: readonly DraftSummary[]): Promise<void> {
+    const { restorer } = this.deps;
+    let left = 0;
+    let failed = 0;
+    for (const draft of before) {
+      if (draft.state !== "pending") continue;
+      try {
+        await restorer.mark(draft.id, "needs-copy", "manual");
+        this.stalls.delete(draft.id);
+        left++;
+      } catch {
+        // A vault that cannot be changed keeps the draft pending; the next pass tries again.
+        failed++;
+      }
+    }
+    logDraft(restorer.log, "retype-off", { left, failed });
+    if (left) {
+      try {
+        restorer.notify({ restored: 0, left });
+      } catch {
+        // A notification that fails changes nothing about the drafts.
+      }
+      try {
+        this.deps.changed();
+      } catch {
+        // The panel reads the drafts again on its next refresh.
+      }
+    }
+    if (failed) this.arm(RETRY_MS);
     else this.disarm();
+  }
+
+  /**
+   * Arms what the pending `drafts` need: the 10 s retries while one is for Desktop's
+   * `account`, the 60 s check while they wait only for other accounts, nothing while none
+   * waits.
+   */
+  private schedule(
+    drafts: readonly DraftSummary[],
+    account: string | undefined,
+  ): void {
+    this.account = account;
+    const pending = drafts.filter((d) => d.state === "pending");
+    if (!pending.length) return this.disarm();
+    if (account && pending.some((d) => sameAccount(d.to, account)))
+      this.arm(RETRY_MS);
+    else this.arm(ACCOUNT_CHECK_MS);
+  }
+
+  /** The 60 s check: Desktop's account alone, and a full pass once it is another. */
+  private async check(): Promise<void> {
+    if (this.running || this.stopped) return;
+    if (sameRead(await this.currentAccount(), this.account)) return;
+    await this.run(false);
+  }
+
+  /** Desktop's account; undefined when it cannot be read. */
+  private async currentAccount(): Promise<string | undefined> {
+    try {
+      return await this.deps.restorer.currentAccount();
+    } catch {
+      return undefined;
+    }
   }
 
   private read(): Promise<DraftSummary[]> {
     return this.deps.drafts().catch(() => []);
   }
 
-  private arm(): void {
-    if (this.cancel || this.stopped) return;
-    this.cancel = (this.deps.every ?? interval)(() => void this.tick(), RETRY_MS);
+  private arm(period: number): void {
+    if (this.stopped || (this.cancel && this.period === period)) return;
+    this.disarm();
+    this.period = period;
+    this.cancel = (this.deps.every ?? interval)(
+      period === RETRY_MS ? () => void this.tick() : () => void this.check(),
+      period,
+    );
   }
 
   private disarm(): void {
     this.cancel?.();
     this.cancel = undefined;
+    this.period = undefined;
   }
 }
 

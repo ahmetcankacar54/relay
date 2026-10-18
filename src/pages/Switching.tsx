@@ -5,7 +5,10 @@ import { Switch } from "@/components/ui/switch";
 import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { SharedHistoryPreferences } from "../features/SwitchPreferences";
+import {
+  DraftRetypePreference,
+  SharedHistoryPreferences,
+} from "../features/SwitchPreferences";
 import { ContinuationSettings } from "../features/ContinuationSettings";
 import { AutomationSettings } from "../features/AutomationControl";
 
@@ -154,6 +157,14 @@ export function Switching() {
               !!desktopBusy || !!pendingDesktop || !!desktop?.recoveryRequired
             }
             sync={() => relay.requestDesktop(active, "history")}
+            t={t}
+          />
+        </Card>
+        <Card className={cardClass}>
+          <DraftRetypePreference
+            value={settings}
+            update={update}
+            disabled={disabled}
             t={t}
           />
         </Card>
