@@ -13,7 +13,7 @@ import {
   overviewCards,
   prerequisites,
 } from "../src/lib/onboarding";
-import { MIN_CLI_VERSION, meetsCliMinimum } from "../shared/cli-version";
+import { MIN_CLI_VERSION, USAGE_CLI_VERSION, meetsCliMinimum, readsUsage } from "../shared/cli-version";
 import { EXTERNAL_LINKS, isExternalLink } from "../shared/external-links";
 import { intentHash, PAGE_INTENTS } from "../src/app/routes";
 import { supportsDesktop } from "../electron/core/environment";
@@ -72,6 +72,20 @@ test("the CLI minimum is the one the Desktop check uses", () => {
   assert.equal(supportsDesktop("2.1.285", "linux", "x64"), false);
 });
 
+test("reading limits needs a newer CLI, the one the usage refresher enforces", () => {
+  assert.equal(USAGE_CLI_VERSION, "2.1.296");
+  assert.equal(readsUsage("2.1.295 (Claude Code)"), false);
+  assert.equal(readsUsage("2.1.296 (Claude Code)"), true);
+  assert.equal(readsUsage("2.2.0"), true);
+  assert.equal(readsUsage("2.0.999"), false);
+  assert.equal(readsUsage("1.9.999"), false);
+  assert.equal(readsUsage("unknown"), false);
+  // The refresher in main reads the same constant, not a number of its own.
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(main, /readsUsage\(diagnostics\.version/);
+  assert.doesNotMatch(main, /< 296/);
+});
+
 test("cliState reads the diagnostics: unknown, missing, unreadable, outdated or ok", () => {
   assert.equal(cliState(undefined), "unknown");
   assert.equal(
@@ -83,6 +97,9 @@ test("cliState reads the diagnostics: unknown, missing, unreadable, outdated or 
     "unreadable",
   );
   assert.equal(cliState(diagnostics({ version: "2.1.200 (Claude Code)" })), "outdated");
+  // The Desktop minimum is not enough: the ✓ means the CLI can read limits.
+  assert.equal(cliState(diagnostics({ version: "2.1.290 (Claude Code)" })), "outdated");
+  assert.equal(cliState(diagnostics({ version: "2.1.296 (Claude Code)" })), "ok");
   assert.equal(cliState(diagnostics()), "ok");
   // The preview's platform is not darwin; the version alone decides.
   assert.equal(cliState(diagnostics({ platform: "preview", desktopSupported: false })), "ok");
@@ -94,8 +111,8 @@ test("cliDetail names the version found, and the minimum when it is too old", ()
   assert.equal(cliDetail("missing", undefined, en), "Not found");
   assert.equal(cliDetail("unreadable", undefined, tr), "Sürümü okunamadı");
   assert.equal(cliDetail("unreadable", undefined, en), "Its version couldn’t be read");
-  assert.equal(cliDetail("outdated", "2.1.200", tr), "2.1.200 · 2.1.285 veya üstü gerekir");
-  assert.equal(cliDetail("outdated", "2.1.200", en), "2.1.200 · needs 2.1.285 or later");
+  assert.equal(cliDetail("outdated", "2.1.200", tr), "2.1.200 · 2.1.296 veya üstü gerekir");
+  assert.equal(cliDetail("outdated", "2.1.200", en), "2.1.200 · needs 2.1.296 or later");
 });
 
 test("the Code tab counts as opened once the current sign-in has a workspace folder", () => {

@@ -100,7 +100,7 @@ export function PanelAccounts({
                 className="h-auto px-0 text-[12.5px]"
                 onClick={() => openAddAccount(relay)}
               >
-                {t("Hesap ekle", "Add an account")}
+                {t("Hesap ekle", "Add account")}
               </Button>
             </div>
           )
@@ -184,12 +184,12 @@ export function PanelAccounts({
                       <span>
                         {language === "tr" ? (
                           <>
-                            Claude kapanıp <b>{account.name}</b> ile yeniden
+                            Claude uygulaması kapanıp <b>{account.name}</b> ile yeniden
                             açılır. Çalışan yanıtlar bitsin.
                           </>
                         ) : (
                           <>
-                            Claude quits and reopens with <b>{account.name}</b>.
+                            The Claude app quits and reopens with <b>{account.name}</b>.
                             Let running replies finish.
                           </>
                         )}

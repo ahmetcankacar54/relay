@@ -96,8 +96,9 @@ export function usageSignInStatus(
 /**
  * The one status an account shows, in the table and in the details sheet. The first problem found wins,
  * in this order: a browser approval in progress, no Claude app sign-in, a usage sign-in that must be
- * renewed (or belongs to another account), a locked Keychain, a connection to renew, no usage sign-in.
- * Otherwise the account is running in Claude, or ready.
+ * renewed (or belongs to another account), a locked Keychain, a connection to renew, no usage sign-in,
+ * a usage read that failed or is out of date. Otherwise the account is running in Claude, or ready.
+ * The Overview and the panel rows (`accountRowSubtitle`) read this same status.
  */
 export function accountHealth(
   account: Account,
@@ -162,5 +163,9 @@ export function accountHealth(
       ["Limit okuma girişi yok", "No usage sign-in"],
       "cli",
     );
+  // A failed or old read is not "Ready": the limits shown are not current (a transient error
+  // keeps the previous limits, marked stale). The Overview names it the same way.
+  if (usage && (usage.stale || usage.status === "error"))
+    return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
   return result("ok", running ? ["Çalışıyor", "Running"] : ["Hazır", "Ready"]);
 }

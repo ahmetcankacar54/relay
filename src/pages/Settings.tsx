@@ -90,8 +90,8 @@ export function Settings() {
                   </span>
                 }
                 description={t(
-                  "Claude yeniden başlarken menü çubuğunun altında kısa bir sahne oynar.",
-                  "A short scene plays under the menu bar while Claude restarts.",
+                  "Claude uygulaması yeniden başlarken menü çubuğunun altında kısa bir sahne oynar.",
+                  "A short scene plays under the menu bar while the Claude app restarts.",
                 )}
               >
                 <Switch
@@ -165,8 +165,8 @@ export function Settings() {
             label={t("Kullanım limitlerini yenile", "Refresh usage limits")}
             htmlFor="usage-interval"
             description={t(
-              "Yalnızca kullanım verisi okunur; Claude çalışmaya devam eder.",
-              "Reads usage data while Claude keeps running.",
+              "Yalnızca kullanım verisi okunur; Claude uygulaması çalışmaya devam eder.",
+              "Reads usage data while the Claude app keeps running.",
             )}
           >
             <OptionSelect
@@ -223,8 +223,8 @@ export function Settings() {
           </SettingRow>
           <Note className="mb-2">
             {t(
-              "Desktop geçişi, Claude’un yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",
-              "Desktop switching is an experimental integration with Claude’s local file format. Code sessions and local project records merge within your chosen sharing scope. Chat history and server-managed project groups remain account-specific.",
+              "Hesap geçişi, Claude uygulamasının yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",
+              "Switching accounts is an experimental integration with the Claude app’s local file format. Code sessions and local project records merge within your chosen sharing scope. Chat history and server-managed project groups remain account-specific.",
             )}
           </Note>
           <Note>

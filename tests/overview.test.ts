@@ -61,7 +61,7 @@ test("overview shows the active account, limits, accounts, today and automation"
     vertex: use("vertex", 12, 31),
   };
   const html = render(relayFor(active, [active, vertex], usage, { suggestion: vertex }));
-  assert.match(html, /CLAUDE DESKTOP’TA AÇIK/);
+  assert.match(html, /CLAUDE UYGULAMASINDA AÇIK/);
   assert.match(html, /Kişisel · Max/);
   assert.match(html, /Max 5×/);
   assert.match(html, /Çalışıyor/);
@@ -69,19 +69,19 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Haftalık · tüm modeller/);
   assert.match(html, /Haftalık · Opus/);
   assert.match(html, /Önerilen/);
-  // The suggestion band keeps its text; the suggested row's own "Geçiş yap" is the one switch offer.
+  // The suggestion band keeps its text; the suggested row's own "Geç" is the one switch offer.
   assert.match(html, /Kişisel · Max limiti uyarı eşiğini geçti\. Önerilen: <b>Vertex<\/b>/);
   // The suggestion's figure is what it has left (its tightest window, 31 % used), with its word.
   assert.match(html, /<b>Vertex<\/b> \(%69 kaldı\)\./);
   assert.doesNotMatch(html, /Geçişi incele/);
-  assert.equal(html.match(/Geçiş yap/g)?.length, 1);
+  assert.equal(html.match(/>Geç</g)?.length, 1);
   assert.match(html, /Bugün/);
   assert.match(html, /Önceden başlatma kapalı/);
   assert.doesNotMatch(html, /Otomatik başlatma/);
   assert.match(html, /<label[^>]*for="automation-mode"[^>]*>Otomatik geçiş<\/label>/);
   assert.match(html, /Kapalı\. Kota dolunca hesabı sen değiştirirsin\./);
   assert.match(html, /Limit dönemlerini önceden başlat/);
-  assert.doesNotMatch(html, /Claude kapanınca hazırla/);
+  assert.doesNotMatch(html, /Claude uygulaması kapanınca hazırla/);
   assert.match(html, /Limitleri yenile/);
 });
 
@@ -93,7 +93,7 @@ test("overview without an active account offers onboarding", () => {
   assert.match(emptyHtml, /Hesap ekle/);
   assert.match(emptyHtml, /Henüz hesap yok/);
   assert.doesNotMatch(emptyHtml, /Başka hesap yok/);
-  assert.doesNotMatch(emptyHtml, /CLAUDE DESKTOP’TA AÇIK/);
+  assert.doesNotMatch(emptyHtml, /CLAUDE UYGULAMASINDA AÇIK/);
 });
 
 test("unlinked accounts offer a Desktop link instead of a switch", () => {
@@ -110,7 +110,7 @@ test("unlinked accounts offer a Desktop link instead of a switch", () => {
 const rowsOf = (html: string) => html.split("grid-cols-[1.2fr_1fr_1fr_auto]").slice(1);
 const rowFor = (html: string, name: string) => rowsOf(html).find((r) => r.includes(`>${name}<`)) ?? "";
 const switchButtons = (html: string) =>
-  (html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Geçiş yap<\/button>/g) ?? []);
+  (html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Geç<\/button>/g) ?? []);
 
 test("the automation choice is locked while a handoff is switching or continuing", () => {
   const active = acct("active", "Kişisel · Max", "max5");
@@ -208,7 +208,7 @@ test("onboarding with saved accounts but none open looks out instead of greeting
   const html = render(relayFor(undefined, [other], {}, { hasUnclaimedDesktop: true }));
   assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="72"/);
   assert.doesNotMatch(html, /data-scene="welcome"|Merhaba, ben Relay’in kuryesiyim/);
-  assert.match(html, /Desktop hesabı eşleştirilmedi/);
+  assert.match(html, /Claude uygulaması hesabı eşleştirilmedi/);
 });
 
 test("today's card shows a lookout panda when automatic start has no planned account", () => {
@@ -352,7 +352,7 @@ test("a first run lists the three prerequisites, each with a mark, a reason and 
   const code = item(list, "code");
   assert.match(code, /data-met="false"/);
   assert.match(code, /Code sekmesi açıldı/);
-  assert.match(code, /Claude’da sol menüden Code’u bir kez aç; liste kendiliğinden dolar\./);
+  assert.match(code, /Claude uygulamasında sol menüden Code’u bir kez aç; liste kendiliğinden dolar\./);
 });
 
 test("met prerequisites are ticked and the list hides once all three are met", () => {
@@ -360,8 +360,8 @@ test("met prerequisites are ticked and the list hides once all three are met", (
   assert.match(item(partial, "desktop"), /data-met="true"[\s\S]*Bulundu/);
   assert.doesNotMatch(item(partial, "desktop"), /İndir/);
   // With the Claude app there, the Code step can open it.
-  assert.match(item(partial, "code"), /<button[^>]*>Claude’u aç<\/button>/);
-  assert.match(item(checklist(render(firstRun({ desktop: { running: true } }))), "code"), /<button[^>]*>Claude’u öne getir<\/button>/);
+  assert.match(item(partial, "code"), /<button[^>]*>Claude uygulamasını aç<\/button>/);
+  assert.match(item(checklist(render(firstRun({ desktop: { running: true } }))), "code"), /<button[^>]*>Claude uygulamasını öne getir<\/button>/);
   const ready = render(
     firstRun({
       desktop: { currentAccountUuid: "00000000-0000-4000-8000-000000000001", organizations: ["00000000-0000-4000-8000-000000000002"] },
@@ -377,7 +377,11 @@ test("met prerequisites are ticked and the list hides once all three are met", (
 test("an outdated CLI names the version found and the minimum", () => {
   const cli = item(checklist(render(firstRun({ diagnostics: { executable: "/usr/local/bin/claude", version: "2.1.200 (Claude Code)", error: undefined } }))), "cli");
   assert.match(cli, /data-met="false"/);
-  assert.match(cli, /2\.1\.200 \(Claude Code\) · 2\.1\.285 veya üstü gerekir/);
+  assert.match(cli, /2\.1\.200 \(Claude Code\) · 2\.1\.296 veya üstü gerekir/);
+  // A CLI the Claude app accepts but that cannot read limits is not ticked.
+  const between = item(checklist(render(firstRun({ diagnostics: { executable: "/usr/local/bin/claude", version: "2.1.290 (Claude Code)", error: undefined } }))), "cli");
+  assert.match(between, /data-met="false"/);
+  assert.match(between, /2\.1\.290 \(Claude Code\) · 2\.1\.296 veya üstü gerekir/);
 });
 
 test("the CLI's Choose file reuses the Settings picker", async () => {
@@ -403,7 +407,7 @@ test("the checklist speaks English with the glossary names", () => {
   assert.match(html, /Needed to read usage limits\./);
   assert.match(html, />Choose file<\/button>/);
   assert.match(html, /Code tab opened/);
-  assert.match(html, /Open Code once from the sidebar in Claude; the list fills in on its own\./);
+  assert.match(html, /Open Code once from the sidebar in the Claude app; the list fills in on its own\./);
 });
 
 test("with no account, the overview offers the first one and hides Today and automation", () => {
@@ -414,7 +418,7 @@ test("with no account, the overview offers the first one and hides Today and aut
   assert.doesNotMatch(html, /Otomatik geçiş/);
   assert.doesNotMatch(html, /Otomasyon/);
   const en = renderIn("en", firstRun());
-  assert.match(en, /No accounts yet ·\s*<button[^>]*>Add an account<\/button>/);
+  assert.match(en, /No accounts yet ·\s*<button[^>]*>Add account<\/button>/);
 });
 
 test("Today shows from one connected account, automation from two", () => {

@@ -42,6 +42,7 @@ import { SwitchWindow } from "./switch-window";
 import { SwitchStory, sceneView } from "../shared/switch-scene";
 import { PAGE_INTENTS, PAGES } from "../src/app/routes";
 import { isExternalLink } from "../shared/external-links";
+import { readsUsage } from "../shared/cli-version";
 import { UsageHistory } from "./core/usage-history";
 import { usageStatisticsInput } from "./core/usage-statistics-input";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
@@ -223,17 +224,7 @@ else {
           const { diagnostics } = await service.panelSnapshot();
           if (!diagnostics.executable || diagnostics.error)
             throw new UsageError("unavailable");
-          const version = /\b(\d+)\.(\d+)\.(\d+)\b/.exec(
-            diagnostics.version ?? "",
-          );
-          if (
-            !version ||
-            Number(version[1]) < 2 ||
-            (Number(version[1]) === 2 && Number(version[2]) === 0) ||
-            (Number(version[1]) === 2 &&
-              Number(version[2]) === 1 &&
-              Number(version[3]) < 296)
-          )
+          if (!readsUsage(diagnostics.version ?? ""))
             throw new UsageError("unavailable");
           return diagnostics.executable;
         },

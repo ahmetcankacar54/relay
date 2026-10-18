@@ -43,7 +43,7 @@ export function ActiveAccountCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className={eyebrow}>
-            {t("CLAUDE DESKTOP’TA AÇIK", "OPEN IN CLAUDE DESKTOP")}
+            {t("CLAUDE UYGULAMASINDA AÇIK", "OPEN IN THE CLAUDE APP")}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-2">
             <span className="text-lg font-bold">{active.name}</span>
@@ -68,8 +68,8 @@ export function ActiveAccountCard({
         >
           <ArrowUpRight />
           {running
-            ? t("Claude’u öne getir", "Bring Claude to front")
-            : t("Claude’u aç", "Open Claude")}
+            ? t("Claude uygulamasını öne getir", "Bring the Claude app to front")
+            : t("Claude uygulamasını aç", "Open the Claude app")}
         </Button>
       </div>
       {freshUsage(usage, now) ? (
@@ -128,12 +128,12 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
         <div className="flex min-w-0 items-center gap-3">
           <Panda scene={first ? "welcome" : "lookout"} size={first ? 120 : 72} playful />
           <div className="min-w-0">
-            <div className={eyebrow}>CLAUDE DESKTOP</div>
+            <div className={eyebrow}>CLAUDE UYGULAMASI</div>
             <div className="mt-0.5 text-lg font-bold">
               {first
                 ? t("Merhaba, ben Relay’in kuryesiyim", "Hi, I’m Relay’s courier")
                 : linking
-                  ? t("Desktop hesabı eşleştirilmedi", "Desktop account not linked")
+                  ? t("Claude uygulaması hesabı eşleştirilmedi", "Claude app account not linked")
                   : t("İlk hesabını bağla", "Connect your first account")}
             </div>
             {first && (
@@ -147,17 +147,17 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
             <p className="mt-0.5 text-sm text-muted-foreground">
               {linking
                 ? t(
-                    "Claude’da açık hesabı bir Relay profiliyle eşleştir. Limit okuma girişi bu adımı tamamlamaz.",
-                    "Link the account open in Claude to a Relay profile. The usage sign-in does not complete this step.",
+                    "Claude uygulamasında açık hesabı bir Relay profiliyle eşleştir. Limit okuma girişi bu adımı tamamlamaz.",
+                    "Link the account open in the Claude app to a Relay profile. The usage sign-in does not complete this step.",
                   )
                 : first
                   ? t(
-                      "İlk hesabını bağlayalım. Her Desktop hesabını bir kez bağla; sonrasında buradan değiştir.",
-                      "Let’s connect your first account. Connect each Desktop account once; switch between them here.",
+                      "İlk hesabını bağlayalım. Claude uygulamasındaki her hesabı bir kez bağla; sonrasında buradan değiştir.",
+                      "Let’s connect your first account. Connect each Claude app account once; switch between them here.",
                     )
                   : t(
-                      "Her Desktop hesabını bir kez bağla. Sonrasında buradan değiştir.",
-                      "Connect each Desktop account once. Switch between them here.",
+                      "Claude uygulamasındaki her hesabı bir kez bağla. Sonrasında buradan değiştir.",
+                      "Connect each Claude app account once. Switch between them here.",
                     )}
             </p>
           </div>

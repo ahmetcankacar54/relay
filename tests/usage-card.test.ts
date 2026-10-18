@@ -37,11 +37,11 @@ test("connection renewal is an explicit action and preserves verified current qu
   assert.match(en, /80%/);
   assert.match(en, /The usage sign-in needs to be renewed/);
   assert.match(en, /No limit reported/);
-  assert.match(en, />Renew connection<\/button>/);
+  assert.match(en, />Allow renewal<\/button>/);
   assert.doesNotMatch(en, /Allow Keychain access|Reconnect|Stale data/);
   const tr = render(usage, "tr");
   assert.match(tr, /Limit okuma girişinin yenilenmesi gerekiyor/);
-  assert.match(tr, />Bağlantıyı yenile<\/button>/);
+  assert.match(tr, />Yenilemeye izin ver<\/button>/);
 });
 
 test("an expired connection waiting for interactive renewal does not ask for another reader grant or browser login", () => {
@@ -52,7 +52,7 @@ test("an expired connection waiting for interactive renewal does not ask for ano
     issue: "renewal-required",
     retryAt: later,
   });
-  assert.match(en, />Renew connection<\/button>/);
+  assert.match(en, />Allow renewal<\/button>/);
   assert.doesNotMatch(en, /Allow Keychain access|Reconnect|Retry /);
 });
 

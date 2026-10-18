@@ -139,7 +139,7 @@ export function DraftRetypePreference({
       <SettingRow
         label={
           <span className="inline-flex items-center gap-2">
-            {t("Taslakları Claude’a yeniden yaz", "Re-type drafts into Claude")}
+            {t("Taslakları Claude uygulamasına yeniden yaz", "Re-type drafts into the Claude app")}
             <Badge variant="outline" className="text-muted-foreground">
               {t("Deneysel", "Experimental")}
             </Badge>
@@ -209,10 +209,20 @@ export function SharedHistoryPreferences({
                 "Code konuşmaların her hesapta ayrı kalır.",
                 "Your Code conversations stay separate in each account.",
               )
-            : t(
-                "Geçişten sonra Code konuşmaların diğer hesapta da görünür.",
-                "After a switch, your Code conversations appear in the other account too.",
-              )
+            : value.desktopHistoryTransfer === "all"
+              ? t(
+                  "Geçişten sonra Code konuşmaların bağlı her hesapta görünür.",
+                  "After a switch, your Code conversations appear in every connected account.",
+                )
+              : value.desktopHistoryTransfer === "selected"
+                ? t(
+                    "Geçişten sonra Code konuşmaların seçtiğin hesaplarda görünür.",
+                    "After a switch, your Code conversations appear in the accounts you picked.",
+                  )
+                : t(
+                    "Geçişten sonra Code konuşmaların aynı gruptaki hesaplarda görünür.",
+                    "After a switch, your Code conversations appear in the accounts of the same group.",
+                  )
         }
       />
       <SettingRow
@@ -296,8 +306,8 @@ export function SharedHistoryPreferences({
                   `No sharing sources are selected for ${active.name}.`,
                 )
             : t(
-                "Önce açık Desktop hesabını bağla.",
-                "Link the current Desktop account first.",
+                "Önce Claude uygulamasında açık hesabı bağla.",
+                "Link the account open in the Claude app first.",
               )}
         </p>
         <Button

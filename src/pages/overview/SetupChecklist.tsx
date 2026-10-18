@@ -69,8 +69,8 @@ export function SetupChecklist() {
           }
         >
           {desktop.running
-            ? t("Claude’u öne getir", "Bring Claude to front")
-            : t("Claude’u aç", "Open Claude")}
+            ? t("Claude uygulamasını öne getir", "Bring the Claude app to front")
+            : t("Claude uygulamasını aç", "Open the Claude app")}
         </Button>
       ),
     },

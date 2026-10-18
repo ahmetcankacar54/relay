@@ -75,7 +75,7 @@ test("read-only readiness does not arm or authorize a continuation, and unavaila
   const ready = render();
   assert.match(consentTag(ready) ?? "", /aria-checked="false"/);
   assert.match(buttonTag(ready, "Watch this conversation") ?? "", /disabled=""/);
-  assert.match(ready, /restart Claude/);
+  assert.match(ready, /restart the Claude app/);
   assert.match(ready, /one continuation message/);
   const unavailable = render({ executable: false });
   assert.match(unavailable, /Automatic continuation cannot be enabled/);
@@ -97,7 +97,7 @@ test("execution and verified completion remain visible when an older observation
   assert.match(completed, /new response started in the same conversation/);
   assert.match(completed, /permission mode preserved/);
   assert.match(completed, /one-time watch is complete/);
-  assert.doesNotMatch(completed, /Open Claude and choose/);
+  assert.doesNotMatch(completed, /Open the Claude app and choose/);
 });
 
 test("ambiguous delivery keeps its non-repeat explanation instead of an unrelated observation error", () => {

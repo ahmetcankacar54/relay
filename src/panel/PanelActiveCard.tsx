@@ -48,7 +48,7 @@ export function PanelActiveCard({ now }: { now: number }) {
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
-        <span>{t("Claude Desktop’ta açık", "Open in Claude Desktop")}</span>
+        <span>{t("Claude uygulamasında açık", "Open in the Claude app")}</span>
         <span className="flex items-center gap-1.5 normal-case tracking-normal">
           <StatusDot tone={running ? "ok" : "off"} />
           {running ? t("Çalışıyor", "Running") : t("Kapalı", "Closed")}
@@ -58,8 +58,8 @@ export function PanelActiveCard({ now }: { now: number }) {
         {!active ? (
           <div className="flex flex-wrap items-center gap-1 text-muted-foreground">
             {t(
-              "Claude’da kayıtlı hesap açık değil",
-              "No saved account is open in Claude",
+              "Claude uygulamasında kayıtlı hesap açık değil",
+              "No saved account is open in the Claude app",
             )}{" "}
             ·
             <Button
@@ -115,7 +115,7 @@ export function PanelActiveCard({ now }: { now: number }) {
                             "Anahtarlık erişimine izin ver",
                             "Allow Keychain access",
                           )
-                        : t("Bağlantıyı yenile", "Renew connection")
+                        : t("Yenilemeye izin ver", "Allow renewal")
                     }
                     disabled={relay.usageBusy.has(active.id)}
                     onClick={() => void relay.refreshUsage(active, true)}
@@ -140,13 +140,13 @@ export function PanelActiveCard({ now }: { now: number }) {
       </div>
       {relay.desktopBusy ? (
         <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-          {t("Desktop işlemi sürüyor", "A Desktop operation is in progress")}
+          {t("Claude uygulaması işlemi sürüyor", "A Claude app operation is in progress")}
         </p>
       ) : desktop?.recoveryRequired ? (
         <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11.5px] text-muted-foreground">
           {t(
-            "Önce Desktop yedeğini geri yükle",
-            "Restore the Desktop backup first",
+            "Önce yedeği geri yükle",
+            "Restore the backup first",
           )}{" "}
           ·
           <Button

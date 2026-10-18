@@ -290,7 +290,7 @@ export function UsageCard({
             onClick={() => refresh(true)}
           >
             {renewal === "renewal-required"
-              ? t("Bağlantıyı yenile", "Renew connection")
+              ? t("Yenilemeye izin ver", "Allow renewal")
               : t("Anahtarlık erişimine izin ver", "Allow Keychain access")}
           </Button>
         ) : (

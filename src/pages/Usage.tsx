@@ -255,7 +255,7 @@ export function Usage() {
             </summary>
             <Note className="mt-1">
               {t(
-                "Kullanım sorgusu deneysel Anthropic OAuth servisini kullanır. Relay’de bağlı CLI profili okunur; gerektiğinde bağlantıyı sen yenilersin. Bu işlem yalnız Relay profilini günceller, açık Claude’a dokunmaz. Kalan yüzde mesaj sayısı veya süre garantisi değildir.",
+                "Kullanım sorgusu deneysel Anthropic OAuth servisini kullanır. Relay’de bağlı CLI profili okunur; gerektiğinde bağlantıyı sen yenilersin. Bu işlem yalnız Relay profilini günceller, açık Claude uygulamasına dokunmaz. Kalan yüzde mesaj sayısı veya süre garantisi değildir.",
                 "Usage comes from an experimental Anthropic OAuth endpoint. Relay reads its connected CLI profile; you can renew the connection when needed. Renewal updates only the Relay profile and leaves the open Claude app untouched. Remaining percentage is not a message count or time guarantee.",
               )}
             </Note>

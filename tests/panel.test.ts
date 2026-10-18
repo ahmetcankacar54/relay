@@ -153,7 +153,7 @@ test("the panel's active card names what is wrong instead of out-of-date data", 
   assert.match(healthy, /aria-label="Limitleri yenile"/);
   for (const [issue, label, button] of [
     ["keychain-locked", "Anahtarlık izni gerekli", "Anahtarlık erişimine izin ver"],
-    ["renewal-required", "Bağlantı yenilenmeli", "Bağlantıyı yenile"],
+    ["renewal-required", "Bağlantı yenilenmeli", "Yenilemeye izin ver"],
   ] as const) {
     const html = activeCard(failed("active", issue));
     assert.match(html, new RegExp(`${label} ·`), issue);
@@ -196,7 +196,7 @@ test("the panel's active card renews with a prompt, and refreshes without one ot
       await act(async () => dom.dispatch(button, "click", { detail: 1 }));
     };
     await press(failed("active", "keychain-locked"), "Anahtarlık erişimine izin ver");
-    await press(failed("active", "renewal-required"), "Bağlantıyı yenile");
+    await press(failed("active", "renewal-required"), "Yenilemeye izin ver");
     await press({ ...use("active", 1, 1), checkedAt: iso(NOW - 3_600_000) }, "Limitleri yenile");
     await press(failed("active", "expired"), "Limitleri yenile");
     assert.deepEqual(calls, [[active, true], [active, true], [active], [active]]);
@@ -215,7 +215,7 @@ const baseUsage = {
 
 test("panel shows the active account, suggestion, accounts, automation and footer", () => {
   const html = render(relayFor(active, [active, vertex], baseUsage, { suggestion: vertex }));
-  assert.match(html, /Claude Desktop’ta açık/);
+  assert.match(html, /Claude uygulamasında açık/);
   assert.match(html, /Kişisel · Max/);
   assert.match(html, /Max 5×/);
   assert.match(html, /Çalışıyor/);
@@ -241,7 +241,7 @@ test("panel shows the active account, suggestion, accounts, automation and foote
 
 test("panel without an active account points to Relay", () => {
   const html = render(relayFor(undefined, [vertex], { vertex: use("vertex", 1, 1) }));
-  assert.match(html, /Claude’da kayıtlı hesap açık değil/);
+  assert.match(html, /Claude uygulamasında kayıtlı hesap açık değil/);
 });
 
 test("with no account yet, the panel offers adding one in the main window", async () => {
@@ -255,7 +255,7 @@ test("with no account yet, the panel offers adding one in the main window", asyn
       createElement(RelayContext.Provider, { value: relayFor(undefined, [], {}) }, createElement(Panel, { now: NOW })),
     ),
   );
-  assert.match(en, /No accounts yet ·\s*<button[^>]*>Add an account<\/button>/);
+  assert.match(en, /No accounts yet ·\s*<button[^>]*>Add account<\/button>/);
   // With accounts but none besides the open one, it stays "no other accounts".
   assert.match(render(relayFor(active, [active], { active: use("active", 1, 1) })), /Başka hesap yok/);
   const opened: unknown[][] = [];
@@ -283,7 +283,7 @@ test("more than six other accounts collapse into an overflow line", () => {
 
 test("Desktop busy disables every switch and explains why", () => {
   const html = render(relayFor(active, [active, vertex], baseUsage, { suggestion: vertex, desktopBusy: true }));
-  assert.match(html, /Desktop işlemi sürüyor/);
+  assert.match(html, /Claude uygulaması işlemi sürüyor/);
   const all = (html.match(/>Geç</g) ?? []).length;
   assert.ok(all >= 2);
   assert.equal(all, (html.match(/disabled=""[^>]*>Geç</g) ?? []).length);
@@ -291,7 +291,7 @@ test("Desktop busy disables every switch and explains why", () => {
 
 test("recovery required points to Relay", () => {
   const html = render(relayFor(active, [active, vertex], baseUsage, { desktop: { ...desktopState("active"), recoveryRequired: true } }));
-  assert.match(html, /Önce Desktop yedeğini geri yükle/);
+  assert.match(html, /Önce yedeği geri yükle/);
 });
 
 test("errors show inside the panel", () => {
@@ -302,7 +302,7 @@ test("errors show inside the panel", () => {
 test("confirm state warns before switching", () => {
   const relay = relayFor(active, [active, vertex], baseUsage);
   const html = wrap(relay, createElement(PanelAccounts, { now: NOW, initialConfirm: "vertex" }));
-  assert.match(html, /Claude kapanıp <b>Vertex<\/b> ile yeniden açılır/);
+  assert.match(html, /Claude uygulaması kapanıp <b>Vertex<\/b> ile yeniden açılır/);
   assert.match(html, /Vazgeç/);
   assert.match(html, /Onayla/);
 });
@@ -477,7 +477,7 @@ test("the rescued drafts section lists only needs-copy records with reason, Copy
   ]));
   assert.match(html, /Kurtarılan taslaklar/);
   assert.match(html, /Fix the login bug/);
-  assert.match(html, /Desktop taslağı sildi/);
+  assert.match(html, /Claude uygulaması taslağı sildi/);
   assert.match(html, />Kopyala</);
   assert.match(html, />Kapat</);
   assert.equal((html.match(/>Kopyala</g) ?? []).length, 1);
@@ -591,15 +591,15 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     "It may already be in the conversation; check before pasting",
   ];
   const unsupported: [string, string] = [
-    "Desktop arayüzü desteklenmiyor",
-    "Desktop's interface is not supported",
+    "Claude uygulamasının arayüzü desteklenmiyor",
+    "The Claude app’s interface is not supported",
   ];
   const busy: [string, string] = ["Konuşma meşguldü", "The conversation was busy"];
   const labels: Record<string, [string, string]> = {
     accessibility: ["Erişilebilirlik izni yok", "Accessibility permission missing"],
     "composer-not-empty": ["Mesaj kutusu doluydu", "The message box was not empty"],
     "context-changed": ["Ekran değişti", "The screen changed"],
-    lost: ["Desktop taslağı sildi", "Desktop cleared the draft"],
+    lost: ["Claude uygulaması taslağı sildi", "The Claude app cleared the draft"],
     busy,
     manual: ["Elle yapıştır", "Paste it yourself"],
     error: ["Geri yazılamadı", "Could not be restored"],
@@ -613,10 +613,10 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     "desktop-ui-unsupported": unsupported,
     "desktop-work-active": busy,
     "exact-session-not-observed": ["Konuşma açılamadı", "The conversation could not be opened"],
-    "not-ready": ["Desktop hazır değildi", "Desktop was not ready"],
+    "not-ready": ["Claude uygulaması hazır değildi", "The Claude app was not ready"],
     moved: ["Başka bir ekrana geçtin", "You went to another screen"],
     changed: ["Ekran değişti", "The screen changed"],
-    "claude-not-running": ["Claude çalışmıyordu", "Claude was not running"],
+    "claude-not-running": ["Claude uygulaması çalışmıyordu", "The Claude app was not running"],
     budget: ["Süre doldu", "Ran out of time"],
   };
   for (const [reason, [turkish, english]] of Object.entries(labels)) {

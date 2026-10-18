@@ -26,12 +26,12 @@ export function LinkDesktopDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {t("Desktop hesabını eşleştir", "Link Desktop account")}
+            {t("Claude uygulaması hesabını eşleştir", "Link Claude app account")}
           </DialogTitle>
           <DialogDescription className="sr-only">
             {t(
-              "Claude’da açık hesabı bir Relay profiliyle eşleştir.",
-              "Link the account open in Claude to a Relay profile.",
+              "Claude uygulamasında açık hesabı bir Relay profiliyle eşleştir.",
+              "Link the account open in the Claude app to a Relay profile.",
             )}
           </DialogDescription>
         </DialogHeader>

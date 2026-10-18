@@ -60,8 +60,8 @@ const explanations: Record<string, [string, string]> = {
     "Verifying the saved conversation, target account and permission mode. The continuation message is sent only after these checks.",
   ],
   "session-not-stopped": [
-    "Yanıt henüz durmadı. Claude yeniden başlatılmadan tamamlanması bekleniyor.",
-    "The response has not stopped yet. Waiting for it to finish before restarting Claude.",
+    "Yanıt henüz durmadı. Claude uygulaması yeniden başlatılmadan tamamlanması bekleniyor.",
+    "The response has not stopped yet. Waiting for it to finish before restarting the Claude app.",
   ],
   "quota-stop-unverified": [
     "Bu yanıtın kota nedeniyle durduğu doğrulanamadı. Geçiş yapılmadı; yeniden kontrol et.",
@@ -76,8 +76,8 @@ const explanations: Record<string, [string, string]> = {
     "Could not yet take over this conversation’s scheduled quota resume. Switching is waiting to avoid starting two continuations.",
   ],
   "own-quota-wakeup-uncertain": [
-    "Claude’un kota yenilenmesinde devam zamanlayıcısının devralındığı kesinleşmedi. Otomatik işlem durduruldu; Claude’daki zamanlayıcıyı kontrol et. Relay aynı işlemi kendiliğinden tekrarlamaz.",
-    "Could not confirm takeover of Claude’s scheduled quota resume. Automation stopped; check the timer in Claude. Relay will not repeat the action automatically.",
+    "Claude uygulamasının kota yenilenmesinde devam zamanlayıcısının devralındığı kesinleşmedi. Otomatik işlem durduruldu; Claude uygulamasındaki zamanlayıcıyı kontrol et. Relay aynı işlemi kendiliğinden tekrarlamaz.",
+    "Could not confirm takeover of the Claude app’s scheduled quota resume. Automation stopped; check the timer in the Claude app. Relay will not repeat the action automatically.",
   ],
   "quota-available": [
     "Kota henüz dolmadı. Seçtiğin konuşma izleniyor.",
@@ -92,64 +92,64 @@ const explanations: Record<string, [string, string]> = {
     "Quota exhausted. Waiting for the response and other tasks to stop.",
   ],
   "desktop-work-active": [
-    "Çalışan bir görev var. Görevler bitene kadar Claude yeniden başlatılmayacak.",
-    "A task is still running. Claude will not restart until the tasks finish.",
+    "Çalışan bir görev var. Görevler bitene kadar Claude uygulaması yeniden başlatılmayacak.",
+    "A task is still running. The Claude app will not restart until the tasks finish.",
   ],
   "workers-not-quiescent": [
     "Çalışan görev veya bekleyen onay var. Bunlar tamamlanınca yeniden kontrol edilecek.",
     "A task is running or waiting for approval. Will check again when these finish.",
   ],
   "desktop-observation-incomplete": [
-    "Bütün görevlerin durduğu doğrulanamadı. Geçiş bekliyor; Claude’a müdahale edilmiyor.",
-    "Could not verify that all tasks have stopped. The switch is waiting; Claude is left alone.",
+    "Bütün görevlerin durduğu doğrulanamadı. Geçiş bekliyor; Claude uygulamasına müdahale edilmiyor.",
+    "Could not verify that all tasks have stopped. The switch is waiting; the Claude app is left alone.",
   ],
   "quiescence-unverified": [
-    "Bütün görevlerin durduğu doğrulanamadı. Geçiş bekliyor; Claude’a müdahale edilmiyor.",
-    "Could not verify that all tasks have stopped. The switch is waiting; Claude is left alone.",
+    "Bütün görevlerin durduğu doğrulanamadı. Geçiş bekliyor; Claude uygulamasına müdahale edilmiyor.",
+    "Could not verify that all tasks have stopped. The switch is waiting; the Claude app is left alone.",
   ],
   "coverage-unverified": [
-    "Bütün görevlerin durduğu doğrulanamadı. Geçiş bekliyor; Claude’a müdahale edilmiyor.",
-    "Could not verify that all tasks have stopped. The switch is waiting; Claude is left alone.",
+    "Bütün görevlerin durduğu doğrulanamadı. Geçiş bekliyor; Claude uygulamasına müdahale edilmiyor.",
+    "Could not verify that all tasks have stopped. The switch is waiting; the Claude app is left alone.",
   ],
   "observation-not-fresh": [
     "Konuşma kontrolü güncel değil. Yeni bir kontrol tamamlanmadan geçiş yapılmaz.",
     "The conversation check is out of date. A fresh check is required before switching.",
   ],
   "desktop-observation-unavailable": [
-    "Claude’un konuşma ve görev bilgileri okunamadı. Claude’u açık tutup yeniden kontrol et.",
-    "Could not read Claude’s conversation and task state. Keep Claude open and check again.",
+    "Claude uygulamasının konuşma ve görev bilgileri okunamadı. Claude uygulamasını açık tutup yeniden kontrol et.",
+    "Could not read the Claude app’s conversation and task state. Keep the Claude app open and check again.",
   ],
   "accessibility-permission-required": [
-    "Claude’un açık konuşmasını doğrulamak için Relay’e macOS Erişilebilirlik izni ver; ardından yeniden kontrol et.",
-    "Allow Relay in macOS Accessibility to verify Claude’s open conversation, then check again.",
+    "Claude uygulamasının açık konuşmasını doğrulamak için Relay’e macOS Erişilebilirlik izni ver; ardından yeniden kontrol et.",
+    "Allow Relay in macOS Accessibility to verify the Claude app’s open conversation, then check again.",
   ],
   "unsupported-platform": [
-    "Desktop’ta otomatik devam bu platformda kullanılamıyor.",
-    "Automatic Desktop continuation is unavailable on this platform.",
+    "Claude uygulamasında otomatik devam bu platformda kullanılamıyor.",
+    "Automatic continuation in the Claude app is unavailable on this platform.",
   ],
   "desktop-ui-unsupported": [
-    "Bu Claude arayüzünün konuşma ve izin kontrolleri doğrulanamadı. Otomatik işlem başlatılmadı.",
-    "Could not verify conversation and permission controls in this Claude interface. No automatic action was started.",
+    "Claude uygulamasının bu arayüzünün konuşma ve izin kontrolleri doğrulanamadı. Otomatik işlem başlatılmadı.",
+    "Could not verify conversation and permission controls in this Claude app interface. No automatic action was started.",
   ],
   "adapter-contract-unverified": [
-    "Desktop geçiş ve mesaj doğrulama desteği henüz hazır değil. Otomatik devam başlatılamıyor.",
-    "Desktop switching and message verification are not ready. Automatic continuation cannot start.",
+    "Claude uygulamasında geçiş ve mesaj doğrulama desteği henüz hazır değil. Otomatik devam başlatılamıyor.",
+    "Switching and message verification in the Claude app are not ready. Automatic continuation cannot start.",
   ],
   "claude-not-running": [
-    "Claude’u açıp devam etmek istediğin yerel Code konuşmasını seç; ardından yeniden kontrol et.",
-    "Open Claude and choose the local Code conversation to continue, then check again.",
+    "Claude uygulamasını açıp devam etmek istediğin yerel Code konuşmasını seç; ardından yeniden kontrol et.",
+    "Open the Claude app and choose the local Code conversation to continue, then check again.",
   ],
   "exact-session-not-observed": [
-    "Açık Code konuşması doğrulanamadı. Claude’da konuşmayı açıp yeniden kontrol et.",
-    "Could not verify the open Code conversation. Open it in Claude, then check again.",
+    "Açık Code konuşması doğrulanamadı. Claude uygulamasında konuşmayı açıp yeniden kontrol et.",
+    "Could not verify the open Code conversation. Open it in the Claude app, then check again.",
   ],
   "exact-session-unverified": [
-    "Açık Code konuşması doğrulanamadı. Claude’da konuşmayı açıp yeniden kontrol et.",
-    "Could not verify the open Code conversation. Open it in Claude, then check again.",
+    "Açık Code konuşması doğrulanamadı. Claude uygulamasında konuşmayı açıp yeniden kontrol et.",
+    "Could not verify the open Code conversation. Open it in the Claude app, then check again.",
   ],
   "composer-not-empty": [
-    "Claude’un mesaj alanında bir taslak var. Relay taslağın üzerine yazmayacak.",
-    "Claude’s message field has a draft. Relay will not overwrite it.",
+    "Claude uygulamasının mesaj alanında bir taslak var. Relay taslağın üzerine yazmayacak.",
+    "The Claude app’s message field has a draft. Relay will not overwrite it.",
   ],
   "permission-mode-mismatch": [
     "Konuşmanın izin modu değişti. Devam mesajı gönderilmedi; modu kontrol edip yeniden etkinleştir.",
@@ -164,8 +164,8 @@ const explanations: Record<string, [string, string]> = {
     "The open account differs from the watched source account. Turn watching off and on to continue from this account.",
   ],
   "selected-session-changed": [
-    "Claude’da başka bir konuşma açık. Geçiş bekletiliyor; bu konuşmayı izlemek için izlemeyi kapatıp yeniden aç.",
-    "A different conversation is open in Claude. Switching is paused; turn watching off and on to watch this conversation.",
+    "Claude uygulamasında başka bir konuşma açık. Geçiş bekletiliyor; bu konuşmayı izlemek için izlemeyi kapatıp yeniden aç.",
+    "A different conversation is open in the Claude app. Switching is paused; turn watching off and on to watch this conversation.",
   ],
   "target-identity-changed": [
     "Hedef hesabın bağlantı kimliği değişti. Bağlantıyı kontrol edip izlemeyi kapat ve yeniden aç.",
@@ -192,8 +192,8 @@ const explanations: Record<string, [string, string]> = {
     "The target account’s current quota is unavailable. No switch was made.",
   ],
   "automatic-target-unavailable": [
-    "Ortak geçmiş kapsamındaki bağlı hesaplarda güncel ve yeterli limit bulunamadı. Limitler yenilenince yeniden değerlendirilecek; Claude’a müdahale edilmiyor.",
-    "No connected account in the shared history scope has fresh, sufficient quota. Will check again when usage is refreshed; Claude is left alone.",
+    "Ortak geçmiş kapsamındaki bağlı hesaplarda güncel ve yeterli limit bulunamadı. Limitler yenilenince yeniden değerlendirilecek; Claude uygulamasına müdahale edilmiyor.",
+    "No connected account in the shared history scope has fresh, sufficient quota. Will check again when usage is refreshed; the Claude app is left alone.",
   ],
   "automatic-target-enrollment-unavailable": [
     "Otomatik geçiş için başka bir hesabın Claude uygulaması ve limit okuma girişlerini aynı kimlikle tamamla.",
@@ -220,36 +220,36 @@ const explanations: Record<string, [string, string]> = {
     "This watch needs a new continuation confirmation. Turn watching off and enable it again.",
   ],
   "unfinished-attempt": [
-    "Yarım kalan geçiş kaydı var. Yeni bir geçiş açmadan önce Claude’daki konuşmayı kontrol edip aşağıdan doğrulamayı sürdür.",
-    "An interrupted handoff is recorded. Check the conversation in Claude and resume verification below before enabling a new handoff.",
+    "Yarım kalan geçiş kaydı var. Yeni bir geçiş açmadan önce Claude uygulamasındaki konuşmayı kontrol edip aşağıdan doğrulamayı sürdür.",
+    "An interrupted handoff is recorded. Check the conversation in the Claude app and resume verification below before enabling a new handoff.",
   ],
   "attempt-interrupted": [
-    "Geçiş kesildi. Claude’daki hesabı ve konuşmayı kontrol edip aşağıdan doğrulamayı sürdür.",
-    "The handoff was interrupted. Check the account and conversation in Claude, then resume verification below.",
+    "Geçiş kesildi. Claude uygulamasındaki hesabı ve konuşmayı kontrol edip aşağıdan doğrulamayı sürdür.",
+    "The handoff was interrupted. Check the account and conversation in the Claude app, then resume verification below.",
   ],
   "quota-episode-already-continued": [
     "Bu kota duruşu için zaten devam edildi. Aynı yanıt için ikinci bir devam mesajı gönderilmeyecek.",
     "This quota stop was already continued. A second continuation message will not be sent for the same response.",
   ],
   "new-turn-not-observed": [
-    "Devam mesajından sonraki yanıt henüz doğrulanamadı. Mesaj tekrar gönderilmeyecek; Claude’daki konuşmayı kontrol et.",
-    "The response after the continuation message could not yet be verified. The message will not be sent again; check the conversation in Claude.",
+    "Devam mesajından sonraki yanıt henüz doğrulanamadı. Mesaj tekrar gönderilmeyecek; Claude uygulamasındaki konuşmayı kontrol et.",
+    "The response after the continuation message could not yet be verified. The message will not be sent again; check the conversation in the Claude app.",
   ],
   "delivery-accepted": [
     "Devam mesajı alındı; yeni yanıtın başladığı henüz doğrulanmadı. Mesaj tekrar gönderilmez.",
     "The continuation message was accepted; the new response has not yet been verified. The message will not be sent again.",
   ],
   "delivery-unknown": [
-    "Devam mesajının ulaşıp ulaşmadığı kesinleşmedi. Tekrar gönderilmeyecek; Claude’daki konuşmayı kontrol et.",
-    "Could not confirm whether the continuation message arrived. It will not be sent again; check the conversation in Claude.",
+    "Devam mesajının ulaşıp ulaşmadığı kesinleşmedi. Tekrar gönderilmeyecek; Claude uygulamasındaki konuşmayı kontrol et.",
+    "Could not confirm whether the continuation message arrived. It will not be sent again; check the conversation in the Claude app.",
   ],
   "delivery-ambiguous": [
-    "Devam mesajının ulaşıp ulaşmadığı kesinleşmedi. Tekrar gönderilmeyecek; Claude’daki konuşmayı kontrol et.",
-    "Could not confirm whether the continuation message arrived. It will not be sent again; check the conversation in Claude.",
+    "Devam mesajının ulaşıp ulaşmadığı kesinleşmedi. Tekrar gönderilmeyecek; Claude uygulamasındaki konuşmayı kontrol et.",
+    "Could not confirm whether the continuation message arrived. It will not be sent again; check the conversation in the Claude app.",
   ],
   "reconciliation-required": [
-    "Yarım kalan işlemi Claude’da kontrol et. Çift mesaj göndermemek için otomatik devam durduruldu.",
-    "Check the interrupted action in Claude. Automatic continuation stopped to avoid duplicate messages.",
+    "Yarım kalan işlemi Claude uygulamasında kontrol et. Çift mesaj göndermemek için otomatik devam durduruldu.",
+    "Check the interrupted action in the Claude app. Automatic continuation stopped to avoid duplicate messages.",
   ],
   continued: [
     "Aynı konuşmada devam doğrulandı. Bu tek seferlik izleme tamamlandı.",
@@ -264,8 +264,8 @@ const explanations: Record<string, [string, string]> = {
     "Continuation of this conversation was verified from its saved record. A second message was not sent.",
   ],
   "preview-only": [
-    "Bu önizleme gerçek Claude’a bağlanmaz. Desktop kontrollerini Relay uygulamasında kullan.",
-    "This preview does not connect to the real Claude app. Use Desktop checks in the Relay application.",
+    "Bu önizleme gerçek Claude uygulamasına bağlanmaz. Claude uygulaması kontrollerini Relay uygulamasında kullan.",
+    "This preview does not connect to the real Claude app. Use the Claude app checks in the Relay application.",
   ],
 };
 
@@ -313,8 +313,8 @@ const readinessExplanations: Record<
 
 const workExplanations: Record<string, [string, string]> = {
   busyWorkers: [
-    "Başka bir yanıt veya işlem çalışıyor. Bitmeden Claude yeniden başlatılmayacak.",
-    "Another response or operation is running. Claude will not restart before it finishes.",
+    "Başka bir yanıt veya işlem çalışıyor. Bitmeden Claude uygulaması yeniden başlatılmayacak.",
+    "Another response or operation is running. The Claude app will not restart before it finishes.",
   ],
   subagents: [
     "Bir alt görev hâlâ çalışıyor. Alt görevler tamamlanana kadar geçiş bekler.",
@@ -325,8 +325,8 @@ const workExplanations: Record<string, [string, string]> = {
     "There are unfinished tasks. Switching waits until they finish.",
   ],
   waiting: [
-    "Bir görev onay veya yanıt bekliyor. Claude’daki bekleyen kararı tamamla.",
-    "A task is waiting for approval or input. Complete the pending decision in Claude.",
+    "Bir görev onay veya yanıt bekliyor. Claude uygulamasındaki bekleyen kararı tamamla.",
+    "A task is waiting for approval or input. Complete the pending decision in the Claude app.",
   ],
   queuedPrompts: [
     "Bekleyen mesajlar var. Relay bu mesajları kesmez; tamamlanmaları beklenir.",
@@ -337,8 +337,8 @@ const workExplanations: Record<string, [string, string]> = {
     "A continuation is scheduled. Switching waits until this operation is verified.",
   ],
   unknownWork: [
-    "Bazı görevlerin durumu doğrulanamadı. Geçiş bekliyor; Claude’a müdahale edilmiyor.",
-    "Could not verify the state of some tasks. The switch is waiting; Claude is left alone.",
+    "Bazı görevlerin durumu doğrulanamadı. Geçiş bekliyor; Claude uygulamasına müdahale edilmiyor.",
+    "Could not verify the state of some tasks. The switch is waiting; the Claude app is left alone.",
   ],
 };
 
@@ -615,8 +615,8 @@ export function ContinuationSettings({
           <strong className="block break-all text-sm font-semibold">
             {value?.projectKey ??
               t(
-                "Claude’daki açık Code konuşması",
-                "Open Code conversation in Claude",
+                "Claude uygulamasındaki açık Code konuşması",
+                "Open Code conversation in the Claude app",
               )}
           </strong>
           {value?.sessionId && (
@@ -643,8 +643,8 @@ export function ContinuationSettings({
         <p>
           {value?.executable === false && (!reason || reason === "disabled")
             ? t(
-                "Desktop’ta güvenli geçiş ve mesaj doğrulaması bu ortamda hazır değil. Otomatik devam etkinleştirilemez.",
-                "Safe Desktop switching and message verification are not ready in this environment. Automatic continuation cannot be enabled.",
+                "Claude uygulamasında güvenli geçiş ve mesaj doğrulaması bu ortamda hazır değil. Otomatik devam etkinleştirilemez.",
+                "Safe switching and message verification in the Claude app are not ready in this environment. Automatic continuation cannot be enabled.",
               )
             : explanation
               ? t(...explanation)
@@ -655,13 +655,13 @@ export function ContinuationSettings({
                   )
                 : status === "blocked" || status === "reconciliation-required"
                   ? t(
-                      "Güvenli devam koşulları doğrulanamadı. Claude’daki konuşmayı kontrol edip yeniden dene.",
-                      "Could not verify safe continuation conditions. Check the conversation in Claude and try again.",
+                      "Güvenli devam koşulları doğrulanamadı. Claude uygulamasındaki konuşmayı kontrol edip yeniden dene.",
+                      "Could not verify safe continuation conditions. Check the conversation in the Claude app and try again.",
                     )
                   : value?.executable === false
                     ? t(
-                        "Desktop’ta güvenli geçiş ve mesaj doğrulaması bu ortamda hazır değil. Otomatik devam etkinleştirilemez.",
-                        "Safe Desktop switching and message verification are not ready in this environment. Automatic continuation cannot be enabled.",
+                        "Claude uygulamasında güvenli geçiş ve mesaj doğrulaması bu ortamda hazır değil. Otomatik devam etkinleştirilemez.",
+                        "Safe switching and message verification in the Claude app are not ready in this environment. Automatic continuation cannot be enabled.",
                       )
                     : !canEnable
                       ? t(
@@ -687,8 +687,8 @@ export function ContinuationSettings({
           />
           <label htmlFor={`${fieldId}-consent`} className="text-[13px]">
             {t(
-              "Kota dolunca ve diğer işler bitince Claude’u yeniden başlat, uygun hesaba geç ve bu konuşmaya bir devam mesajı gönder.",
-              "When quota runs out and other work finishes, restart Claude, switch to an eligible account and send one continuation message to this conversation.",
+              "Kota dolunca ve diğer işler bitince Claude uygulamasını yeniden başlat, uygun hesaba geç ve bu konuşmaya bir devam mesajı gönder.",
+              "When quota runs out and other work finishes, restart the Claude app, switch to an eligible account and send one continuation message to this conversation.",
             )}
           </label>
         </div>
@@ -737,8 +737,8 @@ export function ContinuationSettings({
       )}
       <Note>
         {t(
-          "Relay açıkken bu konuşma için bir kez çalışır. Hesap, güncel limit ve plan kapasitesine göre seçilir; sonradan eklenen hesaplar için izlemeyi yeniden aç. Geçiş sırasında Claude’da yeni iş başlatma.",
-          "Runs once for this conversation while Relay is open. The account is chosen by current quota and plan capacity; enable watching again to include accounts added later. Don’t start new work in Claude during a handoff.",
+          "Relay açıkken bu konuşma için bir kez çalışır. Hesap, güncel limit ve plan kapasitesine göre seçilir; sonradan eklenen hesaplar için izlemeyi yeniden aç. Geçiş sırasında Claude uygulamasında yeni iş başlatma.",
+          "Runs once for this conversation while Relay is open. The account is chosen by current quota and plan capacity; enable watching again to include accounts added later. Don’t start new work in the Claude app during a handoff.",
         )}
       </Note>
     </section>

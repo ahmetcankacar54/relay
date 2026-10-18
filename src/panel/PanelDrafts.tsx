@@ -12,8 +12,8 @@ const MAYBE_TYPED = [
 ] as const;
 const BUSY = ["Konuşma meşguldü", "The conversation was busy"] as const;
 const UNSUPPORTED = [
-  "Desktop arayüzü desteklenmiyor",
-  "Desktop's interface is not supported",
+  "Claude uygulamasının arayüzü desteklenmiyor",
+  "The Claude app’s interface is not supported",
 ] as const;
 
 const REASONS: Record<string, readonly [string, string]> = {
@@ -21,7 +21,7 @@ const REASONS: Record<string, readonly [string, string]> = {
   "composer-not-empty": ["Mesaj kutusu doluydu", "The message box was not empty"],
   "context-changed": ["Ekran değişti", "The screen changed"],
   changed: ["Ekran değişti", "The screen changed"],
-  lost: ["Desktop taslağı sildi", "Desktop cleared the draft"],
+  lost: ["Claude uygulaması taslağı sildi", "The Claude app cleared the draft"],
   busy: BUSY,
   "desktop-work-active": BUSY,
   manual: ["Elle yapıştır", "Paste it yourself"],
@@ -36,9 +36,9 @@ const REASONS: Record<string, readonly [string, string]> = {
     "Konuşma açılamadı",
     "The conversation could not be opened",
   ],
-  "not-ready": ["Desktop hazır değildi", "Desktop was not ready"],
+  "not-ready": ["Claude uygulaması hazır değildi", "The Claude app was not ready"],
   moved: ["Başka bir ekrana geçtin", "You went to another screen"],
-  "claude-not-running": ["Claude çalışmıyordu", "Claude was not running"],
+  "claude-not-running": ["Claude uygulaması çalışmıyordu", "The Claude app was not running"],
   budget: ["Süre doldu", "Ran out of time"],
 };
 const UNKNOWN_REASON = REASONS.error;

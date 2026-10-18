@@ -162,7 +162,7 @@ export function Accounts() {
                 onClick={() => setLinking(true)}
               >
                 <Link2 />
-                {t("Desktop hesabını eşleştir", "Link Desktop account")}
+                {t("Claude uygulaması hesabını eşleştir", "Link Claude app account")}
               </Button>
               {/* A lock both buttons share is said once, after the second. */}
               {linkBlock && linkBlock !== addBlock && (
@@ -292,8 +292,8 @@ export function AccountsEmpty({ hasAccounts }: { hasAccounts: boolean }) {
         {hasAccounts
           ? t("Aramayı veya filtreyi değiştir.", "Try a different search or filter.")
           : t(
-              "Önce Claude’da açık hesabını kaydet; ardından diğerlerini ekle.",
-              "Save the account open in Claude, then add your other accounts.",
+              "Önce Claude uygulamasında açık hesabını kaydet; ardından diğerlerini ekle.",
+              "Save the account open in the Claude app, then add your other accounts.",
             )}
       </p>
     </div>

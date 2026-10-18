@@ -44,18 +44,18 @@ export function DesktopActionReview({
     kind === "history"
       ? t("Ortak Code geçmişini birleştir", "Merge shared Code history")
       : kind === "recover"
-        ? t("Desktop yedeğini geri yükle", "Restore Desktop backup")
+        ? t("Yedeği geri yükle", "Restore backup")
         : kind === "cancel"
           ? t(
               "Girişi iptal et ve önceki hesaba dön",
               "Cancel sign-in and return to the previous account",
             )
           : kind === "switch"
-            ? t("Desktop hesabını değiştir", "Switch Desktop account")
+            ? t("Claude uygulamasında hesabı değiştir", "Switch the Claude app account")
             : kind === "capture"
               ? t(
-                  "Açık Desktop hesabını kaydet",
-                  "Save the open Desktop account",
+                  "Claude uygulamasında açık hesabı kaydet",
+                  "Save the account open in the Claude app",
                 )
               : t(
                   "Claude uygulaması girişini kur",
@@ -112,7 +112,7 @@ export function DesktopActionReview({
           <Panda scene="travel" size={110} />
           <p className="text-sm font-semibold">{progress}</p>
           <p className="text-xs text-muted-foreground">
-            {t("Claude kapanıp yeniden açılıyor…", "Claude is quitting and reopening…")}
+            {t("Claude uygulaması kapanıp yeniden açılıyor…", "The Claude app is quitting and reopening…")}
           </p>
         </div>
       ) : (
@@ -120,27 +120,27 @@ export function DesktopActionReview({
           <p className="text-sm text-muted-foreground">
             {kind === "history"
               ? t(
-                  "Seçilen hesapların yerel Code oturumları ve proje kayıtları açık hesapla birleştirilir. Claude yeniden başlatılır; hesap değişmez.",
-                  "Local Code sessions and project records from the chosen accounts are merged into the current account. Claude restarts; the account stays the same.",
+                  "Seçilen hesapların yerel Code oturumları ve proje kayıtları açık hesapla birleştirilir. Claude uygulaması yeniden başlatılır; hesap değişmez.",
+                  "Local Code sessions and project records from the chosen accounts are merged into the current account. The Claude app restarts; the account stays the same.",
                 )
               : kind === "cancel" || kind === "recover"
                 ? t(
-                    "Önceki bağlantı yedekten geri yüklenir. Claude yeniden başlatılır; açık işler durabilir.",
-                    "Your previous connection is restored from backup. Claude restarts; active work may stop.",
+                    "Önceki bağlantı yedekten geri yüklenir. Claude uygulaması yeniden başlatılır; açık işler durabilir.",
+                    "Your previous connection is restored from backup. The Claude app restarts; active work may stop.",
                   )
                 : kind === "switch"
                   ? t(
-                      "Kayıtlı Claude uygulaması girişi açılır. Claude yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
-                      "Your saved Claude app sign-in opens. Claude restarts; active responses and background tasks may stop.",
+                      "Kayıtlı Claude uygulaması girişi açılır. Claude uygulaması yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
+                      "Your saved Claude app sign-in opens. The Claude app restarts; active responses and background tasks may stop.",
                     )
                   : kind === "capture"
                     ? t(
-                        "Claude’da açık olan hesap bu profile kaydedilir. Kaydetmek için Claude yeniden başlatılır.",
-                        "The account currently open in Claude is saved to this profile. Saving restarts Claude.",
+                        "Claude uygulamasında açık olan hesap bu profile kaydedilir. Kaydetmek için Claude uygulaması yeniden başlatılır.",
+                        "The account currently open in the Claude app is saved to this profile. Saving restarts the Claude app.",
                       )
                     : t(
-                        "Claude yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yaptıktan sonra Relay’e dönüp bağlantıyı kaydet.",
-                        "Claude restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the connection.",
+                        "Claude uygulaması yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yaptıktan sonra Relay’e dönüp bağlantıyı kaydet.",
+                        "The Claude app restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the connection.",
                       )}
           </p>
           {(kind === "history" || kind === "switch") &&
@@ -161,8 +161,8 @@ export function DesktopActionReview({
               onChange={(e) => setReady(e.target.checked)}
             />
             {t(
-              "Çalışan işlerimi bitirdim; Claude yeniden başlatılabilir.",
-              "My running work is finished; Claude can restart.",
+              "Çalışan işlerimi bitirdim; Claude uygulaması yeniden başlatılabilir.",
+              "My running work is finished; the Claude app can restart.",
             )}
           </label>
         </>

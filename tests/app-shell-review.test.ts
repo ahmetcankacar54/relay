@@ -157,13 +157,13 @@ test("reconnect banners use the shared rule, only for signed-in accounts, and re
   );
 });
 
-test("a renewal banner offers Renew connection and can be dismissed", () => {
+test("a renewal banner offers Allow renewal and can be dismissed", () => {
   const html = wrap(
     relayFor({}, { a: { accountId: "a", status: "error", issue: "renewal-required", stale: true } }),
     createElement(Banners),
   );
-  assert.match(html, /Bağlantıyı yenile/);
-  assert.doesNotMatch(html, /Yeniden bağlan/);
+  assert.match(html, /Yenilemeye izin ver/);
+  assert.doesNotMatch(html, /Limit okuma girişini yenile/);
   assert.match(html, /aria-label="Uyarıyı kapat"/);
 });
 
@@ -283,7 +283,7 @@ test("a confirmed Desktop action shows the travelling panda until it finishes", 
   // The travelling panda is not playful: a click on it does nothing.
   assert.doesNotMatch(running, /data-playful/);
   assert.match(running, /Studio hesabına geçiliyor/);
-  assert.match(running, /Claude kapanıp yeniden açılıyor…/);
+  assert.match(running, /Claude uygulaması kapanıp yeniden açılıyor…/);
   assert.doesNotMatch(running, /type="checkbox"/);
   // Desktop is busy with something else: the review stays as it is, without the panda.
   const elsewhere = wrap(relayFor({ desktopRequest: request, desktopBusy: true }), createElement(DesktopActionBody));

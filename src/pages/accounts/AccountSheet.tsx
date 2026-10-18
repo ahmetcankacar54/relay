@@ -286,8 +286,8 @@ export function AccountSheetBody({
                   "Setup required · switching is not ready yet",
                 )) +
             t(
-              " · Claude’u bu hesapla açmak için kaydedilir.",
-              " · Saved to open Claude with this account.",
+              " · Claude uygulamasını bu hesapla açmak için kaydedilir.",
+              " · Saved to open the Claude app with this account.",
             )
           }
           actions={

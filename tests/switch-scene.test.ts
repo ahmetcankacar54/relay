@@ -123,17 +123,17 @@ test("the line names the target and the result, in Turkish and English", () => {
     "Switching to Vertex", "Switching to Vertex", "Couldn’t finish · details in Relay",
   ]);
   assert.deepEqual(lines("tr", [[0, { phase: "start", kind: "merge" }], [LEAVING_MS, tick], [2_000, merged]]), [
-    "Claude yeniden başlatılıyor…", "Claude yeniden başlatılıyor…", "Claude yeniden açıldı",
+    "Claude uygulaması yeniden başlatılıyor…", "Claude uygulaması yeniden başlatılıyor…", "Claude uygulaması yeniden açıldı",
   ]);
   assert.equal(sceneLine(run([[0, start], [500, ended(false)], [LEAVING_MS, tick]])[2], "tr", name), "İşlem tamamlanamadı · ayrıntılar Relay’de");
   assert.equal(sceneLine(run([[0, start], [500, ended()], [LEAVING_MS, tick]])[2], "en", name), "You’re on Vertex");
-  assert.equal(sceneLine(run([[0, { phase: "start", kind: "merge" }], [500, merged], [LEAVING_MS, tick]])[2], "en", name), "Claude reopened");
+  assert.equal(sceneLine(run([[0, { phase: "start", kind: "merge" }], [500, merged], [LEAVING_MS, tick]])[2], "en", name), "The Claude app reopened");
 });
 
 test("an account deleted during the story falls back to the general lines", () => {
   const states = run([[0, start], [LEAVING_MS, tick], [2_000, ended()]]);
   assert.deepEqual(states.map((s) => sceneLine(s, "tr", () => undefined)), [
-    "Claude yeniden başlatılıyor…", "Claude yeniden başlatılıyor…", "Claude yeniden açıldı",
+    "Claude uygulaması yeniden başlatılıyor…", "Claude uygulaması yeniden başlatılıyor…", "Claude uygulaması yeniden açıldı",
   ]);
 });
 

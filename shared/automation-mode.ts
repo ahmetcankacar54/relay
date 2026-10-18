@@ -45,18 +45,18 @@ export const AUTOMATION_MODES: {
   },
   {
     value: "after-exit",
-    label: ["Claude kapanınca", "When Claude quits"],
+    label: ["Claude uygulaması kapanınca", "When the Claude app quits"],
     description: [
-      "Kota dolunca, sen Claude’u kapattığında sıradaki hesabı hazırlar. Claude’u kendisi kapatmaz.",
-      "When a quota runs out, prepares the next account once you quit Claude. Never quits Claude itself.",
+      "Kota dolunca, sen Claude uygulamasını kapattığında sıradaki hesabı hazırlar. Claude uygulamasını kendisi kapatmaz.",
+      "When a quota runs out, prepares the next account once you quit the Claude app. Never quits the Claude app itself.",
     ],
   },
   {
     value: "quota",
     label: ["Kota dolunca", "At quota"],
     description: [
-      "Kota dolunca, çalışan iş bitince Claude’u sıradaki hesapla yeniden açar ve kota yüzünden duran Code konuşmalarını devam ettirir.",
-      "When a quota runs out and running work finishes, reopens Claude on the next account and continues the Code conversations that stopped at the limit.",
+      "Kota dolunca, çalışan iş bitince Claude uygulamasını sıradaki hesapla yeniden açar ve kota yüzünden duran Code konuşmalarını devam ettirir.",
+      "When a quota runs out and running work finishes, reopens the Claude app on the next account and continues the Code conversations that stopped at the limit.",
     ],
   },
 ];

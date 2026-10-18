@@ -168,9 +168,9 @@ test("the sign-in banner says what is wrong and what Reconnect does", () => {
   );
   assert.match(
     tr,
-    /Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar\. Onaylayınca uyarı kapanır\./,
+    /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda açar\. Onaylayınca uyarı kapanır\./,
   );
-  assert.match(tr, /<button[^>]*>Yeniden bağlan<\/button>/);
+  assert.match(tr, /<button[^>]*>Limit okuma girişini yenile<\/button>/);
   const en = render(relayFor({ a: usage("scope") }), "en");
   assert.match(
     en,
@@ -178,14 +178,14 @@ test("the sign-in banner says what is wrong and what Reconnect does", () => {
   );
   assert.match(
     en,
-    /Reconnect opens this account’s usage sign-in in the browser\. The warning closes once you approve it\./,
+    /“Renew usage sign-in” opens this account’s sign-in in the browser\. The warning closes once you approve it\./,
   );
 });
 
 test("the explanation belongs to the sign-in banner only, not to the renewal banner", () => {
   const html = render(relayFor({ a: usage("renewal-required") }));
-  assert.match(html, /Bağlantıyı yenile/);
-  assert.doesNotMatch(html, /Yeniden bağlan, tarayıcıda/);
+  assert.match(html, /Yenilemeye izin ver/);
+  assert.doesNotMatch(html, /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda/);
   assert.doesNotMatch(html, /oturumun süresi doldu/);
 });
 
@@ -239,7 +239,7 @@ test("one warning renders as a single banner, even beside healthy accounts", () 
     html,
     /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./,
   );
-  assert.match(html, /<button[^>]*>Yeniden bağlan<\/button>/);
+  assert.match(html, /<button[^>]*>Limit okuma girişini yenile<\/button>/);
   assert.match(html, /aria-label="Uyarıyı kapat"/);
   assert.doesNotMatch(html, /ilgi bekliyor|aria-expanded|Göster/);
   const renew = render(relayFor({ b: usage("renewal-required", "b") }, [team]));
@@ -247,7 +247,7 @@ test("one warning renders as a single banner, even beside healthy accounts", () 
     renew,
     /İş · Team · limit okuma girişinin yenilenmesi gerekiyor\./,
   );
-  assert.match(renew, /<button[^>]*>Bağlantıyı yenile<\/button>/);
+  assert.match(renew, /<button[^>]*>Yenilemeye izin ver<\/button>/);
   assert.doesNotMatch(renew, /ilgi bekliyor|aria-expanded/);
 });
 
@@ -260,7 +260,7 @@ test("two or more warnings share one banner with a count and a Show button", () 
   // Collapsed, none of the rows are drawn.
   assert.doesNotMatch(
     html,
-    /Kişisel · Max|Yeniden bağlan|Bağlantıyı yenile|Anahtarlık erişimine izin ver/,
+    /Kişisel · Max|Limit okuma girişini yenile|Yenilemeye izin ver|Anahtarlık erişimine izin ver/,
   );
   const en = render(relayFor(all3, [max, team, pro]), "en");
   assert.match(en, /3 accounts need usage sign-in attention\./);
@@ -283,7 +283,7 @@ test("the expanded group lists a row per warning with today's text, button and d
   );
   assert.match(
     html,
-    /Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar\./,
+    /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda açar\./,
   );
   assert.match(
     html,
@@ -294,15 +294,15 @@ test("the expanded group lists a row per warning with today's text, button and d
     /Ek · Pro · limitleri okumak için Anahtarlık erişimi gerekiyor\./,
   );
   for (const label of [
-    "Yeniden bağlan",
-    "Bağlantıyı yenile",
+    "Limit okuma girişini yenile",
+    "Yenilemeye izin ver",
     "Anahtarlık erişimine izin ver",
   ])
     assert.equal(html.split(`>${label}</button>`).length - 1, 1, label);
   // Each row's button says which account it is for, after its visible label.
   for (const [label, name] of [
-    ["Yeniden bağlan", "Kişisel · Max"],
-    ["Bağlantıyı yenile", "İş · Team"],
+    ["Limit okuma girişini yenile", "Kişisel · Max"],
+    ["Yenilemeye izin ver", "İş · Team"],
     ["Anahtarlık erişimine izin ver", "Ek · Pro"],
   ])
     assert.match(
@@ -325,7 +325,7 @@ test("the expanded group lists a row per warning with today's text, button and d
   assert.match(en, /<button[^>]*aria-expanded="true"[^>]*>Hide<\/button>/);
   assert.match(en, /aria-label="Dismiss warning for İş · Team"/);
   assert.match(en, /Allow Keychain access/);
-  assert.match(en, /aria-label="Reconnect · Kişisel · Max"/);
+  assert.match(en, /aria-label="Renew usage sign-in · Kişisel · Max"/);
 });
 
 test("a dismissed warning stays hidden after a remount and a restart", () => {
@@ -645,7 +645,7 @@ test("a single warning keeps its flat one-line layout", () => {
 });
 
 const EXPLAIN_TR =
-  "Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar. Onaylayınca uyarı kapanır.";
+  "“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda açar. Onaylayınca uyarı kapanır.";
 
 test("the expanded group explains Reconnect once, under the list, and only when a row offers it", () => {
   const twoLogins = {
@@ -663,7 +663,7 @@ test("the expanded group explains Reconnect once, under the list, and only when 
   });
   assert.equal(
     en.split(
-      "Reconnect opens this account’s usage sign-in in the browser. The warning closes once you approve it.",
+      "“Renew usage sign-in” opens this account’s sign-in in the browser. The warning closes once you approve it.",
     ).length - 1,
     1,
   );
@@ -673,11 +673,11 @@ test("the expanded group explains Reconnect once, under the list, and only when 
     "tr",
     { initialExpanded: true },
   );
-  assert.doesNotMatch(renewals, /Yeniden bağlan/);
+  assert.doesNotMatch(renewals, /Limit okuma girişini yenile/);
   // Collapsed, no explanation either.
   assert.doesNotMatch(
     render(relayFor(twoLogins, [max, team, pro])),
-    /Yeniden bağlan, tarayıcıda/,
+    /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda/,
   );
   // A single sign-in banner keeps its own.
   assert.equal(
@@ -691,13 +691,13 @@ test("while a browser approval is pending, the sign-in banner says so and Reconn
   const html = render(relayFor({ a: usage("expired") }, [max], true, pending));
   assert.match(html, /Kişisel · Max · tarayıcı onayı bekleniyor\./);
   assert.doesNotMatch(html, /limit okuma girişinin yenilenmesi gerekiyor/);
-  assert.match(html, /<button[^>]*disabled=""[^>]*>Yeniden bağlan<\/button>/);
+  assert.match(html, /<button[^>]*disabled=""[^>]*>Limit okuma girişini yenile<\/button>/);
   const en = render(
     relayFor({ a: usage("expired") }, [max], true, pending),
     "en",
   );
   assert.match(en, /Kişisel · Max · waiting for browser approval\./);
-  assert.match(en, /<button[^>]*disabled=""[^>]*>Reconnect<\/button>/);
+  assert.match(en, /<button[^>]*disabled=""[^>]*>Renew usage sign-in<\/button>/);
   // Every pending status counts; a finished flow does not.
   for (const status of ["starting", "verifying"])
     assert.match(
@@ -716,7 +716,7 @@ test("while a browser approval is pending, the sign-in banner says so and Reconn
       ]),
     );
     assert.doesNotMatch(done, /tarayıcı onayı bekleniyor/, status);
-    assert.doesNotMatch(done, /disabled=""[^>]*>Yeniden bağlan/, status);
+    assert.doesNotMatch(done, /disabled=""[^>]*>Limit okuma girişini yenile/, status);
   }
   // Another account's flow leaves this banner alone.
   const other = render(
@@ -732,11 +732,11 @@ test("while a browser approval is pending, the sign-in banner says so and Reconn
   assert.match(group, /Kişisel · Max · tarayıcı onayı bekleniyor\./);
   assert.match(
     group,
-    /<button[^>]*disabled=""[^>]*aria-label="Yeniden bağlan · Kişisel · Max"|<button[^>]*aria-label="Yeniden bağlan · Kişisel · Max"[^>]*disabled=""/,
+    /<button[^>]*disabled=""[^>]*aria-label="Limit okuma girişini yenile · Kişisel · Max"|<button[^>]*aria-label="Limit okuma girişini yenile · Kişisel · Max"[^>]*disabled=""/,
   );
   assert.doesNotMatch(
     group,
-    /disabled=""[^>]*>Bağlantıyı yenile|disabled=""[^>]*>Anahtarlık erişimine izin ver/,
+    /disabled=""[^>]*>Yenilemeye izin ver|disabled=""[^>]*>Anahtarlık erişimine izin ver/,
   );
 });
 
@@ -773,8 +773,8 @@ test("a usage sign-in of another account than the Claude app sign-in gets the si
       tr,
       /Ek · Pro · limit okuma girişinin yenilenmesi gerekiyor: giriş başka bir hesaba ait\./,
     );
-    assert.match(tr, /<button[^>]*>Yeniden bağlan<\/button>/);
-    assert.doesNotMatch(tr, /Bağlantıyı yenile|Anahtarlık erişimine izin ver/);
+    assert.match(tr, /<button[^>]*>Limit okuma girişini yenile<\/button>/);
+    assert.doesNotMatch(tr, /Yenilemeye izin ver|Anahtarlık erişimine izin ver/);
     assert.match(tr, /aria-label="Uyarıyı kapat"/);
   }
   const en = render(relayFor({ m: ready("m") }, [other()]), "en");
@@ -782,7 +782,7 @@ test("a usage sign-in of another account than the Claude app sign-in gets the si
     en,
     /Ek · Pro · the usage sign-in needs to be renewed: the sign-in belongs to another account\./,
   );
-  assert.match(en, /<button[^>]*>Reconnect<\/button>/);
+  assert.match(en, /<button[^>]*>Renew usage sign-in<\/button>/);
   // A different organization is a mismatch too.
   const otherOrg: Account = {
     ...other(),

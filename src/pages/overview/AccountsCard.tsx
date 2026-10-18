@@ -64,9 +64,7 @@ export function AccountsCard({
               window.location.hash = intentHash("hesaplar", "ekle");
             }}
           >
-            {relay.accounts.length
-              ? t("Hesap ekle", "Add account")
-              : t("Hesap ekle", "Add an account")}
+            {t("Hesap ekle", "Add account")}
           </Button>
         </div>
       ) : (
@@ -141,7 +139,7 @@ export function AccountsCard({
                       )
                     }
                   >
-                    {t("Geçiş yap", "Switch")}
+                    {t("Geç", "Switch")}
                   </Button>
                 )}
               </div>

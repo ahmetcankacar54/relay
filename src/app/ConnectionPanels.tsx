@@ -59,7 +59,7 @@ export function DesktopPendingActions() {
           onClick={() => void action("open", () => api.openDesktop())}
         >
           <ArrowUpRight />
-          {t("Claude’u yeniden aç", "Reopen Claude")}
+          {t("Claude uygulamasını yeniden aç", "Reopen the Claude app")}
         </Button>
         <Button
           variant="ghost"
@@ -105,8 +105,8 @@ export function DesktopPendingPanel() {
           </h3>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Claude’da doğru hesaba giriş yap ve Code sekmesini aç. Sonra buradan bağlantıyı kaydet.",
-              "Sign in to the matching account inside Claude and open Code. Then save the connection here.",
+              "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç. Sonra buradan bağlantıyı kaydet.",
+              "Sign in to the matching account inside the Claude app and open Code. Then save the connection here.",
             )}
           </p>
         </div>
@@ -126,13 +126,13 @@ export function DesktopPendingPanel() {
                   ? t("Bağlantıyı tamamla", "Complete connection")
                   : t("Code bağlantısı bekleniyor", "Waiting for Code")
                 : t(
-                    "Claude’da giriş bekleniyor",
-                    "Waiting for sign-in in Claude",
+                    "Claude uygulamasında giriş bekleniyor",
+                    "Waiting for sign-in in the Claude app",
                   )
         }
         steps={[
           {
-            title: t("Claude açıldı", "Claude opened"),
+            title: t("Claude uygulaması açıldı", "The Claude app opened"),
             detail: t("Giriş ekranı hazır", "Sign-in is ready"),
           },
           {
@@ -355,7 +355,9 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
                   void relay.startCli(flowAccount);
                 }}
               >
-                {t("Yeniden bağlan", "Reconnect")}
+                {flowAccount?.auth?.email
+                  ? t("Limit okuma girişini yenile", "Renew usage sign-in")
+                  : t("Limit okuma girişi yap", "Sign in to read usage")}
               </Button>
             )}
             <Button

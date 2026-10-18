@@ -203,8 +203,8 @@ export function AutomationSettings() {
           )}
           <Note>
             {t(
-              "Relay açık kalmalı. Çalışan iş bitmeden Claude yeniden başlatılmaz; her konuşmaya en fazla bir devam mesajı gider.",
-              "Relay must stay open. Claude is not restarted while work is running; each conversation gets at most one continue message.",
+              "Relay açık kalmalı. Çalışan iş bitmeden Claude uygulaması yeniden başlatılmaz; her konuşmaya en fazla bir devam mesajı gider.",
+              "Relay must stay open. The Claude app is not restarted while work is running; each conversation gets at most one continue message.",
             )}
           </Note>
         </div>

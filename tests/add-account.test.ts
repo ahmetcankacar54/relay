@@ -104,9 +104,9 @@ test("the add-account dialog walks the Desktop and limit steps for the created p
   assert.match(desktopStep, /Claude uygulaması girişini başlat…/);
   assert.match(desktopStep, /Atla/);
   const pending = wrap(relayFor({ pendingDesktop: b }), createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }));
-  assert.match(pending, /Claude’da giriş bekleniyor/);
+  assert.match(pending, /Claude uygulamasında giriş bekleniyor/);
   assert.doesNotMatch(pending, /üstteki panel/);
-  assert.match(pending, /Claude’u yeniden aç/);
+  assert.match(pending, /Claude uygulamasını yeniden aç/);
   assert.match(pending, /İptal et ve önceki hesaba dön/);
   assert.doesNotMatch(pending, /Bağlantıyı tamamla/);
   const capture = wrap(
@@ -126,15 +126,15 @@ test("the add-account dialog walks the Desktop and limit steps for the created p
 
 test("the Desktop link dialog lists unlinked profiles", () => {
   const html = wrap(relayFor({ hasUnclaimedDesktop: true }), createElement(LinkDesktopBody, { picked() {} }));
-  assert.match(html, /Claude’da açık olan hesap/);
+  assert.match(html, /Claude uygulamasında açık olan hesap/);
   assert.match(html, /Studio/);
   assert.match(html, /Şirket/);
   assert.doesNotMatch(html, /<option[^>]*>Kişisel · Max/);
 });
 
 test("the accounts header offers Desktop linking only while an unclaimed Desktop account is open", () => {
-  assert.match(wrap(relayFor({ hasUnclaimedDesktop: true }), createElement(Accounts)), /Desktop hesabını eşleştir/);
-  assert.doesNotMatch(wrap(relayFor(), createElement(Accounts)), /Desktop hesabını eşleştir/);
+  assert.match(wrap(relayFor({ hasUnclaimedDesktop: true }), createElement(Accounts)), /Claude uygulaması hesabını eşleştir/);
+  assert.doesNotMatch(wrap(relayFor(), createElement(Accounts)), /Claude uygulaması hesabını eşleştir/);
 });
 
 test("connection panels keep their ids, live regions and copy", () => {
@@ -143,7 +143,7 @@ test("connection panels keep their ids, live regions and copy", () => {
   assert.match(html, /id="desktop-pending-panel"[^>]*aria-live="polite"|aria-live="polite"[^>]*id="desktop-pending-panel"/);
   assert.match(html, /id="cli-connection-panel"/);
   assert.match(html, /Studio · Claude uygulaması girişi/);
-  assert.match(html, /Claude’u yeniden aç/);
+  assert.match(html, /Claude uygulamasını yeniden aç/);
   assert.match(html, /Tarayıcı onayı bekleniyor/);
   assert.match(html, /Tarayıcıyı yeniden aç/);
   assert.match(html, /2 \/ 3/);
@@ -209,7 +209,7 @@ test("the Claude app step says why its button is disabled, next to it", () => {
   assert.doesNotMatch(noCode, /Code’u aç \/ çalışma alanı seç/);
   assert.match(
     reasonAfter(noCode, "Bu hesabı eşleştir…"),
-    /^<small[^>]*>Claude’da sol menüden Code’u bir kez aç; liste kendiliğinden dolar\.<\/small>/,
+    /^<small[^>]*>Claude uygulamasında sol menüden Code’u bir kez aç; liste kendiliğinden dolar\.<\/small>/,
   );
   // Two folders and none picked yet.
   assert.match(
@@ -248,13 +248,13 @@ test("the pending sign-in names the Code step while no workspace folder exists",
     relayFor({ pendingDesktop: b, hasUnclaimedDesktop: true, desktop: claude({ currentAccountUuid: "u" }) } as Partial<Relay>),
     createElement(ConnectionPanels),
   );
-  assert.match(html, /Claude’da sol menüden Code’u bir kez aç; liste kendiliğinden dolar\./);
+  assert.match(html, /Claude uygulamasında sol menüden Code’u bir kez aç; liste kendiliğinden dolar\./);
   assert.doesNotMatch(html, /Bağlantıyı tamamla<\/button>/);
 });
 
 test("with no account, the accounts header hides Desktop linking", () => {
   const html = wrap(relayFor({ accounts: [], active: undefined, hasUnclaimedDesktop: true }), createElement(Accounts));
-  assert.doesNotMatch(html, /Desktop hesabını eşleştir/);
+  assert.doesNotMatch(html, /Claude uygulaması hesabını eşleştir/);
   assert.match(html, /Hesap ekle/);
 });
 
@@ -263,7 +263,7 @@ test("disabled accounts header buttons say why, next to them", () => {
   assert.match(pending, /<button[^>]*disabled=""[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle<\/button><span[^>]*>Önce devam eden Claude uygulaması girişini tamamla veya iptal et\.<\/span>/);
   const linkedAll = [a, { ...b, desktop: a.desktop }, { ...w, desktop: a.desktop }];
   const allLinked = wrap(relayFor({ accounts: linkedAll, hasUnclaimedDesktop: true }), createElement(Accounts));
-  assert.match(allLinked, /<button[^>]*disabled=""[^>]*>(?:(?!<\/button>)[\s\S])*?Desktop hesabını eşleştir<\/button><span[^>]*>Her profilin Claude uygulaması girişi kayıtlı\.<\/span>/);
+  assert.match(allLinked, /<button[^>]*disabled=""[^>]*>(?:(?!<\/button>)[\s\S])*?Claude uygulaması hesabını eşleştir<\/button><span[^>]*>Her profilin Claude uygulaması girişi kayıtlı\.<\/span>/);
   const full = Array.from({ length: 50 }, (_, i) => ({ ...b, id: `p${i}` }));
   assert.match(wrap(relayFor({ accounts: full }), createElement(Accounts)), /Hesap ekle<\/button><span[^>]*>En fazla 50 hesap eklenebilir\.<\/span>/);
   // A lock both buttons share is said once, after the second.

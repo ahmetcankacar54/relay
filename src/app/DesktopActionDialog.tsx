@@ -22,12 +22,12 @@ export function DesktopActionDialog() {
     >
       <DialogContent className="sm:max-w-lg" showCloseButton={false}>
         <DialogTitle className="sr-only">
-          {t("Desktop işlemini onayla", "Confirm Desktop action")}
+          {t("Claude uygulaması işlemini onayla", "Confirm Claude app action")}
         </DialogTitle>
         <DialogDescription className="sr-only">
           {t(
-            "Claude yeniden başlatılmadan önce onay gerekir.",
-            "Confirmation is required before Claude restarts.",
+            "Claude uygulaması yeniden başlatılmadan önce onay gerekir.",
+            "Confirmation is required before the Claude app restarts.",
           )}
         </DialogDescription>
         <DesktopActionBody />

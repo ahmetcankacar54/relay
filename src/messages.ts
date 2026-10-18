@@ -6,44 +6,52 @@
 type Pair = [tr: string, en: string, enDisplay?: string];
 const pairs: Pair[] = [
   [
-    "Tercihleri değiştirmeden önce Desktop işlemini tamamla.",
+    "Tercihleri değiştirmeden önce Claude uygulamasındaki işlemi tamamla.",
     "Finish the Desktop operation before changing preferences.",
+    "Finish the Claude app operation before changing preferences.",
   ],
   [
     "Seçimi, var olan Relay hesaplarını birer kez kullanarak yap.",
     "Select existing Relay accounts once each.",
   ],
   [
-    "Geçmişini birleştirmeden önce bu Desktop hesabına geç.",
+    "Geçmişini birleştirmeden önce Claude uygulamasında bu hesaba geç.",
     "Switch to this Desktop account before syncing its history.",
+    "Switch the Claude app to this account before syncing its history.",
   ],
   [
-    "Desktop geçmişi takip verisi geçersiz.",
+    "Claude uygulaması geçmiş takip verisi geçersiz.",
     "Invalid Desktop history tracking data.",
+    "Invalid Claude app history tracking data.",
   ],
   [
-    "Koşullar değiştiği için otomatik Desktop geçişi iptal edildi.",
+    "Koşullar değiştiği için otomatik geçiş iptal edildi.",
     "Automatic Desktop switch was cancelled because its conditions changed.",
+    "The automatic switch was cancelled because its conditions changed.",
   ],
   [
-    "Geçiş sırasında Claude açıldı. Claude’u kapattıktan sonra yedeği geri yükle.",
+    "Geçiş sırasında Claude uygulaması açıldı. Uygulamayı kapattıktan sonra yedeği geri yükle.",
     "Claude opened during the Desktop switch. Restore its backup after closing Claude.",
+    "The Claude app opened during the switch. Restore its backup after quitting the Claude app.",
   ],
   [
-    "Bu profil farklı bir Claude hesabına bağlı. Eşleşen Desktop hesabını seç.",
+    "Bu profil farklı bir Claude hesabına bağlı. Claude uygulamasında eşleşen hesabı seç.",
     "This profile is connected to a different Claude account. Choose the matching Desktop account.",
+    "This profile is connected to a different Claude account. Choose the matching account in the Claude app.",
   ],
   [
     "Bu profil farklı bir Claude kuruluşuna bağlı. Eşleşen Code çalışma alanını seç.",
     "This profile is connected to a different Claude organization. Choose its matching Code workspace.",
   ],
   [
-    "Kurulum sırasında Desktop hesabı değişti. Tekrar dene.",
+    "Kurulum sırasında Claude uygulamasındaki hesap değişti. Tekrar dene.",
     "Desktop account changed during setup. Try again.",
+    "The account in the Claude app changed during setup. Try again.",
   ],
   [
-    "Bu Desktop profili zaten bağlı.",
+    "Claude uygulamasındaki bu hesap zaten bağlı.",
     "This Desktop profile is already connected.",
+    "This Claude app account is already connected.",
   ],
   [
     "Kayıtlı Claude uygulaması girişi eksik. Hesabı yeniden bağla.",
@@ -56,39 +64,58 @@ const pairs: Pair[] = [
     "Invalid saved Claude app sign-in.",
   ],
   [
-    "Claude hâlâ açık. Dosyalar değiştirilmedi.",
+    "Claude uygulaması hâlâ açık. Dosyalar değiştirilmedi.",
     "Claude is still running. No files were changed.",
+    "The Claude app is still running. No files were changed.",
   ],
   [
-    "Desktop kurtarma yedeği bulunamadı.",
+    "Kurtarma yedeği bulunamadı.",
     "Desktop recovery backup is missing.",
+    "The recovery backup is missing.",
   ],
-  ["Desktop yedeği geçersiz.", "Invalid Desktop backup."],
+  [
+    "Claude uygulaması yedeği geçersiz.",
+    "Invalid Desktop backup.",
+    "Invalid Claude app backup.",
+  ],
   ["Kurtarma dosya yolu geçersiz.", "Invalid recovery path."],
   ["Kurtarma verisi geçersiz.", "Invalid recovery data."],
-  ["Desktop dosya yolu geçersiz.", "Invalid Desktop path."],
   [
-    "Desktop verisinde sembolik bağlantı kullanılamaz.",
+    "Claude uygulaması dosya yolu geçersiz.",
+    "Invalid Desktop path.",
+    "Invalid Claude app path.",
+  ],
+  [
+    "Claude uygulaması verisinde sembolik bağlantı kullanılamaz.",
     "Desktop data cannot contain symbolic links.",
+    "Claude app data cannot contain symbolic links.",
   ],
   [
-    "Desktop dosya boyutu veya türü desteklenmiyor.",
+    "Claude uygulaması dosya boyutu veya türü desteklenmiyor.",
     "Unsupported Desktop file size or type.",
+    "Unsupported Claude app file size or type.",
   ],
-  ["Desktop veri biçimi desteklenmiyor.", "Unsupported Desktop data format."],
   [
-    "Code oturum biçimi tanınmadı. Desktop dosyaları değiştirilmedi.",
+    "Claude uygulaması veri biçimi desteklenmiyor.",
+    "Unsupported Desktop data format.",
+    "Unsupported Claude app data format.",
+  ],
+  [
+    "Code oturum biçimi tanınmadı. Claude uygulaması dosyaları değiştirilmedi.",
     "Unrecognized Code session format. No Desktop files changed.",
+    "Unrecognized Code session format. No Claude app files changed.",
   ],
   ["Proje biçimi tanınmadı.", "Unrecognized project format."],
   ["Proje kaydı tanınmadı.", "Unrecognized project record."],
   [
-    "Geçişten önce Desktop yedeğinin geri yüklenmesi gerekiyor.",
+    "Geçişten önce yedeğin geri yüklenmesi gerekiyor.",
     "Desktop recovery is required before switching.",
+    "Restore the backup before switching.",
   ],
   [
-    "Claude Desktop verisi okunamadı. Dosyalar değiştirilmedi.",
+    "Claude uygulaması verisi okunamadı. Dosyalar değiştirilmedi.",
     "Claude Desktop data could not be read. No files were changed.",
+    "The Claude app’s data could not be read. No files were changed.",
   ],
   [
     "İşletim sistemi şifrelemesi kullanılamıyor.",
@@ -154,20 +181,24 @@ const pairs: Pair[] = [
     "Paste the single-line code from the browser.",
   ],
   [
-    "Bu Desktop hesabı başka bir profilde kayıtlı.",
+    "Claude uygulamasındaki bu hesap başka bir profilde kayıtlı.",
     "This Desktop account is already saved in another profile.",
+    "This Claude app account is already saved in another profile.",
   ],
   [
-    "Önce Claude Desktop’ta giriş yap ve Code sekmesini aç.",
+    "Önce Claude uygulamasında giriş yap ve Code sekmesini aç.",
     "Open Claude Desktop, sign in and open the Code tab first.",
+    "Open the Claude app, sign in and open the Code tab first.",
   ],
   [
-    "Önce açık Desktop hesabını bir profile kaydet.",
+    "Önce Claude uygulamasında açık hesabı bir profile kaydet.",
     "Save the current Desktop account into a profile before adding another account.",
+    "Save the account open in the Claude app into a profile before adding another account.",
   ],
   [
-    "Geçişten önce açık Desktop hesabını kaydet.",
+    "Geçişten önce Claude uygulamasında açık hesabı kaydet.",
     "Save the current Desktop account before switching.",
+    "Save the account open in the Claude app before switching.",
   ],
   [
     "Önce devam eden Claude uygulaması girişini tamamla veya iptal et.",
@@ -175,29 +206,39 @@ const pairs: Pair[] = [
     "Finish or cancel the current Claude app sign-in first.",
   ],
   [
-    "Desktop’ta bir işlem devam ediyor.",
+    "Claude uygulamasında bir işlem sürüyor.",
     "A Desktop operation is already in progress.",
+    "A Claude app operation is already in progress.",
   ],
   [
-    "Bu platformda Claude Desktop bulunamadı.",
+    "Bu platformda Claude uygulaması bulunamadı.",
     "Claude Desktop was not found on this platform.",
+    "The Claude app was not found on this platform.",
   ],
   [
-    "Önce yarım kalan Desktop geçişini geri yükle.",
+    "Önce yarım kalan geçişi geri yükle.",
     "Restore the interrupted Desktop switch first.",
+    "Restore the interrupted switch first.",
   ],
   [
-    "Önce bu hesabı Claude Desktop’ta bağla.",
+    "Önce bu hesabı Claude uygulamasında bağla.",
     "Connect this account in Claude Desktop first.",
+    "Connect this account in the Claude app first.",
   ],
-  ["Claude Desktop kurulu değil.", "Claude Desktop is not installed."],
   [
-    "Bu profil başka bir Desktop hesabına ait. Yeni bir profil oluştur.",
+    "Claude uygulaması kurulu değil.",
+    "Claude Desktop is not installed.",
+    "The Claude app is not installed.",
+  ],
+  [
+    "Bu profil Claude uygulamasındaki başka bir hesaba ait. Yeni bir profil oluştur.",
     "This profile belongs to another Desktop account. Create a new profile.",
+    "This profile belongs to another Claude app account. Create a new profile.",
   ],
   [
-    "Claude kapanmadı. Açık çalışmanı bitirip Claude’u kapattıktan sonra tekrar dene. Dosyalar değiştirilmedi.",
+    "Claude uygulaması kapanmadı. Açık çalışmanı bitirip uygulamayı kapattıktan sonra tekrar dene. Dosyalar değiştirilmedi.",
     "Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.",
+    "The Claude app did not close. Finish running work and quit the Claude app, then try again. No files changed.",
   ],
   [
     "İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.",

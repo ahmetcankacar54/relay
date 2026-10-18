@@ -69,8 +69,8 @@ export function DesktopSetup({
       <p className="text-sm text-muted-foreground">
         {unclaimed
           ? t(
-              "Claude’da açık hesabı doğru Relay profiliyle eşleştir. E-posta ve çalışma alanı aynı hesaba ait olmalı.",
-              "Link the account open in Claude to the matching Relay profile. The email and workspace must belong to that account.",
+              "Claude uygulamasında açık hesabı doğru Relay profiliyle eşleştir. E-posta ve çalışma alanı aynı hesaba ait olmalı.",
+              "Link the account open in the Claude app to the matching Relay profile. The email and workspace must belong to that account.",
             )
           : t(
               "Bu profilin Claude uygulaması girişi henüz kayıtlı değil. Limit okuma girişi kullanım limitlerini okur; hesap geçişi için bir kez Claude uygulaması girişi de gerekir.",
@@ -79,7 +79,7 @@ export function DesktopSetup({
       </p>
       {!account && (
         <label className="grid gap-1.5 text-sm font-medium">
-          {t("Claude’da açık olan hesap", "Account currently open in Claude")}
+          {t("Claude uygulamasında açık olan hesap", "Account currently open in the Claude app")}
           <select
             className={selectClass}
             value=""

@@ -95,7 +95,7 @@ test("Settings offers the switch window, on unless turned off, on macOS only", (
   const control = (html: string) => /<button[^>]*aria-labelledby="switch-window-label"[^>]*>/.exec(html)?.[0] ?? "";
   const on = render();
   assert.match(on, /Geçişte panda penceresini göster/);
-  assert.match(on, /Claude yeniden başlarken menü çubuğunun altında kısa bir sahne oynar\./);
+  assert.match(on, /Claude uygulaması yeniden başlarken menü çubuğunun altında kısa bir sahne oynar\./);
   assert.match(control(on), /aria-checked="true"/);
   assert.match(control(render({ switchWindow: false })), /aria-checked="false"/);
   for (const platform of ["win32", "linux"])

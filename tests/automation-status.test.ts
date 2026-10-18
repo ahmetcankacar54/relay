@@ -149,11 +149,11 @@ test("after-exit waiting for Claude offers the target with the reason", () => {
   assert.equal(status.mode, "after-exit");
   assert.equal(
     status.text[0],
-    "Kişisel · Max %0 kaldı · Claude açık, kapanmasını bekliyorum. Claude’u kapatınca Kişisel · İkinci hazırlanır.",
+    "Kişisel · Max %0 kaldı · Claude uygulaması açık, kapanmasını bekliyorum. Claude uygulamasını kapatınca Kişisel · İkinci hazırlanır.",
   );
   assert.equal(
     status.text[1],
-    "Kişisel · Max 0% left · Claude is open; waiting for it to quit. Quit Claude and Kişisel · İkinci is prepared.",
+    "Kişisel · Max 0% left · The Claude app is open; waiting for it to quit. Quit the Claude app and Kişisel · İkinci is prepared.",
   );
   assert.equal(status.switchTo, b.id);
   assert.equal(status.banner, true);
@@ -170,11 +170,11 @@ test("fleet waiting for other work offers switching now and says who continues",
   assert.equal(status.mode, "quota");
   assert.equal(
     status.text[0],
-    "Kişisel · Max %0 kaldı · 2 konuşma kota yüzünden durdu. Claude’da başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+    "Kişisel · Max %0 kaldı · 2 konuşma kota yüzünden durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
   );
   assert.equal(
     status.text[1],
-    "Kişisel · Max 0% left · 2 conversations stopped at the limit. Other work is running in Claude; when it finishes I switch to Kişisel · İkinci and continue. If you switch now, you type the continue message yourself.",
+    "Kişisel · Max 0% left · 2 conversations stopped at the limit. Other work is running in the Claude app; when it finishes I switch to Kişisel · İkinci and continue. If you switch now, you type the continue message yourself.",
   );
   assert.equal(status.switchTo, b.id);
   assert.equal(status.banner, true);
@@ -185,7 +185,7 @@ test("quiescence-unverified reads like other work running", () => {
   const status = automationStatus(
     input({ fleet: fleet("quiescence-unverified") }),
   );
-  assert.match(status.text[0], /Claude’da başka iş çalışıyor/);
+  assert.match(status.text[0], /Claude uygulamasında başka iş çalışıyor/);
   assert.match(status.text[0], /Şimdi geçersen devam mesajını sen yazarsın\.$/);
   assert.match(
     status.text[1],
@@ -290,7 +290,7 @@ test("a full reading too old to confirm the quota waits for fresh data", () => {
     input({ fleet: fleet("not-quiescent:busyWorkers"), usage: aged(20) }),
   );
   assert.equal(otherWork.switchTo, undefined);
-  assert.match(otherWork.text[0], /Claude’da başka iş çalışıyor/);
+  assert.match(otherWork.text[0], /Claude uygulamasında başka iş çalışıyor/);
 });
 
 test("a fresh full account is judged from the other limits too", () => {
@@ -404,8 +404,8 @@ test("the prepared and quota-exhausted sentences name the target", () => {
     }),
   );
   assert.deepEqual(prepared.text, [
-    "Kişisel · İkinci hazır. Claude’u açıp konuşmanı sürdür.",
-    "Kişisel · İkinci is ready. Open Claude and continue your conversation.",
+    "Kişisel · İkinci hazır. Claude uygulamasını açıp konuşmanı sürdür.",
+    "Kişisel · İkinci is ready. Open the Claude app and continue your conversation.",
   ]);
   assert.equal(prepared.switchTo, undefined);
   const exhausted = automationStatus(
@@ -429,8 +429,8 @@ test("prepared does not repeat the account the prefix already names", () => {
     }),
   );
   assert.deepEqual(here.text, [
-    "Kişisel · İkinci %80 kaldı · Hazır. Claude’u açıp konuşmanı sürdür.",
-    "Kişisel · İkinci 80% left · Ready. Open Claude and continue your conversation.",
+    "Kişisel · İkinci %80 kaldı · Hazır. Claude uygulamasını açıp konuşmanı sürdür.",
+    "Kişisel · İkinci 80% left · Ready. Open the Claude app and continue your conversation.",
   ]);
   assert.equal(here.tone, "ok");
   assert.equal(here.banner, true);
@@ -441,8 +441,8 @@ test("prepared does not repeat the account the prefix already names", () => {
     }),
   );
   assert.deepEqual(elsewhere.text, [
-    "Kişisel · Max %0 kaldı · Kişisel · İkinci hazır. Claude’u açıp konuşmanı sürdür.",
-    "Kişisel · Max 0% left · Kişisel · İkinci is ready. Open Claude and continue your conversation.",
+    "Kişisel · Max %0 kaldı · Kişisel · İkinci hazır. Claude uygulamasını açıp konuşmanı sürdür.",
+    "Kişisel · Max 0% left · Kişisel · İkinci is ready. Open the Claude app and continue your conversation.",
   ]);
 });
 
@@ -600,11 +600,11 @@ test("an uncertain delivery counts the conversations and stays in the banner", (
   assert.equal(status.banner, true);
   assert.equal(
     status.text[0],
-    "2 konuşmada devam mesajının ulaştığı doğrulanamadı; Claude’da kontrol et. Tekrar gönderilmez.",
+    "2 konuşmada devam mesajının ulaştığı doğrulanamadı; Claude uygulamasında kontrol et. Tekrar gönderilmez.",
   );
   assert.equal(
     status.text[1],
-    "Could not confirm the continue message reached 2 conversations; check them in Claude. Nothing is resent.",
+    "Could not confirm the continue message reached 2 conversations; check them in the Claude app. Nothing is resent.",
   );
 });
 
@@ -627,7 +627,7 @@ test("a failed switch keeps its cause and an unknown reason keeps its own", () =
   assert.equal(unreadable.banner, true);
   assert.equal(
     unreadable.text[0],
-    "Claude arayüzü okunamadı (ax-unreadable). Geçiş bekliyor.",
+    "Claude uygulamasının arayüzü okunamadı (ax-unreadable). Geçiş bekliyor.",
   );
   const waiting = automationStatus(
     bare({ fleet: fleet("ax-unreadable", { status: "waiting" }) }),

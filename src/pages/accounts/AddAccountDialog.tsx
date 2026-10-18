@@ -281,14 +281,14 @@ export function AddAccountSteps({
             <div className="grid gap-3">
               <StatusLine tone="warn" icon={<Monitor />}>
                 {t(
-                  "Claude’da giriş bekleniyor",
-                  "Waiting for sign-in in Claude",
+                  "Claude uygulamasında giriş bekleniyor",
+                  "Waiting for sign-in in the Claude app",
                 )}
               </StatusLine>
               <p className="text-sm text-muted-foreground">
                 {t(
-                  "Claude’da doğru hesaba giriş yap ve Code sekmesini aç. Sonra buradan bağlantıyı kaydet.",
-                  "Sign in to the matching account inside Claude and open Code. Then save the connection here.",
+                  "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç. Sonra buradan bağlantıyı kaydet.",
+                  "Sign in to the matching account inside the Claude app and open Code. Then save the connection here.",
                 )}
               </p>
               <DesktopPendingActions />

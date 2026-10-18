@@ -143,8 +143,8 @@ export function Banners({
   const explanation = (
     <p className="mt-0.5 text-xs text-muted-foreground">
       {t(
-        "Yeniden bağlan, tarayıcıda bu hesabın limit okuma girişini açar. Onaylayınca uyarı kapanır.",
-        "Reconnect opens this account’s usage sign-in in the browser. The warning closes once you approve it.",
+        "“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda açar. Onaylayınca uyarı kapanır.",
+        "“Renew usage sign-in” opens this account’s sign-in in the browser. The warning closes once you approve it.",
       )}
     </p>
   );
@@ -155,10 +155,10 @@ export function Banners({
   ) => {
     const label =
       action === "login"
-        ? t("Yeniden bağlan", "Reconnect")
+        ? t("Limit okuma girişini yenile", "Renew usage sign-in")
         : issue === "keychain-locked"
           ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
-          : t("Bağlantıyı yenile", "Renew connection");
+          : t("Yenilemeye izin ver", "Allow renewal");
     return action === "login" ? (
       <Button
         size="sm"
@@ -181,7 +181,7 @@ export function Banners({
       </Button>
     );
   };
-  /** A warning's text. The group explains Reconnect once, under its list, so its rows leave it out. */
+  /** A warning's text. The group explains the renewal once, under its list, so its rows leave it out. */
   const issueText = (
     { account: a, issue, action }: ReconnectIssue,
     explain = true,
@@ -255,14 +255,14 @@ export function Banners({
               disabled={relay.desktopBusy}
               onClick={() => relay.requestDesktop(active, "recover")}
             >
-              {t("Geri yükle", "Restore backup")}
+              {t("Yedeği geri yükle", "Restore backup")}
             </Button>
           }
         >
           <span>
             {t(
-              "Yarım kalan Desktop geçişi var. Önce yedeği geri yükle.",
-              "A Desktop switch was interrupted. Restore the backup first.",
+              "Yarım kalan bir geçiş var. Önce yedeği geri yükle.",
+              "A switch was interrupted. Restore the backup first.",
             )}
           </span>
         </Banner>

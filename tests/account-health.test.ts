@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { accountHealth, displayedIssue, renewalIssue, usageSignInStatus } from "../src/lib/account-health";
+import { accountRowSubtitle } from "../src/lib/account-row";
 import { displayedIssue as sharedDisplayedIssue } from "../shared/account-state";
 import { Disclosure } from "../src/components/Disclosure";
 import { reconnectIssues } from "../src/app/Banners";
@@ -105,6 +106,38 @@ test("8. everything else that works is ready", () => {
     assert.deepEqual([h.tone, h.label, h.fix], ["ok", "Hazır", undefined]);
   }
   assert.equal(health(base, undefined, idle, "en").label, "Ready");
+});
+
+test("a failed or old usage read is out of date, not ready, wherever the account is shown", () => {
+  // Studio: a transient error (rate-limited, or the service down) keeps the previous limits, marked stale.
+  const studio: AccountUsage = {
+    accountId: "a", status: "error", issue: "rate-limited", stale: true,
+    checkedAt: iso(NOW - 3 * 3_600_000), fiveHour: { usedPercent: 40 }, sevenDay: { usedPercent: 10 },
+    retryAt: iso(NOW + 600_000),
+  };
+  for (const usage of [
+    studio,
+    { ...studio, issue: "unavailable" as const },
+    // Old limits the service marks stale on its own.
+    { ...ready, stale: true, checkedAt: iso(NOW - 3_600_000) },
+    // A failed read with nothing kept.
+    { accountId: "a", status: "error" as const, issue: "unavailable" as const, stale: false },
+  ]) {
+    const h = health(base, usage);
+    assert.deepEqual([h.tone, h.label, h.fix], ["warn", "Limit verisi eski", undefined], usage.issue ?? "stale");
+    assert.equal(health(base, usage, {}, "en").label, "Usage data is out of date");
+    // The Overview and the panel rows read the same status.
+    const row = { account: base, usage, state: "unknown" as const, recommended: false };
+    assert.equal(accountRowSubtitle(row, tr("tr"), "tr", "UTC", NOW), "Limit verisi eski");
+  }
+  // The active account with Claude open is not "Çalışıyor" on old limits either.
+  assert.equal(health(base, studio, { active: true, desktopRunning: true }).label, "Limit verisi eski");
+  // A sign-in problem still outranks it.
+  assert.equal(health(noAuth, studio).label, "Limit okuma girişi yok");
+  // A fresh read and no read yet stay ready.
+  assert.equal(health(base, ready).label, "Hazır");
+  assert.equal(health(base, undefined).label, "Hazır");
+  assert.equal(health(base, { ...ready, status: "loading" }).label, "Hazır");
 });
 
 test("an account with several problems shows the highest one, and the next once it clears", () => {
@@ -231,9 +264,9 @@ test("a connection flag left over from before does not ask for a renewal while t
   for (const value of ["rate-limited", "unavailable"] as const) {
     const usage: AccountUsage = { ...issue(value), connectionRenewalRequired: true };
     assert.equal(renewalIssue(usage), undefined, value);
-    // Renewing cannot run then, so the status falls through to the next rows.
+    // Renewing cannot run then, so the status falls through to the next rows: the failed read.
     const h = health(base, usage);
-    assert.deepEqual([h.tone, h.label, h.fix], ["ok", "Hazır", undefined], value);
+    assert.deepEqual([h.tone, h.label, h.fix], ["warn", "Limit verisi eski", undefined], value);
     assert.equal(h.detail, "Claude uygulaması girişi: Kayıtlı · Limit okuma girişi: Bağlı", value);
     assert.equal(health(noAuth, usage).label, "Limit okuma girişi yok", value);
     assert.deepEqual(usageSignInStatus(base, usage, false, tr("tr")), { tone: "ok", label: "Bağlı" }, value);
@@ -281,7 +314,7 @@ test("the status, the banner, the usage card and the row menu read the same issu
     const banner = reconnectIssues([base], { a: usage }, new Set())[0];
     assert.equal(banner?.action === "renew", renew, `banner: ${name}`);
     if (banner) assert.equal(banner.issue, displayedIssue(usage), `banner key: ${name}`);
-    assert.equal(/>(Renew connection|Allow Keychain access)<\/button>/.test(card(usage)), renew, `usage card: ${name}`);
+    assert.equal(/>(Allow renewal|Allow Keychain access)<\/button>/.test(card(usage)), renew, `usage card: ${name}`);
     assert.equal(rowActions(base, relay(usage), (t) => t).some((x) => x.key === "renew"), renew, `row menu: ${name}`);
   }
 });

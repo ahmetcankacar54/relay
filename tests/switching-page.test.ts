@@ -172,21 +172,43 @@ test("Paylaşma says history is not shared, and never that it is", () => {
   assert.match(en, /Code history is not shared between accounts\./);
   assert.match(en, /Not merged between accounts\./);
   assert.doesNotMatch(en, /Only local Code history is shared|Merged on every account switch/);
-  // The sharing modes keep their wording.
+  // The sharing modes keep their wording, and the header says where the conversations appear.
+  const where: Record<string, RegExp> = {
+    all: /Geçişten sonra Code konuşmaların bağlı her hesapta görünür\./,
+    "same-group": /Geçişten sonra Code konuşmaların aynı gruptaki hesaplarda görünür\./,
+    selected: /Geçişten sonra Code konuşmaların seçtiğin hesaplarda görünür\./,
+  };
   for (const mode of ["all", "same-group", "selected"]) {
     const html = render(relayFor({}, { desktopHistoryTransfer: mode }));
     assert.equal(shareDescription(html), "Her hesap geçişinde birleştirilir.", mode);
     assert.match(html, /Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez\./, mode);
     assert.doesNotMatch(html, /hesaplar arasında paylaşılmaz|Hesaplar arasında birleştirilmez/, mode);
-    assert.match(html, /Geçişten sonra Code konuşmaların diğer hesapta da görünür\./, mode);
+    assert.match(html, where[mode], mode);
+    assert.doesNotMatch(html, /diğer hesapta da görünür/, mode);
   }
+  const english = (mode: string) =>
+    renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language: "en", setLanguage() {}, t: (_tr: string, en: string) => en } },
+        createElement(
+          RelayContext.Provider,
+          { value: relayFor({}, { desktopHistoryTransfer: mode }) },
+          createElement(Switching),
+        ),
+      ),
+    );
+  assert.match(english("all"), /appear in every connected account\./);
+  assert.match(english("same-group"), /appear in the accounts of the same group\./);
+  assert.match(english("selected"), /appear in the accounts you picked\./);
+  assert.match(english("off"), /Your Code conversations stay separate in each account\./);
 });
 
 test("Switching offers draft re-typing, off unless turned on, marked experimental", () => {
   const control = (html: string) =>
     /<button[^>]*id="draft-retype"[^>]*>/.exec(html)?.[0] ?? "";
   const off = render(relayFor());
-  assert.match(off, /for="draft-retype"[^>]*>[\s\S]*Taslakları Claude’a yeniden yaz/);
+  assert.match(off, /for="draft-retype"[^>]*>[\s\S]*Taslakları Claude uygulamasına yeniden yaz/);
   assert.match(off, />Deneysel</);
   assert.match(
     off,
@@ -213,7 +235,7 @@ test("Switching offers draft re-typing, off unless turned on, marked experimenta
       ),
     ),
   );
-  assert.match(en, /Re-type drafts into Claude/);
+  assert.match(en, /Re-type drafts into the Claude app/);
   assert.match(en, />Experimental</);
   assert.match(
     en,

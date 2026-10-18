@@ -138,8 +138,8 @@ export function Switching() {
                 </div>
                 <Note>
                   {t(
-                    "Claude’un kota zamanlayıcısı devralındıysa, işlemi iptal etmek bu zamanlayıcıyı yeniden açmaz. Claude’daki ‘limit yenilenince devam et’ seçeneğini kontrol et.",
-                    "If Claude’s quota timer was taken over, cancelling this handoff does not re-enable it. Check Claude’s ‘continue when limits reset’ option.",
+                    "Claude uygulamasının kota zamanlayıcısı devralındıysa, işlemi iptal etmek bu zamanlayıcıyı yeniden açmaz. Claude uygulamasındaki ‘limit yenilenince devam et’ seçeneğini kontrol et.",
+                    "If the Claude app’s quota timer was taken over, cancelling this handoff does not re-enable it. Check the Claude app’s ‘continue when limits reset’ option.",
                   )}
                 </Note>
               </div>
@@ -179,8 +179,8 @@ export function Switching() {
             label={t("Geçilecek hesabı öner", "Suggest another account")}
             htmlFor="usage-suggestions"
             description={t(
-              "Geçmiş kapsamındaki, iki limiti de uygun olan Desktop hesabını önerir. Geçişi sen başlatırsın.",
-              "Suggests a Desktop account in the history scope with room in both limits. You start the switch.",
+              "Geçmiş kapsamındaki, iki limiti de uygun olan hesabı önerir. Geçişi sen başlatırsın.",
+              "Suggests an account in the history scope with room in both limits. You start the switch.",
             )}
           >
             <Switch

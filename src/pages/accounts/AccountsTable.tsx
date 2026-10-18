@@ -36,7 +36,7 @@ import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
 import { accountHealth, renewalIssue } from "@/lib/account-health";
 import { formatLeft } from "@/lib/meter";
-import { avatarClass, planLabel } from "./accountLabels";
+import { avatarClass, planColumn } from "./accountLabels";
 
 export interface RowAction {
   key:
@@ -69,7 +69,7 @@ export function rowActions(
   if (a.desktop && !isActive)
     items.push({
       key: "switch",
-      label: t("Geçiş yap", "Switch"),
+      label: t("Geç", "Switch"),
       icon: ArrowLeftRight,
       disabled: switchBlocked,
       run: () => relay.requestDesktop(a, "switch"),
@@ -77,7 +77,7 @@ export function rowActions(
   if (a.desktop && isActive)
     items.push({
       key: "open",
-      label: t("Claude’u aç", "Open Claude"),
+      label: t("Claude uygulamasını aç", "Open the Claude app"),
       icon: ArrowUpRight,
       disabled: switchBlocked,
       run: () =>
@@ -100,7 +100,7 @@ export function rowActions(
       label:
         renewal === "keychain-locked"
           ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
-          : t("Bağlantıyı yenile", "Renew connection"),
+          : t("Yenilemeye izin ver", "Allow renewal"),
       icon: KeyRound,
       disabled: relay.usageBusy.has(a.id),
       run: () => void relay.refreshUsage(a, true),
@@ -198,7 +198,7 @@ export function AccountsTable({
           const usage = data?.usage[a.id];
           const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
           const waiting = pendingFlow(authFlow);
-          const plan = planLabel(a);
+          const plan = planColumn(a);
           const health = accountHealth(
             a,
             usage,
@@ -247,11 +247,21 @@ export function AccountsTable({
                 </div>
               </TableCell>
               <TableCell>
-                {plan ? (
-                  <Badge variant="secondary">{plan}</Badge>
+                {plan?.source === "planning" ? (
+                  <Badge variant="secondary">{plan.label}</Badge>
                 ) : (
-                  <span className="text-muted-foreground">
-                    {t("Plan yok", "No plan")}
+                  <span
+                    className="text-muted-foreground"
+                    title={
+                      plan
+                        ? t(
+                            "Abonelik · planlama için plan seçilmedi",
+                            "Subscription · no plan picked for planning",
+                          )
+                        : undefined
+                    }
+                  >
+                    {plan?.label ?? "—"}
                   </span>
                 )}
               </TableCell>

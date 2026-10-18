@@ -188,8 +188,8 @@ export function Sidebar({
             </span>
             <span className="text-muted-foreground">
               {summary.running
-                ? t("Desktop'ta açık", "Open in Desktop")
-                : t("Desktop kapalı", "Desktop closed")}
+                ? t("Claude uygulamasında açık", "Open in the Claude app")
+                : t("Claude uygulaması kapalı", "Claude app closed")}
             </span>
           </button>
           <div className="mt-1.5">

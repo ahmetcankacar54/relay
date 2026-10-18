@@ -6,7 +6,7 @@ import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
 import { AccountSheetBody } from "../src/pages/accounts/AccountSheet";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
-import { filterAccounts, groupName, planLabel } from "../src/pages/accounts/accountLabels";
+import { filterAccounts, groupName, planColumn, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { fakeDom } from "./fake-dom";
@@ -165,8 +165,8 @@ test("the menu offers a prompting renewal only while the Keychain or the connect
   assert.equal(renew(relayWithUsage("a", usageOf("a", "keychain-locked")), en)?.label, "Allow Keychain access");
   // Offered for a connection to renew, however it is reported.
   for (const value of [usageOf("a", "renewal-required"), usageOf("a", undefined, { connectionRenewalRequired: true })]) {
-    assert.equal(renew(relayWithUsage("a", value))?.label, "Bağlantıyı yenile");
-    assert.equal(renew(relayWithUsage("a", value), en)?.label, "Renew connection");
+    assert.equal(renew(relayWithUsage("a", value))?.label, "Yenilemeye izin ver");
+    assert.equal(renew(relayWithUsage("a", value), en)?.label, "Allow renewal");
   }
   // It sits with the sign-in items, before Refresh limits.
   assert.deepEqual(keys(relayWithUsage("a", usageOf("a", "renewal-required"))), [
@@ -210,8 +210,8 @@ test("a row with a locked Keychain or a connection to renew offers that renewal 
   );
   const renewing = row(usageOf("a", "renewal-required"));
   assert.match(renewing, /Bağlantı yenilenmeli/);
-  assert.match(renewing, /aria-label="Bağlantıyı yenile · Kişisel · Max"[^>]*>Bağlantıyı yenile<\/button>/);
-  assert.match(row(usageOf("a", undefined, { connectionRenewalRequired: true }), "en"), /aria-label="Renew connection · Kişisel · Max"[^>]*>Renew connection<\/button>/);
+  assert.match(renewing, /aria-label="Yenilemeye izin ver · Kişisel · Max"[^>]*>Yenilemeye izin ver<\/button>/);
+  assert.match(row(usageOf("a", undefined, { connectionRenewalRequired: true }), "en"), /aria-label="Allow renewal · Kişisel · Max"[^>]*>Allow renewal<\/button>/);
 });
 
 /** The drawn tree, read from the fake DOM. */
@@ -271,8 +271,27 @@ test("the inline fix button runs its action and does not also open the sheet", a
   }
 });
 
-test("an account without a plan shows muted Plan yok text, not a badge", () => {
+test("planColumn shows the planning plan, else the subscription, else nothing", () => {
+  // The plan picked for planning wins.
+  assert.deepEqual(planColumn({ ...a, auth: { ...a.auth!, subscription: "team" } }), { label: "Max 5×", source: "planning" });
+  // Without one, the subscription the usage sign-in reported.
+  const unplanned = (subscription?: string): Account => ({ ...a, planning: undefined, auth: { ...a.auth!, subscription } });
+  assert.deepEqual(planColumn(unplanned("max")), { label: "Max", source: "subscription" });
+  assert.deepEqual(planColumn(unplanned("pro")), { label: "Pro", source: "subscription" });
+  assert.deepEqual(planColumn(unplanned("team")), { label: "Team", source: "subscription" });
+  assert.deepEqual(planColumn(unplanned("enterprise")), { label: "Enterprise", source: "subscription" });
+  assert.deepEqual(planColumn(unplanned("custom")), { label: "Custom", source: "subscription" });
+  // An "unknown" plan is not a plan.
+  assert.deepEqual(planColumn({ ...unplanned("max"), planning: { plan: "unknown", capacityWeight: 1 } }), { label: "Max", source: "subscription" });
+  // Neither known.
+  assert.equal(planColumn(unplanned(undefined)), undefined);
+  assert.equal(planColumn(unplanned("unknown")), undefined);
+  assert.equal(planColumn({ ...a, planning: undefined, auth: undefined }), undefined);
+});
+
+test("an account without a plan shows its subscription muted, or a dash, never a badge", () => {
   const noPlan: Account = { ...b, planning: undefined };
+  const subscribed: Account = { ...w, id: "s", planning: undefined, auth: { ...w.auth!, subscription: "team" } };
   const html = (language: "tr" | "en") =>
     renderToStaticMarkup(
       createElement(
@@ -281,15 +300,17 @@ test("an account without a plan shows muted Plan yok text, not a badge", () => {
         createElement(
           RelayContext.Provider,
           { value: relayFor() },
-          createElement(AccountsTable, { accounts: [noPlan, a], open() {}, link() {} }),
+          createElement(AccountsTable, { accounts: [noPlan, subscribed, a], open() {}, link() {} }),
         ),
       ),
     );
   const tr = html("tr");
-  assert.match(tr, /<span[^>]*class="[^"]*text-muted-foreground[^"]*"[^>]*>Plan yok<\/span>/);
-  assert.doesNotMatch(tr, /data-slot="badge"[^>]*>Plan yok/);
+  assert.doesNotMatch(tr, /Plan yok|No plan/);
+  assert.match(tr, /<span[^>]*class="[^"]*text-muted-foreground[^"]*"[^>]*>—<\/span>/);
+  assert.match(tr, /<span class="text-muted-foreground" title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
+  assert.doesNotMatch(tr, /data-slot="badge"[^>]*>Team/);
   assert.doesNotMatch(tr, /Plan seç/);
-  assert.match(html("en"), /<span[^>]*text-muted-foreground[^>]*>No plan<\/span>/);
+  assert.match(html("en"), /title="Subscription · no plan picked for planning">Team<\/span>/);
   // A chosen plan is still a badge.
   assert.match(tr, /data-slot="badge"[^>]*>Max 5×/);
 });
@@ -356,11 +377,11 @@ test("the sheet header shows the health label and one primary action", () => {
   const ready = statusBlock(sheetFor(c, {}, { c: { ...usage.a, accountId: "c" } }));
   assert.match(ready, /Hazır/);
   assert.equal(ready.match(/<button/g)?.length, 1);
-  assert.match(ready, /<button[^>]*>Geçiş yap<\/button>/);
+  assert.match(ready, /<button[^>]*>Geç<\/button>/);
   // A pending approval has no fix either, so it offers the switch.
   const waiting = statusBlock(sheetFor(c, {}, {}, [{ accountId: "c", status: "waiting" }]));
   assert.match(waiting, /Tarayıcı onayı bekleniyor/);
-  assert.match(waiting, /<button[^>]*>Geçiş yap<\/button>/);
+  assert.match(waiting, /<button[^>]*>Geç<\/button>/);
   // No fix and the active account: nothing to do.
   const active = statusBlock(sheetFor(a));
   assert.match(active, /Çalışıyor/);
@@ -378,7 +399,7 @@ test("a locked Keychain or a connection to renew is fixed from the header, and t
   const renewing = sheetFor(c, {}, { c: usageOf("c", "renewal-required") });
   const renewingHead = statusBlock(renewing);
   assert.match(renewingHead, /Bağlantı yenilenmeli/);
-  assert.match(renewingHead, /<button[^>]*>Bağlantıyı yenile<\/button>/);
+  assert.match(renewingHead, /<button[^>]*>Yenilemeye izin ver<\/button>/);
   // The usage sign-in row says what the header says, not "Bağlı" under a green dot.
   const usageRow = (html: string) =>
     /Limit okuma girişi<\/div><div[^>]*><span[^>]*class="[^"]*(bg-\w+)[^"]*"[^>]*><\/span><span[^>]*>([^<]*)/.exec(html);
@@ -586,7 +607,7 @@ test("row actions follow the Desktop link state and the switch lock", () => {
   const labels = (acct: Account, relay: Relay) => rowActions(acct, relay, t).map((x) => x.label);
   const relay = relayFor();
   assert.deepEqual(labels(a, relay), [
-    "Claude’u aç",
+    "Claude uygulamasını aç",
     "Limit okuma girişini yenile",
     "Claude uygulaması girişini yenile…",
     "Limitleri yenile",
@@ -598,22 +619,22 @@ test("row actions follow the Desktop link state and the switch lock", () => {
   ]);
   const unlinkedActive = { ...a, desktop: undefined };
   const labelsUnlinked = labels(unlinkedActive, relayFor({ active: unlinkedActive }));
-  assert.ok(!labelsUnlinked.includes("Claude’u aç"));
+  assert.ok(!labelsUnlinked.includes("Claude uygulamasını aç"));
   assert.ok(labelsUnlinked.includes("Claude uygulaması girişini kaydet"));
   const linked = { ...b, id: "c", desktop };
-  assert.ok(labels(linked, relay).includes("Geçiş yap"));
+  assert.ok(labels(linked, relay).includes("Geç"));
   for (const extra of [
     { desktopBusy: true },
     { pendingDesktop: b },
     { desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: true, errorRevision: 0, activeProfileId: "a" } },
   ] as Partial<Relay>[]) {
     const r = relayFor(extra);
-    const open = rowActions(a, r, t).find((x) => x.label === "Claude’u aç");
-    const sw = rowActions(linked, r, t).find((x) => x.label === "Geçiş yap");
+    const open = rowActions(a, r, t).find((x) => x.label === "Claude uygulamasını aç");
+    const sw = rowActions(linked, r, t).find((x) => x.label === "Geç");
     assert.equal(open?.disabled, true, JSON.stringify(Object.keys(extra)));
     assert.equal(sw?.disabled, true);
   }
-  assert.equal(rowActions(a, relay, t).find((x) => x.label === "Claude’u aç")?.disabled, false);
+  assert.equal(rowActions(a, relay, t).find((x) => x.label === "Claude uygulamasını aç")?.disabled, false);
 });
 
 test("the accounts empty state looks out when a filter hides every account", () => {

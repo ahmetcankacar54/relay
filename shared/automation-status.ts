@@ -68,16 +68,16 @@ const attention = (copy: Copy, banner = true): Row => ({
 
 const CHECKING: Copy = ["Kontrol ediliyor…", "Checking…"];
 const DESKTOP_BUSY: Copy = [
-  "Relay başka bir Desktop işlemi yapıyor; bitince yeniden bakarım.",
-  "Relay is busy with another Desktop action; I’ll check again after it.",
+  "Relay Claude uygulamasında başka bir işlem yapıyor; bitince yeniden bakarım.",
+  "Relay is busy with another Claude app action; I’ll check again after it.",
 ];
 const DESKTOP_UNAVAILABLE: Copy = [
-  "Claude Desktop bulunamadı.",
-  "Claude Desktop was not found.",
+  "Claude uygulaması bulunamadı.",
+  "The Claude app was not found.",
 ];
 const UNKNOWN_ACTIVE: Copy = [
-  "Claude’da açık hesap Relay’e bağlı değil. Hesaplar’da bu hesabı bağla.",
-  "The account open in Claude is not linked in Relay. Link it on Accounts.",
+  "Claude uygulamasında açık hesap Relay’e bağlı değil. Hesaplar’da bu hesabı bağla.",
+  "The account open in the Claude app is not linked in Relay. Link it on Accounts.",
 ];
 
 const USAGE_NOT_FRESH: Copy = [
@@ -116,20 +116,20 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
   ]),
   "usage-not-fresh": waiting(USAGE_NOT_FRESH),
   "exit-settling": waiting([
-    "Claude kapandı; kapanışın oturmasını bekliyorum.",
-    "Claude quit; waiting for the exit to settle.",
+    "Claude uygulaması kapandı; kapanışın oturmasını bekliyorum.",
+    "The Claude app quit; waiting for the exit to settle.",
   ]),
   "quota-exhausted": waiting(["{tgt} hazırlanıyor…", "Preparing {tgt}…"]),
   "claude-running": {
     ...waiting([
-      "Claude açık, kapanmasını bekliyorum. Claude’u kapatınca {tgt} hazırlanır.",
-      "Claude is open; waiting for it to quit. Quit Claude and {tgt} is prepared.",
+      "Claude uygulaması açık, kapanmasını bekliyorum. Claude uygulamasını kapatınca {tgt} hazırlanır.",
+      "The Claude app is open; waiting for it to quit. Quit the Claude app and {tgt} is prepared.",
     ]),
     banner: true,
   },
   "quota-available": ok([
-    "İzliyorum. Kota dolup Claude kapanınca sıradaki hesabı hazırlarım.",
-    "Watching. When the quota runs out and Claude quits, I prepare the next account.",
+    "İzliyorum. Kota dolup Claude uygulaması kapanınca sıradaki hesabı hazırlarım.",
+    "Watching. When the quota runs out and the Claude app quits, I prepare the next account.",
   ]),
   "already-switched": ok([
     "Bu limit dönemi için geçiş zaten yapıldı.",
@@ -137,8 +137,8 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
   ]),
   prepared: ok(
     [
-      "{tgt} hazır. Claude’u açıp konuşmanı sürdür.",
-      "{tgt} is ready. Open Claude and continue your conversation.",
+      "{tgt} hazır. Claude uygulamasını açıp konuşmanı sürdür.",
+      "{tgt} is ready. Open the Claude app and continue your conversation.",
     ],
     true,
   ),
@@ -150,8 +150,8 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
   // Desktop recovery has its own banner.
   "desktop-recovery": attention(
     [
-      "Yarım kalan bir Desktop işlemi var; önce yedeği geri yükle.",
-      "A Desktop action was interrupted; restore the backup first.",
+      "Yarım kalan bir Claude uygulaması işlemi var; önce yedeği geri yükle.",
+      "A Claude app action was interrupted; restore the backup first.",
     ],
     false,
   ),
@@ -177,8 +177,8 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
     "The switch failed; I’ll retry shortly. You can switch by hand.",
   ]),
   "switch-failed": attention([
-    "Geçiş tamamlanamadı. Desktop bağlantısını veya kurtarma durumunu kontrol et.",
-    "The switch could not finish. Check the Desktop connection or recovery status.",
+    "Geçiş tamamlanamadı. Claude uygulaması bağlantısını veya kurtarma durumunu kontrol et.",
+    "The switch could not finish. Check the Claude app connection or recovery status.",
   ]),
   "ledger-unavailable": attention([
     "Hesap hazırlandı ama otomasyon kaydı yazılamadı; tekrar koruması yalnızca bu çalıştırmada geçerli.",
@@ -188,8 +188,8 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
 /** `prepared` when the prefix already names the target. */
 const PREPARED_HERE = ok(
   [
-    "Hazır. Claude’u açıp konuşmanı sürdür.",
-    "Ready. Open Claude and continue your conversation.",
+    "Hazır. Claude uygulamasını açıp konuşmanı sürdür.",
+    "Ready. Open the Claude app and continue your conversation.",
   ],
   true,
 );
@@ -210,8 +210,8 @@ const FLEET: Record<string, Row> = {
     "Something changed; checking again.",
   ]),
   "delivery-uncertain": attention([
-    "{uncertain} konuşmada devam mesajının ulaştığı doğrulanamadı; Claude’da kontrol et. Tekrar gönderilmez.",
-    "Could not confirm the continue message reached {uncertain} conversations; check them in Claude. Nothing is resent.",
+    "{uncertain} konuşmada devam mesajının ulaştığı doğrulanamadı; Claude uygulamasında kontrol et. Tekrar gönderilmez.",
+    "Could not confirm the continue message reached {uncertain} conversations; check them in the Claude app. Nothing is resent.",
   ]),
   "no-target": attention([
     "{n} konuşma durdu ama kotası uygun hesap yok; bir hesabın limiti yenilenince geçerim.",
@@ -224,8 +224,8 @@ const FLEET: Record<string, Row> = {
     "Give Relay macOS Accessibility permission to continue conversations.",
   ]),
   "switch-interrupted": attention([
-    "Bir geçiş yarıda kaldı; Desktop kurtarması devraldı.",
-    "A switch was interrupted; Desktop recovery took over.",
+    "Bir geçiş yarıda kaldı; kurtarma devraldı.",
+    "A switch was interrupted; recovery took over.",
   ]),
   "account-changed": attention([
     "Geçişten sonra açık hesap değişti; devam mesajları gönderilmedi.",
@@ -239,12 +239,12 @@ const FLEET: Record<string, Row> = {
 
 /** Any reason Relay has no sentence for: the UI could not be read. */
 const UNREADABLE: Copy = [
-  "Claude arayüzü okunamadı ({reason}). Geçiş bekliyor.",
-  "Could not read Claude’s interface ({reason}). The switch is waiting.",
+  "Claude uygulamasının arayüzü okunamadı ({reason}). Geçiş bekliyor.",
+  "Could not read the Claude app’s interface ({reason}). The switch is waiting.",
 ];
 const OTHER_WORK: Copy = [
-  "{n} konuşma kota yüzünden durdu. Claude’da başka iş çalışıyor; bitince {tgt’e} geçip devam ettiririm.",
-  "{n} conversations stopped at the limit. Other work is running in Claude; when it finishes I switch to {tgt} and continue.",
+  "{n} konuşma kota yüzünden durdu. Claude uygulamasında başka iş çalışıyor; bitince {tgt’e} geçip devam ettiririm.",
+  "{n} conversations stopped at the limit. Other work is running in the Claude app; when it finishes I switch to {tgt} and continue.",
 ];
 const WATCHING: Copy = [
   "İzliyorum. Kota dolunca duran konuşmaları sıradaki hesapta devam ettiririm.",

@@ -120,7 +120,7 @@ test("banners read an injected relay and offer reconnect for expired usage sign-
   assert.match(html, /Tarayıcı önizlemesi/);
   assert.match(html, /Kaydedildi/);
   assert.match(html, /Vertex/);
-  assert.match(html, /Yeniden bağlan/);
+  assert.match(html, /Limit okuma girişini yenile/);
 });
 
 test("sidebar buttons override the legacy centred button style and keep the meter outside buttons", () => {

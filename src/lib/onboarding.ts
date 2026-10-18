@@ -1,5 +1,5 @@
 import type { Account, DesktopState, Diagnostics } from "../../shared/types";
-import { MIN_CLI_VERSION, meetsCliMinimum } from "../../shared/cli-version";
+import { USAGE_CLI_VERSION, readsUsage } from "../../shared/cli-version";
 
 type T = (tr: string, en: string) => string;
 
@@ -10,8 +10,8 @@ export function cliState(diagnostics?: Diagnostics): CliState {
   if (!diagnostics) return "unknown";
   if (!diagnostics.executable) return "missing";
   if (diagnostics.error || !diagnostics.version) return "unreadable";
-  // The same version gate as `supportsDesktop`, without its platform part.
-  return meetsCliMinimum(diagnostics.version) ? "ok" : "outdated";
+  // "ok" means the CLI can read limits: the usage refresher's version gate, not the Claude app's.
+  return readsUsage(diagnostics.version) ? "ok" : "outdated";
 }
 
 /** The CLI cannot sign in or read limits: say so instead of starting a sign-in. */
@@ -27,8 +27,8 @@ export function cliDetail(state: CliState, version: string | undefined, t: T) {
       return t("Sürümü okunamadı", "Its version couldn’t be read");
     case "outdated":
       return t(
-        `${version} · ${MIN_CLI_VERSION} veya üstü gerekir`,
-        `${version} · needs ${MIN_CLI_VERSION} or later`,
+        `${version} · ${USAGE_CLI_VERSION} veya üstü gerekir`,
+        `${version} · needs ${USAGE_CLI_VERSION} or later`,
       );
     default:
       return version ?? "";
@@ -133,8 +133,8 @@ export function blockReason(block: Block | undefined, t: T) {
 /** The Code-tab step, where a workspace folder is needed and none exists yet. */
 export const codeTabStep = (t: T) =>
   t(
-    "Claude’da sol menüden Code’u bir kez aç; liste kendiliğinden dolar.",
-    "Open Code once from the sidebar in Claude; the list fills in on its own.",
+    "Claude uygulamasında sol menüden Code’u bir kez aç; liste kendiliğinden dolar.",
+    "Open Code once from the sidebar in the Claude app; the list fills in on its own.",
   );
 
 /**

@@ -246,8 +246,8 @@ function useRelayState(
             )
           : request.kind === "switch"
             ? t(
-                `${account?.name} · Desktop hesabına geçildi.`,
-                `${account?.name} · Desktop account switched.`,
+                `${account?.name} · Claude uygulamasında bu hesaba geçildi.`,
+                `${account?.name} · Switched the Claude app to this account.`,
               )
             : request.kind === "capture"
               ? t(
@@ -260,8 +260,8 @@ function useRelayState(
                     "The previous Claude app sign-in was restored.",
                   )
                 : t(
-                    "Claude’da bu hesabın girişini tamamla, ardından Relay’e dön.",
-                    "Complete this account’s sign-in in Claude, then return to Relay.",
+                    "Claude uygulamasında bu hesabın girişini tamamla, ardından Relay’e dön.",
+                    "Complete this account’s sign-in in the Claude app, then return to Relay.",
                   ),
       );
     });

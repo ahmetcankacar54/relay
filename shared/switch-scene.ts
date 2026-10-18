@@ -106,17 +106,17 @@ export function switchScene(
 export type SwitchLanguage = "tr" | "en";
 const LINES = {
   tr: {
-    restarting: "Claude yeniden başlatılıyor…",
+    restarting: "Claude uygulaması yeniden başlatılıyor…",
     switching: (name: string) => `${name} hesabına geçiliyor`,
     switched: (name: string) => `${name} hesabındasın`,
-    back: "Claude yeniden açıldı",
+    back: "Claude uygulaması yeniden açıldı",
     failed: "İşlem tamamlanamadı · ayrıntılar Relay’de",
   },
   en: {
-    restarting: "Restarting Claude…",
+    restarting: "Restarting the Claude app…",
     switching: (name: string) => `Switching to ${name}`,
     switched: (name: string) => `You’re on ${name}`,
-    back: "Claude reopened",
+    back: "The Claude app reopened",
     failed: "Couldn’t finish · details in Relay",
   },
 };

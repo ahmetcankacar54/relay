@@ -13,6 +13,33 @@ const PLAN_LABELS: Partial<Record<string, string>> = {
 export const planLabel = (account: Account): string | undefined =>
   PLAN_LABELS[account.planning?.plan ?? ""];
 
+const SUBSCRIPTION_LABELS: Partial<Record<string, string>> = {
+  free: "Free",
+  pro: "Pro",
+  max: "Max",
+  team: "Team",
+  enterprise: "Enterprise",
+};
+
+/**
+ * The Accounts table's plan: the plan picked for planning, else the subscription the usage sign-in
+ * reported (`auth.subscription`), which the table shows muted. Undefined when neither is known.
+ */
+export function planColumn(
+  account: Account,
+): { label: string; source: "planning" | "subscription" } | undefined {
+  const plan = planLabel(account);
+  if (plan) return { label: plan, source: "planning" };
+  const subscription = account.auth?.subscription?.trim().toLowerCase();
+  if (!subscription || subscription === "unknown") return undefined;
+  return {
+    label:
+      SUBSCRIPTION_LABELS[subscription] ??
+      subscription.charAt(0).toUpperCase() + subscription.slice(1),
+    source: "subscription",
+  };
+}
+
 /** History-sharing group shown to the user. */
 export const groupName = (account: Account, t: T) =>
   account.kind === "personal"
