@@ -11,6 +11,25 @@ export type Attribution =
 
 /** A later reset time by at least this much means the window rolled over. */
 const RESET_SHIFT_MS = 60 * 60_000;
+/**
+ * When no account's usage rose across the pair around a response, the nearest
+ * rise this close still names the account: a small response may not move the
+ * percent within its own five minutes, and the server may report it a reading late.
+ */
+export const NEAR_RISE_MS = 15 * 60_000;
+
+/** How far `time` is from a sample pair: 0 inside it, else to its nearer end. */
+const distance = (time: number, from: number, to: number) =>
+  time < from ? from - time : time >= to ? time - to : 0;
+
+/** Whether `candidate` (distance, rise) beats `best`: nearer, then a larger rise. */
+const nearer = (
+  candidate: { distance: number; rise: number },
+  best?: { distance: number; rise: number },
+) =>
+  !best ||
+  candidate.distance < best.distance ||
+  (candidate.distance === best.distance && candidate.rise > best.rise);
 
 interface Reading {
   at: number;
@@ -42,7 +61,9 @@ function rise(a: Reading, b: Reading): number {
 
 /**
  * The Relay account whose 5-hour usage rose across the sample pair around
- * `time`, the largest rise winning. Undefined when no account's usage rose.
+ * `time`, the largest rise winning. When none rose there, the account with the
+ * nearest rise within `NEAR_RISE_MS` (nearest first, then the larger rise).
+ * Undefined when no account's usage rose that close.
  */
 export function estimateAccountAt(
   time: number,
@@ -70,7 +91,20 @@ export function estimateAccountAt(
       break;
     }
   }
-  return best?.accountId;
+  if (best) return best.accountId;
+  let near: { accountId: string; distance: number; rise: number } | undefined;
+  for (const [accountId, points] of byAccount)
+    for (let i = 0; i + 1 < points.length; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      if (b.at - a.at > MAX_USAGE_GAP_MS) continue;
+      const amount = rise(a, b);
+      const away = distance(time, a.at, b.at);
+      if (amount <= 0 || !(away <= NEAR_RISE_MS)) continue;
+      const candidate = { accountId, distance: away, rise: amount };
+      if (nearer(candidate, near)) near = candidate;
+    }
+  return near?.accountId;
 }
 
 export interface SampleIndex {
@@ -106,11 +140,38 @@ export function indexSamples(samples: readonly UsageSample[]): SampleIndex {
       );
     return { accountId, times, rises };
   });
+  /** The rise nearest `time` within `NEAR_RISE_MS` for one account, whose first sample after `time` is `low`. */
+  const nearestRise = (
+    { times, rises }: { times: number[]; rises: number[] },
+    time: number,
+    low: number,
+  ) => {
+    let near: { distance: number; rise: number } | undefined;
+    const consider = (i: number) => {
+      const away = distance(time, times[i], times[i + 1]);
+      if (rises[i] > 0 && away <= NEAR_RISE_MS) {
+        const candidate = { distance: away, rise: rises[i] };
+        if (nearer(candidate, near)) near = candidate;
+      }
+    };
+    // Pairs ending at or before `time`, then the pair around it, then pairs after it.
+    for (let i = low - 2; i >= 0 && time - times[i + 1] <= NEAR_RISE_MS; i--)
+      consider(i);
+    if (low >= 1 && low < times.length) consider(low - 1);
+    for (
+      let i = low;
+      i + 1 < times.length && times[i] - time <= NEAR_RISE_MS;
+      i++
+    )
+      consider(i);
+    return near;
+  };
   return {
     estimate(time) {
       if (Number.isNaN(time)) return estimateAccountAt(time, samples);
-      if (!(time >= first && time < last)) return;
+      if (!(time >= first - NEAR_RISE_MS && time < last + NEAR_RISE_MS)) return;
       let best: { accountId: string; rise: number } | undefined;
+      const lows: number[] = [];
       for (const { accountId, times, rises } of accounts) {
         // The first sample after `time`; the pair starts just before it.
         let low = 0;
@@ -120,11 +181,20 @@ export function indexSamples(samples: readonly UsageSample[]): SampleIndex {
           if (times[middle] <= time) low = middle + 1;
           else high = middle;
         }
-        const amount = rises[low - 1];
+        lows.push(low);
+        const amount = low >= 1 && low < times.length ? rises[low - 1] : 0;
         if (amount > 0 && (!best || amount > best.rise))
           best = { accountId, rise: amount };
       }
-      return best?.accountId;
+      if (best) return best.accountId;
+      let near:
+        { accountId: string; distance: number; rise: number } | undefined;
+      accounts.forEach((account, at) => {
+        const found = nearestRise(account, time, lows[at]);
+        if (found && nearer(found, near))
+          near = { accountId: account.accountId, ...found };
+      });
+      return near?.accountId;
     },
   };
 }
