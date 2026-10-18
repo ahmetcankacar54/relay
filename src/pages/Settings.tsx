@@ -16,6 +16,13 @@ import { chooseCliFile } from "../features/CliSetup";
 
 const cardClass = "gap-0 px-5 py-4";
 
+/** Shows the diagnosis logs in Finder; main picks the files, the page passes no path. */
+export const showDiagnostics = ({
+  api,
+  action,
+}: Pick<ReturnType<typeof useRelay>, "api" | "action">) =>
+  action("diagnostics", () => api.showDiagnostics());
+
 export function Settings() {
   const { api, data, desktop, settings, busy, version, action } = useRelay();
   const { t, language, setLanguage } = useI18n();
@@ -221,6 +228,21 @@ export function Settings() {
               </Button>
             </span>
           </SettingRow>
+          <div className="grid justify-items-start gap-1.5 border-t border-border py-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void showDiagnostics({ api, action })}
+            >
+              {t("Tanılama dosyalarını göster", "Show diagnostics files")}
+            </Button>
+            <p className="text-[13px] text-muted-foreground">
+              {t(
+                "Yalnızca draft-events.json ve usage-issues.json dosyalarını gönder; klasörün geri kalanında kayıtlı girişlerin var.",
+                "Send only draft-events.json and usage-issues.json; the rest of the folder holds your saved sign-ins.",
+              )}
+            </p>
+          </div>
           <Note className="mb-2">
             {t(
               "Hesap geçişi, Claude uygulamasının yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",

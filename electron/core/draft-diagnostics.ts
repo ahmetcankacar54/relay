@@ -40,6 +40,21 @@ const cut = (value: string) => value.slice(0, DRAFT_EVENT_STRING_LIMIT);
 export const shortId = (id: string | undefined): string | null =>
   id ? id.slice(0, 8) : null;
 
+const FULL_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A log entry with every field that is a full account or org id cut to its `shortId`. Callers
+ * cut the ids they log; this also cuts ones an older Relay wrote, as the log is rewritten.
+ */
+export function withShortIds<T extends object>(entry: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entry))
+    out[key] =
+      typeof value === "string" && FULL_ID.test(value) ? shortId(value) : value;
+  return out as T;
+}
+
 /**
  * The fields worth keeping: only strings, numbers, booleans and null, strings cut. A field
  * named `text` is dropped whatever it holds, `at` and `event` are the entry's own, and objects
@@ -113,7 +128,9 @@ export function appendDraftEvent(
       event: cut(entry.event),
       ...scalarFields(entry),
     };
-    const entries = [...entriesIn(file), next].slice(-DRAFT_EVENT_LIMIT);
+    const entries = [...entriesIn(file), next]
+      .slice(-DRAFT_EVENT_LIMIT)
+      .map(withShortIds);
     writePrivateJson(file, { version: 1, entries });
     return true;
   } catch {

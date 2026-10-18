@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { DesktopSetup } from "../../features/DesktopSetup";
+import { KEYCHAIN_HINT } from "../../features/DesktopActionReview";
 import { CliFlowPanel, DesktopPendingActions } from "@/app/ConnectionPanels";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { historyCopy } from "./historyCopy";
@@ -313,6 +314,11 @@ export function AddAccountSteps({
                 )
               }
             />
+          )}
+          {!account.desktop && (
+            <p className="text-xs text-muted-foreground">
+              {t(...KEYCHAIN_HINT)}
+            </p>
           )}
           <div className="flex justify-end gap-2">
             {account.desktop ? (

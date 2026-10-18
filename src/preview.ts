@@ -447,6 +447,7 @@ export const previewApi: RelayAPI = {
     return structuredClone(account);
   },
   setTrayLanguage: async () => {},
+  showDiagnostics: desktopOnly,
   onChanged: () => () => {},
   openPage: async (page, intent) => {
     location.hash = intentHash(page, intent);

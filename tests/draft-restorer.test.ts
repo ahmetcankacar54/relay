@@ -1725,7 +1725,7 @@ test("a restored draft logs each step of its run, and no text", async () => {
   ]);
   assert.deepEqual(h.logs[0], {
     event: "restore-start",
-    account: ACCOUNT,
+    account: ACCOUNT.slice(0, 8),
     records: 2,
     all: 2,
     ready: true,
@@ -1924,14 +1924,14 @@ test("a run that finds Claude not ready logs it, and one with nothing to restore
   const early = harness({ uptime: 1_000, records: [record(1, { text: SECRET })] });
   await restoreDrafts(early.deps);
   assert.deepEqual(early.logs, [
-    { event: "restore-start", account: ACCOUNT, records: 1, all: 1, ready: false },
+    { event: "restore-start", account: ACCOUNT.slice(0, 8), records: 1, all: 1, ready: false },
     { event: "restore-end", status: "waiting", restored: 0, left: 1, reason: null },
   ]);
   // Pending drafts of another account: Desktop is not on theirs.
   const other = harness({ records: [record(1, { to: OTHER, text: SECRET })] });
   await restoreDrafts(other.deps);
   assert.deepEqual(other.logs, [
-    { event: "restore-start", account: ACCOUNT, records: 0, all: 1, ready: null },
+    { event: "restore-start", account: ACCOUNT.slice(0, 8), records: 0, all: 1, ready: null },
     { event: "restore-end", status: "idle", restored: 0, left: 0, reason: null },
   ]);
   // No Desktop account at all.
@@ -1946,6 +1946,11 @@ test("a run that finds Claude not ready logs it, and one with nothing to restore
     ready: null,
   });
   assertNoText([...early.logs, ...other.logs, ...signedOut.logs]);
+  // The account is logged by its short id only.
+  assert.doesNotMatch(
+    JSON.stringify([...early.logs, ...other.logs]),
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+  );
 });
 
 test("a restore that throws logs its end with the error's name, never its message", async () => {

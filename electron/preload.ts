@@ -16,6 +16,7 @@ const api: RelayAPI = {
   dismissDraft: (id) => ipcRenderer.invoke("relay:dismiss-draft", id),
   updateAccountPlanning: (id, input) =>
     ipcRenderer.invoke("relay:account-planning", id, input),
+  showDiagnostics: () => ipcRenderer.invoke("relay:show-diagnostics"),
   setTrayLanguage: (language) =>
     ipcRenderer.invoke("relay:tray-language", language),
   openPage: (page, intent) =>

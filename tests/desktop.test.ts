@@ -1416,8 +1416,8 @@ test("a capture is logged with its slots and lengths, never its text", async (t)
     [
       "capture",
       {
-        from: a.desktop!.accountUuid,
-        to: b.desktop!.accountUuid,
+        from: a.desktop!.accountUuid.slice(0, 8),
+        to: b.desktop!.accountUuid.slice(0, 8),
         status: "captured",
         count: 2,
         drafts: `${shared.slice(0, 8)}:${UNSENT.length},new:${"a new start".length}`,
@@ -1425,6 +1425,8 @@ test("a capture is logged with its slots and lengths, never its text", async (t)
     ],
   ]);
   const logged = JSON.stringify(events);
+  // Ids are cut to 8 characters: the log holds no full account id.
+  assert.doesNotMatch(logged, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
   assert.ok(!logged.includes(UNSENT));
   assert.ok(!logged.includes("a new start"));
 });
@@ -1450,8 +1452,8 @@ test("a capture that fails or is skipped is logged with its reason, and a log th
     [
       "capture",
       {
-        from: a.desktop!.accountUuid,
-        to: b.desktop!.accountUuid,
+        from: a.desktop!.accountUuid.slice(0, 8),
+        to: b.desktop!.accountUuid.slice(0, 8),
         status: "failed",
         count: 0,
         error: "parse-error",
@@ -1491,8 +1493,8 @@ test("a switch whose history policy forbids drafts logs that no capture was trie
     [
       "capture",
       {
-        from: a.desktop!.accountUuid,
-        to: b.desktop!.accountUuid,
+        from: a.desktop!.accountUuid.slice(0, 8),
+        to: b.desktop!.accountUuid.slice(0, 8),
         status: "not-run",
         reason: "history-off",
       },

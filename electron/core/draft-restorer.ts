@@ -202,7 +202,7 @@ async function restore(deps: RestorerDeps): Promise<RestoreResult> {
   let ready: boolean;
   const start = (ready: boolean | null, error?: string) =>
     logDraft(deps.log, "restore-start", {
-      account: account ?? null,
+      account: shortId(account),
       records: records.length,
       all: all ?? null,
       ready,

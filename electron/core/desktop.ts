@@ -32,6 +32,7 @@ import {
   type CaptureOutcome,
 } from "./draft-transfer";
 import { safeMessage, shortId } from "./draft-diagnostics";
+import { pruneSwitchBackups } from "./backup-prune";
 import type { CapturedDraft } from "./drafts";
 import { removeLegacyDraftBackups } from "./draft-storage";
 import {
@@ -104,8 +105,8 @@ function captureFields(
   captured: CapturedDraft[],
 ) {
   return {
-    from,
-    to,
+    from: shortId(from),
+    to: shortId(to),
     status: outcome.status,
     count: captured.length,
     ...(outcome.status === "failed" ? { error: safeMessage(outcome.error) } : {}),
@@ -621,7 +622,12 @@ export class DesktopManager {
   ) {
     /** Why no capture was tried, for the diagnosis log: nothing else says. */
     const notRun = (reason: string) =>
-      this.diagnose("capture", { from, to, status: "not-run", reason });
+      this.diagnose("capture", {
+        from: shortId(from),
+        to: shortId(to),
+        status: "not-run",
+        reason,
+      });
     try {
       const host = this.host;
       if (!host.readDrafts) return notRun("no-draft-reader");
@@ -669,7 +675,11 @@ export class DesktopManager {
       this.diagnose("capture", captureFields(from, to, outcome, captured));
     } catch {
       // Drafts never change how a switch ends.
-      this.diagnose("capture", { from, to, status: "threw" });
+      this.diagnose("capture", {
+        from: shortId(from),
+        to: shortId(to),
+        status: "threw",
+      });
     }
   }
   /**
@@ -892,6 +902,9 @@ export class DesktopManager {
     );
     await writeBytes(this.vault, "journal.json", jsonBytes({ backup: id }));
     this.lastBackup = id;
+    // The journal names the new backup, so it is kept; older ones beyond the newest 20 go.
+    // Never throws: pruning never fails a switch.
+    await pruneSwitchBackups(this.vault);
     try {
       for (const [relative, data] of changes) {
         await guard();

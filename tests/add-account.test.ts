@@ -6,6 +6,7 @@ import { AddAccountSteps, profileInput } from "../src/pages/accounts/AddAccountD
 import { LinkDesktopBody } from "../src/pages/accounts/LinkDesktopDialog";
 import { Accounts, intentAllowed } from "../src/pages/Accounts";
 import { ConnectionPanels } from "../src/app/ConnectionPanels";
+import { DesktopActionReview, type DesktopActionKind } from "../src/features/DesktopActionReview";
 import { routeQuery } from "../src/app/routes";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -170,6 +171,29 @@ const claude = (extra: Partial<DesktopState> = {}): DesktopState => ({
 const withCli = (diagnostics: Partial<Diagnostics>) =>
   ({ settings: DEFAULT_SETTINGS, usage: {}, accounts, authFlows: [], diagnostics: { platform: "darwin", dataDir: "/tmp", desktopSupported: false, ...diagnostics } }) as unknown as Snapshot;
 const step = (n: 2 | 3, relay: Relay) => wrap(relay, createElement(AddAccountSteps, { close() {}, initial: { step: n, id: "b" } }));
+
+test("saving a Claude app sign-in warns that macOS may ask for the Mac password once", () => {
+  const hint = /macOS bir kez Mac parolanı isteyebilir \(Relay Safe Storage\); “Her Zaman İzin Ver”i seç\./;
+  // The add-account dialog's sign-in step, before the sign-in is saved.
+  assert.match(step(2, relayFor()), hint);
+  // The confirmations that save a sign-in say it; a switch does not.
+  const review = (kind: DesktopActionKind, language: "tr" | "en" = "tr") =>
+    renderToStaticMarkup(
+      createElement(DesktopActionReview, {
+        kind,
+        busy: false,
+        t: (tr: string, en: string) => (language === "tr" ? tr : en),
+        confirm() {},
+        cancel() {},
+      }),
+    );
+  for (const kind of ["capture", "login", "reconnect"] as const) assert.match(review(kind), hint, kind);
+  assert.doesNotMatch(review("switch"), hint);
+  assert.match(
+    review("capture", "en"),
+    /macOS may ask for your Mac password once \(Relay Safe Storage\); choose “Always Allow”\./,
+  );
+});
 
 test("without a usable CLI, step 3 is not started: the reason, the guide and Choose file instead", () => {
   for (const diagnostics of [

@@ -49,15 +49,28 @@ test("the log keeps only the newest 200 entries", (t) => {
   for (let i = 0; i < USAGE_ISSUE_LOG_LIMIT + 25; i++)
     appendUsageIssue(
       file,
-      { accountId: `account-${i}`, issue: "unavailable" },
+      { accountId: `a${i}`, issue: "unavailable" },
       START + i * MINUTE,
     );
   const { entries } = readLog(file);
   assert.equal(entries.length, USAGE_ISSUE_LOG_LIMIT);
-  assert.equal(entries[0].accountId, "account-25");
-  assert.equal(
-    entries.at(-1).accountId,
-    `account-${USAGE_ISSUE_LOG_LIMIT + 24}`,
+  assert.equal(entries[0].accountId, "a25");
+  assert.equal(entries.at(-1).accountId, `a${USAGE_ISSUE_LOG_LIMIT + 24}`);
+});
+
+test("a logged issue holds the account's short id, never its full id, and older entries lose theirs", (t) => {
+  const file = path.join(directory(t), "usage-issues.json");
+  const full = "cccccccc-3333-4333-8333-333333333333";
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ version: 1, entries: [{ accountId: full, issue: "expired", at: new Date(START).toISOString() }] }),
+  );
+  appendUsageIssue(file, { accountId: full, issue: "scope" }, START + MINUTE);
+  const raw = fs.readFileSync(file, "utf8");
+  assert.doesNotMatch(raw, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  assert.deepEqual(
+    readLog(file).entries.map((e: { accountId: string; issue: string }) => [e.accountId, e.issue]),
+    [["cccccccc", "expired"], ["cccccccc", "scope"]],
   );
 });
 

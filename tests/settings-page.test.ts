@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { Settings } from "../src/pages/Settings";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -20,6 +21,43 @@ function relayFor(): Relay {
     startCli: async () => {}, refreshUsage: async () => {}, action: async () => {}, setData() {},
   } as unknown as Relay;
 }
+
+test("technical details offer the diagnostics files, and say which ones to send", async () => {
+  const calls: string[] = [];
+  const relay = relayFor();
+  relay.api = { showDiagnostics: async () => void calls.push("show") } as unknown as Relay["api"];
+  relay.action = (async (name: string, fn: () => Promise<unknown>) => {
+    calls.push(name);
+    await fn();
+  }) as Relay["action"];
+  const html = (language: "tr" | "en") =>
+    renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+      ),
+    );
+  assert.match(
+    html("tr"),
+    /<button[^>]*>Tanılama dosyalarını göster<\/button><p[^>]*text-muted-foreground[^>]*>Yalnızca draft-events\.json ve usage-issues\.json dosyalarını gönder; klasörün geri kalanında kayıtlı girişlerin var\.<\/p>/,
+  );
+  assert.match(
+    html("en"),
+    /<button[^>]*>Show diagnostics files<\/button><p[^>]*>Send only draft-events\.json and usage-issues\.json; the rest of the folder holds your saved sign-ins\.<\/p>/,
+  );
+  // The button asks main; main takes no path from the renderer.
+  const { showDiagnostics } = await import("../src/pages/Settings");
+  await showDiagnostics(relay);
+  assert.deepEqual(calls, ["diagnostics", "show"]);
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(main, /handle\("show-diagnostics", async \(\) => \{/);
+  const handler = main.slice(main.indexOf('handle("show-diagnostics"'));
+  assert.match(handler.slice(0, 600), /shell\.showItemInFolder\(/);
+  assert.match(handler.slice(0, 600), /"draft-events\.json"/);
+  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
+  assert.match(preload, /showDiagnostics: \(\) => ipcRenderer\.invoke\("relay:show-diagnostics"\)/);
+});
 
 test("Settings shows appearance, language, refresh interval and technical details", () => {
   const html = renderToStaticMarkup(

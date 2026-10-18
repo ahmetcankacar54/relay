@@ -50,6 +50,26 @@ test("the log keeps a version and the entries it was given, each with its time a
   });
 });
 
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+test("a logged entry holds no full account or org id, and older entries lose theirs on the next write", (t) => {
+  const file = path.join(directory(t), "draft-events.json");
+  const from = "aaaaaaaa-1111-4111-8111-111111111111";
+  const to = "bbbbbbbb-2222-4222-8222-222222222222";
+  // An entry written before ids were cut.
+  fs.writeFileSync(
+    file,
+    JSON.stringify({ version: 1, entries: [{ at: new Date(START).toISOString(), event: "capture", from, to }] }),
+  );
+  appendDraftEvent(file, { event: "restore-start", account: to, records: 1 }, START + SECOND);
+  const raw = fs.readFileSync(file, "utf8");
+  assert.doesNotMatch(raw, UUID);
+  assert.deepEqual(readLog(file).entries, [
+    { at: new Date(START).toISOString(), event: "capture", from: "aaaaaaaa", to: "bbbbbbbb" },
+    { at: new Date(START + SECOND).toISOString(), event: "restore-start", account: "bbbbbbbb", records: 1 },
+  ]);
+});
+
 test("the log is private to the owner, as the other Relay journals are", (t) => {
   const file = path.join(directory(t), "draft-events.json");
   appendDraftEvent(file, { event: "capture" }, START);

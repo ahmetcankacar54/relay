@@ -16,6 +16,7 @@ import { pick } from "./language";
 import { routineFailureNotice } from "../shared/routine-failure";
 import { localizeError } from "../src/messages";
 import path from "node:path";
+import fsp from "node:fs/promises";
 import os from "node:os";
 import { z } from "zod";
 import { DesktopManager } from "./core/desktop";
@@ -942,6 +943,16 @@ function bindIPC() {
   });
   handle("copy-draft", (draftId) => draft.copy(draftId));
   handle("dismiss-draft", (draftId) => draft.dismiss(draftId));
+  // Takes no argument: the renderer cannot name a path to reveal.
+  handle("show-diagnostics", async () => {
+    const folder = app.getPath("userData");
+    const events = path.join(folder, "draft-events.json");
+    const exists = await fsp
+      .stat(events)
+      .then((stat) => stat.isFile())
+      .catch(() => false);
+    shell.showItemInFolder(exists ? events : folder);
+  });
   handle("tray-language", (value) => {
     const language = z.enum(["tr", "en"]).parse(value);
     const changed = language !== trayLanguage;

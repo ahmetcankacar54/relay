@@ -1,5 +1,6 @@
 import type { UsageIssue } from "../../shared/types";
 import { readPrivateJson, writePrivateJson } from "./continuation-journal";
+import { shortId, withShortIds } from "./draft-diagnostics";
 
 /** The log keeps this many of the newest entries. */
 export const USAGE_ISSUE_LOG_LIMIT = 200;
@@ -33,8 +34,8 @@ function entriesIn(file: string): UsageIssueEntry[] {
 
 /**
  * Append one usage issue to the private diagnosis log, keeping the newest
- * {@link USAGE_ISSUE_LOG_LIMIT}. Only the account id, the issue and the time are
- * written, never a credential. A failed write is swallowed: the log is a
+ * {@link USAGE_ISSUE_LOG_LIMIT}. Only the account's short id (`shortId`), the issue and
+ * the time are written, never a credential. A failed write is swallowed: the log is a
  * diagnostic aid and must never disturb usage polling. Returns whether it saved.
  */
 export function appendUsageIssue(
@@ -46,11 +47,13 @@ export function appendUsageIssue(
     const entries = [
       ...entriesIn(file),
       {
-        accountId: entry.accountId,
+        accountId: shortId(entry.accountId) ?? "",
         issue: entry.issue,
         at: new Date(now).toISOString(),
       },
-    ].slice(-USAGE_ISSUE_LOG_LIMIT);
+    ]
+      .slice(-USAGE_ISSUE_LOG_LIMIT)
+      .map(withShortIds);
     writePrivateJson(file, { version: 1, entries });
     return true;
   } catch {
