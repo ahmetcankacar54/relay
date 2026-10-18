@@ -70,8 +70,8 @@ test("Ctrl+C while waiting keeps the sign-in pending; --cancel restores the prev
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const done = f.run("add", "C", "--new", "--yes", "--poll-ms", "20");
-  await until(() => fs.existsSync(pendingFile(f.home)));
-  await new Promise((r) => setTimeout(r, 30));
+  // The wait listens for Ctrl+C only once the sign-in has begun.
+  await until(() => fs.existsSync(pendingFile(f.home)) && f.hasSignalHandler());
   f.signal("SIGINT");
   assert.equal(await done, 1);
   assert.ok(fs.existsSync(pendingFile(f.home)));
@@ -88,7 +88,7 @@ test("--resume finishes a pending sign-in", async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const first = f.run("add", "C", "--new", "--yes", "--poll-ms", "20");
-  await until(() => fs.existsSync(pendingFile(f.home)));
+  await until(() => fs.existsSync(pendingFile(f.home)) && f.hasSignalHandler());
   f.signal("SIGINT");
   assert.equal(await first, 1);
   const signed = await f.accountInDesktop();
