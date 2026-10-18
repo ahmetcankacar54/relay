@@ -1,5 +1,7 @@
 import type { Command } from "../command";
 import { add } from "./add";
+import { connect } from "./connect";
+import { usage } from "./usage";
 import { history } from "./history";
 import { remove } from "./remove";
 import { rename } from "./rename";
@@ -19,4 +21,6 @@ export const COMMANDS: Record<string, Command> = {
   remove,
   rename,
   history,
+  connect,
+  usage,
 };

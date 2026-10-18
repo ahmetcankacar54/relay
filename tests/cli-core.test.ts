@@ -137,7 +137,7 @@ test("a schema-less registry next to an installed Relay.app refuses writes; with
 test("a missing key with format-2 files exits 5 and never creates a key", async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
-  fs.rmSync(path.join(f.security.dir, "keychain"));
+  f.security.removeItem("Relay Vault Key");
   const stdinBefore = f.security.stdinLog();
   await assert.rejects(
     openContext(f.io, f.deps as any, { lang: "en" } as any, { write: true, desktop: true }),
