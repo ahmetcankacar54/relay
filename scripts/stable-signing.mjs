@@ -326,9 +326,21 @@ export function pinnedSigner(fingerprint, signAsync) {
   };
 }
 
-function parseArguments(args) {
+/**
+ * The architectures to build, in order. `both` builds this Mac's own last:
+ * electron-builder rebuilds node-pty in node_modules for each one, so the last
+ * build leaves it on the host architecture that `npm run dev` and tests use.
+ */
+function buildArchitectures(arch, hostArch) {
+  if (arch === "both")
+    return hostArch === "x64" ? ["arm64", "x64"] : ["x64", "arm64"];
+  if (arch === "arm64" || arch === "x64") return [arch];
+  throw new Error("Use --arch arm64, x64 or both.");
+}
+
+export function parseArguments(args, hostArch = process.arch) {
   const options = {
-    arch: process.arch,
+    arch: hostArch,
     output: "release/stable",
     skipBuild: false,
     install: false,
@@ -352,9 +364,33 @@ function parseArguments(args) {
   }
   if (options.identity)
     options.identity = normalizeSigningFingerprint(options.identity);
-  if (!["arm64", "x64"].includes(options.arch))
-    throw new Error("Use --arch arm64 or x64.");
+  options.arches = buildArchitectures(options.arch, hostArch);
+  if (options.install && options.arches.length > 1)
+    throw new Error(
+      "--install needs one architecture: use --arch arm64 or x64.",
+    );
   return options;
+}
+
+/** electron-builder writes x64 to <output>/mac and arm64 to <output>/mac-arm64. */
+export function architecturePlan(output, arches, version) {
+  return arches.map((arch) => ({
+    arch,
+    bundle: path.join(
+      output,
+      arch === "arm64" ? "mac-arm64" : "mac",
+      "Relay.app",
+    ),
+    image: path.join(output, `Relay-${version}-${arch}.dmg`),
+  }));
+}
+
+export function architectureFailure(arch, cause) {
+  return new Error(
+    `The ${arch} build failed. node-pty in node_modules may now be built for ${arch}; ` +
+      "restore it for this Mac with: npx electron-builder install-app-deps",
+    { cause },
+  );
 }
 
 async function main() {
@@ -446,12 +482,11 @@ async function main() {
       existing = parent;
     }
   }
-  const bundle = path.join(
-    output,
-    options.arch === "arm64" ? "mac-arm64" : "mac",
-    "Relay.app",
+  const { version } = JSON.parse(
+    await fs.readFile(path.join(root, "package.json"), "utf8"),
   );
-  if (prior?.bundle === bundle)
+  const plan = architecturePlan(output, options.arches, version);
+  if (plan.some((step) => prior?.bundle === step.bundle))
     throw new Error(
       "Choose a new output directory to retain the previous signed bundle.",
     );
@@ -462,48 +497,59 @@ async function main() {
     });
   const { build, Platform, Arch } = await import("electron-builder");
   const { signAsync } = await import("@electron/osx-sign");
-  await build({
-    projectDir: root,
-    targets: Platform.MAC.createTarget("dir", Arch[options.arch]),
-    config: {
-      forceCodeSigning: true,
-      // The installed Electron only matches this Mac's architecture; another
-      // architecture uses electron-builder's verified download of the same version.
-      ...(options.arch === process.arch
-        ? { electronDist: path.join(root, "node_modules/electron/dist") }
-        : {}),
-      directories: { output },
-      mac: {
-        identity: identity.fingerprint,
-        sign: pinnedSigner(identity.fingerprint, signAsync),
-        // A local, non-notarized build: the hardened runtime adds library
-        // validation rules that a self-signed certificate cannot satisfy.
-        hardenedRuntime: false,
-        strictVerify: true,
-        ...(timestampPolicy.timestamp
-          ? { timestamp: timestampPolicy.timestamp }
-          : {}),
-        // Do not infer Apple ID notarization credentials for a local build.
-        notarize: false,
-      },
-    },
-  });
-  const report = await inspectStableSigning(bundle, identity.fingerprint);
-  report.timestampPolicy = timestampPolicy.selfSigned
-    ? "local-no-server"
-    : "library-default";
-  if (prior) report.continuity = verifySigningContinuity(prior, report);
-  if (options.dmg) {
-    const { version } = JSON.parse(
-      await fs.readFile(path.join(root, "package.json"), "utf8"),
-    );
-    report.diskImage = await createDiskImage(
-      bundle,
-      path.join(output, `Relay-${version}-${options.arch}.dmg`),
-    );
+  for (const step of plan) {
+    try {
+      // electron-builder merges this config with package.json's "build",
+      // electronFuses included.
+      await build({
+        projectDir: root,
+        targets: Platform.MAC.createTarget("dir", Arch[step.arch]),
+        config: {
+          forceCodeSigning: true,
+          // The installed Electron only matches this Mac's architecture; another
+          // architecture uses electron-builder's verified download of the same version.
+          ...(step.arch === process.arch
+            ? { electronDist: path.join(root, "node_modules/electron/dist") }
+            : {}),
+          directories: { output },
+          mac: {
+            identity: identity.fingerprint,
+            sign: pinnedSigner(identity.fingerprint, signAsync),
+            // A local, non-notarized build: the hardened runtime adds library
+            // validation rules that a self-signed certificate cannot satisfy.
+            hardenedRuntime: false,
+            strictVerify: true,
+            ...(timestampPolicy.timestamp
+              ? { timestamp: timestampPolicy.timestamp }
+              : {}),
+            // Do not infer Apple ID notarization credentials for a local build.
+            notarize: false,
+          },
+        },
+      });
+      const report = await inspectStableSigning(
+        step.bundle,
+        identity.fingerprint,
+      );
+      report.timestampPolicy = timestampPolicy.selfSigned
+        ? "local-no-server"
+        : "library-default";
+      if (prior) report.continuity = verifySigningContinuity(prior, report);
+      if (options.dmg)
+        report.diskImage = await createDiskImage(step.bundle, step.image);
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    } catch (error) {
+      // Only a build for another architecture can leave node-pty off this Mac's.
+      throw plan.length > 1 || step.arch !== process.arch
+        ? architectureFailure(step.arch, error)
+        : error;
+    }
   }
-  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-  if (options.install) installBundle(bundle);
+  if (plan.at(-1).arch !== process.arch)
+    process.stdout.write(
+      `node-pty in node_modules is now built for ${plan.at(-1).arch}; restore it for this Mac with: npx electron-builder install-app-deps\n`,
+    );
+  if (options.install) installBundle(plan[0].bundle);
 }
 
 /**
@@ -581,7 +627,8 @@ if (
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 )
   main().catch((error) => {
-    console.error(error.message);
-    if (error.cause?.message) console.error(error.cause.message);
+    // A failed architecture wraps the build's own error, which may wrap a tool's output.
+    for (let reason = error; reason; reason = reason.cause)
+      if (reason.message) console.error(reason.message);
     markSigningFailure();
   });

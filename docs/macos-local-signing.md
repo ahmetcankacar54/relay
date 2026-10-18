@@ -50,13 +50,19 @@ node scripts/stable-signing.mjs --verify /Applications/Relay.app
 
 ```sh
 npm run dist:mac:share
-node scripts/stable-signing.mjs --dmg --output release/share --arch x64 --skip-build
 ```
 
-The first command writes `release/share/Relay-<version>-arm64.dmg` for Apple
-silicon Macs, the second `Relay-<version>-x64.dmg` for Intel Macs (Apple menu →
-About This Mac shows which: "Chip Apple M…" or "Processor Intel"). Both hold the
-same certificate-signed app; the `desktop-automation` helper is a universal binary.
+This writes both disk images in one run: `release/share/Relay-<version>-arm64.dmg`
+for Apple silicon Macs and `release/share/Relay-<version>-x64.dmg` for Intel Macs
+(Apple menu → About This Mac shows which: "Chip Apple M…" or "Processor Intel").
+Both hold the same certificate-signed app; the `desktop-automation` helper is a
+universal binary. One architecture alone: add `--arch arm64` or `--arch x64` to
+`node scripts/stable-signing.mjs --dmg --output release/share`.
+
+electron-builder rebuilds node-pty inside `node_modules` for each architecture,
+so the command builds this Mac's architecture last. If a build fails, or after an
+`--arch` build for the other architecture, restore node-pty for this Mac with
+`npx electron-builder install-app-deps`.
 
 The certificate is local and the app is not notarized by Apple, so the other Mac
 blocks the first launch of a downloaded copy:

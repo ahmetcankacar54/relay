@@ -6,10 +6,13 @@ import path from "node:path";
 import test from "node:test";
 // Build tooling is intentionally plain JavaScript for use before transpilation.
 import {
+  architectureFailure,
+  architecturePlan,
   findPinnedSigningIdentity,
   inspectStableSigning,
   markSigningFailure,
   normalizeSigningFingerprint,
+  parseArguments,
   pinnedSigner,
   publicCertificateSigningPolicy,
   readDesignatedRequirement,
@@ -292,4 +295,86 @@ test("update continuity verifies old and new requirements against separately ret
       }),
     /old requirement rejected/,
   );
+});
+
+test("--arch takes arm64, x64 or both, and both builds this Mac's architecture last", () => {
+  assert.deepEqual(parseArguments([], "arm64").arches, ["arm64"]);
+  assert.deepEqual(parseArguments([], "x64").arches, ["x64"]);
+  assert.deepEqual(parseArguments(["--arch", "x64"], "arm64").arches, ["x64"]);
+  assert.deepEqual(parseArguments(["--arch", "arm64"], "x64").arches, [
+    "arm64",
+  ]);
+  // node-pty is rebuilt in node_modules for each architecture: the last build
+  // must be this Mac's, so node_modules is left on the host architecture.
+  assert.deepEqual(parseArguments(["--arch", "both"], "arm64").arches, [
+    "x64",
+    "arm64",
+  ]);
+  assert.deepEqual(parseArguments(["--arch", "both"], "x64").arches, [
+    "arm64",
+    "x64",
+  ]);
+  for (const arch of ["universal", "ia32", "arm64,x64"])
+    assert.throws(
+      () => parseArguments(["--arch", arch], "arm64"),
+      /Use --arch arm64, x64 or both\./,
+    );
+  assert.throws(() => parseArguments(["--arch"], "arm64"), /Missing value/);
+});
+
+test("the share command's other options are parsed as before", () => {
+  const options = parseArguments(
+    ["--dmg", "--arch", "both", "--output", "release/share", "--skip-build"],
+    "arm64",
+  );
+  assert.equal(options.dmg, true);
+  assert.equal(options.skipBuild, true);
+  assert.equal(options.install, false);
+  assert.equal(options.output, "release/share");
+  assert.equal(parseArguments([], "arm64").output, "release/stable");
+  assert.equal(
+    parseArguments(["--identity", fingerprint.toLowerCase()], "arm64").identity,
+    fingerprint,
+  );
+  assert.throws(() => parseArguments(["--fast"], "arm64"), /Unknown argument/);
+  // One app goes to /Applications: installing needs a single architecture.
+  assert.equal(parseArguments(["--install"], "arm64").install, true);
+  assert.throws(
+    () => parseArguments(["--install", "--arch", "both"], "arm64"),
+    /--install needs one architecture/,
+  );
+});
+
+test("the share script builds both disk images in one run", async () => {
+  const manifest = JSON.parse(
+    await fs.readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  assert.equal(
+    manifest.scripts["dist:mac:share"],
+    "node scripts/stable-signing.mjs --dmg --arch both --output release/share",
+  );
+});
+
+test("each architecture has its own bundle folder and disk image", () => {
+  const output = path.resolve("release/share");
+  assert.deepEqual(architecturePlan(output, ["x64", "arm64"], "0.11.0"), [
+    {
+      arch: "x64",
+      bundle: path.join(output, "mac", "Relay.app"),
+      image: path.join(output, "Relay-0.11.0-x64.dmg"),
+    },
+    {
+      arch: "arm64",
+      bundle: path.join(output, "mac-arm64", "Relay.app"),
+      image: path.join(output, "Relay-0.11.0-arm64.dmg"),
+    },
+  ]);
+});
+
+test("a failed architecture names itself and how to restore node-pty for this Mac", () => {
+  const cause = new Error("electron-builder exited");
+  const error = architectureFailure("x64", cause);
+  assert.match(error.message, /The x64 build failed\./);
+  assert.match(error.message, /npx electron-builder install-app-deps/);
+  assert.equal(error.cause, cause);
 });

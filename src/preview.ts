@@ -12,6 +12,7 @@ import type {
   Snapshot,
 } from "../shared/types";
 // Browser preview is deliberately explicit and never communicates with the machine.
+// Development only: useRelay imports it dynamically under import.meta.env.DEV.
 const ids = [
   "fd7f91c2-1bbf-45e0-a11a-37bfe318fd3a",
   "d2f616b5-a4b1-47ad-8b56-ec77bc2f51f6",

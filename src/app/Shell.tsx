@@ -11,7 +11,8 @@ import { Switching } from "@/pages/Switching";
 import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
 import { Planning } from "@/pages/Planning";
-import relayIcon from "../../assets/icon.png";
+// 24 px in the sidebar: the 64 px rendering is sharp at 2×, without the 1 MB icon.png.
+import relayIcon from "../../assets/icons/app-64.png";
 import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
 import { RelayPrankStage } from "@/pranks/RelayPrankStage";
 import { Sidebar } from "./Sidebar";

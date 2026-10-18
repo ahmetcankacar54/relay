@@ -20,6 +20,8 @@ const appSvg =
   </g>
 </svg>`);
 const traySvg = await readFile(path.join(assets, "trayTemplate.svg"), "utf8");
+// icons/app-32.png is also the windows' favicon (index.html, panel.html,
+// switch.html), so the bundle does not carry the 1024 px icon.png.
 const sizes = [16, 32, 64, 128, 256, 512, 1024];
 const appPngs = new Map();
 for (const size of sizes) {

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import "@fontsource/dm-sans/400.css";
-import "@fontsource/dm-sans/600.css";
+import "../styles/fonts.css";
 import type { SwitchSceneView } from "../../shared/switch-scene";
 import { SwitchStage } from "./SwitchStage";
 import "../styles/theme.css";

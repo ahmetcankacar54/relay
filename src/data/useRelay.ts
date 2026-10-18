@@ -16,7 +16,6 @@ import { DEFAULT_SETTINGS } from "../../shared/types";
 import { suggestedAccount } from "../../shared/usage";
 import { staleManualSwitch } from "../../shared/automation-status";
 import type { DesktopActionRequest } from "../features/DesktopActionReview";
-import { previewApi } from "../preview";
 import packageInfo from "../../package.json";
 import { targetWorkspace } from "../lib/workspaces";
 import { errorMessage } from "./error-message";
@@ -32,8 +31,52 @@ import { RelayContext, useRelay, type Relay } from "./relay-context";
 
 export { relayAction, RelayContext, useRelay, type Relay };
 
+/**
+ * An API whose calls wait for `load`. A listener (`on…`) still returns its unsubscribe at once.
+ * A failed load rejects every call and subscribes nothing.
+ */
+function deferredApi(load: () => Promise<RelayAPI>): RelayAPI {
+  let loaded: RelayAPI | undefined;
+  const ready = load().then((api) => (loaded = api));
+  ready.catch(() => {});
+  type Method = (...args: unknown[]) => unknown;
+  const method = (api: RelayAPI, key: string) =>
+    (api as unknown as Record<string, Method>)[key];
+  return new Proxy({} as RelayAPI, {
+    get: (_, key) => {
+      // Not a thenable: `then` stays undefined.
+      if (typeof key !== "string" || key === "then") return undefined;
+      return (...args: unknown[]) => {
+        if (loaded) return method(loaded, key)(...args);
+        if (!/^on[A-Z]/.test(key))
+          return ready.then((api) => method(api, key)(...args));
+        let off: (() => void) | undefined;
+        let cancelled = false;
+        void ready.then(
+          (api) => {
+            if (!cancelled) off = method(api, key)(...args) as () => void;
+          },
+          () => {},
+        );
+        return () => {
+          cancelled = true;
+          off?.();
+        };
+      };
+    },
+  });
+}
+
 const injected = typeof window === "undefined" ? undefined : window.relay;
-export const api: RelayAPI = injected ?? previewApi;
+// The browser preview's sample data (`npm run dev:ui`) is development only. A built app always
+// has the preload's API, and its bundle carries no sample data.
+export const api: RelayAPI =
+  injected ??
+  deferredApi(
+    import.meta.env.DEV
+      ? () => import("../preview").then((module) => module.previewApi)
+      : () => Promise.reject(new Error("Relay’s window bridge is missing.")),
+  );
 export const preview = !injected;
 export const APP_VERSION: string = packageInfo.version;
 
