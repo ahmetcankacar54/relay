@@ -1,10 +1,10 @@
-Relay 0.12.0 — Claude uygulaması (Claude Desktop) için hesap değiştirici
+Relay 0.12.1 — Claude uygulaması (Claude Desktop) için hesap değiştirici
 Gayriresmî, kişisel bir araç; Anthropic ürünü değil.
 
 KURULUM
 1) Apple menüsü → Bu Mac Hakkında’ya bak:
-   • "Çip: Apple M…" yazıyorsa (M1–M4, Apple silicon): Relay-0.12.0-arm64.dmg
-   • "İşlemci: Intel" yazıyorsa: Relay-0.12.0-x64.dmg
+   • "Çip: Apple M…" yazıyorsa (M1–M4, Apple silicon): Relay-0.12.1-arm64.dmg
+   • "İşlemci: Intel" yazıyorsa: Relay-0.12.1-x64.dmg
    macOS 13 veya üstü gerekir.
 2) DMG’yi aç, Relay’i Uygulamalar klasörüne sürükle. DMG’nin içinden çalıştırma.
 3) Relay’i aç. "Apple doğrulayamadı" uyarısında "Bitti"ye bas.
