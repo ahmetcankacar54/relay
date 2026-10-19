@@ -1,5 +1,5 @@
 import os from "node:os";
-import { profileEnvironment } from "../../../electron/core/environment";
+import { cliEnvironment } from "../environment";
 import { acquireProfileLock } from "../../../electron/core/profile-lock";
 import { EXTERNAL_LINKS } from "../../../shared/external-links";
 import { resolveAccount } from "../accounts";
@@ -36,7 +36,7 @@ export const run: Command = async ({ io, deps, parsed, t }) => {
   try {
     const child = ctx.deps.spawn(claude, parsed.rest, {
       cwd: io.cwd,
-      env: profileEnvironment(ctx.store.profile(account.id), io.env),
+      env: cliEnvironment(ctx.store.profile(account.id), io.env),
       stdio: "inherit",
     });
     // The terminal sends Ctrl+C to Claude Code itself; passing it on again would double it.

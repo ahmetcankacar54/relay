@@ -94,7 +94,15 @@ export async function openContext(
       EXIT.environment,
     );
   if (needs.desktop && needs.write && vault.kind === "legacy")
-    throw new CliError(updateAppMessage(t), EXIT.environment);
+    throw new CliError(
+      appVersion !== undefined && !olderThan(appVersion, "0.12.0")
+        ? t(
+            "Relay.app kasayı henüz yeni biçime taşımadı. Relay.app'i açın ve Keychain sorusuna (\"Relay Safe Storage\") izin verin; sorun sürerse uygulamadaki uyarıya bakın.",
+            "Relay.app has not moved the vault to the new format yet. Open Relay.app and allow its Keychain prompt (\"Relay Safe Storage\"); if it persists, see the warning the app shows.",
+          )
+        : updateAppMessage(t),
+      EXIT.environment,
+    );
   let sealer = closedSealer(t);
   if (needs.desktop && needs.write) {
     try {

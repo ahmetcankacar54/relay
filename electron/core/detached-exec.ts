@@ -31,8 +31,11 @@ export function runDetached(
       killed = true;
       child.kill("SIGKILL");
     }, options.timeout);
-    const collect = (append: (text: string) => void) => (chunk: Buffer) => {
-      append(chunk.toString("utf8"));
+    // Decoded per stream, so a character split across two reads comes back whole.
+    child.stdout!.setEncoding("utf8");
+    child.stderr!.setEncoding("utf8");
+    const collect = (append: (text: string) => void) => (chunk: string) => {
+      append(chunk);
       if (stdout.length + stderr.length > limit) {
         killed = true;
         child.kill("SIGKILL");

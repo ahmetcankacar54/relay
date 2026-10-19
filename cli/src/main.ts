@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { LockBusyError } from "../../electron/core/process-lock";
 import { ProfileLockBusyError } from "../../electron/core/profile-lock";
 import { StoreWriteRefused } from "../../electron/core/store";
@@ -10,6 +11,7 @@ import { helpText } from "./help";
 import { pickLang, translator, type Translate } from "./i18n";
 import { CliError, EXIT, type CliIO } from "./io";
 import { CLI_VERSION } from "./version";
+import { lockHolderText } from "./describe";
 import { COMMANDS } from "./commands";
 import { runWorker } from "./inside-desktop";
 import { relayPaths } from "../../electron/core/relay-paths";
@@ -22,17 +24,11 @@ const BLOCKED: [RegExp, string, string][] = [
 ];
 
 function lockMessage(error: LockBusyError, t: Translate, now: number): string {
-  const { by, kind, startedAt } = error.holder;
+  const { startedAt } = error.holder;
   const seconds = Math.max(0, Math.round((now - Date.parse(startedAt)) / 1000));
-  const who =
-    by === "app"
-      ? t("Relay.app", "Relay.app")
-      : by === "cli"
-        ? t("Başka bir relay komutu", "Another relay command")
-        : t("Başka bir Relay işlemi", "Another Relay process");
   return t(
-    `${who} şu an bir Claude Desktop işlemi yapıyor (${kind}, ${seconds} sn önce başladı). Bitince yeniden deneyin.`,
-    `${who} is running a Claude Desktop operation (${kind}, started ${seconds} s ago). Try again when it ends.`,
+    `${lockHolderText(error.holder, t)} (${seconds} sn önce başladı). Bitince yeniden deneyin.`,
+    `${lockHolderText(error.holder, t)} (started ${seconds} s ago). Try again when it ends.`,
   );
 }
 
@@ -48,6 +44,16 @@ export function describeError(error: unknown, t: Translate, now = Date.now()) {
       ),
       code: EXIT.busy,
     };
+  if (error instanceof ZodError || (error as Error)?.name === "ZodError") {
+    const where = (error as ZodError).issues?.[0]?.path?.join(".");
+    return {
+      message: t(
+        `Relay'in hesap listesi (state.json) okunamadı${where ? `: ${where} beklenen biçimde değil` : ""}. relay'i güncelleyin ya da listeyi Relay.app ile açın.`,
+        `Relay's account list (state.json) could not be read${where ? `: ${where} is not in the expected format` : ""}. Update relay, or open the list with Relay.app.`,
+      ),
+      code: EXIT.failed,
+    };
+  }
   if (error instanceof StoreWriteRefused || error instanceof VaultKeyError || error instanceof VaultFormatError)
     return { message: redact(error.message, 600), code: EXIT.environment };
   const message = redact(error, 600);

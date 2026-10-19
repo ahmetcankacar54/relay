@@ -1,6 +1,30 @@
 import type { Account, RelaySettings } from "../../shared/types";
 import type { Translate } from "./i18n";
 import { RELAY_APPS } from "./deps";
+import type { LockInfo } from "../../electron/core/process-lock";
+
+/** What a lock's holder is doing, in words: "Relay.app is switching accounts" and so on. */
+export function lockHolderText(holder: LockInfo, t: Translate): string {
+  const who =
+    holder.by === "app"
+      ? "Relay.app"
+      : holder.by === "cli"
+        ? t("Başka bir relay komutu", "Another relay command")
+        : t("Başka bir Relay işlemi", "Another Relay process");
+  const doing: Record<string, [string, string]> = {
+    switch: ["hesap değiştiriyor", "is switching accounts"],
+    save: ["bir hesabı kaydediyor", "is saving an account"],
+    link: ["yeni bir giriş başlatıyor", "is starting a sign-in"],
+    "cancel-link": ["bir girişi iptal ediyor", "is cancelling a sign-in"],
+    merge: ["Code geçmişini taşıyor", "is bringing Code history over"],
+    restore: ["yarıda kalan bir geçişi geri alıyor", "is restoring an interrupted switch"],
+    reset: ["kasayı sıfırlıyor", "is resetting the vault"],
+    "desktop-task": ["Claude Desktop'ta bir iş yapıyor", "is doing a task in Claude Desktop"],
+    "draft-retype": ["bir taslağı yeniden yazıyor", "is re-typing a draft"],
+  };
+  const [tr, en] = doing[holder.kind] ?? ["bir Claude Desktop işlemi yapıyor", "is running a Claude Desktop operation"];
+  return `${who} ${t(tr, en)}`;
+}
 
 export function historyModeText(mode: RelaySettings["desktopHistoryTransfer"], t: Translate): string {
   switch (mode) {

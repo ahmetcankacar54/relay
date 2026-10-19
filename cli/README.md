@@ -203,10 +203,11 @@ If the "Relay Vault Key" item disappears from your Keychain, the saved sign-ins 
 opened. That can happen after macOS makes a new login keychain, for example. Relay then refuses to
 switch and says so.
 
-`relay reset-vault` starts over:
-1. It sets the old files aside in `desktop-vault/lost-key-…`; nothing is deleted.
-2. It makes a new key.
-3. It clears each account's Claude Desktop link.
+`relay reset-vault` starts over. Quit Relay.app first (⌥⌘Q), since a running app keeps the old key
+in memory. Then it:
+1. sets the old files aside in `desktop-vault/lost-key-…`; nothing is deleted;
+2. makes a new key;
+3. clears each account's Claude Desktop link.
 
 Then save each account again with `relay add <name>` while it is signed in to Claude Desktop.
 

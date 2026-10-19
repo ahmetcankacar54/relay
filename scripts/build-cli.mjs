@@ -2,16 +2,17 @@
 // plain-syntax launcher that checks macOS and the Node version before loading it.
 import { build } from "esbuild";
 import { chmod, copyFile, mkdir, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 const out = new URL("../cli/dist/", import.meta.url);
 await mkdir(out, { recursive: true });
 const result = await build({
-  entryPoints: [new URL("../cli/src/bin.ts", import.meta.url).pathname],
+  entryPoints: [fileURLToPath(new URL("../cli/src/bin.ts", import.meta.url))],
   bundle: true,
   platform: "node",
   format: "esm",
   target: "node22",
-  outfile: new URL("relay-cli.js", out).pathname,
+  outfile: fileURLToPath(new URL("relay-cli.js", out)),
   // Readable on purpose: people can audit what they install.
   minify: false,
   metafile: true,

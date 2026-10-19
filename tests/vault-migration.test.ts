@@ -138,3 +138,13 @@ test("a broken journal backup stops the migration before any other file is moved
   assert.equal((await readBytes(vault, `accounts/${ACCOUNT}.bin`))!.toString(), "v10BROKEN");
   await assert.rejects(fs.access(path.join(vault, "unreadable")));
 });
+
+test("a corrupt old file left after the rest migrated is set aside, so the migration can finish", async (t) => {
+  const vault = await fs.mkdtemp(path.join(os.tmpdir(), "relay-vault-mig-"));
+  t.after(() => fs.rm(vault, { recursive: true, force: true }));
+  await writeBytes(vault, `accounts/${ACCOUNT}.bin`, sealer.seal("already migrated"));
+  await writeBytes(vault, "backups/99999999-2222-4333-8444-555555555555.bin", Buffer.from("v10BROKEN"));
+  const r = await migrateVault(vault, sealer, legacyUnseal);
+  assert.deepEqual(r.movedAside, ["backups/99999999-2222-4333-8444-555555555555.bin"]);
+  assert.equal((await vaultState(vault)).kind, "ready");
+});

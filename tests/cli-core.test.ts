@@ -164,3 +164,24 @@ test("shielded ignores signals during the operation and prints one wait line", a
   assert.equal(f.err().split("\n").filter((l) => /wait/i.test(l)).length, 1);
   assert.equal(f.hasSignalHandler(), false);
 });
+
+test("a registry this relay cannot read names state.json instead of printing raw schema errors", async (t) => {
+  const f = await cliFixture(t);
+  await f.saved("A");
+  const file = path.join(f.home, "state.json");
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  raw.settings.desktopHistoryTransfer = "sometimes";
+  fs.writeFileSync(file, JSON.stringify(raw));
+  assert.equal(await f.run("list"), 1);
+  assert.match(f.err(), /state\.json/);
+  assert.doesNotMatch(f.err(), /relay: \[/);
+});
+
+test("a legacy vault next to Relay.app 0.12 points to the app's Keychain prompt, not to an update", async (t) => {
+  const f = await cliFixture(t, { appVersion: "0.12.0" });
+  await writeBytes(path.join(f.home, "desktop-vault"), "accounts/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.bin", Buffer.from("v10old"));
+  await assert.rejects(
+    openContext(f.io, f.deps as any, { lang: "en" } as any, { write: true, desktop: true }),
+    (e: any) => e.code === EXIT.environment && /Keychain prompt/.test(e.message) && !/Update Relay\.app/.test(e.message),
+  );
+});

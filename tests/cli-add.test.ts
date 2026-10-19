@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { cliFixture } from "./cli-fixture";
-import { readObject } from "../electron/core/desktop-files";
+import { jsonBytes, readObject, writeBytes } from "../electron/core/desktop-files";
 
 const identity = async (claude: string) => (await readObject(claude, "config.json"))?.lastKnownAccountUuid;
 const pendingFile = (home: string) => path.join(home, "desktop-vault", "pending.json");
@@ -129,4 +129,17 @@ test("a worker gives up waiting for a sign-in after its time limit", async (t) =
   assert.equal(await f.run("add", "C", "--new", "--yes", "--poll-ms", "10"), 1);
   assert.match(f.out() + f.err(), /relay add --resume/);
   assert.ok(fs.existsSync(pendingFile(f.home)));
+});
+
+test("signing back in with an account that is already saved says so while waiting", async (t) => {
+  const f = await cliFixture(t);
+  const a = await f.saved("A");
+  const done = f.run("add", "C", "--new", "--yes", "--poll-ms", "10");
+  t.after(() => f.signal("SIGINT"));
+  await until(() => f.out().includes("open the Code tab once; waiting"));
+  await writeBytes(f.claude, "config.json", jsonBytes({ "oauth:tokenCacheV2": "FIXTURE-SECRET-again", lastKnownAccountUuid: a.desktop!.accountUuid }));
+  await until(() => f.out().includes("already saved"));
+  assert.match(f.out(), /signed in as A, which is already saved/);
+  f.signal("SIGINT");
+  assert.equal(await done, 1);
 });

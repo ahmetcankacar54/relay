@@ -94,6 +94,7 @@ async function waitForSignIn(
   let stop!: () => void;
   const stopped = new Promise<void>((resolve) => (stop = resolve));
   let interrupted = false;
+  let alreadyToldOf: string | undefined;
   io.onSignal(() => {
     interrupted = true;
     stop();
@@ -121,8 +122,18 @@ async function waitForSignIn(
         return undefined;
       }
       const uuid = state.currentAccountUuid;
-      if (uuid && !ctx.store.state.accounts.some((a) => a.desktop?.accountUuid === uuid) && state.organizations.length)
-        return { accountUuid: uuid, orgs: state.organizations };
+      const saved = uuid ? ctx.store.state.accounts.find((a) => a.desktop?.accountUuid === uuid) : undefined;
+      if (uuid && !saved && state.organizations.length) return { accountUuid: uuid, orgs: state.organizations };
+      // Signed back in with a saved account: say so once, and keep waiting for the new one.
+      if (saved && saved.desktop?.accountUuid !== alreadyToldOf) {
+        alreadyToldOf = saved.desktop?.accountUuid;
+        io.stdout(
+          t(
+            `Claude Desktop'ta ${saved.name} hesabı açık; o zaten kayıtlı. Yeni hesapla giriş yapın.`,
+            `Claude Desktop is signed in as ${saved.name}, which is already saved. Sign in with the new account.`,
+          ),
+        );
+      }
       await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, pollMs))]);
       if (interrupted) {
         io.stdout(stillPending);

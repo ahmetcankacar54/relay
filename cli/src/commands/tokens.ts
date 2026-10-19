@@ -19,7 +19,13 @@ const total = (c: TokenCounts) => c.input + c.output + c.cacheWrite + c.cacheRea
 /** The ledger Relay.app keeps, as the view builder takes it; undefined when there is none. */
 function readLedger(file: string): LedgerSnapshot | undefined {
   if (!fs.existsSync(file)) return undefined;
-  const saved = readPrivateJson(file, 64 * 1024 * 1024) as {
+  // readPrivateJson allocates its limit up front: give it the file's size (it re-checks), not
+  // the 64 MB cap.
+  const size = fs.lstatSync(file).size;
+  const cap = 64 * 1024 * 1024;
+  if (size > cap)
+    throw new CliError("The token ledger is larger than relay reads (64 MB).", EXIT.failed);
+  const saved = readPrivateJson(file, Math.min(cap, size + 64 * 1024)) as {
     version?: number;
     complete?: boolean;
     days?: LedgerSnapshot["days"];

@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { VAULT_KEY_SERVICE, VaultKeyError, loadVaultKey, readVaultKey } from "../../../electron/core/vault-key";
-import { markVaultFormat } from "../../../electron/core/vault-migration";
+import { readBytes } from "../../../electron/core/desktop-files";
+import { isSealedV2 } from "../../../electron/core/vault-crypto";
+import { markVaultFormat, sealedFiles } from "../../../electron/core/vault-migration";
+import { relayAppRunning } from "../describe";
 import type { Command } from "../command";
 import { confirm } from "../confirm";
 import { openContext } from "../context";
@@ -21,6 +24,43 @@ export const resetVault: Command = async ({ io, deps, parsed, t }) => {
   const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: false });
   if (ctx.vault.kind === "empty")
     throw new CliError(t("Kasa boş; sıfırlanacak bir şey yok.", "The vault is empty; nothing to reset."), EXIT.failed);
+  if (ctx.vault.kind === "newer")
+    throw new CliError(
+      t("Kasayı daha yeni bir Relay yazmış; relay'i güncelleyin. Hiçbir şey değişmedi.", "A newer Relay wrote the vault; update relay. Nothing changed."),
+      EXIT.environment,
+    );
+  // An old-format vault never had a key: its sign-ins are sealed by Relay.app's own key, which
+  // the app moves to the vault key itself. Only files sealed with the vault key can be orphaned.
+  if (ctx.vault.kind === "legacy") {
+    let anyV2 = false;
+    for (const relative of await sealedFiles(ctx.paths.vault)) {
+      const data = await readBytes(ctx.paths.vault, relative);
+      if (data && isSealedV2(data)) anyV2 = true;
+    }
+    if (!anyV2)
+      throw new CliError(
+        t(
+          "Kasa hâlâ eski biçimde; kaybolabilecek bir anahtarı hiç olmadı. Relay.app 0.12'yi açın, kasayı kendisi taşır. Hiçbir şey değişmedi.",
+          "The vault is still in the old format, so it never had a key to lose. Open Relay.app 0.12; it migrates the vault itself. Nothing changed.",
+        ),
+        EXIT.failed,
+      );
+  }
+  // A running Relay.app keeps the key it loaded in memory and would go on sealing with it.
+  let appRunning = false;
+  try {
+    appRunning = relayAppRunning(await ctx.deps.processList());
+  } catch {
+    // Unknown: go on; the operation lock below still guards a running operation.
+  }
+  if (appRunning)
+    throw new CliError(
+      t(
+        "Önce Relay.app'ten çıkın (⌥⌘Q), sonra bunu yeniden çalıştırın; açık uygulama eski anahtarı bellekte tutar. Hiçbir şey değişmedi.",
+        "Quit Relay.app first (⌥⌘Q), then run this again; a running app keeps the old key in memory. Nothing changed.",
+      ),
+      EXIT.busy,
+    );
   try {
     await readVaultKey(ctx.deps.securityTool);
     throw new CliError(

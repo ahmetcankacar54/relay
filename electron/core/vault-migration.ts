@@ -99,8 +99,8 @@ async function moveAside(vault: string, relative: string) {
  * Re-seals every old file in format 2, keeping its modification time, and writes the marker
  * once none is left. A run stopped half-way resumes, since format-2 files are skipped. Every old
  * file is opened before anything changes:
- * - none opens: the old seal is unusable this run (macOS refused it), so nothing moves and no
- *   marker is written; the next start tries again;
+ * - none opens, and none was migrated before: the old seal is unusable this run (macOS refused
+ *   it), so nothing moves and no marker is written; the next start tries again;
  * - the backup journal.json names does not open: recovery depends on it, so nothing moves;
  * - otherwise each file that does not open is moved aside, never deleted.
  */
@@ -116,8 +116,10 @@ export async function migrateVault(
       : undefined;
   const opened = new Map<string, string>();
   const failed: string[] = [];
+  let anyV2 = false;
   for (const relative of await sealedFiles(vault)) {
     const data = await readBytes(vault, relative);
+    if (data && isSealedV2(data)) anyV2 = true;
     if (!data || isSealedV2(data)) continue;
     try {
       opened.set(relative, legacyUnseal(data));
@@ -125,7 +127,9 @@ export async function migrateVault(
       failed.push(relative);
     }
   }
-  if (failed.length && !opened.size)
+  // Nothing opening at all means the old seal was refused this run, unless an earlier run
+  // already migrated files with it: then what is left is damaged, and is set aside below.
+  if (failed.length && !opened.size && !anyV2)
     throw new Error(
       "None of the old vault files could be opened, so nothing was moved. Relay tries again at its next start.",
     );

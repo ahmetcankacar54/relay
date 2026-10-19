@@ -26,3 +26,8 @@ test("Desktop commands run in their own process group, out of reach of the termi
   await assert.rejects(runDetached("/bin/sh", ["-c", "echo nope >&2; exit 3"], { timeout: 5000 }), (e: any) => e.code === 3 && /Command failed: \/bin\/sh/.test(e.message) && /nope/.test(e.message));
   await assert.rejects(runDetached("/bin/sh", ["-c", "sleep 5"], { timeout: 100 }), (e: any) => e.killed === true);
 });
+
+test("a character split across two output chunks comes back whole", async () => {
+  const { stdout } = await runDetached("/bin/sh", ["-c", "printf '\\305'; sleep 0.1; printf '\\237'"], { timeout: 5000 });
+  assert.equal(stdout, "ş");
+});

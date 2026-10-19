@@ -138,3 +138,29 @@ test("a holder that lets go between the failed create and the look at its file i
     (fs as any).lstatSync = original;
   }
 });
+
+test("a lock that vanishes while it is being read is retried, not reported busy", (t) => {
+  const file = tempLock(t);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ pid: process.ppid, token: "x", by: "app", kind: "switch", startedAt: new Date().toISOString() }));
+  const original = fs.lstatSync;
+  let calls = 0;
+  (fs as any).lstatSync = (p: fs.PathLike, ...rest: any[]) => {
+    const stat = (original as any)(p, ...rest);
+    if (p === file && ++calls === 1) fs.unlinkSync(file);
+    return stat;
+  };
+  try {
+    const lock = new ProcessLock(file, "cli");
+    lock.tryAcquire("switch");
+    assert.ok(lock.held);
+    lock.release();
+  } finally {
+    (fs as any).lstatSync = original;
+  }
+});
+
+test("a lock this pid wrote before this process started is stale", () => {
+  assert.equal(holderAlive(process.pid, "2000-01-01T00:00:00.000Z"), false);
+  assert.equal(holderAlive(process.pid, new Date().toISOString()), true);
+});

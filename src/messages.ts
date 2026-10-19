@@ -7,6 +7,18 @@
 type Pair = [tr: string, en: string, enDisplay?: string];
 const pairs: Pair[] = [
   [
+    "Relay.app şu an Claude Desktop'u kullanıyor. Bitince yeniden dene.",
+    "Relay.app is using Claude Desktop. Try again when it ends.",
+  ],
+  [
+    "Terminaldeki bir relay komutu şu an Claude Desktop'u kullanıyor. Bitince yeniden dene.",
+    "A relay command in a terminal is using Claude Desktop. Try again when it ends.",
+  ],
+  [
+    "Başka bir Relay işlemi şu an Claude Desktop'u kullanıyor. Bitince yeniden dene.",
+    "Another Relay process is using Claude Desktop. Try again when it ends.",
+  ],
+  [
     "Tercihleri değiştirmeden önce Claude uygulamasındaki işlemi tamamla.",
     "Finish the Desktop operation before changing preferences.",
     "Finish the Claude app operation before changing preferences.",

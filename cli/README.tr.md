@@ -207,7 +207,8 @@ güncelleme denetimi yapmaz.
 macOS yeni bir oturum anahtar zinciri oluşturduğunda olabilir. Relay bu durumda geçiş yapmayı
 reddeder ve nedenini söyler.
 
-`relay reset-vault` baştan başlatır:
+`relay reset-vault` baştan başlatır. Önce Relay.app'ten çıkın (⌥⌘Q), çünkü açık uygulama eski anahtarı
+bellekte tutar. Sonra komut:
 1. Eski dosyaları `desktop-vault/lost-key-…` klasörüne ayırır; hiçbir şey silinmez.
 2. Yeni bir anahtar oluşturur.
 3. Hesapların Claude Desktop bağlantılarını temizler.

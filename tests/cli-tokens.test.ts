@@ -58,3 +58,21 @@ test("without a ledger it says Relay.app keeps one", async (t) => {
   assert.equal(await f.run("tokens"), 0);
   assert.match(f.out(), /Relay\.app/);
 });
+
+test("reading a small ledger does not allocate a buffer the size of the cap", async (t) => {
+  const f = await cliFixture(t);
+  fs.mkdirSync(f.home, { recursive: true });
+  fs.writeFileSync(path.join(f.home, "token-ledger.json"), JSON.stringify({ version: 2, files: {}, days: {}, seen: {} }), { mode: 0o600 });
+  const original = Buffer.alloc;
+  let largest = 0;
+  (Buffer as any).alloc = (size: number, ...rest: any[]) => {
+    largest = Math.max(largest, size);
+    return (original as any).call(Buffer, size, ...rest);
+  };
+  try {
+    assert.equal(await f.run("tokens", "--json"), 0);
+  } finally {
+    (Buffer as any).alloc = original;
+  }
+  assert.ok(largest < 4 * 1024 * 1024, `allocated ${largest}`);
+});

@@ -59,3 +59,9 @@ test("cli/package.json has no dependencies or scripts and pins name, bin, os, en
   assert.equal(pkg.scripts, undefined);
   assert.match(fs.readFileSync(path.join(cli, "LICENSE"), "utf8"), /Copyright \(c\) 2026 Ahmet Can Kacar/);
 });
+
+test("the build script turns its URLs into paths with fileURLToPath, so folders with spaces work", () => {
+  const script = fs.readFileSync(path.join(root, "scripts", "build-cli.mjs"), "utf8");
+  assert.doesNotMatch(script, /\.pathname/);
+  assert.match(script, /fileURLToPath/);
+});

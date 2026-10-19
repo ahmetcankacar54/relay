@@ -7,7 +7,7 @@ import { childReady } from "./lock-child";
 import { profileLockHolders } from "../electron/core/profile-lock";
 
 async function setup(t: any, loggedIn = true) {
-  const f = await cliFixture(t, { env: { ANTHROPIC_API_KEY: "sk-ant-api-should-not-pass" } });
+  const f = await cliFixture(t, { env: { ANTHROPIC_API_KEY: "sk-ant-api-should-not-pass", TERM: "screen-256color" } });
   const a = await f.saved("A");
   if (loggedIn)
     f.store().update((s) => {
@@ -22,6 +22,7 @@ async function setup(t: any, loggedIn = true) {
 echo "dir=$CLAUDE_CONFIG_DIR" >> "${log}"
 echo "args=$*" >> "${log}"
 echo "key=$ANTHROPIC_API_KEY" >> "${log}"
+echo "term=$TERM colorterm=$COLORTERM" >> "${log}"
 ls "${locks}/${a.id}" | wc -l | tr -d ' ' | sed 's/^/locks=/' >> "${log}"
 exit 7
 `,
@@ -39,6 +40,8 @@ test("run starts Claude Code with the account's profile and passes its exit code
   assert.match(out, /args=--resume x/);
   assert.match(out, /key=\n/);
   assert.match(out, /locks=1/);
+  // The user's own terminal, not the app's xterm.js.
+  assert.match(out, /term=screen-256color colorterm=\n/);
   assert.deepEqual(profileLockHolders(locks, a.id), []);
 });
 

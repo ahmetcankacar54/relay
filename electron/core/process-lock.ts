@@ -15,10 +15,14 @@ export interface LockInfo {
 
 export class LockBusyError extends Error {
   constructor(readonly holder: LockInfo) {
+    // Fixed sentences, so the app can show them in Turkish (src/messages.ts); the relay CLI
+    // describes the holder itself.
     super(
-      holder.by === "unknown"
-        ? "Another Relay process holds the lock."
-        : `Relay ${holder.by === "app" ? "(the app)" : "(a terminal)"} is busy with ${holder.kind}, since ${holder.startedAt}.`,
+      holder.by === "app"
+        ? "Relay.app is using Claude Desktop. Try again when it ends."
+        : holder.by === "cli"
+          ? "A relay command in a terminal is using Claude Desktop. Try again when it ends."
+          : "Another Relay process is using Claude Desktop. Try again when it ends.",
     );
   }
 }
@@ -60,7 +64,6 @@ export function holderAlive(
   } catch (error: any) {
     if (error.code === "ESRCH") return false;
   }
-  if (pid === process.pid) return true;
   const written = Date.parse(startedAt);
   const began = (deps.startedAt ?? processStartedAt)(pid);
   // The pid runs: when its start time cannot be read, it is the holder until shown otherwise.
@@ -165,10 +168,13 @@ export class ProcessLock {
         throw error;
       }
       last = this.read();
+      // Released between the create and this read: try to create it again.
+      if (!last && !fs.existsSync(this.file)) continue;
       if (!last) {
         // Another process may be writing it this instant: look once more.
         sleepSync(20);
         last = this.read();
+        if (!last && !fs.existsSync(this.file)) continue;
       }
       if (!last || last.by === "unknown") {
         // Still unreadable: a writer that died mid-write long ago is stale.

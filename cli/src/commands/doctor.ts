@@ -56,7 +56,9 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
     "vault",
     vault.kind === "legacy" || vault.kind === "newer" ? "fail" : "ok",
     vault.kind === "legacy"
-      ? t("eski biçim: Relay.app'i 0.12 veya üstüne güncelleyip bir kez açın", "old format: update Relay.app to 0.12 or later and open it once")
+      ? ctx.appVersion && !olderThan(ctx.appVersion, "0.12.0")
+        ? t("eski biçim: Relay.app'i açıp Keychain sorusuna izin verin", "old format: open Relay.app and allow its Keychain prompt")
+        : t("eski biçim: Relay.app'i 0.12 veya üstüne güncelleyip bir kez açın", "old format: update Relay.app to 0.12 or later and open it once")
       : vault.kind === "newer"
         ? t("daha yeni bir Relay yazmış: relay'i güncelleyin", "written by a newer Relay: update relay")
         : vault.kind === "empty"

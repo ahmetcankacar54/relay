@@ -1,7 +1,7 @@
 import { readObject } from "../../../electron/core/desktop-files";
 import type { Command } from "../command";
 import { openContext } from "../context";
-import { historyModeText, relayAppRunning, seconds } from "../describe";
+import { historyModeText, lockHolderText, relayAppRunning, seconds } from "../describe";
 import { paint, printJson } from "../output";
 import { lastWorkerRecord, writeWorkerRecord } from "../inside-desktop";
 
@@ -91,20 +91,13 @@ export const status: Command = async ({ io, deps, parsed, t }) => {
           : t("kurulu değil", "not installed")
     }`,
   );
-  if (holder) {
-    const by =
-      holder.by === "app"
-        ? "Relay.app"
-        : holder.by === "cli"
-          ? t("Başka bir relay komutu", "Another relay command")
-          : t("Başka bir Relay işlemi", "Another Relay process");
+  if (holder)
     lines.push(
       t(
-        `Kilit: ${by} bir Desktop işlemi yapıyor (${holder.kind}, ${seconds(holder.startedAt, io.now())} sn)`,
-        `Lock: ${by} is running a Desktop operation (${holder.kind}, ${seconds(holder.startedAt, io.now())} s)`,
+        `Kilit: ${lockHolderText(holder, t)} (${seconds(holder.startedAt, io.now())} sn)`,
+        `Lock: ${lockHolderText(holder, t)} (${seconds(holder.startedAt, io.now())} s)`,
       ),
     );
-  }
   if (ctx.vault.kind === "legacy")
     lines.push(t("Kasa: eski biçimde → Relay.app'i 0.12 veya üstüne güncelleyip bir kez açın", "Vault: old format → update Relay.app to 0.12 or later and open it once"));
   if (ctx.vault.kind === "newer")

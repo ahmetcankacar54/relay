@@ -26,7 +26,7 @@ export class DesktopLock {
   constructor(
     private readonly changed: () => void = () => {},
     private readonly fileLock?: {
-      acquire(kind: "operation" | "restore"): void;
+      acquire(kind: "desktop-task" | "draft-retype"): void;
       release(): void;
     },
   ) {}
@@ -102,7 +102,9 @@ export class DesktopLock {
     let fileHeld = false;
     try {
       try {
-        this.fileLock?.acquire(kind);
+        // Named for the other process: a draft restore re-types a draft; any other holder does a
+        // Desktop task (a DesktopManager operation inside it names itself no further).
+        this.fileLock?.acquire(kind === "restore" ? "draft-retype" : "desktop-task");
         fileHeld = !!this.fileLock;
       } catch (error) {
         // Another Relay process runs a Desktop operation: a draft restore gives up, as it

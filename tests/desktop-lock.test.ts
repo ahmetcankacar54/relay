@@ -411,14 +411,14 @@ test("an operation whose file lock is busy rejects and frees the queue", async (
   assert.equal(lock.active, false);
   busy = false;
   assert.equal(await lock.run(async () => 7), 7);
-  assert.deepEqual(taken, ["+operation", "-"]);
+  assert.deepEqual(taken, ["+desktop-task", "-"]);
 });
 
 test("a draft restore gives up when another process holds the file lock", async () => {
   const holder = { pid: 1, token: "t", by: "cli" as const, kind: "switch", startedAt: new Date().toISOString() };
   const lock = new DesktopLock(() => {}, {
     acquire: (kind) => {
-      if (kind === "restore") throw new LockBusyError(holder);
+      if (kind === "draft-retype") throw new LockBusyError(holder);
     },
     release: () => {},
   });
@@ -432,4 +432,12 @@ test("a draft restore gives up when another process holds the file lock", async 
   );
   assert.equal(ran, false);
   assert.equal(lock.callers, 0);
+});
+
+test("the app names its holders for the other process: a Desktop task, or a draft being re-typed", async () => {
+  const kinds: string[] = [];
+  const lock = new DesktopLock(() => {}, { acquire: (kind) => void kinds.push(kind), release: () => {} });
+  await lock.run(async () => {});
+  await lock.restore(async () => 1);
+  assert.deepEqual(kinds, ["desktop-task", "draft-retype"]);
 });

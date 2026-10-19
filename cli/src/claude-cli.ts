@@ -1,5 +1,5 @@
 import os from "node:os";
-import { profileEnvironment } from "../../electron/core/environment";
+import { cliEnvironment } from "./environment";
 import type { CliDeps } from "./deps";
 
 /**
@@ -17,7 +17,7 @@ export function runClaude(
   return new Promise((resolve, reject) => {
     const child = deps.spawn(executable, args, {
       cwd: options.cwd ?? profile,
-      env: profileEnvironment(profile, options.env ?? process.env),
+      env: cliEnvironment(profile, options.env ?? process.env),
       stdio: options.inherit ? "inherit" : "ignore",
     });
     const timer =

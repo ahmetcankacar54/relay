@@ -100,3 +100,16 @@ test("status and list never write the registry", async (t) => {
   await f.run("list");
   assert.equal(fs.statSync(file).mtimeMs, before);
 });
+
+test("a lock held for an app task is described in words, not as a raw kind", async (t) => {
+  const f = await cliFixture(t);
+  await f.saved("A");
+  await f.saved("B"); // B is open in Claude, so switching to A needs the lock
+  const child = await holdInChild(path.join(f.home, "desktop-vault", "operation.lock"), "draft-retype", "app");
+  t.after(() => child.kill());
+  await f.run("status");
+  assert.match(f.out(), /re-typing a draft/);
+  f.clear();
+  assert.equal(await f.run("switch", "A", "--yes"), 3);
+  assert.match(f.err(), /Relay\.app is re-typing a draft/);
+});
