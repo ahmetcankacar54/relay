@@ -2,6 +2,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type MouseEvent,
   type PointerEvent,
   type ReactNode,
 } from "react";
@@ -27,12 +28,25 @@ const KEY_MOVES: Record<
   End: (_, last) => last,
 };
 
+/** Where bar `day` is centred, as a share of the chart's width. */
+export const barCentre = (
+  { width, left, step }: Omit<DayBars, "count">,
+  day: number,
+) => (left + day * step + step / 2) / width;
+
 /**
  * Which day of a bar chart is shown in detail. The pointer picks the day under it; with the chart
  * focused, ←/→ move one day, Home/End jump to either end and Escape lets go. `chart` goes on the <svg>;
- * `at` is the active bar's centre as a share of the chart's width, for `DayTooltip`.
+ * `at` is the active bar's centre as a share of the chart's width, for `DayTooltip`. With `onPick`,
+ * a click on a day, or Enter or Space on the active one, picks it.
  */
-export function useDayHover({ width, left, step, count }: DayBars) {
+export function useDayHover({
+  width,
+  left,
+  step,
+  count,
+  onPick,
+}: DayBars & { onPick?: (day: number) => void }) {
   const [active, setActive] = useState<number>();
   const ref = useRef<SVGSVGElement>(null);
   const dayAt = (clientX: number) => {
@@ -42,20 +56,27 @@ export function useDayHover({ width, left, step, count }: DayBars) {
     const day = Math.floor((x - left) / step);
     return day >= 0 && day < count ? day : undefined;
   };
+  const shown = active !== undefined && active < count ? active : undefined;
   const onKeyDown = (event: KeyboardEvent<SVGSVGElement>) => {
     if (event.key === "Escape") return setActive(undefined);
+    if ((event.key === "Enter" || event.key === " ") && onPick) {
+      if (shown === undefined) return;
+      event.preventDefault();
+      return onPick(shown);
+    }
     const move = KEY_MOVES[event.key];
     if (!move) return;
     event.preventDefault();
     setActive(move(active, count - 1));
   };
-  const shown = active !== undefined && active < count ? active : undefined;
+  const onClick = (event: MouseEvent<SVGSVGElement>) => {
+    const day = dayAt(event.clientX);
+    if (day !== undefined) onPick?.(day);
+  };
   return {
     active: shown,
     at:
-      shown === undefined
-        ? undefined
-        : (left + shown * step + step / 2) / width,
+      shown === undefined ? undefined : barCentre({ width, left, step }, shown),
     chart:
       count > 0
         ? {
@@ -66,6 +87,7 @@ export function useDayHover({ width, left, step, count }: DayBars) {
             onPointerLeave: () => setActive(undefined),
             onBlur: () => setActive(undefined),
             onKeyDown,
+            ...(onPick ? { onClick } : {}),
           }
         : { ref },
   };
