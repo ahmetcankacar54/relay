@@ -85,7 +85,7 @@ export function PandaBench({
       role="group"
       aria-label={t("Pandanın anlattığı gün", "The day the panda explains")}
       data-slot="panda-bench"
-      className="token-bench absolute top-10 z-20 w-72 rounded-xl border bg-popover px-3 pt-3 pb-2.5 text-xs text-popover-foreground shadow-lg @max-[38rem]:relative @max-[38rem]:top-auto @max-[38rem]:right-auto! @max-[38rem]:left-auto! @max-[38rem]:mt-12 @max-[38rem]:w-full"
+      className="token-bench absolute top-10 z-20 w-80 rounded-xl border bg-popover px-3 pt-3 pb-2.5 text-xs text-popover-foreground shadow-lg @max-[38rem]:relative @max-[38rem]:top-auto @max-[38rem]:right-auto! @max-[38rem]:left-auto! @max-[38rem]:mt-12 @max-[38rem]:w-full"
       style={
         at > 0.5
           ? { right: `calc(${(1 - at) * 100}% + 14px)` }
@@ -105,8 +105,10 @@ export function PandaBench({
         )}
       </span>
       <div className="flex items-baseline justify-between gap-3 pl-16">
-        <b className="font-semibold">{formatDayLong(date, language)}</b>
-        <span className="tabular-nums">
+        <b className="font-semibold whitespace-nowrap">
+          {formatDayLong(date, language)}
+        </b>
+        <span className="whitespace-nowrap tabular-nums">
           <span className="text-muted-foreground">{t("Toplam", "Total")} </span>
           <b>
             {estimated && (

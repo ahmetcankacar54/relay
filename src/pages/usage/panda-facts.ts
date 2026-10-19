@@ -47,12 +47,12 @@ export const BOOKS: readonly Book[] = [
 const BOOK_BAND = 1_000;
 const TOKENS_PER_WORD = 1.3;
 const WORDS_PER_MINUTE = 238;
-/** Cache reads from this share of the day make the panda's first line. */
-const CACHE_LINE_SHARE = 0.5;
+/** A printed page: about 500 words. */
+const TOKENS_PER_PAGE = 500 * TOKENS_PER_WORD;
 /** The top row carries the day from this share. */
 const CARRIED_SHARE = 0.6;
-/** Output below this share is worth a line. */
-const OUTPUT_LINE_SHARE = 0.05;
+/** A day is ranked against the range's ordinary day only with this many active days. */
+const MIN_ACTIVE_DAYS = 5;
 
 export interface PandaLine {
   key: string;
@@ -102,18 +102,96 @@ export function pickBook(tokens: number, seed: string): Book | undefined {
   return [...BOOKS].reverse().find((book) => tokens >= book.tokens);
 }
 
-/** "≈ 3,1 Tutunamayanlar" / "≈ 3.1× The Disconnected", or "about one …" between 1 and 2. */
+/** "≈ 12 Hobbit kadar" / "≈ 12× The Hobbit", or "about one …" between 1 and 2. */
 function bookAmount(tokens: number, book: Book) {
   const times = tokens / book.tokens;
   return times < 2
     ? {
         tr: `aşağı yukarı bir ${book.tr} kadar`,
-        en: `about as much as ${book.en}`,
+        en: `about one ${book.en}`,
       }
     : {
-        tr: `≈ ${formatTimes(times, "tr")} ${book.tr}`,
+        tr: `≈ ${formatTimes(times, "tr")} ${book.tr} kadar`,
         en: `≈ ${formatTimes(times, "en")}× ${book.en}`,
       };
+}
+
+/** "6.600" pages: two significant digits, at least one. */
+function formatPages(tokens: number, language: Language) {
+  return new Intl.NumberFormat(locale(language), {
+    maximumSignificantDigits: 2,
+  }).format(Math.max(1, tokens / TOKENS_PER_PAGE));
+}
+
+/** "2,9 milyar" / "2.9 billion": a count spelled out for a sentence. */
+export function formatCount(value: number, language: Language) {
+  return new Intl.NumberFormat(locale(language), {
+    notation: "compact",
+    compactDisplay: "long",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+/** How much less than an ordinary day a quiet one is, in words. */
+function quietFraction(ratio: number) {
+  if (ratio <= 0.1)
+    return { tr: "onda birinden az", en: "less than a tenth of" };
+  if (ratio <= 0.25)
+    return { tr: "dörtte birinden az", en: "less than a quarter of" };
+  if (ratio <= 1 / 3)
+    return { tr: "üçte birinden az", en: "less than a third of" };
+  return { tr: "yarısından az", en: "less than half of" };
+}
+
+const ORDINAL_EN = ["", "", "second ", "third "];
+
+/**
+ * Where the day stands among the range's active days: its rank when it is one of the three busiest, else
+ * how it compares with an ordinary day (the median active day). Undefined with too few active days.
+ */
+function rankLine(
+  view: TokenUsageView,
+  date: string,
+  total: number,
+): PandaLine | undefined {
+  const totals = view.days
+    .map((day) =>
+      Object.values(day.byRow).reduce((sum, cell) => sum + kindsTotal(cell), 0),
+    )
+    .filter((value) => value > 0)
+    .sort((a, b) => b - a);
+  if (totals.length < MIN_ACTIVE_DAYS) return undefined;
+  const ordinary = totals[Math.floor(totals.length / 2)];
+  const ratio = total / ordinary;
+  const rank = totals.indexOf(total) + 1;
+  const times = { tr: formatTimes(ratio, "tr"), en: formatTimes(ratio, "en") };
+  const range = view.range;
+  // A top-three day is named only when it stands out, so days alike do not all claim to be the busiest.
+  if (rank >= 1 && rank <= 3 && ratio >= 1.2)
+    return {
+      key: "rank",
+      tr: `Bu ${range} günün en yoğun ${rank === 1 ? "" : `${rank}. `}günü: sıradan bir gününün ${times.tr} katı.`,
+      en: `The ${ORDINAL_EN[rank]}busiest of these ${range} days: ${times.en}× an ordinary day.`,
+    };
+  if (ratio >= 1.5)
+    return {
+      key: "rank",
+      tr: `Yoğun bir gün: sıradan bir gününün ${times.tr} katı.`,
+      en: `A busy day: ${times.en}× an ordinary day.`,
+    };
+  if (ratio < 0.5) {
+    const fraction = quietFraction(ratio);
+    return {
+      key: "rank",
+      tr: `Sakin bir gün: sıradan bir gününün ${fraction.tr}.`,
+      en: `A quiet day: ${fraction.en} an ordinary day.`,
+    };
+  }
+  return {
+    key: "rank",
+    tr: "Sıradan bir gün; ne fazla ne az.",
+    en: "An ordinary day, no more and no less.",
+  };
 }
 
 /** How long a person would read `tokens` without stopping: minutes, hours, days, months or years. */
@@ -209,21 +287,27 @@ export function pandaLines(input: DayInput): PandaLine[] {
     ];
   const lines: PandaLine[] = [];
   const share = (value: number, of = total) => value / of;
-  const cache = share(kinds.cacheRead);
-  if (cache >= CACHE_LINE_SHARE)
+  const isToday = date === today;
+  const rank = rankLine(view, date, total);
+  if (rank) lines.push(rank);
+  // What Claude wrote: its output, in pages and in a book.
+  if (kinds.output >= TOKENS_PER_PAGE) {
+    const book = pickBook(kinds.output, `${date}:wrote`);
+    const amount = book && bookAmount(kinds.output, book);
     lines.push({
-      key: "cache",
-      tr: `Bu sütunu söktüm: ${formatShare(cache, "tr")} önbellek okuması çıktı. Çoğunu daha önce görmüştük.`,
-      en: `I took this bar apart: ${formatShare(cache, "en")} of it was cache reads. We’d seen most of it before.`,
+      key: "wrote",
+      tr: `Claude ${isToday ? "bugün" : "bu gün"} ≈ ${formatPages(kinds.output, "tr")} sayfa yazdı${amount ? `; ${amount.tr}` : ""}.`,
+      en: `Claude wrote ≈ ${formatPages(kinds.output, "en")} pages ${isToday ? "today" : "this day"}${amount ? `, ${amount.en}` : ""}.`,
     });
-  const said = kinds.input + kinds.output;
-  const book = pickBook(said, `${date}:day`);
-  if (book) {
-    const amount = bookAmount(said, book);
+  }
+  // What it read to do so: everything it was given, cached or not.
+  const read = kinds.input + kinds.cacheWrite + kinds.cacheRead;
+  if (read > 0) {
+    const time = readingTime(read);
     lines.push({
-      key: "book-day",
-      tr: `${date === today ? "Bugünün" : "Bu günün"} girdi ve çıktısı ${amount.tr} eder.`,
-      en: `${date === today ? "Today’s" : "This day’s"} input and output come to ${amount.en}.`,
+      key: "read",
+      tr: `Claude ${isToday ? "bugün" : "bu gün"} ${formatCount(read, "tr")} token okudu; bir insan durmadan okusa ${time.tr} sürerdi.`,
+      en: `Claude read ${formatCount(read, "en")} tokens ${isToday ? "today" : "this day"}; a person reading nonstop would need ${time.en}.`,
     });
   }
   // Only an account carries a day, and only when the range has more than one row to choose from.
@@ -242,35 +326,20 @@ export function pandaLines(input: DayInput): PandaLine[] {
       tr: `Bu günün yükünü büyük ölçüde ${carrier} çekti: ${formatShare(share(top.total), "tr")}.`,
       en: `${carrier} pulled most of this day: ${formatShare(share(top.total), "en")}.`,
     });
-  const output = share(kinds.output);
-  if (output < OUTPUT_LINE_SHARE)
-    lines.push({
-      key: "output",
-      tr: `Claude’un kendi yazdığı kısım sadece ${formatShare(output, "tr")}; gerisi okuma ve hatırlama.`,
-      en: `Claude itself wrote only ${formatShare(output, "en")}; the rest was reading and remembering.`,
-    });
-  if (kinds.cacheRead > 0) {
-    const time = readingTime(kinds.cacheRead);
-    lines.push({
-      key: "reading",
-      tr: `Önbellekten okunanı bir insan durmadan okusa ${time.tr} sürerdi.`,
-      en: `A person reading the cache reads nonstop would need ${time.en}.`,
-    });
-  }
   if (estimated)
     lines.push({
       key: "estimated",
       tr: "Bu günü limit ölçümlerinden tahmin ettim; ≈ işaretleri ondan.",
       en: "I worked this day out from limit readings; that is what the ≈ marks mean.",
     });
-  const rangeSaid = view.totals.input + view.totals.output;
-  const rangeBook = pickBook(rangeSaid, `${date}:range`);
-  if (rangeBook) {
-    const amount = bookAmount(rangeSaid, rangeBook);
+  const rangeWrote = view.totals.output;
+  if (rangeWrote >= TOKENS_PER_PAGE) {
+    const book = pickBook(rangeWrote, `${date}:range`);
+    const amount = book && bookAmount(rangeWrote, book);
     lines.push({
-      key: "book-range",
-      tr: `Bu ${view.range} günde girdi ve çıktın ${amount.tr}.`,
-      en: `Your input and output over these ${view.range} days: ${amount.en}.`,
+      key: "range-wrote",
+      tr: `Bu ${view.range} günde Claude ≈ ${formatPages(rangeWrote, "tr")} sayfa yazdı${amount ? `; ${amount.tr}` : ""}.`,
+      en: `Over these ${view.range} days Claude wrote ≈ ${formatPages(rangeWrote, "en")} pages${amount ? `, ${amount.en}` : ""}.`,
     });
   }
   const models = view.models

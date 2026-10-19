@@ -538,19 +538,20 @@ test("the panda takes the busiest day apart: its parts, its lines one by one, a 
     const bench = textOf(slot("panda-bench"));
     assert.match(bench, /^14 Ekim ÇarşambaToplam 2,2 Mn/);
     assert.match(bench, /Önbellek okuma805 B %37Önbellek yazma50 B %2,3Girdi1,1 Mn %51Çıktı220 B %10/);
-    assert.match(line(), /^Bugünün girdi ve çıktısı .+ eder\.$/);
+    // 220 000 output tokens are about 340 pages.
+    assert.match(line(), /^Claude bugün ≈ 340 sayfa yazdı; .+ kadar\.$/);
     // Screen readers hear the day and the line once, when asked.
     assert.equal(textOf(slot("panda-say")), `14 Ekim Çarşamba: ${line()}`);
     assert.equal(textOf(slot("token-stamp")), "Bunu daha önce gördük");
     assert.equal(classed("token-taken"), 1);
     await click("Bir daha");
-    assert.equal(line(), "Bu günün yükünü büyük ölçüde Kişisel · Max çekti: %94.");
-    assert.equal(textOf(slot("panda-say")), "14 Ekim Çarşamba: Bu günün yükünü büyük ölçüde Kişisel · Max çekti: %94.");
+    assert.equal(line(), "Claude bugün 2 milyon token okudu; bir insan durmadan okusa 4 gün sürerdi.");
+    assert.equal(textOf(slot("panda-say")), "14 Ekim Çarşamba: Claude bugün 2 milyon token okudu; bir insan durmadan okusa 4 gün sürerdi.");
     await click("Bir daha");
-    assert.equal(line(), "Önbellekten okunanı bir insan durmadan okusa 43 saat sürerdi.");
+    assert.equal(line(), "Bu günün yükünü büyük ölçüde Kişisel · Max çekti: %94.");
     // Asking about the same day again is one more line, too.
     await click("Panda anlatsın");
-    assert.match(line(), /^Bu 7 günde girdi ve çıktın/);
+    assert.match(line(), /^Bu 7 günde Claude ≈ 500 sayfa yazdı/);
     await click("Kapat");
     assert.equal(slot("panda-bench"), undefined);
     assert.equal(textOf(slot("panda-say")), "");
@@ -584,7 +585,7 @@ test("clicking a bar or pressing Enter on it explains that day, and Escape puts 
     await act(async () => dom.dispatch(svg, "keydown", { key: "ArrowLeft" }));
     await act(async () => dom.dispatch(svg, "keydown", { key: "Enter" }));
     assert.match(textOf(slot("panda-bench")), /^13 Ekim SalıToplam ≈tahmini 1 Mn/);
-    assert.match(textOf(slot("panda-line")), /^Bu günün girdi ve çıktısı .+ eder\.$/);
+    assert.match(textOf(slot("panda-line")), /^Claude bu gün ≈ 150 sayfa yazdı/);
     // The hover box waits while the workbench is open.
     assert.equal(dayTip(container), undefined);
     // Escape on the chart only closes the bench: the 13th stays the active day, and its hover box comes back.

@@ -84,36 +84,73 @@ test("model ids read as family and version, without a date", () => {
   assert.equal(modelName("2024"), "2024");
 });
 
-test("a cache-heavy day opens with the taken-apart peak, and a thin output gets its line", () => {
-  const view = viewOf({ "2026-10-13": { a: cell(counts(10_000, 9_000, 61_000, 920_000)) } });
-  const all = lines(view, "2026-10-13");
-  assert.deepEqual(all.map((l) => l.key), ["cache", "carried", "output", "reading"]);
-  assert.equal(all[0].tr, "Bu sütunu söktüm: %92 önbellek okuması çıktı. Çoğunu daha önce görmüştük.");
-  assert.equal(all[0].en, "I took this bar apart: 92% of it was cache reads. We’d seen most of it before.");
-  assert.equal(all[1].tr, "Bu günü tek başına Kişisel taşıdı.");
-  assert.equal(all[2].tr, "Claude’un kendi yazdığı kısım sadece %0,9; gerisi okuma ve hatırlama.");
-  // In plus out (19 000) is under the smallest book: no comparison.
-  assert.ok(!all.some((l) => l.key === "book-day"));
-});
+/** A view of one day per total, ending on the 14th, every day's tokens cache reads. */
+function daysOf(totals: number[]): TokenUsageView {
+  const end = Date.parse(`${TODAY}T12:00:00Z`);
+  return viewOf({}, {
+    days: totals.map((total, i) => ({
+      date: new Date(end - (totals.length - 1 - i) * 86_400_000).toISOString().slice(0, 10),
+      byRow: (total ? { a: cell(counts(0, 0, 0, total)) } : {}) as ByRow,
+    })),
+  });
+}
+const rankOf = (totals: number[], day: number) => {
+  const view = daysOf(totals);
+  return lines(view, view.days[day].date).find((l) => l.key === "rank");
+};
 
-test("the day's comparison counts only input and output, and says Bugünün for today", () => {
-  const view = viewOf({ [TODAY]: { a: cell(counts(500_000, 100_000, 0, 5_000_000)) } });
-  const day = lines(view, TODAY).find((l) => l.key === "book-day")!;
-  assert.match(day.tr, /^Bugünün girdi ve çıktısı (≈ [\d,]+ .+|aşağı yukarı bir .+ kadar) eder\.$/);
-  assert.match(day.en, /^Today’s input and output come to (≈ [\d.]+× .+|about as much as .+)\.$/);
+test("a day says what Claude wrote, in pages and a book, and what it read, in reading time", () => {
+  const view = viewOf({ [TODAY]: { a: cell(counts(50_000, 650_000, 0, 2_899_950_000)) } });
+  const all = lines(view, TODAY);
+  // The cache share is the same nearly every day, so it is no line.
+  assert.deepEqual(all.map((l) => l.key), ["wrote", "read", "carried"]);
+  // 650 000 tokens are 1,000 pages of 500 words.
+  assert.match(all[0].tr, /^Claude bugün ≈ 1\.000 sayfa yazdı; (≈ [\d,]+ .+|aşağı yukarı bir .+) kadar\.$/);
+  assert.match(all[0].en, /^Claude wrote ≈ 1,000 pages today, (≈ [\d.]+× .+|about one .+)\.$/);
+  // 2.9 billion tokens at 238 words a minute.
+  assert.equal(all[1].tr, "Claude bugün 2,9 milyar token okudu; bir insan durmadan okusa 18 yıl sürerdi.");
+  assert.equal(all[1].en, "Claude read 2.9 billion tokens today; a person reading nonstop would need 18 years.");
   const earlier = viewOf({ "2026-10-12": { a: cell(counts(500_000, 100_000)) } });
-  assert.match(lines(earlier, "2026-10-12").find((l) => l.key === "book-day")!.tr, /^Bu günün girdi ve çıktısı/);
+  const past = lines(earlier, "2026-10-12");
+  assert.match(past[0].tr, /^Claude bu gün ≈ 150 sayfa yazdı/);
+  assert.match(past[1].tr, /^Claude bu gün 500 bin token okudu;/);
+  assert.match(past[1].en, /^Claude read 500 thousand tokens this day;/);
+  // Under a page of output there is nothing to say about writing.
+  assert.deepEqual(keys(viewOf({ [TODAY]: { a: cell(counts(1_000, 649)) } }), TODAY), ["read", "carried"]);
 });
 
 test("between once and twice a book the panda says about one; above it, how many times", () => {
-  // 600 000 is at least once only for books up to 576k; force the Lord of the Rings by leaving nothing else in the band.
   const lotr = BOOKS.find((b) => b.en === "The Lord of the Rings")!;
-  const once = lines(viewOf({ [TODAY]: { a: cell(counts(lotr.tokens * 1.5)) } }), TODAY)
-    .find((l) => l.key === "book-day")!;
-  const named = BOOKS.find((b) => once.tr.includes(b.tr))!;
+  const wrote = lines(viewOf({ [TODAY]: { a: cell(counts(0, lotr.tokens * 1.5)) } }), TODAY)
+    .find((l) => l.key === "wrote")!;
+  const named = [...BOOKS].reverse().find((b) => wrote.tr.includes(b.tr))!;
   const times = (lotr.tokens * 1.5) / named.tokens;
-  if (times < 2) assert.equal(once.tr, `Bugünün girdi ve çıktısı aşağı yukarı bir ${named.tr} kadar eder.`);
-  else assert.match(once.tr, new RegExp(`≈ [\\d,]+ ${named.tr} eder\\.$`));
+  if (times < 2) assert.match(wrote.tr, new RegExp(`; aşağı yukarı bir ${named.tr} kadar\\.$`));
+  else assert.match(wrote.tr, new RegExp(`; ≈ [\\d,]+ ${named.tr} kadar\\.$`));
+});
+
+test("a day is placed among the range's active days: top three, busy, ordinary or quiet", () => {
+  // The ordinary day is the median active day: 400 here.
+  const week = [100, 200, 300, 400, 500, 600, 2_400];
+  assert.deepEqual(rankOf(week, 6), {
+    key: "rank",
+    tr: "Bu 7 günün en yoğun günü: sıradan bir gününün 6 katı.",
+    en: "The busiest of these 7 days: 6× an ordinary day.",
+  });
+  assert.equal(rankOf(week, 5)!.tr, "Bu 7 günün en yoğun 2. günü: sıradan bir gününün 1,5 katı.");
+  assert.equal(rankOf(week, 5)!.en, "The second busiest of these 7 days: 1.5× an ordinary day.");
+  assert.equal(rankOf(week, 4)!.en, "The third busiest of these 7 days: 1.3× an ordinary day.");
+  assert.equal(rankOf(week, 3)!.tr, "Sıradan bir gün; ne fazla ne az.");
+  assert.equal(rankOf(week, 0)!.tr, "Sakin bir gün: sıradan bir gününün dörtte birinden az.");
+  assert.equal(rankOf(week, 0)!.en, "A quiet day: less than a quarter of an ordinary day.");
+  // Busy but fourth: the median of nine days is 10.
+  const busy = [10, 10, 10, 10, 10, 20, 30, 40, 50];
+  assert.equal(rankOf(busy, 5)!.tr, "Yoğun bir gün: sıradan bir gününün 2 katı.");
+  // Days alike do not claim to be the busiest.
+  assert.equal(rankOf([100, 100, 100, 100, 100], 0)!.tr, "Sıradan bir gün; ne fazla ne az.");
+  assert.equal(rankOf([1, 100, 100, 100, 100], 0)!.tr, "Sakin bir gün: sıradan bir gününün onda birinden az.");
+  // With fewer than five active days there is nothing to compare with.
+  assert.equal(rankOf([0, 0, 100, 200, 300, 400], 5), undefined);
 });
 
 test("the account that carried most of a shared day is named with its share; an even day names nobody", () => {
@@ -141,7 +178,7 @@ test("nobody carries a day when the range has one row, or when the top row is no
   assert.ok(!keys(unknown, TODAY).includes("carried"));
 });
 
-test("an estimated day says so; the range gets its book and its busiest model", () => {
+test("an estimated day says so; the range says how much Claude wrote and its busiest model", () => {
   const view = viewOf(
     { "2026-10-13": { a: cell(counts(900_000, 100_000), true) } },
     {
@@ -154,11 +191,12 @@ test("an estimated day says so; the range gets its book and its busiest model", 
     },
   );
   const all = lines(view, "2026-10-13");
-  assert.deepEqual(all.map((l) => l.key), ["book-day", "carried", "estimated", "book-range", "model"]);
-  assert.equal(all[2].tr, "Bu günü limit ölçümlerinden tahmin ettim; ≈ işaretleri ondan.");
-  assert.match(all[3].tr, /^Bu 30 günde girdi ve çıktın (≈ [\d,]+ .+|aşağı yukarı bir .+ kadar)\.$/);
-  assert.equal(all[4].tr, "Bu aralıkta en çok Opus 5.5 çalıştı: %64.");
-  assert.equal(all[4].en, "Opus 5.5 worked the most in this range: 64%.");
+  assert.deepEqual(all.map((l) => l.key), ["wrote", "read", "carried", "estimated", "range-wrote", "model"]);
+  assert.equal(all[3].tr, "Bu günü limit ölçümlerinden tahmin ettim; ≈ işaretleri ondan.");
+  assert.match(all[4].tr, /^Bu 30 günde Claude ≈ 4\.600 sayfa yazdı; (≈ [\d,]+ .+|aşağı yukarı bir .+) kadar\.$/);
+  assert.match(all[4].en, /^Over these 30 days Claude wrote ≈ 4,600 pages, /);
+  assert.equal(all[5].tr, "Bu aralıkta en çok Opus 5.5 çalıştı: %64.");
+  assert.equal(all[5].en, "Opus 5.5 worked the most in this range: 64%.");
 });
 
 test("an empty day only dozes", () => {
