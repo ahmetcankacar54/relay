@@ -508,7 +508,7 @@ test("the arrow keys walk the days, the detail marks estimates and empty days, a
   }
 });
 
-test("the panda takes the busiest day apart: its parts, its lines one by one, a stamp, and a crooked bar after", async () => {
+test("the panda takes the busiest day apart: its parts, its lines one by one, and a crooked bar after", async () => {
   const dom = fakeDom();
   dom.install();
   readableText();
@@ -532,7 +532,6 @@ test("the panda takes the busiest day apart: its parts, its lines one by one, a 
       return count(container);
     };
     assert.equal(slot("panda-bench"), undefined);
-    assert.equal(slot("token-stamp"), undefined);
     await click("Panda anlatsın");
     // The 14th is the busiest day: 2.2 million, mostly Kişisel · Max.
     const bench = textOf(slot("panda-bench"));
@@ -542,7 +541,6 @@ test("the panda takes the busiest day apart: its parts, its lines one by one, a 
     assert.match(line(), /^Claude bugün ≈ 340 sayfa yazdı; .+ kadar\.$/);
     // Screen readers hear the day and the line once, when asked.
     assert.equal(textOf(slot("panda-say")), `14 Ekim Çarşamba: ${line()}`);
-    assert.equal(textOf(slot("token-stamp")), "Bunu daha önce gördük");
     assert.equal(classed("token-taken"), 1);
     await click("Bir daha");
     assert.equal(line(), "Claude bugün 2 milyon token okudu; bir insan durmadan okusa 4 gün sürerdi.");
@@ -555,7 +553,6 @@ test("the panda takes the busiest day apart: its parts, its lines one by one, a 
     await click("Kapat");
     assert.equal(slot("panda-bench"), undefined);
     assert.equal(textOf(slot("panda-say")), "");
-    assert.equal(slot("token-stamp"), undefined);
     assert.equal(classed("token-taken"), 0);
     assert.equal(classed("token-crooked"), 1);
     // A new metric straightens it again.

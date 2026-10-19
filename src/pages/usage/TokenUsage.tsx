@@ -124,16 +124,13 @@ function Tile({
   label,
   value,
   exact,
-  stamp,
 }: {
   label: string;
   value: string;
   exact: string;
-  /** A customs stamp across the tile while the panda talks; the panda's line says the same in words. */
-  stamp?: string;
 }) {
   return (
-    <div data-slot="token-tile" className="relative min-w-0">
+    <div data-slot="token-tile" className="min-w-0">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         title={exact}
@@ -141,38 +138,18 @@ function Tile({
       >
         {value}
       </div>
-      {stamp && (
-        <span
-          aria-hidden="true"
-          data-slot="token-stamp"
-          className="token-stamp pointer-events-none absolute top-1 right-0 rounded border-2 border-crit px-1.5 py-0.5 text-[10px] leading-none font-bold tracking-wider text-crit uppercase opacity-85"
-        >
-          {stamp}
-        </span>
-      )}
     </div>
   );
 }
 
-function Tiles({
-  view,
-  stamped,
-}: {
-  view: TokenUsageView;
-  /** The panda is explaining a day: the cache-read tile gets its stamp. */
-  stamped?: boolean;
-}) {
+function Tiles({ view }: { view: TokenUsageView }) {
   const { t, language } = useI18n();
   const { totals } = view;
-  const tiles: [string, number, string?][] = [
+  const tiles: [string, number][] = [
     [t("Girdi", "Input"), totals.input],
     [t("Çıktı", "Output"), totals.output],
     [t("Önbellek yazma", "Cache write"), totals.cacheWrite],
-    [
-      t("Önbellek okuma", "Cache read"),
-      totals.cacheRead,
-      stamped ? t("Bunu daha önce gördük", "Seen it before") : undefined,
-    ],
+    [t("Önbellek okuma", "Cache read"), totals.cacheRead],
   ];
   const total = totalOf(totals);
   return (
@@ -187,13 +164,12 @@ function Tiles({
         )}
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {tiles.map(([label, value, stamp]) => (
+        {tiles.map(([label, value]) => (
           <Tile
             key={label}
             label={label}
             value={formatTokens(value, language)}
             exact={formatNumber(value, language)}
-            stamp={stamp}
           />
         ))}
       </div>
@@ -689,7 +665,7 @@ function Content({
         )
       ) : (
         <>
-          <Tiles view={view} stamped={explained !== undefined} />
+          <Tiles view={view} />
           {/* The chart's controls: what each row adds up to, and what is counted. */}
           <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-3">
             <Legend view={view} columns={columns} metric={metric} />
