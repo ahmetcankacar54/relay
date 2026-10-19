@@ -619,6 +619,11 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     changed: ["Ekran değişti", "The screen changed"],
     "claude-not-running": ["Claude uygulaması çalışmıyordu", "The Claude app was not running"],
     budget: ["Süre doldu", "Ran out of time"],
+    // Fast restore's watch window ran out before the user opened the conversation.
+    "not-opened": [
+      "Konuşmayı 30 dakika içinde açmadın",
+      "You didn’t open the conversation within 30 minutes",
+    ],
   };
   for (const [reason, [turkish, english]] of Object.entries(labels)) {
     assert.equal(draftReason(reason, tr), turkish, reason);
@@ -647,6 +652,10 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     "exact-session-not-observed": [
       "Yeni oturum ekranı açılamadı",
       "The new-session screen could not be opened",
+    ],
+    "not-opened": [
+      "Yeni oturum ekranını 30 dakika içinde açmadın",
+      "You didn’t open the new-session screen within 30 minutes",
     ],
   };
   for (const [reason, [turkish, english]] of Object.entries(fresh)) {

@@ -29,6 +29,9 @@ import {
 } from "./core/desktop-host";
 import { identity, readObject } from "./core/desktop-files";
 import { DesktopLock } from "./core/desktop-lock";
+import { lastDraftWipeAt } from "./core/desktop-wipe";
+import { nativeDesktopWatch } from "./core/desktop-watch";
+import { IDLE_MS, QUIET_MS } from "./core/draft-restorer";
 import {
   DraftScheduler,
   draftActions,
@@ -502,9 +505,8 @@ else {
             Date.now(),
           ),
       );
-      automation = nativeDesktopAutomation(
-        path.join(__dirname, "desktop-automation"),
-      );
+      const automationHelper = path.join(__dirname, "desktop-automation");
+      automation = nativeDesktopAutomation(automationHelper);
       draftRestore = new DraftScheduler({
         restorer: {
           automation,
@@ -515,6 +517,11 @@ else {
             identity(await readObject(desktop.root, "config.json")),
           running: () => host.running(),
           uptimeMs: () => desktop.claudeUptimeMs(),
+          // Read in place from Claude's live Local Storage: one key, nothing written.
+          wipedAt: () =>
+            lastDraftWipeAt(
+              path.join(desktop.root, "Local Storage", "leveldb"),
+            ),
           withLock: (fn) => desktopLock.restore(fn, () => !desktop.isBusy),
           // The restore holds the lock as one caller: any more are waiting for it.
           yielding: () => desktopLock.callers > 1,
@@ -527,6 +534,10 @@ else {
         drafts: () => desktop.pendingDrafts(),
         changed: broadcastChanged,
         retype: draftRetype,
+        // Where the user is in Claude, while drafts wait: one long-lived helper, macOS only.
+        ...(process.platform === "darwin"
+          ? { watch: nativeDesktopWatch(automationHelper, QUIET_MS, IDLE_MS) }
+          : {}),
       });
       // One hook for every switch: tray, panel, automatic, continuation and fleet.
       desktop.onSwitched = () => void draftRestore.afterSwitch();

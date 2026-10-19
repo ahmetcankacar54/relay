@@ -24,6 +24,12 @@ export interface RestorerDeps {
   currentAccount(): Promise<string | undefined>;
   running(): Promise<boolean>;
   uptimeMs(): Promise<number | undefined>;
+  /**
+   * When Desktop last finished its draft wipe (`chat-draft-wipe-completed-at`, ms since the
+   * epoch), as its Local Storage says; undefined when unknown. Without it, Claude is ready only
+   * once it has run 15 s.
+   */
+  wipedAt?(): Promise<number | undefined>;
   /** Runs `fn` holding Relay's Desktop lock; undefined, without running it, when busy. */
   withLock<T>(fn: () => Promise<T>): Promise<T | undefined>;
   /** True when another caller waits for the Desktop lock while the restore holds it. */
@@ -49,8 +55,12 @@ export type RestoreResult = {
    * Why a run stopped with drafts still pending:
    * - `not-ready`: Desktop's UI never answered;
    * - `busy`: another Desktop operation held the lock, or waited for it;
-   * - `active`: Claude was not in front, or the user had input in the last 3 s, so Relay
-   *   did not open or type anything;
+   * - `active`: Claude was not in front, the user had input in the last 3 s before Relay
+   *   would take them elsewhere, or pressed a key in the last 1 s before Relay would type
+   *   where they are, so Relay did not open or type anything;
+   * - `elsewhere`: a draft's place was not on screen and Relay may not take the user there
+   *   now (the run allows no visits, or where the user is cannot be told, so they could not
+   *   be brought back); it stays pending for the user to open it;
    * - `moved`: the user went to another conversation or screen;
    * - `changed`: Claude's account, uptime or process changed;
    * - `claude-not-running`;
@@ -79,8 +89,18 @@ const placeLabel = (place: Place | undefined): string | null =>
       ? place
       : shortId(place.replace(/^local_/, ""));
 
-/** Desktop wipes its drafts about 6 s after an account loads. Restore only well after that. */
+/**
+ * Desktop wipes its drafts about 2–6 s after an account loads. Without its marker, restore
+ * only once Claude has run this long.
+ */
 const MIN_UPTIME_MS = 15_000;
+/**
+ * `ps etime` counts whole seconds, so Claude's start as Relay works it out may be up to 1 s
+ * late: a wipe this much before it still counts as this launch's.
+ */
+const WIPE_SLACK_MS = 1_000;
+/** How long a run right after a switch waits for Claude to start. */
+const LAUNCH_MS = 10_000;
 const POLL_MS = 500;
 /** How long Desktop's UI may take to answer at all. */
 const READY_MS = 60_000;
@@ -93,8 +113,16 @@ const RECHECK_MS = 5_000;
 const BUDGET_MS = 5 * 60_000;
 /** The longest draft `writeDraft` takes. Longer ones are left for Copy. */
 const MAX_TEXT = 16_384;
-/** How long the user must have left the keyboard and mouse alone before Relay acts. */
-const IDLE_MS = 3_000;
+/**
+ * How long the user must have left the keyboard and mouse alone before Relay takes them to
+ * another place.
+ */
+export const IDLE_MS = 3_000;
+/**
+ * How long no key may have been pressed before Relay types: where the user is, or after it
+ * took them there. A mouse that moves does not count.
+ */
+export const QUIET_MS = 1_000;
 
 /**
  * Ends a run. With `pending`, the draft in hand and those after it stay pending; with `copy`,
@@ -123,11 +151,21 @@ const sameAccount = (a: string | undefined, b: string) =>
   !!a && a.toLowerCase() === b.toLowerCase();
 
 /**
- * Claude is in front and the user has not touched the keyboard or mouse for 3 s, so nothing
- * Relay opens or types meets the user's keystrokes. A view that does not say is not one.
+ * Claude is in front and the user has not touched the keyboard or mouse for 3 s, so Relay may
+ * take them to another place. A view that does not say is not one.
  */
 const letsAct = (view: Snapshot) =>
   view.frontmost === true && (view.idleMs ?? 0) >= IDLE_MS;
+/**
+ * Claude is in front and no key has been pressed for 1 s, so Relay may type where the user
+ * is: none of their keystrokes is on its way to the composer. A view from a helper that does
+ * not tell keys apart needs 3 s without any input.
+ */
+const letsType = (view: Snapshot) =>
+  view.frontmost === true &&
+  (view.keyIdleMs !== undefined
+    ? view.keyIdleMs >= QUIET_MS
+    : (view.idleMs ?? 0) >= IDLE_MS);
 
 /**
  * Why a draft is left for copy once a write was tried: it may be in its composer, unless
@@ -145,6 +183,10 @@ function yieldTo(deps: RestorerDeps): void {
 interface Run {
   account: string;
   pid: number;
+  /** Desktop's wipe is known to be past from its marker, so 15 s of uptime is not needed. */
+  wiped: boolean;
+  /** Relay may take the user to a place not on screen, and back. */
+  visits: boolean;
   /** Set by the first lock's look at the screen. */
   anchored: boolean;
   /** The place the user was on, to take them back to. */
@@ -153,26 +195,47 @@ interface Run {
   lastSeen?: Place;
 }
 
+export interface RestoreOptions {
+  /**
+   * Relay may take the user to a draft's place that is not on screen, and back; true unless
+   * said otherwise. Without, only the drafts whose place is on screen are typed.
+   */
+  visits?: boolean;
+  /** Right after a switch: Claude may still be starting, so the run waits up to 10 s for it. */
+  launching?: boolean;
+}
+
+/** The place a draft is typed into, or undefined when it can only be copied by hand. */
+export const draftPlace = (record: DraftRecord): string | undefined =>
+  typeable(record);
+
 /**
  * Types the drafts captured for Desktop's current account back into the empty composers of
  * their conversations, and of Code's new-session screen for the draft of a session that does
- * not exist yet, once Claude has run 15 s, and takes the user back to where they were. It
- * never sends, and never writes into a composer that is not empty.
+ * not exist yet, once Desktop's draft wipe is past, and takes the user back to where they
+ * were. It never sends, and never writes into a composer that is not empty.
  *
- * It waits for Desktop's UI without the Desktop lock, then takes the lock for each draft and
- * re-checks Claude under it. It acts only while Claude is in front and the user has left it
- * alone for 3 s. It stops, leaving the rest pending, when the lock is busy or another
- * operation waits for it, the user is active or moves, Claude changes or the run passes 5
- * minutes. A draft it cannot type, or cannot see in its composer afterwards, is marked
- * `needs-copy` with the reason: `maybe-typed` once a write was tried, except a write the
- * helper refused for want of accessibility, which typed nothing and stays `accessibility`.
+ * The wipe is past once Desktop's marker says it finished after Claude started, or once Claude
+ * has run 15 s; a run that finds Claude running but not there yet waits for it, checking the
+ * marker every 500 ms. It waits for Desktop's UI without the Desktop lock, then takes the lock
+ * for each draft and re-checks Claude under it. The draft whose place is on screen goes
+ * first, and is typed where the user is while Claude is in front and no key has been pressed
+ * for 1 s. Taking the user elsewhere needs the run to allow visits, a place to bring them
+ * back to, and Claude in front with the user idle for 3 s; a draft that cannot be gone to now
+ * stays pending, and the run ends `elsewhere`. It stops, leaving the rest pending, when the
+ * lock is busy or another operation waits for it, the user is active or moves, Claude
+ * changes or the run passes 5 minutes. A draft it cannot type, or cannot see in its composer
+ * afterwards, is marked `needs-copy` with the reason: `maybe-typed` once a write was tried,
+ * except a write the helper refused for want of accessibility, which typed nothing and stays
+ * `accessibility`.
  */
 export async function restoreDrafts(
   deps: RestorerDeps,
+  options: RestoreOptions = {},
 ): Promise<RestoreResult> {
   let result: RestoreResult;
   try {
-    result = await restore(deps);
+    result = await restore(deps, options);
   } catch (error) {
     // Its name only: a message could hold anything, a draft's text included.
     logDraft(deps.log, "restore-end", {
@@ -193,19 +256,23 @@ export async function restoreDrafts(
   return result;
 }
 
-async function restore(deps: RestorerDeps): Promise<RestoreResult> {
+async function restore(
+  deps: RestorerDeps,
+  options: RestoreOptions,
+): Promise<RestoreResult> {
   const started = deps.now();
   let account: string | undefined;
   let records: DraftRecord[] = [];
   /** Every record read, whatever its account or state; undefined before they are read. */
   let all: number | undefined;
-  let ready: boolean;
-  const start = (ready: boolean | null, error?: string) =>
+  let ready: Ready | undefined;
+  const start = (ready: Ready | undefined | null, error?: string) =>
     logDraft(deps.log, "restore-start", {
       account: shortId(account),
       records: records.length,
       all: all ?? null,
-      ready,
+      ready: ready === null ? null : !!ready,
+      ...(ready ? { wiped: ready.wiped, waitedMs: ready.waitedMs } : {}),
       ...(error ? { error } : {}),
     });
   try {
@@ -223,9 +290,9 @@ async function restore(deps: RestorerDeps): Promise<RestoreResult> {
       start(null);
       return { status: "idle", restored: 0, left: 0 };
     }
-    ready = await claudeReady(deps);
+    ready = await claudeReady(deps, options.launching === true);
   } catch {
-    start(false, "start-failed");
+    start(undefined, "start-failed");
     return { status: "waiting", restored: 0, left: records.length };
   }
   start(ready);
@@ -244,6 +311,8 @@ async function restore(deps: RestorerDeps): Promise<RestoreResult> {
     }
     logDraft(deps.log, "leave", { id: shortId(record.id), reason, marked });
   };
+  /** Drafts whose place was not on screen and could not be gone to: still pending. */
+  let skipped = 0;
   const end = (status: RestoreResult["status"], reason?: string) => {
     if (restored + copied > 0)
       try {
@@ -269,9 +338,17 @@ async function restore(deps: RestorerDeps): Promise<RestoreResult> {
     run = {
       account,
       pid: first.pid,
+      wiped: ready.wiped,
+      visits: options.visits !== false,
       anchored: false,
       lastSeen: placeOf(first),
     };
+    // The draft of the place on screen first: it needs no visit.
+    const here = placeOf(first);
+    records = [
+      ...records.filter((record) => here && typeable(record) === here),
+      ...records.filter((record) => !here || typeable(record) !== here),
+    ];
     for (; next < records.length; next++) {
       typing.wrote = false;
       if (deps.now() - started >= BUDGET_MS)
@@ -289,10 +366,17 @@ async function restore(deps: RestorerDeps): Promise<RestoreResult> {
         continue;
       }
       const reason = await locked(deps, async () => {
-        await confirm(deps, run);
+        if ((await confirm(deps, run, target)) === SKIP) return SKIP;
         return restoreOne(deps, run, target, record.text, typing, id);
       });
-      if (reason !== undefined) await leave(record, reason);
+      if (reason === SKIP) {
+        skipped++;
+        logDraft(deps.log, "skip", {
+          id,
+          visits: run.visits,
+          returnKnown: run.returnTo !== undefined,
+        });
+      } else if (reason !== undefined) await leave(record, reason);
       else {
         restored++;
         let removed = true;
@@ -329,7 +413,8 @@ async function restore(deps: RestorerDeps): Promise<RestoreResult> {
   if (run.anchored && run.returnTo && run.returnTo !== run.lastSeen)
     try {
       await locked(deps, async () => {
-        await confirm(deps, run);
+        // Relay went there itself, so a visit is allowed: SKIP never comes back here.
+        if ((await confirm(deps, run, run.returnTo!)) === SKIP) return;
         await go(deps, run.returnTo!).catch(() => {
           // The user can go back by hand, and one who is active stays where they are.
         });
@@ -344,14 +429,45 @@ async function restore(deps: RestorerDeps): Promise<RestoreResult> {
         phase: "return",
       });
     }
-  return end("done");
+  return skipped ? end("waiting", "elsewhere") : end("done");
 }
 
-/** Claude runs, and has run long enough for Desktop's wipe to be over. */
-async function claudeReady(deps: RestorerDeps): Promise<boolean> {
-  if (!(await deps.running())) return false;
-  const uptime = await deps.uptimeMs();
-  return uptime !== undefined && uptime >= MIN_UPTIME_MS;
+/** Claude is ready: `wiped` when its marker said so before 15 s; how long the run waited. */
+interface Ready {
+  wiped: boolean;
+  waitedMs: number;
+}
+
+/**
+ * Claude runs, and Desktop's wipe is over: its marker says it finished after Claude started,
+ * or Claude has run 15 s. While Claude runs but neither holds yet, it waits, reading the
+ * marker every 500 ms; the uptime is read once and counted on from there, so `ps` runs once.
+ * With `launching`, it first waits up to 10 s for Claude to run at all. Undefined when Claude
+ * does not run or its uptime cannot be read.
+ */
+async function claudeReady(
+  deps: RestorerDeps,
+  launching: boolean,
+): Promise<Ready | undefined> {
+  const begun = deps.now();
+  let uptime: number | undefined;
+  for (;;) {
+    if (await deps.running()) uptime = await deps.uptimeMs();
+    if (uptime !== undefined) break;
+    if (!launching || deps.now() - begun >= LAUNCH_MS) return undefined;
+    await deps.sleep(POLL_MS);
+  }
+  const read = deps.now();
+  const startedAt = read - uptime;
+  for (;;) {
+    const waitedMs = deps.now() - begun;
+    if (uptime + (deps.now() - read) >= MIN_UPTIME_MS)
+      return { wiped: false, waitedMs };
+    const wipedAt = await deps.wipedAt?.().catch(() => undefined);
+    if (wipedAt !== undefined && wipedAt >= startedAt - WIPE_SLACK_MS)
+      return { wiped: true, waitedMs };
+    await deps.sleep(POLL_MS);
+  }
 }
 
 /**
@@ -367,6 +483,9 @@ function typeable(record: DraftRecord): Place | undefined {
   return isLocalSessionId(target) ? target : undefined;
 }
 
+/** What `confirm` says of a draft whose place is not on screen and cannot be gone to now. */
+const SKIP = Symbol("skip");
+
 /** Runs `fn` under the Desktop lock. A busy lock stops the run. */
 async function locked<T>(deps: RestorerDeps, fn: () => Promise<T>): Promise<T> {
   // Boxed, so a result of undefined is told apart from a busy lock.
@@ -376,11 +495,19 @@ async function locked<T>(deps: RestorerDeps, fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Under the lock, before Relay acts: Desktop is on the run's account, Claude is the same
- * process and has run 15 s, the screen shows what Relay last saw there, and Claude is in
- * front with the user idle. The first lock's look is where the user is taken back to.
+ * Under the lock, before Relay acts on `target`: Desktop is on the run's account, Claude is
+ * the same process and past its wipe (by its marker, or 15 s of uptime), and the screen shows
+ * what Relay last saw there. The first lock's look is where the user is taken back to, and
+ * nothing the screen showed before it counts as the user moving. With `target` on screen,
+ * Claude must be in front with no key pressed for 1 s. Elsewhere, Relay goes there only when
+ * the run allows visits and knows where to bring the user back, and then with Claude in front
+ * and the user idle for 3 s; without both, SKIP.
  */
-async function confirm(deps: RestorerDeps, run: Run): Promise<void> {
+async function confirm(
+  deps: RestorerDeps,
+  run: Run,
+  target: Place,
+): Promise<typeof SKIP | void> {
   const account = await deps.currentAccount().catch(() => undefined);
   if (!(await deps.running().catch(() => false)))
     throw new Stop("pending", "claude-not-running");
@@ -388,7 +515,7 @@ async function confirm(deps: RestorerDeps, run: Run): Promise<void> {
   if (
     !sameAccount(account, run.account) ||
     uptime === undefined ||
-    uptime < MIN_UPTIME_MS
+    (uptime < MIN_UPTIME_MS && !run.wiped)
   )
     throw new Stop("pending", "changed");
   let view: Snapshot;
@@ -400,12 +527,19 @@ async function confirm(deps: RestorerDeps, run: Run): Promise<void> {
     throw new Stop("pending", "moved");
   }
   if (view.pid !== run.pid) throw new Stop("pending", "changed");
-  if (placeOf(view) !== run.lastSeen) throw new Stop("pending", "moved");
-  if (!letsAct(view)) throw new Stop("pending", "active");
+  const place = placeOf(view);
   if (!run.anchored) {
+    // Relay has done nothing yet, so a screen still settling is no move of the user's.
     run.anchored = true;
-    run.returnTo = placeOf(view);
+    run.returnTo = place;
+    run.lastSeen = place;
+  } else if (place !== run.lastSeen) throw new Stop("pending", "moved");
+  if (place === target) {
+    if (!letsType(view)) throw new Stop("pending", "active");
+    return;
   }
+  if (!run.visits || run.returnTo === undefined) return SKIP;
+  if (!letsAct(view)) throw new Stop("pending", "active");
 }
 
 /** The first answer from Desktop's UI, every 500 ms for up to 60 s. */
@@ -498,7 +632,7 @@ async function restoreOne(
     const attempt = again ? 2 : 1;
     try {
       typing.wrote = true;
-      await deps.automation.writeDraft(guard, text);
+      await deps.automation.writeDraft(guard, text, { keysIdleMs: QUIET_MS });
       logDraft(deps.log, "write", { id, ok: true, attempt });
     } catch (error) {
       logDraft(deps.log, "write", {
@@ -558,10 +692,14 @@ function guardable(view: Snapshot, target: Place): boolean {
   }
 }
 
-/** `view` shows `target` with a composer a draft can be typed into, or busy. */
+/**
+ * `view` shows `target` with a composer a draft can be typed into, or one that already holds
+ * text, which no draft is typed into, or busy.
+ */
 const shows = (view: Snapshot, target: Place) =>
   placeOf(view) === target &&
-  ((view.composerPresent === true && guardable(view, target)) ||
+  ((view.composerPresent === true &&
+    (guardable(view, target) || !view.composerEmpty)) ||
     view.status === "running" ||
     view.status === "waiting");
 

@@ -1,11 +1,18 @@
 import { z } from "zod";
 import {
+  draftPlace,
   restoreDrafts,
+  type RestoreOptions,
   type RestorerDeps,
   type RestoreResult,
 } from "./draft-restorer";
 import { logDraft, shortId, type DraftLog } from "./draft-diagnostics";
 import type { DraftSummary } from "./draft-vault";
+import type {
+  DesktopWatch,
+  DesktopWatchState,
+  DesktopWatcher,
+} from "./desktop-watch";
 
 /**
  * The main process's side of draft restore: when the restorer runs, the notification it is
@@ -22,13 +29,27 @@ export const RETRY_MS = 10_000;
 export const ACCOUNT_CHECK_MS = 60_000;
 /** How long retries wait after a run in which Desktop's UI never answered. */
 export const NOT_READY_BACKOFF_MS = 2 * 60_000;
-/**
- * How long retries wait after a run that found the user working, in Claude or elsewhere, so
- * Desktop's UI is not inspected every 10 s while they do.
- */
-export const ACTIVE_BACKOFF_MS = 60_000;
 /** Runs in a row that may try a pending draft and move nothing, before it is left for Copy. */
 export const MAX_STALLS = 3;
+/**
+ * For how long after Claude is ready on an account Relay may take the user to a draft's
+ * place and back. After it, a draft is typed only where the user opens it.
+ */
+export const VISIT_MS = 2 * 60_000;
+/**
+ * For how long after Claude is ready on an account its drafts wait to be opened. After it,
+ * the ones still pending are left for Copy as `not-opened`.
+ */
+export const WATCH_MS = 30 * 60_000;
+/** The least time between the end of a run and one the watch starts. */
+export const NUDGE_MS = 1_000;
+/**
+ * With a watch on, a 10 s retry still runs once this long has passed since the last run, in
+ * case the watch missed the draft's place on screen.
+ */
+export const BACKSTOP_MS = 60_000;
+/** Why a draft is left for Copy once the watch window ran out. */
+export const NOT_OPENED = "not-opened";
 
 /** The notification after a restore: counts only, never a draft's text or title. */
 export function draftNotice(
@@ -69,7 +90,8 @@ const pendingIds = (drafts: readonly DraftSummary[]) =>
  * the account it ran for, and only a run that stopped with a reason counts: one without
  * (Claude closed or not up long enough, nothing pending for the account) tried nothing, and
  * neither did one stopped `busy`, which found another Desktop operation holding the lock or
- * waiting for it, or `active`, which found the user working in Claude or Claude not in front.
+ * waiting for it, `active`, which found the user working in Claude or Claude not in front, or
+ * `elsewhere`, which found a draft's place not on screen and could not go there.
  * Every other stop counts, a restore that threw (`error`) included. A run that moved any draft
  * starts every count again. A draft counted `MAX_STALLS` times is given up.
  */
@@ -97,7 +119,13 @@ export function tallyStalls(
   const giveUp: string[] = [];
   const account = run.account;
   const { reason } = run.result;
-  if (!reason || reason === "busy" || reason === "active" || !account)
+  if (
+    !reason ||
+    reason === "busy" ||
+    reason === "active" ||
+    reason === "elsewhere" ||
+    !account
+  )
     return { counts: next, giveUp };
   for (const draft of after) {
     if (!before.has(draft.id) || !sameAccount(draft.to, account)) continue;
@@ -123,9 +151,19 @@ export interface DraftSchedulerDeps {
    */
   retype(): boolean;
   /** The restore to run; restoreDrafts unless a test gives another. */
-  restore?: (deps: RestorerDeps) => Promise<RestoreResult>;
+  restore?: (
+    deps: RestorerDeps,
+    options?: RestoreOptions,
+  ) => Promise<RestoreResult>;
   /** Calls `fn` every `ms` until the returned function is called; setInterval unless a test gives another. */
   every?: (fn: () => void, ms: number) => () => void;
+  /** Calls `fn` once after `ms` unless the returned function is called first; setTimeout unless a test gives another. */
+  later?: (fn: () => void, ms: number) => () => void;
+  /**
+   * Watches where the user is in Claude, cheaply, while drafts wait for Desktop's account;
+   * without one, the 10 s retries look instead.
+   */
+  watch?: DesktopWatcher;
 }
 
 const anyPending = (drafts: readonly DraftSummary[]) =>
@@ -137,12 +175,36 @@ function interval(fn: () => void, ms: number): () => void {
   return () => clearInterval(timer);
 }
 
+function timeout(fn: () => void, ms: number): () => void {
+  const timer = setTimeout(fn, ms);
+  timer.unref?.();
+  return () => clearTimeout(timer);
+}
+
+/** A run got past Claude's readiness: it looked at Desktop's UI, whatever came of it. */
+const readyRun = (result: RestoreResult) =>
+  result.status === "done" ||
+  (result.reason !== undefined &&
+    !["not-ready", "claude-not-running", RESTORE_ERROR].includes(result.reason));
+
 /**
  * Runs the draft restorer after every switch, one run at a time, and every 10 s while a
  * pending draft is for Desktop's current account. While drafts wait only for other accounts,
  * Desktop's account alone is read every 60 s and a full pass runs once it is another; while
  * none waits, nothing is armed. After a run in which Desktop's UI never answered, the 10 s
- * retries wait 2 minutes, and after one that found the user active, 60 s; a switch does not.
+ * retries wait 2 minutes; a switch does not. The run after a switch waits for Claude to start.
+ *
+ * Once a run finds Claude ready on an account, the account's windows open: for `VISIT_MS`
+ * runs may take the user to a draft's place and back, and after `WATCH_MS` the drafts still
+ * pending for it are left for Copy as `not-opened`. A switch, or another account, opens new
+ * ones. While drafts wait for Desktop's account and Claude was ready, the watch reports where
+ * the user is; a run starts, at least `NUDGE_MS` after the last, when a pending draft's place
+ * is on screen with Claude in front and no key pressed for 1 s, or, while visits are allowed,
+ * when the user leaves Claude alone in front for 3 s. A report during a run is weighed once it
+ * ends. With a watch on, a 10 s retry runs only while its last report would start a run, the
+ * watch window is over, or `BACKSTOP_MS` passed since the last run, and otherwise reads
+ * Desktop's account alone.
+ *
  * A pending draft that `MAX_STALLS` runs in a row tried and stopped on is left for Copy with
  * the last stop reason, so none stays pending for ever.
  * Once accessibility is granted, `retryAccessibility` sets the drafts left for Copy for want
@@ -169,6 +231,21 @@ export class DraftScheduler {
   private stopped = false;
   /** The drafts `retryAccessibility` set back to pending while Relay runs. */
   private retried = new Set<string>();
+  /** Since when Claude has been ready on `account`, as a run first found it. */
+  private window?: { account: string; since: number };
+  /** A switch asked for the next run: Claude may still be starting. */
+  private switched = false;
+  /** Switches so far: a run begun before the last one opens no window for the new Claude. */
+  private generation = 0;
+  /** The watch while one runs, and its last report. */
+  private watching?: { watch: DesktopWatch; state?: DesktopWatchState };
+  /** The places of the drafts pending for Desktop's account, as the watch looks for them. */
+  private targets = new Set<string>();
+  /** When the last run ended. */
+  private lastRunEnd = -Infinity;
+  /** A report came during a run: weigh it once the run ends. */
+  private nudged = false;
+  private nudgeTimer?: () => void;
   /** The `retryAccessibility` call in progress; the next one waits for it. */
   private retrying: Promise<unknown> = Promise.resolve();
   constructor(private readonly deps: DraftSchedulerDeps) {}
@@ -197,17 +274,35 @@ export class DraftScheduler {
   }
 
   /**
-   * After a switch: a run now, whatever the backoff. A switch while a run is in flight gets a
-   * run of its own once that one ends, never alongside it.
+   * After a switch: a run now, whatever the backoff, that waits for Claude to start. A switch
+   * while a run is in flight gets a run of its own once that one ends, never alongside it. It
+   * means a new Claude: the windows open again, and the watch of the last one ends.
    */
   afterSwitch(): Promise<void> {
     this.notBefore = -Infinity;
+    this.window = undefined;
+    this.switched = true;
+    this.generation++;
+    this.unwatch();
     return this.run(true);
   }
 
-  /** One 10 s retry: skipped while backing off, and dropped while a run is in flight. */
+  /**
+   * One 10 s retry: skipped while backing off, and dropped while a run is in flight. With a
+   * watch on, it runs only while the watch's last report would start a run, the watch window
+   * is over or the last run was `BACKSTOP_MS` ago; otherwise it reads Desktop's account alone,
+   * and runs once that is another.
+   */
   tick(): Promise<void> {
-    if (this.deps.restorer.now() < this.notBefore) return Promise.resolve();
+    const now = this.deps.restorer.now();
+    if (now < this.notBefore) return Promise.resolve();
+    if (
+      this.watching &&
+      !this.go() &&
+      !this.expired(now) &&
+      now - this.lastRunEnd < BACKSTOP_MS
+    )
+      return this.check();
     return this.run(false);
   }
 
@@ -268,10 +363,11 @@ export class DraftScheduler {
     return moved;
   }
 
-  /** No more runs or retries; one in flight ends as it would. */
+  /** No more runs, retries or watch; one in flight ends as it would. */
   stop(): void {
     this.stopped = true;
     this.disarm();
+    this.unwatch();
   }
 
   private run(again: boolean): Promise<void> {
@@ -289,6 +385,12 @@ export class DraftScheduler {
         } while (this.again && !this.stopped);
       } finally {
         this.running = false;
+        this.lastRunEnd = this.deps.restorer.now();
+      }
+      // What the watch said meanwhile, now that the run has changed what is pending.
+      if (this.nudged) {
+        this.nudged = false;
+        this.consider();
       }
     })().catch(() => {
       // A run never throws; should one, the next tick or switch runs again.
@@ -298,32 +400,60 @@ export class DraftScheduler {
 
   private async once(): Promise<void> {
     this.passes++;
-    const before = await this.read();
-    if (!anyPending(before)) return this.disarm();
-    if (!this.deps.retype()) return this.leaveAll(before);
+    let before = await this.read();
+    if (!anyPending(before)) {
+      this.unwatch();
+      return this.disarm();
+    }
+    if (!this.deps.retype()) {
+      this.unwatch();
+      return this.leaveAll(before);
+    }
     const { restorer } = this.deps;
+    if (this.expired(restorer.now())) {
+      before = await this.expire(before);
+      if (!anyPending(before)) {
+        this.unwatch();
+        return this.disarm();
+      }
+    }
     let account: string | undefined;
     let asked = false;
     let result: RestoreResult;
+    const launching = this.switched;
+    this.switched = false;
+    const generation = this.generation;
+    const started = restorer.now();
     try {
-      result = await (this.deps.restore ?? restoreDrafts)({
-        ...restorer,
-        // The restorer reads the account first and restores only that account's drafts.
-        currentAccount: async () => {
-          const value = await restorer.currentAccount();
-          if (!asked) account = value;
-          asked = true;
-          return value;
+      result = await (this.deps.restore ?? restoreDrafts)(
+        {
+          ...restorer,
+          // The restorer reads the account first and restores only that account's drafts.
+          currentAccount: async () => {
+            const value = await restorer.currentAccount();
+            if (!asked) account = value;
+            asked = true;
+            return value;
+          },
         },
-      });
+        { visits: this.visits(started), launching },
+      );
     } catch {
       // A failure the restorer did not expect: counted, so one that repeats is given up.
       result = { status: "waiting", restored: 0, left: 0, reason: RESTORE_ERROR };
     }
     if (result.reason === "not-ready")
       this.notBefore = restorer.now() + NOT_READY_BACKOFF_MS;
-    else if (result.reason === "active")
-      this.notBefore = restorer.now() + ACTIVE_BACKOFF_MS;
+    // The windows are the account's: another account's run opens its own.
+    if (
+      this.window &&
+      (!account || !sameAccount(this.window.account, account))
+    )
+      this.window = undefined;
+    // A run begun before a switch found the Claude that switch replaced.
+    const ready = readyRun(result) && generation === this.generation;
+    if (!this.window && account && ready)
+      this.window = { account, since: started };
     // A run with nothing for this account changed nothing.
     const after = result.status === "idle" ? before : await this.read();
     const tally = tallyStalls(this.stalls, { before, after, account, result });
@@ -361,11 +491,166 @@ export class DraftScheduler {
       } catch {
         // The panel reads the drafts again on its next refresh.
       }
-    this.schedule(
-      after.filter((d) => !given.has(d.id)),
-      // The account the restorer read first; read here only when it read none.
-      asked ? account : await this.currentAccount(),
-    );
+    const left = after.filter((d) => !given.has(d.id));
+    // The account the restorer read first; read here only when it read none.
+    const current = asked ? account : await this.currentAccount();
+    this.schedule(left, current);
+    await this.watchFor(left, current, ready);
+  }
+
+  /** Relay may take the user elsewhere and back: Claude is not ready yet, or only just. */
+  private visits(now: number): boolean {
+    return !this.window || now < this.window.since + VISIT_MS;
+  }
+
+  /** The watch window of Desktop's account is over. */
+  private expired(now: number): boolean {
+    return !!this.window && now >= this.window.since + WATCH_MS;
+  }
+
+  /**
+   * The watch window is over: every draft still pending for its account, while Desktop is on
+   * it, is left for Copy as `not-opened`, and the watch ends. Resolves with the drafts as they
+   * are after it. A draft whose mark fails stays pending, and the next run tries again.
+   */
+  private async expire(
+    before: DraftSummary[],
+  ): Promise<DraftSummary[]> {
+    const { restorer } = this.deps;
+    const account = this.window!.account;
+    if (!sameRead(await this.currentAccount(), account)) return before;
+    this.unwatch();
+    let left = 0;
+    for (const draft of before) {
+      if (draft.state !== "pending" || !sameAccount(draft.to, account)) continue;
+      try {
+        await restorer.mark(draft.id, "needs-copy", NOT_OPENED);
+        this.stalls.delete(draft.id);
+        left++;
+      } catch {
+        // A vault that cannot be changed keeps the draft pending.
+      }
+    }
+    logDraft(restorer.log, "watch-over", { left });
+    if (!left) return before;
+    try {
+      restorer.notify({ restored: 0, left });
+    } catch {
+      // A notification that fails changes nothing about the drafts.
+    }
+    try {
+      this.deps.changed();
+    } catch {
+      // The panel reads the drafts again on its next refresh.
+    }
+    return this.read();
+  }
+
+  /**
+   * Keeps the watch on while drafts are pending for Desktop's `account` and a run found Claude
+   * ready, with the places it looks for; ends it otherwise. The places come from the records,
+   * read here in main.
+   */
+  private async watchFor(
+    drafts: readonly DraftSummary[],
+    account: string | undefined,
+    ready: boolean,
+  ): Promise<void> {
+    if (
+      this.stopped ||
+      !this.deps.watch ||
+      !account ||
+      !drafts.some((d) => d.state === "pending" && sameAccount(d.to, account))
+    )
+      return this.unwatch();
+    let places: Set<string>;
+    try {
+      places = new Set(
+        (await this.deps.restorer.pending())
+          .filter((r) => r.state === "pending" && sameAccount(r.to, account))
+          .map(draftPlace)
+          .filter((place): place is string => place !== undefined),
+      );
+    } catch {
+      // Records that cannot be read: nothing to look for until the next run.
+      return this.unwatch();
+    }
+    this.targets = places;
+    if (!places.size) return this.unwatch();
+    if (!this.watching && ready) this.startWatch();
+  }
+
+  private startWatch(): void {
+    const watcher = this.deps.watch;
+    if (!watcher || this.stopped) return;
+    const log = this.deps.restorer.log;
+    const entry: { watch: DesktopWatch; state?: DesktopWatchState } = {
+      watch: { stop() {} },
+    };
+    this.watching = entry;
+    logDraft(log, "watch-start", { places: this.targets.size });
+    try {
+      entry.watch = watcher({
+        state: (state) => {
+          if (this.watching !== entry) return;
+          entry.state = state;
+          this.consider();
+        },
+        end: (reason) => {
+          if (this.watching !== entry) return;
+          this.watching = undefined;
+          logDraft(log, "watch-end", { reason });
+          // The helper's own 10 minutes: a new one, while drafts still wait.
+          if (reason === "expired" && this.targets.size) this.startWatch();
+        },
+      });
+    } catch {
+      if (this.watching === entry) this.watching = undefined;
+      logDraft(log, "watch-end", { reason: "failed" });
+    }
+  }
+
+  private unwatch(): void {
+    this.nudgeTimer?.();
+    this.nudgeTimer = undefined;
+    this.nudged = false;
+    const current = this.watching;
+    if (!current) return;
+    this.watching = undefined;
+    try {
+      current.watch.stop();
+    } catch {
+      // A watch that cannot be stopped ends with Relay, or on its own after 10 minutes.
+    }
+  }
+
+  /**
+   * The watch's last report would start a run: Claude in front, and either a pending draft's
+   * place on screen with no key for 1 s, or, while visits are allowed, the user idle 3 s.
+   */
+  private go(): boolean {
+    const state = this.watching?.state;
+    if (!state?.frontmost) return false;
+    if (state.place && this.targets.has(state.place) && state.quiet) return true;
+    return state.idle && this.visits(this.deps.restorer.now());
+  }
+
+  /** Starts a run when the watch's last report says so, at least NUDGE_MS after the last run. */
+  private consider(): void {
+    if (this.stopped || !this.go()) return;
+    if (this.running) {
+      this.nudged = true;
+      return;
+    }
+    const wait = this.lastRunEnd + NUDGE_MS - this.deps.restorer.now();
+    if (wait <= 0) {
+      void this.run(false);
+      return;
+    }
+    this.nudgeTimer ??= (this.deps.later ?? timeout)(() => {
+      this.nudgeTimer = undefined;
+      this.consider();
+    }, wait);
   }
 
   /**

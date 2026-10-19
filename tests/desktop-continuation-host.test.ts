@@ -375,6 +375,22 @@ test("a snapshot keeps frontmost and idleMs, which are optional and well-formed 
   assert.equal(written.frontmost, true);
   assert.equal(written.idleMs, 9_000);
 });
+test("a snapshot keeps keyIdleMs, which is optional and a whole number of ms when given", async () => {
+  const reply = (extra: Record<string, unknown>) =>
+    nativeDesktopAutomation("/unused", async () => ({
+      ok: true,
+      snapshot: { ...snapshot(), ...extra },
+    }));
+  assert.equal((await reply({ keyIdleMs: 1_250 }).inspect()).keyIdleMs, 1_250);
+  assert.equal((await reply({ keyIdleMs: 0 }).inspect()).keyIdleMs, 0);
+  assert.equal((await reply({}).inspect()).keyIdleMs, undefined);
+  for (const bad of [-1, 1.5, "1000", Number.POSITIVE_INFINITY, true])
+    await assert.rejects(
+      reply({ keyIdleMs: bad }).inspect(),
+      blocked("desktop-ui-unsupported"),
+      String(bad),
+    );
+});
 test("only an exact local session id passes isLocalSessionId", () => {
   assert.equal(isLocalSessionId(localId), true);
   // The id is matched whatever the case of its hex digits.
@@ -462,6 +478,45 @@ test("writeDraft sends the write-draft command with the guard and text", async (
   // The 16 384 character limit is inclusive.
   await adapter.writeDraft(draftGuard(), "a".repeat(16_384));
   assert.equal(commands.length, 2);
+});
+test("writeDraft passes keysIdleMs only when given, and refuses one out of 500 to 3000 without calling the helper", async () => {
+  const commands: unknown[] = [];
+  const adapter = nativeDesktopAutomation("/unused", async (input) => {
+    commands.push(input);
+    return { ok: true, snapshot: snapshot() };
+  });
+  await adapter.writeDraft(draftGuard(), "draft", { keysIdleMs: 1_000 });
+  await adapter.writeDraft(draftGuard(), "draft", {});
+  await adapter.writeDraft(draftGuard(), "draft", { keysIdleMs: 500 });
+  await adapter.writeDraft(draftGuard(), "draft", { keysIdleMs: 3_000 });
+  assert.deepEqual(commands, [
+    {
+      command: "write-draft",
+      guard: draftGuard(),
+      text: "draft",
+      keysIdleMs: 1_000,
+    },
+    { command: "write-draft", guard: draftGuard(), text: "draft" },
+    {
+      command: "write-draft",
+      guard: draftGuard(),
+      text: "draft",
+      keysIdleMs: 500,
+    },
+    {
+      command: "write-draft",
+      guard: draftGuard(),
+      text: "draft",
+      keysIdleMs: 3_000,
+    },
+  ]);
+  for (const keysIdleMs of [499, 3_001, 1.5, Number.NaN, -1])
+    await assert.rejects(
+      adapter.writeDraft(draftGuard(), "draft", { keysIdleMs }),
+      blocked("desktop-ui-unsupported"),
+      String(keysIdleMs),
+    );
+  assert.equal(commands.length, 4);
 });
 test("writeDraft refuses empty, NUL and over-long text without calling the helper", async () => {
   const commands: unknown[] = [];
@@ -704,11 +759,16 @@ test("the Swift write-draft branch checks the user, then re-reads the composer a
     assert.ok(i > active, `${before} must follow the user check`);
     assert.ok(i < write, `${before} must precede writeComposer`);
   }
-  // Read fresh, never from the observation: Claude in front and 3 s without input.
+  // Read fresh, never from the observation: Claude in front and 3 s without input, or, when
+  // the caller names keysIdleMs (500 to 3000), no key for that long.
   const check = branch.slice(guarded, at("composerReadsEmpty("));
   assert.match(
     check,
-    /guard claudeFrontmost\(current\.app\), idleMilliseconds\(\) >= 3000 else \{ try fail\("user-active"\) \}/,
+    /if let keys = request\["keysIdleMs"\] \{\s*guard let ms = keys as\? Int, \(500\.\.\.3000\)\.contains\(ms\) else \{ try fail\("desktop-ui-unsupported"\) \}\s*quiet = keyIdleMilliseconds\(\) >= ms\s*\} else \{\s*quiet = idleMilliseconds\(\) >= 3000\s*\}/,
+  );
+  assert.match(
+    check,
+    /guard claudeFrontmost\(current\.app\), quiet else \{ try fail\("user-active"\) \}/,
   );
   assert.doesNotMatch(check, /current\.fields/);
 });
@@ -809,6 +869,58 @@ test("the Swift snapshot reports frontmost and idleMs outside the fingerprint", 
   assert.match(
     swiftBlock("func idleMilliseconds("),
     /CGEventSource\.secondsSinceLastEventType\(\.combinedSessionState, eventType: CGEventType\(rawValue: ~0\)!\)/,
+  );
+  // keyIdleMs too: keys and modifiers only, read after the fingerprint.
+  const keys = body.indexOf('fields["keyIdleMs"] = keyIdleMilliseconds()');
+  assert.ok(keys > fingerprint);
+  assert.doesNotMatch(stable, /keyIdleMs/);
+  assert.match(
+    swiftBlock("func keyIdleMilliseconds("),
+    /\[CGEventType\.keyDown, \.flagsChanged\]\.map \{\s*CGEventSource\.secondsSinceLastEventType\(\.combinedSessionState, eventType: \$0\)\s*\}\.min\(\)/,
+  );
+});
+test("the Swift watch only reads: it opens, types, presses and observes nothing, and ends on its own", () => {
+  const body = swiftBlock("func watch(");
+  for (const forbidden of [
+    /writeComposer\(/,
+    /press\(/,
+    /NSWorkspace\.shared\.open/,
+    /AXUIElementSetAttributeValue/,
+    /AXUIElementPerformAction/,
+    /CGEvent\(/,
+    /observe\(\)/,
+    /NSPasteboard/,
+    /requestAccessibility|AXIsProcessTrustedWithOptions/,
+  ])
+    assert.doesNotMatch(body, forbidden, String(forbidden));
+  // Ends with stdin, with Claude, and after 10 minutes; never asks for accessibility.
+  assert.match(
+    body,
+    /FileHandle\.standardInput\.readDataToEndOfFile\(\)\s*exit\(0\)/,
+  );
+  assert.match(body, /guard AXIsProcessTrusted\(\) else/);
+  assert.match(body, /Date\(\)\.addingTimeInterval\(600\)/);
+  assert.match(body, /emit\(\["gone": true\]\)/);
+  // Its times are bounded, and it reads the web areas only while Claude is in front.
+  assert.match(
+    body,
+    /\(250\.\.\.10000\)\.contains\(quietMs\), \(250\.\.\.10000\)\.contains\(idleMs\)/,
+  );
+  assert.match(body, /if front \{\s*if areas\.isEmpty/);
+  assert.match(body, /front \? 0\.25 : 1/);
+  // The cheap walk never enters a web area or the menu bar, and stops at 300 elements.
+  const walk = swiftBlock("func webAreas(");
+  assert.match(walk, /seen < 300/);
+  assert.match(
+    walk,
+    /if role == "AXWebArea" \{ found\.append\(element\); continue \}/,
+  );
+  assert.match(walk, /role == "AXMenuBar"/);
+  // The dispatcher runs it from its argument, before reading any request.
+  const dispatch = swiftSource.slice(swiftSource.lastIndexOf("#else"));
+  assert.ok(
+    dispatch.indexOf('CommandLine.arguments[1] == "watch"') <
+      dispatch.indexOf("readDataToEndOfFile"),
   );
 });
 test("the Swift pre-write composer re-read counts only a readable empty value as empty", () => {

@@ -60,6 +60,14 @@ func claudeFrontmost(_ app: NSRunningApplication) -> Bool {
 func idleMilliseconds() -> Int {
     Int(CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: CGEventType(rawValue: ~0)!) * 1000)
 }
+// Milliseconds since the user last pressed a key, a modifier included, read now. A mouse
+// that moves or clicks does not count: only keystrokes could land in a composer Relay types into.
+func keyIdleMilliseconds() -> Int {
+    let since = [CGEventType.keyDown, .flagsChanged].map {
+        CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0)
+    }.min() ?? 0
+    return Int(since * 1000)
+}
 struct Node {
     let element: AXUIElement
     let role: String
@@ -263,6 +271,7 @@ func observe() throws -> Observation {
     // What the user is doing, not what the conversation is: outside the fingerprint.
     fields["frontmost"] = claudeFrontmost(app)
     fields["idleMs"] = idleMilliseconds()
+    fields["keyIdleMs"] = keyIdleMilliseconds()
     return Observation(app: app, tree: tree, composer: composer, send: send, permission: permission, fields: fields)
 }
 // A guard names its screen by a conversation id or, for write-draft only
@@ -448,8 +457,16 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
               let composer = current.composer else { try fail("desktop-ui-unsupported") }
         // The user's keystrokes, a Return included, must never land in a composer
         // Relay types into: write only into a Claude in front that has had no input
-        // for 3 s. Read now, not from the observation, before anything is written.
-        guard claudeFrontmost(current.app), idleMilliseconds() >= 3000 else { try fail("user-active") }
+        // for 3 s or, when the caller names keysIdleMs (500-3000), no key pressed for
+        // that long. Read now, not from the observation, before anything is written.
+        let quiet: Bool
+        if let keys = request["keysIdleMs"] {
+            guard let ms = keys as? Int, (500...3000).contains(ms) else { try fail("desktop-ui-unsupported") }
+            quiet = keyIdleMilliseconds() >= ms
+        } else {
+            quiet = idleMilliseconds() >= 3000
+        }
+        guard claudeFrontmost(current.app), quiet else { try fail("user-active") }
         guard composerReadsEmpty(composer.element) else { try fail("composer-not-empty") }
         let live = liveScreen(current)
         if expected["newSession"] as? Bool == true {
@@ -466,6 +483,87 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         return ["ok": true, "snapshot": current.fields]
     }
     try fail("desktop-ui-unsupported")
+}
+
+// Claude's top-level web areas, found cheaply: a breadth-first walk of the native views
+// only. It skips the menu bar, never descends into a web area and stops at 300 elements,
+// so it never walks the page's own tree the way observe() does.
+func webAreas(_ root: AXUIElement) -> [AXUIElement] {
+    var found: [AXUIElement] = []
+    var queue: [(AXUIElement, Int)] = [(root, 0)]
+    var seen = 0
+    while !queue.isEmpty && seen < 300 {
+        let (element, depth) = queue.removeFirst()
+        seen += 1
+        let role = stringAttribute(element, kAXRoleAttribute)
+        if role == "AXWebArea" { found.append(element); continue }
+        if role == "AXMenuBar" || depth >= 12 { continue }
+        for child in attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? [] { queue.append((child, depth + 1)) }
+    }
+    return found
+}
+func emit(_ object: [String: Any]) {
+    guard let line = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return }
+    FileHandle.standardOutput.write(line + Data("\n".utf8))
+}
+// `watch <quietMs> <idleMs>`: a long-lived, read-only look at where the user is, so the
+// parent need not spawn a whole observe() to learn it. While Claude is in front it reads,
+// every 250 ms, the URLs of Claude's web areas, and every 1 s otherwise only whether Claude
+// is in front. It prints one JSON line each time the place (a conversation id, the
+// new-session screen, or null when unknown or Claude is not in front), Claude being in front,
+// no key for quietMs, or no input for idleMs changes. It never opens, types or presses
+// anything, and reads no text. It ends when stdin closes, Claude quits, or after 10 minutes.
+func watch(_ arguments: [String]) -> Never {
+    guard arguments.count == 4, let quietMs = Int(arguments[2]), let idleMs = Int(arguments[3]),
+          (250...10000).contains(quietMs), (250...10000).contains(idleMs) else {
+        emit(["issue": "desktop-ui-unsupported"]); exit(2)
+    }
+    // The parent holds stdin open: its end, or the parent's, ends the watch.
+    Thread.detachNewThread {
+        _ = FileHandle.standardInput.readDataToEndOfFile()
+        exit(0)
+    }
+    guard AXIsProcessTrusted() else { emit(["issue": "accessibility-permission-required"]); exit(0) }
+    let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).filter { !$0.isTerminated }
+    guard apps.count == 1, let app = apps.first else {
+        emit(["issue": apps.isEmpty ? "claude-not-running" : "desktop-ui-unsupported"]); exit(0)
+    }
+    let pid = app.processIdentifier
+    let root = AXUIElementCreateApplication(pid)
+    let deadline = Date().addingTimeInterval(600)
+    var areas: [AXUIElement] = []
+    var foundAt = Date.distantPast
+    var last: Data?
+    func tick() {
+        if Date() >= deadline { emit(["expired": true]); exit(0) }
+        if app.isTerminated || kill(pid, 0) != 0 { emit(["gone": true]); exit(0) }
+        let front = claudeFrontmost(app)
+        var place: Any = NSNull()
+        if front {
+            if areas.isEmpty || Date().timeIntervalSince(foundAt) >= 2 {
+                areas = webAreas(root)
+                foundAt = Date()
+            }
+            let strings = areas.flatMap { area in
+                [kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute, "AXURL"].map { stringAttribute(area, $0) }
+            }.filter { !$0.isEmpty }
+            let screen = screenOf(strings)
+            if let id = screen.localSessionId { place = id } else if screen.newSession { place = "new-session" }
+        }
+        let state: [String: Any] = [
+            "pid": Int(pid), "place": place, "frontmost": front,
+            "quiet": keyIdleMilliseconds() >= quietMs, "idle": idleMilliseconds() >= idleMs
+        ]
+        if let line = try? JSONSerialization.data(withJSONObject: state, options: [.sortedKeys]), line != last {
+            last = line
+            FileHandle.standardOutput.write(line + Data("\n".utf8))
+        }
+        // The main run loop runs between looks, so NSWorkspace and NSRunningApplication stay current.
+        Timer.scheduledTimer(withTimeInterval: front ? 0.25 : 1, repeats: false) { _ in tick() }
+    }
+    tick()
+    RunLoop.main.run()
+    exit(0)
 }
 
 #if RELAY_AX_SELECTOR_FIXTURE
@@ -492,6 +590,7 @@ do {
     FileHandle.standardOutput.write(Data("{\"error\":\"invalid-fixture\"}".utf8))
 }
 #else
+if CommandLine.arguments.count > 1 && CommandLine.arguments[1] == "watch" { watch(CommandLine.arguments) }
 do {
     let input = FileHandle.standardInput.readDataToEndOfFile()
     guard input.count <= 65536,

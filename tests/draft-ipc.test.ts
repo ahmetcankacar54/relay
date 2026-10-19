@@ -336,7 +336,7 @@ test("a busy lock or an active user never counts; every other stop, and a restor
     });
   // Another Desktop operation held the lock, or the user was working in Claude: the draft
   // was never tried.
-  for (const reason of ["busy", "active"]) {
+  for (const reason of ["busy", "active", "elsewhere"]) {
     const tally = run(reason);
     assert.deepEqual(tally.giveUp, [], reason);
     assert.deepEqual([...tally.counts], [["mine", 2]], reason);
@@ -659,26 +659,18 @@ test("after Desktop's UI never answered, retries wait 2 minutes, but a switch do
   assert.equal(state.runs, 4);
 });
 
-test("after a run the user was active in, retries wait 60 s, but a switch does not", async () => {
+test("a run the user was active in sets no backoff: the next 10 s retry runs", async () => {
   const { scheduler, state } = harness();
-  state.results.push(stopped("active"), stopped("active"));
+  state.results.push(stopped("active"), stopped("active"), stopped("elsewhere"));
   await scheduler.afterSwitch();
   assert.equal(state.runs, 1);
   state.clock = 10_000;
   await scheduler.tick();
-  state.clock = 59_999;
-  await scheduler.tick();
-  assert.equal(state.runs, 1);
-  state.clock = 60_000;
-  await scheduler.tick();
   assert.equal(state.runs, 2);
-  // Active again: another 60 s from that run.
-  state.clock = 119_999;
+  state.clock = 20_000;
   await scheduler.tick();
-  assert.equal(state.runs, 2);
-  await scheduler.afterSwitch();
   assert.equal(state.runs, 3);
-  // The backoff never gives a draft up, and the retries stay on.
+  // Neither gives a draft up, and the retries stay on.
   assert.deepEqual(state.marks, []);
   assert.equal(state.cancelled, 0);
 });
@@ -737,7 +729,7 @@ test("a restore that throws ends its run, and three in a row leave the draft for
 });
 
 test("busy runs never give a draft up, however many there are", async () => {
-  for (const reason of ["busy", "active"]) {
+  for (const reason of ["busy", "active", "elsewhere"]) {
     const { scheduler, state } = harness();
     for (let i = 0; i < 5; i++) state.results.push(stopped(reason));
     await scheduler.afterSwitch();

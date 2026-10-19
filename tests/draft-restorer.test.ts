@@ -61,6 +61,8 @@ interface Hooks {
   vault?: (op: "mark" | "remove", id: string) => Error | void;
   /** Replaces the uptime, for the nth read of it. */
   uptime?: (n: number) => number | undefined;
+  /** Desktop's wipe marker, at the nth read of it; none without. */
+  wipedAt?: (n: number) => number | undefined;
   /** Runs before the nth read of the records; an error is thrown from it. */
   pending?: (n: number) => Error | void;
   /** True when the nth lock is held by another Desktop operation. */
@@ -92,6 +94,7 @@ function harness(
   options: {
     records?: DraftRecord[];
     running?: boolean;
+    /** Claude's uptime when the restore starts; it grows with the clock. */
     uptime?: number;
     noUptime?: boolean;
     lockBusy?: boolean;
@@ -101,7 +104,8 @@ function harness(
     noComposer?: string[];
   } = {},
 ) {
-  let clock = 1_000_000;
+  const begin = 1_000_000;
+  let clock = begin;
   let account: string | undefined = ACCOUNT;
   let records = (options.records ?? [record(1)]).map((r) => ({ ...r }));
   let shown: string | undefined = "shown" in options ? options.shown : HOME;
@@ -112,6 +116,7 @@ function harness(
   let locks = 0;
   let pendingReads = 0;
   let uptimeReads = 0;
+  let wipeReads = 0;
   const composers = new Map(Object.entries(options.composers ?? {}));
   const statuses = new Map(Object.entries(options.statuses ?? {}));
   const noComposer = new Set(options.noComposer ?? []);
@@ -120,18 +125,23 @@ function harness(
   /** Fields forced onto the snapshots of one screen, after `patch`. */
   const screenPatch = new Map<string, Partial<Snapshot>>();
   /**
-   * Whether Claude is in front and how long the user has been idle. Outside the fingerprint,
-   * as in the helper. By default the user lets Relay act.
+   * Whether Claude is in front, how long the user has been idle and how long no key has been
+   * pressed. Outside the fingerprint, as in the helper. By default the user lets Relay act.
    */
-  const activity: Partial<Pick<Snapshot, "frontmost" | "idleMs">> = {
+  const activity: Partial<
+    Pick<Snapshot, "frontmost" | "idleMs" | "keyIdleMs">
+  > = {
     frontmost: true,
     idleMs: 60_000,
+    keyIdleMs: 60_000,
   };
   const calls: string[] = [];
   /** The options of each openSession and openNewSession call, in order. */
   const openOptions: unknown[] = [];
   /** Every guard a write was given, in order. */
   const guards: DesktopDraftGuard[] = [];
+  /** The options of each write, in order. */
+  const writeOptions: unknown[] = [];
   const sleeps: number[] = [];
   const marks: Array<[string, DraftState, string | undefined]> = [];
   const removed: string[] = [];
@@ -205,9 +215,10 @@ function harness(
       },
       openSession: (id, options) => follow(id, options),
       openNewSession: (options) => follow(NEW, options),
-      writeDraft: async (guard, text) => {
+      writeDraft: async (guard, text, options) => {
         writes++;
         guards.push(guard);
+        writeOptions.push(options);
         const newSession = "newSession" in guard;
         touch(`write:${newSession ? NEW : guard.localSessionId}`);
         const error = hooks.write?.(writes);
@@ -228,8 +239,17 @@ function harness(
         if (now.status !== "stopped") throw issue("desktop-work-active");
         if (!now.composerPresent) throw issue("desktop-ui-unsupported");
         if (!now.composerEmpty) throw issue("composer-not-empty");
-        // As the helper refuses, before it types, while the user is active.
-        if (!(now.frontmost === true && (now.idleMs ?? 0) >= 3_000))
+        // As the helper refuses, before it types, while the user is active: a key pressed
+        // within `keysIdleMs` when given, any input within 3 s otherwise.
+        const keys = options?.keysIdleMs;
+        if (
+          !(
+            now.frontmost === true &&
+            (keys !== undefined
+              ? (now.keyIdleMs ?? 0) >= keys
+              : (now.idleMs ?? 0) >= 3_000)
+          )
+        )
           throw issue("user-active");
         composers.set(shown!, text);
         return view();
@@ -259,8 +279,11 @@ function harness(
     uptimeMs: async () => {
       uptimeReads++;
       if (hooks.uptime) return hooks.uptime(uptimeReads);
-      return options.noUptime ? undefined : (options.uptime ?? 20_000);
+      return options.noUptime
+        ? undefined
+        : (options.uptime ?? 20_000) + (clock - begin);
     },
+    wipedAt: async () => hooks.wipedAt?.(++wipeReads),
     withLock: async (fn) => {
       locks++;
       if (options.lockBusy || hooks.busy?.(locks)) return undefined;
@@ -294,6 +317,7 @@ function harness(
     calls,
     openOptions,
     guards,
+    writeOptions,
     sleeps,
     marks,
     removed,
@@ -309,6 +333,12 @@ function harness(
     actionsOutsideLock: () => outsideLock.filter((c) => c !== "inspect"),
     get inspects() {
       return inspects;
+    },
+    get wipeReads() {
+      return wipeReads;
+    },
+    get uptimeReads() {
+      return uptimeReads;
     },
     get shown() {
       return shown;
@@ -357,12 +387,8 @@ test("an account matches whatever its case", async () => {
   assert.deepEqual(h.removed, ["draft-1"]);
 });
 
-test("waits until Claude has been up 15 s", async () => {
-  for (const options of [
-    { uptime: 14_999 },
-    { noUptime: true },
-    { running: false },
-  ]) {
+test("a run waits until Claude has been up 15 s; without Claude or its uptime it does not", async () => {
+  for (const options of [{ noUptime: true }, { running: false }]) {
     const h = harness(options);
     assert.deepEqual(await restoreDrafts(h.deps), {
       status: "waiting",
@@ -370,12 +396,115 @@ test("waits until Claude has been up 15 s", async () => {
       left: 1,
     });
     assert.deepEqual(h.calls, []);
+    assert.deepEqual(h.sleeps, []);
     assert.deepEqual(h.marks, []);
     assert.deepEqual(h.removed, []);
   }
   const ready = harness({ uptime: 15_000 });
   assert.equal((await restoreDrafts(ready.deps)).status, "done");
   assert.deepEqual(ready.removed, ["draft-1"]);
+  // Up 10 s: the run waits the 5 s left, touching nothing of Desktop's meanwhile, and reads
+  // the uptime once for it rather than running ps every 500 ms.
+  const early = harness({ uptime: 10_000 });
+  const start = early.now();
+  let firstLook: { at: number; uptimeReads: number } | undefined;
+  early.hooks.inspect = (n) => {
+    if (n === 1) firstLook = { at: early.now(), uptimeReads: early.uptimeReads };
+  };
+  assert.equal((await restoreDrafts(early.deps)).restored, 1);
+  assert.deepEqual(firstLook, { at: start + 5_000, uptimeReads: 1 });
+  assert.ok(early.sleeps.slice(0, 10).every((ms) => ms === 500));
+});
+
+test("Desktop's wipe marker from after Claude started makes it ready before 15 s", async () => {
+  /** When a run first looks at Desktop's UI, from its start; undefined when it never does. */
+  const firstLook = async (
+    h: ReturnType<typeof harness>,
+  ): Promise<number | undefined> => {
+    const start = h.now();
+    let at: number | undefined;
+    h.hooks.inspect = (n) => {
+      if (n === 1) at = h.now() - start;
+    };
+    await restoreDrafts(h.deps);
+    return at;
+  };
+  // Up 2 s, the wipe finished 1 s ago: at once, and the lock's own check needs no 15 s.
+  const now = harness({ uptime: 2_000 });
+  const wiped = now.now() - 1_000;
+  now.hooks.wipedAt = () => wiped;
+  assert.equal(await firstLook(now), 0);
+  assert.deepEqual(now.removed, ["draft-1"]);
+  assert.deepEqual(now.logs[0], {
+    event: "restore-start",
+    account: ACCOUNT.slice(0, 8),
+    records: 1,
+    all: 1,
+    ready: true,
+    wiped: true,
+    waitedMs: 0,
+  });
+  // The marker comes 3 s in: the run goes on then.
+  const later = harness({ uptime: 1_000 });
+  const begun = later.now();
+  later.hooks.wipedAt = () =>
+    later.now() - begun >= 3_000 ? begun + 2_900 : undefined;
+  assert.equal(await firstLook(later), 3_000);
+  assert.deepEqual(later.removed, ["draft-1"]);
+  // A marker up to 1 s before the start Relay works out still counts: ps counts whole seconds.
+  const rounded = harness({ uptime: 2_000 });
+  const early = rounded.now() - 2_000 - 1_000;
+  rounded.hooks.wipedAt = () => early;
+  assert.equal(await firstLook(rounded), 0);
+  // The last Claude's wipe, from before this one started, and a marker that cannot be read,
+  // are no marker: 15 s of uptime it is.
+  const old = harness({ uptime: 2_000 });
+  const before = old.now() - 2_000 - 1_001;
+  old.hooks.wipedAt = () => before;
+  assert.equal(await firstLook(old), 13_000);
+  const unreadable = harness({ uptime: 2_000 });
+  unreadable.hooks.wipedAt = () => {
+    throw new Error("EACCES");
+  };
+  assert.equal(await firstLook(unreadable), 13_000);
+  assert.deepEqual(unreadable.removed, ["draft-1"]);
+  // Up 15 s already: the marker is not read at all.
+  const up = harness();
+  up.hooks.wipedAt = () => assert.fail("not read");
+  assert.equal(await firstLook(up), 0);
+  assert.equal(up.wipeReads, 0);
+});
+
+test("right after a switch, a run waits up to 10 s for Claude to start", async () => {
+  // Claude starts 3 s after the switch; Desktop's wipe is done 2 s after that.
+  const h = harness();
+  const switched = h.now();
+  const startsAt = switched + 3_000;
+  h.deps.running = async () => h.now() >= startsAt;
+  h.hooks.uptime = () => h.now() - startsAt;
+  h.hooks.wipedAt = () => (h.now() >= startsAt + 2_000 ? startsAt + 2_000 : undefined);
+  let at: number | undefined;
+  h.hooks.inspect = (n) => {
+    if (n === 1) at = h.now() - switched;
+  };
+  assert.equal(
+    (await restoreDrafts(h.deps, { launching: true })).restored,
+    1,
+  );
+  assert.equal(at, 5_000);
+  // Without `launching`, a Claude not running yet is not waited for.
+  const later = harness({ running: false });
+  assert.equal((await restoreDrafts(later.deps)).status, "waiting");
+  assert.deepEqual(later.sleeps, []);
+  // A Claude that never starts: 10 s, then the drafts wait for the next run.
+  const never = harness({ running: false });
+  assert.deepEqual(await restoreDrafts(never.deps, { launching: true }), {
+    status: "waiting",
+    restored: 0,
+    left: 1,
+  });
+  assert.equal(sum(never.sleeps), 10_000);
+  assert.deepEqual(never.calls, []);
 });
 
 test("restores one draft and returns to the user's conversation", async () => {
@@ -416,6 +545,18 @@ test("a non-empty composer is never written", async () => {
   assert.deepEqual(raced.marks, [
     ["draft-1", "needs-copy", "composer-not-empty"],
   ]);
+  // A composer with text is not waited on for a guard: nothing will be typed there anyway.
+  // (2026-10-19 09:26: 30 s of looks every 500 ms at a composer the user had typed into.)
+  const unguarded = harness({
+    shown: target(1),
+    composers: { [target(1)]: "the user's own words" },
+  });
+  unguarded.screenPatch.set(target(1), { permissionMode: undefined });
+  await restoreDrafts(unguarded.deps);
+  assert.deepEqual(unguarded.marks, [
+    ["draft-1", "needs-copy", "composer-not-empty"],
+  ]);
+  assert.deepEqual(unguarded.sleeps, []);
 });
 
 test("a busy conversation is never written", async () => {
@@ -784,15 +925,21 @@ test("the user moving between drafts stops the restore and is never sent back", 
     reason: "moved",
   });
   assert.deepEqual(unseen.opens(), [`open:${target(1)}`]);
-  // The user moving between the wait for the UI and the first lock: nothing is touched.
+  // The screen changing between the wait for the UI and the first lock, as while Desktop
+  // loads, is no move: Relay has done nothing yet, and brings the user back to where the
+  // first lock found them.
   const early = harness();
   let looks = 0;
   // The ready look sees HOME; by the first lock's look the user is elsewhere.
   early.hooks.inspect = () => {
     if (++looks === 2) early.setShown(ELSEWHERE);
   };
-  assert.equal((await restoreDrafts(early.deps)).reason, "moved");
-  assert.deepEqual(early.opens(), []);
+  assert.deepEqual(await restoreDrafts(early.deps), {
+    status: "done",
+    restored: 1,
+    left: 0,
+  });
+  assert.deepEqual(early.opens(), [`open:${target(1)}`, `open:${ELSEWHERE}`]);
 });
 
 test("the conditions are read again under each lock", async () => {
@@ -1306,10 +1453,19 @@ test("a vault that fails to mark or remove does not stop the other drafts", asyn
 });
 
 test("the return point is used only when it was seen and differs from the last conversation", async () => {
-  // No conversation was open when the restore started.
-  const unseen = harness({ shown: undefined });
-  await restoreDrafts(unseen.deps);
-  assert.deepEqual(unseen.opens(), [`open:${target(1)}`]);
+  // Where the user is cannot be told: Relay never takes them away, as it could not bring them
+  // back. The draft waits for them to open its conversation.
+  const unseen = harness({ shown: undefined, records: [record(1), fresh(2)] });
+  assert.deepEqual(await restoreDrafts(unseen.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 2,
+    reason: "elsewhere",
+  });
+  assert.deepEqual(unseen.opens(), []);
+  assert.deepEqual(unseen.writes(), []);
+  assert.deepEqual(unseen.marks, []);
+  assert.deepEqual(unseen.notes, []);
   // The user was already on the draft's conversation: nothing is opened at all.
   const same = harness({ shown: target(1) });
   assert.equal((await restoreDrafts(same.deps)).restored, 1);
@@ -1377,6 +1533,103 @@ test("a target already on screen is not opened", async () => {
   assert.deepEqual(h.writes(), [`write:${target(1)}`]);
 });
 
+test("a draft whose place is on screen is typed there with 1 s of quiet keys, whatever the mouse does", async () => {
+  for (const shown of [target(1), NEW]) {
+    const records = shown === NEW ? [fresh(1)] : [record(1)];
+    const h = harness({ shown, records });
+    // The mouse is in use; no key has been pressed for 1 s.
+    h.activity.idleMs = 0;
+    h.activity.keyIdleMs = 1_000;
+    assert.deepEqual(await restoreDrafts(h.deps), {
+      status: "done",
+      restored: 1,
+      left: 0,
+    });
+    assert.deepEqual(h.opens(), [], shown);
+    assert.deepEqual(h.writes(), [`write:${shown}`], shown);
+    assert.deepEqual(h.removed, ["draft-1"], shown);
+  }
+  // Every write asks the helper to check, right before it types, that no key came for 1 s.
+  const visit = harness({ records: [record(1), record(2)] });
+  assert.equal((await restoreDrafts(visit.deps)).restored, 2);
+  assert.deepEqual(visit.writeOptions, [
+    { keysIdleMs: 1_000 },
+    { keysIdleMs: 1_000 },
+  ]);
+  // A key between the look and the write: the helper refuses, and the draft waits.
+  const late = harness({ shown: target(1) });
+  late.hooks.write = () => {
+    late.activity.keyIdleMs = 50;
+  };
+  assert.deepEqual(await restoreDrafts(late.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 1,
+    reason: "active",
+  });
+  assert.equal(late.composers.get(target(1)), undefined);
+  assert.deepEqual(late.marks, []);
+});
+
+test("the draft of the place on screen goes first, and the user is brought back there", async () => {
+  const h = harness({ records: [record(1), record(2), record(3)], shown: target(2) });
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "done",
+    restored: 3,
+    left: 0,
+  });
+  assert.deepEqual(h.writes(), [
+    `write:${target(2)}`,
+    `write:${target(1)}`,
+    `write:${target(3)}`,
+  ]);
+  assert.deepEqual(h.opens(), [
+    `open:${target(1)}`,
+    `open:${target(3)}`,
+    `open:${target(2)}`,
+  ]);
+  assert.equal(h.shown, target(2));
+});
+
+test("without visits only the draft on screen is typed, and the rest wait as elsewhere", async () => {
+  const h = harness({ records: [record(1), record(2), fresh(3)], shown: target(2) });
+  assert.deepEqual(await restoreDrafts(h.deps, { visits: false }), {
+    status: "waiting",
+    restored: 1,
+    left: 2,
+    reason: "elsewhere",
+  });
+  assert.deepEqual(h.opens(), []);
+  assert.deepEqual(h.writes(), [`write:${target(2)}`]);
+  assert.deepEqual(h.marks, []);
+  assert.deepEqual(h.notes, [{ restored: 1, left: 0 }]);
+  assert.deepEqual(
+    h.logs.filter((e) => e.event === "skip"),
+    [
+      { event: "skip", id: "draft-1", visits: false, returnKnown: true },
+      { event: "skip", id: "draft-3", visits: false, returnKnown: true },
+    ],
+  );
+  // Nothing on screen of theirs: nothing is opened, typed or told.
+  const none = harness({ records: [record(1)] });
+  assert.deepEqual(await restoreDrafts(none.deps, { visits: false }), {
+    status: "waiting",
+    restored: 0,
+    left: 1,
+    reason: "elsewhere",
+  });
+  assert.deepEqual(none.calls.filter((c) => c !== "inspect"), []);
+  assert.deepEqual(none.notes, []);
+  // An idle user changes nothing about it.
+  const idle = harness({ records: [record(1)] });
+  idle.activity.idleMs = 600_000;
+  assert.equal(
+    (await restoreDrafts(idle.deps, { visits: false })).reason,
+    "elsewhere",
+  );
+  assert.deepEqual(idle.opens(), []);
+});
+
 test("while the screen shows where the user was, or is loading, the link is sent again every 5 s", async () => {
   const h = harness();
   const start = h.now();
@@ -1399,7 +1652,8 @@ test("while the screen shows where the user was, or is loading, the link is sent
 
 test("Claude not in front, or the user active, leaves every draft pending and opens nothing", async () => {
   type Activity = ReturnType<typeof harness>["activity"];
-  const cases: Array<[string, (a: Activity) => void]> = [
+  // Taking the user to the first draft's conversation needs 3 s without any input.
+  const away: Array<[string, (a: Activity) => void]> = [
     ["Claude is not frontmost", (a) => void (a.frontmost = false)],
     ["the user was active 1 s ago", (a) => void (a.idleMs = 1_000)],
     ["no frontmost field", (a) => void delete a.frontmost],
@@ -1413,8 +1667,31 @@ test("Claude not in front, or the user active, leaves every draft pending and op
     ],
   ];
   // With the first draft's conversation already on screen, nothing but the lock's own look
-  // stands between Relay and a write.
-  for (const shown of [HOME, target(1)])
+  // stands between Relay and a write: Claude in front, and no key for 1 s.
+  const here: Array<[string, (a: Activity) => void]> = [
+    ["Claude is not frontmost", (a) => void (a.frontmost = false)],
+    ["a key was pressed 999 ms ago", (a) => void (a.keyIdleMs = 999)],
+    ["no frontmost field", (a) => void delete a.frontmost],
+    [
+      "a helper that tells no keys apart, and input 1 s ago",
+      (a) => {
+        delete a.keyIdleMs;
+        a.idleMs = 1_000;
+      },
+    ],
+    [
+      "no field",
+      (a) => {
+        delete a.frontmost;
+        delete a.idleMs;
+        delete a.keyIdleMs;
+      },
+    ],
+  ];
+  for (const [shown, cases] of [
+    [HOME, away],
+    [target(1), here],
+  ] as const)
     for (const [name, change] of cases) {
       const h = harness({ records: [record(1), record(2)], shown });
       change(h.activity);
@@ -1496,7 +1773,9 @@ test("a write refused because the user is active leaves the draft pending, never
   // The user starts typing as the target shows: the helper's own fresh look refuses.
   const typing = harness();
   typing.hooks.inspect = () => {
-    if (typing.shown === target(1)) typing.activity.idleMs = 100;
+    if (typing.shown !== target(1)) return;
+    typing.activity.idleMs = 100;
+    typing.activity.keyIdleMs = 100;
   };
   assert.deepEqual(await restoreDrafts(typing.deps), {
     status: "waiting",
@@ -1729,6 +2008,8 @@ test("a restored draft logs each step of its run, and no text", async () => {
     records: 2,
     all: 2,
     ready: true,
+    wiped: false,
+    waitedMs: 0,
   });
   assert.deepEqual(h.logs[1], {
     event: "record-start",
@@ -1921,7 +2202,7 @@ test("a re-check that cannot look is logged without a view", async () => {
 });
 
 test("a run that finds Claude not ready logs it, and one with nothing to restore logs why", async () => {
-  const early = harness({ uptime: 1_000, records: [record(1, { text: SECRET })] });
+  const early = harness({ running: false, records: [record(1, { text: SECRET })] });
   await restoreDrafts(early.deps);
   assert.deepEqual(early.logs, [
     { event: "restore-start", account: ACCOUNT.slice(0, 8), records: 1, all: 1, ready: false },

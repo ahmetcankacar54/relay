@@ -40,6 +40,10 @@ const REASONS: Record<string, readonly [string, string]> = {
   moved: ["Başka bir ekrana geçtin", "You went to another screen"],
   "claude-not-running": ["Claude uygulaması çalışmıyordu", "The Claude app was not running"],
   budget: ["Süre doldu", "Ran out of time"],
+  "not-opened": [
+    "Konuşmayı 30 dakika içinde açmadın",
+    "You didn’t open the conversation within 30 minutes",
+  ],
 };
 const UNKNOWN_REASON = REASONS.error;
 
@@ -61,6 +65,10 @@ const NEW_SESSION_REASONS: Record<string, readonly [string, string]> = {
   "exact-session-not-observed": [
     "Yeni oturum ekranı açılamadı",
     "The new-session screen could not be opened",
+  ],
+  "not-opened": [
+    "Yeni oturum ekranını 30 dakika içinde açmadın",
+    "You didn’t open the new-session screen within 30 minutes",
   ],
 };
 

@@ -63,6 +63,11 @@ export interface DesktopAutomationSnapshot {
   frontmost?: boolean;
   /** Milliseconds since the user's last input of any kind. Outside the fingerprint; older helpers omit it. */
   idleMs?: number;
+  /**
+   * Milliseconds since the user last pressed a key, a modifier included; mouse input does not
+   * count. Outside the fingerprint; older helpers omit it.
+   */
+  keyIdleMs?: number;
 }
 
 export interface DesktopAutomationGuard {
@@ -128,12 +133,14 @@ export interface DesktopAutomation {
    * new-session screen, and never presses Send. One guarded attempt: a non-empty
    * composer is `composer-not-empty`, a moved context is `context-changed`, an
    * unverifiable result is `delivery-ambiguous`. Claude not in front, or input from
-   * the user in the last 3 s, is `user-active`, before anything is typed. Resolves
-   * with the snapshot taken after the write.
+   * the user in the last 3 s, is `user-active`, before anything is typed; with
+   * `keysIdleMs` (500 to 3000), a key pressed in that time instead of any input.
+   * Resolves with the snapshot taken after the write.
    */
   writeDraft(
     guard: DesktopDraftGuard,
     text: string,
+    options?: { keysIdleMs?: number },
   ): Promise<DesktopAutomationSnapshot>;
 }
 
@@ -237,7 +244,9 @@ function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
     /^[0-9a-f]{64}$/.test(v.contextFingerprint) &&
     v.coverage === "active-conversation-only" &&
     (v.frontmost === undefined || typeof v.frontmost === "boolean") &&
-    (v.idleMs === undefined || (Number.isSafeInteger(v.idleMs) && v.idleMs >= 0))
+    (v.idleMs === undefined || (Number.isSafeInteger(v.idleMs) && v.idleMs >= 0)) &&
+    (v.keyIdleMs === undefined ||
+      (Number.isSafeInteger(v.keyIdleMs) && v.keyIdleMs >= 0))
   );
 }
 
@@ -367,11 +376,22 @@ export function nativeDesktopAutomation(
       });
       return { acceptedVisible: r.acceptedVisible === true };
     },
-    writeDraft: async (expected, text) => {
+    writeDraft: async (expected, text, options) => {
       if (!text || text.length > MAX_DRAFT_LENGTH || text.includes("\0"))
         throw new DesktopAutomationError("desktop-ui-unsupported");
+      const keys = options?.keysIdleMs;
+      if (
+        keys !== undefined &&
+        !(Number.isSafeInteger(keys) && keys >= 500 && keys <= 3_000)
+      )
+        throw new DesktopAutomationError("desktop-ui-unsupported");
       return snapshot(
-        await call({ command: "write-draft", guard: expected, text }),
+        await call({
+          command: "write-draft",
+          guard: expected,
+          text,
+          ...(keys !== undefined ? { keysIdleMs: keys } : {}),
+        }),
       );
     },
     hasRequestMarker: async (requestId) => {
