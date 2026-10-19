@@ -8,6 +8,7 @@ import { Store } from "../electron/core/store";
 import {
   DESKTOP_CACHE_MS,
   DesktopManager,
+  DesktopSwitchRefused,
   type DesktopHost,
 } from "../electron/core/desktop";
 import type { DesktopRestartEvent } from "../shared/types";
@@ -197,11 +198,35 @@ test("a changed continuation guard blocks restart before Claude is asked to quit
   const quits = f.quits();
   await assert.rejects(
     f.manager.switchTo(b.id, { canProceed: () => false }),
-    /cancelled before restart/,
+    (error) =>
+      error instanceof DesktopSwitchRefused &&
+      /cancelled before restart/.test(error.message),
+  );
+  // A `beforeQuit` refusal reaches the caller as it was thrown.
+  const refusal = new DesktopSwitchRefused("work-started");
+  await assert.rejects(
+    f.manager.switchTo(b.id, {
+      canProceed: () => true,
+      beforeQuit: async () => {
+        throw refusal;
+      },
+    }),
+    (error) => error === refusal,
   );
   assert.equal(f.quits(), quits);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
   assert.equal((await f.manager.snapshot()).running, true);
+  // A guard that refuses only after the quit is an ordinary failure, not a refusal.
+  let checks = 0;
+  await assert.rejects(
+    f.manager.switchTo(b.id, { canProceed: () => ++checks <= 2 }),
+    (error) =>
+      error instanceof Error &&
+      !(error instanceof DesktopSwitchRefused) &&
+      /conditions changed/.test(error.message),
+  );
+  assert.equal(f.quits(), quits + 1);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
 });
 test("real Desktop file switch A → B → A preserves config, cookies, history and refreshes saved credentials", async (t) => {
   const f = await fixture(t);

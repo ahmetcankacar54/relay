@@ -14,6 +14,21 @@ export interface TranscriptSummary {
   cwds: ReadonlySet<string>;
   /** The latest main-chain user or assistant row. */
   last?: Row;
+  /** When `last` is a task notification, the latest other main-chain row before it. */
+  beforeNotifications?: Row;
+}
+
+/**
+ * A prompt Claude Code wrote itself when a background task finished, not one
+ * a person sent. Older transcripts lack `origin`; their text still says so.
+ */
+export function isTaskNotification(row: Row) {
+  if (row.type !== "user") return false;
+  if (row.origin !== undefined) return row.origin?.kind === "task-notification";
+  const content = row.message?.content;
+  return (
+    typeof content === "string" && content.startsWith("<task-notification>")
+  );
 }
 
 interface Scan {
@@ -29,6 +44,7 @@ interface Scan {
   hash: Hash;
   cwds: Set<string>;
   last?: Row;
+  beforeNotifications?: Row;
   /** A malformed or oversized line was consumed; its file is never usable. */
   invalid: boolean;
 }
@@ -103,6 +119,7 @@ export class TranscriptScanner {
         sha256: scan!.hash.copy().digest("hex"),
         cwds: new Set(scan!.cwds),
         last: scan!.last,
+        beforeNotifications: scan!.beforeNotifications,
       };
     } finally {
       await handle.close();
@@ -195,8 +212,12 @@ export class TranscriptScanner {
       !value.isSidechain &&
       !value.isMeta &&
       ["user", "assistant"].includes(value.type)
-    )
+    ) {
+      if (!isTaskNotification(value)) scan.beforeNotifications = undefined;
+      else if (scan.last && !isTaskNotification(scan.last))
+        scan.beforeNotifications = scan.last;
       scan.last = value;
+    }
   }
 }
 

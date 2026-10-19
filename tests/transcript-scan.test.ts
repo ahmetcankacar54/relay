@@ -221,3 +221,42 @@ test("retain forgets transcripts that are no longer watched", async () => {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("the row before trailing task notifications is kept until another row follows them", async () => {
+  const { root, file } = await scratch();
+  try {
+    const notice = (uuid: string) => ({
+      type: "user",
+      uuid,
+      origin: { kind: "task-notification" },
+      message: { content: "<task-notification>\n</task-notification>" },
+    });
+    const stop = {
+      type: "assistant",
+      uuid: "q1",
+      error: "rate_limit",
+      message: { content: "limited" },
+    };
+    const scanner = new TranscriptScanner();
+    await fs.writeFile(file, line(stop));
+    assert.equal((await scanner.scan(file)).beforeNotifications, undefined);
+    await fs.appendFile(file, line(notice("n1")));
+    await fs.appendFile(file, line({ type: "user", isMeta: true }));
+    await fs.appendFile(file, line(notice("n2")));
+    const after = await scanner.scan(file);
+    assert.equal(after.last?.uuid, "n2");
+    assert.equal(after.beforeNotifications?.uuid, "q1");
+    // A fresh scan of the whole file concludes the same.
+    const fresh = await new TranscriptScanner().scan(file);
+    assert.equal(fresh.beforeNotifications?.uuid, "q1");
+    await fs.appendFile(
+      file,
+      line({ type: "user", uuid: "h1", message: { content: "go on" } }),
+    );
+    const prompted = await scanner.scan(file);
+    assert.equal(prompted.last?.uuid, "h1");
+    assert.equal(prompted.beforeNotifications, undefined);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

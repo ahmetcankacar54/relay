@@ -5,7 +5,11 @@ import { createHash } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { readObject, readBytes, safeFile, scopePath } from "./desktop-files";
-import { TranscriptScanner, type TranscriptSummary } from "./transcript-scan";
+import {
+  TranscriptScanner,
+  isTaskNotification,
+  type TranscriptSummary,
+} from "./transcript-scan";
 import type { Account } from "../../shared/types";
 import type { Store } from "./store";
 import type { DesktopManager } from "./desktop";
@@ -232,14 +236,30 @@ export function desktopProcessQuiescence(
   return result;
 }
 
+/**
+ * The main chain's latest user or assistant row. Background tasks that finish
+ * after a usage-limit stop leave task notifications behind it; out of quota,
+ * Claude Code never answers them, so the stop stays the latest row. After any
+ * other row a notification starts a new turn and is the latest row itself.
+ */
+function mainTail(rows: Row[]) {
+  const turns = rows.filter(
+    (r) =>
+      !r.isSidechain && !r.isMeta && ["user", "assistant"].includes(r.type),
+  );
+  let index = turns.length - 1;
+  while (index >= 0 && isTaskNotification(turns[index])) index--;
+  const settled = turns[index];
+  return index < turns.length - 1 &&
+    settled?.type === "assistant" &&
+    transcriptError(settled) === "quota"
+    ? settled
+    : turns.at(-1);
+}
+
 /** Turn state of a transcript's main chain: an unfinished turn means work is in progress. */
 export function transcriptTurnState(rows: Row[]): "idle" | "busy" {
-  const tail = rows
-    .filter(
-      (r) =>
-        !r.isSidechain && !r.isMeta && ["user", "assistant"].includes(r.type),
-    )
-    .at(-1);
+  const tail = mainTail(rows);
   if (!tail) return "idle";
   if (tail.type === "user")
     return /^\[Request interrupted/.test(transcriptMessageText(tail).trim())
@@ -380,11 +400,7 @@ function transcriptError(row: Row): "quota" | "other" | undefined {
 }
 
 export function latestQuotaEndedTurn(rows: Row[]) {
-  const turns = rows.filter(
-    (r) =>
-      !r.isSidechain && !r.isMeta && ["user", "assistant"].includes(r.type),
-  );
-  const tail = turns.at(-1);
+  const tail = mainTail(rows);
   if (!tail || tail.type !== "assistant" || !UUID.test(tail.uuid ?? "")) return;
   if (transcriptError(tail) !== "quota") return;
   return {
@@ -393,12 +409,17 @@ export function latestQuotaEndedTurn(rows: Row[]) {
   };
 }
 
+/** A row Claude Code wrote itself, such as an API error or "No response requested.". */
+const synthetic = (row: Row) => row.message?.model === "<synthetic>";
+
 export function continuationTurn(rows: Row[], requestId?: string) {
+  // A background task that finishes during the resumed turn is not a new prompt.
   const users = rows.filter(
     (r) =>
       r.type === "user" &&
       !r.isMeta &&
       !r.isSidechain &&
+      !isTaskNotification(r) &&
       transcriptMessageText(r),
   );
   const user = users.at(-1);
@@ -420,20 +441,33 @@ export function continuationTurn(rows: Row[], requestId?: string) {
     }
     return false;
   };
+  // Before the first prompt after a stop, Claude Code writes a synthetic
+  // "No response requested." reply and parents the prompt on it: a row the
+  // marker itself answers, not other work.
+  const answered = new Set<string>();
+  for (
+    let cursor = byId.get(user.parentUuid);
+    cursor && !answered.has(cursor.uuid);
+    cursor = byId.get(cursor.parentUuid)
+  )
+    answered.add(cursor.uuid);
   // The resumed turn alternates assistant and tool-result rows while it works.
   // Its latest successful assistant row in the marker's chain proves it started.
-  // A persisted API error alone (for example another quota stop) only proves
-  // the input was accepted, never that work resumed.
+  // A persisted API error alone (for example another quota stop) or another
+  // synthetic row only proves the input was accepted, never that work resumed.
   const assistants = rows.filter(
     (r) =>
       r.type === "assistant" &&
       !r.isMeta &&
       !r.isSidechain &&
-      UUID.test(r.uuid ?? ""),
+      UUID.test(r.uuid ?? "") &&
+      !(synthetic(r) && answered.has(r.uuid)),
   );
   const chained = assistants.filter(descends);
   if (assistants.length && !chained.length) return;
-  const started = chained.filter((r) => !transcriptError(r)).at(-1);
+  const started = chained
+    .filter((r) => !transcriptError(r) && !synthetic(r))
+    .at(-1);
   return started
     ? { requestId: marker[1], user, assistant: started }
     : { requestId: marker[1], user };
@@ -748,8 +782,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       } catch {
         continue;
       }
-      const { last } = transcript.summary;
-      const ended = latestQuotaEndedTurn(last ? [last] : []);
+      const { last, beforeNotifications } = transcript.summary;
+      const ended = latestQuotaEndedTurn(
+        [beforeNotifications, last].filter((row) => row !== undefined),
+      );
       if (
         !ended ||
         !Number.isFinite(ended.timestamp) ||
@@ -861,6 +897,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
         r.type === "user" &&
         !r.isMeta &&
         !r.isSidechain &&
+        !isTaskNotification(r) &&
         transcriptMessageText(r).includes(marker),
     );
     if (!users.length) return "absent";
@@ -964,11 +1001,11 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       ended.timestamp <= now;
     const selectedEnded =
       snapshot.status === "stopped" &&
-      tail?.type === "assistant" &&
       (Boolean(ended) ||
-        ["end_turn", "max_tokens", "stop_sequence"].includes(
-          tail.message?.stop_reason,
-        ));
+        (tail?.type === "assistant" &&
+          ["end_turn", "max_tokens", "stop_sequence"].includes(
+            tail.message?.stop_reason,
+          )));
     const processes = await (this.options.processes ?? collectProcesses)();
     this.remember(processes, snapshot.pid);
     const quiescence = desktopProcessQuiescence(
@@ -1281,6 +1318,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
         r.type === "user" &&
         !r.isMeta &&
         !r.isSidechain &&
+        !isTaskNotification(r) &&
         transcriptMessageText(r).includes(marker),
     );
     if (!users.length) return { status: "absent" };

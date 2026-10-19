@@ -94,8 +94,15 @@ export interface DesktopSwitchOptions {
   closedOnly?: boolean;
   expectedActiveProfileId?: string;
   canProceed?: () => boolean;
+  /** Runs right before Claude is asked to quit; throw `DesktopSwitchRefused` to call it off. */
   beforeQuit?: () => Promise<void>;
 }
+/**
+ * A switch called off by its guards before Claude was asked to quit: Claude kept running and
+ * no file was written, so trying again later restarts nothing twice. Thrown when `canProceed`
+ * refuses before the quit; a `beforeQuit` that refuses throws it itself and it passes unchanged.
+ */
+export class DesktopSwitchRefused extends Error {}
 interface Operation {
   kind: DesktopOperationKind;
   profileId?: string;
@@ -966,11 +973,13 @@ export class DesktopManager {
   ) {
     // Check the live handoff guard immediately before asking Claude to quit.
     // File-write guards alone are too late to protect a newly started task.
-    if (canProceed && !canProceed())
-      throw new Error("Automatic Desktop switch was cancelled before restart.");
+    const refuse = () =>
+      new DesktopSwitchRefused(
+        "Automatic Desktop switch was cancelled before restart.",
+      );
+    if (canProceed && !canProceed()) throw refuse();
     await beforeQuit?.();
-    if (canProceed && !canProceed())
-      throw new Error("Automatic Desktop switch was cancelled before restart.");
+    if (canProceed && !canProceed()) throw refuse();
     await this.quitClaude();
     try {
       await fn();

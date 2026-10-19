@@ -16,6 +16,7 @@ import {
   writePrivateJson,
 } from "./continuation-journal";
 import type { QuotaStop } from "./desktop-continuation-evidence";
+import { DesktopSwitchRefused } from "./desktop";
 
 export { sourceExhausted } from "../../shared/usage";
 
@@ -42,6 +43,7 @@ export interface FleetDeps {
   unchanged(stop: QuotaStop): boolean;
   /** Reason the UI automation cannot continue conversations, or undefined. */
   automationReady(): Promise<string | undefined>;
+  /** Throws `DesktopSwitchRefused` when a guard called the switch off before Claude quit. */
   switchTo(
     targetId: string,
     guards: { canProceed: () => boolean; beforeQuit: () => Promise<void> },
@@ -349,14 +351,26 @@ export class FleetContinuation {
               (await this.deps.quiet(current)) ||
               !current.every((stop) => this.deps.unchanged(stop))
             )
-              throw new Error("work-started");
+              throw new DesktopSwitchRefused("work-started");
           },
         });
       } catch (error) {
         const after = await this.deps.desktop().catch(() => undefined);
         if (after?.activeProfileId !== target.id) {
-          // Not switched. Never retry this limit automatically: a persistent
-          // failure must not restart Claude again and again.
+          if (error instanceof DesktopSwitchRefused) {
+            // Called off before Claude quit, often by a task notification landing in a
+            // stopped transcript: nothing restarted, so the next tick scans these again.
+            this.scan = undefined;
+            this.save({ ...this.saved, pending: undefined });
+            return this.publish({
+              ...base,
+              targetId: target.id,
+              status: "waiting",
+              reason: "context-changed",
+            });
+          }
+          // Not switched, and a quit or a write may have happened. Never retry this
+          // limit automatically: a persistent failure must not restart Claude again and again.
           this.save({
             ...this.saved,
             pending: undefined,
