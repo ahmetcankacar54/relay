@@ -149,3 +149,13 @@
     animation-iteration-count: infinite !important;
   }
 }
+/*
+ * A window nobody sees holds its motion still (src/lib/motion.ts): the hidden menu bar panel,
+ * the main window behind another app. Paused animations need no frames, so the renderer and the
+ * GPU idle. A spinner keeps turning: it reports work.
+ */
+:root[data-motion-paused] *:not(.animate-spin):not([data-spinner]),
+:root[data-motion-paused] *::before,
+:root[data-motion-paused] *::after {
+  animation-play-state: paused !important;
+}
