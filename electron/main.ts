@@ -97,8 +97,25 @@ import {
 import { appendUsageIssue } from "./core/usage-issue-log";
 import { appendDraftEvent, draftEventFilter } from "./core/draft-diagnostics";
 import { UsageError } from "./core/usage-credentials";
+import { WindowRelease } from "./window-release";
 
 let window: BrowserWindow | null = null;
+/**
+ * A closed main window stays loaded a minute, then its renderer is freed; showWindow creates it
+ * again. A sign-in or a Desktop operation in progress keeps it.
+ */
+const windowRelease = new WindowRelease({
+  hidden: () => !!window && !window.isDestroyed() && !window.isVisible(),
+  busy: () =>
+    !initialized ||
+    desktop.isBusy ||
+    desktopLock.busy ||
+    !!observedDesktop?.pendingProfileId ||
+    service.auth
+      .list()
+      .some((f) => ["starting", "waiting", "verifying"].includes(f.status)),
+  release: () => window?.destroy(),
+});
 let service: Service;
 let desktop: DesktopManager;
 let usage: UsageManager;
@@ -1015,8 +1032,11 @@ function createWindow() {
   applyAppMenu();
   loadPage(window, "index.html");
   window.on("closed", () => {
+    windowRelease.cancel();
     window = null;
   });
+  window.on("hide", () => windowRelease.arm());
+  window.on("show", () => windowRelease.cancel());
   window.on("close", (event) => {
     if (!quitting && tray) {
       event.preventDefault();
