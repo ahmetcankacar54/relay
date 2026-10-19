@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
-import type { LostItem } from "../../shared/lost-found";
+import { validLostItem, type LostItem } from "../../shared/lost-found";
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Where the kept items live: a JSON array of `ShelfItem`, newest first. */
 const STORAGE_KEY = "relay.lostfound.shelf.v1";
@@ -42,8 +44,10 @@ function load(): readonly ShelfItem[] {
       ? parsed.filter(
           (entry): entry is ShelfItem =>
             typeof entry?.id === "string" &&
-            typeof entry?.start === "string" &&
-            typeof entry?.item?.kind === "string",
+            DATE.test(entry?.start) &&
+            DATE.test(entry?.end) &&
+            validLostItem(entry?.item) &&
+            (entry?.names === undefined || typeof entry.names === "object"),
         )
       : [];
   } catch {

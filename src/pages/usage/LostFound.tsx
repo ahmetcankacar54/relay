@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { LostFoundWeek, LostItem } from "../../../shared/lost-found";
+import {
+  addDays,
+  type LostFoundWeek,
+  type LostItem,
+} from "../../../shared/lost-found";
 import type { Account } from "../../../shared/types";
 import { PandaRig } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
@@ -41,22 +45,67 @@ const COUNT_WORDS: Record<number, Copy> = {
   7: ["Yedi", "Seven"],
 };
 
-/** "Çarşamba 09:56" / "Wednesday 09:56" in the planning zone. */
-function formatWhen(iso: string, zone: string, language: Language) {
-  return new Intl.DateTimeFormat(locale(language), {
-    weekday: "long",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZone: zone,
-  }).format(new Date(iso));
+// Building an Intl formatter costs more than formatting with it, and a shelf tells up to 40 items.
+const timeFormats = new Map<string, Intl.DateTimeFormat>();
+function timeFormat(language: Language, zone: string, weekday: boolean) {
+  const key = `${language}|${zone}|${weekday}`;
+  let format = timeFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat(locale(language), {
+      ...(weekday ? { weekday: "long" as const } : {}),
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: zone,
+    });
+    timeFormats.set(key, format);
+  }
+  return format;
 }
+
+/** "Çarşamba 09:56" / "Wednesday 09:56" in the planning zone. */
+const formatWhen = (iso: string, zone: string, language: Language) =>
+  timeFormat(language, zone, true).format(new Date(iso));
 
 /** "12–18 Eki" within a month, "29 Eyl – 5 Eki" across two. */
 export function weekLabel(start: string, end: string, language: Language) {
   return start.slice(0, 7) === end.slice(0, 7)
     ? `${Number(start.slice(8))}–${formatDay(end, language)}`
     : `${formatDay(start, language)} – ${formatDay(end, language)}`;
+}
+
+/** "1 minute" / "8 minutes". */
+const minutesEn = (n: number) => `${n} ${n === 1 ? "minute" : "minutes"}`;
+/** "once", "twice", "3 times". */
+const timesEn = (n: number) =>
+  n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
+
+/** An item's picture and name: all a shelf tile needs. */
+export function lookOf(item: LostItem, t: T): { emoji: string; title: string } {
+  switch (item.kind) {
+    case "hourglass":
+      return { emoji: "⏳", title: t("Kum saati", "Hourglass") };
+    case "boomerang":
+      return { emoji: "🪃", title: t("Bumerang", "Boomerang") };
+    case "trophy":
+      return { emoji: "🏆", title: t("Rekor kupası", "Trophy") };
+    case "scroll":
+      return { emoji: "📜", title: t("Uzun parşömen", "Long scroll") };
+    case "scarf": {
+      const n = item.accountIds.length;
+      const word = COUNT_WORDS[n] ?? [String(n), String(n)];
+      return {
+        emoji: "🧣",
+        title: t(`${word[0]} renkli atkı`, `${word[1]}-colour scarf`),
+      };
+    }
+    case "clocks":
+      return { emoji: "⏰", title: t("Çift çalar saat", "Twin alarm clocks") };
+    case "spare":
+      return { emoji: "🛞", title: t("Yedek lastik", "Spare tyre") };
+    case "feather":
+      return { emoji: "🪶", title: t("Gece kuşu tüyü", "Night owl feather") };
+  }
 }
 
 /** How an item reads: its picture, name, what happened, when and to whom, and what the panda thinks. */
@@ -70,7 +119,7 @@ export interface Described {
   quip: string;
 }
 
-/** Every item's words, in the page's language; every Turkish line keeps suffixes off numbers and names. */
+/** Every item's words, in the page's language; every Turkish line keeps suffixes off numbers, names and times. */
 export function describe(
   item: LostItem,
   week: { start: string; end: string },
@@ -78,13 +127,12 @@ export function describe(
   t: T,
   language: Language,
 ): Described {
-  const pick = (c: Copy) => (language === "tr" ? c[0] : c[1]);
+  const look = lookOf(item, t);
   switch (item.kind) {
     case "hourglass": {
       const took = formatDuration(item.minutes * 60_000, language);
       return {
-        emoji: "⏳",
-        title: t("Kum saati", "Hourglass"),
+        ...look,
         story: t(
           `Bir 5 saatlik dönem, başlamasından yalnızca ${took} sonra doldu.`,
           `A five-hour window ran out just ${took} after it began.`,
@@ -99,11 +147,10 @@ export function describe(
     }
     case "boomerang":
       return {
-        emoji: "🪃",
-        title: t("Bumerang", "Boomerang"),
+        ...look,
         story: t(
           `Başladığın hesaba ${item.minutes} dakika içinde geri döndün.`,
-          `You were back on the account you started with within ${item.minutes} minutes.`,
+          `You were back on the account you started with within ${minutesEn(item.minutes)}.`,
         ),
         when: formatWhen(item.at, zone, language),
         accounts: [item.accountIds[0], item.accountIds[1], item.accountIds[0]],
@@ -115,8 +162,7 @@ export function describe(
         maximumFractionDigits: 1,
       }).format(item.times);
       return {
-        emoji: "🏆",
-        title: t("Rekor kupası", "Trophy"),
+        ...look,
         story: t(
           `Son 30 günün en yoğun günü: sıradan bir günün ${times} katı, ${count} token.`,
           `The busiest of the last 30 days: ${times}× an ordinary day, ${count} tokens.`,
@@ -131,8 +177,7 @@ export function describe(
         Date.parse(item.at) + item.hours * 3_600_000,
       ).toISOString();
       return {
-        emoji: "📜",
-        title: t("Uzun parşömen", "Long scroll"),
+        ...look,
         story: t(
           `${item.hours} saat aralıksız çalıştın.`,
           `You worked ${item.hours} hours without a break.`,
@@ -149,8 +194,7 @@ export function describe(
       const n = item.accountIds.length;
       const word = COUNT_WORDS[n] ?? [String(n), String(n)];
       return {
-        emoji: "🧣",
-        title: t(`${word[0]} renkli atkı`, `${word[1]}-colour scarf`),
+        ...look,
         story: t(
           `Aynı gün ${n} hesabın her biri iş başındaydı.`,
           `${word[1]} accounts all took a turn on the same day.`,
@@ -161,27 +205,26 @@ export function describe(
       };
     }
     case "clocks": {
-      const together: Copy =
+      const together =
         item.gapMinutes === 0
-          ? [
+          ? t(
               "İki hesabın 5 saatlik dönemi aynı anda yenilendi.",
               "Two accounts’ five-hour windows reset at the same moment.",
-            ]
-          : [
+            )
+          : t(
               `İki hesabın 5 saatlik dönemi ${item.gapMinutes} dakika arayla yenilendi.`,
-              `Two accounts’ five-hour windows reset ${item.gapMinutes} minutes apart.`,
-            ];
-      const again: Copy =
+              `Two accounts’ five-hour windows reset ${minutesEn(item.gapMinutes)} apart.`,
+            );
+      const again =
         item.count > 1
-          ? [
-              ` Bu hafta ${item.count} kez oldu.`,
-              ` It happened ${item.count} times that week.`,
-            ]
-          : ["", ""];
+          ? t(
+              ` O hafta ${item.count} kez oldu.`,
+              ` It happened ${timesEn(item.count)} that week.`,
+            )
+          : "";
       return {
-        emoji: "⏰",
-        title: t("Çift çalar saat", "Twin alarm clocks"),
-        story: pick([together[0] + again[0], together[1] + again[1]]),
+        ...look,
+        story: together + again,
         when: formatWhen(item.at, zone, language),
         accounts: item.accountIds,
         quip: t(
@@ -193,11 +236,10 @@ export function describe(
     case "spare": {
       const many = item.accountIds.length > 1;
       return {
-        emoji: "🛞",
-        title: t("Yedek lastik", "Spare tyre"),
+        ...look,
         story: t(
           `${many ? "Bazı hesaplar" : "Bir hesap"} bütün hafta kenarda bekledi; bu arada ${item.hits} kez limite takıldın.`,
-          `${many ? "Some accounts" : "An account"} sat out the whole week while you hit a limit ${item.hits} ${item.hits === 1 ? "time" : "times"}.`,
+          `${many ? "Some accounts" : "An account"} sat out the whole week while you hit a limit ${timesEn(item.hits)}.`,
         ),
         when: weekLabel(week.start, week.end, language),
         accounts: item.accountIds,
@@ -206,18 +248,14 @@ export function describe(
     }
     case "feather": {
       const from = formatWhen(item.at, zone, language);
-      const to = new Intl.DateTimeFormat(locale(language), {
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-        timeZone: zone,
-      }).format(new Date(Date.parse(item.at) + 3_600_000));
+      const to = timeFormat(language, zone, false).format(
+        new Date(Date.parse(item.at) + 3_600_000),
+      );
       return {
-        emoji: "🪶",
-        title: t("Gece kuşu tüyü", "Night owl feather"),
+        ...look,
         story: t(
-          `Gece yarısından sonra ${item.hours} saat çalıştın.`,
-          `You worked ${item.hours} ${item.hours === 1 ? "hour" : "hours"} after midnight.`,
+          `O hafta gece yarısından sonra toplam ${item.hours} saat çalıştın.`,
+          `That week you worked ${item.hours} ${item.hours === 1 ? "hour" : "hours"} after midnight in all.`,
         ),
         when: t(`En geç: ${from}–${to}`, `Latest: ${from}–${to}`),
         accounts: [],
@@ -291,15 +329,17 @@ function AccountChips({
   );
 }
 
-/** The item on show: its picture in the drawer with the panda behind it, its story and the shelf button. */
+/**
+ * The item on show: its picture in the drawer with the panda behind it, its story and the shelf toggle. The
+ * toggle stays one button whether the item is kept or not, so keyboard focus stays on it.
+ */
 function Showcase({
   described,
   accounts,
   names,
   label,
   kept,
-  onKeep,
-  onRemove,
+  onToggle,
   arrows,
 }: {
   described: Described;
@@ -308,8 +348,7 @@ function Showcase({
   /** Where the item comes from, when it is not the open week: "Raftan · 12–18 Eki". */
   label?: string;
   kept: boolean;
-  onKeep?: () => void;
-  onRemove?: () => void;
+  onToggle: () => void;
   arrows?: boolean;
 }) {
   const { t } = useI18n();
@@ -324,9 +363,7 @@ function Showcase({
             size={56}
           />
         </span>
-        <span role="img" aria-label={described.title}>
-          {described.emoji}
-        </span>
+        <span aria-hidden="true">{described.emoji}</span>
       </div>
       <div className="min-w-0 flex-1 basis-60">
         {label && <div className="text-xs text-muted-foreground">{label}</div>}
@@ -350,24 +387,17 @@ function Showcase({
           </span>
           “{described.quip}”
         </p>
-        <div className="mt-3 flex gap-2">
+        <Button
+          size="xs"
+          variant={kept ? "secondary" : "outline"}
+          className="mt-3"
+          aria-pressed={kept}
+          onClick={onToggle}
+        >
           {kept
-            ? onRemove && (
-                <Button size="xs" variant="ghost" onClick={onRemove}>
-                  {t("Raftan kaldır", "Take off the shelf")}
-                </Button>
-              )
-            : onKeep && (
-                <Button size="xs" variant="outline" onClick={onKeep}>
-                  {t("Rafa koy", "Keep on the shelf")}
-                </Button>
-              )}
-          {kept && !onRemove && (
-            <span className="text-xs text-muted-foreground">
-              {t("Rafta", "On the shelf")}
-            </span>
-          )}
-        </div>
+            ? t("Rafta ✓", "On the shelf ✓")
+            : t("Rafa koy", "Keep on the shelf")}
+        </Button>
       </div>
     </div>
   );
@@ -385,9 +415,9 @@ export function LostFound() {
   const [weekStart, setWeekStart] = useState<string>();
   const { view: week, loading, error } = useLostFound(weekStart);
   const shelf = useShelf();
-  /** What is on show: one of the open week's finds, or a kept one. */
+  /** What is on show: one of a week's finds (for that week only), or a kept one. */
   const [chosen, setChosen] = useState<
-    { kind: LostItem["kind"] } | { shelf: string }
+    { start: string; kind: LostItem["kind"] } | { shelf: string }
   >();
 
   const fromShelf =
@@ -397,39 +427,72 @@ export function LostFound() {
   const weekItem =
     week &&
     (week.items.find(
-      (item) => chosen && "kind" in chosen && item.kind === chosen.kind,
+      (item) =>
+        chosen &&
+        "kind" in chosen &&
+        chosen.start === week.start &&
+        item.kind === chosen.kind,
     ) ??
       week.items[0]);
-  const keepCurrent = (item: LostItem) => {
+  const toggleWeekItem = (item: LostItem) => {
     if (!week) return;
+    const id = shelfId(week.start, item.kind);
+    if (shelf.some((kept) => kept.id === id)) return removeFromShelf(id);
     const ids = describe(item, week, zone, t, language).accounts;
     keepOnShelf({
-      id: shelfId(week.start, item.kind),
+      id,
       start: week.start,
       end: week.end,
       item,
       names: Object.fromEntries(
-        ids.flatMap((id) => {
-          const account = accounts.find((a) => a.id === id);
-          return account ? [[id, account.name]] : [];
+        ids.flatMap((accountId) => {
+          const account = accounts.find((a) => a.id === accountId);
+          return account ? [[accountId, account.name]] : [];
         }),
       ),
     });
   };
-  const open = (start: string) => {
-    setChosen(undefined);
-    setWeekStart(start);
-  };
+  /** What the showcase tells: a kept item (taking it off the shelf ends its showing), else the week's. */
+  const shownItem = fromShelf
+    ? {
+        described: describe(fromShelf.item, fromShelf, zone, t, language),
+        names: fromShelf.names,
+        label: t(
+          `Raftan · ${weekLabel(fromShelf.start, fromShelf.end, "tr")}`,
+          `From the shelf · ${weekLabel(fromShelf.start, fromShelf.end, "en")}`,
+        ),
+        kept: true,
+        onToggle: () => removeFromShelf(fromShelf.id),
+        arrows: fromShelf.item.kind === "boomerang",
+      }
+    : week && weekItem
+      ? {
+          described: describe(weekItem, week, zone, t, language),
+          kept: shelf.some(
+            (kept) => kept.id === shelfId(week.start, weekItem.kind),
+          ),
+          onToggle: () => toggleWeekItem(weekItem),
+          arrows: weekItem.kind === "boomerang",
+        }
+      : undefined;
+  // Steps count from the week asked for, so a second click while the first loads still moves on.
+  const shownStart = weekStart ?? week?.start;
   const step = (days: number) => {
-    if (!week) return;
-    const next = new Date(
-      Date.parse(`${week.start}T12:00:00Z`) + days * 86_400_000,
-    )
-      .toISOString()
-      .slice(0, 10);
-    open(next);
+    if (!shownStart) return;
+    setChosen(undefined);
+    setWeekStart((asked) => {
+      const next = addDays(asked ?? shownStart, days);
+      // Never past the reach: the main process would answer that with the newest week.
+      if (!week) return next;
+      return next < week.oldest
+        ? week.oldest
+        : next > week.latest
+          ? week.latest
+          : next;
+    });
   };
-  const isLatest = week ? week.start === week.latest : true;
+  const isLatest = week ? (shownStart ?? week.start) >= week.latest : true;
+  const isOldest = week ? (shownStart ?? week.start) <= week.oldest : true;
 
   return (
     <Card className="min-w-0 gap-3 px-5 py-4" aria-busy={loading || undefined}>
@@ -439,7 +502,7 @@ export function LostFound() {
             {t("Kayıp Eşya Bürosu", "Lost and found")}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {isLatest
+            {week?.start === week?.latest
               ? t(
                   "Panda geçen haftanın ardından kalanları topladı.",
                   "What last week left behind, collected by the panda.",
@@ -456,7 +519,7 @@ export function LostFound() {
               size="icon-sm"
               variant="ghost"
               aria-label={t("Önceki hafta", "Previous week")}
-              disabled={week.start <= week.oldest}
+              disabled={isOldest}
               onClick={() => step(-7)}
             >
               <ChevronLeft />
@@ -477,49 +540,29 @@ export function LostFound() {
         )}
       </div>
 
-      {error && !week ? (
-        <p className="text-sm text-muted-foreground">
+      {error && (
+        <p role="alert" className="text-sm text-muted-foreground">
           <b>{t("Eşyalar alınamadı.", "Could not open the lost and found.")}</b>{" "}
           {error}
         </p>
-      ) : !week ? (
-        <p className="text-sm text-muted-foreground">
-          {t("Çekmece açılıyor", "Opening the drawer")}
-        </p>
-      ) : fromShelf ? (
-        <Showcase
-          described={describe(fromShelf.item, fromShelf, zone, t, language)}
-          accounts={accounts}
-          names={fromShelf.names}
-          label={t(
-            `Raftan · ${weekLabel(fromShelf.start, fromShelf.end, "tr")}`,
-            `From the shelf · ${weekLabel(fromShelf.start, fromShelf.end, "en")}`,
-          )}
-          kept
-          onRemove={() => {
-            removeFromShelf(fromShelf.id);
-            setChosen(undefined);
-          }}
-          arrows={fromShelf.item.kind === "boomerang"}
-        />
-      ) : weekItem ? (
+      )}
+      {!week ? (
+        !error && (
+          <p className="text-sm text-muted-foreground">
+            {t("Çekmece açılıyor", "Opening the drawer")}
+          </p>
+        )
+      ) : shownItem ? (
+        // One tree for a kept item and a week's item, so the shelf toggle keeps its focus across both.
         <>
-          <Showcase
-            described={describe(weekItem, week, zone, t, language)}
-            accounts={accounts}
-            kept={shelf.some(
-              (kept) => kept.id === shelfId(week.start, weekItem.kind),
-            )}
-            onKeep={() => keepCurrent(weekItem)}
-            arrows={weekItem.kind === "boomerang"}
-          />
-          {week.items.length > 1 && (
+          <Showcase {...shownItem} accounts={accounts} />
+          {!fromShelf && weekItem && week.items.length > 1 && (
             <div className="flex flex-wrap items-center gap-1.5 border-t pt-3">
               <span className="mr-1 text-xs text-muted-foreground">
                 {t("Aynı haftadan:", "Same week:")}
               </span>
               {week.items.map((item) => {
-                const d = describe(item, week, zone, t, language);
+                const look = lookOf(item, t);
                 const on = item.kind === weekItem.kind;
                 return (
                   <Button
@@ -527,10 +570,12 @@ export function LostFound() {
                     size="xs"
                     variant={on ? "secondary" : "ghost"}
                     aria-pressed={on}
-                    onClick={() => setChosen({ kind: item.kind })}
+                    onClick={() =>
+                      setChosen({ start: week.start, kind: item.kind })
+                    }
                   >
-                    <span aria-hidden="true">{d.emoji}</span>
-                    {d.title}
+                    <span aria-hidden="true">{look.emoji}</span>
+                    {look.title}
                   </Button>
                 );
               })}
@@ -556,14 +601,15 @@ export function LostFound() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {shelf.map((kept) => {
-              const d = describe(kept.item, kept, zone, t, language);
+              const look = lookOf(kept.item, t);
               const on = fromShelf?.id === kept.id;
+              const label = weekLabel(kept.start, kept.end, language);
               return (
                 <button
                   key={kept.id}
                   type="button"
                   aria-pressed={on}
-                  title={`${d.title} · ${weekLabel(kept.start, kept.end, language)}`}
+                  title={`${look.title} · ${label}`}
                   onClick={() => setChosen(on ? undefined : { shelf: kept.id })}
                   className={cn(
                     "grid w-16 justify-items-center gap-0.5 rounded-lg border px-1 py-1.5 text-[10px] text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
@@ -571,12 +617,10 @@ export function LostFound() {
                   )}
                 >
                   <span aria-hidden="true" className="text-xl leading-none">
-                    {d.emoji}
+                    {look.emoji}
                   </span>
-                  <span className="sr-only">{d.title}, </span>
-                  <span className="tabular-nums">
-                    {weekLabel(kept.start, kept.end, language)}
-                  </span>
+                  <span className="sr-only">{look.title}, </span>
+                  <span className="tabular-nums">{label}</span>
                 </button>
               );
             })}

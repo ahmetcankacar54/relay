@@ -25,6 +25,10 @@ export const BOOMERANG_MAX_MS = 15 * MINUTE_MS;
 export const NIGHT_END_HOUR = 5;
 /** The trophy day is the busiest of this many days, the week's own included. */
 export const TROPHY_DAYS = 30;
+/** It is compared with at least this many other active days… */
+export const TROPHY_MIN_DAYS = 5;
+/** …and is at least this many times an ordinary one. */
+export const TROPHY_MIN_TIMES = 1.5;
 /** How many weeks back the bureau can look: the rollups keep 90 days. */
 export const LOST_FOUND_WEEKS = 12;
 
@@ -125,16 +129,49 @@ export function mondayOf(date: string) {
 
 const isoAt = (time: number) => new Date(time).toISOString();
 
-/** The rollup identity → account id map, as the statistics read it. */
+/** The rollup identity → account id map, as the statistics read it: one owner per identity. */
 function identityAccounts(accounts: Account[]) {
   const map = new Map<string, string>();
   for (const [identity, account] of identityOwners(accounts))
     map.set(identity, account.id);
-  for (const account of accounts) {
-    const identity = historyIdentity(account);
-    if (identity && !map.has(identity)) map.set(identity, account.id);
-  }
   return map;
+}
+
+/** Whether a stored item has what its kind needs to be told; a shelf from another version may not. */
+export function validLostItem(value: unknown): value is LostItem {
+  const item = value as Record<string, unknown> | null;
+  if (!item || !LOST_ITEM_KINDS.includes(item.kind as LostItemKind))
+    return false;
+  const time = (key: string) =>
+    typeof item[key] === "string" &&
+    Number.isFinite(Date.parse(item[key] as string));
+  const date = (key: string) =>
+    typeof item[key] === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(item[key] as string);
+  const count = (key: string) =>
+    typeof item[key] === "number" && Number.isFinite(item[key]);
+  const ids = (key: string) =>
+    Array.isArray(item[key]) &&
+    (item[key] as unknown[]).every((id) => typeof id === "string");
+  switch (item.kind as LostItemKind) {
+    case "hourglass":
+      return time("at") && count("minutes");
+    case "boomerang":
+      return time("at") && ids("accountIds") && count("minutes");
+    case "trophy":
+      return date("date") && count("tokens") && count("times");
+    case "scroll":
+    case "feather":
+      return time("at") && count("hours");
+    case "scarf":
+      return date("date") && ids("accountIds");
+    case "clocks":
+      return (
+        time("at") && ids("accountIds") && count("gapMinutes") && count("count")
+      );
+    case "spare":
+      return ids("accountIds") && count("hits");
+  }
 }
 
 /** Everything the week left behind, most striking first. */
@@ -150,6 +187,9 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
     wallTime(start, "00:00", zone) ?? Date.parse(`${start}T00:00:00Z`);
   const to = wallTime(addDays(start, 7), "00:00", zone) ?? from + 7 * DAY_MS;
   const within = (time: number) => time >= from && time < to;
+  // An hour bucket starts on the UTC hour; its middle decides its local day and hour, so a zone half
+  // an hour off UTC puts each bucket where most of it lies.
+  const middle = (hour: number) => hour + 30 * MINUTE_MS;
   const owner = identityAccounts(accounts);
   const rollups = input.rollups;
 
@@ -158,7 +198,7 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
   for (const [identity, byHour] of Object.entries(rollups?.hours ?? {}))
     for (const [key, hour] of Object.entries(byHour)) {
       const time = Date.parse(key);
-      if (!within(time) || !(hour.points > 0)) continue;
+      if (!within(middle(time)) || !(hour.points > 0)) continue;
       const who = owner.get(identity) ?? identity;
       const row = hours.get(time) ?? new Map<string, number>();
       row.set(who, (row.get(who) ?? 0) + hour.points);
@@ -190,7 +230,8 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
   }
   if (hourglass) found.push(hourglass);
 
-  // Boomerang: A, then B for a few minutes, then A again, all within the week.
+  // Boomerang: A, then B for a few minutes, then A again, all within the week. Each hand-over is a
+  // switch, so B starts soon after A ends: after a gap (Relay or the Claude app closed) B's stay is unknown.
   const segments = input.segments
     .map((segment) => ({
       account: desktopAccountFor(segment, accounts)?.id,
@@ -203,6 +244,7 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
     const [a, b, c] = [segments[i], segments[i + 1], segments[i + 2]];
     if (!a.account || !b.account || a.account === b.account) continue;
     if (c.account !== a.account || !within(b.from)) continue;
+    if (!(b.from - a.to <= BOOMERANG_MAX_MS)) continue;
     const away = c.from - b.from;
     if (!(away > 0 && away <= BOOMERANG_MAX_MS)) continue;
     const minutes = Math.max(1, Math.round(away / MINUTE_MS));
@@ -216,7 +258,8 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
   }
   if (boomerang) found.push(boomerang);
 
-  // Trophy: the week's busiest token day, when it is also the busiest of the last 30 days.
+  // Trophy: the week's busiest token day, when it is also the busiest of the last 30 days, clearly
+  // ahead of an ordinary one, compared with at least five other active days.
   const dayTotal = (date: string) =>
     Object.values(input.ledgerDays[date] ?? {}).reduce(
       (sum, byModel) =>
@@ -240,12 +283,17 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
     ).filter((tokens) => tokens > 0);
     const sorted = [...window].sort((a, b) => b - a);
     const ordinary = sorted[Math.floor(sorted.length / 2)];
-    if (sorted.length >= 5 && sorted[0] === busiest.tokens && ordinary > 0)
+    const times = ordinary > 0 ? busiest.tokens / ordinary : 0;
+    if (
+      sorted.length >= TROPHY_MIN_DAYS + 1 &&
+      sorted[0] === busiest.tokens &&
+      times >= TROPHY_MIN_TIMES
+    )
       found.push({
         kind: "trophy",
         date: busiest.date,
         tokens: busiest.tokens,
-        times: Math.round((busiest.tokens / ordinary) * 10) / 10,
+        times: Math.round(times * 10) / 10,
       });
   }
 
@@ -265,7 +313,7 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
   // Scarf: the day the most accounts took a turn, three at least.
   const byDay = new Map<string, Map<string, number>>();
   for (const time of activeHours) {
-    const date = localDate(time, zone);
+    const date = localDate(middle(time), zone);
     const day = byDay.get(date) ?? new Map<string, number>();
     for (const [who, points] of hours.get(time)!)
       if (known(who)) day.set(who, (day.get(who) ?? 0) + points);
@@ -294,12 +342,15 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
         r.who !== undefined && within(r.time),
     )
     .sort((a, b) => a.time - b.time);
+  // Every pair of two accounts' resets within the gap, not only neighbours.
   const pairs: { a: (typeof resets)[number]; b: (typeof resets)[number] }[] =
     [];
   resets.forEach((a, i) => {
-    const b = resets[i + 1];
-    if (b && b.who !== a.who && b.time - a.time <= CLOCKS_MAX_GAP_MS)
-      pairs.push({ a, b });
+    for (let j = i + 1; j < resets.length; j++) {
+      const b = resets[j];
+      if (b.time - a.time > CLOCKS_MAX_GAP_MS) break;
+      if (b.who !== a.who) pairs.push({ a, b });
+    }
   });
   if (pairs.length) {
     const closest = pairs.reduce((best, pair) =>
@@ -314,13 +365,22 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
     });
   }
 
-  // Spare: accounts never used while the others ran into five-hour limits.
+  // Spare: accounts never used while the others ran into five-hour limits. Only an account that
+  // already existed when the week began, and owns its usage identity, can have sat it out.
   if (fiveHourHits.length) {
     const used = new Set(
       activeHours.flatMap((time) => [...hours.get(time)!.keys()]),
     );
     const idle = accounts
-      .filter((a) => historyIdentity(a) && !used.has(a.id))
+      .filter((a) => {
+        const identity = historyIdentity(a);
+        return (
+          identity !== undefined &&
+          owner.get(identity) === a.id &&
+          Date.parse(a.createdAt) < from &&
+          !used.has(a.id)
+        );
+      })
       .map((a) => a.id);
     if (idle.length && used.size)
       found.push({
@@ -331,12 +391,11 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
   }
 
   // Feather: hours after midnight; the latest is the one nearest morning.
-  const night = activeHours.filter(
-    (time) => localHour(time, zone) < NIGHT_END_HOUR,
-  );
+  const nightHour = (time: number) => localHour(middle(time), zone);
+  const night = activeHours.filter((time) => nightHour(time) < NIGHT_END_HOUR);
   if (night.length) {
     const latest = night.reduce((best, time) =>
-      localHour(time, zone) >= localHour(best, zone) ? time : best,
+      nightHour(time) >= nightHour(best) ? time : best,
     );
     found.push({ kind: "feather", at: isoAt(latest), hours: night.length });
   }

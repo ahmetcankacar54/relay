@@ -191,12 +191,12 @@ export class ActiveAccountTimeline {
     };
   }
 
-  /** When the timeline began to know, the start of its first segment; before it nothing is known. */
   /** A copy of the segments, oldest first. */
   list(): ActiveSegment[] {
     return this.segments.map((segment) => ({ ...segment }));
   }
 
+  /** When the timeline began to know, the start of its first segment; before it nothing is known. */
   exactSince(): number | undefined {
     return this.fromMs[0];
   }

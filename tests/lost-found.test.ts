@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LOST_ITEM_KINDS, lostFoundWeek, mondayOf, addDays, type LostFoundInput } from "../shared/lost-found";
+import { LOST_ITEM_KINDS, lostFoundWeek, mondayOf, addDays, validLostItem, type LostFoundInput } from "../shared/lost-found";
 import type { Account } from "../shared/types";
 import type { UsageRollups } from "../shared/usage-rollups";
 
@@ -20,7 +20,7 @@ const account = (id: string, n: number): Account => ({
   kind: "personal",
   group: "personal",
   color: "olive",
-  createdAt: iso(NOW),
+  createdAt: "2026-09-01T00:00:00.000Z",
   auth: { loggedIn: true, accountUuid: `uuid-${n}`, orgId: `org-${n}` },
   desktop: { accountUuid: `uuid-${n}`, orgId: `org-${n}`, savedAt: iso(NOW) },
 } as Account);
@@ -123,6 +123,9 @@ test("boomerang: off to another account and back within fifteen minutes", () => 
   // An account Relay does not know cannot be the place you went.
   const unknown = [segments[0], { ...segments[1], accountUuid: "uuid-9" }, segments[2]];
   assert.equal(itemOf(lostFoundWeek(input({ segments: unknown })), "boomerang"), undefined);
+  // After a gap (Relay or the Claude app closed), how long B lasted is unknown: no boomerang.
+  const gap = [seg(1, oct(1, 9), oct(1, 10)), seg(2, oct(14, 11, 10), oct(14, 11, 15)), seg(1, oct(14, 11, 16))];
+  assert.equal(itemOf(lostFoundWeek(input({ segments: gap })), "boomerang"), undefined);
 });
 
 test("trophy: the week's busiest token day, when it is also the busiest of the last 30 days", () => {
@@ -140,11 +143,14 @@ test("trophy: the week's busiest token day, when it is also the busiest of the l
   // A busier day within the 30 days takes the record away.
   ledgerDays["2026-09-20"] = day(500);
   assert.equal(itemOf(lostFoundWeek(input({ ledgerDays })), "trophy"), undefined);
-  // So does having fewer than five active days to compare with.
-  assert.equal(
-    itemOf(lostFoundWeek(input({ ledgerDays: { "2026-10-14": day(430), "2026-10-13": day(100) } })), "trophy"),
-    undefined,
-  );
+  // So does having fewer than five other active days to compare with…
+  const few: LostFoundInput["ledgerDays"] = { "2026-10-14": day(430) };
+  for (let i = 1; i <= 4; i++) few[addDays("2026-10-14", -i)] = day(100);
+  assert.equal(itemOf(lostFoundWeek(input({ ledgerDays: few })), "trophy"), undefined);
+  // …and a day barely ahead of an ordinary one.
+  const close: LostFoundInput["ledgerDays"] = { "2026-10-14": day(140) };
+  for (let i = 1; i <= 9; i++) close[addDays("2026-10-14", -i)] = day(100);
+  assert.equal(itemOf(lostFoundWeek(input({ ledgerDays: close })), "trophy"), undefined);
 });
 
 test("scroll: eight active hours in a row, any account; seven are not enough", () => {
@@ -205,6 +211,43 @@ test("spare: an account never used while others ran into five-hour limits", () =
     hits: 1,
   });
   assert.equal(itemOf(lostFoundWeek(input({ rollups: rollups({ hours }) })), "spare"), undefined);
+  // An account added after the week began, or one sharing another's usage identity, sat nothing out.
+  const late = { ...account("d", 4), createdAt: "2026-10-17T00:00:00.000Z" };
+  const twin = { ...account("e", 1), id: "e" };
+  const week = lostFoundWeek(input({ accounts: [A, B, C, late, twin], rollups: rollups({ hours, hits: [hit] }) }));
+  assert.deepEqual(itemOf(week, "spare")?.accountIds, ["c"]);
+});
+
+test("clocks count every pair of accounts within the gap, not only neighbours", () => {
+  const window = (time: number) => ({ resetAt: iso(time), maxPercent: 50 });
+  const week = lostFoundWeek(input({
+    rollups: rollups({
+      windows: {
+        [identity(1)]: [window(oct(14, 10))],
+        [identity(2)]: [window(oct(14, 10, 4))],
+        [identity(3)]: [window(oct(14, 10, 8))],
+      },
+    }),
+  }));
+  assert.equal(itemOf(week, "clocks")?.count, 3);
+  assert.equal(itemOf(week, "clocks")?.gapMinutes, 4);
+});
+
+test("in a zone half an hour off UTC an hour bucket counts where most of it lies", () => {
+  // Asia/Kolkata is UTC+5:30: the 22:00 UTC bucket is 03:30–04:30 there, a night hour; the 23:00 one,
+  // 04:30–05:30, is mostly morning.
+  const hours = active(1, oct(14, 22), oct(14, 23));
+  const week = lostFoundWeek(input({ zone: "Asia/Kolkata", rollups: rollups({ hours }) }));
+  assert.deepEqual(itemOf(week, "feather"), { kind: "feather", at: iso(oct(14, 22)), hours: 1 });
+});
+
+test("a kept item is told only when it has what its kind needs", () => {
+  assert.equal(validLostItem({ kind: "hourglass", at: "2026-10-14T06:56:00Z", minutes: 66 }), true);
+  assert.equal(validLostItem({ kind: "scarf", date: "2026-10-14", accountIds: ["a", "b", "c"] }), true);
+  assert.equal(validLostItem({ kind: "hourglass", at: "yesterday", minutes: 66 }), false);
+  assert.equal(validLostItem({ kind: "trophy", date: "2026-10-14", tokens: 5 }), false);
+  assert.equal(validLostItem({ kind: "unicorn" }), false);
+  assert.equal(validLostItem(null), false);
 });
 
 test("feather: hours after local midnight; the latest is the one nearest morning", () => {

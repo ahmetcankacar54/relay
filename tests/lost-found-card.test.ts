@@ -65,7 +65,11 @@ test("every item tells what happened, when and to whom, with the panda's word, i
   assert.equal(say({ kind: "scarf", date: "2026-10-14", accountIds: ["b", "a", "c", "d"] }, "en").title, "Four-colour scarf");
 
   const together = say({ kind: "clocks", at: "2026-10-16T14:10:00Z", accountIds: ["a", "b"], gapMinutes: 0, count: 3 });
-  assert.equal(together.story, "İki hesabın 5 saatlik dönemi aynı anda yenilendi. Bu hafta 3 kez oldu.");
+  assert.equal(together.story, "İki hesabın 5 saatlik dönemi aynı anda yenilendi. O hafta 3 kez oldu.");
+  assert.equal(
+    say({ kind: "clocks", at: "2026-10-16T14:10:00Z", accountIds: ["a", "b"], gapMinutes: 1, count: 2 }, "en").story,
+    "Two accounts’ five-hour windows reset 1 minute apart. It happened twice that week.",
+  );
   const apart = say({ kind: "clocks", at: "2026-10-16T14:10:00Z", accountIds: ["a", "b"], gapMinutes: 6, count: 1 }, "en");
   assert.equal(apart.story, "Two accounts’ five-hour windows reset 6 minutes apart.");
 
@@ -75,15 +79,19 @@ test("every item tells what happened, when and to whom, with the panda's word, i
   );
   assert.equal(
     say({ kind: "spare", accountIds: ["a", "b"], hits: 1 }, "en").story,
-    "Some accounts sat out the whole week while you hit a limit 1 time.",
+    "Some accounts sat out the whole week while you hit a limit once.",
   );
   assert.equal(say({ kind: "spare", accountIds: ["b"], hits: 2 }).when, "12–18 Eki");
 
   // 04:00 in Istanbul.
   const feather = say({ kind: "feather", at: "2026-10-18T01:00:00Z", hours: 17 });
-  assert.equal(feather.story, "Gece yarısından sonra 17 saat çalıştın.");
+  assert.equal(feather.story, "O hafta gece yarısından sonra toplam 17 saat çalıştın.");
   assert.equal(feather.when, "En geç: Pazar 04:00–05:00");
-  assert.equal(say({ kind: "feather", at: "2026-10-18T01:00:00Z", hours: 1 }, "en").story, "You worked 1 hour after midnight.");
+  assert.equal(say({ kind: "feather", at: "2026-10-18T01:00:00Z", hours: 1 }, "en").story, "That week you worked 1 hour after midnight in all.");
+  assert.equal(
+    say({ kind: "boomerang", at: "2026-10-14T11:10:00Z", accountIds: ["a", "b"], minutes: 1 }, "en").story,
+    "You were back on the account you started with within 1 minute.",
+  );
 });
 
 const WEEK: LostFoundWeek = {
@@ -154,7 +162,8 @@ test("the bureau shows last week's most striking find, its other finds, other we
     await click(button((text) => text === "Rafa koy"));
     assert.equal(JSON.parse(stored.get("relay.lostfound.shelf.v1")!)[0].id, "2026-10-12:scroll");
     assert.ok(slot("lost-shelf"));
-    assert.ok(find(container, (n) => textOf(n) === "Rafta"));
+    // The same button now says it is kept, and pressing it again would take it off.
+    assert.equal(attr(button((text) => text === "Rafta ✓")!, "aria-pressed"), "true");
 
     // The week before: an empty drawer.
     await click(button((_, n) => attr(n, "aria-label") === "Önceki hafta"));
@@ -165,7 +174,7 @@ test("the bureau shows last week's most striking find, its other finds, other we
     // The shelf still opens the kept scroll, named as from the shelf, and can let it go.
     await click(find(slot("lost-shelf")!, (n) => n.tagName === "button"));
     assert.match(textOf(slot("lost-item")), /Raftan · 12–18 Eki/);
-    await click(button((text) => text === "Raftan kaldır"));
+    await click(button((text) => text === "Rafta ✓"));
     assert.equal(slot("lost-shelf"), undefined);
     assert.deepEqual(JSON.parse(stored.get("relay.lostfound.shelf.v1")!), []);
     await act(async () => root.unmount());
@@ -196,4 +205,34 @@ test("the preload exposes the bureau and the main process answers it", async () 
   const main = await fs.readFile(new URL("../electron/main.ts", import.meta.url), "utf8");
   assert.match(preload, /lostFound: \(input\) => ipcRenderer\.invoke\("relay:lost-found", input\)/);
   assert.match(main, /handle\("lost-found", \(input\) => \{\s*const \{ weekStart \} = lostFoundInput\.parse\(input\);/);
+});
+
+test("kept items from another version that cannot be told are left off the shelf", async () => {
+  const stored = new Map<string, string>([
+    [
+      "relay.lostfound.shelf.v1",
+      JSON.stringify([
+        { id: "2026-10-12:unicorn", start: "2026-10-12", end: "2026-10-18", item: { kind: "unicorn" }, names: {} },
+        { id: "2026-10-12:scroll", start: "2026-10-12", item: { kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16 } },
+        { id: "2026-10-12:hourglass", start: "2026-10-12", end: "2026-10-18", item: { kind: "hourglass", at: "2026-10-14T06:56:00Z", minutes: 66 }, names: {} },
+      ]),
+    ],
+  ]);
+  const dom = fakeDom({
+    localStorage: () => ({ getItem: (key: string) => stored.get(key) ?? null, setItem() {} }),
+  });
+  dom.install();
+  readableText();
+  const api = { lostFound: async () => ({ ...WEEK, items: [] }) } as unknown as RelayAPI;
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(tree(createElement(LostFound), relayFor(api))));
+    const shelf = find(dom.container as unknown as Fake, (n) => (n as { attributes?: Map<string, string> }).attributes?.get?.("data-slot") === "lost-shelf");
+    assert.ok(shelf);
+    assert.equal(textOf(shelf), "Raf⏳Kum saati, 12–18 Eki");
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
 });
