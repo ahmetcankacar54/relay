@@ -21,17 +21,24 @@ export interface SwitchWindowOptions {
   panelOpen(): boolean;
 }
 
+/** How long the window stays loaded after a story ends, so the next switch opens it at once. */
+export const SWITCH_WINDOW_RELEASE_MS = 30_000;
+
 /**
- * The story window under the menu bar icon: one hidden window, loaded once,
- * never focused and transparent to the mouse.
+ * The story window under the menu bar icon, never focused and transparent to the mouse. It is
+ * created when a story starts and destroyed a while after it ends, so between switches Relay
+ * keeps no renderer for it.
  */
 export class SwitchWindow {
   private win?: BrowserWindow;
   /** Ready once the page has said it listens; one crash reloads it, a second keeps it off. */
   private load = INITIAL_PANEL_LOAD;
   private view?: SwitchSceneView;
+  private releaseTimer?: ReturnType<typeof setTimeout>;
 
-  constructor(private readonly options: SwitchWindowOptions) {
+  constructor(private readonly options: SwitchWindowOptions) {}
+
+  private create(): BrowserWindow {
     const win = new BrowserWindow({
       ...SWITCH_WINDOW_SIZE,
       frame: false,
@@ -46,7 +53,7 @@ export class SwitchWindow {
       transparent: true,
       backgroundColor: "#00000000",
       webPreferences: {
-        preload: options.preload,
+        preload: this.options.preload,
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
@@ -54,6 +61,7 @@ export class SwitchWindow {
       },
     });
     this.win = win;
+    this.load = INITIAL_PANEL_LOAD;
     win.setIgnoreMouseEvents(true);
     win.setAlwaysOnTop(true, "pop-up-menu");
     win.setVisibleOnAllWorkspaces(true, {
@@ -68,16 +76,28 @@ export class SwitchWindow {
     });
     win.webContents.on("render-process-gone", () => this.dispatch("gone"));
     win.on("closed", () => {
-      this.win = undefined;
+      if (this.win === win) this.win = undefined;
     });
-    options.load(win);
+    this.options.load(win);
+    return win;
   }
 
   /** A new state of the story. */
   show(view: SwitchSceneView) {
     this.view = view;
+    if (view.visible && this.options.enabled()) {
+      this.cancelRelease();
+      // The story is decoration: a window that cannot be made leaves the switch untouched.
+      if (!this.live())
+        try {
+          this.create();
+        } catch {
+          this.win = undefined;
+        }
+    }
     this.send();
     this.sync();
+    if (!view.visible) this.scheduleRelease();
   }
 
   /** The page listens now; only this window's main frame may say so. */
@@ -108,9 +128,27 @@ export class SwitchWindow {
   }
 
   destroy() {
+    this.cancelRelease();
     const win = this.live();
     this.win = undefined;
     if (win) win.destroy();
+  }
+
+  private scheduleRelease() {
+    if (this.releaseTimer || !this.live()) return;
+    this.releaseTimer = setTimeout(() => {
+      this.releaseTimer = undefined;
+      if (this.view?.visible) return;
+      const win = this.live();
+      this.win = undefined;
+      win?.destroy();
+    }, SWITCH_WINDOW_RELEASE_MS);
+    this.releaseTimer.unref();
+  }
+
+  private cancelRelease() {
+    if (this.releaseTimer) clearTimeout(this.releaseTimer);
+    this.releaseTimer = undefined;
   }
 
   private send() {
