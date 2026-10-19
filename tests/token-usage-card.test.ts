@@ -508,7 +508,7 @@ test("the arrow keys walk the days, the detail marks estimates and empty days, a
   }
 });
 
-test("the panda takes the busiest day apart: its parts, its lines one by one, and a crooked bar after", async () => {
+test("the panda takes the busiest day apart: its parts and its lines one by one, with that day lit", async () => {
   const dom = fakeDom();
   dom.install();
   readableText();
@@ -541,7 +541,9 @@ test("the panda takes the busiest day apart: its parts, its lines one by one, an
     assert.match(line(), /^Claude bugün ≈ 340 sayfa yazdı; .+ kadar\.$/);
     // Screen readers hear the day and the line once, when asked.
     assert.equal(textOf(slot("panda-say")), `14 Ekim Çarşamba: ${line()}`);
-    assert.equal(classed("token-taken"), 1);
+    // The day stays lit and the other six fade, as on hover; the bar itself does not move.
+    assert.equal(classed("opacity-40"), 6);
+    assert.equal(classed("token-taken"), 0);
     await click("Bir daha");
     assert.equal(line(), "Claude bugün 2 milyon token okudu; bir insan durmadan okusa 4 gün sürerdi.");
     assert.equal(textOf(slot("panda-say")), "14 Ekim Çarşamba: Claude bugün 2 milyon token okudu; bir insan durmadan okusa 4 gün sürerdi.");
@@ -553,11 +555,7 @@ test("the panda takes the busiest day apart: its parts, its lines one by one, an
     await click("Kapat");
     assert.equal(slot("panda-bench"), undefined);
     assert.equal(textOf(slot("panda-say")), "");
-    assert.equal(classed("token-taken"), 0);
-    assert.equal(classed("token-crooked"), 1);
-    // A new metric straightens it again.
-    await click("Çıktı");
-    assert.equal(classed("token-crooked"), 0);
+    assert.equal(classed("opacity-40"), 0);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();

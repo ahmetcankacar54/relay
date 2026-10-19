@@ -241,7 +241,6 @@ function Chart({
   explained,
   line,
   more,
-  crooked,
   onPick,
   onNextLine,
   onPutBack,
@@ -256,7 +255,6 @@ function Chart({
   line?: PandaLine;
   more: boolean;
   /** Days the panda put back not quite straight. */
-  crooked: readonly string[];
   /** A day was clicked, or picked with Enter or Space, on `chart`. */
   onPick: (date: string, chart: Element | null) => void;
   onNextLine: () => void;
@@ -308,6 +306,8 @@ function Chart({
   const takenAt = explained
     ? days.findIndex((day) => day.date === explained.date)
     : -1;
+  // The day lit against the others: the one the panda explains, else the one pointed at.
+  const lit = takenAt >= 0 ? takenAt : hover.active;
   const shown = hover.active === undefined ? undefined : days[hover.active];
   const shownTotal = shown ? dayTotal(shown) : 0;
   return (
@@ -360,15 +360,10 @@ function Chart({
               aria-label={spoken}
               className={cn(
                 "transition-opacity duration-100",
-                hover.active !== undefined &&
-                  hover.active !== i &&
-                  "opacity-40",
-                i === takenAt
-                  ? "token-taken"
-                  : crooked.includes(day.date) && "token-crooked",
+                lit !== undefined && lit !== i && "opacity-40",
               )}
             >
-              {hover.active === i && (
+              {lit === i && (
                 <rect
                   data-slot="token-day-band"
                   className="fill-muted"
@@ -589,17 +584,15 @@ function Content({
   const { t, language } = useI18n();
   const [metric, setMetric] = useState<Metric>("total");
   const [explained, setExplained] = useState<Explained>();
-  const [crooked, setCrooked] = useState<string[]>([]);
   /** What screen readers hear: set only when the user asks, so a refresh announces nothing. */
   const [said, setSaid] = useState("");
   const opener = useRef<Element | null>(null);
-  // A new range, a new day or a new account filter puts every bar back straight and closes the workbench.
+  // A new range, a new day or a new account filter closes the workbench.
   const shape = `${view.range}|${view.days[0]?.date ?? ""}|${filterKey}`;
   const [seenShape, setSeenShape] = useState(shape);
   if (seenShape !== shape) {
     setSeenShape(shape);
     setExplained(undefined);
-    setCrooked([]);
     setSaid("");
   }
   const accountNames = Object.fromEntries(
@@ -623,18 +616,14 @@ function Content({
     if (!explained || !line) return;
     say(explained.date, lines[(lines.indexOf(line) + 1) % lines.length]);
   };
-  const putBack = (date: string) =>
-    setCrooked((days) => (days.includes(date) ? days : [...days, date]));
   /** The panda explains `date`, opened from `from`; asked about the same day again, it says its next line. */
   const explain = (date: string, from: Element | null) => {
     opener.current = from;
     if (explained?.date === date) return nextLine();
-    if (explained) putBack(explained.date);
     say(date, linesOf(date)[0]);
   };
   const close = useCallback(() => {
     if (!explained) return;
-    putBack(explained.date);
     setExplained(undefined);
     setSaid("");
   }, [explained]);
@@ -688,11 +677,7 @@ function Content({
                 size="sm"
                 aria-label={t("Ölçü", "Metric")}
                 value={metric}
-                onValueChange={(v) => {
-                  if (!v) return;
-                  setMetric(v as Metric);
-                  setCrooked([]);
-                }}
+                onValueChange={(v) => v && setMetric(v as Metric)}
               >
                 {METRICS.map((m) => (
                   <ToggleGroupItem key={m} value={m}>
@@ -710,7 +695,6 @@ function Content({
             explained={explained}
             line={line}
             more={lines.length > 1}
-            crooked={crooked}
             onPick={explain}
             onNextLine={nextLine}
             onPutBack={close}
