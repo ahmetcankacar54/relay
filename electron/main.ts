@@ -71,6 +71,10 @@ import { attribute } from "./core/token-attribution";
 import { TokenLedger, tokenTickDelay } from "./core/token-ledger";
 import { planningIdentity } from "../shared/planning";
 import { PACE_WINDOW_MS } from "../shared/adaptive-plan";
+import {
+  automationMode,
+  automationModeWrites,
+} from "../shared/automation-mode";
 import { WindowKeeper, type KeeperDeps } from "./core/window-keeper";
 import { TempoTracker } from "./core/tempo-tracker";
 import { runQuotaStarter } from "./core/routine-runner";
@@ -682,6 +686,19 @@ else {
         withDesktopLock,
         changed: broadcastChanged,
       });
+      // Before the single choice both records could be saved on. The fleet wins,
+      // as the mode reads; turning it off later must not leave prepare-on-quit on.
+      const savedMode = automationModeWrites(
+        automationMode(service.store.state.settings, fleet.snapshot()),
+      ).autoSwitchMode;
+      if (savedMode !== service.store.state.settings.autoSwitchMode)
+        try {
+          service.store.update((s) => {
+            s.settings.autoSwitchMode = savedMode;
+          });
+        } catch {
+          // A refused write keeps the pair; the fleet still wins while it is on.
+        }
       observedDesktop = await desktop.snapshot();
       const keeperBlocked = () =>
         !observedDesktop ||

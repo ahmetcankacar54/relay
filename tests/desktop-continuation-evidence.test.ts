@@ -275,6 +275,136 @@ test("only the latest main assistant structured rate error is a quota-ended turn
     undefined,
   );
 });
+
+const noticeA = "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1";
+const noticeB = "b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2";
+/** A background task's notification, as Claude Code writes it. */
+const notice = (id: string, parentUuid: string) => ({
+  type: "user",
+  uuid: id,
+  parentUuid,
+  timestamp: "2026-10-13T14:00:30.000Z",
+  origin: { kind: "task-notification", producer: "session-task" },
+  message: {
+    role: "user",
+    content:
+      "<task-notification>\n<task-id>a3870edfc2231487c</task-id>\n<status>completed</status>\n</task-notification>",
+  },
+});
+test("task notifications after a quota stop leave it stopped and idle; after a finished turn they start one", () => {
+  const stopped = [
+    terminal,
+    notice(noticeA, assistantId),
+    notice(noticeB, noticeA),
+  ];
+  assert.equal(transcriptTurnState(stopped), "idle");
+  assert.equal(latestQuotaEndedTurn(stopped)?.turnId, assistantId);
+  assert.equal(
+    latestQuotaEndedTurn(stopped)?.timestamp,
+    Date.parse(terminal.timestamp),
+  );
+  // Older transcripts carry no origin; the text still says what the row is.
+  const { origin: _, ...legacy } = notice(noticeA, assistantId);
+  assert.equal(transcriptTurnState([terminal, legacy]), "idle");
+  assert.equal(latestQuotaEndedTurn([terminal, legacy])?.turnId, assistantId);
+  // A newer quota stop answering a notification is the stop.
+  assert.equal(
+    latestQuotaEndedTurn([
+      ...stopped,
+      { ...terminal, uuid: nextAssistant, parentUuid: noticeB },
+    ])?.turnId,
+    nextAssistant,
+  );
+  // With quota, a notification after a finished or otherwise failed turn
+  // starts a new turn: work is running until its reply ends.
+  for (const before of [
+    {
+      type: "assistant",
+      uuid: assistantId,
+      message: {
+        content: [{ type: "text", text: "done" }],
+        stop_reason: "end_turn",
+      },
+    },
+    { ...terminal, error: "network_error" },
+  ]) {
+    const rows = [before, notice(noticeA, assistantId)];
+    assert.equal(transcriptTurnState(rows), "busy", JSON.stringify(before));
+    assert.equal(latestQuotaEndedTurn(rows), undefined);
+  }
+  // A person's prompt, even one quoting a notification, ends the stop.
+  for (const after of [
+    { type: "user", uuid: userId, message: { content: "go on" } },
+    { ...notice(userId, noticeA), origin: { kind: "human" } },
+  ]) {
+    const rows = [...stopped, after];
+    assert.equal(transcriptTurnState(rows), "busy", JSON.stringify(after));
+    assert.equal(latestQuotaEndedTurn(rows), undefined);
+  }
+});
+test("the receipt looks past Claude's synthetic reply before the prompt and notifications after it", () => {
+  const filler = "f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0";
+  /** What Claude Code writes before the first prompt after a stop. */
+  const noResponse = {
+    type: "assistant",
+    uuid: filler,
+    parentUuid: noticeB,
+    isApiErrorMessage: false,
+    message: {
+      model: "<synthetic>",
+      role: "assistant",
+      stop_reason: "stop_sequence",
+      content: [{ type: "text", text: "No response requested." }],
+    },
+  };
+  const prompt = {
+    type: "user",
+    uuid: userId,
+    parentUuid: filler,
+    message: { content: "Continue\n[Relay continuation: request]" },
+  };
+  const reply = {
+    type: "assistant",
+    uuid: nextAssistant,
+    parentUuid: userId,
+    message: {
+      model: "claude-opus-5-5",
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+    },
+  };
+  const accepted = continuationTurn([noResponse, prompt], "request");
+  assert.equal(accepted?.user.uuid, userId);
+  assert.equal(accepted?.assistant, undefined);
+  assert.equal(
+    continuationTurn([noResponse, prompt, reply], "request")?.assistant?.uuid,
+    nextAssistant,
+  );
+  // A background task finishing during the resumed turn is not a new prompt.
+  assert.equal(
+    continuationTurn(
+      [noResponse, prompt, reply, notice(noticeA, nextAssistant)],
+      "request",
+    )?.assistant?.uuid,
+    nextAssistant,
+  );
+  // A synthetic row after the prompt proves nothing resumed.
+  assert.equal(
+    continuationTurn(
+      [prompt, { ...noResponse, uuid: nextAssistant, parentUuid: userId }],
+      "request",
+    )?.assistant,
+    undefined,
+  );
+  // One outside the prompt's own chain is still other work.
+  assert.equal(
+    continuationTurn(
+      [noResponse, { ...prompt, parentUuid: noticeB }],
+      "request",
+    ),
+    undefined,
+  );
+});
 test("partial or malformed transcript records cannot become a safe checkpoint", () => {
   assert.throws(() =>
     parseDesktopTranscript(Buffer.from('{"type":"assistant"}')),
@@ -746,6 +876,97 @@ test("every quota-stopped conversation of an account is found from files, and it
       (await f.evidence.quotaStops(f.store.account(f.source.id))).length,
       0,
     );
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
+test("a quota stop followed by background-task notifications is a quiet stop, and its continuation is verified", async () => {
+  const f = await recentFixture();
+  try {
+    const account = f.store.account(f.source.id);
+    const append = (...rows: unknown[]) =>
+      fs.appendFile(
+        f.transcriptFile,
+        rows.map((row) => JSON.stringify(row) + "\n").join(""),
+      );
+    // Scanned once before the notifications, as polling does.
+    assert.equal((await f.evidence.quotaStops(account)).length, 1);
+    await append(
+      { type: "queue-operation", operation: "enqueue" },
+      notice(noticeA, assistantId),
+      { type: "queue-operation", operation: "dequeue" },
+      notice(noticeB, noticeA),
+    );
+    const stops = await f.evidence.quotaStops(account);
+    assert.equal(stops.length, 1);
+    assert.equal(stops[0].turnId, assistantId);
+    assert.equal(stops[0].stoppedAt, Date.parse(terminal.timestamp));
+    assert.equal(
+      stops[0].transcriptBytes,
+      (await fs.stat(f.transcriptFile)).size,
+    );
+    assert.equal(f.evidence.unchanged(stops[0]), true);
+    // Neither the fleet's check nor the open conversation's sees work running.
+    assert.equal(await f.evidence.quietExcept([]), undefined);
+    const state = await f.evidence.read(f.ui);
+    assert.equal(state.quotaStop?.turnId, assistantId);
+    assert.equal(state.quiescence.busyWorkers, 0);
+    // With quota, a notification after a finished turn is work running.
+    const other = path.join(path.dirname(f.transcriptFile), `${userId}.jsonl`);
+    await fs.writeFile(
+      other,
+      [
+        {
+          type: "assistant",
+          uuid: nextAssistant,
+          message: { content: "done", stop_reason: "end_turn" },
+        },
+        notice(noticeA, nextAssistant),
+      ]
+        .map((row) => JSON.stringify(row) + "\n")
+        .join(""),
+    );
+    assert.equal(
+      await f.evidence.quietExcept(stops),
+      "not-quiescent:busyWorkers",
+    );
+    await fs.rm(other);
+    // After the switch, Claude writes its synthetic reply, then the prompt.
+    assert.equal(await f.evidence.deliveryAfter(stops[0], "r1"), "absent");
+    const filler = "f0f0f0f0-f0f0-4f0f-8f0f-f0f0f0f0f0f0";
+    await append(
+      {
+        type: "assistant",
+        uuid: filler,
+        parentUuid: noticeB,
+        isApiErrorMessage: false,
+        message: {
+          model: "<synthetic>",
+          stop_reason: "stop_sequence",
+          content: [{ type: "text", text: "No response requested." }],
+        },
+      },
+      {
+        type: "user",
+        uuid: userId,
+        parentUuid: filler,
+        origin: { kind: "human" },
+        message: { content: "Continue\n[Relay continuation: r1]" },
+      },
+    );
+    assert.equal(await f.evidence.deliveryAfter(stops[0], "r1"), "accepted");
+    await append({
+      type: "assistant",
+      uuid: nextAssistant,
+      parentUuid: userId,
+      message: {
+        model: "claude-opus-5-5",
+        content: [{ type: "text", text: "ok" }],
+        stop_reason: "end_turn",
+      },
+    });
+    assert.equal(await f.evidence.deliveryAfter(stops[0], "r1"), "started");
+    assert.equal((await f.evidence.quotaStops(account)).length, 0);
   } finally {
     await fs.rm(f.root, { recursive: true, force: true });
   }
