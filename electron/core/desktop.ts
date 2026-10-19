@@ -101,8 +101,11 @@ export interface DesktopSwitchOptions {
  * A switch called off by its guards before Claude was asked to quit: Claude kept running and
  * no file was written, so trying again later restarts nothing twice. Thrown when `canProceed`
  * refuses before the quit; a `beforeQuit` that refuses throws it itself and it passes unchanged.
+ * Only the `canProceed` refusal shows as Desktop's error: auto-switch and a single continuation
+ * give no other reason. A `beforeQuit` refusal is its caller's to tell, as the fleet's waiting does.
  */
 export class DesktopSwitchRefused extends Error {}
+const SWITCH_CANCELLED = "Automatic Desktop switch was cancelled before restart.";
 interface Operation {
   kind: DesktopOperationKind;
   profileId?: string;
@@ -894,7 +897,8 @@ export class DesktopManager {
       ok = true;
       return result;
     } catch (e: any) {
-      this.reportError(e.message);
+      if (!(e instanceof DesktopSwitchRefused) || e.message === SWITCH_CANCELLED)
+        this.reportError(e.message);
       throw e;
     } finally {
       release?.();
@@ -960,10 +964,7 @@ export class DesktopManager {
   ) {
     // Check the live handoff guard immediately before asking Claude to quit.
     // File-write guards alone are too late to protect a newly started task.
-    const refuse = () =>
-      new DesktopSwitchRefused(
-        "Automatic Desktop switch was cancelled before restart.",
-      );
+    const refuse = () => new DesktopSwitchRefused(SWITCH_CANCELLED);
     if (canProceed && !canProceed()) throw refuse();
     await beforeQuit?.();
     if (canProceed && !canProceed()) throw refuse();

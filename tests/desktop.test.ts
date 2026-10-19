@@ -12,6 +12,7 @@ import {
   type DesktopHost,
 } from "../electron/core/desktop";
 import type { DesktopRestartEvent } from "../shared/types";
+import { localizeError } from "../src/messages";
 import type { DraftJob, DraftResult } from "../electron/draft-job";
 import {
   CONVERSATION_DRAFT_PREFIX,
@@ -192,6 +193,49 @@ test("a changed continuation guard blocks restart before Claude is asked to quit
       /conditions changed/.test(error.message),
   );
   assert.equal(f.quits(), quits + 1);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+});
+test("only Desktop's own refusal shows as its error; a beforeQuit refusal is the caller's to tell", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  await f.manager.switchTo(a.id);
+  f.setRunning(true);
+  const quits = f.quits();
+  // Auto-switch and a single continuation give no other reason than this sentence.
+  await assert.rejects(
+    f.manager.switchTo(b.id, { canProceed: () => false }),
+    DesktopSwitchRefused,
+  );
+  const cancelled = (await f.manager.snapshot()).error;
+  assert.equal(cancelled, "Automatic Desktop switch was cancelled before restart.");
+  assert.notEqual(localizeError(cancelled!, "en"), cancelled);
+  // The fleet waits and says so itself: no raw "work-started" banner, and the old one is gone.
+  await assert.rejects(
+    f.manager.switchTo(b.id, {
+      canProceed: () => true,
+      beforeQuit: async () => {
+        throw new DesktopSwitchRefused("work-started");
+      },
+    }),
+    DesktopSwitchRefused,
+  );
+  assert.equal((await f.manager.snapshot()).error, undefined);
+  // A caller's check that fails rather than refuses is still Desktop's error.
+  await assert.rejects(
+    f.manager.switchTo(b.id, {
+      canProceed: () => true,
+      beforeQuit: async () => {
+        throw new Error("The process list could not be read.");
+      },
+    }),
+    (error) => !(error instanceof DesktopSwitchRefused),
+  );
+  assert.equal(
+    (await f.manager.snapshot()).error,
+    "The process list could not be read.",
+  );
+  assert.equal(f.quits(), quits);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
 });
 test("real Desktop file switch A → B → A preserves config, cookies, history and refreshes saved credentials", async (t) => {
