@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { MAX_SIDEBAR_CHARS } from "./core/sidebar-keys";
 
 /** Starts the argument that makes Relay's Electron run as the draft helper: `--relay-draft-worker=<job.json>`. */
 export const DRAFT_WORKER_FLAG = "--relay-draft-worker=";
@@ -22,9 +23,17 @@ export interface DraftJob {
   claudeElectron: string;
 }
 
-/** What the helper answers: on success, every `composer-draft:` key of Local Storage with its raw value. */
+/**
+ * What the helper answers: on success, every `composer-draft:` key of Local Storage with its raw
+ * value, and the raw values of the `SIDEBAR_KEYS` it found (omitted when they could not be read).
+ */
 export type DraftResult =
-  { ok: true; drafts: Record<string, string> } | { ok: false; error: string };
+  | {
+      ok: true;
+      drafts: Record<string, string>;
+      sidebar?: Record<string, string>;
+    }
+  | { ok: false; error: string };
 
 /** The job file's path from the process arguments, or undefined when this is not a helper run. */
 export function draftJobPath(argv: string[]): string | undefined {
@@ -94,6 +103,8 @@ export interface DraftPage {
   size(): Promise<number>;
   /** Every `composer-draft:` key with its value. */
   read(): Promise<Record<string, string>>;
+  /** The `SIDEBAR_KEYS` the origin holds, with their values. */
+  readSidebar?(): Promise<Record<string, string>>;
 }
 
 /** Why a job fails when Chromium gave the helper no data to work on. */
@@ -121,8 +132,9 @@ export function assertLocalStorage(storage: string): void {
 }
 
 /**
- * Reads every `composer-draft:` key of Claude's Local Storage through `page`, and writes nothing.
- * Never throws.
+ * Reads every `composer-draft:` key of Claude's Local Storage through `page`, and the sidebar
+ * keys, and writes nothing. Never throws. A sidebar that cannot be read is left out: it never
+ * costs the drafts.
  *
  * An origin with no keys at all is a failure: when Chromium cannot open Claude's database it
  * deletes and recreates it, or falls back to memory, and either way the job would otherwise
@@ -134,7 +146,23 @@ export async function runDraftJob(
 ): Promise<DraftResult> {
   try {
     if ((await page.size()) === 0) return { ok: false, error: EMPTY_STORAGE };
-    return { ok: true, drafts: await page.read() };
+    const drafts = await page.read();
+    let sidebar: Record<string, string> | undefined;
+    try {
+      sidebar = await page.readSidebar?.();
+    } catch {
+      // Only the sidebar is missing then.
+    }
+    // Too large, it could push the result file past what Relay reads, drafts and all.
+    if (
+      sidebar &&
+      Object.entries(sidebar).reduce(
+        (n, [k, v]) => n + k.length + v.length,
+        0,
+      ) > MAX_SIDEBAR_CHARS
+    )
+      sidebar = undefined;
+    return { ok: true, drafts, ...(sidebar ? { sidebar } : {}) };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }

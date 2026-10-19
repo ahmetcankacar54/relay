@@ -2,6 +2,7 @@ import { app, BrowserWindow, session } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { DRAFT_KEY_PREFIX } from "./core/drafts";
+import { SIDEBAR_KEYS } from "./core/sidebar-keys";
 import {
   assertLocalStorage,
   draftJobPath,
@@ -17,7 +18,7 @@ import {
 // Relay's Electron, started by `entry.ts` as `--relay-draft-worker=<job.json>` while Claude is
 // closed. It opens Relay's private copy of Claude's Chromium Local Storage (`job.storage`)
 // through a scratch session root, so Chromium itself reads its own LevelDB, and answers with
-// the unsent drafts it holds. It only reads: Claude Desktop wipes drafts itself after an account change,
+// the unsent drafts it holds, with the Code sidebar's organization. It only reads: Claude Desktop wipes drafts itself after an account change,
 // and Relay re-types them later.
 // It never imports `main.ts`: nothing here may start the tray, a window or the network.
 
@@ -43,6 +44,17 @@ function pageFor(win: BrowserWindow): DraftPage {
             drafts[key] = localStorage.getItem(key);
         }
         return JSON.stringify(drafts);
+      })()`);
+      return JSON.parse(String(json)) as Record<string, string>;
+    },
+    async readSidebar() {
+      const json = await run(`(() => {
+        const found = {};
+        for (const key of ${JSON.stringify(SIDEBAR_KEYS)}) {
+          const value = localStorage.getItem(key);
+          if (value !== null) found[key] = value;
+        }
+        return JSON.stringify(found);
       })()`);
       return JSON.parse(String(json)) as Record<string, string>;
     },

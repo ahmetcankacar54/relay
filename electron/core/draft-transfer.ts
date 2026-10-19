@@ -13,6 +13,7 @@ import {
   type CapturedDraft,
 } from "./drafts";
 import { copyLocalStorage, sweepDraftLeftovers } from "./draft-storage";
+import { MAX_SIDEBAR_CHARS, SIDEBAR_KEYS } from "./sidebar-keys";
 import type { DraftSlots } from "./draft-vault";
 import {
   DRAFT_WORKER_FLAG,
@@ -57,7 +58,9 @@ export type CaptureOutcome =
  * meanwhile, or a check that throws, skips the step before the run, and the copy is dropped.
  *
  * After a successful read, `store` gets the drafts kept, possibly none, and the slots read for
- * `to`: every carried conversation and the new-session screen.
+ * `to`: every carried conversation and the new-session screen. `sidebar`, when given, gets the
+ * sidebar keys the helper read (undefined when it read none) before that; whatever it does, it
+ * never changes the step's outcome.
  *
  * A run that fails, throws or answers nothing, and a copy or a store that fails, end the step
  * as failed. The outcome is written to `lastJson` (`<vault>/drafts/last.json`) with counts and
@@ -71,6 +74,7 @@ export async function captureDrafts(input: {
   titles: Record<string, string>;
   run: (job: DraftJob) => Promise<DraftResult>;
   store: (to: string, drafts: CapturedDraft[], slots: DraftSlots) => Promise<void>;
+  sidebar?: (raw: Record<string, string> | undefined) => Promise<void>;
   lastJson: string;
   now: Date;
   blocked?: string;
@@ -143,6 +147,11 @@ async function capture(
         error:
           result?.ok === false && result.error ? result.error : "no result",
       };
+    try {
+      await input.sidebar?.(result.sidebar);
+    } catch {
+      // The sidebar is a side matter of the step: the drafts still go on.
+    }
     const drafts = selectDrafts({
       drafts: result.drafts,
       from: input.from,
@@ -327,6 +336,25 @@ function validDrafts(value: unknown): Record<string, string> | undefined {
 }
 
 /**
+ * The sidebar keys of a helper's answer, or undefined when it is not a plain map from
+ * `SIDEBAR_KEYS` to strings within the limit.
+ */
+function validSidebar(value: unknown): Record<string, string> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return undefined;
+  const sidebar: Record<string, string> = {};
+  let chars = 0;
+  for (const [key, text] of Object.entries(value)) {
+    if (!(SIDEBAR_KEYS as readonly string[]).includes(key) || typeof text !== "string")
+      return undefined;
+    chars += key.length + text.length;
+    if (chars > MAX_SIDEBAR_CHARS) return undefined;
+    sidebar[key] = text;
+  }
+  return sidebar;
+}
+
+/**
  * What the helper's exit and the text of its result file add up to. A written success counts
  * only when the helper also exited by itself with code 0.
  */
@@ -356,7 +384,9 @@ export function helperOutcome(
     return { ok: false, error: `the helper was stopped by ${exit.signal}` };
   if (exit.code !== 0)
     return { ok: false, error: `the helper exited with code ${exit.code}` };
-  return { ok: true, drafts };
+  // A sidebar answer that is off is only left out: the drafts stand on their own.
+  const sidebar = validSidebar(result.sidebar);
+  return { ok: true, drafts, ...(sidebar ? { sidebar } : {}) };
 }
 
 /**

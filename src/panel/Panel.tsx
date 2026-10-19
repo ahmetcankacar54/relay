@@ -14,6 +14,7 @@ import { PanelActiveCard } from "./PanelActiveCard";
 import { PanelAccounts, panelRows, switchingId } from "./PanelAccounts";
 import { PanelAutomation } from "./PanelAutomation";
 import { PanelDrafts } from "./PanelDrafts";
+import { PanelSidebar } from "./PanelSidebar";
 import { panelHead } from "./panel-head";
 
 /** The menu bar popover: active account, other accounts, automation. */
@@ -125,6 +126,7 @@ export function Panel({
         </div>
       )}
       <PanelDrafts />
+      <PanelSidebar />
       <PanelAccounts
         now={now}
         confirmId={confirmId}

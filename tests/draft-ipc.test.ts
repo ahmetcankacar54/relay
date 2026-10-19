@@ -1508,3 +1508,22 @@ test("no IPC handler returns draft text", () => {
   assert.match(types, /dismissDraft\(id: string\): Promise<void>;/);
   assert.match(types, /drafts\?: DraftSummary\[\];/);
 });
+
+test("the sidebar recipe is copied in main: the renderer sends an offer id and gets nothing back", () => {
+  const main = source("../electron/main.ts");
+  assert.match(
+    main,
+    /const sidebar = sidebarActions\(\{\s*gaps: desktop,\s*writeClipboard: \(text\) => clipboard\.writeText\(text\),\s*changed: broadcastChanged,\s*log: logDraftEvent,\s*\}\);/,
+  );
+  assert.match(handler(main, "copy-sidebar-recipe"), /^handle\("copy-sidebar-recipe", \(gapId\) => sidebar\.copy\(gapId\)\);/);
+  assert.match(handler(main, "dismiss-sidebar-gap"), /^handle\("dismiss-sidebar-gap", \(gapId\) => sidebar\.dismiss\(gapId\)\);/);
+  // Both snapshots carry the summary, never the recipe.
+  assert.equal((main.match(/sidebar: await sidebarSummary\(desktop\),/g) ?? []).length, 2);
+  assert.doesNotMatch(main, /sidebarRecipe\(/);
+  const preload = source("../electron/preload.ts");
+  assert.match(preload, /copySidebarRecipe: \(id\) =>\s*ipcRenderer\.invoke\("relay:copy-sidebar-recipe", id\),/);
+  assert.match(preload, /dismissSidebarGap: \(id\) =>\s*ipcRenderer\.invoke\("relay:dismiss-sidebar-gap", id\),/);
+  const types = source("../shared/types.ts");
+  assert.match(types, /copySidebarRecipe\(id: string\): Promise<void>;/);
+  assert.match(types, /sidebar\?: SidebarGapSummary;/);
+});

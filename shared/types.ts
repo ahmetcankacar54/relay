@@ -82,6 +82,21 @@ export interface AuthFlow {
   startedAt: string;
   error?: string;
 }
+/**
+ * The Code sidebar sections the account switched to lacks, as counts and account names: the
+ * sessions and the recipe stay in main.
+ */
+export interface SidebarGapSummary {
+  id: string;
+  /** The account switched to, by name. */
+  to: string;
+  /** The accounts the sections come from, by name. */
+  from: string[];
+  /** Sections the account has none of that name for. */
+  missingSections: number;
+  /** Sessions to file in the sections. */
+  sessions: number;
+}
 export interface Snapshot {
   settings: RelaySettings;
   autoSwitch?: AutoSwitchState;
@@ -90,6 +105,8 @@ export interface Snapshot {
   planning?: KeeperSnapshot;
   /** The drafts rescued at switches: summaries only, never their text. */
   drafts?: DraftSummary[];
+  /** What Desktop's current account lacks of the sidebar organization of the accounts it came from. */
+  sidebar?: SidebarGapSummary;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   accounts: Account[];
@@ -181,6 +198,10 @@ export interface RelayAPI {
   copyDraft(id: string): Promise<void>;
   /** Removes a rescued draft. */
   dismissDraft(id: string): Promise<void>;
+  /** Copies the sidebar recipe of gap `id` to the clipboard in main. */
+  copySidebarRecipe(id: string): Promise<void>;
+  /** Stops offering the sidebar gap `id`. */
+  dismissSidebarGap(id: string): Promise<void>;
   updateAccountPlanning(
     accountId: string,
     input: AccountPlanning,

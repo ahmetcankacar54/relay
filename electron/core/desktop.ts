@@ -18,7 +18,13 @@ import {
   type CarriedConversation,
   type JsonObject,
 } from "./desktop-files";
-import type { Account, DesktopOperationKind, DesktopRestartEvent, DesktopState } from "../../shared/types";
+import type {
+  Account,
+  DesktopOperationKind,
+  DesktopRestartEvent,
+  DesktopState,
+  SidebarGapSummary,
+} from "../../shared/types";
 import {
   allowedHistoryPair,
   historySources,
@@ -35,6 +41,13 @@ import { safeMessage, shortId } from "./draft-diagnostics";
 import { pruneSwitchBackups } from "./backup-prune";
 import type { CapturedDraft } from "./drafts";
 import { removeLegacyDraftBackups } from "./draft-storage";
+import {
+  UnsupportedSidebar,
+  planSidebarGap,
+  readSidebarStorage,
+  sidebarRecipe,
+} from "./sidebar-layout";
+import { SidebarGapVault, type SidebarGapRecord } from "./sidebar-vault";
 import {
   DraftVault,
   summarize,
@@ -195,6 +208,8 @@ export class DesktopManager {
   private operation?: Operation & { restarted: boolean };
   /** The drafts captured at switches, sealed, until they are re-typed or dismissed. */
   private drafts: DraftVault;
+  /** What the account switched to lacks of its sources' sidebar organization. */
+  private sidebar: SidebarGapVault;
   /** The reading observers share; every Desktop operation drops it. */
   private shared?: { at: number; reading: Promise<DesktopReading> };
   constructor(
@@ -218,6 +233,7 @@ export class DesktopManager {
         onList: (count) => this.diagnose("vault-list", { count }),
       },
     );
+    this.sidebar = new SidebarGapVault(this.vault, this.now);
   }
   /** One diagnosis event; a log that fails changes nothing about the drafts. */
   private diagnose(event: string, fields?: Record<string, unknown>) {
@@ -740,6 +756,10 @@ export class DesktopManager {
    * and keeps what it finds sealed in the vault. Drafts follow the history policy: nothing is
    * captured when it is off or does not allow this pair. Never throws, so a draft can never
    * fail, roll back or hold up a switch.
+   *
+   * The same read gives the sidebar organization, under the same rules: `planSidebar` keeps what
+   * `to` lacks of it. Whatever the last switch offered goes first, so the offer always describes
+   * this switch.
    */
   private async carryDrafts(
     from: string,
@@ -747,6 +767,7 @@ export class DesktopManager {
     target: Account,
     conversations: CarriedConversation[],
   ) {
+    await this.sidebar.clear().catch(() => {});
     /** Why no capture was tried, for the diagnosis log: nothing else says. */
     const notRun = (reason: string) =>
       this.diagnose("capture", {
@@ -787,6 +808,7 @@ export class DesktopManager {
             ? {}
             : await this.draftTitles(target, conversations),
         run: (job) => host.readDrafts!(job),
+        sidebar: (raw) => this.planSidebar(raw, from, target, conversations),
         store: (account, drafts, slots) => {
           captured = drafts;
           return this.drafts.add(account, drafts, slots);
@@ -808,6 +830,105 @@ export class DesktopManager {
         status: "threw",
       });
     }
+  }
+  /**
+   * Keeps what the account switched to (`target`) lacks of its sources' Code sidebar organization,
+   * from the sidebar keys the draft helper read (`raw`, undefined when it read none). The sources
+   * are the accounts the history policy allows, the one being left (`from`) first; `conversations`
+   * maps their sessions to the target's. Logs counts only, never names or aliases. Never throws.
+   */
+  private async planSidebar(
+    raw: Record<string, string> | undefined,
+    from: string,
+    target: Account,
+    conversations: CarriedConversation[],
+  ): Promise<void> {
+    const fields = { from: shortId(from), to: shortId(target.desktop!.accountUuid) };
+    try {
+      if (!raw) return this.diagnose("sidebar", { ...fields, status: "not-read" });
+      const storage = readSidebarStorage(raw);
+      const sources = historySources(
+        target,
+        this.store.state.accounts,
+        this.store.state.settings,
+      )
+        .map((account) => account.desktop!)
+        .sort(
+          (a, b) =>
+            Number(b.accountUuid === from) - Number(a.accountUuid === from),
+        );
+      const gap = planSidebarGap({
+        sources: sources.map((scope) => ({
+          accountUuid: scope.accountUuid,
+          layout: storage.layout(scope),
+        })),
+        target: {
+          accountUuid: target.desktop!.accountUuid,
+          layout: storage.layout(target.desktop!),
+        },
+        conversations,
+        starred: storage.starred,
+      });
+      if (!gap) return this.diagnose("sidebar", { ...fields, status: "none" });
+      await this.sidebar.put(target.desktop!.accountUuid, gap);
+      this.diagnose("sidebar", {
+        ...fields,
+        status: "planned",
+        sections: gap.sections.length,
+        missing: gap.missingSections,
+        sessions: gap.sessions,
+      });
+    } catch (error) {
+      this.diagnose("sidebar", {
+        ...fields,
+        status: error instanceof UnsupportedSidebar ? "unsupported" : "failed",
+        reason: safeMessage(errorMessage(error)),
+      });
+    }
+  }
+  /** The account named for the sidebar offer: its Relay name, or a short id when it has none. */
+  private accountName(accountUuid: string): string {
+    return (
+      this.store.state.accounts.find(
+        (a) => a.desktop?.accountUuid.toLowerCase() === accountUuid.toLowerCase(),
+      )?.name ?? shortId(accountUuid)!
+    );
+  }
+  /** The sidebar offer, while Desktop is still on the account it was made for. */
+  private async currentSidebarGap(): Promise<SidebarGapRecord | undefined> {
+    const record = await this.sidebar.get();
+    if (!record) return undefined;
+    let current: string | undefined;
+    try {
+      current = identity(await readObject(this.root, "config.json"));
+    } catch {
+      return undefined;
+    }
+    return current?.toLowerCase() === record.to.toLowerCase() ? record : undefined;
+  }
+  /** What Desktop's current account lacks of its sources' sidebar sections, for the panel. */
+  async sidebarGap(): Promise<SidebarGapSummary | undefined> {
+    const record = await this.currentSidebarGap();
+    if (!record) return undefined;
+    return {
+      id: record.id,
+      to: this.accountName(record.to),
+      from: record.gap.from.map((uuid) => this.accountName(uuid)),
+      missingSections: record.gap.missingSections,
+      sessions: record.gap.sessions,
+    };
+  }
+  /** The recipe of sidebar gap `id`, while it is offered. Main process only. */
+  async sidebarRecipe(id: string): Promise<string | undefined> {
+    const record = await this.currentSidebarGap();
+    if (record?.id !== id) return undefined;
+    return sidebarRecipe(record.gap, {
+      to: this.accountName(record.to),
+      from: record.gap.from.map((uuid) => this.accountName(uuid)),
+    });
+  }
+  async dismissSidebarGap(id: string): Promise<void> {
+    await this.sidebar.remove(id);
   }
   /**
    * The title of each carried conversation on the target's card of it, as the merge left it:

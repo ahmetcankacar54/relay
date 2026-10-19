@@ -35,6 +35,7 @@ import {
   draftNotice,
   draftSummaries,
 } from "./core/draft-main";
+import { sidebarActions, sidebarSummary } from "./core/sidebar-main";
 import { Service } from "./core/service";
 import { UsageManager } from "./core/usage";
 import { AutoSwitchManager } from "./core/auto-switch";
@@ -1193,6 +1194,14 @@ function bindIPC() {
   });
   handle("copy-draft", (draftId) => draft.copy(draftId));
   handle("dismiss-draft", (draftId) => draft.dismiss(draftId));
+  const sidebar = sidebarActions({
+    gaps: desktop,
+    writeClipboard: (text) => clipboard.writeText(text),
+    changed: broadcastChanged,
+    log: logDraftEvent,
+  });
+  handle("copy-sidebar-recipe", (gapId) => sidebar.copy(gapId));
+  handle("dismiss-sidebar-gap", (gapId) => sidebar.dismiss(gapId));
   // Takes no argument: the renderer cannot name a path to reveal.
   handle("show-diagnostics", async () => {
     // Only these fixed files in the user data folder; no path comes from the renderer.
@@ -1388,6 +1397,7 @@ function bindIPC() {
     autoSwitch: autoSwitch.snapshot(),
     planning: keeper.snapshot(),
     drafts: await draftSummaries(desktop),
+    sidebar: await sidebarSummary(desktop),
   }));
   handle("snapshot", () =>
     service.transaction(async () => ({
@@ -1398,6 +1408,7 @@ function bindIPC() {
       autoSwitch: autoSwitch.snapshot(),
       planning: keeper.snapshot(),
       drafts: await draftSummaries(desktop),
+      sidebar: await sidebarSummary(desktop),
     })),
   );
   handle("usage-statistics", (input) => {
