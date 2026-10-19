@@ -335,14 +335,25 @@ app.whenReady().then(async () => {
         333,
         "the main window cannot resize the panel",
       );
+      const findSwitcher = () =>
+        BrowserWindow.getAllWindows().find(
+          (w) => !w.isDestroyed() && w.webContents.getURL().endsWith("switch.html"),
+        );
+      assert.equal(findSwitcher(), undefined, "Relay starts with no switch window");
+      // A story creates the window; the smoke starts one scene through main's hook.
+      const scene = {
+        visible: true,
+        stage: "waiting",
+        story: 1,
+        line: "smoke",
+        motion: false,
+      };
+      globalThis.relaySmokeSwitchScene(scene);
       let switcher;
       await eventually(() => {
-        switcher = BrowserWindow.getAllWindows().find((w) =>
-          w.webContents.getURL().endsWith("switch.html"),
-        );
+        switcher = findSwitcher();
         return switcher && !switcher.webContents.isLoading();
       });
-      assert.equal(switcher.isVisible(), false, "the switch window starts hidden");
       assert.equal(switcher.isFocusable(), false, "the switch window never takes focus");
       assert.equal(
         await switcher.webContents.executeJavaScript("typeof require"),
@@ -357,14 +368,7 @@ app.whenReady().then(async () => {
         await switcher.webContents.executeJavaScript("typeof window.relaySwitch?.onScene"),
         "function",
       );
-      // One scene through the real channel and the built page.
-      switcher.webContents.send("relay:switch-scene", {
-        visible: true,
-        stage: "waiting",
-        story: 1,
-        line: "smoke",
-        motion: false,
-      });
+      // The scene reached the built page through the real channel.
       await eventually(async () =>
         Boolean(
           await switcher.webContents.executeJavaScript(
@@ -372,6 +376,9 @@ app.whenReady().then(async () => {
           ),
         ),
       );
+      // The story ends: the window hides, and it is freed 30 s later.
+      globalThis.relaySmokeSwitchScene({ ...scene, visible: false });
+      await eventually(() => !switcher.isVisible());
       await call("openPage", "genel");
       await eventually(
         async () =>

@@ -46,3 +46,13 @@ test("a fresh window starts its load from the beginning", () => {
   assert.match(create, /this\.load = INITIAL_PANEL_LOAD;/);
   assert.match(create, /if \(this\.win === win\) this\.win = undefined;/);
 });
+
+test("only an unpackaged Relay lets the smoke test start a scene", () => {
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(
+    main,
+    /if \(!app\.isPackaged\)\s*Object\.assign\(globalThis, \{\s*relaySmokeSwitchScene: \(view: SwitchSceneView\) =>\s*switchWindow\?\.show\(view\),/,
+  );
+  const smoke = readFileSync(new URL("../scripts/smoke.cjs", import.meta.url), "utf8");
+  assert.match(smoke, /assert\.equal\(findSwitcher\(\), undefined, "Relay starts with no switch window"\);/);
+});

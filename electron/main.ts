@@ -50,7 +50,11 @@ import { RelayTray } from "./tray";
 import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
 import { TrayPanel } from "./tray-panel";
 import { SwitchWindow } from "./switch-window";
-import { SwitchStory, sceneView } from "../shared/switch-scene";
+import {
+  SwitchStory,
+  sceneView,
+  type SwitchSceneView,
+} from "../shared/switch-scene";
 import { PAGE_INTENTS, PAGES } from "../src/app/routes";
 import { isExternalLink } from "../shared/external-links";
 import { readsUsage } from "../shared/cli-version";
@@ -804,6 +808,13 @@ else {
           switchStory = story;
           // Real restarts only: lock holders that never quit Claude stay silent.
           desktop.onRestart = (event) => story.report(event);
+          // The window exists only during a story, so the smoke test starts one scene through it.
+          // A packaged Relay has no such hook.
+          if (!app.isPackaged)
+            Object.assign(globalThis, {
+              relaySmokeSwitchScene: (view: SwitchSceneView) =>
+                switchWindow?.show(view),
+            });
         } catch {
           switchWindow?.destroy();
           switchWindow = undefined;
