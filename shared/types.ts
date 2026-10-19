@@ -2,6 +2,8 @@ import type { UsageStatisticsView } from "./usage-statistics-view";
 export type { UsageStatisticsView } from "./usage-statistics-view";
 import type { TokenUsageView } from "./token-usage-view";
 export type { TokenUsageView } from "./token-usage-view";
+import type { LostFoundWeek } from "./lost-found";
+export type { LostFoundWeek, LostItem } from "./lost-found";
 import type { Tempo } from "./tempo";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 import type { DraftSummary } from "../electron/core/draft-vault";
@@ -225,6 +227,8 @@ export interface RelayAPI {
     range: 7 | 30 | 90;
     accountId?: string;
   }): Promise<TokenUsageView>;
+  /** What a week left behind; the newest complete week without `weekStart`. */
+  lostFound(input: { weekStart?: string }): Promise<LostFoundWeek>;
   createAccount(input: CreateAccount): Promise<Account>;
   checkAuth(accountId: string): Promise<Account>;
   login(accountId: string): Promise<AuthFlow>;

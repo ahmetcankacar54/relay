@@ -3,6 +3,7 @@ import {
   type UsageSample,
 } from "../../shared/usage-statistics";
 import type { Account } from "../../shared/types";
+import { desktopAccountFor } from "../../shared/desktop-account";
 
 export type Attribution =
   | { kind: "account"; accountId: string; estimated: boolean }
@@ -226,26 +227,6 @@ function indexFor(
   return index;
 }
 
-function sameId(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase();
-}
-
-function accountFor(
-  known: { accountUuid: string; orgId?: string },
-  accounts: readonly Account[],
-): Account | undefined {
-  return accounts.find((account) => {
-    const desktop = account.desktop;
-    if (
-      !desktop?.accountUuid ||
-      !sameId(desktop.accountUuid, known.accountUuid)
-    )
-      return false;
-    // The organization decides only when both sides know it.
-    return !known.orgId || !desktop.orgId || sameId(desktop.orgId, known.orgId);
-  });
-}
-
 /**
  * Which Relay account a Claude response belongs to, or whether it is not
  * Desktop's. Only an account with a Claude app sign-in can be estimated.
@@ -271,7 +252,7 @@ export function attribute(
     return { kind: "terminal" };
   const known = deps.timeline.accountAt(row.time);
   if (known) {
-    const owner = accountFor(known, deps.accounts);
+    const owner = desktopAccountFor(known, deps.accounts);
     return owner
       ? { kind: "account", accountId: owner.id, estimated: false }
       : { kind: "unknown" };

@@ -59,7 +59,11 @@ import { intentHash, PAGE_INTENTS, PAGES } from "../src/app/routes";
 import { isExternalLink } from "../shared/external-links";
 import { readsUsage } from "../shared/cli-version";
 import { UsageHistory } from "./core/usage-history";
-import { usageStatisticsInput } from "./core/usage-statistics-input";
+import {
+  lostFoundInput,
+  usageStatisticsInput,
+} from "./core/usage-statistics-input";
+import { lostFoundWeek } from "../shared/lost-found";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { buildTokenUsageView } from "../shared/token-usage-view";
 import type { UsageSample } from "../shared/usage-statistics";
@@ -1433,6 +1437,18 @@ function bindIPC() {
       zone: service.store.state.settings.planning.timeZone,
       now: Date.now(),
       ...(exactSince === undefined ? {} : { exactSince }),
+    });
+  });
+  handle("lost-found", (input) => {
+    const { weekStart } = lostFoundInput.parse(input);
+    return lostFoundWeek({
+      rollups: usageHistory.rollups(),
+      segments: activeTimeline.list(),
+      ledgerDays: tokenLedger?.snapshot().days ?? {},
+      accounts: service.store.state.accounts,
+      zone: service.store.state.settings.planning.timeZone,
+      now: Date.now(),
+      ...(weekStart ? { weekStart } : {}),
     });
   });
   handle("create-account", (input) =>
