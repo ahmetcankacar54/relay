@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import type { Account } from "../../../shared/types";
 import {
   TOKEN_ROW_LABELS,
@@ -10,6 +10,8 @@ import type { StatisticsRange } from "../../../shared/usage-statistics-view";
 import { Banner } from "@/components/Banner";
 import { Disclosure } from "@/components/Disclosure";
 import { Note } from "@/components/SettingRow";
+import { PandaRig } from "@/components/Panda";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -24,7 +26,15 @@ import { useI18n, type Language, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
-import { DayTipRow, DayTooltip, Swatch, useDayHover } from "./DayHover";
+import {
+  barCentre,
+  DayTipRow,
+  DayTooltip,
+  Swatch,
+  useDayHover,
+} from "./DayHover";
+import { PandaBench } from "./PandaBench";
+import { busiestDay, pandaLines, type PandaLine } from "./panda-facts";
 import {
   formatDay,
   formatDayLong,
@@ -114,13 +124,16 @@ function Tile({
   label,
   value,
   exact,
+  stamp,
 }: {
   label: string;
   value: string;
   exact: string;
+  /** A customs stamp across the tile while the panda talks; the panda's line says the same in words. */
+  stamp?: string;
 }) {
   return (
-    <div data-slot="token-tile" className="min-w-0">
+    <div data-slot="token-tile" className="relative min-w-0">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div
         title={exact}
@@ -128,18 +141,38 @@ function Tile({
       >
         {value}
       </div>
+      {stamp && (
+        <span
+          aria-hidden="true"
+          data-slot="token-stamp"
+          className="token-stamp pointer-events-none absolute top-1 right-0 rounded border-2 border-crit px-1.5 py-0.5 text-[10px] leading-none font-bold tracking-wider text-crit uppercase opacity-85"
+        >
+          {stamp}
+        </span>
+      )}
     </div>
   );
 }
 
-function Tiles({ view }: { view: TokenUsageView }) {
+function Tiles({
+  view,
+  stamped,
+}: {
+  view: TokenUsageView;
+  /** The panda is explaining a day: the cache-read tile gets its stamp. */
+  stamped?: boolean;
+}) {
   const { t, language } = useI18n();
   const { totals } = view;
-  const tiles: [string, number][] = [
+  const tiles: [string, number, string?][] = [
     [t("Girdi", "Input"), totals.input],
     [t("Çıktı", "Output"), totals.output],
     [t("Önbellek yazma", "Cache write"), totals.cacheWrite],
-    [t("Önbellek okuma", "Cache read"), totals.cacheRead],
+    [
+      t("Önbellek okuma", "Cache read"),
+      totals.cacheRead,
+      stamped ? t("Bunu daha önce gördük", "Seen it before") : undefined,
+    ],
   ];
   const total = totalOf(totals);
   return (
@@ -154,12 +187,13 @@ function Tiles({ view }: { view: TokenUsageView }) {
         )}
       </div>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {tiles.map(([label, value]) => (
+        {tiles.map(([label, value, stamp]) => (
           <Tile
             key={label}
             label={label}
             value={formatTokens(value, language)}
             exact={formatNumber(value, language)}
+            stamp={stamp}
           />
         ))}
       </div>
@@ -216,16 +250,42 @@ function Legend({
 }
 
 /** Stacked tokens per local day, one segment per row, coloured by account; pointing at a day details it. */
+/** The day the panda took out of the chart, and which of its lines it is saying. */
+interface Explained {
+  date: string;
+  /** The line's key: a refresh may add or drop lines, and the panda keeps saying the same one. */
+  key: string;
+}
+
 function Chart({
   view,
   columns,
   metric,
   metricLabel,
+  explained,
+  line,
+  more,
+  crooked,
+  onPick,
+  onNextLine,
+  onPutBack,
+  returnFocus,
 }: {
   view: TokenUsageView;
   columns: Column[];
   metric: Metric;
   metricLabel: string;
+  explained?: Explained;
+  /** What the panda says about the explained day, and whether it has more. */
+  line?: PandaLine;
+  more: boolean;
+  /** Days the panda put back not quite straight. */
+  crooked: readonly string[];
+  /** A day was clicked, or picked with Enter or Space, on `chart`. */
+  onPick: (date: string, chart: Element | null) => void;
+  onNextLine: () => void;
+  onPutBack: () => void;
+  returnFocus: () => void;
 }) {
   const { t, language } = useI18n();
   const days = view.days.map((day) => ({
@@ -256,15 +316,30 @@ function Chart({
   const ticks = days.length
     ? [0, Math.floor((days.length - 1) / 2), days.length - 1]
     : [];
-  const hover = useDayHover({ width: WIDTH, left, step, count: days.length });
+  const hover = useDayHover({
+    width: WIDTH,
+    left,
+    step,
+    count: days.length,
+    onPick: (day) => onPick(days[day].date, hover.ref.current),
+    // With the bench open, Escape on the chart only closes it; the day stays.
+    onEscape: () => {
+      if (!explained) return false;
+      onPutBack();
+      return true;
+    },
+  });
+  const takenAt = explained
+    ? days.findIndex((day) => day.date === explained.date)
+    : -1;
   const shown = hover.active === undefined ? undefined : days[hover.active];
   const shownTotal = shown ? dayTotal(shown) : 0;
   return (
-    <div className="relative mx-auto w-full max-w-4xl">
+    <div className="@container relative mx-auto w-full max-w-4xl">
       <svg
         {...hover.chart}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="h-auto w-full rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="h-auto w-full cursor-pointer rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         role="group"
         aria-label={t(
           "Günlük token grafiği; günler arasında ok tuşlarıyla gezilir",
@@ -312,6 +387,9 @@ function Chart({
                 hover.active !== undefined &&
                   hover.active !== i &&
                   "opacity-40",
+                i === takenAt
+                  ? "token-taken"
+                  : crooked.includes(day.date) && "token-crooked",
               )}
             >
               {hover.active === i && (
@@ -368,7 +446,22 @@ function Chart({
           ))}
         </g>
       </svg>
-      <DayTooltip at={hover.at}>
+      {takenAt >= 0 && explained && line && (
+        <PandaBench
+          // A new day is taken apart afresh: the panda peeks and the parts are laid out again.
+          key={explained.date}
+          view={view}
+          date={explained.date}
+          line={line}
+          more={more}
+          at={barCentre({ width: WIDTH, left, step }, takenAt)}
+          onNext={onNextLine}
+          onClose={onPutBack}
+          returnFocus={returnFocus}
+        />
+      )}
+      {/* The workbench says more than the hover box; the box waits until it closes. */}
+      <DayTooltip at={takenAt >= 0 ? undefined : hover.at}>
         {shown && (
           <>
             <div className="font-semibold">
@@ -510,12 +603,65 @@ export function DayTable({
 function Content({
   view,
   accounts,
+  filterKey,
 }: {
   view: TokenUsageView;
   accounts: Account[];
+  /** What the view was asked for beyond its range: the account filter. */
+  filterKey: string;
 }) {
   const { t, language } = useI18n();
   const [metric, setMetric] = useState<Metric>("total");
+  const [explained, setExplained] = useState<Explained>();
+  const [crooked, setCrooked] = useState<string[]>([]);
+  /** What screen readers hear: set only when the user asks, so a refresh announces nothing. */
+  const [said, setSaid] = useState("");
+  const opener = useRef<Element | null>(null);
+  // A new range, a new day or a new account filter puts every bar back straight and closes the workbench.
+  const shape = `${view.range}|${view.days[0]?.date ?? ""}|${filterKey}`;
+  const [seenShape, setSeenShape] = useState(shape);
+  if (seenShape !== shape) {
+    setSeenShape(shape);
+    setExplained(undefined);
+    setCrooked([]);
+    setSaid("");
+  }
+  const accountNames = Object.fromEntries(
+    view.rows
+      .filter((row) => row.kind === "account")
+      .map((row) => [row.key, rowLabel(row, t)]),
+  );
+  const today = view.days[view.days.length - 1]?.date ?? "";
+  const linesOf = (date: string) =>
+    pandaLines({ view, date, accountNames, today });
+  const lines = explained ? linesOf(explained.date) : [];
+  // The chosen line while it still applies; after a refresh dropped it, the day's first.
+  const line = explained
+    ? (lines.find((l) => l.key === explained.key) ?? lines[0])
+    : undefined;
+  const say = (date: string, next: PandaLine) => {
+    setExplained({ date, key: next.key });
+    setSaid(`${formatDayLong(date, language)}: ${t(next.tr, next.en)}`);
+  };
+  const nextLine = () => {
+    if (!explained || !line) return;
+    say(explained.date, lines[(lines.indexOf(line) + 1) % lines.length]);
+  };
+  const putBack = (date: string) =>
+    setCrooked((days) => (days.includes(date) ? days : [...days, date]));
+  /** The panda explains `date`, opened from `from`; asked about the same day again, it says its next line. */
+  const explain = (date: string, from: Element | null) => {
+    opener.current = from;
+    if (explained?.date === date) return nextLine();
+    if (explained) putBack(explained.date);
+    say(date, linesOf(date)[0]);
+  };
+  const close = useCallback(() => {
+    if (!explained) return;
+    putBack(explained.date);
+    setExplained(undefined);
+    setSaid("");
+  }, [explained]);
   const columns = tokenColumns(view, accounts, t);
   const labels: Record<Metric, string> = {
     total: t("Toplam", "Total"),
@@ -528,6 +674,9 @@ function Content({
   const mix = modelMix(view, metric, language);
   return (
     <>
+      <p aria-live="polite" data-slot="panda-say" className="sr-only">
+        {said}
+      </p>
       {empty ? (
         // While the scan runs, an empty range may only not be read yet: the scanning note says so.
         !scanning && (
@@ -540,30 +689,58 @@ function Content({
         )
       ) : (
         <>
-          <Tiles view={view} />
+          <Tiles view={view} stamped={explained !== undefined} />
           {/* The chart's controls: what each row adds up to, and what is counted. */}
           <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t pt-3">
             <Legend view={view} columns={columns} metric={metric} />
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              aria-label={t("Ölçü", "Metric")}
-              value={metric}
-              onValueChange={(v) => v && setMetric(v as Metric)}
-            >
-              {METRICS.map((m) => (
-                <ToggleGroupItem key={m} value={m}>
-                  {labels[m]}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={(event) => {
+                  const date = busiestDay(view);
+                  if (date) explain(date, event.currentTarget);
+                }}
+              >
+                <PandaRig pose="head" expression="happy" size={18} />
+                {t("Panda anlatsın", "Ask the panda")}
+              </Button>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                aria-label={t("Ölçü", "Metric")}
+                value={metric}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  setMetric(v as Metric);
+                  setCrooked([]);
+                }}
+              >
+                {METRICS.map((m) => (
+                  <ToggleGroupItem key={m} value={m}>
+                    {labels[m]}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </div>
           </div>
           <Chart
             view={view}
             columns={columns}
             metric={metric}
             metricLabel={labels[metric]}
+            explained={explained}
+            line={line}
+            more={lines.length > 1}
+            crooked={crooked}
+            onPick={explain}
+            onNextLine={nextLine}
+            onPutBack={close}
+            returnFocus={() =>
+              (opener.current as HTMLElement | null)?.focus?.()
+            }
           />
           {mix && (
             <p className="text-xs text-muted-foreground">
@@ -608,9 +785,12 @@ function Content({
 export function TokenUsageCard({
   state,
   accounts,
+  filterKey = "",
 }: {
   state: TokenUsageState;
   accounts: Account[];
+  /** The account filter the view was asked for; a new one closes the panda's workbench. */
+  filterKey?: string;
 }) {
   const { t } = useI18n();
   const { view, loading, error } = state;
@@ -636,7 +816,7 @@ export function TokenUsageCard({
         </Banner>
       )}
       {view ? (
-        <Content view={view} accounts={accounts} />
+        <Content view={view} accounts={accounts} filterKey={filterKey} />
       ) : error ? (
         <p className="text-sm text-muted-foreground">
           <b>
@@ -666,6 +846,7 @@ export function TokenUsage({
     <TokenUsageCard
       state={useTokenUsage(range, accountId)}
       accounts={accounts}
+      filterKey={accountId ?? ""}
     />
   );
 }

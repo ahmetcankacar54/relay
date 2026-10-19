@@ -3,6 +3,7 @@
 @import "./panda.css";
 @import "./switch-stage.css";
 @import "./pranks.css";
+@import "./token-panda.css";
 
 :root {
   color-scheme: light;

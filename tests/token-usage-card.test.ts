@@ -92,6 +92,9 @@ const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "
 const card = (state: Parameters<typeof TokenUsageCard>[0]["state"], language: Language = "tr") =>
   render(createElement(TokenUsageCard, { state, accounts }), language);
 const shown = (language: Language = "tr") => card({ view, loading: false }, language);
+/** The chart's <svg>, not the panda drawn in the "Panda anlatsın" button. */
+const chartOf = (container: Fake) =>
+  find(container, (n) => n.tagName === "svg" && (n as { attributes?: Map<string, string> }).attributes?.get?.("role") === "group")!;
 /** The day table on its own: the card folds it under "Gün gün tablo". */
 const dayTable = (language: Language = "tr") =>
   render(createElement(DayTable, { view, columns: tokenColumns(view, accounts, i18n(language).t), metric: "total" }), language);
@@ -446,7 +449,7 @@ test("pointing at a day details it beside the bar: each row's value and share, a
     const root = createRoot(dom.container as unknown as Element);
     await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
     const container = dom.container as unknown as Fake;
-    const svg = find(container, (n) => n.tagName === "svg") as Fake & { box: { left: number; top: number; width: number; height: number } };
+    const svg = chartOf(container) as Fake & { box: { left: number; top: number; width: number; height: number } };
     // The chart is drawn 1:1 with its 640-unit viewBox.
     svg.box = { left: 0, top: 0, width: 640, height: 146 };
     // Days drawn faint while another one is detailed.
@@ -480,7 +483,7 @@ test("the arrow keys walk the days, the detail marks estimates and empty days, a
     const root = createRoot(dom.container as unknown as Element);
     await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
     const container = dom.container as unknown as Fake;
-    const svg = find(container, (n) => n.tagName === "svg") as Fake;
+    const svg = chartOf(container);
     assert.equal((svg as unknown as { attributes: Map<string, string> }).attributes.get("tabindex"), "0");
     const tip = () => dayTip(container);
     const key = (k: string) => act(async () => dom.dispatch(svg, "keydown", { key: k }));
@@ -499,6 +502,111 @@ test("the arrow keys walk the days, the detail marks estimates and empty days, a
     assert.match(tip() ?? "", /^14 Ekim/);
     await key("Escape");
     assert.equal(tip(), undefined);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("the panda takes the busiest day apart: its parts, its lines one by one, a stamp, and a crooked bar after", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
+    const container = dom.container as unknown as Fake;
+    const attr = (n: Fake, name: string) => (n as { attributes?: Map<string, string> }).attributes?.get?.(name);
+    const slot = (name: string) => find(container, (n) => attr(n, "data-slot") === name);
+    const button = (label: string) => find(container, (n) => n.tagName === "button" && textOf(n) === label);
+    const click = (label: string) => {
+      const target = button(label);
+      assert.ok(target, label);
+      return act(async () => dom.dispatch(target, "click", { detail: 1 }));
+    };
+    const line = () => textOf(slot("panda-line"));
+    const classed = (name: string) => {
+      const count = (node: Fake): number =>
+        (attr(node, "class")?.split(" ").includes(name) ? 1 : 0) + (node.childNodes ?? []).reduce((sum, c) => sum + count(c), 0);
+      return count(container);
+    };
+    assert.equal(slot("panda-bench"), undefined);
+    assert.equal(slot("token-stamp"), undefined);
+    await click("Panda anlatsın");
+    // The 14th is the busiest day: 2.2 million, mostly Kişisel · Max.
+    const bench = textOf(slot("panda-bench"));
+    assert.match(bench, /^14 Ekim ÇarşambaToplam 2,2 Mn/);
+    assert.match(bench, /Önbellek okuma805 B %37Önbellek yazma50 B %2,3Girdi1,1 Mn %51Çıktı220 B %10/);
+    assert.match(line(), /^Bugünün girdi ve çıktısı .+ eder\.$/);
+    // Screen readers hear the day and the line once, when asked.
+    assert.equal(textOf(slot("panda-say")), `14 Ekim Çarşamba: ${line()}`);
+    assert.equal(textOf(slot("token-stamp")), "Bunu daha önce gördük");
+    assert.equal(classed("token-taken"), 1);
+    await click("Bir daha");
+    assert.equal(line(), "Bu günün yükünü büyük ölçüde Kişisel · Max çekti: %94.");
+    assert.equal(textOf(slot("panda-say")), "14 Ekim Çarşamba: Bu günün yükünü büyük ölçüde Kişisel · Max çekti: %94.");
+    await click("Bir daha");
+    assert.equal(line(), "Önbellekten okunanı bir insan durmadan okusa 43 saat sürerdi.");
+    // Asking about the same day again is one more line, too.
+    await click("Panda anlatsın");
+    assert.match(line(), /^Bu 7 günde girdi ve çıktın/);
+    await click("Kapat");
+    assert.equal(slot("panda-bench"), undefined);
+    assert.equal(textOf(slot("panda-say")), "");
+    assert.equal(slot("token-stamp"), undefined);
+    assert.equal(classed("token-taken"), 0);
+    assert.equal(classed("token-crooked"), 1);
+    // A new metric straightens it again.
+    await click("Çıktı");
+    assert.equal(classed("token-crooked"), 0);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("clicking a bar or pressing Enter on it explains that day, and Escape puts it back", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
+    const container = dom.container as unknown as Fake;
+    const attr = (n: Fake, name: string) => (n as { attributes?: Map<string, string> }).attributes?.get?.(name);
+    const slot = (name: string) => find(container, (n) => attr(n, "data-slot") === name);
+    const svg = chartOf(container) as Fake & { box: { left: number; top: number; width: number; height: number } };
+    svg.box = { left: 0, top: 0, width: 640, height: 146 };
+    // The 13th, estimated, is the second bar from the right.
+    await act(async () => dom.dispatch(svg, "keydown", { key: "End" }));
+    await act(async () => dom.dispatch(svg, "keydown", { key: "ArrowLeft" }));
+    await act(async () => dom.dispatch(svg, "keydown", { key: "Enter" }));
+    assert.match(textOf(slot("panda-bench")), /^13 Ekim SalıToplam ≈tahmini 1 Mn/);
+    assert.match(textOf(slot("panda-line")), /^Bu günün girdi ve çıktısı .+ eder\.$/);
+    // The hover box waits while the workbench is open.
+    assert.equal(dayTip(container), undefined);
+    // Escape on the chart only closes the bench: the 13th stays the active day, and its hover box comes back.
+    await act(async () => dom.dispatch(svg, "keydown", { key: "Escape" }));
+    assert.equal(slot("panda-bench"), undefined);
+    assert.match(dayTip(container) ?? "", /^13 Ekim Salı/);
+    // An Escape a menu already handled leaves the bench open; a plain one closes it.
+    await act(async () => dom.dispatch(svg, "keydown", { key: "Enter" }));
+    const escape = (handled: boolean) => {
+      const event = Object.assign(new Event("keydown", { cancelable: true }), { key: "Escape" });
+      if (handled) event.preventDefault();
+      return act(async () => void (globalThis.document as unknown as EventTarget).dispatchEvent(event));
+    };
+    await escape(true);
+    assert.ok(slot("panda-bench"));
+    await escape(false);
+    assert.equal(slot("panda-bench"), undefined);
+    // A click on the empty 8th: the panda only dozes, with nothing more to say.
+    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 60, clientY: 60 }));
+    await act(async () => dom.dispatch(svg, "click", { clientX: 60, clientY: 60, detail: 1 }));
+    assert.equal(textOf(slot("panda-line")), "Bu gün boş. Ben de biraz kestirdim.");
+    assert.equal(find(container, (n) => n.tagName === "button" && textOf(n) === "Bir daha"), undefined);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
