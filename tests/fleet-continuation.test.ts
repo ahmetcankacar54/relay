@@ -11,6 +11,7 @@ import {
   type FleetResult,
 } from "../electron/core/fleet-continuation";
 import type { QuotaStop } from "../electron/core/desktop-continuation-evidence";
+import { DesktopSwitchRefused } from "../electron/core/desktop";
 import {
   DEFAULT_SETTINGS,
   type Account,
@@ -120,8 +121,14 @@ function setup() {
     unchanged: () => true,
     automationReady: async () => state.automation,
     switchTo: async (targetId, guards) => {
+      // As DesktopManager.restart: every guard runs before Claude is asked to quit.
+      const refused = () =>
+        new DesktopSwitchRefused(
+          "Automatic Desktop switch was cancelled before restart.",
+        );
+      if (!guards.canProceed()) throw refused();
       await guards.beforeQuit();
-      assert.equal(guards.canProceed(), true);
+      if (!guards.canProceed()) throw refused();
       if (state.switchError) throw state.switchError;
       state.switches.push(targetId);
       // History merge carries the stopped conversations to the target.
@@ -261,6 +268,97 @@ test("a failed switch is reported and never retried automatically", async () => 
   f.state.switchError = undefined;
   await fleet.tick();
   assert.deepEqual(f.state.switches, []);
+  assert.equal(f.state.sent.length, 0);
+});
+
+function handledStops(directory: string): string[] {
+  return JSON.parse(
+    fs.readFileSync(path.join(directory, "fleet-state.json"), "utf8"),
+  ).handled;
+}
+
+test("a task notification that calls the switch off before Claude quits leaves the stops for the next tick", async () => {
+  const f = setup();
+  let scans = 0;
+  let attempts = 0;
+  // A background-task notification lands in a stopped transcript between the
+  // scan under the lock and the quit; it keeps the stop's turn.
+  let landed = false;
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    stops: async (account) => {
+      scans++;
+      return f.state.stops.get(account.id) ?? [];
+    },
+    quiet: async () => (landed ? "not-quiescent:busyWorkers" : undefined),
+    switchTo: (targetId, guards) => {
+      if (!attempts++) landed = true;
+      return f.deps.switchTo(targetId, guards);
+    },
+  });
+  fleet.setEnabled(true);
+  const refused = await fleet.tick();
+  assert.equal(refused.status, "waiting");
+  assert.equal(refused.reason, "context-changed");
+  assert.equal(refused.stopped, 2);
+  assert.deepEqual(f.state.switches, []);
+  assert.deepEqual(handledStops(f.directory), []);
+  assert.equal(scans, 2);
+  // The notification settled: the next tick scans afresh and continues both.
+  landed = false;
+  const done = await fleet.tick();
+  assert.equal(scans, 4);
+  assert.deepEqual(f.state.switches, [f.b.id]);
+  assert.equal(f.state.sent.length, 2);
+  assert.equal(done.reason, "continued");
+  assert.equal(handledStops(f.directory).length, 2);
+});
+
+test("a transcript that changes right before the quit is refused by the guard and tried again", async () => {
+  const f = setup();
+  let attempts = 0;
+  let changed = false;
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    unchanged: () => !changed,
+    switchTo: (targetId, guards) => {
+      if (!attempts++) changed = true;
+      return f.deps.switchTo(targetId, guards);
+    },
+  });
+  fleet.setEnabled(true);
+  assert.equal((await fleet.tick()).reason, "context-changed");
+  assert.deepEqual(handledStops(f.directory), []);
+  changed = false;
+  assert.equal((await fleet.tick()).reason, "continued");
+  assert.deepEqual(f.state.switches, [f.b.id]);
+  assert.equal(f.state.sent.length, 2);
+});
+
+test("a switch that fails after Claude was asked to quit marks its stops handled", async () => {
+  const f = setup();
+  let attempts = 0;
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    switchTo: async (targetId, guards) => {
+      attempts++;
+      assert.equal(guards.canProceed(), true);
+      await guards.beforeQuit();
+      // Claude quit; the write guard then saw the conditions change. Claude
+      // relaunches on the source account.
+      throw new Error(
+        "Automatic Desktop switch was cancelled because its conditions changed.",
+      );
+    },
+  });
+  fleet.setEnabled(true);
+  const failed = await fleet.tick();
+  assert.equal(failed.status, "attention");
+  assert.match(failed.reason ?? "", /^switch-failed:.*conditions changed/);
+  assert.equal(handledStops(f.directory).length, 2);
+  // Never restarted again for the same limit.
+  assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
+  assert.equal(attempts, 1);
   assert.equal(f.state.sent.length, 0);
 });
 
