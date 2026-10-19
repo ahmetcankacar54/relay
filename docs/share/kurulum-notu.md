@@ -1,10 +1,10 @@
-Relay 0.11.0 — Claude uygulaması (Claude Desktop) için hesap değiştirici
+Relay 0.12.0 — Claude uygulaması (Claude Desktop) için hesap değiştirici
 Gayriresmî, kişisel bir araç; Anthropic ürünü değil.
 
 KURULUM
 1) Apple menüsü → Bu Mac Hakkında’ya bak:
-   • "Çip: Apple M…" yazıyorsa (M1–M4, Apple silicon): Relay-0.11.0-arm64.dmg
-   • "İşlemci: Intel" yazıyorsa: Relay-0.11.0-x64.dmg
+   • "Çip: Apple M…" yazıyorsa (M1–M4, Apple silicon): Relay-0.12.0-arm64.dmg
+   • "İşlemci: Intel" yazıyorsa: Relay-0.12.0-x64.dmg
    macOS 13 veya üstü gerekir.
 2) DMG’yi aç, Relay’i Uygulamalar klasörüne sürükle. DMG’nin içinden çalıştırma.
 3) Relay’i aç. "Apple doğrulayamadı" uyarısında "Bitti"ye bas.
@@ -36,8 +36,12 @@ HESAP EKLEME
    sonra da yapabilirsin.
 
 ÇIKABİLECEK İSTEMLER
-• Anahtar Zinciri "Relay Safe Storage": bir giriş kaydederken ve yeni bir
-  sürümden sonra Mac parolanı isteyebilir. Parolanı gir, "Her Zaman İzin Ver"i seç.
+• Anahtar Zinciri: Relay kayıtlı girişlerini "Relay Vault Key" adlı bir
+  anahtarla şifreler ve ilk açılışta kendisi oluşturur; genelde soru sormaz.
+  Önceki bir Relay sürümünden güncelliyorsan bir kez "Relay Safe Storage" için
+  Mac parolanı isteyebilir. Parolanı gir, "Her Zaman İzin Ver"i seç.
+• Otomasyon: ilk hesap geçişinde macOS "Relay, Claude'u denetlemek istiyor"
+  diye sorabilir. "İzin Ver"i seç; Relay bunu Claude'u kapatıp açmak için kullanır.
 • Erişilebilirlik: varsayılan ayarlarla gerekmez. Yalnızca Geçiş sayfasında
   deneysel "Taslakları Claude uygulamasına yeniden yaz" ayarını ya da Otomatik
   geçiş → "Kota dolunca" seçeneğini açarsan Relay bir düğmeyle ister.
