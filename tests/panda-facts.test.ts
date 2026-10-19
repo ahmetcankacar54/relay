@@ -10,19 +10,20 @@ import {
   pickBook,
   readingTime,
 } from "../src/pages/usage/panda-facts";
-import type { TokenCounts, TokenUsageView } from "../shared/token-usage-view";
+import type { TokenCounts, TokenRow, TokenUsageView } from "../shared/token-usage-view";
 
 const counts = (input: number, output = 0, cacheWrite = 0, cacheRead = 0): TokenCounts => ({
   input, output, cacheWrite, cacheRead, responses: 1,
 });
 const cell = (c: TokenCounts, estimated = false) => ({ ...c, estimated });
 type ByRow = TokenUsageView["days"][number]["byRow"];
-/** A three-day view ending on the 14th; `models` and `totals` as given. */
+const row = (key: string, kind: TokenRow["kind"] = "account"): TokenRow => ({ key, kind, estimated: false, totals: counts(0) });
+/** A three-day view ending on the 14th, with accounts a and b; `models` and `totals` as given. */
 function viewOf(byDate: Record<string, ByRow>, extra: Partial<TokenUsageView> = {}): TokenUsageView {
   return {
     range: 7,
     days: ["2026-10-12", "2026-10-13", "2026-10-14"].map((date) => ({ date, byRow: byDate[date] ?? {} })),
-    rows: [],
+    rows: [row("a"), row("b")],
     totals: counts(0),
     models: [],
     progress: { percent: 100, complete: true },
@@ -31,7 +32,7 @@ function viewOf(byDate: Record<string, ByRow>, extra: Partial<TokenUsageView> = 
 }
 const names = { a: "Kişisel", b: "Vertex" };
 const TODAY = "2026-10-14";
-const lines = (view: TokenUsageView, date: string) => pandaLines({ view, date, names, today: TODAY });
+const lines = (view: TokenUsageView, date: string) => pandaLines({ view, date, accountNames: names, today: TODAY });
 const keys = (view: TokenUsageView, date: string) => lines(view, date).map((l) => l.key);
 
 test("shares under 10% keep one decimal, larger ones are whole, in each language's form", () => {
@@ -41,6 +42,9 @@ test("shares under 10% keep one decimal, larger ones are whole, in each language
   assert.equal(formatShare(0.93, "tr"), "%93");
   assert.equal(formatShare(0.9349, "en"), "93%");
   assert.equal(formatShare(0, "tr"), "%0");
+  // A sliver is never shown as nothing.
+  assert.equal(formatShare(0.0004, "tr"), "<%0,1");
+  assert.equal(formatShare(0.0004, "en"), "<0.1%");
 });
 
 test("a book is one the value is 1 to 1,000 times, varied by the seed, else the largest under it", () => {
@@ -61,7 +65,9 @@ test("a book is one the value is 1 to 1,000 times, varied by the seed, else the 
 test("reading time grows from hours to days, months and years", () => {
   // 1.3 tokens a word, 238 words a minute.
   const tokensFor = (minutes: number) => minutes * 238 * 1.3;
-  assert.deepEqual(readingTime(tokensFor(10)), { tr: "1 saat", en: "1 hour" });
+  assert.deepEqual(readingTime(tokensFor(0.2)), { tr: "1 dakika", en: "1 minute" });
+  assert.deepEqual(readingTime(tokensFor(10)), { tr: "10 dakika", en: "10 minutes" });
+  assert.deepEqual(readingTime(tokensFor(70)), { tr: "1 saat", en: "1 hour" });
   assert.deepEqual(readingTime(tokensFor(43 * 60)), { tr: "43 saat", en: "43 hours" });
   assert.deepEqual(readingTime(tokensFor(3 * 24 * 60)), { tr: "3 gün", en: "3 days" });
   assert.deepEqual(readingTime(tokensFor(7 * 30 * 24 * 60)), { tr: "7 ay", en: "7 months" });
@@ -73,6 +79,7 @@ test("model ids read as family and version, without a date", () => {
   assert.equal(modelName("claude-opus-4"), "Opus 4");
   assert.equal(modelName("claude-sonnet-4-5-20250929"), "Sonnet 4.5");
   assert.equal(modelName("claude-haiku-4-5"), "Haiku 4.5");
+  assert.equal(modelName("claude-3-5-sonnet-20241022"), "Sonnet 3.5");
   assert.equal(modelName("gpt"), "Gpt");
   assert.equal(modelName("2024"), "2024");
 });
@@ -81,8 +88,8 @@ test("a cache-heavy day opens with the taken-apart peak, and a thin output gets 
   const view = viewOf({ "2026-10-13": { a: cell(counts(10_000, 9_000, 61_000, 920_000)) } });
   const all = lines(view, "2026-10-13");
   assert.deepEqual(all.map((l) => l.key), ["cache", "carried", "output", "reading"]);
-  assert.equal(all[0].tr, "Bu tepeyi söktüm: %92 önbellek okuması çıktı. Çoğunu daha önce görmüştük.");
-  assert.equal(all[0].en, "I took this peak apart: 92% of it was cache reads. We’d seen most of it before.");
+  assert.equal(all[0].tr, "Bu sütunu söktüm: %92 önbellek okuması çıktı. Çoğunu daha önce görmüştük.");
+  assert.equal(all[0].en, "I took this bar apart: 92% of it was cache reads. We’d seen most of it before.");
   assert.equal(all[1].tr, "Bu günü tek başına Kişisel taşıdı.");
   assert.equal(all[2].tr, "Claude’un kendi yazdığı kısım sadece %0,9; gerisi okuma ve hatırlama.");
   // In plus out (19 000) is under the smallest book: no comparison.
@@ -123,6 +130,17 @@ test("the account that carried most of a shared day is named with its share; an 
   assert.ok(!keys(even, TODAY).includes("carried"));
 });
 
+test("nobody carries a day when the range has one row, or when the top row is no account", () => {
+  // An account filter leaves one row: every day would be carried alone.
+  const filtered = viewOf({ [TODAY]: { a: cell(counts(940_000)) } }, { rows: [row("a")] });
+  assert.ok(!keys(filtered, TODAY).includes("carried"));
+  const unknown = viewOf(
+    { [TODAY]: { unknown: cell(counts(940_000)), a: cell(counts(60_000)) } },
+    { rows: [row("a"), row("unknown", "unknown")] },
+  );
+  assert.ok(!keys(unknown, TODAY).includes("carried"));
+});
+
 test("an estimated day says so; the range gets its book and its busiest model", () => {
   const view = viewOf(
     { "2026-10-13": { a: cell(counts(900_000, 100_000), true) } },
@@ -140,7 +158,7 @@ test("an estimated day says so; the range gets its book and its busiest model", 
   assert.equal(all[2].tr, "Bu günü limit ölçümlerinden tahmin ettim; ≈ işaretleri ondan.");
   assert.match(all[3].tr, /^Bu 30 günde girdi ve çıktın (≈ [\d,]+ .+|aşağı yukarı bir .+ kadar)\.$/);
   assert.equal(all[4].tr, "Bu aralıkta en çok Opus 5.5 çalıştı: %64.");
-  assert.equal(all[4].en, "Opus 5.5 did most of the work in this range: 64%.");
+  assert.equal(all[4].en, "Opus 5.5 worked the most in this range: 64%.");
 });
 
 test("an empty day only dozes", () => {

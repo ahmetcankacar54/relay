@@ -17,8 +17,10 @@
 }
 
 /* The stamp on the cache-read tile while the panda talks. */
+/* It lands from its right end, which sits on the card's edge, so its landing never reaches past the card. */
 .token-stamp {
   transform: rotate(-8deg);
+  transform-origin: 100% 50%;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -66,6 +68,6 @@
 @keyframes token-stamp-in {
   from {
     opacity: 0;
-    transform: scale(1.8) rotate(-16deg);
+    transform: scale(1.5) rotate(-14deg);
   }
 }

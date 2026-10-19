@@ -68,10 +68,11 @@ export type DayKinds = Pick<
 export const kindsTotal = (c: DayKinds) =>
   c.input + c.output + c.cacheWrite + c.cacheRead;
 
-/** A share of a whole: one decimal under 10 ("%0,9"), whole above ("%82"). */
+/** A share of a whole: one decimal under 10 ("%0,9"), whole above ("%82"), "<%0,1" for a sliver. */
 export function formatShare(share: number, language: Language) {
   const percent = share * 100;
   if (percent >= 10 || percent === 0) return formatPercent(percent, language);
+  if (percent < 0.1) return language === "tr" ? "<%0,1" : "<0.1%";
   const n = new Intl.NumberFormat(locale(language), {
     maximumFractionDigits: 1,
   }).format(percent);
@@ -115,20 +116,22 @@ function bookAmount(tokens: number, book: Book) {
       };
 }
 
-/** How long a person would read `tokens` without stopping: hours, days, months or years. */
+/** How long a person would read `tokens` without stopping: minutes, hours, days, months or years. */
 export function readingTime(tokens: number) {
   const minutes = tokens / TOKENS_PER_WORD / WORDS_PER_MINUTE;
   const hours = minutes / 60;
   const days = hours / 24;
   const months = days / 30;
   const unit =
-    days < 2
-      ? { n: Math.max(1, Math.round(hours)), tr: "saat", en: "hour" }
-      : days < 60
-        ? { n: Math.round(days), tr: "gün", en: "day" }
-        : months < 24
-          ? { n: Math.round(months), tr: "ay", en: "month" }
-          : { n: Math.round(months / 12), tr: "yıl", en: "year" };
+    hours < 1
+      ? { n: Math.max(1, Math.round(minutes)), tr: "dakika", en: "minute" }
+      : days < 2
+        ? { n: Math.round(hours), tr: "saat", en: "hour" }
+        : days < 60
+          ? { n: Math.round(days), tr: "gün", en: "day" }
+          : months < 24
+            ? { n: Math.round(months), tr: "ay", en: "month" }
+            : { n: Math.round(months / 12), tr: "yıl", en: "year" };
   const n = (language: Language) =>
     new Intl.NumberFormat(locale(language)).format(unit.n);
   return {
@@ -137,14 +140,15 @@ export function readingTime(tokens: number) {
   };
 }
 
-/** "claude-opus-5-5" → "Opus 5.5"; a date suffix is dropped; anything else as it is. */
+/** "claude-opus-5-5" → "Opus 5.5", "claude-3-5-sonnet-20241022" → "Sonnet 3.5"; a date is dropped; anything else as it is. */
 export function modelName(model: string) {
   const parts = model.replace(/^claude-/, "").split("-");
   const family = parts.findIndex((part) => /^[a-z]+$/i.test(part));
   if (family < 0) return model;
-  const version = parts
-    .slice(family + 1)
-    .filter((part) => /^\d{1,2}$/.test(part));
+  const numbers = (list: string[]) =>
+    list.filter((part) => /^\d{1,2}$/.test(part));
+  const after = numbers(parts.slice(family + 1));
+  const version = after.length ? after : numbers(parts.slice(0, family));
   const name = parts[family][0].toUpperCase() + parts[family].slice(1);
   return version.length ? `${name} ${version.join(".")}` : name;
 }
@@ -152,8 +156,8 @@ export function modelName(model: string) {
 export interface DayInput {
   view: TokenUsageView;
   date: string;
-  /** Each row's display name, by row key. */
-  names: Record<string, string>;
+  /** The display names of the rows that are accounts, by row key; only an account carries a day. */
+  accountNames: Record<string, string>;
   /** Today in the planning zone, for "Bugünün". */
   today: string;
 }
@@ -193,7 +197,7 @@ export function busiestDay(view: TokenUsageView) {
 
 /** Everything the panda can say about a day, in the order it says it. */
 export function pandaLines(input: DayInput): PandaLine[] {
-  const { view, date, names, today } = input;
+  const { view, date, accountNames, today } = input;
   const { kinds, rows, estimated, total } = dayParts(input);
   if (total === 0)
     return [
@@ -209,8 +213,8 @@ export function pandaLines(input: DayInput): PandaLine[] {
   if (cache >= CACHE_LINE_SHARE)
     lines.push({
       key: "cache",
-      tr: `Bu tepeyi söktüm: ${formatShare(cache, "tr")} önbellek okuması çıktı. Çoğunu daha önce görmüştük.`,
-      en: `I took this peak apart: ${formatShare(cache, "en")} of it was cache reads. We’d seen most of it before.`,
+      tr: `Bu sütunu söktüm: ${formatShare(cache, "tr")} önbellek okuması çıktı. Çoğunu daha önce görmüştük.`,
+      en: `I took this bar apart: ${formatShare(cache, "en")} of it was cache reads. We’d seen most of it before.`,
     });
   const said = kinds.input + kinds.output;
   const book = pickBook(said, `${date}:day`);
@@ -222,18 +226,21 @@ export function pandaLines(input: DayInput): PandaLine[] {
       en: `${date === today ? "Today’s" : "This day’s"} input and output come to ${amount.en}.`,
     });
   }
+  // Only an account carries a day, and only when the range has more than one row to choose from.
   const top = rows[0];
-  if (top && rows.length === 1)
+  const carrier =
+    top && view.rows.length > 1 ? accountNames[top.key] : undefined;
+  if (carrier && rows.length === 1)
     lines.push({
       key: "carried",
-      tr: `Bu günü tek başına ${names[top.key] ?? top.key} taşıdı.`,
-      en: `${names[top.key] ?? top.key} carried this day alone.`,
+      tr: `Bu günü tek başına ${carrier} taşıdı.`,
+      en: `${carrier} carried this day alone.`,
     });
-  else if (top && share(top.total) >= CARRIED_SHARE)
+  else if (carrier && share(top.total) >= CARRIED_SHARE)
     lines.push({
       key: "carried",
-      tr: `Bu günün yükünü büyük ölçüde ${names[top.key] ?? top.key} çekti: ${formatShare(share(top.total), "tr")}.`,
-      en: `${names[top.key] ?? top.key} pulled most of this day: ${formatShare(share(top.total), "en")}.`,
+      tr: `Bu günün yükünü büyük ölçüde ${carrier} çekti: ${formatShare(share(top.total), "tr")}.`,
+      en: `${carrier} pulled most of this day: ${formatShare(share(top.total), "en")}.`,
     });
   const output = share(kinds.output);
   if (output < OUTPUT_LINE_SHARE)
@@ -276,7 +283,7 @@ export function pandaLines(input: DayInput): PandaLine[] {
     lines.push({
       key: "model",
       tr: `Bu aralıkta en çok ${name} çalıştı: ${formatShare(part, "tr")}.`,
-      en: `${name} did most of the work in this range: ${formatShare(part, "en")}.`,
+      en: `${name} worked the most in this range: ${formatShare(part, "en")}.`,
     });
   }
   return lines;

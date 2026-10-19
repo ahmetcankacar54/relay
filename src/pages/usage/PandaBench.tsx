@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { TokenUsageView } from "../../../shared/token-usage-view";
 import { PandaRig } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
@@ -8,8 +8,8 @@ import { formatDayLong, formatTokens } from "./format";
 import {
   dayParts,
   formatShare,
-  pandaLines,
   type DayKinds,
+  type PandaLine,
 } from "./panda-facts";
 
 /** The parts a bar is taken apart into, largest kind first as they usually come. */
@@ -32,48 +32,60 @@ const PARTS: { kind: keyof DayKinds; tr: string; en: string; fill: string }[] =
   ];
 
 /**
- * The panda's workbench beside a bar it took out of the chart: the day, what the bar is made of and one line the
- * panda says about it. "Bir daha" asks for the next line; closing it, or Escape, puts the bar back.
+ * The panda's workbench beside a bar it took out of the chart: the day, what the bar is made of and the line the
+ * panda says about it. "Bir daha" asks for the next line; closing it, or Escape nobody else handled, puts the bar
+ * back. Where the chart is narrow the bench sits under it instead of over it. The card announces the lines, so the
+ * bench itself has no live region.
  */
 export function PandaBench({
   view,
   date,
-  names,
-  today,
   line,
+  more,
   at,
   onNext,
   onClose,
+  returnFocus,
 }: {
   view: TokenUsageView;
   date: string;
-  /** Each row's display name, by row key. */
-  names: Record<string, string>;
-  today: string;
-  /** Which of the day's lines to say; it wraps around. */
-  line: number;
+  line: PandaLine;
+  /** The day has other lines, so "Bir daha" shows. */
+  more: boolean;
   /** The bar's centre as a share of the chart's width. */
   at: number;
   onNext: () => void;
   onClose: () => void;
+  /** Where focus goes when the bench closes with focus inside it: what opened it. */
+  returnFocus: () => void;
 }) {
   const { t, language } = useI18n();
-  const { kinds, total } = dayParts({ view, date });
-  const lines = pandaLines({ view, date, names, today });
-  const said = lines[line % lines.length];
+  const root = useRef<HTMLDivElement>(null);
+  const { kinds, total, estimated } = dayParts({ view, date });
+  const close = () => {
+    const inside = root.current?.contains?.(document.activeElement) ?? false;
+    onClose();
+    if (inside) returnFocus();
+  };
+  const closeRef = useRef(close);
   useEffect(() => {
+    closeRef.current = close;
+  });
+  useEffect(() => {
+    // A menu or the chart that took the Escape for itself marks it handled.
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !event.defaultPrevented) closeRef.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
   return (
     <div
+      ref={root}
       role="group"
       aria-label={t("Pandanın anlattığı gün", "The day the panda explains")}
       data-slot="panda-bench"
-      className="token-bench absolute top-0 z-20 w-72 max-w-[calc(100%-1rem)] rounded-xl border bg-popover px-3 pt-3 pb-2.5 text-xs text-popover-foreground shadow-lg"
+      className="token-bench absolute top-10 z-20 w-72 rounded-xl border bg-popover px-3 pt-3 pb-2.5 text-xs text-popover-foreground shadow-lg @max-[38rem]:relative @max-[38rem]:top-auto @max-[38rem]:right-auto! @max-[38rem]:left-auto! @max-[38rem]:mt-12 @max-[38rem]:w-full"
       style={
         at > 0.5
           ? { right: `calc(${(1 - at) * 100}% + 14px)` }
@@ -94,14 +106,24 @@ export function PandaBench({
       </span>
       <div className="flex items-baseline justify-between gap-3 pl-16">
         <b className="font-semibold">{formatDayLong(date, language)}</b>
-        <b className="tabular-nums">{formatTokens(total, language)}</b>
+        <span className="tabular-nums">
+          <span className="text-muted-foreground">{t("Toplam", "Total")} </span>
+          <b>
+            {estimated && (
+              <>
+                <span aria-hidden="true">≈</span>
+                <span className="sr-only">{t("tahmini", "estimated")} </span>
+              </>
+            )}
+            {formatTokens(total, language)}
+          </b>
+        </span>
       </div>
       <p
-        aria-live="polite"
         data-slot="panda-line"
         className="mt-2 rounded-lg bg-muted px-2.5 py-2 text-[13px] leading-snug"
       >
-        {t(said.tr, said.en)}
+        {t(line.tr, line.en)}
       </p>
       {total > 0 && (
         <ul className="mt-2 grid gap-1.5">
@@ -140,12 +162,12 @@ export function PandaBench({
         </ul>
       )}
       <div className="mt-2.5 flex justify-end gap-1.5">
-        {lines.length > 1 && (
+        {more && (
           <Button size="xs" variant="outline" onClick={onNext}>
             {t("Bir daha", "One more")}
           </Button>
         )}
-        <Button size="xs" variant="ghost" onClick={onClose}>
+        <Button size="xs" variant="ghost" onClick={close}>
           {t("Kapat", "Close")}
         </Button>
       </div>

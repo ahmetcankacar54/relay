@@ -38,7 +38,8 @@ export const barCentre = (
  * Which day of a bar chart is shown in detail. The pointer picks the day under it; with the chart
  * focused, ←/→ move one day, Home/End jump to either end and Escape lets go. `chart` goes on the <svg>;
  * `at` is the active bar's centre as a share of the chart's width, for `DayTooltip`. With `onPick`,
- * a click on a day, or Enter or Space on the active one, picks it.
+ * a click on a day, or Enter or Space on the active one, picks it. `onEscape` may take an Escape for
+ * itself by returning true; the active day then stays.
  */
 export function useDayHover({
   width,
@@ -46,7 +47,11 @@ export function useDayHover({
   step,
   count,
   onPick,
-}: DayBars & { onPick?: (day: number) => void }) {
+  onEscape,
+}: DayBars & {
+  onPick?: (day: number) => void;
+  onEscape?: () => boolean;
+}) {
   const [active, setActive] = useState<number>();
   const ref = useRef<SVGSVGElement>(null);
   const dayAt = (clientX: number) => {
@@ -58,7 +63,10 @@ export function useDayHover({
   };
   const shown = active !== undefined && active < count ? active : undefined;
   const onKeyDown = (event: KeyboardEvent<SVGSVGElement>) => {
-    if (event.key === "Escape") return setActive(undefined);
+    if (event.key === "Escape") {
+      if (onEscape?.()) return event.preventDefault();
+      return setActive(undefined);
+    }
     if ((event.key === "Enter" || event.key === " ") && onPick) {
       if (shown === undefined) return;
       event.preventDefault();
@@ -74,6 +82,7 @@ export function useDayHover({
     if (day !== undefined) onPick?.(day);
   };
   return {
+    ref,
     active: shown,
     at:
       shown === undefined ? undefined : barCentre({ width, left, step }, shown),

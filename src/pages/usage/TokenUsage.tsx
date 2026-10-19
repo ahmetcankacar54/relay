@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import type { Account } from "../../../shared/types";
 import {
   TOKEN_ROW_LABELS,
@@ -34,7 +34,7 @@ import {
   useDayHover,
 } from "./DayHover";
 import { PandaBench } from "./PandaBench";
-import { busiestDay } from "./panda-facts";
+import { busiestDay, pandaLines, type PandaLine } from "./panda-facts";
 import {
   formatDay,
   formatDayLong,
@@ -253,7 +253,8 @@ function Legend({
 /** The day the panda took out of the chart, and which of its lines it is saying. */
 interface Explained {
   date: string;
-  line: number;
+  /** The line's key: a refresh may add or drop lines, and the panda keeps saying the same one. */
+  key: string;
 }
 
 function Chart({
@@ -262,22 +263,29 @@ function Chart({
   metric,
   metricLabel,
   explained,
+  line,
+  more,
   crooked,
   onPick,
   onNextLine,
   onPutBack,
+  returnFocus,
 }: {
   view: TokenUsageView;
   columns: Column[];
   metric: Metric;
   metricLabel: string;
   explained?: Explained;
+  /** What the panda says about the explained day, and whether it has more. */
+  line?: PandaLine;
+  more: boolean;
   /** Days the panda put back not quite straight. */
   crooked: readonly string[];
-  /** A day was clicked, or picked with Enter or Space. */
-  onPick: (date: string) => void;
+  /** A day was clicked, or picked with Enter or Space, on `chart`. */
+  onPick: (date: string, chart: Element | null) => void;
   onNextLine: () => void;
   onPutBack: () => void;
+  returnFocus: () => void;
 }) {
   const { t, language } = useI18n();
   const days = view.days.map((day) => ({
@@ -313,7 +321,13 @@ function Chart({
     left,
     step,
     count: days.length,
-    onPick: (day) => onPick(days[day].date),
+    onPick: (day) => onPick(days[day].date, hover.ref.current),
+    // With the bench open, Escape on the chart only closes it; the day stays.
+    onEscape: () => {
+      if (!explained) return false;
+      onPutBack();
+      return true;
+    },
   });
   const takenAt = explained
     ? days.findIndex((day) => day.date === explained.date)
@@ -321,7 +335,7 @@ function Chart({
   const shown = hover.active === undefined ? undefined : days[hover.active];
   const shownTotal = shown ? dayTotal(shown) : 0;
   return (
-    <div className="relative mx-auto w-full max-w-4xl">
+    <div className="@container relative mx-auto w-full max-w-4xl">
       <svg
         {...hover.chart}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
@@ -432,16 +446,18 @@ function Chart({
           ))}
         </g>
       </svg>
-      {takenAt >= 0 && explained && (
+      {takenAt >= 0 && explained && line && (
         <PandaBench
+          // A new day is taken apart afresh: the panda peeks and the parts are laid out again.
+          key={explained.date}
           view={view}
           date={explained.date}
-          names={Object.fromEntries(columns.map((c) => [c.key, c.name]))}
-          today={view.days[view.days.length - 1]?.date ?? ""}
-          line={explained.line}
+          line={line}
+          more={more}
           at={barCentre({ width: WIDTH, left, step }, takenAt)}
           onNext={onNextLine}
           onClose={onPutBack}
+          returnFocus={returnFocus}
         />
       )}
       {/* The workbench says more than the hover box; the box waits until it closes. */}
@@ -587,35 +603,64 @@ export function DayTable({
 function Content({
   view,
   accounts,
+  filterKey,
 }: {
   view: TokenUsageView;
   accounts: Account[];
+  /** What the view was asked for beyond its range: the account filter. */
+  filterKey: string;
 }) {
   const { t, language } = useI18n();
   const [metric, setMetric] = useState<Metric>("total");
   const [explained, setExplained] = useState<Explained>();
   const [crooked, setCrooked] = useState<string[]>([]);
-  // A new range or account filter puts every bar back straight and closes the workbench.
-  const shape = `${view.range}|${view.days[0]?.date ?? ""}|${view.rows.map((r) => r.key).join(",")}`;
+  /** What screen readers hear: set only when the user asks, so a refresh announces nothing. */
+  const [said, setSaid] = useState("");
+  const opener = useRef<Element | null>(null);
+  // A new range, a new day or a new account filter puts every bar back straight and closes the workbench.
+  const shape = `${view.range}|${view.days[0]?.date ?? ""}|${filterKey}`;
   const [seenShape, setSeenShape] = useState(shape);
   if (seenShape !== shape) {
     setSeenShape(shape);
     setExplained(undefined);
     setCrooked([]);
+    setSaid("");
   }
+  const accountNames = Object.fromEntries(
+    view.rows
+      .filter((row) => row.kind === "account")
+      .map((row) => [row.key, rowLabel(row, t)]),
+  );
+  const today = view.days[view.days.length - 1]?.date ?? "";
+  const linesOf = (date: string) =>
+    pandaLines({ view, date, accountNames, today });
+  const lines = explained ? linesOf(explained.date) : [];
+  // The chosen line while it still applies; after a refresh dropped it, the day's first.
+  const line = explained
+    ? (lines.find((l) => l.key === explained.key) ?? lines[0])
+    : undefined;
+  const say = (date: string, next: PandaLine) => {
+    setExplained({ date, key: next.key });
+    setSaid(`${formatDayLong(date, language)}: ${t(next.tr, next.en)}`);
+  };
+  const nextLine = () => {
+    if (!explained || !line) return;
+    say(explained.date, lines[(lines.indexOf(line) + 1) % lines.length]);
+  };
   const putBack = (date: string) =>
     setCrooked((days) => (days.includes(date) ? days : [...days, date]));
-  /** The panda explains `date`; asked about the same day again, it says its next line. */
-  const explain = (date: string) => {
-    if (explained?.date === date)
-      return setExplained({ date, line: explained.line + 1 });
+  /** The panda explains `date`, opened from `from`; asked about the same day again, it says its next line. */
+  const explain = (date: string, from: Element | null) => {
+    opener.current = from;
+    if (explained?.date === date) return nextLine();
     if (explained) putBack(explained.date);
-    setExplained({ date, line: 0 });
+    say(date, linesOf(date)[0]);
   };
   const close = useCallback(() => {
     if (!explained) return;
     putBack(explained.date);
     setExplained(undefined);
+    setSaid("");
   }, [explained]);
   const columns = tokenColumns(view, accounts, t);
   const labels: Record<Metric, string> = {
@@ -629,6 +674,9 @@ function Content({
   const mix = modelMix(view, metric, language);
   return (
     <>
+      <p aria-live="polite" data-slot="panda-say" className="sr-only">
+        {said}
+      </p>
       {empty ? (
         // While the scan runs, an empty range may only not be read yet: the scanning note says so.
         !scanning && (
@@ -650,9 +698,9 @@ function Content({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
+                onClick={(event) => {
                   const date = busiestDay(view);
-                  if (date) explain(date);
+                  if (date) explain(date, event.currentTarget);
                 }}
               >
                 <PandaRig pose="head" expression="happy" size={18} />
@@ -684,13 +732,15 @@ function Content({
             metric={metric}
             metricLabel={labels[metric]}
             explained={explained}
+            line={line}
+            more={lines.length > 1}
             crooked={crooked}
             onPick={explain}
-            onNextLine={() =>
-              explained &&
-              setExplained({ ...explained, line: explained.line + 1 })
-            }
+            onNextLine={nextLine}
             onPutBack={close}
+            returnFocus={() =>
+              (opener.current as HTMLElement | null)?.focus?.()
+            }
           />
           {mix && (
             <p className="text-xs text-muted-foreground">
@@ -735,9 +785,12 @@ function Content({
 export function TokenUsageCard({
   state,
   accounts,
+  filterKey = "",
 }: {
   state: TokenUsageState;
   accounts: Account[];
+  /** The account filter the view was asked for; a new one closes the panda's workbench. */
+  filterKey?: string;
 }) {
   const { t } = useI18n();
   const { view, loading, error } = state;
@@ -763,7 +816,7 @@ export function TokenUsageCard({
         </Banner>
       )}
       {view ? (
-        <Content view={view} accounts={accounts} />
+        <Content view={view} accounts={accounts} filterKey={filterKey} />
       ) : error ? (
         <p className="text-sm text-muted-foreground">
           <b>
@@ -793,6 +846,7 @@ export function TokenUsage({
     <TokenUsageCard
       state={useTokenUsage(range, accountId)}
       accounts={accounts}
+      filterKey={accountId ?? ""}
     />
   );
 }
