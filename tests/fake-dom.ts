@@ -196,9 +196,21 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
         document: doc,
         IS_REACT_ACT_ENVIRONMENT: true,
         HTMLFormElement: window.HTMLFormElement,
+        // Radix's presence (tabs, dialogs) reads an element's animation and waits a frame; nothing animates here.
+        getComputedStyle: () => ({ animationName: "none", display: "block", getPropertyValue: () => "" }),
+        requestAnimationFrame: (callback: (time: number) => void) => setTimeout(() => callback(Date.now()), 0),
+        cancelAnimationFrame: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
       }),
     uninstall: () => {
-      for (const name of ["window", "document", "IS_REACT_ACT_ENVIRONMENT", "HTMLFormElement"])
+      for (const name of [
+        "window",
+        "document",
+        "IS_REACT_ACT_ENVIRONMENT",
+        "HTMLFormElement",
+        "getComputedStyle",
+        "requestAnimationFrame",
+        "cancelAnimationFrame",
+      ])
         Reflect.deleteProperty(globalThis, name);
     },
   };

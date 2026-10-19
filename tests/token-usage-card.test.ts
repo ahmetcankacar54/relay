@@ -323,11 +323,10 @@ test("rows that are not accounts take their labels from the shared label table",
   assert.doesNotMatch(en, /Eski hesap|Hesabı bilinmeyen|Relay dışı terminal/);
 });
 
-test("Usage puts the token card under the statistics and above the warnings", () => {
+test("Usage keeps the token card on its own tab, not on the limits tab it opens with", () => {
   const html = text(render(createElement(Usage)));
-  assert.match(html, /Token kullanımı/);
-  assert.ok(html.indexOf("İstatistikler yükleniyor") < html.indexOf("Token kullanımı"));
-  assert.ok(html.indexOf("Token kullanımı") < html.indexOf("Uyarılar"));
+  assert.match(html, /Token/);
+  assert.doesNotMatch(html, /Token kullanımı/);
 });
 
 // The hook, mounted in a fake browser.

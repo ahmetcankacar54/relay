@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { act, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Usage, UsageStatisticsSection } from "../src/pages/Usage";
+import { Usage, UsageStatisticsSection, UsageWarnings } from "../src/pages/Usage";
 import { SummaryTiles } from "../src/pages/usage/SummaryTiles";
 import { AccountBalance } from "../src/pages/usage/AccountBalance";
 import { DailyChart } from "../src/pages/usage/DailyChart";
@@ -20,7 +20,7 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 import type { UsageStatisticsView } from "../shared/usage-statistics-view";
-import { dayTip, fakeDom, find, readableText, type Fake } from "./fake-dom";
+import { dayTip, fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const ZONE = "Europe/Istanbul";
@@ -326,29 +326,77 @@ test("the header offers 7/30/90 days and an account filter", () => {
   assert.match(filtered, /7 days/);
 });
 
-test("Usage composes the header, loading statistics and the warning preferences at the bottom", () => {
+test("Usage is four tabs and opens the limits, with the range and account filter, by default", () => {
   const html = text(render(createElement(Usage)));
+  assert.match(html, /LimitlerTokenKayıp EşyaUyarılar/);
   assert.match(html, /30 gün/);
   assert.match(html, /Tüm hesaplar/);
   assert.match(html, /İstatistikler yükleniyor/);
+  // Only the open tab is drawn.
+  assert.doesNotMatch(html, /Token kullanımı|Kayıp Eşya Bürosu|Limit uyarıları/);
+  assert.match(text(render(createElement(Usage), "en")), /LimitsTokensLost and foundWarnings/);
+});
+
+test("the warnings tab holds the warning preferences and the data source", () => {
+  const html = text(render(createElement(UsageWarnings)));
   assert.match(html, /Limit uyarıları/);
   assert.match(html, /Uyarı eşiği/);
   assert.match(html, /%80 kullanılınca/);
   assert.match(html, /Veri kaynağı ve sınırlar/);
-  assert.ok(html.indexOf("İstatistikler yükleniyor") < html.indexOf("Uyarılar"));
+});
+
+test("Usage reopens the tab last open, and shows the range and account filter only with limits and tokens", async () => {
+  for (const [stored, shows, hides] of [
+    ["warnings", /Limit uyarıları/, /30 gün|Tüm hesaplar/],
+    ["lost", /Kayıp Eşya Bürosu/, /30 gün|Tüm hesaplar/],
+    ["tokens", /Token kullanımı.*/, /İstatistikler yükleniyor/],
+    ["nonsense", /İstatistikler yükleniyor/, /Limit uyarıları/],
+  ] as const) {
+    const dom = fakeDom({ localStorage: () => ({ getItem: () => stored, setItem() {} }) });
+    dom.install();
+    readableText();
+    const relay = {
+      ...relayFor(),
+      api: {
+        usageStatistics: () => new Promise(() => {}),
+        tokenUsage: () => new Promise(() => {}),
+        lostFound: () => new Promise(() => {}),
+        onChanged: () => () => {},
+      },
+    } as unknown as Relay;
+    try {
+      const { createRoot } = await import("react-dom/client");
+      const root = createRoot(dom.container as unknown as Element);
+      await act(async () =>
+        root.render(
+          createElement(
+            I18nContext.Provider,
+            { value: i18n("tr") },
+            createElement(RelayContext.Provider, { value: relay }, createElement(Usage)),
+          ),
+        ),
+      );
+      const shown = textOf(dom.container as unknown as Fake);
+      assert.match(shown, shows, stored);
+      assert.doesNotMatch(shown, hides, stored);
+      await act(async () => root.unmount());
+    } finally {
+      dom.uninstall();
+    }
+  }
 });
 
 test("the warning threshold is phrased as what is used, for the stored values 80, 90 and 95", () => {
-  const tr = text(render(createElement(Usage)));
+  const tr = text(render(createElement(UsageWarnings)));
   for (const used of [80, 90, 95]) assert.match(tr, new RegExp(`%${used} kullanılınca`));
   assert.doesNotMatch(tr, /kalınca|Kalan yüzde/);
-  const en = text(render(createElement(Usage), "en"));
+  const en = text(render(createElement(UsageWarnings), "en"));
   for (const used of [80, 90, 95]) assert.match(en, new RegExp(`At ${used}% used`));
   assert.doesNotMatch(en, /% remaining|% left|Remaining percentage/);
 });
 
 test("Usage calls the warning threshold's scope a limit, not a window, in English", () => {
-  const html = text(render(createElement(Usage), "en"));
+  const html = text(render(createElement(UsageWarnings), "en"));
   assert.match(html, /Applies to either the 5-hour or weekly usage limit\./);
   assert.doesNotMatch(html, /usage window/);
 });

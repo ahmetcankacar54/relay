@@ -7,6 +7,7 @@ import { PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
 import { Panda } from "@/components/Panda";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
@@ -162,17 +163,120 @@ function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
   );
 }
 
-export function Usage() {
-  const { api, accounts, settings, busy, desktop, action } = useRelay();
+/** The page's tabs; only the open one is drawn, so a hidden token scan asks for nothing. */
+const TABS = ["limits", "tokens", "lost", "warnings"] as const;
+export type UsageTab = (typeof TABS)[number];
+/** Where the open tab is remembered, a convenience for this window only. */
+const TAB_KEY = "relay.usage.tab.v1";
+
+function storedTab(): UsageTab {
+  try {
+    const value = window.localStorage?.getItem(TAB_KEY);
+    return TABS.includes(value as UsageTab) ? (value as UsageTab) : "limits";
+  } catch {
+    return "limits";
+  }
+}
+
+function storeTab(tab: UsageTab) {
+  try {
+    window.localStorage?.setItem(TAB_KEY, tab);
+  } catch {
+    // The tab is then remembered until the page closes.
+  }
+}
+
+/** Whether the page will warn about accounts near their limit, and at what share; with where the figures come from. */
+export function UsageWarnings() {
+  const { api, settings, busy, desktop, action } = useRelay();
   const { t } = useI18n();
-  const [range, setRange] = useState<StatisticsRange>(30);
-  const [chosen, setChosen] = useState<string>();
-  // A deleted account falls back to all accounts.
-  const accountId = accounts.some((a) => a.id === chosen) ? chosen : undefined;
-  const statistics = useUsageStatistics(range, accountId);
   const disabled = !!busy || !!desktop?.busy;
   const update = (patch: Partial<typeof settings>) =>
     void action("settings", () => api.updateSettings(patch));
+  return (
+    <Card className={cardClass}>
+      <SectionHeading title={t("Uyarılar", "Warnings")} />
+      <SettingRow
+        label={t("Limit uyarıları", "Usage warnings")}
+        htmlFor="usage-warnings"
+        description={t(
+          "Eşiğe ulaşan hesapları bu panelde işaretle.",
+          "Highlight accounts approaching their limit in this panel.",
+        )}
+      >
+        <Switch
+          id="usage-warnings"
+          checked={settings.usageWarnings}
+          disabled={disabled}
+          onCheckedChange={(usageWarnings) => update({ usageWarnings })}
+        />
+      </SettingRow>
+      <SettingRow
+        label={
+          <span id="usage-threshold">
+            {t("Uyarı eşiği", "Warning threshold")}
+          </span>
+        }
+        description={t(
+          "Beş saatlik veya haftalık kullanım için geçerli.",
+          "Applies to either the 5-hour or weekly usage limit.",
+        )}
+      >
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          aria-labelledby="usage-threshold"
+          value={String(settings.usageWarningPercent)}
+          disabled={disabled || !settings.usageWarnings}
+          onValueChange={(v) =>
+            v &&
+            update({
+              usageWarningPercent: Number(
+                v,
+              ) as typeof settings.usageWarningPercent,
+            })
+          }
+        >
+          {[80, 90, 95].map((n) => (
+            <ToggleGroupItem key={n} value={String(n)}>
+              {t(
+                `${formatPercent(n, "tr")} kullanılınca`,
+                `At ${formatPercent(n, "en")} used`,
+              )}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </SettingRow>
+      <details className="border-t border-border pt-3">
+        <summary className="cursor-pointer text-sm font-medium">
+          {t("Veri kaynağı ve sınırlar", "Data source and limits")}
+        </summary>
+        <Note className="mt-1">
+          {t(
+            "Kullanım sorgusu deneysel Anthropic OAuth servisini kullanır. Relay’de bağlı CLI profili okunur; gerektiğinde bağlantıyı sen yenilersin. Bu işlem yalnız Relay profilini günceller, açık Claude uygulamasına dokunmaz. Kullanılan yüzde mesaj sayısı veya süre garantisi değildir.",
+            "Usage comes from an experimental Anthropic OAuth endpoint. Relay reads its connected CLI profile; you can renew the connection when needed. Renewal updates only the Relay profile and leaves the open Claude app untouched. The percentage used is not a message count or time guarantee.",
+          )}
+        </Note>
+      </details>
+    </Card>
+  );
+}
+
+/**
+ * Usage in four tabs, so nothing needs a long scroll: the limit statistics, the token counts, the panda's lost and
+ * found, and the warning preferences. The range and account filter belong to the first two and show only there.
+ */
+export function Usage() {
+  const { accounts, settings } = useRelay();
+  const { t } = useI18n();
+  const [range, setRange] = useState<StatisticsRange>(30);
+  const [chosen, setChosen] = useState<string>();
+  const [tab, setTab] = useState<UsageTab>(storedTab);
+  // A deleted account falls back to all accounts.
+  const accountId = accounts.some((a) => a.id === chosen) ? chosen : undefined;
+  const statistics = useUsageStatistics(range, accountId);
+  const filtered = tab === "limits" || tab === "tokens";
   return (
     <PageFrame
       title={t("Kullanım", "Usage")}
@@ -181,91 +285,54 @@ export function Usage() {
         "Usage per account · your working habits",
       )}
       actions={
-        <StatisticsHeader
-          range={range}
-          onRange={setRange}
-          accountId={accountId}
-          onAccount={setChosen}
-          accounts={accounts}
-        />
+        filtered ? (
+          <StatisticsHeader
+            range={range}
+            onRange={setRange}
+            accountId={accountId}
+            onAccount={setChosen}
+            accounts={accounts}
+          />
+        ) : undefined
       }
     >
-      <div className="grid gap-3 px-6 pb-6">
-        <UsageStatisticsSection
-          state={statistics}
-          accounts={accounts}
-          accountId={accountId}
-          zone={settings.planning.timeZone}
-        />
-        <TokenUsage range={range} accountId={accountId} />
-        <LostFound />
-        <Card className={cardClass}>
-          <SectionHeading title={t("Uyarılar", "Warnings")} />
-          <SettingRow
-            label={t("Limit uyarıları", "Usage warnings")}
-            htmlFor="usage-warnings"
-            description={t(
-              "Eşiğe ulaşan hesapları bu panelde işaretle.",
-              "Highlight accounts approaching their limit in this panel.",
-            )}
-          >
-            <Switch
-              id="usage-warnings"
-              checked={settings.usageWarnings}
-              disabled={disabled}
-              onCheckedChange={(usageWarnings) => update({ usageWarnings })}
-            />
-          </SettingRow>
-          <SettingRow
-            label={
-              <span id="usage-threshold">
-                {t("Uyarı eşiği", "Warning threshold")}
-              </span>
-            }
-            description={t(
-              "Beş saatlik veya haftalık kullanım için geçerli.",
-              "Applies to either the 5-hour or weekly usage limit.",
-            )}
-          >
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              aria-labelledby="usage-threshold"
-              value={String(settings.usageWarningPercent)}
-              disabled={disabled || !settings.usageWarnings}
-              onValueChange={(v) =>
-                v &&
-                update({
-                  usageWarningPercent: Number(
-                    v,
-                  ) as typeof settings.usageWarningPercent,
-                })
-              }
-            >
-              {[80, 90, 95].map((n) => (
-                <ToggleGroupItem key={n} value={String(n)}>
-                  {t(
-                    `${formatPercent(n, "tr")} kullanılınca`,
-                    `At ${formatPercent(n, "en")} used`,
-                  )}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </SettingRow>
-          <details className="border-t border-border pt-3">
-            <summary className="cursor-pointer text-sm font-medium">
-              {t("Veri kaynağı ve sınırlar", "Data source and limits")}
-            </summary>
-            <Note className="mt-1">
-              {t(
-                "Kullanım sorgusu deneysel Anthropic OAuth servisini kullanır. Relay’de bağlı CLI profili okunur; gerektiğinde bağlantıyı sen yenilersin. Bu işlem yalnız Relay profilini günceller, açık Claude uygulamasına dokunmaz. Kullanılan yüzde mesaj sayısı veya süre garantisi değildir.",
-                "Usage comes from an experimental Anthropic OAuth endpoint. Relay reads its connected CLI profile; you can renew the connection when needed. Renewal updates only the Relay profile and leaves the open Claude app untouched. The percentage used is not a message count or time guarantee.",
-              )}
-            </Note>
-          </details>
-        </Card>
-      </div>
+      <Tabs
+        className="px-6 pb-6"
+        value={tab}
+        onValueChange={(value) => {
+          const next = value as UsageTab;
+          setTab(next);
+          storeTab(next);
+        }}
+      >
+        <TabsList aria-label={t("Kullanım bölümleri", "Usage sections")}>
+          <TabsTrigger value="limits">{t("Limitler", "Limits")}</TabsTrigger>
+          <TabsTrigger value="tokens">{t("Token", "Tokens")}</TabsTrigger>
+          <TabsTrigger value="lost">
+            {t("Kayıp Eşya", "Lost and found")}
+          </TabsTrigger>
+          <TabsTrigger value="warnings">
+            {t("Uyarılar", "Warnings")}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="limits">
+          <UsageStatisticsSection
+            state={statistics}
+            accounts={accounts}
+            accountId={accountId}
+            zone={settings.planning.timeZone}
+          />
+        </TabsContent>
+        <TabsContent value="tokens">
+          <TokenUsage range={range} accountId={accountId} />
+        </TabsContent>
+        <TabsContent value="lost">
+          <LostFound />
+        </TabsContent>
+        <TabsContent value="warnings">
+          <UsageWarnings />
+        </TabsContent>
+      </Tabs>
     </PageFrame>
   );
 }
