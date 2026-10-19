@@ -6,6 +6,7 @@ import { Panel } from "../src/panel/Panel";
 import { panelHead } from "../src/panel/panel-head";
 import { PanelAccounts, confirmSwitch } from "../src/panel/PanelAccounts";
 import { PanelDrafts, allowAccessibilityAction, copyDraftAction, dismissDraftAction, draftReason } from "../src/panel/PanelDrafts";
+import { PanelSidebar, copySidebarRecipeAction, dismissSidebarGapAction, sidebarGapLine } from "../src/panel/PanelSidebar";
 import { relayAction } from "../src/data/relay-action";
 import { panelRowState, accountRowSubtitle } from "../src/lib/account-row";
 import { PanelActiveCard } from "../src/panel/PanelActiveCard";
@@ -13,7 +14,7 @@ import { fakeDom } from "./fake-dom";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import type { OverviewRow } from "../src/data/selectors";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type DesktopState, type DraftSummary, type KeeperAdaptation, type KeeperSnapshot, type Snapshot, type UsageIssue } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type DesktopState, type DraftSummary, type KeeperAdaptation, type KeeperSnapshot, type SidebarGapSummary, type Snapshot, type UsageIssue } from "../shared/types";
 
 const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -704,4 +705,87 @@ test("copy, dismiss and permission go through relay.action by record id", async 
   await allowAccessibilityAction(relay);
   assert.deepEqual(keys, ["draft-copy:d1", "draft-dismiss:d2", "draft-accessibility"]);
   assert.deepEqual(calls, ["copy:d1", "dismiss:d2", "accessibility"]);
+});
+
+const gap = (over: Partial<SidebarGapSummary> = {}): SidebarGapSummary => ({
+  id: "g1", to: "Alto", from: ["Vertex"], missingSections: 9, sessions: 157, ...over,
+});
+const withSidebar = (sidebar: SidebarGapSummary | undefined, extra: Partial<Relay> = {}): Relay => {
+  const relay = relayFor(active, [active, vertex], baseUsage, extra);
+  relay.data = { ...relay.data, ...(sidebar ? { sidebar } : {}) } as Snapshot;
+  return relay;
+};
+const sidebar = (relay: Relay) => wrap(relay, createElement(PanelSidebar));
+
+test("the sidebar row says what the account lacks and where it comes from, with Copy recipe and Dismiss", () => {
+  const html = sidebar(withSidebar(gap()));
+  assert.match(html, /Kenar çubuğu düzeni/);
+  assert.match(html, /Alto hesabında 9 bölüm eksik, 157 oturum bölümsüz/);
+  assert.match(html, /Kaynak: Vertex\. Tarifi bir Code oturumuna yapıştırınca Claude bölümleri kurar\./);
+  assert.match(html, />Tarifi kopyala</);
+  assert.match(html, />Kapat</);
+  // No session id ever reaches the panel.
+  assert.doesNotMatch(html, /local_/);
+  assert.equal(sidebar(withSidebar(undefined)), "");
+});
+
+test("a sidebar offer that only restores the account's own filing names no source", () => {
+  const html = sidebar(withSidebar(gap({ from: [] })));
+  assert.doesNotMatch(html, /Kaynak:/);
+  assert.match(html, /Tarifi bir Code oturumuna yapıştırınca Claude bölümleri kurar\./);
+});
+
+test("the sidebar line names only what is missing, in both languages", () => {
+  const tr = (a: string) => a;
+  const en = (_: string, b: string) => b;
+  assert.equal(sidebarGapLine(gap({ sessions: 0 }), tr), "Alto hesabında 9 bölüm eksik");
+  assert.equal(sidebarGapLine(gap({ missingSections: 0, sessions: 3 }), tr), "Alto hesabında 3 oturum bölümsüz");
+  assert.equal(sidebarGapLine(gap(), en), "On Alto: 9 sections missing, 157 sessions unfiled");
+  assert.equal(sidebarGapLine(gap({ missingSections: 1, sessions: 1 }), en), "On Alto: 1 section missing, 1 session unfiled");
+});
+
+test("the panel places the sidebar row after rescued drafts and before the accounts", () => {
+  const relay = withDrafts([draft()]);
+  relay.data = { ...relay.data, sidebar: gap() } as Snapshot;
+  const html = render(relay);
+  const at = (re: RegExp) => html.search(re);
+  assert.ok(at(/Kurtarılan taslaklar/) >= 0);
+  assert.ok(at(/Kurtarılan taslaklar/) < at(/Kenar çubuğu düzeni/));
+  assert.ok(at(/Kenar çubuğu düzeni/) < at(/>Hesaplar</));
+});
+
+test("the sidebar row's buttons are disabled while its action runs", () => {
+  const disabled = (busy: string) =>
+    (sidebar(withSidebar(gap(), { busy })).match(/disabled=""/g) ?? []).length;
+  assert.equal(disabled(""), 0);
+  assert.equal(disabled("sidebar-copy:g1"), 2);
+  assert.equal(disabled("sidebar-dismiss:g1"), 2);
+  assert.equal(disabled("draft-copy:d1"), 0);
+});
+
+test("Copy recipe and Dismiss go through relay.action by offer id, and only a copy that worked says so", async () => {
+  const calls: string[] = [];
+  const keys: string[] = [];
+  let copied = 0;
+  let fail = false;
+  const relay = relayFor(active, [active, vertex], baseUsage, {
+    action: async (key: string, fn: () => Promise<unknown>) => {
+      keys.push(key);
+      await fn().catch(() => {});
+    },
+    api: {
+      copySidebarRecipe: async (id: string) => {
+        if (fail) throw new Error("gone");
+        calls.push(`copy:${id}`);
+      },
+      dismissSidebarGap: async (id: string) => void calls.push(`dismiss:${id}`),
+    } as unknown as Relay["api"],
+  });
+  await copySidebarRecipeAction(relay, "g1", () => copied++);
+  fail = true;
+  await copySidebarRecipeAction(relay, "g1", () => copied++);
+  await dismissSidebarGapAction(relay, "g1");
+  assert.deepEqual(keys, ["sidebar-copy:g1", "sidebar-copy:g1", "sidebar-dismiss:g1"]);
+  assert.deepEqual(calls, ["copy:g1", "dismiss:g1"]);
+  assert.equal(copied, 1);
 });

@@ -157,7 +157,7 @@ function draftHelperCommand() {
 /**
  * The draft helper against real Chromium, on fixture data in <root>/appdata/Claude-drafts-fixture
  * only. The helper only reads: it returns every `composer-draft:` key of Local Storage with its
- * raw value and writes nothing. The job points straight at the fixture's Local Storage, so a
+ * raw value, and the Code sidebar keys there are, and writes nothing. The job points straight at the fixture's Local Storage, so a
  * dump afterwards proves the helper itself leaves the data untouched. (In production Relay hands
  * it a private copy, a second layer on top of that.) It never switches Desktop accounts:
  * desktopHost() would drive the real Claude.app.
@@ -208,6 +208,16 @@ async function proveDraftHelper() {
     [newSessionKey]: draft("Yeni oturum taslağı", A),
     [conversationKey(z)]: draft("Başka hesabın taslağı", C),
     "relay-smoke-keep": "1",
+    // The Code sidebar's organization, read along with the drafts.
+    "dframe-store": JSON.stringify({
+      state: { customGroupsByScope: {}, codeSidebarByScope: {} },
+      version: 1,
+    }),
+    "LSS-persisted.starred-local-code-sessions": JSON.stringify({
+      value: [`local_${x}`],
+      tabId: "",
+      timestamp: 1,
+    }),
   };
 
   // 1. A brand-new Local Storage, written by Chromium and committed when its process quits.
@@ -249,13 +259,18 @@ async function proveDraftHelper() {
     helper.command,
   );
   // Every `composer-draft:` key, whoever owns it (choosing by owner is Relay's job, not the
-  // helper's), and nothing else: not `relay-smoke-keep`.
+  // helper's), and the sidebar keys there are, and nothing else: not `relay-smoke-keep`.
   assert.deepEqual(JSON.parse(resultText()), {
     ok: true,
     drafts: {
       [conversationKey(x)]: seeded[conversationKey(x)],
       [newSessionKey]: seeded[newSessionKey],
       [conversationKey(z)]: seeded[conversationKey(z)],
+    },
+    sidebar: {
+      "dframe-store": seeded["dframe-store"],
+      "LSS-persisted.starred-local-code-sessions":
+        seeded["LSS-persisted.starred-local-code-sessions"],
     },
   });
 

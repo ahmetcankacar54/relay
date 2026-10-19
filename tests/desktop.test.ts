@@ -2243,3 +2243,195 @@ test("carriedCount reports the conversations the switch wrote into the target", 
   await f.manager.switchTo(a.id);
   assert.equal(f.manager.carriedCount, 2);
 });
+
+// Claude's sidebar keys holding custom sections for some scopes, shaped like Desktop's in 2026-10:
+// `dframe-store` with each scope's groups and sections, and the global pins.
+function sidebarKeys(
+  scopes: { account: any; groups: { name: string; members: string[] }[] }[],
+  starred: string[] = [],
+) {
+  const groups: Record<string, unknown> = {};
+  const sections: Record<string, unknown> = {};
+  for (const { account, groups: list } of scopes) {
+    const key = `${account.desktop.accountUuid}/${account.desktop.orgId}`;
+    const ids = list.map(() => `cg-${randomUUID()}`);
+    groups[key] = {
+      groups: list.map((g, i) => ({ id: ids[i], name: g.name })),
+      assignments: Object.fromEntries(
+        list.flatMap((g, i) => g.members.map((m) => [`code:local_${m}`, ids[i]])),
+      ),
+      order: {},
+    };
+    sections[key] = {
+      sections: [
+        { id: "pinned", kind: "pinned", v: 2, name: "", order: 0 },
+        ...list.map((g, i) => ({ id: ids[i], kind: "manual", v: 2, name: g.name, order: 1 + i })),
+        { id: "sessions", kind: "sessions", v: 2, name: "", order: 99, groupBy: "folder" },
+      ],
+      migratedFrom: 1,
+      prefsSeeded: true,
+    };
+  }
+  return {
+    "dframe-store": JSON.stringify({
+      state: { customGroupsByScope: groups, codeSidebarByScope: sections },
+      version: 1,
+      shared: 1,
+    }),
+    "LSS-persisted.starred-local-code-sessions": JSON.stringify({
+      value: starred.map((alias) => `local_${alias}`),
+      tabId: "",
+      timestamp: 1,
+    }),
+  };
+}
+
+// A switch from A, open in Claude, to B: A filed two sessions in "relay" and has an empty
+// "landing"; B has none of it. `x` is on both accounts, `y` only on A.
+async function sidebarSwitch(t: any, options: { pinY?: boolean } = {}) {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A"); // A is open in Claude
+  const [x, y] = [randomUUID(), randomUUID()];
+  await session(f.root, a, x, { lastActivityAt: 200 });
+  await session(f.root, b, x, { lastActivityAt: 100 });
+  await session(f.root, a, y, { lastActivityAt: 300 });
+  let sidebar: Record<string, string> | undefined = sidebarKeys(
+    [{ account: a, groups: [{ name: "relay", members: [x, y] }, { name: "landing", members: [] }] }],
+    options.pinY ? [y] : [],
+  );
+  const d = await withDraftHelper(f, async () => ({
+    ok: true,
+    drafts: {},
+    ...(sidebar ? { sidebar } : {}),
+  }));
+  const events: Array<[string, Record<string, unknown> | undefined]> = [];
+  f.manager.onDraftEvent = (event, fields) => void events.push([event, fields]);
+  return {
+    f,
+    a,
+    b,
+    x,
+    y,
+    d,
+    events,
+    sidebarEvents: () => events.filter(([event]) => event === "sidebar").map(([, fields]) => fields),
+    setSidebar: (value: Record<string, string> | undefined) => {
+      sidebar = value;
+    },
+  };
+}
+
+test("an A→B switch offers the sidebar sections B lacks, with a recipe only main can read", async (t) => {
+  const { f, a, b, x, y, sidebarEvents } = await sidebarSwitch(t);
+
+  await f.manager.switchTo(b.id);
+
+  const gap = await f.manager.sidebarGap();
+  assert.ok(gap);
+  assert.match(gap.id, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(
+    { ...gap, id: undefined },
+    { id: undefined, to: "B", from: ["A"], missingSections: 2, sessions: 2 },
+  );
+  const recipe = await f.manager.sidebarRecipe(gap.id);
+  assert.ok(recipe);
+  assert.match(recipe, /on this account \(B\)\. They come from A,/);
+  assert.match(recipe, new RegExp(`### relay\\n\\nlocal_${x} local_${y}\\n`));
+  assert.match(recipe, /### landing/);
+  assert.equal(await f.manager.sidebarRecipe(randomUUID()), undefined);
+  // The log has counts and short ids only.
+  assert.deepEqual(sidebarEvents(), [
+    {
+      from: a.desktop!.accountUuid.slice(0, 8),
+      to: b.desktop!.accountUuid.slice(0, 8),
+      status: "planned",
+      sections: 2,
+      missing: 2,
+      sessions: 2,
+    },
+  ]);
+  // Claude's own data is never written for it: only the vault holds the offer.
+  const vaultFile = path.join(f.store.root, "desktop-vault", "sidebar", "pending.json");
+  assert.ok((await fs.readFile(vaultFile, "utf8")).includes(y));
+
+  await f.manager.dismissSidebarGap(gap.id);
+  assert.equal(await f.manager.sidebarGap(), undefined);
+});
+
+test("a pinned session is left out of the recipe: moving it would unpin it on every account", async (t) => {
+  const { f, b, x, y } = await sidebarSwitch(t, { pinY: true });
+  await f.manager.switchTo(b.id);
+  const gap = (await f.manager.sidebarGap())!;
+  assert.equal(gap.sessions, 1);
+  const recipe = (await f.manager.sidebarRecipe(gap.id))!;
+  assert.ok(recipe.includes(`local_${x}`));
+  assert.ok(!recipe.includes(y));
+});
+
+test("the offer shows only while Desktop is on the account it was made for", async (t) => {
+  const { f, a, b } = await sidebarSwitch(t);
+  await f.manager.switchTo(b.id);
+  assert.ok(await f.manager.sidebarGap());
+  // The user moved Claude to A by hand: B's offer is not A's.
+  const config = (await readObject(f.root, "config.json"))!;
+  await writeBytes(
+    f.root,
+    "config.json",
+    jsonBytes({ ...config, lastKnownAccountUuid: a.desktop!.accountUuid }),
+  );
+  assert.equal(await f.manager.sidebarGap(), undefined);
+});
+
+test("each switch replaces the offer: no sidebar read, or a format Relay does not know, offers nothing", async (t) => {
+  const { f, a, b, sidebarEvents, setSidebar } = await sidebarSwitch(t);
+  await f.manager.switchTo(b.id);
+  assert.ok(await f.manager.sidebarGap());
+
+  setSidebar(undefined);
+  await f.manager.switchTo(a.id);
+  await f.manager.switchTo(b.id);
+  assert.equal(await f.manager.sidebarGap(), undefined);
+
+  setSidebar({ "dframe-store": JSON.stringify({ state: {}, version: 7 }) });
+  await f.manager.switchTo(a.id);
+  assert.equal(await f.manager.sidebarGap(), undefined);
+  assert.deepEqual(
+    sidebarEvents().map((e) => e?.status),
+    ["planned", "not-read", "not-read", "unsupported"],
+  );
+  assert.equal(sidebarEvents()[3]?.reason, "unsupported Desktop sidebar format: dframe-store version");
+});
+
+test("with history transfer off, a switch offers no sidebar and drops the last offer", async (t) => {
+  const { f, a, b, sidebarEvents } = await sidebarSwitch(t);
+  await f.manager.switchTo(b.id);
+  assert.ok(await f.manager.sidebarGap());
+  f.store.update((s) => {
+    s.settings.desktopHistoryTransfer = "off";
+  });
+  await f.manager.switchTo(a.id);
+  await f.manager.switchTo(b.id);
+  assert.equal(await f.manager.sidebarGap(), undefined);
+  assert.equal(sidebarEvents().length, 1);
+});
+
+test("a sidebar in a format Relay does not know costs the drafts nothing", async (t) => {
+  const f = await fixture(t);
+  const b = await f.account("B");
+  const a = await f.account("A"); // A is open in Claude
+  const shared = randomUUID();
+  await session(f.root, a, shared, { lastActivityAt: 300 });
+  await session(f.root, b, shared, { lastActivityAt: 100 });
+  const d = await withDraftHelper(f, async () => ({
+    ok: true,
+    drafts: { [CONVERSATION_DRAFT_PREFIX + shared]: draftOf(a.desktop!.accountUuid, UNSENT) },
+    sidebar: { "dframe-store": "{not json" },
+  }));
+
+  await f.manager.switchTo(b.id);
+
+  assert.equal((await f.manager.pendingDraftRecords()).length, 1);
+  assert.equal((await d.last())!.status, "captured");
+  assert.equal(await f.manager.sidebarGap(), undefined);
+});

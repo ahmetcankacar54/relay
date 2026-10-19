@@ -14,6 +14,10 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:request-desktop-accessibility"),
   copyDraft: (id) => ipcRenderer.invoke("relay:copy-draft", id),
   dismissDraft: (id) => ipcRenderer.invoke("relay:dismiss-draft", id),
+  copySidebarRecipe: (id) =>
+    ipcRenderer.invoke("relay:copy-sidebar-recipe", id),
+  dismissSidebarGap: (id) =>
+    ipcRenderer.invoke("relay:dismiss-sidebar-gap", id),
   updateAccountPlanning: (id, input) =>
     ipcRenderer.invoke("relay:account-planning", id, input),
   browserProfiles: () => ipcRenderer.invoke("relay:browser-profiles"),
