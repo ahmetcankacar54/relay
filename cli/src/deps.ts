@@ -2,6 +2,10 @@ import os from "node:os";
 import path from "node:path";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import {
+  macBrowserSystem,
+  type BrowserSystem,
+} from "../../electron/core/browser-profiles";
 import type { DesktopHost } from "../../electron/core/desktop";
 import { nodeDesktopHost } from "../../electron/core/desktop-host-node";
 import { resolveExecutable } from "../../electron/core/environment";
@@ -28,6 +32,8 @@ export interface CliDeps {
   selfPath: string;
   /** Claude Code's transcripts, for the history summary. */
   transcriptRoot: string;
+  /** Opens an account's browser profile after a switch. */
+  browser: BrowserSystem;
   platform: NodeJS.Platform;
 }
 
@@ -84,6 +90,7 @@ export function defaultDeps(): CliDeps {
     },
     selfPath: process.argv[1] ?? "",
     transcriptRoot: path.join(os.homedir(), ".claude"),
+    browser: macBrowserSystem(),
     platform: process.platform,
   };
 }

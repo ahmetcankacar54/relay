@@ -14,6 +14,7 @@ import { runCli } from "../cli/src/main";
 import type { CliDeps } from "../cli/src/deps";
 import type { CliIO } from "../cli/src/io";
 import { fakeSecurity } from "./fake-security";
+import { macBrowserSystem, type BrowserSystem } from "../electron/core/browser-profiles";
 
 export interface FixtureOptions {
   tty?: boolean;
@@ -62,6 +63,15 @@ export async function cliFixture(t: any, options: FixtureOptions = {}) {
     seal: (text) => sealer.seal(text),
     unseal: (data) => sealer.unseal(data),
   });
+  // A home of its own for browsers: real reads of what a test writes there, a recorded `open`.
+  const opened: string[][] = [];
+  const browser: BrowserSystem = {
+    ...macBrowserSystem(path.join(temp, "home")),
+    alive: () => false,
+    open: async (args) => {
+      opened.push(args);
+    },
+  };
   const out: string[] = [],
     err: string[] = [];
   const answers = [...(options.answers ?? [])];
@@ -101,6 +111,7 @@ export async function cliFixture(t: any, options: FixtureOptions = {}) {
     guiSession: () => options.gui ?? true,
     selfPath: path.join(temp, "relay-cli.js"),
     transcriptRoot: path.join(temp, ".claude"),
+    browser,
   };
   let secret = 0;
   /** Signs a new account in to the fixture's Claude folder; its secrets carry FIXTURE-SECRET. */
@@ -151,6 +162,8 @@ export async function cliFixture(t: any, options: FixtureOptions = {}) {
     deps,
     security,
     state,
+    browser,
+    opened,
     accountInDesktop,
     saved,
     store: () => new Store(home, { by: "cli", backupOnOpen: false, migrateOnOpen: false }),

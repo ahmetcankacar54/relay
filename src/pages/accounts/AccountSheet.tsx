@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
-import { Globe2, Monitor, RefreshCw } from "lucide-react";
-import type { Account } from "../../../shared/types";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { AppWindow, Globe2, Monitor, RefreshCw } from "lucide-react";
+import type { Account, InstalledBrowser } from "../../../shared/types";
 import {
   desktopCliMismatch,
   duplicateCliAccount,
@@ -8,6 +8,13 @@ import {
 import { historySources } from "../../../shared/history-policy";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -29,6 +36,13 @@ import { DesktopSetup } from "../../features/DesktopSetup";
 import { PlanEditor } from "../../features/PlanEditor";
 import { rowActions } from "./AccountsTable";
 import { groupName, planLabel } from "./accountLabels";
+import {
+  browserOptions,
+  browserStatus,
+  browserValue,
+  chosenLabel,
+  openResultText,
+} from "./browserProfile";
 
 export function AccountSheet({
   account,
@@ -83,12 +97,14 @@ function ConnectionRow({
   status,
   tone,
   actions,
+  children,
 }: {
   icon: ReactNode;
   title: string;
   status: string;
   tone: "ok" | "warn" | "crit" | "off";
   actions: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <div className="grid gap-2 rounded-lg border p-3">
@@ -105,7 +121,129 @@ function ConnectionRow({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">{actions}</div>
+      {children}
     </div>
+  );
+}
+
+/**
+ * The browser profile opened after a switch to this account, so the Claude extension signed in
+ * there is the one Claude finds. Profiles are listed when the sheet opens and the picker does.
+ */
+export function BrowserProfileRow({
+  account: a,
+  initialBrowsers,
+}: {
+  account: Account;
+  /** For static rendering; otherwise listed on mount. */
+  initialBrowsers?: InstalledBrowser[];
+}) {
+  const { api, accounts, busy, action } = useRelay();
+  const { t } = useI18n();
+  const [browsers, setBrowsers] = useState(initialBrowsers);
+  const [opened, setOpened] = useState<string>();
+  const list = useCallback(() => {
+    api.browserProfiles().then(setBrowsers, () => {});
+  }, [api]);
+  useEffect(list, [list]);
+  useEffect(
+    () => setOpened(undefined),
+    [a.id, a.browser?.app, a.browser?.profile],
+  );
+  const status = browserStatus(a, browsers, t);
+  const options = browserOptions(a, accounts, browsers ?? [], t);
+  const current = a.browser ? browserValue(a.browser) : "none";
+  const label = chosenLabel(a, browsers);
+  return (
+    <ConnectionRow
+      icon={<AppWindow />}
+      title={t("Tarayıcı profili", "Browser profile")}
+      tone={status.tone}
+      status={status.label}
+      actions={
+        <>
+          <Select
+            value={current}
+            disabled={!!busy}
+            onOpenChange={(open) => open && list()}
+            onValueChange={(value) => {
+              const option = options.find((o) => o.value === value);
+              void action(`browser:${a.id}`, () =>
+                api.setAccountBrowser(
+                  a.id,
+                  option ? { app: option.app, profile: option.profile } : null,
+                ),
+              );
+            }}
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label={t(
+                `${a.name} tarayıcı profili`,
+                `${a.name} browser profile`,
+              )}
+              className="max-w-full min-w-0"
+            >
+              {/* Children keep the label in static markup, before Radix measures items. */}
+              <SelectValue>
+                {label ?? t("Profil seç", "Choose a profile")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("Yok", "None")}</SelectItem>
+              {label && !options.some((o) => o.value === current) && (
+                <SelectItem value={current}>{label}</SelectItem>
+              )}
+              {options.map((o) => (
+                <SelectItem key={o.value} value={o.value} disabled={o.disabled}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {a.browser && label && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!!busy}
+              onClick={() =>
+                void action(`browser-open:${a.id}`, async () =>
+                  setOpened(
+                    openResultText(
+                      await api.openAccountBrowser(a.id),
+                      label,
+                      t,
+                    ),
+                  ),
+                )
+              }
+            >
+              {t("Şimdi aç", "Open now")}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {opened && (
+        <p role="status" className="text-xs">
+          {opened}
+        </p>
+      )}
+      {browsers?.length === 0 && (
+        <p className="text-xs text-warn-foreground">
+          {t(
+            "Desteklenen bir tarayıcı bulunamadı (Chrome, Brave, Edge, Chromium, Vivaldi).",
+            "No supported browser found (Chrome, Brave, Edge, Chromium, Vivaldi).",
+          )}
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        {t(
+          "Claude uygulaması tarayıcı eklentisini hesaba göre bulur. Her hesap için ayrı bir tarayıcı profili aç ve Claude eklentisine orada bu hesapla bir kez giriş yap. Relay geçişten sonra yalnızca bu profili açar; eklentiye giriş yapmaz, girişini okumaz.",
+          "The Claude app finds the browser extension by account. Give each account its own browser profile, and sign in to the Claude extension there once, with this account. After a switch, Relay only opens this profile; it never signs in to the extension or reads its sign-in.",
+        )}
+      </p>
+    </ConnectionRow>
   );
 }
 
@@ -404,6 +542,10 @@ export function AccountSheetBody({
         />
         {/* The page-frame panel sits under the sheet; finish the sign-in here. */}
         {relay.flow?.accountId === a.id && <CliFlowPanel embedded />}
+        {/* Profiles open only on macOS; the browser preview shows the row too. */}
+        {["darwin", "preview"].includes(data?.diagnostics?.platform ?? "") && (
+          <BrowserProfileRow key={a.id} account={a} />
+        )}
       </Disclosure>
       {a.desktop && (
         <Disclosure title={t("Code geçmişi", "Code history")}>

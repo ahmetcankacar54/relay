@@ -1,4 +1,6 @@
 import { historySources } from "../../../shared/history-policy";
+import { BROWSERS } from "../../../shared/browser-profiles";
+import { openBrowserProfile } from "../../../electron/core/browser-profiles";
 import { resolveAccount } from "../accounts";
 import type { Command } from "../command";
 import { confirm } from "../confirm";
@@ -69,5 +71,19 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
       `Switched to ${target.name}; ${n} conversation${n === 1 ? "" : "s"} carried.`,
     ),
   );
+  // As the app does after a switch: the account's browser profile, unless it has a window.
+  const browser = ctx.store.state.accounts.find((a) => a.id === target.id)?.browser;
+  if (browser) {
+    const profile = `${BROWSERS[browser.app].name} · ${browser.name}`;
+    const result = await openBrowserProfile(ctx.deps.browser, browser);
+    if (result === "opened")
+      io.stdout(t(`Tarayıcı profili açıldı: ${profile}.`, `Opened the browser profile ${profile}.`));
+    else if (result === "missing")
+      io.stdout(
+        t(`Bu profil artık tarayıcıda yok: ${profile}.`, `The browser no longer has this profile: ${profile}.`),
+      );
+    else if (result === "failed")
+      io.stdout(t(`Tarayıcı profili açılamadı: ${profile}.`, `Could not open the browser profile ${profile}.`));
+  }
   return EXIT.ok;
 };

@@ -12,6 +12,7 @@ import { openContext } from "../cli/src/context";
 import { shielded } from "../cli/src/shield";
 import { CliError, EXIT } from "../cli/src/io";
 import { writeBytes } from "../electron/core/desktop-files";
+import { STATE_SCHEMA } from "../electron/core/store";
 import type { Account } from "../shared/types";
 
 const acct = (name: string, id = crypto.randomUUID()): Account => ({
@@ -131,7 +132,7 @@ test("a schema-less registry next to an installed Relay.app refuses writes; with
   fs.writeFileSync(path.join(g.home, "state.json"), JSON.stringify(graw));
   const ctx = await openContext(g.io, g.deps as any, { lang: "en" } as any, { write: true, desktop: true });
   ctx.store.update(() => {});
-  assert.equal(JSON.parse(fs.readFileSync(path.join(g.home, "state.json"), "utf8")).schema, 2);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(g.home, "state.json"), "utf8")).schema, STATE_SCHEMA);
 });
 
 test("a missing key with format-2 files exits 5 and never creates a key", async (t) => {

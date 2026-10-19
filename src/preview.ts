@@ -11,6 +11,7 @@ import type {
   Account,
   AuthFlow,
   DesktopState,
+  InstalledBrowser,
   RelayAPI,
   Session,
   Snapshot,
@@ -66,6 +67,22 @@ const accounts: Account[] = [
     orgName: a.kind === "personal" ? "Personal workspace" : "Studio",
   },
 }));
+/** Brave with a profile per account, one without the extension; and Chrome. */
+const previewBrowsers: InstalledBrowser[] = [
+  {
+    app: "brave",
+    profiles: [
+      { profile: "Default", name: "Kişisel", extension: true },
+      { profile: "Profile 1", name: "Studio", extension: true },
+      { profile: "Profile 2", name: "Danışmanlık", extension: false },
+    ],
+  },
+  {
+    app: "chrome",
+    profiles: [{ profile: "Default", name: "Your Chrome", extension: true }],
+  },
+];
+accounts[0].browser = { app: "brave", profile: "Default", name: "Kişisel" };
 accounts[0].desktop = {
   accountUuid: ids[0],
   orgId: ids[2],
@@ -493,6 +510,32 @@ export const previewApi: RelayAPI = {
     account.planning = input;
     return structuredClone(account);
   },
+  browserProfiles: async () => structuredClone(previewBrowsers),
+  setAccountBrowser: async (id, input) => {
+    const account = accounts.find((a) => a.id === id);
+    if (!account) throw new Error("Account not found.");
+    if (!input) {
+      delete account.browser;
+      return structuredClone(account);
+    }
+    const profile = previewBrowsers
+      .find((b) => b.app === input.app)
+      ?.profiles.find((p) => p.profile === input.profile);
+    if (!profile) throw new Error("This browser profile was not found.");
+    if (
+      accounts.some(
+        (a) =>
+          a.id !== id &&
+          a.browser?.app === input.app &&
+          a.browser.profile === input.profile,
+      )
+    )
+      throw new Error("Another account already uses this browser profile.");
+    account.browser = { ...input, name: profile.name };
+    return structuredClone(account);
+  },
+  openAccountBrowser: async (id) =>
+    accounts.find((a) => a.id === id)?.browser ? "opened" : "none",
   setTrayLanguage: async () => {},
   showDiagnostics: desktopOnly,
   onChanged: () => () => {},

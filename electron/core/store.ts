@@ -10,11 +10,23 @@ import {
   type CreateAccount,
   type PlanningSettings,
 } from "../../shared/types";
+import {
+  BROWSER_APPS,
+  PROFILE_FOLDER,
+  type AccountBrowser,
+} from "../../shared/browser-profiles";
 
 export const accountPlanningSchema = z
   .object({
     plan: z.enum(["unknown", "pro", "max5", "max20", "team"]),
     capacityWeight: z.number().finite().min(1).max(100),
+  })
+  .strict();
+export const accountBrowserSchema = z
+  .object({
+    app: z.enum(BROWSER_APPS),
+    profile: z.string().regex(PROFILE_FOLDER),
+    name: z.string().min(1).max(100),
   })
   .strict();
 export const timeZoneSchema = z
@@ -114,6 +126,7 @@ const accountSchema = z.object({
   createdAt: z.iso.datetime(),
   cooldownUntil: z.iso.datetime().optional(),
   planning: accountPlanningSchema.optional(),
+  browser: accountBrowserSchema.optional(),
   desktop: z
     .object({
       accountUuid: z.uuid(),
@@ -177,9 +190,10 @@ const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
 /**
  * The registry layout this build writes. Bumped whenever a field is added anywhere in it, so a
  * build that knows less never writes a file a newer build wrote and silently drops its fields.
- * A file without the field was written before 0.12 and counts as 1.
+ * A file without the field was written before 0.12 and counts as 1. 3 added an account's
+ * browser profile.
  */
-export const STATE_SCHEMA = 2;
+export const STATE_SCHEMA = 3;
 const stateSchema = z.object({
   version: z.literal(1),
   schema: z.number().int().min(1).optional(),
@@ -418,6 +432,28 @@ export class Store {
     const account = this.state.accounts.find((a) => a.id === id);
     if (!account) throw new Error("Hesap bulunamadı.");
     return structuredClone(account);
+  }
+  /** Sets or clears an account's browser profile. Two accounts never share one. */
+  setBrowser(id: string, browser: AccountBrowser | undefined): Account {
+    this.account(id);
+    const value = browser && accountBrowserSchema.parse(browser);
+    this.update((state) => {
+      if (
+        value &&
+        state.accounts.some(
+          (a) =>
+            a.id !== id &&
+            a.browser?.app === value.app &&
+            a.browser.profile === value.profile,
+        )
+      )
+        throw new Error("Another account already uses this browser profile.");
+      const account = state.accounts.find((a) => a.id === id);
+      if (!account) throw new Error("Hesap bulunamadı.");
+      if (value) account.browser = value;
+      else delete account.browser;
+    });
+    return this.account(id);
   }
   profile(id: string): string {
     this.account(id);

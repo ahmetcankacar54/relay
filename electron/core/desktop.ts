@@ -181,6 +181,11 @@ export class DesktopManager {
    */
   onSwitched?: () => void;
   /**
+   * Told when a switch succeeded, after Desktop is free, with the account switched to; never
+   * for a failed one. May throw; nothing depends on it.
+   */
+  onSwitchedTo?: (profileId: string) => void;
+  /**
    * Told what the draft steps did, for a diagnosis log: an event name and fields that are ids,
    * states, reasons, counts and times, never a draft's text. May throw; nothing depends on it.
    */
@@ -578,13 +583,21 @@ export class DesktopManager {
       };
       if (options.closedOnly) await change();
       else await this.restart(change, options.canProceed, options.beforeQuit);
-    }).finally(() => {
-      try {
-        this.onSwitched?.();
-      } catch {
-        // A listener never changes how a switch ends.
-      }
-    });
+    })
+      .then(() => {
+        try {
+          this.onSwitchedTo?.(profileId);
+        } catch {
+          // A listener never changes how a switch ends.
+        }
+      })
+      .finally(() => {
+        try {
+          this.onSwitched?.();
+        } catch {
+          // A listener never changes how a switch ends.
+        }
+      });
   }
   async cancelLogin() {
     return this.exclusive({ kind: "cancel-link" }, async () => {

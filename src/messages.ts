@@ -339,6 +339,16 @@ const pairs: Pair[] = [
     "Stop this project’s running session on the Live tab first.",
   ],
   [
+    "Bu tarayıcı profilini başka bir hesap kullanıyor. Bir eklenti tek hesaba bağlanır.",
+    "Another account already uses this browser profile.",
+    "Another account already uses this browser profile. An extension signs in to one account.",
+  ],
+  [
+    "Bu tarayıcı profili bulunamadı. Listeyi yenileyip yeniden seç.",
+    "This browser profile was not found.",
+    "This browser profile was not found. Refresh the list and choose again.",
+  ],
+  [
     "Hesap bulunamadı.",
     "Hesap bulunamadı.",
     "Account not found.",

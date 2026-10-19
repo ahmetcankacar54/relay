@@ -44,7 +44,7 @@ test("reload sees another process's write, and only then reports a change", (t) 
   assert.equal(a.reload(), false);
 });
 
-test("every write stamps schema 2, and the app's default options stamp a schema-less file on open", (t) => {
+test("every write stamps this build's schema, and the app's default options stamp a schema-less file on open", (t) => {
   const dir = folder(t);
   new Store(dir).create({ name: "A", kind: "personal" });
   assert.equal(raw(dir).schema, STATE_SCHEMA);
@@ -55,15 +55,15 @@ test("every write stamps schema 2, and the app's default options stamp a schema-
   assert.equal(cli.fileSchema, 1);
   assert.equal(raw(dir).schema, undefined);
   const app = new Store(dir);
-  assert.equal(app.fileSchema, 2);
-  assert.equal(raw(dir).schema, 2);
+  assert.equal(app.fileSchema, STATE_SCHEMA);
+  assert.equal(raw(dir).schema, STATE_SCHEMA);
 });
 
 test("a newer file is read leniently and every write is refused", (t) => {
   const dir = folder(t);
   new Store(dir).create({ name: "A", kind: "personal" });
   const newer = raw(dir);
-  newer.schema = 3;
+  newer.schema = STATE_SCHEMA + 1;
   newer.settings.futureKey = true;
   newer.settings.planning.futurePlanning = 1;
   newer.accounts[0].futureField = "x";
@@ -71,7 +71,7 @@ test("a newer file is read leniently and every write is refused", (t) => {
   const before = fs.readFileSync(path.join(dir, "state.json"), "utf8");
   const store = new Store(dir, CLI);
   assert.equal(store.state.accounts[0].name, "A");
-  assert.equal(store.fileSchema, 3);
+  assert.equal(store.fileSchema, STATE_SCHEMA + 1);
   assert.throws(
     () => store.create({ name: "B", kind: "personal" }),
     (e: any) => e instanceof StoreWriteRefused && e.reason === "newer-schema",
@@ -116,4 +116,50 @@ test("a state.lock held by another process makes update wait, then throw after l
   const started = Date.now();
   assert.throws(() => store.create({ name: "A", kind: "personal" }), LockBusyError);
   assert.ok(Date.now() - started >= 200);
+});
+
+test("a schema 2 registry opens with no browser profiles and is written as schema 3", (t) => {
+  const dir = folder(t);
+  new Store(dir).create({ name: "A", kind: "personal" });
+  const old = raw(dir);
+  old.schema = 2;
+  writeRaw(dir, old);
+  const store = new Store(dir);
+  assert.equal(STATE_SCHEMA, 3);
+  assert.equal(raw(dir).schema, 3);
+  assert.equal(store.state.accounts[0].browser, undefined);
+});
+
+test("an account's browser profile survives a round trip, is cleared, and is never shared", (t) => {
+  const dir = folder(t);
+  const store = new Store(dir);
+  const a = store.create({ name: "A", kind: "personal" });
+  const b = store.create({ name: "B", kind: "personal" });
+  const work = { app: "brave", profile: "Default", name: "Work" } as const;
+  assert.deepEqual(store.setBrowser(a.id, work).browser, work);
+  assert.deepEqual(new Store(dir, CLI).account(a.id).browser, work);
+  assert.throws(
+    () => store.setBrowser(b.id, { ...work, name: "Other" }),
+    /Another account already uses this browser profile/,
+  );
+  // The same folder in another browser is another profile.
+  store.setBrowser(b.id, { ...work, app: "chrome" });
+  // Choosing it again for the same account is fine.
+  store.setBrowser(a.id, work);
+  assert.equal(store.setBrowser(a.id, undefined).browser, undefined);
+  assert.equal("browser" in raw(dir).accounts[0], false);
+  assert.deepEqual(store.setBrowser(b.id, work).browser, work);
+});
+
+test("a browser profile with an unsafe folder or an unknown browser is refused", (t) => {
+  const store = new Store(folder(t));
+  const a = store.create({ name: "A", kind: "personal" });
+  for (const bad of [
+    { app: "brave", profile: "../Default", name: "x" },
+    { app: "brave", profile: "--flag", name: "x" },
+    { app: "safari", profile: "Default", name: "x" },
+    { app: "brave", profile: "Default", name: "" },
+  ])
+    assert.throws(() => store.setBrowser(a.id, bad as any));
+  assert.equal(store.account(a.id).browser, undefined);
 });

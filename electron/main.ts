@@ -46,6 +46,16 @@ import {
   settingsPatchSchema,
 } from "./core/store";
 import { accountPlanningSchema } from "./core/store";
+import {
+  installedBrowsers,
+  macBrowserSystem,
+  openBrowserProfile,
+} from "./core/browser-profiles";
+import {
+  BROWSER_APPS,
+  PROFILE_FOLDER,
+  type BrowserOpenResult,
+} from "../shared/browser-profiles";
 import { RelayTray } from "./tray";
 import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
 import { TrayPanel } from "./tray-panel";
@@ -138,6 +148,19 @@ const windowRelease = new WindowRelease({
   },
 });
 let service: Service;
+/** Browser profiles open only on macOS. */
+const browserSystem =
+  process.platform === "darwin" ? macBrowserSystem() : undefined;
+/** Opens an account's browser profile unless it has a window; "none" without one. */
+async function openAccountBrowser(
+  accountId: string,
+): Promise<BrowserOpenResult | "none"> {
+  const choice = service.store.state.accounts.find(
+    (a) => a.id === accountId,
+  )?.browser;
+  if (!choice || !browserSystem) return "none";
+  return openBrowserProfile(browserSystem, choice);
+}
 let desktop: DesktopManager;
 let usage: UsageManager;
 let usageCredentialRefresher: UsageCredentialRefresher;
@@ -502,6 +525,8 @@ else {
       });
       // One hook for every switch: tray, panel, automatic, continuation and fleet.
       desktop.onSwitched = () => void draftRestore.afterSwitch();
+      // Every successful switch too: the account's browser profile, for its Claude extension.
+      desktop.onSwitchedTo = (profileId) => void openAccountBrowser(profileId);
       const evidence = new NativeDesktopContinuationEvidence({
         store: service.store,
         desktop,
@@ -1232,6 +1257,35 @@ function bindIPC() {
     void keeper.tick();
     return service.store.account(account.id);
   });
+  handle("browser-profiles", () =>
+    browserSystem ? installedBrowsers(browserSystem) : [],
+  );
+  handle("account-browser", (accountId, input) => {
+    const account = service.store.account(id.parse(accountId));
+    const choice = z
+      .object({
+        app: z.enum(BROWSER_APPS),
+        profile: z.string().regex(PROFILE_FOLDER),
+      })
+      .strict()
+      .nullable()
+      .parse(input);
+    if (!choice) return service.store.setBrowser(account.id, undefined);
+    // Only a profile the browser lists now, under the name it has there.
+    const profile =
+      browserSystem &&
+      installedBrowsers(browserSystem)
+        .find((b) => b.app === choice.app)
+        ?.profiles.find((p) => p.profile === choice.profile);
+    if (!profile) throw new Error("This browser profile was not found.");
+    return service.store.setBrowser(account.id, {
+      ...choice,
+      name: profile.name,
+    });
+  });
+  handle("open-account-browser", (accountId) =>
+    openAccountBrowser(id.parse(accountId)),
+  );
   // The windows show it; every switch, sign-in or recovery rechecks fresh in main.
   handle("desktop-snapshot", async () => ({
     ...(await desktop.cachedSnapshot()),
