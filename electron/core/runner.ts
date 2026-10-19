@@ -1,11 +1,18 @@
 import { randomUUID } from "node:crypto";
-import * as pty from "node-pty";
+import type * as Pty from "node-pty";
 import type { Run, TerminalEvent } from "../../shared/types";
 import { ProfileLockBusyError } from "./profile-lock";
 
+/** node-pty loads a native module; only a terminal needs it, so the first one loads it. */
+let ptyModule: typeof Pty | undefined;
+function loadPty(): typeof Pty {
+  ptyModule ??= require("node-pty") as typeof Pty;
+  return ptyModule;
+}
+
 interface ProcessEntry {
   run: Run;
-  process: pty.IPty;
+  process: Pty.IPty;
   buffer: string;
   sequence: number;
   exited: Promise<void>;
@@ -50,9 +57,9 @@ export class Runner {
         );
       throw error;
     }
-    let proc: pty.IPty;
+    let proc: Pty.IPty;
     try {
-      proc = pty.spawn(executable, args, {
+      proc = loadPty().spawn(executable, args, {
         name: "xterm-256color",
         cols: 110,
         rows: 30,

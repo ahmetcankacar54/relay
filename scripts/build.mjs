@@ -18,6 +18,9 @@ await build({
   outdir: "dist-electron",
   outExtension: { ".js": ".cjs" },
   external: ["electron", "node-pty"],
+  // Smaller code for main to parse and keep; names stay for stack traces and diagnostics.
+  minify: true,
+  keepNames: true,
   sourcemap: true,
 });
 
