@@ -1,8 +1,8 @@
 /**
- * Decorative motion (the panda, the switch knob) runs only while someone can see it. A hidden
- * window can keep painting every frame of an infinite animation: the menu bar panel's document
- * reads "visible" until the panel is first shown. `data-motion-paused` on <html> holds every
- * animation but the spinners still (theme.css).
+ * The panda's looping motion runs only while someone can see it. A hidden window can keep
+ * painting every frame of an infinite animation: the menu bar panel's document reads "visible"
+ * until the panel is first shown. `data-motion-paused` on <html> holds every panda still
+ * (theme.css); other animations run on.
  */
 export const MOTION_PAUSED = "data-motion-paused";
 

@@ -77,12 +77,14 @@ test("the main window holds still while hidden or in the background", () => {
   assert.equal(win.count() + doc.count(), 0, "cleanup removes every listener");
 });
 
-test("theme.css pauses every animation but spinners, outside any media query", () => {
+test("theme.css pauses only the panda's motion, outside any media query", () => {
   const css = read("src/styles/theme.css");
-  const rule = css.match(
-    /:root\[data-motion-paused\] \*:not\(\.animate-spin\):not\(\[data-spinner\]\),\s*:root\[data-motion-paused\] \*::before,\s*:root\[data-motion-paused\] \*::after \{\s*animation-play-state: paused !important;\s*\}/,
+  assert.match(
+    css,
+    /:root\[data-motion-paused\] \.panda,\s*:root\[data-motion-paused\] \.panda \* \{\s*animation-play-state: paused !important;\s*\}/,
   );
-  assert.ok(rule, "the paused rule");
+  // One-shot animations that mount or unmount content are never paused.
+  assert.doesNotMatch(css, /:root\[data-motion-paused\] \*/);
   assert.ok(!mediaBlock(css, "(prefers-reduced-motion: reduce)").includes("data-motion-paused"));
   assert.ok(css.includes(`[${MOTION_PAUSED}]`));
 });

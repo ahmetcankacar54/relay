@@ -74,25 +74,52 @@ test("arming twice keeps one timer", () => {
   assert.equal(h.pending().length, 1);
 });
 
-test("main arms the release on hide, cancels it on show and when the window closes", () => {
+test("only closing to the menu bar arms the release; showing the window clears it", () => {
   const main = readFileSync(
     new URL("../electron/main.ts", import.meta.url),
     "utf8",
   );
-  assert.match(main, /window\.on\("hide", \(\) => windowRelease\.arm\(\)\);/);
-  assert.match(main, /window\.on\("show", \(\) => windowRelease\.cancel\(\)\);/);
+  // Cmd+H, minimize and occlusion also emit "hide" on macOS, so no hide listener arms it.
+  assert.doesNotMatch(main, /\.on\("hide", \(\) => windowRelease\.arm\(\)\)/);
   assert.match(
     main,
-    /window\.on\("closed", \(\) => \{\s*windowRelease\.cancel\(\);\s*window = null;/,
+    /function closeWindowToTray\(\) \{\s*closedToTray = true;\s*windowRelease\.arm\(\);\s*\}/,
   );
-  // A sign-in or a Desktop operation keeps the window; release destroys it.
+  assert.match(main, /own\.hide\(\);\s*closeWindowToTray\(\);/);
+  assert.match(main, /window\?\.hide\(\);\s*if \(window\) closeWindowToTray\(\);/);
+  assert.match(
+    main,
+    /own\.on\("show", \(\) => \{\s*closedToTray = false;\s*windowRelease\.cancel\(\);\s*\}\);/,
+  );
+  assert.match(
+    main,
+    /own\.on\("closed", \(\) => \{\s*if \(window !== own\) return;\s*windowRelease\.cancel\(\);\s*window = null;/,
+  );
   const block = main.slice(
     main.indexOf("const windowRelease = new WindowRelease("),
-    main.indexOf("});", main.indexOf("const windowRelease = new WindowRelease(")),
+    main.indexOf("\n});", main.indexOf("const windowRelease = new WindowRelease(")),
   );
+  // Released only while closed to the menu bar, not minimized, and not busy.
+  assert.match(block, /closedToTray &&/);
+  assert.match(block, /!window\.isMinimized\(\)/);
   assert.match(block, /desktop\.isBusy/);
   assert.match(block, /desktopLock\.busy/);
   assert.match(block, /pendingProfileId/);
   assert.match(block, /service\.auth/);
-  assert.match(block, /release: \(\) => window\?\.destroy\(\)/);
+  // The variable is cleared before the window is destroyed.
+  assert.match(block, /const released = window;\s*window = null;\s*released\?\.destroy\(\);/);
+});
+
+test("a page opened from the panel on a freed window loads on that page", () => {
+  const main = readFileSync(
+    new URL("../electron/main.ts", import.meta.url),
+    "utf8",
+  );
+  const start = main.indexOf('handle("open-page",');
+  const handler = main.slice(start, main.indexOf('handle("quit"', start));
+  assert.match(handler, /const fresh = !window;\s*showWindow\(intentHash\(target, want\)\);/);
+  assert.match(handler, /if \(contents && !fresh\) \{/);
+  assert.match(main, /function showWindow\(hash\?: string\) \{[\s\S]*?createWindow\(hash\);/);
+  assert.match(main, /loadPage\(window, "index\.html", hash\);/);
+  assert.match(main, /hash \? \{ hash: hash\.replace\(\/\^#\/, ""\) \} : undefined/);
 });

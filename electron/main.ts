@@ -55,7 +55,7 @@ import {
   sceneView,
   type SwitchSceneView,
 } from "../shared/switch-scene";
-import { PAGE_INTENTS, PAGES } from "../src/app/routes";
+import { intentHash, PAGE_INTENTS, PAGES } from "../src/app/routes";
 import { isExternalLink } from "../shared/external-links";
 import { readsUsage } from "../shared/cli-version";
 import { UsageHistory } from "./core/usage-history";
@@ -108,8 +108,17 @@ let window: BrowserWindow | null = null;
  * A closed main window stays loaded a minute, then its renderer is freed; showWindow creates it
  * again. A sign-in or a Desktop operation in progress keeps it.
  */
+/** The main window was closed to the menu bar; showing it again clears this. */
+let closedToTray = false;
 const windowRelease = new WindowRelease({
-  hidden: () => !!window && !window.isDestroyed() && !window.isVisible(),
+  // Only a window closed to the menu bar: Cmd+H, a minimized window and macOS occlusion
+  // also hide it, and such a window must stay.
+  hidden: () =>
+    closedToTray &&
+    !!window &&
+    !window.isDestroyed() &&
+    !window.isVisible() &&
+    !window.isMinimized(),
   busy: () =>
     !initialized ||
     desktop.isBusy ||
@@ -118,7 +127,11 @@ const windowRelease = new WindowRelease({
     service.auth
       .list()
       .some((f) => ["starting", "waiting", "verifying"].includes(f.status)),
-  release: () => window?.destroy(),
+  release: () => {
+    const released = window;
+    window = null;
+    released?.destroy();
+  },
 });
 let service: Service;
 let desktop: DesktopManager;
@@ -852,9 +865,9 @@ else {
       app.exit(1);
     });
 }
-function showWindow() {
+function showWindow(hash?: string) {
   if (!initialized) return;
-  if (!window && service) createWindow();
+  if (!window && service) createWindow(hash);
   if (window) {
     // Cmd+Q hides the dock icon with the window; opening it again brings it back.
     // Only when hidden: showing an already visible dock icon re-activates the app.
@@ -876,8 +889,14 @@ function closeToTray() {
     return;
   }
   window?.hide();
+  if (window) closeWindowToTray();
   trayPanel?.hide();
   if (process.platform === "darwin") app.dock?.hide();
+}
+/** The main window went to the menu bar: free its renderer if it stays there. */
+function closeWindowToTray() {
+  closedToTray = true;
+  windowRelease.arm();
 }
 /** Menu-bar switch: one native confirmation, then the normal saved-login switch. */
 async function traySwitch(profileId: string) {
@@ -1005,13 +1024,21 @@ function broadcastChanged() {
 function loadPage(
   win: BrowserWindow,
   page: "index.html" | "panel.html" | "switch.html",
+  /** `#/planlama`: the page the main window opens on. */
+  hash?: string,
 ) {
   const devURL = !app.isPackaged && process.env.RELAY_DEV_URL;
   if (devURL === "http://127.0.0.1:5173")
-    void win.loadURL(page === "index.html" ? devURL : `${devURL}/${page}`);
-  else void win.loadFile(path.join(__dirname, "../dist", page));
+    void win.loadURL(
+      page === "index.html" ? `${devURL}/${hash ?? ""}` : `${devURL}/${page}`,
+    );
+  else
+    void win.loadFile(
+      path.join(__dirname, "../dist", page),
+      hash ? { hash: hash.replace(/^#/, "") } : undefined,
+    );
 }
-function createWindow() {
+function createWindow(hash?: string) {
   window = new BrowserWindow({
     width: 960,
     height: 760,
@@ -1041,17 +1068,22 @@ function createWindow() {
   );
   window.webContents.session.setPermissionCheckHandler(() => false);
   applyAppMenu();
-  loadPage(window, "index.html");
-  window.on("closed", () => {
+  loadPage(window, "index.html", hash);
+  const own = window;
+  own.on("closed", () => {
+    if (window !== own) return;
     windowRelease.cancel();
     window = null;
   });
-  window.on("hide", () => windowRelease.arm());
-  window.on("show", () => windowRelease.cancel());
-  window.on("close", (event) => {
+  own.on("show", () => {
+    closedToTray = false;
+    windowRelease.cancel();
+  });
+  own.on("close", (event) => {
     if (!quitting && tray) {
       event.preventDefault();
-      window?.hide();
+      own.hide();
+      closeWindowToTray();
     }
   });
 }
@@ -1237,9 +1269,11 @@ function bindIPC() {
   handle("open-page", (page, intent) => {
     const target = z.enum(PAGES).parse(page);
     const want = z.enum(PAGE_INTENTS).optional().parse(intent);
-    showWindow();
+    // A window made now opens on the page itself; a loaded one is told to go there.
+    const fresh = !window;
+    showWindow(intentHash(target, want));
     const contents = window?.webContents;
-    if (contents) {
+    if (contents && !fresh) {
       if (contents.isLoading())
         contents.once("did-finish-load", () =>
           contents.send("relay:navigate", target, want),

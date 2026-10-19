@@ -92,6 +92,7 @@ export class SwitchWindow {
         try {
           this.create();
         } catch {
+          this.live()?.destroy();
           this.win = undefined;
         }
     }

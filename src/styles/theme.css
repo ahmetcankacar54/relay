@@ -150,12 +150,12 @@
   }
 }
 /*
- * A window nobody sees holds its motion still (src/lib/motion.ts): the hidden menu bar panel,
- * the main window behind another app. Paused animations need no frames, so the renderer and the
- * GPU idle. A spinner keeps turning: it reports work.
+ * A window nobody sees holds the panda still (src/lib/motion.ts): the hidden menu bar panel,
+ * the main window behind another app. Only the panda's loops pause; one-shot animations that
+ * mount or unmount content (dialogs, the page fade, the confetti) run on, since a paused one
+ * would leave content invisible or a closed dialog's overlay in place.
  */
-:root[data-motion-paused] *:not(.animate-spin):not([data-spinner]),
-:root[data-motion-paused] *::before,
-:root[data-motion-paused] *::after {
+:root[data-motion-paused] .panda,
+:root[data-motion-paused] .panda * {
   animation-play-state: paused !important;
 }

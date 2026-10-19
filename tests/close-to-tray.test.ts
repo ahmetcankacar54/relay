@@ -37,7 +37,10 @@ test("Cmd+W hides the main window as its close button does, and hides the panel"
   assert.match(body, /if \(focused === window\) focused\.close\(\);/);
   assert.match(body, /trayPanel\?\.hide\(\)/);
   // The main window's close is what hides it while the menu bar keeps Relay running.
-  assert.match(main, /window\.on\("close", \(event\) => \{\s*if \(!quitting && tray\) \{\s*event\.preventDefault\(\);\s*window\?\.hide\(\);/);
+  assert.match(
+    main,
+    /own\.on\("close", \(event\) => \{\s*if \(!quitting && tray\) \{\s*event\.preventDefault\(\);\s*own\.hide\(\);\s*closeWindowToTray\(\);/,
+  );
 });
 
 test("closeToTray quits without a tray; otherwise it hides the window, the panel and the dock", () => {
