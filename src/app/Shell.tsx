@@ -15,7 +15,9 @@ import { Planning } from "@/pages/Planning";
 import relayIcon from "../../assets/icons/app-64.png";
 import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
 import { RelayPrankStage } from "@/pranks/RelayPrankStage";
+import { cardState, cardYields, desktopWorking } from "@/mascot/card-panda";
 import { Sidebar } from "./Sidebar";
+import { CardPanda, useCardPanda } from "./CardPanda";
 import { DesktopActionDialog } from "./DesktopActionDialog";
 import { intentHash, shortcutPage } from "./routes";
 import { useHashRoute } from "./useHashRoute";
@@ -64,6 +66,14 @@ export function Shell() {
     [go],
   );
   const active = relay.active;
+  const panda = useCardPanda({
+    state: cardState(relay.data, relay.desktop, relay.busy, Date.now()),
+    active: active?.id,
+    busy: desktopWorking(relay.desktop, relay.busy),
+    settings: relay.data && JSON.stringify(relay.data.settings),
+    refreshing: relay.usageBusy.size > 0,
+    yields: cardYields(page, relay.accounts, relay.settings.planning),
+  });
   return (
     <TooltipProvider delayDuration={300}>
       <RelayPrankStage>
@@ -75,6 +85,8 @@ export function Shell() {
             t={t}
             compact={compact}
             icon={relayIcon}
+            panda={<CardPanda view={panda.view} />}
+            onPoke={panda.poke}
             status={sidebarStatus(relay.data)}
             summary={
               active && {

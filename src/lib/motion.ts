@@ -6,11 +6,26 @@
  */
 export const MOTION_PAUSED = "data-motion-paused";
 
+let pausedNow = false;
+const watchers = new Set<() => void>();
+
 export function setMotionPaused(
   paused: boolean,
   root: Pick<Element, "toggleAttribute"> = document.documentElement,
 ) {
   root.toggleAttribute(MOTION_PAUSED, paused);
+  if (paused === pausedNow) return;
+  pausedNow = paused;
+  for (const watcher of watchers) watcher();
+}
+
+/** Whether this window holds the panda still right now. */
+export const motionPaused = () => pausedNow;
+
+/** Calls `watcher` each time this window's motion pauses or resumes; returns the unsubscribe. */
+export function onMotionPaused(watcher: () => void): () => void {
+  watchers.add(watcher);
+  return () => void watchers.delete(watcher);
 }
 
 type Listener = () => void;

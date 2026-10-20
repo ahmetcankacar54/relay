@@ -34,6 +34,11 @@ export function plannedSettings(
   };
 }
 
+/** The Today card's lookout: automatic start is on and no connected account is planned. */
+export function todayLookout(settings: PlanningSettings, accounts: Account[]): boolean {
+  return settings.autoStart && !plannedSettings(settings, accounts).accounts.length;
+}
+
 /** Windows that touch the day, first occurrence of each start only (neighbouring days can repeat one). */
 export function windowsInDay(
   lists: PlannedWindow[][],

@@ -10,6 +10,7 @@ import {
   dayTimeline,
   nextPlannedWindow,
   plannedSettings,
+  todayLookout,
   windowTone,
 } from "@/lib/day-timeline";
 import { formatClock } from "@/lib/time";
@@ -37,7 +38,7 @@ export function TodayCard({
     tempo,
   });
   const planned = plannedSettings(settings, accounts);
-  const unplanned = settings.autoStart && !planned.accounts.length;
+  const unplanned = todayLookout(settings, accounts);
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
   const plannedToday = dayPlan(
     localDate(now, zone),
