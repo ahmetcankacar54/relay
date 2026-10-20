@@ -179,11 +179,11 @@
   0%, 30%, 60%, 90%, 100% { transform: rotate(0deg); }
   15%, 45%, 75% { transform: rotate(12deg); }
 }
-/* The paw comes up off the edge, waves once and goes back down. */
+/* The paw comes up off the edge, waves once and goes back down; it turns about its elbow, behind the card. */
 @keyframes panda-paw-wave {
   0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  20%, 60% { transform: translate(0, -48px) rotate(-16deg); }
-  40% { transform: translate(0, -48px) rotate(4deg); }
+  20%, 60% { transform: translate(8px, -60px) rotate(16deg); }
+  40% { transform: translate(8px, -60px) rotate(2deg); }
 }
 @keyframes panda-rawr {
   0%, 50%, 100% { transform: translateY(0); }

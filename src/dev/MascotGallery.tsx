@@ -138,7 +138,7 @@ function GalleryCard({ tone, children }: { tone: "light" | "dark"; children: Rea
   );
 }
 
-/** One card that runs the real clock: states, every reaction, and a switch that walks off and comes back. */
+/** A light and a dark card on the real clock: states, every reaction, and a switch that walks off and comes back. */
 function CardPandaDemo() {
   const [state, setState] = useState<MascotPose>("idle");
   const [active, setActive] = useState("a");
@@ -163,9 +163,11 @@ function CardPandaDemo() {
   };
   return (
     <div className="mt-4 flex flex-wrap items-start gap-4">
-      <GalleryCard tone="light">
-        <CardPanda view={panda.view} />
-      </GalleryCard>
+      {(["light", "dark"] as const).map((tone) => (
+        <GalleryCard key={tone} tone={tone}>
+          <CardPanda view={panda.view} />
+        </GalleryCard>
+      ))}
       <div className="grid gap-2 text-sm">
         <div className="flex flex-wrap gap-1.5">
           {CARD_STATES.map((s) => (

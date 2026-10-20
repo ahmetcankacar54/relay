@@ -30,6 +30,7 @@ import {
   type CardReaction,
   type ReactionContext,
 } from "../src/mascot/card-panda";
+import { PANDA_RIG } from "../src/mascot/panda-rig";
 import { MOTION_PARTS } from "../src/mascot/scenes";
 import { trickLook } from "../src/pranks/tricks";
 import type { MascotPose } from "../shared/mascot";
@@ -236,20 +237,40 @@ test("the card panda stays decorative: hidden from assistive tech, never focusab
 
 const css = readFileSync("src/styles/card-panda.css", "utf8");
 
-test("card-panda.css moves only without Reduce motion, runs every reaction once and loops nothing", () => {
+/** The animations a rule's `animation` lists, split on the commas outside parentheses. */
+const animations = (rule: string) =>
+  (/animation:\s*([^;]*);/.exec(rule)?.[1] ?? "").split(/,(?![^(]*\))/).map((one) => one.trim()).filter(Boolean);
+
+/** Each @keyframes block by name: its keyframes as offsets (0–100) and declarations. */
+function keyframes(source: string) {
+  const blocks = new Map<string, { offsets: number[]; body: string }[]>();
+  for (const [, name, inner] of source.matchAll(/@keyframes ([\w-]+) \{([\s\S]*?)\n\}/g))
+    blocks.set(
+      name,
+      [...inner.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([\d.%,\s]+)\{([^}]*)\}/g)].map(([, offsets, body]) => ({
+        offsets: offsets.split(",").map((o) => Number(o.trim().replace("%", ""))),
+        body,
+      })),
+    );
+  return blocks;
+}
+
+test("card-panda.css moves only without Reduce motion, runs every reaction once and loops only the idle breath and blink", () => {
   const motion = mediaBlock(css, "(prefers-reduced-motion: no-preference)");
   assert.ok(motion.length > 0);
   const outside = css.replace(motion, "").replace(/\/\*[\s\S]*?\*\//g, "");
   assert.doesNotMatch(outside, /animation\s*:|transition\s*:|:hover/);
-  assert.doesNotMatch(css, /infinite/);
+  const loops = [...motion.matchAll(/\{([^}]*)\}/g)].flatMap(([, rule]) => animations(rule)).filter((one) => /\binfinite\b/.test(one));
+  assert.deepEqual(loops.map((one) => one.split(" ")[0]).sort(), ["card-panda-blink", "card-panda-breathe"]);
   for (const [kind, { ms }] of Object.entries(REACTIONS)) {
     const rules = [...motion.matchAll(new RegExp(`\\.card-panda\\[data-reaction="${kind}"\\][^{]*\\{([^}]*)\\}`, "g"))].map((m) => m[1]);
     assert.ok(rules.length > 0, `${kind} has a rule`);
-    for (const rule of rules) {
-      const [, length, count] = /animation:\s*[\w-]+ ([\d.]+)s [\w-]+ (\d+);/.exec(rule) ?? [];
-      assert.ok(length, `${kind}: ${rule}`);
-      assert.equal(Math.round(Number(length) * Number(count) * 1000), ms, `${kind} runs ${ms} ms`);
-    }
+    for (const rule of rules)
+      for (const one of animations(rule)) {
+        const [, length, count] = /^[\w-]+ ([\d.]+)s [\w-]+(?:\([^)]*\))? (\d+)$/.exec(one) ?? [];
+        assert.ok(length, `${kind}: ${one}`);
+        assert.equal(Math.round(Number(length) * Number(count) * 1000), ms, `${kind} runs ${ms} ms`);
+      }
   }
   assert.match(motion, /\.card-panda\[data-rise\] \{\s*animation: card-panda-rise 0\.45s/);
   assert.match(motion, /\.card-panda\[data-leave\] \{\s*animation: card-panda-leave 1\.1s [\w-]+ forwards;/);
@@ -257,6 +278,41 @@ test("card-panda.css moves only without Reduce motion, runs every reaction once 
   // The hover lift moves the head only, and only of the poses whose paws or hands stay on the edge.
   assert.match(motion, /\[data-slot="account-card"\]:hover \.card-panda:not\(\[data-leave\]\) \.panda:is\(\[data-pose="peek"\], \[data-pose="chew"\]\) \[data-part="head"\]/);
   assert.match(readFileSync("src/styles/theme.css", "utf8"), /@import "\.\/card-panda\.css";/);
+});
+
+test("the wave leads with the paw, the head settles after it and the ears last, each part back at rest", () => {
+  const blocks = keyframes(css);
+  const at = (name: string, offset: number) => {
+    const frames = blocks.get(name);
+    assert.ok(frames, name);
+    return frames.filter((f) => f.offsets.includes(offset)).map((f) => f.body).join(";");
+  };
+  const rest = /^(?:\s*(?:translate: 0 0|rotate: 0deg|scale: 1 1|animation-timing-function: [^;]+);)+\s*$/;
+  const parts = ["paw-lift", "paw-turn", "paw-squash", "paw-brace", "head-bob", "head-tilt", "ear-left", "ear-right"];
+  for (const part of parts)
+    for (const offset of [0, 100]) assert.match(at(`card-panda-wave-${part}`, offset), rest, `${part} at ${offset}%`);
+  // The eyes open into the smile and close out of it, so the face changes behind a blink.
+  assert.match(at("card-panda-wave-eyes", 0), /scale: 1 0\.15/);
+  assert.match(at("card-panda-wave-eyes", 100), /scale: 1 0\.15/);
+  // Where each part is still from on.
+  const settled = (part: string) => {
+    const frames = blocks.get(`card-panda-wave-${part}`)!.flatMap((f) => f.offsets.map((offset) => ({ offset, body: f.body })));
+    const moving = frames.filter((f) => !rest.test(f.body)).map((f) => f.offset);
+    return Math.min(...frames.map((f) => f.offset).filter((offset) => offset > Math.max(...moving)));
+  };
+  const last = (names: string[]) => Math.max(...names.map(settled));
+  const first = (names: string[]) => Math.min(...names.map(settled));
+  assert.ok(last(["paw-lift", "paw-turn", "paw-squash"]) < first(["head-bob", "head-tilt"]), "the head settles after the paw");
+  assert.ok(last(["head-bob", "head-tilt"]) < first(["ear-left", "ear-right"]), "the ears settle after the head");
+});
+
+test("the peek's paws turn about elbows the card hides, so a lifted paw shows its forearm", () => {
+  const peek = PANDA_RIG.peek;
+  for (const paw of ["paw-left", "paw-right"]) {
+    const [, y] = new RegExp(`data-part="${paw}" data-pivot="\\d+ (\\d+)"`).exec(peek) ?? [];
+    assert.ok(Number(y) > CARD_LEDGE.peek!, `${paw} pivots below the card's edge`);
+    assert.match(peek, new RegExp(`data-part="${paw}"[^>]*><g [^>]*><path [^>]*data-model="forearm"`), `${paw} has a forearm`);
+  }
 });
 
 test("on the peek the swish flicks the ears and the wave lifts a paw, without Reduce motion only", () => {

@@ -1,7 +1,14 @@
 /* The panda over the sidebar's account card (src/app/CardPanda.tsx). Without motion it shows its state's still
-   look; every animation and transition goes inside the reduced-motion "no-preference" block below. Each one runs
-   once and ends at rest: the only loop is the blink panda.css already plays. Lengths inside the rig are canvas
-   units: at the card's 112 px, about 4.6 of them make 1 px. */
+   look; every animation and transition goes inside the reduced-motion "no-preference" block below. Each reaction
+   runs once and ends at rest; the only loops are the idle breath and blink. Lengths inside the rig are canvas
+   units: at the card's 112 px, about 4.6 of them make 1 px.
+
+   The wave moves each part on channels of its own (translate, rotate, scale), so each channel keeps its own
+   timing and the parts can lag one another, and it sets its curves per keyframe. The curves it uses:
+     sine        cubic-bezier(0.37, 0, 0.63, 1)   swings, holds and settles
+     out         cubic-bezier(0.22, 1, 0.36, 1)   a fast start that slows, for the rise
+     out-cubic   cubic-bezier(0.33, 1, 0.68, 1)   a gentler slow-down, after a landing
+     in          cubic-bezier(0.5, 0, 0.75, 0)    speeding up, for the drop */
 
 @media (prefers-reduced-motion: no-preference) {
   /* Coming back from behind the card, and walking off it to the right while Desktop is busy. */
@@ -18,6 +25,15 @@
   }
   [data-slot="account-card"]:hover .card-panda:not([data-leave]) .panda:is([data-pose="peek"], [data-pose="chew"]) [data-part="head"] {
     transform: translateY(-27px);
+  }
+
+  /* Idle: the peek's head rises a hair on each breath, and the eyes blink now and then, unevenly. A reaction that
+     moves the same part replaces its loop while it plays (it comes later here), and the loop starts again at rest. */
+  .card-panda .panda[data-pose="peek"] [data-part="head"] {
+    animation: card-panda-breathe 4.6s linear infinite;
+  }
+  .card-panda .panda[data-motion~="blink"] [data-part="eyes"] {
+    animation: card-panda-blink 23s linear infinite;
   }
 
   /* Reactions (src/mascot/card-panda.ts REACTIONS); each length matches its entry there. */
@@ -42,8 +58,29 @@
   .card-panda[data-reaction="nod"] .panda [data-part="head"] {
     animation: card-panda-nod 1.2s ease-in-out 1;
   }
+  /* A finished switch, 1.8 s: the paw leads, the head follows a beat later and the ears last. */
   .card-panda[data-reaction="wave"] .panda [data-part="paw-right"] {
-    animation: card-panda-paw 1.6s ease-in-out 1;
+    animation:
+      card-panda-wave-paw-lift 1.8s linear 1,
+      card-panda-wave-paw-turn 1.8s linear 1,
+      card-panda-wave-paw-squash 1.8s linear 1;
+  }
+  .card-panda[data-reaction="wave"] .panda [data-part="paw-left"] {
+    animation: card-panda-wave-paw-brace 1.8s linear 1;
+  }
+  .card-panda[data-reaction="wave"] .panda [data-part="head"] {
+    animation:
+      card-panda-wave-head-bob 1.8s linear 1,
+      card-panda-wave-head-tilt 1.8s linear 1;
+  }
+  .card-panda[data-reaction="wave"] .panda [data-part="ear-left"] {
+    animation: card-panda-wave-ear-left 1.8s linear 1;
+  }
+  .card-panda[data-reaction="wave"] .panda [data-part="ear-right"] {
+    animation: card-panda-wave-ear-right 1.8s linear 1;
+  }
+  .card-panda[data-reaction="wave"] .panda [data-part="eyes"] {
+    animation: card-panda-wave-eyes 1.8s linear 1;
   }
   .card-panda[data-reaction="glance"] .panda [data-part="head"] {
     animation: card-panda-glance 1.6s ease-in-out 1;
@@ -102,11 +139,126 @@
   0%, 60%, 100% { transform: translateY(0); }
   30% { transform: translateY(16px); }
 }
-/* A finished switch: the right paw comes up off the edge, waves twice and goes back. */
-@keyframes card-panda-paw {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  20%, 50%, 80% { transform: translate(0, -48px) rotate(-16deg); }
-  35%, 65% { transform: translate(0, -48px) rotate(4deg); }
+/*
+ * A finished switch, on the wave's 1.8 s (1% is 18 ms). The paw presses into the edge (0.13 s), springs up past
+ * its mark with its forearm out from behind the card (to 0.38 s) and settles, waves two and a half times, each
+ * swing smaller (to 1.17 s), lifts a little, drops and squashes on the edge (1.44 s), then settles. The other
+ * paw takes the weight. The head dips with the press, then rises and tilts away from the paw a beat after it,
+ * holds, swings back past rest and settles. The ears drag behind each of the head's swings and settle last.
+ * The face turns happy as the wave starts and back as it ends; the eyes open into it and close out of it, so
+ * neither change pops.
+ */
+/* The paw also moves out a little, so it waves beside the face rather than over it. */
+@keyframes card-panda-wave-paw-lift {
+  0% { translate: 0 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  7% { translate: 0 4px; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  21% { translate: 10px -72px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  29% { translate: 10px -64px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  65% { translate: 10px -66px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  69% { translate: 10px -70px; animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+  80% { translate: 0 3px; animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
+  87%, 100% { translate: 0 0; }
+}
+/* Positive turns the paw outwards, about its elbow behind the card; it swings out and back, never over the face. */
+@keyframes card-panda-wave-paw-turn {
+  0% { rotate: 0deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  7% { rotate: -3deg; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  21% { rotate: 18deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  30% { rotate: 2deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  39% { rotate: 17deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  48% { rotate: 4deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  57% { rotate: 14deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  65% { rotate: 7deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  69% { rotate: 8deg; animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+  80% { rotate: -3deg; animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
+  87%, 100% { rotate: 0deg; }
+}
+/* Squashed while it presses and lands, stretched while it rises and falls. */
+@keyframes card-panda-wave-paw-squash {
+  0% { scale: 1 1; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  7% { scale: 1.05 0.95; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  14% { scale: 0.96 1.06; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  25%, 71% { scale: 1 1; animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+  77% { scale: 0.97 1.04; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  80% { scale: 1.07 0.93; animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
+  88%, 100% { scale: 1 1; }
+}
+@keyframes card-panda-wave-paw-brace {
+  0% { translate: 0 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  7% { translate: 0 3px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  21%, 69% { translate: 0 4px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  82% { translate: 0 -1px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  90%, 100% { translate: 0 0; }
+}
+@keyframes card-panda-wave-head-bob {
+  0% { translate: 0 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  7% { translate: 0 5px; animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
+  24% { translate: 0 -5px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  33%, 70% { translate: 0 -2px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  84% { translate: 0 3px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  93%, 100% { translate: 0 0; }
+}
+/* Negative tilts the head away from the waving paw, about its neck, so the paw shows against the background. */
+@keyframes card-panda-wave-head-tilt {
+  0% { rotate: 0deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  8% { rotate: 1.5deg; animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
+  25% { rotate: -5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  33% { rotate: -3.5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  71% { rotate: -4deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  85% { rotate: 1.5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  93% { rotate: -0.6deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  98%, 100% { rotate: 0deg; }
+}
+/* The ears turn against the head's swing as it starts and past it as it stops; the right one a little later. */
+@keyframes card-panda-wave-ear-left {
+  0% { rotate: 0deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  9% { rotate: -1.5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  18% { rotate: 7deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  30% { rotate: -5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  39% { rotate: 1.5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  47%, 72% { rotate: 0deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  80% { rotate: -6deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  89% { rotate: 3.5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  96% { rotate: -1deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  100% { rotate: 0deg; }
+}
+@keyframes card-panda-wave-ear-right {
+  0% { rotate: 0deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  10% { rotate: -1deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  20% { rotate: 6deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  32% { rotate: -4.5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  41% { rotate: 1deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  49%, 73% { rotate: 0deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  82% { rotate: -5deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  91% { rotate: 3deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  97% { rotate: -0.8deg; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  100% { rotate: 0deg; }
+}
+@keyframes card-panda-wave-eyes {
+  0% { scale: 1 0.15; animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
+  6%, 95% { scale: 1 1; animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0); }
+  100% { scale: 1 0.15; }
+}
+/* Idle. In on a little under half the breath, out on the rest. */
+@keyframes card-panda-breathe {
+  0%, 100% { translate: 0 0; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+  42% { translate: 0 -4px; animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1); }
+}
+/*
+ * Five blinks on a 23 s loop, 4.7 to 6.8 s apart with one double blink, so no beat shows. Each closes in 70 ms,
+ * stays shut 40 ms and opens in 120 ms; the upper lid travels further than the lower one.
+ */
+@keyframes card-panda-blink {
+  0%, 11.304%, 12.304%, 40.87%, 41.87%, 61.304%, 62.304%, 62.826%, 63.826%, 85.652%, 86.652%, 100% {
+    scale: 1 1;
+    translate: 0 0;
+    animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0);
+  }
+  11.609%, 11.783%, 41.174%, 41.348%, 61.609%, 61.783%, 63.13%, 63.304%, 85.957%, 86.13% {
+    scale: 1 0.1;
+    translate: 0 4px;
+    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
 }
 /* Now and then: a look to one side, then the other. */
 @keyframes card-panda-glance {

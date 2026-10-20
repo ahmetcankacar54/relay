@@ -32,7 +32,8 @@ export const LEAVING_LOOK: CardLook = { pose: "walk", expression: "open", props:
 /**
  * The canvas line (0–512) each pose holds on the card's top edge; the card hides what is below it. The stand,
  * walk and chew lines put their heads where the peek's is: stand shows its head and its "!", walk its head
- * and tail, and chew sits a little higher so the bamboo shows. Curl lies on the card.
+ * and tail, and chew sits a little higher so the bamboo shows. Curl lies on the card. The peek's paws reach down
+ * behind the edge to their elbows, so the card also hides the forearm a lifted paw shows.
  */
 export const CARD_LEDGE: Partial<Record<PandaPose, number>> = {
   peek: 400,
@@ -66,7 +67,7 @@ export type CardReaction = "wave" | "check" | "nod" | "look-up" | "look-down" | 
 
 /** Each reaction's length and priority: one of equal or higher priority replaces the one playing. */
 export const REACTIONS: Record<CardReaction, { ms: number; priority: number }> = {
-  wave: { ms: 1_600, priority: 3 },
+  wave: { ms: 1_800, priority: 3 },
   check: { ms: 1_600, priority: 2 },
   nod: { ms: 1_200, priority: 2 },
   "look-up": { ms: 1_200, priority: 1 },
