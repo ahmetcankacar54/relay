@@ -84,6 +84,16 @@
   .panda[data-trick="rawr"] {
     animation: panda-rawr 1.2s ease-out 1;
   }
+  /* The peek has no tail and no arm: its swish flicks the ears, and its wave lifts a paw off the edge. */
+  .panda[data-pose="peek"][data-trick="swish"] [data-part="ear-left"] {
+    animation: panda-ear-flick-left 1.2s ease-in-out 1;
+  }
+  .panda[data-pose="peek"][data-trick="swish"] [data-part="ear-right"] {
+    animation: panda-ear-flick-right 1.2s ease-in-out 1;
+  }
+  .panda[data-pose="peek"][data-trick="wave"] [data-part="paw-right"] {
+    animation: panda-paw-wave 1.2s ease-in-out 1;
+  }
 }
 @keyframes panda-blink {
   0%, 92%, 100% { transform: scaleY(1); }
@@ -159,6 +169,21 @@
 @keyframes panda-hide {
   0%, 100% { transform: translateY(0); }
   20%, 80% { transform: translateY(78%); }
+}
+/* The ears flick outwards and back three times, from rest to rest. */
+@keyframes panda-ear-flick-left {
+  0%, 30%, 60%, 90%, 100% { transform: rotate(0deg); }
+  15%, 45%, 75% { transform: rotate(-12deg); }
+}
+@keyframes panda-ear-flick-right {
+  0%, 30%, 60%, 90%, 100% { transform: rotate(0deg); }
+  15%, 45%, 75% { transform: rotate(12deg); }
+}
+/* The paw comes up off the edge, waves once and goes back down. */
+@keyframes panda-paw-wave {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  20%, 60% { transform: translate(0, -48px) rotate(-16deg); }
+  40% { transform: translate(0, -48px) rotate(4deg); }
 }
 @keyframes panda-rawr {
   0%, 50%, 100% { transform: translateY(0); }

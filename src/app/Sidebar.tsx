@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -34,6 +34,10 @@ export interface SidebarProps {
   summary?: SidebarSummary;
   /** App icon URL; injected by the shell so this module stays importable under Node. */
   icon?: string;
+  /** The panda over the account card (src/app/CardPanda.tsx); the shell draws it, the rail shows none. */
+  panda?: ReactNode;
+  /** A click in the sidebar, above the account card (the pages) or below it (Settings and the card itself). */
+  onPoke?(where: "above" | "below"): void;
 }
 
 interface Item {
@@ -115,7 +119,13 @@ export function Sidebar({
   status,
   summary,
   icon,
+  panda,
+  onPoke,
 }: SidebarProps) {
+  const goFrom = (where: "above" | "below") => (page: PageId) => {
+    onPoke?.(where);
+    go(page);
+  };
   const items: Item[] = [
     { id: "genel", icon: LayoutDashboard, label: t("Genel bakış", "Overview") },
     {
@@ -181,16 +191,20 @@ export function Sidebar({
             item={item}
             active={page === item.id}
             compact={compact}
-            go={go}
+            go={goFrom("above")}
           />
         ))}
       </nav>
       <div className="flex-1" />
       {summary && !compact && (
-        <div className="mb-2 w-full rounded-lg border bg-card p-2.5 text-xs [-webkit-app-region:no-drag]">
+        <div
+          data-slot="account-card"
+          className="relative mt-8 mb-2 w-full rounded-lg border bg-card p-2.5 text-xs [-webkit-app-region:no-drag]"
+        >
+          {panda}
           <button
             type="button"
-            onClick={() => go("genel")}
+            onClick={() => goFrom("below")("genel")}
             className="flex w-full flex-col items-start justify-start gap-0.5 rounded-md text-left whitespace-normal"
           >
             <span className="flex w-full min-w-0 items-center gap-1.5">
@@ -217,7 +231,7 @@ export function Sidebar({
           item={settings}
           active={page === "ayarlar"}
           compact={compact}
-          go={go}
+          go={goFrom("below")}
         />
       </div>
     </aside>

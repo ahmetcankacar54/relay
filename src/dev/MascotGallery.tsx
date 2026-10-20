@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Panda } from "@/components/Panda";
+import { CardPanda, useCardPanda, type CardPhase } from "@/app/CardPanda";
+import { cn } from "@/lib/utils";
+import { REACTIONS, type CardReaction } from "@/mascot/card-panda";
 import { PANDA_SCENES, type PandaScene } from "@/mascot/scenes";
 import type { PrankKind } from "@/pranks/budget";
 import { PrankStage, usePrank } from "@/pranks/PrankStage";
 import { SwitchStage } from "@/switch/SwitchStage";
+import type { MascotPose } from "../../shared/mascot";
 import { BLINK_FRAME, POSE_FRAME, type MascotFrame } from "../../shared/mascot-frames";
 import {
   DISGUISES,
@@ -104,6 +108,113 @@ function SceneSheet() {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+const CARD_STATES: readonly MascotPose[] = ["idle", "hungry", "alert", "sleeping", "warming", "away"];
+const CARD_REACTIONS = Object.keys(REACTIONS) as CardReaction[];
+
+/** The sidebar's account card, drawn on its own light or dark ground; the panda sits on its top edge. */
+function GalleryCard({ tone, children }: { tone: "light" | "dark"; children: ReactNode }) {
+  return (
+    <div
+      data-tone={tone}
+      className={cn("w-[200px] rounded-lg px-2.5 pt-14 pb-2.5", tone === "light" ? "bg-neutral-100" : "bg-neutral-900")}
+    >
+      <div
+        data-slot="account-card"
+        className={cn(
+          "relative rounded-lg border p-2.5 text-xs",
+          tone === "light" ? "border-neutral-200 bg-neutral-50 text-neutral-900" : "border-neutral-700 bg-neutral-800 text-neutral-50",
+        )}
+      >
+        {children}
+        <b className="font-semibold">Kişisel · Max</b>
+        <div className="opacity-60">Claude uygulamasında açık</div>
+        <div className="mt-1.5 h-1 rounded-full bg-orange-600/80" />
+      </div>
+    </div>
+  );
+}
+
+/** One card that runs the real clock: states, every reaction, and a switch that walks off and comes back. */
+function CardPandaDemo() {
+  const [state, setState] = useState<MascotPose>("idle");
+  const [active, setActive] = useState("a");
+  const [busy, setBusy] = useState(false);
+  const panda = useCardPanda({ state, active, busy, refreshing: false, yields: false });
+  const ending = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(ending.current), []);
+  const comeBack = useRef<MascotPose>("idle");
+  const pick = (next: MascotPose) => {
+    if (next !== "away") comeBack.current = next;
+    setState(next);
+  };
+  const switchDemo = () => {
+    window.clearTimeout(ending.current);
+    setBusy(true);
+    setState("away");
+    ending.current = window.setTimeout(() => {
+      setBusy(false);
+      setActive((id) => (id === "a" ? "b" : "a"));
+      setState(comeBack.current);
+    }, DEMO_OPERATION_MS);
+  };
+  return (
+    <div className="mt-4 flex flex-wrap items-start gap-4">
+      <GalleryCard tone="light">
+        <CardPanda view={panda.view} />
+      </GalleryCard>
+      <div className="grid gap-2 text-sm">
+        <div className="flex flex-wrap gap-1.5">
+          {CARD_STATES.map((s) => (
+            <button key={s} type="button" className={cn("rounded-md border px-2 py-0.5", s === state && "bg-muted")} onClick={() => pick(s)}>
+              {s}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {CARD_REACTIONS.map((kind) => (
+            <button key={kind} type="button" className="rounded-md border px-2 py-0.5" onClick={() => panda.react(kind)}>
+              {kind}
+            </button>
+          ))}
+          <button type="button" className="rounded-md border px-2 py-0.5" onClick={switchDemo}>
+            Geçiş (git, dön, el salla)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The panda over the sidebar's account card (src/app/CardPanda.tsx): every state on light and dark cards. */
+function CardPandaSheet() {
+  return (
+    <section className="mt-8">
+      <h2 className="font-display text-lg font-bold">Kenar çubuğu kartı</h2>
+      <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(420px,1fr))] gap-4">
+        {CARD_STATES.map((state) => {
+          const phase: CardPhase = state === "away" ? "gone" : "here";
+          return (
+            <div key={state} data-card-state={state} className="grid gap-1.5">
+              <div className="text-sm font-semibold">
+                {state}
+                {state === "away" && <span className="font-normal text-muted-foreground"> · yürüyüp çıktı, Desktop boşalınca döner</span>}
+              </div>
+              <div className="flex gap-2">
+                {(["light", "dark"] as const).map((tone) => (
+                  <GalleryCard key={tone} tone={tone}>
+                    <CardPanda view={{ state, phase }} />
+                  </GalleryCard>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <CardPandaDemo />
     </section>
   );
 }
@@ -237,6 +348,7 @@ export function MascotGallery({ frames }: { frames: Frames }) {
         ))}
       </section>
       <SceneSheet />
+      <CardPandaSheet />
       <SwitchDemo />
       <PrankSheet />
     </div>
