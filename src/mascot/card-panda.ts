@@ -43,10 +43,10 @@ export const CARD_LEDGE: Partial<Record<PandaPose, number>> = {
 };
 
 /** Every pose is drawn in one box, at the rig's shared scale. */
-export const CARD_SIZE = 56;
+export const CARD_SIZE = 112;
 
 /** How far the panda's middle sits from the card's right edge, in px. */
-export const CARD_CENTER_FROM_RIGHT = 42;
+export const CARD_CENTER_FROM_RIGHT = 68;
 
 /** Where the panda's box goes in the clip box over the card: its right and its bottom, in px. */
 export function cardPlacement(pose: PandaPose): { right: number; bottom: number; size: number } {

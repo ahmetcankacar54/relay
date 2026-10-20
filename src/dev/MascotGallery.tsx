@@ -120,7 +120,7 @@ function GalleryCard({ tone, children }: { tone: "light" | "dark"; children: Rea
   return (
     <div
       data-tone={tone}
-      className={cn("w-[200px] rounded-lg px-2.5 pt-14 pb-2.5", tone === "light" ? "bg-neutral-100" : "bg-neutral-900")}
+      className={cn("w-[200px] rounded-lg px-2.5 pt-28 pb-2.5", tone === "light" ? "bg-neutral-100" : "bg-neutral-900")}
     >
       <div
         data-slot="account-card"

@@ -1,7 +1,7 @@
 /* The panda over the sidebar's account card (src/app/CardPanda.tsx). Without motion it shows its state's still
    look; every animation and transition goes inside the reduced-motion "no-preference" block below. Each one runs
    once and ends at rest: the only loop is the blink panda.css already plays. Lengths inside the rig are canvas
-   units: at the card's 56 px, 9 of them make 1 px. */
+   units: at the card's 112 px, about 4.6 of them make 1 px. */
 
 @media (prefers-reduced-motion: no-preference) {
   /* Coming back from behind the card, and walking off it to the right while Desktop is busy. */
@@ -12,7 +12,7 @@
     animation: card-panda-leave 1.1s ease-in forwards;
   }
 
-  /* Hovering the card: the head rises 3 px while the paws stay on the edge. */
+  /* Hovering the card: the head rises about 6 px while the paws stay on the edge. */
   .card-panda .panda:is([data-pose="peek"], [data-pose="chew"]) [data-part="head"] {
     transition: transform 0.2s ease-out;
   }

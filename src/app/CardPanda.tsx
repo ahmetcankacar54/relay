@@ -4,6 +4,7 @@ import { motionPaused, onMotionPaused } from "@/lib/motion";
 import {
   AMBIENT,
   CARD_LOOKS,
+  CARD_SIZE,
   LEAVE_MS,
   LEAVING_LOOK,
   ambientDelay,
@@ -156,7 +157,8 @@ export function CardPanda({ view }: { view: CardPandaView }) {
     <span
       aria-hidden="true"
       data-slot="card-panda"
-      className="pointer-events-none absolute inset-x-0 bottom-[calc(100%+1px)] h-14 overflow-hidden"
+      className="pointer-events-none absolute inset-x-0 bottom-[calc(100%+1px)] overflow-hidden"
+      style={{ height: CARD_SIZE }}
     >
       <span
         data-card-panda={view.state}

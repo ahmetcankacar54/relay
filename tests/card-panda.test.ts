@@ -12,6 +12,7 @@ import {
   AMBIENT_MAX_MS,
   CARD_LEDGE,
   CARD_LOOKS,
+  CARD_CENTER_FROM_RIGHT,
   CARD_SIZE,
   HOLD_MS,
   LEAVE_MS,
@@ -89,7 +90,7 @@ test("every pose sits at the same scale and place, its ledge line on the card's 
   for (const pose of Object.keys(CARD_LEDGE) as (keyof typeof CARD_LEDGE)[]) {
     const place = cardPlacement(pose);
     assert.equal(place.size, CARD_SIZE);
-    assert.equal(place.right + place.size / 2, 42, `${pose} is centred 42 px from the card's right`);
+    assert.equal(place.right + place.size / 2, CARD_CENTER_FROM_RIGHT, `${pose} is centred on one line from the card's right`);
     assert.equal(place.bottom, -((512 - CARD_LEDGE[pose]!) / 512) * CARD_SIZE, pose);
   }
   // The peek's ledge is its own: its head and paws show, its drawn ledge stays behind the card.
