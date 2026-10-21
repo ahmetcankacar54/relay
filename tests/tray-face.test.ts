@@ -71,6 +71,8 @@ test("the menu bar tray sets its title, tooltip and panda through the face", () 
   );
   assert.doesNotMatch(tray, /this\.tray\.set(Title|ToolTip|Image)\(/);
   assert.match(tray, /this\.face\.setTitle\(/);
+  // AppKit already leaves 2 pt after the panda; a leading space only widened the gap.
+  assert.doesNotMatch(tray, /setTitle\([^)]*" "/);
   assert.match(tray, /this\.face\.setToolTip\(/);
   assert.match(tray, /this\.face\.setImage\(frame,/);
 });

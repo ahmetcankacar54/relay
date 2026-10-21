@@ -1,6 +1,6 @@
 import type { MascotPose } from "./mascot";
 
-/** Menu bar frame size in points; rendered at 1x, 2x and 3x. */
+/** Menu bar frame canvas in points; rendered at 1x, 2x and 3x, then trimmed on the right (scripts/mascot-assets.ts). */
 export const MASCOT_FRAME_SIZE = { width: 24, height: 20 } as const;
 
 /** Every menu bar frame: one red panda head and a door. Codex delivers one file per name. */

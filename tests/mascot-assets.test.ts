@@ -5,10 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import {
-  checkMascotSources, checkRigSources, checkTraySources, renderMascot, renderTrayFrame, rigMarkup, sourcesHash, writeMascot,
+  checkMascotSources, checkRigSources, checkTraySources, renderMascot, renderTrayFrame, rigMarkup, sourcesHash, trimTrayFrames,
+  writeMascot,
 } from "../scripts/mascot-assets";
 import { mascotTrayFrames } from "../electron/mascot-tray-frames";
-import { MASCOT_FRAMES } from "../shared/mascot-frames";
+import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
 import { PANDA_RIG } from "../src/mascot/panda-rig";
 import { PANDA_POSES, RIG_ID_TOKEN, type PandaPose } from "../shared/panda-poses";
 
@@ -199,13 +200,74 @@ test("dark anti-aliased edges and faint light pixels are not light fills", async
   }
 });
 
-test("the generated tray module holds every frame at three scales", async () => {
+/** Each representation's size in pixels. */
+const sizes = (reps: readonly { scaleFactor: number; png: string }[]) =>
+  Promise.all(reps.map(async (r) => {
+    const meta = await sharp(Buffer.from(r.png, "base64")).metadata();
+    return [r.scaleFactor, meta.width, meta.height];
+  }));
+/** The summed alpha of a representation: trimming must not lose any of it. */
+const ink = async (png: string) => {
+  const { data, info } = await sharp(Buffer.from(png, "base64")).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let sum = 0;
+  for (let i = info.channels - 1; i < data.length; i += info.channels) sum += data[i];
+  return sum;
+};
+
+test("the generated tray module holds every frame at three scales, trimmed right after the panda", async () => {
   assert.deepEqual(Object.keys(mascotTrayFrames).sort(), [...MASCOT_FRAMES].sort());
+  // The head ends at x 19 of the 24 pt canvas; the "!" and the "z" reach x 23; the door stays as wide as the head.
+  const width: Record<MascotFrame, number> = { idle: 19, blink: 19, hungry: 19, away: 19, sleep: 23, alert: 23 };
   for (const frame of MASCOT_FRAMES) {
-    const reps = mascotTrayFrames[frame];
-    assert.deepEqual(reps.map((r) => r.scaleFactor), [1, 2, 3], frame);
-    const meta = await sharp(Buffer.from(reps[2].png, "base64")).metadata();
-    assert.deepEqual([meta.width, meta.height], [72, 60], frame);
+    const w = width[frame];
+    assert.deepEqual(await sizes(mascotTrayFrames[frame]), [[1, w, 20], [2, w * 2, 40], [3, w * 3, 60]], frame);
+  }
+});
+
+test("trimming drops each frame's empty right side, never below the idle head and never into ink", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  const root = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20">';
+  const head = '<rect x="1" y="3" width="17.5" height="16"/>';
+  const body: Record<MascotFrame, string> = {
+    idle: head,
+    blink: head,
+    hungry: head,
+    // A mark beside the head, ending between two points.
+    alert: `${head}<rect x="20" y="2" width="2.4" height="8"/>`,
+    sleep: `${head}<rect x="19" y="2" width="4" height="3"/>`,
+    // Narrower than the head.
+    away: '<rect x="7" y="1" width="8" height="18"/>',
+  };
+  try {
+    for (const frame of MASCOT_FRAMES) await writeFile(path.join(tray, `${frame}.svg`), `${root}${body[frame]}</svg>`);
+    const full = {} as Record<MascotFrame, Awaited<ReturnType<typeof renderTrayFrame>>>;
+    for (const frame of MASCOT_FRAMES) full[frame] = await renderTrayFrame(tray, frame);
+    const trimmed = await trimTrayFrames(full);
+    const width: Record<MascotFrame, number> = { idle: 19, blink: 19, hungry: 19, away: 19, alert: 23, sleep: 23 };
+    for (const frame of MASCOT_FRAMES) {
+      const w = width[frame];
+      assert.deepEqual(await sizes(trimmed[frame]), [[1, w, 20], [2, w * 2, 40], [3, w * 3, 60]], frame);
+      for (const [i, rep] of trimmed[frame].entries())
+        assert.equal(await ink(rep.png), await ink(full[frame][i].png), `${frame} @${rep.scaleFactor}x lost ink`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a frame inked to the canvas edge keeps the whole canvas", async () => {
+  const dir = await trayDir();
+  const tray = path.join(dir, "tray");
+  try {
+    for (const frame of MASCOT_FRAMES) await writeFile(path.join(tray, `${frame}.svg`), cover(""));
+    const full = {} as Record<MascotFrame, Awaited<ReturnType<typeof renderTrayFrame>>>;
+    for (const frame of MASCOT_FRAMES) full[frame] = await renderTrayFrame(tray, frame);
+    const trimmed = await trimTrayFrames(full);
+    for (const frame of MASCOT_FRAMES)
+      assert.deepEqual(await sizes(trimmed[frame]), [[1, 24, 20], [2, 48, 40], [3, 72, 60]], frame);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
 

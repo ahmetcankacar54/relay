@@ -120,10 +120,8 @@ export class RelayTray {
       mascot: this.mascot,
       show: (snapshot) => {
         const language = this.options.language?.() ?? "en";
-        if (process.platform === "darwin") {
-          const title = trayTitle(snapshot, Date.now(), language);
-          this.face.setTitle(title ? " " + title : "");
-        }
+        // AppKit leaves 2 pt between the panda and the title; a leading space would widen the gap.
+        if (process.platform === "darwin") this.face.setTitle(trayTitle(snapshot, Date.now(), language));
         this.face.setToolTip(trayTooltip(snapshot, language));
         const items = buildTrayMenu(snapshot, language);
         this.menuLifecycle.update(items, JSON.stringify(items));

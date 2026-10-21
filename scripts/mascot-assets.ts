@@ -382,6 +382,46 @@ export async function renderTrayFrame(trayDir: string, frame: MascotFrame): Prom
   return reps;
 }
 
+/** How far right a representation has any ink, in points. */
+async function inkRight(rep: TrayRepresentation) {
+  const { data, info } = await sharp(Buffer.from(rep.png, "base64")).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  let right = 0;
+  for (let y = 0; y < info.height; y++)
+    for (let x = info.width - 1; x >= right; x--)
+      if (data[(y * info.width + x) * info.channels + info.channels - 1] > 0) {
+        right = x + 1;
+        break;
+      }
+  return right / rep.scaleFactor;
+}
+
+/**
+ * Each frame without the transparent columns on its right, so the menu bar title sits right next to the
+ * panda: AppKit already leaves 2 pt between the image and the title. A frame is never narrower than the idle
+ * head, so the title stays put when the panda blinks or walks off; a mark beside the head (the "!" or the
+ * "z") widens its own frame. Widths are whole points, the same at every scale, and no ink is cut.
+ */
+export async function trimTrayFrames(
+  frames: Record<MascotFrame, TrayRepresentation[]>,
+): Promise<Record<MascotFrame, TrayRepresentation[]>> {
+  const right = async (frame: MascotFrame) => Math.max(0, ...(await Promise.all(frames[frame].map(inkRight))));
+  const head = await right("idle");
+  const trimmed = {} as Record<MascotFrame, TrayRepresentation[]>;
+  for (const frame of MASCOT_FRAMES) {
+    const width = Math.min(MASCOT_FRAME_SIZE.width, Math.max(1, Math.ceil(Math.max(head, await right(frame)))));
+    trimmed[frame] = await Promise.all(
+      frames[frame].map(async (rep) => {
+        const png = await sharp(Buffer.from(rep.png, "base64"))
+          .extract({ left: 0, top: 0, width: width * rep.scaleFactor, height: MASCOT_FRAME_SIZE.height * rep.scaleFactor })
+          .png()
+          .toBuffer();
+        return { scaleFactor: rep.scaleFactor, png: png.toString("base64") };
+      }),
+    );
+  }
+  return trimmed;
+}
+
 /**
  * A hash of the delivered files in one folder (sorted names and contents, hidden
  * files skipped); a generated module records it so a test can catch stale output.
@@ -405,7 +445,7 @@ export async function renderMascot(source: string) {
   for (const frame of MASCOT_FRAMES) tray[frame] = await renderTrayFrame(trayDir, frame);
   const rig = {} as Record<PandaPose, string>;
   for (const pose of PANDA_POSES) rig[pose] = rigMarkup(await readFile(path.join(rigDir, `${pose}.svg`), "utf8"));
-  return { tray, sources: await sourcesHash(trayDir), rig, rigSources: await sourcesHash(rigDir) };
+  return { tray: await trimTrayFrames(tray), sources: await sourcesHash(trayDir), rig, rigSources: await sourcesHash(rigDir) };
 }
 
 export async function writeMascot(rendered: Awaited<ReturnType<typeof renderMascot>>, root: string) {

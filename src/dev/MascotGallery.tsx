@@ -32,6 +32,7 @@ const src = (frames: Frames, frame: MascotFrame, scale: number) =>
  * One sequence, repeated with a short pause, on a light and a dark menu bar.
  * Frames are drawn from their alpha only, as macOS draws template images:
  * light fills disappear into the silhouette here just as in the menu bar.
+ * Each frame keeps its own trimmed width, and the title follows 2 pt after it, as AppKit lays it out.
  */
 function Strip({ spec, frames }: { spec: StripSpec; frames: Frames }) {
   const [tick, setTick] = useState(0);
@@ -54,27 +55,23 @@ function Strip({ spec, frames }: { spec: StripSpec; frames: Frames }) {
           data-bar={bar}
           className={
             bar === "light"
-              ? "flex items-center gap-1 rounded-md bg-neutral-200 px-2 py-0.5 text-neutral-950"
-              : "flex items-center gap-1 rounded-md bg-neutral-800 px-2 py-0.5 text-neutral-50"
+              ? "flex w-fit items-center gap-[2px] rounded-md bg-neutral-200 px-2 py-0.5 text-neutral-950"
+              : "flex w-fit items-center gap-[2px] rounded-md bg-neutral-800 px-2 py-0.5 text-neutral-50"
           }
         >
           <img
             src={src(frames, frame, 2)}
             alt=""
-            width={24}
-            height={20}
-            className={bar === "dark" ? "brightness-0 invert" : "brightness-0"}
+            className={cn("h-5 w-auto", bar === "dark" ? "brightness-0 invert" : "brightness-0")}
           />
-          <span className="text-[13px]">38%</span>
+          <span className="text-[13px]">%38</span>
         </div>
       ))}
       <img
         src={src(frames, frame, 1)}
         alt=""
-        width={96}
-        height={80}
         style={{ imageRendering: "pixelated" }}
-        className="rounded border brightness-0 dark:invert"
+        className="h-20 w-auto rounded border brightness-0 dark:invert"
       />
     </div>
   );
