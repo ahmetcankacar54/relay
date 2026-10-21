@@ -5,18 +5,23 @@ import {
   AMBIENT,
   CARD_LOOKS,
   CARD_SIZE,
-  LEAVE_MS,
   LEAVING_LOOK,
+  PHASE_MS,
   ambientDelay,
+  arriving,
   cardPlacement,
   react,
   reactionLook,
+  restage,
   resume,
   showing,
   sightReactions,
+  stageEnd,
+  type CardPhase,
   type CardReaction,
   type CardSeen,
   type CardSight,
+  type CardStage,
   type ReactionQueue,
 } from "@/mascot/card-panda";
 import { usePrank } from "@/pranks/context";
@@ -27,10 +32,10 @@ import type { MascotPose } from "../../shared/mascot";
 const reducedMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-/** `here`, or `rising` back from behind the card; `leaving` walks off it; `gone` draws nothing. */
-export type CardPhase = "here" | "rising" | "leaving" | "gone";
+export type { CardPhase };
 
 export interface CardPandaView {
+  /** The state drawn, which lags the state while the panda ducks or blinks into a new one. */
   state: MascotPose;
   phase: CardPhase;
   reaction?: CardReaction;
@@ -54,15 +59,44 @@ export function useCardPanda(input: CardPandaInput): {
   const { state, active, busy, settings, refreshing, yields } = input;
   const paused = useSyncExternalStore(onMotionPaused, motionPaused, () => false);
   const [queue, setQueue] = useState<ReactionQueue>({});
-  // The reaction effects below read the state of this render; this effect runs first.
-  const latest = useRef({ state, paused });
+
+  // Where the panda is. A new state or step-aside restages it at once (a walk off, a duck, a blink, a rise); each
+  // passing phase ends on its timer, with the state of that moment.
+  const hidden = state === "away" || yields;
+  const [stage, setStage] = useState<CardStage>({ phase: hidden ? "gone" : "here", shown: state });
+  const [staged, setStaged] = useState({ state, yields });
+  if (staged.state !== state || staged.yields !== yields) {
+    setStaged({ state, yields });
+    const next = restage(stage, state, yields, paused || reducedMotion());
+    if (next !== stage) {
+      setStage(next);
+      // Whatever was playing stops as the panda walks off, ducks or blinks.
+      if (next.phase === "leaving" || next.phase === "ducking" || next.phase === "shutting")
+        setQueue((q) => ({ held: q.held }));
+    }
+  }
+
+  // The reaction effects and timers below read the state of this render; this effect runs first.
+  const latest = useRef({ state, yields, paused, phase: stage.phase });
   useEffect(() => {
-    latest.current = { state, paused };
+    latest.current = { state, yields, paused, phase: stage.phase };
   });
   const push = useCallback((kind: CardReaction) => {
-    const { state, paused } = latest.current;
-    setQueue((q) => react(q, kind, { now: Date.now(), state, paused, reducedMotion: reducedMotion() }));
+    const { state, paused, phase } = latest.current;
+    setQueue((q) =>
+      react(q, kind, { now: Date.now(), state, paused, reducedMotion: reducedMotion(), arriving: arriving(phase) }),
+    );
   }, []);
+
+  useEffect(() => {
+    const ms = PHASE_MS[stage.phase];
+    if (ms === undefined) return;
+    const id = setTimeout(() => {
+      const { state, yields, paused } = latest.current;
+      setStage((s) => (s === stage ? stageEnd(s, state, yields, paused || reducedMotion()) : s));
+    }, ms);
+    return () => clearTimeout(id);
+  }, [stage]);
 
   const seen = useRef<CardSeen>({ refreshing: false });
   useEffect(() => {
@@ -71,10 +105,12 @@ export function useCardPanda(input: CardPandaInput): {
     for (const kind of next.reactions) push(kind);
   }, [active, busy, settings, refreshing, state, push]);
 
+  // What waited plays once the window is in view and the panda back on the card.
+  const here = stage.phase === "here";
   useEffect(() => {
-    if (!paused)
+    if (!paused && here)
       setQueue((q) => resume(q, { now: Date.now(), state: latest.current.state, reducedMotion: reducedMotion() }));
-  }, [paused]);
+  }, [paused, here]);
 
   const playing = queue.playing;
   useEffect(() => {
@@ -86,23 +122,9 @@ export function useCardPanda(input: CardPandaInput): {
     return () => clearTimeout(id);
   }, [playing]);
 
-  // Away walks off the card (not under Reduce motion, and not when nothing showed); stepping aside just goes.
-  const hidden = state === "away" || yields;
-  const [wasHidden, setWasHidden] = useState(hidden);
-  const [phase, setPhase] = useState<CardPhase>(hidden ? "gone" : "here");
-  if (hidden !== wasHidden) {
-    setWasHidden(hidden);
-    setPhase(hidden ? (state === "away" && phase !== "gone" && !reducedMotion() ? "leaving" : "gone") : "rising");
-  }
-  useEffect(() => {
-    if (phase !== "leaving") return;
-    const id = setTimeout(() => setPhase("gone"), LEAVE_MS);
-    return () => clearTimeout(id);
-  }, [phase]);
-
   // Now and then, only while it is drawn and seen.
   const ambient = AMBIENT[state];
-  const present = phase === "here" || phase === "rising";
+  const present = stage.phase !== "gone" && stage.phase !== "leaving";
   useEffect(() => {
     if (!ambient || paused || !present || reducedMotion()) return;
     let id: ReturnType<typeof setTimeout>;
@@ -116,11 +138,9 @@ export function useCardPanda(input: CardPandaInput): {
     return () => clearTimeout(id);
   }, [ambient, paused, present, push]);
 
-  const reaction = present
-    ? showing(queue, { now: Date.now(), state, reducedMotion: reducedMotion() })
-    : undefined;
+  const reaction = here ? showing(queue, { now: Date.now(), state, reducedMotion: reducedMotion() }) : undefined;
   const poke = useCallback((where: "above" | "below") => push(where === "above" ? "look-up" : "look-down"), [push]);
-  return { view: { state, phase, reaction }, poke, react: push };
+  return { view: { state: stage.shown, phase: stage.phase, reaction }, poke, react: push };
 }
 
 /**
@@ -135,16 +155,17 @@ export function CardPanda({ view }: { view: CardPandaView }) {
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const leaving = view.phase === "leaving";
+  const going = leaving || view.phase === "ducking";
   const base = leaving ? LEAVING_LOOK : view.state === "away" ? undefined : CARD_LOOKS[view.state];
   if (view.phase === "gone" || !base) return null;
-  // A trick wins over a reaction while it plays; a panda walking off plays neither.
-  const playing = leaving ? undefined : trick;
+  // A trick wins over a reaction while it plays; a panda walking off or ducking plays neither.
+  const playing = going ? undefined : trick;
   const reaction = playing ? undefined : view.reaction;
   const look = trickLook(reactionLook(base, reaction), playing);
   const place = cardPlacement(look.pose);
 
   const click = (event: MouseEvent<HTMLSpanElement>) => {
-    if (leaving) return;
+    if (going) return;
     const played = pandaClick(clicks.current, event, prank, Date.now(), Math.random);
     clicks.current = played.state;
     if (!played.trick) return;
@@ -164,7 +185,9 @@ export function CardPanda({ view }: { view: CardPandaView }) {
         data-card-panda={view.state}
         data-reaction={reaction}
         data-rise={view.phase === "rising" ? "" : undefined}
+        data-duck={view.phase === "ducking" ? "" : undefined}
         data-leave={leaving ? "" : undefined}
+        data-blink={view.phase === "shutting" ? "out" : view.phase === "opening" ? "in" : undefined}
         className="card-panda pointer-events-auto absolute"
         style={{ right: place.right, bottom: place.bottom, width: place.size, height: place.size }}
         onClick={click}

@@ -59,9 +59,82 @@ export function cardPlacement(pose: PandaPose): { right: number; bottom: number;
   };
 }
 
-/** How long the walk off the card takes, and the rise back from behind it. */
+/** How long the walk off the card takes, the rise back from behind it, and the duck behind it before a new pose. */
 export const LEAVE_MS = 1_100;
-export const RISE_MS = 450;
+export const RISE_MS = 560;
+export const DUCK_MS = 240;
+/** A new face in the same pose shows behind a blink: the eyes shut on the old face, then open on the new one. */
+export const SHUT_MS = 90;
+export const OPEN_MS = 150;
+
+/**
+ * Where the panda is: `here` on the card; `rising` back from behind it; `ducking` behind it, to go or to come
+ * back in another pose; `shutting` and `opening` its eyes around a new face; `leaving` as it walks off; `gone`.
+ */
+export type CardPhase = "here" | "rising" | "ducking" | "shutting" | "opening" | "leaving" | "gone";
+
+/** How long each passing phase lasts; `here` and `gone` stay until the state changes. */
+export const PHASE_MS: Partial<Record<CardPhase, number>> = {
+  rising: RISE_MS,
+  ducking: DUCK_MS,
+  shutting: SHUT_MS,
+  opening: OPEN_MS,
+  leaving: LEAVE_MS,
+};
+
+/** Coming back or changing: reactions asked for meanwhile wait until the panda is here. */
+export const arriving = (phase: CardPhase) =>
+  phase === "rising" || phase === "ducking" || phase === "shutting" || phase === "opening";
+
+export interface CardStage {
+  phase: CardPhase;
+  /** The state drawn; while the panda ducks or shuts its eyes, the one it had before. */
+  shown: MascotPose;
+}
+
+const poseOf = (state: Exclude<MascotPose, "away">) => CARD_LOOKS[state].pose;
+
+/**
+ * The stage once the state, or Overview's stepping aside, changes. `still` (Reduce motion, or a window nobody sees)
+ * changes at once. Otherwise the panda walks off when Desktop gets busy and ducks when the page steps aside; it
+ * rises back when the state returns; a new pose ducks and rises, and a new face in the same pose blinks. A change
+ * while it rises, ducks or blinks waits for that to end (stageEnd).
+ */
+export function restage(stage: CardStage, state: MascotPose, yields: boolean, still: boolean): CardStage {
+  const hidden = state === "away" || yields;
+  if (still) return hidden ? { phase: "gone", shown: stage.shown } : { phase: "here", shown: state };
+  switch (stage.phase) {
+    case "gone":
+    case "leaving":
+      return hidden ? stage : { phase: "rising", shown: state };
+    case "here":
+      if (hidden) return { phase: state === "away" ? "leaving" : "ducking", shown: stage.shown };
+      if (state === stage.shown || stage.shown === "away") return stage;
+      return { phase: poseOf(state) === poseOf(stage.shown) ? "shutting" : "ducking", shown: stage.shown };
+    default:
+      return stage;
+  }
+}
+
+/** The stage once its passing phase is over, for the state at that moment. */
+export function stageEnd(stage: CardStage, state: MascotPose, yields: boolean, still: boolean): CardStage {
+  const hidden = state === "away" || yields;
+  switch (stage.phase) {
+    case "leaving":
+      return { ...stage, phase: "gone" };
+    case "ducking":
+      return hidden ? { ...stage, phase: "gone" } : { phase: still ? "here" : "rising", shown: state };
+    case "shutting":
+      if (!hidden && !still && stage.shown !== "away" && poseOf(state) === poseOf(stage.shown))
+        return { phase: "opening", shown: state };
+      return restage({ ...stage, phase: "here" }, state, yields, still);
+    case "rising":
+    case "opening":
+      return restage({ ...stage, phase: "here" }, state, yields, still);
+    default:
+      return stage;
+  }
+}
 
 export type CardReaction = "wave" | "check" | "nod" | "look-up" | "look-down" | "glance" | "chew";
 
@@ -88,10 +161,12 @@ export const ambientDelay = (random: number) => AMBIENT_MIN_MS + Math.floor(rand
 
 /** How long a switch's wave waits for a window in the background to come back. */
 export const HOLD_MS = 60_000;
+/** How long another reaction waits for the panda to be back on the card (a rise, a duck and a blink are shorter). */
+export const ARRIVING_HOLD_MS = 2_000;
 
 export interface ReactionQueue {
   playing?: { kind: CardReaction; until: number };
-  /** The switch wave, kept while the window is in the background. */
+  /** Kept for later: the switch wave while the window is in the background, or any reaction while the panda arrives. */
   held?: { kind: CardReaction; expires: number };
 }
 
@@ -100,6 +175,8 @@ export interface ReactionContext {
   state: MascotPose;
   reducedMotion: boolean;
   paused: boolean;
+  /** The panda is rising, ducking or blinking (arriving()). */
+  arriving?: boolean;
 }
 
 /** The reaction showing at `now`, if any. */
@@ -111,20 +188,29 @@ export function showing(queue: ReactionQueue, context: Omit<ReactionContext, "pa
 
 /**
  * The queue after `kind` is asked for. Reduce motion and a state that does not react play nothing. In the
- * background only the switch wave is kept, for later. Otherwise one of equal or higher priority replaces the one
- * playing and restarts the clock, and a lower one is dropped: nothing waits behind.
+ * background only the switch wave is kept, for later; while the panda arrives every reaction is, so it plays once
+ * the panda is back on the card (resume). Otherwise one of equal or higher priority replaces the one playing and
+ * restarts the clock, and a lower one is dropped: nothing waits behind.
  */
 export function react(queue: ReactionQueue, kind: CardReaction, context: ReactionContext): ReactionQueue {
   if (context.reducedMotion || !reacts(context.state)) return queue;
-  if (context.paused)
-    return kind === "wave" ? { ...queue, held: { kind, expires: context.now + HOLD_MS } } : queue;
+  if (context.paused) return kind === "wave" ? hold(queue, kind, context.now + HOLD_MS, context.now) : queue;
+  if (context.arriving)
+    return hold(queue, kind, context.now + (kind === "wave" ? HOLD_MS : ARRIVING_HOLD_MS), context.now);
   const current = showing(queue, context);
   if (current && REACTIONS[current].priority > REACTIONS[kind].priority) return queue;
   return { playing: { kind, until: context.now + REACTIONS[kind].ms } };
 }
 
-/** The window is back in view: a kept wave plays if it is still fresh; either way it is let go. */
-export function resume(queue: ReactionQueue, context: Omit<ReactionContext, "paused">): ReactionQueue {
+/** Keeps `kind` for later, unless a fresh one of higher priority is kept already. */
+function hold(queue: ReactionQueue, kind: CardReaction, expires: number, now: number): ReactionQueue {
+  const held = queue.held;
+  if (held && held.expires > now && REACTIONS[held.kind].priority > REACTIONS[kind].priority) return queue;
+  return { ...queue, held: { kind, expires } };
+}
+
+/** The window is in view and the panda on the card: a kept reaction plays if still fresh; either way it is let go. */
+export function resume(queue: ReactionQueue, context: Omit<ReactionContext, "paused" | "arriving">): ReactionQueue {
   const held = queue.held;
   if (!held) return queue;
   const rest: ReactionQueue = { playing: queue.playing };

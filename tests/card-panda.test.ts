@@ -10,24 +10,33 @@ import { MascotGallery } from "../src/dev/MascotGallery";
 import { setMotionPaused } from "../src/lib/motion";
 import {
   AMBIENT_MAX_MS,
+  ARRIVING_HOLD_MS,
   CARD_LEDGE,
   CARD_LOOKS,
   CARD_CENTER_FROM_RIGHT,
   CARD_SIZE,
+  DUCK_MS,
   HOLD_MS,
   LEAVE_MS,
   LEAVING_LOOK,
+  OPEN_MS,
+  PHASE_MS,
   REACTIONS,
+  RISE_MS,
+  SHUT_MS,
   cardPlacement,
   cardState,
   cardYields,
   react,
   reactionLook,
+  restage,
   resume,
   settle,
   showing,
   sightReactions,
+  stageEnd,
   type CardReaction,
+  type CardStage,
   type ReactionContext,
 } from "../src/mascot/card-panda";
 import { PANDA_RIG } from "../src/mascot/panda-rig";
@@ -161,6 +170,49 @@ test("in the background only the switch wave is kept, for up to 60 s", () => {
   assert.equal(resume({}, at("idle", 10)).playing, undefined);
 });
 
+test("while the panda rises, ducks or blinks, what is asked for waits for it; a higher priority wins the wait", () => {
+  const chew = react({}, "chew", at("warming", 0, { arriving: true }));
+  assert.deepEqual(chew, { held: { kind: "chew", expires: ARRIVING_HOLD_MS } }, "any reaction waits, not only the wave");
+  assert.equal(showing(chew, at("warming", 0)), undefined);
+  const wave = react(chew, "wave", at("idle", 10, { arriving: true }));
+  assert.deepEqual(wave.held, { kind: "wave", expires: 10 + HOLD_MS }, "the switch wave waits as long as in the background");
+  assert.equal(react(wave, "glance", at("idle", 20, { arriving: true })), wave, "a lower one does not push it out");
+  assert.deepEqual(resume(wave, at("idle", 600)), { playing: { kind: "wave", until: 600 + REACTIONS.wave.ms } });
+  assert.deepEqual(resume(chew, at("warming", ARRIVING_HOLD_MS)), { playing: undefined }, "stale, let go");
+  assert.deepEqual(react({}, "nod", at("alert", 0, { arriving: true })), {}, "a state that does not react keeps nothing");
+});
+
+// The stage.
+
+const stage = (phase: CardStage["phase"], shown: MascotPose = "idle"): CardStage => ({ phase, shown });
+
+test("the stage: a walk off, a duck to step aside or into a new pose, a blink into a new face, a rise back", () => {
+  assert.deepEqual(restage(stage("here"), "away", false, false), stage("leaving"), "Desktop busy: it walks off");
+  assert.deepEqual(restage(stage("here"), "idle", true, false), stage("ducking"), "Overview: it ducks out");
+  assert.deepEqual(restage(stage("here"), "alert", false, false), stage("ducking"), "another pose: it ducks first");
+  assert.deepEqual(restage(stage("here"), "hungry", false, false), stage("shutting"), "another face: it blinks first");
+  assert.deepEqual(restage(stage("here"), "idle", false, false), stage("here"));
+  assert.deepEqual(restage(stage("gone"), "warming", false, false), stage("rising", "warming"));
+  assert.deepEqual(restage(stage("leaving"), "idle", false, false), stage("rising"), "back before it was gone");
+  for (const phase of ["rising", "ducking", "shutting", "opening"] as const)
+    assert.deepEqual(restage(stage(phase), "alert", false, false), stage(phase), `a change waits for ${phase} to end`);
+  // Each passing phase ends with the state of that moment.
+  assert.deepEqual(stageEnd(stage("ducking"), "alert", false, false), stage("rising", "alert"));
+  assert.deepEqual(stageEnd(stage("ducking"), "idle", true, false), stage("gone"));
+  assert.deepEqual(stageEnd(stage("shutting"), "hungry", false, false), stage("opening", "hungry"));
+  assert.deepEqual(stageEnd(stage("shutting"), "sleeping", false, false), stage("ducking"), "a new pose meanwhile: a duck");
+  assert.deepEqual(stageEnd(stage("opening", "hungry"), "hungry", false, false), stage("here", "hungry"));
+  assert.deepEqual(stageEnd(stage("rising"), "alert", false, false), stage("ducking"), "the change it waited for");
+  assert.deepEqual(stageEnd(stage("rising"), "away", false, false), stage("leaving"));
+  assert.deepEqual(stageEnd(stage("leaving"), "away", false, false), stage("gone"));
+  // Reduce motion, or a window nobody sees: at once.
+  assert.deepEqual(restage(stage("here"), "away", false, true), stage("gone"));
+  assert.deepEqual(restage(stage("here"), "alert", false, true), stage("here", "alert"));
+  assert.deepEqual(restage(stage("ducking"), "alert", false, true), stage("here", "alert"));
+  assert.deepEqual(restage(stage("gone"), "idle", false, true), stage("here"));
+  assert.deepEqual(PHASE_MS, { rising: RISE_MS, ducking: DUCK_MS, shutting: SHUT_MS, opening: OPEN_MS, leaving: LEAVE_MS });
+});
+
 test("what changes between two sights asks for the reactions", () => {
   const base = { busy: false, refreshing: false, state: "idle" as MascotPose };
   let { reactions, seen } = sightReactions({ refreshing: false }, { ...base, active: "a", settings: "{1}" });
@@ -262,22 +314,53 @@ test("card-panda.css moves only without Reduce motion, runs every reaction once 
   assert.doesNotMatch(outside, /animation\s*:|transition\s*:|:hover/);
   const loops = [...motion.matchAll(/\{([^}]*)\}/g)].flatMap(([, rule]) => animations(rule)).filter((one) => /\binfinite\b/.test(one));
   assert.deepEqual(loops.map((one) => one.split(" ")[0]).sort(), ["card-panda-blink", "card-panda-breathe"]);
-  for (const [kind, { ms }] of Object.entries(REACTIONS)) {
-    const rules = [...motion.matchAll(new RegExp(`\\.card-panda\\[data-reaction="${kind}"\\][^{]*\\{([^}]*)\\}`, "g"))].map((m) => m[1]);
-    assert.ok(rules.length > 0, `${kind} has a rule`);
+  // Every reaction's and every change's animations last as long as the clock in card-panda.ts gives them.
+  const timed: [string, string, number][] = [
+    ...Object.entries(REACTIONS).map(([kind, { ms }]): [string, string, number] => [kind, `[data-reaction="${kind}"]`, ms]),
+    ["rise", "[data-rise]", RISE_MS],
+    ["duck", "[data-duck]", DUCK_MS],
+    ["leave", "[data-leave]", LEAVE_MS],
+    ["shut", '[data-blink="out"]', SHUT_MS],
+    ["open", '[data-blink="in"]', OPEN_MS],
+  ];
+  for (const [name, attribute, ms] of timed) {
+    const selector = `.card-panda${attribute}`.replace(/[.[\]"=]/g, "\\$&");
+    const rules = [...motion.matchAll(new RegExp(`${selector}[^{]*\\{([^}]*)\\}`, "g"))].map((m) => m[1]);
+    assert.ok(rules.length > 0, `${name} has a rule`);
     for (const rule of rules)
       for (const one of animations(rule)) {
-        const [, length, count] = /^[\w-]+ ([\d.]+)s [\w-]+(?:\([^)]*\))? (\d+)$/.exec(one) ?? [];
-        assert.ok(length, `${kind}: ${one}`);
-        assert.equal(Math.round(Number(length) * Number(count) * 1000), ms, `${kind} runs ${ms} ms`);
+        const [, length, count] = /^[\w-]+ ([\d.]+)s [\w-]+(?:\([^)]*\))? (\d+|forwards|backwards)$/.exec(one) ?? [];
+        assert.ok(length, `${name}: ${one}`);
+        assert.equal(Math.round(Number(length) * (Number(count) || 1) * 1000), ms, `${name} runs ${ms} ms`);
       }
   }
-  assert.match(motion, /\.card-panda\[data-rise\] \{\s*animation: card-panda-rise 0\.45s/);
-  assert.match(motion, /\.card-panda\[data-leave\] \{\s*animation: card-panda-leave 1\.1s [\w-]+ forwards;/);
-  assert.equal(LEAVE_MS, 1_100);
+  // The duck and the walk off end out of sight and stay there until the panda is gone; the rest end at rest.
+  assert.match(motion, /\.card-panda\[data-duck\] \{\s*animation: card-panda-duck [^;]* forwards;/);
+  assert.match(motion, /\.card-panda\[data-leave\] \{\s*animation: card-panda-leave [^;]* forwards;/);
   // The hover lift moves the head only, and only of the poses whose paws or hands stay on the edge.
   assert.match(motion, /\[data-slot="account-card"\]:hover \.card-panda:not\(\[data-leave\]\) \.panda:is\(\[data-pose="peek"\], \[data-pose="chew"\]\) \[data-part="head"\]/);
   assert.match(readFileSync("src/styles/theme.css", "utf8"), /@import "\.\/card-panda\.css";/);
+});
+
+test("every reaction starts and ends each part at rest; only the wave's eyes start and end shut", () => {
+  const motion = mediaBlock(css, "(prefers-reduced-motion: no-preference)");
+  const blocks = keyframes(css);
+  const rest = /^(?:\s*(?:translate: 0 0|rotate: 0deg|scale: 1 1|animation-timing-function: [^;]+);)+\s*$/;
+  for (const kind of Object.keys(REACTIONS)) {
+    const names = [...motion.matchAll(new RegExp(`\\.card-panda\\[data-reaction="${kind}"\\][^{]*\\{([^}]*)\\}`, "g"))]
+      .flatMap(([, rule]) => animations(rule))
+      .map((one) => one.split(" ")[0]);
+    assert.ok(names.length > 1, `${kind} moves more than one part`);
+    for (const name of names) {
+      if (name === "card-panda-wave-eyes") continue;
+      const frames = blocks.get(name);
+      assert.ok(frames, name);
+      for (const offset of [0, 100]) {
+        const body = frames.filter((f) => f.offsets.includes(offset)).map((f) => f.body).join(";");
+        assert.match(body, rest, `${name} at ${offset}%`);
+      }
+    }
+  }
 });
 
 test("the wave leads with the paw, the head settles after it and the ears last, each part back at rest", () => {
@@ -376,7 +459,9 @@ async function mounted(
   run: (env: {
     update(patch: Partial<Props>): Promise<void>;
     advance(ms: number): Promise<void>;
-    panda(): { state?: string; reaction?: string; pose?: string; expression?: string; rise: boolean; leave: boolean } | undefined;
+    panda():
+      | { state?: string; reaction?: string; pose?: string; expression?: string; rise: boolean; leave: boolean; duck?: boolean; blink?: string }
+      | undefined;
     pause(paused: boolean): Promise<void>;
   }) => Promise<void>,
   options: { reducedMotion?: boolean; initial?: Partial<Props> } = {},
@@ -412,6 +497,8 @@ async function mounted(
           expression: svg?.attributes.get("data-expression"),
           rise: box.attributes.has("data-rise"),
           leave: box.attributes.has("data-leave"),
+          ...(box.attributes.has("data-duck") && { duck: true }),
+          ...(box.attributes.has("data-blink") && { blink: box.attributes.get("data-blink") }),
         };
       },
       pause: (paused) => act(async () => setMotionPaused(paused, root)),
@@ -426,7 +513,7 @@ async function mounted(
   }
 }
 
-test("a switch: the panda walks off while Desktop is busy, rises back and waves, then is itself again", async () => {
+test("a switch: the panda walks off while Desktop is busy, rises back, then waves once it is on the card", async () => {
   await mounted(async (env) => {
     assert.deepEqual(env.panda(), { state: "idle", reaction: undefined, pose: "peek", expression: "open", rise: false, leave: false });
     await env.update({ state: "away", busy: true });
@@ -435,7 +522,9 @@ test("a switch: the panda walks off while Desktop is busy, rises back and waves,
     await env.advance(LEAVE_MS);
     assert.equal(env.panda(), undefined, "gone while Desktop is busy");
     await env.update({ state: "idle", busy: false, active: "b" });
-    assert.deepEqual(env.panda(), { state: "idle", reaction: "wave", pose: "peek", expression: "happy", rise: true, leave: false });
+    assert.deepEqual(env.panda(), { state: "idle", reaction: undefined, pose: "peek", expression: "open", rise: true, leave: false });
+    await env.advance(RISE_MS);
+    assert.deepEqual(env.panda(), { state: "idle", reaction: "wave", pose: "peek", expression: "happy", rise: false, leave: false });
     await env.advance(REACTIONS.wave.ms);
     assert.equal(env.panda()?.reaction, undefined);
     assert.equal(env.panda()?.expression, "open", "back to the state's look");
@@ -514,13 +603,58 @@ test("paused: reactions are dropped and the now-and-then glance stops; a switch'
   });
 });
 
-test("on Overview it steps aside without walking, and rises back after", async () => {
+test("on Overview it ducks aside without walking, and rises back after", async () => {
   await mounted(async (env) => {
     await env.update({ yields: true });
+    assert.equal(env.panda()?.duck, true);
+    assert.equal(env.panda()?.pose, "peek");
+    await env.advance(DUCK_MS);
     assert.equal(env.panda(), undefined);
     await env.update({ yields: false });
     assert.equal(env.panda()?.rise, true);
   });
+});
+
+test("a new pose ducks and rises in it, a new face blinks into it, and what is asked for meanwhile waits", async () => {
+  await mounted(async (env) => {
+    // Warming: the peek ducks, the chew pose rises, and the warming chew plays once it is on the card.
+    await env.update({ state: "warming" });
+    assert.deepEqual(env.panda(), { state: "idle", reaction: undefined, pose: "peek", expression: "open", rise: false, leave: false, duck: true });
+    await env.advance(DUCK_MS);
+    assert.deepEqual(env.panda(), { state: "warming", reaction: undefined, pose: "chew", expression: "open", rise: true, leave: false });
+    await env.advance(RISE_MS);
+    assert.equal(env.panda()?.reaction, "chew");
+    await env.advance(REACTIONS.chew.ms);
+    // Hungry, from idle: the same pose, so the eyes shut on the old face and open on the new one.
+    await env.update({ state: "idle" });
+    await env.advance(DUCK_MS);
+    await env.advance(RISE_MS);
+    assert.equal(env.panda()?.pose, "peek");
+    await env.update({ state: "hungry" });
+    assert.deepEqual(env.panda(), { state: "idle", reaction: undefined, pose: "peek", expression: "open", rise: false, leave: false, blink: "out" });
+    await env.update({ settings: '{"x":1}' });
+    await env.advance(SHUT_MS);
+    assert.deepEqual(env.panda(), { state: "hungry", reaction: undefined, pose: "peek", expression: "worried", rise: false, leave: false, blink: "in" });
+    await env.advance(OPEN_MS);
+    assert.equal(env.panda()?.reaction, "nod", "the setting's nod waited for the blink");
+    assert.equal(env.panda()?.blink, undefined);
+  });
+});
+
+test("Reduce motion changes the look at once, with no duck, blink or rise", async () => {
+  await mounted(
+    async (env) => {
+      await env.update({ state: "alert" });
+      assert.deepEqual(env.panda(), { state: "alert", reaction: undefined, pose: "stand", expression: "wide", rise: false, leave: false });
+      await env.update({ state: "hungry" });
+      assert.deepEqual(env.panda(), { state: "hungry", reaction: undefined, pose: "peek", expression: "worried", rise: false, leave: false });
+      await env.update({ yields: true });
+      assert.equal(env.panda(), undefined);
+      await env.update({ yields: false });
+      assert.equal(env.panda()?.rise, false);
+    },
+    { reducedMotion: true },
+  );
 });
 
 // The gallery.
