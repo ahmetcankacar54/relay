@@ -2,10 +2,8 @@ import os from "node:os";
 import path from "node:path";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import {
-  macBrowserSystem,
-  type BrowserSystem,
-} from "../../electron/core/browser-profiles";
+import { macBrowserSystem, type BrowserSystem } from "../../electron/core/browser-system";
+import { levelExtensionStorage, type ExtensionStorage } from "../../electron/core/extension-storage";
 import type { DesktopHost } from "../../electron/core/desktop";
 import { nodeDesktopHost } from "../../electron/core/desktop-host-node";
 import { resolveExecutable } from "../../electron/core/environment";
@@ -32,8 +30,8 @@ export interface CliDeps {
   selfPath: string;
   /** Claude Code's transcripts, for the history summary. */
   transcriptRoot: string;
-  /** Opens an account's browser profile after a switch. */
-  browser: BrowserSystem;
+  /** The browsers and the Claude extension's storage; undefined when a switch leaves the extension alone. */
+  extension?: { system: BrowserSystem; storage: ExtensionStorage };
   platform: NodeJS.Platform;
 }
 
@@ -90,7 +88,10 @@ export function defaultDeps(): CliDeps {
     },
     selfPath: process.argv[1] ?? "",
     transcriptRoot: path.join(os.homedir(), ".claude"),
-    browser: macBrowserSystem(),
+    extension:
+      process.platform === "darwin"
+        ? { system: macBrowserSystem(), storage: levelExtensionStorage }
+        : undefined,
     platform: process.platform,
   };
 }

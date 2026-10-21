@@ -16,6 +16,6 @@ test("node-pty loads with the first terminal, not with Relay", () => {
 test("the main process bundle is minified and keeps its names", () => {
   const build = read("scripts/build.mjs");
   assert.match(build, /minify: true,\s*keepNames: true,/);
-  // node-pty stays outside the bundle, loaded from the app's unpacked node_modules.
-  assert.match(build, /external: \["electron", "node-pty"\]/);
+  // node-pty and classic-level stay outside the bundle, loaded from the app's unpacked node_modules.
+  assert.match(build, /external: \["electron", "node-pty", "classic-level"\]/);
 });

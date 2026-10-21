@@ -156,40 +156,6 @@ test("every switch tells onSwitched once it ends, after Desktop is free, even wh
     /cancelled before restart/,
   );
 });
-test("onSwitchedTo names the account after a restarting or a closed-only switch, never after a failed one", async (t) => {
-  const f = await fixture(t);
-  const a = await f.account("A");
-  const b = await f.account("B"); // B is open in Claude
-  const told: { id: string; busy: boolean; relaunched: boolean }[] = [];
-  f.manager.onSwitchedTo = (id) =>
-    told.push({ id, busy: f.manager.isBusy, relaunched: f.starts() > 0 });
-  // A restarting switch: the menu bar, the panel, the Accounts page and continue at quota.
-  await f.manager.switchTo(a.id);
-  assert.deepEqual(told, [{ id: a.id, busy: false, relaunched: true }]);
-  // A closed-only switch, as the switch after Claude quits makes it.
-  f.setRunning(false);
-  await f.manager.switchTo(b.id, {
-    closedOnly: true,
-    expectedActiveProfileId: a.id,
-  });
-  assert.deepEqual(
-    told.map((x) => x.id),
-    [a.id, b.id],
-  );
-  // A failed switch tells nothing.
-  f.setRunning(true);
-  await assert.rejects(
-    f.manager.switchTo(a.id, { canProceed: () => false }),
-    /cancelled before restart/,
-  );
-  assert.equal(told.length, 2);
-  // A listener that throws never changes how a switch ends.
-  f.manager.onSwitchedTo = () => {
-    throw new Error("listener");
-  };
-  await f.manager.switchTo(a.id);
-  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
-});
 test("a changed continuation guard blocks restart before Claude is asked to quit", async (t) => {
   const f = await fixture(t);
   const a = await f.account("A");

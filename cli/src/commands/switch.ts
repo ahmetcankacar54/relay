@@ -1,6 +1,5 @@
 import { historySources } from "../../../shared/history-policy";
-import { BROWSERS } from "../../../shared/browser-profiles";
-import { openBrowserProfile } from "../../../electron/core/browser-profiles";
+import { extensionLine } from "../../../shared/extension-text";
 import { resolveAccount } from "../accounts";
 import type { Command } from "../command";
 import { confirm } from "../confirm";
@@ -43,6 +42,7 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
           `Code geçmişi şu hesaplardan gelir: ${sources.map((a) => a.name).join(", ")}.`,
           `Code history comes over from: ${sources.map((a) => a.name).join(", ")}.`,
         );
+  const browser = await ctx.desktop.extensionQuitsBrowser();
   const inside = await insideDesktop(ctx);
   await confirm(
     io,
@@ -57,6 +57,14 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
         ),
       ),
       ...quitLines(ctx),
+      ...(browser
+        ? [
+            t(
+              `${browser} da kısa süreliğine kapanıp sekmeleriyle yeniden açılacak (Claude eklentisinin girişi için).`,
+              `${browser} will also quit for a moment and reopen with its tabs, for the Claude extension's sign-in.`,
+            ),
+          ]
+        : []),
       ...(inside ? [sessionEndsLine(ctx)] : []),
       history,
     ],
@@ -71,19 +79,9 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
       `Switched to ${target.name}; ${n} conversation${n === 1 ? "" : "s"} carried.`,
     ),
   );
-  // As the app does after a switch: the account's browser profile, unless it has a window.
-  const browser = ctx.store.state.accounts.find((a) => a.id === target.id)?.browser;
-  if (browser) {
-    const profile = `${BROWSERS[browser.app].name} · ${browser.name}`;
-    const result = await openBrowserProfile(ctx.deps.browser, browser);
-    if (result === "opened")
-      io.stdout(t(`Tarayıcı profili açıldı: ${profile}.`, `Opened the browser profile ${profile}.`));
-    else if (result === "missing")
-      io.stdout(
-        t(`Bu profil artık tarayıcıda yok: ${profile}.`, `The browser no longer has this profile: ${profile}.`),
-      );
-    else if (result === "failed")
-      io.stdout(t(`Tarayıcı profili açılamadı: ${profile}.`, `Could not open the browser profile ${profile}.`));
-  }
+  // As the app does: what became of the Claude extension's sign-in, when there is something to say.
+  const extension = ctx.desktop.extensionOutcome;
+  const line = extension && extensionLine(extension, t);
+  if (line) io.stdout(line);
   return EXIT.ok;
 };

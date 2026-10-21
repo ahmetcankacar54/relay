@@ -12,9 +12,9 @@ import {
 } from "../../shared/types";
 import {
   BROWSER_APPS,
+  EXTENSION_MODES,
   PROFILE_FOLDER,
-  type AccountBrowser,
-} from "../../shared/browser-profiles";
+} from "../../shared/browser-extension";
 
 export const accountPlanningSchema = z
   .object({
@@ -22,11 +22,16 @@ export const accountPlanningSchema = z
     capacityWeight: z.number().finite().min(1).max(100),
   })
   .strict();
-export const accountBrowserSchema = z
+export const extensionSettingSchema = z
   .object({
-    app: z.enum(BROWSER_APPS),
-    profile: z.string().regex(PROFILE_FOLDER),
-    name: z.string().min(1).max(100),
+    mode: z.enum(EXTENSION_MODES),
+    browser: z
+      .object({
+        app: z.enum(BROWSER_APPS),
+        profile: z.string().regex(PROFILE_FOLDER),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const timeZoneSchema = z
@@ -126,7 +131,6 @@ const accountSchema = z.object({
   createdAt: z.iso.datetime(),
   cooldownUntil: z.iso.datetime().optional(),
   planning: accountPlanningSchema.optional(),
-  browser: accountBrowserSchema.optional(),
   desktop: z
     .object({
       accountUuid: z.uuid(),
@@ -170,6 +174,8 @@ export const settingsSchema = z
     switchWindow: z.boolean().optional(),
     pranks: z.enum(["sometimes", "rarely", "off"]).optional(),
     draftRetype: z.boolean().optional(),
+    // Missing means the default, mode "restart"; no .default() so a patch keeps the stored choice.
+    claudeExtension: extensionSettingSchema.optional(),
   })
   .strict();
 // Migration defaults belong to a complete saved registry, never to an IPC patch.
@@ -191,9 +197,10 @@ const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
  * The registry layout this build writes. Bumped whenever a field is added anywhere in it, so a
  * build that knows less never writes a file a newer build wrote and silently drops its fields.
  * A file without the field was written before 0.12 and counts as 1. 3 added an account's
- * browser profile.
+ * browser profile; 4 replaced it with the Claude extension setting, and a file's profiles are
+ * dropped when it is read.
  */
-export const STATE_SCHEMA = 3;
+export const STATE_SCHEMA = 4;
 const stateSchema = z.object({
   version: z.literal(1),
   schema: z.number().int().min(1).optional(),
@@ -432,28 +439,6 @@ export class Store {
     const account = this.state.accounts.find((a) => a.id === id);
     if (!account) throw new Error("Hesap bulunamadı.");
     return structuredClone(account);
-  }
-  /** Sets or clears an account's browser profile. Two accounts never share one. */
-  setBrowser(id: string, browser: AccountBrowser | undefined): Account {
-    this.account(id);
-    const value = browser && accountBrowserSchema.parse(browser);
-    this.update((state) => {
-      if (
-        value &&
-        state.accounts.some(
-          (a) =>
-            a.id !== id &&
-            a.browser?.app === value.app &&
-            a.browser.profile === value.profile,
-        )
-      )
-        throw new Error("Another account already uses this browser profile.");
-      const account = state.accounts.find((a) => a.id === id);
-      if (!account) throw new Error("Hesap bulunamadı.");
-      if (value) account.browser = value;
-      else delete account.browser;
-    });
-    return this.account(id);
   }
   profile(id: string): string {
     this.account(id);

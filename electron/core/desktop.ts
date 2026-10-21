@@ -55,6 +55,23 @@ import {
   type DraftState,
   type DraftSummary,
 } from "./draft-vault";
+import {
+  browserRunning,
+  dataDir,
+  readJson,
+  type BrowserSystem,
+} from "./browser-system";
+import { clearScratch, type ExtensionStorage } from "./extension-storage";
+import { ExtensionSwitcher } from "./extension-switch";
+import { ExtensionVault } from "./extension-vault";
+import {
+  BROWSERS,
+  DEFAULT_EXTENSION,
+  chooseInstance,
+  startupRestores,
+  type ExtensionOutcome,
+  type ExtensionStatus,
+} from "../../shared/browser-extension";
 
 export interface DesktopHost {
   available(): Promise<boolean>;
@@ -204,11 +221,6 @@ export class DesktopManager {
    */
   onSwitched?: () => void;
   /**
-   * Told when a switch succeeded, after Desktop is free, with the account switched to; never
-   * for a failed one. May throw; nothing depends on it.
-   */
-  onSwitchedTo?: (profileId: string) => void;
-  /**
    * Told what the draft steps did, for a diagnosis log: an event name and fields that are ids,
    * states, reasons, counts and times, never a draft's text. May throw; nothing depends on it.
    */
@@ -225,6 +237,17 @@ export class DesktopManager {
   private drafts: DraftVault;
   /** What the account switched to lacks of its sources' sidebar organization. */
   private sidebar: SidebarGapVault;
+  /** The Claude extension's sign-ins, sealed per account. */
+  private extensionVault: ExtensionVault;
+  private extensionSwitcher?: ExtensionSwitcher;
+  private lastExtension?: ExtensionOutcome;
+  /**
+   * The browsers and the extension's storage, for keeping the Claude extension's sign-in with
+   * the account at a switch. Without it (not macOS) the step never runs.
+   */
+  extension?: { system: BrowserSystem; storage: ExtensionStorage };
+  /** Where an extension step keeps its backup of the extension's folder; the data folder's `extension-scratch` when unset. */
+  extensionScratchDir?: string;
   /** The reading observers share; every Desktop operation drops it. */
   private shared?: { at: number; reading: Promise<DesktopReading> };
   constructor(
@@ -249,6 +272,12 @@ export class DesktopManager {
       },
     );
     this.sidebar = new SidebarGapVault(this.vault, this.now);
+    this.extensionVault = new ExtensionVault(
+      this.vault,
+      (text) => this.host.seal(text),
+      (data) => this.host.unseal(data),
+      this.now,
+    );
   }
   /** One diagnosis event; a log that fails changes nothing about the drafts. */
   private diagnose(event: string, fields?: Record<string, unknown>) {
@@ -264,6 +293,8 @@ export class DesktopManager {
     await removeLegacyDraftBackups(this.vault);
     // A draft step that stopped with Relay leaves a copy and the helper's result behind.
     await sweepStaleDraftScratch(this.host.draftScratchDir ?? os.tmpdir());
+    // So does an extension step: its backup of the extension's folder.
+    await clearScratch(this.extensionScratch);
     await this.refreshPending();
     const recovery = await readObject(this.vault, "journal.json");
     if (recovery)
@@ -606,24 +637,20 @@ export class DesktopManager {
         // Still inside `change`, so a restart relaunches Claude only once the helper is gone.
         if (current && current !== saved.accountUuid)
           await this.carryDrafts(current, saved.accountUuid, target, carried);
+        // Last, while Claude is still closed: a browser quit for it is open again before
+        // Claude starts. A switch that keeps Claude closed never quits the browser.
+        if (current !== saved.accountUuid)
+          await this.extensionStep(target, !options.closedOnly);
       };
       if (options.closedOnly) await change();
       else await this.restart(change, options.canProceed, options.beforeQuit);
-    })
-      .then(() => {
-        try {
-          this.onSwitchedTo?.(profileId);
-        } catch {
-          // A listener never changes how a switch ends.
-        }
-      })
-      .finally(() => {
-        try {
-          this.onSwitched?.();
-        } catch {
-          // A listener never changes how a switch ends.
-        }
-      });
+    }).finally(() => {
+      try {
+        this.onSwitched?.();
+      } catch {
+        // A listener never changes how a switch ends.
+      }
+    });
   }
   async cancelLogin() {
     return this.exclusive({ kind: "cancel-link" }, async () => {
@@ -713,6 +740,123 @@ export class DesktopManager {
         await this.apply(await this.historyPlan(account));
       });
     });
+  }
+  private get extensionScratch() {
+    return this.extensionScratchDir ?? path.join(this.store.root, "extension-scratch");
+  }
+  private switcher(): ExtensionSwitcher | undefined {
+    const ports = this.extension;
+    if (!ports) return undefined;
+    this.extensionSwitcher ??= new ExtensionSwitcher({
+      ...ports,
+      vault: this.extensionVault,
+      scratch: this.extensionScratch,
+      now: this.now,
+    });
+    return this.extensionSwitcher;
+  }
+  /** What the last extension step did, or undefined when none ran since Relay started. */
+  get extensionOutcome(): ExtensionOutcome | undefined {
+    return this.lastExtension;
+  }
+  /**
+   * Keeps the Claude extension's sign-in with `target`: saves what the extension holds and puts
+   * the target's in place (see ExtensionSwitcher). Never throws, so it can never fail or hold up
+   * a switch. Logs statuses and short ids only, never a key or a value.
+   */
+  private async extensionStep(
+    target: Account,
+    mayQuit: boolean,
+  ): Promise<ExtensionOutcome | undefined> {
+    try {
+      const switcher = this.switcher();
+      if (!switcher) return undefined;
+      const uuids = (account: Account) =>
+        [account.desktop?.accountUuid, account.auth?.accountUuid].filter(
+          (value): value is string => !!value,
+        );
+      const outcome = await switcher.run({
+        setting: this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION,
+        mayQuit,
+        target: uuids(target),
+        known: this.store.state.accounts.flatMap(uuids),
+      });
+      this.lastExtension = outcome;
+      this.diagnose("extension", {
+        to: shortId(target.desktop?.accountUuid ?? target.id),
+        result: outcome.result,
+        ...(outcome.reason ? { reason: outcome.reason } : {}),
+        restarted: outcome.restarted,
+        ...(outcome.reopened === undefined ? {} : { reopened: outcome.reopened }),
+        saved: outcome.saved,
+      });
+      return outcome;
+    } catch {
+      return undefined;
+    }
+  }
+  /**
+   * Runs the extension step for the account Desktop is on, without changing Claude: how to bring
+   * the extension along after a switch that left a running browser alone, and a way to test the
+   * setup. A running browser is quit and opened again, in mode "restart".
+   */
+  async syncExtension(): Promise<ExtensionOutcome> {
+    return this.exclusive({ kind: "switch" }, async () => {
+      if (this.pending)
+        throw new Error("Finish or cancel the current Desktop sign-in first.");
+      const state = await this.snapshot();
+      const active = state.activeProfileId
+        ? this.store.account(state.activeProfileId)
+        : undefined;
+      if (!active)
+        throw new Error("Switch Claude Desktop to a saved account first.");
+      const outcome = await this.extensionStep(active, true);
+      if (!outcome)
+        throw new Error("The Claude browser extension is not supported here.");
+      return outcome;
+    });
+  }
+  /**
+   * The browser (its name) a switch now would quit for the extension step: the mode is "restart",
+   * the extension is found and its browser runs. For a prompt that says so before it happens.
+   */
+  async extensionQuitsBrowser(): Promise<string | undefined> {
+    const switcher = this.switcher();
+    if (!switcher || !this.extension) return undefined;
+    const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
+    if (setting.mode !== "restart") return undefined;
+    const target = chooseInstance(switcher.instances(), setting.browser);
+    if (
+      !target ||
+      !(await this.extension.storage.available()) ||
+      !(await browserRunning(this.extension.system, target.app))
+    )
+      return undefined;
+    return BROWSERS[target.app].name;
+  }
+  /** The setting, the extension found, what is saved, and the last result; for the UI. */
+  async extensionStatus(): Promise<ExtensionStatus | undefined> {
+    const switcher = this.switcher();
+    if (!switcher || !this.extension) return undefined;
+    const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
+    const instances = switcher.instances();
+    const target = chooseInstance(instances, setting.browser);
+    const { system } = this.extension;
+    return {
+      setting,
+      instances,
+      target,
+      restoresTabs: target
+        ? startupRestores(
+            readJson(
+              system,
+              path.join(dataDir(system, target.app), target.profile, "Preferences"),
+            ),
+          )
+        : undefined,
+      saved: await this.extensionVault.list(),
+      last: this.lastExtension,
+    };
   }
   private async historyPlan(
     target: Account,

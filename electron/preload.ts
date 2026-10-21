@@ -20,11 +20,8 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:dismiss-sidebar-gap", id),
   updateAccountPlanning: (id, input) =>
     ipcRenderer.invoke("relay:account-planning", id, input),
-  browserProfiles: () => ipcRenderer.invoke("relay:browser-profiles"),
-  setAccountBrowser: (id, input) =>
-    ipcRenderer.invoke("relay:account-browser", id, input),
-  openAccountBrowser: (id) =>
-    ipcRenderer.invoke("relay:open-account-browser", id),
+  extensionStatus: () => ipcRenderer.invoke("relay:extension-status"),
+  syncExtension: () => ipcRenderer.invoke("relay:extension-sync"),
   showDiagnostics: () => ipcRenderer.invoke("relay:show-diagnostics"),
   setTrayLanguage: (language) =>
     ipcRenderer.invoke("relay:tray-language", language),

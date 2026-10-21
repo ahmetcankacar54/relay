@@ -9,6 +9,7 @@ import {
   DraftRetypePreference,
   SharedHistoryPreferences,
 } from "../features/SwitchPreferences";
+import { ExtensionPreference } from "../features/ExtensionPreference";
 import { ContinuationSettings } from "../features/ContinuationSettings";
 import { AutomationSettings } from "../features/AutomationControl";
 
@@ -159,6 +160,9 @@ export function Switching() {
             sync={() => relay.requestDesktop(active, "history")}
             t={t}
           />
+        </Card>
+        <Card className={cardClass}>
+          <ExtensionPreference />
         </Card>
         <Card className={cardClass}>
           <DraftRetypePreference

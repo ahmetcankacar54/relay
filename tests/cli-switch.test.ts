@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { cliFixture } from "./cli-fixture";
 import { jsonBytes, readObject, writeBytes } from "../electron/core/desktop-files";
+import { signInFor } from "./extension-world";
 
 const identity = async (claude: string) => (await readObject(claude, "config.json"))?.lastKnownAccountUuid;
 
@@ -135,27 +136,40 @@ test("an unknown account name is a usage error", async (t) => {
   assert.equal(await f.run("switch", "--yes"), 2);
 });
 
-test("relay switch opens the target's browser profile, and says when it is gone", async (t) => {
+test("relay switch leaves the Claude extension and its browser alone, and says where to sync it", async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const b = await f.saved("B");
-  const brave = path.join(f.temp, "home", "Library", "Application Support", "BraveSoftware", "Brave-Browser");
-  fs.mkdirSync(brave, { recursive: true });
-  fs.writeFileSync(
-    path.join(brave, "Local State"),
-    JSON.stringify({ profile: { info_cache: { "Profile 2": { name: "Alto" } } } }),
-  );
-  f.store().setBrowser(a.id, { app: "brave", profile: "Profile 2", name: "Alto" });
+  const dir = f.extension.install("brave");
+  f.extension.stored.set(dir, signInFor(b.desktop!.accountUuid, 2));
+  f.extension.state.running = true;
   assert.equal(await f.run("switch", "A", "--yes"), 0);
-  assert.deepEqual(f.opened, [["-n", "-b", "com.brave.Browser", "--args", "--profile-directory=Profile 2"]]);
-  assert.match(f.out(), /Opened the browser profile Brave · Alto/);
-  // B has none: nothing opens.
-  assert.equal(await f.run("switch", "B", "--yes"), 0);
-  assert.equal(f.opened.length, 1);
-  // A removed profile is reported, and the switch still succeeds.
-  f.store().setBrowser(b.id, { app: "brave", profile: "Profile 3", name: "Old" });
-  assert.equal(await f.run("switch", "A", "--yes"), 0);
-  assert.equal(await f.run("switch", "B", "--yes"), 0);
-  assert.match(f.out(), /The browser no longer has this profile: Brave · Old/);
-  assert.equal(f.opened.length, 2);
+  // Nothing quit, nothing opened, nothing read or written.
+  assert.deepEqual(f.extension.events, []);
+  assert.deepEqual(f.extension.opened, []);
+  assert.deepEqual(f.extension.stored.get(dir), signInFor(b.desktop!.accountUuid, 2));
+  assert.match(f.out(), /Switched to A/);
+  assert.match(f.out(), /This tool cannot change the Claude extension's sign-in; use Relay\.app: Switching/);
+  assert.ok(!(f.out() + f.err()).includes("SECRET"));
+  assert.equal(a.desktop!.accountUuid.length, 36);
 });
+
+test("relay switch says nothing about the extension when none is installed", async (t) => {
+  const f = await cliFixture(t);
+  await f.saved("A");
+  await f.saved("B");
+  assert.equal(await f.run("switch", "A", "--yes"), 0);
+  assert.doesNotMatch(f.out(), /extension/i);
+});
+
+test("the prompt never announces a browser quit, since the CLI never quits one", async (t) => {
+  const f = await cliFixture(t, { tty: true, answers: ["n"] });
+  await f.saved("A");
+  await f.saved("B");
+  f.extension.install("brave");
+  f.extension.state.running = true;
+  assert.equal(await f.run("switch", "A"), 1);
+  assert.doesNotMatch(f.out(), /Brave/);
+  assert.deepEqual(f.extension.events, []);
+});
+

@@ -8,6 +8,9 @@ test("a lost vault key points to reset-vault, which sets the old files aside and
   const f = await cliFixture(t);
   await f.saved("A");
   const b = await f.saved("B"); // Desktop is signed in to B
+  // The extension's sealed sign-ins are lost with the key too.
+  fs.mkdirSync(path.join(f.home, "desktop-vault", "extension"), { recursive: true });
+  fs.writeFileSync(path.join(f.home, "desktop-vault", "extension", "x.bin"), "RLY2 sealed with the lost key");
   f.security.removeItem("Relay Vault Key");
   assert.equal(await f.run("switch", "A", "--yes"), 5);
   assert.match(f.err(), /relay reset-vault/);
@@ -18,6 +21,8 @@ test("a lost vault key points to reset-vault, which sets the old files aside and
   assert.equal(fs.existsSync(path.join(vault, "accounts")), false);
   const lost = fs.readdirSync(vault).find((name) => name.startsWith("lost-key-"))!;
   assert.ok(fs.existsSync(path.join(vault, lost, "accounts")));
+  assert.equal(fs.existsSync(path.join(vault, "extension")), false);
+  assert.ok(fs.existsSync(path.join(vault, lost, "extension", "x.bin")));
   assert.notEqual(f.security.stored(), "");
   assert.ok(f.store().state.accounts.every((a) => a.desktop === undefined));
   f.clear();

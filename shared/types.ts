@@ -6,15 +6,18 @@ import type { LostFoundWeek } from "./lost-found";
 export type { LostFoundWeek, LostItem } from "./lost-found";
 import type { Tempo } from "./tempo";
 import type {
-  AccountBrowser,
-  BrowserOpenResult,
-  InstalledBrowser,
-} from "./browser-profiles";
+  ExtensionOutcome,
+  ExtensionSetting,
+  ExtensionStatus,
+} from "./browser-extension";
 export type {
-  AccountBrowser,
-  BrowserOpenResult,
-  InstalledBrowser,
-} from "./browser-profiles";
+  ExtensionInstance,
+  ExtensionMode,
+  ExtensionOutcome,
+  ExtensionSetting,
+  ExtensionStatus,
+  ExtensionTarget,
+} from "./browser-extension";
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
@@ -34,8 +37,6 @@ export interface Account {
   createdAt: string;
   cooldownUntil?: string;
   planning?: AccountPlanning;
-  /** The browser profile opened after a switch to this account; see shared/browser-profiles. */
-  browser?: AccountBrowser;
   desktop?: {
     accountUuid: string;
     orgId: string;
@@ -218,15 +219,10 @@ export interface RelayAPI {
     accountId: string,
     input: AccountPlanning,
   ): Promise<Account>;
-  /** The installed browsers and their profiles; none outside macOS. */
-  browserProfiles(): Promise<InstalledBrowser[]>;
-  /** Sets or clears the browser profile an account opens after a switch. */
-  setAccountBrowser(
-    accountId: string,
-    input: { app: AccountBrowser["app"]; profile: string } | null,
-  ): Promise<Account>;
-  /** Opens the account's browser profile now, as a switch would; "none" without one. */
-  openAccountBrowser(accountId: string): Promise<BrowserOpenResult | "none">;
+  /** The Claude browser extension's setting, what Relay found and saved, and the last result; undefined outside macOS. */
+  extensionStatus(): Promise<ExtensionStatus | undefined>;
+  /** Runs the extension step for the account Desktop is on, without changing Claude. */
+  syncExtension(): Promise<ExtensionOutcome>;
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;
@@ -337,6 +333,8 @@ export interface RelaySettings {
    * drafts are offered in the panel for Copy, and nothing asks for Accessibility for them.
    */
   draftRetype?: boolean;
+  /** What Relay does with the Claude browser extension's sign-in at a switch; missing means "restart". */
+  claudeExtension?: ExtensionSetting;
 }
 export type PrankLevel = "sometimes" | "rarely" | "off";
 export interface PlanningHours {

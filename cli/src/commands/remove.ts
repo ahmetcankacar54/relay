@@ -64,6 +64,9 @@ export const remove: Command = async ({ io, deps, parsed, t }) => {
     fs.rmSync(profile, { recursive: true, force: true });
     if (account.desktop)
       await writeBytes(ctx.paths.vault, `accounts/${account.desktop.accountUuid.toLowerCase()}.bin`, null);
+    // The Claude extension's saved sign-in goes with the account (kept under either uuid it has).
+    for (const uuid of new Set([account.desktop?.accountUuid, account.auth?.accountUuid]))
+      if (uuid) await writeBytes(ctx.paths.vault, `extension/${uuid.toLowerCase()}.bin`, null);
     ctx.store.update((s) => {
       s.accounts = s.accounts.filter((a) => a.id !== account.id);
       s.settings.desktopHistoryAccounts = s.settings.desktopHistoryAccounts.filter((id) => id !== account.id);

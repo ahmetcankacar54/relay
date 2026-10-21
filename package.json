@@ -31,6 +31,7 @@
     "format": "prettier --write src electron shared tests scripts"
   },
   "dependencies": {
+    "classic-level": "3.0.0",
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
@@ -83,6 +84,7 @@
     ],
     "asarUnpack": [
       "node_modules/node-pty/**/*",
+      "node_modules/classic-level/**/*",
       "dist-electron/desktop-automation"
     ],
     "electronFuses": {

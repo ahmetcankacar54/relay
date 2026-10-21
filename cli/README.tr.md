@@ -175,6 +175,13 @@ geçişi, Claude kapanınca ölmeyecek ayrı bir sürece devreder. Claude yenide
 Korumalı alanda (sandbox) çalışan bir oturumda bunu yapamaz; normal bir terminal kullanmanızı
 ister.
 
+## Claude tarayıcı eklentisi
+
+`relay switch` Claude tarayıcı eklentisinin girişini değiştirmez ve tarayıcıyı hiç kapatmaz.
+Relay.app değiştirir: eklentinin girişini kasaya kaydeder, yeni hesabınkini yerine koyar; açık bir
+tarayıcıyı kısa süreliğine kapatır. Eklenti kuruluysa `relay switch` bunu söyler; Relay.app'te Geçiş →
+Claude tarayıcı eklentisi → Şimdi eşitle.
+
 ## Otomasyon izni
 
 Bir terminal uygulaması Claude'u ilk kez kapatırken macOS, o uygulamanın Claude'u kontrol edip

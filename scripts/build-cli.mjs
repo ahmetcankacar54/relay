@@ -13,6 +13,9 @@ const result = await build({
   format: "esm",
   target: "node22",
   outfile: fileURLToPath(new URL("relay-cli.js", out)),
+  // Native, with an install script: the CLI package has no dependencies, so it is never installed
+  // beside the CLI and the extension step reports itself unavailable there.
+  external: ["classic-level"],
   // Readable on purpose: people can audit what they install.
   minify: false,
   metafile: true,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AppWindow, Globe2, Monitor, RefreshCw } from "lucide-react";
-import type { Account, InstalledBrowser } from "../../../shared/types";
+import type { Account, ExtensionStatus } from "../../../shared/types";
 import {
   desktopCliMismatch,
   duplicateCliAccount,
@@ -8,13 +8,6 @@ import {
 import { historySources } from "../../../shared/history-policy";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -36,13 +29,7 @@ import { DesktopSetup } from "../../features/DesktopSetup";
 import { PlanEditor } from "../../features/PlanEditor";
 import { rowActions } from "./AccountsTable";
 import { groupName, planLabel } from "./accountLabels";
-import {
-  browserOptions,
-  browserStatus,
-  browserValue,
-  chosenLabel,
-  openResultText,
-} from "./browserProfile";
+import { rowStatus } from "@/lib/extension-ui";
 
 export function AccountSheet({
   account,
@@ -127,123 +114,33 @@ function ConnectionRow({
 }
 
 /**
- * The browser profile opened after a switch to this account, so the Claude extension signed in
- * there is the one Claude finds. Profiles are listed when the sheet opens and the picker does.
+ * Whether the Claude browser extension's sign-in is saved for this account. Relay saves it at
+ * the switch away from the account, after the extension was signed in to it once.
  */
-export function BrowserProfileRow({
+export function ExtensionRow({
   account: a,
-  initialBrowsers,
+  initialStatus,
 }: {
   account: Account;
-  /** For static rendering; otherwise listed on mount. */
-  initialBrowsers?: InstalledBrowser[];
+  /** For static rendering; otherwise read on mount. */
+  initialStatus?: ExtensionStatus;
 }) {
-  const { api, accounts, busy, action } = useRelay();
-  const { t } = useI18n();
-  const [browsers, setBrowsers] = useState(initialBrowsers);
-  const [opened, setOpened] = useState<string>();
-  const list = useCallback(() => {
-    api.browserProfiles().then(setBrowsers, () => {});
+  const { api } = useRelay();
+  const { t, language } = useI18n();
+  const [status, setStatus] = useState(initialStatus);
+  const load = useCallback(() => {
+    api.extensionStatus().then((s) => setStatus(s), () => {});
   }, [api]);
-  useEffect(list, [list]);
-  useEffect(
-    () => setOpened(undefined),
-    [a.id, a.browser?.app, a.browser?.profile],
-  );
-  const status = browserStatus(a, browsers, t);
-  const options = browserOptions(a, accounts, browsers ?? [], t);
-  const current = a.browser ? browserValue(a.browser) : "none";
-  const label = chosenLabel(a, browsers);
+  useEffect(load, [load]);
+  const row = rowStatus(a, status, t, language);
   return (
     <ConnectionRow
       icon={<AppWindow />}
-      title={t("Tarayıcı profili", "Browser profile")}
-      tone={status.tone}
-      status={status.label}
-      actions={
-        <>
-          <Select
-            value={current}
-            disabled={!!busy}
-            onOpenChange={(open) => open && list()}
-            onValueChange={(value) => {
-              const option = options.find((o) => o.value === value);
-              void action(`browser:${a.id}`, () =>
-                api.setAccountBrowser(
-                  a.id,
-                  option ? { app: option.app, profile: option.profile } : null,
-                ),
-              );
-            }}
-          >
-            <SelectTrigger
-              size="sm"
-              aria-label={t(
-                `${a.name} tarayıcı profili`,
-                `${a.name} browser profile`,
-              )}
-              className="max-w-full min-w-0"
-            >
-              {/* Children keep the label in static markup, before Radix measures items. */}
-              <SelectValue>
-                {label ?? t("Profil seç", "Choose a profile")}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">{t("Yok", "None")}</SelectItem>
-              {label && !options.some((o) => o.value === current) && (
-                <SelectItem value={current}>{label}</SelectItem>
-              )}
-              {options.map((o) => (
-                <SelectItem key={o.value} value={o.value} disabled={o.disabled}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {a.browser && label && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!!busy}
-              onClick={() =>
-                void action(`browser-open:${a.id}`, async () =>
-                  setOpened(
-                    openResultText(
-                      await api.openAccountBrowser(a.id),
-                      label,
-                      t,
-                    ),
-                  ),
-                )
-              }
-            >
-              {t("Şimdi aç", "Open now")}
-            </Button>
-          )}
-        </>
-      }
-    >
-      {opened && (
-        <p role="status" className="text-xs">
-          {opened}
-        </p>
-      )}
-      {browsers?.length === 0 && (
-        <p className="text-xs text-warn-foreground">
-          {t(
-            "Desteklenen bir tarayıcı bulunamadı (Chrome, Brave, Edge, Chromium, Vivaldi).",
-            "No supported browser found (Chrome, Brave, Edge, Chromium, Vivaldi).",
-          )}
-        </p>
-      )}
-      <p className="text-xs text-muted-foreground">
-        {t(
-          "Claude uygulaması tarayıcı eklentisini hesaba göre bulur. Her hesap için ayrı bir tarayıcı profili aç ve Claude eklentisine orada bu hesapla bir kez giriş yap. Relay geçişten sonra yalnızca bu profili açar; eklentiye giriş yapmaz, girişini okumaz.",
-          "The Claude app finds the browser extension by account. Give each account its own browser profile, and sign in to the Claude extension there once, with this account. After a switch, Relay only opens this profile; it never signs in to the extension or reads its sign-in.",
-        )}
-      </p>
-    </ConnectionRow>
+      title={t("Tarayıcı eklentisi", "Browser extension")}
+      tone={row.tone}
+      status={row.label}
+      actions={null}
+    />
   );
 }
 
@@ -542,9 +439,9 @@ export function AccountSheetBody({
         />
         {/* The page-frame panel sits under the sheet; finish the sign-in here. */}
         {relay.flow?.accountId === a.id && <CliFlowPanel embedded />}
-        {/* Profiles open only on macOS; the browser preview shows the row too. */}
+        {/* The extension's sign-in is kept only on macOS; the browser preview shows the row too. */}
         {["darwin", "preview"].includes(data?.diagnostics?.platform ?? "") && (
-          <BrowserProfileRow key={a.id} account={a} />
+          <ExtensionRow key={a.id} account={a} />
         )}
       </Disclosure>
       {a.desktop && (

@@ -118,48 +118,55 @@ test("a state.lock held by another process makes update wait, then throw after l
   assert.ok(Date.now() - started >= 200);
 });
 
-test("a schema 2 registry opens with no browser profiles and is written as schema 3", (t) => {
+test("a schema 3 registry with a browser profile opens without it and is written as schema 4", (t) => {
   const dir = folder(t);
   new Store(dir).create({ name: "A", kind: "personal" });
   const old = raw(dir);
-  old.schema = 2;
+  old.schema = 3;
+  old.accounts[0].browser = { app: "brave", profile: "Default", name: "Work" };
   writeRaw(dir, old);
   const store = new Store(dir);
-  assert.equal(STATE_SCHEMA, 3);
-  assert.equal(raw(dir).schema, 3);
-  assert.equal(store.state.accounts[0].browser, undefined);
+  assert.equal(STATE_SCHEMA, 4);
+  assert.equal(raw(dir).schema, 4);
+  assert.equal("browser" in raw(dir).accounts[0], false);
+  assert.equal("browser" in store.state.accounts[0], false);
+  // The rest of the account is as it was.
+  assert.equal(store.state.accounts[0].name, "A");
 });
 
-test("an account's browser profile survives a round trip, is cleared, and is never shared", (t) => {
+test("the Claude extension setting survives a round trip, and a missing one means the default", (t) => {
   const dir = folder(t);
   const store = new Store(dir);
-  const a = store.create({ name: "A", kind: "personal" });
-  const b = store.create({ name: "B", kind: "personal" });
-  const work = { app: "brave", profile: "Default", name: "Work" } as const;
-  assert.deepEqual(store.setBrowser(a.id, work).browser, work);
-  assert.deepEqual(new Store(dir, CLI).account(a.id).browser, work);
-  assert.throws(
-    () => store.setBrowser(b.id, { ...work, name: "Other" }),
-    /Another account already uses this browser profile/,
-  );
-  // The same folder in another browser is another profile.
-  store.setBrowser(b.id, { ...work, app: "chrome" });
-  // Choosing it again for the same account is fine.
-  store.setBrowser(a.id, work);
-  assert.equal(store.setBrowser(a.id, undefined).browser, undefined);
-  assert.equal("browser" in raw(dir).accounts[0], false);
-  assert.deepEqual(store.setBrowser(b.id, work).browser, work);
+  assert.equal(store.state.settings.claudeExtension, undefined);
+  store.update((state) => {
+    state.settings.claudeExtension = {
+      mode: "closed",
+      browser: { app: "brave", profile: "Profile 1" },
+    };
+  });
+  assert.deepEqual(new Store(dir, CLI).state.settings.claudeExtension, {
+    mode: "closed",
+    browser: { app: "brave", profile: "Profile 1" },
+  });
+  store.update((state) => {
+    state.settings.claudeExtension = { mode: "off" };
+  });
+  assert.deepEqual(new Store(dir, CLI).state.settings.claudeExtension, { mode: "off" });
 });
 
-test("a browser profile with an unsafe folder or an unknown browser is refused", (t) => {
+test("an extension setting with an unsafe folder, an unknown browser or an unknown mode is refused", (t) => {
   const store = new Store(folder(t));
-  const a = store.create({ name: "A", kind: "personal" });
   for (const bad of [
-    { app: "brave", profile: "../Default", name: "x" },
-    { app: "brave", profile: "--flag", name: "x" },
-    { app: "safari", profile: "Default", name: "x" },
-    { app: "brave", profile: "Default", name: "" },
+    { mode: "restart", browser: { app: "brave", profile: "../Default" } },
+    { mode: "restart", browser: { app: "brave", profile: "--flag" } },
+    { mode: "restart", browser: { app: "safari", profile: "Default" } },
+    { mode: "always" },
+    { mode: "restart", extra: 1 },
   ])
-    assert.throws(() => store.setBrowser(a.id, bad as any));
-  assert.equal(store.account(a.id).browser, undefined);
+    assert.throws(() =>
+      store.update((state) => {
+        state.settings.claudeExtension = bad as any;
+      }),
+    );
+  assert.equal(store.state.settings.claudeExtension, undefined);
 });

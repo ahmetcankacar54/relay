@@ -171,6 +171,13 @@ it went.
 
 In a sandboxed session Relay cannot do this, and asks you to use a normal terminal.
 
+## The Claude browser extension
+
+`relay switch` does not change the sign-in of the Claude browser extension, and never quits your
+browser. Relay.app does: it saves the extension's sign-in in the vault and puts the new account's in
+place, closing a running browser for a moment. When the extension is installed, `relay switch` says
+so; in Relay.app use Switching → Claude browser extension → Sync now.
+
 ## The Automation permission
 
 The first time a terminal app quits Claude, macOS asks whether that app may control Claude. If you

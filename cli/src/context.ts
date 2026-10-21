@@ -136,6 +136,9 @@ export async function openContext(
   // a capture Relay.app may be running.
   host.draftScratchDir = path.join(paths.data, "cli-scratch");
   const desktop = new DesktopManager(paths.claude, store, host, deps.transcriptRoot);
+  // The Claude extension's sign-in follows the account here too; its backup stays out of the app's.
+  desktop.extension = deps.extension;
+  desktop.extensionScratchDir = path.join(paths.data, "cli-scratch", "extension");
   const lock = new ProcessLock(path.join(paths.vault, "operation.lock"), "cli");
   desktop.operationLock = {
     ensure: (kind) => {

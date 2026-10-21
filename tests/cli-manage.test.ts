@@ -38,9 +38,16 @@ test("remove forgets an account, its sealed sign-in and its profile, and leaves 
   });
   const sealed = path.join(f.home, "desktop-vault", "accounts", `${b.desktop!.accountUuid}.bin`);
   assert.ok(fs.existsSync(sealed));
+  // The Claude extension's saved sign-in for B goes too; A's stays.
+  const extension = path.join(f.home, "desktop-vault", "extension");
+  fs.mkdirSync(extension, { recursive: true });
+  fs.writeFileSync(path.join(extension, `${b.desktop!.accountUuid}.bin`), "sealed");
+  fs.writeFileSync(path.join(extension, "other.bin"), "sealed");
   const before = digest(f.claude);
   assert.equal(await f.run("remove", "B", "--yes"), 0);
   assert.equal(fs.existsSync(sealed), false);
+  assert.equal(fs.existsSync(path.join(extension, `${b.desktop!.accountUuid}.bin`)), false);
+  assert.ok(fs.existsSync(path.join(extension, "other.bin")));
   assert.equal(fs.existsSync(path.join(f.home, "profiles", b.id)), false);
   const after = f.store().state;
   assert.deepEqual(after.accounts.map((a) => a.name), ["A"]);

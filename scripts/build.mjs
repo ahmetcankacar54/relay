@@ -17,7 +17,8 @@ await build({
   format: "cjs",
   outdir: "dist-electron",
   outExtension: { ".js": ".cjs" },
-  external: ["electron", "node-pty"],
+  // classic-level is native (LevelDB for the Claude extension's sign-in) and loads from asarUnpack.
+  external: ["electron", "node-pty", "classic-level"],
   // Smaller code for main to parse and keep; names stay for stack traces and diagnostics.
   minify: true,
   keepNames: true,

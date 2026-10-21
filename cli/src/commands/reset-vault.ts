@@ -11,7 +11,7 @@ import { openContext } from "../context";
 import { CliError, EXIT } from "../io";
 
 /** What a lost key leaves unusable, set aside together. */
-const SET_ASIDE = ["accounts", "backups", "drafts", "journal.json", "pending.json", "format.json"];
+const SET_ASIDE = ["accounts", "backups", "drafts", "extension", "journal.json", "pending.json", "format.json"];
 
 /**
  * Starts the vault over when its Keychain key is gone for good: the files it sealed are set
