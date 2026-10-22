@@ -8,7 +8,7 @@
  *
  * A dark menu bar tints the template white, which would turn that face into its negative (white
  * eyes in a dark mask), so a second set (assets/mascot/source/tray-dark/*.png) maps the tones the
- * other way: the cream is solid, the fur half, and the dark brown is cut out.
+ * other way: the cream is solid, the fur three quarters, and the dark brown is cut out.
  *
  *   node --import tsx scripts/mascot-tray-from-rig.ts && npm run mascot
  */
@@ -87,8 +87,23 @@ function tone(l: number) {
   return 1;
 }
 
-/** The tone for a dark menu bar: the same three bands, light and dark swapped, the fur still half. */
-const darkTone = (l: number) => 1 - tone(l);
+/** Prototyping overrides: `--dark-fur=0.75 --dark-out=<dir>` writes only the dark set there. */
+const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
+/**
+ * The fur's tone on a dark menu bar. Half, as on a light one, sank into a busy wallpaper next to
+ * the white percent; three quarters reads clearly and still keeps the white mask apart from it.
+ * Fully solid lost the mask and looked like a cat.
+ */
+const DARK_FUR = Number(arg("dark-fur") ?? 0.75);
+
+/** The tone for a dark menu bar: the cream solid, the fur at DARK_FUR, the dark brown cut out. */
+function darkTone(l: number) {
+  if (l >= 88) return 1;
+  if (l >= 66) return DARK_FUR + ((l - 66) / 22) * (1 - DARK_FUR);
+  if (l >= 40) return DARK_FUR;
+  if (l >= 26) return (DARK_FUR * (l - 26)) / 14;
+  return 0;
+}
 
 async function headLayer(expression: Expression, polarity: Polarity) {
   const toneOf = polarity === "dark" ? darkTone : tone;
@@ -138,15 +153,17 @@ async function frame(name: MascotFrame, polarity: Polarity) {
     .composite(layers)
     .png()
     .toBuffer();
-  const dir = polarity === "dark" ? TRAY_DARK : TRAY;
+  const dir = polarity === "dark" ? (arg("dark-out") ?? TRAY_DARK) : TRAY;
   await mkdir(dir, { recursive: true });
   await rm(path.join(dir, `${name}.svg`), { force: true });
   await writeFile(path.join(dir, `${name}.png`), png);
 }
 
 async function main() {
+  // With --dark-out only the dark set is written there, for comparing variants.
+  const polarities = arg("dark-out") ? (["dark"] as const) : (["light", "dark"] as const);
   for (const name of Object.keys(FRAMES) as MascotFrame[])
-    for (const polarity of ["light", "dark"] as const) await frame(name, polarity);
+    for (const polarity of polarities) await frame(name, polarity);
   console.log("Built the menu bar frames from the rig's head. Run npm run mascot next.");
 }
 main().catch((error) => {
