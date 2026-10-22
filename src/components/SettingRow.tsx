@@ -43,6 +43,31 @@ export function SectionHeading({
   );
 }
 
+/**
+ * A titled group of setting rows (direction A): a small heading above one bordered box, the rows
+ * inside it divided by hairlines, as in the macOS settings.
+ */
+export function SettingGroup({
+  title,
+  id,
+  className,
+  children,
+}: {
+  title: ReactNode;
+  id: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section aria-labelledby={id} data-slot="setting-group" className="grid gap-1.5">
+      <h3 id={id} className="px-1 text-xs font-semibold text-muted-foreground">
+        {title}
+      </h3>
+      <div className={cn("rounded-xl border bg-card px-4", className)}>{children}</div>
+    </section>
+  );
+}
+
 /** Label and description on the left, a control on the right. */
 export function SettingRow({
   label,

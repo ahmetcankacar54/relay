@@ -1,20 +1,18 @@
+import { Check, CircleAlert } from "lucide-react";
 import { PageFrame } from "@/app/PageFrame";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Note,
   OptionSelect,
-  SectionHeading,
+  SettingGroup,
   SettingRow,
 } from "@/components/SettingRow";
 import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import type { PrankLevel, RelaySettings } from "../../shared/types";
 import { chooseCliFile } from "../features/CliSetup";
-
-const cardClass = "gap-0 px-5 py-4";
 
 /** Shows the diagnosis logs in Finder; main picks the files, the page passes no path. */
 export const showDiagnostics = ({
@@ -23,6 +21,24 @@ export const showDiagnostics = ({
 }: Pick<ReturnType<typeof useRelay>, "api" | "action">) =>
   action("diagnostics", () => api.showDiagnostics());
 
+/** A system row's value: a check when it is in place, a mark when it is not. */
+function Status({ ok, children }: { ok: boolean; children: string }) {
+  const Icon = ok ? Check : CircleAlert;
+  return (
+    <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+      <Icon
+        aria-hidden="true"
+        className={ok ? "size-4 text-ok" : "size-4 text-warn"}
+      />
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Settings in direction A: one centred column of titled groups (appearance, the menu bar,
+ * general, the system Relay works with, privacy), each a bordered box of rows.
+ */
 export function Settings() {
   const { api, data, desktop, settings, busy, version, action } = useRelay();
   const { t, language, setLanguage } = useI18n();
@@ -37,9 +53,8 @@ export function Settings() {
         "Appearance, language and technical details",
       )}
     >
-      <div className="grid gap-3 px-6 pb-6">
-        <Card className={cardClass}>
-          <SectionHeading title={t("Görünüm", "Appearance")} />
+      <div className="mx-auto grid w-full max-w-2xl gap-6 px-6 pb-8">
+        <SettingGroup id="settings-appearance" title={t("Görünüm", "Appearance")}>
           <SettingRow
             label={<span id="appearance-label">{t("Tema", "Theme")}</span>}
             description={t(
@@ -69,47 +84,6 @@ export function Settings() {
               </ToggleGroupItem>
             </ToggleGroup>
           </SettingRow>
-          {/* The menu bar panda and the switch window are macOS-only; other platforms keep the R icon. */}
-          {data?.diagnostics.platform === "darwin" && (
-            <>
-              <SettingRow
-                label={
-                  <span id="menu-bar-animation-label">
-                    {t("Panda animasyonları", "Panda animations")}
-                  </span>
-                }
-                description={t(
-                  "Kapalıyken panda yalnızca ifade değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
-                  "When off, the panda only changes expression. With Reduce motion on in macOS it never animates.",
-                )}
-              >
-                <Switch
-                  aria-labelledby="menu-bar-animation-label"
-                  checked={settings.menuBarAnimation !== false}
-                  disabled={disabled}
-                  onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
-                />
-              </SettingRow>
-              <SettingRow
-                label={
-                  <span id="switch-window-label">
-                    {t("Geçişte panda penceresini göster", "Show the panda window when switching")}
-                  </span>
-                }
-                description={t(
-                  "Claude uygulaması yeniden başlarken menü çubuğunun altında kısa bir sahne oynar.",
-                  "A short scene plays under the menu bar while the Claude app restarts.",
-                )}
-              >
-                <Switch
-                  aria-labelledby="switch-window-label"
-                  checked={settings.switchWindow !== false}
-                  disabled={disabled}
-                  onCheckedChange={(checked) => update({ switchWindow: checked })}
-                />
-              </SettingRow>
-            </>
-          )}
           <SettingRow
             label={
               <span id="panda-pranks-label">
@@ -139,9 +113,49 @@ export function Settings() {
               <ToggleGroupItem value="off">{t("Kapalı", "Off")}</ToggleGroupItem>
             </ToggleGroup>
           </SettingRow>
-        </Card>
-        <Card className={cardClass}>
-          <SectionHeading title={t("Dil", "Language")} />
+        </SettingGroup>
+        {/* The menu bar panda and the switch window are macOS-only; other platforms keep the R icon. */}
+        {data?.diagnostics.platform === "darwin" && (
+          <SettingGroup id="settings-menu-bar" title={t("Menü çubuğu", "Menu bar")}>
+            <SettingRow
+              label={
+                <span id="menu-bar-animation-label">
+                  {t("Panda animasyonları", "Panda animations")}
+                </span>
+              }
+              description={t(
+                "Kapalıyken panda yalnızca ifade değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
+                "When off, the panda only changes expression. With Reduce motion on in macOS it never animates.",
+              )}
+            >
+              <Switch
+                aria-labelledby="menu-bar-animation-label"
+                checked={settings.menuBarAnimation !== false}
+                disabled={disabled}
+                onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
+              />
+            </SettingRow>
+            <SettingRow
+              label={
+                <span id="switch-window-label">
+                  {t("Geçişte panda penceresini göster", "Show the panda window when switching")}
+                </span>
+              }
+              description={t(
+                "Claude uygulaması yeniden başlarken menü çubuğunun altında kısa bir sahne oynar.",
+                "A short scene plays under the menu bar while the Claude app restarts.",
+              )}
+            >
+              <Switch
+                aria-labelledby="switch-window-label"
+                checked={settings.switchWindow !== false}
+                disabled={disabled}
+                onCheckedChange={(checked) => update({ switchWindow: checked })}
+              />
+            </SettingRow>
+          </SettingGroup>
+        )}
+        <SettingGroup id="settings-general" title={t("Genel", "General")}>
           <SettingRow
             label={
               <span id="language-label">
@@ -165,9 +179,6 @@ export function Settings() {
               <ToggleGroupItem value="en">English</ToggleGroupItem>
             </ToggleGroup>
           </SettingRow>
-        </Card>
-        <Card className={cardClass}>
-          <SectionHeading title={t("Limitleri yenileme", "Limit refresh")} />
           <SettingRow
             label={t("Kullanım limitlerini yenile", "Refresh usage limits")}
             htmlFor="usage-interval"
@@ -196,28 +207,21 @@ export function Settings() {
               }
             />
           </SettingRow>
-        </Card>
-        <Card className={cardClass}>
-          <SectionHeading
-            title={t("Teknik bilgiler", "Technical details")}
-            description={t(
-              "Claude bağlantısı ve sürüm",
-              "Claude connection and version",
-            )}
-          />
+        </SettingGroup>
+        <SettingGroup id="settings-system" title={t("Sistem", "System")}>
           <SettingRow label="Claude Desktop">
-            <span className="text-sm text-muted-foreground">
+            <Status ok={!!desktop?.available}>
               {desktop?.available
                 ? t("Bulundu", "Detected")
                 : t("Bulunamadı / desteklenmiyor", "Not found / unsupported")}
-            </span>
+            </Status>
           </SettingRow>
           {/* The missing-CLI error names this path: Ayarlar → Claude Code CLI → Dosyayı seç. */}
           <SettingRow label="Claude Code CLI">
             <span className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground">
+              <Status ok={!!data?.diagnostics.version}>
                 {data?.diagnostics.version ?? t("Bulunamadı", "Not found")}
-              </span>
+              </Status>
               <Button
                 variant="outline"
                 size="sm"
@@ -228,41 +232,47 @@ export function Settings() {
               </Button>
             </span>
           </SettingRow>
-          <div className="grid justify-items-start gap-1.5 border-t border-border py-3">
+          <SettingRow
+            label={t("Tanılama dosyaları", "Diagnostics files")}
+            description={t(
+              "Yalnızca draft-events.json ve usage-issues.json dosyalarını gönder; klasörün geri kalanında kayıtlı girişlerin var.",
+              "Send only draft-events.json and usage-issues.json; the rest of the folder holds your saved sign-ins.",
+            )}
+          >
             <Button
               variant="outline"
               size="sm"
               onClick={() => void showDiagnostics({ api, action })}
             >
-              {t("Tanılama dosyalarını göster", "Show diagnostics files")}
+              {t("Finder’da göster", "Show in Finder")}
             </Button>
-            <p className="text-[13px] text-muted-foreground">
-              {t(
-                "Yalnızca draft-events.json ve usage-issues.json dosyalarını gönder; klasörün geri kalanında kayıtlı girişlerin var.",
-                "Send only draft-events.json and usage-issues.json; the rest of the folder holds your saved sign-ins.",
-              )}
-            </p>
-          </div>
-          <Note className="mb-2">
-            {t(
-              "Hesap geçişi, Claude uygulamasının yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",
-              "Switching accounts is an experimental integration with the Claude app’s local file format. Code sessions and local project records merge within your chosen sharing scope. Chat history and server-managed project groups remain account-specific.",
-            )}
-          </Note>
+          </SettingRow>
+        </SettingGroup>
+        <SettingGroup
+          id="settings-privacy"
+          title={t("Gizlilik ve güvenlik", "Privacy and security")}
+          className="grid gap-2 py-3"
+        >
           <Note>
             {t(
               "Claude uygulaması girişleri bu cihazda işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. Limit okuma girişi resmi Claude Code üzerinden tamamlanır.",
               "Claude app sign-ins are encrypted on this device using the operating system. Every switch creates a backup. The usage sign-in uses the official Claude Code.",
             )}
           </Note>
-          <Note className="mt-2">
+          <Note>
             {t(
               "Relay kayıtlı girişleri macOS Anahtarlık’ta tuttuğu bir anahtarla şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
               "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
             )}
           </Note>
-        </Card>
-        <p className="px-1 text-center text-[13px] text-muted-foreground">
+          <Note>
+            {t(
+              "Hesap geçişi, Claude uygulamasının yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",
+              "Switching accounts is an experimental integration with the Claude app’s local file format. Code sessions and local project records merge within your chosen sharing scope. Chat history and server-managed project groups remain account-specific.",
+            )}
+          </Note>
+        </SettingGroup>
+        <p className="px-1 text-center text-xs text-muted-foreground">
           {t(
             "Yerelde saklanır. Kontrol sende.",
             "Stored locally. You stay in control.",

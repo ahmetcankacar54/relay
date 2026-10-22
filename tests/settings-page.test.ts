@@ -22,7 +22,7 @@ function relayFor(): Relay {
   } as unknown as Relay;
 }
 
-test("technical details offer the diagnostics files, and say which ones to send", async () => {
+test("the system group offers the diagnostics files, and say which ones to send", async () => {
   const calls: string[] = [];
   const relay = relayFor();
   relay.api = { showDiagnostics: async () => void calls.push("show") } as unknown as Relay["api"];
@@ -40,11 +40,11 @@ test("technical details offer the diagnostics files, and say which ones to send"
     );
   assert.match(
     html("tr"),
-    /<button[^>]*>Tanılama dosyalarını göster<\/button><p[^>]*text-muted-foreground[^>]*>Yalnızca draft-events\.json ve usage-issues\.json dosyalarını gönder; klasörün geri kalanında kayıtlı girişlerin var\.<\/p>/,
+    /Tanılama dosyaları<\/label><p[^>]*text-muted-foreground[^>]*>Yalnızca draft-events\.json ve usage-issues\.json dosyalarını gönder; klasörün geri kalanında kayıtlı girişlerin var\.<\/p>(?:(?!<button)[\s\S])*<button[^>]*>Finder’da göster<\/button>/,
   );
   assert.match(
     html("en"),
-    /<button[^>]*>Show diagnostics files<\/button><p[^>]*>Send only draft-events\.json and usage-issues\.json; the rest of the folder holds your saved sign-ins\.<\/p>/,
+    /Diagnostics files<\/label><p[^>]*>Send only draft-events\.json and usage-issues\.json; the rest of the folder holds your saved sign-ins\.<\/p>(?:(?!<button)[\s\S])*<button[^>]*>Show in Finder<\/button>/,
   );
   // The button asks main; main takes no path from the renderer.
   const { showDiagnostics } = await import("../src/pages/Settings");
@@ -59,7 +59,7 @@ test("technical details offer the diagnostics files, and say which ones to send"
   assert.match(preload, /showDiagnostics: \(\) => ipcRenderer\.invoke\("relay:show-diagnostics"\)/);
 });
 
-test("Settings shows appearance, language, refresh interval and technical details", () => {
+test("Settings groups appearance, the menu bar, general, the system and privacy", () => {
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
@@ -68,8 +68,8 @@ test("Settings shows appearance, language, refresh interval and technical detail
     ),
   );
   for (const re of [
-    /Görünüm/, /Sistem/, /Açık/, /Koyu/, /Dil/, /Türkçe/, /English/,
-    /Limitleri yenileme/, /Elle/, /Bulundu/, /2\.1\.0/,
+    /Görünüm/, /Sistem/, /Açık/, /Koyu/, /Arayüz dili/, /Türkçe/, /English/,
+    /Menü çubuğu/, /Genel/, /Kullanım limitlerini yenile/, /Elle/, /Gizlilik ve güvenlik/, /Bulundu/, /2\.1\.0/,
     // The path the missing-CLI error names: Ayarlar → Claude Code CLI → Dosyayı seç.
     /Claude Code CLI<\/[^>]+>(?:(?!<button)[\s\S])*?2\.1\.0(?:(?!<button)[\s\S])*?<button[^>]*>Dosyayı seç<\/button>/,
     /Yerelde saklanır\. Kontrol sende\./, /Bağımsız araç · 0\.\d+\.\d+/,
@@ -181,7 +181,7 @@ test("Settings shows the panda pranks setting in English", () => {
     assert.match(html, re);
 });
 
-test("Settings explains the Keychain prompt in Turkish and English, under the technical details", () => {
+test("Settings explains the Keychain prompt in Turkish and English, under privacy and security", () => {
   const render = (language: "tr" | "en") =>
     renderToStaticMarkup(
       createElement(
@@ -201,8 +201,8 @@ test("Settings explains the Keychain prompt in Turkish and English, under the te
     note(en),
     "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
   );
-  // It belongs to the technical details card, after the existing notes.
-  assert.ok(tr.indexOf("Teknik bilgiler") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
+  // It belongs to the privacy group, after the note on how sign-ins are kept.
+  assert.ok(tr.indexOf("Gizlilik ve güvenlik") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
   assert.ok(tr.indexOf("Limit okuma girişi resmi Claude Code") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
   assert.ok(tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler") < tr.indexOf("Yerelde saklanır"));
 });
