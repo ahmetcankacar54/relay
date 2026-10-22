@@ -14,9 +14,32 @@ import {
   instanceValue,
   modeOptions,
   modeSentence,
+  pairedAccounts,
   startupLine,
   accountUuids,
 } from "@/lib/extension-ui";
+
+/** Which accounts have the extension's sign-in and the browser's claude.ai login saved, and which only one. */
+function pairLine(
+  status: ExtensionStatus,
+  accounts: Parameters<typeof pairedAccounts>[1],
+  t: (tr: string, en: string) => string,
+): string {
+  const { paired, half } = pairedAccounts(status, accounts);
+  const list = (names: string[]) => names.join(", ");
+  const parts = [
+    paired.length
+      ? t(`Eklenti + claude.ai oturumu kayıtlı: ${list(paired)}.`, `Extension and claude.ai login saved: ${list(paired)}.`)
+      : t("Henüz tam kayıtlı hesap yok.", "No account is fully saved yet."),
+    half.length
+      ? t(
+          `Yalnızca yarısı kayıtlı: ${list(half)}. O hesapla claude.ai'ye girip eklentiyi açtıktan sonra Kontrol et.`,
+          `Only half saved: ${list(half)}. Sign in to claude.ai with it, open the extension, then Check.`,
+        )
+      : "",
+  ];
+  return parts.filter(Boolean).join(" ");
+}
 
 /**
  * What Relay does with the Claude browser extension's sign-in at a switch: the mode, the browser
@@ -147,6 +170,14 @@ export function ExtensionPreference({
           <Button variant="outline" disabled={checking} onClick={() => void check()}>
             {t("Kontrol et", "Check")}
           </Button>
+        </SettingRow>
+      )}
+      {status.target && setting.mode !== "off" && (
+        <SettingRow
+          label={t("Kayıtlı hesap çiftleri", "Saved account pairs")}
+          description={pairLine(status, accounts, t)}
+        >
+          <span />
         </SettingRow>
       )}
       {result && (

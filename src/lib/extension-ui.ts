@@ -112,6 +112,29 @@ export const accountUuids = (account: Account) =>
     .filter((value): value is string => !!value);
 
 /**
+ * The accounts that have a complete pair saved (the extension's hints and the browser profile's
+ * claude.ai login), by name, and those that have only one half. Only a complete pair can be put
+ * in place by the modes that write to the browser.
+ */
+export function pairedAccounts(
+  status: ExtensionStatus,
+  accounts: Account[],
+): { paired: string[]; half: string[] } {
+  const hints = new Set(status.saved.map((x) => x.accountUuid.toLowerCase()));
+  const logins = new Set(status.cookiesSaved.map((x) => x.accountUuid.toLowerCase()));
+  const paired: string[] = [];
+  const half: string[] = [];
+  for (const account of accounts) {
+    const uuids = accountUuids(account);
+    const h = uuids.some((u) => hints.has(u));
+    const l = uuids.some((u) => logins.has(u));
+    if (h && l) paired.push(account.name);
+    else if (h || l) half.push(account.name);
+  }
+  return { paired, half };
+}
+
+/**
  * Where an account stands with the browser extension, and what to do next. `steps` is the
  * sign-in to make in the browser, `check` that Relay should look again after it, `settings`
  * that the fix is on the Switching page.

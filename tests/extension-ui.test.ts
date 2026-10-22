@@ -8,6 +8,7 @@ import {
   instanceLine,
   modeOptions,
   modeSentence,
+  pairedAccounts,
   extensionGuide,
   startupLine,
 } from "../src/lib/extension-ui";
@@ -288,4 +289,22 @@ test("the new reasons have a sentence in both languages, and none names a token 
   }
   assert.match(extensionLine(outcome({ result: "failed", reason: "schema-changed" }), en)!, /cookie layout/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "journal-pending" }), en)!, /not closed cleanly/);
+});
+
+test("a pair is complete only with the extension's hints and the claude.ai login both saved", () => {
+  const uuid = (n: number) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`;
+  const mk = (name: string, n: number): Account => ({ ...base, id: name, name, desktop: { accountUuid: uuid(n).toUpperCase(), orgId: ID, savedAt: NOW } });
+  const accounts = [mk("Vertex", 1), mk("Kişisel", 2), mk("Alto", 3), alto];
+  const saved = (n: number) => ({ accountUuid: uuid(n), savedAt: NOW });
+  const result = pairedAccounts(status({ saved: [saved(1), saved(2)], cookiesSaved: [saved(1), saved(3)] }), accounts);
+  assert.deepEqual(result, { paired: ["Vertex"], half: ["Kişisel", "Alto"] });
+  assert.deepEqual(pairedAccounts(status({ saved: [], cookiesSaved: [] }), accounts), { paired: [], half: [] });
+  const html = render(
+    relayFor("darwin", accounts, { mode: "closed" }),
+    createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "closed" }, saved: [saved(1), saved(2)], cookiesSaved: [saved(1), saved(3)] }) }),
+    "en",
+  );
+  assert.match(html, /Saved account pairs/);
+  assert.match(html, /Extension and claude\.ai login saved: Vertex\./);
+  assert.match(html, /Only half saved: Kişisel, Alto\./);
 });
