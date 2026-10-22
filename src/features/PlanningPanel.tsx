@@ -26,7 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { SectionHeading } from "@/components/SettingRow";
+import { SettingGroup } from "@/components/SettingRow";
 import { cn } from "@/lib/utils";
 import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
@@ -171,7 +171,7 @@ function span(hours: PlanningHours, t: T) {
 const cardClass = "gap-0 px-5 py-4";
 /** Account row: narrow = switch · name · order, editors below; wide (@xl) = one row. */
 const accountRowClass =
-  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 border-t py-3 @xl:grid-cols-[auto_minmax(0,1.3fr)_160px_minmax(0,1.1fr)_28px]";
+  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 border-t py-3 first:border-t-0 @xl:grid-cols-[auto_minmax(0,1.3fr)_160px_minmax(0,1.1fr)_28px]";
 const wideCell = "col-start-2 col-end-4 min-w-0 @xl:col-auto";
 const noteClass = "text-xs text-muted-foreground";
 
@@ -378,7 +378,7 @@ export function PlanningPanel({
             `${plannedToday} starts planned today`,
           );
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-6">
       <PlanTimeline
         settings={planned}
         accounts={accounts}
@@ -390,10 +390,11 @@ export function PlanningPanel({
         t={t}
       />
 
-      <Card
+      <SettingGroup
+        id="planning-early"
+        title={t("Önceden başlatma", "Early start")}
         className={cn(
-          cardClass,
-          "@container flex-row items-center gap-3.5",
+          "@container flex items-center gap-3.5 py-3.5",
           settings.autoStart && "border-primary/40",
         )}
       >
@@ -442,12 +443,13 @@ export function PlanningPanel({
           )}
           onCheckedChange={(autoStart) => update({ autoStart })}
         />
-      </Card>
+      </SettingGroup>
 
-      <Card className={cn(cardClass, "@container")}>
-        <SectionHeading
-          title={t("Çalışma saatleri ve tempo", "Work hours and tempo")}
-        />
+      <SettingGroup
+        id="planning-hours"
+        title={t("Çalışma saatleri ve tempo", "Work hours and tempo")}
+        className="@container"
+      >
         <div className="grid">
           <HoursRow
             id="weekday"
@@ -486,33 +488,43 @@ export function PlanningPanel({
             t={t}
           />
         </div>
-        <div className="mt-2.5 max-w-[420px]">
-          <TimeZonePicker
-            id="planning-zone"
-            label={t("Saat dilimi", "Time zone")}
-            value={zone}
-            disabled={disabled}
-            onChange={(timeZone) => update({ timeZone })}
-            t={t}
-            now={now}
-          />
+        <div className="grid gap-2.5 border-t py-3">
+          <div className="max-w-[420px]">
+            <TimeZonePicker
+              id="planning-zone"
+              label={t("Saat dilimi", "Time zone")}
+              value={zone}
+              disabled={disabled}
+              onChange={(timeZone) => update({ timeZone })}
+              t={t}
+              now={now}
+            />
+          </div>
+          <p className={noteClass}>
+            {t(
+              "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay hesapları kapasiteye ve tempoya göre işten önce ısıtır.",
+              "An end before the start runs into the next day. Relay warms accounts up before work by capacity and tempo.",
+            )}
+          </p>
         </div>
-        <p className={cn(noteClass, "mt-2.5")}>
-          {t(
-            "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay hesapları kapasiteye ve tempoya göre işten önce ısıtır.",
-            "An end before the start runs into the next day. Relay warms accounts up before work by capacity and tempo.",
-          )}
-        </p>
-      </Card>
+      </SettingGroup>
 
-      <Card className={cn(cardClass, "@container")}>
-        <SectionHeading
-          title={t("Hesaplar", "Accounts")}
-          description={t(
-            "Sıra yalnızca eşitlikte öncelik verir.",
-            "Order only breaks ties.",
-          )}
-        />
+      <SettingGroup
+        id="planning-accounts"
+        title={
+          <>
+            {t("Hesaplar", "Accounts")}
+            <span className="font-normal">
+              {" · "}
+              {t(
+                "Sıra yalnızca eşitlikte öncelik verir.",
+                "Order only breaks ties.",
+              )}
+            </span>
+          </>
+        }
+        className="@container"
+      >
         {included.map((entry, index) => {
           const account = accounts.find((a) => a.id === entry.id)!;
           const automatic = reference?.accounts.find(
@@ -701,7 +713,7 @@ export function PlanningPanel({
             </div>
           </div>
         ))}
-      </Card>
+      </SettingGroup>
 
       {!!keeper?.attempts.length && (
         <Card className={cn(cardClass, "@container")}>
