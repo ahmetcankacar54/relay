@@ -2,6 +2,8 @@ import { Fragment, type ReactNode } from "react";
 import {
   AppWindow,
   ArrowLeft,
+  Check,
+  CircleAlert,
   Link2,
   Globe2,
   LoaderCircle,
@@ -191,6 +193,14 @@ function CardTitle({ title, aside }: { title: string; aside?: ReactNode }) {
   );
 }
 
+/** A connection's leading square: a check when it is ready, a mark when it needs a step, its kind when absent. */
+const toneSquare = {
+  ok: "bg-ok/12 text-ok-foreground",
+  warn: "bg-warn/15 text-warn-foreground",
+  crit: "bg-crit/12 text-crit",
+  off: "bg-muted text-muted-foreground",
+} as const;
+
 /**
  * A connection: what it is for, its state and its action, on one row; a guide or a setup panel
  * opens under it.
@@ -218,8 +228,14 @@ function ConnectionRow({
       className="grid gap-2 border-t py-3.5 first:border-0 first:pt-0 last:pb-0"
     >
       <div className="flex min-w-0 items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">
-          {icon}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "grid size-8 shrink-0 place-items-center rounded-lg [&_svg]:size-4",
+            toneSquare[tone],
+          )}
+        >
+          {tone === "ok" ? <Check strokeWidth={2.6} /> : tone === "off" ? icon : <CircleAlert strokeWidth={2.4} />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -398,7 +414,6 @@ export function AccountDetailBody({
     t,
   );
   const signIn = usageSignInStatus(a, usage, waiting, t);
-  const email = a.desktop?.email ?? a.auth?.email;
   const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
   const ready = [!!a.desktop, signIn.tone === "ok"].filter(Boolean).length;
   return (
@@ -642,34 +657,26 @@ export function AccountDetailBody({
         <div className="grid gap-3">
           <Card className={cardClass}>
             <CardTitle title={t("Hesap", "Account")} />
-            <dl className="grid grid-cols-[80px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
-              <dt className="text-muted-foreground">{t("E-posta", "Email")}</dt>
-              <dd className="truncate" title={email}>
-                {a.desktop?.email ??
-                  a.auth?.email ??
-                  t("Giriş bekleniyor", "Waiting for sign-in")}
-              </dd>
-              <dt className="text-muted-foreground">
-                {t("Kuruluş", "Organization")}
-              </dt>
-              <dd className="min-w-0 break-words">{a.auth?.orgName ?? "—"}</dd>
-              <dt className="text-muted-foreground">
-                {t("Tür · grup", "Type · group")}
-              </dt>
-              <dd className="min-w-0 break-words">
-                {a.kind === "personal"
-                  ? t("Kişisel", "Personal")
-                  : t("Şirket", "Work")}
-                {a.kind === "work" ? ` · ${groupName(a, t)}` : ""}
-              </dd>
-              {a.auth?.subscription && (
-                <>
-                  <dt className="text-muted-foreground">
-                    {t("Abonelik", "Subscription")}
-                  </dt>
-                  <dd className="capitalize">{a.auth.subscription}</dd>
-                </>
-              )}
+            <dl className="-mx-1 grid text-[13px]">
+              {[
+                [t("E-posta", "Email"), a.desktop?.email ?? a.auth?.email ?? t("Giriş bekleniyor", "Waiting for sign-in")],
+                [t("Kuruluş", "Organization"), a.auth?.orgName ?? "—"],
+                [
+                  t("Tür · grup", "Type · group"),
+                  (a.kind === "personal" ? t("Kişisel", "Personal") : t("Şirket", "Work")) +
+                    (a.kind === "work" ? ` · ${groupName(a, t)}` : ""),
+                ],
+                ...(a.auth?.subscription
+                  ? [[t("Abonelik", "Subscription"), a.auth.subscription.replace(/^\w/, (c) => c.toUpperCase())]]
+                  : []),
+              ].map(([label, value]) => (
+                <div key={label} className="flex min-w-0 items-baseline justify-between gap-3 border-t px-1 py-2 first:border-0">
+                  <dt className="shrink-0 text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 truncate text-right" title={value}>
+                    {value}
+                  </dd>
+                </div>
+              ))}
             </dl>
           </Card>
           <Card className={cardClass}>

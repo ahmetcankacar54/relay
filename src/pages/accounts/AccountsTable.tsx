@@ -268,6 +268,7 @@ export function AccountsTable({
   const extension = useExtensionStatus({ check: true }).status;
   const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
   return (
+    <div className="overflow-hidden rounded-xl border bg-card">
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
@@ -433,5 +434,6 @@ export function AccountsTable({
         })}
       </TableBody>
     </Table>
+    </div>
   );
 }
