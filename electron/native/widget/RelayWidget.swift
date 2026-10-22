@@ -548,15 +548,33 @@ struct WeekBars: View {
 private let turkish = Locale.preferredLanguages.first?.hasPrefix("tr") == true
 private func say(_ tr: String, _ en: String) -> String { turkish ? tr : en }
 
-/** A widget with nothing to draw yet: what it is, and why. */
+/**
+ * The panda's head, from the extension's own Resources (scripts/build-native.mjs copies it there):
+ * the sandbox reads nothing of Relay's but its widget folder, so the image travels in the bundle.
+ */
+private let pandaHead: NSImage? = Bundle.main.url(forResource: "panda", withExtension: "png")
+  .flatMap { NSImage(contentsOf: $0) }
+
+/** A widget with nothing to draw yet: what it is, and why; while Relay scans, the panda beside it. */
 private struct Message: View {
   let title: String
   let line: String
+  var panda = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       Text(title).font(.headline)
-      Text(line).font(.caption).foregroundStyle(.secondary)
+      HStack(alignment: .center, spacing: 6) {
+        if panda, let image = pandaHead {
+          Image(nsImage: image)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
+            .frame(width: 26)
+            .accessibilityHidden(true)
+        }
+        Text(line).font(.caption).foregroundStyle(.secondary)
+      }
       Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -564,10 +582,12 @@ private struct Message: View {
 }
 
 /** What the account widgets show before their content: nil when they can draw it. */
-private func blocked(_ entry: TodayEntry) -> (String, String)? {
-  guard let snapshot = entry.snapshot else { return ("Relay", say("Relay'i açın", "Open Relay")) }
-  if entry.newDay { return (snapshot.text.title, snapshot.text.empty) }
-  if snapshot.state == "scanning" { return (snapshot.text.title, snapshot.text.status) }
+private func blocked(_ entry: TodayEntry) -> Message? {
+  guard let snapshot = entry.snapshot else { return Message(title: "Relay", line: say("Relay'i açın", "Open Relay")) }
+  if entry.newDay { return Message(title: snapshot.text.title, line: snapshot.text.empty) }
+  if snapshot.state == "scanning" {
+    return Message(title: snapshot.text.title, line: snapshot.text.status, panda: true)
+  }
   return nil
 }
 
@@ -673,7 +693,7 @@ struct AccountView: View {
   var body: some View {
     Group {
       if let message = blocked(entry) {
-        Message(title: message.0, line: message.1)
+        message
       } else if let snapshot = entry.snapshot, let active = snapshot.active {
         content(snapshot, active)
       } else if let snapshot = entry.snapshot {
@@ -737,7 +757,7 @@ struct AccountsView: View {
   var body: some View {
     Group {
       if let message = blocked(entry) {
-        Message(title: message.0, line: message.1)
+        message
       } else if let snapshot = entry.snapshot {
         if family == .systemLarge { large(snapshot) } else { medium(snapshot) }
       }
@@ -850,7 +870,7 @@ struct TodayView: View {
         if entry.newDay {
           Message(title: snapshot.text.title, line: snapshot.text.empty)
         } else if snapshot.state != "data" {
-          Message(title: snapshot.text.title, line: snapshot.text.status)
+          Message(title: snapshot.text.title, line: snapshot.text.status, panda: snapshot.state == "scanning")
         } else if family == .systemSmall {
           small(snapshot)
         } else {
@@ -977,7 +997,7 @@ struct WeekView: View {
   var body: some View {
     Group {
       if let message = blocked(entry) {
-        Message(title: message.0, line: message.1)
+        message
       } else if let snapshot = entry.snapshot, let week = snapshot.week {
         content(snapshot, week)
       } else {

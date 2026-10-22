@@ -119,6 +119,13 @@ export async function buildNativeHelpers() {
       output: path.join(appex, "Contents/MacOS/RelayWidget"),
       plist: widgetPlist(version),
       plistFile: path.join(appex, "Contents/Info.plist"),
+      // The sandboxed widget reads only Relay's widget folder, so its images travel in the bundle.
+      resources: [
+        [
+          path.resolve("electron/native/widget/panda.png"),
+          path.join(appex, "Contents/Resources/panda.png"),
+        ],
+      ],
       targets: ["arm64", "x86_64"].map((arch) => `${arch}-apple-macosx14.0`),
       // Without _NSExtensionMain chronod starts the extension and it exits at once.
       args: [
@@ -168,6 +175,11 @@ export async function buildNativeHelpers() {
       // The appex's Info.plist sits beside its binary, so it is written on every build.
       if (plistFile.startsWith(outDir))
         await fs.writeFile(plistFile, plist, { mode: 0o644 });
+    }
+    // Like the appex's Info.plist, its resources are copied on every build.
+    for (const [from, to] of product.resources ?? []) {
+      await fs.mkdir(path.dirname(to), { recursive: true });
+      await fs.copyFile(from, to);
     }
     await fs.mkdir(path.dirname(output), { recursive: true });
     const sourceHash = sha256(
