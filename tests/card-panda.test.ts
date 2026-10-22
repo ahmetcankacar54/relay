@@ -73,7 +73,8 @@ test("the card shows the menu bar's state, and a Desktop action this window star
   assert.equal(cardState(data, desktop({ busy: true }), "", NOW), "away");
   assert.equal(cardState(data, desktop(), "desktop-action:b", NOW), "away", "the switch this window asked for");
   assert.equal(cardState(data, desktop(), "cli:a", NOW), "idle", "a usage sign-in is no Desktop action");
-  assert.equal(cardState({ ...data, usage: { a: usage(100), b: usage(30, 100) } }, desktop(), "", NOW), "sleeping");
+  assert.equal(cardState({ ...data, usage: { a: usage(100), b: usage(30, 100) } }, desktop(), "", NOW), "full");
+  assert.equal(cardState(data, desktop({ running: false }), "", NOW), "sleeping", "Claude is closed");
   const attempts = [{ at: new Date(NOW - 30_000).toISOString(), status: "started" }];
   assert.equal(cardState({ ...data, planning: { attempts } } as never, desktop(), "", NOW), "warming");
 });
@@ -92,7 +93,7 @@ test("each state's look uses only the props and parts its pose has, and every po
   for (const look of looks) for (const motion of look.motion) assert.equal(motion, "blink");
   assert.deepEqual(
     Object.fromEntries(Object.entries(CARD_LOOKS).map(([state, look]) => [state, `${look.pose} ${look.expression} ${look.props.join(" ")}`.trim()])),
-    { idle: "peek open", hungry: "peek worried", alert: "stand wide bang", sleeping: "curl closed z", warming: "chew open bamboo" },
+    { idle: "peek open", hungry: "peek worried", full: "peek wide", alert: "stand wide bang", sleeping: "curl closed z", warming: "chew open bamboo" },
   );
 });
 

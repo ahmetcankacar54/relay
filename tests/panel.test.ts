@@ -460,7 +460,12 @@ test("the panel header shows the panda head for the menu bar pose", () => {
     /<header[\s\S]*?data-scene="([^"]+)"/.exec(render(relayFor(active, [active], usage, extra)))?.[1];
   assert.equal(scene({ active: use("active", 20, 10) }), "head-idle");
   assert.equal(scene({ active: use("active", 95, 10) }), "head-hungry");
-  assert.equal(scene({ active: use("active", 100, 10) }), "head-sleep");
+  // A full window keeps the wide eyes; the head sleeps while Claude is closed.
+  assert.equal(scene({ active: use("active", 100, 10) }), "head-hungry");
+  assert.equal(
+    scene({ active: use("active", 20, 10) }, { desktop: { ...desktopState("active"), running: false } }),
+    "head-sleep",
+  );
   assert.equal(
     scene({ active: use("active", 20, 10) }, { desktop: { ...desktopState("active"), recoveryRequired: true } }),
     "head-alert",

@@ -25,9 +25,11 @@ test("tray title shows the active account's five-hour percent used, compact", ()
   assert.equal(trayTitle(snap(usage(94)), NOW, "tr"), "%94 · 1:00");
   // Only a full window reads 100.
   assert.equal(trayTitle(snap(usage(99.9)), NOW, "tr"), "%99 · 1:00");
-  assert.equal(trayTitle(snap(usage(100)), NOW, "tr"), "%100 · 1:00");
+  // A full one gives the clock it reopens at, in the planning time zone.
+  assert.equal(trayTitle({ ...snap(usage(100)), timeZone: "Europe/Istanbul" }, NOW, "tr"), "14:00");
   assert.equal(trayTitle(snap(usage(0)), NOW, "tr"), "%0");
-  assert.equal(trayTitle(snap(usage(20, NOW - 3_600_000)), NOW), "");
+  // A reading too old to count: the panda sleeps and the title says so.
+  assert.equal(trayTitle(snap(usage(20, NOW - 3_600_000)), NOW), "—");
   assert.equal(trayTitle(snap(undefined), NOW), "");
   assert.equal(trayTitle(snap(usage(20), "missing"), NOW), "");
 });
@@ -35,7 +37,7 @@ test("tray title shows the active account's five-hour percent used, compact", ()
 test("the tooltip says what the title's number is", () => {
   assert.equal(trayTooltip(snap(usage(94)), "tr", NOW), "Relay — A · %94 kullanıldı · 1:00 sonra yenilenir");
   assert.equal(trayTooltip(snap(usage(94)), "en", NOW), "Relay — A · 94% used · renews in 1:00");
-  assert.equal(trayTooltip(snap(usage(20, NOW - 3_600_000)), "en", NOW), "Relay — A");
+  assert.equal(trayTooltip(snap(usage(20, NOW - 3_600_000)), "en", NOW), "Relay — A · usage unknown");
 });
 
 test("the panel opens under the icon and stays on screen", () => {

@@ -5,6 +5,8 @@ import {
   canRequestTraySwitch,
   trayAccountName,
   trayCountdown,
+  trayResetClock,
+  trayShortName,
   trayTitle,
   trayTooltip,
   trayUsageLabel,
@@ -272,6 +274,71 @@ test("the menu bar title adds the time left from 80 % used on, when the reset is
   assert.equal(titled(94), "%94");
   // A reset already past makes the reading old, so the title is empty rather than counting down.
   assert.equal(titled(94, new Date(now - 60_000).toISOString()), "");
+});
+
+/** The snapshot with "target" open in Claude and its five-hour window at `usedPercent`. */
+const onTarget = (usedPercent: number, extra: Partial<TraySnapshot> = {}, u: Partial<AccountUsage> = {}): TraySnapshot => {
+  const s = snapshot();
+  s.desktop!.activeProfileId = "target";
+  s.usage = {
+    target: { ...usage("target"), fiveHour: { usedPercent, resetsAt: "2026-10-13T19:50:00Z" }, ...u },
+  };
+  return { ...s, ...extra };
+};
+
+test("a full five-hour window shows the clock it reopens at, in the planning time zone", () => {
+  const istanbul = onTarget(100, { timeZone: "Europe/Istanbul" });
+  assert.equal(trayTitle(istanbul, now, "tr"), "22:50");
+  assert.equal(trayTitle(istanbul, now, "en"), "22:50");
+  assert.equal(trayTitle(onTarget(100, { timeZone: "UTC" }), now, "en"), "19:50");
+  assert.equal(trayTooltip(istanbul, "tr", now), "Relay — Max · %100 kullanıldı · 22:50’de yenilenir");
+  assert.equal(trayTooltip(istanbul, "en", now), "Relay — Max · 100% used · renews at 22:50");
+  // 99.9 % is not full yet: the countdown stays.
+  assert.equal(trayTitle(onTarget(99.9, { timeZone: "UTC" }), now, "tr"), "%99 · 9:50");
+  // Without a reset time a full window still reads as a percent.
+  const unknownReset = onTarget(100, { timeZone: "UTC" });
+  unknownReset.usage.target.fiveHour = { usedPercent: 100 };
+  assert.equal(trayTitle(unknownReset, now, "tr"), "%100");
+  // An unknown zone falls back to the system's clock rather than failing.
+  assert.match(trayTitle(onTarget(100, { timeZone: "Mars/Olympus" }), now, "en"), /^\d\d:\d\d$/);
+  assert.equal(trayResetClock("2026-10-13T19:50:00Z", now, "en", "UTC"), "19:50");
+  assert.equal(trayResetClock("2026-10-13T09:00:00Z", now, "en", "UTC"), undefined);
+});
+
+test("while a switch runs the title names the account it opens, cut short when long", () => {
+  const busy = (switchingTo?: string) =>
+    onTarget(40, { switchingTo, desktop: { ...desktop, activeProfileId: "target", busy: true, running: false } });
+  assert.equal(trayTitle(busy("current"), now, "tr"), "Current…");
+  assert.equal(trayTooltip(busy("current"), "tr", now), "Relay — Current hesabına geçiliyor…");
+  assert.equal(trayTooltip(busy("current"), "en", now), "Relay — Switching to Current…");
+  const long = busy("current");
+  long.accounts[0].name = "Şirket hesabı (ekip)\nikinci";
+  assert.equal(trayTitle(long, now, "tr"), "Şirket hesabı…");
+  assert.equal(trayShortName("Abcdefghijklmn"), "Abcdefghijklmn");
+  assert.equal(trayShortName("Abcdefghijklmno"), "Abcdefghijklm");
+  // Busy with no known target (a save, a link): the title keeps the percent, though Claude may be closed.
+  assert.equal(trayTitle(busy(), now, "tr"), "%40");
+  // A target left over once Desktop is no longer busy is ignored.
+  assert.equal(trayTitle(onTarget(40, { switchingTo: "current" }), now, "tr"), "%40");
+});
+
+test("the title shows a dash while the panda sleeps: Claude closed, or the reading failed or is old", () => {
+  const closed = onTarget(40, { desktop: { ...desktop, activeProfileId: "target", running: false } });
+  assert.equal(trayTitle(closed, now, "tr"), "—");
+  assert.equal(trayTooltip(closed, "tr", now), "Relay — Max · Claude uygulaması kapalı");
+  assert.equal(trayTooltip(closed, "en", now), "Relay — Max · Claude app closed");
+  const old = onTarget(40, {}, { checkedAt: new Date(now - 31 * 60_000).toISOString() });
+  assert.equal(trayTitle(old, now, "tr"), "—");
+  assert.equal(trayTooltip(old, "tr", now), "Relay — Max · limit bilinmiyor");
+  assert.equal(trayTooltip(old, "en", now), "Relay — Max · usage unknown");
+  assert.equal(trayTitle(onTarget(40, {}, { checkedAt: new Date(now - 29 * 60_000).toISOString() }), now, "tr"), "%40");
+  assert.equal(trayTitle(onTarget(40, {}, { status: "error", issue: "rate-limited" }), now, "tr"), "—");
+  // A refresh in progress keeps the reading it started from.
+  assert.equal(trayTitle(onTarget(40, {}, { status: "loading" }), now, "tr"), "%40");
+  // Before the first reading, and with no saved account open, there is nothing to sleep over.
+  assert.equal(trayTitle(onTarget(40, { usage: {} }), now, "tr"), "");
+  assert.equal(trayTitle(onTarget(40, {}, { status: "loading", checkedAt: undefined }), now, "tr"), "");
+  assert.equal(trayTitle({ ...snapshot(), desktop: { ...desktop, activeProfileId: undefined } }, now, "tr"), "");
 });
 
 test("a fresh recheck rejects a target when Desktop changes after menu creation", () => {

@@ -216,8 +216,8 @@ const ink = async (png: string) => {
 
 test("the generated tray module holds every frame at three scales, trimmed right after the panda", async () => {
   assert.deepEqual(Object.keys(mascotTrayFrames).sort(), [...MASCOT_FRAMES].sort());
-  // The head ends at x 19 of the 24 pt canvas; the "!" and the "z" reach x 23; the happy face of a switch is the head.
-  const width: Record<MascotFrame, number> = { idle: 19, blink: 19, hungry: 19, away: 19, sleep: 23, alert: 23 };
+  // The head ends at x 19 of the 24 pt canvas; the "!", the "z" and the clock reach x 23; the happy face of a switch is the head.
+  const width: Record<MascotFrame, number> = { idle: 19, blink: 19, hungry: 19, away: 19, sleep: 23, alert: 23, full: 23 };
   for (const frame of MASCOT_FRAMES) {
     const w = width[frame];
     assert.deepEqual(await sizes(mascotTrayFrames[frame]), [[1, w, 20], [2, w * 2, 40], [3, w * 3, 60]], frame);
@@ -236,6 +236,7 @@ test("trimming drops each frame's empty right side, never below the idle head an
     // A mark beside the head, ending between two points.
     alert: `${head}<rect x="20" y="2" width="2.4" height="8"/>`,
     sleep: `${head}<rect x="19" y="2" width="4" height="3"/>`,
+    full: `${head}<circle cx="20.5" cy="4.25" r="2"/>`,
     // Narrower than the head.
     away: '<rect x="7" y="1" width="8" height="18"/>',
   };
@@ -244,7 +245,7 @@ test("trimming drops each frame's empty right side, never below the idle head an
     const full = {} as Record<MascotFrame, Awaited<ReturnType<typeof renderTrayFrame>>>;
     for (const frame of MASCOT_FRAMES) full[frame] = await renderTrayFrame(tray, frame);
     const trimmed = await trimTrayFrames(full);
-    const width: Record<MascotFrame, number> = { idle: 19, blink: 19, hungry: 19, away: 19, alert: 23, sleep: 23 };
+    const width: Record<MascotFrame, number> = { idle: 19, blink: 19, hungry: 19, away: 19, alert: 23, sleep: 23, full: 23 };
     for (const frame of MASCOT_FRAMES) {
       const w = width[frame];
       assert.deepEqual(await sizes(trimmed[frame]), [[1, w, 20], [2, w * 2, 40], [3, w * 3, 60]], frame);
