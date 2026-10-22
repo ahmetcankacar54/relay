@@ -1,4 +1,4 @@
-import { Menu, nativeImage, Tray, type Rectangle } from "electron";
+import { Menu, nativeImage, systemPreferences, Tray, type Rectangle } from "electron";
 import {
   buildTrayMenu,
   canRequestTraySwitch,
@@ -15,7 +15,7 @@ import { TrayMenuLifecycle } from "./core/tray-menu-lifecycle";
 import { trayIcons } from "./tray-icons";
 import { trayClickAction } from "../shared/tray-panel";
 import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
-import { mascotTrayFrames } from "./mascot-tray-frames";
+import { mascotTrayFrames, mascotTrayFramesDark } from "./mascot-tray-frames";
 import { MascotPlayer } from "./core/mascot-player";
 import { TrayMascot } from "./core/tray-mascot";
 import { refreshTray } from "./core/tray-refresh";
@@ -47,12 +47,23 @@ function image(
   icon.setTemplateImage(template);
   return icon;
 }
-/** Every panda frame, decoded once; macOS tints template images for the menu bar. */
+type MenuBarTone = "light" | "dark";
+/**
+ * Every panda frame for each menu bar, decoded once. macOS tints a template image black on a light
+ * menu bar and white on a dark one; alpha alone cannot say which parts are dark, so the dark menu bar
+ * gets its own set with the tones swapped (a white mask and dark eyes, not their negative).
+ */
 function mascotImages() {
-  return new Map<MascotFrame, Electron.NativeImage>(
-    MASCOT_FRAMES.map((frame) => [frame, image(mascotTrayFrames[frame], true)]),
-  );
+  const set = (frames: typeof mascotTrayFrames) =>
+    new Map<MascotFrame, Electron.NativeImage>(MASCOT_FRAMES.map((frame) => [frame, image(frames[frame], true)]));
+  return { light: set(mascotTrayFrames), dark: set(mascotTrayFramesDark) } satisfies Record<MenuBarTone, unknown>;
 }
+/**
+ * The menu bar follows macOS's own appearance, not Relay's: the Appearance setting overrides
+ * nativeTheme for Relay's windows only, so the system default is read directly.
+ */
+const menuBarTone = (): MenuBarTone =>
+  systemPreferences.getUserDefault("AppleInterfaceStyle", "string") === "Dark" ? "dark" : "light";
 
 export class RelayTray {
   private readonly tray: Tray;
@@ -60,6 +71,10 @@ export class RelayTray {
   private readonly face: TrayFace<Electron.NativeImage>;
   private menu?: Menu;
   private readonly mascot?: TrayMascot;
+  /** The panda frame on screen, redrawn in the other set when the appearance changes. */
+  private frame: MascotFrame = "idle";
+  /** The appearance-change subscription, while the panda shows. */
+  private readonly themeSubscription?: number;
   private revision = 0;
   private destroyed = false;
   /**
@@ -76,16 +91,25 @@ export class RelayTray {
   constructor(private readonly options: RelayTrayOptions) {
     // macOS shows the panda; other platforms keep the colored R.
     const frames = process.platform === "darwin" ? mascotImages() : undefined;
-    this.tray = new Tray(frames ? frames.get("idle")! : image(trayIcons.color, false));
+    this.tray = new Tray(frames ? frames[menuBarTone()].get("idle")! : image(trayIcons.color, false));
     this.face = new TrayFace(this.tray);
     this.face.setToolTip("Relay");
-    if (frames)
+    if (frames) {
+      const show = (frame: MascotFrame) => {
+        this.frame = frame;
+        const tone = menuBarTone();
+        this.face.setImage(`${tone}:${frame}`, () => frames[tone].get(frame)!);
+      };
       this.mascot = new TrayMascot(
-        new MascotPlayer({
-          show: (frame) => this.face.setImage(frame, () => frames.get(frame)!),
-          motionAllowed: () => options.motionAllowed?.() ?? true,
-        }),
+        new MascotPlayer({ show, motionAllowed: () => options.motionAllowed?.() ?? true }),
       );
+      this.themeSubscription = systemPreferences.subscribeNotification(
+        "AppleInterfaceThemeChangedNotification",
+        () => {
+          if (!this.destroyed) show(this.frame);
+        },
+      );
+    }
     const panel = options.panel;
     this.panelMode = process.platform === "darwin" && !!panel;
     if (panel && this.panelMode) {
@@ -222,6 +246,8 @@ export class RelayTray {
     this.revision++;
     this.menuLifecycle.destroy();
     this.mascot?.destroy();
+    if (this.themeSubscription !== undefined)
+      systemPreferences.unsubscribeNotification(this.themeSubscription);
     if (!this.tray.isDestroyed()) this.tray.destroy();
     this.menu = undefined;
   }

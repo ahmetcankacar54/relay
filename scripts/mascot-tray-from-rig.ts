@@ -6,9 +6,13 @@
  * half-transparent, and the cream (cheek mask, brow spots, muzzle, ear rims, eye glints) is cut
  * out. Each frame picks one of the rig's expressions; "!" and "z" sit beside the head as before.
  *
+ * A dark menu bar tints the template white, which would turn that face into its negative (white
+ * eyes in a dark mask), so a second set (assets/mascot/source/tray-dark/*.png) maps the tones the
+ * other way: the cream is solid, the fur half, and the dark brown is cut out.
+ *
  *   node --import tsx scripts/mascot-tray-from-rig.ts && npm run mascot
  */
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp, { type OverlayOptions } from "sharp";
 import { MASCOT_FRAME_SIZE, type MascotFrame } from "../shared/mascot-frames";
@@ -16,6 +20,8 @@ import { MASCOT_FRAME_SIZE, type MascotFrame } from "../shared/mascot-frames";
 const root = path.resolve(import.meta.dirname, "..");
 const RIG_HEAD = path.join(root, "assets/mascot/source/rig/head.svg");
 const TRAY = path.join(root, "assets/mascot/source/tray");
+const TRAY_DARK = path.join(root, "assets/mascot/source/tray-dark");
+type Polarity = "light" | "dark";
 
 type Expression = "open" | "closed" | "happy" | "worried" | "wide";
 
@@ -81,7 +87,11 @@ function tone(l: number) {
   return 1;
 }
 
-async function headLayer(expression: Expression) {
+/** The tone for a dark menu bar: the same three bands, light and dark swapped, the fur still half. */
+const darkTone = (l: number) => 1 - tone(l);
+
+async function headLayer(expression: Expression, polarity: Polarity) {
+  const toneOf = polarity === "dark" ? darkTone : tone;
   const svg = withExpression(await readFile(RIG_HEAD, "utf8"), expression);
   const px = HEAD_WIDTH * SCALE * SUPERSAMPLE;
   const height = Math.round((px * HEAD_BOX.height) / HEAD_BOX.width);
@@ -97,7 +107,7 @@ async function headLayer(expression: Expression) {
   const out = Buffer.alloc(info.width * info.height * 4);
   for (let i = 0, o = 0; i < data.length; i += info.channels, o += 4) {
     const alpha = data[i + 3] / 255;
-    out[o + 3] = Math.round(255 * alpha * tone(lightness(data[i], data[i + 1], data[i + 2])));
+    out[o + 3] = Math.round(255 * alpha * toneOf(lightness(data[i], data[i + 1], data[i + 2])));
   }
   return sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } })
     .resize(HEAD_WIDTH * SCALE, Math.round((HEAD_WIDTH * SCALE * HEAD_BOX.height) / HEAD_BOX.width), {
@@ -107,11 +117,11 @@ async function headLayer(expression: Expression) {
     .toBuffer();
 }
 
-async function frame(name: MascotFrame) {
+async function frame(name: MascotFrame, polarity: Polarity) {
   const { expression, mark } = FRAMES[name];
   const width = MASCOT_FRAME_SIZE.width * SCALE;
   const height = MASCOT_FRAME_SIZE.height * SCALE;
-  const head = await headLayer(expression);
+  const head = await headLayer(expression, polarity);
   const headHeight = (await sharp(head).metadata()).height ?? height;
   const layers: OverlayOptions[] = [
     { input: head, left: 0, top: Math.round((height - headHeight) / 2) },
@@ -128,12 +138,15 @@ async function frame(name: MascotFrame) {
     .composite(layers)
     .png()
     .toBuffer();
-  await rm(path.join(TRAY, `${name}.svg`), { force: true });
-  await writeFile(path.join(TRAY, `${name}.png`), png);
+  const dir = polarity === "dark" ? TRAY_DARK : TRAY;
+  await mkdir(dir, { recursive: true });
+  await rm(path.join(dir, `${name}.svg`), { force: true });
+  await writeFile(path.join(dir, `${name}.png`), png);
 }
 
 async function main() {
-  for (const name of Object.keys(FRAMES) as MascotFrame[]) await frame(name);
+  for (const name of Object.keys(FRAMES) as MascotFrame[])
+    for (const polarity of ["light", "dark"] as const) await frame(name, polarity);
   console.log("Built the menu bar frames from the rig's head. Run npm run mascot next.");
 }
 main().catch((error) => {

@@ -8,7 +8,7 @@ import {
   checkMascotSources, checkRigSources, checkTraySources, renderMascot, renderTrayFrame, rigMarkup, sourcesHash, trimTrayFrames,
   writeMascot,
 } from "../scripts/mascot-assets";
-import { mascotTrayFrames } from "../electron/mascot-tray-frames";
+import { mascotTrayFrames, mascotTrayFramesDark } from "../electron/mascot-tray-frames";
 import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
 import { PANDA_RIG } from "../src/mascot/panda-rig";
 import { PANDA_POSES, RIG_ID_TOKEN, type PandaPose } from "../shared/panda-poses";
@@ -308,11 +308,17 @@ test("the sources hash follows file names and contents and ignores hidden files"
 test("the generator writes the sources hash into the module header", async () => {
   const dir = await trayDir();
   try {
-    for (const frame of MASCOT_FRAMES) await writeFile(path.join(dir, "tray", `${frame}.svg`), svg());
+    await mkdir(path.join(dir, "tray-dark"), { recursive: true });
+    for (const frame of MASCOT_FRAMES) {
+      await writeFile(path.join(dir, "tray", `${frame}.svg`), svg());
+      await writeFile(path.join(dir, "tray-dark", `${frame}.svg`), svg('opacity="0.5"'));
+    }
     await cp(RIG, path.join(dir, "rig"), { recursive: true });
     await writeMascot(await renderMascot(dir), dir);
     const tray = await readFile(path.join(dir, "electron/mascot-tray-frames.ts"), "utf8");
     assert.equal(SOURCES_HEADER.exec(tray)?.[1], await sourcesHash(path.join(dir, "tray")));
+    assert.equal(/^\/\/ Dark sources: (sha256-[0-9a-f]{64})$/m.exec(tray)?.[1], await sourcesHash(path.join(dir, "tray-dark")));
+    assert.match(tray, /export const mascotTrayFramesDark: typeof mascotTrayFrames = /);
     const rig = await readFile(path.join(dir, "src/mascot/panda-rig.ts"), "utf8");
     assert.equal(SOURCES_HEADER.exec(rig)?.[1], await sourcesHash(path.join(dir, "rig")));
   } finally {
@@ -622,4 +628,31 @@ test("rig markup is the same for CRLF and LF sources, as the sources hash is", (
   assert.doesNotMatch(crlf.replaceAll("\r\n", ""), /\r/);
   assert.equal(rigMarkup(crlf), rigMarkup(lf));
   assert.doesNotMatch(rigMarkup(crlf), /\r/);
+});
+
+test("the dark menu bar set holds every frame at the light set's widths, with the tones swapped", async () => {
+  assert.deepEqual(Object.keys(mascotTrayFramesDark).sort(), [...MASCOT_FRAMES].sort());
+  for (const frame of MASCOT_FRAMES) {
+    // The same widths, so the title never moves when the appearance changes.
+    assert.deepEqual(await sizes(mascotTrayFramesDark[frame]), await sizes(mascotTrayFrames[frame]), frame);
+    // Swapped tones, not the same image: the white mask is ink and the dark eyes are not.
+    assert.notEqual(mascotTrayFramesDark[frame][2].png, mascotTrayFrames[frame][2].png, frame);
+  }
+  const module = await readFile(path.join(root, "electron/mascot-tray-frames.ts"), "utf8");
+  const header = /^\/\/ Dark sources: (sha256-[0-9a-f]{64})$/m.exec(module.slice(0, module.indexOf("export ")));
+  assert.ok(header, "the generated module must name its dark sources' hash; run npm run mascot");
+  assert.equal(
+    header[1],
+    await sourcesHash(path.join(root, "assets/mascot/source/tray-dark")),
+    "assets/mascot/source/tray-dark changed since the module was generated; run npm run mascot",
+  );
+});
+
+test("the menu bar picks its panda set by macOS's appearance and redraws when it changes", async () => {
+  const tray = await readFile(path.join(root, "electron/tray.ts"), "utf8");
+  assert.match(tray, /getUserDefault\("AppleInterfaceStyle", "string"\) === "Dark"/);
+  assert.match(tray, /subscribeNotification\(\s*"AppleInterfaceThemeChangedNotification"/);
+  assert.match(tray, /unsubscribeNotification\(this\.themeSubscription\)/);
+  // Relay's own Appearance setting must not decide it.
+  assert.doesNotMatch(tray, /nativeTheme\./);
 });
