@@ -220,6 +220,53 @@ function storeTab(tab: UsageTab) {
   }
 }
 
+/**
+ * The warning threshold as a segmented control, off while warnings are; Usage → Uyarılar and
+ * Settings → Genel both show it. `short` drops the "kullanılınca" for a narrow row.
+ */
+export function WarningThreshold({
+  labelledBy,
+  short,
+}: {
+  labelledBy: string;
+  short?: boolean;
+}) {
+  const { api, settings, busy, desktop, action } = useRelay();
+  const { t, language } = useI18n();
+  const disabled = !!busy || !!desktop?.busy;
+  return (
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      size="sm"
+      aria-labelledby={labelledBy}
+      value={String(settings.usageWarningPercent)}
+      disabled={disabled || !settings.usageWarnings}
+      onValueChange={(v) =>
+        v &&
+        void action("settings", () =>
+          api.updateSettings({
+            usageWarningPercent: Number(
+              v,
+            ) as typeof settings.usageWarningPercent,
+          }),
+        )
+      }
+    >
+      {[80, 90, 95].map((n) => (
+        <ToggleGroupItem key={n} value={String(n)}>
+          {short
+            ? formatPercent(n, language)
+            : t(
+                `${formatPercent(n, "tr")} kullanılınca`,
+                `At ${formatPercent(n, "en")} used`,
+              )}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
 /** Whether the page will warn about accounts near their limit, and at what share; with where the figures come from. */
 export function UsageWarnings() {
   const { api, settings, busy, desktop, action } = useRelay();
@@ -256,31 +303,7 @@ export function UsageWarnings() {
           "Applies to either the 5-hour or weekly usage limit.",
         )}
       >
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          size="sm"
-          aria-labelledby="usage-threshold"
-          value={String(settings.usageWarningPercent)}
-          disabled={disabled || !settings.usageWarnings}
-          onValueChange={(v) =>
-            v &&
-            update({
-              usageWarningPercent: Number(
-                v,
-              ) as typeof settings.usageWarningPercent,
-            })
-          }
-        >
-          {[80, 90, 95].map((n) => (
-            <ToggleGroupItem key={n} value={String(n)}>
-              {t(
-                `${formatPercent(n, "tr")} kullanılınca`,
-                `At ${formatPercent(n, "en")} used`,
-              )}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+        <WarningThreshold labelledBy="usage-threshold" />
       </SettingRow>
       <details className="border-t border-border pt-3">
         <summary className="cursor-pointer text-sm font-medium">
