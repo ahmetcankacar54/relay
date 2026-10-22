@@ -8,8 +8,19 @@ const helpers = ["desktop-automation"];
 /** The widget extension's bundle in dist-electron; electron-builder copies it to Contents/PlugIns. */
 export const WIDGET_APPEX = "RelayWidget.appex";
 
-function widgetPlist(version) {
-  // The extension point is all chronod needs; versions follow Relay's.
+/**
+ * The widget's build number: an integer from its source and images. chronod keeps a widget
+ * extension's list of kinds per bundle version, so with the version alone a new Relay showed the
+ * widgets of the first install it saw; this changes whenever the widget does.
+ */
+export function widgetBuild(...inputs) {
+  const hash = createHash("sha256");
+  for (const input of inputs) hash.update(input);
+  return String(Number.parseInt(hash.digest("hex").slice(0, 8), 16));
+}
+
+export function widgetPlist(version, build = version) {
+  // The extension point is all chronod needs; the marketing version follows Relay's.
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -20,7 +31,7 @@ function widgetPlist(version) {
 <key>CFBundlePackageType</key><string>XPC!</string>
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleShortVersionString</key><string>${version}</string>
-<key>CFBundleVersion</key><string>${version}</string>
+<key>CFBundleVersion</key><string>${build}</string>
 <key>CFBundleSupportedPlatforms</key><array><string>MacOSX</string></array>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>com.apple.widgetkit-extension</string></dict>
@@ -117,7 +128,13 @@ export async function buildNativeHelpers() {
       name: "widget",
       source: path.resolve("electron/native/widget/RelayWidget.swift"),
       output: path.join(appex, "Contents/MacOS/RelayWidget"),
-      plist: widgetPlist(version),
+      plist: widgetPlist(
+        version,
+        widgetBuild(
+          await fs.readFile(path.resolve("electron/native/widget/RelayWidget.swift")),
+          await fs.readFile(path.resolve("electron/native/widget/panda.png")),
+        ),
+      ),
       plistFile: path.join(appex, "Contents/Info.plist"),
       // The sandboxed widget reads only Relay's widget folder, so its images travel in the bundle.
       resources: [

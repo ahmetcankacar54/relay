@@ -660,6 +660,13 @@ function installBundle(bundle) {
   } catch {
     // Launching Relay registers it as well.
   }
+  // chronod, WidgetKit's daemon, caches each extension's widget kinds; restarting it makes the
+  // gallery list the new ones. launchd starts it again at once.
+  try {
+    execFileSync("/usr/bin/killall", ["chronod"]);
+  } catch {
+    // Not running.
+  }
   process.stdout.write(`Installed ${target}\n`);
 }
 
