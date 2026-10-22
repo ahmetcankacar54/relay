@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
-import { AccountDetail, AccountDetailBody, accountFromHash, accountHash } from "../src/pages/accounts/AccountDetail";
+import { AccountDetail, AccountDetailBody, accountFromHash, accountHash, historyLine } from "../src/pages/accounts/AccountDetail";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
 import { filterAccounts, groupName, planColumn, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { fakeDom } from "./fake-dom";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type Snapshot, type UsageIssue } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type ExtensionStatus, type Snapshot, type UsageIssue } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -355,9 +355,10 @@ test("the account page shows identity, usage, the connections and a closed histo
   assert.match(html, />Yenile…<\/button>/);
   assert.match(html, /Limit okuma<\/span>/);
   assert.match(html, /aria-label="Limit okuma girişini doğrula"/);
-  assert.match(html, /Claude uygulaması ve limitler: 2\/2 hazır/);
-  // History is a disclosure that starts closed.
+  assert.match(html, /<h2[^>]*>Bağlantılar<\/h2><span[^>]*>2 \/ 2 hazır<\/span>/);
+  // History is a disclosure that starts closed, saying whether it is shared.
   assert.equal(disclosureState(html, "Code geçmişi"), "false");
+  assert.match(html, /data-slot="disclosure-summary"[^>]*>paylaşılmıyor</);
   // A healthy account has no status strip: the header says it.
   assert.doesNotMatch(html, /data-slot="account-status"/);
   assert.doesNotMatch(html, /Desktop girişi|tarayıcı girişi|Tarayıcı girişi/);
@@ -673,4 +674,176 @@ test("no view mixes the old Desktop and connection wording with the two sign-in 
     for (const [name, html] of views)
       assert.doesNotMatch(html, forbidden, `${language}: ${name}`);
   }
+});
+
+test("on macOS the connections count the browser extension too, unless it is off or in no browser", () => {
+  const brave = { app: "brave", profile: "Default", name: "Kişisel" } as const;
+  const extension = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
+    setting: { mode: "restart" },
+    instances: [brave],
+    target: brave,
+    saved: [{ accountUuid: desktop.accountUuid, savedAt: iso(NOW) }],
+    ...over,
+  });
+  const mac = (extensionStatus?: ExtensionStatus, platform = "darwin") =>
+    wrap(
+      relayFor({
+        data: { settings: DEFAULT_SETTINGS, usage, accounts, authFlows: [], diagnostics: { platform } } as unknown as Snapshot,
+      }),
+      createElement(AccountDetailBody, { account: a, now: NOW, extensionStatus }),
+    );
+  const count = (html: string) => /<h2[^>]*>Bağlantılar<\/h2><span[^>]*>([^<]*)<\/span>/.exec(html)?.[1];
+  assert.equal(count(mac(extension())), "3 / 3 hazır");
+  assert.equal(count(mac(extension({ saved: [] }))), "2 / 3 hazır");
+  // While it is read it counts, not yet ready.
+  assert.equal(count(mac()), "2 / 3 hazır");
+  // Turned off, or in no browser, it is not a connection to make.
+  assert.equal(count(mac(extension({ setting: { mode: "off" } }))), "2 / 2 hazır");
+  assert.equal(count(mac(extension({ instances: [], target: undefined }))), "2 / 2 hazır");
+  // Elsewhere there is no extension row to count.
+  assert.equal(count(mac(extension(), "win32")), "2 / 2 hazır");
+});
+
+test("the closed Code history row says whether, and with how many accounts, it is shared", () => {
+  const t = (tr: string) => tr;
+  const en = (_: string, english: string) => english;
+  assert.equal(historyLine(0, "same-group", t), "paylaşılmıyor");
+  assert.equal(historyLine(2, "same-group", t), "aynı gruptaki 2 hesapla paylaşılıyor");
+  assert.equal(historyLine(2, "all", t), "2 hesapla paylaşılıyor");
+  assert.equal(historyLine(1, "same-group", en), "shared with 1 account in the same group");
+  assert.equal(historyLine(0, "off", en), "not shared");
+  // On the page: `c` is in `a`'s group with a saved Claude app sign-in, so the next merge brings its history.
+  const summary = (html: string) => /data-slot="disclosure-summary"[^>]*>([^<]*)</.exec(html)?.[1];
+  assert.equal(summary(sheetFor(a)), "aynı gruptaki 1 hesapla paylaşılıyor");
+  assert.equal(summary(sheetFor(a, { settings: { ...DEFAULT_SETTINGS, desktopHistoryTransfer: "off" } })), "paylaşılmıyor");
+});
+
+/** A table of `a` (active), `c` and `b`, with `c` suggested unless said otherwise. */
+const suggestedTable = (extra: Partial<Relay> = {}, usageFor: Record<string, AccountUsage> = {}, language: "tr" | "en" = "tr") =>
+  renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+      createElement(
+        RelayContext.Provider,
+        { value: relayOf({ suggestion: c, ...extra }, { c: { ...usage.a, accountId: "c" }, ...usageFor }) },
+        createElement(AccountsTable, { accounts: [a, c, b], open() {}, link() {} }),
+      ),
+    ),
+  );
+const rowsOf = (html: string) => html.split("<tr").slice(2);
+
+test("the suggested account's row is marked and offers its switch inline", () => {
+  const [activeRow, suggestedRow, otherRow] = rowsOf(suggestedTable());
+  assert.match(suggestedRow, /Üçüncü<\/span><span[^>]*>önerilen<\/span>/);
+  assert.match(suggestedRow, /<button[^>]*data-variant="default"[^>]*data-size="xs"[^>]*aria-label="Geç · Üçüncü"[^>]*>Geç<\/button>/);
+  for (const row of [activeRow, otherRow]) {
+    assert.doesNotMatch(row, /önerilen/);
+    assert.doesNotMatch(row, />Geç<\/button>/);
+  }
+  // No suggestion, no mark and no inline switch.
+  const plain = suggestedTable({ suggestion: undefined });
+  assert.doesNotMatch(plain, /önerilen|>Geç<\/button>/);
+  // It takes the switch lock.
+  assert.match(rowsOf(suggestedTable({ desktopBusy: true }))[1], /<button[^>]*disabled=""[^>]*>Geç<\/button>/);
+  assert.match(rowsOf(suggestedTable({}, {}, "en"))[1], /suggested<\/span>.*aria-label="Switch · Üçüncü"[^>]*>Switch<\/button>/);
+});
+
+test("a stale row shows the age of its data and a Refresh button", () => {
+  const checkedAt = new Date(Date.now() - 2 * 3_600_000 - 60_000).toISOString();
+  const stale = { c: { accountId: "c", status: "ready", stale: true, checkedAt, fiveHour: { usedPercent: 20 } } as AccountUsage };
+  const row = rowsOf(suggestedTable({ suggestion: undefined }, stale))[1];
+  assert.match(row, /Limit verisi eski/);
+  assert.match(row, /data-slot="data-age"[^>]*>Veri 2 sa önce<\/span>/);
+  assert.match(row, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*aria-label="Yenile · Üçüncü"[^>]*>Yenile<\/button>/);
+  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], />Data 2 h ago<\/span>.*>Refresh<\/button>/);
+  // A fresh row has neither.
+  const fresh = rowsOf(suggestedTable({ suggestion: undefined }))[1];
+  assert.doesNotMatch(fresh, /data-age|>Yenile<\/button>/);
+  // It takes Refresh limits' busy state.
+  assert.match(rowsOf(suggestedTable({ suggestion: undefined, usageBusy: new Set(["c"]) }, stale))[1], /<button[^>]*disabled=""[^>]*>Yenile<\/button>/);
+});
+
+test("the inline switch and refresh run the ⋯ menu's own actions, without opening the account", async () => {
+  const checkedAt = new Date(Date.now() - 3_600_000).toISOString();
+  const switched: [string, string][] = [];
+  const refreshed: string[] = [];
+  const opened: string[] = [];
+  const relay = relayOf(
+    {
+      suggestion: c,
+      requestDesktop: (account: Account, kind: string) => void switched.push([account.id, kind]),
+      refreshUsage: async (account: Account) => void refreshed.push(account.id),
+    } as Partial<Relay>,
+    { c: { ...usage.a, accountId: "c" }, b: { accountId: "b", status: "ready", stale: true, checkedAt } as AccountUsage },
+  );
+  const dom = fakeDom();
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    const linkedB: Account = { ...b, desktop, auth: { loggedIn: true, email: "b@example.com", checkedAt } };
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(
+            RelayContext.Provider,
+            { value: relay },
+            createElement(AccountsTable, { accounts: [c, linkedB], open: (id) => void opened.push(id), link() {} }),
+          ),
+        ),
+      ),
+    );
+    const buttons = drawn(dom.container as unknown as FakeNode).filter(
+      (n) => n.tagName === "button" && n.attributes.get("data-size") === "xs",
+    );
+    const by = (label: string) => buttons.find((n) => n.attributes.get("aria-label") === label);
+    const go = by("Geç · Üçüncü");
+    const refresh = by("Yenile · Studio");
+    assert.ok(go && refresh, "both inline buttons are drawn");
+    await act(async () => dom.dispatch(go, "click", { detail: 1 }));
+    await act(async () => dom.dispatch(refresh, "click", { detail: 1 }));
+    assert.deepEqual(switched, [["c", "switch"]]);
+    assert.deepEqual(refreshed, ["b"]);
+    assert.deepEqual(opened, []);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("connection icons that need a step carry a dot, and a legend says what the colours mean", () => {
+  const html = suggestedTable();
+  const [activeRow, , unlinkedRow] = rowsOf(html);
+  // `b` has no usage sign-in: a step, so amber with a dot; no Claude app sign-in: grey, no dot.
+  assert.match(unlinkedRow, /aria-label="Limit okuma: Yok" role="img" data-step="true" class="relative text-warn"/);
+  assert.match(unlinkedRow, /aria-label="Claude uygulaması: kayıtlı değil" role="img" class="relative text-muted-foreground\/40"/);
+  assert.doesNotMatch(activeRow, /data-step/);
+  // A sign-in to renew is a step too, in the same amber.
+  const critical = rowsOf(suggestedTable({}, { c: { accountId: "c", status: "error", issue: "expired", stale: true } }))[1];
+  assert.match(critical, /aria-label="Limit okuma: Gerekli" role="img" data-step="true" class="relative text-warn"/);
+  assert.match(html, /data-slot="connection-legend".*yeşil: hazır.*kehribar ve nokta: bir adım gerekiyor.*gri: yok/);
+  assert.match(suggestedTable({}, {}, "en"), /green: ready.*amber and dot: a step is needed.*grey: none/);
+});
+
+test("a search that matches nothing is named and can be cleared", () => {
+  const html = wrap(relayFor(), createElement(AccountsEmpty, { hasAccounts: true, query: " stu ", clearQuery() {} }));
+  assert.match(html, /<h3[^>]*>“stu” ile eşleşen hesap yok<\/h3>/);
+  assert.match(html, /<button[^>]*data-variant="link"[^>]*>Aramayı temizle<\/button>/);
+  assert.doesNotMatch(html, /Aramayı veya filtreyi değiştir/);
+  const en = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "en", setLanguage() {}, t: (_: string, english: string) => english } },
+      createElement(RelayContext.Provider, { value: relayFor() }, createElement(AccountsEmpty, { hasAccounts: true, query: "stu", clearQuery() {} })),
+    ),
+  );
+  assert.match(en, /No accounts match “stu”/);
+  assert.match(en, />Clear search<\/button>/);
+  // Only a filter hides them: the general lookout, nothing to clear.
+  const filtered = wrap(relayFor(), createElement(AccountsEmpty, { hasAccounts: true, query: "", clearQuery() {} }));
+  assert.match(filtered, /Eşleşen hesap yok/);
+  assert.doesNotMatch(filtered, /Aramayı temizle/);
 });

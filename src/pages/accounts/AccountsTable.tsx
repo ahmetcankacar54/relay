@@ -42,15 +42,21 @@ import {
 } from "@/lib/account-health";
 import { extensionGuide } from "@/lib/extension-ui";
 import { formatPercent, percentUsed } from "@/lib/meter";
+import { formatRelative } from "@/lib/time";
 import { UsageRing } from "@/components/UsageRing";
 import { useExtensionStatus } from "@/data/useExtension";
 import type { ExtensionStatus } from "../../../shared/types";
 import { avatarClass, planColumn } from "./accountLabels";
 
+/**
+ * A connection icon's three states, as the legend under the table names them: green when ready, amber
+ * with a dot when it needs a step (a sign-in to renew reads the same; the Durum column says how bad),
+ * grey when absent.
+ */
 const toneText = {
   ok: "text-ok",
   warn: "text-warn",
-  crit: "text-crit",
+  crit: "text-warn",
   off: "text-muted-foreground/40",
 } as const;
 
@@ -114,11 +120,25 @@ function ConnectionIcons({
   ];
   return (
     <div className="flex items-center gap-2" data-slot="connection-icons">
-      {items.map(({ key, icon: Icon, tone, title }) => (
-        <span key={key} title={title} aria-label={title} role="img" className={toneText[tone]}>
-          <Icon className="size-4" />
-        </span>
-      ))}
+      {items.map(({ key, icon: Icon, tone, title }) => {
+        const step = tone === "warn" || tone === "crit";
+        return (
+          <span
+            key={key}
+            title={title}
+            aria-label={title}
+            role="img"
+            data-step={step || undefined}
+            className={cn("relative", toneText[tone])}
+          >
+            <Icon className="size-4" />
+            {/* Shape as well as colour: a step to take is never told by the amber alone. */}
+            {step && (
+              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-current ring-2 ring-card" />
+            )}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -267,7 +287,9 @@ export function AccountsTable({
   // Opening the list also checks the extension, so an account signed in to it gets linked.
   const extension = useExtensionStatus({ check: true }).status;
   const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
+  const now = Date.now();
   return (
+    <>
     <div className="overflow-hidden rounded-xl border bg-card">
     <Table>
       <TableHeader>
@@ -298,6 +320,12 @@ export function AccountsTable({
           const actions = rowActions(a, relay, t, link);
           // The inline fix is the matching ⋯ menu item: same label, same handler.
           const fix = health.fix && actions.find((x) => x.key === health.fix);
+          // "Limit verisi eski" is the one warning without a fix: a refresh is its step.
+          const stale =
+            !waiting && !health.fix && !!usage && (usage.stale || usage.status === "error");
+          const refresh = stale && actions.find((x) => x.key === "refresh");
+          const suggested = relay.suggestion?.id === a.id;
+          const switchTo = suggested && actions.find((x) => x.key === "switch");
           const five = usage?.fiveHour?.usedPercent;
           const week = usage?.sevenDay?.usedPercent;
           return (
@@ -329,6 +357,11 @@ export function AccountsTable({
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-1.5">
                       <span className="truncate font-semibold">{a.name}</span>
+                      {suggested && (
+                        <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-[11px] font-semibold text-accent-foreground">
+                          {t("önerilen", "suggested")}
+                        </span>
+                      )}
                       {plan && (
                         <Badge
                           variant="secondary"
@@ -363,6 +396,46 @@ export function AccountsTable({
                     <StatusDot tone={health.tone} />
                     {health.label}
                   </span>
+                  {stale && usage?.checkedAt && (
+                    <span
+                      data-slot="data-age"
+                      className="shrink-0 rounded-full border px-1.5 py-px text-[11px] text-muted-foreground"
+                    >
+                      {t(
+                        `Veri ${formatRelative(usage.checkedAt, now, language)}`,
+                        `Data ${formatRelative(usage.checkedAt, now, language)}`,
+                      )}
+                    </span>
+                  )}
+                  {refresh && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      aria-label={`${t("Yenile", "Refresh")} · ${a.name}`}
+                      title={refresh.label}
+                      disabled={refresh.disabled}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        refresh.run();
+                      }}
+                    >
+                      {t("Yenile", "Refresh")}
+                    </Button>
+                  )}
+                  {/* The suggested account's switch is the ⋯ menu's own: the same review, the same prank after it. */}
+                  {switchTo && !(health.tone !== "ok" && fix) && (
+                    <Button
+                      size="xs"
+                      aria-label={`${switchTo.label} · ${a.name}`}
+                      disabled={switchTo.disabled}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        itemHandlers(switchTo, prank).onClick?.(e);
+                      }}
+                    >
+                      {switchTo.label}
+                    </Button>
+                  )}
                   {health.tone !== "ok" && fix && (
                     <Button
                       size="xs"
@@ -435,5 +508,35 @@ export function AccountsTable({
       </TableBody>
     </Table>
     </div>
+    <ConnectionLegend />
+    </>
+  );
+}
+
+/** What the connection icons' colours and dot mean, under the table. */
+function ConnectionLegend() {
+  const { t } = useI18n();
+  return (
+    <p
+      data-slot="connection-legend"
+      className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs text-muted-foreground"
+    >
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-2 rounded-full bg-ok" />
+        {t("yeşil: hazır", "green: ready")}
+      </span>
+      <span aria-hidden="true">·</span>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="relative size-2 rounded-full bg-warn">
+          <span className="absolute -top-1 -right-1 size-1.5 rounded-full bg-warn ring-2 ring-background" />
+        </span>
+        {t("kehribar ve nokta: bir adım gerekiyor", "amber and dot: a step is needed")}
+      </span>
+      <span aria-hidden="true">·</span>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-2 rounded-full bg-muted-foreground/40" />
+        {t("gri: yok", "grey: none")}
+      </span>
+    </p>
   );
 }
