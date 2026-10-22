@@ -230,6 +230,11 @@ export interface RelayAPI {
    * linked. Returns the status with `current` filled in; undefined outside macOS.
    */
   checkExtension(): Promise<ExtensionStatus | undefined>;
+  /**
+   * Like `checkExtension`, for an extension whose data names no account: the user says it is
+   * signed in to this account, and its sign-in is saved as this account's.
+   */
+  linkExtension(accountId: string): Promise<ExtensionStatus | undefined>;
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;

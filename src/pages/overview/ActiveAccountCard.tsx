@@ -3,7 +3,7 @@ import { freshUsage } from "../../../shared/usage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { LimitMeter } from "@/components/LimitMeter";
+import { LimitRings } from "@/components/LimitRings";
 import { Panda } from "@/components/Panda";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
@@ -42,8 +42,8 @@ export function ActiveAccountCard({
     <Card className="gap-0 px-4 py-3.5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className={eyebrow}>
-            {t("CLAUDE UYGULAMASINDA AÇIK", "OPEN IN THE CLAUDE APP")}
+          <div className="text-xs font-medium text-muted-foreground">
+            {t("Claude uygulamasında açık", "Open in the Claude app")}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-2">
             <span className="text-lg font-bold">{active.name}</span>
@@ -73,25 +73,13 @@ export function ActiveAccountCard({
         </Button>
       </div>
       {freshUsage(usage, now) ? (
-        <div className="mt-3 grid gap-4 sm:grid-cols-3">
-          {usageWindowRows(usage).map((row) => (
-            <LimitMeter
-              key={row.key}
-              label={t(row.label.tr, row.label.en)}
-              percent={row.usedPercent}
-              detail={
-                row.resetsAt
-                  ? formatReset(
-                      row.resetsAt,
-                      now,
-                      language,
-                      relay.settings.planning.timeZone,
-                    )
-                  : undefined
-              }
-            />
-          ))}
-        </div>
+        <LimitRings
+          className="mt-3"
+          usage={usage}
+          now={now}
+          zone={relay.settings.planning.timeZone}
+          size={96}
+        />
       ) : (
         <div className="mt-3">
           <UsageCard

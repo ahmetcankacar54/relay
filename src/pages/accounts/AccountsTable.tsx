@@ -41,12 +41,8 @@ import {
   usageSignInStatus,
 } from "@/lib/account-health";
 import { extensionGuide } from "@/lib/extension-ui";
-import {
-  formatPercent,
-  meterClass,
-  meterTone,
-  percentUsed,
-} from "@/lib/meter";
+import { formatPercent, percentUsed } from "@/lib/meter";
+import { UsageRing } from "@/components/UsageRing";
 import { useExtensionStatus } from "@/data/useExtension";
 import type { ExtensionStatus } from "../../../shared/types";
 import { avatarClass, planColumn } from "./accountLabels";
@@ -58,22 +54,16 @@ const toneText = {
   off: "text-muted-foreground/40",
 } as const;
 
-/** A limit in a table cell: the percent and a short bar under it. */
+/** A limit in a table cell: a small ring and the percent beside it. */
 function CellMeter({ percent, label }: { percent?: number; label: string }) {
   const { language } = useI18n();
   if (percent === undefined) return <span className="text-muted-foreground">—</span>;
   const value = Math.max(0, Math.min(100, percent));
+  const text = formatPercent(percentUsed(value), language);
   return (
-    <div className="grid w-16 gap-1" aria-label={label}>
-      <span className="text-xs font-semibold tabular-nums">
-        {formatPercent(percentUsed(value), language)}
-      </span>
-      <span className="h-1 overflow-hidden rounded-full bg-track">
-        <span
-          className={cn("block h-full rounded-full", meterClass[meterTone(value)])}
-          style={{ width: `${value}%` }}
-        />
-      </span>
+    <div className="flex items-center gap-2">
+      <UsageRing outer={value} size={22} label={`${label} ${text}`} />
+      <span className="text-xs font-semibold tabular-nums">{text}</span>
     </div>
   );
 }

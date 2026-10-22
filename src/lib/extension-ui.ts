@@ -102,7 +102,7 @@ export interface ExtensionGuide {
   label: string;
   detail?: string;
   steps?: string[];
-  action?: "check" | "settings";
+  action?: "check" | "settings" | "claim";
   /** The browser profile Relay manages, for the line under the status. */
   where?: string;
 }
@@ -148,7 +148,8 @@ export function extensionGuide(
   const uuids = accountUuids(account);
   const saved = status.saved.find((s) => uuids.includes(s.accountUuid));
   const current = status.current;
-  const here = current?.state === "signed-in" && uuids.includes(current.accountUuid);
+  const here =
+    current?.state === "signed-in" && !!current.accountUuid && uuids.includes(current.accountUuid);
   if (saved || here) {
     const date = saved
       ? new Date(saved.savedAt).toLocaleDateString(language === "tr" ? "tr-TR" : "en-GB", {
@@ -205,7 +206,34 @@ export function extensionGuide(
       action: "check",
     };
   const on = current.accountUuid;
-  const other = accounts.find((a) => accountUuids(a).includes(on));
+  const other = on ? accounts.find((a) => accountUuids(a).includes(on)) : undefined;
+  // Signed in, but the extension's data names none of Relay's accounts: the user can say which.
+  if (!other && !current.other)
+    return {
+      tone: "warn",
+      label: t(
+        "Bağlı değil · eklentideki hesap tanınamadı",
+        "Not linked · the extension's account could not be told",
+      ),
+      steps: [
+        email
+          ? t(
+              `Eklentide ${email} ile giriş yaptığından emin ol.`,
+              `Make sure the extension is signed in with ${email}.`,
+            )
+          : t(
+              "Eklentide bu hesapla giriş yaptığından emin ol.",
+              "Make sure the extension is signed in with this account.",
+            ),
+        t("“Bu hesap olarak bağla”ya bas.", "Press “Link as this account”."),
+      ],
+      detail: t(
+        "Eklenti hangi hesapta olduğunu Relay'in tanıdığı biçimde saklamıyor; bu yüzden bir kez senin söylemen gerekiyor. Sonraki geçişlerde Relay hangi hesabı koyduğunu hatırlar.",
+        "The extension does not store its account in a way Relay can tell, so say it once. After that Relay remembers which account it put in place.",
+      ),
+      where,
+      action: "claim",
+    };
   return {
     tone: "warn",
     label: other

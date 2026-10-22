@@ -13,7 +13,7 @@ import {
   type ExtensionStorage,
 } from "./extension-storage";
 import type { ExtensionVault } from "./extension-vault";
-import { signInAccount } from "../../shared/extension-auth";
+import { pickSignIn } from "../../shared/extension-auth";
 import {
   chooseInstance,
   type ExtensionCurrent,
@@ -31,7 +31,7 @@ export interface ExtensionPorts {
   scratch: string;
   /** Where a check keeps its copy of the extension's folder; apart from `scratch`, which a step clears. */
   peekScratch?: string;
-  /** Told the key names (never values) a check found when it found no sign-in. */
+  /** Told the key names (never values) a check saw when it found no account of Relay's. */
   onUnknownLayout?: (names: string[]) => void;
   now?: () => number;
 }
@@ -124,7 +124,12 @@ export class ExtensionSwitcher {
    * how an account is linked, with no switch. Undefined when the step would not run (mode off,
    * no extension, no library). Never throws.
    */
-  async check(request: Pick<ExtensionRequest, "setting" | "known">): Promise<
+  async check(
+    request: Pick<ExtensionRequest, "setting" | "known"> & {
+      /** The account the user says the extension is signed in to, for data that names none. */
+      claim?: string;
+    },
+  ): Promise<
     ExtensionCurrent | undefined
   > {
     const { system, storage, vault, scratch } = this.ports;
@@ -140,21 +145,35 @@ export class ExtensionSwitcher {
         extensionStorageDir(system, instance.app, instance.profile),
         peekScratch,
       );
-      const current = await storage.read(copy);
-      const account = current && signInAccount(current);
-      if (!current || !account) {
-        if (this.ports.onUnknownLayout && storage.keyNames)
-          this.ports.onUnknownLayout(await storage.keyNames(copy).catch(() => []));
-        return { state: "signed-out", at };
-      }
-      const known = lower(request.known).includes(account);
-      if (known) await vault.save(current);
-      return { state: "signed-in", accountUuid: account, known, at };
+      const entries = await storage.read(copy);
+      const reading = pickSignIn(entries, request.known);
+      if (!reading?.account)
+        this.ports.onUnknownLayout?.(entries.map(([key]) => key));
+      if (!reading) return { state: "signed-out", at };
+      const claim = request.claim?.toLowerCase();
+      const account =
+        reading.account ??
+        (reading.other
+          ? undefined
+          : claim && lower(request.known).includes(claim)
+            ? claim
+            : await this.owner(request.known));
+      if (!account)
+        return { state: "signed-in", known: false, ...(reading.other ? { other: true } : {}), at };
+      await vault.save(account, reading.signIn);
+      await vault.setOwner(account);
+      return { state: "signed-in", accountUuid: account, known: true, at };
     } catch {
       return { state: "unreadable", at };
     } finally {
       await clearScratch(peekScratch);
     }
+  }
+
+  /** The owner Relay remembers, when it is still one of its accounts. */
+  private async owner(known: string[]): Promise<string | undefined> {
+    const owner = await this.ports.vault.owner().catch(() => undefined);
+    return owner && lower(known).includes(owner) ? owner : undefined;
   }
 
   /** The browser is closed. Backs up, saves what the extension holds, puts the target's in. */
@@ -169,9 +188,9 @@ export class ExtensionSwitcher {
     try {
       const backup = await backupFolder(dir, scratch);
       let saved = false;
-      let current;
+      let entries;
       try {
-        current = await storage.read(dir);
+        entries = await storage.read(dir);
       } catch (error) {
         return {
           result: "failed",
@@ -179,14 +198,20 @@ export class ExtensionSwitcher {
           saved,
         };
       }
-      const account = current && signInAccount(current);
-      if (current && (!account || !lower(request.known).includes(account)))
+      const current = pickSignIn(entries, request.known);
+      // Data that names no account is the one Relay last knew the extension to be on.
+      const account =
+        current &&
+        (current.account ?? (current.other ? undefined : await this.owner(request.known)));
+      if (current && !account)
         return { result: "skipped", reason: "unknown-account", saved };
-      if (current) {
-        await vault.save(current);
+      if (current && account) {
+        await vault.save(account, current.signIn);
+        await vault.setOwner(account);
         saved = true;
       }
       const wanted = await vault.load(request.target);
+      const listed = await vault.list();
       if (!wanted)
         return {
           result: saved ? "saved" : "unchanged",
@@ -211,6 +236,10 @@ export class ExtensionSwitcher {
         }
         return { result: "failed", reason, saved };
       }
+      const placed = lower(request.target).find((uuid) =>
+        listed.some((x) => x.accountUuid === uuid),
+      );
+      if (placed) await vault.setOwner(placed);
       return { result: "switched", saved };
     } finally {
       if (!keepBackup) await clearScratch(scratch);

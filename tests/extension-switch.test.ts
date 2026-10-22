@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { ExtensionSwitcher, type ExtensionRequest } from "../electron/core/extension-switch";
 import { ExtensionVault } from "../electron/core/extension-vault";
 import { createSealer } from "../electron/core/vault-crypto";
-import { signInAccount, type SignIn } from "../shared/extension-auth";
+import type { SignIn } from "../shared/extension-auth";
 import { DEFAULT_EXTENSION, type ExtensionSetting } from "../shared/browser-extension";
 import { extensionWorld, signInFor } from "./extension-world";
 
@@ -45,7 +45,7 @@ const mode = (m: ExtensionSetting["mode"]): ExtensionSetting => ({ mode: m });
 test("a closed browser: the extension's sign-in is saved for its account and the target's is put in place", async (t) => {
   const s = setup(t);
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "switched");
   assert.equal(outcome.saved, true);
@@ -59,8 +59,8 @@ test("a closed browser: the extension's sign-in is saved for its account and the
 
 test("a rotated refresh token is kept: the next switch away saves the newer copy", async (t) => {
   const s = setup(t);
-  await s.vault.save(signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 1));
+  await s.vault.save(s.a, signInFor(s.a, 1));
+  await s.vault.save(s.b, signInFor(s.b, 1));
   s.world.stored.set(s.dir, signInFor(s.a, 2)); // the extension renewed A's tokens
   await s.switcher.run(s.request());
   assert.deepEqual(await s.vault.load([s.a]), signInFor(s.a, 2));
@@ -80,7 +80,7 @@ test("the first sign-in is captured at the switch away, when the target has none
 
 test("a signed-out extension takes the target's saved sign-in and saves nothing", async (t) => {
   const s = setup(t);
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "switched");
   assert.equal(outcome.saved, false);
@@ -97,7 +97,7 @@ test("signed out with nothing saved for the target changes nothing", async (t) =
 
 test("the extension already on the target is left, and its newer copy is saved", async (t) => {
   const s = setup(t);
-  await s.vault.save(signInFor(s.b, 1));
+  await s.vault.save(s.b, signInFor(s.b, 1));
   s.world.stored.set(s.dir, signInFor(s.b, 3));
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "unchanged");
@@ -111,7 +111,7 @@ test("a running browser is quit, left closed while the database is used, and ope
   const s = setup(t);
   s.world.state.running = true;
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "switched");
   assert.equal(outcome.restarted, true);
@@ -127,7 +127,7 @@ test("the browser is opened again even when the swap failed", async (t) => {
   const s = setup(t);
   s.world.state.running = true;
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   s.world.state.failWrite = "failed";
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "failed");
@@ -138,7 +138,7 @@ test("the browser is opened again even when the swap failed", async (t) => {
 test("a failed write puts the folder back from the backup; a mismatch says so", async (t) => {
   const s = setup(t);
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   s.world.state.failWrite = "failed";
   assert.equal((await s.switcher.run(s.request())).reason, "write-failed");
   assert.equal(fs.readFileSync(path.join(s.dir, "data.txt"), "utf8"), "ORIGINAL");
@@ -152,7 +152,7 @@ test("a failed write puts the folder back from the backup; a mismatch says so", 
 test("a failed restore keeps the backup and says so", async (t) => {
   const s = setup(t);
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   s.world.state.failWrite = "failed";
   // The restore cannot run: the folder is gone after the failed write.
   const write = s.world.storage.write;
@@ -174,7 +174,7 @@ test("a browser that does not quit is left alone, and the extension is not touch
   s.world.state.running = true;
   s.world.state.stuck = true;
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "skipped");
   assert.equal(outcome.reason, "browser-did-not-quit");
@@ -188,7 +188,7 @@ test("a browser that cannot be opened again is reported", async (t) => {
   const s = setup(t);
   s.world.state.running = true;
   s.world.state.failLaunch = true;
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "switched");
   assert.equal(outcome.restarted, true);
@@ -199,7 +199,7 @@ test("a running browser is left alone in mode 'closed' and when the switch may n
   const s = setup(t);
   s.world.state.running = true;
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   for (const request of [
     s.request({ setting: mode("closed") }),
     s.request({ mayQuit: false }),
@@ -215,7 +215,7 @@ test("a running browser is left alone in mode 'closed' and when the switch may n
 
 test("a closed browser is used in mode 'closed' and when the switch may not quit it", async (t) => {
   const s = setup(t);
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   for (const request of [s.request({ setting: mode("closed") }), s.request({ mayQuit: false })]) {
     s.world.stored.set(s.dir, signInFor(s.a, 1));
     assert.equal((await s.switcher.run(request)).result, "switched");
@@ -237,7 +237,7 @@ test("an extension signed in to an account Relay does not have is never overwrit
   const s = setup(t);
   const stranger = randomUUID();
   s.world.stored.set(s.dir, signInFor(stranger, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "skipped");
   assert.equal(outcome.reason, "unknown-account");
@@ -250,7 +250,7 @@ test("the target is found by either of its account's uuids", async (t) => {
   const s = setup(t);
   const own = randomUUID();
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(own, 9));
+  await s.vault.save(own, signInFor(own, 9));
   const outcome = await s.switcher.run(s.request({ target: [s.b, own], known: [s.a, s.b, own] }));
   assert.equal(outcome.result, "switched");
   assert.deepEqual(s.world.stored.get(s.dir), signInFor(own, 9));
@@ -277,7 +277,7 @@ test("no extension installed, and several browser profiles without a choice, do 
   const sign = randomUUID();
   const withChoice = { ...request, setting: { mode: "closed", browser: { app: "chrome", profile: "Default" } } as const, target: [sign], known: [sign] };
   world.state.running = false;
-  await vault.save(signInFor(sign, 4));
+  await vault.save(sign, signInFor(sign, 4));
   assert.equal((await switcher.run(withChoice)).result, "switched");
   assert.deepEqual(world.stored.get(chromeDir), signInFor(sign, 4));
   assert.equal(world.stored.get(braveDir), undefined);
@@ -287,7 +287,7 @@ test("a damaged vault file fails the step, never throws, and the browser is open
   const s = setup(t);
   s.world.state.running = true;
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const file = path.join(s.temp, "vault", "extension", `${s.b}.bin`);
   fs.writeFileSync(file, Buffer.from("not sealed at all"));
   const outcome = await s.switcher.run(s.request());
@@ -300,7 +300,7 @@ test("a damaged vault file fails the step, never throws, and the browser is open
 test("an outcome never carries a token", async (t) => {
   const s = setup(t);
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const text = JSON.stringify(await s.switcher.run(s.request()));
   assert.doesNotMatch(text, /SECRET/);
 });
@@ -308,20 +308,20 @@ test("an outcome never carries a token", async (t) => {
 test("the vault keeps each sign-in under the account it names, sealed", async (t) => {
   const s = setup(t);
   const signIn: SignIn = signInFor(s.a, 1);
-  await s.vault.save(signIn);
+  await s.vault.save(s.a, signIn);
   const file = path.join(s.temp, "vault", "extension", `${s.a}.bin`);
   const bytes = fs.readFileSync(file);
   assert.equal(bytes.subarray(0, 4).toString(), "RLY2");
   assert.doesNotMatch(bytes.toString("latin1"), /SECRET/);
-  assert.equal(signInAccount((await s.vault.load([s.a]))!), s.a);
+  assert.deepEqual(await s.vault.load([s.a.toUpperCase()]), signIn);
   assert.equal(await s.vault.load([s.b]), undefined);
   const listed = await s.vault.list();
   assert.deepEqual(listed.map((x) => x.accountUuid), [s.a]);
   // A file copied under another account's name is refused.
   fs.copyFileSync(file, path.join(s.temp, "vault", "extension", `${s.b}.bin`));
   await assert.rejects(s.vault.load([s.b]), /Invalid saved extension sign-in/);
-  // A sign-in naming no account is not saved.
-  await assert.rejects(s.vault.save({ accessToken: '"x"' }), /names no account/);
+  // A sign-in without an account is not saved.
+  await assert.rejects(s.vault.save("not-a-uuid", { accessToken: '"x"' }), /names no account/);
 });
 
 test("without the LevelDB library nothing is quit, read or written", async (t) => {
@@ -329,7 +329,7 @@ test("without the LevelDB library nothing is quit, read or written", async (t) =
   s.world.state.available = false;
   s.world.state.running = true;
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  await s.vault.save(signInFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "skipped");
   assert.equal(outcome.reason, "unavailable");
@@ -351,7 +351,7 @@ test("several browser profiles without a choice: the one whose extension was use
   world.modified.set(braveDir, 2_000);
   world.modified.set(chromeDir, 1_000);
   const sign = randomUUID();
-  await vault.save(signInFor(sign, 4));
+  await vault.save(sign, signInFor(sign, 4));
   const outcome = await switcher.run({ setting: DEFAULT_EXTENSION, mayQuit: true, target: [sign], known: [sign] });
   assert.equal(outcome.result, "switched");
   assert.deepEqual(world.stored.get(braveDir), signInFor(sign, 4));
@@ -387,17 +387,58 @@ test("a check of an unknown account, a signed-out extension, or mode off saves n
   assert.equal(await s.vault.load([s.a]), undefined);
 });
 
-test("a check that finds no sign-in reports the key names it saw, never a value", async (t) => {
+test("a check that finds no account of Relay's reports the key names it saw, never a value", async (t) => {
   const s = setup(t);
   const seen: string[][] = [];
   const switcher = new ExtensionSwitcher({
     system: s.world.system,
-    storage: { ...s.world.storage, keyNames: async () => ["oauthState", "settings"] },
+    storage: s.world.storage,
     vault: s.vault,
     scratch: s.scratch,
     onUnknownLayout: (names) => void seen.push(names),
   });
-  s.world.stored.set(s.dir, undefined);
+  s.world.stored.set(s.dir, { settings: '{"x":1}', oauthState: '"abc"' });
   assert.equal((await switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a] }))?.state, "signed-out");
-  assert.deepEqual(seen, [["oauthState", "settings"]]);
+  assert.deepEqual(seen, [["settings", "oauthState"]]);
+  assert.doesNotMatch(JSON.stringify(seen), /abc|"x"/);
+});
+
+test("data naming no account: the user's claim links it, and Relay then remembers who it put in place", async (t) => {
+  const s = setup(t);
+  // Tokens only, no account uuid anywhere.
+  const bare = (n: number): SignIn => ({ oauth: JSON.stringify({ access_token: `sk-ant-oat01-SECRET${n}AAAAAA` }) });
+  s.world.stored.set(s.dir, bare(1));
+  const unknown = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b] });
+  assert.deepEqual([unknown?.state, unknown?.state === "signed-in" && unknown.known], ["signed-in", false]);
+  // A claim for an account Relay does not have is ignored.
+  const stray = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b], claim: randomUUID() });
+  assert.equal(stray?.state === "signed-in" && stray.known, false);
+  const claimed = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b], claim: s.a });
+  assert.equal(claimed?.state === "signed-in" && claimed.accountUuid, s.a.toLowerCase());
+  assert.deepEqual(await s.vault.load([s.a]), bare(1));
+  // A switch to B: the bare sign-in is saved as A's (the owner), B's is put in, B becomes the owner.
+  await s.vault.save(s.b, bare(5));
+  s.world.stored.set(s.dir, bare(2));
+  assert.equal((await s.switcher.run(s.request({ target: [s.b] }))).result, "switched");
+  assert.deepEqual(await s.vault.load([s.a]), bare(2));
+  assert.deepEqual(s.world.stored.get(s.dir), bare(5));
+  assert.equal(await s.vault.owner(), s.b.toLowerCase());
+  // And back: B's rotated copy is kept, A's is put in.
+  s.world.stored.set(s.dir, bare(6));
+  assert.equal((await s.switcher.run(s.request({ target: [s.a] }))).result, "switched");
+  assert.deepEqual(await s.vault.load([s.b]), bare(6));
+  assert.deepEqual(s.world.stored.get(s.dir), bare(2));
+});
+
+test("a sign-in naming another account is never taken for the remembered one", async (t) => {
+  const s = setup(t);
+  await s.vault.setOwner(s.a);
+  const stranger = randomUUID();
+  s.world.stored.set(s.dir, signInFor(stranger, 1));
+  const current = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b], claim: s.a });
+  assert.equal(current?.state === "signed-in" && current.known, false);
+  assert.equal(await s.vault.load([s.a]), undefined);
+  await s.vault.save(s.b, signInFor(s.b, 5));
+  assert.equal((await s.switcher.run(s.request())).reason, "unknown-account");
+  assert.deepEqual(s.world.stored.get(s.dir), signInFor(stranger, 1));
 });

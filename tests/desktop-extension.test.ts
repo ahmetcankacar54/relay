@@ -76,7 +76,7 @@ test("a restarting switch puts the target's extension sign-in in place before Cl
   const b = await f.account("B"); // Claude is on B
   f.setRunning(true);
   f.world.state.running = true;
-  await f.vault.save(signInFor(a.desktop!.accountUuid, 1));
+  await f.vault.save(a.desktop!.accountUuid, signInFor(a.desktop!.accountUuid, 1));
   f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
   await f.manager.switchTo(a.id);
   assert.deepEqual(f.events, ["claude-quit", "quit:brave", "launch:brave", "claude-launch"]);
@@ -93,7 +93,7 @@ test("a switch that keeps Claude closed never quits the browser", async (t) => {
   f.setRunning(false);
   f.world.state.running = true;
   f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
-  await f.vault.save(signInFor(a.desktop!.accountUuid, 1));
+  await f.vault.save(a.desktop!.accountUuid, signInFor(a.desktop!.accountUuid, 1));
   await f.manager.switchTo(a.id, { closedOnly: true, expectedActiveProfileId: b.id });
   assert.deepEqual(f.events, []);
   assert.equal(f.manager.extensionOutcome?.result, "skipped");
@@ -102,7 +102,7 @@ test("a switch that keeps Claude closed never quits the browser", async (t) => {
   // The browser is closed: the same kind of switch swaps.
   f.world.state.running = false;
   f.world.stored.set(f.dir, signInFor(a.desktop!.accountUuid, 3));
-  await f.vault.save(signInFor(b.desktop!.accountUuid, 4));
+  await f.vault.save(b.desktop!.accountUuid, signInFor(b.desktop!.accountUuid, 4));
   await f.manager.switchTo(b.id, { closedOnly: true, expectedActiveProfileId: a.id });
   assert.equal(f.manager.extensionOutcome?.result, "switched");
   assert.deepEqual(f.world.stored.get(f.dir), signInFor(b.desktop!.accountUuid, 4));
@@ -155,7 +155,7 @@ test("sync now runs the step for the active account and quits a running browser;
   const b = await f.account("B"); // active
   f.world.state.running = true;
   f.world.stored.set(f.dir, signInFor(a.desktop!.accountUuid, 2));
-  await f.vault.save(signInFor(b.desktop!.accountUuid, 7));
+  await f.vault.save(b.desktop!.accountUuid, signInFor(b.desktop!.accountUuid, 7));
   assert.equal(await f.manager.extensionQuitsBrowser(), "Brave");
   const outcome = await f.manager.syncExtension();
   assert.equal(outcome.result, "switched");

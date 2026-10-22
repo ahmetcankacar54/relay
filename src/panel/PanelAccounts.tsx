@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { formatPercent, meterClass, meterTone, percentUsed } from "@/lib/meter";
-import { cn } from "@/lib/utils";
-import { useI18n } from "@/data/i18n";
+import { useI18n, type T } from "@/data/i18n";
 import type { Relay } from "@/data/relay-context";
 import { useRelay } from "@/data/relay-context";
 import {
@@ -12,38 +10,32 @@ import {
   tempoRateNow,
   type OverviewRow,
 } from "@/data/selectors";
-import { accountRowSubtitle, panelRowState } from "@/lib/account-row";
+import {
+  accountRowSubtitle,
+  accountTileLine,
+  panelRowState,
+  type PanelRowBlock,
+} from "@/lib/account-row";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
-import { planLabel } from "../pages/accounts/accountLabels";
+import { AccountTiles } from "../features/AccountTiles";
 import { panelCard, panelEyebrow } from "./PanelActiveCard";
 
 export const PANEL_MAX_ROWS = 6;
 
-/** A limit on one line: its short name, a bar and the percent used. */
-function InlineMeter({ label, percent }: { label: string; percent?: number }) {
-  const { language } = useI18n();
-  const value = percent === undefined ? undefined : Math.max(0, Math.min(100, percent));
-  return (
-    <div className="flex min-w-0 items-center gap-1.5 text-[11.5px]">
-      <span className="w-8 shrink-0 text-muted-foreground">{label}</span>
-      <span
-        role="meter"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={value}
-        className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-track"
-      >
-        <span
-          className={cn("block h-full rounded-full", meterClass[meterTone(value)])}
-          style={{ width: `${value ?? 0}%` }}
-        />
-      </span>
-      <b className="w-9 shrink-0 text-right tabular-nums">
-        {value === undefined ? "—" : formatPercent(percentUsed(value), language)}
-      </b>
-    </div>
-  );
+/** Why a tile cannot be switched to, in a few words. */
+export function blockWords(reason: PanelRowBlock, t: T): string {
+  switch (reason) {
+    case "not-linked":
+      return t("Relay’de girişi kaydet", "Save its sign-in in Relay");
+    case "exhausted":
+      return t("Limiti dolu", "Its limit is full");
+    case "busy":
+      return t("Claude uygulaması işlemi sürüyor", "A Claude app operation is running");
+    case "pending":
+      return t("Bekleyen giriş var", "A sign-in is waiting");
+    case "recovery":
+      return t("Önce yedeği geri yükle", "Restore the backup first");
+  }
 }
 
 /** Overview ranking, with the badge on the suggested account when there is one. */
@@ -85,7 +77,7 @@ export function PanelAccounts({
   now: number;
   /** Tests: render with this account’s confirmation open. */
   initialConfirm?: string;
-  /** Lifted state, so the panel can own which row’s confirmation is open. */
+  /** Lifted state, so the panel can own which tile’s confirmation is open. */
   confirmId?: string;
   onConfirmChange?: (id: string | undefined) => void;
 }) {
@@ -106,6 +98,9 @@ export function PanelAccounts({
   if (pinned && !rows.includes(pinned))
     rows = [...rows.slice(0, PANEL_MAX_ROWS - 1), pinned];
   const hidden = all.length - rows.length;
+  const waiting = (row: OverviewRow) =>
+    pendingFlow(relay.data?.authFlows.find((f) => f.accountId === row.account.id));
+  const confirming = rows.find((r) => r.account.id === confirmId);
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
@@ -116,15 +111,25 @@ export function PanelAccounts({
         ) : (
           <span>{t("Diğer hesaplar · en uygunu üstte", "Other accounts · best first")}</span>
         )}
+        {rows.length > 0 && (
+          <span className="flex items-center gap-2" aria-hidden="true">
+            <span className="flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-foreground/70" />
+              {t("5 sa", "5 h")}
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-foreground/30" />
+              {t("hafta", "week")}
+            </span>
+          </span>
+        )}
       </div>
-      <div className={`${panelCard} px-2 py-1`}>
-        {rows.length === 0 ? (
-          relay.accounts.length ? (
-            <div className="py-1.5 text-muted-foreground">
-              {t("Başka hesap yok", "No other accounts")}
-            </div>
+      {rows.length === 0 ? (
+        <div className={`${panelCard} text-muted-foreground`}>
+          {relay.accounts.length ? (
+            t("Başka hesap yok", "No other accounts")
           ) : (
-            <div className="flex flex-wrap items-center gap-1 py-1.5 text-muted-foreground">
+            <span className="flex flex-wrap items-center gap-1">
               {`${t("Henüz hesap yok", "No accounts yet")} ·`}
               <Button
                 variant="link"
@@ -134,128 +139,78 @@ export function PanelAccounts({
               >
                 {t("Hesap ekle", "Add account")}
               </Button>
-            </div>
-          )
-        ) : (
-          rows.map((row) => {
-            const { account, usage } = row;
-            const plan = planLabel(account);
-            const { canSwitch } = panelRowState(row, relay);
-            const open = confirmId === account.id;
-            const waiting = pendingFlow(
-              relay.data?.authFlows.find((f) => f.accountId === account.id),
-            );
-            const subtitle = `${plan ? `${plan} · ` : ""}${accountRowSubtitle(row, t, language, zone, now, waiting)}`;
-            return (
-              <div
-                key={account.id}
-                data-slot="panel-account"
-                className="grid gap-1 border-t px-1 py-2 first:border-0"
+            </span>
+          )}
+        </div>
+      ) : (
+        <AccountTiles
+          variant="panel"
+          rows={rows}
+          selected={confirmId}
+          switching={switching}
+          line={(row) => accountTileLine(row, t, language, zone, now, waiting(row))}
+          title={(row) => accountRowSubtitle(row, t, language, zone, now, waiting(row))}
+          blocked={(row) => {
+            const { reason } = panelRowState(row, relay);
+            return reason && blockWords(reason, t);
+          }}
+          pick={(row, e) => {
+            const { canSwitch, reason } = panelRowState(row, relay);
+            if (reason === "not-linked") return void relay.api.openPage("hesaplar");
+            if (!canSwitch) return;
+            // Closing an open confirmation is a cancel, not a switch request: no prank.
+            if (confirmId === row.account.id) return setConfirmId(undefined);
+            offerAfter(prank, "nibble-cursor", e, () => setConfirmId(row.account.id));
+          }}
+        />
+      )}
+      {switching ? (
+        <div
+          role="status"
+          className="mt-2 flex items-center gap-2 rounded-lg border bg-muted px-2.5 py-1.5 text-xs"
+        >
+          <LoaderCircle className="size-3.5 animate-spin" />
+          {t(
+            `${relay.accounts.find((a) => a.id === switching)?.name ?? ""} hesabına geçiliyor…`,
+            `Switching to ${relay.accounts.find((a) => a.id === switching)?.name ?? ""}…`,
+          )}
+        </div>
+      ) : (
+        confirming && (
+          <div
+            data-slot="switch-confirm"
+            className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs text-warn-foreground"
+          >
+            <span>
+              {language === "tr" ? (
+                <>
+                  Claude uygulaması kapanıp <b>{confirming.account.name}</b> ile yeniden
+                  açılır. Çalışan yanıtlar bitsin.
+                </>
+              ) : (
+                <>
+                  The Claude app quits and reopens with <b>{confirming.account.name}</b>.
+                  Let running replies finish.
+                </>
+              )}
+            </span>
+            <span className="flex shrink-0 gap-1.5">
+              <Button size="xs" variant="outline" onClick={() => setConfirmId(undefined)}>
+                {t("Vazgeç", "Cancel")}
+              </Button>
+              <Button
+                size="xs"
+                disabled={!panelRowState(confirming, relay).canSwitch}
+                onClick={() =>
+                  confirmSwitch(relay, confirming.account.id, () => setConfirmId(undefined))
+                }
               >
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                    <span
-                      className="min-w-0 truncate font-semibold"
-                      title={account.name}
-                    >
-                      {account.name}
-                    </span>
-                    {row.recommended && (
-                      <span className="shrink-0 text-[11.5px] font-semibold text-brand">
-                        {t("önerilen", "suggested")}
-                      </span>
-                    )}
-                  </div>
-                  <Button
-                    size="xs"
-                    variant={row.recommended ? "default" : "outline"}
-                    disabled={!canSwitch || !!switching}
-                    aria-expanded={open}
-                    aria-label={t(`${account.name} hesabına geç`, `Switch to ${account.name}`)}
-                    onClick={(e) =>
-                      // Closing an open confirmation is a cancel, not a switch request: no prank.
-                      open
-                        ? setConfirmId(undefined)
-                        : offerAfter(prank, "nibble-cursor", e, () =>
-                            setConfirmId(account.id),
-                          )
-                    }
-                  >
-                    {t("Geç", "Switch")}
-                  </Button>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <InlineMeter
-                    label={t("5 sa", "5 h")}
-                    percent={usage?.fiveHour?.usedPercent}
-                  />
-                  <InlineMeter
-                    label={t("Hafta", "Week")}
-                    percent={usage?.sevenDay?.usedPercent}
-                  />
-                </div>
-                <div
-                  className="truncate text-[11.5px] text-muted-foreground"
-                  title={subtitle}
-                >
-                  {subtitle}
-                </div>
-                {switching === account.id ? (
-                  <div
-                    role="status"
-                    className="col-span-full flex items-center gap-2 rounded-lg border bg-muted px-2.5 py-1.5 text-xs"
-                  >
-                    <LoaderCircle className="size-3.5 animate-spin" />
-                    {t(
-                      `${account.name} hesabına geçiliyor…`,
-                      `Switching to ${account.name}…`,
-                    )}
-                  </div>
-                ) : (
-                  open &&
-                  !switching && (
-                    <div className="col-span-full flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs text-warn-foreground">
-                      <span>
-                        {language === "tr" ? (
-                          <>
-                            Claude uygulaması kapanıp <b>{account.name}</b> ile yeniden
-                            açılır. Çalışan yanıtlar bitsin.
-                          </>
-                        ) : (
-                          <>
-                            The Claude app quits and reopens with <b>{account.name}</b>.
-                            Let running replies finish.
-                          </>
-                        )}
-                      </span>
-                      <span className="flex shrink-0 gap-1.5">
-                        <Button
-                          size="xs"
-                          variant="outline"
-                          onClick={() => setConfirmId(undefined)}
-                        >
-                          {t("Vazgeç", "Cancel")}
-                        </Button>
-                        <Button
-                          size="xs"
-                          disabled={!canSwitch}
-                          onClick={() =>
-                            confirmSwitch(relay, account.id, () =>
-                              setConfirmId(undefined),
-                            )
-                          }
-                        >
-                          {t("Onayla", "Confirm")}
-                        </Button>
-                      </span>
-                    </div>
-                  )
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
+                {t("Geç", "Switch")}
+              </Button>
+            </span>
+          </div>
+        )
+      )}
       {hidden > 0 && (
         <Button
           variant="link"

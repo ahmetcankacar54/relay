@@ -4,7 +4,8 @@ import { LimitMeter } from "@/components/LimitMeter";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { overviewAccounts, pendingFlow, tempoRateNow } from "@/data/selectors";
-import { accountRowSubtitle } from "@/lib/account-row";
+import { accountRowSubtitle, accountTileLine } from "@/lib/account-row";
+import { AccountTiles } from "../../features/AccountTiles";
 import { intentHash, type PageId } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { planLabel } from "../accounts/accountLabels";
@@ -33,6 +34,8 @@ export function AccountsCard({
       ? { ...row, recommended: row.account.id === relay.suggestion.id }
       : row,
   );
+  const waitingFor = (row: { account: { id: string } }) =>
+    pendingFlow(relay.data?.authFlows.find((f) => f.accountId === row.account.id));
   const switchBlocked =
     relay.desktopBusy ||
     !!relay.pendingDesktop ||
@@ -77,90 +80,36 @@ export function AccountsCard({
           </Button>
         </div>
       ) : (
-        <div>
-          {rows.map((row) => {
-            const { account, usage } = row;
-            const plan = planLabel(account);
-            return (
-              <div
-                key={account.id}
-                className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 border-t py-2.5 first:border-0"
-              >
-                <div className="min-w-0">
-                  <div className="flex min-w-0 items-baseline gap-1.5 font-semibold">
-                    <a
-                      href={accountHash(account.id)}
-                      className="truncate underline-offset-2 hover:underline"
-                      title={t(`${account.name} hesabını aç`, `Open ${account.name}`)}
-                    >
-                      {account.name}
-                    </a>
-                    {row.recommended && (
-                      <span className="shrink-0 text-xs font-semibold text-brand">
-                        {t("önerilen", "suggested")}
-                      </span>
-                    )}
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {plan ? `${plan} · ` : ""}
-                    {accountRowSubtitle(
-                      row,
-                      t,
-                      language,
-                      zone,
-                      now,
-                      pendingFlow(
-                        relay.data?.authFlows.find(
-                          (f) => f.accountId === account.id,
-                        ),
-                      ),
-                    )}
-                  </div>
-                </div>
-                <LimitMeter
-                  size="sm"
-                  label={t("5 sa", "5 h")}
-                  percent={usage?.fiveHour?.usedPercent}
-                />
-                <LimitMeter
-                  size="sm"
-                  label={t("Hafta", "Week")}
-                  percent={usage?.sevenDay?.usedPercent}
-                />
-                {row.state === "not-linked" ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={linkBlocked}
-                    title={t(
-                      "Claude uygulaması girişini kaydet",
-                      "Save Claude app sign-in",
-                    )}
-                    onClick={() => {
-                      relay.setSetupId(account.id);
-                      go("hesaplar");
-                    }}
-                  >
-                    {t("Girişi kaydet", "Save sign-in")}
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant={row.recommended ? "default" : "outline"}
-                    disabled={switchBlocked}
-                    onClick={(e) =>
-                      offerAfter(prank, "nibble-cursor", e, () =>
-                        relay.requestDesktop(account, "switch"),
-                      )
-                    }
-                  >
-                    {t("Geç", "Switch")}
-                  </Button>
-                )}
-              </div>
+        <AccountTiles
+          rows={rows}
+          line={(row) =>
+            accountTileLine(row, t, language, zone, now, waitingFor(row))
+          }
+          title={(row) =>
+            accountRowSubtitle(row, t, language, zone, now, waitingFor(row))
+          }
+          blocked={(row) =>
+            row.state === "not-linked"
+              ? undefined
+              : row.state === "exhausted"
+                ? t("Limiti dolu", "Its limit is full")
+                : switchBlocked
+                  ? t("Şu an geçilemez", "Cannot switch right now")
+                  : undefined
+          }
+          pick={(row, e) => {
+            if (row.state === "not-linked") {
+              if (linkBlocked) return;
+              relay.setSetupId(row.account.id);
+              window.location.hash = accountHash(row.account.id);
+              return;
+            }
+            if (switchBlocked || row.state === "exhausted") return;
+            offerAfter(prank, "nibble-cursor", e, () =>
+              relay.requestDesktop(row.account, "switch"),
             );
-          })}
-        </div>
+          }}
+        />
       )}
     </Card>
   );

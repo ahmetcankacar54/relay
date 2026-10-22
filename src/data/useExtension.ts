@@ -16,9 +16,15 @@ export function useExtensionStatus({
   const [status, setStatus] = useState<ExtensionStatus | null | undefined>(initial);
   const [checking, setChecking] = useState(false);
   const run = useCallback(
-    (look: boolean) => {
+    (look: boolean, claimFor?: string) => {
       if (look) setChecking(true);
-      return (look ? api.checkExtension() : api.extensionStatus())
+      return (
+        claimFor
+          ? api.linkExtension(claimFor)
+          : look
+            ? api.checkExtension()
+            : api.extensionStatus()
+      )
         .then(
           (s) => setStatus(s ?? null),
           () => {},
@@ -34,6 +40,8 @@ export function useExtensionStatus({
     status,
     checking,
     check: () => run(true),
+    /** Links the extension's sign-in as this account's, for data that names no account. */
+    link: (accountId: string) => run(true, accountId),
     reload: () => run(false),
   };
 }

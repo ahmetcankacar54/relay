@@ -1,12 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import {
-  SIGN_IN_KEYS,
-  pickSignIn,
-  sameSignIn,
-  type SignIn,
-} from "../../shared/extension-auth";
+import { isSignInEntry, sameSignIn, type SignIn } from "../../shared/extension-auth";
 
 /** Why the extension's storage could not be used: a browser holds it, or it is not a LevelDB. */
 export class StorageError extends Error {
@@ -28,19 +23,17 @@ export interface ExtensionStorage {
    * without it (the CLI has no dependencies) leaves the browser alone.
    */
   available(): Promise<boolean>;
-  /** The sign-in the folder holds; undefined when it holds none. Throws a `StorageError`. */
-  read(dir: string): Promise<SignIn | undefined>;
   /**
-   * Puts `signIn`'s keys, and deletes the sign-in keys it lacks, in one batch, then reads the
-   * folder again and compares. Throws a `StorageError` on a failure and on a mismatch; the
-   * caller restores its backup.
+   * Every key and value the folder holds (JSON text); the caller picks the sign-in out of them
+   * (`pickSignIn`). Throws a `StorageError`.
+   */
+  read(dir: string): Promise<[string, string][]>;
+  /**
+   * Puts `signIn`'s keys, and deletes the sign-in entries it lacks, in one batch, then reads the
+   * folder again and compares. Keys that are not part of a sign-in are never touched. Throws a
+   * `StorageError` on a failure and on a mismatch; the caller restores its backup.
    */
   write(dir: string, signIn: SignIn): Promise<void>;
-  /**
-   * The names of the keys the folder holds, never a value: what a check logs when it finds no
-   * sign-in, so a renamed key can be told from a signed-out extension.
-   */
-  keyNames?(dir: string): Promise<string[]>;
 }
 
 async function openDatabase(dir: string) {
@@ -89,13 +82,23 @@ async function withDatabase<T>(
   }
 }
 
-async function readKeys(
+/** At most this many entries are read: the extension keeps a few dozen. */
+const MAX_ENTRIES = 5000;
+
+async function readEntries(
   db: Awaited<ReturnType<typeof openDatabase>>,
-): Promise<SignIn | undefined> {
-  const keys = [...SIGN_IN_KEYS];
-  const values = await db.getMany(keys);
-  return pickSignIn(keys.map((key, i) => [key, values[i]] as const));
+): Promise<[string, string][]> {
+  const entries: [string, string][] = [];
+  for await (const [key, value] of db.iterator({ limit: MAX_ENTRIES }))
+    entries.push([String(key), String(value)]);
+  return entries;
 }
+
+/** The entries of `entries` that belong to a sign-in: what a write replaces. */
+const signInPart = (entries: [string, string][], keep: SignIn): SignIn =>
+  Object.fromEntries(
+    entries.filter(([key, value]) => key in keep || isSignInEntry(key, value)),
+  );
 
 export const levelExtensionStorage: ExtensionStorage = {
   available: () =>
@@ -103,27 +106,27 @@ export const levelExtensionStorage: ExtensionStorage = {
       () => true,
       () => false,
     ),
-  read: (dir) => withDatabase(dir, readKeys),
-  keyNames: (dir) =>
-    withDatabase(dir, async (db) => {
-      const names: string[] = [];
-      for await (const key of db.keys({ limit: 200 })) names.push(String(key).slice(0, 80));
-      return names;
-    }),
+  read: (dir) => withDatabase(dir, readEntries),
   async write(dir, signIn) {
-    await withDatabase(dir, (db) =>
-      db.batch(
-        SIGN_IN_KEYS.map((key) =>
-          key in signIn
-            ? { type: "put" as const, key, value: signIn[key] }
-            : { type: "del" as const, key },
-        ),
+    await withDatabase(dir, async (db) => {
+      const current = signInPart(await readEntries(db), signIn);
+      await db.batch(
+        [
+          ...Object.keys(current)
+            .filter((key) => !(key in signIn))
+            .map((key) => ({ type: "del" as const, key })),
+          ...Object.entries(signIn).map(([key, value]) => ({
+            type: "put" as const,
+            key,
+            value,
+          })),
+        ],
         { sync: true },
-      ),
-    );
+      );
+    });
     // A second, separate open: what the browser will read, not what this handle remembers.
-    const back = await withDatabase(dir, readKeys);
-    if (!back || !sameSignIn(back, signIn))
+    const back = signInPart(await withDatabase(dir, readEntries), signIn);
+    if (!sameSignIn(back, signIn))
       throw new StorageError("mismatch", "The extension's sign-in did not read back.");
   },
 };
