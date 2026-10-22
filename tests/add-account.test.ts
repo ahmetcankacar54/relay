@@ -57,9 +57,10 @@ test("routeQuery reads the intent after the page id", () => {
 
 test("the add-account dialog shows the three steps and the profile form", () => {
   const html = wrap(relayFor(), createElement(AddAccountSteps, { close() {} }));
-  assert.match(html, /Profil/);
-  assert.match(html, /Claude uygulaması girişi/);
-  assert.match(html, /Limit okuma girişi/);
+  assert.match(html, /Adım 1 \/ 3/);
+  assert.match(html, /1 · Profil/);
+  assert.match(html, /2 · Claude uygulaması/);
+  assert.match(html, /3 · Limit okuma/);
   assert.match(html, /Hesap adı/);
   assert.match(html, /placeholder="Örn. Kişisel Max"/);
   assert.match(html, /Kişisel/);

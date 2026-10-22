@@ -12,7 +12,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { StatusDot } from "@/components/StatusDot";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -72,60 +71,63 @@ export function AddAccountDialog({
   );
 }
 
+/**
+ * Where the wizard stands (direction A): "2 / 3" and three segments, each a bar over its
+ * numbered name; done and current bars are filled, the current name is bold.
+ */
 function StepIndicator({ step }: { step: Step }) {
   const { t } = useI18n();
   const titles = [
     t("Profil", "Profile"),
-    t("Claude uygulaması girişi", "Claude app sign-in"),
-    t("Limit okuma girişi", "Usage sign-in"),
+    t("Claude uygulaması", "Claude app"),
+    t("Limit okuma", "Usage"),
   ];
   return (
-    <ol
-      className="flex items-center gap-2 text-xs"
-      aria-label={t("Adımlar", "Steps")}
-    >
-      {titles.map((title, index) => {
-        const n = (index + 1) as Step;
-        const done = n < step;
-        const active = n === step;
-        return (
-          <li
-            key={title}
-            className="flex min-w-0 items-center gap-1.5"
-            aria-current={active ? "step" : undefined}
-          >
-            {index > 0 && (
+    <div className="grid gap-2">
+      <span className="text-xs font-semibold text-muted-foreground tabular-nums">
+        {t(`Adım ${step} / 3`, `Step ${step} of 3`)}
+      </span>
+      <ol
+        className="grid grid-cols-3 gap-1.5 text-xs"
+        aria-label={t("Adımlar", "Steps")}
+      >
+        {titles.map((title, index) => {
+          const n = (index + 1) as Step;
+          const done = n < step;
+          const active = n === step;
+          return (
+            <li
+              key={title}
+              className="grid min-w-0 gap-1.5"
+              aria-current={active ? "step" : undefined}
+            >
               <span
-                className="h-px w-3 shrink-0 bg-border"
                 aria-hidden="true"
+                className={cn(
+                  "h-1 rounded-full",
+                  done || active ? "bg-primary" : "bg-track",
+                )}
               />
-            )}
-            <span
-              className={cn(
-                "grid size-5 shrink-0 place-items-center rounded-full text-xs font-semibold",
-                done
-                  ? "bg-brand text-primary-foreground"
-                  : active
-                    ? "border-2 border-brand text-primary"
-                    : "bg-muted text-muted-foreground",
-              )}
-              aria-hidden="true"
-            >
-              {done ? <Check className="size-3" /> : n}
-            </span>
-            <span
-              className={cn(
-                "truncate",
-                active ? "font-semibold" : "text-muted-foreground",
-              )}
-            >
-              {title}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+              <span
+                className={cn(
+                  "flex min-w-0 items-center gap-1 truncate",
+                  active ? "font-semibold" : "text-muted-foreground",
+                )}
+              >
+                {done && <Check aria-hidden="true" className="size-3 shrink-0 text-ok" />}
+                {done ? title : `${n} · ${title}`}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
+}
+
+/** A step's own heading: what this step does for the named account. */
+function StepTitle({ children }: { children: ReactNode }) {
+  return <h3 className="text-[15px] font-semibold leading-snug">{children}</h3>;
 }
 
 /** Dialog contents, rendered outside the portal so it can be tested statically. */
@@ -271,6 +273,12 @@ export function AddAccountSteps({
       )}
       {step === 2 && account && (
         <>
+          <StepTitle>
+            {t(
+              `“${account.name}” için Claude uygulaması girişini kaydet`,
+              `Save the Claude app sign-in for “${account.name}”`,
+            )}
+          </StepTitle>
           {account.desktop ? (
             <StatusLine tone="ok" icon={<Monitor />}>
               {t(
@@ -335,6 +343,12 @@ export function AddAccountSteps({
       )}
       {step === 3 && account && (
         <>
+          <StepTitle>
+            {t(
+              `“${account.name}” için limit okuma girişi`,
+              `The usage sign-in for “${account.name}”`,
+            )}
+          </StepTitle>
           <p className="text-sm text-muted-foreground">
             {t(
               "Limit okuma girişi bu hesabın kullanım limitlerini okur.",
@@ -379,6 +393,7 @@ export function AddAccountSteps({
   );
 }
 
+/** One state row (direction A): a check when done, a spinner while waiting, then what it is. */
 function StatusLine({
   tone,
   icon,
@@ -390,12 +405,20 @@ function StatusLine({
 }) {
   return (
     <div
-      className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground"
+      className="flex items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
       aria-live="polite"
     >
-      {icon}
-      <StatusDot tone={tone} />
-      <span className="min-w-0">{children}</span>
+      {tone === "ok" ? (
+        <span aria-hidden="true" className="grid size-5 shrink-0 place-items-center rounded-full bg-ok/15 text-ok">
+          <Check className="size-3" />
+        </span>
+      ) : (
+        <LoaderCircle aria-hidden="true" className="animate-spin text-warn" />
+      )}
+      <span className="min-w-0 flex-1">{children}</span>
+      <span aria-hidden="true" className="text-muted-foreground [&>svg]:size-4">
+        {icon}
+      </span>
     </div>
   );
 }
