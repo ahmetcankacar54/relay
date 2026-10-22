@@ -4,6 +4,7 @@ import { act, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Usage } from "../src/pages/Usage";
 import { DayTable, TokenUsage, TokenUsageCard, tokenColumns } from "../src/pages/usage/TokenUsage";
+import { CostBreakdown } from "../src/pages/usage/CostBreakdown";
 import { TOKEN_SCAN_POLL_MS } from "../src/pages/usage/useTokenUsage";
 import { formatTokens } from "../src/pages/usage/format";
 import { RelayContext, type Relay } from "../src/data/relay-context";
@@ -668,4 +669,31 @@ test("the API value metric shows dollars in the legend and table, and the price 
     }),
   );
   assert.match(text(table), /≈\s*tahmini\s*\$2,50/);
+});
+
+test("the cost card splits the API value by account and by model, largest first, ≈ where estimated", () => {
+  const priced: TokenUsageView = {
+    ...view,
+    rows: [
+      { ...rows[1], totals: { ...rows[1].totals, cost: 10 } },
+      { ...rows[0], totals: { ...rows[0].totals, cost: 90 } },
+    ],
+    totals: { ...view.totals, cost: 100 },
+    models: [
+      { model: "claude-sonnet-4", totals: { ...view.models[1].totals, cost: 25 } },
+      { model: "claude-opus-4", totals: { ...view.models[0].totals, cost: 75 } },
+    ],
+  };
+  const plain = text(render(createElement(CostBreakdown, { view: priced, accounts })));
+  assert.match(plain, /Ücret karşılığı/);
+  assert.match(plain, /Aboneliğin ücreti ayrıdır/);
+  assert.match(plain, /Hesaba göre.*Kişisel · Max%90≈\$90,00.*Vertex%10\$10,00/);
+  assert.match(plain, /Modele göre.*claude-opus-4%75\$75,00.*claude-sonnet-4%25\$25,00/);
+  assert.match(plain, /son 7 gün · günde \$14,29/);
+  const english = text(render(createElement(CostBreakdown, { view: priced, accounts }), "en"));
+  assert.match(english, /Cost equivalent.*By account.*By model/);
+});
+
+test("the cost card stays out when nothing in the range was priced", () => {
+  assert.equal(render(createElement(CostBreakdown, { view: { ...view, totals: { ...view.totals, cost: 0 } }, accounts })), "");
 });

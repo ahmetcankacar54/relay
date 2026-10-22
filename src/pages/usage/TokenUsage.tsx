@@ -33,6 +33,7 @@ import {
   Swatch,
   useDayHover,
 } from "./DayHover";
+import { CostBreakdown } from "./CostBreakdown";
 import { PandaBench } from "./PandaBench";
 import { TodayCard } from "./TodayCard";
 import { busiestDay, pandaLines, type PandaLine } from "./panda-facts";
@@ -858,11 +859,15 @@ export function TokenUsage({
   accountId?: string;
 }) {
   const { accounts } = useRelay();
+  const state = useTokenUsage(range, accountId);
   return (
-    <TokenUsageCard
-      state={useTokenUsage(range, accountId)}
-      accounts={accounts}
-      filterKey={accountId ?? ""}
-    />
+    <div className="grid gap-3">
+      <TokenUsageCard
+        state={state}
+        accounts={accounts}
+        filterKey={accountId ?? ""}
+      />
+      {state.view && <CostBreakdown view={state.view} accounts={accounts} />}
+    </div>
   );
 }

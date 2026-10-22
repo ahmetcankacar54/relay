@@ -307,7 +307,7 @@ export function Usage() {
       >
         <TabsList aria-label={t("Kullanım bölümleri", "Usage sections")}>
           <TabsTrigger value="limits">{t("Limitler", "Limits")}</TabsTrigger>
-          <TabsTrigger value="tokens">{t("Token", "Tokens")}</TabsTrigger>
+          <TabsTrigger value="tokens">{t("Token ve ücret", "Tokens and cost")}</TabsTrigger>
           <TabsTrigger value="lost">
             {t("Kayıp Eşya", "Lost and found")}
           </TabsTrigger>

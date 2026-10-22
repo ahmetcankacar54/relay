@@ -328,13 +328,13 @@ test("the header offers 7/30/90 days and an account filter", () => {
 
 test("Usage is four tabs and opens the limits, with the range and account filter, by default", () => {
   const html = text(render(createElement(Usage)));
-  assert.match(html, /LimitlerTokenKayıp EşyaUyarılar/);
+  assert.match(html, /LimitlerToken ve ücretKayıp EşyaUyarılar/);
   assert.match(html, /30 gün/);
   assert.match(html, /Tüm hesaplar/);
   assert.match(html, /İstatistikler yükleniyor/);
   // Only the open tab is drawn.
   assert.doesNotMatch(html, /Token kullanımı|Kayıp Eşya Bürosu|Limit uyarıları/);
-  assert.match(text(render(createElement(Usage), "en")), /LimitsTokensLost and foundWarnings/);
+  assert.match(text(render(createElement(Usage), "en")), /LimitsTokens and costLost and foundWarnings/);
 });
 
 test("the warnings tab holds the warning preferences and the data source", () => {
