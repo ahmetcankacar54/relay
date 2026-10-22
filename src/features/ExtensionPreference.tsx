@@ -61,8 +61,8 @@ export function ExtensionPreference({
       <SectionHeading
         title={t("Claude tarayıcı eklentisi", "Claude browser extension")}
         description={t(
-          "Eklentinin girişi her geçişte hesapla birlikte değişir; tarayıcı profili açman gerekmez.",
-          "The extension's sign-in follows the account at every switch; no browser profile to open.",
+          "Eklenti, tarayıcı profilindeki claude.ai oturumuyla giriş yapar. Hesabı izlemesi için Relay o oturumu da değiştirebilir; bu seçenek varsayılan olarak kapalıdır.",
+          "The extension signs in through the browser profile's claude.ai login. To make it follow the account, Relay can change that login too; this is off by default.",
         )}
       />
       <SettingRow

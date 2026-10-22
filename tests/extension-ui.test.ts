@@ -36,6 +36,7 @@ const status = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
   target: brave,
   restoresTabs: false,
   saved: [{ accountUuid: ID, savedAt: "2026-10-20T08:00:00.000Z" }],
+  cookiesSaved: [],
   ...over,
 });
 
@@ -108,13 +109,24 @@ test("with several browsers and none chosen, the one whose extension was used la
 });
 
 test("each mode has a label and a sentence in both languages", () => {
-  assert.deepEqual(modeOptions(en).map((o) => o.value), ["restart", "closed", "off"]);
-  for (const mode of ["restart", "closed", "off"] as const) {
+  assert.deepEqual(modeOptions(en).map((o) => o.value), ["off", "guide", "closed", "restart"]);
+  for (const mode of ["restart", "closed", "guide", "off"] as const) {
     assert.ok(modeSentence(mode, tr).length > 10);
     assert.notEqual(modeSentence(mode, tr), modeSentence(mode, en));
   }
   assert.match(modeSentence("restart", en), /closed for a moment and opened again with its tabs/);
   assert.match(modeSentence("closed", en), /only when the browser is closed/);
+  // The modes that write to the browser say that claude.ai follows, and how to avoid that.
+  for (const mode of ["restart", "closed"] as const) {
+    assert.match(modeSentence(mode, en), /changes that login too, so claude\.ai tabs open on the new account/);
+    assert.match(modeSentence(mode, en), /separate browser profile/);
+    assert.match(modeSentence(mode, tr), /claude\.ai oturumunu da değiştirir/);
+    assert.match(modeSentence(mode, tr), /ayrı bir tarayıcı profilinde/);
+  }
+  // Guide writes nothing and quits nothing; off says it never touches.
+  assert.match(modeSentence("guide", en), /writes no browser file and never quits the browser/);
+  assert.doesNotMatch(modeSentence("guide", en), /changes that login/);
+  assert.equal(modeOptions(en).find((o) => o.value === "guide")?.label, "Guide only");
 });
 
 test("the card names the instance, asks to choose among several, and explains the startup setting", () => {
@@ -164,7 +176,8 @@ test("each outcome says what happened, or nothing when there is nothing to say",
   );
 });
 
-function relayFor(platform: string, list: Account[]): Relay {
+function relayFor(platform: string, list: Account[], extension?: ExtensionStatus["setting"]): Relay {
+  const settings = extension ? { ...DEFAULT_SETTINGS, claudeExtension: extension } : DEFAULT_SETTINGS;
   return {
     api: {
       extensionStatus: () => new Promise(() => {}),
@@ -172,7 +185,7 @@ function relayFor(platform: string, list: Account[]): Relay {
       desktopHistorySummary: () => new Promise(() => {}),
     },
     preview: false, error: "", notice: "", accounts: list, active: undefined,
-    settings: DEFAULT_SETTINGS, busy: "", usageBusy: new Set<string>(),
+    settings, busy: "", usageBusy: new Set<string>(),
     desktopBusy: false, hasUnclaimedDesktop: false, targetOrg: "", historyRevision: 0,
     desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0 },
     data: {
@@ -227,13 +240,23 @@ test("the sheet shows the row on macOS only", () => {
 });
 
 test("the settings card shows the mode with its sentence, the instance, the startup note and Sync now", () => {
-  const html = render(
+  // Nothing chosen yet: Relay only guides.
+  const guided = render(
     relayFor("darwin", [vertex]),
+    createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "guide" } }) }),
+  );
+  assert.match(guided, /Yalnızca rehberlik/);
+  assert.match(guided, /Relay hiçbir tarayıcı dosyasına yazmaz/);
+  assert.match(guided, /bu seçenek varsayılan olarak kapalıdır/);
+  assert.doesNotMatch(guided, /claude\.ai oturumunu da değiştirir/);
+  const html = render(
+    relayFor("darwin", [vertex], { mode: "restart" }),
     createElement(ExtensionPreference, { initialStatus: status() }),
   );
   assert.match(html, /Claude tarayıcı eklentisi/);
-  assert.match(html, /Tarayıcıyı kapatıp yeniden aç/);
+  assert.match(html, /Eklenti ve claude\.ai oturumu · tarayıcıyı kapatıp yeniden aç/);
   assert.match(html, /Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar/);
+  assert.match(html, /claude\.ai oturumunu da değiştirir/);
   assert.match(html, /Brave · Kişisel · eklenti yüklü/);
   assert.match(html, /Relay oturumu kendisi geri yükler/);
   assert.match(html, /Şimdi eşitle/);
@@ -253,4 +276,16 @@ test("the settings card shows the mode with its sentence, the instance, the star
   assert.match(several, /Choose a profile/);
   // Not on this Mac: the card is not drawn at all.
   assert.equal(render(relayFor("darwin", [vertex]), createElement(ExtensionPreference, {})), "");
+});
+
+test("the new reasons have a sentence in both languages, and none names a token or a cookie", () => {
+  for (const reason of ["guide-mismatch", "ambiguous-owner", "schema-changed", "journal-pending"] as const) {
+    const o = outcome({ result: "skipped", reason });
+    const trText = extensionLine(o, tr);
+    const enText = extensionLine(o, en);
+    assert.ok(trText && enText, reason);
+    assert.doesNotMatch(trText + enText, /sessionKey|token|SECRET/i);
+  }
+  assert.match(extensionLine(outcome({ result: "failed", reason: "schema-changed" }), en)!, /cookie layout/);
+  assert.match(extensionLine(outcome({ result: "failed", reason: "journal-pending" }), en)!, /not closed cleanly/);
 });

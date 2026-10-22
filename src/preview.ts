@@ -70,7 +70,7 @@ const accounts: Account[] = [
 }));
 /** Brave (used last) and Chrome with the extension; signed in and saved for the first account only. */
 const previewExtension: ExtensionStatus = {
-  setting: { mode: "restart" },
+  setting: { mode: "guide" },
   instances: [
     { app: "chrome", profile: "Default", name: "Kişi 1", usedAt: Date.now() - 9 * 86_400_000 },
     { app: "brave", profile: "Default", name: "Kişisel", usedAt: Date.now() - 60_000 },
@@ -79,6 +79,7 @@ const previewExtension: ExtensionStatus = {
   picked: "recent",
   restoresTabs: false,
   saved: [{ accountUuid: ids[0], savedAt: new Date().toISOString() }],
+  cookiesSaved: [],
 };
 accounts[0].desktop = {
   accountUuid: ids[0],

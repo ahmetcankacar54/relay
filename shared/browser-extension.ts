@@ -57,11 +57,15 @@ export const PROFILE_FOLDER = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/;
 const HIDDEN_FOLDERS = new Set(["Guest Profile", "System Profile"]);
 
 /**
- * What Relay does with the extension's sign-in at a switch. "restart": it saves and puts the
- * sign-in in place, closing a running browser for a moment and opening it again. "closed":
- * only when the browser is already closed. "off": never.
+ * What Relay does with the extension's sign-in at a switch. The extension signs in through the
+ * browser profile's claude.ai web login, so keeping it on the account moves that login too
+ * (its cookie rows) together with the extension's own sign-in hints.
+ * - "restart": swaps both, closing a running browser for a moment and opening it again.
+ * - "closed": swaps both, only when the browser is already closed.
+ * - "guide": writes nothing and quits nothing; says when the extension is not on the account.
+ * - "off": never touches or reads the extension.
  */
-export const EXTENSION_MODES = ["restart", "closed", "off"] as const;
+export const EXTENSION_MODES = ["restart", "closed", "guide", "off"] as const;
 export type ExtensionMode = (typeof EXTENSION_MODES)[number];
 /** The browser profile whose extension Relay manages. */
 export interface ExtensionTarget {
@@ -73,7 +77,10 @@ export interface ExtensionSetting {
   /** Chosen when several browser profiles have the extension; the only one is used without. */
   browser?: ExtensionTarget;
 }
-export const DEFAULT_EXTENSION: ExtensionSetting = { mode: "restart" };
+/** Writing to a browser is opt-in: until the user picks "restart" or "closed", Relay only guides. */
+export const DEFAULT_EXTENSION: ExtensionSetting = { mode: "guide" };
+/** Modes that change a browser profile's files: the claude.ai login and the extension's sign-in. */
+export const writesBrowser = (mode: ExtensionMode) => mode === "restart" || mode === "closed";
 
 /** A browser profile that has the Claude extension's storage. */
 export interface ExtensionInstance extends ExtensionTarget {
@@ -101,7 +108,15 @@ export type ExtensionReason =
   | "unreadable"
   | "write-failed"
   | "verify-failed"
-  | "restore-failed";
+  | "restore-failed"
+  /** Mode "guide": the extension is not on the account Desktop is on; nothing was changed. */
+  | "guide-mismatch"
+  /** The browser's claude.ai login cannot be tied to the extension's account. */
+  | "ambiguous-owner"
+  /** The browser's cookie database or its login cookies are not laid out as Relay expects. */
+  | "schema-changed"
+  /** The browser's cookie database was not closed cleanly. */
+  | "journal-pending";
 /**
  * What the last extension step did. "switched": the target's sign-in was put in place.
  * "saved": the extension's was kept and the target has none saved. "unchanged": nothing to
@@ -146,6 +161,8 @@ export interface ExtensionStatus {
   restoresTabs?: boolean;
   /** Sealed sign-ins, by the extension's account uuid (lower case). */
   saved: { accountUuid: string; savedAt: string }[];
+  /** Sealed claude.ai logins of the browser profile, by the same uuid. */
+  cookiesSaved: { accountUuid: string; savedAt: string }[];
   last?: ExtensionOutcome;
   /** The last check of who the extension is signed in to; undefined before one ran. */
   current?: ExtensionCurrent;

@@ -118,7 +118,7 @@ test("a state.lock held by another process makes update wait, then throw after l
   assert.ok(Date.now() - started >= 200);
 });
 
-test("a schema 3 registry with a browser profile opens without it and is written as schema 4", (t) => {
+test("a schema 3 registry with a browser profile opens without it and is written as the current schema", (t) => {
   const dir = folder(t);
   new Store(dir).create({ name: "A", kind: "personal" });
   const old = raw(dir);
@@ -126,8 +126,8 @@ test("a schema 3 registry with a browser profile opens without it and is written
   old.accounts[0].browser = { app: "brave", profile: "Default", name: "Work" };
   writeRaw(dir, old);
   const store = new Store(dir);
-  assert.equal(STATE_SCHEMA, 4);
-  assert.equal(raw(dir).schema, 4);
+  assert.equal(STATE_SCHEMA, 5);
+  assert.equal(raw(dir).schema, 5);
   assert.equal("browser" in raw(dir).accounts[0], false);
   assert.equal("browser" in store.state.accounts[0], false);
   // The rest of the account is as it was.
@@ -169,4 +169,37 @@ test("an extension setting with an unsafe folder, an unknown browser or an unkno
       }),
     );
   assert.equal(store.state.settings.claudeExtension, undefined);
+});
+
+test("a schema 4 registry's extension mode never turns into one that writes to a browser", (t) => {
+  for (const [mode, expected] of [
+    ["restart", "guide"],
+    ["closed", "guide"],
+    ["off", "off"],
+  ] as const) {
+    const dir = folder(t);
+    new Store(dir).create({ name: "A", kind: "personal" });
+    const old = raw(dir);
+    old.schema = 4;
+    old.settings.claudeExtension = { mode, browser: { app: "brave", profile: "Default" } };
+    writeRaw(dir, old);
+    const store = new Store(dir);
+    assert.equal(store.state.settings.claudeExtension?.mode, expected);
+    // The chosen browser profile stays.
+    assert.deepEqual(store.state.settings.claudeExtension?.browser, { app: "brave", profile: "Default" });
+    assert.equal(raw(dir).schema, 5);
+    assert.equal(raw(dir).settings.claudeExtension.mode, expected);
+  }
+});
+
+test("a schema 5 registry keeps the modes that write to a browser, and accepts guide", (t) => {
+  for (const mode of ["restart", "closed", "guide", "off"] as const) {
+    const dir = folder(t);
+    const first = new Store(dir);
+    first.update((state) => {
+      state.settings.claudeExtension = { mode };
+    });
+    assert.equal(raw(dir).schema, 5);
+    assert.equal(new Store(dir).state.settings.claudeExtension?.mode, mode);
+  }
 });

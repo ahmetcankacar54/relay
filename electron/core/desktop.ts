@@ -64,6 +64,8 @@ import {
 import { clearScratch, type ExtensionStorage } from "./extension-storage";
 import { ExtensionSwitcher } from "./extension-switch";
 import { ExtensionVault } from "./extension-vault";
+import { CookieVault } from "./cookie-vault";
+import type { CookieStorage } from "./cookie-store";
 import {
   BROWSERS,
   DEFAULT_EXTENSION,
@@ -241,6 +243,8 @@ export class DesktopManager {
   private sidebar: SidebarGapVault;
   /** The Claude extension's sign-ins, sealed per account. */
   private extensionVault: ExtensionVault;
+  /** The browser profile's claude.ai logins, sealed per account. */
+  private cookieVault: CookieVault;
   private extensionSwitcher?: ExtensionSwitcher;
   private lastExtension?: ExtensionOutcome;
   private lastExtensionCheck?: ExtensionCurrent;
@@ -249,7 +253,7 @@ export class DesktopManager {
    * The browsers and the extension's storage, for keeping the Claude extension's sign-in with
    * the account at a switch. Without it (not macOS) the step never runs.
    */
-  extension?: { system: BrowserSystem; storage: ExtensionStorage };
+  extension?: { system: BrowserSystem; storage: ExtensionStorage; cookies?: CookieStorage };
   /** Where an extension step keeps its backup of the extension's folder; the data folder's `extension-scratch` when unset. */
   extensionScratchDir?: string;
   /** The reading observers share; every Desktop operation drops it. */
@@ -282,6 +286,12 @@ export class DesktopManager {
       (data) => this.host.unseal(data),
       this.now,
     );
+    this.cookieVault = new CookieVault(
+      this.vault,
+      (text) => this.host.seal(text),
+      (data) => this.host.unseal(data),
+      this.now,
+    );
   }
   /** One diagnosis event; a log that fails changes nothing about the drafts. */
   private diagnose(event: string, fields?: Record<string, unknown>) {
@@ -299,6 +309,7 @@ export class DesktopManager {
     await sweepStaleDraftScratch(this.host.draftScratchDir ?? os.tmpdir());
     // So does an extension step: its backup of the extension's folder.
     await clearScratch(this.extensionScratch);
+    await clearScratch(`${this.extensionScratch}-cookies`);
     await clearScratch(`${this.extensionScratch}-peek`);
     await this.refreshPending();
     const recovery = await readObject(this.vault, "journal.json");
@@ -755,6 +766,8 @@ export class DesktopManager {
     this.extensionSwitcher ??= new ExtensionSwitcher({
       ...ports,
       vault: this.extensionVault,
+      cookieVault: this.cookieVault,
+      cookieScratch: `${this.extensionScratch}-cookies`,
       scratch: this.extensionScratch,
       now: this.now,
       // Key names only, so a renamed sign-in key can be found from the log.
@@ -868,6 +881,7 @@ export class DesktopManager {
           )
         : undefined,
       saved: await this.extensionVault.list(),
+      cookiesSaved: await this.cookieVault.list(),
       last: this.lastExtension,
       current: this.lastExtensionCheck,
     };

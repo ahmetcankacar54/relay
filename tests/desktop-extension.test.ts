@@ -9,10 +9,11 @@ import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
 import { jsonBytes, writeBytes } from "../electron/core/desktop-files";
 import { ExtensionVault } from "../electron/core/extension-vault";
 import { createSealer } from "../electron/core/vault-crypto";
-import { extensionWorld, signInFor } from "./extension-world";
+import { CookieVault } from "../electron/core/cookie-vault";
+import { extensionWorld, loginFor, signInFor } from "./extension-world";
 
 /** Claude folder, Relay store, a fake Claude host and a fake browser world. */
-async function fixture(t: any) {
+async function fixture(t: any, options: { defaultSetting?: boolean } = {}) {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), "relay-desktop-ext-"));
   t.after(() => fs.rm(temp, { recursive: true, force: true }));
   const root = path.join(temp, "Claude");
@@ -43,13 +44,24 @@ async function fixture(t: any) {
   const push = events.push.bind(events);
   log.push = (...items: string[]) => push(...items);
   const manager = new DesktopManager(root, store, host, path.join(temp, ".claude"));
-  manager.extension = { system: world.system, storage: world.storage };
+  manager.extension = { system: world.system, storage: world.storage, cookies: world.cookies };
+  // Writing to a browser is opt-in; these tests are about the modes that do.
+  if (!options.defaultSetting)
+    store.update((s) => {
+      s.settings.claudeExtension = { mode: "restart" };
+    });
   await manager.initialize();
   const vault = new ExtensionVault(
     path.join(store.root, "desktop-vault"),
     (x) => sealer.seal(x),
     (d) => sealer.unseal(d),
   );
+  const cookieVault = new CookieVault(
+    path.join(store.root, "desktop-vault"),
+    (x) => sealer.seal(x),
+    (d) => sealer.unseal(d),
+  );
+  const profile = path.dirname(path.dirname(dir));
   async function account(name: string) {
     const a = store.create({ name, kind: "personal" });
     const accountUuid = randomUUID(),
@@ -67,7 +79,7 @@ async function fixture(t: any) {
     events.length = 0;
     return store.account(a.id);
   }
-  return { temp, store, manager, world, dir, vault, account, events, setRunning: (v: boolean) => (running = v) };
+  return { temp, store, manager, world, dir, profile, vault, cookieVault, account, events, setRunning: (v: boolean) => (running = v) };
 }
 
 test("a restarting switch puts the target's extension sign-in in place before Claude opens, quitting and reopening a running browser", async (t) => {
@@ -77,10 +89,14 @@ test("a restarting switch puts the target's extension sign-in in place before Cl
   f.setRunning(true);
   f.world.state.running = true;
   await f.vault.save(a.desktop!.accountUuid, signInFor(a.desktop!.accountUuid, 1));
+  await f.cookieVault.save(a.desktop!.accountUuid, loginFor(a.desktop!.accountUuid, 1));
   f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
   await f.manager.switchTo(a.id);
   assert.deepEqual(f.events, ["claude-quit", "quit:brave", "launch:brave", "claude-launch"]);
   assert.deepEqual(f.world.stored.get(f.dir), signInFor(a.desktop!.accountUuid, 1));
+  assert.deepEqual(f.world.web.get(f.profile), loginFor(a.desktop!.accountUuid, 1));
+  assert.deepEqual(await f.cookieVault.load([b.desktop!.accountUuid]), loginFor(b.desktop!.accountUuid, 2));
   assert.deepEqual(await f.vault.load([b.desktop!.accountUuid]), signInFor(b.desktop!.accountUuid, 2));
   assert.equal(f.manager.extensionOutcome?.result, "switched");
   assert.ok(f.world.opened.every((o) => !o.running));
@@ -94,6 +110,8 @@ test("a switch that keeps Claude closed never quits the browser", async (t) => {
   f.world.state.running = true;
   f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
   await f.vault.save(a.desktop!.accountUuid, signInFor(a.desktop!.accountUuid, 1));
+  await f.cookieVault.save(a.desktop!.accountUuid, loginFor(a.desktop!.accountUuid, 1));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
   await f.manager.switchTo(a.id, { closedOnly: true, expectedActiveProfileId: b.id });
   assert.deepEqual(f.events, []);
   assert.equal(f.manager.extensionOutcome?.result, "skipped");
@@ -102,10 +120,13 @@ test("a switch that keeps Claude closed never quits the browser", async (t) => {
   // The browser is closed: the same kind of switch swaps.
   f.world.state.running = false;
   f.world.stored.set(f.dir, signInFor(a.desktop!.accountUuid, 3));
+  f.world.web.set(f.profile, loginFor(a.desktop!.accountUuid, 3));
   await f.vault.save(b.desktop!.accountUuid, signInFor(b.desktop!.accountUuid, 4));
+  await f.cookieVault.save(b.desktop!.accountUuid, loginFor(b.desktop!.accountUuid, 4));
   await f.manager.switchTo(b.id, { closedOnly: true, expectedActiveProfileId: a.id });
   assert.equal(f.manager.extensionOutcome?.result, "switched");
   assert.deepEqual(f.world.stored.get(f.dir), signInFor(b.desktop!.accountUuid, 4));
+  assert.deepEqual(f.world.web.get(f.profile), loginFor(b.desktop!.accountUuid, 4));
 });
 
 test("an extension step that fails never fails the switch", async (t) => {
@@ -155,7 +176,9 @@ test("sync now runs the step for the active account and quits a running browser;
   const b = await f.account("B"); // active
   f.world.state.running = true;
   f.world.stored.set(f.dir, signInFor(a.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(a.desktop!.accountUuid, 2));
   await f.vault.save(b.desktop!.accountUuid, signInFor(b.desktop!.accountUuid, 7));
+  await f.cookieVault.save(b.desktop!.accountUuid, loginFor(b.desktop!.accountUuid, 7));
   assert.equal(await f.manager.extensionQuitsBrowser(), "Brave");
   const outcome = await f.manager.syncExtension();
   assert.equal(outcome.result, "switched");
@@ -166,6 +189,7 @@ test("sync now runs the step for the active account and quits a running browser;
   assert.equal(status.target?.app, "brave");
   assert.equal(status.restoresTabs, false);
   assert.deepEqual(status.saved.map((s) => s.accountUuid).sort(), [a.desktop!.accountUuid, b.desktop!.accountUuid].sort());
+  assert.deepEqual(status.cookiesSaved.map((s) => s.accountUuid).sort(), [a.desktop!.accountUuid, b.desktop!.accountUuid].sort());
   assert.equal(status.last?.result, "switched");
   // Claude was not touched.
   assert.ok(!f.events.includes("claude-quit"));
@@ -195,4 +219,23 @@ test("sync now needs Claude on a saved account, and is not available without the
   f.manager.extension = undefined;
   await assert.rejects(f.manager.syncExtension(), /not supported here/);
   assert.equal(await f.manager.extensionStatus(), undefined);
+});
+
+test("without a saved choice Relay only guides: nothing is written and no browser is quit", async (t) => {
+  const f = await fixture(t, { defaultSetting: true });
+  const a = await f.account("A");
+  const b = await f.account("B");
+  f.setRunning(true);
+  f.world.state.running = true;
+  f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
+  await f.vault.save(a.desktop!.accountUuid, signInFor(a.desktop!.accountUuid, 1));
+  await f.cookieVault.save(a.desktop!.accountUuid, loginFor(a.desktop!.accountUuid, 1));
+  assert.equal(await f.manager.extensionQuitsBrowser(), undefined);
+  await f.manager.switchTo(a.id);
+  assert.deepEqual(f.events, ["claude-quit", "claude-launch"]);
+  assert.equal(f.manager.extensionOutcome?.reason, "guide-mismatch");
+  assert.deepEqual(f.world.stored.get(f.dir), signInFor(b.desktop!.accountUuid, 2));
+  assert.deepEqual(f.world.web.get(f.profile), loginFor(b.desktop!.accountUuid, 2));
+  assert.equal((await f.manager.extensionStatus())!.setting.mode, "guide");
 });
