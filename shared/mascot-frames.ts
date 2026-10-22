@@ -3,7 +3,10 @@ import type { MascotPose } from "./mascot";
 /** Menu bar frame canvas in points; rendered at 1x, 2x and 3x, then trimmed on the right (scripts/mascot-assets.ts). */
 export const MASCOT_FRAME_SIZE = { width: 24, height: 20 } as const;
 
-/** Every menu bar frame: one red panda head and a door. Codex delivers one file per name. */
+/**
+ * Every menu bar frame: the red panda head with one expression (scripts/mascot-tray-from-rig.ts builds them from
+ * the rig's head). "away", a Desktop operation such as a switch, is the happy face.
+ */
 export const MASCOT_FRAMES = ["idle", "blink", "hungry", "sleep", "alert", "away"] as const;
 export type MascotFrame = (typeof MASCOT_FRAMES)[number];
 

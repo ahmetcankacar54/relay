@@ -372,8 +372,10 @@ export async function renderTrayFrame(trayDir: string, frame: MascotFrame): Prom
         throw new Error(`tray/${frame}.svg: cannot be rendered (${reason(error)})`);
       });
     } else {
+      // Mitchell, not the default Lanczos: Lanczos rings a faint pixel or two past the ink at 1x and 2x, which
+      // the trim below would keep and the menu bar item would grow by.
       png = await sharp(path.join(trayDir, `${frame}.png`))
-        .resize(MASCOT_FRAME_SIZE.width * scale, MASCOT_FRAME_SIZE.height * scale, { fit: "fill" })
+        .resize(MASCOT_FRAME_SIZE.width * scale, MASCOT_FRAME_SIZE.height * scale, { fit: "fill", kernel: "mitchell" })
         .png()
         .toBuffer();
     }

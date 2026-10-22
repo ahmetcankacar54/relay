@@ -216,7 +216,7 @@ const ink = async (png: string) => {
 
 test("the generated tray module holds every frame at three scales, trimmed right after the panda", async () => {
   assert.deepEqual(Object.keys(mascotTrayFrames).sort(), [...MASCOT_FRAMES].sort());
-  // The head ends at x 19 of the 24 pt canvas; the "!" and the "z" reach x 23; the door stays as wide as the head.
+  // The head ends at x 19 of the 24 pt canvas; the "!" and the "z" reach x 23; the happy face of a switch is the head.
   const width: Record<MascotFrame, number> = { idle: 19, blink: 19, hungry: 19, away: 19, sleep: 23, alert: 23 };
   for (const frame of MASCOT_FRAMES) {
     const w = width[frame];
