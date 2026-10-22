@@ -1,8 +1,8 @@
-import { ShieldCheck } from "lucide-react";
+import { Hand, Power, Zap, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { cn } from "@/lib/utils";
 import { Banner } from "@/components/Banner";
-import { Note, SectionHeading } from "@/components/SettingRow";
+import { Note } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -101,6 +101,14 @@ export function AutomationStatusLine({
   );
 }
 
+/** Each choice's card: an icon and a title that says who acts. */
+const MODE_ICON: Record<AutomationMode, LucideIcon> = { off: Hand, "after-exit": Power, quota: Zap };
+export const MODE_TITLE: Record<AutomationMode, [tr: string, en: string]> = {
+  off: ["Ben geçerim", "I switch"],
+  "after-exit": ["Claude'u kapatınca", "When I quit Claude"],
+  quota: ["Kota dolunca", "At quota"],
+};
+
 /** The Switching page card: one choice, what it does, and its status. */
 export function AutomationSettings() {
   const relay = useRelay();
@@ -111,34 +119,60 @@ export function AutomationSettings() {
   const fleet = relay.data?.fleet;
   return (
     <section aria-labelledby="automation-title" className="grid gap-3">
-      <SectionHeading
-        id="automation-title"
-        icon={<ShieldCheck size={18} aria-hidden="true" />}
-        title={t("Otomatik geçiş", "Automatic switching")}
-      />
-      <div className="grid justify-items-start gap-1.5">
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          size="sm"
-          aria-labelledby="automation-title"
-          value={mode}
-          disabled={locked}
-          onValueChange={(v) => v && setMode(v as AutomationMode)}
-        >
-          {AUTOMATION_MODES.map((m) => (
-            <ToggleGroupItem
+      <h2 id="automation-title" className="flex items-center gap-2 text-sm font-semibold">
+        <span aria-hidden="true" className="grid size-5 place-items-center rounded-full bg-foreground text-[11px] text-background">
+          1
+        </span>
+        {t("Ne zaman geçilsin?", "When to switch?")}
+      </h2>
+      <div
+        role="radiogroup"
+        aria-labelledby="automation-title"
+        className="grid gap-3 sm:grid-cols-3"
+      >
+        {AUTOMATION_MODES.map((m) => {
+          const Icon = MODE_ICON[m.value];
+          const checked = mode === m.value;
+          const off = locked || (m.value !== "off" && !supported);
+          return (
+            <button
               key={m.value}
-              value={m.value}
-              disabled={m.value !== "off" && !supported}
+              type="button"
+              role="radio"
+              aria-checked={checked}
+              disabled={off}
+              onClick={() => !checked && setMode(m.value)}
+              className={cn(
+                "flex flex-col gap-2.5 rounded-xl border bg-card p-4 text-left outline-none transition-colors",
+                "hover:border-foreground/20 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50",
+                checked && "border-2 border-primary bg-accent/40 p-[15px]",
+              )}
             >
-              {t(...m.label)}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-        <p className="text-[13px] text-muted-foreground">
-          {t(...automationModeCopy(mode).description)}
-        </p>
+              <span className="flex items-center justify-between">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "grid size-8 place-items-center rounded-lg [&_svg]:size-4",
+                    checked ? "bg-accent text-accent-foreground" : "bg-muted text-foreground/80",
+                  )}
+                >
+                  <Icon />
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "size-[18px] rounded-full border-[1.5px] border-input bg-card",
+                    checked && "border-[5px] border-primary",
+                  )}
+                />
+              </span>
+              <span className="text-sm font-semibold">{t(...MODE_TITLE[m.value])}</span>
+              <span className="text-[12.5px] leading-snug text-muted-foreground">
+                {t(...m.description)}
+              </span>
+            </button>
+          );
+        })}
       </div>
       <AutomationStatusLine status={status} />
       {!supported && (
