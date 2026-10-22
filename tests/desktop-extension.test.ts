@@ -189,7 +189,7 @@ test("sync now runs the step for the active account and quits a running browser;
   assert.equal(status.target?.app, "brave");
   assert.equal(status.restoresTabs, false);
   assert.deepEqual(status.saved.map((s) => s.accountUuid).sort(), [a.desktop!.accountUuid, b.desktop!.accountUuid].sort());
-  assert.deepEqual(status.cookiesSaved.map((s) => s.accountUuid).sort(), [a.desktop!.accountUuid, b.desktop!.accountUuid].sort());
+  assert.deepEqual(status.cookiesSaved!.map((s) => s.accountUuid).sort(), [a.desktop!.accountUuid, b.desktop!.accountUuid].sort());
   assert.equal(status.last?.result, "switched");
   // Claude was not touched.
   assert.ok(!f.events.includes("claude-quit"));
