@@ -51,6 +51,44 @@ test("an account Relay does not have, or two it cannot tell apart, names no acco
   assert.equal(namedAccount([["recent", JSON.stringify([a, b])]], [a, b]), undefined);
 });
 
+test("extension 1.0.102's layout: accountUuid names the account, a consent map of several names no one", () => {
+  const mine = randomUUID();
+  const other = randomUUID();
+  const stranger = randomUUID();
+  const org = randomUUID();
+  const layout = (account: string): [string, string][] => [
+    ["accountUuid", JSON.stringify(account)],
+    ["anonymousId", JSON.stringify(randomUUID())],
+    ["bridgeDeviceId", JSON.stringify(randomUUID())],
+    ["codeVerifier", '"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"'],
+    ["lastActiveOrgHint", JSON.stringify(org)],
+    ["oauthState", '"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"'],
+    [
+      "permissionConsentByAccount",
+      JSON.stringify({
+        [stranger]: { browserControlPermissionAccepted: true },
+        [mine]: { browserControlPermissionAccepted: true },
+        [other]: { browserControlPermissionAccepted: true },
+      }),
+    ],
+    ["permissionConsentOwner", JSON.stringify(account)],
+    ["tokenOrg", JSON.stringify({ hybrid: false, uuid: org })],
+  ];
+  const picked = pickSignIn(layout(mine), [mine, other])!;
+  assert.equal(picked.account, mine);
+  assert.equal(picked.other, undefined);
+  assert.equal(picked.signIn.accountUuid, JSON.stringify(mine));
+  // Signed in to an account Relay does not have: someone else's, never guessed from the map.
+  const theirs = pickSignIn(layout(stranger), [mine, other])!;
+  assert.equal(theirs.account, undefined);
+  assert.equal(theirs.other, true);
+  // Signed out: the extension deletes accountUuid, tokenOrg and the rest; the map stays.
+  const signedOut = layout(mine).filter(([key]) =>
+    ["anonymousId", "bridgeDeviceId", "permissionConsentByAccount"].includes(key),
+  );
+  assert.equal(pickSignIn(signedOut, [mine, other]), undefined);
+});
+
 test("two sign-ins are the same only when every key is", () => {
   const uuid = randomUUID();
   assert.ok(sameSignIn(signInFor(uuid, 1), signInFor(uuid, 1)));
