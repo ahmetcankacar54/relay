@@ -14,7 +14,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { StatusDot } from "@/components/StatusDot";
-import { LimitMeter } from "@/components/LimitMeter";
+import { UsageRing } from "@/components/UsageRing";
+import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
 import type { T } from "@/data/i18n";
 import type { sidebarStatus } from "@/data/selectors";
 import type { PageId } from "./routes";
@@ -205,25 +206,34 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => goFrom("below")("genel")}
-            className="flex w-full flex-col items-start justify-start gap-0.5 rounded-md text-left whitespace-normal"
+            className="flex w-full items-center gap-2.5 rounded-md text-left whitespace-normal"
           >
-            <span className="flex w-full min-w-0 items-center gap-1.5">
-              <StatusDot tone={summary.running ? "ok" : "off"} />
-              <b className="truncate font-semibold">{summary.name}</b>
-            </span>
-            <span className="text-muted-foreground">
-              {summary.running
-                ? t("Claude uygulamasında açık", "Open in the Claude app")
-                : t("Claude uygulaması kapalı", "Claude app closed")}
+            <UsageRing
+              outer={summary.fiveHour}
+              size={30}
+              label={
+                summary.fiveHour === undefined
+                  ? t("5 saatlik dönem bilinmiyor", "5-hour period unknown")
+                  : t(`5 saatlik dönem ${formatUsed(summary.fiveHour, "tr")}`, `5-hour period ${formatUsed(summary.fiveHour, "en")}`)
+              }
+            />
+            <span className="grid min-w-0 gap-0.5">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <StatusDot tone={summary.running ? "ok" : "off"} />
+                <b className="truncate font-semibold">{summary.name}</b>
+              </span>
+              <span className="truncate text-muted-foreground">
+                {summary.fiveHour === undefined
+                  ? summary.running
+                    ? t("Claude'da açık", "Open in Claude")
+                    : t("Claude kapalı", "Claude closed")
+                  : t(
+                      `5 saat ${formatPercent(percentUsed(summary.fiveHour), "tr")}${summary.running ? "" : " · Claude kapalı"}`,
+                      `5 h ${formatPercent(percentUsed(summary.fiveHour), "en")}${summary.running ? "" : " · Claude closed"}`,
+                    )}
+              </span>
             </span>
           </button>
-          <div className="mt-1.5">
-            <LimitMeter
-              label={t("5 saatlik dönem", "5-hour period")}
-              percent={summary.fiveHour}
-              size="sm"
-            />
-          </div>
         </div>
       )}
       <div className="w-full">

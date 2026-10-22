@@ -1,14 +1,12 @@
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { LimitMeter } from "@/components/LimitMeter";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { overviewAccounts, pendingFlow, tempoRateNow } from "@/data/selectors";
 import { accountRowSubtitle, accountTileLine } from "@/lib/account-row";
-import { AccountTiles } from "../../features/AccountTiles";
+import { AccountList } from "../../features/AccountList";
+import { Plus } from "lucide-react";
 import { intentHash, type PageId } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
-import { planLabel } from "../accounts/accountLabels";
 import { accountHash } from "../accounts/AccountDetail";
 
 export function AccountsCard({
@@ -46,10 +44,15 @@ export function AccountsCard({
     !relay.desktop?.available ||
     !!relay.pendingDesktop ||
     !!relay.desktop?.recoveryRequired;
+  const addAccount = () => {
+    window.location.hash = intentHash("hesaplar", "ekle");
+  };
   return (
-    <Card className="gap-0 px-4 py-3.5">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="font-semibold">{t("Hesaplar", "Accounts")}</span>
+    <section className="grid content-start gap-2">
+      <div className="flex items-baseline justify-between gap-2 px-1">
+        <h2 className="text-[13px] font-semibold text-muted-foreground">
+          {t("Diğer hesaplar", "Other accounts")}
+        </h2>
         {relay.suggestion && relay.active ? (
           <span className="text-xs font-medium text-warn-foreground">
             {t(
@@ -64,24 +67,18 @@ export function AccountsCard({
         )}
       </div>
       {rows.length === 0 ? (
-        <div className="flex items-center gap-1 py-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1 rounded-xl border bg-card px-4 py-3 text-sm text-muted-foreground">
           {relay.accounts.length
             ? `${t("Başka hesap yok", "No other accounts")} ·`
             : `${t("Henüz hesap yok", "No accounts yet")} ·`}
-          <Button
-            variant="link"
-            size="sm"
-            className="h-auto px-0"
-            onClick={() => {
-              window.location.hash = intentHash("hesaplar", "ekle");
-            }}
-          >
+          <Button variant="link" size="sm" className="h-auto px-0" onClick={addAccount}>
             {t("Hesap ekle", "Add account")}
           </Button>
         </div>
       ) : (
-        <AccountTiles
+        <AccountList
           rows={rows}
+          href={(row) => accountHash(row.account.id)}
           line={(row) =>
             accountTileLine(row, t, language, zone, now, waitingFor(row))
           }
@@ -109,8 +106,37 @@ export function AccountsCard({
               relay.requestDesktop(row.account, "switch"),
             );
           }}
+          footer={
+            <button
+              type="button"
+              onClick={addAccount}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left outline-none hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50"
+            >
+              <span className="grid size-[38px] shrink-0 place-items-center rounded-full border-[1.5px] border-dashed border-input">
+                <Plus aria-hidden="true" className="size-4 text-muted-foreground" />
+              </span>
+              <span>
+                <span className="block text-[13.5px] font-medium">{t("Hesap ekle", "Add account")}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {t("Claude uygulamasındaki hesabı bir kez kaydet", "Save an account of the Claude app once")}
+                </span>
+              </span>
+            </button>
+          }
         />
       )}
-    </Card>
+      {rows.length > 0 && (
+        <p className="flex flex-wrap items-center gap-3 px-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-muted-foreground" />
+            {t("kalın: 5 saatlik dönem", "thick: 5-hour period")}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-full border-[1.5px] border-muted-foreground" />
+            {t("ince: hafta", "thin: week")}
+          </span>
+        </p>
+      )}
+    </section>
   );
 }

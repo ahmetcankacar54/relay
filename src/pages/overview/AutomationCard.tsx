@@ -1,39 +1,48 @@
-import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { OptionSelect } from "@/components/SettingRow";
+import { ChevronRight } from "lucide-react";
+import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { useExtensionStatus } from "@/data/useExtension";
 import { formatClock } from "@/lib/time";
+import { instanceLabel } from "@/lib/extension-ui";
 import type { PageId } from "@/app/routes";
-import { AutomationStatusLine } from "../../features/AutomationControl";
-import { useAutomation } from "../../features/useAutomation";
-import { AUTOMATION_MODES } from "../../../shared/automation-mode";
+import { AUTOMATION_DOT, automationModeCopy, useAutomation } from "../../features/useAutomation";
 import { nextPlannedWindow } from "@/lib/day-timeline";
 
+/** One setting at a glance: its name, its state, its page. */
 function Row({
-  title,
-  status,
-  control,
+  name,
+  value,
+  detail,
+  tone,
+  onClick,
 }: {
-  title: string;
-  status: string;
-  control: ReactNode;
+  name: string;
+  value: string;
+  detail?: string;
+  tone?: "ok" | "warn" | "crit" | "off";
+  onClick: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-t py-2 first:border-0">
-      <div className="min-w-0">
-        <div className="text-sm font-semibold">{title}</div>
-        <div className="truncate text-xs text-muted-foreground">
-          {status}
-        </div>
-      </div>
-      {control}
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full min-w-0 items-center gap-3 border-t px-4 py-3 text-left outline-none first:border-0 hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px]">{name}</span>
+        {detail && <span className="block truncate text-xs text-muted-foreground">{detail}</span>}
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+        {tone && <StatusDot tone={tone} />}
+        {value}
+      </span>
+      <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground/70" />
+    </button>
   );
 }
 
+/** Automation as a grouped list: each row says how a setting stands and opens its page. */
 export function AutomationCard({
   go,
   now,
@@ -43,80 +52,53 @@ export function AutomationCard({
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
-  const { api, accounts, settings, action } = relay;
-  const disabled = !!relay.busy || !!relay.desktop?.busy;
+  const { accounts, settings } = relay;
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
   const automation = useAutomation(now);
   const planning = settings.planning;
   const next = planning.autoStart
     ? nextPlannedWindow(planning, accounts, relay.data?.planning, now)
     : undefined;
+  const extension = useExtensionStatus().status;
+  const macOS = ["darwin", "preview"].includes(relay.data?.diagnostics?.platform ?? "");
   return (
-    <Card className="gap-0 px-4 py-3.5">
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="font-semibold">{t("Otomasyon", "Automation")}</span>
-        <Button
-          variant="link"
-          size="sm"
-          className="h-auto px-0"
-          onClick={() => go("gecis")}
-        >
-          {t("Geçiş →", "Switching →")}
-        </Button>
-      </div>
-      <div>
-        <div className="grid gap-1 border-t py-2 first:border-0">
-          <div className="flex items-center justify-between gap-3">
-            <label htmlFor="automation-mode" className="text-sm font-semibold">
-              {t("Otomatik geçiş", "Automatic switching")}
-            </label>
-            <OptionSelect
-              id="automation-mode"
-              className="min-w-36"
-              value={automation.mode}
-              disabled={automation.locked}
-              onChange={automation.setMode}
-              options={AUTOMATION_MODES.map((m) => ({
-                value: m.value,
-                label: t(...m.label),
-                disabled: m.value !== "off" && !automation.supported,
-              }))}
-            />
-          </div>
-          <AutomationStatusLine status={automation.status} compact />
-        </div>
+    <section className="grid content-start gap-2">
+      <h2 className="px-1 text-[13px] font-semibold text-muted-foreground">
+        {t("Otomasyon", "Automation")}
+      </h2>
+      <div className="overflow-hidden rounded-xl border bg-card">
         <Row
-          title={t(
-            "Limit dönemlerini önceden başlat",
-            "Start limit periods early",
-          )}
-          status={
+          name={t("Otomatik geçiş", "Automatic switching")}
+          value={t(...automationModeCopy(automation.mode).label)}
+          detail={t(...automation.status.text)}
+          tone={AUTOMATION_DOT[automation.status.tone]}
+          onClick={() => go("gecis")}
+        />
+        <Row
+          name={t("Önceden başlatma", "Early start")}
+          value={
             !planning.autoStart
               ? t("Kapalı", "Off")
               : next
-                ? t(
-                    `Sonraki ${formatClock(next.at, language, planning.timeZone)} ${name(next.accountId)}`,
-                    `Next ${formatClock(next.at, language, planning.timeZone)} ${name(next.accountId)}`,
-                  )
+                ? `${name(next.accountId)} ${formatClock(next.at, language, planning.timeZone)}`
                 : t("Açık", "On")
           }
-          control={
-            <Switch
-              aria-label={t(
-                "Limit dönemlerini önceden başlat",
-                "Start limit periods early",
-              )}
-              checked={planning.autoStart}
-              disabled={disabled}
-              onCheckedChange={(v) =>
-                void action("planning", () =>
-                  api.updatePlanning({ autoStart: v }),
-                )
-              }
-            />
-          }
+          onClick={() => go("planlama")}
         />
+        {macOS && extension && (
+          <Row
+            name={t("Tarayıcı eklentisi", "Browser extension")}
+            value={
+              extension.setting.mode === "off"
+                ? t("Kapalı", "Off")
+                : extension.target
+                  ? t(`${instanceLabel(extension.target)} · izliyor`, `${instanceLabel(extension.target)} · following`)
+                  : t("Tarayıcı seç", "Choose a browser")
+            }
+            onClick={() => go("gecis")}
+          />
+        )}
       </div>
-    </Card>
+    </section>
   );
 }

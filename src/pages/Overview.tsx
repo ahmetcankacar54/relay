@@ -49,22 +49,33 @@ export function Overview({
       title={t("Genel bakış", "Overview")}
       description={description}
       actions={
-        <Button
-          variant="outline"
-          disabled={refreshing || !accounts.length}
-          onClick={(e) =>
-            offerAfter(prank, "wheel", e, () => {
-              for (const a of accounts) void relay.refreshUsage(a);
-            })
-          }
-        >
-          {refreshing ? (
-            <LoaderCircle className="animate-spin" />
-          ) : (
-            <RefreshCw />
+        <>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t("Limitleri yenile", "Refresh limits")}
+            title={t("Limitleri yenile", "Refresh limits")}
+            disabled={refreshing || !accounts.length}
+            onClick={(e) =>
+              offerAfter(prank, "wheel", e, () => {
+                for (const a of accounts) void relay.refreshUsage(a);
+              })
+            }
+          >
+            {refreshing ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+          </Button>
+          {relay.active && (
+            <Button
+              variant="outline"
+              disabled={relay.desktopBusy}
+              onClick={() => void relay.action("open", () => relay.api.openDesktop())}
+            >
+              {relay.desktop?.running
+                ? t("Claude'u öne getir", "Bring Claude to front")
+                : t("Claude'u aç", "Open Claude")}
+            </Button>
           )}
-          {t("Limitleri yenile", "Refresh limits")}
-        </Button>
+        </>
       }
     >
       <div className="grid gap-3 px-6 pb-6">

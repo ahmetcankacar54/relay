@@ -1,6 +1,8 @@
-import { ArrowUpRight, Plus } from "lucide-react";
+import { Plus, TriangleAlert } from "lucide-react";
 import { freshUsage } from "../../../shared/usage";
 import { Badge } from "@/components/ui/badge";
+import { formatUsed } from "@/lib/meter";
+import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { LimitRings } from "@/components/LimitRings";
@@ -8,8 +10,7 @@ import { Panda } from "@/components/Panda";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { pendingFlow, usageWindowRows } from "@/data/selectors";
-import { formatReset } from "@/lib/time";
+import { pendingFlow } from "@/data/selectors";
 import { intentHash, type PageId } from "@/app/routes";
 import { blockReason, desktopBlock } from "@/lib/onboarding";
 import { UsageCard } from "../../features/UsageCard";
@@ -27,6 +28,7 @@ export function ActiveAccountCard({
   now: number;
 }) {
   const relay = useRelay();
+  const prank = usePrank();
   const { t, language } = useI18n();
   const { active, desktop, desktopBusy } = relay;
   if (!active) return <Onboarding go={go} />;
@@ -38,50 +40,39 @@ export function ActiveAccountCard({
   const authFlow = relay.data?.authFlows?.find(
     (f) => f.accountId === active.id,
   );
-  return (
-    <Card className="gap-0 px-4 py-3.5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-xs font-medium text-muted-foreground">
-            {t("Claude uygulamasında açık", "Open in the Claude app")}
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2">
-            <span className="text-lg font-bold">{active.name}</span>
-            {plan && <Badge variant="secondary">{plan}</Badge>}
-            <Badge variant="outline">
-              <StatusDot tone={running ? "ok" : "off"} />
-              {running ? t("Çalışıyor", "Running") : t("Kapalı", "Closed")}
-            </Badge>
-          </div>
-          {identity && (
-            <div className="mt-0.5 truncate text-sm text-muted-foreground">
-              {identity}
-            </div>
-          )}
-        </div>
-        <Button
-          variant="outline"
-          disabled={desktopBusy}
-          onClick={() =>
-            void relay.action("open", () => relay.api.openDesktop())
-          }
-        >
-          <ArrowUpRight />
-          {running
-            ? t("Claude uygulamasını öne getir", "Bring the Claude app to front")
-            : t("Claude uygulamasını aç", "Open the Claude app")}
-        </Button>
+  const suggestion = relay.suggestion;
+  const suggestedUsage = suggestion && relay.data?.usage[suggestion.id];
+  const switchBlocked = desktopBusy || !!relay.pendingDesktop || !!desktop?.recoveryRequired;
+  const header = (
+    <div className="grid gap-1">
+      <div className="text-xs font-medium text-muted-foreground">
+        {t("Claude uygulamasında açık", "Open in the Claude app")}
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[22px] font-bold tracking-tight">{active.name}</span>
+        {plan && <Badge variant="secondary">{plan}</Badge>}
+        <span className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
+          <StatusDot tone={running ? "ok" : "off"} />
+          {running ? t("Çalışıyor", "Running") : t("Kapalı", "Closed")}
+        </span>
+      </div>
+      {identity && <div className="truncate text-xs text-muted-foreground">{identity}</div>}
+    </div>
+  );
+  return (
+    <Card className="flex-row flex-wrap items-center gap-6 px-6 py-5">
       {freshUsage(usage, now) ? (
         <LimitRings
-          className="mt-3"
+          className="min-w-0 flex-1"
           usage={usage}
           now={now}
           zone={relay.settings.planning.timeZone}
-          size={96}
+          size={140}
+          aside={header}
         />
       ) : (
-        <div className="mt-3">
+        <div className="grid min-w-0 flex-1 gap-3">
+          {header}
           <UsageCard
             usage={usage}
             busy={relay.usageBusy.has(active.id)}
@@ -95,6 +86,44 @@ export function ActiveAccountCard({
             }
             connect={() => void relay.startCli(active)}
           />
+        </div>
+      )}
+      {suggestion && (
+        <div
+          data-slot="suggestion"
+          className="flex w-56 shrink-0 flex-col gap-2.5 border-l pl-6"
+        >
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-warn-foreground">
+            <TriangleAlert aria-hidden="true" className="size-3.5" />
+            {t("Limit dolmak üzere", "Near the limit")}
+          </span>
+          <p className="text-[13px] leading-snug text-foreground/85">
+            {language === "tr" ? (
+              <>
+                <b>{suggestion.name}</b> en uygunu
+                {suggestedUsage?.fiveHour
+                  ? `: ${formatUsed(suggestedUsage.fiveHour.usedPercent, language)}.`
+                  : "."}
+              </>
+            ) : (
+              <>
+                <b>{suggestion.name}</b> is the best fit
+                {suggestedUsage?.fiveHour
+                  ? `: ${formatUsed(suggestedUsage.fiveHour.usedPercent, language)}.`
+                  : "."}
+              </>
+            )}
+          </p>
+          <Button
+            disabled={switchBlocked}
+            onClick={(e) =>
+              offerAfter(prank, "nibble-cursor", e, () =>
+                relay.requestDesktop(suggestion, "switch"),
+              )
+            }
+          >
+            {t(`${suggestion.name} hesabına geç`, `Switch to ${suggestion.name}`)}
+          </Button>
         </div>
       )}
     </Card>

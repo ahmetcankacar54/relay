@@ -10,7 +10,7 @@ import {
   automationModeCopy,
   useAutomation,
 } from "../features/useAutomation";
-import { panelEyebrow } from "./PanelActiveCard";
+import { panelCard, panelEyebrow } from "./PanelActiveCard";
 
 /** A setting at a glance: its name, its state and the page it opens in the main window. */
 function Row({
@@ -80,7 +80,7 @@ export function PanelAutomation({ now }: { now: number }) {
       <div className={panelEyebrow}>
         <span>{t("Otomasyon", "Automation")}</span>
       </div>
-      <div className="grid">
+      <div className={`${panelCard} grid px-1.5 py-1`}>
         <Row
           tone={AUTOMATION_DOT[automation.status.tone]}
           name={t("Otomatik geçiş", "Automatic switching")}

@@ -17,7 +17,7 @@ import {
   type PanelRowBlock,
 } from "@/lib/account-row";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
-import { AccountTiles } from "../features/AccountTiles";
+import { AccountList } from "../features/AccountList";
 import { panelCard, panelEyebrow } from "./PanelActiveCard";
 
 export const PANEL_MAX_ROWS = 6;
@@ -109,7 +109,7 @@ export function PanelAccounts({
             {t("Limit dolmak üzere · önerilen üstte", "Near the limit · suggested first")}
           </span>
         ) : (
-          <span>{t("Diğer hesaplar · en uygunu üstte", "Other accounts · best first")}</span>
+          <span>{t("Geç · en uygunu üstte", "Switch · best first")}</span>
         )}
         {rows.length > 0 && (
           <span className="flex items-center gap-2" aria-hidden="true">
@@ -143,7 +143,7 @@ export function PanelAccounts({
           )}
         </div>
       ) : (
-        <AccountTiles
+        <AccountList
           variant="panel"
           rows={rows}
           selected={confirmId}
