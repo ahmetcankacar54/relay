@@ -12,7 +12,7 @@ import {
 } from "@/data/selectors";
 import {
   accountRowSubtitle,
-  accountTileLine,
+  panelRowLine,
   panelRowState,
   type PanelRowBlock,
 } from "@/lib/account-row";
@@ -146,9 +146,10 @@ export function PanelAccounts({
         <AccountList
           variant="panel"
           rows={rows}
+          now={now}
           selected={confirmId}
           switching={switching}
-          line={(row) => accountTileLine(row, t, language, zone, now, waiting(row))}
+          line={(row) => panelRowLine(row, t, language, zone, now, waiting(row))}
           title={(row) => accountRowSubtitle(row, t, language, zone, now, waiting(row))}
           blocked={(row) => {
             const { reason } = panelRowState(row, relay);

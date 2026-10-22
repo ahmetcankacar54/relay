@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { overviewAccounts, pendingFlow, tempoRateNow } from "@/data/selectors";
-import { accountRowSubtitle, accountTileLine } from "@/lib/account-row";
+import { accountRowSubtitle, accountTileLine, ringState } from "@/lib/account-row";
 import { AccountList } from "../../features/AccountList";
 import { Plus } from "lucide-react";
 import { intentHash, type PageId } from "@/app/routes";
@@ -78,6 +78,7 @@ export function AccountsCard({
       ) : (
         <AccountList
           rows={rows}
+          now={now}
           href={(row) => accountHash(row.account.id)}
           line={(row) =>
             accountTileLine(row, t, language, zone, now, waitingFor(row))
@@ -136,6 +137,12 @@ export function AccountsCard({
             <span className="size-2 rounded-full border-[1.5px] border-muted-foreground" />
             {t("ince: hafta", "thin: week")}
           </span>
+          {rows.some((row) => ringState(row.usage, now) === "stale") && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="size-2 rounded-full border-[1.5px] border-dashed border-muted-foreground/60" />
+              {t("soluk ve kesikli: eski veri", "faded and dashed: old data")}
+            </span>
+          )}
         </p>
       )}
     </section>

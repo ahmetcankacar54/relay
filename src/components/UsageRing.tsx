@@ -20,17 +20,27 @@ const clamp = (value: number | undefined) =>
     ? undefined
     : Math.max(0, Math.min(100, value));
 
+/**
+ * How far a ring's reading can be trusted: `fresh`, `stale` (an old reading: faded arcs on a
+ * dashed track), `unknown` (no reading: the dashed track alone) or `full` (a limit is used up:
+ * critical arcs whatever their length; the caller says when it opens).
+ */
+export type RingState = "fresh" | "stale" | "unknown" | "full";
+
 /** One ring: its track, and the arc of what is used from 12 o'clock, clockwise. */
 function Arc({
   radius,
   width,
   value,
+  state,
 }: {
   radius: number;
   width: number;
   value: number | undefined;
+  state: RingState;
 }) {
-  const used = clamp(value);
+  const used = state === "unknown" ? undefined : clamp(value);
+  const dashed = state === "stale" || state === "unknown";
   return (
     <>
       <circle
@@ -39,6 +49,7 @@ function Arc({
         r={radius}
         fill="none"
         strokeWidth={width}
+        {...(dashed && { pathLength: 100, strokeDasharray: "3 2.5" })}
         className="stroke-track"
       />
       {used !== undefined && used > 0 && (
@@ -53,7 +64,8 @@ function Arc({
           strokeDasharray={`${used} 100`}
           transform="rotate(-90 50 50)"
           className={cn(
-            strokeClass[meterTone(used)],
+            strokeClass[state === "full" ? "crit" : meterTone(used)],
+            state === "stale" && "opacity-45",
             "transition-[stroke-dasharray] duration-500 ease-out motion-reduce:transition-none",
           )}
         />
@@ -67,13 +79,14 @@ function Arc({
  * inner one the week, thin, so the two read apart by weight rather than by colour. Each fills with
  * what is used, in the meter's tone (brand, warning from 75 %, critical from 90 %). `children` sits
  * in the middle, usually the five-hour percent, inside a clear zone the rings never touch.
- * Without `inner` it is a single ring.
+ * Without `inner` it is a single ring. `state` says how far the reading can be trusted (`RingState`).
  */
 export function UsageRing({
   outer,
   inner,
   size = 44,
   label,
+  state = "fresh",
   className,
   children,
 }: {
@@ -84,6 +97,7 @@ export function UsageRing({
   size?: number;
   /** What the rings say, for screen readers. */
   label: string;
+  state?: RingState;
   className?: string;
   children?: ReactNode;
 }) {
@@ -99,12 +113,13 @@ export function UsageRing({
     <div
       role="img"
       aria-label={label}
+      data-state={state === "fresh" ? undefined : state}
       className={cn("relative shrink-0", className)}
       style={{ width: size, height: size }}
     >
       <svg viewBox="0 0 100 100" className="size-full" aria-hidden="true">
-        <Arc radius={outerRadius} width={width} value={outer} />
-        {dual && <Arc radius={innerRadius} width={innerWidth} value={inner ?? undefined} />}
+        <Arc radius={outerRadius} width={width} value={outer} state={state} />
+        {dual && <Arc radius={innerRadius} width={innerWidth} value={inner ?? undefined} state={state} />}
       </svg>
       {children !== undefined && (
         <div className="absolute inset-0 grid place-items-center text-center leading-none">
