@@ -5,6 +5,7 @@ import path from "node:path";
 import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { applyAutomationMode } from "../src/features/automation-actions";
+import { afterExitChips } from "../src/features/AutomationControl";
 import { Switching } from "../src/pages/Switching";
 import { Overview } from "../src/pages/Overview";
 import { Planning } from "../src/pages/Planning";
@@ -328,6 +329,69 @@ test("the after-exit card lists accounts and the quota card does not", () => {
   assert.match(
     quota,
     /Relay açık kalmalı\. Çalışan iş bitmeden Claude uygulaması yeniden başlatılmaz; her konuşmaya en fazla bir devam mesajı gider\./,
+  );
+});
+
+/** The account chips: each one's text, and whether it is pressed. */
+const chips = (html: string) =>
+  [...html.matchAll(/<button type="button" aria-pressed="(true|false)"[^>]*>(.*?)<\/button>/g)].map(
+    ([, pressed, inner]) => `${pressed === "true" ? "✓ " : ""}${inner.replace(/<[^>]+>/g, "")}`,
+  );
+
+test("the after-exit accounts are chips saying which is open, which is next and whose data is old", () => {
+  const afterExit = (data: Record<string, unknown>, selected = ["a", "b"]) =>
+    render(
+      relayFor(
+        { fleet: { enabled: false, status: "off" }, ...data },
+        { autoSwitchMode: "after-exit", autoSwitchAccounts: selected },
+      ),
+    );
+  // b has room and a fresh reading: the next switch goes to it.
+  const fresh = afterExit({ usage: { a: usage("a", 60), b: usage("b", 10) } });
+  assert.deepEqual(chips(fresh), ["✓ Kişisel · Max· şu an açık", "✓ Kişisel · İkinci· sıradaki"]);
+  // An old reading is not chosen by, and the chip says so.
+  const old = { ...usage("b", 10), checkedAt: iso(NOW - 60 * 60_000) };
+  assert.deepEqual(chips(afterExit({ usage: { a: usage("a", 60), b: old } })), [
+    "✓ Kişisel · Max· şu an açık",
+    "✓ Kişisel · İkinci· veri eski · seçilmez",
+  ]);
+  // An unselected account is never next; its chip is not pressed.
+  assert.deepEqual(chips(afterExit({ usage: { a: usage("a", 60), b: usage("b", 10) } }, ["a"])), [
+    "✓ Kişisel · Max· şu an açık",
+    "Kişisel · İkinci",
+  ]);
+  // The other modes show no chips.
+  assert.deepEqual(chips(render(relayFor({ usage: fullUsage }))), []);
+  assert.deepEqual(chips(render(relayFor({ fleet: { enabled: false, status: "off" } }))), []);
+});
+
+test("next is the watch's target when it has one, else the best selected account by the switch rule", () => {
+  const c: Account = { ...b, id: "c", name: "Üçüncü", desktop: linked(3, "c@example.com") };
+  const settings = { ...baseSettings, autoSwitchMode: "after-exit" as const, autoSwitchAccounts: ["a", "b", "c"] };
+  const states = (input: Partial<Parameters<typeof afterExitChips>[0]>) =>
+    afterExitChips({
+      accounts: [a, b, c],
+      settings,
+      usage: { a: usage("a", 100), b: usage("b", 10), c: usage("c", 95) },
+      activeId: "a",
+      now: NOW,
+      ...input,
+    }).map((chip) => chip.state);
+  // c is over 90%, so b is next.
+  assert.deepEqual(states({}), ["open", "next", undefined]);
+  // The watch's own pick wins.
+  assert.deepEqual(states({ targetId: "c" }), ["open", undefined, "next"]);
+  // Nobody with room: no next.
+  assert.deepEqual(states({ usage: { a: usage("a", 100), b: usage("b", 92), c: usage("c", 95) } }), [
+    "open",
+    undefined,
+    undefined,
+  ]);
+  // Without a Claude app sign-in the chip asks for one instead.
+  const unsigned = { ...b, desktop: undefined };
+  assert.deepEqual(
+    afterExitChips({ accounts: [a, unsigned], settings, usage: {}, activeId: "a", now: NOW }).map((x) => x.state),
+    ["open", "sign-in"],
   );
 });
 

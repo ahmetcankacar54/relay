@@ -115,6 +115,18 @@ export function AccountSelection({
   );
 }
 
+/** The "Geçmişi paylaş" choices, for the details' select and the Switching page's card. */
+export function historyTransferOptions(
+  t: T,
+): { value: RelaySettings["desktopHistoryTransfer"]; label: string }[] {
+  return [
+    { value: "all", label: t("Tüm hesaplar arasında", "Between all accounts") },
+    { value: "same-group", label: t("Aynı paylaşım grubunda", "Within sharing group") },
+    { value: "selected", label: t("Seçtiğim hesaplar arasında", "Between selected accounts") },
+    { value: "off", label: t("Paylaşma", "Do not share") },
+  ];
+}
+
 type Props = {
   value: RelaySettings;
   accounts: Account[];
@@ -247,24 +259,7 @@ export function SharedHistoryPreferences({
           onChange={(desktopHistoryTransfer) =>
             update({ desktopHistoryTransfer })
           }
-          options={[
-            {
-              value: "all",
-              label: t("Tüm hesaplar arasında", "Between all accounts"),
-            },
-            {
-              value: "same-group",
-              label: t("Aynı paylaşım grubunda", "Within sharing group"),
-            },
-            {
-              value: "selected",
-              label: t(
-                "Seçtiğim hesaplar arasında",
-                "Between selected accounts",
-              ),
-            },
-            { value: "off", label: t("Paylaşma", "Do not share") },
-          ]}
+          options={historyTransferOptions(t)}
         />
       </SettingRow>
       <Note>

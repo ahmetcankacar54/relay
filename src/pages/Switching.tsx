@@ -1,19 +1,30 @@
-import type { ReactNode } from "react";
-import { ArrowRight, Code2, Lightbulb, PencilLine, PanelsTopLeft } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { ArrowRight, Code2, Lightbulb, ListTree, PencilLine, PanelsTopLeft } from "lucide-react";
 import { PageFrame } from "@/app/PageFrame";
 import { UsageRing } from "@/components/UsageRing";
 import { useExtensionStatus } from "@/data/useExtension";
+import { extensionGuide } from "@/lib/extension-ui";
 import { formatPercent, percentUsed } from "@/lib/meter";
+import {
+  copySidebarRecipeAction,
+  sidebarActionKeys,
+  sidebarGapLine,
+  sidebarRecipeHint,
+} from "@/lib/sidebar-recipe";
 import { useAutomation } from "../features/useAutomation";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
-import { useI18n } from "@/data/i18n";
+import { Note, OptionSelect, SectionHeading, SettingRow } from "@/components/SettingRow";
+import { StatusDot } from "@/components/StatusDot";
+import { useI18n, type T } from "@/data/i18n";
+import type { Account, ExtensionStatus } from "../../shared/types";
 import { useRelay } from "@/data/relay-context";
 import {
   DraftRetypePreference,
   SharedHistoryPreferences,
+  historyTransferOptions,
 } from "../features/SwitchPreferences";
 import { ExtensionPreference } from "../features/ExtensionPreference";
 import { ContinuationSettings } from "../features/ContinuationSettings";
@@ -39,19 +50,126 @@ function Side({ name, caption, percent, align }: { name: string; caption: string
   );
 }
 
-/** What a switch brings along: one card per part, its state, and a jump to its settings. */
-function Carry({ icon, title, value, href }: { icon: ReactNode; title: string; value: string; href: string }) {
+/**
+ * What a switch brings along: one card per part, its state and its main control. The full
+ * settings stay in Details below, which `href` jumps to.
+ */
+function Carry({
+  icon,
+  title,
+  value,
+  tone,
+  href,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  value: string;
+  tone?: "ok" | "warn" | "crit" | "off";
+  href?: string;
+  children?: ReactNode;
+}) {
+  const { t } = useI18n();
   return (
-    <a
-      href={href}
-      className="flex flex-col gap-2 rounded-xl border bg-card p-4 text-inherit no-underline outline-none hover:border-foreground/20 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
-      <span aria-hidden="true" className="grid size-8 place-items-center rounded-lg bg-muted text-foreground/80 [&_svg]:size-4">
-        {icon}
-      </span>
+    <div className="flex flex-col gap-2 rounded-xl border bg-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span aria-hidden="true" className="grid size-8 place-items-center rounded-lg bg-muted text-foreground/80 [&_svg]:size-4">
+          {icon}
+        </span>
+        {href && (
+          <a
+            href={href}
+            aria-label={t(`${title} · ayrıntılar`, `${title} · details`)}
+            className="rounded-sm text-xs text-muted-foreground no-underline outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {t("Ayrıntılar", "Details")}
+          </a>
+        )}
+      </div>
       <span className="text-sm font-semibold">{title}</span>
-      <span className="text-[12.5px] text-muted-foreground">{value}</span>
-    </a>
+      <span className="flex items-start gap-1.5 text-[12.5px] text-muted-foreground">
+        {tone && <StatusDot tone={tone} className="mt-1.5" />}
+        <span className="min-w-0">{value}</span>
+      </span>
+      {children && <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">{children}</div>}
+    </div>
+  );
+}
+
+/** The Code sidebar sections the open account lacks, with Copy recipe as in the menu bar panel. */
+function SidebarCarry() {
+  const relay = useRelay();
+  const { t } = useI18n();
+  const [copiedId, setCopiedId] = useState<string>();
+  const gap = relay.data?.sidebar;
+  return (
+    <Carry
+      icon={<ListTree />}
+      title={t("Kenar çubuğu bölümleri", "Sidebar sections")}
+      value={
+        gap
+          ? `${sidebarGapLine(gap, t)}. ${sidebarRecipeHint(gap, copiedId === gap.id, t)}`
+          : t("Açık hesapta eksik bölüm yok.", "The open account lacks no sections.")
+      }
+    >
+      {gap && (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={sidebarActionKeys(gap.id).includes(relay.busy)}
+          onClick={() => void copySidebarRecipeAction(relay, gap.id, () => setCopiedId(gap.id))}
+        >
+          {t("Tarifi kopyala", "Copy recipe")}
+        </Button>
+      )}
+    </Carry>
+  );
+}
+
+/**
+ * The extension card's line for the open account, its dot, and whether Check may help. `status`
+ * is undefined while loading and null where the extension is not handled.
+ */
+export function extensionCarry(
+  status: ExtensionStatus | null | undefined,
+  active: Account | undefined,
+  accounts: Account[],
+  t: T,
+  language: "tr" | "en",
+): { value: string; tone?: "ok" | "warn" | "crit" | "off"; check: boolean } {
+  if (status === undefined) return { value: t("Kontrol ediliyor…", "Checking…"), check: false };
+  if (status === null) return { value: t("Bu Mac'te yok", "Not on this Mac"), check: false };
+  if (status.setting.mode === "off") return { value: t("Kapalı", "Off"), tone: "off", check: false };
+  const guide = active ? extensionGuide(active, status, accounts, t, language) : undefined;
+  const check = guide?.action === "check";
+  // Before any check Relay does not know who the extension is on: the count, and Check.
+  if (!guide || (check && !status.current))
+    return {
+      value: t(`${status.saved.length} hesap bağlı`, `${status.saved.length} accounts linked`),
+      check,
+    };
+  return { value: guide.label, tone: guide.tone, check };
+}
+
+function ExtensionCarry({ disabled }: { disabled: boolean }) {
+  const { accounts, active } = useRelay();
+  const { t, language } = useI18n();
+  const { status, checking, check } = useExtensionStatus();
+  const state = extensionCarry(status, active, accounts, t, language);
+  return (
+    <Carry
+      icon={<PanelsTopLeft />}
+      title={t("Tarayıcı eklentisi", "Browser extension")}
+      value={state.value}
+      tone={state.tone}
+      href="#gecis-eklenti"
+    >
+      {state.check && (
+        <Button size="sm" variant="outline" disabled={disabled || checking} onClick={() => void check()}>
+          {t("Kontrol et", "Check")}
+        </Button>
+      )}
+    </Carry>
   );
 }
 
@@ -84,12 +202,6 @@ export function Switching() {
     "same-group": t("Aynı gruptaki hesaplarda görünür", "Visible in the same group"),
     selected: t("Seçili hesaplarda görünür", "Visible in selected accounts"),
   }[settings.desktopHistoryTransfer];
-  const extension = useExtensionStatus().status;
-  const extensionValue = !extension
-    ? t("Bu Mac'te yok", "Not on this Mac")
-    : extension.setting.mode === "off"
-      ? t("Kapalı", "Off")
-      : t(`${extension.saved.length} hesap bağlı`, `${extension.saved.length} accounts linked`);
   const update = (patch: Partial<typeof settings>) =>
     void action("settings", () => api.updateSettings(patch));
   const requestAccessibility = () =>
@@ -162,19 +274,21 @@ export function Switching() {
             </span>
             {t("Geçişte neler gelir?", "What comes along?")}
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Carry
-              icon={<Code2 />}
-              title={t("Code geçmişi", "Code history")}
-              value={historyValue}
-              href="#gecis-gecmis"
-            />
-            <Carry
-              icon={<PanelsTopLeft />}
-              title={t("Tarayıcı eklentisi", "Browser extension")}
-              value={extensionValue}
-              href="#gecis-eklenti"
-            />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Carry icon={<Code2 />} title={t("Code geçmişi", "Code history")} value={historyValue} href="#gecis-gecmis">
+              <label htmlFor="carry-history" className="sr-only">
+                {t("Geçmişi paylaş", "Share history")}
+              </label>
+              <OptionSelect
+                id="carry-history"
+                className="w-full min-w-0"
+                value={settings.desktopHistoryTransfer}
+                disabled={disabled}
+                onChange={(desktopHistoryTransfer) => update({ desktopHistoryTransfer })}
+                options={historyTransferOptions(t)}
+              />
+            </Carry>
+            <ExtensionCarry disabled={disabled} />
             <Carry
               icon={<PencilLine />}
               title={t("Yarım mesajlar", "Unsent drafts")}
@@ -184,13 +298,45 @@ export function Switching() {
                   : t("Panelde Kopyala ile sunulur", "Offered to copy in the panel")
               }
               href="#gecis-taslak"
-            />
+            >
+              <label className="flex items-center gap-2 text-[13px]">
+                <input
+                  id="carry-retype"
+                  type="checkbox"
+                  className="size-4 shrink-0 accent-primary"
+                  checked={settings.draftRetype === true}
+                  disabled={disabled}
+                  onChange={(e) => update({ draftRetype: e.target.checked })}
+                />
+                {t("Yerine yaz", "Type it back")}
+                <Badge variant="outline" className="text-muted-foreground">
+                  {t("Deneysel", "Experimental")}
+                </Badge>
+              </label>
+            </Carry>
             <Carry
               icon={<Lightbulb />}
               title={t("Hesap önerisi", "Account suggestion")}
-              value={settings.suggestAccounts ? t("Limit yaklaşınca önerir", "Suggests near the limit") : t("Kapalı", "Off")}
+              value={
+                !settings.usageWarnings
+                  ? t("Limit uyarıları kapalı", "Usage warnings are off")
+                  : settings.suggestAccounts
+                    ? t("Limit yaklaşınca önerir", "Suggests near the limit")
+                    : t("Kapalı", "Off")
+              }
               href="#gecis-oneri"
-            />
+            >
+              <label className="flex items-center gap-2 text-[13px]">
+                <Switch
+                  id="carry-suggest"
+                  checked={settings.suggestAccounts}
+                  disabled={disabled || !settings.usageWarnings}
+                  onCheckedChange={(suggestAccounts) => update({ suggestAccounts })}
+                />
+                {t("Hesap öner", "Suggest accounts")}
+              </label>
+            </Carry>
+            <SidebarCarry />
           </div>
         </section>
         <h2 className="mt-2 px-1 text-[13px] font-semibold text-muted-foreground">{t("Ayrıntılar", "Details")}</h2>

@@ -1,4 +1,4 @@
-import { Hand, Power, Zap, type LucideIcon } from "lucide-react";
+import { Check, Hand, Power, Zap, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Banner } from "@/components/Banner";
@@ -14,7 +14,11 @@ import {
   switchNowLabel,
   type AutomationStatus,
 } from "../../shared/automation-status";
-import { AccountSelection } from "./SwitchPreferences";
+import { desktopCliMismatch } from "../../shared/account-state";
+import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
+import { allowedHistoryPair } from "../../shared/history-policy";
+import { freshUsage, quotaWindows } from "../../shared/usage";
+import type { Account, AccountUsage, RelaySettings } from "../../shared/types";
 import {
   AUTOMATION_DOT,
   automationModeCopy,
@@ -101,6 +105,133 @@ export function AutomationStatusLine({
   );
 }
 
+/** What a chip says beside an account's name; none for an account that is simply eligible. */
+export type AfterExitChipState = "open" | "next" | "stale" | "sign-in";
+
+/**
+ * The accounts for "Claude'u kapatınca", as chips: whether each is selected, and where it stands.
+ * "next" is the account the next switch goes to: the one Relay's watch has picked, else the one
+ * it would pick now among the selected (fresh, under 90% in every window, history allowed),
+ * ranked as automatic switching ranks them. "stale" is a reading too old to choose by.
+ */
+export function afterExitChips({
+  accounts,
+  settings,
+  usage,
+  activeId,
+  targetId,
+  now,
+}: {
+  accounts: Account[];
+  settings: RelaySettings;
+  usage: Record<string, AccountUsage>;
+  activeId?: string;
+  targetId?: string;
+  now: number;
+}): { account: Account; selected: boolean; state?: AfterExitChipState }[] {
+  const selected = settings.autoSwitchAccounts;
+  const source = accounts.find((a) => a.id === activeId);
+  const ready = (a: Account) => !!a.desktop && !desktopCliMismatch(a);
+  const usable = (a: Account) => {
+    const windows = quotaWindows(usage[a.id]);
+    return (
+      a.id !== activeId &&
+      selected.includes(a.id) &&
+      ready(a) &&
+      freshUsage(usage[a.id], now) &&
+      (!a.cooldownUntil || Date.parse(a.cooldownUntil) <= now) &&
+      (!source || allowedHistoryPair(source, a, settings)) &&
+      !!windows?.every((w) => w.usedPercent < 90)
+    );
+  };
+  const next =
+    (targetId !== activeId && accounts.find((a) => a.id === targetId)?.id) ||
+    rankContinuationTargets(
+      accounts.filter(usable).map((account) => ({ account, usage: usage[account.id] })),
+      { now },
+    )[0]?.account.id;
+  return accounts.map((account) => ({
+    account,
+    selected: selected.includes(account.id),
+    state:
+      account.id === activeId
+        ? "open"
+        : !ready(account)
+          ? "sign-in"
+          : account.id === next
+            ? "next"
+            : !freshUsage(usage[account.id], now)
+              ? "stale"
+              : undefined,
+  }));
+}
+
+const CHIP_STATE: Record<AfterExitChipState, [tr: string, en: string]> = {
+  open: ["şu an açık", "open now"],
+  next: ["sıradaki", "next"],
+  stale: ["veri eski · seçilmez", "data is old · not picked"],
+  "sign-in": ["Claude girişi gerekli", "Claude sign-in needed"],
+};
+
+/** The always-visible account chips for "Claude'u kapatınca": a press selects or drops one. */
+function AfterExitAccounts({ disabled }: { disabled: boolean }) {
+  const relay = useRelay();
+  const { t } = useI18n();
+  const { api, accounts, settings, action } = relay;
+  const chips = afterExitChips({
+    accounts,
+    settings,
+    usage: relay.data?.usage ?? {},
+    activeId: relay.desktop?.activeProfileId,
+    targetId: relay.data?.autoSwitch?.targetId,
+    now: Date.now(),
+  });
+  const selected = settings.autoSwitchAccounts;
+  const update = (ids: string[]) =>
+    void action("settings", () => api.updateSettings({ autoSwitchAccounts: ids }));
+  return (
+    <fieldset className="grid gap-2 rounded-lg border border-border p-3 disabled:opacity-60" disabled={disabled}>
+      <legend className="px-1 text-[13px] font-medium">
+        {t("Otomatik geçişe dahil hesaplar", "Accounts eligible for automatic switching")}{" "}
+        <span className="text-muted-foreground">
+          {chips.filter((c) => c.selected).length} / {accounts.length}
+        </span>
+      </legend>
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map(({ account, selected: on, state }) => (
+          <button
+            key={account.id}
+            type="button"
+            aria-pressed={on}
+            onClick={() =>
+              update(on ? selected.filter((id) => id !== account.id) : [...selected, account.id])
+            }
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12.5px] outline-none transition-colors",
+              "hover:border-foreground/20 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              on ? "border-primary bg-accent/40 font-medium" : "bg-card text-muted-foreground",
+            )}
+          >
+            {on && <Check aria-hidden="true" className="size-3.5 text-primary" />}
+            <span className="max-w-40 truncate">{account.name}</span>
+            {state && (
+              <span
+                className={cn(
+                  "text-[11.5px] font-normal",
+                  state === "next" ? "text-primary" : state === "open" ? "text-muted-foreground" : "text-warn",
+                )}
+              >
+                · {t(...CHIP_STATE[state])}
+              </span>
+            )}
+          </button>
+        ))}
+        {!accounts.length && <Note>{t("Önce hesap ekle.", "Add an account first.")}</Note>}
+      </div>
+    </fieldset>
+  );
+}
+
 /** Each choice's card: an icon and a title that says who acts. */
 const MODE_ICON: Record<AutomationMode, LucideIcon> = { off: Hand, "after-exit": Power, quota: Zap };
 export const MODE_TITLE: Record<AutomationMode, [tr: string, en: string]> = {
@@ -114,7 +245,7 @@ export function AutomationSettings() {
   const relay = useRelay();
   const { t } = useI18n();
   const { mode, status, locked, supported, setMode } = useAutomation();
-  const { api, accounts, settings, action } = relay;
+  const { api, settings, action } = relay;
   const disabled = !!relay.busy || !!relay.desktop?.busy;
   const fleet = relay.data?.fleet;
   return (
@@ -185,21 +316,7 @@ export function AutomationSettings() {
       )}
       {mode === "after-exit" && (
         <div className="grid gap-1">
-          <AccountSelection
-            accounts={accounts}
-            selected={settings.autoSwitchAccounts}
-            update={(ids) =>
-              void action("settings", () =>
-                api.updateSettings({ autoSwitchAccounts: ids }),
-              )
-            }
-            disabled={disabled}
-            label={t(
-              "Otomatik geçişe dahil hesaplar",
-              "Accounts eligible for automatic switching",
-            )}
-            t={t}
-          />
+          <AfterExitAccounts disabled={disabled} />
           <Note>
             {t(
               "Açık ve hedef hesapları seç. Hedefte limitin en fazla %90’ı kullanılmış olmalı.",
