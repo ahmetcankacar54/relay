@@ -198,9 +198,11 @@ const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
  * build that knows less never writes a file a newer build wrote and silently drops its fields.
  * A file without the field was written before 0.12 and counts as 1. 3 added an account's
  * browser profile; 4 replaced it with the Claude extension setting, and a file's profiles are
- * dropped when it is read.
+ * dropped when it is read. 5 added the extension mode "guide" and made "restart" and "closed"
+ * also swap the browser profile's claude.ai login, so a 4 file's "restart" and "closed" (which
+ * only swapped the extension's hints) are read as "guide" until the user picks them again.
  */
-export const STATE_SCHEMA = 4;
+export const STATE_SCHEMA = 5;
 const stateSchema = z.object({
   version: z.literal(1),
   schema: z.number().int().min(1).optional(),
@@ -353,6 +355,10 @@ export class Store {
     const schema =
       raw && Number.isSafeInteger(raw.schema) && raw.schema >= 1 ? raw.schema : 1;
     this.state = schema > STATE_SCHEMA ? parseNewer(raw) : stateSchema.parse(raw);
+    // Writing to a browser is opt-in: an older file's mode never turns into it silently.
+    const extension = this.state.settings.claudeExtension;
+    if (schema < 5 && extension && (extension.mode === "restart" || extension.mode === "closed"))
+      this.state.settings.claudeExtension = { ...extension, mode: "guide" };
     this.fileSchema = schema;
     this.seen = { ino: before.ino, size: before.size, mtimeMs: before.mtimeMs };
   }

@@ -1,6 +1,5 @@
 import {
   BROWSERS,
-  EXTENSION_MODES,
   type ExtensionInstance,
   type ExtensionMode,
   type ExtensionStatus,
@@ -18,25 +17,45 @@ export const instanceValue = (i: ExtensionTarget) => `${i.app}:${i.profile}`;
 
 export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
   const labels: Record<ExtensionMode, string> = {
-    restart: t("Tarayıcıyı kapatıp yeniden aç", "Quit and reopen the browser"),
-    closed: t("Yalnızca tarayıcı kapalıysa", "Only when the browser is closed"),
-    off: t("Kapalı", "Off"),
+    off: t("Hiçbir şey yapma", "Do nothing"),
+    guide: t("Sadece haber ver", "Only tell me"),
+    closed: t(
+      "Eklentiyi de değiştir · tarayıcı kapalıysa",
+      "Change the extension too · if the browser is closed",
+    ),
+    restart: t(
+      "Eklentiyi de değiştir · tarayıcıyı kapatıp aç",
+      "Change the extension too · quit and reopen the browser",
+    ),
   };
-  return EXTENSION_MODES.map((value) => ({ value, label: labels[value] }));
+  // From the least to the most Relay does.
+  return (["off", "guide", "closed", "restart"] as const).map((value) => ({
+    value,
+    label: labels[value],
+  }));
 }
 
 /** The sentence under the mode picker: what Relay does at a switch in that mode. */
 export function modeSentence(mode: ExtensionMode, t: T): string {
+  const web = t(
+    "Eklentinin girişi, tarayıcıdaki claude.ai oturumundan ayrılamaz: Relay bu profildeki claude.ai oturumunu da değiştirir, claude.ai sekmeleri yeni hesapta açılır. Gündelik claude.ai hesabını korumak için eklentiyi ayrı bir tarayıcı profilinde kullan.",
+    "The extension's sign-in cannot be separated from the browser profile's claude.ai login: Relay changes that login too, so claude.ai tabs open on the new account. To keep your everyday claude.ai account, use the extension in a separate browser profile.",
+  );
   switch (mode) {
     case "restart":
-      return t(
-        "Relay her geçişte eklentinin girişini kaydeder ve yeni hesabınkini yerine koyar. Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar.",
-        "Relay saves the extension's sign-in and puts the new account's in place on every switch. A running browser is closed for a moment and opened again with its tabs.",
-      );
+      return `${t(
+        "Relay her hesap değişiminde eklentinin girişini ve bu profildeki claude.ai oturumunu saklar, yeni hesabınkileri yerine koyar. Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar.",
+        "Relay saves the extension's sign-in and this profile's claude.ai login at every switch, and puts the new account's in place. A running browser is closed for a moment and opened again with its tabs.",
+      )} ${web}`;
     case "closed":
+      return `${t(
+        "Relay bunları yalnızca tarayıcı kapalıyken değiştirir. Eklentinin hesabı izlemesini istiyorsan hesabı değiştirmeden önce tarayıcıyı kapat.",
+        "Relay changes them only when the browser is closed. Close it before a switch if you want the extension to follow.",
+      )} ${web}`;
+    case "guide":
       return t(
-        "Relay eklentinin girişini yalnızca tarayıcı kapalıyken değiştirir. Eklentinin hesabı izlemesini istiyorsan geçişten önce tarayıcıyı kapat.",
-        "Relay changes the extension's sign-in only when the browser is closed. Close it before a switch if you want it to follow.",
+        "Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez, tarayıcıyı da kapatmaz. Hesap değişince eklenti başka bir hesapta ya da çıkışta kalmışsa bunu söyler ve ne yapacağını gösterir.",
+        "Relay changes nothing in the browser or the extension and never quits the browser. After a switch it tells you when the extension is left on another account or signed out, and what to do.",
       );
     case "off":
       return t("Relay eklentiye hiç dokunmaz.", "Relay never touches the extension.");
@@ -91,6 +110,29 @@ export const accountUuids = (account: Account) =>
   [account.desktop?.accountUuid, account.auth?.accountUuid]
     .map(lower)
     .filter((value): value is string => !!value);
+
+/**
+ * The accounts that have a complete pair saved (the extension's hints and the browser profile's
+ * claude.ai login), by name, and those that have only one half. Only a complete pair can be put
+ * in place by the modes that write to the browser.
+ */
+export function pairedAccounts(
+  status: ExtensionStatus,
+  accounts: Account[],
+): { paired: string[]; half: string[] } {
+  const hints = new Set(status.saved.map((x) => x.accountUuid.toLowerCase()));
+  const logins = new Set((status.cookiesSaved ?? []).map((x) => x.accountUuid.toLowerCase()));
+  const paired: string[] = [];
+  const half: string[] = [];
+  for (const account of accounts) {
+    const uuids = accountUuids(account);
+    const h = uuids.some((u) => hints.has(u));
+    const l = uuids.some((u) => logins.has(u));
+    if (h && l) paired.push(account.name);
+    else if (h || l) half.push(account.name);
+  }
+  return { paired, half };
+}
 
 /**
  * Where an account stands with the browser extension, and what to do next. `steps` is the

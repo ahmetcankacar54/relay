@@ -52,6 +52,7 @@ import {
 import { accountPlanningSchema } from "./core/store";
 import { macBrowserSystem } from "./core/browser-system";
 import { levelExtensionStorage } from "./core/extension-storage";
+import { sqliteCookieStorage } from "./core/cookie-store";
 import { RelayTray } from "./tray";
 import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
 import { TrayPanel } from "./tray-panel";
@@ -654,6 +655,7 @@ else {
         desktop.extension = {
           system: macBrowserSystem(),
           storage: levelExtensionStorage,
+          cookies: sqliteCookieStorage,
         };
       const evidence = new NativeDesktopContinuationEvidence({
         store: service.store,

@@ -54,8 +54,28 @@ export function extensionLine(outcome: ExtensionOutcome, t: T): string | undefin
             );
           case "unknown-account":
             return t(
-              "Eklenti Relay'de olmayan bir hesaba girişli; dokunulmadı.",
-              "The extension is signed in to an account Relay does not have; it was left alone.",
+              "Eklenti ya da tarayıcıdaki claude.ai oturumu Relay'de olmayan bir hesaba ait; dokunulmadı.",
+              "The extension or the browser's claude.ai login belongs to an account Relay does not have; it was left alone.",
+            );
+          case "guide-mismatch":
+            return t(
+              "Eklenti bu hesapta değil. Tarayıcıda claude.ai'ye bu hesapla gir, eklentiye giriş yap, sonra Kontrol et. İstersen ayarlardan Relay'in bunu yapmasını aç.",
+              "The extension is not on this account. Sign in to claude.ai in the browser with it, sign in to the extension, then Check. Or turn on Relay doing this in the settings.",
+            );
+          case "ambiguous-owner":
+            return t(
+              "Tarayıcıdaki claude.ai oturumunun hangi hesaba ait olduğu belli değil; dokunulmadı. Eklentiyi açıp Kontrol et.",
+              "It is unclear which account the browser's claude.ai login belongs to; it was left alone. Open the extension and Check.",
+            );
+          case "schema-changed":
+            return t(
+              "Tarayıcının çerez düzeni Relay'in beklediğinden farklı; dokunulmadı.",
+              "The browser's cookie layout is not what Relay expects; it was left alone.",
+            );
+          case "journal-pending":
+            return t(
+              "Tarayıcının çerez dosyası temiz kapanmamış; dokunulmadı. Tarayıcıyı bir kez açıp kapat.",
+              "The browser's cookie file was not closed cleanly; it was left alone. Open and quit the browser once.",
             );
           default:
             return undefined;
@@ -64,19 +84,29 @@ export function extensionLine(outcome: ExtensionOutcome, t: T): string | undefin
         switch (outcome.reason) {
           case "locked":
             return t(
-              "Eklentinin deposu başka bir süreçte açık; dokunulmadı.",
-              "The extension's storage is open in another process; it was left alone.",
+              "Eklentinin deposu ya da tarayıcının çerez dosyası başka bir süreçte açık; dokunulmadı.",
+              "The extension's storage or the browser's cookie file is open in another process; it was left alone.",
+            );
+          case "schema-changed":
+            return t(
+              "Tarayıcının çerez düzeni Relay'in beklediğinden farklı; dokunulmadı.",
+              "The browser's cookie layout is not what Relay expects; it was left alone.",
+            );
+          case "journal-pending":
+            return t(
+              "Tarayıcının çerez dosyası temiz kapanmamış; dokunulmadı. Tarayıcıyı bir kez açıp kapat.",
+              "The browser's cookie file was not closed cleanly; it was left alone. Open and quit the browser once.",
             );
           case "write-failed":
           case "verify-failed":
             return t(
-              "Eklenti girişi yazılamadı; eski hâli geri konuldu.",
-              "Could not write the extension's sign-in; it was put back.",
+              "Eklenti girişi ya da claude.ai oturumu yazılamadı; eski hâli geri konuldu.",
+              "Could not write the extension's sign-in or the claude.ai login; it was put back.",
             );
           case "restore-failed":
             return t(
-              "Eklenti girişi yazılamadı ve eski hâli geri konulamadı. Yedeği Relay'in veri klasöründeki extension-scratch içinde.",
-              "Could not write the extension's sign-in or put it back. The backup is in extension-scratch in Relay's data folder.",
+              "Eklenti girişi ya da claude.ai oturumu yazılamadı ve eski hâli geri konulamadı. Yedekler Relay'in veri klasöründeki extension-scratch ve extension-scratch-cookies içinde.",
+              "Could not write the extension's sign-in or the claude.ai login, or put them back. The backups are in extension-scratch and extension-scratch-cookies in Relay's data folder.",
             );
           default:
             return t(

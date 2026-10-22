@@ -4,6 +4,31 @@ import { BROWSERS, CLAUDE_EXTENSION_ID, type BrowserApp } from "../shared/browse
 import type { SignIn } from "../shared/extension-auth";
 import { StorageError, type ExtensionStorage } from "../electron/core/extension-storage";
 import type { BrowserSystem } from "../electron/core/browser-system";
+import {
+  CookieStoreError,
+  type CookieSnapshot,
+  type CookieStorage,
+} from "../electron/core/cookie-store";
+
+/** A browser profile's claude.ai login as the cookie database holds it; `n` tells copies apart. */
+export function loginFor(accountUuid: string, n = 1, createdMs = 1_700_000_000_000): CookieSnapshot {
+  const row = (name: string, host: string, value: string) => ({
+    creation_utc: BigInt(createdMs + 11_644_473_600_000) * 1000n,
+    host_key: host,
+    top_frame_site_key: "",
+    name,
+    encrypted_value: new Uint8Array(Buffer.from(`v10${value}-${accountUuid}-${n}`)),
+  });
+  return {
+    version: "24",
+    columns: ["creation_utc", "host_key", "top_frame_site_key", "name", "encrypted_value"],
+    rows: [
+      row("sessionKey", ".claude.ai", "SESSION-SECRET"),
+      row("__Host-sessionBinding", "claude.ai", "BINDING-SECRET"),
+    ],
+    unlisted: [],
+  };
+}
 
 /** A stored sign-in for an account, as the extension keeps it: each value is JSON text. */
 export function signInFor(accountUuid: string, n = 1): SignIn {
@@ -32,7 +57,13 @@ export function extensionWorld(temp: string) {
     available: true,
     /** Makes the next write change the folder, then fail with this reason. */
     failWrite: undefined as undefined | "failed" | "mismatch",
+    /** SQLite can be loaded; false where `node:sqlite` is missing. */
+    cookiesAvailable: true,
+    /** Makes the next cookie write change the cookie file, then fail with this reason. */
+    failCookieWrite: undefined as undefined | CookieStoreError["reason"],
   };
+  /** The login each profile folder's cookie database holds; undefined reads as logged out. */
+  const web = new Map<string, CookieSnapshot | undefined>();
   /** Every dir the storage was used on, with whether the browser ran then. */
   const opened: { dir: string; running: boolean }[] = [];
   const stored = new Map<string, SignIn | undefined>();
@@ -93,6 +124,43 @@ export function extensionWorld(temp: string) {
       stored.set(dir, structuredClone(signIn));
     },
   };
+  /** A copy of the cookie files names its source profile; it opens while the browser runs. */
+  const cookieSourceOf = (dir: string) => {
+    try {
+      const source = fs.readFileSync(path.join(dir, "Cookies"), "utf8");
+      return source === dir ? undefined : source;
+    } catch {
+      return undefined;
+    }
+  };
+  const cookies: CookieStorage = {
+    available: async () => state.cookiesAvailable,
+    read: async (dir) => {
+      const source = cookieSourceOf(dir);
+      if (!source) {
+        opened.push({ dir, running: state.running });
+        if (state.running) throw new CookieStoreError("locked", "locked");
+      }
+      return (
+        structuredClone(web.get(source ?? dir)) ?? {
+          version: "24",
+          columns: ["creation_utc", "host_key", "top_frame_site_key", "name", "encrypted_value"],
+          rows: [],
+          unlisted: [],
+        }
+      );
+    },
+    write: async (dir, snapshot) => {
+      opened.push({ dir, running: state.running });
+      if (state.running) throw new CookieStoreError("locked", "locked");
+      if (state.failCookieWrite) {
+        // A half-done write: the cookie file changed, the login did not.
+        fs.writeFileSync(path.join(dir, "Cookies"), "HALF-WRITTEN");
+        throw new CookieStoreError(state.failCookieWrite, "write failed");
+      }
+      web.set(dir, structuredClone(snapshot));
+    },
+  };
   /** Adds a profile with the extension's folder; returns that folder. */
   function install(app: BrowserApp, profile = "Default", name = profile): string {
     const data = path.join(support, BROWSERS[app].dataDir);
@@ -106,7 +174,10 @@ export function extensionWorld(temp: string) {
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "data.txt"), "ORIGINAL");
     fs.writeFileSync(path.join(dir, "source.txt"), dir);
+    const profileDir = path.join(data, profile);
+    fs.writeFileSync(path.join(profileDir, "Cookies"), profileDir);
+    fs.writeFileSync(path.join(profileDir, "Device Bound Sessions"), "DBSC");
     return dir;
   }
-  return { support, system, storage, events, state, opened, stored, modified, install };
+  return { support, system, storage, cookies, web, events, state, opened, stored, modified, install };
 }
