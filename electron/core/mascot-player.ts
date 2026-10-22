@@ -8,6 +8,8 @@ export const BLINK_MAX_MS = 6 * 60_000;
 export const BLINK_MS = 150;
 /** A blink this late (the Mac slept) is skipped instead of played. */
 export const LATE_FRAME_MS = 2_000;
+/** The happy face stays this long after a Desktop operation ends, unless an alert takes over. */
+export const AWAY_HOLD_MS = 2_000;
 
 export interface MascotPlayerDeps {
   show(frame: MascotFrame): void;
@@ -19,9 +21,14 @@ export interface MascotPlayerDeps {
   random?: () => number;
 }
 
-/** Shows the menu bar panda's pose; the idle panda blinks every few minutes. */
+/**
+ * Shows the menu bar panda's pose; the idle panda blinks every few minutes, and the happy face of a
+ * Desktop operation stays a moment after it ends.
+ */
 export class MascotPlayer {
   private pose: MascotPose = "idle";
+  /** The pose waiting for the happy face's hold to end. */
+  private after?: MascotPose;
   private shown?: MascotFrame;
   /** The tray refused the last image; the next update tries again. */
   private failed = false;
@@ -43,9 +50,29 @@ export class MascotPlayer {
 
   update(pose: MascotPose) {
     if (this.destroyed) return;
+    if (this.pose === "away" && pose !== "away" && pose !== "alert") return this.hold(pose);
+    // Back to away, or an alert: the hold, if any, ends here.
+    if (this.after !== undefined) {
+      this.after = undefined;
+      this.clear();
+    }
     if (pose === this.pose && !this.failed) return;
     this.pose = pose;
     this.rest();
+  }
+
+  /** Keeps the happy face for AWAY_HOLD_MS after the operation ended, then shows the latest pose. */
+  private hold(next: MascotPose) {
+    this.after = next;
+    if (this.failed) this.show(POSE_FRAME.away);
+    if (this.timer !== undefined) return;
+    this.timer = this.setTimer(() => {
+      this.timer = undefined;
+      if (this.destroyed || this.after === undefined) return;
+      this.pose = this.after;
+      this.after = undefined;
+      this.rest();
+    }, AWAY_HOLD_MS);
   }
 
   destroy() {

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { MascotPlayer } from "../electron/core/mascot-player";
+import { AWAY_HOLD_MS, MascotPlayer } from "../electron/core/mascot-player";
 import type { MascotFrame } from "../shared/mascot-frames";
 
 function harness(options: { random?: number[] } = {}) {
@@ -68,15 +68,48 @@ test("the idle panda blinks for a moment every three to six minutes", () => {
 
 test("every pose shows its still frame, and only idle blinks", () => {
   const h = harness();
-  for (const pose of ["hungry", "sleeping", "alert", "away"] as const) {
+  for (const pose of ["hungry", "full", "sleeping", "alert", "away"] as const) {
     h.player.update(pose);
     assert.equal(h.timers.size, 0, pose);
   }
+  // Away holds its happy face first.
   h.player.update("warming");
+  h.advance(AWAY_HOLD_MS);
   assert.equal(h.timers.size, 0);
   h.player.update("idle");
-  assert.deepEqual(h.shown, ["idle", "hungry", "sleep", "alert", "away", "idle"]);
+  assert.deepEqual(h.shown, ["idle", "hungry", "full", "sleep", "alert", "away", "idle"]);
   assert.equal(h.timers.size, 1);
+});
+
+test("the happy face stays two seconds after a Desktop operation ends, then shows the latest pose", () => {
+  const h = harness();
+  h.player.update("away");
+  h.player.update("idle");
+  h.advance(1_000);
+  h.player.update("full");
+  h.advance(AWAY_HOLD_MS - 1_000 - 1);
+  assert.deepEqual(h.shown, ["idle", "away"]);
+  h.advance(1);
+  assert.deepEqual(h.shown, ["idle", "away", "full"]);
+  assert.equal(h.timers.size, 0);
+});
+
+test("an alert or a new operation ends the hold at once", () => {
+  const h = harness();
+  h.player.update("away");
+  h.player.update("idle");
+  h.player.update("alert");
+  assert.deepEqual(h.shown, ["idle", "away", "alert"]);
+  assert.equal(h.timers.size, 0);
+  h.player.update("away");
+  h.player.update("hungry");
+  h.player.update("away");
+  assert.equal(h.timers.size, 0);
+  h.advance(AWAY_HOLD_MS);
+  assert.deepEqual(h.shown, ["idle", "away", "alert", "away"]);
+  h.player.destroy();
+  h.player.update("idle");
+  assert.equal(h.timers.size, 0);
 });
 
 test("without motion the panda does not blink", () => {
