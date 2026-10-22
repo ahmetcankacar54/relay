@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { pickSignIn, sameSignIn, signInAccount, SIGN_IN_KEYS } from "../shared/extension-auth";
+import { holdsToken, namedAccount, pickSignIn, sameSignIn } from "../shared/extension-auth";
 import {
   chooseInstance,
   localStateProfiles,
@@ -9,40 +9,46 @@ import {
 } from "../shared/browser-extension";
 import { signInFor } from "./extension-world";
 
-test("the sign-in is the sign-in keys and nothing else", () => {
+test("the sign-in is its own entries, found by name or by a token, with the account it names", () => {
   const uuid = randomUUID();
   const entries: [string, string][] = [
     ...Object.entries(signInFor(uuid)),
     ["savedPrompts", '["a prompt"]'],
     ["conversationCache", "{}"],
   ];
-  const picked = pickSignIn(entries)!;
-  assert.deepEqual(Object.keys(picked).sort(), [...SIGN_IN_KEYS].sort());
-  assert.equal(signInAccount(picked), uuid);
+  const picked = pickSignIn(entries, [uuid, randomUUID()])!;
+  assert.deepEqual(Object.keys(picked.signIn).sort(), ["accessToken", "accountUuid", "refreshToken", "tokenExpiry"]);
+  assert.equal(picked.account, uuid);
 });
 
-test("an upper-case account uuid reads as lower case", () => {
+test("key names need not be known: a nested sign-in under any key is found", () => {
   const uuid = randomUUID();
-  assert.equal(signInAccount(signInFor(uuid.toUpperCase())), uuid);
+  const state = JSON.stringify({ access_token: "sk-ant-oat01-ABCDEFGHIJKL", refresh_token: "sk-ant-ort01-ABCDEFGHIJKL", account: { uuid: uuid.toUpperCase() } });
+  const entries: [string, string][] = [["persistedState", state], ["tabGroups", "[]"], ["theme", '"dark"']];
+  const picked = pickSignIn(entries, [uuid])!;
+  assert.equal(picked.account, uuid);
+  assert.deepEqual(Object.keys(picked.signIn), ["persistedState"]);
+  // A bare token value under an odd name counts too.
+  assert.ok(holdsToken([["x", '"sk-ant-oat01-ABCDEFGHIJKLMN"']]));
 });
 
-test("a store without an account, without a token, or with a bad uuid is not signed in", () => {
-  const good = signInFor(randomUUID());
-  assert.ok(pickSignIn(Object.entries(good)));
-  assert.equal(pickSignIn([]), undefined);
-  assert.equal(pickSignIn(Object.entries({ ...good, accountUuid: undefined as any })), undefined);
-  assert.equal(
-    pickSignIn(Object.entries({ ...good, accountUuid: JSON.stringify("not-a-uuid") })),
-    undefined,
-  );
-  assert.equal(
-    pickSignIn(Object.entries({ ...good, accountUuid: "not json{" })),
-    undefined,
-  );
-  const { accessToken, refreshToken, ...noTokens } = good;
-  assert.equal(pickSignIn(Object.entries(noTokens)), undefined);
-  // Either token is enough to count as signed in.
-  assert.ok(pickSignIn(Object.entries({ ...noTokens, refreshToken })));
+test("signed out: no token anywhere, even with an account uuid left behind", () => {
+  const uuid = randomUUID();
+  assert.equal(pickSignIn([], [uuid]), undefined);
+  assert.equal(pickSignIn([["lastAccountUuid", JSON.stringify(uuid)], ["oauthState", '"abc"']], [uuid]), undefined);
+  assert.equal(pickSignIn([["accessToken", "null"], ["refreshToken", '""']], [uuid]), undefined);
+});
+
+test("an account Relay does not have, or two it cannot tell apart, names no account", () => {
+  const a = randomUUID();
+  const b = randomUUID();
+  const stranger = pickSignIn(Object.entries(signInFor(randomUUID())), [a, b])!;
+  assert.ok(stranger);
+  assert.equal(stranger.account, undefined);
+  // Both named, one in an account key: that one.
+  assert.equal(namedAccount([["accountUuid", JSON.stringify(a)], ["recent", JSON.stringify([a, b])]], [a, b]), a);
+  // Both named, neither in an account key: none.
+  assert.equal(namedAccount([["recent", JSON.stringify([a, b])]], [a, b]), undefined);
 });
 
 test("two sign-ins are the same only when every key is", () => {

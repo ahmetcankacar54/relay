@@ -2,7 +2,7 @@ import { KeyRound, RefreshCw } from "lucide-react";
 import { freshUsage } from "../../shared/usage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LimitMeter } from "@/components/LimitMeter";
+import { LimitRings } from "@/components/LimitRings";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
@@ -45,6 +45,21 @@ export function PanelActiveCard({ now }: { now: number }) {
   // A plain refresh cannot clear a locked Keychain or a connection to renew: it has to prompt.
   const renew = health?.fix === "renew";
   const openRelay = () => void relay.api.openPage("genel");
+  const title = active && (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate text-[13.5px] font-bold" title={active.name}>
+        {active.name}
+      </span>
+      {plan && <Badge variant="secondary">{plan}</Badge>}
+      <span
+        className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+        title={t("Claude uygulamasında açık hesap", "The account open in the Claude app")}
+      >
+        <StatusDot tone={running ? "ok" : "off"} />
+        {running ? t("Claude açık", "Claude open") : t("Claude kapalı", "Claude closed")}
+      </span>
+    </div>
+  );
   return (
     <section className="px-3 py-1.5">
       <div className={panelCard}>
@@ -64,77 +79,48 @@ export function PanelActiveCard({ now }: { now: number }) {
               {t("Relay’i aç", "Open Relay")}
             </Button>
           </div>
+        ) : freshUsage(usage, now) ? (
+          <LimitRings
+            usage={usage}
+            now={now}
+            zone={relay.settings.planning.timeZone}
+            size={72}
+            aside={title}
+          />
         ) : (
           <>
-            <div className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate text-[13.5px] font-bold" title={active.name}>
-                {active.name}
-              </span>
-              {plan && <Badge variant="secondary">{plan}</Badge>}
-              <span
-                className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
-                title={t("Claude uygulamasında açık hesap", "The account open in the Claude app")}
-              >
-                <StatusDot tone={running ? "ok" : "off"} />
-                {running ? t("Claude açık", "Claude open") : t("Claude kapalı", "Claude closed")}
-              </span>
+            {title}
+            <div className="mt-1 flex items-center gap-1 text-muted-foreground">
+              {health && health.tone !== "ok"
+                ? health.label
+                : t("Limit verisi eski", "Usage data is out of date")}{" "}
+              ·
+              {renew ? (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={
+                    renewalIssue(usage) === "keychain-locked"
+                      ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+                      : t("Yenilemeye izin ver", "Allow renewal")
+                  }
+                  disabled={relay.usageBusy.has(active.id)}
+                  onClick={() => void relay.refreshUsage(active, true)}
+                >
+                  <KeyRound />
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t("Limitleri yenile", "Refresh limits")}
+                  disabled={relay.usageBusy.has(active.id)}
+                  onClick={() => void relay.refreshUsage(active)}
+                >
+                  <RefreshCw />
+                </Button>
+              )}
             </div>
-            {freshUsage(usage, now) ? (
-              <div className="mt-1 grid gap-2">
-                {usageWindowRows(usage).map((row) => (
-                  <LimitMeter
-                    key={row.key}
-                    label={t(row.label.tr, row.label.en)}
-                    percent={row.usedPercent}
-                    detail={
-                      row.resetsAt
-                        ? formatReset(
-                            row.resetsAt,
-                            now,
-                            language,
-                            relay.settings.planning.timeZone,
-                          )
-                        : undefined
-                    }
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="mt-1 flex items-center gap-1 text-muted-foreground">
-                {health && health.tone !== "ok"
-                  ? health.label
-                  : t("Limit verisi eski", "Usage data is out of date")}{" "}
-                ·
-                {renew ? (
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={
-                      renewalIssue(usage) === "keychain-locked"
-                        ? t(
-                            "Anahtarlık erişimine izin ver",
-                            "Allow Keychain access",
-                          )
-                        : t("Yenilemeye izin ver", "Allow renewal")
-                    }
-                    disabled={relay.usageBusy.has(active.id)}
-                    onClick={() => void relay.refreshUsage(active, true)}
-                  >
-                    <KeyRound />
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={t("Limitleri yenile", "Refresh limits")}
-                    disabled={relay.usageBusy.has(active.id)}
-                    onClick={() => void relay.refreshUsage(active)}
-                  >
-                    <RefreshCw />
-                  </Button>
-                )}
-              </div>
-            )}
           </>
         )}
       </div>

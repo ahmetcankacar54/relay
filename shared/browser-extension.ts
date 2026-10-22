@@ -123,7 +123,15 @@ export interface ExtensionOutcome {
  * browser is never quit for it. "signed-in" names the account; `linked` says Relay saved it.
  */
 export type ExtensionCurrent =
-  | { state: "signed-in"; accountUuid: string; known: boolean; at: string }
+  /** `accountUuid` is set for one of Relay's accounts (`known`); an account it cannot tell has none. */
+  | {
+      state: "signed-in";
+      accountUuid?: string;
+      known: boolean;
+      /** The data names an account that is not Relay's. */
+      other?: boolean;
+      at: string;
+    }
   | { state: "signed-out"; at: string }
   | { state: "unreadable"; at: string };
 /** What the settings card and the account page show. */

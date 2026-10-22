@@ -12,7 +12,7 @@ import {
   levelExtensionStorage,
   restoreFolder,
 } from "../electron/core/extension-storage";
-import { SIGN_IN_KEYS, signInAccount } from "../shared/extension-auth";
+import { pickSignIn } from "../shared/extension-auth";
 import { signInFor } from "./extension-world";
 
 function temp(t: any) {
@@ -44,19 +44,23 @@ async function dump(dir: string): Promise<Record<string, string>> {
   }
 }
 
-test("read returns the sign-in keys and nothing else", async (t) => {
+/** The sign-in in a folder, as the step picks it. */
+const signInOf = async (dir: string, known: string[]) =>
+  pickSignIn(await levelExtensionStorage.read(dir), known)?.signIn;
+
+test("read returns every entry, and the sign-in is picked out of them", async (t) => {
   const dir = path.join(temp(t), "ext");
   const a = randomUUID();
   await extensionDb(dir, { ...signInFor(a), savedPrompts: '["p"]', other: "1" });
-  const signIn = (await levelExtensionStorage.read(dir))!;
-  assert.deepEqual(Object.keys(signIn).sort(), [...SIGN_IN_KEYS].sort());
-  assert.equal(signInAccount(signIn), a);
+  const entries = await levelExtensionStorage.read(dir);
+  assert.deepEqual(entries.map(([k]) => k).sort(), ["accessToken", "accountUuid", "other", "refreshToken", "savedPrompts", "tokenExpiry"]);
+  assert.deepEqual(await signInOf(dir, [a]), signInFor(a));
 });
 
-test("read of a store with no sign-in is undefined", async (t) => {
+test("a store with no sign-in has none to pick", async (t) => {
   const dir = path.join(temp(t), "ext");
   await extensionDb(dir, { savedPrompts: '["p"]' });
-  assert.equal(await levelExtensionStorage.read(dir), undefined);
+  assert.equal(await signInOf(dir, [randomUUID()]), undefined);
 });
 
 test("write puts the sign-in keys, deletes the ones it lacks, and leaves every other key", async (t) => {
@@ -74,15 +78,16 @@ test("write puts the sign-in keys, deletes the ones it lacks, and leaves every o
   assert.equal("tokenExpiry" in after, false);
   assert.equal(after.savedPrompts, '["p"]');
   assert.equal(after.other, "1");
-  assert.deepEqual(await levelExtensionStorage.read(dir), wanted);
+  assert.deepEqual(await signInOf(dir, [b]), wanted);
 });
 
 test("write into a store with no sign-in puts one", async (t) => {
   const dir = path.join(temp(t), "ext");
   await extensionDb(dir, { other: "1" });
-  const wanted = signInFor(randomUUID());
+  const b = randomUUID();
+  const wanted = signInFor(b);
   await levelExtensionStorage.write(dir, wanted);
-  assert.deepEqual(await levelExtensionStorage.read(dir), wanted);
+  assert.deepEqual(await signInOf(dir, [b]), wanted);
 });
 
 test("a database another handle holds is refused as locked, and nothing is changed", async (t) => {

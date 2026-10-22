@@ -77,10 +77,10 @@ export function extensionWorld(temp: string) {
     available: async () => state.available,
     read: async (dir) => {
       const source = sourceOf(dir);
-      if (source) return structuredClone(stored.get(source));
+      if (source) return Object.entries(stored.get(source) ?? {});
       opened.push({ dir, running: state.running });
       if (state.running) throw new StorageError("locked", "locked");
-      return structuredClone(stored.get(dir));
+      return Object.entries(stored.get(dir) ?? {});
     },
     write: async (dir, signIn) => {
       opened.push({ dir, running: state.running });

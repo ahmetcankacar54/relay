@@ -538,6 +538,7 @@ export const previewApi: RelayAPI = {
     return structuredClone(account);
   },
   extensionStatus: async () => structuredClone(previewExtension),
+  linkExtension: async () => structuredClone(previewExtension),
   checkExtension: async () => {
     previewExtension.current = {
       state: "signed-in",

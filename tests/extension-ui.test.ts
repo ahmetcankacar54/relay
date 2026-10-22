@@ -76,8 +76,13 @@ test("an unlinked account gets the steps to link it, for each thing the extensio
   assert.match(other.steps?.[0] ?? "", /çıkış yap/);
   assert.match(other.detail ?? "", /Vertex için kayıt Relay'de duruyor/);
   // On an account Relay does not have.
-  const stranger = guide(altoLinked, { current: { ...signedIn("44444444-4444-4444-8444-444444444444"), known: false } });
+  const stranger = guide(altoLinked, { current: { state: "signed-in", known: false, other: true, at: NOW } });
   assert.match(stranger.label, /Relay'de olmayan bir hesapta/);
+  // Signed in, but no account can be told: the user links it as this one.
+  const untold = guide(altoLinked, { current: { state: "signed-in", known: false, at: NOW } });
+  assert.match(untold.label, /eklentideki hesap tanınamadı/);
+  assert.equal(untold.action, "claim");
+  assert.match(untold.steps?.[0] ?? "", /alto@example\.com/);
   // Unreadable: try again.
   const unreadable = guide(altoLinked, { current: { state: "unreadable", at: NOW } });
   assert.equal(unreadable.tone, "crit");

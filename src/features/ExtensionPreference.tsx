@@ -39,8 +39,8 @@ export function ExtensionPreference({
   if (!status) return null;
   const current = status.current;
   const on =
-    current?.state === "signed-in"
-      ? accounts.find((a) => accountUuids(a).includes(current.accountUuid))
+    current?.state === "signed-in" && current.accountUuid
+      ? accounts.find((a) => accountUuids(a).includes(current.accountUuid!))
       : undefined;
   const currentLine = !current
     ? undefined

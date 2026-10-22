@@ -1,15 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { readBytes, safeFile, writeBytes } from "./desktop-files";
-import {
-  SIGN_IN_KEYS,
-  isAccountUuid,
-  signInAccount,
-  type SignIn,
-} from "../../shared/extension-auth";
+import { isAccountUuid, type SignIn } from "../../shared/extension-auth";
 
 /** Inside the vault, one sealed file per account: `extension/<account uuid>.bin`. */
 const DIR = "extension";
+/** Which account the extension was last on; not an account's file, so `list` skips it. */
+const OWNER = `${DIR}/owner.bin`;
 
 interface Saved {
   accountUuid: string;
@@ -35,15 +32,14 @@ export class ExtensionVault {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** Keeps `signIn` as the account's, replacing the one saved. */
-  async save(signIn: SignIn): Promise<void> {
-    const accountUuid = signInAccount(signIn);
-    if (!accountUuid) throw new Error("This sign-in names no account.");
+  /** Keeps `signIn` as the account's (the account the extension named), replacing the one saved. */
+  async save(accountUuid: string, signIn: SignIn): Promise<void> {
+    if (!isAccountUuid(accountUuid)) throw new Error("This sign-in names no account.");
     const saved: Saved = {
-      accountUuid,
+      accountUuid: accountUuid.toLowerCase(),
       savedAt: new Date(this.now()).toISOString(),
       signIn: Object.fromEntries(
-        SIGN_IN_KEYS.filter((key) => key in signIn).map((key) => [key, signIn[key]]),
+        Object.entries(signIn).filter(([, value]) => typeof value === "string"),
       ),
     };
     await writeBytes(this.vault, file(accountUuid), this.seal(JSON.stringify(saved)));
@@ -61,12 +57,36 @@ export class ExtensionVault {
       if (
         !saved.signIn ||
         typeof saved.signIn !== "object" ||
-        signInAccount(saved.signIn) !== accountUuid.toLowerCase()
+        saved.accountUuid !== accountUuid.toLowerCase()
       )
         throw new Error("Invalid saved extension sign-in.");
       return saved.signIn;
     }
     return undefined;
+  }
+
+  /**
+   * The account Relay last knew the extension to be on: the one it named, the one Relay put in
+   * place, or the one the user said it was. Used when the extension's own data names no account.
+   */
+  async owner(): Promise<string | undefined> {
+    const data = await readBytes(this.vault, OWNER);
+    if (!data) return undefined;
+    try {
+      const value = JSON.parse(this.unseal(data))?.accountUuid;
+      return isAccountUuid(value) ? value.toLowerCase() : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async setOwner(accountUuid: string): Promise<void> {
+    if (!isAccountUuid(accountUuid)) return;
+    await writeBytes(
+      this.vault,
+      OWNER,
+      this.seal(JSON.stringify({ accountUuid: accountUuid.toLowerCase() })),
+    );
   }
 
   /** When each account's sign-in was saved, from the files; nothing is opened. */

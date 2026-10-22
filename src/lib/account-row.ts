@@ -70,3 +70,51 @@ export function panelRowState(
   if (relay.desktop?.recoveryRequired) return blocked("recovery");
   return { canSwitch: true };
 }
+
+/** Time left until `at` as "1 sa 50 dk" / "1 h 50 m" (minutes only under an hour); undefined once past. */
+export function timeLeft(at: string | undefined, now: number, t: T): string | undefined {
+  const ms = at ? Date.parse(at) - now : NaN;
+  if (!Number.isFinite(ms) || ms <= 0) return undefined;
+  const minutes = Math.ceil(ms / 60_000);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h
+    ? t(`${h} sa${m ? ` ${m} dk` : ""}`, `${h} h${m ? ` ${m} m` : ""}`)
+    : t(`${m} dk`, `${m} m`);
+}
+
+/**
+ * The short line under an account's ring: what is wrong, else when it matters next. Shorter than
+ * `accountRowSubtitle`, for a tile about a hundred pixels wide; the full line is its title.
+ */
+export function accountTileLine(
+  row: OverviewRow,
+  t: T,
+  language: Language,
+  zone: string,
+  now: number,
+  waiting = false,
+): string {
+  const health = accountHealth(
+    row.account,
+    row.usage,
+    { active: false, desktopRunning: false, waiting },
+    t,
+  );
+  if (row.state === "not-linked") return t("Giriş kaydedilmedi", "Sign-in not saved");
+  if (health.tone !== "ok") return health.label;
+  switch (row.state) {
+    case "window-open": {
+      const left = timeLeft(row.usage?.fiveHour?.resetsAt, now, t);
+      return left ? t(`Dönem açık · ${left}`, `Open · ${left}`) : t("Dönem açık", "Period open");
+    }
+    case "ready":
+      return t("Hazır", "Ready");
+    case "exhausted": {
+      const at = row.availableAt ? formatClock(row.availableAt, language, zone) : "";
+      return at ? t(`${clockLocative(at)} açılır`, `Opens ${at}`) : t("Dolu", "Full");
+    }
+    default:
+      return t("Veri eski", "Out of date");
+  }
+}

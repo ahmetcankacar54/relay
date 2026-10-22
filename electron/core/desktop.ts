@@ -759,7 +759,10 @@ export class DesktopManager {
       now: this.now,
       // Key names only, so a renamed sign-in key can be found from the log.
       onUnknownLayout: (names) =>
-        this.diagnose("extension-keys", { count: names.length, names }),
+        this.diagnose("extension-keys", {
+          count: names.length,
+          names: names.map((name) => name.slice(0, 40)).join(" "),
+        }),
     });
     return this.extensionSwitcher;
   }
@@ -875,19 +878,27 @@ export class DesktopManager {
    * ExtensionSwitcher.check). Skipped while a Desktop operation runs, whose own step uses the
    * extension; one check at a time.
    */
-  async checkExtension(): Promise<ExtensionStatus | undefined> {
+  async checkExtension(claimFor?: string): Promise<ExtensionStatus | undefined> {
     const switcher = this.switcher();
     if (!switcher) return undefined;
+    const claimed = claimFor ? this.store.account(claimFor) : undefined;
+    if (claimFor && !claimed) throw new Error("Account not found.");
+    const claim = claimed?.desktop?.accountUuid ?? claimed?.auth?.accountUuid;
+    if (claimFor && !claim)
+      throw new Error("Save this account's Claude app sign-in first.");
     if (!this.busy) {
       const uuids = this.store.state.accounts.flatMap((account) =>
         [account.desktop?.accountUuid, account.auth?.accountUuid].filter(
           (value): value is string => !!value,
         ),
       );
+      // A claim must not ride on a check already running without it.
+      if (claim) await this.extensionChecking?.catch(() => undefined);
       this.extensionChecking ??= switcher
         .check({
           setting: this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION,
           known: uuids,
+          ...(claim ? { claim } : {}),
         })
         .finally(() => {
           this.extensionChecking = undefined;
@@ -898,7 +909,10 @@ export class DesktopManager {
         this.diagnose("extension-check", {
           state: current.state,
           ...(current.state === "signed-in"
-            ? { account: shortId(current.accountUuid), known: current.known }
+            ? {
+                known: current.known,
+                ...(current.accountUuid ? { account: shortId(current.accountUuid) } : {}),
+              }
             : {}),
         });
       }

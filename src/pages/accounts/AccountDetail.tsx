@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import {
   AppWindow,
   ArrowLeft,
+  Link2,
   Globe2,
   LoaderCircle,
   Monitor,
@@ -35,10 +36,13 @@ import { PageFrame } from "@/app/PageFrame";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { routeHash } from "@/app/routes";
 import { accountHealth, usageSignInStatus } from "@/lib/account-health";
-import { extensionGuide } from "@/lib/extension-ui";
+import { accountUuids, extensionGuide } from "@/lib/extension-ui";
 import { cn } from "@/lib/utils";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { UsageCard } from "../../features/UsageCard";
+import { LimitRings } from "@/components/LimitRings";
+import { freshUsage } from "../../../shared/usage";
+import { formatRelative } from "@/lib/time";
 import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
 import { PlanEditor } from "../../features/PlanEditor";
@@ -252,7 +256,7 @@ export function ExtensionRow({
 }) {
   const { accounts } = useRelay();
   const { t, language } = useI18n();
-  const { status, checking, check } = useExtensionStatus({
+  const { status, checking, check, link } = useExtensionStatus({
     check: true,
     initial: initialStatus,
   });
@@ -276,7 +280,29 @@ export function ExtensionRow({
       tone={guide.tone}
       status={guide.label}
       actions={
-        guide.action === "check" ? (
+        guide.action === "claim" ? (
+          <>
+            <Button
+              size="sm"
+              disabled={checking || !accountUuids(a).length}
+              title={accountUuids(a).length ? undefined : t("Önce Claude uygulaması girişini kaydet.", "Save the Claude app sign-in first.")}
+              onClick={() => void link(a.id)}
+            >
+              {checking ? <LoaderCircle className="animate-spin" /> : <Link2 />}
+              {t("Bu hesap olarak bağla", "Link as this account")}
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("Eklentiyi yeniden kontrol et", "Check the extension again")}
+              title={t("Eklentiyi yeniden kontrol et", "Check the extension again")}
+              disabled={checking}
+              onClick={() => void check()}
+            >
+              <RefreshCw />
+            </Button>
+          </>
+        ) : guide.action === "check" ? (
           <Button
             size="sm"
             variant={guide.steps ? "default" : "outline"}
@@ -420,7 +446,34 @@ export function AccountDetailBody({
       <div className="grid items-start gap-3 @3xl:grid-cols-[minmax(0,1fr)_280px]">
         <div className="grid gap-3">
           <Card className={cardClass}>
-            <CardTitle title={t("Limitler", "Limits")} />
+            <CardTitle
+              title={t("Limitler", "Limits")}
+              aside={
+                freshUsage(usage, now ?? Date.now()) && usage?.checkedAt ? (
+                  <span className="flex items-center gap-1">
+                    {t("Güncellendi", "Updated")}{" "}
+                    {formatRelative(usage.checkedAt, now ?? Date.now(), language)}
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={t("Limitleri yenile", "Refresh limits")}
+                      disabled={usageBusy.has(a.id)}
+                      onClick={() => void relay.refreshUsage(a)}
+                    >
+                      <RefreshCw className={usageBusy.has(a.id) ? "animate-spin" : undefined} />
+                    </Button>
+                  </span>
+                ) : undefined
+              }
+            />
+            {freshUsage(usage, now ?? Date.now()) ? (
+              <LimitRings
+                usage={usage}
+                now={now ?? Date.now()}
+                zone={settings.planning.timeZone}
+                size={88}
+              />
+            ) : (
             <UsageCard
               usage={usage}
               busy={usageBusy.has(a.id)}
@@ -432,6 +485,7 @@ export function AccountDetailBody({
               refresh={(allowPrompt) => void relay.refreshUsage(a, allowPrompt)}
               connect={() => void relay.startCli(a)}
             />
+            )}
           </Card>
           <Card className={cardClass} data-slot="connections">
             <CardTitle
