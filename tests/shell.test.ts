@@ -150,10 +150,93 @@ test("sidebar buttons override the legacy centred button style and the summary c
   // The summary card: a single 30 px ring for the five hours and its percent, inside the card's button.
   const summary = buttons.find((b) => b.includes("Kişisel · Max")) ?? "";
   assert.match(summary, /<div role="img" aria-label="5 saatlik dönem %94 kullanıldı"[^>]*style="width:30px;height:30px"/);
-  assert.match(summary, />5 saat %94</);
+  // Without a relay to read the reset from, the line is the percent alone.
+  assert.match(summary, />%94</);
   assert.doesNotMatch(html, /role="meter"/);
   // With Claude closed, the line says so after the percent.
-  assert.match(sidebar(false), />5 saat %94 · Claude kapalı</);
+  assert.match(sidebar(false), />%94 · Claude kapalı</);
+});
+
+const sidebarAccount = (id: string, name: string, linked: boolean) =>
+  ({
+    id,
+    name,
+    kind: "personal",
+    group: "personal",
+    color: "olive",
+    createdAt: "2026-10-14T00:00:00Z",
+    planning: { plan: "pro", capacityWeight: 1 },
+    ...(linked && {
+      desktop: { accountUuid: `${id}-uuid`, orgId: "org", savedAt: "2026-10-14T00:00:00Z" },
+      auth: { loggedIn: true, email: `${id}@example.com`, checkedAt: "2026-10-14T00:00:00Z" },
+    }),
+  }) as Account;
+const ready = sidebarAccount("a", "Kişisel · Max", true);
+const unlinked = sidebarAccount("b", "Studio", false);
+const sidebarRelay = (resetsAt: string) =>
+  ({
+    accounts: [ready, unlinked],
+    active: ready,
+    settings: DEFAULT_SETTINGS,
+    desktop: { running: true },
+    data: {
+      usage: {
+        a: { accountId: "a", status: "ready", stale: false, checkedAt: new Date().toISOString(), fiveHour: { usedPercent: 94, resetsAt } },
+      },
+      authFlows: [],
+    },
+  }) as unknown as Relay;
+const withRelay = (relay: Relay, page: "genel" | "hesaplar", running = true, compact = false) =>
+  renderToStaticMarkup(
+    createElement(
+      RelayContext.Provider,
+      { value: relay },
+      inShell(
+        createElement(Sidebar, {
+          page,
+          go: () => {},
+          t,
+          compact,
+          status: { accounts: 2, planning: false, switching: false },
+          summary: { name: "Kişisel · Max", running, fiveHour: 94 },
+        }),
+      ),
+    ),
+  );
+
+test("the summary card gives the five-hour window's time left after its percent", () => {
+  const relay = sidebarRelay(new Date(Date.now() + 110 * 60_000).toISOString());
+  assert.match(withRelay(relay, "genel"), />%94 · 1 sa 50 dk</);
+  assert.match(withRelay(relay, "genel", false), />%94 · 1 sa 50 dk · Claude kapalı</);
+  // A window already reset has no time left to show.
+  assert.match(withRelay(sidebarRelay(new Date(Date.now() - 60_000).toISOString()), "genel"), />%94</);
+});
+
+test("on the Accounts page the sidebar lists the accounts under Hesaplar, each with its dot and page", () => {
+  const relay = sidebarRelay(new Date(Date.now() + 3_600_000).toISOString());
+  assert.doesNotMatch(withRelay(relay, "genel"), /href="#\/hesaplar\//);
+  assert.doesNotMatch(withRelay(relay, "hesaplar", true, true), /href="#\/hesaplar\//);
+  const html = withRelay(relay, "hesaplar");
+  const links = html.match(/<a [^>]*href="#\/hesaplar\/[^"]*"[\s\S]*?<\/a>/g) ?? [];
+  assert.equal(links.length, 2);
+  // It sits right under the Hesaplar item.
+  assert.ok(html.indexOf("Hesaplar</span>") < html.indexOf('href="#/hesaplar/a"'));
+  assert.ok(html.indexOf('href="#/hesaplar/b"') < html.indexOf("Kullanım"));
+  // Green when ready (here: running), grey otherwise; the status is said in words too.
+  assert.match(links[0], /href="#\/hesaplar\/a"[\s\S]*bg-ok[\s\S]*Kişisel · Max[\s\S]*· Çalışıyor/);
+  assert.match(links[1], /href="#\/hesaplar\/b"[\s\S]*bg-muted-foreground\/40[\s\S]*Studio[\s\S]*· Claude uygulaması girişi yok/);
+  assert.doesNotMatch(html, /aria-current="true"/);
+  // The open account is marked.
+  const g = globalThis as { window?: unknown };
+  const saved = g.window;
+  g.window = { location: { hash: "#/hesaplar/b" }, addEventListener() {}, removeEventListener() {} };
+  try {
+    const open = withRelay(relay, "hesaplar");
+    assert.match(open, /<a [^>]*href="#\/hesaplar\/b"[^>]*aria-current="true"/);
+    assert.doesNotMatch(open, /<a [^>]*href="#\/hesaplar\/a"[^>]*aria-current/);
+  } finally {
+    g.window = saved;
+  }
 });
 
 test("compact rail centres its icon buttons", () => {

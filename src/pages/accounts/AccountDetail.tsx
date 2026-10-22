@@ -11,7 +11,7 @@ import {
   MoreHorizontal,
   RefreshCw,
 } from "lucide-react";
-import type { Account, ExtensionStatus } from "../../../shared/types";
+import type { Account, ExtensionStatus, RelaySettings } from "../../../shared/types";
 import {
   desktopCliMismatch,
   duplicateCliAccount,
@@ -184,6 +184,21 @@ export function AccountDetail({
 
 const cardClass = "gap-0 px-5 py-4";
 
+/**
+ * The closed Code history row's summary: how many other accounts' history the next merge brings
+ * (`historySources`, the list the open section names), and why, by the history setting.
+ */
+export function historyLine(
+  sources: number,
+  transfer: RelaySettings["desktopHistoryTransfer"],
+  t: (tr: string, en: string) => string,
+): string {
+  if (!sources) return t("paylaşılmıyor", "not shared");
+  return transfer === "same-group"
+    ? t(`aynı gruptaki ${sources} hesapla paylaşılıyor`, `shared with ${sources} ${sources === 1 ? "account" : "accounts"} in the same group`)
+    : t(`${sources} hesapla paylaşılıyor`, `shared with ${sources} ${sources === 1 ? "account" : "accounts"}`);
+}
+
 function CardTitle({ title, aside }: { title: string; aside?: ReactNode }) {
   return (
     <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -263,19 +278,27 @@ function ConnectionRow({
  * the extension is signed in to (from a copy; no browser is quit) and links a known account.
  */
 export function ExtensionRow({
-  account: a,
+  account,
   initialStatus,
 }: {
   account: Account;
   /** For static rendering; otherwise read, and checked, on mount. */
   initialStatus?: ExtensionStatus;
 }) {
+  const extension = useExtensionStatus({ check: true, initial: initialStatus });
+  return <ExtensionConnection account={account} extension={extension} />;
+}
+
+/** The extension's row from a status the caller reads, so the page can count it among the connections. */
+function ExtensionConnection({
+  account: a,
+  extension: { status, checking, check, link },
+}: {
+  account: Account;
+  extension: ReturnType<typeof useExtensionStatus>;
+}) {
   const { accounts } = useRelay();
   const { t, language } = useI18n();
-  const { status, checking, check, link } = useExtensionStatus({
-    check: true,
-    initial: initialStatus,
-  });
   if (status === null) return null;
   const guide = extensionGuide(a, status, accounts, t, language);
   return (
@@ -373,9 +396,12 @@ export function ExtensionRow({
 export function AccountDetailBody({
   account: a,
   now,
+  extensionStatus,
 }: {
   account: Account;
   now?: number;
+  /** The browser extension's status, for static rendering; otherwise read, and checked, on mount. */
+  extensionStatus?: ExtensionStatus;
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
@@ -415,7 +441,20 @@ export function AccountDetailBody({
   );
   const signIn = usageSignInStatus(a, usage, waiting, t);
   const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
-  const ready = [!!a.desktop, signIn.tone === "ok"].filter(Boolean).length;
+  const extension = useExtensionStatus({ check: macOS, initial: extensionStatus });
+  // The extension counts on macOS unless it is turned off or no browser has it; while it loads, it counts.
+  const ext = extension.status;
+  const extensionCounts =
+    macOS && ext !== null && !(ext && (ext.setting.mode === "off" || !ext.instances.length));
+  const connections = [
+    !!a.desktop,
+    signIn.tone === "ok",
+    ...(extensionCounts
+      ? [!!ext && extensionGuide(a, ext, accounts, t, language).tone === "ok"]
+      : []),
+  ];
+  const ready = connections.filter(Boolean).length;
+  const history = historySources(a, accounts, settings);
   return (
     <div className="@container grid gap-3 px-6 pb-8">
       <RelayErrorAlert />
@@ -506,8 +545,8 @@ export function AccountDetailBody({
             <CardTitle
               title={t("Bağlantılar", "Connections")}
               aside={t(
-                `Claude uygulaması ve limitler: ${ready}/2 hazır`,
-                `Claude app and limits: ${ready}/2 ready`,
+                `${ready} / ${connections.length} hazır`,
+                `${ready} / ${connections.length} ready`,
               )}
             />
             <ConnectionRow
@@ -638,15 +677,18 @@ export function AccountDetailBody({
               {relay.flow?.accountId === a.id && <CliFlowPanel embedded />}
             </ConnectionRow>
             {/* The extension's sign-in is kept only on macOS; the browser preview shows the row too. */}
-            {macOS && <ExtensionRow key={a.id} account={a} />}
+            {macOS && <ExtensionConnection account={a} extension={extension} />}
           </Card>
           {a.desktop && (
             <Card className={cardClass}>
-              <Disclosure title={t("Code geçmişi", "Code history")}>
+              <Disclosure
+                title={t("Code geçmişi", "Code history")}
+                summary={historyLine(history.length, settings.desktopHistoryTransfer, t)}
+              >
                 <HistorySummary
                   key={`${a.id}:${historyRevision}`}
                   account={a}
-                  sources={historySources(a, accounts, settings)}
+                  sources={history}
                   api={api}
                   t={t}
                 />

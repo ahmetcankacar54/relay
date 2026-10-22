@@ -292,7 +292,14 @@ export function Accounts() {
             }}
           />
         ) : (
-          <AccountsEmpty hasAccounts={accounts.length > 0} />
+          <AccountsEmpty
+            hasAccounts={accounts.length > 0}
+            query={query}
+            clearQuery={() => {
+              setQuery("");
+              search.current?.focus();
+            }}
+          />
         )}
       </div>
       {dialogs}
@@ -309,25 +316,45 @@ function Reason({ children }: { children: ReactNode }) {
   );
 }
 
-/** The empty table: a greeting before any account, a lookout when a filter hides them all. */
-export function AccountsEmpty({ hasAccounts }: { hasAccounts: boolean }) {
+/**
+ * The empty table: a greeting before any account, a lookout when a search or a filter hides them all.
+ * A search that matches nothing is named, with a link that clears it.
+ */
+export function AccountsEmpty({
+  hasAccounts,
+  query = "",
+  clearQuery,
+}: {
+  hasAccounts: boolean;
+  query?: string;
+  clearQuery?: () => void;
+}) {
   const { t } = useI18n();
+  const searched = hasAccounts ? query.trim() : "";
   return (
     <div className="grid justify-items-center gap-1.5 rounded-xl border border-dashed px-6 py-10 text-center">
       <Panda scene={hasAccounts ? "lookout" : "welcome"} size={72} playful />
-      <h3 className="font-semibold">
-        {hasAccounts
-          ? t("Eşleşen hesap yok", "No matching accounts")
-          : t("Tek panel. Tüm hesapların.", "One panel. All your accounts.")}
+      <h3 className="font-semibold break-words">
+        {searched
+          ? t(`“${searched}” ile eşleşen hesap yok`, `No accounts match “${searched}”`)
+          : hasAccounts
+            ? t("Eşleşen hesap yok", "No matching accounts")
+            : t("Tek panel. Tüm hesapların.", "One panel. All your accounts.")}
       </h3>
-      <p className="text-sm text-muted-foreground">
-        {hasAccounts
-          ? t("Aramayı veya filtreyi değiştir.", "Try a different search or filter.")
-          : t(
-              "Önce Claude uygulamasında açık hesabını kaydet; ardından diğerlerini ekle.",
-              "Save the account open in the Claude app, then add your other accounts.",
-            )}
-      </p>
+      {searched && clearQuery ? (
+        <Button variant="link" size="sm" className="h-auto px-0" onClick={clearQuery}>
+          {t("Aramayı temizle", "Clear search")}
+        </Button>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          {hasAccounts
+            ? t("Aramayı veya filtreyi değiştir.", "Try a different search or filter.")
+            : t(
+                "Önce Claude uygulamasında açık hesabını kaydet; ardından diğerlerini ekle.",
+                "Save the account open in the Claude app, then add your other accounts.",
+              )}
+        </p>
+      )}
     </div>
   );
 }
