@@ -162,7 +162,7 @@ export interface ExtensionStatus {
   /** Sealed sign-ins, by the extension's account uuid (lower case). */
   saved: { accountUuid: string; savedAt: string }[];
   /** Sealed claude.ai logins of the browser profile, by the same uuid. */
-  cookiesSaved: { accountUuid: string; savedAt: string }[];
+  cookiesSaved?: { accountUuid: string; savedAt: string }[];
   last?: ExtensionOutcome;
   /** The last check of who the extension is signed in to; undefined before one ran. */
   current?: ExtensionCurrent;

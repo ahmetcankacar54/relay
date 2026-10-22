@@ -121,7 +121,7 @@ export function pairedAccounts(
   accounts: Account[],
 ): { paired: string[]; half: string[] } {
   const hints = new Set(status.saved.map((x) => x.accountUuid.toLowerCase()));
-  const logins = new Set(status.cookiesSaved.map((x) => x.accountUuid.toLowerCase()));
+  const logins = new Set((status.cookiesSaved ?? []).map((x) => x.accountUuid.toLowerCase()));
   const paired: string[] = [];
   const half: string[] = [];
   for (const account of accounts) {
