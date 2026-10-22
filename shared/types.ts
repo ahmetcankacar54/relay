@@ -11,6 +11,7 @@ import type {
   ExtensionStatus,
 } from "./browser-extension";
 export type {
+  ExtensionCurrent,
   ExtensionInstance,
   ExtensionMode,
   ExtensionOutcome,
@@ -223,6 +224,12 @@ export interface RelayAPI {
   extensionStatus(): Promise<ExtensionStatus | undefined>;
   /** Runs the extension step for the account Desktop is on, without changing Claude. */
   syncExtension(): Promise<ExtensionOutcome>;
+  /**
+   * Reads who the extension is signed in to from a copy of its storage (a running browser is
+   * left alone) and saves that sign-in when the account is one of Relay's: how an account is
+   * linked. Returns the status with `current` filled in; undefined outside macOS.
+   */
+  checkExtension(): Promise<ExtensionStatus | undefined>;
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;

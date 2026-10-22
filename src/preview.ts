@@ -67,11 +67,15 @@ const accounts: Account[] = [
     orgName: a.kind === "personal" ? "Personal workspace" : "Studio",
   },
 }));
-/** Brave with the extension, signed in and saved for the first account only. */
+/** Brave (used last) and Chrome with the extension; signed in and saved for the first account only. */
 const previewExtension: ExtensionStatus = {
   setting: { mode: "restart" },
-  instances: [{ app: "brave", profile: "Default", name: "Kişisel" }],
+  instances: [
+    { app: "chrome", profile: "Default", name: "Kişi 1", usedAt: Date.now() - 9 * 86_400_000 },
+    { app: "brave", profile: "Default", name: "Kişisel", usedAt: Date.now() - 60_000 },
+  ],
   target: { app: "brave", profile: "Default", name: "Kişisel" },
+  picked: "recent",
   restoresTabs: false,
   saved: [{ accountUuid: ids[0], savedAt: new Date().toISOString() }],
 };
@@ -505,6 +509,15 @@ export const previewApi: RelayAPI = {
     return structuredClone(account);
   },
   extensionStatus: async () => structuredClone(previewExtension),
+  checkExtension: async () => {
+    previewExtension.current = {
+      state: "signed-in",
+      accountUuid: ids[0],
+      known: true,
+      at: new Date().toISOString(),
+    };
+    return structuredClone(previewExtension);
+  },
   syncExtension: async () => ({
     result: "switched",
     at: new Date().toISOString(),

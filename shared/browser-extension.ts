@@ -78,6 +78,8 @@ export const DEFAULT_EXTENSION: ExtensionSetting = { mode: "restart" };
 /** A browser profile that has the Claude extension's storage. */
 export interface ExtensionInstance extends ExtensionTarget {
   name: string;
+  /** When the extension last wrote its storage in this profile (ms); the one in use is the newest. */
+  usedAt?: number;
 }
 export type ExtensionResult =
   | "switched"
@@ -116,17 +118,29 @@ export interface ExtensionOutcome {
   /** The extension's sign-in was sealed into the vault. */
   saved: boolean;
 }
-/** What the settings card and the account sheet show. */
+/**
+ * Who the extension is signed in to right now, read from a copy of its storage so a running
+ * browser is never quit for it. "signed-in" names the account; `linked` says Relay saved it.
+ */
+export type ExtensionCurrent =
+  | { state: "signed-in"; accountUuid: string; known: boolean; at: string }
+  | { state: "signed-out"; at: string }
+  | { state: "unreadable"; at: string };
+/** What the settings card and the account page show. */
 export interface ExtensionStatus {
   setting: ExtensionSetting;
   instances: ExtensionInstance[];
-  /** The instance Relay manages: the chosen one, or the only one. */
+  /** The instance Relay manages: the chosen one, the only one, or the one used last. */
   target?: ExtensionInstance;
+  /** How `target` was picked; "recent" means several have the extension and none was chosen. */
+  picked?: "chosen" | "only" | "recent";
   /** The browser's own startup setting brings tabs back; Relay restores them either way. */
   restoresTabs?: boolean;
   /** Sealed sign-ins, by the extension's account uuid (lower case). */
   saved: { accountUuid: string; savedAt: string }[];
   last?: ExtensionOutcome;
+  /** The last check of who the extension is signed in to; undefined before one ran. */
+  current?: ExtensionCurrent;
 }
 
 const record = (value: unknown): Record<string, unknown> | undefined =>
@@ -179,13 +193,29 @@ export function startupRestores(preferences: unknown): boolean {
   return value === 1 || value === 5;
 }
 
-/** The instance Relay manages: the chosen one when it is found, else the only one found. */
+/**
+ * The instance Relay manages: the chosen one when it is found, else the only one found, else the
+ * one whose storage changed last (the extension writes it whenever it is used), so having the
+ * extension in a second browser never stops the step.
+ */
 export function chooseInstance(
   instances: ExtensionInstance[],
   chosen: ExtensionTarget | undefined,
 ): ExtensionInstance | undefined {
-  const picked = chosen
+  return pickInstance(instances, chosen)?.instance;
+}
+
+export function pickInstance(
+  instances: ExtensionInstance[],
+  chosen: ExtensionTarget | undefined,
+): { instance: ExtensionInstance; picked: "chosen" | "only" | "recent" } | undefined {
+  const match = chosen
     ? instances.find((i) => i.app === chosen.app && i.profile === chosen.profile)
     : undefined;
-  return picked ?? (instances.length === 1 ? instances[0] : undefined);
+  if (match) return { instance: match, picked: "chosen" };
+  if (instances.length === 1) return { instance: instances[0], picked: "only" };
+  const dated = instances.filter((i) => i.usedAt !== undefined);
+  if (!dated.length) return undefined;
+  const newest = dated.reduce((a, b) => ((b.usedAt ?? 0) > (a.usedAt ?? 0) ? b : a));
+  return { instance: newest, picked: "recent" };
 }

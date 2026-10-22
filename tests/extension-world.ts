@@ -36,6 +36,17 @@ export function extensionWorld(temp: string) {
   /** Every dir the storage was used on, with whether the browser ran then. */
   const opened: { dir: string; running: boolean }[] = [];
   const stored = new Map<string, SignIn | undefined>();
+  /** When each extension folder was last written; unset folders read as unknown. */
+  const modified = new Map<string, number>();
+  /** A copy Relay made of an extension folder names its source; it opens while the browser runs. */
+  const sourceOf = (dir: string) => {
+    try {
+      const source = fs.readFileSync(path.join(dir, "source.txt"), "utf8");
+      return source === dir ? undefined : source;
+    } catch {
+      return undefined;
+    }
+  };
   const system: BrowserSystem = {
     support,
     readText: (file) => {
@@ -46,6 +57,7 @@ export function extensionWorld(temp: string) {
       }
     },
     exists: (file) => fs.existsSync(file),
+    modifiedAt: (dir) => modified.get(dir),
     readLink: () => undefined,
     alive: () => false,
     processes: async () =>
@@ -64,6 +76,8 @@ export function extensionWorld(temp: string) {
   const storage: ExtensionStorage = {
     available: async () => state.available,
     read: async (dir) => {
+      const source = sourceOf(dir);
+      if (source) return structuredClone(stored.get(source));
       opened.push({ dir, running: state.running });
       if (state.running) throw new StorageError("locked", "locked");
       return structuredClone(stored.get(dir));
@@ -91,7 +105,8 @@ export function extensionWorld(temp: string) {
     const dir = path.join(data, profile, "Local Extension Settings", CLAUDE_EXTENSION_ID);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "data.txt"), "ORIGINAL");
+    fs.writeFileSync(path.join(dir, "source.txt"), dir);
     return dir;
   }
-  return { support, system, storage, events, state, opened, stored, install };
+  return { support, system, storage, events, state, opened, stored, modified, install };
 }

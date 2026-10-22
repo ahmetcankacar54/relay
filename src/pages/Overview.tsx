@@ -1,16 +1,12 @@
 import { LoaderCircle, RefreshCw } from "lucide-react";
-import { maxUsedPercent } from "../../shared/usage";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatRelative } from "@/lib/time";
-import { formatUsed } from "@/lib/meter";
 import { overviewCards } from "@/lib/onboarding";
 import { PageFrame } from "@/app/PageFrame";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
-import { Banner } from "@/components/Banner";
 import type { PageId } from "@/app/routes";
-import { useAutomation } from "../features/useAutomation";
 import { ActiveAccountCard } from "./overview/ActiveAccountCard";
 import { AccountsCard } from "./overview/AccountsCard";
 import { TodayCard } from "./overview/TodayCard";
@@ -28,7 +24,7 @@ export function Overview({
   const relay = useRelay();
   const prank = usePrank();
   const { t, language } = useI18n();
-  const { active, suggestion, accounts, usageBusy } = relay;
+  const { accounts, usageBusy } = relay;
   const usage = relay.data?.usage ?? {};
   const date = new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", {
     timeZone: relay.settings.planning.timeZone,
@@ -45,9 +41,6 @@ export function Overview({
     ? `${date} · ${t("güncellendi", "updated")} ${formatRelative(latest, now, language)}`
     : date;
   const refreshing = usageBusy.size > 0;
-  const suggestedUse = suggestion && maxUsedPercent(usage[suggestion.id]);
-  // One offer at a time: automatic switching's switch-now wins over the suggestion.
-  const automationOffer = !!useAutomation(now).status.switchTo;
   // Today plans a connected account; automatic switching needs two.
   const cards = overviewCards(accounts);
   return (
@@ -76,21 +69,6 @@ export function Overview({
     >
       <div className="grid gap-3 px-6 pb-6">
         <ActiveAccountCard go={go} now={now} />
-        {suggestion && active && !automationOffer && (
-          <Banner tone="warn">
-            <span>
-              {t(
-                `${active.name} limiti uyarı eşiğini geçti. Önerilen: `,
-                `${active.name} passed the warning threshold. Suggested: `,
-              )}
-              <b>{suggestion.name}</b>
-              {suggestedUse !== undefined
-                ? ` (${formatUsed(suggestedUse, language)})`
-                : ""}
-              .
-            </span>
-          </Banner>
-        )}
         <SetupChecklist />
         {cards.today ? (
           <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr]">

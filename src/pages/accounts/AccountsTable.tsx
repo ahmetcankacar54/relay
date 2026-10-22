@@ -1,5 +1,6 @@
 import { Fragment, type MouseEvent } from "react";
 import {
+  AppWindow,
   ArrowLeftRight,
   type LucideIcon,
   ArrowUpRight,
@@ -34,9 +35,103 @@ import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
-import { accountHealth, renewalIssue } from "@/lib/account-health";
-import { formatPercent, percentUsed } from "@/lib/meter";
+import {
+  accountHealth,
+  renewalIssue,
+  usageSignInStatus,
+} from "@/lib/account-health";
+import { extensionGuide } from "@/lib/extension-ui";
+import {
+  formatPercent,
+  meterClass,
+  meterTone,
+  percentUsed,
+} from "@/lib/meter";
+import { useExtensionStatus } from "@/data/useExtension";
+import type { ExtensionStatus } from "../../../shared/types";
 import { avatarClass, planColumn } from "./accountLabels";
+
+const toneText = {
+  ok: "text-ok",
+  warn: "text-warn",
+  crit: "text-crit",
+  off: "text-muted-foreground/40",
+} as const;
+
+/** A limit in a table cell: the percent and a short bar under it. */
+function CellMeter({ percent, label }: { percent?: number; label: string }) {
+  const { language } = useI18n();
+  if (percent === undefined) return <span className="text-muted-foreground">—</span>;
+  const value = Math.max(0, Math.min(100, percent));
+  return (
+    <div className="grid w-16 gap-1" aria-label={label}>
+      <span className="text-xs font-semibold tabular-nums">
+        {formatPercent(percentUsed(value), language)}
+      </span>
+      <span className="h-1 overflow-hidden rounded-full bg-track">
+        <span
+          className={cn("block h-full rounded-full", meterClass[meterTone(value)])}
+          style={{ width: `${value}%` }}
+        />
+      </span>
+    </div>
+  );
+}
+
+/** The three connections as icons, each in its state's colour, with what it is in its title. */
+function ConnectionIcons({
+  account,
+  usage,
+  waiting,
+  extension,
+}: {
+  account: Account;
+  usage: Parameters<typeof usageSignInStatus>[1];
+  waiting: boolean;
+  extension: ExtensionStatus | null | undefined;
+}) {
+  const relay = useRelay();
+  const { t, language } = useI18n();
+  const signIn = usageSignInStatus(account, usage, waiting, t);
+  const ext =
+    extension && extensionGuide(account, extension, relay.accounts, t, language);
+  const items: { key: string; icon: LucideIcon; tone: keyof typeof toneText; title: string }[] = [
+    {
+      key: "desktop",
+      icon: Monitor,
+      tone: account.desktop ? "ok" : "off",
+      title: t(
+        `Claude uygulaması: ${account.desktop ? "kayıtlı" : "kayıtlı değil"}`,
+        `Claude app: ${account.desktop ? "saved" : "not saved"}`,
+      ),
+    },
+    {
+      key: "usage",
+      icon: Globe2,
+      tone: signIn.tone,
+      title: t(`Limit okuma: ${signIn.label}`, `Usage limits: ${signIn.label}`),
+    },
+    ...(ext
+      ? [
+          {
+            key: "extension",
+            icon: AppWindow,
+            tone: ext.tone,
+            title: t(`Tarayıcı eklentisi: ${ext.label}`, `Browser extension: ${ext.label}`),
+          },
+        ]
+      : []),
+  ];
+  return (
+    <div className="flex items-center gap-2" data-slot="connection-icons">
+      {items.map(({ key, icon: Icon, tone, title }) => (
+        <span key={key} title={title} aria-label={title} role="img" className={toneText[tone]}>
+          <Icon className="size-4" />
+        </span>
+      ))}
+    </div>
+  );
+}
 
 export interface RowAction {
   key:
@@ -179,14 +274,18 @@ export function AccountsTable({
   const prank = usePrank();
   const { t, language } = useI18n();
   const { data, desktop, active } = relay;
+  // Opening the list also checks the extension, so an account signed in to it gets linked.
+  const extension = useExtensionStatus({ check: true }).status;
+  const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
   return (
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>{t("Hesap", "Account")}</TableHead>
-          <TableHead>{t("Plan", "Plan")}</TableHead>
           <TableHead>{t("Durum", "Status")}</TableHead>
-          <TableHead>{t("Kullanılan · 5 sa · hafta", "Used · 5 h · week")}</TableHead>
+          <TableHead>{t("5 saat", "5 hours")}</TableHead>
+          <TableHead>{t("Hafta", "Week")}</TableHead>
+          <TableHead>{t("Bağlantılar", "Connections")}</TableHead>
           <TableHead className="w-10">
             <span className="sr-only">{t("İşlemler", "Actions")}</span>
           </TableHead>
@@ -225,7 +324,7 @@ export function AccountsTable({
                 }
               }}
             >
-              <TableCell className="max-w-0 w-[38%]">
+              <TableCell className="max-w-0 w-[34%]">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span
                     aria-hidden="true"
@@ -237,7 +336,25 @@ export function AccountsTable({
                     {a.name.slice(0, 1).toLocaleUpperCase(language)}
                   </span>
                   <div className="min-w-0">
-                    <div className="truncate font-semibold">{a.name}</div>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate font-semibold">{a.name}</span>
+                      {plan && (
+                        <Badge
+                          variant="secondary"
+                          className="shrink-0 px-1.5 text-[11px]"
+                          title={
+                            plan.source === "planning"
+                              ? undefined
+                              : t(
+                                  "Abonelik · planlama için plan seçilmedi",
+                                  "Subscription · no plan picked for planning",
+                                )
+                          }
+                        >
+                          {plan.label}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="truncate text-xs text-muted-foreground">
                       {a.desktop?.email ??
                         a.auth?.email ??
@@ -245,25 +362,6 @@ export function AccountsTable({
                     </div>
                   </div>
                 </div>
-              </TableCell>
-              <TableCell>
-                {plan?.source === "planning" ? (
-                  <Badge variant="secondary">{plan.label}</Badge>
-                ) : (
-                  <span
-                    className="text-muted-foreground"
-                    title={
-                      plan
-                        ? t(
-                            "Abonelik · planlama için plan seçilmedi",
-                            "Subscription · no plan picked for planning",
-                          )
-                        : undefined
-                    }
-                  >
-                    {plan?.label ?? "—"}
-                  </span>
-                )}
               </TableCell>
               <TableCell className="whitespace-normal">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -290,10 +388,19 @@ export function AccountsTable({
                   )}
                 </div>
               </TableCell>
-              <TableCell className="tabular-nums">
-                {five === undefined && week === undefined
-                  ? "—"
-                  : `${formatPercent(percentUsed(five), language)} · ${formatPercent(percentUsed(week), language)}`}
+              <TableCell>
+                <CellMeter percent={five} label={t("5 saat", "5 hours")} />
+              </TableCell>
+              <TableCell>
+                <CellMeter percent={week} label={t("Hafta", "Week")} />
+              </TableCell>
+              <TableCell>
+                <ConnectionIcons
+                  account={a}
+                  usage={usage}
+                  waiting={waiting}
+                  extension={macOS ? extension : null}
+                />
               </TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>

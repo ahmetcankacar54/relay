@@ -12,7 +12,7 @@ import { formatReset } from "@/lib/time";
 import { planLabel } from "../pages/accounts/accountLabels";
 
 export const panelEyebrow =
-  "mb-1.5 flex items-center justify-between gap-2 text-xs font-semibold tracking-wider text-muted-foreground uppercase";
+  "mb-1 flex items-center justify-between gap-2 px-1 text-[11.5px] font-medium text-muted-foreground";
 export const panelCard = "rounded-[10px] border bg-card px-3 py-2.5";
 
 /** The pending-Desktop hint links to the accounts page, where it is completed. */
@@ -47,13 +47,6 @@ export function PanelActiveCard({ now }: { now: number }) {
   const openRelay = () => void relay.api.openPage("genel");
   return (
     <section className="px-3 py-1.5">
-      <div className={panelEyebrow}>
-        <span>{t("Claude uygulamasında açık", "Open in the Claude app")}</span>
-        <span className="flex items-center gap-1.5 normal-case tracking-normal">
-          <StatusDot tone={running ? "ok" : "off"} />
-          {running ? t("Çalışıyor", "Running") : t("Kapalı", "Closed")}
-        </span>
-      </div>
       <div className={panelCard}>
         {!active ? (
           <div className="flex flex-wrap items-center gap-1 text-muted-foreground">
@@ -73,11 +66,18 @@ export function PanelActiveCard({ now }: { now: number }) {
           </div>
         ) : (
           <>
-            <div className="flex min-w-0 items-center gap-1.5 text-[13.5px] font-bold">
-              <span className="truncate" title={active.name}>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate text-[13.5px] font-bold" title={active.name}>
                 {active.name}
               </span>
               {plan && <Badge variant="secondary">{plan}</Badge>}
+              <span
+                className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+                title={t("Claude uygulamasında açık hesap", "The account open in the Claude app")}
+              >
+                <StatusDot tone={running ? "ok" : "off"} />
+                {running ? t("Claude açık", "Claude open") : t("Claude kapalı", "Claude closed")}
+              </span>
             </div>
             {freshUsage(usage, now) ? (
               <div className="mt-1 grid gap-2">

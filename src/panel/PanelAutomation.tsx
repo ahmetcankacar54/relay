@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { ChevronRight } from "lucide-react";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -12,29 +12,33 @@ import {
 } from "../features/useAutomation";
 import { panelEyebrow } from "./PanelActiveCard";
 
-function Pill({
+/** A setting at a glance: its name, its state and the page it opens in the main window. */
+function Row({
   tone,
-  label,
+  name,
+  value,
   title,
   page,
 }: {
   tone: "ok" | "warn" | "crit" | "off";
-  label: string;
+  name: string;
+  value: string;
   title?: string;
   page: PageId;
 }) {
   const relay = useRelay();
   return (
-    <Button
-      variant="outline"
-      size="xs"
+    <button
+      type="button"
       title={title}
-      className="h-auto max-w-full rounded-full px-2 py-0.5 text-xs font-normal"
+      className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
       onClick={() => void relay.api.openPage(page)}
     >
       <StatusDot tone={tone} className="size-[7px]" />
-      <span className="truncate">{label}</span>
-    </Button>
+      <span className="shrink-0">{name}</span>
+      <span className="ml-auto min-w-0 truncate text-muted-foreground">{value}</span>
+      <ChevronRight aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+    </button>
   );
 }
 
@@ -59,7 +63,7 @@ export function PanelAutomation({ now }: { now: number }) {
         )
       : undefined;
   const planLabel = !planning.autoStart
-    ? t("Önceden başlatma kapalı", "Early start off")
+    ? t("Kapalı", "Off")
     : deferred
       ? t(
           `Uyarlandı · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
@@ -70,22 +74,24 @@ export function PanelAutomation({ now }: { now: number }) {
             `Sonraki başlatma ${clock(next.at)} · ${name(next.accountId)}`,
             `Next start ${clock(next.at)} · ${name(next.accountId)}`,
           )
-        : t("Önceden başlatma açık", "Early start on");
+        : t("Açık", "On");
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
         <span>{t("Otomasyon", "Automation")}</span>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        <Pill
+      <div className="grid">
+        <Row
           tone={AUTOMATION_DOT[automation.status.tone]}
-          label={`${t("Otomatik geçiş", "Automatic switching")} · ${t(...automationModeCopy(automation.mode).label)}`}
+          name={t("Otomatik geçiş", "Automatic switching")}
+          value={t(...automationModeCopy(automation.mode).label)}
           title={t(...automation.status.text)}
           page="gecis"
         />
-        <Pill
+        <Row
           tone={planning.autoStart ? "ok" : "off"}
-          label={planLabel}
+          name={t("Önceden başlatma", "Early start")}
+          value={planLabel}
           page="planlama"
         />
       </div>

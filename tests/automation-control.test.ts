@@ -370,7 +370,7 @@ test("Switching and Overview show the offer inline, not in the page banner", () 
   assert.equal(count(planning, SWITCH_NOW), 1);
 });
 
-test("Overview hides the suggestion band while automation offers a switch", () => {
+test("Overview has no suggestion band: automation's switch-now stays its one offer and the suggestion leads the accounts", () => {
   const offered = render(
     { ...relayFor({ fleet: otherWork, usage: fullUsage }), suggestion: b },
     overview,
@@ -378,7 +378,8 @@ test("Overview hides the suggestion band while automation offers a switch", () =
   assert.doesNotMatch(offered, /uyarı eşiğini geçti/);
   assert.doesNotMatch(offered, /Geçişi incele/);
   assert.equal(count(offered, SWITCH_NOW), 1);
-  // Without an automation offer the suggestion band stays.
+  // Without an automation offer there is still no band: the accounts card's heading names the
+  // near limit and puts the suggestion first, and nothing offers a switch-now.
   const suggested = render(
     {
       ...relayFor({ usage: { a: usage("a", 90), b: usage("b", 10) } }),
@@ -386,7 +387,9 @@ test("Overview hides the suggestion band while automation offers a switch", () =
     },
     overview,
   );
-  assert.match(suggested, /uyarı eşiğini geçti/);
+  assert.doesNotMatch(suggested, /uyarı eşiğini geçti/);
+  assert.match(suggested, /limiti dolmak üzere · önerilen üstte/);
+  assert.match(suggested, />önerilen</);
   assert.doesNotMatch(suggested, /Geçişi incele/);
   assert.equal(count(suggested, SWITCH_NOW), 0);
 });

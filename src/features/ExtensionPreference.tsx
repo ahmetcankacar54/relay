@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { DEFAULT_EXTENSION } from "../../shared/browser-extension";
 import type { ExtensionMode, ExtensionStatus } from "../../shared/types";
 import { extensionLine } from "../../shared/extension-text";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Note, OptionSelect, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { useExtensionStatus } from "@/data/useExtension";
 import {
   instanceFromValue,
   instanceLabel,
@@ -14,6 +15,7 @@ import {
   modeOptions,
   modeSentence,
   startupLine,
+  accountUuids,
 } from "@/lib/extension-ui";
 
 /**
@@ -26,16 +28,29 @@ export function ExtensionPreference({
   /** For static rendering; otherwise read on mount. */
   initialStatus?: ExtensionStatus;
 }) {
-  const { api, settings, busy, desktop, action } = useRelay();
+  const { api, settings, busy, desktop, action, accounts } = useRelay();
   const { t } = useI18n();
   // undefined: not read yet. null: this Mac does not run the step.
-  const [status, setStatus] = useState<ExtensionStatus | null | undefined>(initialStatus);
+  const { status, checking, check, reload } = useExtensionStatus({
+    check: true,
+    initial: initialStatus,
+  });
   const [result, setResult] = useState<string>();
-  const load = useCallback(() => {
-    api.extensionStatus().then((s) => setStatus(s ?? null), () => {});
-  }, [api]);
-  useEffect(load, [load, settings.claudeExtension]);
   if (!status) return null;
+  const current = status.current;
+  const on =
+    current?.state === "signed-in"
+      ? accounts.find((a) => accountUuids(a).includes(current.accountUuid))
+      : undefined;
+  const currentLine = !current
+    ? undefined
+    : current.state === "signed-in"
+      ? on
+        ? t(`Eklenti şu an ${on.name} hesabında · bağlı`, `The extension is on ${on.name} now · linked`)
+        : t("Eklenti Relay'de olmayan bir hesapta.", "The extension is on an account Relay does not have.")
+      : current.state === "signed-out"
+        ? t("Eklentide giriş yok.", "The extension is signed out.")
+        : t("Eklentinin girişi okunamadı.", "Could not read the extension's sign-in.");
   const setting = settings.claudeExtension ?? DEFAULT_EXTENSION;
   const disabled = !!busy || !!desktop?.busy;
   const update = (next: typeof setting) =>
@@ -68,10 +83,17 @@ export function ExtensionPreference({
         <SettingRow
           label={t("Eklentinin tarayıcı profili", "The extension's browser profile")}
           htmlFor="extension-instance"
-          description={t(
-            "Relay yalnızca bunun girişini yönetir.",
-            "Relay manages the sign-in of this one only.",
-          )}
+          description={
+            status.picked === "recent"
+              ? t(
+                  "Seçilmediği için en son kullanılan izleniyor. Relay yalnızca bunun girişini yönetir.",
+                  "None chosen, so the one used last is followed. Relay manages the sign-in of this one only.",
+                )
+              : t(
+                  "Relay yalnızca bunun girişini yönetir.",
+                  "Relay manages the sign-in of this one only.",
+                )
+          }
         >
           <OptionSelect
             id="extension-instance"
@@ -107,13 +129,26 @@ export function ExtensionPreference({
                 extensionLine(outcome, t) ??
                   t("Eklentide değiştirilecek bir şey yok.", "Nothing to change in the extension."),
               );
-              load();
+              void reload();
             })
           }
         >
           {t("Şimdi eşitle", "Sync now")}
         </Button>
       </SettingRow>
+      {status.target && setting.mode !== "off" && (
+        <SettingRow
+          label={currentLine ?? t("Eklenti kontrol ediliyor…", "Checking the extension…")}
+          description={t(
+            "Eklentiye bir hesapla giriş yapınca Kontrol et; o hesap bağlanır. Tarayıcı kapanmaz.",
+            "After signing in to the extension with an account, press Check and that account is linked. The browser stays open.",
+          )}
+        >
+          <Button variant="outline" disabled={checking} onClick={() => void check()}>
+            {t("Kontrol et", "Check")}
+          </Button>
+        </SettingRow>
+      )}
       {result && (
         <p role="status" className="text-[13px]">
           {result}

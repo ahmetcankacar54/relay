@@ -4,6 +4,8 @@ import {
   buildTrayMenu,
   canRequestTraySwitch,
   trayAccountName,
+  trayCountdown,
+  trayTitle,
   trayTooltip,
   trayUsageLabel,
   unavailableTrayMenu,
@@ -225,12 +227,51 @@ test("every menu row gives the percent used of both windows with its word once, 
 test("the tooltip names the account and carries the five-hour percent used with its word", () => {
   const s = snapshot();
   s.desktop!.activeProfileId = "target";
+  // With the window's reset known, it also says when the window renews.
+  assert.equal(trayTooltip(s, "en", now), "Relay — Max · 22% used · renews in 4:00");
+  assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %22 kullanıldı · 4:00 sonra yenilenir");
+  // Without one, the percent alone.
+  s.usage = { target: { ...usage("target"), fiveHour: { usedPercent: 22.5 } } };
   assert.equal(trayTooltip(s, "en", now), "Relay — Max · 22% used");
   assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %22 kullanıldı");
   // No fresh reading: the name alone, as before.
   s.usage = {};
   assert.equal(trayTooltip(s, "en", now), "Relay — Max");
   assert.equal(trayTooltip({ accounts: [], usage: {} }, "tr", now), "Relay");
+});
+
+test("the countdown reads h:mm until the reset, rounding up to the minute, and nothing once it passed", () => {
+  const at = (ms: number) => new Date(now + ms).toISOString();
+  assert.equal(trayCountdown(at(110 * 60_000), now), "1:50");
+  assert.equal(trayCountdown(at(7 * 60_000), now), "0:07");
+  assert.equal(trayCountdown(at(5 * 3_600_000), now), "5:00");
+  // A part-minute counts as a whole one, so the last seconds read 0:01, never 0:00.
+  assert.equal(trayCountdown(at(61_000), now), "0:02");
+  assert.equal(trayCountdown(at(1_000), now), "0:01");
+  assert.equal(trayCountdown(at(0), now), undefined);
+  assert.equal(trayCountdown(at(-60_000), now), undefined);
+  assert.equal(trayCountdown(undefined, now), undefined);
+  assert.equal(trayCountdown("soon", now), undefined);
+});
+
+test("the menu bar title adds the time left from 80 % used on, when the reset is known", () => {
+  const titled = (usedPercent: number, resetsAt?: string, language: "tr" | "en" = "tr") => {
+    const s = snapshot();
+    s.desktop!.activeProfileId = "target";
+    s.usage = { target: { ...usage("target"), fiveHour: { usedPercent, ...(resetsAt ? { resetsAt } : {}) } } };
+    return trayTitle(s, now, language);
+  };
+  const in110 = new Date(now + 110 * 60_000).toISOString();
+  // Below 80 % the item stays a plain number.
+  assert.equal(titled(22.5, in110), "%22");
+  assert.equal(titled(79.9, in110), "%79");
+  assert.equal(titled(80, in110), "%80 · 1:50");
+  assert.equal(titled(94, in110), "%94 · 1:50");
+  assert.equal(titled(94, in110, "en"), "94% · 1:50");
+  // No reset time: the percent alone.
+  assert.equal(titled(94), "%94");
+  // A reset already past makes the reading old, so the title is empty rather than counting down.
+  assert.equal(titled(94, new Date(now - 60_000).toISOString()), "");
 });
 
 test("a fresh recheck rejects a target when Desktop changes after menu creation", () => {

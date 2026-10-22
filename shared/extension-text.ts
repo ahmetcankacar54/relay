@@ -34,8 +34,8 @@ export function extensionLine(outcome: ExtensionOutcome, t: T): string | undefin
         switch (outcome.reason) {
           case "choose-instance":
             return t(
-              "Claude eklentisi birden çok tarayıcı profilinde var; Ayarlar'dan birini seç.",
-              "The Claude extension is in several browser profiles; choose one in Settings.",
+              "Claude eklentisi birden çok tarayıcı profilinde var; Geçiş sayfasından birini seç.",
+              "The Claude extension is in several browser profiles; choose one on the Switching page.",
             );
           case "unavailable":
             return t(

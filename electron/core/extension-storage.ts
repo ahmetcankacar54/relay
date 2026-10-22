@@ -36,6 +36,11 @@ export interface ExtensionStorage {
    * caller restores its backup.
    */
   write(dir: string, signIn: SignIn): Promise<void>;
+  /**
+   * The names of the keys the folder holds, never a value: what a check logs when it finds no
+   * sign-in, so a renamed key can be told from a signed-out extension.
+   */
+  keyNames?(dir: string): Promise<string[]>;
 }
 
 async function openDatabase(dir: string) {
@@ -99,6 +104,12 @@ export const levelExtensionStorage: ExtensionStorage = {
       () => false,
     ),
   read: (dir) => withDatabase(dir, readKeys),
+  keyNames: (dir) =>
+    withDatabase(dir, async (db) => {
+      const names: string[] = [];
+      for await (const key of db.keys({ limit: 200 })) names.push(String(key).slice(0, 80));
+      return names;
+    }),
   async write(dir, signIn) {
     await withDatabase(dir, (db) =>
       db.batch(

@@ -376,11 +376,11 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
-export function ConnectionPanels() {
+export function ConnectionPanels({ cliFlow = true }: { cliFlow?: boolean }) {
   return (
     <>
       <DesktopPendingPanel />
-      <CliFlowPanel />
+      {cliFlow && <CliFlowPanel />}
     </>
   );
 }

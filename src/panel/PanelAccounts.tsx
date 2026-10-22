@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LimitMeter } from "@/components/LimitMeter";
+import { formatPercent, meterClass, meterTone, percentUsed } from "@/lib/meter";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/data/i18n";
 import type { Relay } from "@/data/relay-context";
 import { useRelay } from "@/data/relay-context";
@@ -18,6 +18,33 @@ import { planLabel } from "../pages/accounts/accountLabels";
 import { panelCard, panelEyebrow } from "./PanelActiveCard";
 
 export const PANEL_MAX_ROWS = 6;
+
+/** A limit on one line: its short name, a bar and the percent used. */
+function InlineMeter({ label, percent }: { label: string; percent?: number }) {
+  const { language } = useI18n();
+  const value = percent === undefined ? undefined : Math.max(0, Math.min(100, percent));
+  return (
+    <div className="flex min-w-0 items-center gap-1.5 text-[11.5px]">
+      <span className="w-8 shrink-0 text-muted-foreground">{label}</span>
+      <span
+        role="meter"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={value}
+        className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-track"
+      >
+        <span
+          className={cn("block h-full rounded-full", meterClass[meterTone(value)])}
+          style={{ width: `${value ?? 0}%` }}
+        />
+      </span>
+      <b className="w-9 shrink-0 text-right tabular-nums">
+        {value === undefined ? "—" : formatPercent(percentUsed(value), language)}
+      </b>
+    </div>
+  );
+}
 
 /** Overview ranking, with the badge on the suggested account when there is one. */
 export function panelRows(relay: Relay, now: number): OverviewRow[] {
@@ -58,7 +85,7 @@ export function PanelAccounts({
   now: number;
   /** Tests: render with this account’s confirmation open. */
   initialConfirm?: string;
-  /** Lifted state so the suggestion strip can open a row’s confirmation. */
+  /** Lifted state, so the panel can own which row’s confirmation is open. */
   confirmId?: string;
   onConfirmChange?: (id: string | undefined) => void;
 }) {
@@ -82,8 +109,13 @@ export function PanelAccounts({
   return (
     <section className="px-3 py-1.5">
       <div className={panelEyebrow}>
-        <span>{t("Hesaplar", "Accounts")}</span>
-        <span>{t("en uygunu üstte", "best first")}</span>
+        {relay.suggestion && relay.active ? (
+          <span className="font-semibold text-warn-foreground">
+            {t("Limit dolmak üzere · önerilen üstte", "Near the limit · suggested first")}
+          </span>
+        ) : (
+          <span>{t("Diğer hesaplar · en uygunu üstte", "Other accounts · best first")}</span>
+        )}
       </div>
       <div className={`${panelCard} px-2 py-1`}>
         {rows.length === 0 ? (
@@ -117,59 +149,57 @@ export function PanelAccounts({
             return (
               <div
                 key={account.id}
-                className="grid grid-cols-[1fr_88px_88px_auto] items-center gap-2 border-t px-1 py-1.5 first:border-0"
+                data-slot="panel-account"
+                className="grid gap-1 border-t px-1 py-2 first:border-0"
               >
-                <div className="min-w-0">
-                  <div
-                    className="min-w-0 truncate font-semibold"
-                    title={account.name}
-                  >
-                    {account.name}
-                  </div>
-                  <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    {row.recommended && (
-                      <Badge
-                        variant="secondary"
-                        className="shrink-0 px-1.5 text-xs"
-                      >
-                        {t("Önerilen", "Suggested")}
-                      </Badge>
-                    )}
-                    {/* Two lines, so the reason a switch is unavailable is read in full. */}
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
                     <span
-                      className="line-clamp-2 min-w-0 break-words"
-                      title={subtitle}
+                      className="min-w-0 truncate font-semibold"
+                      title={account.name}
                     >
-                      {subtitle}
+                      {account.name}
                     </span>
+                    {row.recommended && (
+                      <span className="shrink-0 text-[11.5px] font-semibold text-brand">
+                        {t("önerilen", "suggested")}
+                      </span>
+                    )}
                   </div>
+                  <Button
+                    size="xs"
+                    variant={row.recommended ? "default" : "outline"}
+                    disabled={!canSwitch || !!switching}
+                    aria-expanded={open}
+                    aria-label={t(`${account.name} hesabına geç`, `Switch to ${account.name}`)}
+                    onClick={(e) =>
+                      // Closing an open confirmation is a cancel, not a switch request: no prank.
+                      open
+                        ? setConfirmId(undefined)
+                        : offerAfter(prank, "nibble-cursor", e, () =>
+                            setConfirmId(account.id),
+                          )
+                    }
+                  >
+                    {t("Geç", "Switch")}
+                  </Button>
                 </div>
-                <LimitMeter
-                  size="sm"
-                  label={t("5 sa", "5 h")}
-                  percent={usage?.fiveHour?.usedPercent}
-                />
-                <LimitMeter
-                  size="sm"
-                  label={t("Hafta", "Week")}
-                  percent={usage?.sevenDay?.usedPercent}
-                />
-                <Button
-                  size="xs"
-                  variant={row.recommended ? "default" : "outline"}
-                  disabled={!canSwitch || !!switching}
-                  aria-expanded={open}
-                  onClick={(e) =>
-                    // Closing an open confirmation is a cancel, not a switch request: no prank.
-                    open
-                      ? setConfirmId(undefined)
-                      : offerAfter(prank, "nibble-cursor", e, () =>
-                          setConfirmId(account.id),
-                        )
-                  }
+                <div className="grid grid-cols-2 gap-3">
+                  <InlineMeter
+                    label={t("5 sa", "5 h")}
+                    percent={usage?.fiveHour?.usedPercent}
+                  />
+                  <InlineMeter
+                    label={t("Hafta", "Week")}
+                    percent={usage?.sevenDay?.usedPercent}
+                  />
+                </div>
+                <div
+                  className="truncate text-[11.5px] text-muted-foreground"
+                  title={subtitle}
                 >
-                  {t("Geç", "Switch")}
-                </Button>
+                  {subtitle}
+                </div>
                 {switching === account.id ? (
                   <div
                     role="status"

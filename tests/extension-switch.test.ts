@@ -338,3 +338,66 @@ test("without the LevelDB library nothing is quit, read or written", async (t) =
   assert.deepEqual(s.world.opened, []);
   assert.deepEqual(s.world.stored.get(s.dir), signInFor(s.a, 1));
 });
+
+test("several browser profiles without a choice: the one whose extension was used last is managed", async (t) => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "relay-ext-recent-"));
+  t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
+  const world = extensionWorld(temp);
+  const sealer = createSealer(Buffer.alloc(32, 7));
+  const vault = new ExtensionVault(path.join(temp, "vault"), (x) => sealer.seal(x), (d) => sealer.unseal(d));
+  const switcher = new ExtensionSwitcher({ system: world.system, storage: world.storage, vault, scratch: path.join(temp, "scratch") });
+  const braveDir = world.install("brave");
+  const chromeDir = world.install("chrome");
+  world.modified.set(braveDir, 2_000);
+  world.modified.set(chromeDir, 1_000);
+  const sign = randomUUID();
+  await vault.save(signInFor(sign, 4));
+  const outcome = await switcher.run({ setting: DEFAULT_EXTENSION, mayQuit: true, target: [sign], known: [sign] });
+  assert.equal(outcome.result, "switched");
+  assert.deepEqual(world.stored.get(braveDir), signInFor(sign, 4));
+  assert.equal(world.stored.get(chromeDir), undefined);
+});
+
+test("a check reads a copy while the browser runs, links a known account, and quits nothing", async (t) => {
+  const s = setup(t);
+  s.world.state.running = true;
+  s.world.stored.set(s.dir, signInFor(s.a, 3));
+  const current = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b] });
+  assert.equal(current?.state, "signed-in");
+  assert.equal(current?.state === "signed-in" && current.accountUuid, s.a.toLowerCase());
+  assert.equal(current?.state === "signed-in" && current.known, true);
+  assert.deepEqual(await s.vault.load([s.a]), signInFor(s.a, 3), "linked: saved in the vault");
+  assert.deepEqual(s.world.events, [], "the browser is left running");
+  assert.deepEqual(s.world.opened, [], "the live folder is never opened");
+  assert.equal(fs.existsSync(`${s.scratch}-peek`), false, "the copy is removed");
+  assert.equal(fs.readFileSync(path.join(s.dir, "data.txt"), "utf8"), "ORIGINAL");
+});
+
+test("a check of an unknown account, a signed-out extension, or mode off saves nothing", async (t) => {
+  const s = setup(t);
+  const stranger = randomUUID();
+  s.world.stored.set(s.dir, signInFor(stranger, 1));
+  const unknown = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a] });
+  assert.equal(unknown?.state === "signed-in" && unknown.known, false);
+  assert.equal(await s.vault.load([stranger]), undefined);
+  s.world.stored.set(s.dir, undefined);
+  assert.equal((await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a] }))?.state, "signed-out");
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  assert.equal(await s.switcher.check({ setting: mode("off"), known: [s.a] }), undefined);
+  assert.equal(await s.vault.load([s.a]), undefined);
+});
+
+test("a check that finds no sign-in reports the key names it saw, never a value", async (t) => {
+  const s = setup(t);
+  const seen: string[][] = [];
+  const switcher = new ExtensionSwitcher({
+    system: s.world.system,
+    storage: { ...s.world.storage, keyNames: async () => ["oauthState", "settings"] },
+    vault: s.vault,
+    scratch: s.scratch,
+    onUnknownLayout: (names) => void seen.push(names),
+  });
+  s.world.stored.set(s.dir, undefined);
+  assert.equal((await switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a] }))?.state, "signed-out");
+  assert.deepEqual(seen, [["oauthState", "settings"]]);
+});

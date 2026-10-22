@@ -1,17 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RefreshCw, Settings2 } from "lucide-react";
-import { maxUsedPercent } from "../../shared/usage";
 import { Button } from "@/components/ui/button";
 import { Panda } from "@/components/Panda";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { panelRowState } from "@/lib/account-row";
-import { formatUsed } from "@/lib/meter";
 import { formatRelative } from "@/lib/time";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { PanelActiveCard } from "./PanelActiveCard";
-import { PanelAccounts, panelRows, switchingId } from "./PanelAccounts";
+import { PanelAccounts } from "./PanelAccounts";
 import { PanelAutomation } from "./PanelAutomation";
 import { PanelDrafts } from "./PanelDrafts";
 import { PanelSidebar } from "./PanelSidebar";
@@ -27,7 +24,7 @@ export function Panel({
   const relay = useRelay();
   const prank = usePrank();
   const { t, language } = useI18n();
-  const { api, accounts, suggestion, usageBusy } = relay;
+  const { api, accounts, usageBusy } = relay;
   const [confirmId, setConfirmId] = useState<string>();
   const root = useRef<HTMLDivElement>(null);
 
@@ -55,13 +52,6 @@ export function Panel({
     .filter((c): c is string => !!c && Number.isFinite(Date.parse(c)))
     .sort()
     .at(-1);
-  const suggestedRow =
-    suggestion &&
-    panelRows(relay, now).find((r) => r.account.id === suggestion.id);
-  const suggestionCanSwitch =
-    !!suggestedRow &&
-    panelRowState(suggestedRow, relay).canSwitch &&
-    !switchingId(relay.busy);
   const refreshing = usageBusy.size > 0;
 
   return (
@@ -103,28 +93,6 @@ export function Panel({
         <RelayErrorAlert />
       </div>
       <PanelActiveCard now={now} />
-      {suggestion && relay.active && (
-        <div className="mx-3 my-1.5 flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs">
-          <span className="min-w-0">
-            {t("Limit dolmak üzere", "Limit almost reached")} ·{" "}
-            {t("Önerilen", "Suggested")}: <b>{suggestion.name}</b>
-            {` (${formatUsed(maxUsedPercent(usage[suggestion.id]), language)})`}
-          </span>
-          <Button
-            size="xs"
-            disabled={!suggestionCanSwitch}
-            onClick={(e) => {
-              // Opening the confirmation is the switch request and offers; with it already open there is nothing to request.
-              if (confirmId !== suggestion.id)
-                offerAfter(prank, "nibble-cursor", e, () =>
-                  setConfirmId(suggestion.id),
-                );
-            }}
-          >
-            {t("Geç", "Switch")}
-          </Button>
-        </div>
-      )}
       <PanelDrafts />
       <PanelSidebar />
       <PanelAccounts
