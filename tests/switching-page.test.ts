@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { Switching } from "../src/pages/Switching";
+import { Switching, extensionCarry } from "../src/pages/Switching";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type ExtensionStatus, type Snapshot } from "../shared/types";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -271,4 +271,85 @@ test("with Continue at quota and prepare-on-quit both on, the choice reads Kota 
     .map(([, inner]) => /<span class="text-sm font-semibold">(.*?)<\/span>/.exec(inner)?.[1]);
   assert.deepEqual(checked, ["Kota dolunca"]);
   assert.doesNotMatch(html, /Otomatik geçişe dahil hesaplar/);
+});
+
+/** The "Geçişte neler gelir?" section, up to the details. */
+const carry = (html: string) =>
+  html.slice(html.indexOf("Geçişte neler gelir?"), html.indexOf(">Ayrıntılar</h2>"));
+
+test("each carry card holds its main control, bound to the same setting as the details", () => {
+  const html = carry(render(relayFor()));
+  // Code history: the sharing select, with the details' options and the current choice.
+  assert.match(html, /<label for="carry-history" class="sr-only">Geçmişi paylaş<\/label>/);
+  assert.match(html, /<button[^>]*id="carry-history"[^>]*>[\s\S]*?Tüm hesaplar arasında/);
+  assert.match(html, />Tüm hesaplarda görünür</);
+  // Drafts: "Yerine yaz · Deneysel", off unless turned on.
+  const retype = (h: string) => /<input[^>]*id="carry-retype"[^>]*>/.exec(h)?.[0] ?? "";
+  assert.match(html, /Yerine yaz<span[^>]*>Deneysel<\/span>/);
+  assert.match(retype(html), /type="checkbox"/);
+  assert.doesNotMatch(retype(html), /checked/);
+  assert.match(retype(carry(render(relayFor({}, { draftRetype: true })))), /checked=""/);
+  // Suggestions: the toggle, disabled while usage warnings are off.
+  const suggest = (h: string) => /<button[^>]*id="carry-suggest"[^>]*>/.exec(h)?.[0] ?? "";
+  assert.match(suggest(html), /role="switch"/);
+  assert.match(suggest(html), /aria-checked="true"/);
+  const quiet = carry(render(relayFor({}, { usageWarnings: false })));
+  assert.match(suggest(quiet), /disabled=""/);
+  assert.match(quiet, />Limit uyarıları kapalı</);
+  // Each card still jumps to its full settings.
+  for (const id of ["gecis-gecmis", "gecis-eklenti", "gecis-taslak", "gecis-oneri"])
+    assert.match(html, new RegExp(`<a href="#${id}" aria-label="[^"]+ · ayrıntılar"[^>]*>Ayrıntılar</a>`), id);
+});
+
+test("the sidebar card offers Copy recipe for the open account's missing sections", () => {
+  const gap = { id: "g1", to: "Kişisel · Max", from: ["Vertex"], missingSections: 9, sessions: 157 };
+  const html = carry(render(relayFor({ sidebar: gap })));
+  assert.match(html, />Kenar çubuğu bölümleri</);
+  assert.match(html, /Kişisel · Max hesabında 9 bölüm eksik, 157 oturum bölümsüz\. Kaynak: Vertex\./);
+  assert.match(html, /<button[^>]*>Tarifi kopyala<\/button>/);
+  assert.match(
+    carry(render({ ...relayFor({ sidebar: gap }), busy: "sidebar-copy:g1" } as Relay)),
+    /<button[^>]*disabled=""[^>]*>Tarifi kopyala<\/button>/,
+  );
+  const none = carry(render(relayFor()));
+  assert.match(none, />Açık hesapta eksik bölüm yok\.</);
+  assert.doesNotMatch(none, /Tarifi kopyala/);
+});
+
+test("the extension card says where the extension stands for the open account, with Check when it helps", () => {
+  const t = (tr: string) => tr;
+  const status = (over: Partial<ExtensionStatus> = {}): ExtensionStatus =>
+    ({
+      setting: { mode: "restart" },
+      instances: [{ app: "chrome", profile: "Default", name: "Kişi 1" }],
+      target: { app: "chrome", profile: "Default", name: "Kişi 1" },
+      picked: "only",
+      saved: [],
+      ...over,
+    }) as ExtensionStatus;
+  assert.deepEqual(extensionCarry(undefined, a, accounts, t, "tr"), { value: "Kontrol ediliyor…", check: false });
+  assert.deepEqual(extensionCarry(null, a, accounts, t, "tr"), { value: "Bu Mac'te yok", check: false });
+  assert.deepEqual(extensionCarry(status({ setting: { mode: "off" } }), a, accounts, t, "tr"), {
+    value: "Kapalı",
+    tone: "off",
+    check: false,
+  });
+  // Before a check: the linked count, and Check.
+  assert.deepEqual(extensionCarry(status(), a, accounts, t, "tr"), { value: "0 hesap bağlı", check: true });
+  // On this account now: linked, nothing to do.
+  const here = status({ current: { state: "signed-in", accountUuid: desktop.accountUuid } } as Partial<ExtensionStatus>);
+  assert.deepEqual(extensionCarry(here, a, accounts, t, "tr"), {
+    value: "Bağlı · eklenti şu an bu hesapta",
+    tone: "ok",
+    check: false,
+  });
+  // Signed out after a check: the guide's line, and Check again.
+  const out = status({ current: { state: "signed-out" } } as Partial<ExtensionStatus>);
+  assert.deepEqual(extensionCarry(out, a, accounts, t, "tr"), {
+    value: "Bağlı değil · eklentide giriş yok",
+    tone: "warn",
+    check: true,
+  });
+  // Rendered before the status loads, the card says it is checking.
+  assert.match(carry(render(relayFor())), />Tarayıcı eklentisi<[\s\S]*?Kontrol ediliyor…/);
 });
