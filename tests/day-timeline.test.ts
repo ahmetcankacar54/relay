@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   dayTimeline,
   nextPlannedWindow,
+  nextStartLabel,
   plannedSettings,
+  startDayLabel,
   switchTimes,
   windowsInDay,
 } from "../src/lib/day-timeline";
@@ -378,4 +380,27 @@ test("inside yesterday's overnight interval a deferral moves yesterday's chain, 
   const rest = liveForecast({ plan: yesterday, settings: plannedSettings(s, accounts), context, usage, activeId: "a", now, factor: 1, schedule })!;
   assert.deepEqual(view.live?.forecast, rest);
   assert.equal(view.live?.date, "2026-10-13");
+});
+
+test("a start reads today, tomorrow, a weekday or a date in the planning zone", () => {
+  // Tuesday 2026-10-13, 23:30 in Istanbul: already Wednesday in Tokyo.
+  const now = at("2026-10-13", "23:30");
+  const label = (date: string, clock: string, language: "tr" | "en" = "tr") =>
+    startDayLabel(at(date, clock), now, ZONE, language);
+  assert.equal(label("2026-10-13", "23:45"), "bugün 23:45");
+  assert.equal(label("2026-10-14", "06:40"), "yarın 06:40");
+  assert.equal(label("2026-10-14", "06:40", "en"), "tomorrow 06:40");
+  assert.equal(label("2026-10-17", "09:00"), "Cumartesi 09:00");
+  assert.equal(label("2026-10-17", "09:00", "en"), "Saturday 09:00");
+  assert.equal(label("2026-10-21", "09:00"), "21 Eki 09:00");
+  // The day is the given zone's: Istanbul's 06:40 tomorrow is 12:40 today in Tokyo.
+  assert.equal(
+    startDayLabel(at("2026-10-14", "06:40"), now, "Asia/Tokyo", "tr"),
+    "bugün 12:40",
+  );
+  assert.equal(startDayLabel("later", now, ZONE, "tr"), "");
+  assert.equal(
+    nextStartLabel("Alto", new Date(at("2026-10-14", "06:40")).toISOString(), now, ZONE, "tr"),
+    "Alto yarın 06:40",
+  );
 });

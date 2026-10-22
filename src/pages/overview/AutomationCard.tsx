@@ -3,11 +3,10 @@ import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { useExtensionStatus } from "@/data/useExtension";
-import { formatClock } from "@/lib/time";
 import { instanceLabel } from "@/lib/extension-ui";
 import type { PageId } from "@/app/routes";
 import { AUTOMATION_DOT, automationModeCopy, useAutomation } from "../../features/useAutomation";
-import { nextPlannedWindow } from "@/lib/day-timeline";
+import { nextPlannedWindow, nextStartLabel } from "@/lib/day-timeline";
 import { SwitchNowButton } from "../../features/AutomationControl";
 
 /** One setting at a glance: its name, its state, its page. */
@@ -86,11 +85,12 @@ export function AutomationCard({
         )}
         <Row
           name={t("Önceden başlatma", "Early start")}
+          detail={planning.autoStart && next ? t("Sonraki başlatma", "Next start") : undefined}
           value={
             !planning.autoStart
               ? t("Kapalı", "Off")
               : next
-                ? `${name(next.accountId)} ${formatClock(next.at, language, planning.timeZone)}`
+                ? nextStartLabel(name(next.accountId), next.at, now, planning.timeZone, language)
                 : t("Açık", "On")
           }
           onClick={() => go("planlama")}

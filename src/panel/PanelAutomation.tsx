@@ -2,7 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { nextPlannedWindow } from "@/lib/day-timeline";
+import { nextPlannedWindow, nextStartLabel } from "@/lib/day-timeline";
 import { formatClock } from "@/lib/time";
 import type { PageId } from "@/app/routes";
 import {
@@ -70,9 +70,12 @@ export function PanelAutomation({ now }: { now: number }) {
           `Adapted · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
         )
       : next
-        ? t(
-            `Sonraki başlatma ${clock(next.at)} · ${name(next.accountId)}`,
-            `Next start ${clock(next.at)} · ${name(next.accountId)}`,
+        ? nextStartLabel(
+            name(next.accountId),
+            next.at,
+            now,
+            planning.timeZone,
+            language,
           )
         : t("Açık", "On");
   return (
@@ -92,6 +95,11 @@ export function PanelAutomation({ now }: { now: number }) {
           tone={planning.autoStart ? "ok" : "off"}
           name={t("Önceden başlatma", "Early start")}
           value={planLabel}
+          title={
+            planning.autoStart && !deferred && next
+              ? t(`Sonraki başlatma: ${planLabel}`, `Next start: ${planLabel}`)
+              : undefined
+          }
           page="planlama"
         />
       </div>
