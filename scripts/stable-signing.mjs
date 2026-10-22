@@ -15,13 +15,40 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const appIdentifier = "dev.relay.workspace";
+/** The widget extension, inside the app; it alone is sandboxed. */
+export const WIDGET_RELATIVE = "Contents/PlugIns/RelayWidget.appex";
+export const WIDGET_ENTITLEMENTS = fileURLToPath(
+  new URL("../electron/native/widget/widget.entitlements", import.meta.url),
+);
 const permissionTargets = [
   { relative: "", identifier: appIdentifier },
   ...["desktop-automation"].map((name) => ({
     relative: `Contents/Resources/app.asar.unpacked/dist-electron/${name}`,
     identifier: `${appIdentifier}.${name}`,
   })),
+  // chronod runs the widget by this identity; keep it the same across updates.
+  { relative: WIDGET_RELATIVE, identifier: `${appIdentifier}.widget` },
 ];
+
+/**
+ * The widget extension and its executable get the widget's own entitlements
+ * (the App Sandbox and read access to Relay's widget directory) with the
+ * hardened runtime; everything else keeps what electron-builder chose.
+ */
+export function widgetOptionsForFile(app, base) {
+  const root = path.join(path.resolve(app), WIDGET_RELATIVE);
+  return (file) => {
+    const absolute = path.resolve(file);
+    const inherited = typeof base === "function" ? base(file) : undefined;
+    if (absolute !== root && !absolute.startsWith(`${root}${path.sep}`))
+      return inherited;
+    return {
+      ...inherited,
+      entitlements: WIDGET_ENTITLEMENTS,
+      hardenedRuntime: true,
+    };
+  };
+}
 
 // These are data in Electron's resource directories, not nested code. The
 // enclosing framework/app signature still seals them in CodeResources. Avoid
@@ -310,6 +337,7 @@ export function pinnedSigner(fingerprint, signAsync) {
       );
     await signAsync({
       ...options,
+      optionsForFile: widgetOptionsForFile(options.app, options.optionsForFile),
       identity: pin,
       // We validate the full fingerprint ourselves. Name discovery would permit
       // a different same-name certificate; codesign still validates/signs normally.
@@ -619,6 +647,19 @@ function installBundle(bundle) {
   if (fsSync.existsSync(target)) fsSync.renameSync(target, previous);
   fsSync.renameSync(staged, target);
   execFileSync("/bin/rm", ["-rf", previous]);
+  // Register now, so the widget is in the gallery before Relay's first launch.
+  try {
+    execFileSync(
+      "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+      ["-f", "-R", target],
+    );
+    execFileSync("/usr/bin/pluginkit", [
+      "-a",
+      path.join(target, WIDGET_RELATIVE),
+    ]);
+  } catch {
+    // Launching Relay registers it as well.
+  }
   process.stdout.write(`Installed ${target}\n`);
 }
 

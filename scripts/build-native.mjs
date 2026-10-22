@@ -5,6 +5,28 @@ import path from "node:path";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const helpers = ["desktop-automation"];
+/** The widget extension's bundle in dist-electron; electron-builder copies it to Contents/PlugIns. */
+export const WIDGET_APPEX = "RelayWidget.appex";
+
+function widgetPlist(version) {
+  // The extension point is all chronod needs; versions follow Relay's.
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>dev.relay.workspace.widget</string>
+<key>CFBundleName</key><string>RelayWidget</string>
+<key>CFBundleDisplayName</key><string>Relay</string>
+<key>CFBundleExecutable</key><string>RelayWidget</string>
+<key>CFBundlePackageType</key><string>XPC!</string>
+<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+<key>CFBundleShortVersionString</key><string>${version}</string>
+<key>CFBundleVersion</key><string>${version}</string>
+<key>CFBundleSupportedPlatforms</key><array><string>MacOSX</string></array>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>com.apple.widgetkit-extension</string></dict>
+</dict></plist>
+`;
+}
 
 function helperPlist(name) {
   // The helper version is independent of Relay's marketing version. Changing it
@@ -66,12 +88,69 @@ export async function buildNativeHelpers() {
     sdkSettings: sha256(await fs.readFile(path.join(sdk, "SDKSettings.json"))),
     targets,
   };
+  const { version } = JSON.parse(await fs.readFile("package.json", "utf8"));
+  const appex = path.join(outDir, WIDGET_APPEX);
+  const products = [
+    ...helpers.map((name) => {
+      const plistFile = path.join(cacheDir, `${name}.plist`);
+      return {
+        name,
+        source: path.resolve("electron/native", `${name}.swift`),
+        output: path.join(outDir, name),
+        plist: helperPlist(name),
+        plistFile,
+        targets,
+        args: [
+          "-Xlinker",
+          "-sectcreate",
+          "-Xlinker",
+          "__TEXT",
+          "-Xlinker",
+          "__info_plist",
+          "-Xlinker",
+          plistFile,
+        ],
+      };
+    }),
+    {
+      // Desktop widgets and containerBackground need macOS 14; on 13 Relay has no widget.
+      name: "widget",
+      source: path.resolve("electron/native/widget/RelayWidget.swift"),
+      output: path.join(appex, "Contents/MacOS/RelayWidget"),
+      plist: widgetPlist(version),
+      plistFile: path.join(appex, "Contents/Info.plist"),
+      targets: ["arm64", "x86_64"].map((arch) => `${arch}-apple-macosx14.0`),
+      // Without _NSExtensionMain chronod starts the extension and it exits at once.
+      args: [
+        "-parse-as-library",
+        "-application-extension",
+        "-Xlinker",
+        "-e",
+        "-Xlinker",
+        "_NSExtensionMain",
+      ],
+    },
+    {
+      name: "widget-center",
+      source: path.resolve("electron/native/widget-center.swift"),
+      header: path.resolve("electron/native/node_api_subset.h"),
+      output: path.join(outDir, "widget-center.node"),
+      targets,
+      // A Node-API addon: napi_* resolve from the Electron process that loads it.
+      args: [
+        "-emit-library",
+        "-import-objc-header",
+        path.resolve("electron/native/node_api_subset.h"),
+        "-Xlinker",
+        "-undefined",
+        "-Xlinker",
+        "dynamic_lookup",
+      ],
+    },
+  ];
   const results = [];
-  for (const name of helpers) {
-    const source = path.resolve("electron/native", `${name}.swift`);
-    const output = path.join(outDir, name);
-    const plist = helperPlist(name);
-    const plistFile = path.join(cacheDir, `${name}.plist`);
+  for (const product of products) {
+    const { name, source, output, plist, plistFile } = product;
     const recordFile = path.join(cacheDir, `${name}.json`);
     const args = [
       source,
@@ -82,22 +161,28 @@ export async function buildNativeHelpers() {
       `Relay_${name.replaceAll("-", "_")}`,
       "-module-cache-path",
       path.join(cacheDir, "module-cache"),
-      "-Xlinker",
-      "-sectcreate",
-      "-Xlinker",
-      "__TEXT",
-      "-Xlinker",
-      "__info_plist",
-      "-Xlinker",
-      plistFile,
+      ...product.args,
     ];
-    const sourceHash = sha256(await fs.readFile(source));
+    if (plistFile) {
+      await fs.mkdir(path.dirname(plistFile), { recursive: true });
+      // The appex's Info.plist sits beside its binary, so it is written on every build.
+      if (plistFile.startsWith(outDir))
+        await fs.writeFile(plistFile, plist, { mode: 0o644 });
+    }
+    await fs.mkdir(path.dirname(output), { recursive: true });
+    const sourceHash = sha256(
+      Buffer.concat([
+        await fs.readFile(source),
+        ...(product.header ? [await fs.readFile(product.header)] : []),
+      ]),
+    );
     const inputHash = sha256(
       JSON.stringify({
         pipelineVersion: 3,
         source: sourceHash,
         plist,
         toolchain,
+        targets: product.targets,
         args,
       }),
     );
@@ -126,17 +211,25 @@ export async function buildNativeHelpers() {
     // Neither an interrupted build nor a replacement can poison the next reuse.
     const temporary = path.join(cacheDir, `${name}-${randomUUID()}`);
     const temporaryRecord = `${recordFile}-${randomUUID()}`;
-    const slices = targets.map((target) => `${temporary}-${target}`);
+    const slices = product.targets.map((target) => `${temporary}-${target}`);
     try {
-      await fs.writeFile(plistFile, plist, { mode: 0o600 });
-      for (const [index, target] of targets.entries())
+      if (plistFile && !plistFile.startsWith(outDir))
+        await fs.writeFile(plistFile, plist, { mode: 0o600 });
+      for (const [index, target] of product.targets.entries())
         execFileSync(swift, [...args, "-target", target, "-o", slices[index]], {
           stdio: "inherit",
         });
       execFileSync(lipo, ["-create", ...slices, "-output", temporary], {
         stdio: "inherit",
       });
-      if (sha256(await fs.readFile(source)) !== sourceHash)
+      if (
+        sha256(
+          Buffer.concat([
+            await fs.readFile(source),
+            ...(product.header ? [await fs.readFile(product.header)] : []),
+          ]),
+        ) !== sourceHash
+      )
         throw new Error(`Native source changed during compilation: ${name}`);
       // Standard local signing also binds the embedded plist in development.
       // The linker signature otherwise uses the temporary output's filename.

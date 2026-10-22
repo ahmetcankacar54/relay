@@ -80,6 +80,35 @@ const helpers = ["desktop-automation"].map((name) => {
     cdHash: signature.match(/^CDHash=(.+)$/m)?.[1],
   };
 });
+// The widget: its own identity and exactly its sandbox entitlements.
+const widgetFile = path.join(contents, "PlugIns/RelayWidget.appex");
+execFileSync("/usr/bin/codesign", ["--verify", "--strict", widgetFile], {
+  stdio: ["ignore", "pipe", "pipe"],
+});
+const widgetSignature = details(widgetFile);
+if (!widgetSignature.includes("Identifier=dev.relay.workspace.widget\n"))
+  throw new Error("The packaged widget lacks its stable identity.");
+const widgetEntitlements = execFileSync(
+  "/usr/bin/codesign",
+  ["--display", "--entitlements", "-", "--xml", widgetFile],
+  { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+);
+const widgetKeys = [...widgetEntitlements.matchAll(/<key>([^<]+)<\/key>/g)]
+  .map((m) => m[1])
+  .sort();
+if (
+  JSON.stringify(widgetKeys) !==
+  JSON.stringify([
+    "com.apple.security.app-sandbox",
+    "com.apple.security.temporary-exception.files.home-relative-path.read-only",
+  ])
+)
+  throw new Error("The packaged widget has other entitlements than its sandbox.");
+const widget = {
+  identifier: "dev.relay.workspace.widget",
+  entitlements: widgetKeys,
+  cdHash: widgetSignature.match(/^CDHash=(.+)$/m)?.[1],
+};
 const adHoc = appSignature.includes("Signature=adhoc");
 process.stdout.write(
   `${JSON.stringify(
@@ -88,6 +117,7 @@ process.stdout.write(
       identifier,
       verified: true,
       helpers,
+      widget,
       signing: adHoc ? "local-ad-hoc" : "certificate",
       ...(adHoc
         ? {

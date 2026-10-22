@@ -32,6 +32,8 @@ export interface WidgetSnapshot {
     change: string;
     /** The line under the title while `state` is not "data". */
     status: string;
+    /** What a new day shows before Relay writes it: the widget switches to it at midnight. */
+    empty: string;
     /** Shown in place of the subtitle once the file is 30 minutes old. */
     stale: string;
   };
@@ -103,6 +105,7 @@ export function buildWidgetSnapshot(input: WidgetSnapshotInput): WidgetSnapshot 
           : state === "empty"
             ? t("Bugün henüz token yok", "No tokens yet today")
             : "",
+      empty: t("Bugün henüz token yok", "No tokens yet today"),
       stale: t(
         `Güncel değil · ${timeOf(now, zone, language)}`,
         `Not current · ${timeOf(now, zone, language)}`,

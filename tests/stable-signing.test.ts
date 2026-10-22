@@ -15,6 +15,7 @@ import {
   parseArguments,
   pinnedSigner,
   publicCertificateSigningPolicy,
+  WIDGET_ENTITLEMENTS,
   readDesignatedRequirement,
   verifySigningContinuity,
   // @ts-expect-error The standalone build script has no declaration file.
@@ -124,7 +125,18 @@ test("the custom signer pins the key while retaining library signing policy and 
   });
   assert.equal(received?.identity, fingerprint);
   assert.equal(received?.identityValidation, false);
-  assert.equal(received?.optionsForFile, optionsForFile);
+  // electron-builder's per-file options stand for everything but the widget.
+  const perFile = received?.optionsForFile as (file: string) => Record<string, unknown>;
+  assert.deepEqual(perFile("/fixture/Relay.app/Contents/MacOS/Relay"), optionsForFile());
+  assert.deepEqual(perFile("/fixture/Relay.app/Contents/PlugIns/RelayWidget.appex"), {
+    hardenedRuntime: true,
+    entitlements: WIDGET_ENTITLEMENTS,
+  });
+  assert.equal(
+    perFile("/fixture/Relay.app/Contents/PlugIns/RelayWidget.appex/Contents/MacOS/RelayWidget").entitlements,
+    WIDGET_ENTITLEMENTS,
+  );
+  assert.deepEqual(perFile("/fixture/Relay.app/Contents/PlugIns/RelayWidget.appexx"), optionsForFile());
   assert.equal(received?.strictVerify, true);
   assert.equal(received?.requirements, undefined);
   await assert.rejects(
@@ -174,7 +186,9 @@ function fixtureRun(
     const target = args.at(-1)!;
     const name = target.endsWith("Relay.app")
       ? ""
-      : `.${path.basename(target)}`;
+      : target.endsWith("RelayWidget.appex")
+        ? ".widget"
+        : `.${path.basename(target)}`;
     const identifier = `dev.relay.workspace${name}`;
     if (args.includes("--verbose=4"))
       return `Identifier=${identifier}\n${overrides.adHoc ? "Signature=adhoc" : "Authority=Relay Local Development"}\nCDHash=1234\nSealed Resources version=2\n`;
@@ -210,13 +224,17 @@ test("final artifact verification checks the actual public signing certificate o
   assert.equal(report.verified, true);
   assert.deepEqual(
     report.targets.map((target: { identifier: string }) => target.identifier),
-    ["dev.relay.workspace", "dev.relay.workspace.desktop-automation"],
+    [
+      "dev.relay.workspace",
+      "dev.relay.workspace.desktop-automation",
+      "dev.relay.workspace.widget",
+    ],
   );
   assert.equal(
     fixture.calls.filter((call) =>
       call.args.some((arg) => arg.startsWith("--extract-certificates")),
     ).length,
-    2,
+    3,
   );
 });
 
@@ -265,7 +283,8 @@ test("update continuity verifies old and new requirements against separately ret
     true,
   );
   const checks = fixture.calls.slice(countBefore);
-  assert.equal(checks.length, 4);
+  // Two directions for each of the three targets.
+  assert.equal(checks.length, 6);
   assert.ok(checks.every((call) => call.args.includes("--test-requirement")));
   assert.ok(
     checks.every((call) =>
@@ -377,4 +396,26 @@ test("a failed architecture names itself and how to restore node-pty for this Ma
   assert.match(error.message, /The x64 build failed\./);
   assert.match(error.message, /npx electron-builder install-app-deps/);
   assert.equal(error.cause, cause);
+});
+
+test("the widget's entitlements are only its sandbox and read access to Relay's widget folder", async () => {
+  const xml = await fs.readFile(WIDGET_ENTITLEMENTS, "utf8");
+  assert.deepEqual(
+    [...xml.matchAll(/<key>([^<]+)<\/key>/g)].map((m) => m[1]),
+    [
+      "com.apple.security.app-sandbox",
+      "com.apple.security.temporary-exception.files.home-relative-path.read-only",
+    ],
+  );
+  assert.match(xml, /<string>\/Library\/Application Support\/Relay\/widget\/<\/string>/);
+});
+
+test("an update from a build without the widget passes continuity: only the previous targets are compared", async () => {
+  const fixture = fixtureRun();
+  const next = await inspectStableSigning("/fixture/next/Relay.app", fingerprint, fixture.options);
+  const previous = await inspectStableSigning("/fixture/previous/Relay.app", fingerprint, fixture.options);
+  previous.targets = previous.targets.filter(
+    (target: { identifier: string }) => target.identifier !== "dev.relay.workspace.widget",
+  );
+  assert.equal(verifySigningContinuity(previous, next, fixture.options.run).verified, true);
 });

@@ -78,6 +78,7 @@ test("the widget file carries today's numbers and every string, formatted in Tur
     cost: "$444,56",
     change: "+%57,2",
     status: "",
+    empty: "Bugün henüz token yok",
     stale: "Güncel değil · 20:24",
   });
 });

@@ -76,6 +76,7 @@
       "!dist/**/*.map",
       "dist-electron/**/*",
       "!dist-electron/**/*.map",
+      "!dist-electron/RelayWidget.appex/**",
       "package.json"
     ],
     "electronLanguages": [
@@ -85,7 +86,8 @@
     "asarUnpack": [
       "node_modules/node-pty/**/*",
       "node_modules/classic-level/**/*",
-      "dist-electron/desktop-automation"
+      "dist-electron/desktop-automation",
+      "dist-electron/widget-center.node"
     ],
     "electronFuses": {
       "runAsNode": false,
@@ -96,6 +98,12 @@
     },
     "mac": {
       "identity": "-",
+      "extraFiles": [
+        {
+          "from": "dist-electron/RelayWidget.appex",
+          "to": "PlugIns/RelayWidget.appex"
+        }
+      ],
       "icon": "assets/icon.icns",
       "target": [
         "dmg",
