@@ -12,6 +12,7 @@ import {
 import {
   buildWidgetSnapshot,
   widgetCountdown,
+  widgetMood,
   widgetVisibleKey,
   type WidgetSnapshot,
 } from "../shared/widget-snapshot";
@@ -83,6 +84,12 @@ test("the widget file carries today's numbers and every string, formatted in Tur
     empty: "Bugün henüz token yok",
     stale: "Güncel değil · 20:24",
     costTokens: "$444,56 · 1,3 Mr token",
+    tokens: "1,3 Mr token",
+    apiTitle: "Bugün · API değeri",
+    others: "Diğer hesaplar",
+    todayWord: "bugün",
+    inClaude: "Claude’da açık",
+    suggested: "önerilen",
     todayLine: "Bugün toplam $444,56 · 1,3 Mr token",
     allToday: "Bugün · tüm hesaplar",
     switch: "Geç",
@@ -439,6 +446,34 @@ test("the accounts and the week read in English too, and parts without data are 
   assert.equal(none.active, undefined);
   assert.equal(none.accounts.length, 3);
   assert.equal(none.week?.text.activeWeek, "");
+});
+
+test("the panda is happy, alarmed from 80 % of the five hours, worried at a full limit, asleep with nothing to watch", () => {
+  const usage = (fiveHour: number, week: number) =>
+    withAccounts({
+      limits: {
+        accounts: ACCOUNTS,
+        usage: { ...USAGE, [ID.personal]: reading(ID.personal, fiveHour, week) },
+        activeId: ID.personal,
+        settings: DEFAULT_SETTINGS,
+      },
+    }).mood;
+  assert.equal(usage(40, 50), "happy");
+  assert.equal(usage(79.9, 50), "happy");
+  assert.equal(usage(80, 50), "alert");
+  assert.equal(withAccounts().mood, "alert");
+  assert.equal(usage(100, 50), "worried");
+  assert.equal(usage(30, 100), "worried");
+  // No Relay account open in Claude, no accounts at all, or the first scan: asleep.
+  assert.equal(
+    withAccounts({ limits: { accounts: ACCOUNTS, usage: USAGE, settings: DEFAULT_SETTINGS } }).mood,
+    "sleeping",
+  );
+  assert.equal(build().mood, "sleeping");
+  assert.equal(withAccounts({ progress: { complete: false, percent: 30 } }).mood, "sleeping");
+  assert.equal(widgetMood("data", {}), "happy");
+  assert.equal(plain(withAccounts({ language: "en" }).text.tokens), "1.3bn tokens");
+  assert.equal(withAccounts({ language: "en" }).text.apiTitle, "Today · API value");
 });
 
 test("the countdown reads h:mm and is empty once the window renewed", () => {

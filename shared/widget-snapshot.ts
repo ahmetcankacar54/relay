@@ -101,6 +101,27 @@ export interface WidgetSplitPart extends WidgetSeries {
   text: { cost: string };
 }
 
+/**
+ * The panda's face in the widgets: "happy" while all is well, "alert" (wide eyes) once the open
+ * account's five-hour window is 80 % used, "worried" when one of its limits is full, and
+ * "sleeping" while there is nothing to watch: the first scan runs, or no Relay account is open in
+ * Claude. The widget also lets it sleep once the file is 30 minutes old.
+ */
+export type WidgetMood = "happy" | "alert" | "worried" | "sleeping";
+/** The open account's five-hour use from which the panda looks alarmed. */
+export const WIDGET_ALERT_PERCENT = 80;
+
+export function widgetMood(
+  state: WidgetSnapshot["state"],
+  active: Pick<WidgetAccount, "fiveHour" | "week"> | undefined,
+): WidgetMood {
+  if (state === "scanning" || !active) return "sleeping";
+  if ((active.fiveHour ?? 0) >= 100 || (active.week ?? 0) >= 100)
+    return "worried";
+  if ((active.fiveHour ?? 0) >= WIDGET_ALERT_PERCENT) return "alert";
+  return "happy";
+}
+
 /** The last seven days, oldest first, ending today. */
 export interface WidgetWeek {
   days: {
@@ -147,6 +168,7 @@ export interface WidgetSnapshot {
   zone: string;
   /** "data", "empty" (no tokens today yet) or "scanning" (the first scan is running). */
   state: "data" | "empty" | "scanning";
+  mood: WidgetMood;
   totals: { input: number; output: number; cache: number; total: number };
   cost: number;
   change: number | null;
@@ -181,6 +203,18 @@ export interface WidgetSnapshot {
     stale: string;
     /** "$91,48 · 86,5 Mn token" */
     costTokens: string;
+    /** "86,5 Mn token" */
+    tokens: string;
+    /** "Bugün · API değeri": the Today widget's title. */
+    apiTitle: string;
+    /** "Diğer hesaplar": the heading over the other accounts. */
+    others: string;
+    /** "bugün": the heading over their cost today. */
+    todayWord: string;
+    /** "Claude’da açık": over the active account's name. */
+    inClaude: string;
+    /** "önerilen": beside the suggested account's name. */
+    suggested: string;
     /** "Bugün toplam $91,48 · 86,5 Mn token" */
     todayLine: string;
     /** "Bugün · tüm hesaplar" */
@@ -319,6 +353,7 @@ export function buildWidgetSnapshot(
     date: today.date,
     zone,
     state,
+    mood: widgetMood(state, accountsPart.active),
     totals: { input: totals.input, output: totals.output, cache, total },
     cost,
     change: today.change,
@@ -347,6 +382,12 @@ export function buildWidgetSnapshot(
         `Not current · ${timeOf(now, zone, language)}`,
       ),
       costTokens,
+      tokens: `${formatTokens(total, language)} ${tokenWord}`,
+      apiTitle: t("Bugün · API değeri", "Today · API value"),
+      others: t("Diğer hesaplar", "Other accounts"),
+      todayWord: t("bugün", "today"),
+      inClaude: t("Claude’da açık", "Open in Claude"),
+      suggested: t("önerilen", "suggested"),
       todayLine: t(`Bugün toplam ${costTokens}`, `Total today ${costTokens}`),
       allToday: t("Bugün · tüm hesaplar", "Today · all accounts"),
       switch: t("Geç", "Switch"),
@@ -641,6 +682,7 @@ export function widgetVisibleKey(snapshot: WidgetSnapshot): string {
   return JSON.stringify([
     snapshot.date,
     snapshot.state,
+    snapshot.mood,
     text,
     snapshot.slots.map((v) => (v === null ? null : cents(v))),
     snapshot.yesterdayAverage === null
