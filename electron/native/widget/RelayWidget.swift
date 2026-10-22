@@ -7,6 +7,13 @@
 //
 // A widget never switches accounts. Its Geç buttons open relay://switch links:
 // Relay shows its usual switch review for that account, and nothing more.
+//
+// Two looks. In full colour the widgets use Relay's colours: the brand orange,
+// amber and red for a limit's tone, and a colour per account in the stacked
+// bars. When the desktop is not focused macOS draws them vibrant: it drops the
+// background, desaturates everything and turns lightness into opacity, so hues
+// collapse into one tone. There every mark is the primary colour and hierarchy
+// comes from opacity and weight (see `Look`); the key marks are accentable.
 import SwiftUI
 import WidgetKit
 
@@ -32,10 +39,18 @@ struct Snapshot: Decodable {
     let switchWord: String
     let left: String
     let noActive: String
+    // Added with the panda; a file from an older Relay has none of them.
+    let tokens: String?
+    let apiTitle: String?
+    let others: String?
+    let todayWord: String?
+    let inClaude: String?
+    let suggested: String?
 
     enum CodingKeys: String, CodingKey {
       case title, subtitle, rows, input, output, cache, total, cost, change, status, empty, stale
       case costTokens, todayLine, allToday, left, noActive
+      case tokens, apiTitle, others, todayWord, inClaude, suggested
       case switchWord = "switch"
     }
   }
@@ -116,6 +131,8 @@ struct Snapshot: Decodable {
   let date: String
   let zone: String
   let state: String
+  /** The panda's face: happy, alert, worried or sleeping (shared/widget-snapshot.ts `widgetMood`). */
+  let mood: String?
   let change: Double?
   let slots: [Double?]
   let yesterdayAverage: Double?
@@ -191,6 +208,16 @@ struct TodayEntry: TimelineEntry {
   }
   /** The active account's five-hour countdown at this entry. */
   var left: String? { countdown(snapshot?.active?.fiveHourResetsAt, at: date) }
+
+  /** The panda's face: Relay's, asleep while the file is old or from another day. */
+  var mood: String {
+    guard let snapshot, !stale, !newDay else { return "sleeping" }
+    if let mood = snapshot.mood { return mood }
+    // A file from a Relay before the panda: the same rule as widgetMood.
+    guard snapshot.state != "scanning", let active = snapshot.active else { return "sleeping" }
+    if (active.fiveHour ?? 0) >= 100 || (active.week ?? 0) >= 100 { return "worried" }
+    return (active.fiveHour ?? 0) >= 80 ? "alert" : "happy"
+  }
 }
 
 struct TodayProvider: TimelineProvider {
@@ -231,7 +258,7 @@ struct TodayProvider: TimelineProvider {
   }
 }
 
-// MARK: - Colours
+// MARK: - Look
 
 private extension Color {
   init(hex: UInt32) {
@@ -243,35 +270,145 @@ private extension Color {
   }
 }
 
-/** Relay's colours in the widget's appearance. */
-struct Palette {
-  let dark: Bool
-  init(_ scheme: ColorScheme) { dark = scheme == .dark }
+/**
+ * The widget's colours in its appearance and rendering mode. In full colour,
+ * Relay's: the brand orange, amber from 75 % and red from 90 %, and a colour
+ * per account. Vibrant (or accented) widgets lose their hue, so there every
+ * mark is the primary colour and opacity carries the hierarchy: the figures
+ * full, secondary lines about 0.6, tracks and hairlines under 0.2, accounts in
+ * the stacked bars in steps; no filled rows.
+ */
+struct Look {
+  var dark = false
+  /** Vibrant or accented: no hue. */
+  var mono = false
+
+  init() {}
+  init(_ scheme: ColorScheme, _ mode: WidgetRenderingMode) {
+    dark = scheme == .dark
+    mono = mode != .fullColor
+  }
 
   private func pick(_ light: UInt32, _ dark: UInt32) -> Color {
     Color(hex: self.dark ? dark : light)
   }
-  var brand: Color { pick(0xC2410C, 0xFF8A4C) }
-  var warn: Color { Color(hex: 0xD97706) }
-  var crit: Color { Color(hex: 0xD92D20) }
-  var track: Color { pick(0xEFEDE9, 0x3E3C38) }
-  /** The suggested account's row. */
-  var suggestedRow: Color { pick(0xFFF4EC, 0x3A2416) }
-  var onBrand: Color { dark ? Color(hex: 0x1C1917) : .white }
+  private func ink(_ opacity: Double) -> Color { Color.primary.opacity(opacity) }
 
-  /** A limit's tone by percent used: brand, warning from 75, critical from 90. */
+  var primary: Color { mono ? .primary : pick(0x1D1D1F, 0xF5F5F7) }
+  var secondary: Color { mono ? ink(0.62) : pick(0x6E6E73, 0xA1A1A6) }
+  var tertiary: Color { mono ? ink(0.42) : pick(0x8E8E93, 0x7C7C80) }
+  var hairline: Color { mono ? ink(0.18) : pick(0xE7E4E0, 0x3A393C) }
+  var track: Color { mono ? ink(0.2) : pick(0xEFEDE9, 0x3E3C38) }
+  var brand: Color { mono ? .primary : pick(0xC2410C, 0xFF8A4C) }
+  var warn: Color { mono ? .primary : pick(0xD97706, 0xF5A524) }
+  var crit: Color { mono ? .primary : pick(0xD92D20, 0xFF6159) }
+  var up: Color { mono ? .primary : pick(0x1F7A3A, 0x4CC873) }
+  var down: Color { crit }
+  /** The line saying the file is old. */
+  var staleLine: Color { mono ? ink(0.62) : pick(0xA14A06, 0xF0A35E) }
+  /** Quarter hours still to come. */
+  var future: Color { mono ? ink(0.12) : pick(0xE5E2DD, 0x3A3936) }
+  /** The suggested account's row: a tint in colour, nothing in vibrant. */
+  var suggestedRow: Color { mono ? .clear : brand.opacity(dark ? 0.1 : 0.07) }
+  /** The suggested account's Geç. */
+  var suggestedButton: Color { mono ? Color.primary.opacity(0.14) : brand.opacity(dark ? 0.16 : 0.12) }
+  /** The large widget's account list and the chips. */
+  var well: Color { mono ? .clear : pick(0xF6F5F3, 0x2A2A2C) }
+
+  /** A limit's tone by percent used: brand, amber from 75, red from 90. */
   func tone(_ percent: Double?) -> Color {
     guard let percent else { return track }
     return percent >= 90 ? crit : percent >= 75 ? warn : brand
   }
-  /** The stacked bars' colours, by account order; 3 is the rest. */
+  /** The stacked bars' colours by account order; 3 is the rest. Vibrant: opacity steps. */
   func series(_ index: Int) -> Color {
+    if mono { return ink([1, 0.58, 0.34, 0.2][min(max(index, 0), 3)]) }
     switch index {
     case 0: return brand
     case 1: return pick(0x5B7C99, 0x86A6C4)
     case 2: return pick(0xC9C0B4, 0x8C8479)
-    default: return pick(0xE4E0DA, 0x4E4B46)
+    default: return pick(0xDDD8D1, 0x55524C)
     }
+  }
+}
+
+private struct LookKey: EnvironmentKey {
+  static let defaultValue = Look()
+}
+
+extension EnvironmentValues {
+  var look: Look {
+    get { self[LookKey.self] }
+    set { self[LookKey.self] = newValue }
+  }
+}
+
+/** Reads the appearance and rendering mode once, for every view below. */
+private struct LookReader: ViewModifier {
+  @Environment(\.colorScheme) private var scheme
+  @Environment(\.widgetRenderingMode) private var mode
+
+  func body(content: Content) -> some View {
+    content.environment(\.look, Look(scheme, mode))
+  }
+}
+
+extension View {
+  /** The widget's frame: its look and the system's background. */
+  func widgetChrome() -> some View {
+    modifier(LookReader()).containerBackground(.background, for: .widget)
+  }
+}
+
+// MARK: - Panda
+
+/**
+ * The panda's heads, from the extension's own Resources (scripts/build-native.mjs
+ * copies electron/native/widget/pandas there): the sandbox reads nothing of Relay's
+ * but its widget folder, so the images travel in the bundle.
+ */
+private enum PandaImages {
+  // NSCache is thread-safe: WidgetKit may draw several widgets at once.
+  nonisolated(unsafe) private static let cache = NSCache<NSString, NSImage>()
+
+  static func image(_ name: String) -> NSImage? {
+    if let image = cache.object(forKey: name as NSString) { return image }
+    guard let url = Bundle.main.url(forResource: name, withExtension: "png"),
+      let image = NSImage(contentsOf: url)
+    else { return nil }
+    cache.setObject(image, forKey: name as NSString)
+    return image
+  }
+}
+
+/**
+ * The panda's head for a mood. In colour it is the mascot; vibrant, a template in
+ * the primary colour, whose mask keeps the face the right way round: the dark
+ * features solid for dark ink, the cream solid for light ink.
+ */
+struct Panda: View {
+  @Environment(\.look) private var look
+  let mood: String
+  var size: CGFloat = 22
+
+  var body: some View {
+    let name = "panda-\(mood)"
+    Group {
+      if look.mono, let mask = PandaImages.image("\(name)-mask\(look.dark ? "-dark" : "")") {
+        Image(nsImage: mask)
+          .renderingMode(.template)
+          .resizable()
+          .interpolation(.high)
+          .foregroundStyle(look.primary)
+      } else if let image = PandaImages.image(name) {
+        Image(nsImage: image)
+          .resizable()
+          .interpolation(.high)
+      }
+    }
+    .aspectRatio(468 / 420, contentMode: .fit)
+    .frame(width: size, height: size * 420 / 468)
+    .accessibilityHidden(true)
   }
 }
 
@@ -323,6 +460,7 @@ private struct Arc: View {
           .trim(from: 0, to: CGFloat(min(100, value) / 100))
           .stroke(color, style: stroke)
           .rotationEffect(.degrees(-90))
+          .widgetAccentable()
       }
     }
     .frame(width: diameter, height: diameter)
@@ -330,31 +468,30 @@ private struct Arc: View {
 }
 
 struct UsageRing<Label: View>: View {
-  @Environment(\.colorScheme) private var scheme
+  @Environment(\.look) private var look
   /** Percent used of the five-hour window (or the one value of a single ring). */
   let outer: Double?
   /** Percent used of the week; nil for a single ring. */
   let inner: Double?
   let size: CGFloat
-  /** Grey arcs: the file is old. */
+  /** Quiet arcs: the file is old. */
   var muted = false
   var lines = 1
   @ViewBuilder var label: () -> Label
 
   var body: some View {
-    let palette = Palette(scheme)
     let ring = RingGeometry(size: size)
     let scale = size / 100
-    let color = { (value: Double?) in muted ? Color.secondary : palette.tone(value) }
+    let color = { (value: Double?) in muted ? look.tertiary : look.tone(value) }
     let box = ring.labelBox(lines: lines)
     ZStack {
       Arc(
         value: outer, radius: ring.outerRadius, width: ring.outerWidth, scale: scale,
-        color: color(outer), track: palette.track)
+        color: color(outer), track: look.track)
       if !ring.single, inner != nil {
         Arc(
           value: inner, radius: ring.innerRadius, width: ring.innerWidth, scale: scale,
-          color: color(inner), track: palette.track)
+          color: color(inner), track: look.track)
       }
       label()
         .frame(width: box.width, height: box.height)
@@ -369,24 +506,25 @@ extension UsageRing where Label == EmptyView {
   }
 }
 
-/** The percent, and below it the time left when the ring is large enough for two lines. */
+/** The percent in a ring's centre, and below it the time left when the ring has room for two lines. */
 private struct RingFigure: View {
+  @Environment(\.look) private var look
   let percent: String
   let left: String?
   let size: CGFloat
   var muted = false
 
   var body: some View {
-    VStack(spacing: 0) {
+    VStack(spacing: -1) {
       Text(percent)
-        .font(.system(size: size >= 90 ? 19 : size >= 80 ? 16 : 14, weight: .bold))
+        .font(.system(size: size >= 90 ? 21 : size >= 80 ? 19 : 15, weight: .bold))
         .monospacedDigit()
-        .foregroundStyle(muted ? Color.secondary : Color.primary)
+        .foregroundStyle(muted ? look.secondary : look.primary)
       if let left, size >= 80 {
         Text(left)
-          .font(.system(size: 10, weight: .medium))
+          .font(.system(size: 11, weight: .medium))
           .monospacedDigit()
-          .foregroundStyle(.secondary)
+          .foregroundStyle(look.secondary)
       }
     }
     .lineLimit(1)
@@ -396,60 +534,92 @@ private struct RingFigure: View {
 
 // MARK: - Charts
 
-/** The API value per quarter hour, with yesterday's average dashed. */
-struct TodayLine: View {
+/** Today's API value per half hour as bars, with yesterday's average dashed; hours to come as stubs. */
+struct SlotBars: View {
+  @Environment(\.look) private var look
   let slots: [Double?]
   let average: Double?
-  let color: Color
-  var ticks = false
+  var muted = false
+
+  var body: some View {
+    // Two quarter hours to a bar: 48 bars fit a medium widget.
+    let bars: [Double?] = stride(from: 0, to: slots.count, by: 2).map { index in
+      let a = slots[index]
+      let b = index + 1 < slots.count ? slots[index + 1] : nil
+      return a == nil && b == nil ? nil : (a ?? 0) + (b ?? 0)
+    }
+    let mean = average.map { $0 * 2 }
+    let peak = max(bars.compactMap { $0 }.max() ?? 0, mean ?? 0, 0.0001)
+    GeometryReader { geometry in
+      let height = geometry.size.height
+      let gap: CGFloat = bars.count > 60 ? 1 : 1.5
+      ZStack(alignment: .bottomLeading) {
+        HStack(alignment: .bottom, spacing: gap) {
+          ForEach(Array(bars.enumerated()), id: \.offset) { _, value in
+            UnevenRoundedRectangle(topLeadingRadius: 1.5, topTrailingRadius: 1.5)
+              .fill(value == nil ? look.future : muted ? look.tertiary : look.brand)
+              .frame(height: value.map { max(1, height * CGFloat($0 / peak)) } ?? max(2, height * 0.05))
+              .frame(maxWidth: .infinity)
+              .widgetAccentable(value != nil)
+          }
+        }
+        if let mean {
+          Path { path in
+            let y = height - height * CGFloat(mean / peak)
+            path.move(to: CGPoint(x: 0, y: y))
+            path.addLine(to: CGPoint(x: geometry.size.width, y: y))
+          }
+          .stroke(look.mono ? Color.primary.opacity(0.55) : look.tertiary,
+                  style: StrokeStyle(lineWidth: 1.2, dash: [3, 2.5]))
+        }
+      }
+    }
+  }
+}
+
+/** Today's API value as a line, for the small widget: area, line and a dot where it is now. */
+struct Sparkline: View {
+  @Environment(\.look) private var look
+  let slots: [Double?]
+  let average: Double?
+  var muted = false
 
   var body: some View {
     GeometryReader { geometry in
       let values = slots.enumerated().compactMap { slot, value in value.map { (slot, $0) } }
-      let peak = max(values.map(\.1).max() ?? 0, average ?? 0)
-      let width = geometry.size.width
-      let height = geometry.size.height - (ticks ? 12 : 0)
-      let x = { (slot: Int) in CGFloat(slot) / 95 * width }
-      let y = { (value: Double) in peak > 0 ? height - CGFloat(value / peak) * (height - 2) : height }
+      let peak = max(values.map(\.1).max() ?? 0, average ?? 0, 0.0001)
+      let width = geometry.size.width - 4
+      let height = geometry.size.height - 4
+      let x = { (slot: Int) in 2 + CGFloat(slot) / CGFloat(max(1, slots.count - 1)) * width }
+      let y = { (value: Double) in 2 + height - CGFloat(value / peak) * height }
+      let color = muted ? look.tertiary : look.brand
       ZStack(alignment: .topLeading) {
-        if ticks {
-          ForEach([24, 48, 72], id: \.self) { slot in
-            Path { path in
-              path.move(to: CGPoint(x: x(slot), y: 0))
-              path.addLine(to: CGPoint(x: x(slot), y: height))
-            }
-            .stroke(Color.secondary.opacity(0.25), lineWidth: 0.5)
-            Text("\(slot / 4)")
-              .font(.system(size: 9))
-              .foregroundStyle(.secondary)
-              .position(x: x(slot), y: height + 7)
-          }
-        }
         if let average {
           Path { path in
-            path.move(to: CGPoint(x: 0, y: y(average)))
-            path.addLine(to: CGPoint(x: width, y: y(average)))
+            path.move(to: CGPoint(x: 2, y: y(average)))
+            path.addLine(to: CGPoint(x: 2 + width, y: y(average)))
           }
-          .stroke(Color.secondary.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+          .stroke(look.tertiary, style: StrokeStyle(lineWidth: 1, dash: [3, 2.5]))
         }
         if let first = values.first, let last = values.last {
           Path { path in
-            path.move(to: CGPoint(x: x(first.0), y: height))
+            path.move(to: CGPoint(x: x(first.0), y: 2 + height))
             for (slot, value) in values { path.addLine(to: CGPoint(x: x(slot), y: y(value))) }
-            path.addLine(to: CGPoint(x: x(last.0), y: height))
+            path.addLine(to: CGPoint(x: x(last.0), y: 2 + height))
             path.closeSubpath()
           }
-          .fill(
-            LinearGradient(
-              colors: [color.opacity(0.35), color.opacity(0.02)],
-              startPoint: .top, endPoint: .bottom))
+          .fill(LinearGradient(
+            colors: [color.opacity(look.mono ? 0.28 : 0.22), color.opacity(0)],
+            startPoint: .top, endPoint: .bottom))
           Path { path in
             path.move(to: CGPoint(x: x(first.0), y: y(first.1)))
-            for (slot, value) in values.dropFirst() {
-              path.addLine(to: CGPoint(x: x(slot), y: y(value)))
-            }
+            for (slot, value) in values.dropFirst() { path.addLine(to: CGPoint(x: x(slot), y: y(value))) }
           }
-          .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineJoin: .round))
+          .stroke(color, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+          .widgetAccentable()
+          Circle().fill(color).frame(width: 6, height: 6)
+            .position(x: x(last.0), y: y(last.1))
+            .widgetAccentable()
         }
       }
     }
@@ -458,20 +628,20 @@ struct TodayLine: View {
 
 /** Today's cost split by account, one stacked bar. */
 struct SplitBar: View {
-  @Environment(\.colorScheme) private var scheme
+  @Environment(\.look) private var look
   let parts: [Snapshot.SplitPart]
   var muted = false
 
   var body: some View {
-    let palette = Palette(scheme)
     GeometryReader { geometry in
-      let gaps = CGFloat(max(0, parts.count - 1))
-      let width = max(0, geometry.size.width - gaps)
-      HStack(spacing: 1) {
+      let gap: CGFloat = 2
+      let width = max(0, geometry.size.width - gap * CGFloat(max(0, parts.count - 1)))
+      HStack(spacing: gap) {
         ForEach(parts) { part in
           Rectangle()
-            .fill(muted ? Color.secondary.opacity(0.4) : palette.series(part.color))
+            .fill(muted ? look.tertiary : look.series(part.color))
             .frame(width: max(2, width * CGFloat(part.share)))
+            .widgetAccentable(part.color == 0)
         }
       }
       .frame(width: geometry.size.width, alignment: .leading)
@@ -480,59 +650,102 @@ struct SplitBar: View {
   }
 }
 
+/** Lays its items in lines, wrapping like text; an item wider than a line is offered the line. */
+struct Flow: Layout {
+  var spacing: CGFloat = 10
+  var lineSpacing: CGFloat = 3
+
+  private func rows(_ subviews: Subviews, _ width: CGFloat) -> [(CGPoint, CGSize)] {
+    var x: CGFloat = 0
+    var y: CGFloat = 0
+    var line: CGFloat = 0
+    return subviews.map { subview in
+      var size = subview.sizeThatFits(.unspecified)
+      size.width = min(size.width, width)
+      if x > 0, x + size.width > width {
+        x = 0
+        y += line + lineSpacing
+        line = 0
+      }
+      defer {
+        x += size.width + spacing
+        line = max(line, size.height)
+      }
+      return (CGPoint(x: x, y: y), size)
+    }
+  }
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let width = proposal.width ?? .infinity
+    let placed = rows(subviews, width)
+    let right = placed.map { $0.0.x + $0.1.width }.max() ?? 0
+    let bottom = placed.map { $0.0.y + $0.1.height }.max() ?? 0
+    return CGSize(width: min(right, width), height: bottom)
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    for (subview, (origin, size)) in zip(subviews, rows(subviews, bounds.width)) {
+      subview.place(
+        at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+        proposal: ProposedViewSize(size))
+    }
+  }
+}
+
 /** Each account's colour, name and cost today. */
 struct SplitLegend: View {
-  @Environment(\.colorScheme) private var scheme
+  @Environment(\.look) private var look
   let parts: [Snapshot.SplitPart]
-  var limit = 4
+  var size: CGFloat = 11
 
   var body: some View {
-    let palette = Palette(scheme)
-    HStack(spacing: 8) {
-      ForEach(parts.prefix(limit)) { part in
-        HStack(spacing: 3) {
-          Circle().fill(palette.series(part.color)).frame(width: 6, height: 6)
-          Text(part.name).lineLimit(1).truncationMode(.tail)
-          Text(part.text.cost).monospacedDigit().lineLimit(1).layoutPriority(1)
+    Flow(spacing: 10, lineSpacing: 2) {
+      ForEach(parts) { part in
+        HStack(spacing: 4) {
+          RoundedRectangle(cornerRadius: 2).fill(look.series(part.color)).frame(width: 7, height: 7)
+          (Text(part.name).foregroundStyle(look.secondary)
+            + Text(" ") + Text(part.text.cost).fontWeight(.semibold).foregroundStyle(look.primary))
+            .monospacedDigit()
+            .lineLimit(1)
         }
       }
-      Spacer(minLength: 0)
     }
-    .font(.system(size: 9))
-    .foregroundStyle(.secondary)
+    .font(.system(size: size))
   }
 }
 
 /** Seven days' cost, stacked by account; today stands out. */
 struct WeekBars: View {
-  @Environment(\.colorScheme) private var scheme
+  @Environment(\.look) private var look
   let days: [Snapshot.Week.Day]
   var muted = false
 
   var body: some View {
-    let palette = Palette(scheme)
     let peak = max(days.map(\.cost).max() ?? 0, 0.0001)
     GeometryReader { geometry in
-      let height = max(0, geometry.size.height - 14)
-      HStack(alignment: .bottom, spacing: 5) {
+      let height = max(0, geometry.size.height - 15)
+      HStack(alignment: .bottom, spacing: 6) {
         ForEach(days) { day in
-          VStack(spacing: 2) {
+          VStack(spacing: 3) {
             Spacer(minLength: 0)
-            VStack(spacing: 0) {
+            VStack(spacing: 1) {
               ForEach(Array(day.parts.enumerated().reversed()), id: \.offset) { index, cost in
                 if cost > 0 {
                   Rectangle()
-                    .fill(muted ? Color.secondary.opacity(0.5) : palette.series(index))
-                    .frame(height: max(1, height * CGFloat(cost / peak)))
+                    .fill(muted ? look.tertiary : look.series(index))
+                    .opacity(index == 0 && !day.today && !look.mono ? 0.85 : 1)
+                    .frame(height: max(1.5, height * CGFloat(cost / peak) - 1))
                 }
               }
             }
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 2))
-            .opacity(day.today ? 1 : 0.6)
+            .clipShape(RoundedRectangle(cornerRadius: 2.5))
+            // Vibrant: the other days a step back, today accented.
+            .opacity(look.mono && !day.today ? 0.7 : 1)
+            .widgetAccentable(day.today)
             Text(day.label)
-              .font(.system(size: 9, weight: day.today ? .bold : .regular))
-              .foregroundStyle(day.today ? Color.primary : Color.secondary)
+              .font(.system(size: 10, weight: day.today ? .bold : .regular))
+              .foregroundStyle(day.today ? look.primary : look.secondary)
               .lineLimit(1)
               .minimumScaleFactor(0.7)
               .frame(height: 12)
@@ -548,189 +761,188 @@ struct WeekBars: View {
 private let turkish = Locale.preferredLanguages.first?.hasPrefix("tr") == true
 private func say(_ tr: String, _ en: String) -> String { turkish ? tr : en }
 
-/**
- * The panda's head, from the extension's own Resources (scripts/build-native.mjs copies it there):
- * the sandbox reads nothing of Relay's but its widget folder, so the image travels in the bundle.
- */
-private let pandaHead: NSImage? = Bundle.main.url(forResource: "panda", withExtension: "png")
-  .flatMap { NSImage(contentsOf: $0) }
+/** `whole` without `part` and the separators around it: "Bugün toplam" from the today line. */
+private func without(_ whole: String, _ part: String) -> String {
+  guard !part.isEmpty, whole.contains(part) else { return whole }
+  return whole.replacingOccurrences(of: part, with: "")
+    .trimmingCharacters(in: CharacterSet(charactersIn: " ·").union(.whitespaces))
+}
 
-/** A widget with nothing to draw yet: what it is, and why; while Relay scans, the panda beside it. */
+/** A widget with nothing to draw yet: the panda, what it is, and why. */
 private struct Message: View {
+  @Environment(\.look) private var look
   let title: String
   let line: String
-  var panda = false
+  let mood: String
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text(title).font(.headline)
-      HStack(alignment: .center, spacing: 6) {
-        if panda, let image = pandaHead {
-          Image(nsImage: image)
-            .resizable()
-            .interpolation(.high)
-            .aspectRatio(contentMode: .fit)
-            .frame(width: 26)
-            .accessibilityHidden(true)
+    VStack(alignment: .leading, spacing: 0) {
+      Spacer(minLength: 0)
+      HStack(alignment: .center, spacing: 10) {
+        Panda(mood: mood, size: 40)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(title).font(.system(size: 13, weight: .bold)).foregroundStyle(look.primary)
+          Text(line).font(.system(size: 11)).foregroundStyle(look.secondary)
+            .fixedSize(horizontal: false, vertical: true)
         }
-        Text(line).font(.caption).foregroundStyle(.secondary)
       }
       Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(14)
   }
 }
 
 /** What the account widgets show before their content: nil when they can draw it. */
 private func blocked(_ entry: TodayEntry) -> Message? {
-  guard let snapshot = entry.snapshot else { return Message(title: "Relay", line: say("Relay'i açın", "Open Relay")) }
-  if entry.newDay { return Message(title: snapshot.text.title, line: snapshot.text.empty) }
+  guard let snapshot = entry.snapshot else {
+    return Message(title: "Relay", line: say("Relay'i açın", "Open Relay"), mood: "sleeping")
+  }
+  if entry.newDay { return Message(title: snapshot.text.title, line: snapshot.text.empty, mood: entry.mood) }
   if snapshot.state == "scanning" {
-    return Message(title: snapshot.text.title, line: snapshot.text.status, panda: true)
+    return Message(title: snapshot.text.title, line: snapshot.text.status, mood: entry.mood)
   }
   return nil
 }
 
-/** A Geç button: filled for the suggested account. Opens Relay's review, never switches. */
+/** A row's Geç button at its narrowest; a row without one keeps the room, so the costs line up. */
+private let switchWidth: CGFloat = 40
+
+/** A Geç button: tinted for the suggested account, outlined for the rest. Opens Relay's review, never switches. */
 private struct SwitchButton: View {
-  @Environment(\.colorScheme) private var scheme
+  @Environment(\.look) private var look
   let title: String
-  let filled: Bool
+  let suggested: Bool
   var wide = false
 
   var body: some View {
-    let palette = Palette(scheme)
+    let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+    let fill: Color = suggested ? look.suggestedButton : .clear
     Text(title)
-      .font(.system(size: wide ? 11 : 10, weight: .semibold))
+      .font(.system(size: wide ? 12 : 11.5, weight: .semibold))
       .lineLimit(1)
       .minimumScaleFactor(0.7)
-      .padding(.horizontal, wide ? 8 : 7)
-      .padding(.vertical, wide ? 5 : 3)
-      .frame(maxWidth: wide ? .infinity : nil)
-      .foregroundStyle(filled ? palette.onBrand : palette.brand)
-      .background(Capsule().fill(filled ? palette.brand : Color.clear))
-      .overlay(Capsule().strokeBorder(palette.brand, lineWidth: filled ? 0 : 1))
-  }
-}
-
-/** Another account: its rings, name and limits, today's cost and tokens, and Geç. */
-private struct AccountRow: View {
-  @Environment(\.colorScheme) private var scheme
-  let account: Snapshot.Account
-  let switchWord: String
-  let muted: Bool
-
-  var body: some View {
-    let palette = Palette(scheme)
-    let suggested = account.suggested == true
-    HStack(spacing: 6) {
-      UsageRing(outer: account.fiveHour, inner: account.week ?? 0, size: 30, muted: muted)
-      VStack(alignment: .leading, spacing: 1) {
-        Text(account.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-        Text(account.text.limits)
-          .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
-      }
-      Spacer(minLength: 4)
-      VStack(alignment: .trailing, spacing: 1) {
-        Text(account.text.cost)
-          .font(.system(size: 11, weight: .semibold)).monospacedDigit()
-          .foregroundStyle(muted ? Color.secondary : Color.primary)
-        Text(account.text.tokens)
-          .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
-      }
-      .lineLimit(1)
-      .layoutPriority(1)
-      if let url = account.url {
-        Link(destination: url) { SwitchButton(title: switchWord, filled: suggested) }
-      }
-    }
-    .padding(.horizontal, 6)
-    .padding(.vertical, 3)
-    .background(
-      RoundedRectangle(cornerRadius: 8).fill(suggested ? palette.suggestedRow : Color.clear))
-  }
-}
-
-private struct Chip: View {
-  let text: String
-
-  var body: some View {
-    Text(text)
-      .font(.system(size: 10, weight: .medium))
-      .monospacedDigit()
-      .lineLimit(1)
-      .minimumScaleFactor(0.7)
-      .padding(.horizontal, 6)
-      .padding(.vertical, 2)
-      .background(Capsule().fill(Color.secondary.opacity(0.12)))
+      .padding(.horizontal, wide ? 10 : 6)
+      .frame(minWidth: wide ? nil : switchWidth, maxWidth: wide ? .infinity : nil)
+      .frame(height: wide ? 28 : 24)
+      .foregroundStyle(suggested && !look.mono ? look.brand : look.primary)
+      .background(shape.fill(fill))
+      .overlay(shape.strokeBorder(suggested && !look.mono ? Color.clear : look.hairline, lineWidth: 1))
   }
 }
 
 /** The day's change against yesterday, with its arrow. */
 private struct Change: View {
+  @Environment(\.look) private var look
   let snapshot: Snapshot
   var size: CGFloat = 11
+  var muted = false
 
   var body: some View {
     if let change = snapshot.change, !snapshot.text.change.isEmpty {
       HStack(spacing: 2) {
         Image(systemName: change >= 0 ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-          .font(.system(size: size - 3))
-        Text(snapshot.text.change).font(.system(size: size, weight: .bold)).monospacedDigit()
+          .font(.system(size: size - 4))
+        // The arrow gives the direction: "▲ %50", not "▲ +%50".
+        Text(snapshot.text.change.trimmingCharacters(in: CharacterSet(charactersIn: "+-−")))
+          .font(.system(size: size, weight: .semibold)).monospacedDigit()
       }
-      .foregroundStyle(change >= 0 ? Color.green : Color.red)
+      .foregroundStyle(muted ? look.secondary : change >= 0 ? look.up : look.down)
       .lineLimit(1)
+      .fixedSize()
     }
   }
+}
+
+/** A label and its value on one line, as the Today and week widgets list them. */
+private struct Pair: View {
+  @Environment(\.look) private var look
+  let label: String
+  let value: String
+
+  var body: some View {
+    HStack(spacing: 4) {
+      Text(label).foregroundStyle(look.secondary)
+      Spacer(minLength: 2)
+      Text(value).foregroundStyle(look.primary).fontWeight(.medium)
+    }
+    .font(.system(size: 11))
+    .monospacedDigit()
+    .lineLimit(1)
+  }
+}
+
+private struct Hairline: View {
+  @Environment(\.look) private var look
+  var body: some View { Rectangle().fill(look.hairline).frame(height: 1) }
+}
+
+/** "hafta" and "%68" from "hafta %68", the figure drawn bold. */
+private func weekShort(_ account: Snapshot.Account, _ look: Look) -> Text {
+  let label = without(account.text.weekShort, account.text.week)
+  return Text("\(label) ").foregroundStyle(look.secondary)
+    + Text(account.text.week).fontWeight(.semibold).foregroundStyle(look.primary)
 }
 
 // MARK: - Hesap (small)
 
 struct AccountView: View {
-  @Environment(\.colorScheme) private var scheme
   let entry: TodayEntry
 
   var body: some View {
-    Group {
-      if let message = blocked(entry) {
-        message
-      } else if let snapshot = entry.snapshot, let active = snapshot.active {
-        content(snapshot, active)
-      } else if let snapshot = entry.snapshot {
-        Message(title: "Relay", line: snapshot.text.noActive)
-      }
+    AccountContent(entry: entry)
+      .widgetURL(entry.stale ? nil : entry.snapshot?.suggested?.url)
+      .widgetChrome()
+  }
+}
+
+struct AccountContent: View {
+  @Environment(\.look) private var look
+  let entry: TodayEntry
+
+  var body: some View {
+    if let message = blocked(entry) {
+      message
+    } else if let snapshot = entry.snapshot, let active = snapshot.active {
+      content(snapshot, active)
+    } else if let snapshot = entry.snapshot {
+      Message(title: "Relay", line: snapshot.text.noActive, mood: entry.mood)
     }
-    .widgetURL(entry.stale ? nil : entry.snapshot?.suggested?.url)
-    .containerBackground(.background, for: .widget)
   }
 
   private func content(_ snapshot: Snapshot, _ active: Snapshot.Account) -> some View {
-    let palette = Palette(scheme)
     let muted = entry.stale
-    return VStack(alignment: .leading, spacing: 6) {
-      HStack(spacing: 4) {
-        Text(active.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-        Spacer(minLength: 4)
+    return VStack(alignment: .leading, spacing: 8) {
+      HStack(alignment: .center, spacing: 4) {
+        Text(active.name)
+          .font(.system(size: 12.5, weight: .bold))
+          .foregroundStyle(look.primary)
+          .lineLimit(1)
+          .minimumScaleFactor(0.9)
+        Spacer(minLength: 2)
         if let left = entry.left {
           Text(left).font(.system(size: 11, weight: .medium)).monospacedDigit()
-            .foregroundStyle(.secondary)
+            .foregroundStyle(look.secondary)
+            .fixedSize()
         }
+        Panda(mood: entry.mood, size: 18)
       }
-      HStack(spacing: 9) {
+      HStack(spacing: 10) {
         UsageRing(outer: active.fiveHour, inner: active.week ?? 0, size: 64, muted: muted) {
           RingFigure(percent: active.text.fiveHour, left: nil, size: 64, muted: muted)
         }
         VStack(alignment: .leading, spacing: 2) {
           Text(active.text.cost)
-            .font(.system(size: 15, weight: .bold)).monospacedDigit()
-            .foregroundStyle(muted ? Color.secondary : Color.primary)
+            .font(.system(size: 17, weight: .bold)).monospacedDigit()
+            .foregroundStyle(muted ? look.secondary : look.primary)
+            .widgetAccentable()
           Text(active.text.tokensChip ?? active.text.tokens)
-            .font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary)
+            .font(.system(size: 11)).monospacedDigit().foregroundStyle(look.secondary)
           if !active.text.weekShort.isEmpty {
             HStack(spacing: 4) {
-              Circle().strokeBorder(muted ? Color.secondary : palette.tone(active.week), lineWidth: 1.5)
-                .frame(width: 7, height: 7)
-              Text(active.text.weekShort).font(.system(size: 11)).monospacedDigit()
+              Circle().strokeBorder(muted ? look.tertiary : look.tone(active.week), lineWidth: 1.5)
+                .frame(width: 8, height: 8)
+              weekShort(active, look).font(.system(size: 11)).monospacedDigit()
             }
           }
         }
@@ -739,253 +951,462 @@ struct AccountView: View {
       }
       Spacer(minLength: 0)
       if muted {
-        Text(snapshot.text.stale).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+        Text(snapshot.text.stale).font(.system(size: 11, weight: .medium))
+          .foregroundStyle(look.staleLine).lineLimit(1).minimumScaleFactor(0.8)
       } else if let suggested = snapshot.suggested, let title = suggested.text.switchTo {
-        SwitchButton(title: title, filled: true, wide: true)
+        SwitchButton(title: title, suggested: true, wide: true)
       }
     }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 13)
   }
 }
 
 // MARK: - Hesaplar (medium) and Hesaplar ve bugün (large)
 
 struct AccountsView: View {
-  @Environment(\.colorScheme) private var scheme
   @Environment(\.widgetFamily) private var family
   let entry: TodayEntry
 
   var body: some View {
-    Group {
-      if let message = blocked(entry) {
-        message
-      } else if let snapshot = entry.snapshot {
-        if family == .systemLarge { large(snapshot) } else { medium(snapshot) }
+    AccountsContent(entry: entry, large: family == .systemLarge).widgetChrome()
+  }
+}
+
+/** Another account in the medium widget: its rings, name and limits, today's cost and tokens, and Geç. */
+private struct AccountRow: View {
+  @Environment(\.look) private var look
+  let account: Snapshot.Account
+  let switchWord: String
+  let muted: Bool
+
+  var body: some View {
+    let suggested = account.suggested == true
+    HStack(spacing: 7) {
+      UsageRing(outer: account.fiveHour, inner: account.week ?? 0, size: 30, muted: muted)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(account.name).font(.system(size: 12, weight: .semibold)).foregroundStyle(look.primary)
+        Text(account.text.limits)
+          .font(.system(size: 11)).monospacedDigit().foregroundStyle(look.secondary)
+          .minimumScaleFactor(0.85)
+      }
+      .lineLimit(1)
+      Spacer(minLength: 0)
+      VStack(alignment: .trailing, spacing: 1) {
+        Text(account.text.cost)
+          .font(.system(size: 12, weight: .bold)).monospacedDigit()
+          .foregroundStyle(muted ? look.secondary : look.primary)
+        Text(account.text.tokens)
+          .font(.system(size: 11)).monospacedDigit().foregroundStyle(look.secondary)
+      }
+      .lineLimit(1)
+      .fixedSize()
+      switchSlot(suggested)
+    }
+    .padding(.horizontal, 6)
+    .padding(.vertical, 5)
+    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(suggested ? look.suggestedRow : .clear))
+  }
+
+  /** Geç, or the room it takes, so the cost column lines up with its heading. */
+  @ViewBuilder private func switchSlot(_ suggested: Bool) -> some View {
+    if let url = account.url {
+      Link(destination: url) { SwitchButton(title: switchWord, suggested: suggested) }
+    } else {
+      SwitchButton(title: switchWord, suggested: false).hidden()
+    }
+  }
+}
+
+/** Another account in the large widget: one ring, name, limits with the countdown, cost and Geç. */
+private struct LargeRow: View {
+  @Environment(\.look) private var look
+  let account: Snapshot.Account
+  let snapshot: Snapshot
+  let date: Date
+  let muted: Bool
+
+  var body: some View {
+    let suggested = account.suggested == true
+    let left = countdown(account.fiveHourResetsAt, at: date)
+    let limits = [account.text.fiveHour, account.text.weekShort, left ?? ""]
+      .filter { !$0.isEmpty && $0 != "—" }
+      .joined(separator: " · ")
+    HStack(spacing: 9) {
+      UsageRing(outer: account.fiveHour, inner: nil, size: 28, muted: muted)
+      VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: 5) {
+          Text(account.name).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(look.primary)
+          if suggested, let word = snapshot.text.suggested {
+            Text(word)
+              .font(.system(size: 10, weight: .semibold))
+              .foregroundStyle(look.mono ? look.secondary : look.brand)
+          }
+        }
+        Text(limits.isEmpty ? account.text.limits : limits)
+          .font(.system(size: 11)).monospacedDigit().foregroundStyle(look.secondary)
+      }
+      .lineLimit(1)
+      Spacer(minLength: 2)
+      VStack(alignment: .trailing, spacing: 1) {
+        Text(account.text.cost)
+          .font(.system(size: 12.5, weight: .bold)).monospacedDigit()
+          .foregroundStyle(muted ? look.secondary : look.primary)
+        Text(account.text.tokens)
+          .font(.system(size: 11)).monospacedDigit().foregroundStyle(look.secondary)
+      }
+      .lineLimit(1)
+      .fixedSize()
+      if let url = account.url {
+        Link(destination: url) { SwitchButton(title: snapshot.text.switchWord, suggested: suggested) }
+      } else {
+        SwitchButton(title: snapshot.text.switchWord, suggested: false).hidden()
       }
     }
-    .containerBackground(.background, for: .widget)
+    .padding(.horizontal, 10)
+    .padding(.vertical, 6)
+    .background(suggested ? look.suggestedRow : .clear)
+  }
+}
+
+struct AccountsContent: View {
+  @Environment(\.look) private var look
+  let entry: TodayEntry
+  let large: Bool
+
+  var body: some View {
+    if let message = blocked(entry) {
+      message
+    } else if let snapshot = entry.snapshot {
+      if large { self.large(snapshot) } else { medium(snapshot) }
+    }
   }
 
   private var muted: Bool { entry.stale }
 
-  private func rows(_ snapshot: Snapshot, _ count: Int) -> some View {
-    VStack(spacing: 4) {
-      ForEach(snapshot.others.prefix(count)) { account in
-        AccountRow(account: account, switchWord: snapshot.text.switchWord, muted: muted)
+  /** "Bugün toplam" and "$91,48 · 86,5 Mn token", shorter where it must be; or the stale line. */
+  private func footer(_ snapshot: Snapshot) -> some View {
+    let label = Text(without(snapshot.text.todayLine, snapshot.text.costTokens)).foregroundStyle(look.secondary)
+    let figure = { (tokens: String) in
+      (Text(snapshot.text.cost).fontWeight(.bold).foregroundStyle(look.primary)
+        + Text(" · \(tokens)").foregroundStyle(look.secondary))
+        .monospacedDigit()
+    }
+    return VStack(spacing: 4) {
+      Hairline()
+      Group {
+        if muted {
+          Text(snapshot.text.stale).foregroundStyle(look.staleLine).fontWeight(.medium)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+          ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) { label; Spacer(minLength: 4); figure(snapshot.text.tokens ?? snapshot.text.total) }
+            HStack(spacing: 6) { label; Spacer(minLength: 4); figure(snapshot.text.total) }
+            HStack(spacing: 6) { Spacer(minLength: 0); figure(snapshot.text.total) }
+          }
+        }
       }
+      .font(.system(size: 11))
+      .lineLimit(1)
+      .padding(.horizontal, 6)
     }
   }
 
-  private func footer(_ snapshot: Snapshot, _ line: String) -> some View {
-    Text(muted ? snapshot.text.stale : line)
-      .font(.system(size: 10)).monospacedDigit()
-      .foregroundStyle(.secondary)
-      .lineLimit(1).minimumScaleFactor(0.7)
-  }
-
   private func medium(_ snapshot: Snapshot) -> some View {
-    HStack(alignment: .top, spacing: 10) {
-      VStack(spacing: 4) {
+    HStack(alignment: .center, spacing: 10) {
+      VStack(spacing: 5) {
         if let active = snapshot.active {
           UsageRing(outer: active.fiveHour, inner: active.week ?? 0, size: 84, muted: muted, lines: 2) {
             RingFigure(percent: active.text.fiveHour, left: entry.left, size: 84, muted: muted)
           }
-          Text(active.name).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-          Text(active.text.costTokens)
-            .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
+          HStack(spacing: 4) {
+            Panda(mood: entry.mood, size: 18)
+            Text(active.name).font(.system(size: 12, weight: .bold)).foregroundStyle(look.primary)
+              .lineLimit(1)
+          }
+          (Text(active.text.cost).fontWeight(.bold).foregroundStyle(muted ? look.secondary : look.primary)
+            + Text(" · \(active.text.tokens)").foregroundStyle(look.secondary))
+            .font(.system(size: 11)).monospacedDigit()
             .lineLimit(1).minimumScaleFactor(0.7)
         } else {
-          Text(snapshot.text.noActive).font(.caption).foregroundStyle(.secondary)
+          Panda(mood: entry.mood, size: 32)
+          Text(snapshot.text.noActive).font(.system(size: 11)).foregroundStyle(look.secondary)
+            .multilineTextAlignment(.center)
+        }
+      }
+      .frame(width: 98)
+      Rectangle().fill(look.hairline).frame(width: 1).padding(.vertical, 2)
+      VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: 7) {
+          Text(snapshot.text.others ?? say("Diğer hesaplar", "Other accounts"))
+          Spacer(minLength: 0)
+          Text(snapshot.text.todayWord ?? say("bugün", "today"))
+          // Over the cost column: a hidden Geç takes the room the rows' buttons take.
+          SwitchButton(title: snapshot.text.switchWord, suggested: false).hidden().frame(height: 12)
+        }
+        .font(.system(size: 10.5, weight: .semibold))
+        .foregroundStyle(look.secondary)
+        .lineLimit(1)
+        .padding(.horizontal, 6)
+        VStack(spacing: 2) {
+          ForEach(snapshot.others.prefix(2)) { account in
+            AccountRow(account: account, switchWord: snapshot.text.switchWord, muted: muted)
+          }
         }
         Spacer(minLength: 0)
-      }
-      .frame(width: 104)
-      VStack(alignment: .leading, spacing: 4) {
-        rows(snapshot, 2)
-        Spacer(minLength: 0)
-        footer(snapshot, snapshot.text.todayLine)
+        footer(snapshot)
       }
       .frame(maxWidth: .infinity)
     }
+    .padding(.leading, 12)
+    .padding(.trailing, 10)
+    .padding(.vertical, 12)
   }
 
   private func large(_ snapshot: Snapshot) -> some View {
-    VStack(alignment: .leading, spacing: 7) {
+    VStack(alignment: .leading, spacing: 11) {
       if let active = snapshot.active {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
           UsageRing(outer: active.fiveHour, inner: active.week ?? 0, size: 96, muted: muted, lines: 2) {
             RingFigure(percent: active.text.fiveHour, left: entry.left, size: 96, muted: muted)
           }
-          VStack(alignment: .leading, spacing: 4) {
-            Text(active.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+          VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .center) {
+              Text(snapshot.text.inClaude ?? say("Claude’da açık", "Open in Claude"))
+                .font(.system(size: 11)).foregroundStyle(look.secondary)
+              Spacer(minLength: 4)
+              Panda(mood: entry.mood, size: 26)
+            }
+            Text(active.name).font(.system(size: 16, weight: .bold)).foregroundStyle(look.primary)
+              .lineLimit(1)
             if let line = active.text.weekLine, !line.isEmpty {
-              Text(line).font(.system(size: 11)).foregroundStyle(.secondary)
+              Text(line).font(.system(size: 11)).foregroundStyle(look.secondary)
                 .lineLimit(1).minimumScaleFactor(0.8)
             }
-            HStack(spacing: 5) {
-              Chip(text: active.text.costChip ?? active.text.cost)
-              Chip(text: active.text.tokensChip ?? active.text.tokens)
+            HStack(spacing: 6) {
+              chip(active.text.cost, active.text.costChip)
+              chip(active.text.tokens, active.text.tokensChip)
             }
+            .padding(.top, 3)
           }
-          Spacer(minLength: 0)
         }
       } else {
-        Text(snapshot.text.noActive).font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 10) {
+          Panda(mood: entry.mood, size: 28)
+          Text(snapshot.text.noActive).font(.system(size: 12)).foregroundStyle(look.secondary)
+        }
       }
-      rows(snapshot, 3)
-      Divider()
-      HStack(spacing: 6) {
-        Text(snapshot.text.allToday).font(.system(size: 11, weight: .semibold)).lineLimit(1)
-        Spacer(minLength: 4)
-        Text(snapshot.text.costTokens)
-          .font(.system(size: 11)).monospacedDigit()
-          .foregroundStyle(muted ? Color.secondary : Color.primary)
-          .lineLimit(1).minimumScaleFactor(0.7)
-        Change(snapshot: snapshot)
+      if !snapshot.others.isEmpty {
+        VStack(spacing: 0) {
+          ForEach(Array(snapshot.others.prefix(3).enumerated()), id: \.element.id) { index, account in
+            if index > 0 { Hairline() }
+            LargeRow(account: account, snapshot: snapshot, date: entry.date, muted: muted)
+          }
+        }
+        .background(look.well)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+          RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .strokeBorder(look.mono ? look.hairline : .clear, lineWidth: 1))
       }
-      TodayLine(
-        slots: snapshot.slots, average: snapshot.yesterdayAverage,
-        color: muted ? .secondary : Palette(scheme).brand
-      )
-      // The chart takes whatever room fewer accounts leave.
-      .frame(minHeight: 36, maxHeight: .infinity)
-      if let split = snapshot.split, !split.isEmpty {
-        SplitBar(parts: split, muted: muted).frame(height: 6)
-        SplitLegend(parts: split)
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+          Text(muted ? snapshot.text.stale : snapshot.text.allToday)
+            .font(.system(size: 11.5, weight: muted ? .medium : .regular))
+            .foregroundStyle(muted ? look.staleLine : look.secondary)
+            .lineLimit(1)
+          Spacer(minLength: 4)
+          Text(snapshot.text.cost)
+            .font(.system(size: 16, weight: .bold)).monospacedDigit()
+            .foregroundStyle(muted ? look.secondary : look.primary)
+            .widgetAccentable()
+          Text("· \(snapshot.text.tokens ?? snapshot.text.total)")
+            .font(.system(size: 11)).monospacedDigit().foregroundStyle(look.secondary)
+          Change(snapshot: snapshot, muted: muted)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        // The chart takes whatever room fewer accounts leave.
+        SlotBars(slots: snapshot.slots, average: snapshot.yesterdayAverage, muted: muted)
+          .frame(minHeight: 30, maxHeight: .infinity)
+        if let split = snapshot.split, !split.isEmpty {
+          SplitBar(parts: split, muted: muted).frame(height: 6)
+          SplitLegend(parts: split)
+        }
       }
-      if muted { footer(snapshot, "") }
     }
+    .padding(16)
+  }
+
+  /** "$69,18 bugün": the figure bold, the word quiet. */
+  private func chip(_ figure: String, _ whole: String?) -> some View {
+    let word = without(whole ?? figure, figure)
+    return (Text(figure).fontWeight(.bold).foregroundStyle(look.primary)
+      + Text(word.isEmpty ? "" : " \(word)").foregroundStyle(look.secondary))
+      .font(.system(size: 11))
+      .monospacedDigit()
+      .lineLimit(1)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 3)
+      .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(look.well))
+      .overlay(
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+          .strokeBorder(look.mono ? look.hairline : .clear, lineWidth: 1))
   }
 }
 
 // MARK: - Bugün (small, medium)
 
 struct TodayView: View {
-  @Environment(\.colorScheme) private var scheme
-  @Environment(\.widgetFamily) var family
+  @Environment(\.widgetFamily) private var family
   let entry: TodayEntry
 
   var body: some View {
-    Group {
-      if let snapshot = entry.snapshot {
-        if entry.newDay {
-          Message(title: snapshot.text.title, line: snapshot.text.empty)
-        } else if snapshot.state != "data" {
-          Message(title: snapshot.text.title, line: snapshot.text.status, panda: snapshot.state == "scanning")
-        } else if family == .systemSmall {
-          small(snapshot)
-        } else {
-          medium(snapshot)
-        }
+    TodayContent(entry: entry, small: family == .systemSmall).widgetChrome()
+  }
+}
+
+struct TodayContent: View {
+  @Environment(\.look) private var look
+  let entry: TodayEntry
+  let small: Bool
+
+  var body: some View {
+    if let snapshot = entry.snapshot {
+      if entry.newDay {
+        Message(title: snapshot.text.title, line: snapshot.text.empty, mood: entry.mood)
+      } else if snapshot.state != "data" {
+        Message(title: snapshot.text.title, line: snapshot.text.status, mood: entry.mood)
+      } else if small {
+        self.small(snapshot)
       } else {
-        Message(title: "Relay", line: say("Relay'i açın", "Open Relay"))
+        medium(snapshot)
       }
-    }
-    .containerBackground(.background, for: .widget)
-  }
-
-  private func tone(_ snapshot: Snapshot) -> Color {
-    guard let change = snapshot.change else { return .primary }
-    return change >= 0 ? .green : .red
-  }
-  private func lineColor(_ snapshot: Snapshot) -> Color {
-    entry.stale ? .secondary : tone(snapshot) == .primary ? .green : tone(snapshot)
-  }
-
-  private func header(_ snapshot: Snapshot) -> some View {
-    HStack(spacing: 4) {
-      Text(snapshot.text.title).font(.headline)
-      Spacer(minLength: 4)
-      Change(snapshot: snapshot)
+    } else {
+      Message(title: "Relay", line: say("Relay'i açın", "Open Relay"), mood: "sleeping")
     }
   }
 
-  private func subtitle(_ snapshot: Snapshot) -> some View {
-    Text(entry.stale ? snapshot.text.stale : snapshot.text.subtitle)
-      .font(.caption2)
-      .foregroundStyle(.secondary)
+  private var muted: Bool { entry.stale }
+
+  private func title(_ text: String) -> some View {
+    HStack(alignment: .center, spacing: 4) {
+      Text(text)
+        .font(.system(size: 11.5, weight: .semibold))
+        .foregroundStyle(look.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+      Spacer(minLength: 2)
+      Panda(mood: entry.mood, size: 20)
+    }
+  }
+
+  private func figure(_ snapshot: Snapshot, size: CGFloat) -> some View {
+    Text(snapshot.text.cost)
+      .font(.system(size: size, weight: .bold)).monospacedDigit()
+      .foregroundStyle(muted ? look.secondary : look.primary)
       .lineLimit(1)
+      .minimumScaleFactor(0.6)
+      .widgetAccentable()
   }
 
-  /** "Kişisel %94 · 1:50 kaldı", beside the active account's single ring. */
+  /** "Kişisel %94 · 1:50 kaldı", beside the active account's single ring; the stale line once the file is old. */
   @ViewBuilder private func activeLine(_ snapshot: Snapshot) -> some View {
-    if let active = snapshot.active, active.fiveHour != nil {
-      let left = entry.left.map { " · \($0) \(snapshot.text.left)" } ?? ""
-      HStack(spacing: 5) {
-        UsageRing(outer: active.fiveHour, inner: nil, size: 18, muted: entry.stale)
-        Text("\(active.name) \(active.text.fiveHour)\(left)")
-          .font(.system(size: 10)).monospacedDigit()
-          .lineLimit(1).minimumScaleFactor(0.7)
+    if muted {
+      Text(snapshot.text.stale)
+        .font(.system(size: 11, weight: .medium)).foregroundStyle(look.staleLine)
+        .lineLimit(1).minimumScaleFactor(0.8)
+    } else if let active = snapshot.active, active.fiveHour != nil {
+      let line = { (left: String) in
+        (Text("\(active.name) \(active.text.fiveHour)").fontWeight(.semibold).foregroundStyle(look.primary)
+          + Text(left).foregroundStyle(look.secondary))
+          .font(.system(size: 11)).monospacedDigit()
+          .lineLimit(1)
+      }
+      HStack(spacing: 6) {
+        UsageRing(outer: active.fiveHour, inner: nil, size: 18)
+        // "· 1:50 kaldı", then without "kaldı", then the name and percent alone, shrinking last.
+        ViewThatFits(in: .horizontal) {
+          if let left = entry.left {
+            line(" · \(left) \(snapshot.text.left)")
+            line(" · \(left)")
+          }
+          line("").minimumScaleFactor(0.7)
+        }
       }
     }
   }
 
   private func small(_ snapshot: Snapshot) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
-      header(snapshot)
-      subtitle(snapshot)
-      Spacer(minLength: 2)
-      HStack(alignment: .firstTextBaseline, spacing: 4) {
-        Text(snapshot.text.cost)
-          .font(.title2.bold()).monospacedDigit()
-          .foregroundStyle(entry.stale ? Color.secondary : tone(snapshot))
-          .layoutPriority(1)
-        Text(snapshot.text.total)
-          .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 0) {
+      title(snapshot.text.title)
+      HStack(alignment: .firstTextBaseline, spacing: 6) {
+        figure(snapshot, size: 26).layoutPriority(1)
+        Change(snapshot: snapshot, muted: muted)
       }
-      .lineLimit(1)
-      .minimumScaleFactor(0.6)
-      TodayLine(slots: snapshot.slots, average: snapshot.yesterdayAverage, color: lineColor(snapshot))
-        .frame(height: snapshot.active?.fiveHour == nil ? 28 : 20)
-      activeLine(snapshot).padding(.top, 2)
+      .padding(.top, 2)
+      Text(snapshot.text.tokens ?? snapshot.text.total)
+        .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+        .foregroundStyle(look.primary)
+        .lineLimit(1)
+      Sparkline(slots: snapshot.slots, average: snapshot.yesterdayAverage, muted: muted)
+        .frame(minHeight: 22, maxHeight: .infinity)
+        .padding(.top, 6)
+        .padding(.bottom, 7)
+      Hairline()
+      activeLine(snapshot).padding(.top, 7)
     }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 13)
   }
 
   private func medium(_ snapshot: Snapshot) -> some View {
     let values = [snapshot.text.input, snapshot.text.output, snapshot.text.cache]
     let split = snapshot.split ?? []
-    return VStack(alignment: .leading, spacing: 5) {
-      HStack(alignment: .top, spacing: 14) {
-        VStack(alignment: .leading, spacing: 1) {
-          Text(snapshot.text.title).font(.headline)
-          subtitle(snapshot)
-          Spacer(minLength: 2)
+    return HStack(alignment: .top, spacing: 14) {
+      VStack(alignment: .leading, spacing: 0) {
+        title(snapshot.text.apiTitle ?? snapshot.text.title)
+        figure(snapshot, size: 25).padding(.top, 1)
+        HStack(spacing: 5) {
+          Text(snapshot.text.tokens ?? snapshot.text.total)
+            .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+            .foregroundStyle(look.primary)
+            .lineLimit(1).minimumScaleFactor(0.8)
+          Change(snapshot: snapshot, muted: muted)
+        }
+        if muted {
+          Text(snapshot.text.stale).font(.system(size: 11, weight: .medium))
+            .foregroundStyle(look.staleLine).lineLimit(1).minimumScaleFactor(0.8)
+            .padding(.top, 2)
+        }
+        Spacer(minLength: 4)
+        VStack(spacing: 2) {
           ForEach(Array(zip(snapshot.text.rows, values)), id: \.0) { label, value in
-            HStack {
-              Text(label).foregroundStyle(.secondary)
-              Spacer()
-              Text(value).monospacedDigit()
-            }
-            .font(.system(size: 10))
+            Pair(label: label, value: value)
           }
-          Spacer(minLength: 2)
-          Text(snapshot.text.total)
-            .font(.title2.bold()).monospacedDigit()
-            .foregroundStyle(entry.stale ? Color.secondary : Color.primary)
-            .minimumScaleFactor(0.6).lineLimit(1)
         }
-        .frame(maxWidth: .infinity)
-        VStack(alignment: .trailing, spacing: 2) {
-          HStack(spacing: 6) {
-            Change(snapshot: snapshot, size: 12)
-            Spacer(minLength: 2)
-            Text(snapshot.text.cost)
-              .font(.title3.bold()).monospacedDigit()
-              .foregroundStyle(entry.stale ? Color.secondary : tone(snapshot))
-              .minimumScaleFactor(0.6).lineLimit(1)
+      }
+      .frame(width: 126)
+      VStack(alignment: .leading, spacing: 5) {
+        SlotBars(slots: snapshot.slots, average: snapshot.yesterdayAverage, muted: muted)
+          .frame(maxHeight: .infinity)
+        HStack {
+          ForEach(["00", "06", "12", "18", "24"], id: \.self) { hour in
+            Text(hour)
+            if hour != "24" { Spacer(minLength: 0) }
           }
-          TodayLine(
-            slots: snapshot.slots, average: snapshot.yesterdayAverage,
-            color: lineColor(snapshot), ticks: true
-          )
-          .padding(.top, 2)
         }
-        .frame(maxWidth: .infinity)
+        .font(.system(size: 10)).monospacedDigit()
+        .foregroundStyle(look.secondary)
+        if !split.isEmpty {
+          SplitBar(parts: split, muted: muted).frame(height: 5).padding(.top, 1)
+          SplitLegend(parts: split, size: 10.5)
+        }
       }
-      if !split.isEmpty {
-        SplitBar(parts: split, muted: entry.stale).frame(height: 5)
-        SplitLegend(parts: split)
-      }
+      .frame(maxWidth: .infinity)
     }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 13)
   }
 }
 
@@ -995,51 +1416,100 @@ struct WeekView: View {
   let entry: TodayEntry
 
   var body: some View {
-    Group {
-      if let message = blocked(entry) {
-        message
-      } else if let snapshot = entry.snapshot, let week = snapshot.week {
-        content(snapshot, week)
-      } else {
-        Message(title: "Relay", line: say("Relay'i açın", "Open Relay"))
-      }
+    WeekContent(entry: entry).widgetChrome()
+  }
+}
+
+struct WeekContent: View {
+  @Environment(\.look) private var look
+  let entry: TodayEntry
+
+  var body: some View {
+    if let message = blocked(entry) {
+      message
+    } else if let snapshot = entry.snapshot, let week = snapshot.week {
+      content(snapshot, week)
+    } else {
+      Message(title: "Relay", line: say("Relay'i açın", "Open Relay"), mood: "sleeping")
     }
-    .containerBackground(.background, for: .widget)
+  }
+
+  /**
+   * "En yoğun Sal · $142,10" as "En yoğun" and "Sal · $142,10" on either side, like the design's
+   * pairs; a line whose figure does not end it ("$58.90 a day") reads as one, the figure bold.
+   */
+  @ViewBuilder private func pair(_ line: String) -> some View {
+    if let end = line.range(of: #"(\S+ · )?[≈$€£]?\d[\d.,]*[×%]?$"#, options: .regularExpression),
+      end.lowerBound > line.startIndex
+    {
+      Pair(
+        label: String(line[..<end.lowerBound]).trimmingCharacters(in: .whitespaces),
+        value: String(line[end]))
+    } else if let figure = line.range(of: #"[≈$€£]\d[\d.,]*"#, options: .regularExpression) {
+      (Text(line[..<figure.lowerBound]).foregroundStyle(look.secondary)
+        + Text(line[figure]).fontWeight(.medium).foregroundStyle(look.primary)
+        + Text(line[figure.upperBound...]).foregroundStyle(look.secondary))
+        .font(.system(size: 11)).monospacedDigit().lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    } else {
+      Text(line).font(.system(size: 11)).foregroundStyle(look.secondary).lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
   }
 
   private func content(_ snapshot: Snapshot, _ week: Snapshot.Week) -> some View {
     let muted = entry.stale
-    return HStack(alignment: .top, spacing: 12) {
-      VStack(alignment: .leading, spacing: 2) {
-        Text(week.text.title).font(.headline).lineLimit(1)
-        Text(week.text.cost)
-          .font(.system(size: 20, weight: .bold)).monospacedDigit()
-          .foregroundStyle(muted ? Color.secondary : Color.primary)
-        Text(week.text.tokens).font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary)
-        Spacer(minLength: 2)
-        Group {
-          Text(week.text.average)
-          if !week.text.busiest.isEmpty { Text(week.text.busiest) }
-          if !week.text.hits.isEmpty { Text(week.text.hits) }
-          if muted { Text(snapshot.text.stale) }
+    return HStack(alignment: .top, spacing: 14) {
+      VStack(alignment: .leading, spacing: 0) {
+        HStack(alignment: .center, spacing: 4) {
+          Text(week.text.title)
+            .font(.system(size: 11.5, weight: .semibold)).foregroundStyle(look.secondary)
+            .lineLimit(1)
+          Spacer(minLength: 2)
+          Panda(mood: entry.mood, size: 20)
         }
-        .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
+        Text(week.text.cost)
+          .font(.system(size: 25, weight: .bold)).monospacedDigit()
+          .foregroundStyle(muted ? look.secondary : look.primary)
+          .lineLimit(1).minimumScaleFactor(0.6)
+          .widgetAccentable()
+          .padding(.top, 1)
+        Text(week.text.tokens)
+          .font(.system(size: 12, weight: .semibold)).monospacedDigit()
+          .foregroundStyle(look.primary)
+          .lineLimit(1)
+        if muted {
+          Text(snapshot.text.stale).font(.system(size: 11, weight: .medium))
+            .foregroundStyle(look.staleLine).lineLimit(1).minimumScaleFactor(0.8)
+            .padding(.top, 2)
+        }
+        Spacer(minLength: 4)
+        VStack(spacing: 2) {
+          pair(week.text.average)
+          if !week.text.busiest.isEmpty { pair(week.text.busiest) }
+          if !week.text.hits.isEmpty { pair(week.text.hits) }
+        }
+        .minimumScaleFactor(0.8)
       }
-      .lineLimit(1)
-      .minimumScaleFactor(0.7)
-      .frame(width: 124, alignment: .leading)
-      VStack(alignment: .leading, spacing: 4) {
+      .frame(width: 126)
+      VStack(alignment: .leading, spacing: 6) {
         WeekBars(days: week.days, muted: muted)
         if let active = snapshot.active, active.week != nil, !week.text.activeWeek.isEmpty {
-          HStack(spacing: 5) {
+          HStack(spacing: 6) {
             UsageRing(outer: active.week, inner: nil, size: 16, muted: muted)
-            Text(week.text.activeWeek)
-              .font(.system(size: 10)).monospacedDigit()
-              .lineLimit(1).minimumScaleFactor(0.7)
+            (Text("\(active.name) · ").foregroundStyle(look.secondary)
+              + weekShort(active, look)
+              + Text(active.text.weekReset.isEmpty ? "" : " · \(active.text.weekReset)")
+              .foregroundStyle(look.secondary))
+              .font(.system(size: 11)).monospacedDigit()
+              .lineLimit(1).minimumScaleFactor(0.75)
           }
         }
       }
+      .frame(maxWidth: .infinity)
     }
+    .padding(.horizontal, 16)
+    .padding(.vertical, 13)
   }
 }
 
@@ -1056,6 +1526,7 @@ struct RelayAccount: Widget {
         "Açık hesabın limitleri, bugünkü maliyeti ve token’ları",
         "The open account's limits, cost and tokens today"))
     .supportedFamilies([.systemSmall])
+    .contentMarginsDisabled()
   }
 }
 
@@ -1070,6 +1541,7 @@ struct RelayAccounts: Widget {
         "Hesapların limitleri ve bugünkü maliyeti; Geç, Relay’de geçişi açar",
         "Your accounts' limits and cost today; Switch opens the switch in Relay"))
     .supportedFamilies([.systemMedium])
+    .contentMarginsDisabled()
   }
 }
 
@@ -1084,6 +1556,7 @@ struct RelayAccountsToday: Widget {
         "Hesapların limitleri, bugünün maliyeti, token’ları ve hesaplara dağılımı",
         "Your accounts' limits, and today's cost, tokens and split by account"))
     .supportedFamilies([.systemLarge])
+    .contentMarginsDisabled()
   }
 }
 
@@ -1098,6 +1571,7 @@ struct RelayToday: Widget {
         "Bugünkü Claude Code token’ları ve API karşılığı",
         "Today's Claude Code tokens and their API value"))
     .supportedFamilies([.systemSmall, .systemMedium])
+    .contentMarginsDisabled()
   }
 }
 
@@ -1112,6 +1586,7 @@ struct RelayWeek: Widget {
         "Son yedi günün maliyeti, token’ları ve hesaplara dağılımı",
         "The last seven days' cost, tokens and split by account"))
     .supportedFamilies([.systemMedium])
+    .contentMarginsDisabled()
   }
 }
 
