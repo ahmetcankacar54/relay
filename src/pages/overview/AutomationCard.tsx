@@ -8,6 +8,7 @@ import { instanceLabel } from "@/lib/extension-ui";
 import type { PageId } from "@/app/routes";
 import { AUTOMATION_DOT, automationModeCopy, useAutomation } from "../../features/useAutomation";
 import { nextPlannedWindow } from "@/lib/day-timeline";
+import { SwitchNowButton } from "../../features/AutomationControl";
 
 /** One setting at a glance: its name, its state, its page. */
 function Row({
@@ -42,7 +43,10 @@ function Row({
   );
 }
 
-/** Automation as a grouped list: each row says how a setting stands and opens its page. */
+/**
+ * Automation as a grouped list: each row says how a setting stands and opens its page; when
+ * automatic switching offers a switch now, its button sits under that row.
+ */
 export function AutomationCard({
   go,
   now,
@@ -74,6 +78,12 @@ export function AutomationCard({
           tone={AUTOMATION_DOT[automation.status.tone]}
           onClick={() => go("gecis")}
         />
+        {/* The page banner is off here (automationInline), so the switch-now offer lives under its row. */}
+        {automation.status.switchTo && (
+          <div data-slot="automation-offer" className="flex justify-end border-t bg-muted/40 px-4 py-2">
+            <SwitchNowButton status={automation.status} size="xs" />
+          </div>
+        )}
         <Row
           name={t("Önceden başlatma", "Early start")}
           value={

@@ -123,24 +123,37 @@ test("banners read an injected relay and offer reconnect for expired usage sign-
   assert.match(html, /Limit okuma girişini yenile/);
 });
 
-test("sidebar buttons override the legacy centred button style and keep the meter outside buttons", () => {
-  const html = renderToStaticMarkup(
-    createElement(Sidebar, {
-      page: "genel",
-      go: () => {},
-      t,
-      compact: false,
-      status: { accounts: 2, planning: false, switching: false },
-      summary: { name: "Kişisel · Max", running: true, fiveHour: 94 },
-    }),
-  );
+test("sidebar buttons override the legacy centred button style and the summary card shows a small five-hour ring", () => {
+  const sidebar = (running: boolean) =>
+    renderToStaticMarkup(
+      createElement(Sidebar, {
+        page: "genel",
+        go: () => {},
+        t,
+        compact: false,
+        status: { accounts: 2, planning: false, switching: false },
+        summary: { name: "Kişisel · Max", running, fiveHour: 94 },
+      }),
+    );
+  const html = sidebar(true);
   const buttons = html.match(/<button[\s\S]*?<\/button>/g) ?? [];
   assert.equal(buttons.length, 7);
   for (const b of buttons) {
-    assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
-    assert.doesNotMatch(b, /role="meter"/);
+    const tag = /^<button[^>]*>/.exec(b)?.[0] ?? "";
+    assert.match(tag, /class="[^"]*text-left/);
+    assert.doesNotMatch(tag, /justify-center/);
   }
-  assert.match(html, /role="meter"/);
+  // The six pages start their row on the left.
+  const pages = buttons.filter((b) => !b.includes("Kişisel · Max"));
+  assert.equal(pages.length, 6);
+  for (const b of pages) assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
+  // The summary card: a single 30 px ring for the five hours and its percent, inside the card's button.
+  const summary = buttons.find((b) => b.includes("Kişisel · Max")) ?? "";
+  assert.match(summary, /<div role="img" aria-label="5 saatlik dönem %94 kullanıldı"[^>]*style="width:30px;height:30px"/);
+  assert.match(summary, />5 saat %94</);
+  assert.doesNotMatch(html, /role="meter"/);
+  // With Claude closed, the line says so after the percent.
+  assert.match(sidebar(false), />5 saat %94 · Claude kapalı</);
 });
 
 test("compact rail centres its icon buttons", () => {
@@ -196,10 +209,32 @@ test("the shell starts each page at the top by resetting the scroller when the p
   );
 });
 
-test("muted text is one step darker in light and lighter in dark", () => {
+test("muted text keeps AA contrast on the page, cards and muted grounds in light and dark", () => {
   const css = fs.readFileSync(path.join(import.meta.dirname, "../src/styles/theme.css"), "utf8");
   const [light, dark] = css.split("@media (prefers-color-scheme: dark)");
-  assert.match(light, /--muted-foreground:\s*#685d52;/);
-  assert.match(dark, /--muted-foreground:\s*#b3a89b;/);
-  assert.doesNotMatch(css, /#73685c|#a3988c/);
+  assert.match(light, /--muted-foreground:\s*#6e6e73;/);
+  assert.match(dark, /--muted-foreground:\s*#a3a19c;/);
+  // The earlier warm greys are gone.
+  assert.doesNotMatch(css, /#685d52|#b3a89b|#73685c|#a3988c/);
+  const token = (block: string, name: string) => {
+    const hex = new RegExp(`--${name}:\\s*(#[0-9a-f]{6});`, "i").exec(block)?.[1];
+    assert.ok(hex, name);
+    return hex;
+  };
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+  for (const [scheme, block] of [["light", light], ["dark", dark]] as const) {
+    const muted = token(block, "muted-foreground");
+    for (const ground of ["background", "card", "popover", "muted", "sidebar"])
+      assert.ok(contrast(muted, token(block, ground)) >= 4.5, `${scheme} muted text on --${ground}`);
+  }
 });

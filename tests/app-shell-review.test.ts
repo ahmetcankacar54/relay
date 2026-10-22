@@ -183,21 +183,30 @@ test("leaving the accounts page forgets the setup target", () => {
   assert.deepEqual(calls, [undefined]);
 });
 
-// 5 + 6. Overview accounts card: Desktop link gating and suffix-free reopening time.
-test("the overview Desktop link is disabled while Desktop cannot start a setup", () => {
+// 5 + 6. Overview accounts card: no Desktop setup from Overview, and suffix-free reopening time.
+test("the overview never starts a Desktop setup itself: an unlinked account's row leads to its page", () => {
   const usage: Record<string, AccountUsage> = { a: { accountId: "a", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 10 }, sevenDay: { usedPercent: 10 } } };
-  const link = (extra: Partial<Relay>) =>
-    wrap(relayFor(extra, usage), createElement(AccountsCard, { go() {}, now: NOW })).match(/<button[^>]*title="Claude uygulaması girişini kaydet"[^>]*>Girişi kaydet<\/button>/)?.[0] ?? "";
-  assert.match(link({}), /title="Claude uygulaması girişini kaydet"/);
-  assert.doesNotMatch(link({}), /aria-label=/);
-  assert.doesNotMatch(link({}), /disabled=""/);
+  const row = (extra: Partial<Relay>) => {
+    const html = wrap(relayFor(extra, usage), createElement(AccountsCard, { go() {}, now: NOW }));
+    const at = html.indexOf('<a href="#/hesaplar/b"');
+    return at < 0 ? "" : html.slice(html.lastIndexOf('data-slot="account-row"', at), html.indexOf("</a>", at) + 4);
+  };
+  // Whatever state Desktop is in, the row is a link to the account (whose page gates the setup),
+  // not a button that could start one while Desktop cannot.
   for (const extra of [
+    {},
     { desktopBusy: true },
     { pendingDesktop: a },
     { desktop: { available: false, running: false, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0 } },
     { desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: true, errorRevision: 0 } },
-  ] as Partial<Relay>[])
-    assert.match(link(extra), /disabled=""/, JSON.stringify(extra));
+  ] as Partial<Relay>[]) {
+    const label = JSON.stringify(extra);
+    const studio = row(extra);
+    assert.match(studio, /<a href="#\/hesaplar\/b" title="Claude uygulaması girişi yok"/, label);
+    assert.match(studio, />Giriş kaydedilmedi</, label);
+    assert.doesNotMatch(studio, /<button/, label);
+    assert.doesNotMatch(studio, /Girişi kaydet|Geç</, label);
+  }
 });
 
 test("an exhausted account says when it reopens, with the suffix its time is read with", () => {

@@ -22,7 +22,7 @@ import {
 } from "./useAutomation";
 
 /** "Şimdi <hesap>’e geç": opens the confirmed switch review for the target. */
-function SwitchNowButton({
+export function SwitchNowButton({
   status,
   size,
 }: {

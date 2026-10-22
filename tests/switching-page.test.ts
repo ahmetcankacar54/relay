@@ -93,12 +93,17 @@ const render = (relay: Relay) =>
     ),
   );
 
-test("Switching shows automatic switching, shared history and suggestions in separate cards", () => {
+test("Switching is a flow: the status, when to switch, what comes along, then the settings", () => {
   const html = render(relayFor());
-  assert.match(html, /Otomatik geçiş, ortak geçmiş ve hesap önerileri/);
+  assert.match(html, /Ne zaman geçilir, yanında neler gelir/);
   assert.doesNotMatch(html, /kapanınca hazırlama/);
-  assert.match(html, /Otomatik geçiş/);
+  assert.match(html, /data-slot="switch-status"/);
+  assert.match(html, /Ne zaman geçilsin\?/);
   assert.match(html, /role="radiogroup"/);
+  assert.match(html, /Geçişte neler gelir\?/);
+  for (const id of ["gecis-gecmis", "gecis-eklenti", "gecis-taslak", "gecis-oneri"])
+    assert.match(html, new RegExp(`href="#${id}"`), id);
+  assert.ok(html.indexOf("Ne zaman geçilsin?") < html.indexOf("Geçişte neler gelir?"));
   assert.match(html, /Ortak Code geçmişi/);
   assert.match(html, /Tüm hesaplar arasında/);
   assert.match(html, /Açık hesapla birleştir/);
@@ -263,7 +268,7 @@ test("with Continue at quota and prepare-on-quit both on, the choice reads Kota 
     ...html.matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g),
   ]
     .filter(([tag]) => tag.includes('aria-checked="true"'))
-    .map(([, label]) => label);
+    .map(([, inner]) => /<span class="text-sm font-semibold">(.*?)<\/span>/.exec(inner)?.[1]);
   assert.deepEqual(checked, ["Kota dolunca"]);
   assert.doesNotMatch(html, /Otomatik geçişe dahil hesaplar/);
 });

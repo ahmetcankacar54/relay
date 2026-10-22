@@ -66,6 +66,9 @@ const wrap = (relay: Relay, el: ReactElement) =>
     ),
   );
 const render = (relay: Relay) => wrap(relay, createElement(Panel, { now: NOW }));
+/** The panel's account rows, each from its <button> on. */
+const panelRows = (html: string) =>
+  html.split(/<div data-slot="account-row"[^>]*>/).slice(1).map((r) => r.slice(0, r.indexOf("</button>") + "</button>".length));
 
 const row = (state: OverviewRow["state"]): OverviewRow => ({ account: acct("x", "X"), usage: use("x", 1, 1), state, recommended: false });
 const idle = { desktopBusy: false, pendingDesktop: undefined, desktop: desktopState("active") } as Pick<Relay, "desktopBusy" | "pendingDesktop" | "desktop">;
@@ -132,14 +135,16 @@ test("panel rows show the account's status when something is wrong", () => {
       relayFor(active, [active, other], { active: use("active", 10, 10), other: { ...r.usage!, accountId: "other" } }),
       createElement(PanelAccounts, { now: NOW }),
     );
-    assert.match(html, new RegExp(`title="Pro · ${label}"`), name);
+    // The row's one line names the problem, and so does its tooltip.
+    assert.match(html, new RegExp(`title="${label}"`), name);
+    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-\\[11\\.5px\\]">${label}</span>`), name);
     assert.doesNotMatch(html, /Limit verisi eski|Hazır · dönem başlamadı/, name);
   }
   // A browser approval in progress for that account.
   const flows = [{ id: "f", accountId: "vertex", status: "waiting" }] as unknown as AuthFlow[];
   const waiting = relayFor(active, [active, vertex], baseUsage);
   (waiting.data as Snapshot).authFlows = flows;
-  assert.match(wrap(waiting, createElement(PanelAccounts, { now: NOW })), /title="Pro · Tarayıcı onayı bekleniyor"/);
+  assert.match(wrap(waiting, createElement(PanelAccounts, { now: NOW })), /title="Tarayıcı onayı bekleniyor"/);
 });
 
 /** The active card's stale line, as the panel draws it. */
@@ -228,15 +233,14 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(html, />Limit dolmak üzere · önerilen üstte</);
   assert.doesNotMatch(html, /Önerilen:/);
   assert.equal((html.match(/Limit dolmak üzere/g) ?? []).length, 1);
-  // The suggested row: name, a small "önerilen" and its own Geç on the first line.
-  assert.match(
-    html,
-    /title="Vertex">Vertex<\/span><span[^>]*text-brand[^>]*>önerilen<\/span><\/div><button[^>]*aria-label="Vertex hesabına geç"[^>]*>Geç<\/button>/,
-  );
-  // Its two limits on one line each: label, bar and percent used.
-  assert.match(html, /<span[^>]*>5 sa<\/span><span role="meter" aria-label="5 sa"[^>]*aria-valuenow="12"[^>]*>.*?<\/span><\/span><b[^>]*>%12<\/b>/);
-  assert.match(html, /<span[^>]*>Hafta<\/span><span role="meter" aria-label="Hafta"[^>]*aria-valuenow="31"[^>]*>.*?<\/span><\/span><b[^>]*>%31<\/b>/);
-  assert.match(html, /title="Pro · Hazır · dönem başlamadı"/);
+  // The rings' key sits by the heading: the filled dot is the five hours, the hollow one the week.
+  assert.match(html, /<span[^>]*rounded-full bg-foreground\/70[^>]*><\/span>5 sa<\/span><span[^>]*><span[^>]*rounded-full border border-foreground\/70[^>]*><\/span>hafta</);
+  // The suggested row is the switch: its ring, the name with a small "önerilen", its line and Geç.
+  const suggestedRow = panelRows(html).find((r) => r.includes(">Vertex<")) ?? "";
+  assert.match(suggestedRow, /^<button type="button" aria-pressed="false" aria-label="Vertex hesabına geç · Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı" title="Hazır · dönem başlamadı"/);
+  // Its two limits are the ring's, used percent per window.
+  assert.match(suggestedRow, /<div role="img" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
+  assert.match(suggestedRow, />Vertex<\/span><span[^>]*>önerilen<\/span><\/span><span[^>]*>Hazır<\/span><\/span><span[^>]*>Geç<\/span><\/button>/);
   assert.match(html, />Otomasyon</);
   // Automation reads as rows: the setting's name and its state, each opening its page.
   assert.match(html, /<button type="button" title="Kişisel · Max %78 kullanıldı · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."[^>]*>.*?>Otomatik geçiş<\/span><span[^>]*>Kapalı<\/span>/);
@@ -286,18 +290,27 @@ test("more than six other accounts collapse into an overflow line", () => {
   const others = Array.from({ length: 7 }, (_, i) => acct(`o${i}`, `Other ${i}`));
   const usage = Object.fromEntries([["active", use("active", 10, 10)], ...others.map((o) => [o.id, use(o.id, 10, 10)])]);
   const html = render(relayFor(active, [active, ...others], usage));
-  assert.equal(html.split('data-slot="panel-account"').length - 1, 6);
+  assert.equal(panelRows(html).length, 6);
   assert.match(html, /\+1 hesap · Relay’de gör/);
 });
 
-test("Desktop busy disables every switch and explains why", () => {
-  // Two other accounts, so more than one row offers a switch (the suggested one included).
+test("Desktop busy withholds every switch and explains why", () => {
+  // Two other accounts, the suggested one included.
   const alto = acct("alto", "Alto");
-  const html = render(relayFor(active, [active, vertex, alto], { ...baseUsage, alto: use("alto", 20, 20) }, { suggestion: vertex, desktopBusy: true }));
-  assert.match(html, /Claude uygulaması işlemi sürüyor/);
-  const all = (html.match(/>Geç</g) ?? []).length;
-  assert.ok(all >= 2);
-  assert.equal(all, (html.match(/disabled=""[^>]*>Geç</g) ?? []).length);
+  const usage = { ...baseUsage, alto: use("alto", 20, 20) };
+  const idle = panelRows(render(relayFor(active, [active, vertex, alto], usage, { suggestion: vertex })));
+  assert.equal(idle.length, 2);
+  for (const r of idle) assert.match(r, /aria-label="[^"]* hesabına geç · /);
+  assert.equal(idle.filter((r) => r.includes(">Geç<")).length, 1);
+  const rows = panelRows(render(relayFor(active, [active, vertex, alto], usage, { suggestion: vertex, desktopBusy: true })));
+  assert.equal(rows.length, 2);
+  for (const r of rows) {
+    // No row offers the switch: its name says why instead, and it is dimmed and drops its Geç.
+    assert.match(r, /aria-label="[^"]* · Claude uygulaması işlemi sürüyor"/);
+    assert.doesNotMatch(r, /hesabına geç/);
+    assert.doesNotMatch(r, />Geç</);
+    assert.match(r, /^<button[^>]*class="[^"]*opacity-60/);
+  }
 });
 
 test("recovery required points to Relay", () => {
@@ -313,9 +326,11 @@ test("errors show inside the panel", () => {
 test("confirm state warns before switching", () => {
   const relay = relayFor(active, [active, vertex], baseUsage);
   const html = wrap(relay, createElement(PanelAccounts, { now: NOW, initialConfirm: "vertex" }));
-  assert.match(html, /Claude uygulaması kapanıp <b>Vertex<\/b> ile yeniden açılır/);
-  assert.match(html, /Vazgeç/);
-  assert.match(html, /Onayla/);
+  // The open row is pressed, and the confirmation strip under the list warns and offers Vazgeç / Geç.
+  assert.match(panelRows(html)[0], /^<button type="button" aria-pressed="true" aria-label="Vertex hesabına geç/);
+  const strip = html.slice(html.indexOf('data-slot="switch-confirm"'));
+  assert.match(strip, /Claude uygulaması kapanıp <b>Vertex<\/b> ile yeniden açılır/);
+  assert.match(strip, /<button[^>]*>Vazgeç<\/button><button[^>]*>Geç<\/button>/);
 });
 
 test("a running switch replaces the confirm box with progress", () => {
@@ -776,7 +791,7 @@ test("the panel places the sidebar row after rescued drafts and before the accou
   const at = (re: RegExp) => html.search(re);
   assert.ok(at(/Kurtarılan taslaklar/) >= 0);
   assert.ok(at(/Kurtarılan taslaklar/) < at(/Kenar çubuğu düzeni/));
-  assert.ok(at(/Kenar çubuğu düzeni/) < at(/>Diğer hesaplar · en uygunu üstte</));
+  assert.ok(at(/Kenar çubuğu düzeni/) < at(/>Geç · en uygunu üstte</));
 });
 
 test("the sidebar row's buttons are disabled while its action runs", () => {

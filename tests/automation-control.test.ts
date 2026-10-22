@@ -266,14 +266,16 @@ const render = (
       createElement(RelayContext.Provider, { value: relay }, element),
     ),
   );
+/** The choice cards: each card's title, and whether it is the chosen one. */
 const radios = (html: string) =>
-  [...html.matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g)].map(
-    ([tag, label]) => ({ label, checked: tag.includes('aria-checked="true"') }),
-  );
+  [...html.matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g)].map(([tag, inner]) => ({
+    label: (/<span class="text-sm font-semibold">(.*?)<\/span>/.exec(inner)?.[1] ?? "").replace(/&#x27;/g, "'"),
+    checked: tag.includes('aria-checked="true"'),
+  }));
 
 test("the Switching card shows one choice with the status and a switch-now button", () => {
   const html = render(relayFor({ fleet: otherWork, usage: fullUsage }));
-  assert.match(html, /Otomatik geçiş/);
+  assert.match(html, /Ne zaman geçilsin\?/);
   const items = radios(html);
   assert.equal(items.length, 3);
   assert.deepEqual(
@@ -306,7 +308,7 @@ test("the after-exit card lists accounts and the quota card does not", () => {
     radios(afterExit)
       .filter((item) => item.checked)
       .map((item) => item.label),
-    ["Claude uygulaması kapanınca"],
+    ["Claude'u kapatınca"],
   );
   assert.match(afterExit, /Otomatik geçişe dahil hesaplar/);
   assert.match(afterExit, /Hedefte limitin en fazla %90’ı kullanılmış olmalı/);

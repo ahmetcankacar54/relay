@@ -1270,6 +1270,7 @@ test("every nibble trigger goes through offerAfter, so the button's own action r
   const files = [
     "src/panel/PanelAccounts.tsx",
     "src/pages/overview/AccountsCard.tsx",
+    "src/pages/overview/ActiveAccountCard.tsx",
     "src/pages/accounts/AccountsTable.tsx",
   ];
   for (const file of files) {
@@ -1289,17 +1290,22 @@ test("each trigger still runs its own action, and the Accounts menu's items keep
   // Opening the confirmation is the switch request and offers; closing it is a cancel and does not.
   assert.match(
     panelAccounts,
-    /open\s*\?\s*setConfirmId\(undefined\)\s*:\s*offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(account\.id\),?\s*\)/,
+    /if \(confirmId === row\.account\.id\) return setConfirmId\(undefined\);\s*offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*setConfirmId\(row\.account\.id\),?\s*\)/,
   );
-  // The panel has no suggestion strip any more: the suggested row's own Geç is its switch offer
-  // (the mounted Panel test below drives it), so the panel itself offers no nibble.
+  // The panel has no suggestion strip: the suggested row is its switch offer (the mounted Panel
+  // test below drives it), so the panel itself offers no nibble.
   assert.doesNotMatch(readFileSync("src/panel/Panel.tsx", "utf8"), /nibble-cursor/);
   const card = readFileSync("src/pages/overview/AccountsCard.tsx", "utf8");
   assert.match(
     card,
-    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(account, "switch"\),?\s*\)/,
+    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(row\.account, "switch"\),?\s*\)/,
   );
-  // The Overview has no suggestion band: the suggested row in the accounts card carries the switch.
+  // The Overview hero's "limit is near" block switches to the suggestion the same way.
+  assert.match(
+    readFileSync("src/pages/overview/ActiveAccountCard.tsx", "utf8"),
+    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(suggestion, "switch"\),?\s*\)/,
+  );
+  // The page itself offers no nibble: its header's refresh offers the wheel.
   assert.doesNotMatch(
     readFileSync("src/pages/Overview.tsx", "utf8"),
     /nibble-cursor/,
@@ -1451,7 +1457,7 @@ test("through a real stage, the switch item runs once before the nibble starts; 
   }
 });
 
-// --- the panel row's "Geç": opening the confirmation nibbles, closing it does not ---
+// --- the panel row: opening the confirmation nibbles, closing it does not ---
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -1520,7 +1526,7 @@ function panelRelay(extra: Partial<Relay> = {}): Relay {
   } as unknown as Relay;
 }
 
-test("the panel row's Geç offers the nibble when it opens the confirmation and not when it closes it", async () => {
+test("the panel row offers the nibble when it opens the confirmation and not when it closes it", async () => {
   const relay = panelRelay();
   const tree = createElement(
     I18nContext.Provider,
@@ -1537,11 +1543,11 @@ test("the panel row's Geç offers the nibble when it opens the confirmation and 
   await withSpyLayer(log, async (plays) => {
     await inFakeBrowser(tree, async ({ dom }) => {
       const button = nodes(dom.container as unknown as FakeNode).find((n) =>
-        n.attributes.has("aria-expanded"),
+        n.attributes.has("aria-pressed"),
       );
-      assert.ok(button, "the row's Geç button is drawn");
+      assert.ok(button, "the row's button is drawn");
       assert.equal(
-        button.attributes.get("aria-expanded"),
+        button.attributes.get("aria-pressed"),
         "true",
         "it starts open",
       );
@@ -1551,17 +1557,17 @@ test("the panel row's Geç offers the nibble when it opens the confirmation and 
         );
       // Closing the open confirmation is a cancel: it closes, and nothing is offered.
       await click(1);
-      assert.equal(button.attributes.get("aria-expanded"), "false");
+      assert.equal(button.attributes.get("aria-pressed"), "false");
       assert.equal(plays.size, 0);
       // Opening it is the switch request: it opens, and the nibble plays.
       await click(1);
-      assert.equal(button.attributes.get("aria-expanded"), "true");
+      assert.equal(button.attributes.get("aria-pressed"), "true");
       assert.equal(plays.size, 1);
     });
   });
 });
 
-test("in the panel, the suggested row's Geç offers the nibble when it opens the confirmation and not when it closes it", async () => {
+test("in the panel, the suggested row offers the nibble when it opens the confirmation and not when it closes it", async () => {
   const vertex = panelRelay().accounts[1];
   const relay = panelRelay({
     suggestion: vertex,
@@ -1595,27 +1601,27 @@ test("in the panel, the suggested row's Geç offers the nibble when it opens the
   try {
     await inFakeBrowser(tree, async ({ dom }) => {
       const all = () => nodes(dom.container as unknown as FakeNode);
-      // The suggested account's row carries the panel's only switch offer; no strip draws a second Geç.
-      const switches = all().filter((n) => n.attributes.has("aria-expanded"));
+      // The suggested account's row carries the panel's only switch offer; no strip draws a second one.
+      const switches = all().filter((n) => n.attributes.has("aria-pressed"));
       assert.equal(switches.length, 1);
       const row = switches[0];
-      assert.equal(row.attributes.get("aria-label"), "Vertex hesabına geç");
+      assert.match(row.attributes.get("aria-label") ?? "", /^Vertex hesabına geç · /);
       const click = (button: FakeNode) =>
         act(async () =>
           dom.dispatch(button, "click", { clientX: 10, clientY: 20, detail: 1 }),
         );
-      assert.equal(row.attributes.get("aria-expanded"), "false");
+      assert.equal(row.attributes.get("aria-pressed"), "false");
       // Opening the confirmation is the switch request: it opens, and the nibble is offered.
       await click(row);
-      assert.equal(row.attributes.get("aria-expanded"), "true");
+      assert.equal(row.attributes.get("aria-pressed"), "true");
       assert.deepEqual(offered, ["nibble-cursor 1"]);
       // Pressed again with the confirmation open, it is a cancel: it closes and asks for nothing.
       await click(row);
-      assert.equal(row.attributes.get("aria-expanded"), "false");
+      assert.equal(row.attributes.get("aria-pressed"), "false");
       assert.deepEqual(offered, ["nibble-cursor 1"]);
       // Opening it again offers again.
       await click(row);
-      assert.equal(row.attributes.get("aria-expanded"), "true");
+      assert.equal(row.attributes.get("aria-pressed"), "true");
       assert.deepEqual(offered, ["nibble-cursor 1", "nibble-cursor 1"]);
     });
   } finally {
@@ -1626,12 +1632,13 @@ test("in the panel, the suggested row's Geç offers the nibble when it opens the
 test("only a switch request nibbles: no confirmation button offers it", () => {
   const panelAccounts = readFileSync("src/panel/PanelAccounts.tsx", "utf8");
   // The confirmation's own button (the one that calls confirmSwitch) is not a trigger.
-  const call = panelAccounts.indexOf("confirmSwitch(relay, account.id");
+  const call = panelAccounts.indexOf("confirmSwitch(relay, confirming.account.id");
   assert.ok(call > 0, "the confirmation button is still where this test looks");
   assert.ok(!panelAccounts.slice(call - 300, call + 300).includes("nibble"));
   assert.equal(panelAccounts.match(/"nibble-cursor"/g)?.length, 1);
   for (const file of [
     "src/pages/overview/AccountsCard.tsx",
+    "src/pages/overview/ActiveAccountCard.tsx",
     "src/pages/accounts/AccountsTable.tsx",
   ])
     assert.equal(

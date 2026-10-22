@@ -104,7 +104,7 @@ export function AccountList({
           "flex min-w-0 items-center gap-3 text-left outline-none",
           panel ? "px-3 py-2" : "px-4 py-3",
           row.recommended && "bg-accent/40",
-          selected === account.id && "bg-accent",
+          selected === account.id && "bg-accent/60",
           why && "opacity-60",
         );
         return (
