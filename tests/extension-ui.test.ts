@@ -125,9 +125,10 @@ test("each mode has a label and a sentence in both languages", () => {
     assert.match(modeSentence(mode, tr), /ayrı bir tarayıcı profilinde/);
   }
   // Guide writes nothing and quits nothing; off says it never touches.
-  assert.match(modeSentence("guide", en), /writes no browser file and never quits the browser/);
+  assert.match(modeSentence("guide", en), /changes nothing in the browser or the extension and never quits the browser/);
   assert.doesNotMatch(modeSentence("guide", en), /changes that login/);
-  assert.equal(modeOptions(en).find((o) => o.value === "guide")?.label, "Guide only");
+  assert.equal(modeOptions(en).find((o) => o.value === "guide")?.label, "Only tell me");
+  assert.equal(modeOptions(tr).find((o) => o.value === "guide")?.label, "Sadece haber ver");
 });
 
 test("the card names the instance, asks to choose among several, and explains the startup setting", () => {
@@ -246,16 +247,16 @@ test("the settings card shows the mode with its sentence, the instance, the star
     relayFor("darwin", [vertex]),
     createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "guide" } }) }),
   );
-  assert.match(guided, /Yalnızca rehberlik/);
-  assert.match(guided, /Relay hiçbir tarayıcı dosyasına yazmaz/);
-  assert.match(guided, /bu seçenek varsayılan olarak kapalıdır/);
+  assert.match(guided, /Sadece haber ver/);
+  assert.match(guided, /Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez/);
+  assert.match(guided, /bunu sen seçmedikçe hiçbir şeyi değiştirmez/);
   assert.doesNotMatch(guided, /claude\.ai oturumunu da değiştirir/);
   const html = render(
     relayFor("darwin", [vertex], { mode: "restart" }),
     createElement(ExtensionPreference, { initialStatus: status() }),
   );
   assert.match(html, /Claude tarayıcı eklentisi/);
-  assert.match(html, /Eklenti ve claude\.ai oturumu · tarayıcıyı kapatıp yeniden aç/);
+  assert.match(html, /Eklentiyi de değiştir · tarayıcıyı kapatıp aç/);
   assert.match(html, /Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar/);
   assert.match(html, /claude\.ai oturumunu da değiştirir/);
   assert.match(html, /Brave · Kişisel · eklenti yüklü/);
@@ -304,7 +305,7 @@ test("a pair is complete only with the extension's hints and the claude.ai login
     createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "closed" }, saved: [saved(1), saved(2)], cookiesSaved: [saved(1), saved(3)] }) }),
     "en",
   );
-  assert.match(html, /Saved account pairs/);
-  assert.match(html, /Extension and claude\.ai login saved: Vertex\./);
-  assert.match(html, /Only half saved: Kişisel, Alto\./);
+  assert.match(html, /Saved accounts/);
+  assert.match(html, /Extension sign-in and claude\.ai login both saved: Vertex\./);
+  assert.match(html, /Missing one of the two: Kişisel, Alto\./);
 });

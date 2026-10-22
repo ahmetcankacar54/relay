@@ -17,15 +17,15 @@ export const instanceValue = (i: ExtensionTarget) => `${i.app}:${i.profile}`;
 
 export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
   const labels: Record<ExtensionMode, string> = {
-    off: t("Kapalı", "Off"),
-    guide: t("Yalnızca rehberlik", "Guide only"),
+    off: t("Hiçbir şey yapma", "Do nothing"),
+    guide: t("Sadece haber ver", "Only tell me"),
     closed: t(
-      "Eklenti ve claude.ai oturumu · yalnızca tarayıcı kapalıysa",
-      "Extension and claude.ai login · only when the browser is closed",
+      "Eklentiyi de değiştir · tarayıcı kapalıysa",
+      "Change the extension too · if the browser is closed",
     ),
     restart: t(
-      "Eklenti ve claude.ai oturumu · tarayıcıyı kapatıp yeniden aç",
-      "Extension and claude.ai login · quit and reopen the browser",
+      "Eklentiyi de değiştir · tarayıcıyı kapatıp aç",
+      "Change the extension too · quit and reopen the browser",
     ),
   };
   // From the least to the most Relay does.
@@ -38,24 +38,24 @@ export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
 /** The sentence under the mode picker: what Relay does at a switch in that mode. */
 export function modeSentence(mode: ExtensionMode, t: T): string {
   const web = t(
-    "Eklentinin girişi, tarayıcı profilindeki claude.ai oturumundan ayrılamaz: Relay bu profildeki claude.ai oturumunu da değiştirir, claude.ai sekmeleri yeni hesapta açılır. Gündelik claude.ai hesabını korumak için eklentiyi ayrı bir tarayıcı profilinde kullan.",
+    "Eklentinin girişi, tarayıcıdaki claude.ai oturumundan ayrılamaz: Relay bu profildeki claude.ai oturumunu da değiştirir, claude.ai sekmeleri yeni hesapta açılır. Gündelik claude.ai hesabını korumak için eklentiyi ayrı bir tarayıcı profilinde kullan.",
     "The extension's sign-in cannot be separated from the browser profile's claude.ai login: Relay changes that login too, so claude.ai tabs open on the new account. To keep your everyday claude.ai account, use the extension in a separate browser profile.",
   );
   switch (mode) {
     case "restart":
       return `${t(
-        "Relay her geçişte eklentinin girişini ve bu profildeki claude.ai oturumunu kaydeder, yeni hesabınkileri yerine koyar. Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar.",
+        "Relay her hesap değişiminde eklentinin girişini ve bu profildeki claude.ai oturumunu saklar, yeni hesabınkileri yerine koyar. Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar.",
         "Relay saves the extension's sign-in and this profile's claude.ai login at every switch, and puts the new account's in place. A running browser is closed for a moment and opened again with its tabs.",
       )} ${web}`;
     case "closed":
       return `${t(
-        "Relay bunları yalnızca tarayıcı kapalıyken değiştirir. Eklentinin hesabı izlemesini istiyorsan geçişten önce tarayıcıyı kapat.",
+        "Relay bunları yalnızca tarayıcı kapalıyken değiştirir. Eklentinin hesabı izlemesini istiyorsan hesabı değiştirmeden önce tarayıcıyı kapat.",
         "Relay changes them only when the browser is closed. Close it before a switch if you want the extension to follow.",
       )} ${web}`;
     case "guide":
       return t(
-        "Relay hiçbir tarayıcı dosyasına yazmaz ve tarayıcıyı kapatmaz. Geçişten sonra eklenti başka bir hesapta ya da çıkışta kalırsa söyler ve ne yapacağını gösterir.",
-        "Relay writes no browser file and never quits the browser. After a switch it tells you when the extension is left on another account or signed out, and what to do.",
+        "Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez, tarayıcıyı da kapatmaz. Hesap değişince eklenti başka bir hesapta ya da çıkışta kalmışsa bunu söyler ve ne yapacağını gösterir.",
+        "Relay changes nothing in the browser or the extension and never quits the browser. After a switch it tells you when the extension is left on another account or signed out, and what to do.",
       );
     case "off":
       return t("Relay eklentiye hiç dokunmaz.", "Relay never touches the extension.");

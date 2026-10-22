@@ -29,12 +29,15 @@ function pairLine(
   const list = (names: string[]) => names.join(", ");
   const parts = [
     paired.length
-      ? t(`Eklenti + claude.ai oturumu kayıtlı: ${list(paired)}.`, `Extension and claude.ai login saved: ${list(paired)}.`)
-      : t("Henüz tam kayıtlı hesap yok.", "No account is fully saved yet."),
+      ? t(
+          `Eklenti girişi ve claude.ai oturumu ikisi de kayıtlı: ${list(paired)}.`,
+          `Extension sign-in and claude.ai login both saved: ${list(paired)}.`,
+        )
+      : t("Henüz ikisi birden kayıtlı hesap yok.", "No account has both saved yet."),
     half.length
       ? t(
-          `Yalnızca yarısı kayıtlı: ${list(half)}. O hesapla claude.ai'ye girip eklentiyi açtıktan sonra Kontrol et.`,
-          `Only half saved: ${list(half)}. Sign in to claude.ai with it, open the extension, then Check.`,
+          `Eksik kaydı olanlar: ${list(half)}. O hesapla claude.ai'ye girip eklentiyi açtıktan sonra Kontrol et.`,
+          `Missing one of the two: ${list(half)}. Sign in to claude.ai with it, open the extension, then Check.`,
         )
       : "",
   ];
@@ -84,12 +87,12 @@ export function ExtensionPreference({
       <SectionHeading
         title={t("Claude tarayıcı eklentisi", "Claude browser extension")}
         description={t(
-          "Eklenti, tarayıcı profilindeki claude.ai oturumuyla giriş yapar. Hesabı izlemesi için Relay o oturumu da değiştirebilir; bu seçenek varsayılan olarak kapalıdır.",
-          "The extension signs in through the browser profile's claude.ai login. To make it follow the account, Relay can change that login too; this is off by default.",
+          "Eklenti, tarayıcıdaki claude.ai oturumuyla giriş yapar. Hesabı izlemesi için Relay o oturumu da değiştirebilir; bunu sen seçmedikçe hiçbir şeyi değiştirmez.",
+          "The extension signs in through the browser's claude.ai login. To make it follow the account, Relay can change that login too; it changes nothing unless you choose it.",
         )}
       />
       <SettingRow
-        label={t("Geçişte eklenti girişi", "Extension sign-in at a switch")}
+        label={t("Hesap değişince eklentiye ne yapılsın?", "What to do with the extension when the account changes")}
         htmlFor="extension-mode"
         description={modeSentence(setting.mode, t)}
       >
@@ -174,7 +177,7 @@ export function ExtensionPreference({
       )}
       {status.target && setting.mode !== "off" && (
         <SettingRow
-          label={t("Kayıtlı hesap çiftleri", "Saved account pairs")}
+          label={t("Kayıtlı hesaplar", "Saved accounts")}
           description={pairLine(status, accounts, t)}
         >
           <span />
