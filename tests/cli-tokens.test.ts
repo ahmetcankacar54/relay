@@ -76,3 +76,32 @@ test("reading a small ledger does not allocate a buffer the size of the cap", as
   }
   assert.ok(largest < 4 * 1024 * 1024, `allocated ${largest}`);
 });
+
+test("tokens reads the version 3 ledger Relay.app writes and shows its API value", async (t) => {
+  const f = await cliFixture(t);
+  const a = await f.saved("A");
+  const zone = f.store().state.settings.planning.timeZone;
+  const today = localDate(Date.now(), zone);
+  fs.writeFileSync(
+    path.join(f.home, "token-ledger.json"),
+    JSON.stringify({
+      version: 3,
+      zone,
+      complete: true,
+      pricedAt: 1,
+      files: {},
+      days: { [today]: { [`acct:${a.id}`]: { "claude-opus-5-5": { ...counts(1000, 200), cost: 12.5, unpriced: 0 } } } },
+      slots: {},
+      seen: {},
+    }),
+    { mode: 0o600 },
+  );
+  assert.equal(await f.run("tokens", "--json"), 0);
+  const view = JSON.parse(f.out());
+  assert.equal(view.totals.cost, 12.5);
+  assert.equal(view.today.totals.cost, 12.5);
+  f.clear();
+  assert.equal(await f.run("tokens"), 0);
+  assert.match(f.out(), /API value \$12\.50/);
+  assert.match(f.out(), /API value/);
+});

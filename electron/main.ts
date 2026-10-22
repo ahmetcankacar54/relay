@@ -71,11 +71,17 @@ import {
 } from "./core/usage-statistics-input";
 import { lostFoundWeek } from "../shared/lost-found";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
-import { buildTokenUsageView } from "../shared/token-usage-view";
+import {
+  buildTokenToday,
+  buildTokenUsageView,
+} from "../shared/token-usage-view";
+import { buildWidgetSnapshot } from "../shared/widget-snapshot";
 import type { UsageSample } from "../shared/usage-statistics";
 import { attribute } from "./core/token-attribution";
 import { TokenLedger, tokenTickDelay } from "./core/token-ledger";
-import { planningIdentity } from "../shared/planning";
+import { WidgetFile } from "./core/widget-file";
+import { loadWidgetCenter } from "./core/widget-center";
+import { localDate, planningIdentity, wallTime } from "../shared/planning";
 import { PACE_WINDOW_MS } from "../shared/adaptive-plan";
 import {
   automationMode,
@@ -182,6 +188,9 @@ let tokenTickedAt = 0;
 let tokenSamples: UsageSample[] = [];
 let tokenSamplesAt = -Infinity;
 let tokenScanStopped = false;
+/** The macOS widget's file, rewritten after every tick and at local midnight. */
+let widgetFile: WidgetFile | undefined;
+let widgetMidnight: ReturnType<typeof setTimeout> | undefined;
 let trayLanguage: "tr" | "en" = "tr";
 /** Main's own copy (menus, dialogs, notifications) in the app's language. */
 const say = (tr: string, en: string) => pick(trayLanguage)(tr, en);
@@ -294,6 +303,7 @@ async function tokenTickOnce() {
     await addTokenRoots();
     refreshTokenSamples();
     tokenLastTick = await tokenLedger.tick();
+    writeWidget();
   } catch {
     // A scan that fails (a full disk, a bad time zone) never disturbs Relay; it
     // is tried again at the slow pace.
@@ -322,6 +332,61 @@ function scheduleTokenTick() {
   );
   tokenTimer.unref();
 }
+/** Today's numbers for the widget, from the ledger as it stands; never disturbs Relay. */
+function writeWidget() {
+  if (!tokenLedger || !widgetFile) return;
+  try {
+    const zone = service.store.state.settings.planning.timeZone;
+    const now = Date.now();
+    const ledger = tokenLedger.snapshot();
+    const { scannedBytes, totalBytes, complete } = ledger.progress;
+    const percent = complete
+      ? 100
+      : totalBytes > 0
+        ? Math.min(99, Math.floor((scannedBytes / totalBytes) * 100))
+        : 0;
+    widgetFile.write(
+      buildWidgetSnapshot({
+        today: buildTokenToday({
+          ledger,
+          accounts: service.store.state.accounts,
+          zone,
+          now,
+        }),
+        progress: { complete, percent },
+        language: trayLanguage,
+        zone,
+        now,
+      }),
+    );
+  } catch {
+    // A widget file that cannot be written leaves the widget saying Relay is not current.
+  }
+}
+/** At local midnight the widget starts the new day, even with nothing to count. */
+function scheduleWidgetMidnight() {
+  if (widgetMidnight) clearTimeout(widgetMidnight);
+  if (tokenScanStopped) return;
+  let wait = 60 * 60_000;
+  try {
+    const zone = service.store.state.settings.planning.timeZone;
+    const now = Date.now();
+    const today = localDate(now, zone);
+    const tomorrow = new Date(Date.parse(`${today}T12:00:00Z`) + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const midnight = wallTime(tomorrow, "00:00", zone);
+    if (midnight !== undefined && midnight > now)
+      wait = Math.min(wait, midnight - now + 1_000);
+  } catch {
+    // An invalid zone: try again within the hour.
+  }
+  widgetMidnight = setTimeout(() => {
+    writeWidget();
+    scheduleWidgetMidnight();
+  }, wait);
+  widgetMidnight.unref();
+}
 function startTokenScan() {
   try {
     tokenRoots.push({ dir: path.join(os.homedir(), ".claude", "projects") });
@@ -336,6 +401,12 @@ function startTokenScan() {
         }),
       zone: () => service.store.state.settings.planning.timeZone,
     });
+    widgetFile = new WidgetFile(
+      path.join(app.getPath("userData"), "widget"),
+      loadWidgetCenter(__dirname),
+    );
+    writeWidget();
+    scheduleWidgetMidnight();
     scheduleTokenTick();
   } catch {
     // Without a ledger the Usage page's token card reports an error; Relay runs on.
@@ -1259,7 +1330,10 @@ function bindIPC() {
     const language = z.enum(["tr", "en"]).parse(value);
     const changed = language !== trayLanguage;
     trayLanguage = language;
-    if (changed) applyAppMenu();
+    if (changed) {
+      applyAppMenu();
+      writeWidget();
+    }
     tray?.update();
   });
   handle("account-planning", (accountId, input) => {
@@ -1724,6 +1798,7 @@ app.on("will-quit", () => {
   if (trayTimer) clearInterval(trayTimer);
   tokenScanStopped = true;
   if (tokenTimer) clearTimeout(tokenTimer);
+  if (widgetMidnight) clearTimeout(widgetMidnight);
   tray?.destroy();
   trayPanel?.destroy();
   switchStory?.destroy();

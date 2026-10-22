@@ -8,6 +8,7 @@ import {
   type TokenCounts,
 } from "../../../shared/token-usage-view";
 import type { StatisticsRange } from "../../../shared/usage-statistics-view";
+import { formatCost } from "../../../shared/number-format";
 import { resolveAccount } from "../accounts";
 import type { Command } from "../command";
 import { openContext } from "../context";
@@ -29,9 +30,12 @@ function readLedger(file: string): LedgerSnapshot | undefined {
     version?: number;
     complete?: boolean;
     days?: LedgerSnapshot["days"];
+    slots?: LedgerSnapshot["slots"];
+    slotsSince?: number;
     files?: Record<string, { size?: number; offset?: number; broken?: boolean }>;
   };
-  if (saved?.version !== 2 || !saved.days || typeof saved.days !== "object")
+  // Relay.app has written version 3 since 2026-10-18; it reads version 2 the same way.
+  if ((saved?.version !== 2 && saved?.version !== 3) || !saved.days || typeof saved.days !== "object")
     throw new CliError("The token ledger is in a format this relay does not know. Update relay.", EXIT.environment);
   let scannedBytes = 0,
     totalBytes = 0;
@@ -40,7 +44,12 @@ function readLedger(file: string): LedgerSnapshot | undefined {
     scannedBytes += Number(state?.offset) || 0;
     totalBytes += Number(state?.size) || 0;
   }
-  return { days: saved.days, progress: { scannedBytes, totalBytes, complete: saved.complete === true } };
+  return {
+    days: saved.days,
+    ...(saved.slots && typeof saved.slots === "object" ? { slots: saved.slots } : {}),
+    ...(typeof saved.slotsSince === "number" ? { slotsSince: saved.slotsSince } : {}),
+    progress: { scannedBytes, totalBytes, complete: saved.complete === true },
+  };
 }
 
 /** When the active-account timeline began: its first segment's start. Read only, never rewritten. */
@@ -89,6 +98,7 @@ export const tokens: Command = async ({ io, deps, parsed, t, lang }) => {
   }
   const format = new Intl.NumberFormat(lang === "tr" ? "tr-TR" : "en-US", { notation: "compact", maximumFractionDigits: 1 });
   const n = (value: number) => format.format(value);
+  const usd = (value: number | undefined) => formatCost(value ?? 0, lang);
   const label = (row: (typeof view.rows)[number]) =>
     row.kind === "account" ? (row.name ?? "") : TOKEN_ROW_LABELS[row.kind][lang];
   io.stdout(
@@ -96,8 +106,8 @@ export const tokens: Command = async ({ io, deps, parsed, t, lang }) => {
   );
   io.stdout(
     t(
-      `Toplam ${n(total(view.totals))} · girdi ${n(view.totals.input)} · çıktı ${n(view.totals.output)} · önbellek yazma ${n(view.totals.cacheWrite)} · önbellek okuma ${n(view.totals.cacheRead)}`,
-      `Total ${n(total(view.totals))} · input ${n(view.totals.input)} · output ${n(view.totals.output)} · cache write ${n(view.totals.cacheWrite)} · cache read ${n(view.totals.cacheRead)}`,
+      `Toplam ${n(total(view.totals))} · girdi ${n(view.totals.input)} · çıktı ${n(view.totals.output)} · önbellek yazma ${n(view.totals.cacheWrite)} · önbellek okuma ${n(view.totals.cacheRead)} · API karşılığı ${view.totals.costEstimated ? "≈" : ""}${usd(view.totals.cost)}`,
+      `Total ${n(total(view.totals))} · input ${n(view.totals.input)} · output ${n(view.totals.output)} · cache write ${n(view.totals.cacheWrite)} · cache read ${n(view.totals.cacheRead)} · API value ${view.totals.costEstimated ? "≈" : ""}${usd(view.totals.cost)}`,
     ),
   );
   if (view.rows.length) {
@@ -108,9 +118,14 @@ export const tokens: Command = async ({ io, deps, parsed, t, lang }) => {
         return cell && total(cell) ? `${cell.estimated ? "≈" : ""}${n(total(cell))}` : "—";
       }),
       n(Object.values(day.byRow).reduce((sum, cell) => sum + total(cell), 0)),
+      `${Object.values(day.byRow).some((cell) => cell.costEstimated) ? "≈" : ""}${usd(
+        Object.values(day.byRow).reduce((sum, cell) => sum + (cell.cost ?? 0), 0),
+      )}`,
     ]);
     io.stdout("");
-    io.stdout(table([t("Gün", "Day"), ...view.rows.map(label), t("Toplam", "Total")], rows));
+    io.stdout(
+      table([t("Gün", "Day"), ...view.rows.map(label), t("Toplam", "Total"), t("API karşılığı", "API value")], rows),
+    );
   }
   io.stdout("");
   if (view.exactSince)
@@ -120,6 +135,12 @@ export const tokens: Command = async ({ io, deps, parsed, t, lang }) => {
         `Exact account matching has been kept since ${view.exactSince}; earlier days were estimated from Relay's limit samples (≈).`,
       ),
     );
+  io.stdout(
+    t(
+      `API karşılığı: Anthropic API liste fiyatları (${view.pricesChecked}); abonelik ücretinden bağımsız.`,
+      `API value: Anthropic API list prices (${view.pricesChecked}); separate from the subscription's price.`,
+    ),
+  );
   if (!view.progress.complete)
     io.stdout(t(`Konuşma kayıtları hâlâ taranıyor: %${view.progress.percent}.`, `Transcripts are still being scanned: ${view.progress.percent}%.`));
   return EXIT.ok;
