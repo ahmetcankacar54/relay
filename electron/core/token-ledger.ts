@@ -2,7 +2,8 @@ import fs from "node:fs/promises";
 import fsSync, { constants, type Dirent, type Stats } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { localDate } from "../../shared/planning";
+import { estimateCost, responseCost } from "../../shared/model-prices";
+import { localDate, localSlot } from "../../shared/planning";
 import {
   privateJournalDirectory,
   readPrivateJson,
@@ -16,12 +17,30 @@ export interface TokenCounts {
   cacheWrite: number;
   cacheRead: number;
   responses: number;
+  /** What these tokens would cost on the API, in USD; see shared/model-prices.ts. */
+  cost?: number;
+  /** Tokens of responses whose model has no price; they add nothing to `cost`. */
+  unpriced?: number;
+  /** Some of `cost` was estimated from sums counted before responses were priced. */
+  costEstimated?: true;
+}
+/** One quarter hour of one day for one `who`: the four kinds and their cost. */
+export interface SlotCounts {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+  cost: number;
 }
 /** `${date}|${who}|${model}`; who = `acct:<id>` | `est:<id>` | "terminal" | "unknown". */
 export type BucketKey = string;
 export interface LedgerSnapshot {
   /** date → who → model → counts */
   days: Record<string, Record<string, Record<string, TokenCounts>>>;
+  /** date → who → quarter hour (0–95) → counts, for the last 8 days. */
+  slots?: Record<string, Record<string, Record<string, SlotCounts>>>;
+  /** When slots began to be kept: earlier responses of those days have none. */
+  slotsSince?: number;
   progress: {
     scannedBytes: number;
     totalBytes: number;
@@ -69,13 +88,18 @@ export interface TokenLedgerOptions {
 }
 
 type Days = LedgerSnapshot["days"];
-type Usage = Omit<TokenCounts, "responses">;
+type Slots = NonNullable<LedgerSnapshot["slots"]>;
+type Usage = Pick<TokenCounts, "input" | "output" | "cacheWrite" | "cacheRead">;
 
 /** The response a transcript's last rows belong to, and what it has added so far. */
 interface LastResponse extends Usage {
   date: string;
   who: string;
   model: string;
+  /** The cost added so far; -1 when the model has no price. */
+  cost: number;
+  /** Its quarter hour, when the day keeps slots. */
+  slot?: number;
 }
 
 /** What is kept of a transcript, under a hash of its path: where reading stopped, never its text. */
@@ -108,6 +132,10 @@ interface Saved {
   complete?: true;
   files: Record<string, FileState>;
   days: Days;
+  slots?: Slots;
+  slotsSince?: number;
+  /** When buckets began to carry a cost; a ledger without it has its sums estimated once. */
+  pricedAt?: number;
   /** The length of each day's seen file that goes with these offsets. */
   seen: Record<string, number>;
 }
@@ -136,6 +164,8 @@ interface Tick {
   zone: string;
   /** The oldest date kept. */
   cutoff: string;
+  /** The oldest date whose slots are kept. */
+  slotCutoff: string;
 }
 
 const DAY_MS = 86_400_000;
@@ -144,6 +174,9 @@ const MAX_LINE_BYTES = 2 * 1024 * 1024;
 /** `<project>/<session>/subagents/<agent>.jsonl` is four levels below a root. */
 const MAX_DEPTH = 4;
 const KEEP_DAYS = 120;
+/** Today and the 7 days before it keep quarter-hour slots. */
+const SLOT_DAYS = 8;
+const SLOT = /^(\d|[1-8]\d|9[0-5])$/;
 /**
  * The 1 MiB default of the private JSON helpers is too small: the owner's
  * transcripts are thousands of files, each with a key and offsets here.
@@ -172,7 +205,7 @@ const USAGE = Buffer.from('"usage"');
 const ASSISTANT = Buffer.from('"assistant"');
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const USAGE_FIELDS = ["input", "output", "cacheWrite", "cacheRead"] as const;
-const FIELDS = [...USAGE_FIELDS, "responses"] as const;
+const FIELDS = [...USAGE_FIELDS, "responses", "cost", "unpriced"] as const;
 
 const yieldToEventLoop = () =>
   new Promise<void>((resolve) => setImmediate(resolve));
@@ -199,6 +232,20 @@ function isId(value: unknown): value is string {
   );
 }
 
+function finite(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+/** Give a bucket counted before costs were kept an estimated cost, once. */
+function priceOldBucket(model: string, counts: TokenCounts) {
+  const estimate = estimateCost(model, counts);
+  if (estimate === undefined) counts.unpriced = tokensOf(counts);
+  else counts.cost = estimate;
+  counts.costEstimated = true;
+}
+
 function usageOf(usage: Record<string, unknown>): Usage {
   return {
     input: amount(usage.input_tokens),
@@ -207,6 +254,22 @@ function usageOf(usage: Record<string, unknown>): Usage {
     cacheRead: amount(usage.cache_read_input_tokens),
   };
 }
+
+/** A response's cost from its row; -1 when its model has no price. */
+function costOf(model: string, usage: Usage, raw: Record<string, unknown>) {
+  const split = isRecord(raw.cache_creation) ? raw.cache_creation : undefined;
+  const cost = responseCost(model, {
+    ...usage,
+    ...(split
+      ? { cacheWrite1h: amount(split.ephemeral_1h_input_tokens) }
+      : {}),
+    ...(typeof raw.speed === "string" ? { speed: raw.speed } : {}),
+    ...(typeof raw.inference_geo === "string" ? { geo: raw.inference_geo } : {}),
+  });
+  return cost ?? -1;
+}
+
+const tokensOf = (u: Usage) => u.input + u.output + u.cacheWrite + u.cacheRead;
 
 function whoOf(attribution: Attribution): string {
   switch (attribution.kind) {
@@ -234,6 +297,25 @@ function bucket(
     cacheWrite: 0,
     cacheRead: 0,
     responses: 0,
+    cost: 0,
+    unpriced: 0,
+  });
+}
+
+function slotBucket(
+  slots: Slots,
+  date: string,
+  who: string,
+  slot: number,
+): SlotCounts {
+  const byWho = (slots[date] ??= Object.create(null));
+  const bySlot = (byWho[who] ??= Object.create(null));
+  return (bySlot[slot] ??= {
+    input: 0,
+    output: 0,
+    cacheWrite: 0,
+    cacheRead: 0,
+    cost: 0,
   });
 }
 
@@ -484,14 +566,26 @@ function restoreLast(value: unknown): LastResponse | undefined {
     typeof value.model !== "string"
   )
     return;
-  return {
-    date: value.date,
-    who: value.who,
-    model: value.model,
+  const usage = {
     input: amount(value.input),
     output: amount(value.output),
     cacheWrite: amount(value.cacheWrite),
     cacheRead: amount(value.cacheRead),
+  };
+  // A response saved before costs were kept is taken as priced at its estimate.
+  const cost =
+    typeof value.cost === "number" && Number.isFinite(value.cost)
+      ? Math.max(-1, value.cost)
+      : (estimateCost(value.model, usage) ?? -1);
+  return {
+    date: value.date,
+    who: value.who,
+    model: value.model,
+    ...usage,
+    cost,
+    ...(typeof value.slot === "number" && SLOT.test(String(value.slot))
+      ? { slot: value.slot }
+      : {}),
   };
 }
 
@@ -540,6 +634,9 @@ export class TokenLedger {
   private readonly files = new Map<string, FileState>();
   private readonly seen: SeenDays;
   private days: Days = Object.create(null);
+  private slots: Slots = Object.create(null);
+  private slotsSince?: number;
+  private pricedAt?: number;
   /** The zone `days` are in; undefined until the first tick names one. */
   private bucketZone?: string;
   /** The seen files could not be trusted: empty everything before counting. */
@@ -599,6 +696,8 @@ export class TokenLedger {
     }
     return {
       days: structuredClone(this.days),
+      slots: structuredClone(this.slots),
+      ...(this.slotsSince === undefined ? {} : { slotsSince: this.slotsSince }),
       progress: {
         scannedBytes,
         totalBytes,
@@ -617,6 +716,7 @@ export class TokenLedger {
       zone,
       // An invalid zone throws here, before anything is read.
       cutoff: localDate(started - KEEP_DAYS * DAY_MS, zone),
+      slotCutoff: localDate(started - (SLOT_DAYS - 1) * DAY_MS, zone),
     };
     if (
       this.mustStartOver ||
@@ -625,6 +725,10 @@ export class TokenLedger {
       this.startOver(zone);
     else if (this.bucketZone === undefined) {
       this.bucketZone = zone;
+      this.dirty = true;
+    }
+    if (this.slotsSince === undefined) {
+      this.slotsSince = started;
       this.dirty = true;
     }
     const pass = (this.pass ??= {
@@ -677,6 +781,9 @@ export class TokenLedger {
     this.passCompleteSinceStart = false;
     this.files.clear();
     this.days = Object.create(null);
+    // The rescan reads every kept day again, so their slots come back whole.
+    this.slots = Object.create(null);
+    this.slotsSince = 0;
     this.pass = undefined;
     this.cursor = undefined;
     this.bucketZone = zone;
@@ -906,11 +1013,28 @@ export class TokenLedger {
       const last = state.last;
       if (!last || last.date < tick.cutoff) return;
       const counts = bucket(this.days, last.date, last.who, last.model);
+      const slot =
+        last.slot !== undefined && last.date >= tick.slotCutoff
+          ? slotBucket(this.slots, last.date, last.who, last.slot)
+          : undefined;
+      const before = tokensOf(last);
       for (const field of USAGE_FIELDS)
         if (usage[field] > last[field]) {
           counts[field] += usage[field] - last[field];
+          if (slot) slot[field] += usage[field] - last[field];
           last[field] = usage[field];
         }
+      if (last.cost < 0) {
+        counts.unpriced = (counts.unpriced ?? 0) + tokensOf(last) - before;
+        return;
+      }
+      // The row's whole cost, less what its earlier rows added.
+      const cost = costOf(last.model, last, message.usage);
+      if (cost > last.cost) {
+        counts.cost = (counts.cost ?? 0) + cost - last.cost;
+        if (slot) slot.cost += cost - last.cost;
+        last.cost = cost;
+      }
       return;
     }
     const date = localDate(time, tick.zone);
@@ -940,13 +1064,30 @@ export class TokenLedger {
     const counts = bucket(this.days, date, who, model);
     for (const field of USAGE_FIELDS) counts[field] += usage[field];
     counts.responses += 1;
+    const cost = costOf(model, usage, message.usage);
+    if (cost < 0) counts.unpriced = (counts.unpriced ?? 0) + tokensOf(usage);
+    else counts.cost = (counts.cost ?? 0) + cost;
+    let slot: number | undefined;
+    if (date >= tick.slotCutoff) {
+      slot = localSlot(time, tick.zone);
+      const into = slotBucket(this.slots, date, who, slot);
+      for (const field of USAGE_FIELDS) into[field] += usage[field];
+      if (cost > 0) into.cost += cost;
+    }
     if (key === undefined || hash === undefined) {
       delete state.lastKey;
       delete state.last;
       return;
     }
     state.lastKey = key;
-    state.last = { date, who, model, ...usage };
+    state.last = {
+      date,
+      who,
+      model,
+      ...usage,
+      cost,
+      ...(slot === undefined ? {} : { slot }),
+    };
     this.seen.add(date, hash);
   }
 
@@ -961,6 +1102,11 @@ export class TokenLedger {
     for (const date of Object.keys(this.days))
       if (date < tick.cutoff) {
         delete this.days[date];
+        this.dirty = true;
+      }
+    for (const date of Object.keys(this.slots))
+      if (date < tick.slotCutoff) {
+        delete this.slots[date];
         this.dirty = true;
       }
     for (const date of this.seen.dates())
@@ -994,6 +1140,9 @@ export class TokenLedger {
       ...(this.passCompleteSinceStart ? { complete: true as const } : {}),
       files: Object.fromEntries(this.files),
       days: this.days,
+      slots: this.slots,
+      ...(this.slotsSince === undefined ? {} : { slotsSince: this.slotsSince }),
+      ...(this.pricedAt === undefined ? {} : { pricedAt: this.pricedAt }),
       seen: Object.fromEntries(this.seen.bytes),
     };
     this.lastPersist = this.now();
@@ -1023,6 +1172,10 @@ export class TokenLedger {
       // No ledger yet, or an unreadable one.
     }
     if (typeof value.zone === "string") this.bucketZone = value.zone;
+    // Costs start now; buckets restored below without one are estimated.
+    const priced = finite(value.pricedAt);
+    this.pricedAt = priced ?? this.now();
+    if (priced === undefined) this.dirty = true;
     if (!this.seen.restore(isRecord(value.seen) ? value.seen : {})) {
       this.mustStartOver = true;
       this.seen.forget();
@@ -1043,8 +1196,25 @@ export class TokenLedger {
             if (!isRecord(raw)) continue;
             const counts = bucket(this.days, date, who, model);
             for (const field of FIELDS) counts[field] += amount(raw[field]);
+            if (raw.costEstimated === true) counts.costEstimated = true;
+            if (priced === undefined) priceOldBucket(model, counts);
           }
         }
       }
+    if (priced !== undefined && isRecord(value.slots))
+      for (const [date, byWho] of Object.entries(value.slots)) {
+        if (!DATE.test(date) || !isRecord(byWho)) continue;
+        for (const [who, bySlot] of Object.entries(byWho)) {
+          if (!isRecord(bySlot)) continue;
+          for (const [slot, raw] of Object.entries(bySlot)) {
+            if (!SLOT.test(slot) || !isRecord(raw)) continue;
+            const counts = slotBucket(this.slots, date, who, Number(slot));
+            for (const field of [...USAGE_FIELDS, "cost"] as const)
+              counts[field] += amount(raw[field]);
+          }
+        }
+      }
+    const since = finite(value.slotsSince);
+    if (priced !== undefined && since !== undefined) this.slotsSince = since;
   }
 }

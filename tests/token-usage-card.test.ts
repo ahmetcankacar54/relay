@@ -55,13 +55,24 @@ const view: TokenUsageView = {
   range: 7,
   days: DATES.map((date) => ({ date, byRow: byDate[date] ?? {} })),
   rows,
-  totals: sum(...rows.map((r) => r.totals)),
+  totals: { ...sum(...rows.map((r) => r.totals)), cost: 1234.5 },
   models: [
     { model: "claude-opus-4", totals: counts(1_500_000, 250_000, 50_000, 800_000) },
     { model: "claude-sonnet-4", totals: counts(547_000, 76_000, 0, 8_000) },
   ],
   progress: { percent: 100, complete: true },
   exactSince: "2026-10-12",
+  today: {
+    date: "2026-10-14",
+    totals: { ...counts(1_100_000, 220_000, 50_000, 805_000), cost: 444.56 },
+    // 10:00Z is 13:00 in Istanbul: quarter hour 52.
+    slots: Array.from({ length: 96 }, (_, i) => (i > 52 ? null : i % 4)),
+    currentSlot: 52,
+    change: 0.5719,
+    yesterdayAverage: 1.5,
+  },
+  unpricedModels: [],
+  pricesChecked: "2026-10-22",
 };
 
 function relayFor(api: Partial<RelayAPI> = {}): Relay {
@@ -122,6 +133,7 @@ test("the card names itself, totals the range and splits it into four tiles", ()
     ["Çıktı", "326 B"],
     ["Önbellek yazma", "50 B"],
     ["Önbellek okuma", "808 B"],
+    ["API karşılığı", "$1.234,50"],
   ]);
   // The exact count stays one hover away.
   assert.match(html, /title="2\.047\.000"/);
@@ -129,19 +141,19 @@ test("the card names itself, totals the range and splits it into four tiles", ()
   const en = text(shown("en"));
   assert.match(en, /Token usage/);
   assert.match(en, /Total 3\.2m/);
-  for (const label of ["Input", "Output", "Cache write", "Cache read"]) assert.match(en, new RegExp(label));
+  for (const label of ["Input", "Output", "Cache write", "Cache read", "API value"]) assert.match(en, new RegExp(label));
   assert.doesNotMatch(en, /Girdi|Çıktı|Önbellek/);
 });
 
-test("the metric toggle offers total, input, output and cache, total first", () => {
+test("the metric toggle offers total, input, output, cache and the API value, total first", () => {
   const html = shown();
   assert.match(html, /data-slot="toggle-group"/);
   const items = [...html.matchAll(/data-slot="toggle-group-item"[^>]*>([^<]+)</g)].map((m) => m[1]);
-  assert.deepEqual(items, ["Toplam", "Girdi", "Çıktı", "Önbellek"]);
+  assert.deepEqual(items, ["Toplam", "Girdi", "Çıktı", "Önbellek", "API karşılığı"]);
   assert.match(html, /data-state="on"[^>]*>Toplam</);
   assert.deepEqual(
     [...shown("en").matchAll(/data-slot="toggle-group-item"[^>]*>([^<]+)</g)].map((m) => m[1]),
-    ["Total", "Input", "Output", "Cache"],
+    ["Total", "Input", "Output", "Cache", "API value"],
   );
 });
 
@@ -606,4 +618,54 @@ test("clicking a bar or pressing Enter on it explains that day, and Escape puts 
   } finally {
     dom.uninstall();
   }
+});
+
+test("the Bugün card shows today's tokens, their API value, the change and the line up to now", () => {
+  const html = shown();
+  const today = html.slice(html.indexOf('data-slot="token-today"'));
+  const plain = text(today);
+  assert.match(plain, /Bugün/);
+  assert.match(plain, /Girdi\s*1,1 Mn/);
+  assert.match(plain, /Önbellek\s*855 B/);
+  assert.match(html, /data-slot="token-today-cost"[^>]*>\$444,56</);
+  assert.match(html, /data-slot="token-today-change"[^>]*>\+%57,2</);
+  assert.match(html, /data-slot="token-today-yesterday"/);
+  // The line stops at the current quarter hour: 53 points, the first a move.
+  const d = /data-slot="token-today-line"[^>]*d="([^"]+)"/.exec(html)?.[1] ?? "";
+  assert.equal(d.match(/[ML]/g)?.length, 53);
+  const en = text(shown("en"));
+  assert.match(en, /Today/);
+  assert.match(en, /\$444\.56/);
+  assert.match(en, /\+57\.2%/);
+});
+
+test("the Bugün card says since when the line is kept, and has no change or dashed line without yesterday", () => {
+  const since = Date.parse("2026-10-14T08:30:00Z");
+  const html = card({
+    view: { ...view, today: { ...view.today, change: null, yesterdayAverage: null, slotsSince: since } },
+    loading: false,
+  });
+  assert.match(text(html), /Gün içi çizgi \d\d:\d\d itibarıyla tutuluyor\./);
+  assert.doesNotMatch(html, /token-today-change|token-today-yesterday/);
+});
+
+test("the API value metric shows dollars in the legend and table, and the price list and unpriced models are named", () => {
+  const html = card({
+    view: { ...view, unpricedModels: ["mystery"], totals: { ...view.totals, unpriced: 1500 } },
+    loading: false,
+  });
+  const plain = text(html);
+  assert.match(plain, /Fiyatlar: Anthropic API liste fiyatları, 22 Eki 2026\./);
+  assert.match(plain, /1,5 B token fiyatı bilinmeyen modellerden; tutara katılmadı \(mystery\)\./);
+  const table = render(
+    createElement(DayTable, {
+      view: {
+        ...view,
+        days: [{ date: "2026-10-14", byRow: { a: { ...cell(counts(1)), cost: 2.5, costEstimated: true as const } } }],
+      },
+      columns: tokenColumns(view, accounts, (tr) => tr),
+      metric: "cost" as never,
+    }),
+  );
+  assert.match(text(table), /≈\s*tahmini\s*\$2,50/);
 });

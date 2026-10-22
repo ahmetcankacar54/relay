@@ -31,6 +31,11 @@ export function localDate(time: number, timeZone: string) {
   const p = localParts(time, timeZone);
   return `${p.year}-${p.month}-${p.day}`;
 }
+/** The local quarter hour (0–95) of `time` in `timeZone`; a repeated DST hour shares its slots. */
+export function localSlot(time: number, timeZone: string) {
+  const p = localParts(time, timeZone);
+  return Math.floor((Number(p.hour) * 60 + Number(p.minute)) / 15);
+}
 /** The local clock hour (0–23) of `time` in `timeZone`. */
 export function localHour(time: number, timeZone: string) {
   return Number(localParts(time, timeZone).hour);

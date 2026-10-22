@@ -2,7 +2,8 @@ import type {
   LedgerSnapshot,
   TokenCounts,
 } from "../electron/core/token-ledger";
-import { localDate } from "./planning";
+import { PRICES_CHECKED } from "./model-prices";
+import { localDate, localSlot, wallTime } from "./planning";
 import type { Account } from "./types";
 import {
   FORMER_KEY,
@@ -24,11 +25,28 @@ export interface TokenRow {
   totals: TokenCounts;
 }
 
+/** Today so far, for the Bugün card and the widget. */
+export interface TokenToday {
+  date: string;
+  /** Today's tokens and cost from the day buckets. */
+  totals: TokenCounts;
+  /** The API value of each quarter hour today, in USD; null after the current one. */
+  slots: (number | null)[];
+  currentSlot: number;
+  /** Today's cost so far against yesterday's up to the same quarter hour; null without a whole yesterday. */
+  change: number | null;
+  /** Yesterday's API value per quarter hour, for the dashed line; null without a whole yesterday. */
+  yesterdayAverage: number | null;
+  /** When slots began to be kept, if that was after today began. */
+  slotsSince?: number;
+}
+
 export interface TokenUsageView {
   range: StatisticsRange;
   /** Every date of the range, oldest first, ending today in the planning zone. */
   days: {
     date: string;
+    /** `estimated`: the account was estimated from limit samples. */
     byRow: Record<string, TokenCounts & { estimated: boolean }>;
   }[];
   /** Rows with tokens in the range: accounts and the former row by total, then unknown and terminal. */
@@ -40,6 +58,11 @@ export interface TokenUsageView {
   progress: { percent: number; complete: boolean; error?: true };
   /** The date, in the planning zone, from which Desktop accounts are matched exactly. */
   exactSince?: string;
+  today: TokenToday;
+  /** Models in the range whose tokens have no price. */
+  unpricedModels: string[];
+  /** The date of the price list. */
+  pricesChecked: string;
 }
 
 export interface TokenUsageInput {
@@ -79,6 +102,8 @@ const zero = (): TokenCounts => ({
   cacheWrite: 0,
   cacheRead: 0,
   responses: 0,
+  cost: 0,
+  unpriced: 0,
 });
 const add = (to: TokenCounts, from: TokenCounts) => {
   to.input += from.input;
@@ -86,6 +111,9 @@ const add = (to: TokenCounts, from: TokenCounts) => {
   to.cacheWrite += from.cacheWrite;
   to.cacheRead += from.cacheRead;
   to.responses += from.responses;
+  to.cost = (to.cost ?? 0) + (from.cost ?? 0);
+  to.unpriced = (to.unpriced ?? 0) + (from.unpriced ?? 0);
+  if (from.costEstimated) to.costEstimated = true;
 };
 const total = (c: TokenCounts) =>
   c.input + c.output + c.cacheWrite + c.cacheRead;
@@ -106,7 +134,7 @@ interface Who {
 }
 
 /** The row a ledger `who` key counts toward: one per account, one for all former ones. */
-function classify(who: string, accounts: Map<string, Account>): Who {
+export function classify(who: string, accounts: Map<string, Account>): Who {
   if (who === TERMINAL_KEY)
     return {
       key: TERMINAL_KEY,
@@ -213,6 +241,10 @@ export function buildTokenUsageView(input: TokenUsageInput): TokenUsageView {
       ? Math.min(99, Math.max(0, Math.floor((scannedBytes / totalBytes) * 100)))
       : 0;
 
+  const unpricedModels = byTotal
+    .filter(([, counts]) => (counts.unpriced ?? 0) > 0)
+    .map(([model]) => model);
+
   return {
     range,
     days,
@@ -223,5 +255,67 @@ export function buildTokenUsageView(input: TokenUsageInput): TokenUsageView {
     ...(input.exactSince !== undefined
       ? { exactSince: localDate(input.exactSince, zone) }
       : {}),
+    today: buildTokenToday(input),
+    unpricedModels,
+    pricesChecked: PRICES_CHECKED,
+  };
+}
+
+const SLOTS_PER_DAY = 96;
+
+/**
+ * Today so far: its tokens and cost from the day buckets, and its line from
+ * the quarter-hour slots. The change compares today with yesterday up to the
+ * same quarter hour, and only when slots were kept for all of yesterday.
+ */
+export function buildTokenToday(
+  input: Pick<TokenUsageInput, "ledger" | "accounts" | "accountId" | "zone" | "now">,
+): TokenToday {
+  const { ledger, zone, now } = input;
+  const accounts = new Map(input.accounts.map((a) => [a.id, a]));
+  const keep = (who: string) =>
+    input.accountId === undefined ||
+    classify(who, accounts).key === input.accountId;
+  const today = localDate(now, zone);
+  const yesterday = shiftDate(today, -1);
+  const currentSlot = localSlot(now, zone);
+
+  const totals = zero();
+  for (const [who, byModel] of Object.entries(ledger.days[today] ?? {}))
+    if (keep(who)) for (const counts of Object.values(byModel)) add(totals, counts);
+
+  const costs = (date: string) => {
+    const out: number[] = Array(SLOTS_PER_DAY).fill(0);
+    for (const [who, bySlot] of Object.entries(ledger.slots?.[date] ?? {}))
+      if (keep(who))
+        for (const [slot, counts] of Object.entries(bySlot))
+          if (Number(slot) < SLOTS_PER_DAY) out[Number(slot)] += counts.cost;
+    return out;
+  };
+  const todayCosts = costs(today);
+  const slots = todayCosts.map((cost, slot) => (slot <= currentSlot ? cost : null));
+
+  const since = ledger.slotsSince;
+  const startOf = (date: string) => wallTime(date, "00:00", zone) ?? Infinity;
+  const wholeYesterday = since !== undefined && since <= startOf(yesterday);
+  let change: number | null = null;
+  let yesterdayAverage: number | null = null;
+  if (wholeYesterday) {
+    const before = costs(yesterday);
+    const sum = (list: number[], upTo: number) =>
+      list.slice(0, upTo + 1).reduce((a, b) => a + b, 0);
+    const then = sum(before, currentSlot);
+    if (then > 0) change = sum(todayCosts, currentSlot) / then - 1;
+    yesterdayAverage = sum(before, SLOTS_PER_DAY - 1) / SLOTS_PER_DAY;
+  }
+
+  return {
+    date: today,
+    totals,
+    slots,
+    currentSlot,
+    change,
+    yesterdayAverage,
+    ...(since !== undefined && since > startOf(today) ? { slotsSince: since } : {}),
   };
 }

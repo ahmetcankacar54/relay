@@ -27,6 +27,16 @@ function viewOf(byDate: Record<string, ByRow>, extra: Partial<TokenUsageView> = 
     totals: counts(0),
     models: [],
     progress: { percent: 100, complete: true },
+    today: {
+      date: "2026-10-14",
+      totals: counts(0),
+      slots: Array(96).fill(null),
+      currentSlot: 48,
+      change: null,
+      yesterdayAverage: null,
+    },
+    unpricedModels: [],
+    pricesChecked: "2026-10-22",
     ...extra,
   };
 }

@@ -34,8 +34,11 @@ import {
   useDayHover,
 } from "./DayHover";
 import { PandaBench } from "./PandaBench";
+import { TodayCard } from "./TodayCard";
 import { busiestDay, pandaLines, type PandaLine } from "./panda-facts";
 import {
+  formatChange,
+  formatCost,
   formatDay,
   formatDayLong,
   formatNumber,
@@ -45,14 +48,16 @@ import {
 } from "./format";
 import { useTokenUsage, type TokenUsageState } from "./useTokenUsage";
 
-type Metric = "total" | "input" | "output" | "cache";
-const METRICS: Metric[] = ["total", "input", "output", "cache"];
+type Metric = "total" | "input" | "output" | "cache" | "cost";
+const METRICS: Metric[] = ["total", "input", "output", "cache", "cost"];
 
 const totalOf = (c: TokenCounts) =>
   c.input + c.output + c.cacheWrite + c.cacheRead;
-/** What the chart and the table count: all four kinds, or one; "cache" is cache write plus cache read. */
+/** What the chart and the table count: all four kinds, or one; "cache" is cache write plus cache read; "cost" the API value. */
 function metricValue(c: TokenCounts, metric: Metric) {
   switch (metric) {
+    case "cost":
+      return c.cost ?? 0;
     case "total":
       return totalOf(c);
     case "input":
@@ -63,6 +68,18 @@ function metricValue(c: TokenCounts, metric: Metric) {
       return c.cacheWrite + c.cacheRead;
   }
 }
+
+/** A metric's value as text: dollars for the API value, compact tokens otherwise. */
+const formatValue = (value: number, metric: Metric, language: Language) =>
+  metric === "cost" ? formatCost(value, language) : formatTokens(value, language);
+
+/** Whether a cell's value is estimated: its account always, and under "cost" its amount too. */
+const isEstimated = (
+  cell: { estimated: boolean; costEstimated?: true } | undefined,
+  metric: Metric,
+) =>
+  cell?.estimated === true ||
+  (metric === "cost" && cell?.costEstimated === true);
 
 /** A named row: the account's own name, or the label of its kind in the page's language. */
 const rowLabel = (row: TokenRow, t: T) =>
@@ -151,6 +168,7 @@ function Tiles({ view }: { view: TokenUsageView }) {
     [t("Önbellek yazma", "Cache write"), totals.cacheWrite],
     [t("Önbellek okuma", "Cache read"), totals.cacheRead],
   ];
+  const cost = totals.cost ?? 0;
   const total = totalOf(totals);
   return (
     <>
@@ -163,7 +181,7 @@ function Tiles({ view }: { view: TokenUsageView }) {
           `Total ${formatTokens(total, language)}`,
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         {tiles.map(([label, value]) => (
           <Tile
             key={label}
@@ -172,6 +190,14 @@ function Tiles({ view }: { view: TokenUsageView }) {
             exact={formatNumber(value, language)}
           />
         ))}
+        <Tile
+          label={t("API karşılığı", "API value")}
+          value={`${totals.costEstimated ? "≈" : ""}${formatCost(cost, language)}`}
+          exact={t(
+            "Bu token’lar Anthropic API liste fiyatlarıyla ödenseydi tutacak tutar. Aboneliğinizin ücreti bundan bağımsızdır.",
+            "What these tokens would cost at Anthropic’s API list prices. Your subscription’s price is separate.",
+          )}
+        />
       </div>
     </>
   );
@@ -208,7 +234,7 @@ function Legend({
           const cell = day.byRow[column.key];
           const part = cell ? metricValue(cell, metric) : 0;
           value += part;
-          estimated ||= part > 0 && cell?.estimated === true;
+          estimated ||= part > 0 && isEstimated(cell, metric);
         }
         return (
           <li key={column.key} className="flex items-center gap-1.5">
@@ -216,7 +242,7 @@ function Legend({
             <span className="text-muted-foreground">{column.name}</span>
             <span className="font-medium tabular-nums">
               {estimated ? "≈" : ""}
-              {formatTokens(value, language)}
+              {formatValue(value, metric, language)}
             </span>
           </li>
         );
@@ -271,7 +297,7 @@ function Chart({
         return {
           column,
           value: cell ? metricValue(cell, metric) : 0,
-          estimated: cell?.estimated === true,
+          estimated: isEstimated(cell, metric),
         };
       })
       .filter((part) => part.value > 0),
@@ -280,7 +306,10 @@ function Chart({
     day.parts.reduce((sum, part) => sum + part.value, 0);
   const max = Math.max(0, ...days.map(dayTotal));
   const scale = max > 0 ? (BASE - TOP) / max : 0;
-  const labels = [formatTokens(max, language), formatTokens(max / 2, language)];
+  const labels = [
+    formatValue(max, metric, language),
+    formatValue(max / 2, metric, language),
+  ];
   const left = Math.max(
     MIN_LEFT,
     Math.ceil(Math.max(...labels.map((l) => l.length)) * LABEL_CHAR) + 8,
@@ -347,10 +376,10 @@ function Chart({
           let y = BASE;
           // The day's total, then each row, the estimated ones named as such.
           const spoken = [
-            `${day.label}: ${formatTokens(dayTotal(day), language)}`,
+            `${day.label}: ${formatValue(dayTotal(day), metric, language)}`,
             ...day.parts.map(
               (p) =>
-                `${p.column.name} ${p.estimated ? `${estimatedWord(t)} ` : ""}${formatTokens(p.value, language)}`,
+                `${p.column.name} ${p.estimated ? `${estimatedWord(t)} ` : ""}${formatValue(p.value, metric, language)}`,
             ),
           ].join("; ");
           return (
@@ -442,7 +471,7 @@ function Chart({
               <span className="text-muted-foreground">{metricLabel}</span>
               <b className="tabular-nums">
                 {shown.parts.some((p) => p.estimated) ? "≈" : ""}
-                {formatTokens(shownTotal, language)}
+                {formatValue(shownTotal, metric, language)}
               </b>
             </div>
             {shown.parts.length ? (
@@ -453,7 +482,7 @@ function Chart({
                     tone={part.column.tone}
                     muted={part.column.muted}
                     name={part.column.name}
-                    value={`${part.estimated ? "≈" : ""}${formatTokens(part.value, language)}`}
+                    value={`${part.estimated ? "≈" : ""}${formatValue(part.value, metric, language)}`}
                     share={shareOf(part.value, shownTotal, language)}
                   />
                 ))}
@@ -465,10 +494,15 @@ function Chart({
             )}
             {shown.parts.some((p) => p.estimated) && (
               <p className="mt-1.5 text-muted-foreground">
-                {t(
-                  "≈ Limit ölçümlerinden tahmin edildi",
-                  "≈ Estimated from limit samples",
-                )}
+                {metric === "cost"
+                  ? t(
+                      "≈ Hesap ya da tutar tahmin edildi",
+                      "≈ Account or amount estimated",
+                    )
+                  : t(
+                      "≈ Limit ölçümlerinden tahmin edildi",
+                      "≈ Estimated from limit samples",
+                    )}
               </p>
             )}
           </>
@@ -489,10 +523,13 @@ export function DayTable({
   metric: Metric;
 }) {
   const { t, language } = useI18n();
-  const estimatedTip = t(
-    "Limit ölçümlerinden tahmin edildi",
-    "Estimated from limit samples",
-  );
+  const estimatedTip =
+    metric === "cost"
+      ? t(
+          "Hesap eşleşmesi limit ölçümlerinden ya da tutar bu sürümden önce sayılan token’lardan tahmin edildi",
+          "The account was estimated from limit samples, or the amount from tokens counted before this version",
+        )
+      : t("Limit ölçümlerinden tahmin edildi", "Estimated from limit samples");
   /**
    * A cell's text: "—" for none, "≈" before a value estimated from limit
    * samples, which screen readers hear as "tahmini".
@@ -506,7 +543,7 @@ export function DayTable({
             <span className="sr-only">{estimatedWord(t)} </span>
           </>
         )}
-        {formatTokens(value, language)}
+        {formatValue(value, metric, language)}
       </>
     ) : (
       "—"
@@ -537,7 +574,7 @@ export function DayTable({
             const cells = columns.map((column) => {
               const cell = day.byRow[column.key];
               const value = cell ? metricValue(cell, metric) : 0;
-              const estimated = value > 0 && cell?.estimated === true;
+              const estimated = value > 0 && isEstimated(cell, metric);
               total += value;
               anyEstimated ||= estimated;
               return { column, value, estimated };
@@ -633,6 +670,7 @@ function Content({
     input: t("Girdi", "Input"),
     output: t("Çıktı", "Output"),
     cache: t("Önbellek", "Cache"),
+    cost: t("API karşılığı", "API value"),
   };
   const empty = view.rows.length === 0;
   const scanning = !view.progress.complete;
@@ -642,6 +680,8 @@ function Content({
       <p aria-live="polite" data-slot="panda-say" className="sr-only">
         {said}
       </p>
+      {/* The range always ends today, so an empty range has an empty today too. */}
+      {!empty && <TodayCard today={view.today} />}
       {empty ? (
         // While the scan runs, an empty range may only not be read yet: the scanning note says so.
         !scanning && (
@@ -712,6 +752,22 @@ function Content({
             <DayTable view={view} columns={columns} metric={metric} />
           </Disclosure>
         </>
+      )}
+      {view.unpricedModels.length > 0 && !empty && (
+        <Note className="text-xs">
+          {t(
+            `${formatTokens(view.totals.unpriced ?? 0, "tr")} token fiyatı bilinmeyen modellerden; tutara katılmadı (${view.unpricedModels.join(", ")}).`,
+            `${formatTokens(view.totals.unpriced ?? 0, "en")} tokens are from models with no known price and are left out of the amount (${view.unpricedModels.join(", ")}).`,
+          )}
+        </Note>
+      )}
+      {!empty && (
+        <Note className="text-xs">
+          {t(
+            `Fiyatlar: Anthropic API liste fiyatları, ${formatDay(view.pricesChecked, "tr")} ${view.pricesChecked.slice(0, 4)}.`,
+            `Prices: Anthropic API list prices, ${formatDay(view.pricesChecked, "en")} ${view.pricesChecked.slice(0, 4)}.`,
+          )}
+        </Note>
       )}
       {view.exactSince && !empty && (
         <Note className="text-xs">

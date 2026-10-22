@@ -31,7 +31,15 @@ const counts = (
   cacheWrite = 0,
   cacheRead = 0,
   responses = 1,
-): TokenCounts => ({ input, output, cacheWrite, cacheRead, responses });
+): TokenCounts => ({
+  input,
+  output,
+  cacheWrite,
+  cacheRead,
+  responses,
+  cost: 0,
+  unpriced: 0,
+});
 
 type Days = LedgerSnapshot["days"];
 function ledger(
@@ -320,10 +328,13 @@ test("the view carries only counts, names and ids", () => {
   assert.deepEqual(Object.keys(view).sort(), [
     "days",
     "models",
+    "pricesChecked",
     "progress",
     "range",
     "rows",
+    "today",
     "totals",
+    "unpricedModels",
   ]);
 });
 
@@ -384,4 +395,96 @@ test("main stops the token scan when Relay quits", () => {
   const quit = main.slice(main.indexOf('app.on("will-quit"'));
   assert.match(quit, /tokenScanStopped = true/);
   assert.match(quit, /if \(tokenTimer\) clearTimeout\(tokenTimer\)/);
+});
+
+const slot = (cost: number, input = 0) => ({
+  input,
+  output: 0,
+  cacheWrite: 0,
+  cacheRead: 0,
+  cost,
+});
+const priced = (input: number, cost: number, extra: Partial<TokenCounts> = {}) => ({
+  ...counts(input),
+  cost,
+  ...extra,
+});
+
+test("costs and unpriced tokens add up across rows, days and models, and estimated costs are marked", () => {
+  const view = build(
+    ledger({
+      "2026-10-13": {
+        "acct:ann": { "claude-opus-5-5": priced(10, 1.5, { costEstimated: true }) },
+      },
+      "2026-10-14": {
+        "acct:ann": { "claude-opus-5-5": priced(10, 2) },
+        "acct:bob": { mystery: priced(5, 0, { unpriced: 5 }) },
+      },
+    }),
+  );
+  assert.equal(view.totals.cost, 3.5);
+  assert.equal(view.totals.unpriced, 5);
+  assert.equal(view.totals.costEstimated, true);
+  assert.equal(view.rows.find((r) => r.key === "ann")?.totals.cost, 3.5);
+  assert.equal(view.days.at(-2)?.byRow.ann.costEstimated, true);
+  assert.equal(view.days.at(-1)?.byRow.ann.costEstimated, undefined);
+  assert.deepEqual(view.unpricedModels, ["mystery"]);
+  assert.equal(view.pricesChecked, "2026-10-22");
+});
+
+test("today's line runs to the current quarter hour and compares with yesterday up to the same one", () => {
+  const snapshot: LedgerSnapshot = {
+    ...ledger({
+      "2026-10-14": { "acct:ann": { "claude-opus-5-5": priced(100, 9) } },
+    }),
+    slots: {
+      // 15:00 in Istanbul is quarter hour 60.
+      "2026-10-14": { "acct:ann": { 4: slot(2), 60: slot(1) }, "acct:bob": { 10: slot(3) } },
+      "2026-10-13": { "acct:ann": { 0: slot(1), 60: slot(1), 95: slot(2) }, "acct:bob": { 1: slot(2) } },
+    },
+    slotsSince: Date.parse("2026-10-01T00:00:00Z"),
+  };
+  const today = build(snapshot).today;
+  assert.equal(today.date, "2026-10-14");
+  assert.equal(today.currentSlot, 60);
+  assert.equal(today.totals.cost, 9);
+  assert.equal(today.slots.length, 96);
+  assert.equal(today.slots[4], 2);
+  assert.equal(today.slots[10], 3);
+  assert.equal(today.slots[60], 1);
+  assert.equal(today.slots[59], 0);
+  assert.equal(today.slots[61], null);
+  // Today 6 against yesterday's 4 up to 15:00 (the 95th slot comes later).
+  assert.equal(today.change, 0.5);
+  assert.equal(today.yesterdayAverage, 6 / 96);
+  assert.equal(today.slotsSince, undefined);
+  // The account filter keeps one account's buckets and slots.
+  const ann = build(snapshot, { accountId: "ann" }).today;
+  assert.equal(ann.slots[10], 0);
+  assert.equal(ann.change, 3 / 2 - 1);
+});
+
+test("without slots for all of yesterday there is no change and no dashed line", () => {
+  const since = Date.parse("2026-10-14T05:00:00Z");
+  const snapshot: LedgerSnapshot = {
+    ...ledger({}),
+    slots: {
+      "2026-10-13": { "acct:ann": { 60: slot(1) } },
+      "2026-10-14": { "acct:ann": { 60: slot(1) } },
+    },
+    slotsSince: since,
+  };
+  const today = build(snapshot).today;
+  assert.equal(today.change, null);
+  assert.equal(today.yesterdayAverage, null);
+  assert.equal(today.slotsSince, since);
+  // Yesterday kept whole but with nothing up to now: no change either.
+  const quiet = build({
+    ...snapshot,
+    slots: { "2026-10-13": { "acct:ann": { 90: slot(1) } } },
+    slotsSince: 0,
+  }).today;
+  assert.equal(quiet.change, null);
+  assert.equal(quiet.yesterdayAverage, 1 / 96);
+  assert.equal(quiet.slotsSince, undefined);
 });

@@ -30,6 +30,9 @@ type Usage = {
   output_tokens?: unknown;
   cache_creation_input_tokens?: unknown;
   cache_read_input_tokens?: unknown;
+  cache_creation?: unknown;
+  speed?: unknown;
+  inference_geo?: unknown;
 };
 
 const temporary: string[] = [];
@@ -135,7 +138,7 @@ function ledgerFor(
 }
 
 function totals(ledger: TokenLedger, who?: string): TokenCounts {
-  const sum: TokenCounts = {
+  const sum = {
     input: 0,
     output: 0,
     cacheWrite: 0,
@@ -146,7 +149,7 @@ function totals(ledger: TokenLedger, who?: string): TokenCounts {
     for (const [key, byModel] of Object.entries(byWho)) {
       if (who !== undefined && key !== who) continue;
       for (const counts of Object.values(byModel))
-        for (const field of Object.keys(sum) as (keyof TokenCounts)[])
+        for (const field of Object.keys(sum) as (keyof typeof sum)[])
           sum[field] += counts[field];
     }
   return sum;
@@ -244,6 +247,8 @@ test("missing or non-finite usage counts as zero and a missing model is unknown"
     cacheWrite: 0,
     cacheRead: 7,
     responses: 1,
+    cost: 0,
+    unpriced: 7,
   });
 });
 
@@ -1180,4 +1185,164 @@ test("a transcript idle for over 2 days keeps no last response", async () => {
   const freshState = saved.files[keyOf(fresh)];
   assert.equal(freshState.lastKey, "msg_B:req_msg_B");
   assert.equal(freshState.last.date, "2026-10-18");
+});
+
+const near = (actual: number | undefined, expected: number) =>
+  assert.ok(
+    actual !== undefined && Math.abs(actual - expected) < 1e-12,
+    `${actual} ≠ ${expected}`,
+  );
+const OPUS_USAGE = {
+  input_tokens: 1000,
+  output_tokens: 2000,
+  cache_creation_input_tokens: 3000,
+  cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 3000 },
+  cache_read_input_tokens: 4000,
+};
+/** 1000 × $4 + 3000 × $8 (1-hour) + 4000 × $0.20 + 2000 × $20, per million. */
+const OPUS_COST = 0.0688;
+
+test("a response is priced into its day bucket and its quarter-hour slot", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(
+    path.join(root, "p", "s.jsonl"),
+    assistant({ id: "msg_C", model: "claude-opus-5-5", usage: OPUS_USAGE }),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  const snap = ledger.snapshot();
+  const counts = snap.days["2026-10-18"]["acct:a1"]["claude-opus-5-5"];
+  near(counts.cost, OPUS_COST);
+  assert.equal(counts.unpriced, 0);
+  assert.equal(counts.costEstimated, undefined);
+  // 09:00Z is 12:00 in Istanbul: quarter hour 48.
+  assert.deepEqual(Object.keys(snap.slots!["2026-10-18"]["acct:a1"]), ["48"]);
+  const slot = snap.slots!["2026-10-18"]["acct:a1"]["48"];
+  near(slot.cost, OPUS_COST);
+  assert.equal(slot.output, 2000);
+  assert.equal(snap.slotsSince, NOW);
+});
+
+test("a streamed response adds only what its later rows grew, in cost too, and a copy adds nothing", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const first = { id: "msg_S", model: "claude-opus-5-5", usage: OPUS_USAGE };
+  const grown = {
+    ...first,
+    usage: { ...OPUS_USAGE, output_tokens: 5000 },
+  };
+  write(path.join(root, "p", "s.jsonl"), assistant(first) + assistant(grown));
+  write(path.join(root, "p", "copy.jsonl"), assistant(grown));
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  const snap = ledger.snapshot();
+  const counts = snap.days["2026-10-18"]["acct:a1"]["claude-opus-5-5"];
+  near(counts.cost, OPUS_COST + (3000 * 20) / 1e6);
+  assert.equal(counts.output, 5000);
+  near(snap.slots!["2026-10-18"]["acct:a1"]["48"].cost, OPUS_COST + 0.06);
+});
+
+test("a model with no price adds its tokens to unpriced, streamed rows included", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const row = { id: "msg_U", model: "mystery-model", usage: { input_tokens: 10 } };
+  write(
+    path.join(root, "p", "s.jsonl"),
+    assistant(row) + assistant({ ...row, usage: { input_tokens: 10, output_tokens: 30 } }),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  const counts = ledger.snapshot().days["2026-10-18"]["acct:a1"]["mystery-model"];
+  assert.equal(counts.cost, 0);
+  // 10 + 30 + the fixture's 3 cache write and 4 cache read.
+  assert.equal(counts.unpriced, 47);
+});
+
+test("fast mode and US inference come from the row", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const usage = { input_tokens: 1_000_000, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+  write(
+    path.join(root, "p", "s.jsonl"),
+    assistant({ id: "msg_F", model: "claude-opus-5-5", usage: { ...usage, speed: "fast" } }) +
+      assistant({ id: "msg_G", model: "claude-opus-5-5", usage: { ...usage, inference_geo: "us" } }),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  near(ledger.snapshot().days["2026-10-18"]["acct:a1"]["claude-opus-5-5"].cost, 8 + 4.4);
+});
+
+test("only the last 8 days keep slots", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(
+    path.join(root, "p", "s.jsonl"),
+    assistant({ id: "msg_old", at: "2026-10-10T09:00:00.000Z" }) +
+      assistant({ id: "msg_kept", at: "2026-10-11T09:00:00.000Z" }),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  await ledger.tick();
+  const snap = ledger.snapshot();
+  assert.ok(snap.days["2026-10-10"] && snap.days["2026-10-11"]);
+  assert.deepEqual(Object.keys(snap.slots!), ["2026-10-11"]);
+  let now = NOW;
+  const later = ledgerFor(dir, [{ dir: root }], { now: () => now });
+  now = NOW + 2 * DAY;
+  await later.tick();
+  assert.deepEqual(Object.keys(later.snapshot().slots!), []);
+});
+
+test("buckets counted before costs were kept are estimated once, and saved costs survive a restart", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  fs.mkdirSync(root, { recursive: true });
+  const old = { input: 1_000_000, output: 0, cacheWrite: 1_000_000, cacheRead: 0, responses: 3 };
+  fs.writeFileSync(
+    path.join(dir, "token-ledger.json"),
+    JSON.stringify({
+      version: 3,
+      zone: ZONE,
+      complete: true,
+      files: {},
+      days: {
+        "2026-10-17": {
+          "acct:a1": { "claude-opus-5-5": old, "mystery-model": { ...old } },
+        },
+      },
+      seen: {},
+    }),
+  );
+  const ledger = ledgerFor(dir, [{ dir: root }]);
+  const before = ledger.snapshot().days["2026-10-17"]["acct:a1"];
+  near(before["claude-opus-5-5"].cost, 4 + 8);
+  assert.equal(before["claude-opus-5-5"].costEstimated, true);
+  assert.equal(before["mystery-model"].unpriced, 2_000_000);
+  // The slot note starts from the first tick after the upgrade.
+  assert.equal(ledger.snapshot().slotsSince, undefined);
+  await ledger.tick();
+  assert.equal(ledger.snapshot().slotsSince, NOW);
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  const after = restarted.snapshot().days["2026-10-17"]["acct:a1"];
+  near(after["claude-opus-5-5"].cost, 12);
+  assert.equal(after["claude-opus-5-5"].costEstimated, true);
+  assert.equal(after["mystery-model"].unpriced, 2_000_000);
+  assert.equal(restarted.snapshot().slotsSince, NOW);
+});
+
+test("slots are saved, restored and emptied with everything on a zone change", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  write(path.join(root, "p", "s.jsonl"), assistant({ id: "msg_Z" }));
+  let zone = ZONE;
+  const ledger = ledgerFor(dir, [{ dir: root }], { zone: () => zone });
+  await ledger.tick();
+  const restarted = ledgerFor(dir, [{ dir: root }], { zone: () => zone });
+  assert.deepEqual(restarted.snapshot().slots, ledger.snapshot().slots);
+  zone = "UTC";
+  await restarted.tick();
+  const snap = restarted.snapshot();
+  // The rescan counts the row again, in the new zone's quarter hour.
+  assert.deepEqual(Object.keys(snap.slots!["2026-10-18"]["acct:a1"]), ["36"]);
+  assert.equal(snap.slotsSince, 0);
 });
