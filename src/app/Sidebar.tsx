@@ -1,4 +1,11 @@
-import type { ComponentType, ReactNode } from "react";
+import {
+  Fragment,
+  useContext,
+  useEffect,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -16,8 +23,12 @@ import {
 import { StatusDot } from "@/components/StatusDot";
 import { UsageRing } from "@/components/UsageRing";
 import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
+import { accountHealth } from "@/lib/account-health";
+import { timeLeft } from "@/lib/account-row";
 import type { T } from "@/data/i18n";
-import type { sidebarStatus } from "@/data/selectors";
+import { RelayContext, type Relay } from "@/data/relay-context";
+import { pendingFlow, type sidebarStatus } from "@/data/selectors";
+import { accountFromHash, accountHash } from "@/pages/accounts/AccountDetail";
 import type { PageId } from "./routes";
 
 type Status = ReturnType<typeof sidebarStatus>;
@@ -112,6 +123,76 @@ function NavItem({
   );
 }
 
+/** The account open on the Accounts page (`#/hesaplar/<id>`), following the hash. */
+function useOpenAccount(): string | undefined {
+  const read = () => accountFromHash(globalThis.window?.location?.hash ?? "");
+  const [id, setId] = useState(read);
+  useEffect(() => {
+    const update = () => setId(read());
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
+  return id;
+}
+
+/**
+ * The accounts under Hesaplar while the Accounts page or an account's page is open: each links to its
+ * page with a dot, green when it is ready (or running) and grey otherwise; the open one is marked.
+ */
+function AccountLinks({
+  relay,
+  open,
+  t,
+  onPick,
+}: {
+  relay: Relay;
+  open?: string;
+  t: T;
+  onPick(): void;
+}) {
+  return (
+    <ul
+      aria-label={t("Hesap listesi", "Account list")}
+      className="ml-[18px] grid min-h-0 gap-px overflow-y-auto border-l py-0.5 pl-1.5"
+    >
+      {relay.accounts.map((a) => {
+        const health = accountHealth(
+          a,
+          relay.data?.usage[a.id],
+          {
+            active: a.id === relay.active?.id,
+            desktopRunning: !!relay.desktop?.running,
+            waiting: pendingFlow(
+              relay.data?.authFlows.find((f) => f.accountId === a.id),
+            ),
+          },
+          t,
+        );
+        const current = a.id === open;
+        return (
+          <li key={a.id} className="min-w-0">
+            <a
+              href={accountHash(a.id)}
+              onClick={onPick}
+              aria-current={current ? "true" : undefined}
+              title={`${a.name} · ${health.label}`}
+              className={cn(
+                "flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-[12.5px] text-muted-foreground hover:bg-card/60 [-webkit-app-region:no-drag]",
+                current &&
+                  "bg-card font-semibold text-accent-foreground shadow-xs hover:bg-card",
+              )}
+            >
+              <StatusDot tone={health.tone === "ok" ? "ok" : "off"} />
+              <span className="truncate">{a.name}</span>
+              <span className="sr-only">{` · ${health.label}`}</span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function Sidebar({
   page,
   go,
@@ -127,6 +208,19 @@ export function Sidebar({
     onPoke?.(where);
     go(page);
   };
+  // Read here rather than passed in, so the shell's props stay as they are; tests may render without it.
+  const relay = useContext(RelayContext);
+  const openAccount = useOpenAccount();
+  const listAccounts = page === "hesaplar" && !compact && !!relay?.accounts.length;
+  // The five-hour window's time left, as the Overview's rings say it.
+  const left =
+    summary?.fiveHour !== undefined && relay?.active
+      ? timeLeft(
+          relay.data?.usage[relay.active.id]?.fiveHour?.resetsAt,
+          Date.now(),
+          t,
+        )
+      : undefined;
   const items: Item[] = [
     { id: "genel", icon: LayoutDashboard, label: t("Genel bakış", "Overview") },
     {
@@ -184,16 +278,25 @@ export function Sidebar({
       </div>
       <nav
         aria-label={t("Sayfalar", "Pages")}
-        className="flex w-full flex-col gap-0.5"
+        className="flex min-h-0 w-full flex-col gap-0.5"
       >
         {items.map((item) => (
-          <NavItem
-            key={item.id}
-            item={item}
-            active={page === item.id}
-            compact={compact}
-            go={goFrom("above")}
-          />
+          <Fragment key={item.id}>
+            <NavItem
+              item={item}
+              active={page === item.id}
+              compact={compact}
+              go={goFrom("above")}
+            />
+            {item.id === "hesaplar" && listAccounts && relay && (
+              <AccountLinks
+                relay={relay}
+                open={openAccount}
+                t={t}
+                onPick={() => onPoke?.("above")}
+              />
+            )}
+          </Fragment>
         ))}
       </nav>
       <div className="flex-1" />
@@ -228,8 +331,8 @@ export function Sidebar({
                     ? t("Claude'da açık", "Open in Claude")
                     : t("Claude kapalı", "Claude closed")
                   : t(
-                      `5 saat ${formatPercent(percentUsed(summary.fiveHour), "tr")}${summary.running ? "" : " · Claude kapalı"}`,
-                      `5 h ${formatPercent(percentUsed(summary.fiveHour), "en")}${summary.running ? "" : " · Claude closed"}`,
+                      `${formatPercent(percentUsed(summary.fiveHour), "tr")}${left ? ` · ${left}` : ""}${summary.running ? "" : " · Claude kapalı"}`,
+                      `${formatPercent(percentUsed(summary.fiveHour), "en")}${left ? ` · ${left}` : ""}${summary.running ? "" : " · Claude closed"}`,
                     )}
               </span>
             </span>
