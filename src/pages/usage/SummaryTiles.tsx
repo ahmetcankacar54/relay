@@ -4,7 +4,8 @@ import { Card } from "@/components/ui/card";
 import { useI18n } from "@/data/i18n";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
-import { formatNumber, hourLabel, weekdayName } from "./format";
+import { formatCost, formatNumber, hourLabel, weekdayName } from "./format";
+import type { CostSummary } from "./cost-summary";
 
 function Tile({
   label,
@@ -39,7 +40,14 @@ function change(current: number, previous: number, language: string) {
   return `${pct > 0 ? "+" : pct < 0 ? "−" : ""}${formatPercent(Math.abs(pct), language)}`;
 }
 
-export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
+export function SummaryTiles({
+  view,
+  cost,
+}: {
+  view: UsageStatisticsView;
+  /** The range's API value; its tile leads when the ledger has priced anything. */
+  cost?: CostSummary;
+}) {
   const { t, language } = useI18n();
   const { totals, range } = view;
   const previous = totals.previousProUnits;
@@ -62,7 +70,17 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
   const hits = totals.hits.fiveHour + totals.hits.weekly;
   const busiest = totals.busiest;
   return (
-    <Card className="grid grid-cols-2 gap-4 px-5 py-4 lg:grid-cols-4">
+    <Card className={cn("grid grid-cols-2 gap-4 px-5 py-4", cost ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
+      {cost && (
+        <Tile
+          label={t("API değeri", "API value")}
+          value={`${cost.estimated ? "≈" : ""}${formatCost(cost.total, language)}`}
+          detail={t(
+            `günde ≈ ${formatCost(cost.perDay, "tr")}`,
+            `≈ ${formatCost(cost.perDay, "en")} a day`,
+          )}
+        />
+      )}
       <Tile
         label={t("Toplam kullanım", "Total usage")}
         value={

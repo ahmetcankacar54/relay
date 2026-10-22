@@ -6,7 +6,8 @@ import { useI18n } from "@/data/i18n";
 import { windowTone } from "@/lib/day-timeline";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
-import { rowKey, rowName, toneIndex, type StatisticsRow } from "./format";
+import { formatCost, rowKey, rowName, toneIndex, type StatisticsRow } from "./format";
+import type { CostSummary } from "./cost-summary";
 
 /** Plan badge; a Team plan also shows the capacity weight it is counted with. */
 function planBadge(row: StatisticsRow, accounts: Account[]) {
@@ -20,12 +21,19 @@ function planBadge(row: StatisticsRow, accounts: Account[]) {
 export function AccountBalance({
   view,
   accounts,
+  cost,
 }: {
   view: UsageStatisticsView;
   accounts: Account[];
+  /** Each account's API value in the range, shown before its share. */
+  cost?: CostSummary;
 }) {
   const { t, language } = useI18n();
   const percent = (value: number | undefined) => formatPercent(value, language);
+  const worth = (row: StatisticsRow) => {
+    const part = row.accountId ? cost?.byAccount[row.accountId] : undefined;
+    return part && `${part.estimated ? "≈" : ""}${formatCost(part.cost, language)} ·`;
+  };
   return (
     <Card className="gap-0 px-5 py-4">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
@@ -33,10 +41,15 @@ export function AccountBalance({
           {t("Hesap dengesi", "Account balance")}
         </h3>
         <span className="text-xs text-muted-foreground">
-          {t(
-            "payı · ortalama dönem doluluğu · boşta gün",
-            "share · average period fill · idle days",
-          )}
+          {cost
+            ? t(
+                "API değeri · payı · ortalama dönem doluluğu · boşta gün",
+                "API value · share · average period fill · idle days",
+              )
+            : t(
+                "payı · ortalama dönem doluluğu · boşta gün",
+                "share · average period fill · idle days",
+              )}
         </span>
       </div>
       {/* Rows share these columns (subgrid), so every share bar ends at the same x. */}
@@ -77,6 +90,7 @@ export function AccountBalance({
                 />
               </div>
               <div className="text-sm whitespace-nowrap tabular-nums">
+                {worth(row) && <b className="mr-1.5">{worth(row)}</b>}
                 <b>{percent(row.share)}</b>{" "}
                 <span className="text-muted-foreground">
                   ·{" "}

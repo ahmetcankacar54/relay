@@ -19,6 +19,8 @@ import { DailyChart } from "./usage/DailyChart";
 import { LimitHits } from "./usage/LimitHits";
 import { StatisticsHeader } from "./usage/StatisticsHeader";
 import { SummaryTiles } from "./usage/SummaryTiles";
+import { costSummary, type CostSummary } from "./usage/cost-summary";
+import { useTokenUsage } from "./usage/useTokenUsage";
 import { TokenUsage } from "./usage/TokenUsage";
 import { LostFound } from "./usage/LostFound";
 import { UsageHeatmap } from "./usage/UsageHeatmap";
@@ -58,6 +60,8 @@ interface SectionProps {
   accounts: Account[];
   accountId?: string;
   zone: string;
+  /** What the range's tokens are worth at API prices, when the token ledger has priced any. */
+  cost?: CostSummary;
 }
 
 /**
@@ -92,7 +96,7 @@ export function UsageStatisticsSection(props: SectionProps) {
   );
 }
 
-function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
+function StatisticsContent({ state, accounts, accountId, zone, cost }: SectionProps) {
   const { t, language } = useI18n();
   const { view, loading } = state;
   const selected = accounts.find((a) => a.id === accountId);
@@ -146,8 +150,8 @@ function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
     );
   return (
     <div className="grid gap-3" aria-busy={loading || undefined}>
-      <SummaryTiles view={view} />
-      <AccountBalance view={view} accounts={accounts} />
+      <SummaryTiles view={view} cost={cost} />
+      <AccountBalance view={view} accounts={accounts} cost={cost} />
       <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
         <DailyChart view={view} accounts={accounts} zone={zone} />
         <UsageHeatmap view={view} />
@@ -155,12 +159,18 @@ function StatisticsContent({ state, accounts, accountId, zone }: SectionProps) {
       <LimitHits view={view} zone={zone} />
       <Note className="px-1 text-xs">
         {t(
-          `Değerler Relay’in gözlediği limit yüzdelerinden hesaplanır; token, mesaj ya da maliyet değildir. Gözlem kapsamı: ${formatPercent(view.coveragePercent, language)} (Relay kapalıyken veri yok). Pro birimi, gözlenen 5 saatlik kota yüzdesinin güncel plan kapasitesiyle çarpımıdır (Pro 1, Max 5× 5, Max 20× 20, Team = girilen ağırlık).`,
-          `Values come from the limit percentages Relay observed; they are not tokens, messages or cost. Observed coverage: ${formatPercent(view.coveragePercent, language)} (no data while Relay is closed). A Pro unit is the observed 5-hour quota percentage times the current plan capacity (Pro 1, Max 5× 5, Max 20× 20, Team = the weight you set).`,
+          `Limit değerleri Relay’in gözlediği limit yüzdelerinden hesaplanır; token, mesaj ya da maliyet değildir. API değeri ayrıca Claude Code token kayıtlarının API liste fiyatıyla karşılığıdır; ödediğin tutar değildir. Gözlem kapsamı: ${formatPercent(view.coveragePercent, language)} (Relay kapalıyken veri yok). Pro birimi, gözlenen 5 saatlik kota yüzdesinin güncel plan kapasitesiyle çarpımıdır (Pro 1, Max 5× 5, Max 20× 20, Team = girilen ağırlık).`,
+          `Limit values come from the limit percentages Relay observed; they are not tokens, messages or cost. The API value is separate: Claude Code’s tokens at API list prices, not what you pay. Observed coverage: ${formatPercent(view.coveragePercent, language)} (no data while Relay is closed). A Pro unit is the observed 5-hour quota percentage times the current plan capacity (Pro 1, Max 5× 5, Max 20× 20, Team = the weight you set).`,
         )}
       </Note>
     </div>
   );
+}
+
+/** The Limits tab: the statistics with the token ledger's API value beside them; mounted only while open. */
+function LimitsTab({ range, ...props }: Omit<SectionProps, "cost"> & { range: StatisticsRange }) {
+  const cost = costSummary(useTokenUsage(range, props.accountId).view);
+  return <UsageStatisticsSection {...props} cost={cost} />;
 }
 
 /** The page's tabs; only the open one is drawn, so a hidden token scan asks for nothing. */
@@ -316,10 +326,11 @@ export function Usage() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="limits">
-          <UsageStatisticsSection
+          <LimitsTab
             state={statistics}
             accounts={accounts}
             accountId={accountId}
+            range={range}
             zone={settings.planning.timeZone}
           />
         </TabsContent>

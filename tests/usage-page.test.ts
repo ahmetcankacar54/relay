@@ -5,6 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Usage, UsageStatisticsSection, UsageWarnings } from "../src/pages/Usage";
 import { SummaryTiles } from "../src/pages/usage/SummaryTiles";
 import { AccountBalance } from "../src/pages/usage/AccountBalance";
+import { costSummary, type CostSummary } from "../src/pages/usage/cost-summary";
+import type { TokenUsageView } from "../shared/token-usage-view";
 import { DailyChart } from "../src/pages/usage/DailyChart";
 import { UsageHeatmap } from "../src/pages/usage/UsageHeatmap";
 import { LimitHits } from "../src/pages/usage/LimitHits";
@@ -502,4 +504,50 @@ test("every statistics message panda is playful: a click on it plays a trick", (
   // Loading draws no panda, and a statistics view has none to click.
   assert.doesNotMatch(html({ loading: true }), /data-playful/);
   assert.doesNotMatch(html({ view, loading: false }), /data-playful/);
+});
+
+test("with priced tokens the Limits tab leads with the API value and gives each account its part", () => {
+  const cost: CostSummary = {
+    total: 2704.15,
+    estimated: true,
+    perDay: 90.14,
+    byAccount: { a: { cost: 1298, estimated: false }, b: { cost: 1001.5, estimated: true } },
+  };
+  const tiles = render(createElement(SummaryTiles, { view, cost }));
+  assert.match(tiles, /lg:grid-cols-5/);
+  const plain = text(tiles);
+  assert.match(plain, /^API değeri≈\$2\.704,15günde ≈ \$90,14Toplam kullanım/);
+  assert.match(text(render(createElement(SummaryTiles, { view, cost }), "en")), /API value≈\$2,704\.15≈ \$90\.14 a day/);
+  // Without priced tokens the four tiles stay as they were.
+  assert.match(render(createElement(SummaryTiles, { view })), /lg:grid-cols-4/);
+  assert.doesNotMatch(text(render(createElement(SummaryTiles, { view }))), /API değeri/);
+
+  const balance = text(render(createElement(AccountBalance, { view, accounts, cost })));
+  assert.match(balance, /API değeri · payı/);
+  assert.match(balance, /Kişisel · Max[\s\S]*\$1\.298,00 ·%58/);
+  assert.match(balance, /Vertex[\s\S]*≈\$1\.001,50 ·%27/);
+  // The former row has no account id and so no amount.
+  assert.match(balance, /Eski hesap[\s\S]*?%15/);
+  assert.doesNotMatch(balance, /Eski hesap[^%]*\$/);
+});
+
+test("the cost summary takes the range's total, its daily average and the account rows", () => {
+  const priced = costSummary({
+    range: 7,
+    days: Array.from({ length: 7 }, (_, i) => ({ date: `2026-10-1${i}`, byRow: {} })),
+    rows: [
+      { key: "a", kind: "account", accountId: "a", estimated: false, totals: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0, responses: 1, cost: 60 } },
+      { key: "b", kind: "account", accountId: "b", estimated: true, totals: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0, responses: 1, cost: 10 } },
+      { key: "terminal", kind: "terminal", estimated: false, totals: { input: 1, output: 1, cacheWrite: 0, cacheRead: 0, responses: 1, cost: 0.5 } },
+    ],
+    totals: { input: 3, output: 3, cacheWrite: 0, cacheRead: 0, responses: 3, cost: 70.5 },
+  } as unknown as TokenUsageView);
+  assert.deepEqual(priced, {
+    total: 70.5,
+    estimated: false,
+    perDay: 70.5 / 7,
+    byAccount: { a: { cost: 60, estimated: false }, b: { cost: 10, estimated: true } },
+  });
+  assert.equal(costSummary(undefined), undefined);
+  assert.equal(costSummary({ range: 7, days: [], rows: [], totals: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, responses: 0 } } as unknown as TokenUsageView), undefined);
 });
