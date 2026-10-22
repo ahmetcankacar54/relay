@@ -109,7 +109,7 @@ function SceneSheet() {
   );
 }
 
-const CARD_STATES: readonly MascotPose[] = ["idle", "hungry", "alert", "sleeping", "warming", "away"];
+const CARD_STATES: readonly MascotPose[] = ["idle", "hungry", "full", "alert", "sleeping", "warming", "away"];
 const CARD_REACTIONS = Object.keys(REACTIONS) as CardReaction[];
 
 /** The sidebar's account card, drawn on its own light or dark ground; the panda sits on its top edge. */

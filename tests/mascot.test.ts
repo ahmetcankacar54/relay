@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { headFor, mascotPose, type MascotInput } from "../shared/mascot";
+import { HUNGRY_PERCENT, READING_MAX_AGE_MS, headFor, mascotPose, mascotRest, type MascotInput } from "../shared/mascot";
+import { TRAY_RESET_FROM } from "../shared/tray";
 import { BLINK_FRAME, MASCOT_FRAMES, POSE_FRAME } from "../shared/mascot-frames";
 import type { Account, AccountUsage, DesktopState, WindowAttempt } from "../shared/types";
 
@@ -33,17 +34,42 @@ test("the panda idles when nothing needs showing", () => {
   assert.equal(mascotPose({ accounts: [], usage: {}, desktop: desktop({ activeProfileId: undefined }) }, NOW), "idle");
 });
 
-test("the panda gets hungry at the menu bar's rounded 90% warning, five-hour window only", () => {
-  assert.equal(mascotPose(input({ usage: { a: usage("a", 89.4), b: usage("b", 30) } }), NOW), "idle");
-  assert.equal(mascotPose(input({ usage: { a: usage("a", 89.6), b: usage("b", 30) } }), NOW), "hungry");
-  assert.equal(mascotPose(input({ usage: { a: usage("a", 95, 10, { stale: true }), b: usage("b", 30) } }), NOW), "idle");
+test("the panda gets hungry where the menu bar title starts counting down, 80 % of the five-hour window", () => {
+  assert.equal(HUNGRY_PERCENT, TRAY_RESET_FROM);
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 79.9), b: usage("b", 30) } }), NOW), "idle");
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 80), b: usage("b", 30) } }), NOW), "hungry");
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 99.9), b: usage("b", 30) } }), NOW), "hungry");
   assert.equal(mascotPose(input({ usage: { a: usage("a", 20, 95), b: usage("b", 30) } }), NOW), "idle");
 });
 
-test("the panda sleeps only when every account is known to be full", () => {
-  assert.equal(mascotPose(input({ usage: { a: usage("a", 100), b: usage("b", 40, 100) } }), NOW), "sleeping");
-  assert.equal(mascotPose(input({ usage: { a: usage("a", 100) } }), NOW), "hungry");
-  assert.equal(mascotPose(input({ usage: { a: usage("a", 100), b: usage("b", 100, 10, { stale: true }) } }), NOW), "hungry");
+test("a full five-hour window, or every account full, shows the full face", () => {
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 100) } }), NOW), "full");
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 100), b: usage("b", 30) } }), NOW), "full");
+  // Every account full, though the active one's five-hour window is not.
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 40, 100), b: usage("b", 100) } }), NOW), "full");
+  // Only the active account's five-hour window counts on its own.
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 40), b: usage("b", 100) } }), NOW), "idle");
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 40, 100), b: usage("b", 100, 10, { stale: true }) } }), NOW), "idle");
+});
+
+test("the panda sleeps when Claude is closed or the active account's reading failed or is old", () => {
+  assert.equal(mascotPose(input({ desktop: desktop({ running: false }) }), NOW), "sleeping");
+  assert.equal(mascotRest(input({ desktop: desktop({ running: false }) }), NOW), "closed");
+  const old = usage("a", 20, 10, { checkedAt: iso(NOW - READING_MAX_AGE_MS) });
+  assert.equal(mascotPose(input({ usage: { a: old, b: usage("b", 30) } }), NOW), "sleeping");
+  assert.equal(mascotRest(input({ usage: { a: old, b: usage("b", 30) } }), NOW), "unknown");
+  const recent = usage("a", 20, 10, { checkedAt: iso(NOW - READING_MAX_AGE_MS + 60_000) });
+  assert.equal(mascotPose(input({ usage: { a: recent, b: usage("b", 30) } }), NOW), "idle");
+  for (const extra of [{ stale: true }, { status: "error" as const, issue: "rate-limited" as const }])
+    assert.equal(mascotPose(input({ usage: { a: usage("a", 95, 10, extra), b: usage("b", 30) } }), NOW), "sleeping");
+  // A refresh in progress keeps its reading; a first reading still to come, or a reset that passed, is no reason.
+  assert.equal(mascotPose(input({ usage: { a: usage("a", 95, 10, { status: "loading" }), b: usage("b", 30) } }), NOW), "hungry");
+  assert.equal(mascotPose(input({ usage: { b: usage("b", 30) } }), NOW), "idle");
+  assert.equal(mascotPose(input({ usage: { a: { accountId: "a", status: "loading", stale: false }, b: usage("b", 30) } }), NOW), "idle");
+  const reset = usage("a", 100, 10, { fiveHour: { usedPercent: 100, resetsAt: iso(NOW - 60_000) } });
+  assert.equal(mascotPose(input({ usage: { a: reset, b: usage("b", 30) } }), NOW), "idle");
+  // No saved account open, or no Desktop state yet: no reason either.
+  assert.equal(mascotPose(input({ desktop: desktop({ activeProfileId: undefined }), usage: {} }), NOW), "idle");
 });
 
 test("warming lasts while a start is under two minutes old", () => {
@@ -52,7 +78,7 @@ test("warming lasts while a start is under two minutes old", () => {
   assert.equal(mascotPose(input({ attempts: [attempt("1", "verified")] }), NOW), "idle");
 });
 
-test("alert beats away, which beats warming, sleeping and hungry", () => {
+test("alert beats away, which beats warming, sleeping, full and hungry", () => {
   const full = { a: usage("a", 100), b: usage("b", 100) };
   const all = input({ desktop: desktop({ busy: true }), attempts: [attempt("1", "started")], usage: full });
   assert.equal(mascotPose(all, NOW), "away");
@@ -60,7 +86,9 @@ test("alert beats away, which beats warming, sleeping and hungry", () => {
   assert.equal(mascotPose({ ...all, desktop: desktop({ busy: true, error: "Claude Desktop data could not be read." }) }, NOW), "alert");
   assert.equal(mascotPose(input({ desktop: desktop({ available: false }) }), NOW), "alert");
   assert.equal(mascotPose(input({ attempts: [attempt("1", "started")], usage: full }), NOW), "warming");
-  assert.equal(mascotPose(input({ usage: full }), NOW), "sleeping");
+  assert.equal(mascotPose(input({ usage: full }), NOW), "full");
+  assert.equal(mascotPose(input({ usage: full, desktop: desktop({ running: false }) }), NOW), "sleeping");
+  assert.equal(mascotPose({ ...all, desktop: desktop({ busy: true, running: false }) }, NOW), "away");
 });
 
 test("only the active account needing sign-in raises the alert", () => {
@@ -135,15 +163,15 @@ test("a locked Keychain is a sign-in problem, with or without a retained flag", 
 
 test("the panel head follows the pose", () => {
   assert.deepEqual(
-    (["alert", "away", "warming", "sleeping", "hungry", "idle"] as const).map(headFor),
-    ["alert", "idle", "idle", "sleep", "hungry", "idle"],
+    (["alert", "away", "warming", "sleeping", "full", "hungry", "idle"] as const).map(headFor),
+    ["alert", "idle", "idle", "sleep", "hungry", "hungry", "idle"],
   );
 });
 
-test("the menu bar has six head frames and every pose shows one", () => {
-  assert.deepEqual([...MASCOT_FRAMES], ["idle", "blink", "hungry", "sleep", "alert", "away"]);
+test("the menu bar has seven head frames and every pose shows one", () => {
+  assert.deepEqual([...MASCOT_FRAMES], ["idle", "blink", "hungry", "sleep", "alert", "away", "full"]);
   assert.deepEqual(POSE_FRAME, {
-    idle: "idle", warming: "idle", hungry: "hungry", sleeping: "sleep", alert: "alert", away: "away",
+    idle: "idle", warming: "idle", hungry: "hungry", full: "full", sleeping: "sleep", alert: "alert", away: "away",
   });
   assert.equal(BLINK_FRAME, "blink");
 });

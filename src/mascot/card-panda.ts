@@ -21,6 +21,8 @@ export interface CardLook {
 export const CARD_LOOKS = {
   idle: { pose: "peek", expression: "open", props: [], motion: ["blink"] },
   hungry: { pose: "peek", expression: "worried", props: [], motion: ["blink"] },
+  // The five-hour window is used up (or every account is full): the menu bar's wide eyes.
+  full: { pose: "peek", expression: "wide", props: [], motion: [] },
   alert: { pose: "stand", expression: "wide", props: ["bang"], motion: [] },
   sleeping: { pose: "curl", expression: "closed", props: ["z"], motion: [] },
   warming: { pose: "chew", expression: "open", props: ["bamboo"], motion: ["blink"] },
@@ -149,7 +151,10 @@ export const REACTIONS: Record<CardReaction, { ms: number; priority: number }> =
   chew: { ms: 1_300, priority: 0 },
 };
 
-/** A sleeping panda sleeps, an away one is not there, and an alert one keeps its "!" until the problem is fixed. */
+/**
+ * A sleeping panda sleeps, an away one is not there, an alert one keeps its "!" until the problem is fixed,
+ * and a full one stares until the window reopens.
+ */
 const REACTIVE: ReadonlySet<MascotPose> = new Set(["idle", "hungry", "warming"]);
 export const reacts = (state: MascotPose) => REACTIVE.has(state);
 

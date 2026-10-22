@@ -26,7 +26,7 @@ type Polarity = "light" | "dark";
 type Expression = "open" | "closed" | "happy" | "worried" | "wide";
 
 /** The rig expression each frame shows, and the mark beside it. */
-const FRAMES: Record<MascotFrame, { expression: Expression; mark?: "bang" | "z" }> = {
+const FRAMES: Record<MascotFrame, { expression: Expression; mark?: keyof typeof MARKS }> = {
   idle: { expression: "open" },
   blink: { expression: "closed" },
   // The limit is close or reached: big, startled eyes.
@@ -35,15 +35,22 @@ const FRAMES: Record<MascotFrame, { expression: Expression; mark?: "bang" | "z" 
   alert: { expression: "open", mark: "bang" },
   // A Desktop operation (a switch) runs: a happy panda.
   away: { expression: "happy" },
+  // The five-hour window is used up: the startled eyes, and a clock for the time it reopens.
+  full: { expression: "wide", mark: "clock" },
 };
 
 /**
  * The marks, in frame points (24 × 20), as in the frames they replace; the "z" half a point further left, so
- * its edge does not end on the 23 pt line, where scaling to 1x would smear it into a 24th point.
+ * its edge does not end on the 23 pt line, where scaling to 1x would smear it into a 24th point. The clock is a
+ * ring (its inner circle runs the other way, so it is a hole) with its two hands, inside the same 19.5–22.5 pt
+ * column as the "z" plus a point to the left for the ring to read.
  */
 const MARKS = {
   bang: "M 20.75 2 H 22.25 V 7 H 20.75 Z M 20.75 9.25 A 0.75 0.75 0 1 0 22.25 9.25 A 0.75 0.75 0 1 0 20.75 9.25 Z",
   z: "M 19.5 2 H 22.5 V 3.5 H 19.5 Z M 21.107 2.614 L 22.393 3.386 L 20.893 5.886 L 19.607 5.114 Z M 19.5 5 H 22.5 V 6.5 H 19.5 Z",
+  clock:
+    "M 18.5 4.25 A 2 2 0 1 1 22.5 4.25 A 2 2 0 1 1 18.5 4.25 Z M 19.2 4.25 A 1.3 1.3 0 1 0 21.8 4.25 A 1.3 1.3 0 1 0 19.2 4.25 Z " +
+    "M 20.2 3.1 H 20.8 V 4.55 H 20.2 Z M 20.8 3.95 H 21.4 V 4.55 H 20.8 Z",
 };
 
 /** The head's extent in the rig's 512 canvas: ear tips to chin, cheek tuft to cheek tuft. */
