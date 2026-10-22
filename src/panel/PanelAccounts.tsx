@@ -118,7 +118,7 @@ export function PanelAccounts({
               {t("5 sa", "5 h")}
             </span>
             <span className="flex items-center gap-1">
-              <span className="size-1.5 rounded-full bg-foreground/30" />
+              <span className="size-1.5 rounded-full border border-foreground/70" />
               {t("hafta", "week")}
             </span>
           </span>

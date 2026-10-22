@@ -56,7 +56,7 @@ export function LimitRings({
             title={`${t(row.label.tr, row.label.en)} · ${formatPercent(percentUsed(row.usedPercent), language)}${row.resetsAt ? ` · ${formatReset(row.resetsAt, now, language, zone)}` : ""}`}
           >
             {row.key === "five_hour" || row.key === "seven_day" ? (
-              <RingKey percent={row.usedPercent} faint={row.key === "seven_day"}>
+              <RingKey percent={row.usedPercent} thin={row.key === "seven_day"}>
                 <span>{row.key === "five_hour" ? t("5 saat", "5 hours") : t("Hafta", "Week")}</span>{" "}
                 <b className="text-foreground tabular-nums">
                   {formatPercent(percentUsed(row.usedPercent), language)}

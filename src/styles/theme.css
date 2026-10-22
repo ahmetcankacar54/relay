@@ -9,79 +9,82 @@
 :root {
   color-scheme: light;
   --radius: 0.75rem;
-  --background: #fbf8f3;
-  --foreground: #2b2621;
+  /* Direction A: a calm, native ground; one orange accent for the primary action and the selection. */
+  --background: #fafaf9;
+  --foreground: #1d1d1f;
   --card: #ffffff;
-  --card-foreground: #2b2621;
+  --card-foreground: #1d1d1f;
   --popover: #ffffff;
-  --popover-foreground: #2b2621;
+  --popover-foreground: #1d1d1f;
   --primary: #c2410c;
   --primary-foreground: #ffffff;
-  --secondary: #f3ede4;
-  --secondary-foreground: #2b2621;
-  --muted: #f3ede4;
-  --muted-foreground: #685d52;
-  --accent: #fde8dc;
+  --secondary: #f3f2ef;
+  --secondary-foreground: #1d1d1f;
+  --muted: #f3f2ef;
+  /* 4.9:1 on white, 4.7:1 on the ground. */
+  --muted-foreground: #6e6e73;
+  --accent: #fdebdd;
   --accent-foreground: #c2410c;
-  --destructive: #d4380d;
-  --border: #e8e0d4;
-  --input: #e8e0d4;
-  --ring: #ec5f1f;
-  --sidebar: #f3ede4;
-  --sidebar-foreground: #2b2621;
-  --brand: #ec5f1f;
-  --track: #f0e9df;
-  --ok: #3f9d5a;
+  --destructive: #d92d20;
+  --border: #e7e5e2;
+  --input: #dcdad6;
+  --ring: #c2410c;
+  --sidebar: #f3f2ef;
+  --sidebar-foreground: #1d1d1f;
+  --brand: #c2410c;
+  --track: #efede9;
+  --ok: #1f9d55;
   /* Success text on light surfaces; --ok is for dots and fills. */
-  --ok-foreground: #2f7a45;
-  --warn: #d99a00;
-  --warn-foreground: #8a5a00;
-  --crit: #d4380d;
+  --ok-foreground: #166534;
+  --warn: #d97706;
+  --warn-foreground: #92400e;
+  --crit: #d92d20;
   /* Timeline window tones, one per planned account (cycled). */
-  --tone-1: #f58a52;
-  --tone-2: #5cb8a0;
-  --tone-3: #e6b84c;
-  --tone-4: #d98cc0;
+  --tone-1: #c2410c;
+  --tone-2: #2563eb;
+  --tone-3: #9ca3af;
+  --tone-4: #0f766e;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --background: #1d1916;
-    --foreground: #f3ece4;
-    --card: #2b2622;
-    --card-foreground: #f3ece4;
-    --popover: #2b2622;
-    --popover-foreground: #f3ece4;
-    --primary: #ff7a3d;
-    --primary-foreground: #1d1916;
-    --secondary: #25201c;
-    --secondary-foreground: #f3ece4;
-    --muted: #25201c;
-    --muted-foreground: #b3a89b;
-    --accent: #4a2b1c;
-    --accent-foreground: #ff9a66;
-    --destructive: #ff5a36;
-    --border: #3a332d;
-    --input: #3a332d;
-    --ring: #ff7a3d;
-    --sidebar: #25201c;
-    --sidebar-foreground: #f3ece4;
-    --brand: #ff7a3d;
-    --track: #3a332d;
-    --ok: #5cc27a;
-    --ok-foreground: #7ad694;
-    --warn: #e0a100;
-    --warn-foreground: #f2c14e;
-    --crit: #ff5a36;
-    --tone-1: #ff9a66;
-    --tone-2: #6fd0b6;
-    --tone-3: #f2c862;
-    --tone-4: #e8a2d2;
+    --background: #161514;
+    --foreground: #f2f1ef;
+    --card: #201f1d;
+    --card-foreground: #f2f1ef;
+    --popover: #242321;
+    --popover-foreground: #f2f1ef;
+    --primary: #ff8a4c;
+    --primary-foreground: #1c1b19;
+    --secondary: #2a2927;
+    --secondary-foreground: #f2f1ef;
+    --muted: #2a2927;
+    --muted-foreground: #a3a19c;
+    --accent: #3a2316;
+    --accent-foreground: #ff9a62;
+    --destructive: #ff6159;
+    --border: #2f2d2a;
+    --input: #3a3835;
+    --ring: #ff8a4c;
+    --sidebar: #1b1a18;
+    --sidebar-foreground: #f2f1ef;
+    --brand: #ff8a4c;
+    --track: #3e3c38;
+    --ok: #34c759;
+    --ok-foreground: #6ee7a0;
+    --warn: #f5b83d;
+    --warn-foreground: #f5c35a;
+    --crit: #ff6159;
+    --tone-1: #ff8a4c;
+    --tone-2: #7c9cff;
+    --tone-3: #8e8e93;
+    --tone-4: #3dd6a3;
   }
 }
 @theme inline {
-  --font-sans: "DM Sans", system-ui, sans-serif;
-  --font-display: "Manrope", "DM Sans", system-ui, sans-serif;
+  /* The system font (SF Pro on macOS), so Relay reads like the rest of the Mac. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
   /* The smallest text: 12.5 px, so no main-window text is smaller (panel text stays 12 px or more). */
   --text-xs: 0.78125rem;
   --radius-sm: calc(var(--radius) - 4px);

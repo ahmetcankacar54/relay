@@ -25,12 +25,10 @@ function Arc({
   radius,
   width,
   value,
-  faint,
 }: {
   radius: number;
   width: number;
   value: number | undefined;
-  faint?: boolean;
 }) {
   const used = clamp(value);
   return (
@@ -56,7 +54,6 @@ function Arc({
           transform="rotate(-90 50 50)"
           className={cn(
             strokeClass[meterTone(used)],
-            faint && "opacity-60",
             "transition-[stroke-dasharray] duration-500 ease-out motion-reduce:transition-none",
           )}
         />
@@ -66,10 +63,11 @@ function Arc({
 }
 
 /**
- * Two limits at a glance, as concentric rings: the outer one the five-hour window, the inner one
- * the week (fainter, so the two read apart). Each fills with what is used, in the meter's tone
- * (brand, warning from 75 %, critical from 90 %). `children` sits in the middle, usually the
- * five-hour percent. Without `inner` it is a single ring.
+ * Two limits at a glance, as concentric rings: the outer one the five-hour window, thick, the
+ * inner one the week, thin, so the two read apart by weight rather than by colour. Each fills with
+ * what is used, in the meter's tone (brand, warning from 75 %, critical from 90 %). `children` sits
+ * in the middle, usually the five-hour percent, inside a clear zone the rings never touch.
+ * Without `inner` it is a single ring.
  */
 export function UsageRing({
   outer,
@@ -90,11 +88,13 @@ export function UsageRing({
   children?: ReactNode;
 }) {
   const dual = inner !== null && inner !== undefined;
-  // Thicker rings when small, so the arcs stay visible at 20 px.
-  const width = size <= 28 ? 13 : size <= 52 ? 10 : 8;
-  const gap = size <= 28 ? 3 : 4;
+  // In a 100 unit box: the outer ring 8 thick and the inner one 3 at hero sizes; thicker when small,
+  // so the arcs stay visible at 20 px, with the inner ring always under half the outer's weight.
+  const width = size <= 28 ? 16 : size <= 52 ? 13 : 8;
+  const innerWidth = size <= 52 ? 6 : 3;
+  const gap = size <= 52 ? 3 : 4.5;
   const outerRadius = 50 - width / 2;
-  const innerRadius = outerRadius - width - gap;
+  const innerRadius = outerRadius - width / 2 - gap - innerWidth / 2;
   return (
     <div
       role="img"
@@ -104,7 +104,7 @@ export function UsageRing({
     >
       <svg viewBox="0 0 100 100" className="size-full" aria-hidden="true">
         <Arc radius={outerRadius} width={width} value={outer} />
-        {dual && <Arc radius={innerRadius} width={width} value={inner ?? undefined} faint />}
+        {dual && <Arc radius={innerRadius} width={innerWidth} value={inner ?? undefined} />}
       </svg>
       {children !== undefined && (
         <div className="absolute inset-0 grid place-items-center text-center leading-none">
@@ -115,24 +115,34 @@ export function UsageRing({
   );
 }
 
-/** A key for the rings: a dot in the limit's tone, its name, and what follows. */
+const ringClass: Record<MeterTone, string> = {
+  ok: "border-brand",
+  warn: "border-warn",
+  crit: "border-crit",
+  none: "border-track",
+};
+
+/**
+ * A key for the rings: a mark in the limit's tone, its name, and what follows. The thick outer
+ * ring's mark is a filled dot, the thin inner ring's (`thin`) a hollow one.
+ */
 export function RingKey({
   percent,
-  faint,
+  thin,
   children,
 }: {
   percent?: number;
-  faint?: boolean;
+  thin?: boolean;
   children: ReactNode;
 }) {
+  const tone = meterTone(clamp(percent));
   return (
     <span className="flex min-w-0 items-center gap-1.5">
       <span
         aria-hidden="true"
         className={cn(
           "size-2 shrink-0 rounded-full",
-          dotClass[meterTone(clamp(percent))],
-          faint && "opacity-60",
+          thin ? cn("border-[1.5px]", ringClass[tone]) : dotClass[tone],
         )}
       />
       <span className="min-w-0 truncate">{children}</span>

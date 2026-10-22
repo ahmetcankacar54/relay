@@ -222,9 +222,9 @@ test("the theme declares color-scheme and a success text colour", () => {
   const css = fs.readFileSync(path.join(import.meta.dirname, "../src/styles/theme.css"), "utf8");
   const [light, dark] = css.split("@media (prefers-color-scheme: dark)");
   assert.match(light, /color-scheme:\s*light/);
-  assert.match(light, /--ok-foreground:\s*#2f7a45/);
+  assert.match(light, /--ok-foreground:\s*#166534/);
   assert.match(dark, /color-scheme:\s*dark/);
-  assert.match(dark, /--ok-foreground:\s*#7ad694/);
+  assert.match(dark, /--ok-foreground:\s*#6ee7a0/);
   assert.match(css, /--color-ok-foreground:\s*var\(--ok-foreground\)/);
   const offenders = ["src/features/PlanningPanel.tsx"].filter((f) =>
     /["\s]text-ok["\s]/.test(fs.readFileSync(path.join(import.meta.dirname, "..", f), "utf8")),
