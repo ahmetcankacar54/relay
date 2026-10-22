@@ -101,6 +101,9 @@ export async function buildNativeHelpers() {
   };
   const { version } = JSON.parse(await fs.readFile("package.json", "utf8"));
   const appex = path.join(outDir, WIDGET_APPEX);
+  // The panda heads, one per mood (scripts/widget-pandas.ts), in a stable order for the build number.
+  const pandaDir = path.resolve("electron/native/widget/pandas");
+  const pandas = (await fs.readdir(pandaDir)).filter((name) => name.endsWith(".png")).sort();
   const products = [
     ...helpers.map((name) => {
       const plistFile = path.join(cacheDir, `${name}.plist`);
@@ -132,17 +135,15 @@ export async function buildNativeHelpers() {
         version,
         widgetBuild(
           await fs.readFile(path.resolve("electron/native/widget/RelayWidget.swift")),
-          await fs.readFile(path.resolve("electron/native/widget/panda.png")),
+          ...(await Promise.all(pandas.flatMap((name) => [Buffer.from(name), fs.readFile(path.join(pandaDir, name))]))),
         ),
       ),
       plistFile: path.join(appex, "Contents/Info.plist"),
       // The sandboxed widget reads only Relay's widget folder, so its images travel in the bundle.
-      resources: [
-        [
-          path.resolve("electron/native/widget/panda.png"),
-          path.join(appex, "Contents/Resources/panda.png"),
-        ],
-      ],
+      resources: pandas.map((name) => [
+        path.join(pandaDir, name),
+        path.join(appex, "Contents/Resources", name),
+      ]),
       targets: ["arm64", "x86_64"].map((arch) => `${arch}-apple-macosx14.0`),
       // Without _NSExtensionMain chronod starts the extension and it exits at once.
       args: [
