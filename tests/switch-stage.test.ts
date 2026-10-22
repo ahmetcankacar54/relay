@@ -57,7 +57,7 @@ test("a hidden or stalled story draws nothing", () => {
 test("a long line wraps to at most two lines without pushing the scene", () => {
   const line = `${"Çok uzun bir hesap adı ".repeat(6)}hesabına geçiliyor`;
   const html = draw(view({ line }));
-  assert.match(html, /<p class="switch-line line-clamp-2[^"]*" title="Çok uzun/);
+  assert.match(html, /<p class="switch-line[^"]*line-clamp-2[^"]*" title="Çok uzun/);
   assert.match(/<div class="switch-stage[^"]*"/.exec(html)?.[0] ?? "", /grid-rows-\[102px_30px\]/);
 });
 
@@ -70,4 +70,21 @@ test("stage animations run only with motion on, never under Reduce motion, and l
     assert.match(selector, /:not\(\[data-still\]\)/, selector.trim());
   // Tossed props must stay gone while the window fades.
   assert.match(motion, /:is\(\[data-switch-stage="returning"\], \[data-switch-stage="closing"\]\)\[data-outcome="switched"\] \.switch-panda :is\(\[data-prop="fedora"\]/);
+});
+
+test("a switch shows the from → to row with each account's five-hour ring, and the scene makes room", () => {
+  const html = draw(view({
+    accounts: { from: { name: "Kişisel · Max", percent: 94 }, to: { name: "Vertex", percent: 22 } },
+  }));
+  const row = /<div data-slot="switch-accounts"[\s\S]*$/.exec(html)?.[0] ?? "";
+  assert.match(row, /Kişisel · Max[\s\S]*%94[\s\S]*Vertex[\s\S]*%22/);
+  assert.match(row, /aria-label="Kişisel · Max %94"/);
+  assert.match(row, /aria-label="Vertex %22"/);
+  assert.match(/<div class="switch-stage[^"]*"/.exec(html)?.[0] ?? "", /grid-rows-\[82px_18px_20px\]/);
+  assert.match(html, /<p class="switch-line[^"]*line-clamp-1/);
+  assert.match(rig(html, "door"), /width="80"/);
+  // Only the target known: the row keeps its place for the source empty.
+  const target = draw(view({ accounts: { to: { name: "Vertex" } } }));
+  assert.match(target, /data-slot="switch-accounts"/);
+  assert.doesNotMatch(target, /%22/);
 });

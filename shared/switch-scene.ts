@@ -26,6 +26,8 @@ export interface SwitchSceneState {
   kind?: DesktopOperationKind;
   /** The switch target; the line names it. */
   profileId?: string;
+  /** The account Claude had open when the story began, for the from → to line. */
+  fromId?: string;
   /** The result, once the operation ended (it may end while the panda still walks). */
   outcome?: SwitchOutcome;
   disguise?: Disguise;
@@ -34,7 +36,9 @@ export interface SwitchSceneState {
 }
 export const INITIAL_SCENE: SwitchSceneState = { stage: "hidden", since: 0, story: 0 };
 
-export type SwitchSceneEvent = DesktopRestartEvent | { phase: "tick" };
+/** A restart report; its start may name the account Claude had open. */
+export type SwitchSceneReport = DesktopRestartEvent & { fromId?: string };
+export type SwitchSceneEvent = SwitchSceneReport | { phase: "tick" };
 
 /** A random disguise other than the previous one. */
 export function pickDisguise(previous?: Disguise, random: () => number = Math.random): Disguise {
@@ -90,6 +94,7 @@ export function switchScene(
       story: state.story + 1,
       kind: event.kind,
       profileId: event.profileId,
+      fromId: event.fromId,
       lastDisguise: state.lastDisguise,
     };
   const current = catchUp(state, now, pick);
@@ -139,6 +144,12 @@ export function sceneLine(
   return state.kind === "switch" && target ? t.switching(target) : t.restarting;
 }
 
+/** One side of a switch: the account's name and its five-hour percent used, when known. */
+export interface SceneAccount {
+  name: string;
+  percent?: number;
+}
+
 /** What the switch window draws; sent to its page as is. */
 export interface SwitchSceneView {
   /** The stage is drawn on screen. */
@@ -148,14 +159,42 @@ export interface SwitchSceneView {
   outcome?: SwitchOutcome;
   disguise?: Disguise;
   line: string;
+  /** For a switch: where it goes, and from where when that is another known account. */
+  accounts?: { from?: SceneAccount; to: SceneAccount };
   /** Animate; otherwise each stage is one still image. */
   motion: boolean;
 }
 
+/** The from → to pair of a switch whose target is still known; undefined for a plain restart. */
+function sceneAccounts(
+  state: SwitchSceneState,
+  name: (profileId: string) => string | undefined,
+  percent: (profileId: string) => number | undefined,
+): SwitchSceneView["accounts"] {
+  if (state.kind !== "switch" || !state.profileId) return undefined;
+  const side = (id: string): SceneAccount | undefined => {
+    const known = name(id);
+    if (known === undefined) return undefined;
+    const used = percent(id);
+    return used === undefined ? { name: known } : { name: known, percent: used };
+  };
+  const to = side(state.profileId);
+  if (!to) return undefined;
+  const from = state.fromId && state.fromId !== state.profileId ? side(state.fromId) : undefined;
+  return from ? { from, to } : { to };
+}
+
 export function sceneView(
   state: SwitchSceneState,
-  context: { language: SwitchLanguage; name: (profileId: string) => string | undefined; motion: boolean },
+  context: {
+    language: SwitchLanguage;
+    name: (profileId: string) => string | undefined;
+    /** The five-hour percent used of an account, when known. */
+    percent?: (profileId: string) => number | undefined;
+    motion: boolean;
+  },
 ): SwitchSceneView {
+  const accounts = sceneAccounts(state, context.name, context.percent ?? (() => undefined));
   return {
     visible: state.stage === "leaving" || state.stage === "waiting" || returned(state),
     stage: state.stage,
@@ -163,6 +202,7 @@ export function sceneView(
     outcome: returned(state) ? state.outcome : undefined,
     disguise: returned(state) ? state.disguise : undefined,
     line: sceneLine(state, context.language, context.name),
+    ...(accounts ? { accounts } : {}),
     motion: context.motion,
   };
 }
@@ -194,7 +234,7 @@ export class SwitchStory {
     return this.state;
   }
 
-  report(event: DesktopRestartEvent) {
+  report(event: SwitchSceneReport) {
     this.step(event);
   }
 

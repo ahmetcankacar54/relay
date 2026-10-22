@@ -149,6 +149,36 @@ test("the view is on screen only for drawn stages, with the outcome once returni
   assert.equal(sceneView(stalled, context).visible, false);
 });
 
+test("a switch's view carries the from → to accounts with their five-hour percents", () => {
+  const names: Record<string, string> = { a: "Kişisel · Max", b: "Vertex" };
+  const percents: Record<string, number> = { a: 94, b: 22 };
+  const context = {
+    language: "tr" as const,
+    name: (id: string) => names[id],
+    percent: (id: string) => percents[id],
+    motion: true,
+  };
+  const [leaving] = run([[0, { ...start, fromId: "a" }]]);
+  assert.equal(leaving.fromId, "a");
+  assert.deepEqual(sceneView(leaving, context).accounts, {
+    from: { name: "Kişisel · Max", percent: 94 },
+    to: { name: "Vertex", percent: 22 },
+  });
+  // Without a known source, or switching to the account already open, only the target shows.
+  const [unknown] = run([[0, start]]);
+  assert.deepEqual(sceneView(unknown, context).accounts, { to: { name: "Vertex", percent: 22 } });
+  const [same] = run([[0, { ...start, fromId: "b" }]]);
+  assert.deepEqual(sceneView(same, context).accounts, { to: { name: "Vertex", percent: 22 } });
+  // No percent known: the name alone. A restart that is not a switch, or a deleted target: no row.
+  assert.deepEqual(sceneView(leaving, { ...context, percent: () => undefined }).accounts, {
+    from: { name: "Kişisel · Max" },
+    to: { name: "Vertex" },
+  });
+  const [merge] = run([[0, { phase: "start", kind: "merge", fromId: "a" }]]);
+  assert.equal(sceneView(merge, context).accounts, undefined);
+  assert.equal(sceneView(leaving, { ...context, name: (id: string) => (id === "a" ? names.a : undefined) }).accounts, undefined);
+});
+
 test("the switch window shows only with the setting on, its page ready and the panel closed", () => {
   const on = { loaded: true, enabled: true, panelOpen: false };
   assert.equal(switchWindowVisible({ visible: true }, on), true);

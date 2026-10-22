@@ -239,7 +239,15 @@ function SwitchDemo() {
       new SwitchStory({
         now: () => Date.now() + skipped.current,
         pick: () => disguise.current,
-        show: (state) => setView(sceneView(state, { language: "tr", name: () => "Vertex", motion: true })),
+        show: (state) =>
+          setView(
+            sceneView(state, {
+              language: "tr",
+              name: (id) => (id === "demo-from" ? "Kişisel · Max" : "Vertex"),
+              percent: (id) => (id === "demo-from" ? 94 : 22),
+              motion: true,
+            }),
+          ),
       }),
     [],
   );
@@ -256,7 +264,7 @@ function SwitchDemo() {
     window.clearTimeout(ending.current);
     disguise.current = demo.disguise ?? "fedora";
     const kind = demo.outcome === "back" ? "merge" : "switch";
-    story.report({ phase: "start", kind, profileId: "demo" });
+    story.report({ phase: "start", kind, profileId: "demo", fromId: "demo-from" });
     ending.current = window.setTimeout(() => {
       if (demo.outcome === "stalled") {
         skipped.current += WAITING_LIMIT_MS;

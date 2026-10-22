@@ -925,6 +925,7 @@ else {
                   language: trayLanguage,
                   name: (id) =>
                     service.store.state.accounts.find((a) => a.id === id)?.name,
+                  percent: (id) => usage.snapshot()[id]?.fiveHour?.usedPercent,
                   motion: motionAllowed(service.store.state.settings, () =>
                     systemPreferences.getAnimationSettings(),
                   ),
@@ -933,7 +934,13 @@ else {
           });
           switchStory = story;
           // Real restarts only: lock holders that never quit Claude stay silent.
-          desktop.onRestart = (event) => story.report(event);
+          // A start names the account Claude had open, for the window's from → to line.
+          desktop.onRestart = (event) =>
+            story.report(
+              event.phase === "start"
+                ? { ...event, fromId: observedDesktop?.activeProfileId }
+                : event,
+            );
           // The window exists only during a story, so the smoke test starts one scene through it.
           // A packaged Relay has no such hook.
           if (!app.isPackaged)
