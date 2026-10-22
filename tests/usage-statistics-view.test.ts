@@ -217,6 +217,44 @@ test("insight rule 2: lowest-capacity account is almost always full", () => {
   });
 });
 
+test("insight: an idle account beside a full one suggests shifting the order", () => {
+  // Alto was last used on Thursday the 8th and observed idle every day since,
+  // today included; Kişisel fills its windows.
+  const alto = account("alto", "Alto", "max5");
+  const kisisel = account("kisisel", "Kişisel", "pro");
+  const ALTO = usageIdentity(alto)!;
+  const KISISEL = usageIdentity(kisisel)!;
+  const idleRollups = (idleFrom: number) => {
+    const r = emptyRollups();
+    r.hours[ALTO] = { "2026-10-08T08:00:00.000Z": h(2) };
+    for (let day = idleFrom; day <= 14; day++)
+      r.hours[ALTO][`2026-10-${String(day).padStart(2, "0")}T09:00:00.000Z`] = h(0);
+    // The 11th was not observed: it neither counts nor ends the idle days.
+    r.hours[ALTO]["2026-10-11T09:00:00.000Z"] = h(0, 0, 0);
+    r.hours[KISISEL] = { "2026-10-13T08:00:00.000Z": h(1) };
+    r.windows[KISISEL] = [
+      { resetAt: "2026-10-12T10:00:00.000Z", maxPercent: 95 },
+      { resetAt: "2026-10-13T10:00:00.000Z", maxPercent: 90 },
+    ];
+    return r;
+  };
+  const both = [alto, kisisel];
+  assert.deepEqual(build({ accounts: both, rollups: idleRollups(9) }).insight, {
+    tr: "Alto 5 gündür boşta; Kişisel açıldığında neredeyse hep doluyor. Sırayı Alto’ya kaydırmak 5 saatlik takılmaları azaltır.",
+    en: "Alto has sat idle for 5 days; Kişisel is almost always full when it opens. Moving Alto up the order would cut 5-hour limit stops.",
+  });
+  // Idle for two days only, or a single account's view: the plain note that Kişisel fills.
+  const plain = {
+    tr: "Kişisel (Pro) açıldığında neredeyse hep doluyor.",
+    en: "Kişisel (Pro) is almost always full when it opens.",
+  };
+  assert.deepEqual(build({ accounts: both, rollups: idleRollups(13) }).insight, plain);
+  assert.deepEqual(
+    build({ accounts: both, accountId: "kisisel", rollups: idleRollups(9) }).insight,
+    plain,
+  );
+});
+
 test("no insight when neither rule applies", () => {
   assert.equal(
     build({ rollups: insightRollups([50, 50, 50, 50, 50], [60]) }).insight,
