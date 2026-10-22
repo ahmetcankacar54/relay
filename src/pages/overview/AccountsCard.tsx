@@ -85,6 +85,7 @@ export function AccountsCard({
           title={(row) =>
             accountRowSubtitle(row, t, language, zone, now, waitingFor(row))
           }
+          canSwitch={(row) => row.state !== "not-linked"}
           blocked={(row) =>
             row.state === "not-linked"
               ? undefined

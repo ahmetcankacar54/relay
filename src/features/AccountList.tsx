@@ -9,9 +9,10 @@ import { cn } from "@/lib/utils";
 /**
  * Other accounts as a grouped list (direction A): each row a small two-ring gauge (five hours
  * thick, the week thin), the name with a "suggested" tag, one status line and, in the app, the two
- * percents. The suggested account that can be switched to carries the one "Switch" action; the
- * others end in a chevron. In the menu bar panel the whole row is the switch (`pick`); in the app
- * the row opens the account (`href`) and the action is its own button.
+ * percents. In the menu bar panel the whole row is the switch (`pick`) and the suggested row shows
+ * "Switch"; in the app the row opens the account (`href`) and every account that can be switched
+ * to now has its own "Switch" button, filled for the suggested one and quiet for the rest. A row
+ * that cannot be switched to ends in a chevron.
  */
 export function AccountList({
   rows,
@@ -24,6 +25,7 @@ export function AccountList({
   href,
   variant = "app",
   footer,
+  canSwitch,
 }: {
   rows: OverviewRow[];
   /** The status line under the name. */
@@ -43,6 +45,8 @@ export function AccountList({
   variant?: "panel" | "app";
   /** A last row, such as "Add account". */
   footer?: ReactNode;
+  /** In the app: whether a row's action is a switch (false for an account without a Claude app sign-in). */
+  canSwitch?: (row: OverviewRow) => boolean;
 }) {
   const { t, language } = useI18n();
   const panel = variant === "panel";
@@ -65,6 +69,8 @@ export function AccountList({
           .filter(Boolean)
           .join(" · ");
         const offer = row.recommended && !why && !busy;
+        // The app offers a switch on every account that can take one now; the panel row is the switch itself.
+        const switchable = !why && !busy && (canSwitch?.(row) ?? true);
         const tooltip = [title?.(row) ?? line(row), why].filter(Boolean).join(" · ");
         const body = (
           <>
@@ -122,12 +128,18 @@ export function AccountList({
                 >
                   {body}
                 </a>
-                {offer ? (
+                {switchable ? (
                   <button
                     type="button"
                     disabled={!!switching}
+                    aria-label={t(`${account.name} hesabına geç`, `Switch to ${account.name}`)}
                     onClick={(e) => pick(row, e)}
-                    className="h-7 shrink-0 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+                    className={cn(
+                      "h-7 shrink-0 rounded-md px-3 text-xs font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50",
+                      row.recommended
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "border bg-card text-foreground hover:bg-muted",
+                    )}
                   >
                     {t("Geç", "Switch")}
                   </button>

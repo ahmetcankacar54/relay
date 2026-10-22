@@ -89,8 +89,8 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(row, /role="img" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
   assert.match(row, /<b[^>]*>%12<\/b><span[^>]*> \/ %31<\/span>/);
   assert.doesNotMatch(html, /Geçişi incele/);
-  // The suggested row's own "Geç" is the list's one switch offer.
-  assert.equal(html.match(/>Geç</g)?.length, 1);
+  // The suggested row's "Geç" is the filled one.
+  assert.match(row, /<button[^>]*aria-label="Vertex hesabına geç"[^>]*class="[^"]*bg-primary[^"]*"[^>]*>Geç<\/button>/);
   // The list ends in "Hesap ekle" with the rings' key under it.
   assert.match(listOf(html), /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle(?:(?!<\/button>)[\s\S])*?<\/button>/);
   assert.match(html, /kalın: 5 saatlik dönem/);
@@ -268,7 +268,10 @@ test("stale and unlinked accounts are never recommended", () => {
   );
   assert.equal(rowsOf(html).length, 2);
   assert.doesNotMatch(html, suggested);
-  assert.equal(switchButtons(html).length, 0);
+  // The stale account can still be switched to, quietly; the unlinked one cannot.
+  assert.equal(switchButtons(html).length, 1);
+  assert.match(rowFor(html, "Stale"), /aria-label="Stale hesabına geç"[^>]*class="[^"]*border bg-card/);
+  assert.doesNotMatch(rowFor(html, "Loose"), />Geç</);
   // Without a suggestion the heading only says how the rows are ordered.
   assert.match(html, />en uygunu üstte</);
   assert.doesNotMatch(html, /dolmak üzere/);
@@ -572,4 +575,25 @@ test("with no profile yet, an unlinked Claude sign-in is added, not linked", () 
   assert.match(html, /Merhaba, ben Relay’in kuryesiyim/);
   assert.match(html, /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle<\/button>/);
   assert.doesNotMatch(html, /Hesabı eşleştir/);
+});
+
+test("every account that can be switched to has its own Geç, filled only for the suggested one", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const vertex = acct("vertex", "Vertex", "pro");
+  const alto = acct("alto", "Alto", "pro");
+  const studio = acct("studio", "Studio", "pro", false);
+  const html = render(
+    relayFor(active, [active, vertex, alto, studio], {
+      active: use("active", 90, 40),
+      vertex: use("vertex", 0, 10),
+      alto: use("alto", 30, 24),
+    }, { suggestion: vertex }),
+  );
+  const geç = (name: string) => /<button[^>]*aria-label="([^"]*) hesabına geç"[^>]*class="([^"]*)"[^>]*>Geç<\/button>/.exec(rowFor(html, name));
+  assert.match(geç("Vertex")?.[2] ?? "", /bg-primary/);
+  assert.match(geç("Alto")?.[2] ?? "", /border bg-card/);
+  assert.doesNotMatch(geç("Alto")?.[2] ?? "", /bg-primary/);
+  // Without a Claude app sign-in there is nothing to switch to: the row opens the account.
+  assert.equal(geç("Studio"), null);
+  assert.equal(switchButtons(html).length, 2);
 });
