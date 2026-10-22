@@ -86,43 +86,152 @@ export function instanceFromValue(
 
 const lower = (value: string | undefined) => value?.toLowerCase();
 
-/** The account's row in the sheet: whether its extension sign-in is saved, and why not. */
-export function rowStatus(
+/** The account's uuids (Desktop's and its own), lower case. */
+export const accountUuids = (account: Account) =>
+  [account.desktop?.accountUuid, account.auth?.accountUuid]
+    .map(lower)
+    .filter((value): value is string => !!value);
+
+/**
+ * Where an account stands with the browser extension, and what to do next. `steps` is the
+ * sign-in to make in the browser, `check` that Relay should look again after it, `settings`
+ * that the fix is on the Switching page.
+ */
+export interface ExtensionGuide {
+  tone: "ok" | "warn" | "crit" | "off";
+  label: string;
+  detail?: string;
+  steps?: string[];
+  action?: "check" | "settings";
+  /** The browser profile Relay manages, for the line under the status. */
+  where?: string;
+}
+
+export function extensionGuide(
   account: Account,
   status: ExtensionStatus | undefined,
+  accounts: Account[],
   t: T,
   language: "tr" | "en",
-): { tone: "ok" | "warn" | "off"; label: string } {
-  if (!status) return { tone: "off", label: "…" };
+): ExtensionGuide {
+  if (!status) return { tone: "off", label: t("Kontrol ediliyor…", "Checking…") };
   if (status.setting.mode === "off")
     return {
       tone: "off",
       label: t("Kapalı · Relay eklentiye dokunmaz.", "Off · Relay does not touch the extension."),
+      action: "settings",
     };
   if (!status.instances.length)
     return {
       tone: "off",
       label: t(
-        "Bu bilgisayarda Claude eklentisi bulunamadı.",
+        "Bu Mac'te Claude eklentisi bulunamadı.",
         "No Claude extension found on this Mac.",
       ),
+      detail: t(
+        "Chrome, Brave, Edge, Chromium ve Vivaldi'ye bakıldı.",
+        "Looked in Chrome, Brave, Edge, Chromium and Vivaldi.",
+      ),
     };
-  const uuids = [account.desktop?.accountUuid, account.auth?.accountUuid].map(lower);
-  const saved = status.saved.find((s) => uuids.includes(s.accountUuid));
-  if (!saved)
+  if (!status.target)
     return {
       tone: "warn",
       label: t(
-        "Henüz kayıtlı değil. Eklentiye bu hesapla bir kez giriş yap; Relay bir sonraki geçişte kaydeder.",
-        "Not saved yet. Sign in to the extension once with this account; Relay saves it at the next switch.",
+        "Eklenti birden çok tarayıcıda var; hangisini izleyeceğimi seç.",
+        "The extension is in several browsers; choose the one to follow.",
       ),
+      action: "settings",
     };
-  const date = new Date(saved.savedAt).toLocaleDateString(
-    language === "tr" ? "tr-TR" : "en-GB",
-    { day: "numeric", month: "short" },
-  );
+  const where =
+    instanceLabel(status.target) +
+    (status.picked === "recent" ? t(" (en son kullanılan)", " (used last)") : "");
+  const uuids = accountUuids(account);
+  const saved = status.saved.find((s) => uuids.includes(s.accountUuid));
+  const current = status.current;
+  const here = current?.state === "signed-in" && uuids.includes(current.accountUuid);
+  if (saved || here) {
+    const date = saved
+      ? new Date(saved.savedAt).toLocaleDateString(language === "tr" ? "tr-TR" : "en-GB", {
+          day: "numeric",
+          month: "short",
+        })
+      : undefined;
+    return {
+      tone: "ok",
+      label: here
+        ? t("Bağlı · eklenti şu an bu hesapta", "Linked · the extension is on this account now")
+        : t(`Bağlı · ${date} kaydedildi`, `Linked · saved ${date}`),
+      detail: here
+        ? undefined
+        : t(
+            "Bu hesaba geçince eklenti de bu hesaba döner.",
+            "Switching to this account brings the extension along.",
+          ),
+      where,
+    };
+  }
+  const email = account.desktop?.email ?? account.auth?.email;
+  const signIn = email
+    ? t(`${email} ile giriş yap.`, `Sign in with ${email}.`)
+    : t("Bu hesapla giriş yap.", "Sign in with this account.");
+  const check = t("“Kontrol et”e bas; Relay bağlar.", "Press “Check”; Relay links it.");
+  if (!current)
+    return { tone: "off", label: t("Kontrol ediliyor…", "Checking…"), where, action: "check" };
+  if (current.state === "unreadable")
+    return {
+      tone: "crit",
+      label: t("Eklentinin girişi okunamadı.", "Could not read the extension's sign-in."),
+      detail: t(
+        "Birkaç saniye sonra tekrar dene. Sürerse eklentinin yeni bir sürümü olabilir.",
+        "Try again in a few seconds. If it persists, the extension may have changed.",
+      ),
+      where,
+      action: "check",
+    };
+  if (current.state === "signed-out")
+    return {
+      tone: "warn",
+      label: t("Bağlı değil · eklentide giriş yok", "Not linked · the extension is signed out"),
+      steps: [
+        t("Tarayıcıda Claude eklentisini aç.", "Open the Claude extension in the browser."),
+        signIn,
+        check,
+      ],
+      detail: t(
+        "Giriş yaptığın hâlde bu yazı kalıyorsa Relay eklentinin girişini tanıyamıyor demektir.",
+        "If this stays after you signed in, Relay cannot recognise the extension's sign-in.",
+      ),
+      where,
+      action: "check",
+    };
+  const on = current.accountUuid;
+  const other = accounts.find((a) => accountUuids(a).includes(on));
   return {
-    tone: "ok",
-    label: t(`Giriş kayıtlı · ${date}`, `Sign-in saved · ${date}`),
+    tone: "warn",
+    label: other
+      ? t(
+          `Bağlı değil · eklenti şu an ${other.name} hesabında`,
+          `Not linked · the extension is on ${other.name} now`,
+        )
+      : t(
+          "Bağlı değil · eklenti Relay'de olmayan bir hesapta",
+          "Not linked · the extension is on an account Relay does not have",
+        ),
+    steps: [
+      t(
+        "Tarayıcıda Claude eklentisini aç ve çıkış yap.",
+        "Open the Claude extension in the browser and sign out.",
+      ),
+      signIn,
+      check,
+    ],
+    detail: other
+      ? t(
+          `${other.name} için kayıt Relay'de duruyor; ona geçince eklenti geri döner.`,
+          `${other.name}'s sign-in stays saved in Relay; switching to it brings the extension back.`,
+        )
+      : undefined,
+    where,
+    action: "check",
   };
 }

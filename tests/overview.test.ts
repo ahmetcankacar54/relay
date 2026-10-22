@@ -68,12 +68,16 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /5 saatlik dönem/);
   assert.match(html, /Haftalık · tüm modeller/);
   assert.match(html, /Haftalık · Opus/);
-  assert.match(html, /Önerilen/);
-  // The suggestion band keeps its text; the suggested row's own "Geç" is the one switch offer.
-  assert.match(html, /Kişisel · Max limiti uyarı eşiğini geçti\. Önerilen: <b>Vertex<\/b>/);
-  // The suggestion's figure is what it has used (its tightest window, 31 %), with its word.
-  assert.match(html, /<b>Vertex<\/b> \(%31 kullanıldı\)\./);
+  // No suggestion band: the accounts card's heading says the limit is near and the suggestion leads.
+  assert.doesNotMatch(html, /uyarı eşiğini geçti|Önerilen:/);
+  assert.match(html, />Kişisel · Max limiti dolmak üzere · önerilen üstte</);
+  assert.doesNotMatch(html, /en uygunu üstte/);
+  // The suggested row carries a small "önerilen" by its name, which links to the account's page.
+  assert.match(html, /<a href="#\/hesaplar\/vertex"[^>]*>Vertex<\/a><span[^>]*text-brand[^>]*>önerilen<\/span>/);
+  // Its figures are the row's own meters, used percent per window.
+  assert.match(rowFor(html, "Vertex"), /aria-label="Hafta"[^>]*aria-valuenow="31"/);
   assert.doesNotMatch(html, /Geçişi incele/);
+  // The suggested row's own "Geç" is the one switch offer.
   assert.equal(html.match(/>Geç</g)?.length, 1);
   assert.match(html, /Bugün/);
   assert.match(html, /Önceden başlatma kapalı/);
@@ -107,8 +111,10 @@ test("unlinked accounts offer a Desktop link instead of a switch", () => {
   assert.doesNotMatch(saveButton, /aria-label=/);
 });
 
-const rowsOf = (html: string) => html.split("grid-cols-[1.2fr_1fr_1fr_auto]").slice(1);
+const rowsOf = (html: string) => html.split("grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_auto]").slice(1);
 const rowFor = (html: string, name: string) => rowsOf(html).find((r) => r.includes(`>${name}<`)) ?? "";
+/** The small "önerilen" next to the suggested account's name. */
+const suggested = />önerilen</;
 const switchButtons = (html: string) =>
   (html.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Geç<\/button>/g) ?? []);
 
@@ -130,17 +136,17 @@ test("the automation choice is locked while a handoff is switching or continuing
   assert.match(html, /Kota dolunca/);
 });
 
-test("the suggested account carries the badge even when ranking prefers another", () => {
+test("the suggested account is marked even when ranking prefers another", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const x = acct("x", "Xeno", "max5");
   const y = acct("y", "Yarn", "pro");
   const usage = { active: use("active", 90, 90), x: use("x", 5, 5), y: use("y", 30, 40) };
   const base = render(relayFor(active, [active, x, y], usage));
-  const ranked = rowFor(base, "Xeno").includes("Önerilen") ? "Xeno" : "Yarn";
+  const ranked = suggested.test(rowFor(base, "Xeno")) ? "Xeno" : "Yarn";
   const other = ranked === "Xeno" ? y : x;
   const html = render(relayFor(active, [active, x, y], usage, { suggestion: other }));
-  assert.match(rowFor(html, other.name), /Önerilen/);
-  assert.doesNotMatch(rowFor(html, ranked), /Önerilen/);
+  assert.match(rowFor(html, other.name), suggested);
+  assert.doesNotMatch(rowFor(html, ranked), suggested);
 });
 
 test("switch buttons are disabled while Desktop is busy, pending or needs recovery", () => {
@@ -175,7 +181,10 @@ test("stale and unlinked accounts are never recommended", () => {
     }),
   );
   assert.equal(rowsOf(html).length, 2);
-  assert.doesNotMatch(html, /Önerilen/);
+  assert.doesNotMatch(html, suggested);
+  // Without a suggestion the heading only says how the rows are ordered.
+  assert.match(html, />en uygunu üstte</);
+  assert.doesNotMatch(html, /dolmak üzere/);
   assert.match(html, /Limit verisi eski/);
 });
 

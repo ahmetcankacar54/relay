@@ -68,7 +68,9 @@ import {
   BROWSERS,
   DEFAULT_EXTENSION,
   chooseInstance,
+  pickInstance,
   startupRestores,
+  type ExtensionCurrent,
   type ExtensionOutcome,
   type ExtensionStatus,
 } from "../../shared/browser-extension";
@@ -241,6 +243,8 @@ export class DesktopManager {
   private extensionVault: ExtensionVault;
   private extensionSwitcher?: ExtensionSwitcher;
   private lastExtension?: ExtensionOutcome;
+  private lastExtensionCheck?: ExtensionCurrent;
+  private extensionChecking?: Promise<ExtensionCurrent | undefined>;
   /**
    * The browsers and the extension's storage, for keeping the Claude extension's sign-in with
    * the account at a switch. Without it (not macOS) the step never runs.
@@ -295,6 +299,7 @@ export class DesktopManager {
     await sweepStaleDraftScratch(this.host.draftScratchDir ?? os.tmpdir());
     // So does an extension step: its backup of the extension's folder.
     await clearScratch(this.extensionScratch);
+    await clearScratch(`${this.extensionScratch}-peek`);
     await this.refreshPending();
     const recovery = await readObject(this.vault, "journal.json");
     if (recovery)
@@ -752,6 +757,9 @@ export class DesktopManager {
       vault: this.extensionVault,
       scratch: this.extensionScratch,
       now: this.now,
+      // Key names only, so a renamed sign-in key can be found from the log.
+      onUnknownLayout: (names) =>
+        this.diagnose("extension-keys", { count: names.length, names }),
     });
     return this.extensionSwitcher;
   }
@@ -840,12 +848,14 @@ export class DesktopManager {
     if (!switcher || !this.extension) return undefined;
     const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
     const instances = switcher.instances();
-    const target = chooseInstance(instances, setting.browser);
+    const pick = pickInstance(instances, setting.browser);
+    const target = pick?.instance;
     const { system } = this.extension;
     return {
       setting,
       instances,
       target,
+      picked: pick?.picked,
       restoresTabs: target
         ? startupRestores(
             readJson(
@@ -856,7 +866,44 @@ export class DesktopManager {
         : undefined,
       saved: await this.extensionVault.list(),
       last: this.lastExtension,
+      current: this.lastExtensionCheck,
     };
+  }
+  /**
+   * Reads who the extension is signed in to from a copy of its storage, without quitting a
+   * browser, and saves the sign-in when it is one of Relay's accounts (see
+   * ExtensionSwitcher.check). Skipped while a Desktop operation runs, whose own step uses the
+   * extension; one check at a time.
+   */
+  async checkExtension(): Promise<ExtensionStatus | undefined> {
+    const switcher = this.switcher();
+    if (!switcher) return undefined;
+    if (!this.busy) {
+      const uuids = this.store.state.accounts.flatMap((account) =>
+        [account.desktop?.accountUuid, account.auth?.accountUuid].filter(
+          (value): value is string => !!value,
+        ),
+      );
+      this.extensionChecking ??= switcher
+        .check({
+          setting: this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION,
+          known: uuids,
+        })
+        .finally(() => {
+          this.extensionChecking = undefined;
+        });
+      const current = await this.extensionChecking;
+      if (current) {
+        this.lastExtensionCheck = current;
+        this.diagnose("extension-check", {
+          state: current.state,
+          ...(current.state === "signed-in"
+            ? { account: shortId(current.accountUuid), known: current.known }
+            : {}),
+        });
+      }
+    }
+    return this.extensionStatus();
   }
   private async historyPlan(
     target: Account,

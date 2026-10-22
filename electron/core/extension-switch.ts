@@ -16,6 +16,7 @@ import type { ExtensionVault } from "./extension-vault";
 import { signInAccount } from "../../shared/extension-auth";
 import {
   chooseInstance,
+  type ExtensionCurrent,
   type ExtensionInstance,
   type ExtensionOutcome,
   type ExtensionReason,
@@ -28,6 +29,10 @@ export interface ExtensionPorts {
   vault: ExtensionVault;
   /** Where a step keeps the backup of the extension's folder while it runs. */
   scratch: string;
+  /** Where a check keeps its copy of the extension's folder; apart from `scratch`, which a step clears. */
+  peekScratch?: string;
+  /** Told the key names (never values) a check found when it found no sign-in. */
+  onUnknownLayout?: (names: string[]) => void;
   now?: () => number;
 }
 
@@ -109,6 +114,46 @@ export class ExtensionSwitcher {
       return done(core, { restarted, reopened });
     } catch {
       return done({ result: "failed", reason: "unreadable", saved: false });
+    }
+  }
+
+  /**
+   * Who the extension is signed in to, read from a copy of its folder so a running browser is
+   * neither quit nor disturbed; the copy is removed before this returns. A sign-in of one of
+   * Relay's accounts is saved into the vault: signing in to the extension once and checking is
+   * how an account is linked, with no switch. Undefined when the step would not run (mode off,
+   * no extension, no library). Never throws.
+   */
+  async check(request: Pick<ExtensionRequest, "setting" | "known">): Promise<
+    ExtensionCurrent | undefined
+  > {
+    const { system, storage, vault, scratch } = this.ports;
+    const at = new Date((this.ports.now ?? Date.now)()).toISOString();
+    const peekScratch = this.ports.peekScratch ?? `${scratch}-peek`;
+    if (request.setting.mode === "off") return undefined;
+    const instance = chooseInstance(this.instances(), request.setting.browser);
+    if (!instance) return undefined;
+    try {
+      if (!(await storage.available())) return undefined;
+      await clearScratch(peekScratch);
+      const copy = await backupFolder(
+        extensionStorageDir(system, instance.app, instance.profile),
+        peekScratch,
+      );
+      const current = await storage.read(copy);
+      const account = current && signInAccount(current);
+      if (!current || !account) {
+        if (this.ports.onUnknownLayout && storage.keyNames)
+          this.ports.onUnknownLayout(await storage.keyNames(copy).catch(() => []));
+        return { state: "signed-out", at };
+      }
+      const known = lower(request.known).includes(account);
+      if (known) await vault.save(current);
+      return { state: "signed-in", accountUuid: account, known, at };
+    } catch {
+      return { state: "unreadable", at };
+    } finally {
+      await clearScratch(peekScratch);
     }
   }
 

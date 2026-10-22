@@ -209,15 +209,30 @@ export function buildTrayMenu(
   ];
 }
 
-/** The percent used of the Desktop-active account's five-hour window; undefined while unknown or old. */
-function activeFiveHourUsed(snapshot: TraySnapshot, now: number) {
+/** The Desktop-active account's five-hour window; undefined while unknown or old. */
+function activeFiveHour(snapshot: TraySnapshot, now: number) {
   const active = snapshot.accounts.find(
     (a) => a.id === snapshot.desktop?.activeProfileId,
   );
   const usage = active ? snapshot.usage[active.id] : undefined;
   if (!active || !freshUsage(usage, now) || usage.fiveHour === undefined)
     return undefined;
-  return usage.fiveHour.usedPercent;
+  return usage.fiveHour;
+}
+/** The percent used of the Desktop-active account's five-hour window; undefined while unknown or old. */
+function activeFiveHourUsed(snapshot: TraySnapshot, now: number) {
+  return activeFiveHour(snapshot, now)?.usedPercent;
+}
+
+/** From this percent used on, the menu bar also says when the five-hour window renews. */
+export const TRAY_RESET_FROM = 80;
+
+/** Time left until `resetsAt` as "h:mm" ("1:50", "0:07"); undefined when past or unknown. */
+export function trayCountdown(resetsAt: string | undefined, now: number) {
+  const at = resetsAt ? Date.parse(resetsAt) : NaN;
+  if (!Number.isFinite(at) || at <= now) return undefined;
+  const minutes = Math.ceil((at - now) / 60_000);
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
 /** The account's name and, when known, the percent used of its five-hour window, with the word the title leaves out. */
@@ -230,20 +245,32 @@ export function trayTooltip(
     (a) => a.id === snapshot.desktop?.activeProfileId,
   );
   if (!active) return "Relay";
-  const used = activeFiveHourUsed(snapshot, now);
+  const window = activeFiveHour(snapshot, now);
+  const used = window?.usedPercent;
   const figure = used === undefined ? "" : ` · ${formatUsed(used, language)}`;
-  return `Relay — ${active.name.replace(/[\r\n\t]/g, " ")}${figure}`;
+  const left = trayCountdown(window?.resetsAt, now);
+  const renews = left
+    ? language === "tr"
+      ? ` · ${left} sonra yenilenir`
+      : ` · renews in ${left}`
+    : "";
+  return `Relay — ${active.name.replace(/[\r\n\t]/g, " ")}${figure}${renews}`;
 }
 
 /**
  * Menu-bar text: the percent used of the Desktop-active account's five-hour window, compact ("%94" /
- * "94%"; the tooltip adds the word), empty when unknown. The menu bar panda shows the warning; the title stays a plain number.
+ * "94%"; the tooltip adds the word), empty when unknown. From 80 % on, when the window's end
+ * starts to matter, it adds the time left until it renews ("%94 · 1:50"); below that the item
+ * stays as narrow as a number. The menu bar panda shows the warning.
  */
 export function trayTitle(
   snapshot: TraySnapshot,
   now = Date.now(),
   language: TrayLanguage = "en",
 ) {
-  const used = percentUsed(activeFiveHourUsed(snapshot, now));
-  return used === undefined ? "" : formatPercent(used, language);
+  const window = activeFiveHour(snapshot, now);
+  const used = percentUsed(window?.usedPercent);
+  if (used === undefined) return "";
+  const left = used >= TRAY_RESET_FROM ? trayCountdown(window?.resetsAt, now) : undefined;
+  return formatPercent(used, language) + (left ? ` · ${left}` : "");
 }

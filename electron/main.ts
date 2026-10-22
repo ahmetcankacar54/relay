@@ -1353,6 +1353,7 @@ function bindIPC() {
   });
   handle("extension-status", () => desktop.extensionStatus());
   handle("extension-sync", () => desktop.syncExtension());
+  handle("extension-check", () => desktop.checkExtension());
   // The windows show it; every switch, sign-in or recovery rechecks fresh in main.
   handle("desktop-snapshot", async () => ({
     ...(await desktop.cachedSnapshot()),

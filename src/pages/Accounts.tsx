@@ -15,7 +15,11 @@ import { useRelay } from "@/data/relay-context";
 import { PageFrame } from "@/app/PageFrame";
 import { routeHash, routeQuery } from "@/app/routes";
 import { AccountsTable } from "./accounts/AccountsTable";
-import { AccountSheet } from "./accounts/AccountSheet";
+import {
+  AccountDetail,
+  accountFromHash,
+  accountHash,
+} from "./accounts/AccountDetail";
 import { AddAccountDialog } from "./accounts/AddAccountDialog";
 import { LinkDesktopDialog } from "./accounts/LinkDesktopDialog";
 import { filterAccounts, type AccountFilter } from "./accounts/accountLabels";
@@ -97,7 +101,24 @@ export function Accounts() {
   const [filter, setFilter] = useState<AccountFilter>("all");
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState(false);
-  const [selected, setSelected] = useState<string>();
+  // The open account lives in the hash (`#/hesaplar/<id>`), so Back and the panel can reach it.
+  const [selected, setSelectedState] = useState<string | undefined>(() =>
+    typeof window === "undefined" ? undefined : accountFromHash(window.location.hash),
+  );
+  useEffect(() => {
+    const read = () => setSelectedState(accountFromHash(window.location.hash));
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
+  const setSelected = (id: string | undefined) => {
+    const hash = id ? accountHash(id) : routeHash("hesaplar");
+    if (window.location.hash !== hash) window.location.hash = hash;
+    setSelectedState(id);
+  };
+  // A new page opens at its top; <main> is the scroller and outlives this one.
+  useEffect(() => {
+    document.querySelector("main")?.scrollTo?.(0, 0);
+  }, [selected]);
   const search = useRef<HTMLInputElement>(null);
   const setSetupIdRef = useRef(setSetupId);
   setSetupIdRef.current = setSetupId;
@@ -144,6 +165,41 @@ export function Accounts() {
   const visible = filterAccounts(accounts, query, filter, language);
   const linked = accounts.filter((a) => a.desktop).length;
   const account = accounts.find((a) => a.id === selected);
+  const dialogs = (
+    <>
+      <AddAccountDialog
+        open={adding}
+        onOpenChange={(open) => {
+          setAdding(open);
+          // The dialog owns the new profile’s setup; don’t reopen it on the account page.
+          if (!open) setSetupId(undefined);
+        }}
+      />
+      <LinkDesktopDialog
+        open={linking}
+        onOpenChange={setLinking}
+        picked={(id) => {
+          setLinking(false);
+          setSetupId(id);
+          show(id);
+        }}
+      />
+    </>
+  );
+  if (account)
+    return (
+      <>
+        <AccountDetail
+          key={account.id}
+          account={account}
+          back={() => {
+            if (setupId && setupId === selected) setSetupId(undefined);
+            setSelected(undefined);
+          }}
+        />
+        {dialogs}
+      </>
+    );
   return (
     <PageFrame
       title={t("Hesaplar", "Accounts")}
@@ -228,7 +284,6 @@ export function Accounts() {
         {visible.length ? (
           <AccountsTable
             accounts={visible}
-            selected={account?.id}
             open={setSelected}
             link={(id) => {
               setSetupId(id);
@@ -240,30 +295,7 @@ export function Accounts() {
           <AccountsEmpty hasAccounts={accounts.length > 0} />
         )}
       </div>
-      <AddAccountDialog
-        open={adding}
-        onOpenChange={(open) => {
-          setAdding(open);
-          // The dialog owns the new profile’s setup; don’t reopen it in the sheet.
-          if (!open) setSetupId(undefined);
-        }}
-      />
-      <LinkDesktopDialog
-        open={linking}
-        onOpenChange={setLinking}
-        picked={(id) => {
-          setLinking(false);
-          setSetupId(id);
-          show(id);
-        }}
-      />
-      <AccountSheet
-        account={account}
-        close={() => {
-          if (setupId && setupId === selected) setSetupId(undefined);
-          setSelected(undefined);
-        }}
-      />
+      {dialogs}
     </PageFrame>
   );
 }

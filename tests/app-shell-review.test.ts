@@ -10,7 +10,7 @@ import type { DesktopActionKind } from "../src/features/DesktopActionReview";
 import { Banners, reconnectIssues } from "../src/app/Banners";
 import { shortcutPage } from "../src/app/routes";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
-import { AccountSheetBody } from "../src/pages/accounts/AccountSheet";
+import { AccountDetailBody } from "../src/pages/accounts/AccountDetail";
 import { AccountsTable } from "../src/pages/accounts/AccountsTable";
 import { AccountsCard } from "../src/pages/overview/AccountsCard";
 import { forgetSetupOnLeave } from "../src/pages/Accounts";
@@ -93,7 +93,7 @@ test("the add-account steps show the current error as an alert", () => {
 });
 
 test("the account sheet shows the current error too, since it covers the page banners", () => {
-  const html = wrap(relayFor({ error: "Sheet action failed" }), createElement(AccountSheetBody, { account: b, now: NOW }));
+  const html = wrap(relayFor({ error: "Sheet action failed" }), createElement(AccountDetailBody, { account: b, now: NOW }));
   assert.match(html, /role="alert"[^>]*>[\s\S]*Sheet action failed/);
 });
 
@@ -122,11 +122,11 @@ test("step 3 of the add dialog embeds the browser sign-in controls without the p
 });
 
 test("the account sheet embeds the browser sign-in controls for its own flow", () => {
-  const html = wrap(relayFor({ flow: waitingFlow, flowAccount: b }), createElement(AccountSheetBody, { account: b, now: NOW }));
+  const html = wrap(relayFor({ flow: waitingFlow, flowAccount: b }), createElement(AccountDetailBody, { account: b, now: NOW }));
   assert.match(html, /Kodu gönder/);
   assert.match(html, /Tarayıcıyı yeniden aç/);
   assert.doesNotMatch(html, /id="cli-connection-panel"/);
-  const other = wrap(relayFor({ flow: waitingFlow, flowAccount: b }), createElement(AccountSheetBody, { account: a, now: NOW }));
+  const other = wrap(relayFor({ flow: waitingFlow, flowAccount: b }), createElement(AccountDetailBody, { account: a, now: NOW }));
   assert.doesNotMatch(other, /Kodu gönder/);
 });
 
@@ -267,10 +267,10 @@ test("limit percentages read %45 kullanıldı in Turkish and 45% used in English
   const usage: Record<string, AccountUsage> = { a: { accountId: "a", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 38 }, sevenDay: { usedPercent: 78 } } };
   const table = (language: Language) =>
     wrap(relayFor({}, usage), createElement(AccountsTable, { accounts, open() {}, link() {} }), language);
-  assert.match(table("tr"), /%38 · %78/);
-  assert.match(table("en"), /38% · 78%/);
-  assert.match(table("tr"), /<th[^>]*>Kullanılan · 5 sa · hafta<\/th>/);
-  assert.match(table("en"), /<th[^>]*>Used · 5 h · week<\/th>/);
+  assert.match(table("tr"), />%38<.*>%78</);
+  assert.match(table("en"), />38%<.*>78%</);
+  assert.match(table("tr"), /<th[^>]*>5 saat<\/th><th[^>]*>Hafta<\/th>/);
+  assert.match(table("en"), /<th[^>]*>5 hours<\/th><th[^>]*>Week<\/th>/);
 });
 
 test("the medium meter names its number with a word, the small one shows the number alone", () => {

@@ -9,7 +9,7 @@ import { mediaBlock } from "./css";
 
 const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
 
-test("panel and meter text is 12 px or more; the smallest class is 12.5 px", () => {
+test("panel and meter text is 11 px or more; text-xs stays 12.5 px", () => {
   const theme = read("../src/styles/theme.css");
   assert.match(theme, /--text-xs: 0\.78125rem;/);
   for (const file of [
@@ -22,7 +22,8 @@ test("panel and meter text is 12 px or more; the smallest class is 12.5 px", () 
     "../src/components/Disclosure.tsx",
     "../src/app/Sidebar.tsx",
   ])
-    assert.doesNotMatch(read(file), /text-\[(?:\d|1[01])(?:\.\d+)?px\]/, file);
+    // The compact panel rows and eyebrows go down to 11.5 px and the "önerilen" mark to 11 px; nothing smaller.
+    assert.doesNotMatch(read(file), /text-\[(?:\d|10)(?:\.\d+)?px\]/, file);
 });
 
 test("reduce motion stops animations and transitions, but spinners keep turning", () => {

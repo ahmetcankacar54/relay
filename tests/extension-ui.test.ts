@@ -2,19 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AccountSheetBody, ExtensionRow } from "../src/pages/accounts/AccountSheet";
+import { AccountDetailBody, ExtensionRow } from "../src/pages/accounts/AccountDetail";
 import { ExtensionPreference } from "../src/features/ExtensionPreference";
 import {
   instanceLine,
   modeOptions,
   modeSentence,
-  rowStatus,
+  extensionGuide,
   startupLine,
 } from "../src/lib/extension-ui";
 import { extensionLine } from "../shared/extension-text";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import type { ExtensionOutcome, ExtensionStatus } from "../shared/browser-extension";
+import { chooseInstance, type ExtensionOutcome, type ExtensionStatus } from "../shared/browser-extension";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 
 const tr = (text: string) => text;
@@ -39,18 +39,67 @@ const status = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
   ...over,
 });
 
-test("the row says whether the account's sign-in is saved, matching the uuid in any case", () => {
-  assert.deepEqual(rowStatus(vertex, status(), tr, "tr"), { tone: "ok", label: "Giriş kayıtlı · 20 Eki" });
-  assert.equal(rowStatus(vertex, status(), en, "en").label, "Sign-in saved · 20 Oct");
-  assert.equal(rowStatus(alto, status(), tr, "tr").tone, "warn");
-  assert.match(rowStatus(alto, status(), tr, "tr").label, /bir kez giriş yap; Relay bir sonraki geçişte kaydeder/);
-  assert.match(rowStatus(alto, status(), en, "en").label, /Sign in to the extension once with this account/);
-  assert.equal(rowStatus(alto, undefined, tr, "tr").label, "…");
+const ALTO = "33333333-3333-4333-8333-333333333333";
+const altoLinked: Account = { ...alto, desktop: { accountUuid: ALTO, orgId: ID, savedAt: NOW, email: "alto@example.com" } };
+const guide = (account: Account, over: Partial<ExtensionStatus> = {}, t: (tr: string, en: string) => string = tr, language: "tr" | "en" = "tr") =>
+  extensionGuide(account, status(over), [vertex, altoLinked], t, language);
+const signedIn = (accountUuid: string) => ({ state: "signed-in" as const, accountUuid, known: true, at: NOW });
+
+test("a saved sign-in reads as linked, matching the uuid in any case", () => {
+  assert.deepEqual(
+    { tone: guide(vertex).tone, label: guide(vertex).label },
+    { tone: "ok", label: "Bağlı · 20 Eki kaydedildi" },
+  );
+  assert.equal(guide(vertex, {}, en, "en").label, "Linked · saved 20 Oct");
+  assert.equal(guide(vertex).where, "Brave · Kişisel");
+  // The extension on this account now says so.
+  assert.equal(guide(vertex, { current: signedIn(ID) }).label, "Bağlı · eklenti şu an bu hesapta");
+  assert.equal(extensionGuide(alto, undefined, [], tr, "tr").label, "Kontrol ediliyor…");
 });
 
-test("the row says when the feature is off or there is no extension", () => {
-  assert.match(rowStatus(vertex, status({ setting: { mode: "off" } }), tr, "tr").label, /Kapalı · Relay eklentiye dokunmaz/);
-  assert.match(rowStatus(vertex, status({ instances: [], target: undefined }), en, "en").label, /No Claude extension found/);
+test("an unlinked account gets the steps to link it, for each thing the extension is on", () => {
+  // Not checked yet: it is being checked.
+  assert.equal(guide(altoLinked).action, "check");
+  // Signed out: open it, sign in with this email, check.
+  const out = guide(altoLinked, { current: { state: "signed-out", at: NOW } });
+  assert.equal(out.tone, "warn");
+  assert.match(out.label, /eklentide giriş yok/);
+  assert.deepEqual(out.steps, [
+    "Tarayıcıda Claude eklentisini aç.",
+    "alto@example.com ile giriş yap.",
+    "“Kontrol et”e bas; Relay bağlar.",
+  ]);
+  assert.match(out.detail ?? "", /tanıyamıyor/);
+  // On another of Relay's accounts: sign out first, and that account stays saved.
+  const other = guide(altoLinked, { current: signedIn(ID) });
+  assert.match(other.label, /eklenti şu an Vertex hesabında/);
+  assert.match(other.steps?.[0] ?? "", /çıkış yap/);
+  assert.match(other.detail ?? "", /Vertex için kayıt Relay'de duruyor/);
+  // On an account Relay does not have.
+  const stranger = guide(altoLinked, { current: { ...signedIn("44444444-4444-4444-8444-444444444444"), known: false } });
+  assert.match(stranger.label, /Relay'de olmayan bir hesapta/);
+  // Unreadable: try again.
+  const unreadable = guide(altoLinked, { current: { state: "unreadable", at: NOW } });
+  assert.equal(unreadable.tone, "crit");
+  assert.equal(unreadable.action, "check");
+});
+
+test("the guide says when the feature is off, there is no extension, or no browser can be told apart", () => {
+  assert.match(guide(vertex, { setting: { mode: "off" } }).label, /Kapalı · Relay eklentiye dokunmaz/);
+  assert.equal(guide(vertex, { setting: { mode: "off" } }).action, "settings");
+  assert.match(guide(vertex, { instances: [], target: undefined }, en, "en").label, /No Claude extension found/);
+  assert.equal(guide(vertex, { target: undefined }).action, "settings");
+  // Picked as the one used last: said next to the browser.
+  assert.equal(guide(vertex, { picked: "recent" }).where, "Brave · Kişisel (en son kullanılan)");
+});
+
+test("with several browsers and none chosen, the one whose extension was used last is followed", () => {
+  const chrome = { app: "chrome", profile: "Default", name: "Kişi 1", usedAt: 1 } as const;
+  const braveUsed = { ...brave, usedAt: 2 };
+  assert.equal(chooseInstance([chrome, braveUsed], undefined), braveUsed);
+  assert.equal(chooseInstance([chrome, braveUsed], { app: "chrome", profile: "Default" }), chrome);
+  // Without dates nothing can be told apart: none is followed.
+  assert.equal(chooseInstance([{ ...chrome, usedAt: undefined }, brave], undefined), undefined);
 });
 
 test("each mode has a label and a sentence in both languages", () => {
@@ -114,6 +163,7 @@ function relayFor(platform: string, list: Account[]): Relay {
   return {
     api: {
       extensionStatus: () => new Promise(() => {}),
+      checkExtension: () => new Promise(() => {}),
       desktopHistorySummary: () => new Promise(() => {}),
     },
     preview: false, error: "", notice: "", accounts: list, active: undefined,
@@ -137,31 +187,36 @@ const render = (relay: Relay, child: ReturnType<typeof createElement>, language:
     ),
   );
 
-test("the account row shows the sign-in state, and no browser profile picker is left", () => {
+test("the account row shows the state and its steps, and no browser profile picker is left", () => {
   const html = render(
     relayFor("darwin", [vertex, alto]),
     createElement(ExtensionRow, { account: vertex, initialStatus: status() }),
   );
   assert.match(html, /Tarayıcı eklentisi/);
-  assert.match(html, /Giriş kayıtlı · 20 Eki/);
+  assert.match(html, /Bağlı · 20 Eki kaydedildi/);
   assert.doesNotMatch(html, /Tarayıcı profili|Şimdi aç|Open now/);
   const none = render(
-    relayFor("darwin", [vertex, alto]),
-    createElement(ExtensionRow, { account: alto, initialStatus: status() }),
+    relayFor("darwin", [vertex, altoLinked]),
+    createElement(ExtensionRow, {
+      account: altoLinked,
+      initialStatus: status({ current: { state: "signed-out", at: NOW } }),
+    }),
     "en",
   );
-  assert.match(none, /Not saved yet\. Sign in to the extension once with this account/);
+  assert.match(none, /Not linked · the extension is signed out/);
+  assert.match(none, /<ol[^>]*>.*Sign in with alto@example\.com\./);
+  assert.match(none, />Check<\/button>/);
 });
 
 test("the sheet shows the row on macOS only", () => {
   const setup: Account = { ...alto, id: "s", name: "Setup" };
   const list = [vertex, alto, setup];
   assert.match(
-    render(relayFor("darwin", list), createElement(AccountSheetBody, { account: setup })),
+    render(relayFor("darwin", list), createElement(AccountDetailBody, { account: setup })),
     /Tarayıcı eklentisi/,
   );
   assert.doesNotMatch(
-    render(relayFor("win32", list), createElement(AccountSheetBody, { account: setup })),
+    render(relayFor("win32", list), createElement(AccountDetailBody, { account: setup })),
     /Tarayıcı eklentisi/,
   );
 });

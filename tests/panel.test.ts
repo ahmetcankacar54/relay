@@ -9,7 +9,7 @@ import { PanelDrafts, allowAccessibilityAction, copyDraftAction, dismissDraftAct
 import { PanelSidebar, copySidebarRecipeAction, dismissSidebarGapAction, sidebarGapLine } from "../src/panel/PanelSidebar";
 import { relayAction } from "../src/data/relay-action";
 import { panelRowState, accountRowSubtitle } from "../src/lib/account-row";
-import { PanelActiveCard } from "../src/panel/PanelActiveCard";
+import { PanelActiveCard, panelEyebrow } from "../src/panel/PanelActiveCard";
 import { fakeDom } from "./fake-dom";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -216,23 +216,31 @@ const baseUsage = {
 
 test("panel shows the active account, suggestion, accounts, automation and footer", () => {
   const html = render(relayFor(active, [active, vertex], baseUsage, { suggestion: vertex }));
-  assert.match(html, /Claude uygulamasında açık/);
+  // The active card has no eyebrow: whether Claude runs sits next to the name, with its dot.
+  assert.doesNotMatch(html, />Claude uygulamasında açık</);
   assert.match(html, /Kişisel · Max/);
   assert.match(html, /Max 5×/);
-  assert.match(html, /Çalışıyor/);
+  assert.match(html, />Max 5×<\/span><span[^>]*title="Claude uygulamasında açık hesap"><span[^>]*bg-ok[^>]*><\/span>Claude açık</);
+  assert.doesNotMatch(html, /Çalışıyor/);
   assert.match(html, /5 saatlik dönem/);
   assert.match(html, /Haftalık · Opus/);
-  assert.match(html, /Limit dolmak üzere/);
-  assert.match(html, /Önerilen/);
-  // The strip names what the suggested account has used (its tightest window), with its word.
-  assert.match(html, /<b>Vertex<\/b> \(%31 kullanıldı\)/);
-  // The name has its own line; the badge sits on the subtitle line so names stay readable.
-  assert.match(html, /title="Vertex"[^>]*>Vertex<\/div><div[^>]*>.*Önerilen/);
+  // No suggestion strip: the accounts heading says the limit is near and the suggestion leads.
+  assert.match(html, />Limit dolmak üzere · önerilen üstte</);
+  assert.doesNotMatch(html, /Önerilen:/);
+  assert.equal((html.match(/Limit dolmak üzere/g) ?? []).length, 1);
+  // The suggested row: name, a small "önerilen" and its own Geç on the first line.
+  assert.match(
+    html,
+    /title="Vertex">Vertex<\/span><span[^>]*text-brand[^>]*>önerilen<\/span><\/div><button[^>]*aria-label="Vertex hesabına geç"[^>]*>Geç<\/button>/,
+  );
+  // Its two limits on one line each: label, bar and percent used.
+  assert.match(html, /<span[^>]*>5 sa<\/span><span role="meter" aria-label="5 sa"[^>]*aria-valuenow="12"[^>]*>.*?<\/span><\/span><b[^>]*>%12<\/b>/);
+  assert.match(html, /<span[^>]*>Hafta<\/span><span role="meter" aria-label="Hafta"[^>]*aria-valuenow="31"[^>]*>.*?<\/span><\/span><b[^>]*>%31<\/b>/);
   assert.match(html, /title="Pro · Hazır · dönem başlamadı"/);
-  assert.match(html, /Hesaplar/);
-  assert.match(html, /Otomatik geçiş · Kapalı/);
-  assert.match(html, /title="Kişisel · Max %78 kullanıldı · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."/);
-  assert.match(html, /Önceden başlatma kapalı/);
+  assert.match(html, />Otomasyon</);
+  // Automation reads as rows: the setting's name and its state, each opening its page.
+  assert.match(html, /<button type="button" title="Kişisel · Max %78 kullanıldı · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."[^>]*>.*?>Otomatik geçiş<\/span><span[^>]*>Kapalı<\/span>/);
+  assert.match(html, /<button type="button"[^>]*>.*?>Önceden başlatma<\/span><span[^>]*>Kapalı<\/span>/);
   assert.doesNotMatch(html, /Kapanınca hazırla/);
   assert.match(html, /Relay’i aç/);
   assert.match(html, /Güncellendi 1 dk önce/);
@@ -278,12 +286,14 @@ test("more than six other accounts collapse into an overflow line", () => {
   const others = Array.from({ length: 7 }, (_, i) => acct(`o${i}`, `Other ${i}`));
   const usage = Object.fromEntries([["active", use("active", 10, 10)], ...others.map((o) => [o.id, use(o.id, 10, 10)])]);
   const html = render(relayFor(active, [active, ...others], usage));
-  assert.equal(html.split("grid-cols-[1fr_88px_88px_auto]").length - 1, 6);
+  assert.equal(html.split('data-slot="panel-account"').length - 1, 6);
   assert.match(html, /\+1 hesap · Relay’de gör/);
 });
 
 test("Desktop busy disables every switch and explains why", () => {
-  const html = render(relayFor(active, [active, vertex], baseUsage, { suggestion: vertex, desktopBusy: true }));
+  // Two other accounts, so more than one row offers a switch (the suggested one included).
+  const alto = acct("alto", "Alto");
+  const html = render(relayFor(active, [active, vertex, alto], { ...baseUsage, alto: use("alto", 20, 20) }, { suggestion: vertex, desktopBusy: true }));
   assert.match(html, /Claude uygulaması işlemi sürüyor/);
   const all = (html.match(/>Geç</g) ?? []).length;
   assert.ok(all >= 2);
@@ -362,7 +372,7 @@ test("a rejected switch clears the confirmation and shows the error", async () =
   assert.equal(lock.current, false);
 });
 
-test("the planning pill names the adopted start while the plan is adapted", () => {
+test("the early start row names the adopted start while the plan is adapted", () => {
   // 10:00 / 10:30 UTC are 13:00 / 13:30 in Istanbul, the planning zone.
   const settings = {
     ...DEFAULT_SETTINGS,
@@ -402,20 +412,25 @@ test("the planning pill names the adopted start while the plan is adapted", () =
     pill(keeper({ factor: 1, schedule: [{ accountId: "vertex", startAt: "later" }] })),
     />Sonraki başlatma 13:00 · Kişisel · Max</,
   );
-  // Switched on with nothing planned: the pill says early start, not automatic start.
-  assert.match(
-    pill(
-      { ...keeper(), next: undefined },
-      { ...settings, planning: { ...settings.planning, accounts: [] } },
-    ),
-    />Önceden başlatma açık</,
+  // Switched on with nothing planned: the early start row says on, not automatic start.
+  const earlyStart = /<span class="shrink-0">Önceden başlatma<\/span><span[^>]*>([^<]*)<\/span>/;
+  assert.equal(
+    earlyStart.exec(
+      pill(
+        { ...keeper(), next: undefined },
+        { ...settings, planning: { ...settings.planning, accounts: [] } },
+      ),
+    )?.[1],
+    "Açık",
   );
-  assert.match(
-    pill(keeper(), {
-      ...settings,
-      planning: { ...settings.planning, autoStart: false },
-    }),
-    />Önceden başlatma kapalı</,
+  assert.equal(
+    earlyStart.exec(
+      pill(keeper(), {
+        ...settings,
+        planning: { ...settings.planning, autoStart: false },
+      }),
+    )?.[1],
+    "Kapalı",
   );
   // Adaptation turned off applies at once.
   assert.doesNotMatch(
@@ -507,7 +522,7 @@ test("with re-typing off, no draft asks for accessibility: Copy and Dismiss only
 });
 
 test("the rescued drafts heading is tagged experimental only while re-typing is on", () => {
-  const eyebrow = (html: string) => /<div class="mb-1\.5 flex[^"]*">([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
+  const eyebrow = (html: string) => html.split(`<div class="${panelEyebrow}">`)[1]?.split("</div>")[0] ?? "";
   const on = eyebrow(drafts(withDrafts([draft()], retyping)));
   assert.match(on, /Kurtarılan taslaklar/);
   assert.match(on, />deneysel</);
@@ -675,12 +690,13 @@ test("a new-session draft's row words its reason for the new-session screen", ()
   assert.match(html, /Konuşmaya yazılmış olabilir, yapıştırmadan önce bak/);
 });
 
-test("the panel places rescued drafts after the suggestion and before the accounts", () => {
+test("the panel places rescued drafts after the active card and before the accounts", () => {
+  // With a suggestion the accounts heading carries the limit warning; the drafts still come first.
   const html = render(withDrafts([draft()], { suggestion: vertex }));
   const at = (re: RegExp) => html.search(re);
-  assert.ok(at(/Limit dolmak üzere/) >= 0);
-  assert.ok(at(/Limit dolmak üzere/) < at(/Kurtarılan taslaklar/));
-  assert.ok(at(/Kurtarılan taslaklar/) < at(/>Hesaplar</));
+  assert.ok(at(/>Claude açık</) >= 0);
+  assert.ok(at(/>Claude açık</) < at(/Kurtarılan taslaklar/));
+  assert.ok(at(/Kurtarılan taslaklar/) < at(/>Limit dolmak üzere · önerilen üstte</));
 });
 
 test("a draft row's buttons are disabled while that row's action runs", () => {
@@ -760,7 +776,7 @@ test("the panel places the sidebar row after rescued drafts and before the accou
   const at = (re: RegExp) => html.search(re);
   assert.ok(at(/Kurtarılan taslaklar/) >= 0);
   assert.ok(at(/Kurtarılan taslaklar/) < at(/Kenar çubuğu düzeni/));
-  assert.ok(at(/Kenar çubuğu düzeni/) < at(/>Hesaplar</));
+  assert.ok(at(/Kenar çubuğu düzeni/) < at(/>Diğer hesaplar · en uygunu üstte</));
 });
 
 test("the sidebar row's buttons are disabled while its action runs", () => {

@@ -22,6 +22,7 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:account-planning", id, input),
   extensionStatus: () => ipcRenderer.invoke("relay:extension-status"),
   syncExtension: () => ipcRenderer.invoke("relay:extension-sync"),
+  checkExtension: () => ipcRenderer.invoke("relay:extension-check"),
   showDiagnostics: () => ipcRenderer.invoke("relay:show-diagnostics"),
   setTrayLanguage: (language) =>
     ipcRenderer.invoke("relay:tray-language", language),

@@ -19,12 +19,13 @@ const snap = (u?: AccountUsage, active = "a"): TraySnapshot => ({
 
 test("tray title shows the active account's five-hour percent used, compact", () => {
   assert.equal(trayTitle(snap(usage(37.6)), NOW), "37%");
-  assert.equal(trayTitle(snap(usage(90)), NOW), "90%");
-  assert.equal(trayTitle(snap(usage(94)), NOW, "en"), "94%");
-  assert.equal(trayTitle(snap(usage(94)), NOW, "tr"), "%94");
+  // From 80 % on, the time left until the window renews (an hour here) follows the percent.
+  assert.equal(trayTitle(snap(usage(90)), NOW), "90% · 1:00");
+  assert.equal(trayTitle(snap(usage(94)), NOW, "en"), "94% · 1:00");
+  assert.equal(trayTitle(snap(usage(94)), NOW, "tr"), "%94 · 1:00");
   // Only a full window reads 100.
-  assert.equal(trayTitle(snap(usage(99.9)), NOW, "tr"), "%99");
-  assert.equal(trayTitle(snap(usage(100)), NOW, "tr"), "%100");
+  assert.equal(trayTitle(snap(usage(99.9)), NOW, "tr"), "%99 · 1:00");
+  assert.equal(trayTitle(snap(usage(100)), NOW, "tr"), "%100 · 1:00");
   assert.equal(trayTitle(snap(usage(0)), NOW, "tr"), "%0");
   assert.equal(trayTitle(snap(usage(20, NOW - 3_600_000)), NOW), "");
   assert.equal(trayTitle(snap(undefined), NOW), "");
@@ -32,8 +33,8 @@ test("tray title shows the active account's five-hour percent used, compact", ()
 });
 
 test("the tooltip says what the title's number is", () => {
-  assert.equal(trayTooltip(snap(usage(94)), "tr", NOW), "Relay — A · %94 kullanıldı");
-  assert.equal(trayTooltip(snap(usage(94)), "en", NOW), "Relay — A · 94% used");
+  assert.equal(trayTooltip(snap(usage(94)), "tr", NOW), "Relay — A · %94 kullanıldı · 1:00 sonra yenilenir");
+  assert.equal(trayTooltip(snap(usage(94)), "en", NOW), "Relay — A · 94% used · renews in 1:00");
   assert.equal(trayTooltip(snap(usage(20, NOW - 3_600_000)), "en", NOW), "Relay — A");
 });
 

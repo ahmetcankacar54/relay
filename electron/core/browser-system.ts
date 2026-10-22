@@ -22,6 +22,8 @@ export interface BrowserSystem {
   support: string;
   readText(file: string): string | undefined;
   exists(file: string): boolean;
+  /** The newest modification time (ms) of a folder's files; undefined when it cannot be read. */
+  modifiedAt(dir: string): number | undefined;
   readLink(file: string): string | undefined;
   alive(pid: number): boolean;
   /** Every process's executable path, from `ps`. */
@@ -48,6 +50,16 @@ export function macBrowserSystem(home = os.homedir()): BrowserSystem {
       }
     },
     exists: (file) => fs.existsSync(file),
+    modifiedAt: (dir) => {
+      try {
+        let newest = fs.statSync(dir).mtimeMs;
+        for (const name of fs.readdirSync(dir))
+          newest = Math.max(newest, fs.lstatSync(path.join(dir, name)).mtimeMs);
+        return newest;
+      } catch {
+        return undefined;
+      }
+    },
     readLink: (file) => {
       try {
         return fs.readlinkSync(file);
@@ -123,7 +135,10 @@ export function extensionInstances(system: BrowserSystem): ExtensionInstance[] {
     const state = readJson(system, path.join(dataDir(system, app), "Local State"));
     return localStateProfiles(state)
       .filter((p) => system.exists(extensionStorageDir(system, app, p.profile)))
-      .map((p) => ({ app, profile: p.profile, name: p.name }));
+      .map((p) => {
+        const usedAt = system.modifiedAt(extensionStorageDir(system, app, p.profile));
+        return { app, profile: p.profile, name: p.name, ...(usedAt === undefined ? {} : { usedAt }) };
+      });
   });
 }
 
