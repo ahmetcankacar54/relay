@@ -235,6 +235,10 @@ export class DesktopManager {
   onState?: (state: DesktopState) => void;
   /** The running operation, and whether it has reported its restart. */
   private operation?: Operation & { restarted: boolean };
+  /** The account a running switch goes to, for the menu bar title; undefined for any other operation. */
+  get switchingTo() {
+    return this.operation?.kind === "switch" ? this.operation.profileId : undefined;
+  }
   /** The drafts captured at switches, sealed, until they are re-typed or dismissed. */
   private drafts: DraftVault;
   /** What the account switched to lacks of its sources' sidebar organization. */

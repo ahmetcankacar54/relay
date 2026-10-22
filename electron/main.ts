@@ -964,6 +964,9 @@ else {
                 ["starting", "waiting", "verifying"].includes(f.status),
               ),
             attempts: recentKeeperAttempts(),
+            // The title names a switch's target and gives a full window's reset in the planning zone.
+            switchingTo: desktop.switchingTo,
+            timeZone: service.store.state.settings.planning.timeZone,
           };
         },
         showWindow,
