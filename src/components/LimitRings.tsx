@@ -6,7 +6,7 @@ import { formatPercent, percentUsed } from "@/lib/meter";
 import { formatReset } from "@/lib/time";
 import { timeLeft } from "@/lib/account-row";
 import { cn } from "@/lib/utils";
-import { RingKey, UsageRing } from "./UsageRing";
+import { RingKey, UsageRing, type RingState } from "./UsageRing";
 
 /**
  * An account's limits as one gauge: two rings (the five-hour window outside, the week inside)
@@ -18,6 +18,7 @@ export function LimitRings({
   now,
   zone,
   size = 76,
+  state,
   aside,
   className,
 }: {
@@ -25,6 +26,8 @@ export function LimitRings({
   now: number;
   zone?: string;
   size?: number;
+  /** How far the reading can be trusted; the key lines say when a full limit opens. */
+  state?: RingState;
   /** Above the key lines (a name, a status). */
   aside?: ReactNode;
   className?: string;
@@ -39,7 +42,7 @@ export function LimitRings({
     .join(" · ");
   return (
     <div data-slot="limit-rings" className={cn("flex min-w-0 items-center gap-3.5", className)}>
-      <UsageRing outer={five} inner={week ?? null} size={size} label={label}>
+      <UsageRing outer={five} inner={week ?? null} size={size} label={label} state={state}>
         <span className="grid gap-0.5">
           <b className={cn("tabular-nums", size >= 88 ? "text-xl" : "text-[15px]")}>
             {five === undefined ? "—" : formatPercent(percentUsed(five), language)}

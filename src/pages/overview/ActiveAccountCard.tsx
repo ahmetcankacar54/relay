@@ -12,9 +12,10 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { intentHash, type PageId } from "@/app/routes";
+import { ringState } from "@/lib/account-row";
 import { blockReason, desktopBlock } from "@/lib/onboarding";
 import { UsageCard } from "../../features/UsageCard";
-import { planLabel } from "../accounts/accountLabels";
+import { planColumn } from "../accounts/accountLabels";
 
 
 const eyebrow =
@@ -34,7 +35,8 @@ export function ActiveAccountCard({
   if (!active) return <Onboarding go={go} />;
   const usage = relay.data?.usage[active.id];
   const running = !!desktop?.running;
-  const plan = planLabel(active);
+  // As in the Accounts table: the plan picked for planning, else the subscription the sign-in reported.
+  const plan = planColumn(active);
   const email = active.desktop?.email ?? active.auth?.email;
   const identity = [email, active.auth?.orgName].filter(Boolean).join(" · ");
   const authFlow = relay.data?.authFlows?.find(
@@ -43,6 +45,8 @@ export function ActiveAccountCard({
   const suggestion = relay.suggestion;
   const suggestedUsage = suggestion && relay.data?.usage[suggestion.id];
   const switchBlocked = desktopBusy || !!relay.pendingDesktop || !!desktop?.recoveryRequired;
+  // Why the switch is disabled, in the words of the add-account wizard's lock.
+  const switchReason = switchBlocked ? blockReason(desktopBlock(relay), t) : undefined;
   const header = (
     <div className="grid gap-1">
       <div className="text-xs font-medium text-muted-foreground">
@@ -50,9 +54,23 @@ export function ActiveAccountCard({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[22px] font-bold tracking-tight">{active.name}</span>
-        {plan && <Badge variant="secondary">{plan}</Badge>}
+        {plan && (
+          <Badge
+            variant="secondary"
+            title={
+              plan.source === "planning"
+                ? undefined
+                : t(
+                    "Abonelik · planlama için plan seçilmedi",
+                    "Subscription · no plan picked for planning",
+                  )
+            }
+          >
+            {plan.label}
+          </Badge>
+        )}
         <span className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
-          <StatusDot tone={running ? "ok" : "off"} />
+          <StatusDot tone={running ? "ok" : "off"} hollow={!running} />
           {running ? t("Çalışıyor", "Running") : t("Kapalı", "Closed")}
         </span>
       </div>
@@ -68,6 +86,7 @@ export function ActiveAccountCard({
           now={now}
           zone={relay.settings.planning.timeZone}
           size={140}
+          state={ringState(usage, now)}
           aside={header}
         />
       ) : (
@@ -124,6 +143,9 @@ export function ActiveAccountCard({
           >
             {t(`${suggestion.name} hesabına geç`, `Switch to ${suggestion.name}`)}
           </Button>
+          {switchReason && (
+            <p className="text-xs text-muted-foreground">{switchReason}</p>
+          )}
         </div>
       )}
     </Card>

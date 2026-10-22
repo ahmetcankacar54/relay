@@ -2,6 +2,7 @@ import type { MouseEvent, ReactNode } from "react";
 import { ChevronRight, LoaderCircle } from "lucide-react";
 import { UsageRing } from "@/components/UsageRing";
 import { useI18n } from "@/data/i18n";
+import { ringState } from "@/lib/account-row";
 import type { OverviewRow } from "@/data/selectors";
 import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
 import { cn } from "@/lib/utils";
@@ -9,13 +10,15 @@ import { cn } from "@/lib/utils";
 /**
  * Other accounts as a grouped list (direction A): each row a small two-ring gauge (five hours
  * thick, the week thin), the name with a "suggested" tag, one status line and, in the app, the two
- * percents. In the menu bar panel the whole row is the switch (`pick`) and the suggested row shows
- * "Switch"; in the app the row opens the account (`href`) and every account that can be switched
- * to now has its own "Switch" button, filled for the suggested one and quiet for the rest. A row
- * that cannot be switched to ends in a chevron.
+ * percents. A ring whose reading is old is faded on a dashed track, and without a reading only the
+ * dashed track is drawn (`ringState`). In the menu bar panel the whole row is the switch (`pick`)
+ * and the suggested row shows "Switch"; in the app the row opens the account (`href`) and every
+ * account that can be switched to now has its own "Switch" button, filled for the suggested one and
+ * quiet for the rest. A row that cannot be switched to ends in a chevron.
  */
 export function AccountList({
   rows,
+  now,
   line,
   title,
   selected,
@@ -28,6 +31,7 @@ export function AccountList({
   canSwitch,
 }: {
   rows: OverviewRow[];
+  now: number;
   /** The status line under the name. */
   line: (row: OverviewRow) => string;
   /** The full status, for the row's tooltip. */
@@ -61,10 +65,12 @@ export function AccountList({
         const week = usage?.sevenDay?.usedPercent;
         const why = blocked?.(row);
         const busy = switching === account.id;
+        const ring = ringState(usage, now);
         const said = [
           account.name,
           five === undefined ? undefined : t(`5 saat ${formatUsed(five, language)}`, `5 hours ${formatUsed(five, language)}`),
           week === undefined ? undefined : t(`hafta ${formatUsed(week, language)}`, `week ${formatUsed(week, language)}`),
+          ring === "stale" ? t("eski veri", "old data") : undefined,
         ]
           .filter(Boolean)
           .join(" · ");
@@ -74,7 +80,7 @@ export function AccountList({
         const tooltip = [title?.(row) ?? line(row), why].filter(Boolean).join(" · ");
         const body = (
           <>
-            <UsageRing outer={five} inner={week ?? null} size={panel ? 32 : 38} label={said} />
+            <UsageRing outer={five} inner={week ?? null} size={panel ? 32 : 38} label={said} state={ring} />
             <span className="min-w-0 flex-1">
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className={cn("truncate font-semibold", panel ? "text-[13px]" : "text-[13.5px]")}>

@@ -135,9 +135,11 @@ test("panel rows show the account's status when something is wrong", () => {
       relayFor(active, [active, other], { active: use("active", 10, 10), other: { ...r.usage!, accountId: "other" } }),
       createElement(PanelAccounts, { now: NOW }),
     );
-    // The row's one line names the problem, and so does its tooltip.
+    // The row's one line names the problem after the percents of any reading, and its tooltip names it alone.
     assert.match(html, new RegExp(`title="${label}"`), name);
-    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-\\[11\\.5px\\]">${label}</span>`), name);
+    const reading = r.usage?.checkedAt ? "%1 · %1 · " : "";
+    const shown = reading ? label.charAt(0).toLocaleLowerCase("tr") + label.slice(1) : label;
+    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-\\[11\\.5px\\]">${reading}${shown}</span>`), name);
     assert.doesNotMatch(html, /Limit verisi eski|Hazır · dönem başlamadı/, name);
   }
   // A browser approval in progress for that account.
@@ -240,7 +242,8 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(suggestedRow, /^<button type="button" aria-pressed="false" aria-label="Vertex hesabına geç · Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı" title="Hazır · dönem başlamadı"/);
   // Its two limits are the ring's, used percent per window.
   assert.match(suggestedRow, /<div role="img" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
-  assert.match(suggestedRow, />Vertex<\/span><span[^>]*>önerilen<\/span><\/span><span[^>]*>Hazır<\/span><\/span><span[^>]*>Geç<\/span><\/button>/);
+  // Its line starts with the two percents.
+  assert.match(suggestedRow, />Vertex<\/span><span[^>]*>önerilen<\/span><\/span><span[^>]*>%12 · %31 · hazır<\/span><\/span><span[^>]*>Geç<\/span><\/button>/);
   assert.match(html, />Otomasyon</);
   // Automation reads as rows: the setting's name and its state, each opening its page.
   assert.match(html, /<button type="button" title="Kişisel · Max %78 kullanıldı · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."[^>]*>.*?>Otomatik geçiş<\/span><span[^>]*>Kapalı<\/span>/);

@@ -128,7 +128,7 @@ test("unlinked accounts lead to their page instead of offering a switch", () => 
   const html = render(relayFor(active, [active, other], { active: use("active", 10, 10) }));
   const row = rowFor(html, "Studio");
   // The row says the sign-in is not saved; the full reason rides on its title.
-  assert.match(row, />Giriş kaydedilmedi</);
+  assert.match(row, />Pro · giriş kaydedilmedi</);
   assert.match(row, /<a href="#\/hesaplar\/other" title="Claude uygulaması girişi yok"/);
   // No switch: the row ends in a chevron and opens the account, whose page saves the sign-in.
   assert.doesNotMatch(row, />Geç</);
@@ -291,19 +291,20 @@ test("overview rows show the account's status where something is wrong, and stal
       /<a [^>]*title="([^"]*)"/.exec(row)?.[1],
     ];
   };
-  assert.deepEqual(status(other, failed("expired")), ["Limit okuma girişi gerekli", "Limit okuma girişi gerekli"]);
-  assert.deepEqual(status(other, failed("keychain-locked")), ["Anahtarlık izni gerekli", "Anahtarlık izni gerekli"]);
-  assert.deepEqual(status(other, failed("renewal-required")), ["Bağlantı yenilenmeli", "Bağlantı yenilenmeli"]);
-  assert.deepEqual(status(other, { ...use("other", 1, 1), connectionRenewalRequired: true }), ["Bağlantı yenilenmeli", "Bağlantı yenilenmeli"]);
-  assert.deepEqual(status({ ...other, auth: undefined }, stale), ["Limit okuma girişi yok", "Limit okuma girişi yok"]);
+  // The line leads with the plan; the title is the status alone.
+  assert.deepEqual(status(other, failed("expired")), ["Pro · limit okuma girişi gerekli", "Limit okuma girişi gerekli"]);
+  assert.deepEqual(status(other, failed("keychain-locked")), ["Pro · anahtarlık izni gerekli", "Anahtarlık izni gerekli"]);
+  assert.deepEqual(status(other, failed("renewal-required")), ["Pro · bağlantı yenilenmeli", "Bağlantı yenilenmeli"]);
+  assert.deepEqual(status(other, { ...use("other", 1, 1), connectionRenewalRequired: true }), ["Pro · bağlantı yenilenmeli", "Bağlantı yenilenmeli"]);
+  assert.deepEqual(status({ ...other, auth: undefined }, stale), ["Pro · limit okuma girişi yok", "Limit okuma girişi yok"]);
   // A browser approval in progress for that account.
   const flows = { authFlows: [{ id: "f", accountId: "other", status: "waiting" }] as unknown as AuthFlow[] };
   const waiting = relayFor(active, [active, other], { active: use("active", 10, 10), other: stale });
   Object.assign(waiting.data as Snapshot, flows);
   assert.match(rowFor(render(waiting), "Vertex"), /Tarayıcı onayı bekleniyor/);
-  // Stale but healthy: the old text.
-  assert.deepEqual(status(other, stale), ["Veri eski", "Limit verisi eski"]);
-  assert.deepEqual(status(other, use("other", 1, 1)), ["Hazır", "Hazır · dönem başlamadı"]);
+  // Stale but healthy: the line says how old the reading is.
+  assert.deepEqual(status(other, stale), ["Pro · limit verisi 1 sa önce", "Limit verisi eski"]);
+  assert.deepEqual(status(other, use("other", 1, 1)), ["Pro · hazır", "Hazır · dönem başlamadı"]);
 });
 
 test("onboarding with saved accounts but none open looks out instead of greeting", () => {
@@ -596,4 +597,70 @@ test("every account that can be switched to has its own Geç, filled only for th
   // Without a Claude app sign-in there is nothing to switch to: the row opens the account.
   assert.equal(geç("Studio"), null);
   assert.equal(switchButtons(html).length, 2);
+});
+
+test("Overview rings say how far each reading can be trusted, and the key explains the faded ones", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const fresh = acct("fresh", "Fresh", "pro");
+  const old = acct("old", "Old", "pro");
+  const none = acct("none", "None", "pro");
+  const full = acct("full", "Full", "pro");
+  const usage = {
+    active: use("active", 10, 10),
+    fresh: use("fresh", 20, 30),
+    old: { ...use("old", 20, 30), checkedAt: iso(NOW - 2 * 3_600_000) },
+    full: use("full", 100, 30, NOW + 3_600_000),
+  };
+  const html = render(relayFor(active, [active, fresh, old, none, full], usage));
+  const ring = (name: string) => /<div role="img"[^>]*>/.exec(rowFor(html, name))?.[0] ?? "";
+  assert.doesNotMatch(ring("Fresh"), /data-state/);
+  assert.match(ring("Old"), /data-state="stale"/);
+  assert.match(ring("Old"), /aria-label="Old · 5 saat %20 kullanıldı · hafta %30 kullanıldı · eski veri"/);
+  assert.match(ring("None"), /data-state="unknown"/);
+  assert.match(ring("Full"), /data-state="full"/);
+  // The stale row's line says how old its reading is; the key under the list says what faded rings mean.
+  assert.match(rowFor(html, "Old"), />Pro · limit verisi 2 sa önce</);
+  assert.match(html, /soluk ve kesikli: eski veri/);
+  // Without a stale row the key keeps its two entries.
+  const current = render(relayFor(active, [active, fresh], { active: use("active", 10, 10), fresh: use("fresh", 20, 30) }));
+  assert.match(current, /ince: hafta/);
+  assert.doesNotMatch(current, /eski veri/);
+});
+
+test("the hero shows the plan, else the subscription, and a hollow dot while Claude is closed", () => {
+  const active = acct("active", "Kişisel", "max5");
+  const usage = { active: use("active", 10, 10) };
+  assert.match(render(relayFor(active, [active], usage)), /<span data-slot="badge"[^>]*>Max 5×<\/span>/);
+  const subscribed: Account = { ...active, planning: undefined, auth: { ...active.auth!, subscription: "team" } };
+  const html = render(relayFor(subscribed, [subscribed], usage));
+  assert.match(html, /<span data-slot="badge"[^>]*title="Abonelik · planlama için plan seçilmedi"[^>]*>Team<\/span>/);
+  // Running is a filled dot; closed is a ring.
+  assert.match(html, /<span aria-hidden="true" class="[^"]*bg-ok[^"]*"><\/span>Çalışıyor/);
+  const closed = render(relayFor(active, [active], usage, {
+    desktop: { available: true, running: false, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0, activeProfileId: "active" },
+  }));
+  assert.match(closed, /<span aria-hidden="true" class="[^"]*border-\[1\.5px\] border-muted-foreground\/60[^"]*"><\/span>Kapalı/);
+  // A used-up limit draws the hero's rings critical.
+  const exhausted = render(relayFor(active, [active], { active: use("active", 100, 40, NOW + 3_600_000) }));
+  assert.match(exhausted, /<div role="img"[^>]*data-state="full"[^>]*style="width:140px;height:140px"/);
+});
+
+test("the hero says why its switch to the suggestion is disabled", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const other = acct("other", "Vertex", "pro");
+  const usage = { active: use("active", 90, 40), other: use("other", 10, 10) };
+  const block = (extra: Partial<Relay>) => {
+    const html = render(relayFor(active, [active, other], usage, { suggestion: other, ...extra }));
+    const start = html.indexOf('data-slot="suggestion"');
+    return html.slice(start, html.indexOf("</div>", start));
+  };
+  assert.doesNotMatch(block({}), /<p class="text-xs text-muted-foreground">/);
+  const recovery = { available: true, running: true, organizations: [], busy: false, recoveryRequired: true, errorRevision: 0, activeProfileId: "active" };
+  for (const [extra, reason] of [
+    [{ desktopBusy: true }, "Claude uygulamasında bir işlem sürüyor."],
+    [{ pendingDesktop: other }, "Önce devam eden Claude uygulaması girişini tamamla veya iptal et."],
+    [{ desktop: recovery }, "Önce Claude uygulaması yedeğini geri yükle."],
+  ] as [Partial<Relay>, string][]) {
+    assert.match(block(extra), new RegExp(`disabled=""[^>]*>Vertex hesabına geç</button><p class="text-xs text-muted-foreground">${reason}</p>`), reason);
+  }
 });
