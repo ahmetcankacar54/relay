@@ -1,5 +1,6 @@
 import { dayPlan, planContext } from "../../../shared/day-plan";
-import { localDate } from "../../../shared/planning";
+import { localDate, wallTime } from "../../../shared/planning";
+import { isWeekend } from "../../../shared/work-hours";
 import { fallbackTempo } from "../../../shared/tempo";
 import { Panda } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   windowTone,
 } from "@/lib/day-timeline";
 import { formatClock } from "@/lib/time";
+import { cn } from "@/lib/utils";
 import type { PageId } from "@/app/routes";
 
 export function TodayCard({
@@ -52,19 +54,31 @@ export function TodayCard({
     now,
   );
   const clock = (time: number | string) => formatClock(time, language, zone);
-  const summary = !settings.autoStart
-    ? t("Önceden başlatma kapalı", "Early start is off")
+  // Today's work hours (weekday or weekend), then how early start stands.
+  const today = localDate(now, zone);
+  const hours = isWeekend(today) ? settings.weekend : settings.weekday;
+  const work = hours.enabled
+    ? t(`Çalışma ${hours.start}–${hours.end}`, `Work ${hours.start}–${hours.end}`)
+    : t("Bugün çalışma yok", "No work today");
+  const early = !settings.autoStart
+    ? t("önceden başlatma kapalı", "early start off")
     : !planned.accounts.length
-      ? t("Plana hesap eklenmedi", "No accounts in the plan")
+      ? t("plana hesap eklenmedi", "no accounts in the plan")
       : upcoming
         ? t(
-            `Önceden başlatma açık · sonraki ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
-            `Early start on · next ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
+            `önceden başlatma açık · sonraki ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
+            `early start on · next ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
           )
         : t(
-            `Bugün ${plannedToday} başlatma planlı`,
-            `${plannedToday} starts planned today`,
+            `önceden başlatma açık · bugün ${plannedToday} başlatma planlı`,
+            `early start on · ${plannedToday} starts planned today`,
           );
+  const summary = `${work} · ${early}`;
+  // The hour axis under the rows; 24 is the day's end, wherever DST puts it.
+  const ticks = ["00", "06", "12", "18", "24"].map((hour) => ({
+    hour,
+    at: hour === "24" ? 100 : pct(wallTime(today, `${hour}:00`, zone) ?? now),
+  }));
   const nowLine = showNow && (
     <div
       className="absolute -inset-y-1 w-0.5 bg-foreground"
@@ -128,6 +142,23 @@ export function TodayCard({
             </div>
           </div>
         ))}
+        <div aria-hidden="true" className="grid grid-cols-[84px_1fr] gap-2">
+          <span />
+          <div className="relative h-3 text-[10.5px] tabular-nums text-muted-foreground">
+            {ticks.map(({ hour, at }, index) => (
+              <span
+                key={hour}
+                className={cn(
+                  "absolute top-0",
+                  index === ticks.length - 1 ? "-translate-x-full" : index > 0 && "-translate-x-1/2",
+                )}
+                style={{ left: `${at}%` }}
+              >
+                {hour}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
     </Card>
   );

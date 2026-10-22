@@ -96,7 +96,7 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /kalın: 5 saatlik dönem/);
   assert.match(html, /ince: hafta/);
   assert.match(html, /Bugün/);
-  assert.match(html, /Önceden başlatma kapalı/);
+  assert.match(html, /(?:Çalışma 09:00–18:00|Bugün çalışma yok) · önceden başlatma kapalı/);
   assert.doesNotMatch(html, /Otomatik başlatma/);
   // Automation is a group of rows, each saying how a setting stands.
   const automation = automationRows(html);
@@ -322,9 +322,43 @@ test("today's card shows a lookout panda when automatic start has no planned acc
   const usage = { active: use("active", 10, 10) };
   const settings = { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_PLANNING, autoStart: true, accounts: [] } };
   const html = render(relayFor(active, [active], usage, { settings }));
-  assert.match(html, /Plana hesap eklenmedi/);
+  assert.match(html, / · plana hesap eklenmedi/);
   assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="40"/);
   assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-scene="lookout"/);
+});
+
+test("today's card names the day's work hours and early start, with an hour axis under the rows", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const usage = { active: use("active", 10, 10) };
+  const at = (now: number, planning: Partial<typeof DEFAULT_PLANNING> = {}) => {
+    const settings = { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_PLANNING, weekday: { enabled: true, start: "09:00", end: "17:00" }, ...planning } };
+    return renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        createElement(
+          RelayContext.Provider,
+          { value: relayFor(active, [active], usage, { settings }) },
+          createElement(Overview, { go: () => {}, now }),
+        ),
+      ),
+    );
+  };
+  // A Friday noon in Istanbul: the weekday's hours.
+  const friday = Date.parse("2026-10-23T09:00:00Z");
+  assert.match(at(friday), />Çalışma 09:00–17:00 · önceden başlatma kapalı</);
+  // Saturday: the weekend's hours, off by default.
+  const saturday = Date.parse("2026-10-24T09:00:00Z");
+  assert.match(at(saturday), />Bugün çalışma yok · önceden başlatma kapalı</);
+  assert.match(
+    at(saturday, { weekend: { enabled: true, start: "11:00", end: "15:00" } }),
+    />Çalışma 11:00–15:00 · önceden başlatma kapalı</,
+  );
+  // The axis: 00 06 12 18 24, at the day's quarters, the ends inside the track.
+  const axis = [...at(friday).matchAll(/<span class="absolute top-0([^"]*)" style="left:([\d.]+)%">(\d\d)<\/span>/g)].map(
+    ([, shift, left, hour]) => `${hour}@${Number(left).toFixed(0)}${shift.trim() ? ` ${shift.trim()}` : ""}`,
+  );
+  assert.deepEqual(axis, ["00@0", "06@25 -translate-x-1/2", "12@50 -translate-x-1/2", "18@75 -translate-x-1/2", "24@100 -translate-x-full"]);
 });
 
 test("today's card calls automatic start early start in both languages", () => {
@@ -361,7 +395,7 @@ test("today's card calls automatic start early start in both languages", () => {
     } as unknown as Snapshot,
   });
   const html = render(relay);
-  assert.match(html, /Önceden başlatma açık · sonraki \d\d:\d\d Vertex/);
+  assert.match(html, / · önceden başlatma açık · sonraki \d\d:\d\d Vertex/);
   assert.doesNotMatch(html, /Otomatik başlatma/);
   const en = renderToStaticMarkup(
     createElement(
@@ -380,12 +414,12 @@ test("today's card calls automatic start early start in both languages", () => {
       ),
     ),
   );
-  assert.match(en, /Early start on · next/);
+  assert.match(en, /(?:Work 09:00–18:00|No work today) · early start on · next/);
   assert.doesNotMatch(en, /Automatic start/);
   const off = render(
     relayFor(active, [active], { active: use("active", 10, 10) }),
   );
-  assert.match(off, /Önceden başlatma kapalı/);
+  assert.match(off, / · önceden başlatma kapalı/);
 });
 
 test("the onboarding and the today lookout pandas are playful, the welcome and the lookouts alike", () => {
