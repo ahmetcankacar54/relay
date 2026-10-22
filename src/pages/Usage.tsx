@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Account } from "../../shared/types";
 import type { StatisticsRange } from "../../shared/usage-statistics-view";
+import type { TokenUsageView } from "../../shared/token-usage-view";
 import { historyIdentity } from "../../shared/usage-statistics";
 import { Banner } from "@/components/Banner";
 import { PageFrame } from "@/app/PageFrame";
@@ -62,6 +63,8 @@ interface SectionProps {
   zone: string;
   /** What the range's tokens are worth at API prices, when the token ledger has priced any. */
   cost?: CostSummary;
+  /** The token ledger's view of the range: the daily chart's token and $ bars, the summary's token total. */
+  tokens?: TokenUsageView;
 }
 
 /**
@@ -96,7 +99,14 @@ export function UsageStatisticsSection(props: SectionProps) {
   );
 }
 
-function StatisticsContent({ state, accounts, accountId, zone, cost }: SectionProps) {
+function StatisticsContent({
+  state,
+  accounts,
+  accountId,
+  zone,
+  cost,
+  tokens,
+}: SectionProps) {
   const { t, language } = useI18n();
   const { view, loading } = state;
   const selected = accounts.find((a) => a.id === accountId);
@@ -150,10 +160,15 @@ function StatisticsContent({ state, accounts, accountId, zone, cost }: SectionPr
     );
   return (
     <div className="grid gap-3" aria-busy={loading || undefined}>
-      <SummaryTiles view={view} cost={cost} />
+      <SummaryTiles view={view} cost={cost} tokens={tokens} />
       <AccountBalance view={view} accounts={accounts} cost={cost} />
       <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
-        <DailyChart view={view} accounts={accounts} zone={zone} />
+        <DailyChart
+          view={view}
+          tokens={tokens}
+          accounts={accounts}
+          zone={zone}
+        />
         <UsageHeatmap view={view} />
       </div>
       <LimitHits view={view} zone={zone} />
@@ -167,10 +182,19 @@ function StatisticsContent({ state, accounts, accountId, zone, cost }: SectionPr
   );
 }
 
-/** The Limits tab: the statistics with the token ledger's API value beside them; mounted only while open. */
-function LimitsTab({ range, ...props }: Omit<SectionProps, "cost"> & { range: StatisticsRange }) {
-  const cost = costSummary(useTokenUsage(range, props.accountId).view);
-  return <UsageStatisticsSection {...props} cost={cost} />;
+/** The Limits tab: the statistics with the token ledger's tokens and API value beside them; mounted only while open. */
+function LimitsTab({
+  range,
+  ...props
+}: Omit<SectionProps, "cost" | "tokens"> & { range: StatisticsRange }) {
+  const tokens = useTokenUsage(range, props.accountId).view;
+  return (
+    <UsageStatisticsSection
+      {...props}
+      cost={costSummary(tokens)}
+      tokens={tokens}
+    />
+  );
 }
 
 /** The page's tabs; only the open one is drawn, so a hidden token scan asks for nothing. */

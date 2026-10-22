@@ -27,3 +27,10 @@ export function costSummary(view: TokenUsageView | undefined): CostSummary | und
     byAccount,
   };
 }
+
+/** The range's tokens of all four kinds; undefined without a view or before any were counted. */
+export function rangeTokens(view: TokenUsageView | undefined): number | undefined {
+  const t = view?.totals;
+  const total = t ? t.input + t.output + t.cacheWrite + t.cacheRead : 0;
+  return total > 0 ? total : undefined;
+}
