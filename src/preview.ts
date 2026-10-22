@@ -4,9 +4,10 @@ import { usageSample, type UsageSample } from "../shared/usage-statistics";
 import { foldSamples } from "../shared/usage-rollups";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { buildTokenUsageView } from "../shared/token-usage-view";
+import { estimateCost } from "../shared/model-prices";
 import { addDays, lostFoundWeek, mondayOf } from "../shared/lost-found";
 import type { LedgerSnapshot, TokenCounts } from "../shared/token-usage-view";
-import { localDate } from "../shared/planning";
+import { localDate, localSlot } from "../shared/planning";
 import type {
   Account,
   AuthFlow,
@@ -166,6 +167,11 @@ function previewTokenLedger(): LedgerSnapshot {
     cacheRead: Math.round(weight * share * 9_800_000),
     responses: Math.round(weight * share * 140),
   });
+  const priced = (model: string, c: TokenCounts): TokenCounts => ({
+    ...c,
+    cost: estimateCost(model, c) ?? 0,
+    unpriced: 0,
+  });
   const days: LedgerSnapshot["days"] = {};
   for (let ago = 0; ago < 30; ago++) {
     const date = new Date(today - ago * day).toISOString().slice(0, 10);
@@ -175,21 +181,44 @@ function previewTokenLedger(): LedgerSnapshot {
       const weight = 1 + ((ago * 7 + index * 3) % 5);
       const estimated = index > 0 && ago >= 12 && ago <= 16;
       byWho[`${estimated ? "est" : "acct"}:${id}`] = {
-        "claude-opus-4-7": counts(weight, 0.65),
-        "claude-sonnet-4-6": counts(weight, 0.35),
+        "claude-opus-4-7": priced("claude-opus-4-7", counts(weight, 0.65)),
+        "claude-sonnet-4-6": priced("claude-sonnet-4-6", counts(weight, 0.35)),
         ...(ago % 4 === 0
-          ? { "claude-haiku-4-5": counts(weight, 0.1) }
+          ? { "claude-haiku-4-5": priced("claude-haiku-4-5", counts(weight, 0.1)) }
           : {}),
       };
     });
     if (ago % 3 === 0)
-      byWho.terminal = { "claude-opus-4-7": counts(1 + (ago % 4), 0.5) };
+      byWho.terminal = {
+        "claude-opus-4-7": priced("claude-opus-4-7", counts(1 + (ago % 4), 0.5)),
+      };
     if (ago % 6 === 2)
-      byWho.unknown = { "claude-sonnet-4-6": counts(1 + (ago % 3), 0.3) };
+      byWho.unknown = {
+        "claude-sonnet-4-6": priced("claude-sonnet-4-6", counts(1 + (ago % 3), 0.3)),
+      };
     days[date] = byWho;
+  }
+  // Today up to now and all of yesterday, in quarter hours: quiet nights, busy afternoons.
+  const zone = state.settings.planning.timeZone;
+  const slots: NonNullable<LedgerSnapshot["slots"]> = {};
+  const now = localSlot(Date.now(), zone);
+  for (const ago of [0, 1]) {
+    const date = new Date(today - ago * day).toISOString().slice(0, 10);
+    const bySlot: Record<string, NonNullable<LedgerSnapshot["slots"]>[string][string][string]> = {};
+    for (let slot = 0; slot < 96; slot++) {
+      if (ago === 0 && slot > now) break;
+      const hour = slot / 4;
+      const busy = hour < 8 ? 0 : Math.max(0, Math.sin(((hour - 8) / 14) * Math.PI));
+      const cost = busy * (ago === 0 ? 9 : 6) * (0.6 + 0.4 * Math.abs(Math.sin(slot * 1.7)));
+      if (cost > 0.01)
+        bySlot[slot] = { input: 0, output: 0, cacheWrite: 0, cacheRead: Math.round(cost * 2e6), cost };
+    }
+    slots[date] = { [`acct:${ids[0]}`]: bySlot };
   }
   return {
     days,
+    slots,
+    slotsSince: today - 10 * day,
     progress: { scannedBytes: 1, totalBytes: 1, complete: true },
   };
 }

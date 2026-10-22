@@ -1330,10 +1330,9 @@ function bindIPC() {
     const language = z.enum(["tr", "en"]).parse(value);
     const changed = language !== trayLanguage;
     trayLanguage = language;
-    if (changed) {
-      applyAppMenu();
-      writeWidget();
-    }
+    if (changed) applyAppMenu();
+    // The widget's strings are in the app's language too.
+    if (changed) writeWidget();
     tray?.update();
   });
   handle("account-planning", (accountId, input) => {
