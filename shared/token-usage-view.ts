@@ -296,8 +296,16 @@ export function buildTokenToday(
   const slots = todayCosts.map((cost, slot) => (slot <= currentSlot ? cost : null));
 
   const since = ledger.slotsSince;
-  const startOf = (date: string) => wallTime(date, "00:00", zone) ?? Infinity;
-  const wholeYesterday = since !== undefined && since <= startOf(yesterday);
+  // A DST change can skip midnight (Cairo, Santiago): the day starts at its first hour.
+  const startOf = (date: string) =>
+    ["00:00", "01:00", "02:00"]
+      .map((clock) => wallTime(date, clock, zone))
+      .find((time) => time !== undefined) ?? Infinity;
+  // While a scan runs, yesterday and today may be only partly read.
+  const wholeYesterday =
+    ledger.progress.complete &&
+    since !== undefined &&
+    since <= startOf(yesterday);
   let change: number | null = null;
   let yesterdayAverage: number | null = null;
   if (wholeYesterday) {

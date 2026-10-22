@@ -94,8 +94,8 @@ struct TodayProvider: TimelineProvider {
 
   /**
    * Now, when the file turns stale, and the next midnight; Relay asks for a
-   * reload when the numbers change, and the widget refreshes itself every 15
-   * minutes in case it cannot.
+   * reload when the numbers change, and the widget refreshes itself every 30
+   * minutes in case it cannot. Both draw on the system's daily reload budget.
    */
   func getTimeline(in context: Context, completion: @escaping (Timeline<TodayEntry>) -> Void) {
     let now = Date.now
@@ -107,7 +107,7 @@ struct TodayProvider: TimelineProvider {
       if let midnight = nextMidnight(after: now, snapshot.zone) { dates.append(midnight) }
     }
     let entries = dates.sorted().map { TodayEntry(date: $0, snapshot: snapshot) }
-    completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
+    completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(30 * 60))))
   }
 }
 

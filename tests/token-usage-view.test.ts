@@ -488,3 +488,33 @@ test("without slots for all of yesterday there is no change and no dashed line",
   assert.equal(quiet.yesterdayAverage, 1 / 96);
   assert.equal(quiet.slotsSince, undefined);
 });
+
+test("while a scan runs, today has no change and no dashed line: yesterday may be only partly read", () => {
+  const snapshot: LedgerSnapshot = {
+    ...ledger({}, { complete: false, scannedBytes: 10 }),
+    slots: {
+      "2026-10-13": { "acct:ann": { 60: slot(1) } },
+      "2026-10-14": { "acct:ann": { 60: slot(5) } },
+    },
+    slotsSince: 0,
+  };
+  const today = build(snapshot).today;
+  assert.equal(today.change, null);
+  assert.equal(today.yesterdayAverage, null);
+  assert.equal(today.slots[60], 5);
+});
+
+test("a day whose midnight a DST change skips starts at its first hour", () => {
+  // Santiago skipped 2026-09-06 00:00 (clocks went to 01:00).
+  const zone = "America/Santiago";
+  const now = Date.parse("2026-09-07T15:00:00Z");
+  const snapshot: LedgerSnapshot = {
+    ...ledger({}),
+    slots: { "2026-09-06": { "acct:ann": { 60: slot(1) } }, "2026-09-07": { "acct:ann": { 40: slot(1) } } },
+    // Slots began during the 6th, after its first hour.
+    slotsSince: Date.parse("2026-09-06T12:00:00Z"),
+  };
+  const today = build(snapshot, { zone, now }).today;
+  assert.equal(today.change, null);
+  assert.equal(today.yesterdayAverage, null);
+});

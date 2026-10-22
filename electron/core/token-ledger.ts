@@ -1216,5 +1216,7 @@ export class TokenLedger {
       }
     const since = finite(value.slotsSince);
     if (priced !== undefined && since !== undefined) this.slotsSince = since;
+    // No ledger yet: the first scan reads every kept day, so their slots come whole.
+    else if (value.version !== 3) this.slotsSince = 0;
   }
 }

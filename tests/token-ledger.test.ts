@@ -1221,7 +1221,8 @@ test("a response is priced into its day bucket and its quarter-hour slot", async
   const slot = snap.slots!["2026-10-18"]["acct:a1"]["48"];
   near(slot.cost, OPUS_COST);
   assert.equal(slot.output, 2000);
-  assert.equal(snap.slotsSince, NOW);
+  // Counted from scratch: every kept day's slots are whole.
+  assert.equal(snap.slotsSince, 0);
 });
 
 test("a streamed response adds only what its later rows grew, in cost too, and a copy adds nothing", async () => {

@@ -187,3 +187,18 @@ test("the reload addon is optional: a missing or wrong one turns reloads off", (
   );
   assert.equal(loadWidgetCenter("/addon", () => ({})), undefined);
 });
+
+test("a language change reloads at once, whatever the throttle says", () => {
+  const dir = tempDir();
+  const reloads: string[] = [];
+  const file = new WidgetFile(dir, (kind) => reloads.push(kind), () => NOW);
+  file.write(build());
+  // A tick soon after: throttled.
+  file.write(build({ today: today({ change: 0.9 }) }));
+  assert.equal(reloads.length, 1);
+  file.write(build({ language: "en" }), true);
+  assert.equal(reloads.length, 2);
+  // Forced but what the widget shows already: nothing to redraw.
+  file.write(build({ language: "en" }), true);
+  assert.equal(reloads.length, 2);
+});

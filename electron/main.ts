@@ -333,7 +333,7 @@ function scheduleTokenTick() {
   tokenTimer.unref();
 }
 /** Today's numbers for the widget, from the ledger as it stands; never disturbs Relay. */
-function writeWidget() {
+function writeWidget(force = false) {
   if (!tokenLedger || !widgetFile) return;
   try {
     const zone = service.store.state.settings.planning.timeZone;
@@ -358,6 +358,7 @@ function writeWidget() {
         zone,
         now,
       }),
+      force,
     );
   } catch {
     // A widget file that cannot be written leaves the widget saying Relay is not current.
@@ -1332,7 +1333,7 @@ function bindIPC() {
     trayLanguage = language;
     if (changed) applyAppMenu();
     // The widget's strings are in the app's language too.
-    if (changed) writeWidget();
+    if (changed) writeWidget(true);
     tray?.update();
   });
   handle("account-planning", (accountId, input) => {

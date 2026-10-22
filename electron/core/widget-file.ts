@@ -10,8 +10,11 @@ import {
 
 /** The widget kind in RelayWidget.swift. */
 export const WIDGET_KIND = "RelayToday";
-/** Reloads are budgeted by the system: at most one this often, unless the day changed. */
-export const WIDGET_RELOAD_MS = 5 * 60_000;
+/**
+ * Reloads are budgeted by the system (roughly 40–70 a day for an app in the
+ * background): at most one this often, unless the day or the language changed.
+ */
+export const WIDGET_RELOAD_MS = 15 * 60_000;
 
 /**
  * Writes the widget's file, `<dir>/today.json`, and asks the system to redraw
@@ -32,7 +35,8 @@ export class WidgetFile {
     this.file = path.join(dir, "today.json");
   }
 
-  write(snapshot: WidgetSnapshot) {
+  /** `force`: reload now whatever the throttle says, as for a new language. */
+  write(snapshot: WidgetSnapshot, force = false) {
     privateJournalDirectory(this.dir);
     writePrivateJson(this.file, snapshot);
     if (!this.reload) return;
@@ -40,6 +44,7 @@ export class WidgetFile {
     if (key === this.reloadedKey) return;
     const now = this.now();
     if (
+      !force &&
       snapshot.date === this.reloadedDate &&
       now - this.reloadedAt < WIDGET_RELOAD_MS
     )
