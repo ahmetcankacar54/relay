@@ -363,6 +363,9 @@ test("today's card calls automatic start early start in both languages", () => {
   });
   const html = render(relay);
   assert.match(html, /Önceden başlatma açık · sonraki \d\d:\d\d Vertex/);
+  // The automation card names the next start's day, as Planning does.
+  assert.match(html, />Sonraki başlatma<\/span>/);
+  assert.match(html, /Vertex (bugün|yarın) \d\d:\d\d</);
   assert.doesNotMatch(html, /Otomatik başlatma/);
   const en = renderToStaticMarkup(
     createElement(

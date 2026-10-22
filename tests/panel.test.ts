@@ -415,10 +415,11 @@ test("the early start row names the adopted start while the plan is adapted", ()
   const deferred = { factor: 1.6, schedule: [{ accountId: "vertex", startAt: "2026-10-15T10:30:00.000Z" }] };
   assert.match(pill(keeper(deferred)), />Uyarlandı · Vertex 13:30</);
   assert.doesNotMatch(pill(keeper(deferred)), /Sonraki başlatma/);
-  // A faster pace alone, or no adaptation: the next start as before.
+  // A faster pace alone, or no adaptation: the next start, named with its day
+  // (the test's clock is the real one, so the day word varies).
   for (const planning of [keeper({ factor: 1.6, schedule: [] }), keeper()]) {
     const html = pill(planning);
-    assert.match(html, />Sonraki başlatma 13:00 · Kişisel · Max</);
+    assert.match(html, />Kişisel · Max [^<]*13:00</);
     assert.doesNotMatch(html, /Uyarlandı/);
   }
   // An entry whose time does not parse is skipped.
@@ -428,7 +429,7 @@ test("the early start row names the adopted start while the plan is adapted", ()
   );
   assert.match(
     pill(keeper({ factor: 1, schedule: [{ accountId: "vertex", startAt: "later" }] })),
-    />Sonraki başlatma 13:00 · Kişisel · Max</,
+    />Kişisel · Max [^<]*13:00</,
   );
   // Switched on with nothing planned: the early start row says on, not automatic start.
   const earlyStart = /<span class="shrink-0">Önceden başlatma<\/span><span[^>]*>([^<]*)<\/span>/;

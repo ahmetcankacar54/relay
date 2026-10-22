@@ -13,6 +13,7 @@ import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import type { PrankLevel, RelaySettings } from "../../shared/types";
 import { chooseCliFile } from "../features/CliSetup";
+import { WarningThreshold } from "./Usage";
 
 /** Shows the diagnosis logs in Finder; main picks the files, the page passes no path. */
 export const showDiagnostics = ({
@@ -206,6 +207,27 @@ export function Settings() {
                 })
               }
             />
+          </SettingRow>
+          {/* The same setting as Kullanım → Uyarılar, where the warnings are switched on and off. */}
+          <SettingRow
+            label={
+              <span id="settings-threshold-label">
+                {t("Uyarı eşiği", "Warning threshold")}
+              </span>
+            }
+            description={
+              settings.usageWarnings
+                ? t(
+                    "Beş saatlik veya haftalık kullanım bu paya ulaşınca hesap işaretlenir.",
+                    "An account is marked when its 5-hour or weekly usage reaches this share.",
+                  )
+                : t(
+                    "Limit uyarıları kapalı; Kullanım → Uyarılar’dan açılır.",
+                    "Usage warnings are off; turn them on in Usage → Warnings.",
+                  )
+            }
+          >
+            <WarningThreshold labelledBy="settings-threshold-label" short />
           </SettingRow>
         </SettingGroup>
         <SettingGroup id="settings-system" title={t("Sistem", "System")}>

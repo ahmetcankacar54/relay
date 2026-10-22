@@ -1,11 +1,18 @@
 import type { ReactNode } from "react";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
+import type { TokenUsageView } from "../../../shared/token-usage-view";
 import { Card } from "@/components/ui/card";
 import { useI18n } from "@/data/i18n";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
-import { formatCost, formatNumber, hourLabel, weekdayName } from "./format";
-import type { CostSummary } from "./cost-summary";
+import {
+  formatCost,
+  formatNumber,
+  formatTokens,
+  hourLabel,
+  weekdayName,
+} from "./format";
+import { rangeTokens, type CostSummary } from "./cost-summary";
 
 function Tile({
   label,
@@ -43,10 +50,13 @@ function change(current: number, previous: number, language: string) {
 export function SummaryTiles({
   view,
   cost,
+  tokens,
 }: {
   view: UsageStatisticsView;
   /** The range's API value; its tile leads when the ledger has priced anything. */
   cost?: CostSummary;
+  /** The token ledger's view of the range; its token total sits under the total usage. */
+  tokens?: TokenUsageView;
 }) {
   const { t, language } = useI18n();
   const { totals, range } = view;
@@ -69,6 +79,7 @@ export function SummaryTiles({
   );
   const hits = totals.hits.fiveHour + totals.hits.weekly;
   const busiest = totals.busiest;
+  const tokenTotal = rangeTokens(tokens);
   return (
     <Card className={cn("grid grid-cols-2 gap-4 px-5 py-4", cost ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
       {cost && (
@@ -92,7 +103,23 @@ export function SummaryTiles({
             </span>
           </>
         }
-        detail={versus}
+        detail={
+          <>
+            {tokenTotal !== undefined && (
+              <span
+                data-slot="range-tokens"
+                className="block font-medium text-foreground"
+                title={formatNumber(tokenTotal, language)}
+              >
+                {t(
+                  `${formatTokens(tokenTotal, "tr")} token`,
+                  `${formatTokens(tokenTotal, "en")} tokens`,
+                )}
+              </span>
+            )}
+            {versus}
+          </>
+        }
       />
       <Tile
         label={t("Başlayan dönem", "Periods started")}

@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { Settings } from "../src/pages/Settings";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { DEFAULT_SETTINGS, type Snapshot } from "../shared/types";
+import { DEFAULT_SETTINGS, type RelaySettings, type Snapshot } from "../shared/types";
+import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const settings = { ...DEFAULT_SETTINGS, usageRefreshMinutes: 0 as const };
 
@@ -205,4 +206,63 @@ test("Settings explains the Keychain prompt in Turkish and English, under privac
   assert.ok(tr.indexOf("Gizlilik ve güvenlik") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
   assert.ok(tr.indexOf("Limit okuma girişi resmi Claude Code") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
   assert.ok(tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler") < tr.indexOf("Yerelde saklanır"));
+});
+
+test("Settings → Genel sets the warning threshold as Usage → Uyarılar does", async () => {
+  const render = (extra: Partial<RelaySettings> = {}, language: "tr" | "en" = "tr") => {
+    const relay = relayFor();
+    const value = { ...settings, ...extra };
+    return renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        createElement(RelayContext.Provider, { value: { ...relay, settings: value } as Relay }, createElement(Settings)),
+      ),
+    );
+  };
+  const group = (html: string) =>
+    /<div[^>]*aria-labelledby="settings-threshold-label"[^>]*>.*?<\/div>/s.exec(html)?.[0] ?? "";
+  const html = render();
+  // In the general group, after the refresh interval.
+  assert.match(html, /Kullanım limitlerini yenile[\s\S]*id="settings-threshold-label">Uyarı eşiği<[\s\S]*id="settings-system"/);
+  assert.match(html, /Beş saatlik veya haftalık kullanım bu paya ulaşınca hesap işaretlenir\./);
+  assert.deepEqual(
+    [...group(html).matchAll(/<button[^>]*>(.*?)<\/button>/gs)].map((m) => m[1]),
+    ["%80", "%90", "%95"],
+  );
+  assert.match(group(html), /data-state="on"[^>]*>%90</);
+  assert.match(group(render({ usageWarningPercent: 95 })), /data-state="on"[^>]*>%95</);
+  assert.match(group(render({}, "en")), />80%<\/button>/);
+  // With warnings off the threshold waits, and the row says where to turn them on.
+  const off = render({ usageWarnings: false });
+  assert.match(group(off), /<button[^>]*disabled=""/);
+  assert.match(off, /Limit uyarıları kapalı; Kullanım → Uyarılar’dan açılır\./);
+
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const updates: Partial<RelaySettings>[] = [];
+    const relay = relayFor();
+    relay.api = { updateSettings: async (patch: Partial<RelaySettings>) => void updates.push(patch) } as unknown as Relay["api"];
+    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+        ),
+      ),
+    );
+    const item = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && textOf(n) === "%95");
+    assert.ok(item);
+    await act(async () => dom.dispatch(item, "click", { detail: 1 }));
+    assert.deepEqual(updates, [{ usageWarningPercent: 95 }]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
 });

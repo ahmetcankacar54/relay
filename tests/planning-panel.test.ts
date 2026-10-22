@@ -56,6 +56,11 @@ const clock = (time: number) =>
     minute: "2-digit",
     hourCycle: "h23",
   }).format(time);
+/** The early start group's next start row with exactly this value. */
+const nextStartRow = (value: string) =>
+  new RegExp(
+    `data-slot="next-start"[^>]*><span>Sonraki başlatma</span><span[^>]*>${value}</span>`,
+  );
 /** Badges with exactly this text (the tempo toggle also reads "Otomatik"). */
 const badges = (html: string, text: string) =>
   html.match(new RegExp(`data-slot="badge"[^>]*>${text}<`, "g"))?.length ?? 0;
@@ -147,11 +152,8 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
   // keeper's live view. The deleted account takes no slot: the plan is the one
   // of the single remaining account.
   const [alone] = todayPlan({ accounts: [{ id: a.id }] }).accounts;
-  assert.ok(
-    html.includes(
-      `Bugün ${alone.windows.length} başlatma planlı · sonraki 17:45 Vertex`,
-    ),
-  );
+  assert.ok(html.includes(`>Bugün ${alone.windows.length} başlatma planlı<`));
+  assert.match(html, nextStartRow("Vertex bugün 17:45"));
   assert.equal(firstStart(html, "Kişisel - Max"), clock(alone.firstStart));
   const empty = render({
     accounts: [{ id: a.id }],
@@ -171,6 +173,8 @@ test("an account the keeper has switched off says early start is off", () => {
   const html = render({ autoStart: false, accounts: [{ id: a.id }] }, keeper);
   assert.match(html, />Önceden başlatma kapalı</);
   assert.doesNotMatch(html, /Otomatik başlatma/);
+  // Switched off, the group has no next start row.
+  assert.doesNotMatch(html, /data-slot="next-start"/);
 });
 
 test("without a keeper view the summary is drawn from the plan", () => {
@@ -183,11 +187,8 @@ test("without a keeper view the summary is drawn from the plan", () => {
     .filter((w) => w.at > NOW)
     .sort((x, y) => x.at - y.at)[0];
   const name = next.id === a.id ? a.name : b.name;
-  assert.ok(
-    html.includes(
-      `Bugün ${count} başlatma planlı · sonraki ${clock(next.at)} ${name}`,
-    ),
-  );
+  assert.ok(html.includes(`>Bugün ${count} başlatma planlı<`));
+  assert.match(html, nextStartRow(`${name} bugün ${clock(next.at)}`));
   assert.match(html, /Pzt–Cum/);
   assert.match(html, /12 sa/);
 });

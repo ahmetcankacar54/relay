@@ -20,8 +20,10 @@ import { fallbackTempo, presetTempo } from "../../shared/tempo";
 import {
   dayTimeline,
   nextPlannedWindow,
+  nextStartLabel,
   type TimelineAdaptation,
 } from "../lib/day-timeline";
+import type { Language } from "../data/language";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -368,15 +370,22 @@ export function PlanningPanel({
           "Plana hesap ekle; başlatma saatleri otomatik dağıtılır.",
           "Add accounts to the plan; start times are spread automatically.",
         )
-      : upcoming
-        ? t(
-            `Bugün ${plannedToday} başlatma planlı · sonraki ${clock(upcoming.at, zone)} ${name(upcoming.accountId)}`,
-            `${plannedToday} starts planned today · next ${clock(upcoming.at, zone)} ${name(upcoming.accountId)}`,
-          )
-        : t(
-            `Bugün ${plannedToday} başlatma planlı`,
-            `${plannedToday} starts planned today`,
-          );
+      : t(
+          `Bugün ${plannedToday} başlatma planlı`,
+          `${plannedToday} starts planned today`,
+        );
+  // The next start has its own row under the switch, in the shared wording.
+  const language = t("tr", "en") as Language;
+  const nextStart =
+    settings.autoStart && included.length && upcoming
+      ? nextStartLabel(
+          name(upcoming.accountId),
+          upcoming.at,
+          now,
+          zone,
+          language,
+        )
+      : undefined;
   return (
     <div className="grid gap-6">
       <PlanTimeline
@@ -393,56 +402,69 @@ export function PlanningPanel({
       <SettingGroup
         id="planning-early"
         title={t("Önceden başlatma", "Early start")}
-        className={cn(
-          "@container flex items-center gap-3.5 py-3.5",
-          settings.autoStart && "border-primary/40",
-        )}
+        className={cn("@container", settings.autoStart && "border-primary/40")}
       >
-        <span
-          className={cn(
-            "hidden size-9 shrink-0 place-items-center rounded-lg @lg:grid",
-            settings.autoStart
-              ? "bg-accent text-accent-foreground"
-              : "bg-muted text-muted-foreground",
-          )}
-          aria-hidden="true"
-        >
-          <Play className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <strong className="font-display text-[15px] font-semibold">
-            {t("Limit dönemlerini önceden başlat", "Start limit periods early")}
-          </strong>
-          <p className="mt-0.5 text-[13px]">{summary}</p>
-          {settings.autoStart && forecast && (
-            <ForecastBadges
-              forecast={forecast}
-              day={forecastDay}
-              source={tempo.source}
-              factor={adaptation?.factor}
-              adapted={
-                !!adaptation && Object.keys(adaptation.schedule).length > 0
-              }
-              clock={zoneClock}
-              t={t}
-            />
-          )}
-          <small className={cn(noteClass, "mt-0.5 block")}>
-            {t(
-              "Her başlatma küçük bir istek kadar kota harcar. Relay açık ve Mac uyanık olmalı.",
-              "Each start uses a small request of quota. Relay must be open and the Mac awake.",
+        <div className="flex items-center gap-3.5 py-3.5">
+          <span
+            className={cn(
+              "hidden size-9 shrink-0 place-items-center rounded-lg @lg:grid",
+              settings.autoStart
+                ? "bg-accent text-accent-foreground"
+                : "bg-muted text-muted-foreground",
             )}
-          </small>
+            aria-hidden="true"
+          >
+            <Play className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <strong className="font-display text-[15px] font-semibold">
+              {t(
+                "Limit dönemlerini önceden başlat",
+                "Start limit periods early",
+              )}
+            </strong>
+            <p className="mt-0.5 text-[13px]">{summary}</p>
+            {settings.autoStart && forecast && (
+              <ForecastBadges
+                forecast={forecast}
+                day={forecastDay}
+                source={tempo.source}
+                factor={adaptation?.factor}
+                adapted={
+                  !!adaptation && Object.keys(adaptation.schedule).length > 0
+                }
+                clock={zoneClock}
+                t={t}
+              />
+            )}
+            <small className={cn(noteClass, "mt-0.5 block")}>
+              {t(
+                "Her başlatma küçük bir istek kadar kota harcar. Relay açık ve Mac uyanık olmalı.",
+                "Each start uses a small request of quota. Relay must be open and the Mac awake.",
+              )}
+            </small>
+          </div>
+          <Switch
+            checked={settings.autoStart}
+            disabled={disabled}
+            aria-label={t(
+              "Limit dönemlerini önceden başlat",
+              "Start limit periods early",
+            )}
+            onCheckedChange={(autoStart) => update({ autoStart })}
+          />
         </div>
-        <Switch
-          checked={settings.autoStart}
-          disabled={disabled}
-          aria-label={t(
-            "Limit dönemlerini önceden başlat",
-            "Start limit periods early",
-          )}
-          onCheckedChange={(autoStart) => update({ autoStart })}
-        />
+        {nextStart && (
+          <div
+            data-slot="next-start"
+            className="flex items-center justify-between gap-3 border-t py-2.5 text-[13px]"
+          >
+            <span>{t("Sonraki başlatma", "Next start")}</span>
+            <span className="min-w-0 truncate text-muted-foreground tabular-nums">
+              {nextStart}
+            </span>
+          </div>
+        )}
       </SettingGroup>
 
       <SettingGroup

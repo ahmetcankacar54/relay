@@ -1,5 +1,6 @@
 import type { Account } from "./types";
 import { formatPercent } from "./percent";
+import { withDative } from "./tr-dative";
 import { localDate, planCapacity, wallTime } from "./planning";
 import { historyIdentity, identityOwners } from "./usage-statistics";
 import type { UsageRollups } from "./usage-rollups";
@@ -64,6 +65,8 @@ const DAY_MS = 86_400_000;
 const FIVE_HOURS_MS = 5 * 3_600_000;
 const PREVIOUS_MAX_DAYS = 45;
 const INSIGHT_MIN_WINDOWS = 5;
+/** Days an account must have sat idle before the order insight names it. */
+const INSIGHT_IDLE_DAYS = 3;
 
 const PLAN_LABELS: Partial<Record<string, string>> = {
   pro: "Pro",
@@ -97,6 +100,23 @@ function localHour(time: number, zone: string): number {
     hourFormatters.set(zone, f);
   }
   return Number(f.format(new Date(time)));
+}
+
+/**
+ * Days a row has sat idle up to today: observed days without use, counted
+ * back to its last active day. Days Relay did not observe are skipped.
+ */
+function idleStreak(
+  dates: string[],
+  covered: Set<string>,
+  active: Set<string>,
+): number {
+  let days = 0;
+  for (let i = dates.length - 1; i >= 0; i--) {
+    if (active.has(dates[i])) break;
+    if (covered.has(dates[i])) days += 1;
+  }
+  return days;
 }
 
 interface Row {
@@ -320,7 +340,13 @@ export function buildStatisticsView(
   const covered = [...coverage.values()].reduce((a, b) => a + b, 0);
   view.coveragePercent = Math.min(100, round1((covered / rangeMinutes) * 100));
 
-  const insight = buildInsight(shown, view.accounts, fills);
+  const idle = new Map(
+    shown.map((row) => [
+      row,
+      idleStreak(dates, coveredDays.get(row)!, activeDays.get(row)!),
+    ]),
+  );
+  const insight = buildInsight(shown, view.accounts, fills, idle);
   if (insight) view.insight = insight;
   return view;
 }
@@ -329,10 +355,15 @@ function buildInsight(
   rows: Row[],
   out: UsageStatisticsView["accounts"],
   fills: Map<Row, number[]>,
+  /** Each row's idle days up to today; see `idleStreak`. */
+  idle: Map<Row, number>,
 ): UsageStatisticsView["insight"] {
-  const candidates = rows
+  const accounts = rows
     .map((row, i) => ({ row, view: out[i] }))
-    .filter(({ row, view }) => row.account && view.averageFill !== undefined);
+    .filter(({ row }) => row.account);
+  const candidates = accounts.filter(
+    ({ view }) => view.averageFill !== undefined,
+  );
   const label = (c: (typeof candidates)[number]) =>
     c.view.plan ? `${c.view.name} (${c.view.plan})` : c.view.name;
   // Rule 1 counts the same closed windows that averageFill is built from.
@@ -353,6 +384,23 @@ function buildInsight(
   const full = candidates
     .filter(({ view }) => view.averageFill! > 80)
     .sort((a, b) => a.row.capacity - b.row.capacity)[0];
+  // A full account beside one that has sat idle for days: shifting the order
+  // moves work to the idle one (the longest idle is named) before the plain
+  // note that it fills.
+  const spare =
+    full &&
+    accounts
+      .filter(
+        (c) => c.row !== full.row && idle.get(c.row)! >= INSIGHT_IDLE_DAYS,
+      )
+      .sort((a, b) => idle.get(b.row)! - idle.get(a.row)!)[0];
+  if (full && spare) {
+    const days = idle.get(spare.row)!;
+    return {
+      tr: `${spare.view.name} ${days} gündür boşta; ${full.view.name} açıldığında neredeyse hep doluyor. Sırayı ${withDative(spare.view.name)} kaydırmak 5 saatlik takılmaları azaltır.`,
+      en: `${spare.view.name} has sat idle for ${days} days; ${full.view.name} is almost always full when it opens. Moving ${spare.view.name} up the order would cut 5-hour limit stops.`,
+    };
+  }
   if (full)
     return {
       tr: `${label(full)} açıldığında neredeyse hep doluyor.`,

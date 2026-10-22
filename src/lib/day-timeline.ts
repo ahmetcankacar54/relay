@@ -20,6 +20,8 @@ import { fallbackTempo, type Tempo } from "../../shared/tempo";
 import type { Forecast, ForecastSegment } from "../../shared/capacity-plan";
 import { liveForecast } from "../../shared/live-forecast";
 import { freshUsage } from "../../shared/usage";
+import type { Language } from "../data/language";
+import { formatClock } from "./time";
 
 /** Planned settings without deleted accounts; deleted accounts take no slot, exactly as in the window keeper. */
 export function plannedSettings(
@@ -349,6 +351,45 @@ export function nextPlannedWindow(
     .sort((a, b) => a.at - b.at)
     .map((w) => ({ ...w, at: new Date(w.at).toISOString() }))[0];
 }
+
+/**
+ * When a planned start falls, read in the planning zone: "bugün 14:20",
+ * "yarın 06:40", a weekday within the coming week ("Cumartesi 09:00"), else
+ * the date ("30 Eki 09:00").
+ */
+export function startDayLabel(
+  at: number | string,
+  now: number,
+  zone: string,
+  language: Language,
+): string {
+  const time = typeof at === "number" ? at : Date.parse(at);
+  if (!Number.isFinite(time)) return "";
+  const tr = language === "tr";
+  const clock = formatClock(time, language, zone);
+  const today = localDate(now, zone);
+  const date = localDate(time, zone);
+  if (date === today) return `${tr ? "bugün" : "today"} ${clock}`;
+  if (date === shiftDate(today, 1))
+    return `${tr ? "yarın" : "tomorrow"} ${clock}`;
+  const week = date > today && date < shiftDate(today, 7);
+  const day = new Intl.DateTimeFormat(tr ? "tr-TR" : "en-GB", {
+    timeZone: zone,
+    ...(week
+      ? { weekday: "long" as const }
+      : { day: "numeric" as const, month: "short" as const }),
+  }).format(new Date(time));
+  return `${day} ${clock}`;
+}
+
+/** The next early start as Planning, the Overview card and the menu bar panel say it: "Alto yarın 06:40". */
+export const nextStartLabel = (
+  name: string,
+  at: number | string,
+  now: number,
+  zone: string,
+  language: Language,
+) => `${name} ${startDayLabel(at, now, zone, language)}`;
 
 /** Timeline window colours, cycled per planned account (theme variables `--tone-1..4`). */
 export const WINDOW_TONES = [

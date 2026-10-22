@@ -7,7 +7,7 @@ import { SummaryTiles } from "../src/pages/usage/SummaryTiles";
 import { AccountBalance } from "../src/pages/usage/AccountBalance";
 import { costSummary, type CostSummary } from "../src/pages/usage/cost-summary";
 import type { TokenUsageView } from "../shared/token-usage-view";
-import { DailyChart } from "../src/pages/usage/DailyChart";
+import { costGuides, DailyChart, guideLabel } from "../src/pages/usage/DailyChart";
 import { UsageHeatmap } from "../src/pages/usage/UsageHeatmap";
 import { LimitHits } from "../src/pages/usage/LimitHits";
 import { StatisticsHeader } from "../src/pages/usage/StatisticsHeader";
@@ -120,6 +120,30 @@ const tree = (child: ReactElement, language: Language = "tr") =>
 const render = (child: ReactElement, language: Language = "tr") => renderToStaticMarkup(tree(child, language));
 const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "’");
 
+/** Token cells: `n` input tokens and their API value. */
+const tokenCell = (n: number, cost: number, estimated = false) => ({
+  input: n, output: 0, cacheWrite: 0, cacheRead: 0, responses: 1, cost, estimated,
+});
+const zeroCounts = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, responses: 0 };
+// The same 30 days from the token ledger: the 14th $160 (a, b and the terminal), the 9th $30 for a, estimated.
+const tokenView = {
+  range: 30,
+  days: dates.map((date) => ({
+    date,
+    byRow:
+      date === "2026-10-14"
+        ? { a: tokenCell(1_500_000, 120), b: tokenCell(600_000, 39.5), terminal: tokenCell(100_000, 0.5) }
+        : date === "2026-10-09"
+          ? { a: tokenCell(300_000, 30, true) }
+          : {},
+  })),
+  rows: [
+    { key: "a", kind: "account", accountId: "a", name: "Kişisel · Max", estimated: true, totals: { ...zeroCounts, input: 1_800_000, cost: 150 } },
+    { key: "b", kind: "account", accountId: "b", name: "Vertex", estimated: false, totals: { ...zeroCounts, input: 600_000, cost: 39.5 } },
+    { key: "terminal", kind: "terminal", estimated: false, totals: { ...zeroCounts, input: 100_000, cost: 0.5 } },
+  ],
+  totals: { ...zeroCounts, input: 2_500_000_000, cost: 190 },
+} as unknown as TokenUsageView;
 test("summary tiles format totals, change, windows, hits and the busiest time", () => {
   const html = text(render(createElement(SummaryTiles, { view })));
   assert.match(html, /1\.840 Pro birimi/);
@@ -237,6 +261,81 @@ test("the daily chart draws one labelled bar group per day and marks hit days", 
   assert.match(en, /Former account/);
 });
 
+test("the daily chart's $ guides sit at round values from the data's scale", () => {
+  assert.deepEqual(costGuides(160), [75, 150]);
+  assert.deepEqual(costGuides(300), [150, 300]);
+  assert.deepEqual(costGuides(99), [40, 80]);
+  assert.deepEqual(costGuides(1.2), [0.5, 1]);
+  assert.equal(costGuides(0.05), undefined);
+  assert.equal(costGuides(0), undefined);
+  // Their labels drop the cents a round value does not need.
+  assert.equal(guideLabel(75, "tr"), "$75");
+  assert.equal(guideLabel(2.5, "tr"), "$2,5");
+  assert.equal(guideLabel(1500, "en"), "$1,500");
+});
+
+test("the daily chart switches between Pro units, tokens and the API value", async () => {
+  // Without a token view only Pro units are drawn, with no switch.
+  assert.doesNotMatch(render(createElement(DailyChart, { view, accounts, zone: ZONE })), /data-slot="toggle-group"/);
+  const html = render(createElement(DailyChart, { view, tokens: tokenView, accounts, zone: ZONE }));
+  assert.match(html, /data-slot="toggle-group"[^>]*aria-label="Ölçü"/);
+  assert.match(html, /data-state="on"[^>]*>Limit</);
+  assert.match(html, /aria-label="14 Eki: 120 Pro birimi, limite takıldı"/);
+
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(tree(createElement(DailyChart, { view, tokens: tokenView, accounts, zone: ZONE }))));
+    const container = dom.container as unknown as Fake;
+    const click = (label: string) => {
+      const item = find(container, (n) => n.tagName === "button" && textOf(n) === label);
+      assert.ok(item, label);
+      return act(async () => dom.dispatch(item, "click", { detail: 1 }));
+    };
+    const attrs = (n: Fake) => (n as { attributes?: Map<string, string> }).attributes;
+    const labelOf = (date: string) => {
+      const day = find(container, (n) => attrs(n)?.get?.("aria-label")?.startsWith(`${date}:`) === true);
+      return day && attrs(day)?.get("aria-label")?.replace(/\u00a0/g, " ");
+    };
+    const plain = () => textOf(container);
+    const svg = find(container, (n) => n.tagName === "svg") as Fake & { box: { left: number; top: number; width: number; height: number } };
+    svg.box = { left: 0, top: 0, width: 440, height: 146 };
+
+    await click("Token");
+    // Limit-hit days stay marked; the legend adds the terminal row.
+    assert.equal(labelOf("14 Eki"), "14 Eki: 2,2 Mn token, limite takıldı");
+    assert.equal(labelOf("9 Eki"), "9 Eki: ≈300 B token, limite takıldı");
+    assert.match(plain(), /Relay dışı terminal/);
+    assert.match(plain(), /30 günde toplam ≈2,5 Mn token; en yoğun gün 14 Eki \(2,2 Mn\)\./);
+    assert.doesNotMatch(plain(), /\$75/);
+    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 439, clientY: 60 }));
+    assert.equal(dayTip(container), "14 Ekim ÇarşambaToken2,2 MnKişisel · Max1,5 MnVertex600 BRelay dışı terminal100 B▲ Limite takıldı");
+
+    await click("$");
+    assert.equal(labelOf("14 Eki"), "14 Eki: $160,00, limite takıldı");
+    assert.equal(labelOf("9 Eki"), "9 Eki: ≈$30,00, limite takıldı");
+    // Two dashed guides at $75 and $150, labelled in the gutter.
+    const guides = find(container, (n) => attrs(n)?.get?.("data-slot") === "cost-guides");
+    assert.ok(guides);
+    assert.equal(guides.childNodes.length, 2);
+    assert.deepEqual(
+      guides.childNodes.map((line) => attrs(line)?.get("y1")),
+      ["74.56", "21.13"],
+    );
+    assert.match(plain(), /30 günde API değeri ≈\$190,00; en yüksek gün 14 Eki \(\$160,00\)\./);
+    assert.equal(dayTip(container), "14 Ekim ÇarşambaAPI değeri$160,00Kişisel · Max$120,00Vertex$39,50Relay dışı terminal$0,50▲ Limite takıldı");
+
+    await click("Limit");
+    assert.equal(labelOf("14 Eki"), "14 Eki: 120 Pro birimi, limite takıldı");
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
 test("the heatmap has 7 × 24 cells and names the busiest cell", () => {
   const html = render(createElement(UsageHeatmap, { view }));
   const cells = html.match(/title="[^"]+ \d\d:00 · [\d.,]+ Pro birimi"/g) ?? [];
@@ -278,6 +377,13 @@ test("the statistics section shows the full layout with the footnote", () => {
   assert.match(plain, /token, mesaj ya da maliyet değildir/);
   assert.match(plain, /Gözlem kapsamı: %83/);
   assert.match(plain, /güncel plan kapasitesiyle/);
+  // With the token view the chart offers its measures and the summary the range's tokens.
+  assert.doesNotMatch(html, /data-slot="toggle-group"|range-tokens/);
+  const withTokens = render(
+    createElement(UsageStatisticsSection, { state: { view, loading: false }, accounts, zone: ZONE, tokens: tokenView }),
+  );
+  assert.match(withTokens, /data-slot="toggle-group"[^>]*aria-label="Ölçü"/);
+  assert.match(withTokens, /data-slot="range-tokens"/);
 });
 
 test("the statistics section shows the empty, unavailable, no-identity, loading and error states", () => {
@@ -518,6 +624,12 @@ test("with priced tokens the Limits tab leads with the API value and gives each 
   const plain = text(tiles);
   assert.match(plain, /^API değeri≈\$2\.704,15günde ≈ \$90,14Toplam kullanım/);
   assert.match(text(render(createElement(SummaryTiles, { view, cost }), "en")), /API value≈\$2,704\.15≈ \$90\.14 a day/);
+  // The token view adds the range's tokens under the total usage.
+  const withTokens = render(createElement(SummaryTiles, { view, cost, tokens: tokenView }));
+  assert.match(text(withTokens), /Toplam kullanım1\.840 Pro birimi2,5\sMr tokenönceki 30 güne göre/);
+  assert.match(withTokens, /data-slot="range-tokens"[^>]*title="2\.500\.000\.000"/);
+  assert.match(text(render(createElement(SummaryTiles, { view, tokens: tokenView }), "en")), /2\.5bn tokens/);
+  assert.doesNotMatch(render(createElement(SummaryTiles, { view, cost })), /range-tokens/);
   // Without priced tokens the four tiles stay as they were.
   assert.match(render(createElement(SummaryTiles, { view })), /lg:grid-cols-4/);
   assert.doesNotMatch(text(render(createElement(SummaryTiles, { view }))), /API değeri/);
