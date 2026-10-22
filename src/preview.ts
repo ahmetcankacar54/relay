@@ -562,6 +562,8 @@ export const previewApi: RelayAPI = {
     location.hash = intentHash(page, intent);
   },
   onNavigate: () => () => {},
+  takeSwitchRequest: async () => undefined,
+  onSwitchRequest: () => () => {},
   setPanelHeight: () => {},
   closePanel: () => {},
   // The browser preview shows the panel page as an open tab.

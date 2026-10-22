@@ -35,6 +35,12 @@ const api: RelayAPI = {
     ipcRenderer.on("relay:navigate", listener);
     return () => ipcRenderer.removeListener("relay:navigate", listener);
   },
+  takeSwitchRequest: () => ipcRenderer.invoke("relay:take-switch-request"),
+  onSwitchRequest: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on("relay:switch-request", listener);
+    return () => ipcRenderer.removeListener("relay:switch-request", listener);
+  },
   setPanelHeight: (height) => ipcRenderer.send("relay:panel-size", height),
   closePanel: () => ipcRenderer.send("relay:panel-close"),
   onPanelVisibility: (callback) => {

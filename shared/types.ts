@@ -244,6 +244,13 @@ export interface RelayAPI {
   openPage(page: PageId, intent?: PageIntent): Promise<void>;
   /** Main window: a page (and intent) requested from the menu bar panel. */
   onNavigate(callback: (page: PageId, intent?: PageIntent) => void): () => void;
+  /**
+   * Main window: the account a widget's Geç link asked to switch to, taken once (undefined
+   * without one, or once it is two minutes old). The window opens its switch review for it.
+   */
+  takeSwitchRequest(): Promise<string | undefined>;
+  /** Main window: a widget's switch request is waiting to be taken. */
+  onSwitchRequest(callback: () => void): () => void;
   /** Menu bar panel only: reports its content height. */
   setPanelHeight(height: number): void;
   /** Menu bar panel only: hides it. */

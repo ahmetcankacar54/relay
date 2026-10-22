@@ -71,11 +71,14 @@ import {
 } from "./core/usage-statistics-input";
 import { lostFoundWeek } from "../shared/lost-found";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
-import {
-  buildTokenToday,
-  buildTokenUsageView,
-} from "../shared/token-usage-view";
+import { buildTokenUsageView } from "../shared/token-usage-view";
 import { buildWidgetSnapshot } from "../shared/widget-snapshot";
+import {
+  parseRelayLink,
+  RELAY_SCHEME,
+  relayLinkArgument,
+} from "../shared/relay-link";
+import { tempoAt } from "../shared/tempo";
 import type { UsageSample } from "../shared/usage-statistics";
 import { attribute } from "./core/token-attribution";
 import { TokenLedger, tokenTickDelay } from "./core/token-ledger";
@@ -191,6 +194,8 @@ let tokenScanStopped = false;
 /** The macOS widget's file, rewritten after every tick and at local midnight. */
 let widgetFile: WidgetFile | undefined;
 let widgetMidnight: ReturnType<typeof setTimeout> | undefined;
+/** The account open in Claude when the widget file was last written. */
+let widgetActiveId: string | undefined;
 let trayLanguage: "tr" | "en" = "tr";
 /** Main's own copy (menus, dialogs, notifications) in the app's language. */
 const say = (tr: string, en: string) => pick(trayLanguage)(tr, en);
@@ -334,6 +339,7 @@ function scheduleTokenTick() {
 }
 /** Today's numbers for the widget, from the ledger as it stands; never disturbs Relay. */
 function writeWidget(force = false) {
+  widgetActiveId = observedDesktop?.activeProfileId;
   if (!tokenLedger || !widgetFile) return;
   try {
     const zone = service.store.state.settings.planning.timeZone;
@@ -345,23 +351,58 @@ function writeWidget(force = false) {
       : totalBytes > 0
         ? Math.min(99, Math.floor((scannedBytes / totalBytes) * 100))
         : 0;
+    const { accounts, settings } = service.store.state;
+    const tokens = buildTokenUsageView({ ledger, accounts, range: 7, zone, now });
     widgetFile.write(
       buildWidgetSnapshot({
-        today: buildTokenToday({
-          ledger,
-          accounts: service.store.state.accounts,
-          zone,
-          now,
-        }),
+        today: tokens.today,
+        days: tokens.days,
         progress: { complete, percent },
         language: trayLanguage,
         zone,
         now,
+        limits: {
+          accounts,
+          usage: usage?.snapshot() ?? {},
+          activeId: observedDesktop?.activeProfileId,
+          settings,
+          rate: widgetTempoRate(now),
+        },
+        hits: widgetLimitHits(zone, now),
       }),
       force,
     );
   } catch {
     // A widget file that cannot be written leaves the widget saying Relay is not current.
+  }
+}
+/** The keeper's tempo now, as the panel ranks accounts with it; undefined without one. */
+function widgetTempoRate(now: number) {
+  try {
+    const tempo = keeper?.snapshot().tempo;
+    return tempo
+      ? tempoAt(tempo, service.store.state.settings.planning, now)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+/** Limits reached in the last seven days, as the Usage page counts them; undefined without history. */
+function widgetLimitHits(zone: string, now: number) {
+  try {
+    if (!usageHistory?.rollupsAvailable) return undefined;
+    const view = buildStatisticsView({
+      rollups: usageHistory.rollups(),
+      available: true,
+      accounts: service.store.state.accounts,
+      range: 7,
+      zone,
+      now,
+    });
+    if (view.status === "unavailable") return undefined;
+    return view.totals.hits.fiveHour + view.totals.hits.weekly;
+  } catch {
+    return undefined;
   }
 }
 /** At local midnight the widget starts the new day, even with nothing to count. */
@@ -419,9 +460,25 @@ let quitting = false;
 app.setName("Relay");
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on("second-instance", () => {
-    showWindow();
+  app.on("second-instance", (_event, argv) => {
+    const link = relayLinkArgument(argv);
+    if (link) openRelayLink(link);
+    else showWindow();
   });
+  // macOS: the widgets' relay:// links, including the one that launches Relay.
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    openRelayLink(url);
+  });
+  // The packaged app's Info.plist declares the scheme; a development Electron
+  // would claim relay:// for the bare Electron app, so it is left alone.
+  if (app.isPackaged) {
+    try {
+      app.setAsDefaultProtocolClient(RELAY_SCHEME);
+    } catch {
+      // The links then open whichever Relay macOS picks; nothing else depends on it.
+    }
+  }
   app
     .whenReady()
     .then(async () => {
@@ -855,6 +912,15 @@ else {
       bindIPC();
       initialized = true;
       createWindow();
+      // A relay:// link Relay was opened with: macOS hands it over before ready,
+      // Windows and Linux on the command line.
+      const launchLink =
+        pendingRelayLink ??
+        (process.platform === "darwin"
+          ? undefined
+          : relayLinkArgument(process.argv));
+      pendingRelayLink = undefined;
+      if (launchLink) openRelayLink(launchLink);
       if (process.platform === "darwin")
         trayPanel = new TrayPanel({
           preload: path.join(__dirname, "preload.cjs"),
@@ -886,6 +952,8 @@ else {
             operations: () => desktopLock.operations + desktop.operations,
           });
           observedDesktop = read.state;
+          // The widgets show the account open in Claude: a switch reaches them now.
+          if (read.state.activeProfileId !== widgetActiveId) writeWidget();
           return {
             accounts: service.store.state.accounts,
             usage: usage.snapshot(),
@@ -1017,6 +1085,43 @@ function closeToTray() {
 function closeWindowToTray() {
   closedToTray = true;
   windowRelease.arm();
+}
+/** How long a widget's switch link waits for the main window to take it. */
+const LINKED_SWITCH_MS = 2 * 60_000;
+/** A widget's Geç: the account whose switch review the main window opens next. */
+let linkedSwitch: { accountId: string; at: number } | undefined;
+/** A link that came before Relay was ready. */
+let pendingRelayLink: string | undefined;
+/**
+ * A relay:// link from a widget. `relay://switch?account=<id>` shows the main
+ * window and asks it for its usual switch review of that account, the one its
+ * own Switch buttons open; nothing here switches. Anything else, or an id that
+ * is not one of Relay's accounts, only shows Relay or is ignored.
+ */
+function openRelayLink(url: string) {
+  if (!initialized) {
+    pendingRelayLink = url;
+    return;
+  }
+  const link = parseRelayLink(url, service.store.state.accounts);
+  if (!link) return;
+  if (link.kind === "switch")
+    linkedSwitch = { accountId: link.accountId, at: Date.now() };
+  showWindow();
+  trayPanel?.hide();
+  // A window still loading takes the request when its page starts.
+  const contents = window?.webContents;
+  if (link.kind === "switch" && contents && !contents.isLoading())
+    contents.send("relay:switch-request");
+}
+/** The main window takes the widget's switch request once; an old one is dropped. */
+function takeLinkedSwitch() {
+  const request = linkedSwitch;
+  linkedSwitch = undefined;
+  if (!request || Date.now() - request.at > LINKED_SWITCH_MS) return undefined;
+  return service.store.state.accounts.some((a) => a.id === request.accountId)
+    ? request.accountId
+    : undefined;
 }
 /** Menu-bar switch: one native confirmation, then the normal saved-login switch. */
 async function traySwitch(profileId: string) {
@@ -1399,6 +1504,12 @@ function bindIPC() {
       void tray?.update();
       broadcastChanged();
     }
+  });
+  // Main window only: the widget's switch request is never the panel's to take.
+  ipcMain.handle("relay:take-switch-request", (event) => {
+    trusted(event);
+    if (event.sender !== window?.webContents) return undefined;
+    return takeLinkedSwitch();
   });
   handle("open-page", (page, intent) => {
     const target = z.enum(PAGES).parse(page);

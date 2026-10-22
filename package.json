@@ -79,6 +79,14 @@
       "!dist-electron/RelayWidget.appex/**",
       "package.json"
     ],
+    "protocols": [
+      {
+        "name": "Relay",
+        "schemes": [
+          "relay"
+        ]
+      }
+    ],
     "electronLanguages": [
       "en",
       "tr"

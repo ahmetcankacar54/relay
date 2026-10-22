@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { api } from "@/data/useRelay";
 import { sidebarStatus } from "@/data/selectors";
+import { linkedSwitchAccount } from "../../shared/relay-link";
 import { Usage } from "@/pages/Usage";
 import { Settings } from "@/pages/Settings";
 import { Switching } from "@/pages/Switching";
@@ -65,6 +66,28 @@ export function Shell() {
       }),
     [go],
   );
+  // A widget's Geç: the same switch review the app's Switch buttons open, once the accounts are known.
+  const [linked, setLinked] = useState<string>();
+  useEffect(() => {
+    const take = () =>
+      void api.takeSwitchRequest().then(
+        (id) => id && setLinked(id),
+        () => {},
+      );
+    take();
+    return api.onSwitchRequest(take);
+  }, []);
+  useEffect(() => {
+    const current = relayRef.current;
+    if (!linked || !current.data) return;
+    setLinked(undefined);
+    const account = linkedSwitchAccount(
+      linked,
+      current.accounts,
+      current.active?.id,
+    );
+    if (account) current.requestDesktop(account, "switch");
+  }, [linked, relay.data]);
   const active = relay.active;
   const panda = useCardPanda({
     state: cardState(relay.data, relay.desktop, relay.busy, Date.now()),
