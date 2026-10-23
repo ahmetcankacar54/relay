@@ -1845,7 +1845,8 @@ function watchedVault(v: { vault: string }, unsealWith = unseal) {
     rejected: [] as number[],
     listed: [] as number[],
   };
-  const drafts = new DraftVault(v.vault, seal, unsealWith, undefined, {
+  // The fixtures' clock: records captured at NOW must not age out as the real date moves on.
+  const drafts = new DraftVault(v.vault, seal, unsealWith, () => NOW.getTime(), {
     onReadError: (stage, message) => calls.errors.push([stage, message]),
     onRecordRejected: (index) => calls.rejected.push(index),
     onList: (count) => calls.listed.push(count),
