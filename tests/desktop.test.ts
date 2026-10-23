@@ -9,8 +9,10 @@ import {
   DESKTOP_CACHE_MS,
   DesktopManager,
   DesktopSwitchRefused,
+  PAGE_BOOT_MS,
   type DesktopHost,
 } from "../electron/core/desktop";
+import type { PageOutcome } from "../electron/core/desktop-launch";
 import type { DesktopRestartEvent } from "../shared/types";
 import { localizeError } from "../src/messages";
 import type { DraftJob, DraftResult } from "../electron/draft-job";
@@ -2400,4 +2402,187 @@ test("a sidebar in a format Relay does not know costs the drafts nothing", async
   assert.equal((await f.manager.pendingDraftRecords()).length, 1);
   assert.equal((await d.last())!.status, "captured");
   assert.equal(await f.manager.sidebarGap(), undefined);
+});
+
+/** A host whose launches are watched: each watch reports the next of `outcomes`. */
+function watchLaunches(f: Awaited<ReturnType<typeof fixture>>, outcomes: PageOutcome[]) {
+  const events: Array<[string, Record<string, unknown> | undefined]> = [];
+  const order: string[] = [];
+  f.manager.onDraftEvent = (event, fields) => void events.push([event, fields]);
+  const launch = f.host.launch;
+  f.host.launch = async () => {
+    order.push("launch");
+    await launch();
+  };
+  const quit = f.host.quit;
+  f.host.quit = async () => {
+    order.push("quit");
+    await quit();
+  };
+  let watches = 0;
+  f.host.watchLaunch = async () => {
+    const outcome = outcomes[watches++];
+    order.push("watch");
+    return outcome === undefined
+      ? undefined
+      : {
+          wait: async (ms) => {
+            assert.equal(ms, PAGE_BOOT_MS);
+            order.push(`wait:${outcome}`);
+            return outcome;
+          },
+        };
+  };
+  // How long the wait took is logged too; the fake watch answers at once.
+  const boot = () =>
+    events
+      .filter(([e]) => e.startsWith("claude-boot"))
+      .map(([e, fields]) => {
+        const { waitedMs, ...rest } = fields ?? {};
+        if (e === "claude-boot") assert.equal(typeof waitedMs, "number");
+        return [e, rest] as const;
+      });
+  return { order, boot, watches: () => watches };
+}
+
+test("a switch waits for Claude's page to boot and restarts nothing more when it does", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B"); // B is open in Claude
+  f.setRunning(true);
+  const w = watchLaunches(f, ["loaded"]);
+  let ended = 0;
+  f.manager.onSwitched = () => void ended++;
+
+  await f.manager.switchTo(a.id);
+
+  assert.deepEqual(w.order, ["quit", "watch", "launch", "wait:loaded"]);
+  assert.deepEqual(w.boot(), [["claude-boot", { outcome: "loaded" }]]);
+  assert.equal(ended, 1);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+});
+
+test("a Claude whose page stays on the loading screen is restarted once", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  f.setRunning(true);
+  const restarts: DesktopRestartEvent[] = [];
+  f.manager.onRestart = (event) => restarts.push(event);
+  const w = watchLaunches(f, ["stalled"]);
+  const busy: boolean[] = [];
+  f.manager.onSwitched = () => busy.push(f.manager.isBusy);
+
+  await f.manager.switchTo(a.id);
+
+  // Quit and started again within the same operation, and never watched a second time.
+  assert.deepEqual(w.order, ["quit", "watch", "launch", "wait:stalled", "quit", "launch"]);
+  assert.equal(w.watches(), 1);
+  assert.deepEqual(w.boot(), [
+    ["claude-boot", { outcome: "stalled" }],
+    ["claude-boot-retry", { quit: true }],
+  ]);
+  // One restart story: the second start belongs to the same switch.
+  assert.deepEqual(
+    restarts.map((e) => e.phase),
+    ["start", "end"],
+  );
+  assert.equal(restarts[1].phase === "end" && restarts[1].ok, true);
+  assert.deepEqual(busy, [false]);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+});
+
+test("a page Relay cannot tell about, or a Claude quit meanwhile, is left alone", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  f.setRunning(true);
+  const w = watchLaunches(f, ["unknown", "closed"]);
+  await f.manager.switchTo(a.id);
+  await f.manager.switchTo(b.id);
+  assert.deepEqual(w.order, [
+    "quit",
+    "watch",
+    "launch",
+    "wait:unknown",
+    "quit",
+    "watch",
+    "launch",
+    "wait:closed",
+  ]);
+  // A log that cannot tell gives no watch at all: the launch is as before.
+  await f.manager.switchTo(a.id);
+  assert.deepEqual(w.order.slice(8), ["quit", "watch", "launch"]);
+});
+
+test("a stuck Claude that will not quit leaves the switch done and Claude as it is", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  f.setRunning(true);
+  const starts = f.starts();
+  const w = watchLaunches(f, ["stalled"]);
+  const quit = f.host.quit;
+  let quits = 0;
+  f.host.quit = async () => {
+    // The first quit is the switch's own; the retry's is refused.
+    if (++quits === 2) throw new Error("Claude Desktop did not close.");
+    await quit();
+  };
+
+  await f.manager.switchTo(a.id);
+
+  assert.deepEqual(w.boot(), [
+    ["claude-boot", { outcome: "stalled" }],
+    ["claude-boot-retry", { quit: false }],
+  ]);
+  assert.equal(f.starts(), starts + 1, "only the switch's own launch");
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+  assert.equal((await f.manager.snapshot()).error, undefined);
+});
+
+test("a watch that throws is as good as none", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  f.setRunning(true);
+  const starts = f.starts();
+  f.host.watchLaunch = async () => {
+    throw new Error("log unreadable");
+  };
+  await f.manager.switchTo(a.id);
+  assert.equal(f.starts(), starts + 1);
+  f.host.watchLaunch = async () => ({
+    wait: async () => {
+      throw new Error("read failed");
+    },
+  });
+  await f.manager.switchTo(a.id);
+  assert.equal(f.starts(), starts + 2);
+});
+
+test("recovery waits for Claude's page and restarts a stuck one too", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const before = await fs.readFile(path.join(f.root, "config.json"));
+  const vault = path.join(f.store.root, "desktop-vault"),
+    backup = randomUUID();
+  await writeBytes(
+    vault,
+    `backups/${backup}.bin`,
+    f.host.seal(
+      JSON.stringify({
+        files: { "config.json": before.toString("base64") },
+        createdAt: new Date().toISOString(),
+      }),
+    ),
+  );
+  await writeBytes(vault, "journal.json", jsonBytes({ backup }));
+  f.setRunning(true);
+  const w = watchLaunches(f, ["stalled"]);
+
+  await f.manager.recover();
+
+  assert.deepEqual(w.order, ["quit", "watch", "launch", "wait:stalled", "quit", "launch"]);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
 });

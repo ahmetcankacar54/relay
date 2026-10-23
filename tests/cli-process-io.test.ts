@@ -31,3 +31,18 @@ test("a character split across two output chunks comes back whole", async () => 
   const { stdout } = await runDetached("/bin/sh", ["-c", "printf '\\305'; sleep 0.1; printf '\\237'"], { timeout: 5000 });
   assert.equal(stdout, "ş");
 });
+
+test("a command given an environment gets only that one, and Relay's own otherwise", async () => {
+  process.env.RELAY_LEAK_PROBE = "from-relay";
+  try {
+    const inherited = await runDetached("/usr/bin/env", [], { timeout: 5000 });
+    assert.match(inherited.stdout, /^RELAY_LEAK_PROBE=from-relay$/m);
+    const clean = await runDetached("/usr/bin/env", [], { timeout: 5000, env: {} });
+    assert.doesNotMatch(clean.stdout, /RELAY_LEAK_PROBE/);
+    const given = await runDetached("/usr/bin/env", [], { timeout: 5000, env: { ONLY: "this" } });
+    assert.match(given.stdout, /^ONLY=this$/m);
+    assert.doesNotMatch(given.stdout, /RELAY_LEAK_PROBE/);
+  } finally {
+    delete process.env.RELAY_LEAK_PROBE;
+  }
+});

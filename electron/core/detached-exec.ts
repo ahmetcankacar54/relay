@@ -19,11 +19,15 @@ export interface DetachedExecError extends Error {
 export function runDetached(
   file: string,
   args: string[],
-  options: { timeout: number; maxBuffer?: number },
+  options: { timeout: number; maxBuffer?: number; env?: NodeJS.ProcessEnv },
 ): Promise<{ stdout: string; stderr: string }> {
   const limit = options.maxBuffer ?? 1024 * 1024;
   return new Promise((resolve, reject) => {
-    const child = spawn(file, args, { detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(file, args, {
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...(options.env ? { env: options.env } : {}),
+    });
     let stdout = "",
       stderr = "",
       killed = false;

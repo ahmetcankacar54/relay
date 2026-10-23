@@ -16,17 +16,28 @@ import {
   retryOnce,
 } from "./desktop-processes";
 import type { Sealer } from "./vault-crypto";
+import { macClaudeLog, watchClaudeLaunch } from "./desktop-launch";
 const execFileAsync = promisify(execFile);
 /** On macOS every command runs out of the terminal's process group; see runDetached. */
 const exec = (
   file: string,
   args: string[],
-  options: { timeout: number; maxBuffer?: number; windowsHide?: boolean },
+  options: {
+    timeout: number;
+    maxBuffer?: number;
+    windowsHide?: boolean;
+    env?: NodeJS.ProcessEnv;
+  },
 ): Promise<{ stdout: string }> =>
   process.platform === "win32"
     ? execFileAsync(file, args, { ...options, encoding: "utf8" })
     : runDetached(file, args, options);
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * The environment `open` gets when it starts Claude on macOS: none, so Launch Services gives
+ * Claude the user's standard one (HOME, PATH, TMPDIR…) and nothing of Relay's own.
+ */
+export const CLEAN_LAUNCH_ENV: NodeJS.ProcessEnv = Object.freeze({});
 /** The default Claude.app bundles, first found wins. */
 export const CLAUDE_APPS = [
   "/Applications/Claude.app",
@@ -244,7 +255,10 @@ export function nodeDesktopHost(options: {
         await exec(
           "/usr/bin/open",
           ["-a", executable.slice(0, executable.indexOf(".app/") + 4)],
-          { timeout: 10_000 },
+          // `open` hands its own environment to the app it starts. Relay's may come from
+          // whatever started Relay, such as a Claude Code session (CLAUDECODE, its session
+          // id, socket and account); with none, Claude gets what a Dock launch gives it.
+          { timeout: 10_000, env: CLEAN_LAUNCH_ENV },
         );
       else
         await new Promise<void>((resolve, reject) => {
@@ -260,6 +274,11 @@ export function nodeDesktopHost(options: {
           });
         });
     },
+    // Claude's log is only known on macOS.
+    watchLaunch: async () =>
+      process.platform === "darwin"
+        ? watchClaudeLaunch(macClaudeLog(os.homedir()), () => liveness.running())
+        : undefined,
     seal: (text) => options.sealer.seal(text),
     unseal: (data) => options.sealer.unseal(data),
     claudeElectron: async () =>

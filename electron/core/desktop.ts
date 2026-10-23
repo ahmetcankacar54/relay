@@ -66,6 +66,7 @@ import { ExtensionSwitcher } from "./extension-switch";
 import { ExtensionVault } from "./extension-vault";
 import { CookieVault } from "./cookie-vault";
 import type { CookieStorage } from "./cookie-store";
+import type { LaunchWatch } from "./desktop-launch";
 import {
   BROWSERS,
   DEFAULT_EXTENSION,
@@ -104,6 +105,11 @@ export interface DesktopHost {
   draftScratchDir?: string;
   /** How long Claude's main process has run, in ms; undefined when that cannot be told. */
   claudeUptimeMs?(): Promise<number | undefined>;
+  /**
+   * Called right before a launch: watches Claude's own log, so the launch's claude.ai page can
+   * be told booted or stuck. Undefined when Claude's log cannot tell.
+   */
+  watchLaunch?(): Promise<LaunchWatch | undefined>;
 }
 interface SavedLogin {
   accountUuid: string;
@@ -153,6 +159,12 @@ export interface OperationLock {
 }
 /** How long observers (the tray, the windows) share one Desktop reading. */
 export const DESKTOP_CACHE_MS = 2_500;
+/**
+ * How long the claude.ai page of a Claude that Relay restarted may take to boot before Relay
+ * restarts Claude once more. A page boots 1–15 s after a start; a stuck one has stayed on the
+ * loading skeleton for a minute or longer, and a second start then booted in seconds.
+ */
+export const PAGE_BOOT_MS = 30_000;
 /** What a Desktop reading finds on disk and in the process list; the rest is Relay's own state. */
 interface DesktopReading {
   available: boolean;
@@ -1228,7 +1240,7 @@ export class DesktopManager {
       await this.restore(uuid.parse(journal.backup));
       await writeBytes(this.vault, "journal.json", null);
       this.lastError = undefined;
-      await this.host.launch();
+      await this.relaunch();
     }, true);
   }
   private async exclusive<T>(operation: Operation, fn: () => Promise<T>, recovery = false) {
@@ -1330,8 +1342,31 @@ export class DesktopManager {
       await fn();
     } finally {
       if (!(await readObject(this.vault, "journal.json")))
-        await this.host.launch();
+        await this.relaunch();
     }
+  }
+  /**
+   * Starts Claude after Relay quit it, and holds the operation until its claude.ai page boots.
+   * A page that has not booted after PAGE_BOOT_MS while Claude still runs gets what the user
+   * would do by hand: Claude is quit and started once more. A watch that cannot tell, or a quit
+   * that fails, leaves Claude as it is; only a failed launch throws, as any launch does.
+   */
+  private async relaunch() {
+    const watch = await this.host.watchLaunch?.().catch(() => undefined);
+    await this.host.launch();
+    if (!watch) return;
+    const begun = this.now();
+    const outcome = await watch.wait(PAGE_BOOT_MS).catch(() => "unknown" as const);
+    this.diagnose("claude-boot", { outcome, waitedMs: this.now() - begun });
+    if (outcome !== "stalled") return;
+    try {
+      await this.host.quit();
+    } catch {
+      this.diagnose("claude-boot-retry", { quit: false });
+      return;
+    }
+    await this.host.launch();
+    this.diagnose("claude-boot-retry", { quit: true });
   }
   private async saveCurrent() {
     const config = await readObject(this.root, "config.json");
