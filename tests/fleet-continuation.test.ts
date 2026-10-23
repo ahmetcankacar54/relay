@@ -474,7 +474,7 @@ test("the windows are told only when the fleet state changed, not for a new chec
   assert.equal(told, 3);
 });
 
-test("no scan while the source has quota; once it is out, a scan at once and then at most once a minute", async () => {
+test("scans at most once a minute, and at once when the source's quota state changes", async () => {
   const f = setup();
   let clock = NOW;
   let scans = 0;
@@ -487,24 +487,24 @@ test("no scan while the source has quota; once it is out, a scan at once and the
     },
   });
   fleet.setEnabled(true);
+  f.state.stops.set(f.a.id, []);
   f.state.usage[f.a.id] = usage(f.a, 70);
   for (let i = 0; i < 3; i++, clock += 10_000)
     assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
-  assert.equal(scans, 0);
+  assert.equal(scans, 1);
   // Out of quota: scanned at once, nothing stopped yet.
-  f.state.stops.set(f.a.id, []);
   f.state.usage[f.a.id] = usage(f.a, 100);
   assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
-  assert.equal(scans, 1);
+  assert.equal(scans, 2);
   // A conversation stops: seen at the next scan, a minute after the last.
   f.state.stops.set(f.a.id, [stop(0)]);
   f.state.automation = "accessibility-permission-required";
   clock += 50_000;
   assert.equal((await fleet.tick()).stopped, 0);
-  assert.equal(scans, 1);
+  assert.equal(scans, 2);
   clock += 10_000;
   assert.equal((await fleet.tick()).stopped, 1);
-  assert.equal(scans, 2);
+  assert.equal(scans, 3);
   // A change of quota state scans again at once.
   f.state.usage[f.a.id] = {
     ...usage(f.a, 100),
@@ -512,7 +512,70 @@ test("no scan while the source has quota; once it is out, a scan at once and the
   };
   clock += 10_000;
   assert.equal((await fleet.tick()).reason, "source-quota-unconfirmed");
-  assert.equal(scans, 3);
+  assert.equal(scans, 4);
+  assert.deepEqual(f.state.switches, []);
+});
+
+test("a stop after a reading that still shows room reads the source again and switches at once", async () => {
+  const f = setup();
+  const reads: string[] = [];
+  // The last reading was a minute before the conversations stopped: 99 %.
+  f.state.usage[f.a.id] = usage(f.a, 99);
+  f.state.stops.set(f.a.id, [
+    { ...stop(0), stoppedAt: NOW - 10_000 },
+    { ...stop(1), stoppedAt: NOW - 11_000 },
+  ]);
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    refreshUsage: async (id) => {
+      reads.push(id);
+      f.state.usage[id] = { ...usage(f.a, 100), checkedAt: new Date(NOW).toISOString() };
+    },
+  });
+  fleet.setEnabled(true);
+  await fleet.tick();
+  assert.deepEqual(reads, [f.a.id]);
+  assert.deepEqual(f.state.switches, [f.b.id]);
+  assert.equal(f.state.sent.length, 2);
+});
+
+test("a source read again that still has room keeps waiting, and is read at most once a minute", async () => {
+  const f = setup();
+  let clock = NOW;
+  const reads: string[] = [];
+  f.state.usage[f.a.id] = usage(f.a, 99);
+  f.state.stops.set(f.a.id, [{ ...stop(0), stoppedAt: NOW - 10_000 }]);
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    now: () => clock,
+    // The server says room still (a model limit, or the window reset meanwhile).
+    refreshUsage: async (id) => void reads.push(id),
+  });
+  fleet.setEnabled(true);
+  assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
+  clock += 10_000;
+  assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
+  assert.equal(reads.length, 1);
+  clock += 50_000;
+  await fleet.tick();
+  assert.equal(reads.length, 2);
+  // A stop older than the reading asks for nothing: the reading came after it.
+  f.state.usage[f.a.id] = { ...usage(f.a, 99), checkedAt: new Date(clock).toISOString() };
+  clock += 70_000;
+  await fleet.tick();
+  assert.equal(reads.length, 2);
+  // A read that fails changes nothing and is asked again only a minute later.
+  f.state.usage[f.a.id] = usage(f.a, 99);
+  const failing = new FleetContinuation({
+    ...f.deps,
+    now: () => clock,
+    refreshUsage: async () => {
+      reads.push("failed");
+      throw new Error("offline");
+    },
+  });
+  assert.equal((await failing.tick()).reason, "awaiting-quota-stop");
+  assert.equal(reads.at(-1), "failed");
   assert.deepEqual(f.state.switches, []);
 });
 

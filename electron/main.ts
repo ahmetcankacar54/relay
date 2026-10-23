@@ -826,6 +826,8 @@ else {
           continuation.snapshot().enabled ||
           continuation.snapshot().status === "executing" ||
           continuation.snapshot().status === "reconciliation-required",
+        // A stop after the last reading: read again now, past the one-minute success cache.
+        refreshUsage: (id) => usage.refreshAfterRequest(id),
         stops: (account) => evidence.quotaStops(account),
         quiet: (stops) => evidence.quietExcept(stops),
         quietSync: (stops) => evidence.quietExceptSync(stops),

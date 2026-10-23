@@ -36,6 +36,11 @@ export interface FleetDeps {
   desktop(): Promise<DesktopState>;
   /** Another Relay operation (sign-in, single-conversation watch…) owns Claude now. */
   busy(): boolean;
+  /**
+   * Reads the account's usage from the server now, past its short success cache. Without it a
+   * stop newer than the last reading waits for the next scheduled one.
+   */
+  refreshUsage?(accountId: string): Promise<unknown>;
   stops(account: Account): Promise<QuotaStop[]>;
   /** Reason restarting Claude would interrupt other work, or undefined. */
   quiet(stops: QuotaStop[]): Promise<string | undefined>;
@@ -83,6 +88,13 @@ const stopKey = (account: Account, stop: QuotaStop) =>
 
 /** How long a quota-stop scan is reused while the source's quota state holds. */
 export const FLEET_SCAN_MS = 60_000;
+/** The least time between two usage reads the fleet asks for, per source. */
+export const FLEET_REREAD_MS = 60_000;
+/** A stop newer than the source's last usage reading, or one with no reading: it is out of date. */
+function stoppedSinceReading(stops: QuotaStop[], usage: AccountUsage | undefined) {
+  const checked = Date.parse(usage?.checkedAt ?? "");
+  return stops.some((stop) => !Number.isFinite(checked) || stop.stoppedAt > checked);
+}
 /**
  * What a reading under 15 minutes old says about the source: out of quota ("full"), not
  * ("room"), or there is no such reading ("unknown").
@@ -152,6 +164,8 @@ export class FleetContinuation {
     at: number;
     stops: QuotaStop[];
   };
+  /** When the fleet last asked for a usage read, and for which source. */
+  private reread?: { sourceId: string; at: number };
   private readonly file: string;
   private readonly now: () => number;
   constructor(private readonly deps: FleetDeps) {
@@ -258,11 +272,21 @@ export class FleetContinuation {
     if (!source?.desktop)
       return this.publish({ status: "waiting", reason: "source-not-enrolled" });
     const now = this.now();
-    const quota = sourceQuota(usage[source.id], now);
+    let quota = sourceQuota(usage[source.id], now);
+    let stops = (await this.quotaStops(source, quota, now)).filter(
+      (stop) => !this.saved.handled.includes(stopKey(source, stop)),
+    );
+    // A conversation that stopped at the limit after the last reading makes that reading
+    // out of date: a 99 % read a minute before the stop must not hold the switch until the
+    // next scheduled read. Read again now, at most once a minute.
+    if (
+      quota !== "full" &&
+      stoppedSinceReading(stops, usage[source.id]) &&
+      (await this.readAgain(source.id))
+    )
+      quota = sourceQuota(this.deps.snapshot().usage[source.id], this.now());
     // While a fresh reading shows room, no conversation waits for another account.
-    const stops = (
-      quota === "room" ? [] : await this.quotaStops(source, quota, now)
-    ).filter((stop) => !this.saved.handled.includes(stopKey(source, stop)));
+    if (quota === "room") stops = [];
     if (!stops.length) {
       // Name the account the fleet would pick while the active one is full, so
       // the UI can offer it. Nothing switches until a conversation stops.
@@ -389,6 +413,21 @@ export class FleetContinuation {
       }
       return this.continueAll({ ...pending, stage: "continuing" });
     });
+  }
+  /** Asks for a fresh usage read of `sourceId`, unless one was asked for under a minute ago. Whether it read. */
+  private async readAgain(sourceId: string) {
+    if (!this.deps.refreshUsage) return false;
+    const now = this.now();
+    if (this.reread?.sourceId === sourceId && now - this.reread.at < FLEET_REREAD_MS)
+      return false;
+    this.reread = { sourceId, at: now };
+    try {
+      await this.deps.refreshUsage(sourceId);
+      return true;
+    } catch {
+      // The scheduled reads go on; the next stop or minute asks again.
+      return false;
+    }
   }
   /** The source's quota stops: the last scan while it is under a minute old for this source and quota state. */
   private quotaStops(source: Account, quota: SourceQuota, now: number) {
