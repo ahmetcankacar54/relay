@@ -108,6 +108,43 @@ test("the new finds tell their story in both languages", () => {
   assert.equal(say({ kind: "teaglass", at: "2026-10-15T02:00:00Z", hours: 3 }).title, "Sabah çayı");
 });
 
+test("token and cost finds tell their money, and every moment the ledger can tell says what it used", () => {
+  assert.equal(
+    say({ kind: "chest", cost: 412.5, tokens: 2_100_000_000, times: 2.1 }).story,
+    "Haftanın API karşılığı $412,50: önceki haftaların hepsinden yüksek, sıradan bir haftanın 2,1 katı, 2,1 milyar token.",
+  );
+  assert.equal(
+    say({ kind: "piggy", accountId: "a", cost: 236.4, price: 200 }).story,
+    "Bir hesabın o haftaki API karşılığı $236,40 oldu; planının aylık ücreti $200,00. Abonelik bedelini tek haftada çıkardı.",
+  );
+  assert.deepEqual(say({ kind: "piggy", accountId: "a", cost: 236.4, price: 200 }).accounts, ["a"]);
+  assert.equal(
+    say({ kind: "fan", families: ["Opus", "Sonnet", "Haiku"] }, "en").story,
+    "That week you worked with 3 model families: Opus, Sonnet, Haiku.",
+  );
+  assert.equal(
+    say({ kind: "tightrope", at: "2026-10-14T11:00:00Z", accountId: "a", percent: 98 }).story,
+    "Bir 5 saatlik dönem limite takılmadan %98 doluluğa ulaştı.",
+  );
+  assert.equal(say({ kind: "lantern", hours: 9 }).story, "Cumartesi ve pazar toplam 9 saat çalıştın.");
+  assert.equal(
+    say({ kind: "hammock", date: "2026-10-14", activeDays: 5 }).when,
+    "14 Ekim Çarşamba",
+  );
+  assert.equal(
+    say({ kind: "scales", accountIds: ["a", "b"], low: 46, high: 54 }).story,
+    "Hafta boyunca 2 hesap işi neredeyse eşit paylaştı: her biri %46 ile %54 arasında.",
+  );
+  const scroll = say({ kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16, spend: { tokens: 12_400_000, cost: 38.2 } });
+  assert.match(scroll.spend!, /^12,4\sMn token · \$38,20 API karşılığı$/);
+  assert.match(
+    describe({ kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16, spend: { tokens: 12_400_000, cost: 38.2 } }, week, ZONE, t("en"), "en").spend!,
+    /^12\.4m tokens · \$38\.20 API value$/,
+  );
+  // A chest already tells its money, so it has no second line.
+  assert.equal(say({ kind: "chest", cost: 1, tokens: 1, times: 2, spend: { tokens: 1, cost: 1 } }).spend, undefined);
+});
+
 const hourglass = (minutes: number, at: string): LostItem => ({ kind: "hourglass", at, accountId: "a", minutes });
 const scroll: LostItem = { kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16 };
 const boomerang: LostItem = { kind: "boomerang", at: "2026-10-14T11:10:00Z", accountIds: ["a", "b"], minutes: 8 };
@@ -173,7 +210,7 @@ test("the page opens like a game's achievements: progress, recent finds, next go
   try {
     const { container, slot, tile, attr } = view;
     // Three of twelve found: one silver, two bronze.
-    assert.match(textOf(slot("lost-overview")!), /3\/12%25/);
+    assert.match(textOf(slot("lost-overview")!), /3\/19%16/);
     assert.match(textOf(slot("lost-overview")!), /0Altın1Gümüş2Bronz/);
     // The newest finds, most striking first within a week; the hourglass just reached silver.
     assert.match(
@@ -183,7 +220,7 @@ test("the page opens like a game's achievements: progress, recent finds, next go
     // The scroll and boomerang are two weeks from silver, the hourglass three from gold.
     assert.match(textOf(slot("lost-next")!), /Uzun parşömen.*Gümüş için 2 hafta daha.*Kum saati.*Altın için 3 hafta daha/);
     // Categories count what is found in them; locked pins say so, secret ones keep their name.
-    assert.match(textOf(slot("lost-library")!), /Tempo ve rekorlar2\/4.*Gün ve saat0\/3.*Hesaplar arasında1\/5/);
+    assert.match(textOf(slot("lost-library")!), /Tempo ve rekorlar2\/4.*Gün ve saat0\/5.*Hesaplar arasında1\/6.*Token ve maliyet0\/4/);
     assert.match(textOf(tile("compass")!), /PusulaKilitli/);
     assert.match(textOf(tile("clocks")!), /Gizli rozetKilitli/);
     assert.equal(attr(tile("boomerang")!, "data-found"), "true");
@@ -194,7 +231,14 @@ test("the page opens like a game's achievements: progress, recent finds, next go
     assert.match(textOf(details), /Nasıl kazanılırBir 5 saatlik dönem, başlamasından en geç 2,5 saat sonra dolsun\./);
     assert.match(textOf(details), /Bronz✓ 1 haftaGümüş✓ 3 haftaAltın6 hafta/);
     assert.match(textOf(details), /İlk bulunduğu hafta28 Eyl – 4 EkiSon bulunduğu hafta12–18 Eki/);
-    assert.match(textOf(details), /12–18 EkiBir 5 saatlik dönem, başlamasından yalnızca 1 sa 6 dk sonra doldu\.Çarşamba 09:56·Kişisel/);
+    // The fastest window is the record, and three weeks of twelve read as now and then.
+    assert.match(textOf(details), /Kişisel rekor1 sa 6 dk12–18 EkiSıklıkAra sıraSon 12 haftada 3 kez/);
+    assert.match(textOf(details), /12–18 EkiRekorBir 5 saatlik dönem, başlamasından yalnızca 1 sa 6 dk sonra doldu\.Çarşamba 09:56·Kişisel/);
+    // Milestones: the first pin is in, platinum is every pin.
+    assert.match(
+      textOf(slot("lost-milestones")!),
+      /Kilometre taşları1\/5✓İlk rozet \(tamam\)○Her kategoriden bir rozet \(henüz değil\).*Platin: tüm rozetler \(henüz değil\)/,
+    );
     assert.match(textOf(details), /5–11 Eki.*1 sa 30 dk.*28 Eyl – 4 Eki.*2 sa/);
     assert.doesNotMatch(textOf(container), /Önceki hafta|Rafa koy|Aynı haftadan/);
   } finally {
@@ -255,7 +299,7 @@ test("finds are kept with their story and the account names of the day, and outl
   resetCollectionForTests();
   const later = await page({ lostFoundCollection: async () => ({ ...ANSWER, found: {} }) }, stored, [a]);
   try {
-    assert.match(textOf(later.slot("lost-overview")!), /3\/12/);
+    assert.match(textOf(later.slot("lost-overview")!), /3\/19/);
     await later.click(find(later.tile("boomerang")!, (n) => n.tagName === "button"));
     assert.match(textOf(later.slot("lost-details")!), /Kişisel→Vertex→Kişisel/);
   } finally {
@@ -280,7 +324,7 @@ test("an earlier version's weeks and shelf carry over; what cannot be told keeps
     assert.match(textOf(tile("feather")!), /Gece kuşu tüyüBronz · 2 hafta/);
     await click(find(tile("feather")!, (n) => n.tagName === "button"));
     const details = textOf(slot("lost-details")!);
-    assert.match(details, /20–26 TemO hafta gece yarısından sonra toplam 3 saat çalıştın\./);
+    assert.match(details, /20–26 TemRekorO hafta gece yarısından sonra toplam 3 saat çalıştın\./);
     assert.match(details, /13–19 TemBu hafta bulundu; ayrıntısı eski bir sürümden kaldığı için yalnızca haftası biliniyor\./);
     // A failed answer leaves the kept finds on show and says the scan is over.
     assert.doesNotMatch(textOf(view.container), /haftaları tarıyor/);
@@ -292,7 +336,7 @@ test("an earlier version's weeks and shelf carry over; what cannot be told keeps
 test("with nothing found yet the panda says when the first pin will turn up", async () => {
   const view = await page({ lostFoundCollection: async () => ({ ...ANSWER, found: {} }) });
   try {
-    assert.match(textOf(view.slot("lost-overview")!), /0\/12%0/);
+    assert.match(textOf(view.slot("lost-overview")!), /0\/19%0/);
     assert.match(textOf(view.slot("lost-recent")!), /Henüz rozet yok\./);
     assert.equal(view.slot("lost-next"), undefined);
   } finally {

@@ -3,9 +3,10 @@
 // found in the usage rollups, the active-account timeline and the token ledger; nothing here is a
 // constant dressed up as a joke.
 import { desktopAccountFor } from "./desktop-account";
-import { localDate, localHour, wallTime } from "./planning";
+import { PLAN_PRICES } from "./plan-prices";
+import { localDate, localHour, localSlot, wallTime } from "./planning";
 import type { Account } from "./types";
-import type { UsageRollups } from "./usage-rollups";
+import { sameReset, type UsageRollups } from "./usage-rollups";
 import { identityOwners, historyIdentity } from "./usage-statistics";
 
 const MINUTE_MS = 60_000;
@@ -37,6 +38,22 @@ export const BATON_EARLY_MS = 2 * MINUTE_MS;
 export const COMPASS_MIN_HOURS = 20;
 /** Morning hours run from the end of the night to this local hour. */
 export const MORNING_END_HOUR = 8;
+/** A window that came this full without a limit hit walked the tightrope. */
+export const TIGHTROPE_MIN_PERCENT = 95;
+/** A weekend watch is at least this many active hours over Saturday and Sunday. */
+export const LANTERN_MIN_HOURS = 6;
+/** A rest day counts in a week with at least this many active days. */
+export const HAMMOCK_MIN_DAYS = 4;
+/** The scales weigh a week of at least this many active hours… */
+export const SCALES_MIN_HOURS = 10;
+/** …whose accounts' shares are at most this many points apart. */
+export const SCALES_MAX_SPREAD = 15;
+/** A treasure week is compared with at least this many earlier weeks of API value… */
+export const CHEST_MIN_WEEKS = 4;
+/** …and is at least this many times an ordinary one. */
+export const CHEST_MIN_TIMES = 1.2;
+/** A model family joins the fan with at least this share of the week's tokens. */
+export const FAN_MIN_SHARE = 0.01;
 /** How many weeks back the bureau can look: the rollups keep 90 days. */
 export const LOST_FOUND_WEEKS = 12;
 
@@ -44,14 +61,21 @@ export const LOST_FOUND_WEEKS = 12;
 export const LOST_ITEM_KINDS = [
   "hourglass",
   "baton",
+  "piggy",
+  "chest",
   "boomerang",
   "trophy",
+  "tightrope",
   "scroll",
   "tally",
   "compass",
+  "scales",
   "scarf",
+  "fan",
   "clocks",
   "spare",
+  "lantern",
+  "hammock",
   "feather",
   "teaglass",
 ] as const;
@@ -61,6 +85,7 @@ export type LostItemKind = (typeof LOST_ITEM_KINDS)[number];
 export const SECRET_LOST_KINDS: readonly LostItemKind[] = [
   "boomerang",
   "clocks",
+  "tightrope",
 ];
 
 /** A pin's finish: how many weeks it was found in. */
@@ -83,7 +108,16 @@ export function nextTier(weeks: number) {
   return LOST_TIERS.find((step) => weeks < step.weeks);
 }
 
-export type LostItem =
+/** What a moment used: tokens and their API value in USD, from the token ledger. */
+export interface LostSpend {
+  tokens: number;
+  cost: number;
+}
+
+/** A find, with what it used when the token ledger can tell. */
+export type LostItem = LostMoment & { spend?: LostSpend };
+
+export type LostMoment =
   /** A five-hour window ran out `minutes` after it began; `at` is when it ran out. */
   | { kind: "hourglass"; at: string; accountId?: string; minutes: number }
   /** Left `accountIds[0]` for `accountIds[1]` at `at` and came back `minutes` later. */
@@ -127,7 +161,21 @@ export type LostItem =
   /** `hours` active hours after midnight; the latest began at `at`. */
   | { kind: "feather"; at: string; hours: number }
   /** `hours` active hours early in the morning; the earliest began at `at`. */
-  | { kind: "teaglass"; at: string; hours: number };
+  | { kind: "teaglass"; at: string; hours: number }
+  /** A five-hour window that reset at `at` came `percent` full without a limit hit. */
+  | { kind: "tightrope"; at: string; accountId?: string; percent: number }
+  /** `hours` active hours over Saturday and Sunday. */
+  | { kind: "lantern"; hours: number }
+  /** Nothing was done on `date`, between active days, in a week of `activeDays`. */
+  | { kind: "hammock"; date: string; activeDays: number }
+  /** `accountIds` (busiest first) shared the week's work, from `low` to `high` percent each. */
+  | { kind: "scales"; accountIds: string[]; low: number; high: number }
+  /** The week's API value was the highest of the weeks before it, `times` an ordinary one. */
+  | { kind: "chest"; cost: number; tokens: number; times: number }
+  /** `accountId`'s API value that week, `cost`, paid for its plan's month, `price`. */
+  | { kind: "piggy"; accountId: string; cost: number; price: number }
+  /** Model families used that week, largest first. */
+  | { kind: "fan"; families: string[] };
 
 export interface LostFoundWeek {
   /** The Monday the week starts, in the planning zone. */
@@ -151,22 +199,37 @@ export interface LostFoundInput {
     from: string;
     to?: string;
   }[];
-  /** Token ledger days: date → who → model → counts. */
-  ledgerDays: Record<
-    string,
-    Record<
-      string,
-      Record<
-        string,
-        { input: number; output: number; cacheWrite: number; cacheRead: number }
-      >
-    >
-  >;
+  /** Token ledger days: date → who → model → counts and their API value. */
+  ledgerDays: Record<string, Record<string, Record<string, LedgerCounts>>>;
+  /** Token ledger quarter hours of the last days: date → who → quarter (0–95) → counts. */
+  ledgerSlots?: Record<string, Record<string, Record<string, LedgerCounts>>>;
+  /** When the ledger began to keep quarter hours; earlier responses of those days have none. */
+  slotsSince?: number;
   accounts: Account[];
   zone: string;
   now: number;
   /** A Monday; the newest complete week when missing or out of reach. */
   weekStart?: string;
+}
+
+interface LedgerCounts {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+  cost?: number;
+}
+
+const tokensIn = (c: LedgerCounts) =>
+  c.input + c.output + c.cacheWrite + c.cacheRead;
+
+/** The account a ledger `who` belongs to: `acct:<id>` or `est:<id>`. */
+const ledgerAccount = (who: string) => /^(acct|est):(.+)$/.exec(who)?.[2];
+
+/** A model id's family, as people name it: "Opus", "Sonnet", "Haiku", "Fable". */
+export function modelFamily(model: string): string | undefined {
+  const match = /(opus|sonnet|haiku|fable)/i.exec(model)?.[1];
+  return match && match[0].toUpperCase() + match.slice(1).toLowerCase();
 }
 
 /** `date` plus `days` calendar days. */
@@ -208,9 +271,35 @@ export function validLostItem(value: unknown): value is LostItem {
   const ids = (key: string) =>
     Array.isArray(item[key]) &&
     (item[key] as unknown[]).every((id) => typeof id === "string");
+  const spend = item.spend as Record<string, unknown> | undefined;
+  if (
+    spend !== undefined &&
+    !(
+      typeof spend === "object" &&
+      Number.isFinite(spend?.tokens) &&
+      Number.isFinite(spend?.cost)
+    )
+  )
+    return false;
   switch (item.kind as LostItemKind) {
     case "hourglass":
       return time("at") && count("minutes");
+    case "tightrope":
+      return time("at") && count("percent");
+    case "lantern":
+      return count("hours");
+    case "hammock":
+      return date("date") && count("activeDays");
+    case "scales":
+      return ids("accountIds") && count("low") && count("high");
+    case "chest":
+      return count("cost") && count("tokens") && count("times");
+    case "piggy":
+      return (
+        typeof item.accountId === "string" && count("cost") && count("price")
+      );
+    case "fan":
+      return ids("families");
     case "boomerang":
       return time("at") && ids("accountIds") && count("minutes");
     case "baton":
@@ -528,9 +617,251 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
     });
   }
 
+  // What the token ledger says each moment used. Days are kept whole; quarter hours only for the last days,
+  // so a moment within hours is told only when every one of its quarters was kept.
+  const daySpend = (date: string): LostSpend => {
+    let tokens = 0;
+    let cost = 0;
+    for (const byModel of Object.values(input.ledgerDays[date] ?? {}))
+      for (const counts of Object.values(byModel)) {
+        tokens += tokensIn(counts);
+        cost += counts.cost ?? 0;
+      }
+    return { tokens, cost };
+  };
+  const sumSpend = (list: LostSpend[]) =>
+    list.reduce(
+      (sum, spend) => ({
+        tokens: sum.tokens + spend.tokens,
+        cost: sum.cost + spend.cost,
+      }),
+      { tokens: 0, cost: 0 },
+    );
+  const weekSpend = (monday: string) =>
+    sumSpend(Array.from({ length: 7 }, (_, i) => daySpend(addDays(monday, i))));
+  const quarterSpend = (quarters: number[]): LostSpend | undefined => {
+    const slots = input.ledgerSlots;
+    const since = input.slotsSince;
+    if (!slots || since === undefined || !quarters.length) return undefined;
+    const seen = new Set<string>();
+    let tokens = 0;
+    let cost = 0;
+    for (const time of quarters) {
+      if (time < since) return undefined;
+      const date = localDate(time, zone);
+      const byWho = slots[date];
+      // A day without kept quarters is only known when it used nothing at all.
+      if (!byWho) {
+        if (daySpend(date).tokens > 0) return undefined;
+        continue;
+      }
+      const slot = String(localSlot(time, zone));
+      if (seen.has(`${date}|${slot}`)) continue;
+      seen.add(`${date}|${slot}`);
+      for (const bySlot of Object.values(byWho)) {
+        const counts = bySlot[slot];
+        if (!counts) continue;
+        tokens += tokensIn(counts);
+        cost += counts.cost ?? 0;
+      }
+    }
+    return { tokens, cost };
+  };
+  const QUARTER_MS = 15 * MINUTE_MS;
+  const hourQuarters = (starts: number[]) =>
+    starts.flatMap((hour) => [0, 1, 2, 3].map((q) => hour + q * QUARTER_MS));
+  const spanQuarters = (fromTime: number, toTime: number) => {
+    const quarters: number[] = [];
+    for (
+      let time = Math.floor(fromTime / QUARTER_MS) * QUARTER_MS;
+      time < toTime;
+      time += QUARTER_MS
+    )
+      quarters.push(time);
+    return quarters;
+  };
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  // Tightrope: the fullest five-hour window that never hit its limit.
+  let tightrope: Extract<LostItem, { kind: "tightrope" }> | undefined;
+  for (const [identity, windows] of Object.entries(rollups?.windows ?? {}))
+    for (const window of windows) {
+      const reset = Date.parse(window.resetAt);
+      if (
+        !within(reset) ||
+        !(window.maxPercent >= TIGHTROPE_MIN_PERCENT) ||
+        window.maxPercent >= 100
+      )
+        continue;
+      const hit = (rollups?.hits ?? []).some(
+        (h) =>
+          h.identity === identity &&
+          h.kind === "five-hour" &&
+          h.resetAt !== undefined &&
+          sameReset(h.resetAt, window.resetAt),
+      );
+      const percent = Math.floor(window.maxPercent);
+      if (hit || (tightrope && percent <= tightrope.percent)) continue;
+      const accountId = owner.get(identity);
+      tightrope = {
+        kind: "tightrope",
+        at: isoAt(reset),
+        ...(accountId ? { accountId } : {}),
+        percent,
+      };
+    }
+  if (tightrope) found.push(tightrope);
+
+  // Lantern: active on both days of the weekend, for some hours.
+  const weekend = activeHours.filter((time) => {
+    const date = localDate(middle(time), zone);
+    return date === weekDays[5] || date === weekDays[6];
+  });
+  const weekendDays = new Set(
+    weekend.map((time) => localDate(middle(time), zone)),
+  );
+  if (weekendDays.size === 2 && weekend.length >= LANTERN_MIN_HOURS)
+    found.push({ kind: "lantern", hours: weekend.length });
+
+  // Hammock: a working day off between two active days, in a busy week.
+  const active = weekDays.map((date) => byDay.has(date));
+  const activeDays = active.filter(Boolean).length;
+  if (activeDays >= HAMMOCK_MIN_DAYS) {
+    const rest = [1, 2, 3, 4].find(
+      (i) => !active[i] && active[i - 1] && active[i + 1],
+    );
+    if (rest !== undefined)
+      found.push({ kind: "hammock", date: weekDays[rest], activeDays });
+  }
+
+  // Scales: two or more accounts carried nearly equal shares of the week.
+  const shares = new Map<string, number>();
+  for (const row of hours.values())
+    for (const [who, points] of row)
+      if (known(who)) shares.set(who, (shares.get(who) ?? 0) + points);
+  const shareTotal = [...shares.values()].reduce((a, b) => a + b, 0);
+  if (
+    shares.size >= 2 &&
+    activeHours.length >= SCALES_MIN_HOURS &&
+    shareTotal > 0
+  ) {
+    const percents = [...shares]
+      .map(([who, points]) => ({ who, percent: (points / shareTotal) * 100 }))
+      .sort((a, b) => b.percent - a.percent);
+    const high = Math.round(percents[0].percent);
+    const low = Math.round(percents[percents.length - 1].percent);
+    if (high - low <= SCALES_MAX_SPREAD)
+      found.push({
+        kind: "scales",
+        accountIds: percents.map((p) => p.who),
+        low,
+        high,
+      });
+  }
+
+  // Chest: the week's API value beat every earlier week in reach, clearly ahead of an ordinary one.
+  const thisWeek = weekSpend(start);
+  if (thisWeek.cost > 0) {
+    const earlier = Array.from(
+      { length: LOST_FOUND_WEEKS - 1 },
+      (_, i) => weekSpend(addDays(start, -7 * (i + 1))).cost,
+    ).filter((cost) => cost > 0);
+    const sorted = [...earlier].sort((a, b) => a - b);
+    const ordinary = sorted[Math.floor(sorted.length / 2)];
+    const times = ordinary > 0 ? thisWeek.cost / ordinary : 0;
+    if (
+      earlier.length >= CHEST_MIN_WEEKS &&
+      thisWeek.cost > Math.max(...earlier) &&
+      times >= CHEST_MIN_TIMES
+    )
+      found.push({
+        kind: "chest",
+        cost: round2(thisWeek.cost),
+        tokens: thisWeek.tokens,
+        times: Math.round(times * 10) / 10,
+      });
+  }
+
+  // Piggy bank: an account's API value that week paid for its plan's month; the best paid back is shown.
+  const accountCost = new Map<string, number>();
+  for (const date of weekDays)
+    for (const [who, byModel] of Object.entries(input.ledgerDays[date] ?? {})) {
+      const id = ledgerAccount(who);
+      if (!id) continue;
+      for (const counts of Object.values(byModel))
+        accountCost.set(id, (accountCost.get(id) ?? 0) + (counts.cost ?? 0));
+    }
+  let piggy: Extract<LostItem, { kind: "piggy" }> | undefined;
+  for (const [id, cost] of accountCost) {
+    const plan = accounts.find((a) => a.id === id)?.planning?.plan;
+    const price = plan ? PLAN_PRICES[plan] : undefined;
+    if (!price || cost < price) continue;
+    if (piggy && cost / price <= piggy.cost / piggy.price) continue;
+    piggy = { kind: "piggy", accountId: id, cost: round2(cost), price };
+  }
+  if (piggy) found.push(piggy);
+
+  // Fan: three or more model families each did a real share of the week's tokens.
+  const families = new Map<string, number>();
+  let weekTokens = 0;
+  for (const date of weekDays)
+    for (const byModel of Object.values(input.ledgerDays[date] ?? {}))
+      for (const [model, counts] of Object.entries(byModel)) {
+        const tokens = tokensIn(counts);
+        weekTokens += tokens;
+        const family = modelFamily(model);
+        if (family) families.set(family, (families.get(family) ?? 0) + tokens);
+      }
+  const fan = [...families]
+    .filter(
+      ([, tokens]) => weekTokens > 0 && tokens / weekTokens >= FAN_MIN_SHARE,
+    )
+    .sort((a, b) => b[1] - a[1])
+    .map(([family]) => family);
+  if (fan.length >= 3) found.push({ kind: "fan", families: fan });
+
+  const spendOf = (item: LostItem): LostSpend | undefined => {
+    switch (item.kind) {
+      case "hourglass": {
+        const at = Date.parse(item.at);
+        return quarterSpend(spanQuarters(at - item.minutes * MINUTE_MS, at));
+      }
+      case "scroll":
+        return quarterSpend(
+          hourQuarters(
+            Array.from(
+              { length: item.hours },
+              (_, i) => Date.parse(item.at) + i * HOUR_MS,
+            ),
+          ),
+        );
+      case "feather":
+        return quarterSpend(hourQuarters(night));
+      case "teaglass":
+        return quarterSpend(hourQuarters(morning));
+      case "lantern":
+        return sumSpend([daySpend(weekDays[5]), daySpend(weekDays[6])]);
+      case "trophy":
+      case "scarf":
+        return daySpend(item.date);
+      case "tally":
+      case "compass":
+      case "scales":
+        return thisWeek;
+      default:
+        return undefined;
+    }
+  };
+  const items = found.map((item): LostItem => {
+    const spend = spendOf(item);
+    return spend && spend.tokens > 0
+      ? { ...item, spend: { tokens: spend.tokens, cost: round2(spend.cost) } }
+      : item;
+  });
+
   const rank = (kind: LostItemKind) => LOST_ITEM_KINDS.indexOf(kind);
-  found.sort((a, b) => rank(a.kind) - rank(b.kind));
-  return { start, end, latest, oldest, items: found };
+  items.sort((a, b) => rank(a.kind) - rank(b.kind));
+  return { start, end, latest, oldest, items };
 }
 
 /** One find: the week it was found in and what happened. */

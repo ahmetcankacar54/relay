@@ -69,6 +69,26 @@ export const PIN = {
   twine: "#7a5a36",
   sealField: "#dcd3c6",
   sealInk: "#9a8f80",
+  plum: "#6b3d6e",
+  plumDeep: "#542f57",
+  gaugeGreen: "#7fb069",
+  gaugeYellow: "#f0b43c",
+  gaugeRed: "#d9482f",
+  dusk: "#e08a5e",
+  duskDeep: "#5b4a7a",
+  duskGround: "#463a61",
+  lanternRed: "#d8402f",
+  hammockSky: "#a9d8e6",
+  scalesField: "#ece5cc",
+  treasure: "#3b2a4d",
+  treasureRay: "#4b3762",
+  piggy: "#f3cfc4",
+  piggyDeep: "#e8b3a5",
+  mint: "#bfd6c3",
+  mintDeep: "#a7c4ad",
+  foldOpus: "#e96b28",
+  foldSonnet: "#2c8a80",
+  foldHaiku: "#f0b43c",
 } as const;
 
 /** Rim metal per finish: face, inner edge and highlight. */
@@ -80,6 +100,9 @@ export const METALS: Record<
   silver: { face: "#c4ccd5", edge: "#6f7a87", light: "#f1f4f7" },
   gold: { face: "#e8b641", edge: "#93650f", light: "#fde48c" },
 };
+
+/** The collection's last milestone: every pin found. */
+export const PLATINUM = { face: "#d4e4ef", edge: "#55748f", light: "#f6fbff" };
 
 /** The ribbon tails under silver and gold pins: face and fold. */
 export const RIBBONS: Record<"silver" | "gold", [string, string]> = {
@@ -101,6 +124,13 @@ export const FIELDS: Record<LostItemKind, string> = {
   spare: PIN.road,
   feather: PIN.midnight,
   teaglass: PIN.dawn,
+  tightrope: PIN.plum,
+  lantern: PIN.dusk,
+  hammock: PIN.hammockSky,
+  scales: PIN.scalesField,
+  chest: PIN.treasure,
+  piggy: PIN.piggy,
+  fan: PIN.mint,
 };
 
 /** Account colours when the pin has none to show (a removed account, a locked pin). */

@@ -38,6 +38,13 @@ const SHAPES: Record<LostItemKind, Shape> = {
   spare: "hexagon",
   feather: "shield",
   teaglass: "stamp",
+  tightrope: "circle",
+  lantern: "stamp",
+  hammock: "hexagon",
+  scales: "shield",
+  chest: "circle",
+  piggy: "hexagon",
+  fan: "stamp",
 };
 
 /** The frames' centre; the space under it holds the ribbon tails. */
@@ -946,6 +953,375 @@ const SCENES: Record<LostItemKind, (context: SceneContext) => Scene> = {
           opacity="0.9"
         />
       </>
+    ),
+  }),
+  // High above, the panda walks the rope with a bamboo pole; the gauge in the corner sits in the red.
+  tightrope: () => ({
+    back: (
+      <>
+        <g fill={PIN.plumDeep}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <rect key={i} x={i * 18 - 4} y="0" width="9" height="100" />
+          ))}
+        </g>
+        <g fill={PIN.brassLight}>
+          <path d={sparkle(22, 30, 2.2)} />
+          <path d={sparkle(30, 72, 1.6)} />
+          <path d={sparkle(78, 66, 1.8)} />
+        </g>
+        <g fill="none" strokeWidth="3.4" strokeLinecap="round">
+          <path d="M53 77A7 7 0 0 1 56.5 70.9" stroke={PIN.gaugeGreen} />
+          <path d="M56.5 70.9A7 7 0 0 1 63.5 70.9" stroke={PIN.gaugeYellow} />
+          <path d="M63.5 70.9A7 7 0 0 1 67 77" stroke={PIN.gaugeRed} />
+        </g>
+        <path
+          d="M60 77L66 76.6"
+          stroke={PIN.cream}
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+        <circle cx="60" cy="77" r="1.5" fill={PIN.cream} />
+        <path
+          d="M6 61Q50 66 94 61"
+          fill="none"
+          stroke={PIN.creamShade}
+          strokeWidth="1.6"
+        />
+        <RigPanda pose="stand" expression="happy" x={31.5} y={22.5} size={40} />
+        <g transform="rotate(-6 50 46)">
+          <rect
+            x="18"
+            y="44.6"
+            width="64"
+            height="2.6"
+            rx="1.3"
+            fill={PIN.bamboo}
+          />
+          <rect x="35" y="44.4" width="1.4" height="3" fill={PIN.bambooDark} />
+          <rect
+            x="63.6"
+            y="44.4"
+            width="1.4"
+            height="3"
+            fill={PIN.bambooDark}
+          />
+          <circle cx="18" cy="45.9" r="2.6" fill={PIN.orange} />
+          <circle cx="82" cy="45.9" r="2.6" fill={PIN.orange} />
+        </g>
+      </>
+    ),
+  }),
+  // At dusk the panda keeps watch over the weekend, a paper lantern glowing on a bamboo pole beside it.
+  lantern: () => ({
+    back: (
+      <>
+        <ellipse cx="50" cy="96" rx="62" ry="34" fill={PIN.duskDeep} />
+        <ellipse cx="50" cy="104" rx="60" ry="26" fill={PIN.duskGround} />
+        <circle cx="30" cy="30" r="6" fill={PIN.sun} opacity="0.8" />
+        <g fill={PIN.sun}>
+          <path d={sparkle(52, 20, 1.8)} />
+          <path d={sparkle(80, 34, 1.4)} />
+        </g>
+        <RigPanda pose="sit" expression="happy" x={14} y={22} size={54} />
+        <rect
+          x="79"
+          y="26"
+          width="2.4"
+          height="64"
+          rx="1"
+          fill={PIN.bambooShade}
+        />
+        <path
+          d="M80 28H70V33"
+          fill="none"
+          stroke={PIN.bambooShade}
+          strokeWidth="2"
+        />
+        <circle cx="70" cy="44" r="13" fill={PIN.brassLight} opacity="0.3" />
+        <rect x="66.5" y="33" width="7" height="2.4" rx="0.8" fill={PIN.wood} />
+        <ellipse cx="70" cy="44" rx="7" ry="8.6" fill={PIN.lanternRed} />
+        <g fill="none" stroke={PIN.russetDark} strokeWidth="0.8">
+          <path d="M66 37.5Q63.5 44 66 50.5" />
+          <path d="M74 37.5Q76.5 44 74 50.5" />
+          <path d="M70 35.6V52.4" />
+        </g>
+        <ellipse
+          cx="68"
+          cy="41"
+          rx="2"
+          ry="3.4"
+          fill={PIN.brassLight}
+          opacity="0.55"
+        />
+        <rect x="66.5" y="52" width="7" height="2.4" rx="0.8" fill={PIN.wood} />
+        <path d="M70 54.4V59" stroke={PIN.brass} strokeWidth="1.2" />
+      </>
+    ),
+  }),
+  // The panda sleeps curled up in a striped hammock strung between two bamboo stalks.
+  hammock: () => ({
+    back: (
+      <>
+        <circle cx="30" cy="26" r="7" fill={PIN.sun} />
+        <g fill={PIN.white} opacity="0.8">
+          <ellipse cx="66" cy="22" rx="8" ry="3" />
+          <ellipse cx="72" cy="19.5" rx="5" ry="2.6" />
+        </g>
+        <ellipse cx="50" cy="100" rx="60" ry="22" fill={PIN.bambooPale} />
+        {[19, 81].map((x) => (
+          <g key={x}>
+            <rect
+              x={x - 2.4}
+              y="18"
+              width="4.8"
+              height="82"
+              rx="1.6"
+              fill={PIN.bamboo}
+            />
+            {[34, 56, 78].map((y) => (
+              <rect
+                key={y}
+                x={x - 2.8}
+                y={y}
+                width="5.6"
+                height="1.4"
+                rx="0.7"
+                fill={PIN.bambooDark}
+              />
+            ))}
+          </g>
+        ))}
+        <Leaf x={21} y={22} angle={-40} s={0.8} />
+        <Leaf x={79} y={22} angle={-140} s={0.8} />
+        <g stroke={PIN.woodLight} strokeWidth="0.9">
+          <path d="M21 44L26 50" />
+          <path d="M79 44L74 50" />
+        </g>
+        <path
+          d="M24 48Q50 76 76 48"
+          fill="none"
+          stroke={PIN.creamShade}
+          strokeWidth="1.2"
+        />
+        <RigPanda
+          pose="curl"
+          expression="closed"
+          props={["z"]}
+          x={30.2}
+          y={24.4}
+          size={40}
+        />
+        <path d="M24 49Q50 72 76 49Q50 84 24 49Z" fill={PIN.cream} />
+        <g fill="none" stroke={PIN.orange} strokeWidth="1.4">
+          <path d="M28 53.5Q50 74.5 72 53.5" />
+          <path d="M32 58Q50 76 68 58" />
+        </g>
+      </>
+    ),
+  }),
+  // Under a scale held level, its pans in the accounts' colours, the panda peeks over the base.
+  scales: ({ tints }) => ({
+    back: (
+      <>
+        <rect x="48.6" y="22" width="2.8" height="54" fill={PIN.woodDark} />
+        <rect x="19" y="21" width="62" height="3" rx="1.5" fill={PIN.wood} />
+        <circle cx="50" cy="22.5" r="3.2" fill={PIN.brass} />
+        <g stroke={PIN.woodLight} strokeWidth="0.8">
+          <path d="M22 23L15 44M22 23L29 44" />
+          <path d="M78 23L71 44M78 23L85 44" />
+        </g>
+        <path d="M13 44H31Q29 51 22 51Q15 51 13 44Z" fill={tints[0]} />
+        <path d="M69 44H87Q85 51 78 51Q71 51 69 44Z" fill={tints[1]} />
+        <g fill={PIN.brass}>
+          <ellipse cx="20" cy="43" rx="3.4" ry="1.4" />
+          <ellipse cx="24" cy="42" rx="3.4" ry="1.4" />
+          <ellipse cx="76" cy="43" rx="3.4" ry="1.4" />
+          <ellipse cx="80" cy="42" rx="3.4" ry="1.4" />
+        </g>
+        <rect x="29" y="74" width="42" height="9" rx="2" fill={PIN.wood} />
+        <rect
+          x="29"
+          y="74"
+          width="42"
+          height="2.2"
+          rx="1"
+          fill={PIN.woodLight}
+        />
+        <RigPanda pose="peek" expression="happy" x={30} y={42.8} size={40} />
+      </>
+    ),
+  }),
+  // The panda pops up from a treasure chest overflowing with coins; one rolls out of the frame.
+  chest: () => ({
+    back: (
+      <>
+        <g fill={PIN.treasureRay}>
+          {Array.from({ length: 10 }, (_, i) => {
+            const a = (Math.PI / 5) * i;
+            const b = a + Math.PI / 12;
+            return (
+              <polygon
+                key={i}
+                points={`50,52 ${round1(50 + 60 * Math.cos(a))},${round1(52 + 60 * Math.sin(a))} ${round1(50 + 60 * Math.cos(b))},${round1(52 + 60 * Math.sin(b))}`}
+              />
+            );
+          })}
+        </g>
+        <path d="M27 54L31 36H69L73 54Z" fill={PIN.woodDark} />
+        <rect x="31" y="36" width="38" height="2.4" fill={PIN.brass} />
+        <RigPanda pose="head" expression="happy" x={28} y={13} size={44} />
+        <g fill={PIN.brass} stroke={PIN.brassShade} strokeWidth="0.8">
+          {(
+            [
+              [33, 53],
+              [40, 51],
+              [47, 52.5],
+              [54, 51],
+              [61, 52],
+              [67, 53.5],
+              [37, 48.5],
+              [58, 48],
+            ] as const
+          ).map(([cx, cy]) => (
+            <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="3.6" />
+          ))}
+        </g>
+        <rect x="26" y="54" width="48" height="26" rx="3" fill={PIN.wood} />
+        <rect x="26" y="54" width="48" height="4" rx="2" fill={PIN.woodLight} />
+        <rect x="33" y="54" width="3.4" height="26" fill={PIN.brass} />
+        <rect x="63.6" y="54" width="3.4" height="26" fill={PIN.brass} />
+        <rect
+          x="45.5"
+          y="61"
+          width="9"
+          height="9"
+          rx="1.6"
+          fill={PIN.brassLight}
+        />
+        <circle cx="50" cy="65" r="1.4" fill={PIN.woodDark} />
+        <g fill={PIN.brassLight}>
+          <path d={sparkle(24, 30, 2.4)} />
+          <path d={sparkle(78, 26, 2)} />
+        </g>
+      </>
+    ),
+    front: (
+      <g fill={PIN.brass} stroke={PIN.brassShade} strokeWidth="0.8">
+        <circle cx="74" cy="84" r="3.6" />
+        <circle cx="81" cy="80" r="3" />
+      </g>
+    ),
+  }),
+  // The panda hugs a jar of coins labelled in the account's colour; one more coin drops into the slot.
+  piggy: ({ tints }) => ({
+    back: (
+      <>
+        <g fill={PIN.piggyDeep}>
+          <circle cx="22" cy="30" r="5" />
+          <circle cx="80" cy="64" r="6" />
+          <circle cx="24" cy="72" r="3.5" />
+        </g>
+      </>
+    ),
+    front: (
+      <>
+        <RigPanda pose="sit" expression="happy" x={20} y={4} size={60} />
+        <rect
+          x="33"
+          y="44"
+          width="34"
+          height="36"
+          rx="8"
+          fill={PIN.white}
+          opacity="0.6"
+        />
+        <g fill={PIN.brass} stroke={PIN.brassShade} strokeWidth="0.7">
+          {(
+            [
+              [40, 74],
+              [47, 75],
+              [54, 74],
+              [61, 75],
+              [43, 69],
+              [50, 70],
+              [58, 69],
+              [46, 64],
+              [54, 64.5],
+            ] as const
+          ).map(([cx, cy]) => (
+            <ellipse key={`${cx}-${cy}`} cx={cx} cy={cy} rx="4" ry="2" />
+          ))}
+        </g>
+        <rect x="33" y="52" width="34" height="7" fill={tints[0]} />
+        <rect x="35" y="40" width="30" height="5.5" rx="1.6" fill={PIN.wood} />
+        <rect
+          x="45"
+          y="41.6"
+          width="10"
+          height="1.6"
+          rx="0.8"
+          fill={PIN.woodDark}
+        />
+        <rect
+          x="37"
+          y="46"
+          width="2.6"
+          height="24"
+          rx="1.3"
+          fill={PIN.white}
+          opacity="0.5"
+        />
+        <circle
+          cx="61"
+          cy="33"
+          r="3.6"
+          fill={PIN.brass}
+          stroke={PIN.brassShade}
+          strokeWidth="0.7"
+        />
+        <g stroke={PIN.white} strokeWidth="1.2" strokeLinecap="round">
+          <path d="M56 28L58 30" />
+          <path d="M66 28L64 30" />
+        </g>
+      </>
+    ),
+  }),
+  // The panda peeks over a folding fan whose folds are the model families it worked with.
+  fan: () => ({
+    back: (
+      <>
+        <g fill={PIN.mintDeep}>
+          <circle cx="22" cy="30" r="4" />
+          <circle cx="80" cy="28" r="3" />
+        </g>
+        <RigPanda pose="head" expression="happy" x={23} y={6} size={54} />
+        {Array.from({ length: 6 }, (_, i) => {
+          const from = Math.PI + (Math.PI / 6) * i;
+          const to = from + Math.PI / 6;
+          const r = 32;
+          const point = (a: number) =>
+            `${round1(50 + r * Math.cos(a))} ${round1(82 + r * Math.sin(a))}`;
+          const fills = [PIN.foldOpus, PIN.foldSonnet, PIN.foldHaiku];
+          return (
+            <path
+              key={i}
+              d={`M50 82L${point(from)}A${r} ${r} 0 0 1 ${point(to)}Z`}
+              fill={fills[i % 3]}
+              stroke={PIN.cream}
+              strokeWidth="0.8"
+            />
+          );
+        })}
+        <circle cx="50" cy="82" r="3.2" fill={PIN.wood} />
+      </>
+    ),
+    front: (
+      <path
+        d="M50 85V93"
+        stroke={PIN.orange}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
     ),
   }),
 };

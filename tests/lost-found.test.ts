@@ -4,6 +4,7 @@ import {
   LOST_ITEM_KINDS,
   lostFoundCollection,
   lostFoundWeek,
+  modelFamily,
   mondayOf,
   addDays,
   nextTier,
@@ -149,6 +150,8 @@ test("trophy: the week's busiest token day, when it is also the busiest of the l
     date: "2026-10-14",
     tokens: 430,
     times: 4.3,
+    // The day's tokens and their API value, here unpriced.
+    spend: { tokens: 430, cost: 0 },
   });
   // A busier day within the 30 days takes the record away.
   ledgerDays["2026-09-20"] = day(500);
@@ -398,4 +401,134 @@ test("a pin's finish: bronze on the first week, silver on the third, gold on the
   assert.equal(tierOf(40), "gold");
   assert.deepEqual(nextTier(1), { tier: "silver", weeks: 3 });
   assert.equal(nextTier(6), undefined);
+});
+
+const ledgerDay = (who: string, model: string, tokens: number, cost: number) => ({
+  [who]: { [model]: { input: tokens, output: 0, cacheWrite: 0, cacheRead: 0, cost } },
+});
+
+test("tightrope: the fullest five-hour window that never hit its limit, 95 % or more", () => {
+  const window = (time: number, maxPercent: number) => ({ resetAt: iso(time), maxPercent });
+  const week = lostFoundWeek(input({
+    rollups: rollups({
+      windows: {
+        [identity(1)]: [window(oct(14, 12), 97.4), window(oct(15, 12), 99.2), window(oct(16, 12), 100)],
+        [identity(2)]: [window(oct(13, 12), 94)],
+      },
+      // The 99 % window did hit its limit, a poll before the reset.
+      hits: [{ identity: identity(1), kind: "five-hour", at: iso(oct(15, 11)), resetAt: iso(oct(15, 12, 1)) }],
+    }),
+  }));
+  assert.deepEqual(itemOf(week, "tightrope"), { kind: "tightrope", at: iso(oct(14, 12)), accountId: "a", percent: 97 });
+});
+
+test("lantern: both weekend days active, six hours or more over them", () => {
+  // Saturday 17 and Sunday 18 October, from noon in Istanbul.
+  const hours = (n: number) => [...[0, 1, 2].map((i) => oct(17, 9 + i)), ...Array.from({ length: n - 3 }, (_, i) => oct(18, 9 + i))];
+  assert.deepEqual(itemOf(lostFoundWeek(input({ rollups: rollups({ hours: active(1, ...hours(6)) }) })), "lantern"), {
+    kind: "lantern",
+    hours: 6,
+  });
+  assert.equal(itemOf(lostFoundWeek(input({ rollups: rollups({ hours: active(1, ...hours(5)) }) })), "lantern"), undefined);
+  const saturday = [0, 1, 2, 3, 4, 5].map((i) => oct(17, 9 + i));
+  assert.equal(itemOf(lostFoundWeek(input({ rollups: rollups({ hours: active(1, ...saturday) }) })), "lantern"), undefined);
+});
+
+test("hammock: a weekday off between two active days, in a week of four active days or more", () => {
+  const days = (...dates: number[]) => active(1, ...dates.map((day) => oct(day, 9)));
+  assert.deepEqual(itemOf(lostFoundWeek(input({ rollups: rollups({ hours: days(12, 13, 15, 16) }) })), "hammock"), {
+    kind: "hammock",
+    date: "2026-10-14",
+    activeDays: 4,
+  });
+  // Three active days are not a busy week, and a Monday off has no day before it in the week.
+  assert.equal(itemOf(lostFoundWeek(input({ rollups: rollups({ hours: days(12, 13, 15) }) })), "hammock"), undefined);
+  assert.equal(itemOf(lostFoundWeek(input({ rollups: rollups({ hours: days(13, 14, 15, 16) }) })), "hammock"), undefined);
+});
+
+test("scales: accounts sharing a week of ten hours or more within fifteen points", () => {
+  const spread = (a: number, b: number) =>
+    itemOf(
+      lostFoundWeek(input({
+        rollups: rollups({
+          hours: {
+            ...active(1, ...Array.from({ length: a }, (_, i) => oct(14, i))),
+            ...active(2, ...Array.from({ length: b }, (_, i) => oct(15, i))),
+          },
+        }),
+      })),
+      "scales",
+    );
+  assert.deepEqual(spread(6, 5), { kind: "scales", accountIds: ["a", "b"], low: 45, high: 55 });
+  assert.equal(spread(8, 3), undefined);
+  // Nine hours are too few to weigh.
+  assert.equal(spread(5, 4), undefined);
+});
+
+test("chest: the week's API value beats every earlier week in reach, at least four of them", () => {
+  const ledgerDays: LostFoundInput["ledgerDays"] = {};
+  for (let i = 1; i <= 5; i++) ledgerDays[addDays("2026-10-14", -7 * i)] = ledgerDay("acct:a", "claude-opus-5-5", 1000, 10);
+  ledgerDays["2026-10-14"] = ledgerDay("acct:a", "claude-opus-5-5", 4000, 30);
+  assert.deepEqual(itemOf(lostFoundWeek(input({ ledgerDays })), "chest"), { kind: "chest", cost: 30, tokens: 4000, times: 3 });
+  // A week before it that cost more takes the chest away.
+  ledgerDays["2026-09-30"] = ledgerDay("acct:a", "claude-opus-5-5", 1000, 31);
+  assert.equal(itemOf(lostFoundWeek(input({ ledgerDays })), "chest"), undefined);
+  // So do too few earlier weeks.
+  const few: LostFoundInput["ledgerDays"] = { "2026-10-14": ledgerDay("acct:a", "claude-opus-5-5", 4000, 30) };
+  for (let i = 1; i <= 3; i++) few[addDays("2026-10-14", -7 * i)] = ledgerDay("acct:a", "claude-opus-5-5", 1000, 10);
+  assert.equal(itemOf(lostFoundWeek(input({ ledgerDays: few })), "chest"), undefined);
+});
+
+test("piggy bank: one account's API value in a week paid for its plan's month", () => {
+  const plan = (a: Account, value: "pro" | "max5" | "max20" | "team") =>
+    ({ ...a, planning: { plan: value, capacityWeight: 1 } }) as Account;
+  const ledgerDays = {
+    "2026-10-13": ledgerDay("acct:a", "claude-opus-5-5", 1000, 120),
+    "2026-10-15": { ...ledgerDay("acct:a", "claude-opus-5-5", 1000, 116.4), ...ledgerDay("est:b", "claude-sonnet-5-5", 1000, 19) },
+  };
+  const week = lostFoundWeek(input({ ledgerDays, accounts: [plan(A, "max20"), plan(B, "pro"), C] }));
+  // A paid back 1.18 times, B 0.95: A is shown.
+  assert.deepEqual(itemOf(week, "piggy"), { kind: "piggy", accountId: "a", cost: 236.4, price: 200 });
+  // A Team seat's price is not known, so it cannot be paid back.
+  assert.equal(itemOf(lostFoundWeek(input({ ledgerDays, accounts: [plan(A, "team"), B, C] })), "piggy"), undefined);
+});
+
+test("fan: three model families, each with at least one percent of the week's tokens", () => {
+  const ledgerDays = (haiku: number) => ({
+    "2026-10-14": {
+      "acct:a": {
+        "claude-opus-5-5": { input: 600, output: 0, cacheWrite: 0, cacheRead: 0 },
+        "claude-sonnet-5-5-20261001": { input: 300, output: 0, cacheWrite: 0, cacheRead: 0 },
+        "claude-haiku-5-5": { input: haiku, output: 0, cacheWrite: 0, cacheRead: 0 },
+      },
+    },
+  });
+  assert.deepEqual(itemOf(lostFoundWeek(input({ ledgerDays: ledgerDays(100) })), "fan"), {
+    kind: "fan",
+    families: ["Opus", "Sonnet", "Haiku"],
+  });
+  assert.equal(itemOf(lostFoundWeek(input({ ledgerDays: ledgerDays(5) })), "fan"), undefined);
+  assert.equal(modelFamily("claude-fable-5-1"), "Fable");
+  assert.equal(modelFamily("gpt-5"), undefined);
+});
+
+test("a moment within hours says what it used when the ledger kept every quarter of it", () => {
+  // Eight hours from 11:00 on 16 October in Istanbul; one kept quarter at 12:00 (slot 48), one after it (20:00).
+  const eight = Array.from({ length: 8 }, (_, i) => oct(16, 8 + i));
+  const counts = (tokens: number, cost: number) => ({ input: tokens, output: 0, cacheWrite: 0, cacheRead: 0, cost });
+  const base = {
+    rollups: rollups({ hours: active(1, ...eight) }),
+    ledgerDays: { "2026-10-16": ledgerDay("acct:a", "claude-opus-5-5", 3000, 7.5) },
+    ledgerSlots: { "2026-10-16": { "acct:a": { "48": counts(1000, 2.5), "80": counts(2000, 5) } } },
+  };
+  assert.deepEqual(itemOf(lostFoundWeek(input({ ...base, slotsSince: oct(1, 0) })), "scroll")?.spend, { tokens: 1000, cost: 2.5 });
+  // Quarters kept only from after the moment began, or not at all, tell nothing.
+  assert.equal(itemOf(lostFoundWeek(input({ ...base, slotsSince: oct(16, 12) })), "scroll")?.spend, undefined);
+  assert.equal(itemOf(lostFoundWeek(input({ ...base, ledgerSlots: undefined })), "scroll")?.spend, undefined);
+  // A day-long moment reads the day's totals.
+  const scarf = lostFoundWeek(input({
+    ...base,
+    rollups: rollups({ hours: { ...active(1, oct(16, 8)), ...active(2, oct(16, 9)), ...active(3, oct(16, 10)) } }),
+  }));
+  assert.deepEqual(itemOf(scarf, "scarf")?.spend, { tokens: 3000, cost: 7.5 });
 });

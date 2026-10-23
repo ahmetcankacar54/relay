@@ -1698,14 +1698,21 @@ function bindIPC() {
       ...(exactSince === undefined ? {} : { exactSince }),
     });
   });
-  const lostFoundSource = () => ({
-    rollups: usageHistory.rollups(),
-    segments: activeTimeline.list(),
-    ledgerDays: tokenLedger?.snapshot().days ?? {},
-    accounts: service.store.state.accounts,
-    zone: service.store.state.settings.planning.timeZone,
-    now: Date.now(),
-  });
+  const lostFoundSource = () => {
+    const ledger = tokenLedger?.snapshot();
+    return {
+      rollups: usageHistory.rollups(),
+      segments: activeTimeline.list(),
+      ledgerDays: ledger?.days ?? {},
+      ...(ledger?.slots ? { ledgerSlots: ledger.slots } : {}),
+      ...(ledger?.slotsSince === undefined
+        ? {}
+        : { slotsSince: ledger.slotsSince }),
+      accounts: service.store.state.accounts,
+      zone: service.store.state.settings.planning.timeZone,
+      now: Date.now(),
+    };
+  };
   handle("lost-found-collection", () => lostFoundCollection(lostFoundSource()));
   handle("create-account", (input) =>
     service.store.create(createAccountSchema.parse(input)),

@@ -522,10 +522,13 @@ function previewLostFoundSource() {
           { accountUuid: first.desktop.accountUuid, from: at(11, 18), to: at(18) },
         ]
       : [];
+  const ledger = previewTokenLedger();
   return {
     rollups: foldSamples(previewSamples(), Date.now()),
     segments,
-    ledgerDays: previewTokenLedger().days,
+    ledgerDays: ledger.days,
+    ...(ledger.slots ? { ledgerSlots: ledger.slots } : {}),
+    ...(ledger.slotsSince === undefined ? {} : { slotsSince: ledger.slotsSince }),
     accounts,
     zone: state.settings.planning.timeZone,
     now: Date.now(),
