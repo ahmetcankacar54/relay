@@ -52,6 +52,12 @@ export interface DesktopAutomationSnapshot {
   /** False when no composer was found, which also reads as not empty. Older helpers omit it. */
   composerPresent?: boolean;
   composerEmpty: boolean;
+  /**
+   * How an empty composer read as empty: "empty", "no-value", "blank" (only line breaks or
+   * spaces), "editor-empty" (tiptap's empty-editor class) or "placeholder". Outside the
+   * fingerprint, for the diagnosis log; older helpers omit it.
+   */
+  composerEmptyAs?: string;
   sendEnabled: boolean;
   quotaAutoResume?: boolean;
   visibleActiveTasks?: number;
@@ -230,6 +236,8 @@ function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
     (v.composerPresent === undefined ||
       typeof v.composerPresent === "boolean") &&
     typeof v.composerEmpty === "boolean" &&
+    (v.composerEmptyAs === undefined ||
+      (typeof v.composerEmptyAs === "string" && /^[a-z-]{1,16}$/.test(v.composerEmptyAs))) &&
     typeof v.sendEnabled === "boolean" &&
     (v.quotaAutoResume === undefined ||
       typeof v.quotaAutoResume === "boolean") &&

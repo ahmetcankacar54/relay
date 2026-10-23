@@ -259,3 +259,33 @@ test(
       assert.deepEqual(screen([...strings]), none, name);
   },
 );
+
+test(
+  "an empty tiptap composer reads as empty, and one with the user's text never does",
+  { skip: process.platform !== "darwin" },
+  async () => {
+    const binary = await fixtureBinary();
+    const read = (value: string, emptyEditorMarked = false, placeholder = "") =>
+      (
+        runFixture(binary, {
+          composer: { value, emptyEditorMarked, placeholder },
+        }) as { emptyAs: string | null }
+      ).emptyAs;
+    // Empty, as Chromium may read it: nothing, the line break holding the paragraph open,
+    // zero-width marks, the drawn placeholder with tiptap's class, or the placeholder alone.
+    assert.equal(read(""), "empty");
+    assert.equal(read("\n"), "blank");
+    assert.equal(read(" ​\n﻿"), "blank");
+    assert.equal(read("Reply to Claude…", true), "editor-empty");
+    assert.equal(read("Reply to Claude…\n", false, "Reply to Claude…"), "placeholder");
+    // Text, even with the class's node gone or a placeholder beside it, is never empty.
+    assert.equal(read("fix the login bug"), null);
+    assert.equal(read("fix the login bug", false, "Reply to Claude…"), null);
+    assert.equal(read("￼"), null, "a mention or file chip is content");
+    assert.equal(read("Reply to Claude…"), null, "without the class or placeholder, the text may be the user's");
+    const visible = runFixture(binary, {
+      composer: { value: "a b\n\nc​" },
+    }) as { visible: string };
+    assert.equal(visible.visible, "abc");
+  },
+);

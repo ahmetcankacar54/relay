@@ -38,19 +38,55 @@ func stringAttribute(_ element: AXUIElement, _ name: String) -> String {
     return ""
 }
 // An element's text for observation: a missing or non-text AXValue is "".
-// observe() derives composerEmpty from it (via Node.value).
 func valueText(_ element: AXUIElement) -> String { stringAttribute(element, kAXValueAttribute) }
-// The pre-write composer re-read is stricter than valueText: the composer is empty
-// only when AX answers with an empty string, or says it has no value. Any other
-// error, or a value that is not text, may hide the user's text: not empty.
-func composerReadsEmpty(_ element: AXUIElement) -> Bool {
+// Marks that take no room on screen. An embedded object (U+FFFC, a mention or a file
+// chip) is not among them: it is content.
+let zeroWidth: Set<Unicode.Scalar> = ["\u{200B}", "\u{200C}", "\u{200D}", "\u{2060}", "\u{FEFF}"]
+// The characters of `text` that show: no spaces, line breaks or zero-width marks.
+func visibleText(_ text: String) -> String {
+    String(String.UnicodeScalarView(text.unicodeScalars.filter {
+        !CharacterSet.whitespacesAndNewlines.contains($0) && !zeroWidth.contains($0)
+    }))
+}
+// Claude's composer is a tiptap editor. Empty, it holds one paragraph kept open by a line
+// break, which tiptap gives this class and whose ::before draws the placeholder; Chromium
+// can read both into the composer's value, so an empty composer never reads as "".
+let emptyEditorClass = "is-editor-empty"
+// Why a composer whose AXValue is `value` reads as empty, or nil when it holds text: no
+// visible character, tiptap's empty-editor class on a node in it, or a value that is
+// only its placeholder.
+func composerEmptyReason(value: String, emptyEditorMarked: Bool, placeholder: String) -> String? {
+    if value.isEmpty { return "empty" }
+    if visibleText(value).isEmpty { return "blank" }
+    if emptyEditorMarked { return "editor-empty" }
+    if !visibleText(placeholder).isEmpty && visibleText(value) == visibleText(placeholder) { return "placeholder" }
+    return nil
+}
+// Whether `element` or a node a few levels inside it carries tiptap's empty-editor class.
+func marksEmptyEditor(_ element: AXUIElement, depth: Int = 3) -> Bool {
+    if (attribute(element, "AXDOMClassList") as? [String])?.contains(emptyEditorClass) == true { return true }
+    guard depth > 0 else { return false }
+    let children = attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? []
+    return children.prefix(8).contains { marksEmptyEditor($0, depth: depth - 1) }
+}
+// Why the composer reads as empty now, or nil. AX saying it has no value is empty; any
+// other error, or a value that is not text, may hide the user's text: not empty.
+func composerEmptiness(_ element: AXUIElement) -> String? {
     var value: CFTypeRef?
     switch AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) {
-    case .success: return (value as? String)?.isEmpty == true
-    case .noValue: return true
-    default: return false
+    case .success: break
+    case .noValue: return "no-value"
+    default: return nil
     }
+    guard let text = value as? String else { return nil }
+    return composerEmptyReason(
+        value: text,
+        emptyEditorMarked: !visibleText(text).isEmpty && marksEmptyEditor(element),
+        placeholder: stringAttribute(element, kAXPlaceholderValueAttribute)
+    )
 }
+// The pre-write composer re-read, from AX directly rather than the observation.
+func composerReadsEmpty(_ element: AXUIElement) -> Bool { composerEmptiness(element) != nil }
 // Whether Claude is the app in front, read now.
 func claudeFrontmost(_ app: NSRunningApplication) -> Bool {
     NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier
@@ -247,10 +283,11 @@ func observe() throws -> Observation {
     // worker proof. The evidence adapter additionally requires a terminal latest
     // transcript turn before permitting a still-alive selected engine.
     let status = waiting ? "waiting" : working ? "running" : (finished || composer != nil) ? "stopped" : "unknown"
+    let composerEmpty = composer.flatMap { composerEmptiness($0.element) }
     var stable: [String: Any] = [
         "pid": Int(app.processIdentifier), "status": status,
         "quotaStopped": quota && status == "stopped",
-        "composerEmpty": composer?.value.isEmpty == true,
+        "composerEmpty": composerEmpty != nil,
         // composerEmpty is false without a composer, so say whether there is one.
         "composerPresent": composer != nil,
         "sendEnabled": send?.enabled == true,
@@ -272,6 +309,8 @@ func observe() throws -> Observation {
     fields["frontmost"] = claudeFrontmost(app)
     fields["idleMs"] = idleMilliseconds()
     fields["keyIdleMs"] = keyIdleMilliseconds()
+    // How an empty composer read as empty, for the diagnosis log; never its text.
+    if let reason = composerEmpty { fields["composerEmptyAs"] = reason }
     return Observation(app: app, tree: tree, composer: composer, send: send, permission: permission, fields: fields)
 }
 // A guard names its screen by a conversation id or, for write-draft only
@@ -438,7 +477,10 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         try writeComposer(current, body)
         current = try observe()
         try validateGuard(current, expected, allowComposer: true)
-        guard current.composer?.value == body, let send = current.send, send.enabled else { try fail("delivery-ambiguous") }
+        // The editor may give its paragraphs other line breaks than the text had: the
+        // characters that show must all be there, in order, and nothing else.
+        guard let typed = current.composer?.value, visibleText(typed) == visibleText(body),
+              let send = current.send, send.enabled else { try fail("delivery-ambiguous") }
         // There is no atomic lock across AX clients. This is one guarded attempt,
         // never an exactly-once transport. Ambiguous results must not be retried.
         try press(send)
@@ -477,9 +519,9 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         try writeComposer(current, text)
         current = try observe()
         try validateGuard(current, expected, allowComposer: true, allowNewSession: true)
-        // One guarded attempt, never retried: a composer that does not read back
-        // exactly is ambiguous, not a reason to type again.
-        guard current.composer?.value == text else { try fail("delivery-ambiguous") }
+        // One guarded attempt, never retried: a composer that does not read back the
+        // same visible characters is ambiguous, not a reason to type again.
+        guard let typed = current.composer?.value, visibleText(typed) == visibleText(text) else { try fail("delivery-ambiguous") }
         return ["ok": true, "snapshot": current.fields]
     }
     try fail("desktop-ui-unsupported")
@@ -584,6 +626,15 @@ do {
     } else if let object = json as? [String: Any], let strings = object["webAreaStrings"] as? [String] {
         let screen = screenOf(strings)
         result = ["localSessionId": screen.localSessionId as Any? ?? NSNull(), "newSession": screen.newSession]
+    } else if let object = json as? [String: Any], let composer = object["composer"] as? [String: Any] {
+        // {"composer": {value, emptyEditorMarked, placeholder}} says how such a composer reads.
+        let value = composer["value"] as? String ?? ""
+        let reason = composerEmptyReason(
+            value: value,
+            emptyEditorMarked: composer["emptyEditorMarked"] as? Bool ?? false,
+            placeholder: composer["placeholder"] as? String ?? ""
+        )
+        result = ["emptyAs": reason as Any? ?? NSNull(), "visible": visibleText(value)]
     } else { try fail("desktop-ui-unsupported") }
     FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]))
 } catch {

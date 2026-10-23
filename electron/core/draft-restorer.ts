@@ -613,6 +613,7 @@ async function restoreOne(
     status: view.status,
     composerPresent: view.composerPresent ?? null,
     composerEmpty: view.composerEmpty,
+    composerEmptyAs: view.composerEmptyAs ?? null,
     frontmost: view.frontmost ?? null,
     idleMs: view.idleMs ?? null,
     guardable: guardable(view, target),

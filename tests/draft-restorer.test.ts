@@ -2024,6 +2024,8 @@ test("a restored draft logs each step of its run, and no text", async () => {
     status: "stopped",
     composerPresent: true,
     composerEmpty: true,
+    // The helper's reason; this fake's snapshots carry none.
+    composerEmptyAs: null,
     frontmost: true,
     idleMs: 60_000,
     guardable: true,

@@ -923,20 +923,18 @@ test("the Swift watch only reads: it opens, types, presses and observes nothing,
       dispatch.indexOf("readDataToEndOfFile"),
   );
 });
-test("the Swift pre-write composer re-read counts only a readable empty value as empty", () => {
-  // observe() still derives composerEmpty from Node.value, which nodes() reads with
-  // valueText: a missing or non-text AXValue is "".
-  assert.match(swiftBlock("func nodes("), /value: valueText\(element\)/);
+test("the Swift composer reads as empty only from a readable value, the same way before a write", () => {
+  // observe() and the re-read right before a write decide alike, from AX directly.
   assert.match(
     swiftBlock("func observe()"),
-    /"composerEmpty": composer\?\.value\.isEmpty == true/,
+    /let composerEmpty = composer\.flatMap \{ composerEmptiness\(\$0\.element\) \}/,
   );
+  assert.match(swiftBlock("func observe()"), /"composerEmpty": composerEmpty != nil/);
   // A missing composer reads as not empty, so the snapshot says whether there is one.
   assert.match(
     swiftBlock("func observe()"),
     /"composerPresent": composer != nil/,
   );
-  // The re-read right before the write is stricter: an AX error is not an empty composer.
   const branch = swiftBlock('if command == "write-draft" {');
   assert.match(
     branch,
@@ -944,17 +942,19 @@ test("the Swift pre-write composer re-read counts only a readable empty value as
   );
   assert.doesNotMatch(branch, /valueText\(/);
   assert.doesNotMatch(branch, /kAXValueAttribute/);
-  const read = swiftBlock("func composerReadsEmpty(");
+  assert.match(
+    swiftBlock("func composerReadsEmpty("),
+    /composerEmptiness\(element\) != nil/,
+  );
+  // An AX error, or a value that is not text, may hide the user's text: never empty.
+  const read = swiftBlock("func composerEmptiness(");
   assert.match(
     read,
     /AXUIElementCopyAttributeValue\(element, kAXValueAttribute as CFString, &value\)/,
   );
-  assert.match(
-    read,
-    /case \.success: return \(value as\? String\)\?\.isEmpty == true/,
-  );
-  assert.match(read, /case \.noValue: return true/);
-  assert.match(read, /default: return false/);
+  assert.match(read, /case \.noValue: return "no-value"/);
+  assert.match(read, /default: return nil/);
+  assert.match(read, /guard let text = value as\? String else \{ return nil \}/);
 });
 test("the Swift writeComposer marks its clipboard text transient and concealed before it is owned", () => {
   const body = swiftBlock("func writeComposer(");
