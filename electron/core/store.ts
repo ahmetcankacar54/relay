@@ -227,6 +227,8 @@ const stateSchema = z.object({
   pinned: z.array(z.string()),
   importEnabled: z.boolean(),
   executable: z.string().optional(),
+  /** Where Claude Desktop is, when the user chose it; Relay looks in the usual places otherwise. */
+  claudeApp: z.string().optional(),
   lineage: z.record(z.string(), z.string()),
   autoSwitchCompleted: z
     .record(z.string().max(200), z.number().finite().nonnegative())

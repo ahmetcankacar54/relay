@@ -706,6 +706,7 @@ export const previewApi: RelayAPI = {
   switchAccount: desktopOnly,
   pickFolder: desktopOnly,
   pickExecutable: desktopOnly,
+  pickClaudeApp: desktopOnly,
   importHistory: desktopOnly,
   setPinned: async (key, pinned) => {
     const s = sessions.find((s) => s.key === key);

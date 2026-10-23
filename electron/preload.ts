@@ -100,6 +100,7 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:switch-account", runId, accountId),
   pickFolder: () => ipcRenderer.invoke("relay:pick-folder"),
   pickExecutable: () => ipcRenderer.invoke("relay:pick-executable"),
+  pickClaudeApp: () => ipcRenderer.invoke("relay:pick-claude-app"),
   importHistory: () => ipcRenderer.invoke("relay:import"),
   setPinned: (key, pinned) => ipcRenderer.invoke("relay:pin", key, pinned),
   setCooldown: (id, hours) => ipcRenderer.invoke("relay:cooldown", id, hours),

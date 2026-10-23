@@ -13,6 +13,7 @@ import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import type { PrankLevel, RelaySettings } from "../../shared/types";
 import { chooseCliFile } from "../features/CliSetup";
+import { chooseClaudeApp } from "../features/ClaudeAppSetup";
 import { WarningThreshold } from "./Usage";
 
 /** Shows the diagnosis logs in Finder; main picks the files, the page passes no path. */
@@ -231,12 +232,23 @@ export function Settings() {
           </SettingRow>
         </SettingGroup>
         <SettingGroup id="settings-system" title={t("Sistem", "System")}>
+          {/* An install Relay does not look for (every Linux build) is chosen here: Konumu seç. */}
           <SettingRow label="Claude Desktop">
-            <Status ok={!!desktop?.available}>
-              {desktop?.available
-                ? t("Bulundu", "Detected")
-                : t("Bulunamadı / desteklenmiyor", "Not found / unsupported")}
-            </Status>
+            <span className="flex items-center gap-3">
+              <Status ok={!!desktop?.available}>
+                {desktop?.available
+                  ? t("Bulundu", "Detected")
+                  : t("Bulunamadı", "Not found")}
+              </Status>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!!busy}
+                onClick={() => chooseClaudeApp({ api, action })}
+              >
+                {t("Konumu seç", "Choose location")}
+              </Button>
+            </span>
           </SettingRow>
           {/* The missing-CLI error names this path: Ayarlar → Claude Code CLI → Dosyayı seç. */}
           <SettingRow label="Claude Code CLI">

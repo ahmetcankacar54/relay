@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ExternalLink } from "@/components/ExternalLink";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import {
@@ -11,8 +10,8 @@ import {
   prerequisites,
   type PrerequisiteKey,
 } from "@/lib/onboarding";
-import { EXTERNAL_LINKS } from "../../../shared/external-links";
 import { CliSetupActions } from "../../features/CliSetup";
+import { ClaudeAppActions } from "../../features/ClaudeAppSetup";
 
 interface Row {
   title: string;
@@ -40,11 +39,7 @@ export function SetupChecklist() {
         "Relay, Claude uygulamasını hesaplar arasında geçirir.",
         "Relay switches the Claude app between accounts.",
       ),
-      action: (
-        <ExternalLink href={EXTERNAL_LINKS.claudeDownload}>
-          {t("İndir", "Download")}
-        </ExternalLink>
-      ),
+      action: <ClaudeAppActions />,
     },
     cli: {
       title: "Claude Code CLI",

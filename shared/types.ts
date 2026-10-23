@@ -302,6 +302,8 @@ export interface RelayAPI {
   switchAccount(runId: string, accountId: string): Promise<Run>;
   pickFolder(): Promise<string | null>;
   pickExecutable(): Promise<void>;
+  /** Asks where Claude Desktop is installed and keeps the choice. */
+  pickClaudeApp(): Promise<void>;
   importHistory(): Promise<void>;
   setPinned(key: string, pinned: boolean): Promise<void>;
   setCooldown(accountId: string, hours: number): Promise<void>;

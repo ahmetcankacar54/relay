@@ -38,6 +38,34 @@ export function macDesktopPids(stdout: string, executable: string): number[] {
 }
 
 /**
+ * Claude Desktop's pids in a Linux `ps -eo pid=,args=` listing. Linux builds start through a
+ * launcher script or an AppImage, so a process counts when an argument is the chosen executable,
+ * lies inside a claude-desktop install or a mounted Claude AppImage, or shares the executable's
+ * name. The Claude Code CLI is also called "claude", so that bare name never matches by itself;
+ * `self` (Relay) is never Claude.
+ */
+export function linuxDesktopPids(
+  stdout: string,
+  executable: string,
+  self = process.pid,
+): number[] {
+  const name = executable.slice(executable.lastIndexOf("/") + 1);
+  const byName = name !== "" && name !== "claude";
+  return stdout.split("\n").flatMap((line) => {
+    const match = /^\s*(\d+)\s+(.+)$/.exec(line);
+    if (!match || Number(match[1]) === self) return [];
+    const hit = match[2].split(/\s+/).some(
+      (arg) =>
+        arg === executable ||
+        arg.includes("/claude-desktop/") ||
+        arg.includes("/.mount_Claude") ||
+        (byName && arg.slice(arg.lastIndexOf("/") + 1) === name),
+    );
+    return hit ? [Number(match[1])] : [];
+  });
+}
+
+/**
  * The pid of Claude's main process in a `ps -axo pid=,comm=` listing: the one running the app's
  * executable itself, not a helper. Undefined when there is none, or more than one.
  */

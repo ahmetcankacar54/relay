@@ -508,14 +508,26 @@ else {
       operationLock = new ProcessLock(path.join(vaultDir, "operation.lock"), "app");
       // Saved sign-ins move from safeStorage to the vault key the relay CLI can read too.
       const legacy = safeStorageSealer();
-      const vault = await prepareVault({
-        vault: vaultDir,
-        legacyUnseal: (data) => legacy.unseal(data),
-        legacyAvailable: safeStorageAvailable,
-        // The desktop smoke test points this at a fake; a packaged Relay never reads it.
-        tool: app.isPackaged ? undefined : process.env.RELAY_SECURITY_TOOL,
-      });
-      const host = desktopHost(vault.sealer);
+      // The vault key lives in the macOS Keychain; elsewhere the system's own store (Secret
+      // Service or KWallet on Linux, DPAPI on Windows) seals through safeStorage.
+      const vault =
+        process.platform === "darwin"
+          ? await prepareVault({
+              vault: vaultDir,
+              legacyUnseal: (data) => legacy.unseal(data),
+              legacyAvailable: safeStorageAvailable,
+              // The desktop smoke test points this at a fake; a packaged Relay never reads it.
+              tool: app.isPackaged ? undefined : process.env.RELAY_SECURITY_TOOL,
+            })
+          : {
+              sealer: legacy,
+              error: safeStorageAvailable()
+                ? undefined
+                : process.platform === "linux"
+                  ? "No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay."
+                  : "System encryption is unavailable, so Claude app sign-ins cannot be saved.",
+            };
+      const host = desktopHost(vault.sealer, () => service.store.state.claudeApp);
       desktop = new DesktopManager(
         path.join(app.getPath("appData"), "Claude"),
         service.store,
@@ -1768,6 +1780,19 @@ function bindIPC() {
       });
       await service.diagnose();
     }
+  });
+  handle("pick-claude-app", async () => {
+    const mac = process.platform === "darwin";
+    const result = await dialog.showOpenDialog(window!, {
+      properties: ["openFile"],
+      ...(mac ? { defaultPath: "/Applications" } : {}),
+      title: say("Claude uygulamasını seç", "Choose the Claude app"),
+    });
+    if (result.canceled || !result.filePaths[0]) return;
+    // The store's change reaches every window, which reads the Desktop state again.
+    service.store.update((s) => {
+      s.claudeApp = result.filePaths[0];
+    });
   });
   handle("import", () => {
     service.store.update((s) => {

@@ -8,6 +8,7 @@ import type { DesktopHost } from "./desktop";
 import {
   assertProcessListing,
   ClaudeLiveness,
+  linuxDesktopPids,
   macDesktopPids,
   macMainPid,
   parseEtime,
@@ -39,33 +40,76 @@ export function claudeExecutable(apps: string[]): string | undefined {
     .find((p) => fs.existsSync(p));
 }
 /**
+ * Where Claude Desktop is usually installed, in the order tried. Linux has no official build;
+ * these are the community packages' launchers and a Claude AppImage in ~/Applications.
+ */
+export function claudeCandidates(
+  platform: NodeJS.Platform = process.platform,
+  options: { apps?: string[]; home?: string; env?: NodeJS.ProcessEnv } = {},
+): string[] {
+  const home = options.home ?? os.homedir();
+  const env = options.env ?? process.env;
+  if (platform === "darwin")
+    return (options.apps ?? CLAUDE_APPS).map((app) =>
+      path.join(app, "Contents", "MacOS", "Claude"),
+    );
+  if (platform === "win32")
+    return [
+      path.join(env.LOCALAPPDATA ?? "", "AnthropicClaude/claude.exe"),
+      path.join(env.LOCALAPPDATA ?? "", "Programs/Claude/Claude.exe"),
+    ];
+  if (platform !== "linux") return [];
+  const appImages = (() => {
+    try {
+      return fs
+        .readdirSync(path.join(home, "Applications"))
+        .filter((f) => /claude.*\.appimage$/i.test(f))
+        .map((f) => path.join(home, "Applications", f));
+    } catch {
+      return [];
+    }
+  })();
+  return [
+    "/usr/bin/claude-desktop",
+    "/usr/local/bin/claude-desktop",
+    path.join(home, ".local", "bin", "claude-desktop"),
+    "/opt/Claude/claude-desktop",
+    "/opt/Claude/claude",
+    "/usr/lib/claude-desktop/claude-desktop",
+    ...appImages,
+  ];
+}
+
+/**
+ * The executable to run: the one the user chose (a Claude.app on macOS is opened to its
+ * executable), else the first default that exists.
+ */
+export function resolveClaudeExecutable(
+  chosen: string | undefined,
+  candidates: string[],
+  exists: (p: string) => boolean = fs.existsSync,
+): string | undefined {
+  if (chosen && path.isAbsolute(chosen)) {
+    const file = chosen.endsWith(".app")
+      ? path.join(chosen, "Contents", "MacOS", "Claude")
+      : chosen;
+    if (exists(file)) return file;
+  }
+  return candidates.find((p) => path.isAbsolute(p) && exists(p));
+}
+
+/**
  * Claude Desktop as a plain Node process sees it: its processes, quitting and launching it,
  * and the vault's seal. Draft capture needs Relay's own Electron and is not here.
  */
 export function nodeDesktopHost(options: {
   sealer: Sealer;
   apps?: string[];
+  /** The location the user chose in Settings, read on every use so a new choice applies at once. */
+  chosen?: () => string | undefined;
 }): DesktopHost {
-  const candidates =
-    process.platform === "darwin"
-      ? (options.apps ?? CLAUDE_APPS).map((app) =>
-          path.join(app, "Contents", "MacOS", "Claude"),
-        )
-      : process.platform === "win32"
-        ? [
-            path.join(
-              process.env.LOCALAPPDATA ?? "",
-              "AnthropicClaude/claude.exe",
-            ),
-            path.join(
-              process.env.LOCALAPPDATA ?? "",
-              "Programs/Claude/Claude.exe",
-            ),
-          ]
-        : [];
-  const executable = candidates.find(
-    (p) => path.isAbsolute(p) && fs.existsSync(p),
-  );
+  const candidates = claudeCandidates(process.platform, { apps: options.apps });
+  const exe = () => resolveClaudeExecutable(options.chosen?.(), candidates);
   /** Every process's pid and executable. macOS only. */
   const macListing = () =>
     // A busy main process can cut ps short (its timeout fires before the output is read), so
@@ -79,7 +123,15 @@ export function nodeDesktopHost(options: {
     }, 250);
   /** Claude's pids, and its main pid on macOS, from one full listing. */
   const listClaude = async (): Promise<{ pids: number[]; main?: number }> => {
+    const executable = exe();
     if (!executable) return { pids: [] };
+    if (process.platform === "linux") {
+      const { stdout } = await exec("/bin/ps", ["-eo", "pid=,args="], {
+        timeout: 5000,
+        maxBuffer: 8 * 1024 * 1024,
+      });
+      return { pids: linuxDesktopPids(stdout, executable) };
+    }
     if (process.platform === "darwin") {
       const listing = await macListing();
       return {
@@ -119,6 +171,7 @@ export function nodeDesktopHost(options: {
   const pids = () => liveness.pids();
   /** The Electron version inside Claude.app, or undefined when it cannot be read. macOS only. */
   const readClaudeElectron = async (): Promise<string | undefined> => {
+    const executable = exe();
     if (!executable) return undefined;
     const bundle = executable.slice(0, executable.indexOf(".app/") + 4);
     try {
@@ -141,7 +194,7 @@ export function nodeDesktopHost(options: {
     }
   };
   return {
-    available: async () => !!executable,
+    available: async () => !!exe(),
     running: () => liveness.running(),
     seemsRunning: () => liveness.seemsRunning(),
     quit: async () => {
@@ -156,6 +209,15 @@ export function nodeDesktopHost(options: {
           ],
           { timeout: 20_000 },
         );
+      else if (process.platform === "linux")
+        // No app-level quit on Linux: ask each process to end, as closing its window would.
+        for (const pid of active) {
+          try {
+            process.kill(pid, "SIGTERM");
+          } catch {
+            // Already gone.
+          }
+        }
       else {
         try {
           await exec(
@@ -176,6 +238,7 @@ export function nodeDesktopHost(options: {
       );
     },
     launch: async () => {
+      const executable = exe();
       if (!executable) throw new Error("Claude Desktop is not installed.");
       if (process.platform === "darwin")
         await exec(
@@ -202,6 +265,7 @@ export function nodeDesktopHost(options: {
     claudeElectron: async () =>
       process.platform === "darwin" ? readClaudeElectron() : undefined,
     claudeUptimeMs: async () => {
+      const executable = exe();
       if (process.platform !== "darwin" || !executable) return undefined;
       try {
         const main = macMainPid(await macListing(), executable);

@@ -28,8 +28,11 @@ export function safeStorageSealer(): Sealer {
 }
 
 /** The app's Desktop host: the Node host, plus draft capture through Relay's own Electron. */
-export function desktopHost(sealer: Sealer): DesktopHost {
-  const base = nodeDesktopHost({ sealer });
+export function desktopHost(
+  sealer: Sealer,
+  chosen?: () => string | undefined,
+): DesktopHost {
+  const base = nodeDesktopHost({ sealer, chosen });
   return {
     ...base,
     draftsBlocked: async () =>
