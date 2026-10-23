@@ -120,7 +120,7 @@ export function AccountsCard({
               <span>
                 <span className="block text-[13.5px] font-medium">{t("Hesap ekle", "Add account")}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {t("Claude uygulamasındaki hesabı bir kez kaydet", "Save an account of the Claude app once")}
+                  {t("Claude uygulamasındaki hesabı bir kez kaydet", "Save the account open in the Claude app once")}
                 </span>
               </span>
             </button>
@@ -140,7 +140,7 @@ export function AccountsCard({
           {rows.some((row) => ringState(row.usage, now) === "stale") && (
             <span className="inline-flex items-center gap-1.5">
               <span className="size-2 rounded-full border-[1.5px] border-dashed border-muted-foreground/60" />
-              {t("soluk ve kesikli: eski veri", "faded and dashed: old data")}
+              {t("soluk ve kesikli: limit verisi eski", "faded and dashed: usage data is out of date")}
             </span>
           )}
         </p>

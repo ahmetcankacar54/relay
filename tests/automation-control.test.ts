@@ -86,7 +86,7 @@ test("applying after-exit turns prepare-on-quit on, then the fleet off", async (
     autoSwitchMode: "off",
     legacyWatch: false,
   });
-  // Both on for a moment still reads as Kota dolunca: the fleet wins.
+  // Both on for a moment still reads as Limit dolunca: the fleet wins.
   assert.deepEqual(calls, [
     "updateSettings:after-exit",
     "setFleetContinuation:false",
@@ -281,13 +281,13 @@ test("the Switching card shows one choice with the status and a switch-now butto
   assert.equal(items.length, 3);
   assert.deepEqual(
     items.filter((item) => item.checked).map((item) => item.label),
-    ["Kota dolunca"],
+    ["Limit dolunca"],
   );
   assert.ok(
     html
       .replace(/<[^>]+>/g, "")
       .includes(
-        "Kişisel · Max %100 kullanıldı · 2 konuşma kota yüzünden durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+        "Kişisel · Max %100 kullanıldı · 2 konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
       ),
   );
   assert.ok(html.includes("Şimdi Kişisel · İkinci’ye geç"));
@@ -309,7 +309,7 @@ test("the after-exit card lists accounts and the quota card does not", () => {
     radios(afterExit)
       .filter((item) => item.checked)
       .map((item) => item.label),
-    ["Claude'u kapatınca"],
+    ["Claude uygulamasını kapatınca"],
   );
   assert.match(afterExit, /Otomatik geçişe dahil hesaplar/);
   assert.match(afterExit, /Hedefte limitin en fazla %90’ı kullanılmış olmalı/);
@@ -353,7 +353,7 @@ test("the after-exit accounts are chips saying which is open, which is next and 
   const old = { ...usage("b", 10), checkedAt: iso(NOW - 60 * 60_000) };
   assert.deepEqual(chips(afterExit({ usage: { a: usage("a", 60), b: old } })), [
     "✓ Kişisel · Max· şu an açık",
-    "✓ Kişisel · İkinci· veri eski · seçilmez",
+    "✓ Kişisel · İkinci· limit verisi eski · seçilmez",
   ]);
   // An unselected account is never next; its chip is not pressed.
   assert.deepEqual(chips(afterExit({ usage: { a: usage("a", 60), b: usage("b", 10) } }, ["a"])), [
@@ -428,7 +428,7 @@ test("Switching and Overview show the offer inline, not in the page banner", () 
     const html = render(relay, element);
     assert.doesNotMatch(html, /Otomatik geçiş ·/, label);
     assert.equal(count(html, SWITCH_NOW), 1, label);
-    assert.equal(count(html, "2 konuşma kota yüzünden durdu."), 1, label);
+    assert.equal(count(html, "2 konuşma limit dolduğu için durdu."), 1, label);
   }
   // Pages without the inline status keep the banner.
   const planning = render(relay, createElement(Planning));
@@ -466,7 +466,7 @@ test("the status line keeps the usage prefix out of the live announcement", () =
     ...html.matchAll(/<span role="status" aria-live="polite">(.*?)<\/span>/g),
   ].map(([, text]) => text);
   assert.deepEqual(live, [
-    "2 konuşma kota yüzünden durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+    "2 konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
   ]);
   // The prefix is still shown, just outside the live region.
   assert.ok(html.includes('Kişisel · Max %100 kullanıldı · <span role="status"'));

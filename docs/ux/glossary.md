@@ -12,6 +12,12 @@ uses "sen". English uses curly apostrophes (’).
 | The CLI sign-in Relay reads limits with | Limit okuma girişi | usage sign-in | Approved once in the browser. |
 | A Relay account | hesap | account | "Profil" only where the Claude app account and the Relay profile must be told apart. |
 | A switch backup | yedek | backup | |
+| What a limit is called | limit | limit, quota | Never "kota" in Turkish. A window that is used up is "limit dolu" / "Limit doldu"; never "kotasız" (it reads as "unlimited"). |
+| A 5-hour or weekly window | dönem | period | "5 saatlik dönem". |
+| Claude Code tokens priced at API list prices | API karşılığı | API value | One name on every usage card, chart and tooltip; never "API değeri" or "Ücret karşılığı". |
+| The prompt Relay copies to rebuild Code sidebar sections | talimat | recipe | "Talimatı kopyala"; never "tarif". |
+| Starting a limit period ahead of work | önceden başlatma | early start | Never "ısıtma" / "warm-up" on screen. |
+| A label Claude itself shows | Claude’s own words | Claude’s own words | Quoted exactly as Claude shows it, in both languages: “Auto-continue when limits reset”, “Auto”, “Manual”. |
 
 ## Actions
 
@@ -21,6 +27,7 @@ account sheet, the panel and the usage card.
 | Action | What it does | Türkçe | English |
 | --- | --- | --- | --- |
 | Switch | Restarts the Claude app on another account | Geç | Switch |
+| Switch and continue | When the limit is reached, switches and continues the stopped Code conversations | Limit dolunca geç ve devam et (mode card: Limit dolunca) | Switch and continue when the limit is reached (mode card: When the limit is reached) |
 | Add an account | Opens the add-account dialog | Hesap ekle | Add account |
 | Open the Claude app | Brings the Claude app forward, or opens it | Claude uygulamasını aç | Open the Claude app |
 | Renew the usage sign-in | Opens the browser sign-in for the CLI that reads limits | Limit okuma girişini yenile | Renew usage sign-in |
@@ -50,5 +57,14 @@ another.
 | --- | --- |
 | ilgi bekliyor | dikkat istiyor |
 | en uygun önce | en uygunu üstte |
-| Açılış 14:00 | 14:00’te açılır |
+| Açılış 14:00 | 14:00’te açılır (a full window that opens again) |
+| Sıfırlanma 14:00, 14:00’te sıfırlanır | 14:00’te yenilenir (a period that resets) |
+| güncellendi 5 dk önce | 5 dk önce güncellendi |
+| kota, kotasız | limit, limit dolu |
+| ısıtma, ısıtır | önceden başlatma, önceden başlatır |
+| tarif | talimat |
+| API değeri, Ücret karşılığı | API karşılığı |
+| Eski veri, Veri eski | Limit verisi eski |
+| Claude’u aç, Claude’u öne getir | Claude uygulamasını aç |
+| bağlantıyı kaydet (Claude app sign-in) | girişi kaydet, Claude uygulaması girişini kaydet |
 | hf (week) | hafta |

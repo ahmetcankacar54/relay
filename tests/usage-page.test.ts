@@ -325,8 +325,8 @@ test("the daily chart switches between Pro units, tokens and the API value", asy
       guides.childNodes.map((line) => attrs(line)?.get("y1")),
       ["74.56", "21.13"],
     );
-    assert.match(plain(), /30 günde API değeri ≈\$190,00; en yüksek gün 14 Eki \(\$160,00\)\./);
-    assert.equal(dayTip(container), "14 Ekim ÇarşambaAPI değeri$160,00Kişisel · Max$120,00Vertex$39,50Relay dışı terminal$0,50▲ Limite takıldı");
+    assert.match(plain(), /30 günde API karşılığı ≈\$190,00; en yüksek gün 14 Eki \(\$160,00\)\./);
+    assert.equal(dayTip(container), "14 Ekim ÇarşambaAPI karşılığı$160,00Kişisel · Max$120,00Vertex$39,50Relay dışı terminal$0,50▲ Limite takıldı");
 
     await click("Limit");
     assert.equal(labelOf("14 Eki"), "14 Eki: 120 Pro birimi, limite takıldı");
@@ -391,7 +391,7 @@ test("the statistics section shows the empty, unavailable, no-identity, loading 
     text(render(createElement(UsageStatisticsSection, { state, accounts, zone: ZONE, accountId })));
   assert.match(section({ view: emptyView("empty"), loading: false }), /Veri birikiyor/);
   const unavailable = section({ view: emptyView("unavailable"), loading: false });
-  assert.match(unavailable, /Kayıt okunamadı/);
+  assert.match(unavailable, /Kullanım geçmişi okunamadı/);
   assert.match(unavailable, /Canlı limitler çalışmaya devam eder/);
   assert.match(section({ view: emptyView("empty"), loading: false }, "c"), /Bu hesap için kullanım kaydı yok/);
   // A connected account with no rows yet is still "collecting".
@@ -622,7 +622,7 @@ test("with priced tokens the Limits tab leads with the API value and gives each 
   const tiles = render(createElement(SummaryTiles, { view, cost }));
   assert.match(tiles, /lg:grid-cols-5/);
   const plain = text(tiles);
-  assert.match(plain, /^API değeri≈\$2\.704,15günde ≈ \$90,14Toplam kullanım/);
+  assert.match(plain, /^API karşılığı≈\$2\.704,15günde ≈ \$90,14Toplam kullanım/);
   assert.match(text(render(createElement(SummaryTiles, { view, cost }), "en")), /API value≈\$2,704\.15≈ \$90\.14 a day/);
   // The token view adds the range's tokens under the total usage.
   const withTokens = render(createElement(SummaryTiles, { view, cost, tokens: tokenView }));
@@ -632,10 +632,10 @@ test("with priced tokens the Limits tab leads with the API value and gives each 
   assert.doesNotMatch(render(createElement(SummaryTiles, { view, cost })), /range-tokens/);
   // Without priced tokens the four tiles stay as they were.
   assert.match(render(createElement(SummaryTiles, { view })), /lg:grid-cols-4/);
-  assert.doesNotMatch(text(render(createElement(SummaryTiles, { view }))), /API değeri/);
+  assert.doesNotMatch(text(render(createElement(SummaryTiles, { view }))), /API karşılığı/);
 
   const balance = text(render(createElement(AccountBalance, { view, accounts, cost })));
-  assert.match(balance, /API değeri · payı/);
+  assert.match(balance, /API karşılığı · payı/);
   assert.match(balance, /Kişisel · Max[\s\S]*\$1\.298,00 ·%58/);
   assert.match(balance, /Vertex[\s\S]*≈\$1\.001,50 ·%27/);
   // The former row has no account id and so no amount.

@@ -195,7 +195,7 @@ function Tiles({ view }: { view: TokenUsageView }) {
           label={t("API karşılığı", "API value")}
           value={`${totals.costEstimated ? "≈" : ""}${formatCost(cost, language)}`}
           exact={t(
-            "Bu token’lar Anthropic API liste fiyatlarıyla ödenseydi tutacak tutar. Aboneliğinizin ücreti bundan bağımsızdır.",
+            "Bu token’lar Anthropic API liste fiyatlarıyla ödenseydi tutacak tutar. Aboneliğinin ücreti bundan ayrıdır.",
             "What these tokens would cost at Anthropic’s API list prices. Your subscription’s price is separate.",
           )}
         />
@@ -757,7 +757,7 @@ function Content({
       {view.unpricedModels.length > 0 && !empty && (
         <Note className="text-xs">
           {t(
-            `${formatTokens(view.totals.unpriced ?? 0, "tr")} token fiyatı bilinmeyen modellerden; tutara katılmadı (${view.unpricedModels.join(", ")}).`,
+            `${formatTokens(view.totals.unpriced ?? 0, "tr")} token, fiyatı bilinmeyen modellerden geldi; tutara katılmadı (${view.unpricedModels.join(", ")}).`,
             `${formatTokens(view.totals.unpriced ?? 0, "en")} tokens are from models with no known price and are left out of the amount (${view.unpricedModels.join(", ")}).`,
           )}
         </Note>
@@ -789,7 +789,7 @@ function Content({
       {view.progress.error && (
         <Note className="text-xs">
           {t(
-            "Token kaydı kaydedilemiyor; Relay’i yeniden başlatınca tarama baştan yapılır.",
+            "Token kayıtları saklanamıyor; Relay yeniden başlayınca tarama baştan yapılır.",
             "Token records cannot be saved; the scan restarts after Relay restarts.",
           )}
         </Note>

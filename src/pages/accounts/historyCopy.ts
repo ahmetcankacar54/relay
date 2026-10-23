@@ -42,7 +42,7 @@ export function historyCopy(
         note:
           kind === "personal"
             ? t(
-                "Kişisel hesapların Code geçmişi aynı grupta korunur.",
+                "Kişisel hesaplar yerel Code geçmişini paylaşır.",
                 "Personal accounts share their local Code history.",
               )
             : t(

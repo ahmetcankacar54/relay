@@ -240,7 +240,7 @@ test("insight: an idle account beside a full one suggests shifting the order", (
   };
   const both = [alto, kisisel];
   assert.deepEqual(build({ accounts: both, rollups: idleRollups(9) }).insight, {
-    tr: "Alto 5 gündür boşta; Kişisel açıldığında neredeyse hep doluyor. Sırayı Alto’ya kaydırmak 5 saatlik takılmaları azaltır.",
+    tr: "Alto 5 gündür boşta; Kişisel ise dönemi açıldığında neredeyse hep doluyor. Alto hesabını sırada öne almak 5 saatlik limite takılmayı azaltır.",
     en: "Alto has sat idle for 5 days; Kişisel is almost always full when it opens. Moving Alto up the order would cut 5-hour limit stops.",
   });
   // Idle for two days only, or a single account's view: the plain note that Kişisel fills.

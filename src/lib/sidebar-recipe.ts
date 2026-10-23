@@ -7,12 +7,12 @@ import type { SidebarGapSummary } from "../../shared/types";
  * Switching page: the one-line summary, the line under it, and Copy recipe / Dismiss.
  */
 
-/** What the account lacks, in one line: "Alto hesabında 9 bölüm eksik, 157 oturum bölümsüz". */
+/** What the account lacks, in one line: "Alto hesabında 9 bölüm eksik, 157 oturum bir bölümde değil". */
 export function sidebarGapLine(gap: SidebarGapSummary, t: T): string {
   const { missingSections: n, sessions: m } = gap;
   const tr = [
     ...(n > 0 ? [`${n} bölüm eksik`] : []),
-    ...(m > 0 ? [`${m} oturum bölümsüz`] : []),
+    ...(m > 0 ? [`${m} oturum bir bölümde değil`] : []),
   ].join(", ");
   const en = [
     ...(n > 0 ? [`${n} ${n === 1 ? "section" : "sections"} missing`] : []),
@@ -30,7 +30,7 @@ export function sidebarRecipeHint(gap: SidebarGapSummary, copied: boolean, t: T)
         `Copied. Paste it into a Code session on ${gap.to}; Claude rebuilds the sections and asks before each move.`,
       )
     : t(
-        `${from ? `Kaynak: ${from}. ` : ""}Tarifi bir Code oturumuna yapıştırınca Claude bölümleri kurar.`,
+        `${from ? `Kaynak: ${from}. ` : ""}Talimatı bir Code oturumuna yapıştırınca Claude bölümleri kurar.`,
         `${from ? `From ${from}. ` : ""}Paste the recipe into a Code session and Claude rebuilds the sections.`,
       );
 }

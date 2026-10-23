@@ -48,11 +48,11 @@ export interface ContinuationSettingsView {
 const explanations: Record<string, [string, string]> = {
   disabled: ["Otomatik geçiş kapalı.", "Automatic switching is off."],
   armed: [
-    "Bu konuşmanın kota nedeniyle durması bekleniyor.",
+    "Bu konuşmanın limit dolduğu için durması bekleniyor.",
     "Waiting for this conversation to stop because its quota is exhausted.",
   ],
   "awaiting-quota-stop": [
-    "Bu konuşmanın kota nedeniyle durması bekleniyor. Kota yüzdesi tek başına geçiş başlatmaz.",
+    "Bu konuşmanın limit dolduğu için durması bekleniyor. Limit yüzdesi tek başına geçiş başlatmaz.",
     "Waiting for this conversation to stop at quota. The quota percentage alone does not trigger a switch.",
   ],
   "checkpointed-handoff": [
@@ -64,31 +64,31 @@ const explanations: Record<string, [string, string]> = {
     "The response has not stopped yet. Waiting for it to finish before restarting the Claude app.",
   ],
   "quota-stop-unverified": [
-    "Bu yanıtın kota nedeniyle durduğu doğrulanamadı. Geçiş yapılmadı; yeniden kontrol et.",
+    "Bu yanıtın limit dolduğu için durduğu doğrulanamadı. Geçiş yapılmadı; yeniden kontrol et.",
     "Could not verify that this response stopped at quota. No switch was made; check again.",
   ],
   "quota-checkpoint-changed": [
-    "Kota nedeniyle duran yanıtın kaydı değişti. Geçiş bekletiliyor; konuşmayı yeniden kontrol et.",
+    "Limit dolduğu için duran yanıtın kaydı değişti. Geçiş bekletiliyor; konuşmayı yeniden kontrol et.",
     "The record of the quota-stopped response changed. Switching is paused; check the conversation again.",
   ],
   "own-quota-wakeup-can-takeover": [
-    "Bu konuşmanın kota yenilenmesindeki devamı henüz devralınamadı. Çift devam başlatmamak için geçiş bekliyor.",
-    "Could not yet take over this conversation’s scheduled quota resume. Switching is waiting to avoid starting two continuations.",
+    "Bu konuşmada Claude’un “Auto-continue when limits reset” seçeneği açık ve Relay onu henüz kapatamadı. Konuşma iki kez sürdürülmesin diye geçiş bekliyor.",
+    "Claude’s “Auto-continue when limits reset” is on for this conversation and Relay could not turn it off yet. Switching waits so the conversation is not continued twice.",
   ],
   "own-quota-wakeup-uncertain": [
-    "Claude uygulamasının kota yenilenmesinde devam zamanlayıcısının devralındığı kesinleşmedi. Otomatik işlem durduruldu; Claude uygulamasındaki zamanlayıcıyı kontrol et. Relay aynı işlemi kendiliğinden tekrarlamaz.",
-    "Could not confirm takeover of the Claude app’s scheduled quota resume. Automation stopped; check the timer in the Claude app. Relay will not repeat the action automatically.",
+    "Relay’in, Claude uygulamasındaki “Auto-continue when limits reset” seçeneğini kapatıp kapatmadığı kesinleşmedi. Otomatik işlem durdu; bu seçeneği Claude uygulamasında kontrol et. Relay aynı işlemi kendiliğinden tekrarlamaz.",
+    "Relay could not confirm whether it turned off “Auto-continue when limits reset” in the Claude app. Automation stopped; check that option in the Claude app. Relay will not repeat the action on its own.",
   ],
   "quota-available": [
-    "Kota henüz dolmadı. Seçtiğin konuşma izleniyor.",
+    "Limit henüz dolmadı. Seçtiğin konuşma izleniyor.",
     "Quota is still available. Watching your selected conversation.",
   ],
   "source-quota-available": [
-    "Kota henüz dolmadı. Seçtiğin konuşma izleniyor.",
+    "Limit henüz dolmadı. Seçtiğin konuşma izleniyor.",
     "Quota is still available. Watching your selected conversation.",
   ],
   "quota-exhausted": [
-    "Kota doldu. Yanıtın ve diğer görevlerin durması bekleniyor.",
+    "Limit doldu. Yanıtın ve diğer görevlerin durması bekleniyor.",
     "Quota exhausted. Waiting for the response and other tasks to stop.",
   ],
   "desktop-work-active": [
@@ -168,8 +168,8 @@ const explanations: Record<string, [string, string]> = {
     "A different conversation is open in the Claude app. Switching is paused; turn watching off and on to watch this conversation.",
   ],
   "target-identity-changed": [
-    "Hedef hesabın bağlantı kimliği değişti. Bağlantıyı kontrol edip izlemeyi kapat ve yeniden aç.",
-    "The target account’s connection identity changed. Check the connection, then turn watching off and on.",
+    "Hedef hesabın girişleri artık başka bir Claude hesabına ait. Hesabın girişlerini kontrol et, sonra izlemeyi kapatıp yeniden aç.",
+    "The target account’s sign-ins now belong to another Claude account. Check its sign-ins, then turn watching off and on.",
   ],
   "context-changed": [
     "Açık hesap veya konuşma değişti. Bu izleme durduruldu; yeni konuşmayı kontrol edip yeniden etkinleştir.",
@@ -196,7 +196,7 @@ const explanations: Record<string, [string, string]> = {
     "No connected account in the shared history scope has fresh, sufficient quota. Will check again when usage is refreshed; the Claude app is left alone.",
   ],
   "automatic-target-enrollment-unavailable": [
-    "Otomatik geçiş için başka bir hesabın Claude uygulaması ve limit okuma girişlerini aynı kimlikle tamamla.",
+    "Otomatik geçiş için başka bir hesabın Claude uygulaması girişini ve limit okuma girişini aynı Claude hesabıyla tamamla.",
     "Complete matching Claude app and usage sign-ins for another account to enable automatic switching.",
   ],
   "target-cooldown": [
@@ -204,12 +204,12 @@ const explanations: Record<string, [string, string]> = {
     "The target account is still in its cooldown period. Will check again when it ends.",
   ],
   "identity-not-enrolled": [
-    "Açık ve hedef hesapların Claude uygulaması ve limit okuma girişleri aynı kimlikle doğrulanmalı.",
+    "Açık ve hedef hesabın Claude uygulaması girişi ile limit okuma girişi aynı Claude hesabına ait olmalı ve doğrulanmalı.",
     "The current and target accounts need matching, verified Claude app and usage sign-ins.",
   ],
   "history-boundary": [
-    "Bu iki hesap ortak geçmiş kapsamında değil. Hesap geçişi ayarlarından kapsamı düzenle.",
-    "These accounts are outside the shared history scope. Update the scope in account switching settings.",
+    "Bu iki hesap ortak geçmiş kapsamında değil. Kapsamı Geçiş sayfasındaki “Code geçmişi” bölümünden düzenle.",
+    "These accounts are outside the shared history scope. Change the scope under “Code history” on the Switching page.",
   ],
   "browser-sign-in": [
     "Bir hesabın limit okuma girişi sürüyor. Giriş tamamlanana kadar geçiş bekler.",
@@ -220,7 +220,7 @@ const explanations: Record<string, [string, string]> = {
     "This watch needs a new continuation confirmation. Turn watching off and enable it again.",
   ],
   "unfinished-attempt": [
-    "Yarım kalan geçiş kaydı var. Yeni bir geçiş açmadan önce Claude uygulamasındaki konuşmayı kontrol edip aşağıdan doğrulamayı sürdür.",
+    "Yarım kalan bir geçiş kaydı var. Yeni bir izleme açmadan önce Claude uygulamasındaki konuşmayı kontrol et ve aşağıdan doğrulamayı sürdür.",
     "An interrupted handoff is recorded. Check the conversation in the Claude app and resume verification below before enabling a new handoff.",
   ],
   "attempt-interrupted": [
@@ -228,7 +228,7 @@ const explanations: Record<string, [string, string]> = {
     "The handoff was interrupted. Check the account and conversation in the Claude app, then resume verification below.",
   ],
   "quota-episode-already-continued": [
-    "Bu kota duruşu için zaten devam edildi. Aynı yanıt için ikinci bir devam mesajı gönderilmeyecek.",
+    "Limit dolduğu için duran bu yanıt zaten sürdürüldü. Aynı yanıt için ikinci bir devam mesajı gönderilmeyecek.",
     "This quota stop was already continued. A second continuation message will not be sent for the same response.",
   ],
   "new-turn-not-observed": [
@@ -274,11 +274,11 @@ const readinessExplanations: Record<
   [string, string]
 > = {
   "source-not-enrolled": [
-    "Kaynak hesabın eşleşen Claude uygulaması ve limit okuma girişleri doğrulanmalı.",
+    "Kaynak hesabın Claude uygulaması girişi ile limit okuma girişi aynı hesaba ait olmalı ve doğrulanmalı.",
     "Verify matching Claude app and usage sign-ins for the source account.",
   ],
   "identity-not-enrolled": [
-    "Eşleşen Claude uygulaması ve limit okuma girişleri gerekli.",
+    "Aynı hesaba ait Claude uygulaması girişi ve limit okuma girişi gerekli.",
     "Matching Claude app and usage sign-ins are required.",
   ],
   "duplicate-identity": [
@@ -290,16 +290,16 @@ const readinessExplanations: Record<
     "This account is outside the shared history scope.",
   ],
   "quota-not-fresh": [
-    "Son 5 dakika içinde doğrulanmış limit gerekli. Hesap kartından limitleri yenile.",
-    "Usage verified within the last 5 minutes is required. Refresh it on the account card.",
+    "Son 5 dakika içinde doğrulanmış limit gerekli. Hesaplar sayfasından limitleri yenile.",
+    "Usage verified within the last 5 minutes is required. Refresh it on the Accounts page.",
   ],
   "five-hour-unavailable": [
     "5 saatlik limit verisi yok; otomatik geçiş hedefi olamaz.",
     "5-hour quota is unavailable; cannot be an automatic target.",
   ],
   "quota-window-invalid": [
-    "Limitin yenilenme zamanı güncel değil. Hesap kartından limitleri yenile.",
-    "The quota reset time is not current. Refresh usage on the account card.",
+    "Limitin yenilenme zamanı güncel değil. Hesaplar sayfasından limitleri yenile.",
+    "The quota reset time is not current. Refresh usage on the Accounts page.",
   ],
   "target-quota-unavailable": [
     "5 saatlik veya haftalık limitin %90’ı ya da fazlası kullanıldı.",
@@ -480,12 +480,12 @@ export function ContinuationSettings({
         id={`${fieldId}-title`}
         icon={<ShieldCheck size={18} aria-hidden="true" />}
         title={t(
-          "Kota dolunca geç ve devam et",
-          "Switch and continue at quota",
+          "Limit dolunca geç ve devam et",
+          "Switch and continue when the limit is reached",
         )}
         description={t(
-          "Kota dolunca uygun hesaba geçer ve bu Code konuşmasında devam eder. İzin modu korunur.",
-          "When quota runs out, switches to an eligible account and continues this Code conversation. Its permission mode is kept.",
+          "Limit dolunca uygun hesaba geçer ve bu Code konuşmasında devam eder. İzin modu korunur.",
+          "When the limit is reached, switches to an eligible account and continues this Code conversation. Its permission mode is kept.",
         )}
         aside={
           <Badge variant="outline">
@@ -541,7 +541,7 @@ export function ContinuationSettings({
               ? selectedTarget.desktop?.email
               : t(
                   `${targetCount} bağlı hesap · geçiş anında değerlendirilir`,
-                  `${targetCount} connected accounts · checked at handoff`,
+                  `${targetCount} connected ${targetCount === 1 ? "account" : "accounts"} · checked at handoff`,
                 )}
           </small>
           {!hasTarget && (
@@ -559,13 +559,13 @@ export function ContinuationSettings({
         <div className={panel}>
           <strong className="text-sm font-semibold">
             {t(
-              `${eligibleCount} hesabın hedef kapasitesi doğrulandı`,
-              `${eligibleCount} accounts have verified target capacity`,
+              `${eligibleCount} hesapta yeterli limit doğrulandı`,
+              `Enough quota verified on ${eligibleCount} ${eligibleCount === 1 ? "account" : "accounts"}`,
             )}
           </strong>
           <Note>
             {t(
-              "Bu, şu anki limit kontrolüdür. Geçiş sırasında kayıtlı hesap kapsamı, kaynak kota ve görevlerin durumu yeniden doğrulanır.",
+              "Bu yalnızca şu anki limit kontrolü. Geçiş sırasında kayıtlı hesap kapsamı, kaynak hesabın limiti ve görevlerin durumu yeniden doğrulanır.",
               "This checks current quota only. The saved account scope, source quota and task state are verified again at handoff.",
             )}
           </Note>
@@ -601,8 +601,8 @@ export function ContinuationSettings({
           {settings?.usageRefreshMinutes !== 5 && (
             <Note className="mt-2">
               {t(
-                "Otomatik geçiş en fazla 5 dakikalık limit verisi kullanır. Kullanım ayarlarında 5 dakikalık yenileme seç; daha uzun aralıkta geçiş yeni veriyi bekleyebilir.",
-                "Automatic switching uses usage data at most 5 minutes old. Choose 5-minute refresh in Usage settings; longer intervals can delay switching until a fresh check.",
+                "Otomatik geçiş en fazla 5 dakikalık limit verisini kullanır. Ayarlar’da “Limitleri otomatik yenile” için “5 dakikada bir” seç; daha uzun aralıkta geçiş yeni veriyi bekleyebilir.",
+                "Automatic switching uses usage data at most 5 minutes old. Choose “Every 5 minutes” for “Refresh limits automatically” in Settings; longer intervals can delay switching until a fresh check.",
               )}
             </Note>
           )}
@@ -687,8 +687,8 @@ export function ContinuationSettings({
           />
           <label htmlFor={`${fieldId}-consent`} className="text-[13px]">
             {t(
-              "Kota dolunca ve diğer işler bitince Claude uygulamasını yeniden başlat, uygun hesaba geç ve bu konuşmaya bir devam mesajı gönder.",
-              "When quota runs out and other work finishes, restart the Claude app, switch to an eligible account and send one continuation message to this conversation.",
+              "Limit dolunca ve diğer işler bitince Claude uygulamasını yeniden başlat, uygun hesaba geç ve bu konuşmaya bir devam mesajı gönder.",
+              "When the limit is reached and other work finishes, restart the Claude app, switch to an eligible account and send one continuation message to this conversation.",
             )}
           </label>
         </div>
@@ -730,7 +730,7 @@ export function ContinuationSettings({
       {legacyWatch && (
         <Note>
           {t(
-            "Bu önceki izleme, kayıtlı hedef hesabı kullanır. Otomatik hesap seçimine geçmek için izlemeyi kapatıp yeniden aç.",
+            "Bu izleme önceki bir sürümde açıldı ve kayıtlı hedef hesabı kullanıyor. Otomatik hesap seçimine geçmek için izlemeyi kapatıp yeniden aç.",
             "This earlier watch retains its saved target account. Turn watching off and on to use automatic account selection.",
           )}
         </Note>

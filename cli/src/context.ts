@@ -59,7 +59,7 @@ export async function openContext(
   const lang = pickLang(flags.lang as string | undefined, io.env);
   const t = translator(lang);
   if (deps.platform !== "darwin")
-    throw new CliError(t("relay yalnız macOS'ta çalışır.", "relay works on macOS only."), EXIT.environment);
+    throw new CliError(t("relay yalnızca macOS’ta çalışır.", "relay works on macOS only."), EXIT.environment);
   const paths = relayPaths(io.env);
   const appVersion = await deps.relayAppVersion();
   const stateExisted = fs.existsSync(path.join(paths.data, "state.json"));
@@ -78,7 +78,7 @@ export async function openContext(
     if (store.fileSchema > STATE_SCHEMA)
       throw new CliError(
         t(
-          "Hesap listesini daha yeni bir Relay yazmış. relay'i güncelleyin: npm i -g @ahmetcankacar/relay",
+          "Hesap listesini daha yeni bir Relay yazmış. relay’i güncelle: npm i -g @ahmetcankacar/relay",
           "A newer Relay wrote the account list. Update relay: npm i -g @ahmetcankacar/relay",
         ),
         EXIT.environment,
@@ -88,7 +88,7 @@ export async function openContext(
   if (needs.desktop && vault.kind === "newer")
     throw new CliError(
       t(
-        "Kasayı daha yeni bir Relay yazmış. relay'i güncelleyin: npm i -g @ahmetcankacar/relay",
+        "Kasayı daha yeni bir Relay yazmış. relay’i güncelle: npm i -g @ahmetcankacar/relay",
         "A newer Relay wrote the vault. Update relay: npm i -g @ahmetcankacar/relay",
       ),
       EXIT.environment,
@@ -97,7 +97,7 @@ export async function openContext(
     throw new CliError(
       appVersion !== undefined && !olderThan(appVersion, "0.12.0")
         ? t(
-            "Relay.app kasayı henüz yeni biçime taşımadı. Relay.app'i açın ve Keychain sorusuna (\"Relay Safe Storage\") izin verin; sorun sürerse uygulamadaki uyarıya bakın.",
+            "Relay.app kasayı henüz yeni biçime taşımadı. Relay.app’i aç ve Anahtarlık sorusuna (\"Relay Safe Storage\") izin ver; sorun sürerse uygulamadaki uyarıya bak.",
             "Relay.app has not moved the vault to the new format yet. Open Relay.app and allow its Keychain prompt (\"Relay Safe Storage\"); if it persists, see the warning the app shows.",
           )
         : updateAppMessage(t),
@@ -114,16 +114,16 @@ export async function openContext(
       throw new CliError(
         error.reason === "missing"
           ? t(
-              `Keychain'de "${VAULT_KEY_SERVICE}" öğesi yok, bu yüzden kayıtlı girişler açılamıyor. Baştan başlamak için: relay reset-vault`,
+              `Anahtarlık’ta "${VAULT_KEY_SERVICE}" öğesi yok, bu yüzden kayıtlı girişler açılamıyor. Baştan başlamak için: relay reset-vault`,
               `The Keychain item "${VAULT_KEY_SERVICE}" is missing, so saved sign-ins cannot be opened. To start over: relay reset-vault`,
             )
           : error.reason === "locked"
             ? t(
-                `Keychain'deki "${VAULT_KEY_SERVICE}" öğesi okunamadı. Mac'in kilidini (oturum anahtar zincirini) açıp yeniden deneyin.`,
-                `The Keychain item "${VAULT_KEY_SERVICE}" could not be read. Unlock the Mac's login keychain and try again.`,
+                `Anahtarlık’taki "${VAULT_KEY_SERVICE}" öğesi okunamadı. Mac’in kilidini (giriş anahtarlığını) açıp yeniden dene.`,
+                `The Keychain item "${VAULT_KEY_SERVICE}" could not be read. Unlock the Mac’s login keychain and try again.`,
               )
             : t(
-                `Keychain'deki "${VAULT_KEY_SERVICE}" öğesi bir kasa anahtarı değil.`,
+                `Anahtarlık’taki "${VAULT_KEY_SERVICE}" öğesi bir kasa anahtarı değil.`,
                 `The Keychain item "${VAULT_KEY_SERVICE}" does not hold a vault key.`,
               ),
         EXIT.environment,

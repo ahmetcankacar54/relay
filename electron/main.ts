@@ -14,7 +14,7 @@ import { themeSource } from "./core/appearance";
 import { appMenuTemplate } from "./app-menu";
 import { pick } from "./language";
 import { routineFailureNotice } from "../shared/routine-failure";
-import { localizeError } from "../src/messages";
+import { localizeError } from "../shared/error-text";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
@@ -1230,8 +1230,8 @@ function notifyAdapted(
           ? "Plan is back to normal."
           : "Plan yeniden normale döndü."
         : en
-          ? `Plan updated for today’s pace · restarts: ${list}`
-          : `Plan bugünkü hızına göre güncellendi · yeniden başlatma: ${list}`,
+          ? `Plan updated for today’s pace · period starts: ${list}`
+          : `Plan bugünkü kullanım hızına göre güncellendi · dönem başlangıçları: ${list}`,
   }).show();
 }
 /**
@@ -1875,12 +1875,12 @@ app.on("before-quit", (event) => {
     void dialog.showMessageBox({
       type: "info",
       message: say(
-        "Hesap bağlantısı yenileniyor.",
-        "Refreshing the account connection.",
+        "Limit okuma girişi yenileniyor.",
+        "Renewing the usage sign-in.",
       ),
       detail: say(
-        "Bağlantıyı yarım bırakmamak için Relay açık kaldı. İşlem tamamlandıktan sonra yeniden çıkabilirsin. Claude uygulaması ve görevleri etkilenmez.",
-        "Relay stayed open to finish the connection safely. Quit again after it completes. The Claude app and its tasks are unaffected.",
+        "Yenilemeyi yarıda bırakmamak için Relay açık kaldı. Bitince yeniden çıkabilirsin. Claude uygulaması ve görevleri etkilenmez.",
+        "Relay stayed open so the renewal isn’t cut off. Quit again once it’s done. The Claude app and its tasks are unaffected.",
       ),
       buttons: [say("Tamam", "OK")],
     });

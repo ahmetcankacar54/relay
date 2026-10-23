@@ -35,7 +35,7 @@ test("in a terminal the prompt says what happens; declining quits nothing", asyn
   await f.saved("B");
   assert.equal(await f.run("switch", "A"), 1);
   assert.equal(f.state.quits, 0);
-  assert.match(f.out(), /Claude Desktop will quit and reopen signed in as A/);
+  assert.match(f.out(), /The Claude app will quit and reopen signed in as A/);
   assert.match(f.out(), /Code sessions will stop/);
   assert.match(f.out(), /drafts/);
   assert.match(f.out(), /Code history/);
@@ -93,7 +93,7 @@ test("Claude opened during the switch leaves the journal and points to relay rec
   void a;
   f.clear();
   assert.equal(await f.run("recover", "--yes"), 0);
-  assert.match(f.out(), /Nothing to recover/);
+  assert.match(f.out(), /No backup to restore/);
 });
 
 test("without a desktop session it exits 5 before quitting", async (t) => {
@@ -149,7 +149,7 @@ test("relay switch leaves the Claude extension and its browser alone, and says w
   assert.deepEqual(f.extension.opened, []);
   assert.deepEqual(f.extension.stored.get(dir), signInFor(b.desktop!.accountUuid, 2));
   assert.match(f.out(), /Switched to A/);
-  assert.match(f.out(), /This tool cannot change the Claude extension's sign-in; use Relay\.app: Switching/);
+  assert.match(f.out(), /This tool cannot change the Claude extension’s sign-in; use Relay\.app: Switching/);
   assert.ok(!(f.out() + f.err()).includes("SECRET"));
   assert.equal(a.desktop!.accountUuid.length, 36);
 });

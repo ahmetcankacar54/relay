@@ -77,7 +77,7 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.doesNotMatch(html, /uyarı eşiğini geçti|Önerilen:/);
   const hint = suggestionBlock(html);
   assert.match(hint, />Limit dolmak üzere</);
-  assert.match(hint, /<b>Vertex<\/b> en uygunu: %12 kullanıldı\./);
+  assert.match(hint, /En uygun hesap <b>Vertex<\/b>: %12 kullanıldı\./);
   assert.match(hint, /<button[^>]*>Vertex hesabına geç<\/button>/);
   assert.match(html, />Kişisel · Max limiti dolmak üzere · önerilen üstte</);
   assert.doesNotMatch(html, /en uygunu üstte</);
@@ -102,13 +102,13 @@ test("overview shows the active account, limits, accounts, today and automation"
   const automation = automationRows(html);
   assert.equal(automation.length, 2);
   assert.match(automation[0], />Otomatik geçiş</);
-  assert.match(automation[0], /Kapalı\. Kota dolunca hesabı sen değiştirirsin\./);
+  assert.match(automation[0], /Kapalı\. Limit dolunca başka hesaba sen geçersin\./);
   assert.match(automation[1], />Önceden başlatma</);
   assert.match(automation[1], />Kapalı</);
   assert.doesNotMatch(html, /Claude uygulaması kapanınca hazırla/);
   // Refresh and bring-to-front live in the page header.
   assert.match(html, /<button[^>]*aria-label="Limitleri yenile"/);
-  assert.match(html, /<button[^>]*>Claude&#x27;u öne getir<\/button>/);
+  assert.match(html, /<button[^>]*>Claude uygulamasını aç<\/button>/);
 });
 
 test("overview without an active account offers onboarding", () => {
@@ -303,7 +303,7 @@ test("overview rows show the account's status where something is wrong, and stal
   Object.assign(waiting.data as Snapshot, flows);
   assert.match(rowFor(render(waiting), "Vertex"), /Tarayıcı onayı bekleniyor/);
   // Stale but healthy: the line says how old the reading is.
-  assert.deepEqual(status(other, stale), ["Pro · limit verisi 1 sa önce", "Limit verisi eski"]);
+  assert.deepEqual(status(other, stale), ["Pro · limit verisi 1 sa önce okundu", "Limit verisi eski"]);
   assert.deepEqual(status(other, use("other", 1, 1)), ["Pro · hazır", "Hazır · dönem başlamadı"]);
 });
 
@@ -445,7 +445,7 @@ test("the automation card's status lines are set in text-xs, not 11 px", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const html = render(relayFor(active, [active, acct("other", "Vertex", "pro")], { active: use("active", 10, 10) }));
   const [switching] = automationRows(html);
-  assert.match(switching, /<span class="block truncate text-xs text-muted-foreground">[^<]*Kapalı\. Kota dolunca hesabı sen değiştirirsin\.<\/span>/);
+  assert.match(switching, /<span class="block truncate text-xs text-muted-foreground">[^<]*Kapalı\. Limit dolunca başka hesaba sen geçersin\.<\/span>/);
   assert.doesNotMatch(html.slice(html.indexOf(">Otomasyon</h2>")), /text-\[11px\]/);
 });
 
@@ -484,7 +484,7 @@ test("a first run lists the three prerequisites, each with a mark, a reason and 
   const app = item(list, "desktop");
   assert.match(app, /data-met="false"/);
   assert.match(app, /Claude uygulaması/);
-  assert.match(app, /Relay, Claude uygulamasını hesaplar arasında geçirir\./);
+  assert.match(app, /Relay, Claude uygulamasında hesaplar arasında geçiş yapar\./);
   assert.match(app, /<a[^>]*href="https:\/\/claude\.ai\/download"[^>]*target="_blank"[^>]*>İndir<\/a>/);
   const cli = item(list, "cli");
   assert.match(cli, /data-met="false"/);
@@ -505,7 +505,7 @@ test("met prerequisites are ticked and the list hides once all three are met", (
   assert.doesNotMatch(item(partial, "desktop"), /İndir/);
   // With the Claude app there, the Code step can open it.
   assert.match(item(partial, "code"), /<button[^>]*>Claude uygulamasını aç<\/button>/);
-  assert.match(item(checklist(render(firstRun({ desktop: { running: true } }))), "code"), /<button[^>]*>Claude uygulamasını öne getir<\/button>/);
+  assert.match(item(checklist(render(firstRun({ desktop: { running: true } }))), "code"), /<button[^>]*>Claude uygulamasını aç<\/button>/);
   const ready = render(
     firstRun({
       desktop: { currentAccountUuid: "00000000-0000-4000-8000-000000000001", organizations: ["00000000-0000-4000-8000-000000000002"] },
@@ -652,12 +652,12 @@ test("Overview rings say how far each reading can be trusted, and the key explai
   const ring = (name: string) => /<div role="img"[^>]*>/.exec(rowFor(html, name))?.[0] ?? "";
   assert.doesNotMatch(ring("Fresh"), /data-state/);
   assert.match(ring("Old"), /data-state="stale"/);
-  assert.match(ring("Old"), /aria-label="Old · 5 saat %20 kullanıldı · hafta %30 kullanıldı · eski veri"/);
+  assert.match(ring("Old"), /aria-label="Old · 5 saat %20 kullanıldı · hafta %30 kullanıldı · limit verisi eski"/);
   assert.match(ring("None"), /data-state="unknown"/);
   assert.match(ring("Full"), /data-state="full"/);
   // The stale row's line says how old its reading is; the key under the list says what faded rings mean.
-  assert.match(rowFor(html, "Old"), />Pro · limit verisi 2 sa önce</);
-  assert.match(html, /soluk ve kesikli: eski veri/);
+  assert.match(rowFor(html, "Old"), />Pro · limit verisi 2 sa önce okundu</);
+  assert.match(html, /soluk ve kesikli: limit verisi eski/);
   // Without a stale row the key keeps its two entries.
   const current = render(relayFor(active, [active, fresh], { active: use("active", 10, 10), fresh: use("fresh", 20, 30) }));
   assert.match(current, /ince: hafta/);

@@ -16,7 +16,7 @@ export async function confirm(
   if (!io.isTTY)
     throw new CliError(
       t(
-        "Bu işlem onay ister. Bir terminalde çalıştırın ya da --yes ekleyin.",
+        "Bu işlem onay ister. Bir terminalde çalıştır ya da --yes ekle.",
         "This needs confirmation. Run it in a terminal, or add --yes.",
       ),
       EXIT.confirm,

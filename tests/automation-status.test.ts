@@ -119,23 +119,23 @@ test("the percent prefix says what is used, rounded down, and needs an active ac
   );
   assert.equal(
     rounded.text[0],
-    "Kişisel · Max %42 kullanıldı · Kapalı. Kota dolunca hesabı sen değiştirirsin.",
+    "Kişisel · Max %42 kullanıldı · Kapalı. Limit dolunca başka hesaba sen geçersin.",
   );
   assert.equal(
     rounded.text[1],
-    "Kişisel · Max 42% used · Off. You switch accounts yourself when a quota runs out.",
+    "Kişisel · Max 42% used · Off. When the limit is reached, you switch accounts yourself.",
   );
   const noUsage = automationStatus(input({ usage: {} }));
   assert.equal(
     noUsage.text[0],
-    "Kapalı. Kota dolunca hesabı sen değiştirirsin.",
+    "Kapalı. Limit dolunca başka hesaba sen geçersin.",
   );
   const unknownActive = automationStatus(
     input({ desktop: desktop("elsewhere") }),
   );
   assert.equal(
     unknownActive.text[0],
-    "Kapalı. Kota dolunca hesabı sen değiştirirsin.",
+    "Kapalı. Limit dolunca başka hesaba sen geçersin.",
   );
 });
 
@@ -170,7 +170,7 @@ test("fleet waiting for other work offers switching now and says who continues",
   assert.equal(status.mode, "quota");
   assert.equal(
     status.text[0],
-    "Kişisel · Max %100 kullanıldı · 2 konuşma kota yüzünden durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+    "Kişisel · Max %100 kullanıldı · 2 konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
   );
   assert.equal(
     status.text[1],
@@ -206,11 +206,11 @@ test("fleet with a full account and nothing stopped offers the target", () => {
   // Nothing stopped, so there is no continue message to warn about.
   assert.equal(
     full.text[0],
-    "Kişisel · Max %100 kullanıldı · Kota doldu ama kota yüzünden duran konuşma yok, devam ettirecek bir şey yok. İstersen şimdi Kişisel · İkinci’ye geç.",
+    "Kişisel · Max %100 kullanıldı · Limit doldu ama duran konuşma yok; devam ettirecek bir şey yok. İstersen şimdi Kişisel · İkinci’ye geç.",
   );
   assert.equal(
     full.text[1],
-    "Kişisel · Max 100% used · Quota is out but no conversation stopped at the limit, so there is nothing to continue. You can switch to Kişisel · İkinci now.",
+    "Kişisel · Max 100% used · The limit is reached but no conversation stopped at it, so there is nothing to continue. You can switch to Kişisel · İkinci now.",
   );
 
   const notFull = automationStatus(
@@ -226,7 +226,7 @@ test("fleet with a full account and nothing stopped offers the target", () => {
   assert.equal(notFull.banner, false);
   assert.equal(
     notFull.text[0],
-    "Kişisel · Max %70 kullanıldı · İzliyorum. Kota dolunca duran konuşmaları sıradaki hesapta devam ettiririm.",
+    "Kişisel · Max %70 kullanıldı · İzliyorum. Limit dolunca duran konuşmaları sıradaki hesapta devam ettiririm.",
   );
 });
 
@@ -245,7 +245,7 @@ test("a full account with nothing stopped and no target says nothing is ready", 
   assert.equal(status.tone, "waiting");
   assert.equal(
     status.text[0],
-    "Kişisel · Max %100 kullanıldı · Kota doldu; duran konuşma ve hazır hesap yok.",
+    "Kişisel · Max %100 kullanıldı · Limit doldu; duran konuşma ve hazır hesap yok.",
   );
 });
 
@@ -283,7 +283,7 @@ test("a full reading too old to confirm the quota waits for fresh data", () => {
   );
   assert.equal(
     nothingReady.text[0],
-    "Kişisel · Max %100 kullanıldı · Kota doldu; duran konuşma ve hazır hesap yok.",
+    "Kişisel · Max %100 kullanıldı · Limit doldu; duran konuşma ve hazır hesap yok.",
   );
   // Other work running: the sentence stays, the switch waits for fresh data.
   const otherWork = automationStatus(
@@ -465,17 +465,15 @@ test("the sign-in and legacy-watch reasons name what to finish and where", () =>
   );
   assert.match(status("desktop-sign-in").text[0], /Claude uygulaması girişi/);
   assert.match(status("desktop-sign-in").text[1], /Claude app sign-in/);
+  // The legacy watch is named by its card's title on the Switching page.
   assert.match(
     status("continuation-active").text[0],
-    /Eski tek konuşma izlemesi açık/,
+    /Geçiş sayfasındaki “Limit dolunca geç ve devam et” kartı açık/,
   );
-  assert.match(
-    status("continuation-active").text[0],
-    /Geçiş sayfasındaki kartından kapat\./,
-  );
+  assert.match(status("continuation-active").text[0], /Kartı oradan kapat\./);
   assert.match(
     status("continuation-active").text[1],
-    /single-conversation watch is on/,
+    /“Switch and continue when the limit is reached” card on the Switching page is on/,
   );
 });
 
@@ -535,7 +533,7 @@ test("a switch and a continuation in progress say where", () => {
     bare({ fleet: fleet(undefined, { status: "switching" }) }),
   );
   assert.deepEqual(switching.text, [
-    "Kişisel · Max → Kişisel · İkinci geçiliyor…",
+    "Kişisel · Max hesabından Kişisel · İkinci hesabına geçiliyor…",
     "Switching Kişisel · Max → Kişisel · İkinci…",
   ]);
   assert.equal(switching.tone, "waiting");
@@ -548,6 +546,11 @@ test("a switch and a continuation in progress say where", () => {
     "Kişisel · İkinci hesabında 3 konuşma sürdürülüyor…",
     "Continuing 3 conversations on Kişisel · İkinci…",
   ]);
+  // One conversation reads in the singular.
+  assert.equal(
+    automationStatus(bare({ fleet: fleet(undefined, { status: "continuing", stopped: 1 }) })).text[1],
+    "Continuing 1 conversation on Kişisel · İkinci…",
+  );
   assert.equal(continuing.tone, "waiting");
   assert.equal(continuing.banner, false);
 });
@@ -618,7 +621,7 @@ test("a failed switch keeps its cause and an unknown reason keeps its own", () =
   assert.equal(failed.banner, true);
   assert.equal(
     failed.text[0],
-    "Geçiş yapılamadı (desktop-locked). Bu kota olayı tekrar denenmez; istersen elle geç.",
+    "Geçiş yapılamadı (desktop-locked). Bu limit için yeniden denemeyeceğim; istersen elle geç.",
   );
   const unreadable = automationStatus(
     bare({ fleet: fleet("ax-unreadable", { status: "attention" }) }),
@@ -690,8 +693,8 @@ test("off with the old single-conversation watch still armed says so", () => {
   assert.equal(status.banner, true);
   assert.equal(status.switchTo, undefined);
   assert.deepEqual(status.text, [
-    "Kişisel · Max %40 kullanıldı · Kapalı, ama eski tek konuşma izlemesi açık; Geçiş sayfasındaki kartından kapat.",
-    "Kişisel · Max 40% used · Off, but the old single-conversation watch is on; turn it off on the Switching page.",
+    "Kişisel · Max %40 kullanıldı · Kapalı, ama Geçiş sayfasındaki “Limit dolunca geç ve devam et” kartı hâlâ açık; oradan kapat.",
+    "Kişisel · Max 40% used · Off, but the “Switch and continue when the limit is reached” card on the Switching page is still on; turn it off there.",
   ]);
   const disarmed = automationStatus(
     input({ continuation: { enabled: false, status: "off" } }, 40),

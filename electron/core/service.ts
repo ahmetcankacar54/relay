@@ -243,7 +243,7 @@ export class Service {
     const input = launchSchema.parse(raw);
     const account = this.store.account(input.accountId);
     if (this.auth.active(account.id))
-      throw new Error("Önce bu hesabın giriş işlemini tamamla veya iptal et.");
+      throw new Error("Önce bu hesabın limit okuma girişini tamamla ya da iptal et.");
     if (account.cooldownUntil && Date.parse(account.cooldownUntil) > Date.now())
       throw new Error(
         "Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.",
@@ -264,13 +264,13 @@ export class Service {
         "Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.",
       );
     if (input.desktop && !input.desktopConsent)
-      throw new Error("Desktop’ta doğru hesabın açık olduğunu doğrula.");
+      throw new Error("Claude uygulamasında doğru hesabın açık olduğunu doğrula.");
     if (
       input.desktop &&
       !(await this.currentDiagnostics()).desktopSupported
     )
       throw new Error(
-        "Desktop aktarımı bu platform veya CLI sürümünde desteklenmiyor.",
+        "Claude uygulamasına aktarım bu platformda veya CLI sürümünde desteklenmiyor.",
       );
     if (
       input.desktop &&
@@ -279,7 +279,7 @@ export class Service {
       source.accountId !== "imported"
     )
       throw new Error(
-        "Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Desktop’a gönder.",
+        "Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Claude uygulamasına gönder.",
       );
     const auth = await this.checkAuth(account.id);
     if (!auth.auth?.loggedIn)

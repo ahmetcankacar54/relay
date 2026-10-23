@@ -126,7 +126,7 @@ export function PanelActiveCard({ now }: { now: number }) {
       </div>
       {relay.desktopBusy ? (
         <p className="mt-1.5 text-xs text-muted-foreground">
-          {t("Claude uygulaması işlemi sürüyor", "A Claude app operation is in progress")}
+          {t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running")}
         </p>
       ) : desktop?.recoveryRequired ? (
         <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">

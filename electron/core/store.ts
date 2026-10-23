@@ -249,8 +249,8 @@ export class StoreWriteRefused extends Error {
   constructor(readonly reason: "newer-schema" | "unversioned") {
     super(
       reason === "newer-schema"
-        ? "Relay's account list was written by a newer version. Update this copy of Relay before changing it."
-        : "Relay's account list was written by Relay 0.11 or older. Update Relay.app to 0.12 or later and open it once.",
+        ? "Relay’s account list was written by a newer version. Update this copy of Relay before changing it."
+        : "Relay’s account list was written by Relay 0.11 or older. Update Relay.app to 0.12 or later and open it once.",
     );
   }
 }

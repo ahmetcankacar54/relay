@@ -247,11 +247,11 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(suggestedRow, />Vertex<\/span><span[^>]*>önerilen<\/span><\/span><span[^>]*>%12 · %31 · hazır<\/span><\/span><span[^>]*>Geç<\/span><\/button>/);
   assert.match(html, />Otomasyon</);
   // Automation reads as rows: the setting's name and its state, each opening its page.
-  assert.match(html, /<button type="button" title="Kişisel · Max %78 kullanıldı · Kapalı\. Kota dolunca hesabı sen değiştirirsin\."[^>]*>.*?>Otomatik geçiş<\/span><span[^>]*>Kapalı<\/span>/);
+  assert.match(html, /<button type="button" title="Kişisel · Max %78 kullanıldı · Kapalı\. Limit dolunca başka hesaba sen geçersin\."[^>]*>.*?>Otomatik geçiş<\/span><span[^>]*>Kapalı<\/span>/);
   assert.match(html, /<button type="button"[^>]*>.*?>Önceden başlatma<\/span><span[^>]*>Kapalı<\/span>/);
   assert.doesNotMatch(html, /Kapanınca hazırla/);
   assert.match(html, /Relay’i aç/);
-  assert.match(html, /Güncellendi 1 dk önce/);
+  assert.match(html, /1 dk önce güncellendi/);
   assert.match(html, /Çık/);
   assert.match(html, /w-\[360px\]/);
 });
@@ -310,7 +310,7 @@ test("Desktop busy withholds every switch and explains why", () => {
   assert.equal(rows.length, 2);
   for (const r of rows) {
     // No row offers the switch: its name says why instead, and it is dimmed and drops its Geç.
-    assert.match(r, /aria-label="[^"]* · Claude uygulaması işlemi sürüyor"/);
+    assert.match(r, /aria-label="[^"]* · Claude uygulamasında bir işlem sürüyor"/);
     assert.doesNotMatch(r, /hesabına geç/);
     assert.doesNotMatch(r, />Geç</);
     assert.match(r, /^<button[^>]*class="[^"]*opacity-60/);
@@ -333,7 +333,7 @@ test("confirm state warns before switching", () => {
   // The open row is pressed, and the confirmation strip under the list warns and offers Vazgeç / Geç.
   assert.match(panelRows(html)[0], /^<button type="button" aria-pressed="true" aria-label="Vertex hesabına geç/);
   const strip = html.slice(html.indexOf('data-slot="switch-confirm"'));
-  assert.match(strip, /Claude uygulaması kapanıp <b>Vertex<\/b> ile yeniden açılır/);
+  assert.match(strip, /Claude uygulaması kapanır ve <b>Vertex<\/b> hesabıyla yeniden açılır/);
   assert.match(strip, /<button[^>]*>Vazgeç<\/button><button[^>]*>Geç<\/button>/);
 });
 
@@ -414,19 +414,19 @@ test("the early start row names the adopted start while the plan is adapted", ()
       }),
     );
   const deferred = { factor: 1.6, schedule: [{ accountId: "vertex", startAt: "2026-10-15T10:30:00.000Z" }] };
-  assert.match(pill(keeper(deferred)), />Uyarlandı · Vertex 13:30</);
+  assert.match(pill(keeper(deferred)), />Plan uyarlandı · Vertex 13:30</);
   assert.doesNotMatch(pill(keeper(deferred)), /Sonraki başlatma/);
   // A faster pace alone, or no adaptation: the next start, named with its day
   // (the test's clock is the real one, so the day word varies).
   for (const planning of [keeper({ factor: 1.6, schedule: [] }), keeper()]) {
     const html = pill(planning);
     assert.match(html, />Kişisel · Max [^<]*13:00</);
-    assert.doesNotMatch(html, /Uyarlandı/);
+    assert.doesNotMatch(html, /[Uu]yarlandı/);
   }
   // An entry whose time does not parse is skipped.
   assert.match(
     pill(keeper({ factor: 1, schedule: [{ accountId: "vertex", startAt: "later" }, ...deferred.schedule] })),
-    />Uyarlandı · Vertex 13:30</,
+    />Plan uyarlandı · Vertex 13:30</,
   );
   assert.match(
     pill(keeper({ factor: 1, schedule: [{ accountId: "vertex", startAt: "later" }] })),
@@ -455,7 +455,7 @@ test("the early start row names the adopted start while the plan is adapted", ()
   // Adaptation turned off applies at once.
   assert.doesNotMatch(
     pill(keeper(deferred), { ...settings, planning: { ...settings.planning, adaptive: false } }),
-    /Uyarlandı/,
+    /[Uu]yarlandı/,
   );
 });
 
@@ -770,9 +770,9 @@ const sidebar = (relay: Relay) => wrap(relay, createElement(PanelSidebar));
 test("the sidebar row says what the account lacks and where it comes from, with Copy recipe and Dismiss", () => {
   const html = sidebar(withSidebar(gap()));
   assert.match(html, /Kenar çubuğu düzeni/);
-  assert.match(html, /Alto hesabında 9 bölüm eksik, 157 oturum bölümsüz/);
-  assert.match(html, /Kaynak: Vertex\. Tarifi bir Code oturumuna yapıştırınca Claude bölümleri kurar\./);
-  assert.match(html, />Tarifi kopyala</);
+  assert.match(html, /Alto hesabında 9 bölüm eksik, 157 oturum bir bölümde değil/);
+  assert.match(html, /Kaynak: Vertex\. Talimatı bir Code oturumuna yapıştırınca Claude bölümleri kurar\./);
+  assert.match(html, />Talimatı kopyala</);
   assert.match(html, />Kapat</);
   // No session id ever reaches the panel.
   assert.doesNotMatch(html, /local_/);
@@ -782,14 +782,14 @@ test("the sidebar row says what the account lacks and where it comes from, with 
 test("a sidebar offer that only restores the account's own filing names no source", () => {
   const html = sidebar(withSidebar(gap({ from: [] })));
   assert.doesNotMatch(html, /Kaynak:/);
-  assert.match(html, /Tarifi bir Code oturumuna yapıştırınca Claude bölümleri kurar\./);
+  assert.match(html, /Talimatı bir Code oturumuna yapıştırınca Claude bölümleri kurar\./);
 });
 
 test("the sidebar line names only what is missing, in both languages", () => {
   const tr = (a: string) => a;
   const en = (_: string, b: string) => b;
   assert.equal(sidebarGapLine(gap({ sessions: 0 }), tr), "Alto hesabında 9 bölüm eksik");
-  assert.equal(sidebarGapLine(gap({ missingSections: 0, sessions: 3 }), tr), "Alto hesabında 3 oturum bölümsüz");
+  assert.equal(sidebarGapLine(gap({ missingSections: 0, sessions: 3 }), tr), "Alto hesabında 3 oturum bir bölümde değil");
   assert.equal(sidebarGapLine(gap(), en), "On Alto: 9 sections missing, 157 sessions unfiled");
   assert.equal(sidebarGapLine(gap({ missingSections: 1, sessions: 1 }), en), "On Alto: 1 section missing, 1 session unfiled");
 });

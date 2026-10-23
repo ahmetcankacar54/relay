@@ -109,7 +109,7 @@ function SidebarCarry() {
       value={
         gap
           ? `${sidebarGapLine(gap, t)}. ${sidebarRecipeHint(gap, copiedId === gap.id, t)}`
-          : t("Açık hesapta eksik bölüm yok.", "The open account lacks no sections.")
+          : t("Açık hesapta eksik bölüm yok.", "The open account has every section.")
       }
     >
       {gap && (
@@ -119,7 +119,7 @@ function SidebarCarry() {
           disabled={sidebarActionKeys(gap.id).includes(relay.busy)}
           onClick={() => void copySidebarRecipeAction(relay, gap.id, () => setCopiedId(gap.id))}
         >
-          {t("Tarifi kopyala", "Copy recipe")}
+          {t("Talimatı kopyala", "Copy recipe")}
         </Button>
       )}
     </Carry>
@@ -138,14 +138,14 @@ export function extensionCarry(
   language: "tr" | "en",
 ): { value: string; tone?: "ok" | "warn" | "crit" | "off"; check: boolean } {
   if (status === undefined) return { value: t("Kontrol ediliyor…", "Checking…"), check: false };
-  if (status === null) return { value: t("Bu Mac'te yok", "Not on this Mac"), check: false };
+  if (status === null) return { value: t("Bu Mac’te yok", "Not on this Mac"), check: false };
   if (status.setting.mode === "off") return { value: t("Kapalı", "Off"), tone: "off", check: false };
   const guide = active ? extensionGuide(active, status, accounts, t, language) : undefined;
   const check = guide?.action === "check";
   // Before any check Relay does not know who the extension is on: the count, and Check.
   if (!guide || (check && !status.current))
     return {
-      value: t(`${status.saved.length} hesap bağlı`, `${status.saved.length} accounts linked`),
+      value: t(`${status.saved.length} hesap bağlı`, `${status.saved.length} ${status.saved.length === 1 ? "account" : "accounts"} linked`),
       check,
     };
   return { value: guide.label, tone: guide.tone, check };
@@ -260,7 +260,7 @@ export function Switching() {
                   {t("Şimdi geç", "Switch now")}
                 </Button>
                 <span className="text-center text-[11.5px] text-muted-foreground">
-                  {t("Claude ~15 sn kapalı kalır", "Claude closes for ~15 s")}
+                  {t("Claude uygulaması ~15 sn kapalı kalır", "The Claude app closes for ~15 s")}
                 </span>
               </div>
             )}
@@ -291,11 +291,11 @@ export function Switching() {
             <ExtensionCarry disabled={disabled} />
             <Carry
               icon={<PencilLine />}
-              title={t("Yarım mesajlar", "Unsent drafts")}
+              title={t("Gönderilmemiş taslaklar", "Unsent drafts")}
               value={
                 settings.draftRetype
                   ? t("Konuşmaya yeniden yazılır", "Typed back into the conversation")
-                  : t("Panelde Kopyala ile sunulur", "Offered to copy in the panel")
+                  : t("Panelde kopyalanmaya hazır bekler", "Offered to copy in the panel")
               }
               href="#gecis-taslak"
             >
@@ -308,7 +308,7 @@ export function Switching() {
                   disabled={disabled}
                   onChange={(e) => update({ draftRetype: e.target.checked })}
                 />
-                {t("Yerine yaz", "Type it back")}
+                {t("Konuşmaya yeniden yaz", "Type it back into the conversation")}
                 <Badge variant="outline" className="text-muted-foreground">
                   {t("Deneysel", "Experimental")}
                 </Badge>
@@ -403,7 +403,7 @@ export function Switching() {
                   >
                     {t(
                       "Yarım kalan geçişi sürdür ve doğrula",
-                      "Resume and reconcile interrupted handoff",
+                      "Resume and verify the interrupted switch",
                     )}
                   </Button>
                   <Button
@@ -416,15 +416,15 @@ export function Switching() {
                     }
                   >
                     {t(
-                      "Gönderilmemiş işlemi iptal et",
-                      "Cancel an unsent handoff",
+                      "Gönderilmemiş devam mesajını iptal et",
+                      "Cancel the unsent continuation",
                     )}
                   </Button>
                 </div>
                 <Note>
                   {t(
-                    "Claude uygulamasının kota zamanlayıcısı devralındıysa, işlemi iptal etmek bu zamanlayıcıyı yeniden açmaz. Claude uygulamasındaki ‘limit yenilenince devam et’ seçeneğini kontrol et.",
-                    "If the Claude app’s quota timer was taken over, cancelling this handoff does not re-enable it. Check the Claude app’s ‘continue when limits reset’ option.",
+                    "Relay, Claude uygulamasındaki “Auto-continue when limits reset” seçeneğini kapattıysa bu işlemi iptal etmek onu yeniden açmaz. Bu seçeneği Claude uygulamasında kontrol et.",
+                    "If Relay turned off “Auto-continue when limits reset” in the Claude app, cancelling this handoff does not turn it back on. Check that option in the Claude app.",
                   )}
                 </Note>
               </div>
@@ -467,8 +467,8 @@ export function Switching() {
             label={t("Geçilecek hesabı öner", "Suggest another account")}
             htmlFor="usage-suggestions"
             description={t(
-              "Geçmiş kapsamındaki, iki limiti de uygun olan hesabı önerir. Geçişi sen başlatırsın.",
-              "Suggests an account in the history scope with room in both limits. You start the switch.",
+              "Code geçmişini paylaşan ve iki limitinde de yer olan bir hesap önerir. Geçişi sen başlatırsın.",
+              "Suggests an account that shares Code history and has room in both limits. You start the switch.",
             )}
           >
             <Switch

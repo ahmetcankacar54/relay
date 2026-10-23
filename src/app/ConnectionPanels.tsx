@@ -78,7 +78,7 @@ export function DesktopPendingActions() {
             disabled={desktopBusy}
             onClick={() => relay.requestDesktop(pendingDesktop, "capture")}
           >
-            {t("Bağlantıyı tamamla", "Complete connection")}
+            {t("Girişi kaydet", "Save sign-in")}
           </Button>
         )}
       </div>
@@ -105,8 +105,8 @@ export function DesktopPendingPanel() {
           </h3>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç. Sonra buradan bağlantıyı kaydet.",
-              "Sign in to the matching account inside the Claude app and open Code. Then save the connection here.",
+              "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç. Sonra girişi buradan kaydet.",
+              "Sign in to the matching account inside the Claude app and open Code. Then save the sign-in here.",
             )}
           </p>
         </div>
@@ -118,13 +118,13 @@ export function DesktopPendingPanel() {
         }
         label={
           desktop?.busy
-            ? t("Bağlantı kaydediliyor", "Saving connection")
+            ? t("Giriş kaydediliyor", "Saving sign-in")
             : desktop?.error
-              ? t("Bağlantı tamamlanmadı", "Connection incomplete")
+              ? t("Giriş kaydedilemedi", "Sign-in not saved")
               : desktopIdentityReady
                 ? targetOrg
-                  ? t("Bağlantıyı tamamla", "Complete connection")
-                  : t("Code bağlantısı bekleniyor", "Waiting for Code")
+                  ? t("Claude uygulaması girişini kaydet", "Save Claude app sign-in")
+                  : t("Code sekmesinin açılması bekleniyor", "Waiting for the Code tab")
                 : t(
                     "Claude uygulamasında giriş bekleniyor",
                     "Waiting for sign-in in the Claude app",
@@ -145,8 +145,8 @@ export function DesktopPendingPanel() {
           {
             title: t("Code’u aç ve bağla", "Open Code & connect"),
             detail: t(
-              "Bağlantıyı Relay’den kaydet",
-              "Save the connection in Relay",
+              "Girişi Relay’de kaydet",
+              "Save the sign-in in Relay",
             ),
           },
         ]}
@@ -250,7 +250,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
           flow.status === "connected"
             ? t("Hesap doğrulandı", "Account verified")
             : flow.status === "failed"
-              ? t("Bağlantı tamamlanmadı", "Connection incomplete")
+              ? t("Giriş tamamlanmadı", "Sign-in not completed")
               : flow.status === "cancelled"
                 ? t("Giriş iptal edildi", "Sign-in cancelled")
                 : flow.status === "verifying"
@@ -266,8 +266,8 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
           {
             title: t("Girişi başlat", "Start sign-in"),
             detail: t(
-              "Güvenli bağlantı hazırlanır",
-              "Prepare the sign-in link",
+              "Giriş sayfası hazırlanır",
+              "The sign-in page is prepared",
             ),
           },
           {

@@ -30,7 +30,7 @@ export function blockWords(reason: PanelRowBlock, t: T): string {
     case "exhausted":
       return t("Limiti dolu", "Its limit is full");
     case "busy":
-      return t("Claude uygulaması işlemi sürüyor", "A Claude app operation is running");
+      return t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running");
     case "pending":
       return t("Bekleyen giriş var", "A sign-in is waiting");
     case "recovery":
@@ -185,8 +185,8 @@ export function PanelAccounts({
             <span>
               {language === "tr" ? (
                 <>
-                  Claude uygulaması kapanıp <b>{confirming.account.name}</b> ile yeniden
-                  açılır. Çalışan yanıtlar bitsin.
+                  Claude uygulaması kapanır ve <b>{confirming.account.name}</b> hesabıyla
+                  yeniden açılır. Önce çalışan yanıtların bitmesini bekle.
                 </>
               ) : (
                 <>
@@ -221,7 +221,7 @@ export function PanelAccounts({
         >
           {t(
             `+${hidden} hesap · Relay’de gör`,
-            `+${hidden} accounts · View in Relay`,
+            `+${hidden} ${hidden === 1 ? "account" : "accounts"} · View in Relay`,
           )}
         </Button>
       )}

@@ -55,7 +55,7 @@ test("the sidebar's automation dot says what it means to a screen reader", () =>
       status: { accounts: 2, planning: true, switching: true },
     }),
   );
-  assert.match(html, /<span class="sr-only">Otomatik planlama açık<\/span>/);
+  assert.match(html, /<span class="sr-only">Önceden başlatma açık<\/span>/);
   assert.match(html, /<span class="sr-only">Otomatik geçiş açık<\/span>/);
 });
 

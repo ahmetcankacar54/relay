@@ -76,8 +76,8 @@ const DESKTOP_UNAVAILABLE: Copy = [
   "The Claude app was not found.",
 ];
 const UNKNOWN_ACTIVE: Copy = [
-  "Claude uygulamasında açık hesap Relay’e bağlı değil. Hesaplar’da bu hesabı bağla.",
-  "The account open in the Claude app is not linked in Relay. Link it on Accounts.",
+  "Claude uygulamasında açık olan hesap Relay’de kayıtlı değil. Hesaplar’da Claude uygulaması girişini kaydet.",
+  "The account open in the Claude app isn’t saved in Relay. Save its Claude app sign-in on Accounts.",
 ];
 
 const USAGE_NOT_FRESH: Copy = [
@@ -86,12 +86,12 @@ const USAGE_NOT_FRESH: Copy = [
 ];
 
 const OFF: Copy = [
-  "Kapalı. Kota dolunca hesabı sen değiştirirsin.",
-  "Off. You switch accounts yourself when a quota runs out.",
+  "Kapalı. Limit dolunca başka hesaba sen geçersin.",
+  "Off. When the limit is reached, you switch accounts yourself.",
 ];
 const OFF_LEGACY_WATCH: Copy = [
-  "Kapalı, ama eski tek konuşma izlemesi açık; Geçiş sayfasındaki kartından kapat.",
-  "Off, but the old single-conversation watch is on; turn it off on the Switching page.",
+  "Kapalı, ama Geçiş sayfasındaki “Limit dolunca geç ve devam et” kartı hâlâ açık; oradan kapat.",
+  "Off, but the “Switch and continue when the limit is reached” card on the Switching page is still on; turn it off there.",
 ];
 const HANDOFF_INTERRUPTED: Copy = [
   "Yarım kalan bir konuşma devri var; Geçiş sayfasındaki kartından sürdür veya iptal et.",
@@ -116,8 +116,8 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
   ]),
   "usage-not-fresh": waiting(USAGE_NOT_FRESH),
   "exit-settling": waiting([
-    "Claude uygulaması kapandı; kapanışın oturmasını bekliyorum.",
-    "The Claude app quit; waiting for the exit to settle.",
+    "Claude uygulaması kapandı; tamamen kapanmasını bekliyorum.",
+    "The Claude app quit; waiting for it to close completely.",
   ]),
   "quota-exhausted": waiting(["{tgt} hazırlanıyor…", "Preparing {tgt}…"]),
   "claude-running": {
@@ -128,8 +128,8 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
     banner: true,
   },
   "quota-available": ok([
-    "İzliyorum. Kota dolup Claude uygulaması kapanınca sıradaki hesabı hazırlarım.",
-    "Watching. When the quota runs out and the Claude app quits, I prepare the next account.",
+    "İzliyorum. Limit dolup Claude uygulaması kapanınca sıradaki hesabı hazırlarım.",
+    "Watching. When the limit is reached and the Claude app quits, I prepare the next account.",
   ]),
   "already-switched": ok([
     "Bu limit dönemi için geçiş zaten yapıldı.",
@@ -156,8 +156,8 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
     false,
   ),
   "continuation-active": attention([
-    "Eski tek konuşma izlemesi açık; o kapanana kadar hazırlamıyorum. Geçiş sayfasındaki kartından kapat.",
-    "The old single-conversation watch is on; preparing waits until it is off. Turn it off on the Switching page.",
+    "Geçiş sayfasındaki “Limit dolunca geç ve devam et” kartı açık; o kapanana kadar hesap hazırlamıyorum. Kartı oradan kapat.",
+    "The “Switch and continue when the limit is reached” card on the Switching page is on; preparing waits until it is off. Turn it off there.",
   ]),
   "unknown-active": attention(UNKNOWN_ACTIVE),
   "not-selected": attention([
@@ -165,24 +165,24 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
     "This account is not included. Choose accounts on the Switching page.",
   ]),
   "source-not-ready": attention([
-    "Açık hesabın iki girişi aynı hesaba ait değil. Hesaplar’da kontrol et.",
-    "The current account’s two sign-ins do not match. Check them on Accounts.",
+    "Açık hesabın Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Hesaplar’da kontrol et.",
+    "The open account’s Claude app sign-in and usage sign-in belong to different accounts. Check them on Accounts.",
   ]),
   "no-ready-target": attention([
-    "Kota doldu ama hazır hesap yok; bir hesabın limiti yenilenince hazırlarım.",
-    "Quota is out but no account is ready; I’ll prepare one when a limit resets.",
+    "Limit doldu ama hazır hesap yok; bir hesabın limiti yenilenince hazırlarım.",
+    "The limit is reached but no account is ready; I’ll prepare one when a limit resets.",
   ]),
   "retry-backoff": attention([
     "Geçiş başarısız oldu; biraz sonra yeniden denerim. İstersen elle geç.",
     "The switch failed; I’ll retry shortly. You can switch by hand.",
   ]),
   "switch-failed": attention([
-    "Geçiş tamamlanamadı. Claude uygulaması bağlantısını veya kurtarma durumunu kontrol et.",
-    "The switch could not finish. Check the Claude app connection or recovery status.",
+    "Geçiş tamamlanamadı. Claude uygulamasının açıldığını ve geri yüklenecek bir yedek olup olmadığını kontrol et.",
+    "The switch couldn’t finish. Check that the Claude app opens and whether a backup needs restoring.",
   ]),
   "ledger-unavailable": attention([
-    "Hesap hazırlandı ama otomasyon kaydı yazılamadı; tekrar koruması yalnızca bu çalıştırmada geçerli.",
-    "The account was prepared, but the automation record could not be saved; repeat protection lasts for this run only.",
+    "Hesap hazırlandı ama otomatik geçiş kaydı yazılamadı; Relay yeniden açılırsa aynı geçişi tekrar yapabilir.",
+    "The account was prepared, but the automatic-switch record couldn’t be saved; if Relay restarts it may repeat this switch.",
   ]),
 };
 /** `prepared` when the prefix already names the target. */
@@ -200,8 +200,8 @@ const PREPARED_HERE = ok(
  */
 const FLEET: Record<string, Row> = {
   "source-quota-unconfirmed": waiting([
-    "{n} konuşma kota yüzünden durdu; limit verisi kotanın dolduğunu doğrulayınca geçerim.",
-    "{n} conversations stopped at the limit; I switch once usage data confirms it.",
+    "{n} konuşma limit dolduğu için durdu; limit verisi bunu doğrulayınca geçerim.",
+    "{n conversations} stopped at the limit; I switch once usage data confirms it.",
   ]),
   checking: waiting(CHECKING),
   "desktop-busy": waiting(DESKTOP_BUSY),
@@ -211,11 +211,11 @@ const FLEET: Record<string, Row> = {
   ]),
   "delivery-uncertain": attention([
     "{uncertain} konuşmada devam mesajının ulaştığı doğrulanamadı; Claude uygulamasında kontrol et. Tekrar gönderilmez.",
-    "Could not confirm the continue message reached {uncertain} conversations; check them in the Claude app. Nothing is resent.",
+    "Could not confirm the continue message reached {uncertain conversations}; check them in the Claude app. Nothing is resent.",
   ]),
   "no-target": attention([
-    "{n} konuşma durdu ama kotası uygun hesap yok; bir hesabın limiti yenilenince geçerim.",
-    "{n} conversations stopped but no account has quota; I switch when one resets.",
+    "{n} konuşma durdu ama limitinde yer olan hesap yok; bir hesabın limiti yenilenince geçerim.",
+    "{n conversations} stopped but no account has room; I switch when one resets.",
   ]),
   "desktop-unavailable": attention(DESKTOP_UNAVAILABLE),
   "source-not-enrolled": attention(UNKNOWN_ACTIVE),
@@ -224,8 +224,8 @@ const FLEET: Record<string, Row> = {
     "Give Relay macOS Accessibility permission to continue conversations.",
   ]),
   "switch-interrupted": attention([
-    "Bir geçiş yarıda kaldı; kurtarma devraldı.",
-    "A switch was interrupted; recovery took over.",
+    "Bir geçiş yarıda kaldı; önce yedeği geri yükle.",
+    "A switch was interrupted; restore the backup first.",
   ]),
   "account-changed": attention([
     "Geçişten sonra açık hesap değişti; devam mesajları gönderilmedi.",
@@ -243,20 +243,20 @@ const UNREADABLE: Copy = [
   "Could not read the Claude app’s interface ({reason}). The switch is waiting.",
 ];
 const OTHER_WORK: Copy = [
-  "{n} konuşma kota yüzünden durdu. Claude uygulamasında başka iş çalışıyor; bitince {tgt’e} geçip devam ettiririm.",
-  "{n} conversations stopped at the limit. Other work is running in the Claude app; when it finishes I switch to {tgt} and continue.",
+  "{n} konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince {tgt’e} geçip devam ettiririm.",
+  "{n conversations} stopped at the limit. Other work is running in the Claude app; when it finishes I switch to {tgt} and continue.",
 ];
 const WATCHING: Copy = [
-  "İzliyorum. Kota dolunca duran konuşmaları sıradaki hesapta devam ettiririm.",
-  "Watching. When the quota runs out, I continue stopped conversations on the next account.",
+  "İzliyorum. Limit dolunca duran konuşmaları sıradaki hesapta devam ettiririm.",
+  "Watching. When the limit is reached, I continue stopped conversations on the next account.",
 ];
 const FULL_NOTHING_STOPPED: Copy = [
-  "Kota doldu ama kota yüzünden duran konuşma yok, devam ettirecek bir şey yok. İstersen şimdi {tgt’e} geç.",
-  "Quota is out but no conversation stopped at the limit, so there is nothing to continue. You can switch to {tgt} now.",
+  "Limit doldu ama duran konuşma yok; devam ettirecek bir şey yok. İstersen şimdi {tgt’e} geç.",
+  "The limit is reached but no conversation stopped at it, so there is nothing to continue. You can switch to {tgt} now.",
 ];
 const FULL_NOTHING_READY: Copy = [
-  "Kota doldu; duran konuşma ve hazır hesap yok.",
-  "Quota is out; no conversation stopped and no account is ready.",
+  "Limit doldu; duran konuşma ve hazır hesap yok.",
+  "The limit is reached; no conversation stopped and no account is ready.",
 ];
 
 /** Reasons where Relay holds a stop it could switch for, if the user asks. */
@@ -275,6 +275,10 @@ function readsFull(u: AccountUsage | undefined) {
       u.otherLimitReached === true)
   );
 }
+
+/** "1 conversation", "3 conversations": the English count of conversations. */
+const conversations = (count: number) =>
+  `${count} conversation${count === 1 ? "" : "s"}`;
 
 function fill(copy: Copy, vars: Record<string, string | number>): Copy {
   const sub = (text: string) =>
@@ -356,17 +360,23 @@ export function automationStatus(
   const n = fleet.stopped ?? 0;
   const src = name(fleet.sourceId);
   const tgt = name(fleet.targetId);
-  const vars = { n, src, tgt, "tgt’e": withDative(tgt) };
+  const vars = {
+    n,
+    "n conversations": conversations(n),
+    src,
+    tgt,
+    "tgt’e": withDative(tgt),
+  };
   if (fleet.status === "switching")
     return show(
-      waiting(["{src} → {tgt} geçiliyor…", "Switching {src} → {tgt}…"]),
+      waiting(["{src} hesabından {tgt} hesabına geçiliyor…", "Switching {src} → {tgt}…"]),
       vars,
     );
   if (fleet.status === "continuing")
     return show(
       waiting([
         "{tgt} hesabında {n} konuşma sürdürülüyor…",
-        "Continuing {n} conversations on {tgt}…",
+        "Continuing {n conversations} on {tgt}…",
       ]),
       vars,
     );
@@ -392,13 +402,14 @@ export function automationStatus(
     return show(
       ok([
         "İzliyorum. Son geçiş: {src} → {tgt}, {started}/{conversations} konuşma sürdürüldü.",
-        "Watching. Last handoff: {src} → {tgt}, {started}/{conversations} conversations continued.",
+        "Watching. Last handoff: {src} → {tgt}, {started}/{conversations} {conversations word} continued.",
       ]),
       {
         src: name(last.sourceId),
         tgt: name(last.targetId),
         started: last.started,
         conversations: last.conversations,
+        "conversations word": last.conversations === 1 ? "conversation" : "conversations",
       },
     );
   if (reason === "continued") return show(ok(WATCHING));
@@ -418,13 +429,17 @@ export function automationStatus(
   if (reason.startsWith("switch-failed:"))
     return show(
       attention([
-        "Geçiş yapılamadı ({x}). Bu kota olayı tekrar denenmez; istersen elle geç.",
-        "The switch failed ({x}). This limit is not retried; you can switch by hand.",
+        "Geçiş yapılamadı ({x}). Bu limit için yeniden denemeyeceğim; istersen elle geç.",
+        "The switch failed ({x}). I won’t retry for this limit; you can switch by hand.",
       ]),
       { x: reason.slice("switch-failed:".length) },
     );
   if (Object.hasOwn(FLEET, reason))
-    return show(FLEET[reason], { ...vars, uncertain: last?.uncertain ?? 0 });
+    return show(FLEET[reason], {
+      ...vars,
+      uncertain: last?.uncertain ?? 0,
+      "uncertain conversations": conversations(last?.uncertain ?? 0),
+    });
   return show(
     fleet.status === "attention" ? attention(UNREADABLE) : waiting(UNREADABLE),
     { reason },

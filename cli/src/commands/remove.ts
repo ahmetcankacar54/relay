@@ -20,14 +20,14 @@ export const remove: Command = async ({ io, deps, parsed, t }) => {
   if (state.activeProfileId === account.id)
     throw new CliError(
       t(
-        `${account.name} şu an Claude Desktop'ta açık. Önce başka bir hesaba geçin: relay switch <ad>`,
-        `${account.name} is signed in to Claude Desktop now. Switch to another account first: relay switch <name>`,
+        `${account.name} şu an Claude uygulamasında açık. Önce başka bir hesaba geç: relay switch <ad>`,
+        `${account.name} is signed in to the Claude app now. Switch to another account first: relay switch <name>`,
       ),
       EXIT.busy,
     );
   if (state.pendingProfileId === account.id)
     throw new CliError(
-      t("Bu hesabın girişi yarım kaldı; önce relay add --cancel çalıştırın.", "This account's sign-in is pending; run relay add --cancel first."),
+      t("Bu hesabın girişi yarım kaldı; önce relay add --cancel çalıştır.", "This account’s sign-in is pending; run relay add --cancel first."),
       EXIT.busy,
     );
   await confirm(
@@ -35,8 +35,8 @@ export const remove: Command = async ({ io, deps, parsed, t }) => {
     t,
     [
       t(
-        `${account.name} unutulacak: kayıtlı Claude Desktop girişi ve Claude Code profili silinir. Claude Desktop'un kendi verisine dokunulmaz.`,
-        `${account.name} will be forgotten: its saved Claude Desktop sign-in and its Claude Code profile are deleted. Claude Desktop's own data is not touched.`,
+        `${account.name} unutulacak: kayıtlı Claude uygulaması girişi ve Claude Code profili (limit okuma girişi) silinir. Claude uygulamasının kendi verisine dokunulmaz.`,
+        `${account.name} will be forgotten: its saved Claude app sign-in and its Claude Code profile (usage sign-in) are deleted. The Claude app’s own data is not touched.`,
       ),
     ],
     ctx.yes,
@@ -56,8 +56,8 @@ export const remove: Command = async ({ io, deps, parsed, t }) => {
       if (!signedOut)
         io.stderr(
           t(
-            "Uyarı: Claude Code girişi kapatılamadı; Keychain'deki öğesi kalabilir.",
-            "Warning: the Claude Code login could not be signed out; its Keychain item may remain.",
+            "Uyarı: Limit okuma girişinden çıkış yapılamadı; Anahtarlık’taki kaydı kalabilir.",
+            "Warning: could not sign out of the usage sign-in; its Keychain item may remain.",
           ),
         );
     }

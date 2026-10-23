@@ -53,7 +53,7 @@ test("a day without gaps counts its switches", () => {
 test("a gap names its time; several gaps name the first", () => {
   assert.equal(
     forecastSummary(forecast(5, [gap]), tr, clock),
-    "14:18–14:50 kotasız · 5 geçiş",
+    "14:18–14:50 limit dolu · 5 geçiş",
   );
   assert.equal(
     forecastSummary(forecast(5, [gap]), en, clock),
@@ -61,7 +61,7 @@ test("a gap names its time; several gaps name the first", () => {
   );
   assert.equal(
     forecastSummary(forecast(5, [gap, later]), tr, clock),
-    "2 kotasız aralık, ilk 14:18–14:50 · 5 geçiş",
+    "2 aralıkta limit dolu, ilki 14:18–14:50 · 5 geçiş",
   );
   assert.equal(
     forecastSummary(forecast(5, [gap, later]), en, clock),

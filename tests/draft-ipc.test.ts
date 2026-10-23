@@ -1377,7 +1377,7 @@ test("the accessibility request asks only while a feature that needs it is on", 
 test("the quit notice addresses the user as sen", () => {
   const main = source("../electron/main.ts");
   assert.doesNotMatch(main, /çıkabilirsiniz/);
-  assert.match(main, /İşlem tamamlandıktan sonra yeniden çıkabilirsin\./);
+  assert.match(main, /Bitince yeniden çıkabilirsin\./);
 });
 
 test("setting a draft back to pending removes its reason in the vault", async (t) => {
@@ -1399,7 +1399,7 @@ test("setting a draft back to pending removes its reason in the vault", async (t
 });
 
 test("the restore notification counts drafts and never names them", () => {
-  assert.equal(draftNotice({ restored: 2, left: 0 }, "tr"), "2 taslak geri yazıldı");
+  assert.equal(draftNotice({ restored: 2, left: 0 }, "tr"), "2 taslak yeniden yazıldı");
   assert.equal(draftNotice({ restored: 1, left: 0 }, "en"), "1 draft restored");
   assert.equal(draftNotice({ restored: 2, left: 0 }, "en"), "2 drafts restored");
   assert.equal(draftNotice({ restored: 0, left: 1 }, "tr"), "1 taslak panelde bekliyor");
@@ -1407,7 +1407,7 @@ test("the restore notification counts drafts and never names them", () => {
   assert.equal(draftNotice({ restored: 0, left: 3 }, "en"), "3 drafts waiting in the panel");
   assert.equal(
     draftNotice({ restored: 2, left: 1 }, "tr"),
-    "2 taslak geri yazıldı · 1 taslak panelde bekliyor",
+    "2 taslak yeniden yazıldı · 1 taslak panelde bekliyor",
   );
   assert.equal(
     draftNotice({ restored: 1, left: 2 }, "en"),

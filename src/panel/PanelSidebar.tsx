@@ -48,7 +48,7 @@ export function PanelSidebar() {
               )
             }
           >
-            {t("Tarifi kopyala", "Copy recipe")}
+            {t("Talimatı kopyala", "Copy recipe")}
           </Button>
           <Button
             size="xs"

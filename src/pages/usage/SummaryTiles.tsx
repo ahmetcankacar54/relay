@@ -84,7 +84,7 @@ export function SummaryTiles({
     <Card className={cn("grid grid-cols-2 gap-4 px-5 py-4", cost ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
       {cost && (
         <Tile
-          label={t("API değeri", "API value")}
+          label={t("API karşılığı", "API value")}
           value={`${cost.estimated ? "≈" : ""}${formatCost(cost.total, language)}`}
           detail={t(
             `günde ≈ ${formatCost(cost.perDay, "tr")}`,

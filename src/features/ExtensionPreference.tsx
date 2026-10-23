@@ -30,14 +30,14 @@ function pairLine(
   const parts = [
     paired.length
       ? t(
-          `Eklenti girişi ve claude.ai oturumu ikisi de kayıtlı: ${list(paired)}.`,
+          `Eklenti girişi ve claude.ai oturumu kayıtlı hesaplar: ${list(paired)}.`,
           `Extension sign-in and claude.ai login both saved: ${list(paired)}.`,
         )
-      : t("Henüz ikisi birden kayıtlı hesap yok.", "No account has both saved yet."),
+      : t("İkisi de kayıtlı olan bir hesap henüz yok.", "No account has both saved yet."),
     half.length
       ? t(
-          `Eksik kaydı olanlar: ${list(half)}. O hesapla claude.ai'ye girip eklentiyi açtıktan sonra Kontrol et.`,
-          `Missing one of the two: ${list(half)}. Sign in to claude.ai with it, open the extension, then Check.`,
+          `Kaydı eksik olanlar: ${list(half)}. Her biri için o hesapla claude.ai’ye gir, eklentiyi aç, sonra “Kontrol et”e bas.`,
+          `Missing one of the two: ${list(half)}. For each, sign in to claude.ai with that account, open the extension, then press “Check”.`,
         )
       : "",
   ];
@@ -73,10 +73,10 @@ export function ExtensionPreference({
     : current.state === "signed-in"
       ? on
         ? t(`Eklenti şu an ${on.name} hesabında · bağlı`, `The extension is on ${on.name} now · linked`)
-        : t("Eklenti Relay'de olmayan bir hesapta.", "The extension is on an account Relay does not have.")
+        : t("Eklenti Relay’de olmayan bir hesapta.", "The extension is on an account Relay does not have.")
       : current.state === "signed-out"
         ? t("Eklentide giriş yok.", "The extension is signed out.")
-        : t("Eklentinin girişi okunamadı.", "Could not read the extension's sign-in.");
+        : t("Eklentinin girişi okunamadı.", "Could not read the extension’s sign-in.");
   const setting = settings.claudeExtension ?? DEFAULT_EXTENSION;
   const disabled = !!busy || !!desktop?.busy;
   const update = (next: typeof setting) =>
@@ -87,8 +87,8 @@ export function ExtensionPreference({
       <SectionHeading
         title={t("Claude tarayıcı eklentisi", "Claude browser extension")}
         description={t(
-          "Eklenti, tarayıcıdaki claude.ai oturumuyla giriş yapar. Hesabı izlemesi için Relay o oturumu da değiştirebilir; bunu sen seçmedikçe hiçbir şeyi değiştirmez.",
-          "The extension signs in through the browser's claude.ai login. To make it follow the account, Relay can change that login too; it changes nothing unless you choose it.",
+          "Eklenti, tarayıcıdaki claude.ai oturumuyla giriş yapar. Eklentinin de aynı hesaba geçmesi için Relay o oturumu da değiştirebilir; sen seçmedikçe hiçbir şeyi değiştirmez.",
+          "The extension signs in through the browser’s claude.ai login. To move it to the same account, Relay can change that login too; it changes nothing unless you choose it.",
         )}
       />
       <SettingRow
@@ -107,16 +107,16 @@ export function ExtensionPreference({
       </SettingRow>
       {status.instances.length > 1 && (
         <SettingRow
-          label={t("Eklentinin tarayıcı profili", "The extension's browser profile")}
+          label={t("Eklentinin tarayıcı profili", "The extension’s browser profile")}
           htmlFor="extension-instance"
           description={
             status.picked === "recent"
               ? t(
-                  "Seçilmediği için en son kullanılan izleniyor. Relay yalnızca bunun girişini yönetir.",
+                  "Profil seçilmediği için en son kullanılan profil izleniyor. Relay yalnızca bu profildeki girişi yönetir.",
                   "None chosen, so the one used last is followed. Relay manages the sign-in of this one only.",
                 )
               : t(
-                  "Relay yalnızca bunun girişini yönetir.",
+                  "Relay yalnızca bu profildeki girişi yönetir.",
                   "Relay manages the sign-in of this one only.",
                 )
           }
@@ -166,7 +166,7 @@ export function ExtensionPreference({
         <SettingRow
           label={currentLine ?? t("Eklenti kontrol ediliyor…", "Checking the extension…")}
           description={t(
-            "Eklentiye bir hesapla giriş yapınca Kontrol et; o hesap bağlanır. Tarayıcı kapanmaz.",
+            "Eklentiye bir hesapla giriş yaptıktan sonra “Kontrol et”e bas; o hesap bağlanır. Tarayıcı kapanmaz.",
             "After signing in to the extension with an account, press Check and that account is linked. The browser stays open.",
           )}
         >

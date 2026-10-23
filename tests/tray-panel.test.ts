@@ -35,9 +35,9 @@ test("tray title shows the active account's five-hour percent used, compact", ()
 });
 
 test("the tooltip says what the title's number is", () => {
-  assert.equal(trayTooltip(snap(usage(94)), "tr", NOW), "Relay — A · %94 kullanıldı · 1:00 sonra yenilenir");
+  assert.equal(trayTooltip(snap(usage(94)), "tr", NOW), "Relay — A · %94 kullanıldı · 1 sa sonra yenilenir");
   assert.equal(trayTooltip(snap(usage(94)), "en", NOW), "Relay — A · 94% used · renews in 1:00");
-  assert.equal(trayTooltip(snap(usage(20, NOW - 3_600_000)), "en", NOW), "Relay — A · usage unknown");
+  assert.equal(trayTooltip(snap(usage(20, NOW - 3_600_000)), "en", NOW), "Relay — A · usage data is out of date");
 });
 
 test("the panel opens under the icon and stays on screen", () => {

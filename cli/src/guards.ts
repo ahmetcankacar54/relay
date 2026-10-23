@@ -15,7 +15,7 @@ export function olderThan(version: string, floor: string): boolean {
 
 export const updateAppMessage = (t: Translate) =>
   t(
-    "Relay.app'i 0.12 veya üstüne güncelleyip bir kez açın.",
+    "Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç.",
     "Update Relay.app to 0.12 or later and open it once.",
   );
 
@@ -24,8 +24,8 @@ export function guiSessionGuard(deps: CliDeps, t: Translate): void {
   if (!deps.guiSession())
     throw new CliError(
       t(
-        "Bu oturumda macOS masaüstü yok (örneğin SSH): Claude Desktop buradan kapatılıp açılamaz.",
-        "This session has no macOS desktop (over SSH, for example): Claude Desktop cannot be quit or opened from here.",
+        "Bu oturumda macOS masaüstü yok (örneğin SSH): Claude uygulaması buradan kapatılıp açılamaz.",
+        "This session has no macOS desktop (over SSH, for example): the Claude app cannot be quit or opened from here.",
       ),
       EXIT.environment,
     );

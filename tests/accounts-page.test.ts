@@ -329,7 +329,7 @@ test("an account without a plan shows its subscription as a badge that says so, 
 
 test("the accounts page shows the empty state", () => {
   const html = wrap(relayFor({ accounts: [], active: undefined }), createElement(Accounts));
-  assert.match(html, /Tek panel. Tüm hesapların./);
+  assert.match(html, /Tüm hesapların tek panelde\./);
   assert.match(html, /data-scene="welcome"/);
 });
 
@@ -754,9 +754,9 @@ test("a stale row shows the age of its data and a Refresh button", () => {
   const stale = { c: { accountId: "c", status: "ready", stale: true, checkedAt, fiveHour: { usedPercent: 20 } } as AccountUsage };
   const row = rowsOf(suggestedTable({ suggestion: undefined }, stale))[1];
   assert.match(row, /Limit verisi eski/);
-  assert.match(row, /data-slot="data-age"[^>]*>Veri 2 sa önce<\/span>/);
+  assert.match(row, /data-slot="data-age"[^>]*>2 sa önce okundu<\/span>/);
   assert.match(row, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*aria-label="Yenile · Üçüncü"[^>]*>Yenile<\/button>/);
-  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], />Data 2 h ago<\/span>.*>Refresh<\/button>/);
+  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], />Read 2 h ago<\/span>.*>Refresh<\/button>/);
   // A fresh row has neither.
   const fresh = rowsOf(suggestedTable({ suggestion: undefined }))[1];
   assert.doesNotMatch(fresh, /data-age|>Yenile<\/button>/);

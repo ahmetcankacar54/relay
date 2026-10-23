@@ -30,8 +30,8 @@ test("pick returns the copy for the app's language", () => {
 test("the app menu speaks Turkish", () => {
   assert.deepEqual(labels(appMenuTemplate("tr", actions, "darwin")), [
     ["Relay", ["Relay hakkında", "Relay’i gizle", "Relay penceresini kapat", "Relay’den çık"]],
-    ["Düzenle", ["Geri al", "Yinele", "Kes", "Kopyala", "Yapıştır", "Tümünü seç"]],
-    ["Görünüm", ["Gerçek boyut", "Yakınlaştır", "Uzaklaştır", "Tam ekran"]],
+    ["Düzen", ["Geri al", "Yinele", "Kes", "Kopyala", "Yapıştır", "Tümünü seç"]],
+    ["Görüntü", ["Gerçek boyut", "Yakınlaştır", "Uzaklaştır", "Tam ekran"]],
     ["Pencere", ["Küçült", "Büyüt", "Pencereyi kapat"]],
   ]);
 });

@@ -79,8 +79,8 @@ export function reconnectCause(
   switch (usage?.issue) {
     case "expired":
       return t(
-        "oturumun süresi doldu ve yenilenemedi",
-        "the session expired and could not be renewed",
+        "girişin süresi doldu ve yenilenemedi",
+        "the sign-in expired and could not be renewed",
       );
     case "credentials-missing":
       return t("kayıtlı giriş bulunamadı", "the saved sign-in was not found");
@@ -226,8 +226,8 @@ export function Banners({
           <Monitor className="size-4 shrink-0" aria-hidden />
           <span>
             {t(
-              "Tarayıcı önizlemesi · Hesaplar örnektir. Geçişler masaüstü uygulamasında çalışır.",
-              "Browser preview · Sample accounts. Switching works in the desktop app.",
+              "Tarayıcı önizlemesi · Hesaplar örnektir. Geçişler Relay uygulamasında çalışır.",
+              "Browser preview · Sample accounts. Switching works in the Relay app.",
             )}
           </span>
         </Banner>

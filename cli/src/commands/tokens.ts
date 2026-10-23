@@ -131,14 +131,14 @@ export const tokens: Command = async ({ io, deps, parsed, t, lang }) => {
   if (view.exactSince)
     io.stdout(
       t(
-        `Kesin hesap eşleşmesi ${view.exactSince} tarihinden beri tutuluyor; öncesi Relay'in limit ölçümlerinden tahmin edildi (≈).`,
-        `Exact account matching has been kept since ${view.exactSince}; earlier days were estimated from Relay's limit samples (≈).`,
+        `Kesin hesap eşleşmesi ${view.exactSince} tarihinden beri tutuluyor; öncesi Relay’in limit ölçümlerinden tahmin edildi (≈).`,
+        `Exact account matching has been kept since ${view.exactSince}; earlier days were estimated from Relay’s limit samples (≈).`,
       ),
     );
   io.stdout(
     t(
       `API karşılığı: Anthropic API liste fiyatları (${view.pricesChecked}); abonelik ücretinden bağımsız.`,
-      `API value: Anthropic API list prices (${view.pricesChecked}); separate from the subscription's price.`,
+      `API value: Anthropic API list prices (${view.pricesChecked}); separate from the subscription’s price.`,
     ),
   );
   if (!view.progress.complete)

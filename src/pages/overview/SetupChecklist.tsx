@@ -36,7 +36,7 @@ export function SetupChecklist() {
       title: t("Claude uygulaması", "Claude app"),
       status: met("desktop") ? t("Bulundu", "Found") : t("Bulunamadı", "Not found"),
       reason: t(
-        "Relay, Claude uygulamasını hesaplar arasında geçirir.",
+        "Relay, Claude uygulamasında hesaplar arasında geçiş yapar.",
         "Relay switches the Claude app between accounts.",
       ),
       action: <ClaudeAppActions />,
@@ -63,9 +63,7 @@ export function SetupChecklist() {
             void relay.action("open", () => relay.api.openDesktop())
           }
         >
-          {desktop.running
-            ? t("Claude uygulamasını öne getir", "Bring the Claude app to front")
-            : t("Claude uygulamasını aç", "Open the Claude app")}
+          {t("Claude uygulamasını aç", "Open the Claude app")}
         </Button>
       ),
     },
@@ -100,7 +98,7 @@ export function SetupChecklist() {
                 <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
                   <span className="font-semibold">{row.title}</span>
                   <span className="sr-only">
-                    {met ? t("Hazır", "Done") : t("Eksik", "Missing")}
+                    {met ? t("Tamam", "Done") : t("Eksik", "Missing")}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {row.status}

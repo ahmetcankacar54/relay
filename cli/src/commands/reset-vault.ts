@@ -15,7 +15,7 @@ const SET_ASIDE = ["accounts", "backups", "drafts", "extension", "journal.json",
 
 /**
  * Starts the vault over when its Keychain key is gone for good: the files it sealed are set
- * aside (never deleted), a new key is made, and every account's Claude Desktop link is cleared
+ * aside (never deleted), a new key is made, and every account's Claude app sign-in is cleared
  * so `relay add <name>` can link it again. Refused while the key can be read.
  */
 export const resetVault: Command = async ({ io, deps, parsed, t }) => {
@@ -26,7 +26,7 @@ export const resetVault: Command = async ({ io, deps, parsed, t }) => {
     throw new CliError(t("Kasa boş; sıfırlanacak bir şey yok.", "The vault is empty; nothing to reset."), EXIT.failed);
   if (ctx.vault.kind === "newer")
     throw new CliError(
-      t("Kasayı daha yeni bir Relay yazmış; relay'i güncelleyin. Hiçbir şey değişmedi.", "A newer Relay wrote the vault; update relay. Nothing changed."),
+      t("Kasayı daha yeni bir Relay yazmış; relay’i güncelle. Hiçbir şey değişmedi.", "A newer Relay wrote the vault; update relay. Nothing changed."),
       EXIT.environment,
     );
   // An old-format vault never had a key: its sign-ins are sealed by Relay.app's own key, which
@@ -40,7 +40,7 @@ export const resetVault: Command = async ({ io, deps, parsed, t }) => {
     if (!anyV2)
       throw new CliError(
         t(
-          "Kasa hâlâ eski biçimde; kaybolabilecek bir anahtarı hiç olmadı. Relay.app 0.12'yi açın, kasayı kendisi taşır. Hiçbir şey değişmedi.",
+          "Kasa hâlâ eski biçimde; kaybolabilecek bir anahtarı hiç olmadı. Relay.app 0.12’yi aç, kasayı kendisi taşır. Hiçbir şey değişmedi.",
           "The vault is still in the old format, so it never had a key to lose. Open Relay.app 0.12; it migrates the vault itself. Nothing changed.",
         ),
         EXIT.failed,
@@ -56,7 +56,7 @@ export const resetVault: Command = async ({ io, deps, parsed, t }) => {
   if (appRunning)
     throw new CliError(
       t(
-        "Önce Relay.app'ten çıkın (⌥⌘Q), sonra bunu yeniden çalıştırın; açık uygulama eski anahtarı bellekte tutar. Hiçbir şey değişmedi.",
+        "Önce Relay.app’ten çık (⌥⌘Q), sonra bunu yeniden çalıştır; açık uygulama eski anahtarı bellekte tutar. Hiçbir şey değişmedi.",
         "Quit Relay.app first (⌥⌘Q), then run this again; a running app keeps the old key in memory. Nothing changed.",
       ),
       EXIT.busy,
@@ -71,13 +71,13 @@ export const resetVault: Command = async ({ io, deps, parsed, t }) => {
     if (!(error instanceof VaultKeyError)) throw error;
     if (error.reason === "locked")
       throw new CliError(
-        t("Keychain kilitli: Mac'in kilidini açıp yeniden deneyin. Hiçbir şey değişmedi.", "The Keychain is locked: unlock the Mac and try again. Nothing changed."),
+        t("Anahtarlık kilitli: Mac’in kilidini açıp yeniden dene. Hiçbir şey değişmedi.", "The Keychain is locked: unlock the Mac and try again. Nothing changed."),
         EXIT.environment,
       );
     if (error.reason === "invalid")
       throw new CliError(
         t(
-          `Keychain'deki "${VAULT_KEY_SERVICE}" öğesi bozuk. Önce silin: security delete-generic-password -s "${VAULT_KEY_SERVICE}" — sonra yeniden çalıştırın.`,
+          `Anahtarlık’taki "${VAULT_KEY_SERVICE}" öğesi bozuk. Önce sil: security delete-generic-password -s "${VAULT_KEY_SERVICE}" — sonra yeniden çalıştır.`,
           `The Keychain item "${VAULT_KEY_SERVICE}" is damaged. Delete it first: security delete-generic-password -s "${VAULT_KEY_SERVICE}" — then run this again.`,
         ),
         EXIT.environment,
@@ -88,16 +88,16 @@ export const resetVault: Command = async ({ io, deps, parsed, t }) => {
     t,
     [
       t(
-        "Keychain'deki kasa anahtarı kayıp, bu yüzden kayıtlı Claude Desktop girişleri artık açılamıyor.",
-        "The vault key is gone from the Keychain, so the saved Claude Desktop sign-ins can no longer be opened.",
+        "Anahtarlık’taki kasa anahtarı kayıp, bu yüzden kayıtlı Claude uygulaması girişleri artık açılamıyor.",
+        "The vault key is gone from the Keychain, so the saved Claude app sign-ins can no longer be opened.",
       ),
       t(
-        "Eski dosyalar desktop-vault/lost-key-… klasörüne ayrılacak, yeni bir anahtar oluşturulacak ve hesapların Claude Desktop bağlantıları silinecek.",
-        "The old files will be set aside in desktop-vault/lost-key-…, a new key will be made, and every account's Claude Desktop link will be cleared.",
+        "Eski dosyalar desktop-vault/lost-key-… klasörüne ayrılacak, yeni bir anahtar oluşturulacak ve hesapların kayıtlı Claude uygulaması girişleri silinecek.",
+        "The old files will be set aside in desktop-vault/lost-key-…, a new key will be made, and every account’s saved Claude app sign-in will be cleared.",
       ),
       t(
-        "Sonra her hesabı, Claude Desktop'ta o hesap açıkken relay add <ad> ile yeniden kaydedin.",
-        "Then save each account again with relay add <name> while it is signed in to Claude Desktop.",
+        "Sonra her hesabı, Claude uygulamasında o hesap açıkken relay add <ad> ile yeniden kaydet.",
+        "Then save each account again with relay add <name> while it is signed in to the Claude app.",
       ),
     ],
     ctx.yes,
@@ -120,8 +120,8 @@ export const resetVault: Command = async ({ io, deps, parsed, t }) => {
   }
   io.stdout(
     t(
-      "Kasa sıfırlandı. Her hesabı, Claude Desktop'ta o hesap açıkken relay add <ad> ile yeniden kaydedin.",
-      "The vault was reset. Save each account again with relay add <name> while it is signed in to Claude Desktop.",
+      "Kasa sıfırlandı. Her hesabı, Claude uygulamasında o hesap açıkken relay add <ad> ile yeniden kaydet.",
+      "The vault was reset. Save each account again with relay add <name> while it is signed in to the Claude app.",
     ),
   );
   return EXIT.ok;

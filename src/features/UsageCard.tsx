@@ -35,7 +35,7 @@ const issues: Record<UsageIssue, [string, string]> = {
     "The usage sign-in needs to be renewed.",
   ],
   expired: [
-    "Yenilenemedi. Limit okuma girişini yenile.",
+    "Limit okuma girişi kendiliğinden yenilenemedi. Limit okuma girişini yenile.",
     "The usage sign-in could not be renewed. Renew the usage sign-in.",
   ],
   scope: [
@@ -47,7 +47,7 @@ const issues: Record<UsageIssue, [string, string]> = {
     "The usage sign-in does not belong to this profile’s account. Renew the usage sign-in.",
   ],
   "rate-limited": [
-    "Kullanım servisi beklememizi istiyor.",
+    "Kullanım servisi kısa bir süre beklenmesini istedi.",
     "The usage service requested a pause.",
   ],
   unavailable: [
@@ -208,7 +208,7 @@ export function UsageCard({
               </time>
             </>
           ) : unused ? (
-            t("İlk mesajla başlar", "Starts with the next message")
+            t("Sonraki mesajla başlar", "Starts with the next message")
           ) : historical ? (
             <>
               {Date.parse(historical.resetsAt) <= now
@@ -258,7 +258,7 @@ export function UsageCard({
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="min-w-0">
-          {usage?.stale && <b className="font-semibold text-warn-foreground">{t("Eski veri · ", "Stale data · ")}</b>}
+          {usage?.stale && <b className="font-semibold text-warn-foreground">{t("Limit verisi eski · ", "Usage data is out of date · ")}</b>}
           {loading
             ? t("Limitler okunuyor…", "Reading usage…")
             : shownIssue

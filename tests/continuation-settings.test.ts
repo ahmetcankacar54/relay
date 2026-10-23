@@ -153,7 +153,7 @@ test("automatic watching presents capacity selection without a fixed target cont
   const html = render({ targetId: undefined, targetSelection: "automatic" });
   assert.doesNotMatch(html, /<select/);
   assert.match(html, /Automatic · by remaining capacity/);
-  assert.match(html, /1 connected accounts · checked at handoff/);
+  assert.match(html, /1 connected account · checked at handoff/);
   assert.match(html, /switch to an eligible account and send one continuation/);
   assert.match(html, /chosen by current quota and plan capacity/);
   assert.match(html, /enable watching again to include accounts added later/);

@@ -76,10 +76,10 @@ test("an unlinked account gets the steps to link it, for each thing the extensio
   const other = guide(altoLinked, { current: signedIn(ID) });
   assert.match(other.label, /eklenti şu an Vertex hesabında/);
   assert.match(other.steps?.[0] ?? "", /çıkış yap/);
-  assert.match(other.detail ?? "", /Vertex için kayıt Relay'de duruyor/);
+  assert.match(other.detail ?? "", /Vertex için kayıt Relay’de duruyor/);
   // On an account Relay does not have.
   const stranger = guide(altoLinked, { current: { state: "signed-in", known: false, other: true, at: NOW } });
-  assert.match(stranger.label, /Relay'de olmayan bir hesapta/);
+  assert.match(stranger.label, /Relay’de olmayan bir hesapta/);
   // Signed in, but no account can be told: the user links it as this one.
   const untold = guide(altoLinked, { current: { state: "signed-in", known: false, at: NOW } });
   assert.match(untold.label, /eklentideki hesap tanınamadı/);
@@ -138,8 +138,8 @@ test("the card names the instance, asks to choose among several, and explains th
     /several browser profiles/,
   );
   assert.match(instanceLine(status({ instances: [], target: undefined }), tr), /bulunamadı/);
-  assert.match(startupLine(status(), en)!, /new tab page by its own setting, so Relay restores the session itself/);
-  assert.match(startupLine(status({ restoresTabs: true }), en)!, /opens the last session by its own setting/);
+  assert.match(startupLine(status(), en)!, /new tab page by its own setting, so Relay restores the tabs itself/);
+  assert.match(startupLine(status({ restoresTabs: true }), en)!, /reopens the last tabs by its own setting/);
   assert.equal(startupLine(status({ target: undefined }), en), undefined);
 });
 
@@ -152,8 +152,8 @@ const outcome = (over: Partial<ExtensionOutcome>): ExtensionOutcome => ({
 });
 
 test("each outcome says what happened, or nothing when there is nothing to say", () => {
-  assert.equal(extensionLine(outcome({}), en), "The extension's sign-in was switched.");
-  assert.match(extensionLine(outcome({ result: "saved", reason: "no-saved-login" }), tr)!, /Eklenti girişi kaydedildi/);
+  assert.equal(extensionLine(outcome({}), en), "The extension’s sign-in was switched.");
+  assert.match(extensionLine(outcome({ result: "saved", reason: "no-saved-login" }), tr)!, /Eklentinin önceki girişi kaydedildi/);
   assert.match(extensionLine(outcome({ result: "unchanged", reason: "no-saved-login" }), en)!, /no saved extension sign-in/);
   assert.equal(extensionLine(outcome({ result: "unchanged", reason: "already-there" }), en), undefined);
   assert.equal(extensionLine(outcome({ result: "skipped", reason: "off" }), en), undefined);
@@ -249,18 +249,18 @@ test("the settings card shows the mode with its sentence, the instance, the star
   );
   assert.match(guided, /Sadece haber ver/);
   assert.match(guided, /Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez/);
-  assert.match(guided, /bunu sen seçmedikçe hiçbir şeyi değiştirmez/);
+  assert.match(guided, /aynı hesaba geçmesi için Relay o oturumu da değiştirebilir; sen seçmedikçe hiçbir şeyi değiştirmez/);
   assert.doesNotMatch(guided, /claude\.ai oturumunu da değiştirir/);
   const html = render(
     relayFor("darwin", [vertex], { mode: "restart" }),
     createElement(ExtensionPreference, { initialStatus: status() }),
   );
   assert.match(html, /Claude tarayıcı eklentisi/);
-  assert.match(html, /Eklentiyi de değiştir · tarayıcıyı kapatıp aç/);
+  assert.match(html, /Eklentinin hesabını da değiştir · tarayıcıyı kapatıp aç/);
   assert.match(html, /Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar/);
   assert.match(html, /claude\.ai oturumunu da değiştirir/);
   assert.match(html, /Brave · Kişisel · eklenti yüklü/);
-  assert.match(html, /Relay oturumu kendisi geri yükler/);
+  assert.match(html, /Relay onları kendisi geri yükler/);
   assert.match(html, /Şimdi eşitle/);
   // One instance: no picker for the profile.
   assert.doesNotMatch(html, /Eklentinin tarayıcı profili/);
@@ -274,7 +274,7 @@ test("the settings card shows the mode with its sentence, the instance, the star
     }),
     "en",
   );
-  assert.match(several, /The extension&#x27;s browser profile/);
+  assert.match(several, /The extension’s browser profile/);
   assert.match(several, /Choose a profile/);
   // Not on this Mac: the card is not drawn at all.
   assert.equal(render(relayFor("darwin", [vertex]), createElement(ExtensionPreference, {})), "");

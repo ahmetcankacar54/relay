@@ -132,7 +132,7 @@ function rowStatus(
   if (health.tone !== "ok" && !outOfDate) return health.label;
   if (row.usage?.checkedAt && ringState(row.usage, now) === "stale") {
     const age = formatRelative(row.usage.checkedAt, now, language);
-    return short ? t(`Veri ${age}`, `Data ${age}`) : t(`Limit verisi ${age}`, `Usage data ${age}`);
+    return short ? t(`${age} okundu`, `Read ${age}`) : t(`Limit verisi ${age} okundu`, `Usage data read ${age}`);
   }
   if (outOfDate) return health.label;
   switch (row.state) {
@@ -140,8 +140,8 @@ function rowStatus(
       const left = timeLeft(row.usage?.fiveHour?.resetsAt, now, t);
       if (!left) return t("Dönem açık", "Period open");
       return short
-        ? t(`Dönem açık ${left}`, `Period open ${left}`)
-        : t(`Dönem açık · ${left}`, `Period open · ${left}`);
+        ? t(`Dönem açık ${left} kaldı`, `Period open ${left} left`)
+        : t(`Dönem açık · ${left} kaldı`, `Period open · ${left} left`);
     }
     case "ready":
       return t("Hazır", "Ready");
@@ -150,7 +150,7 @@ function rowStatus(
       return at ? t(`${clockLocative(at)} açılır`, `Opens ${at}`) : t("Dolu", "Full");
     }
     default:
-      return t("Veri eski", "Out of date");
+      return t("Limit verisi eski", "Usage data is out of date");
   }
 }
 

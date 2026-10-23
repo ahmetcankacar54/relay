@@ -1,5 +1,6 @@
 import { readProfileAuth } from "../../../electron/core/profile-auth";
 import { acquireProfileLock } from "../../../electron/core/profile-lock";
+import { localizeError } from "../../../shared/error-text";
 import { EXTERNAL_LINKS } from "../../../shared/external-links";
 import { resolveAccount } from "../accounts";
 import { runClaude } from "../claude-cli";
@@ -27,8 +28,8 @@ export const connect: Command = async ({ io, deps, parsed, t }) => {
   try {
     io.stdout(
       t(
-        `${account.name} için Claude Code girişi açılıyor; tarayıcıda bu hesapla giriş yapın.`,
-        `Opening the Claude Code sign-in for ${account.name}; sign in with this account in the browser.`,
+        `${account.name} için limit okuma girişi açılıyor; tarayıcıda bu hesapla giriş yap.`,
+        `Opening the usage sign-in for ${account.name}; sign in with this account in the browser.`,
       ),
     );
     const code = await runClaude(ctx.deps, claude, ["auth", "login", "--claudeai"], profile, { inherit: true, env: io.env });
@@ -37,7 +38,7 @@ export const connect: Command = async ({ io, deps, parsed, t }) => {
     const auth = await readProfileAuth(claude, profile, account.auth);
     if (!auth.loggedIn)
       throw new CliError(
-        auth.error ?? t("Giriş doğrulanamadı.", "The sign-in could not be confirmed."),
+        auth.error ? localizeError(auth.error, ctx.lang) : t("Giriş doğrulanamadı.", "The sign-in could not be confirmed."),
         EXIT.failed,
       );
     const desktop = account.desktop;
@@ -47,11 +48,11 @@ export const connect: Command = async ({ io, deps, parsed, t }) => {
         auth.orgId?.toLowerCase() !== desktop.orgId.toLowerCase())
     ) {
       await runClaude(ctx.deps, claude, ["auth", "logout"], profile, { timeoutMs: 30_000, env: io.env }).catch(() => 1);
-      const expected = desktop.email ?? t("Claude Desktop'taki hesabı", "its Claude Desktop account");
+      const expected = desktop.email ?? t("Claude uygulamasındaki hesabı", "its Claude app account");
       throw new CliError(
         t(
-          `${auth.email ?? "başka bir hesap"} ile giriş yapıldı, ama ${account.name} ${expected} ile eşleşmeli. Giriş kapatıldı; doğru hesapla yeniden deneyin.`,
-          `Signed in as ${auth.email ?? "another account"}, but ${account.name} must match ${expected}. The sign-in was undone; try again with the right account.`,
+          `${auth.email ?? "Başka bir hesap"} ile giriş yapıldı, ama ${account.name} için ${expected} ile giriş yapılmalı. Giriş geri alındı; doğru hesapla yeniden dene.`,
+          `Signed in as ${auth.email ?? "another account"}, but ${account.name} must sign in as ${expected}. The sign-in was undone; try again with the right account.`,
         ),
         EXIT.failed,
       );
@@ -61,8 +62,8 @@ export const connect: Command = async ({ io, deps, parsed, t }) => {
     });
     io.stdout(
       t(
-        `${account.name} bağlandı${auth.email ? ` (${auth.email})` : ""}. Limitler için: relay usage`,
-        `Connected ${account.name}${auth.email ? ` (${auth.email})` : ""}. For limits: relay usage`,
+        `${account.name} için limit okuma girişi yapıldı${auth.email ? ` (${auth.email})` : ""}. Limitleri görmek için: relay usage`,
+        `Signed ${account.name} in to read usage${auth.email ? ` (${auth.email})` : ""}. For limits: relay usage`,
       ),
     );
     return EXIT.ok;

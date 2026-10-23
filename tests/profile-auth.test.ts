@@ -37,7 +37,7 @@ test("readProfileAuth reports a failed status as signed out with the error text"
   const s = script(t, "exit 1");
   const auth = await readProfileAuth(s.file, s.profile, undefined);
   assert.equal(auth.loggedIn, false);
-  assert.equal(auth.error, "Giriş durumu doğrulanamadı. Hesabı yeniden bağla.");
+  assert.equal(auth.error, "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.");
 });
 
 test("diagnoseCli reports the version and whether it supports Desktop", async (t) => {

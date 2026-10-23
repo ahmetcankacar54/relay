@@ -110,7 +110,7 @@ test("stale future dates and a passed reset retain their actual dates and observ
   });
   assert.match(stale, /Last known reset/);
   assert.match(stale, /Last verified/);
-  assert.match(stale, /Stale data/);
+  assert.match(stale, /Usage data is out of date/);
   assert.doesNotMatch(stale, />Resets /);
   const past = render({
     accountId: "a",

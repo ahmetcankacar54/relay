@@ -3,6 +3,7 @@ import { diagnoseCli } from "../../../electron/core/cli-diagnostics";
 import { claudeExecutable } from "../../../electron/core/desktop-host-node";
 import { VaultKeyError, readVaultKey } from "../../../electron/core/vault-key";
 import { readsUsage } from "../../../shared/cli-version";
+import { localizeError } from "../../../shared/error-text";
 import type { Command } from "../command";
 import { openContext } from "../context";
 import { relayAppRunning } from "../describe";
@@ -28,7 +29,7 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
     t(`Node ${process.versions.node} (22.12 veya üstü gerekir)`, `Node ${process.versions.node} (22.12 or newer needed)`),
   );
   const app = claudeExecutable(ctx.paths.claudeApps);
-  add("claude-app", app ? "ok" : "fail", app ?? t("Claude Desktop bulunamadı", "Claude Desktop was not found"));
+  add("claude-app", app ? "ok" : "fail", app ?? t("Claude uygulaması bulunamadı", "The Claude app was not found"));
   const cli = await diagnoseCli(ctx.deps.claude(ctx.store.state.executable), ctx.paths.data);
   add(
     "claude-cli",
@@ -36,7 +37,7 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
     !cli.executable
       ? t("Claude Code CLI yok (yalnız limitler ve run için gerekir)", "No Claude Code CLI (only needed for limits and run)")
       : cli.error
-        ? cli.error
+        ? localizeError(cli.error, ctx.lang)
         : readsUsage(cli.version ?? "")
           ? `${cli.executable} · ${cli.version}`
           : t(`${cli.version}: limitler için 2.1.296 veya üstü gerekir`, `${cli.version}: limits need 2.1.296 or newer`),
@@ -46,7 +47,7 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
   try {
     const stat = fs.lstatSync(ctx.paths.data);
     if (stat.isSymbolicLink()) [folder, folderDetail] = ["fail", t(`${ctx.paths.data} sembolik bağlantı`, `${ctx.paths.data} is a symbolic link`)];
-    else if (stat.mode & 0o077) [folder, folderDetail] = ["warn", t(`${ctx.paths.data} yalnız size açık (0700) olmalı`, `${ctx.paths.data} should be private (0700)`)];
+    else if (stat.mode & 0o077) [folder, folderDetail] = ["warn", t(`${ctx.paths.data} yalnızca sana açık (0700) olmalı`, `${ctx.paths.data} should be private (0700)`)];
   } catch {
     [folder, folderDetail] = ["warn", t(`${ctx.paths.data} yok`, `${ctx.paths.data} does not exist`)];
   }
@@ -57,10 +58,10 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
     vault.kind === "legacy" || vault.kind === "newer" ? "fail" : "ok",
     vault.kind === "legacy"
       ? ctx.appVersion && !olderThan(ctx.appVersion, "0.12.0")
-        ? t("eski biçim: Relay.app'i açıp Keychain sorusuna izin verin", "old format: open Relay.app and allow its Keychain prompt")
-        : t("eski biçim: Relay.app'i 0.12 veya üstüne güncelleyip bir kez açın", "old format: update Relay.app to 0.12 or later and open it once")
+        ? t("eski biçim: Relay.app’i açıp Anahtarlık sorusuna izin ver", "old format: open Relay.app and allow its Keychain prompt")
+        : t("eski biçim: Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç", "old format: update Relay.app to 0.12 or later and open it once")
       : vault.kind === "newer"
-        ? t("daha yeni bir Relay yazmış: relay'i güncelleyin", "written by a newer Relay: update relay")
+        ? t("daha yeni bir Relay yazmış: relay’i güncelle", "written by a newer Relay: update relay")
         : vault.kind === "empty"
           ? t("boş (ilk hesapla oluşur)", "empty (made with the first account)")
           : t("hazır", "ready"),
@@ -68,15 +69,15 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
   if (vault.kind === "ready" || vault.kind === "newer") {
     try {
       await readVaultKey(ctx.deps.securityTool);
-      add("key", "ok", t("Keychain'de \"Relay Vault Key\" okunabiliyor", "\"Relay Vault Key\" is readable in the Keychain"));
+      add("key", "ok", t("Anahtarlık’ta \"Relay Vault Key\" okunabiliyor", "\"Relay Vault Key\" is readable in the Keychain"));
     } catch (error) {
       add(
         "key",
         "fail",
         error instanceof VaultKeyError && error.reason !== "locked"
-          ? `${error.message} ${t("Baştan başlamak için: relay reset-vault", "To start over: relay reset-vault")}`
+          ? `${localizeError(error.message, ctx.lang)} ${t("Baştan başlamak için: relay reset-vault", "To start over: relay reset-vault")}`
           : error instanceof VaultKeyError
-            ? error.message
+            ? localizeError(error.message, ctx.lang)
             : String(error),
       );
     }
@@ -91,7 +92,7 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
     "relay-app",
     ctx.appVersion && olderThan(ctx.appVersion, "0.12.0") ? "fail" : "ok",
     ctx.appVersion
-      ? `${ctx.appVersion}${appRunning ? t(", açık", ", running") : t(", kapalı", ", not running")}${olderThan(ctx.appVersion, "0.12.0") ? t(" — 0.12 veya üstüne güncelleyin", " — update to 0.12 or later") : ""}`
+      ? `${ctx.appVersion}${appRunning ? t(", açık", ", running") : t(", kapalı", ", not running")}${olderThan(ctx.appVersion, "0.12.0") ? t(" — 0.12 veya üstüne güncelle", " — update to 0.12 or later") : ""}`
       : t("kurulu değil (gerekmez)", "not installed (not needed)"),
   );
   const holder = ctx.lock.holder();
@@ -117,7 +118,7 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
     "automation",
     "ok",
     t(
-      "macOS, terminalin Claude'u ilk kapatışında Otomasyon izni sorar. Reddedildiyse: Sistem Ayarları → Gizlilik ve Güvenlik → Otomasyon → terminal uygulaması → Claude.",
+      "macOS, terminalin Claude’u ilk kapatışında Otomasyon izni sorar. Reddedildiyse: Sistem Ayarları → Gizlilik ve Güvenlik → Otomasyon → terminal uygulaması → Claude.",
       "macOS asks for the Automation permission the first time a terminal quits Claude. If it was refused: System Settings → Privacy & Security → Automation → your terminal app → Claude.",
     ),
   );

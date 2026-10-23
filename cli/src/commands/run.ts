@@ -22,7 +22,7 @@ export const run: Command = async ({ io, deps, parsed, t }) => {
     throw new CliError(
       t(
         `${account.name} hesabının Claude Code profili bağlı değil. Önce: relay connect "${account.name}"`,
-        `${account.name}'s Claude Code profile is not connected. First: relay connect "${account.name}"`,
+        `${account.name}’s Claude Code profile is not connected. First: relay connect "${account.name}"`,
       ),
       EXIT.failed,
     );

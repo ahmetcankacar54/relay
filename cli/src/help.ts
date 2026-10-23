@@ -1,20 +1,20 @@
 import type { Translate } from "./i18n";
 
 const LINES: [string, string, string][] = [
-  ["relay status", "Claude Desktop, etkin hesap ve Relay'in durumu", "Claude Desktop, the active account and Relay's state"],
+  ["relay status", "Claude uygulamasının, açık hesabın ve Relay’in durumu", "The Claude app, the open account and Relay’s state"],
   ["relay list", "Kayıtlı hesaplar", "Saved accounts"],
-  ["relay add <name>", "Claude Desktop'taki girişi kaydet ya da yeni bir hesapla giriş yap", "Save the Claude Desktop sign-in, or sign a new account in"],
-  ["relay switch <name>", "Claude Desktop'u kapatıp <name> hesabıyla yeniden aç", "Quit Claude Desktop and reopen it signed in as <name>"],
+  ["relay add <name>", "Claude uygulamasındaki girişi kaydet ya da yeni bir hesapla giriş yap", "Save the Claude app sign-in, or sign in with a new account"],
+  ["relay switch <name>", "Claude uygulamasını kapatıp <name> hesabıyla yeniden aç", "Quit the Claude app and reopen it signed in as <name>"],
   ["relay remove <name>", "Kayıtlı bir hesabı unut", "Forget a saved account"],
   ["relay rename <name> <new>", "Bir hesabın adını değiştir", "Rename an account"],
-  ["relay recover", "Yarıda kalan bir geçişi geri al", "Restore an interrupted switch"],
+  ["relay recover", "Yarıda kalan geçişin yedeğini geri yükle", "Restore the backup of an interrupted switch"],
   ["relay history [<name>]", "Code geçmişi paylaşımı; history mode …, history sync", "Code history sharing; history mode …, history sync"],
-  ["relay connect <name>", "Limitler için hesabın Claude Code profilini bağla", "Sign the account's Claude Code profile in, for limits"],
+  ["relay connect <name>", "Hesabın limit okuma girişini yap ya da yenile", "Sign in to read the account’s usage, or renew it"],
   ["relay usage [<name>]", "5 saatlik ve haftalık limitlerin ne kadarı kullanıldı", "How much of the 5-hour and weekly limits is used"],
-  ["relay run <name> [-- …]", "Claude Code'u <name> hesabıyla çalıştır", "Run Claude Code as <name>"],
-  ["relay tokens", "Relay.app'in tuttuğu günlük token kullanımı", "Daily token usage recorded by Relay.app"],
+  ["relay run <name> [-- …]", "Claude Code’u <name> hesabıyla çalıştır", "Run Claude Code as <name>"],
+  ["relay tokens", "Relay.app’in tuttuğu günlük token kullanımı", "Daily token usage recorded by Relay.app"],
   ["relay doctor", "Kurulumu denetle", "Check the setup"],
-  ["relay reset-vault", "Keychain anahtarı kaybolduysa kasayı baştan başlat", "Start the vault over when its Keychain key is lost"],
+  ["relay reset-vault", "Anahtarlık’taki anahtar kaybolduysa kayıtlı girişlerin kasasını sıfırla", "Start the sign-in vault over when its Keychain key is lost"],
 ];
 
 export function helpText(t: Translate): string {
@@ -33,8 +33,8 @@ export function helpText(t: Translate): string {
     `  --version, -v    ${t("Sürüm", "Version")}`,
     "",
     t(
-      "Not: Claude Desktop'u kapatan komutlar (switch, add, recover, history sync) Desktop'taki Code oturumlarını da durdurur.",
-      "Note: commands that quit Claude Desktop (switch, add, recover, history sync) also stop its Code sessions.",
+      "Not: Claude uygulamasını kapatan komutlar (switch, add, recover, history sync) uygulamadaki Code oturumlarını da durdurur.",
+      "Note: commands that quit the Claude app (switch, add, recover, history sync) also stop its Code sessions.",
     ),
   ].join("\n");
 }

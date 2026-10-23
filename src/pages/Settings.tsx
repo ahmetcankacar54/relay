@@ -126,7 +126,7 @@ export function Settings() {
                 </span>
               }
               description={t(
-                "Kapalıyken panda yalnızca ifade değiştirir. macOS’ta Hareketi azalt açıksa animasyon zaten oynamaz.",
+                "Kapalıyken panda yalnızca ifade değiştirir. macOS’ta “Hareketi azalt” açıksa animasyon zaten oynamaz.",
                 "When off, the panda only changes expression. With Reduce motion on in macOS it never animates.",
               )}
             >
@@ -182,7 +182,7 @@ export function Settings() {
             </ToggleGroup>
           </SettingRow>
           <SettingRow
-            label={t("Kullanım limitlerini yenile", "Refresh usage limits")}
+            label={t("Limitleri otomatik yenile", "Refresh limits automatically")}
             htmlFor="usage-interval"
             description={t(
               "Yalnızca kullanım verisi okunur; Claude uygulaması çalışmaya devam eder.",
@@ -197,7 +197,7 @@ export function Settings() {
                 { value: "0", label: t("Elle", "Manually") },
                 ...[5, 15, 30].map((n) => ({
                   value: String(n),
-                  label: `${n} ${t("dakika", "minutes")}`,
+                  label: t(`${n} dakikada bir`, `Every ${n} minutes`),
                 })),
               ]}
               onChange={(v) =>

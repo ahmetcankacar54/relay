@@ -402,8 +402,8 @@ export function AccountsTable({
                       className="shrink-0 rounded-full border px-1.5 py-px text-[11px] text-muted-foreground"
                     >
                       {t(
-                        `Veri ${formatRelative(usage.checkedAt, now, language)}`,
-                        `Data ${formatRelative(usage.checkedAt, now, language)}`,
+                        `${formatRelative(usage.checkedAt, now, language)} okundu`,
+                        `Read ${formatRelative(usage.checkedAt, now, language)}`,
                       )}
                     </span>
                   )}

@@ -328,6 +328,6 @@ test("the travelling panda names what each Desktop action is doing", () => {
   assert.match(line("cancel"), /Yedek geri yükleniyor/);
   assert.match(line("recover"), /Yedek geri yükleniyor/);
   assert.match(line("capture"), /Açık hesap kaydediliyor/);
-  assert.match(line("login"), /Claude uygulaması girişi kuruluyor/);
-  assert.match(line("reconnect"), /Claude uygulaması girişi kuruluyor/);
+  assert.match(line("login"), /Claude uygulamasında giriş ekranı açılıyor/);
+  assert.match(line("reconnect"), /Claude uygulamasında giriş ekranı açılıyor/);
 });

@@ -6,7 +6,7 @@ import { routineFailure, routineFailureNotice } from "../shared/routine-failure"
 test("a known reason is named in words, in both languages", () => {
   assert.equal(
     routineFailureNotice("Studio", "routine-cli-unavailable", "tr"),
-    "Studio limit dönemi başlatılamadı (Claude CLI bulunamadı).",
+    "Studio hesabının limit dönemi başlatılamadı (Claude CLI bulunamadı).",
   );
   assert.equal(
     routineFailureNotice("Studio", "routine-cli-unavailable", "en"),
@@ -17,7 +17,7 @@ test("a known reason is named in words, in both languages", () => {
 
 test("a reason without a label is left out, never shown as a code", () => {
   for (const reason of ["routine-request-failed", "Wait for the account connection refresh to finish.", ""]) {
-    assert.equal(routineFailureNotice("Studio", reason, "tr"), "Studio limit dönemi başlatılamadı.");
+    assert.equal(routineFailureNotice("Studio", reason, "tr"), "Studio hesabının limit dönemi başlatılamadı.");
     assert.equal(routineFailureNotice("Studio", reason, "en"), "Could not start Studio’s limit period.");
   }
   assert.equal(routineFailure(undefined), undefined);

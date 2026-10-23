@@ -41,16 +41,16 @@ const labels = {
     unknownActive: "No saved account active",
     empty: "Add an account in Relay",
     review: "Quota used · select an account to switch",
-    unavailable: "Claude app connection unavailable",
+    unavailable: "The Claude app was not found",
     statusUnavailable: "Claude app status unavailable",
     loading: "Checking the Claude app connection…",
-    busy: "Claude app operation in progress",
+    busy: "A Claude app action is running",
     pending: "Finish the Claude app sign-in first",
     authBusy: "Finish the usage sign-in first",
     recovery: "Restore the backup first",
     unlinked: "Save Claude app sign-in",
     mismatch: "Sign-ins belong to different accounts",
-    outdated: "outdated",
+    outdated: "usage data is out of date",
     fiveHour: "5h",
     week: "wk",
   },
@@ -61,16 +61,16 @@ const labels = {
     unknownActive: "Kayıtlı aktif hesap yok",
     empty: "Relay’de hesap ekle",
     review: "Kullanılan limit · geçmek için hesap seç",
-    unavailable: "Claude uygulaması bağlantısı kullanılamıyor",
+    unavailable: "Claude uygulaması bulunamadı",
     statusUnavailable: "Claude uygulamasının durumu okunamadı",
     loading: "Claude uygulaması bağlantısı kontrol ediliyor…",
-    busy: "Claude uygulaması işlemi sürüyor",
+    busy: "Claude uygulamasında bir işlem sürüyor",
     pending: "Önce Claude uygulaması girişini tamamla",
     authBusy: "Önce limit okuma girişini tamamla",
     recovery: "Önce yedeği geri yükle",
     unlinked: "Claude uygulaması girişini kaydet",
     mismatch: "Girişler farklı hesaplara ait",
-    outdated: "güncel değil",
+    outdated: "limit verisi eski",
     fiveHour: "5 sa",
     week: "hafta",
   },
@@ -282,6 +282,13 @@ export function trayCountdown(resetsAt: string | undefined, now: number) {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
+/** A "h:mm" countdown as Turkish says it after a number: "1 sa 50 dk", "50 dk", "2 sa". */
+function spokenCountdown(left: string) {
+  const [hours, minutes] = left.split(":").map(Number);
+  if (!hours) return `${minutes} dk`;
+  return minutes ? `${hours} sa ${minutes} dk` : `${hours} sa`;
+}
+
 /** Why the title shows "—": the panda sleeps. During another Desktop operation Claude may be closed for a moment. */
 function trayRest(snapshot: TraySnapshot, now: number) {
   return snapshot.desktop?.busy ? undefined : mascotRest(snapshot, now);
@@ -313,8 +320,8 @@ export function trayTooltip(
         : "Claude app closed"
       : rest === "unknown"
         ? language === "tr"
-          ? "limit bilinmiyor"
-          : "usage unknown"
+          ? "limit verisi eski"
+          : "usage data is out of date"
         : undefined;
   if (!active) return why ? `Relay — ${why}` : "Relay";
   if (why) return `Relay — ${oneLine(active.name)} · ${why}`;
@@ -326,13 +333,14 @@ export function trayTooltip(
       ? trayResetClock(window?.resetsAt, now, language, snapshot.timeZone)
       : undefined;
   const left = trayCountdown(window?.resetsAt, now);
+  // A full window opens again at a clock time; one with room renews after the time left.
   const renews = clock
     ? language === "tr"
-      ? ` · ${clockLocative(clock)} yenilenir`
-      : ` · renews at ${clock}`
+      ? ` · ${clockLocative(clock)} açılır`
+      : ` · opens at ${clock}`
     : left
       ? language === "tr"
-        ? ` · ${left} sonra yenilenir`
+        ? ` · ${spokenCountdown(left)} sonra yenilenir`
         : ` · renews in ${left}`
       : "";
   return `Relay — ${oneLine(active.name)}${figure}${renews}`;

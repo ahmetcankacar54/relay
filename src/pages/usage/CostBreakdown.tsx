@@ -99,7 +99,7 @@ export function CostBreakdown({
         ...priced.slice(0, MODELS),
         {
           key: "other",
-          name: t(`Diğer ${rest.length} model`, `${rest.length} other models`),
+          name: t(`Diğer ${rest.length} model`, `${rest.length} other ${rest.length === 1 ? "model" : "models"}`),
           cost: rest.reduce((sum, line) => sum + line.cost, 0),
           estimated: rest.some((line) => line.estimated),
           muted: "opacity-50",
@@ -114,11 +114,11 @@ export function CostBreakdown({
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
         <div>
           <h3 className="font-display text-[15px] font-semibold">
-            {t("Ücret karşılığı", "Cost equivalent")}
+            {t("API karşılığı", "API value")}
           </h3>
           <p className="text-xs text-muted-foreground">
             {t(
-              "Bu token’lar API liste fiyatıyla ödenseydi. Aboneliğin ücreti ayrıdır.",
+              "Bu token’lar API liste fiyatıyla ödenseydi tutacak tutar. Aboneliğinin ücreti ayrıdır.",
               "What these tokens would cost at API list prices. Your subscription is priced separately.",
             )}
           </p>

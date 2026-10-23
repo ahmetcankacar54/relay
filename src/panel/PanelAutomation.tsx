@@ -66,8 +66,8 @@ export function PanelAutomation({ now }: { now: number }) {
     ? t("Kapalı", "Off")
     : deferred
       ? t(
-          `Uyarlandı · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
-          `Adapted · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
+          `Plan uyarlandı · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
+          `Plan adapted · ${name(deferred.accountId)} ${clock(deferred.startAt)}`,
         )
       : next
         ? nextStartLabel(

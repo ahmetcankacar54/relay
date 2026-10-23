@@ -24,7 +24,7 @@ function issueText(ctx: CliContext, account: Account, issue: UsageIssue | undefi
         : t("Claude Code CLI 2.1.296 veya üstü gerekiyor", "needs the Claude Code CLI 2.1.296 or newer");
     case "credentials-missing":
     case "connect-cli":
-      return t(`bağlı değil: ${reconnect}`, `not connected: ${reconnect}`);
+      return t(`limit okuma girişi yok: ${reconnect}`, `no usage sign-in: ${reconnect}`);
     case "expired":
     case "renewal-required":
     case "scope":
@@ -32,9 +32,9 @@ function issueText(ctx: CliContext, account: Account, issue: UsageIssue | undefi
     case "identity-mismatch":
       return t(`başka bir hesapla bağlı: ${reconnect}`, `connected to another account: ${reconnect}`);
     case "keychain-locked":
-      return t("Keychain kilitli; Mac'in kilidini açıp yeniden deneyin", "the Keychain is locked; unlock the Mac and try again");
+      return t("Anahtarlık kilitli; Mac’in kilidini açıp yeniden dene", "the Keychain is locked; unlock the Mac and try again");
     case "rate-limited":
-      return t("çok sık soruldu; biraz sonra yeniden deneyin", "asked too often; try again shortly");
+      return t("çok sık istek gönderildi; biraz sonra yeniden dene", "too many requests; try again shortly");
     default:
       return t("okunamadı", "could not be read");
   }
@@ -105,7 +105,7 @@ export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
           w.resetsAt ? ` · ${t(`${untilText(w.resetsAt, io.now(), t)} sonra yenilenir`, `resets in ${untilText(w.resetsAt, io.now(), t)}`)}` : ""
         }`;
   const rows = results.map(({ account, usage }) => {
-    if (!usage) return [account.name, t(`bağlı değil: relay connect "${account.name}"`, `not connected: relay connect "${account.name}"`), ""];
+    if (!usage) return [account.name, t(`limit okuma girişi yok: relay connect "${account.name}"`, `no usage sign-in: relay connect "${account.name}"`), ""];
     if (usage.status !== "ready") return [account.name, issueText(ctx, account, usage.issue), ""];
     return [
       account.name,

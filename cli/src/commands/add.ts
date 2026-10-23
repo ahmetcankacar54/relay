@@ -44,8 +44,8 @@ async function pickOrg(ctx: CliContext, accountUuid: string, orgs: string[]): Pr
   if (!orgs.length)
     throw new CliError(
       t(
-        "Bu hesabın Code çalışma alanı henüz yok: Claude Desktop'ta Code sekmesini bir kez açıp yeniden deneyin.",
-        "This account has no Code workspace yet: open the Code tab in Claude Desktop once, then try again.",
+        "Bu hesabın henüz Code çalışma alanı yok: Claude uygulamasında Code sekmesini bir kez açıp yeniden dene.",
+        "This account has no Code workspace yet: open the Code tab in the Claude app once, then try again.",
       ),
       EXIT.failed,
     );
@@ -53,7 +53,7 @@ async function pickOrg(ctx: CliContext, accountUuid: string, orgs: string[]): Pr
   if (!io.isTTY)
     throw new CliError(
       t(
-        `Bu hesabın birden çok çalışma alanı var; birini --org ile seçin: ${orgs.join(", ")}`,
+        `Bu hesabın birden çok çalışma alanı var; birini --org ile seç: ${orgs.join(", ")}`,
         `This account has several workspaces; pick one with --org: ${orgs.join(", ")}`,
       ),
       EXIT.usage,
@@ -86,7 +86,7 @@ async function waitForSignIn(
       ? io.now() + (Number.isFinite(limit) && limit > 0 ? limit : WORKER_SIGNIN_LIMIT_MS)
       : Infinity;
   const stillPending = t(
-    "Bekleme bırakıldı; giriş yarım kaldı. Bitirmek için: relay add --resume · İptal için: relay add --cancel",
+    "Beklemeyi bıraktım; giriş yarım kaldı. Bitirmek için: relay add --resume · İptal için: relay add --cancel",
     "Stopped waiting; the sign-in is still pending. To finish: relay add --resume · To cancel: relay add --cancel",
   );
   const poll = Number(ctx.flags["poll-ms"] ?? 2000);
@@ -101,8 +101,8 @@ async function waitForSignIn(
   });
   io.stdout(
     t(
-      "Claude Desktop'ta yeni hesapla giriş yapın ve Code sekmesini bir kez açın; bekleniyor… (Ctrl+C beklemeyi bırakır, giriş yarım kalır.)",
-      "Sign in to Claude Desktop with the new account and open the Code tab once; waiting… (Ctrl+C stops waiting; the sign-in stays pending.)",
+      "Claude uygulamasında yeni hesapla giriş yap ve Code sekmesini bir kez aç; bekleniyor… (Ctrl+C beklemeyi bırakır, giriş yarım kalır.)",
+      "Sign in to the Claude app with the new account and open the Code tab once; waiting… (Ctrl+C stops waiting; the sign-in stays pending.)",
     ),
   );
   try {
@@ -129,8 +129,8 @@ async function waitForSignIn(
         alreadyToldOf = saved.desktop?.accountUuid;
         io.stdout(
           t(
-            `Claude Desktop'ta ${saved.name} hesabı açık; o zaten kayıtlı. Yeni hesapla giriş yapın.`,
-            `Claude Desktop is signed in as ${saved.name}, which is already saved. Sign in with the new account.`,
+            `Claude uygulamasında ${saved.name} hesabı açık; o zaten kayıtlı. Yeni hesapla giriş yap.`,
+            `The Claude app is signed in as ${saved.name}, which is already saved. Sign in with the new account.`,
           ),
         );
       }
@@ -176,12 +176,12 @@ export const add: Command = async ({ io, deps, parsed, t, argv }) => {
     }
     if (flags.resume) {
       if (!pending)
-        throw new CliError(t("Yarım kalan girişin hesabı bulunamadı; relay add --cancel ile iptal edin.", "The pending sign-in's account is gone; cancel it with relay add --cancel."), EXIT.failed);
-      await confirm(io, t, [t(`Giriş ${pending.name} hesabına kaydedilecek; Claude Desktop kısa bir süre kapanıp açılacak.`, `The sign-in will be saved as ${pending.name}; Claude Desktop will quit briefly and reopen.`), ...quitLines(ctx), ...ends], ctx.yes);
+        throw new CliError(t("Yarım kalan girişin hesabı bulunamadı; relay add --cancel ile iptal et.", "The pending sign-in’s account is gone; cancel it with relay add --cancel."), EXIT.failed);
+      await confirm(io, t, [t(`Giriş ${pending.name} hesabına kaydedilecek; Claude uygulaması kısa bir süreliğine kapanıp yeniden açılacak.`, `The sign-in will be saved as ${pending.name}; the Claude app will quit briefly and reopen.`), ...quitLines(ctx), ...ends], ctx.yes);
       if (inside) return detach(ctx, argv);
       return finishSignIn(ctx, pending);
     }
-    await confirm(io, t, [t("Yarım kalan giriş iptal edilecek: Claude Desktop kapanıp önceki hesapla yeniden açılacak.", "The pending sign-in will be cancelled: Claude Desktop will quit and reopen signed in as before."), ...quitLines(ctx), ...ends], ctx.yes);
+    await confirm(io, t, [t("Yarım kalan giriş iptal edilecek: Claude uygulaması kapanıp önceki hesapla yeniden açılacak.", "The pending sign-in will be cancelled: the Claude app will quit and reopen signed in as before."), ...quitLines(ctx), ...ends], ctx.yes);
     if (inside) return detach(ctx, argv);
     await runDesktopOperation(ctx, () => ctx.desktop.cancelLogin());
     if (pending && !pending.desktop && !pending.auth) forget(ctx, pending.id);
@@ -213,8 +213,8 @@ export const add: Command = async ({ io, deps, parsed, t, argv }) => {
       t,
       [
         t(
-          `Claude Desktop'ta açık olan hesap (${current.slice(0, 8)}) ${name} adıyla kaydedilecek; Claude kısa bir süre kapanıp açılacak.`,
-          `The account signed in to Claude Desktop (${current.slice(0, 8)}) will be saved as ${name}; Claude will quit briefly and reopen.`,
+          `Claude uygulamasında açık olan hesap (${current.slice(0, 8)}) ${name} adıyla kaydedilecek; Claude kısa bir süreliğine kapanıp yeniden açılacak.`,
+          `The account signed in to the Claude app (${current.slice(0, 8)}) will be saved as ${name}; Claude will quit briefly and reopen.`,
         ),
         ...quitLines(ctx),
         ...ends,
@@ -236,8 +236,8 @@ export const add: Command = async ({ io, deps, parsed, t, argv }) => {
   if (current && !currentSaved)
     throw new CliError(
       t(
-        "Claude Desktop'ta açık olan hesap henüz kayıtlı değil. Önce onu relay add <ad> ile kaydedin, sonra --new ile yenisini ekleyin.",
-        "The account signed in to Claude Desktop is not saved yet. Save it first with relay add <name>, then add another with --new.",
+        "Claude uygulamasında açık olan hesap henüz kayıtlı değil. Önce onu relay add <ad> ile kaydet, sonra --new ile yenisini ekle.",
+        "The account signed in to the Claude app is not saved yet. Save it first with relay add <name>, then add another with --new.",
       ),
       EXIT.failed,
     );
@@ -246,8 +246,8 @@ export const add: Command = async ({ io, deps, parsed, t, argv }) => {
     t,
     [
       t(
-        "Claude Desktop kapanıp giriş ekranında açılacak. Yeni hesapla giriş yapıp Code sekmesini açın; bu terminal bekler.",
-        "Claude Desktop will quit and reopen on its sign-in screen. Sign in with the new account and open the Code tab; this terminal waits.",
+        "Claude uygulaması kapanıp giriş ekranında açılacak. Yeni hesapla giriş yapıp Code sekmesini aç; bu terminal bekler.",
+        "The Claude app will quit and reopen on its sign-in screen. Sign in with the new account and open the Code tab; this terminal waits.",
       ),
       ...quitLines(ctx),
       ...ends,

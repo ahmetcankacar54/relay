@@ -42,5 +42,5 @@ export function routineFailureNotice(
   const why = words ? ` (${language === "en" ? words[1] : words[0]})` : "";
   return language === "en"
     ? `Could not start ${name}’s limit period${why}.`
-    : `${name} limit dönemi başlatılamadı${why}.`;
+    : `${name} hesabının limit dönemi başlatılamadı${why}.`;
 }

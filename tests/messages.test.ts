@@ -52,8 +52,8 @@ test("the errors main's IPC handlers throw read in both languages", () => {
   const cases: [string, string, string][] = [
     [
       "Wait for the account connection refresh to finish.",
-      "Hesap bağlantısının yenilenmesi bitene kadar bekle.",
-      "Wait for the account connection refresh to finish.",
+      "Limit okuma girişinin yenilenmesi bitene kadar bekle.",
+      "Wait for the usage sign-in renewal to finish.",
     ],
     [
       "Finish the Desktop handoff before signing in.",
@@ -71,9 +71,9 @@ test("the errors main's IPC handlers throw read in both languages", () => {
       "Finish the Claude app operation before changing preferences.",
     ],
     ["Geçersiz IPC kaynağı.", "Geçersiz IPC kaynağı.", "Invalid IPC source."],
-    // Thrown in Turkish by the service, which named the app "Desktop".
+    // Thrown in Turkish by the service.
     [
-      "Desktop’ta doğru hesabın açık olduğunu doğrula.",
+      "Claude uygulamasında doğru hesabın açık olduğunu doğrula.",
       "Claude uygulamasında doğru hesabın açık olduğunu doğrula.",
       "Check that the right account is open in the Claude app.",
     ],
@@ -107,4 +107,35 @@ test("an error Relay does not know is shown as it came", () => {
     localizeError("Something else broke.", "en"),
     "Something else broke.",
   );
+});
+
+test("the saved sign-in (vault) errors read in Turkish, inner reason included", () => {
+  const missing = 'The Keychain item "Relay Vault Key" was not found.';
+  assert.equal(
+    localizeError(missing, "tr"),
+    'Anahtarlık’ta "Relay Vault Key" öğesi bulunamadı.',
+  );
+  assert.equal(
+    localizeError(
+      `The Keychain item "Relay Vault Key" could not be read, so saved Claude app sign-ins cannot be opened. ${missing} To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again.`,
+      "tr",
+    ),
+    'Anahtarlık’taki "Relay Vault Key" öğesi okunamadı, bu yüzden kayıtlı Claude uygulaması girişleri açılamıyor. Anahtarlık’ta "Relay Vault Key" öğesi bulunamadı. Baştan başlamak için relay reset-vault komutunu çalıştır (npm i -g @ahmetcankacar/relay) ve her hesabı yeniden kaydet.',
+  );
+  assert.equal(
+    localizeError(
+      "2 saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.",
+      "tr",
+    ),
+    "2 kayıtlı giriş dosyası açılamadı ve desktop-vault/unreadable klasörüne ayrıldı. Bu hesapların Claude uygulaması girişini yeniden kaydet.",
+  );
+  // English keeps the backend text, which never says "Desktop".
+  assert.equal(localizeError(missing, "en"), missing);
+  for (const message of [
+    "No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay.",
+    "System encryption is unavailable, so Claude app sign-ins cannot be saved.",
+    "Relay could not open its old saved sign-ins this time (macOS did not allow access to their key). Nothing was moved; Relay tries again at its next start.",
+    "Save this account’s Claude app sign-in first.",
+  ])
+    assert.notEqual(localizeError(message, "tr"), message, message);
 });

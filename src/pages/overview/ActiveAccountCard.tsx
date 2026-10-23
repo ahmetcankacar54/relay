@@ -119,7 +119,7 @@ export function ActiveAccountCard({
           <p className="text-[13px] leading-snug text-foreground/85">
             {language === "tr" ? (
               <>
-                <b>{suggestion.name}</b> en uygunu
+                En uygun hesap <b>{suggestion.name}</b>
                 {suggestedUsage?.fiveHour
                   ? `: ${formatUsed(suggestedUsage.fiveHour.usedPercent, language)}.`
                   : "."}
@@ -194,11 +194,11 @@ function Onboarding({ go }: { go: (page: PageId) => void }) {
                   )
                 : first
                   ? t(
-                      "İlk hesabını bağlayalım. Claude uygulamasındaki her hesabı bir kez bağla; sonrasında buradan değiştir.",
+                      "İlk hesabını bağlayalım. Claude uygulamasındaki her hesabı bir kez bağla; sonra hesaplar arasında buradan geç.",
                       "Let’s connect your first account. Connect each Claude app account once; switch between them here.",
                     )
                   : t(
-                      "Claude uygulamasındaki her hesabı bir kez bağla. Sonrasında buradan değiştir.",
+                      "Claude uygulamasındaki her hesabı bir kez bağla. Sonra hesaplar arasında buradan geç.",
                       "Connect each Claude app account once. Switch between them here.",
                     )}
             </p>

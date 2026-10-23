@@ -63,7 +63,7 @@ export function draftNotice(
     parts.push(
       en
         ? `${drafts(summary.restored)} restored`
-        : `${summary.restored} taslak geri yazıldı`,
+        : `${summary.restored} taslak yeniden yazıldı`,
     );
   if (summary.left > 0)
     parts.push(

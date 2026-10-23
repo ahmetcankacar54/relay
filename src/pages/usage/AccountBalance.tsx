@@ -43,7 +43,7 @@ export function AccountBalance({
         <span className="text-xs text-muted-foreground">
           {cost
             ? t(
-                "API değeri · payı · ortalama dönem doluluğu · boşta gün",
+                "API karşılığı · payı · ortalama dönem doluluğu · boşta gün",
                 "API value · share · average period fill · idle days",
               )
             : t(

@@ -26,7 +26,7 @@ export function resolveAccount(
     if (found.length > 1)
       throw new CliError(
         t(
-          `“${query}” birden çok hesaba uyuyor: ${found.map((a) => a.name).join(", ")}. Adın devamını ya da kimliğin başını yazın.`,
+          `“${query}” birden çok hesaba uyuyor: ${found.map((a) => a.name).join(", ")}. Adın devamını ya da kimliğin başını yaz.`,
           `“${query}” matches several accounts: ${found.map((a) => a.name).join(", ")}. Type more of the name, or the start of its id.`,
         ),
         EXIT.usage,
@@ -44,7 +44,7 @@ export function resolveAccount(
   throw new CliError(
     names
       ? t(`“${query}” adlı bir hesap yok. Hesaplar: ${names}.`, `No account named “${query}”. Accounts: ${names}.`)
-      : t("Henüz kayıtlı hesap yok. İlkini relay add <ad> ile ekleyin.", "No accounts are saved yet. Add the first with relay add <name>."),
+      : t("Henüz kayıtlı hesap yok. İlkini relay add <ad> ile ekle.", "No accounts are saved yet. Add the first with relay add <name>."),
     EXIT.usage,
   );
 }

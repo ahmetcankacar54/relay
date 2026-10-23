@@ -125,7 +125,7 @@ export function detach(ctx: CliContext, argv: string[]): number {
   if (!probeWritable(ctx.paths.cliOperations))
     throw new CliError(
       t(
-        "Bu oturum korumalı alanda (sandbox) çalışıyor; komutu normal bir terminalden çalıştırın.",
+        "Bu oturum korumalı alanda (sandbox) çalışıyor; komutu normal bir terminalden çalıştır.",
         "This session runs in a sandbox; run the command from a normal terminal.",
       ),
       EXIT.environment,
@@ -141,8 +141,8 @@ export function detach(ctx: CliContext, argv: string[]): number {
   startWorker(ctx.deps, ctx.io, record.id);
   ctx.io.stdout(
     t(
-      "Claude Desktop kapanınca işlem ayrı bir süreçte sürecek. Sonucunu Claude yeniden açılınca relay status gösterir.",
-      "The operation continues in a separate process when Claude Desktop quits. Once Claude reopens, relay status shows how it went.",
+      "Claude uygulaması kapanınca işlem ayrı bir süreçte sürecek. Claude yeniden açılınca sonucunu relay status gösterir.",
+      "The operation continues in a separate process when the Claude app quits. Once Claude reopens, relay status shows how it went.",
     ),
   );
   return EXIT.ok;

@@ -17,12 +17,12 @@ export function lockHolderText(holder: LockInfo, t: Translate): string {
     link: ["yeni bir giriş başlatıyor", "is starting a sign-in"],
     "cancel-link": ["bir girişi iptal ediyor", "is cancelling a sign-in"],
     merge: ["Code geçmişini taşıyor", "is bringing Code history over"],
-    restore: ["yarıda kalan bir geçişi geri alıyor", "is restoring an interrupted switch"],
+    restore: ["yarıda kalan geçişin yedeğini geri yüklüyor", "is restoring an interrupted switch’s backup"],
     reset: ["kasayı sıfırlıyor", "is resetting the vault"],
-    "desktop-task": ["Claude Desktop'ta bir iş yapıyor", "is doing a task in Claude Desktop"],
+    "desktop-task": ["Claude uygulamasında bir iş yapıyor", "is doing a task in the Claude app"],
     "draft-retype": ["bir taslağı yeniden yazıyor", "is re-typing a draft"],
   };
-  const [tr, en] = doing[holder.kind] ?? ["bir Claude Desktop işlemi yapıyor", "is running a Claude Desktop operation"];
+  const [tr, en] = doing[holder.kind] ?? ["Claude uygulamasında bir işlem yapıyor", "is running a Claude app operation"];
   return `${who} ${t(tr, en)}`;
 }
 
@@ -60,10 +60,10 @@ export function limitsState(account: Account): LimitsState {
 
 export function limitsText(state: LimitsState, t: Translate): string {
   return state === "connected"
-    ? t("bağlı", "connected")
+    ? t("var", "signed in")
     : state === "error"
-      ? t("yeniden bağlanmalı", "needs reconnecting")
-      : t("bağlı değil", "not connected");
+      ? t("bağlantı yenilenmeli", "connection needs renewing")
+      : t("yok", "none");
 }
 
 /** Whether a process inside a Relay.app bundle is in a `ps -axo pid=,ppid=,comm=` listing. */

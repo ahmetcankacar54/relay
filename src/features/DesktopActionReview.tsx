@@ -61,15 +61,15 @@ export function DesktopActionReview({
               "Cancel sign-in and return to the previous account",
             )
           : kind === "switch"
-            ? t("Claude uygulamasında hesabı değiştir", "Switch the Claude app account")
+            ? t("Claude uygulamasında başka hesaba geç", "Switch the Claude app to another account")
             : kind === "capture"
               ? t(
                   "Claude uygulamasında açık hesabı kaydet",
                   "Save the account open in the Claude app",
                 )
               : t(
-                  "Claude uygulaması girişini kur",
-                  "Set up Claude app sign-in",
+                  "Claude uygulamasına giriş yap",
+                  "Sign in to the Claude app",
                 );
   const progress =
     kind === "switch"
@@ -81,8 +81,8 @@ export function DesktopActionReview({
           : kind === "capture"
             ? t("Açık hesap kaydediliyor", "Saving the open account")
             : t(
-                "Claude uygulaması girişi kuruluyor",
-                "Setting up Claude app sign-in",
+                "Claude uygulamasında giriş ekranı açılıyor",
+                "Opening sign-in in the Claude app",
               );
   return (
     <section
@@ -135,13 +135,13 @@ export function DesktopActionReview({
                 )
               : kind === "cancel" || kind === "recover"
                 ? t(
-                    "Önceki bağlantı yedekten geri yüklenir. Claude uygulaması yeniden başlatılır; açık işler durabilir.",
-                    "Your previous connection is restored from backup. The Claude app restarts; active work may stop.",
+                    "Önceki Claude uygulaması girişi yedekten geri yüklenir. Claude uygulaması yeniden başlatılır; açık işler durabilir.",
+                    "Your previous Claude app sign-in is restored from the backup. The Claude app restarts; active work may stop.",
                   )
                 : kind === "switch"
                   ? t(
-                      "Kayıtlı Claude uygulaması girişi açılır. Claude uygulaması yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
-                      "Your saved Claude app sign-in opens. The Claude app restarts; active responses and background tasks may stop.",
+                      "Claude uygulamasına bu hesabın kayıtlı girişi yüklenir. Claude uygulaması yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
+                      "This account’s saved Claude app sign-in is put in place. The Claude app restarts; active responses and background tasks may stop.",
                     )
                   : kind === "capture"
                     ? t(
@@ -149,8 +149,8 @@ export function DesktopActionReview({
                         "The account currently open in the Claude app is saved to this profile. Saving restarts the Claude app.",
                       )
                     : t(
-                        "Claude uygulaması yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yaptıktan sonra Relay’e dönüp bağlantıyı kaydet.",
-                        "The Claude app restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the connection.",
+                        "Claude uygulaması yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yaptıktan sonra Relay’e dön ve girişi kaydet.",
+                        "The Claude app restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the sign-in.",
                       )}
           </p>
           {(kind === "capture" ||
@@ -200,7 +200,7 @@ export function DesktopActionReview({
                 ? t("Yeniden başlat ve geç", "Restart and switch")
                 : kind === "capture"
                   ? t("Kaydet ve yeniden başlat", "Save and restart")
-                  : t("Yeniden başlat ve giriş aç", "Restart and open sign-in")}
+                  : t("Yeniden başlat ve giriş ekranını aç", "Restart and open sign-in")}
         </Button>
         <Button
           type="button"

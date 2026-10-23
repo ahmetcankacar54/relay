@@ -296,8 +296,8 @@ export function AddAccountSteps({
               </StatusLine>
               <p className="text-sm text-muted-foreground">
                 {t(
-                  "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç. Sonra buradan bağlantıyı kaydet.",
-                  "Sign in to the matching account inside the Claude app and open Code. Then save the connection here.",
+                  "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç. Sonra girişi buradan kaydet.",
+                  "Sign in to the matching account inside the Claude app and open Code. Then save the sign-in here.",
                 )}
               </p>
               <DesktopPendingActions />

@@ -307,7 +307,7 @@ test("a ledger that cannot be saved says so, in both languages", () => {
   const unsaved: TokenUsageView = { ...view, progress: { percent: 100, complete: true, error: true } };
   assert.match(
     text(card({ view: unsaved, loading: false })),
-    /Token kaydı kaydedilemiyor; Relay’i yeniden başlatınca tarama baştan yapılır\./,
+    /Token kayıtları saklanamıyor; Relay yeniden başlayınca tarama baştan yapılır\./,
   );
   assert.match(
     text(card({ view: unsaved, loading: false }, "en")),
@@ -657,7 +657,7 @@ test("the API value metric shows dollars in the legend and table, and the price 
   });
   const plain = text(html);
   assert.match(plain, /Fiyatlar: Anthropic API liste fiyatları, 22 Eki 2026\./);
-  assert.match(plain, /1,5 B token fiyatı bilinmeyen modellerden; tutara katılmadı \(mystery\)\./);
+  assert.match(plain, /1,5 B token, fiyatı bilinmeyen modellerden geldi; tutara katılmadı \(mystery\)\./);
   const table = render(
     createElement(DayTable, {
       view: {
@@ -685,13 +685,13 @@ test("the cost card splits the API value by account and by model, largest first,
     ],
   };
   const plain = text(render(createElement(CostBreakdown, { view: priced, accounts })));
-  assert.match(plain, /Ücret karşılığı/);
-  assert.match(plain, /Aboneliğin ücreti ayrıdır/);
+  assert.match(plain, /^API karşılığıBu token’lar API liste fiyatıyla ödenseydi tutacak tutar\./);
+  assert.match(plain, /Aboneliğinin ücreti ayrıdır/);
   assert.match(plain, /Hesaba göre.*Kişisel · Max%90≈\$90,00.*Vertex%10\$10,00/);
   assert.match(plain, /Modele göre.*claude-opus-4%75\$75,00.*claude-sonnet-4%25\$25,00/);
   assert.match(plain, /son 7 gün · günde \$14,29/);
   const english = text(render(createElement(CostBreakdown, { view: priced, accounts }), "en"));
-  assert.match(english, /Cost equivalent.*By account.*By model/);
+  assert.match(english, /API value.*By account.*By model/);
 });
 
 test("the cost card stays out when nothing in the range was priced", () => {

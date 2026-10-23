@@ -235,7 +235,7 @@ export function Sidebar({
       icon: CalendarClock,
       label: t("Planlama", "Planning"),
       on: status.planning,
-      onLabel: t("Otomatik planlama açık", "Automatic planning on"),
+      onLabel: t("Önceden başlatma açık", "Early start on"),
     },
     {
       id: "gecis",
@@ -328,7 +328,7 @@ export function Sidebar({
               <span className="truncate text-muted-foreground">
                 {summary.fiveHour === undefined
                   ? summary.running
-                    ? t("Claude'da açık", "Open in Claude")
+                    ? t("Claude’da açık", "Open in Claude")
                     : t("Claude kapalı", "Claude closed")
                   : t(
                       `${formatPercent(percentUsed(summary.fiveHour), "tr")}${left ? ` · ${left}` : ""}${summary.running ? "" : " · Claude kapalı"}`,

@@ -11,6 +11,7 @@ import { paint, table } from "../cli/src/output";
 import { openContext } from "../cli/src/context";
 import { shielded } from "../cli/src/shield";
 import { CliError, EXIT } from "../cli/src/io";
+import { describeError } from "../cli/src/main";
 import { writeBytes } from "../electron/core/desktop-files";
 import { STATE_SCHEMA } from "../electron/core/store";
 import type { Account } from "../shared/types";
@@ -184,5 +185,16 @@ test("a legacy vault next to Relay.app 0.12 points to the app's Keychain prompt,
   await assert.rejects(
     openContext(f.io, f.deps as any, { lang: "en" } as any, { write: true, desktop: true }),
     (e: any) => e.code === EXIT.environment && /Keychain prompt/.test(e.message) && !/Update Relay\.app/.test(e.message),
+  );
+});
+
+test("a core error the app knows in both languages is shown in the CLI's language", () => {
+  const core = new Error("Connect this account in Claude Desktop first.");
+  assert.equal(describeError(core, translator("tr")).message, "Önce bu hesabı Claude uygulamasında bağla.");
+  assert.equal(describeError(core, translator("en")).message, "Connect this account in the Claude app first.");
+  // The blocked ones keep their own words, with the relay command that clears them.
+  assert.match(
+    describeError(new Error("Finish or cancel the current Desktop sign-in first."), translator("tr")).message,
+    /relay add --resume ile bitir/,
   );
 });

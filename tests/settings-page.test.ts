@@ -70,7 +70,7 @@ test("Settings groups appearance, the menu bar, general, the system and privacy"
   );
   for (const re of [
     /Görünüm/, /Sistem/, /Açık/, /Koyu/, /Arayüz dili/, /Türkçe/, /English/,
-    /Menü çubuğu/, /Genel/, /Kullanım limitlerini yenile/, /Elle/, /Gizlilik ve güvenlik/, /Bulundu/, /2\.1\.0/,
+    /Menü çubuğu/, /Genel/, /Limitleri otomatik yenile/, /Elle/, /Gizlilik ve güvenlik/, /Bulundu/, /2\.1\.0/,
     // The path the missing-CLI error names: Ayarlar → Claude Code CLI → Dosyayı seç.
     /Claude Code CLI<\/[^>]+>(?:(?!<button)[\s\S])*?2\.1\.0(?:(?!<button)[\s\S])*?<button[^>]*>Dosyayı seç<\/button>/,
     /Yerelde saklanır\. Kontrol sende\./, /Bağımsız araç · 0\.\d+\.\d+/,
@@ -224,7 +224,7 @@ test("Settings → Genel sets the warning threshold as Usage → Uyarılar does"
     /<div[^>]*aria-labelledby="settings-threshold-label"[^>]*>.*?<\/div>/s.exec(html)?.[0] ?? "";
   const html = render();
   // In the general group, after the refresh interval.
-  assert.match(html, /Kullanım limitlerini yenile[\s\S]*id="settings-threshold-label">Uyarı eşiği<[\s\S]*id="settings-system"/);
+  assert.match(html, /Limitleri otomatik yenile[\s\S]*id="settings-threshold-label">Uyarı eşiği<[\s\S]*id="settings-system"/);
   assert.match(html, /Beş saatlik veya haftalık kullanım bu paya ulaşınca hesap işaretlenir\./);
   assert.deepEqual(
     [...group(html).matchAll(/<button[^>]*>(.*?)<\/button>/gs)].map((m) => m[1]),

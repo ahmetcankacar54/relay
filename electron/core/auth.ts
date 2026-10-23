@@ -75,7 +75,7 @@ export class AuthManager {
     const previous = this.entries.get(accountId);
     if (previous && this.active(accountId)) return { ...previous.flow };
     if (this.list().filter(authPending).length >= 4)
-      throw new Error("Önce açık hesap bağlantılarından birini tamamla.");
+      throw new Error("Önce yarım kalan limit okuma girişlerinden birini tamamla.");
     let releaseProfile: (() => void) | undefined;
     try {
       releaseProfile = this.profileLock?.(accountId);
@@ -150,7 +150,7 @@ export class AuthManager {
         this.finish(
           e,
           "failed",
-          "Claude giriş işlemi başlatılamadı. Ayarlardan Claude bağlantısını kontrol et.",
+          "Limit okuma girişi başlatılamadı. Ayarlar’daki Claude Code CLI bölümünü kontrol et.",
         );
     });
     child.once("error", () => releaseProfile?.());
@@ -164,7 +164,7 @@ export class AuthManager {
         this.finish(
           e,
           "failed",
-          "Giriş tamamlanmadı. Yeniden bağlanarak tarayıcıda onayla.",
+          "Limit okuma girişi tamamlanmadı. Yeniden dene ve tarayıcıda onayla.",
         );
         return;
       }
@@ -185,7 +185,7 @@ export class AuthManager {
     const e = this.get(accountId, attemptId);
     if (e.stopping || e.flow.status !== "waiting" || !e.url)
       throw new Error(
-        "Bağlantı henüz hazır değil veya süresi doldu. Yeniden bağlan.",
+        "Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.",
       );
     await this.open(e.url);
   }
@@ -213,7 +213,7 @@ export class AuthManager {
     this.finish(
       e,
       timedOut ? "failed" : "cancelled",
-      timedOut ? "Giriş süresi doldu. Yeniden bağlanarak devam et." : undefined,
+      timedOut ? "Giriş süresi doldu. Girişi yeniden başlat." : undefined,
     );
     e.stopping = false;
   }
@@ -238,14 +238,14 @@ export class AuthManager {
         connected ? "connected" : "failed",
         connected
           ? undefined
-          : "Tarayıcı onayı alındı ancak hesap doğrulanamadı. Durumu doğrula veya yeniden bağlan.",
+          : "Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
       );
     } catch {
       if (!e.stopping && authPending(e.flow))
         this.finish(
           e,
           "failed",
-          "Hesap doğrulanamadı. Durumu doğrula veya yeniden bağlan.",
+          "Hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
         );
     }
   }

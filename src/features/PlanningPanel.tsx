@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, CalendarClock, Play } from "lucide-react";
 import { routineFailure } from "../../shared/routine-failure";
+import { clockLocative } from "../../shared/tr-dative";
 import type {
   Account,
   AccountPlanning,
@@ -90,7 +91,7 @@ function statusText(
         : t("Planlı başlatma yok", "No planned start");
     case "active":
       return t(
-        `Dönem açık · Sıfırlanma ${clock(status.resetsAt!, zone)}`,
+        `Dönem açık · ${clockLocative(clock(status.resetsAt!, zone))} yenilenir`,
         `Period open · Resets ${clock(status.resetsAt!, zone)}`,
       );
     case "due":
@@ -98,8 +99,8 @@ function statusText(
     case "waiting":
       if (status.reason === "adapted")
         return t(
-          `Uyarlandı · başlatma ${clock(status.nextStartAt!, zone)}`,
-          `Adapted · starts at ${clock(status.nextStartAt!, zone)}`,
+          `Plan uyarlandı · ${clockLocative(clock(status.nextStartAt!, zone))} başlatılacak`,
+          `Plan adapted · starts at ${clock(status.nextStartAt!, zone)}`,
         );
       if (status.reason === "cooldown")
         return t(
@@ -107,7 +108,7 @@ function statusText(
           `Last attempt failed (${failureText(lastFailure, t)}); retrying in 15 min`,
         );
       if (status.reason === "in-use")
-        return t("Relay'de çalışan oturum var", "A Relay session is running");
+        return t("Relay’de çalışan bir oturum var", "A Relay session is running");
       if (status.reason === "relay-busy")
         return t(
           "Başka bir Relay işlemi sürüyor",
@@ -125,7 +126,7 @@ function statusText(
       if (status.reason === "daily-limit")
         return t(
           "Bugünkü deneme sınırı doldu",
-          "Today's attempt limit reached",
+          "Today’s attempt limit reached",
         );
       return t("Limit okuma girişi gerekli", "Usage sign-in required");
   }
@@ -224,7 +225,7 @@ function HoursRow({
       <div className="col-span-full grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 @xl:col-span-1 @xl:col-start-3 @xl:row-start-1">
         <TimePicker
           id={`${id}-start`}
-          label={t(`${label} başlangıç`, `${label} start`)}
+          label={t(`${label} başlangıç saati`, `${label} start`)}
           value={value.start}
           disabled={disabled || !value.enabled}
           onChange={(start) => onChange({ ...value, start })}
@@ -235,7 +236,7 @@ function HoursRow({
         </span>
         <TimePicker
           id={`${id}-end`}
-          label={t(`${label} bitiş`, `${label} end`)}
+          label={t(`${label} bitiş saati`, `${label} end`)}
           value={value.end}
           disabled={disabled || !value.enabled}
           onChange={(end) => onChange({ ...value, end })}
@@ -372,7 +373,7 @@ export function PlanningPanel({
         )
       : t(
           `Bugün ${plannedToday} başlatma planlı`,
-          `${plannedToday} starts planned today`,
+          `${plannedToday} ${plannedToday === 1 ? "start" : "starts"} planned today`,
         );
   // The next start has its own row under the switch, in the shared wording.
   const language = t("tr", "en") as Language;
@@ -439,7 +440,7 @@ export function PlanningPanel({
             )}
             <small className={cn(noteClass, "mt-0.5 block")}>
               {t(
-                "Her başlatma küçük bir istek kadar kota harcar. Relay açık ve Mac uyanık olmalı.",
+                "Her başlatma küçük bir istek kadar limit harcar. Relay açık ve Mac uyanık olmalı.",
                 "Each start uses a small request of quota. Relay must be open and the Mac awake.",
               )}
             </small>
@@ -524,8 +525,8 @@ export function PlanningPanel({
           </div>
           <p className={noteClass}>
             {t(
-              "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay hesapları kapasiteye ve tempoya göre işten önce ısıtır.",
-              "An end before the start runs into the next day. Relay warms accounts up before work by capacity and tempo.",
+              "Bitiş saati başlangıçtan önceyse aralık ertesi güne uzar. Relay, kapasiteye ve tempoya göre hesapların limit dönemlerini işe başlamadan önce başlatır.",
+              "An end before the start runs into the next day. Relay starts accounts’ limit periods before work, by capacity and tempo.",
             )}
           </p>
         </div>
@@ -678,7 +679,7 @@ export function PlanningPanel({
                   size="icon-xs"
                   className="h-6 w-7"
                   aria-label={t(
-                    `${account.name} yukarı`,
+                    `${account.name} hesabını yukarı taşı`,
                     `Move ${account.name} up`,
                   )}
                   disabled={disabled || index === 0}
@@ -692,7 +693,7 @@ export function PlanningPanel({
                   size="icon-xs"
                   className="h-6 w-7"
                   aria-label={t(
-                    `${account.name} aşağı`,
+                    `${account.name} hesabını aşağı taşı`,
                     `Move ${account.name} down`,
                   )}
                   disabled={disabled || index === included.length - 1}

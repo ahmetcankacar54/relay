@@ -915,7 +915,7 @@ export class DesktopManager {
     if (claimFor && !claimed) throw new Error("Account not found.");
     const claim = claimed?.desktop?.accountUuid ?? claimed?.auth?.accountUuid;
     if (claimFor && !claim)
-      throw new Error("Save this account's Claude app sign-in first.");
+      throw new Error("Save this account’s Claude app sign-in first.");
     if (!this.busy) {
       const uuids = this.store.state.accounts.flatMap((account) =>
         [account.desktop?.accountUuid, account.auth?.accountUuid].filter(

@@ -20,12 +20,12 @@ export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
     off: t("Hiçbir şey yapma", "Do nothing"),
     guide: t("Sadece haber ver", "Only tell me"),
     closed: t(
-      "Eklentiyi de değiştir · tarayıcı kapalıysa",
-      "Change the extension too · if the browser is closed",
+      "Eklentinin hesabını da değiştir · tarayıcı kapalıysa",
+      "Switch the extension too · if the browser is closed",
     ),
     restart: t(
-      "Eklentiyi de değiştir · tarayıcıyı kapatıp aç",
-      "Change the extension too · quit and reopen the browser",
+      "Eklentinin hesabını da değiştir · tarayıcıyı kapatıp aç",
+      "Switch the extension too · quit and reopen the browser",
     ),
   };
   // From the least to the most Relay does.
@@ -39,22 +39,22 @@ export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
 export function modeSentence(mode: ExtensionMode, t: T): string {
   const web = t(
     "Eklentinin girişi, tarayıcıdaki claude.ai oturumundan ayrılamaz: Relay bu profildeki claude.ai oturumunu da değiştirir, claude.ai sekmeleri yeni hesapta açılır. Gündelik claude.ai hesabını korumak için eklentiyi ayrı bir tarayıcı profilinde kullan.",
-    "The extension's sign-in cannot be separated from the browser profile's claude.ai login: Relay changes that login too, so claude.ai tabs open on the new account. To keep your everyday claude.ai account, use the extension in a separate browser profile.",
+    "The extension’s sign-in cannot be separated from the browser profile’s claude.ai login: Relay changes that login too, so claude.ai tabs open on the new account. To keep your everyday claude.ai account, use the extension in a separate browser profile.",
   );
   switch (mode) {
     case "restart":
       return `${t(
-        "Relay her hesap değişiminde eklentinin girişini ve bu profildeki claude.ai oturumunu saklar, yeni hesabınkileri yerine koyar. Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar.",
-        "Relay saves the extension's sign-in and this profile's claude.ai login at every switch, and puts the new account's in place. A running browser is closed for a moment and opened again with its tabs.",
+        "Relay her geçişte eklentinin girişini ve bu profildeki claude.ai oturumunu saklar, yerine yeni hesabınkileri koyar. Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar.",
+        "Relay saves the extension’s sign-in and this profile’s claude.ai login at every switch, and puts the new account’s in place. A running browser is closed for a moment and opened again with its tabs.",
       )} ${web}`;
     case "closed":
       return `${t(
-        "Relay bunları yalnızca tarayıcı kapalıyken değiştirir. Eklentinin hesabı izlemesini istiyorsan hesabı değiştirmeden önce tarayıcıyı kapat.",
+        "Relay bunları yalnızca tarayıcı kapalıyken değiştirir. Eklentinin de aynı hesaba geçmesini istiyorsan geçişten önce tarayıcıyı kapat.",
         "Relay changes them only when the browser is closed. Close it before a switch if you want the extension to follow.",
       )} ${web}`;
     case "guide":
       return t(
-        "Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez, tarayıcıyı da kapatmaz. Hesap değişince eklenti başka bir hesapta ya da çıkışta kalmışsa bunu söyler ve ne yapacağını gösterir.",
+        "Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez, tarayıcıyı da kapatmaz. Geçişten sonra eklenti başka bir hesapta kalmışsa ya da oturumu kapalıysa bunu söyler ve ne yapacağını gösterir.",
         "Relay changes nothing in the browser or the extension and never quits the browser. After a switch it tells you when the extension is left on another account or signed out, and what to do.",
       );
     case "off":
@@ -86,12 +86,12 @@ export function startupLine(status: ExtensionStatus, t: T): string | undefined {
   const name = BROWSERS[status.target.app].name;
   return status.restoresTabs
     ? t(
-        `${name} kendi ayarında önceki oturumu açıyor; Relay de oturumu kendisi geri yükler.`,
-        `${name} opens the last session by its own setting, and Relay restores the session itself too.`,
+        `${name} kendi ayarıyla önceki sekmeleri geri açıyor; Relay de sekmeleri ayrıca geri yükler.`,
+        `${name} reopens the last tabs by its own setting, and Relay restores them too.`,
       )
     : t(
-        `${name} kendi ayarında yeni sekme sayfasını açıyor; sekmelerin geri gelmesi için Relay oturumu kendisi geri yükler. Gizli sekmeler geri gelmez.`,
-        `${name} opens the new tab page by its own setting, so Relay restores the session itself to bring the tabs back. Private tabs do not come back.`,
+        `${name} kendi ayarıyla yeni sekme sayfasını açıyor; sekmelerin geri gelmesi için Relay onları kendisi geri yükler. Gizli sekmeler geri gelmez.`,
+        `${name} opens the new tab page by its own setting, so Relay restores the tabs itself. Private tabs do not come back.`,
       );
 }
 
@@ -167,11 +167,11 @@ export function extensionGuide(
     return {
       tone: "off",
       label: t(
-        "Bu Mac'te Claude eklentisi bulunamadı.",
+        "Bu Mac’te Claude eklentisi bulunamadı.",
         "No Claude extension found on this Mac.",
       ),
       detail: t(
-        "Chrome, Brave, Edge, Chromium ve Vivaldi'ye bakıldı.",
+        "Chrome, Brave, Edge, Chromium ve Vivaldi’ye bakıldı.",
         "Looked in Chrome, Brave, Edge, Chromium and Vivaldi.",
       ),
     };
@@ -179,7 +179,7 @@ export function extensionGuide(
     return {
       tone: "warn",
       label: t(
-        "Eklenti birden çok tarayıcıda var; hangisini izleyeceğimi seç.",
+        "Eklenti birden çok tarayıcıda var; Relay’in hangisini izleyeceğini seç.",
         "The extension is in several browsers; choose the one to follow.",
       ),
       action: "settings",
@@ -207,7 +207,7 @@ export function extensionGuide(
       detail: here
         ? undefined
         : t(
-            "Bu hesaba geçince eklenti de bu hesaba döner.",
+            "Bu hesaba geçince eklenti de bu hesaba geçer.",
             "Switching to this account brings the extension along.",
           ),
       where,
@@ -223,7 +223,7 @@ export function extensionGuide(
   if (current.state === "unreadable")
     return {
       tone: "crit",
-      label: t("Eklentinin girişi okunamadı.", "Could not read the extension's sign-in."),
+      label: t("Eklentinin girişi okunamadı.", "Could not read the extension’s sign-in."),
       detail: t(
         "Birkaç saniye sonra tekrar dene. Sürerse eklentinin yeni bir sürümü olabilir.",
         "Try again in a few seconds. If it persists, the extension may have changed.",
@@ -242,7 +242,7 @@ export function extensionGuide(
       ],
       detail: t(
         "Giriş yaptığın hâlde bu yazı kalıyorsa Relay eklentinin girişini tanıyamıyor demektir.",
-        "If this stays after you signed in, Relay cannot recognise the extension's sign-in.",
+        "If this stays after you signed in, Relay cannot recognise the extension’s sign-in.",
       ),
       where,
       action: "check",
@@ -255,7 +255,7 @@ export function extensionGuide(
       tone: "warn",
       label: t(
         "Bağlı değil · eklentideki hesap tanınamadı",
-        "Not linked · the extension's account could not be told",
+        "Not linked · the extension’s account was not recognised",
       ),
       steps: [
         email
@@ -270,7 +270,7 @@ export function extensionGuide(
         t("“Bu hesap olarak bağla”ya bas.", "Press “Link as this account”."),
       ],
       detail: t(
-        "Eklenti hangi hesapta olduğunu Relay'in tanıdığı biçimde saklamıyor; bu yüzden bir kez senin söylemen gerekiyor. Sonraki geçişlerde Relay hangi hesabı koyduğunu hatırlar.",
+        "Eklenti hangi hesapta olduğunu Relay’in tanıdığı biçimde saklamıyor; bu yüzden bir kez senin söylemen gerekiyor. Sonraki geçişlerde Relay hangi hesabı koyduğunu hatırlar.",
         "The extension does not store its account in a way Relay can tell, so say it once. After that Relay remembers which account it put in place.",
       ),
       where,
@@ -284,7 +284,7 @@ export function extensionGuide(
           `Not linked · the extension is on ${other.name} now`,
         )
       : t(
-          "Bağlı değil · eklenti Relay'de olmayan bir hesapta",
+          "Bağlı değil · eklenti Relay’de olmayan bir hesapta",
           "Not linked · the extension is on an account Relay does not have",
         ),
     steps: [
@@ -297,8 +297,8 @@ export function extensionGuide(
     ],
     detail: other
       ? t(
-          `${other.name} için kayıt Relay'de duruyor; ona geçince eklenti geri döner.`,
-          `${other.name}'s sign-in stays saved in Relay; switching to it brings the extension back.`,
+          `${other.name} için kayıt Relay’de duruyor; o hesaba geçince eklenti de geri gelir.`,
+          `${other.name}’s sign-in stays saved in Relay; switching to it brings the extension back.`,
         )
       : undefined,
     where,

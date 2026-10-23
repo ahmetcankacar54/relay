@@ -49,7 +49,7 @@ test("every mode has a Turkish and English label and description", () => {
     [
       ["Kapalı", "Off"],
       ["Claude uygulaması kapanınca", "When the Claude app quits"],
-      ["Kota dolunca", "At quota"],
+      ["Limit dolunca", "When the limit is reached"],
     ],
   );
   const [off, afterExit, quota] = AUTOMATION_MODES;
@@ -58,12 +58,12 @@ test("every mode has a Turkish and English label and description", () => {
     "Relay never switches accounts on its own.",
   ]);
   assert.deepEqual(afterExit.description, [
-    "Kota dolunca, sen Claude uygulamasını kapattığında sıradaki hesabı hazırlar. Claude uygulamasını kendisi kapatmaz.",
-    "When a quota runs out, prepares the next account once you quit the Claude app. Never quits the Claude app itself.",
+    "Limit dolunca, sen Claude uygulamasını kapattığında sıradaki hesabı hazırlar. Claude uygulamasını kendisi kapatmaz.",
+    "When the limit is reached, prepares the next account once you quit the Claude app. Never quits the Claude app itself.",
   ]);
   assert.deepEqual(quota.description, [
-    "Kota dolunca, çalışan iş bitince Claude uygulamasını sıradaki hesapla yeniden açar ve kota yüzünden duran Code konuşmalarını devam ettirir.",
-    "When a quota runs out and running work finishes, reopens the Claude app on the next account and continues the Code conversations that stopped at the limit.",
+    "Limit dolunca, çalışan iş bitince Claude uygulamasını sıradaki hesapla yeniden açar ve limit dolduğu için duran Code konuşmalarını devam ettirir.",
+    "When the limit is reached and running work finishes, reopens the Claude app on the next account and continues the Code conversations that stopped at the limit.",
   ]);
 });
 

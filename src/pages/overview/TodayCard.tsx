@@ -71,7 +71,7 @@ export function TodayCard({
           )
         : t(
             `önceden başlatma açık · bugün ${plannedToday} başlatma planlı`,
-            `early start on · ${plannedToday} starts planned today`,
+            `early start on · ${plannedToday} ${plannedToday === 1 ? "start" : "starts"} planned today`,
           );
   const summary = `${work} · ${early}`;
   // The hour axis under the rows; 24 is the day's end, wherever DST puts it.

@@ -13,7 +13,7 @@ import type {
 import type { Account, AccountUsage, RelaySettings } from "./types";
 import { freshUsage, suggestedAccount } from "./usage";
 import { desktopCliMismatch } from "./account-state";
-import { withDative } from "./tr-dative";
+import { clockLocative, withDative } from "./tr-dative";
 import { relaySwitchLink } from "./relay-link";
 import { overviewAccounts } from "../src/data/selectors";
 
@@ -63,7 +63,7 @@ export interface WidgetAccount {
 /** The account open in Claude. */
 export interface WidgetActive extends WidgetAccount {
   text: WidgetAccount["text"] & {
-    /** "Hafta %68 · Cmt 21:30 sıfırlanır"; "" while unknown. */
+    /** "Hafta %68 · Cmt 21:30’da yenilenir"; "" while unknown. */
     weekLine: string;
     /** "$69,18 bugün" */
     costChip: string;
@@ -205,7 +205,7 @@ export interface WidgetSnapshot {
     costTokens: string;
     /** "86,5 Mn token" */
     tokens: string;
-    /** "Bugün · API değeri": the Today widget's title. */
+    /** "Bugün · API karşılığı": the Today widget's title. */
     apiTitle: string;
     /** "Diğer hesaplar": the heading over the other accounts. */
     others: string;
@@ -378,12 +378,12 @@ export function buildWidgetSnapshot(
             : "",
       empty: t("Bugün henüz token yok", "No tokens yet today"),
       stale: t(
-        `Güncel değil · ${timeOf(now, zone, language)}`,
-        `Not current · ${timeOf(now, zone, language)}`,
+        `Son güncelleme ${timeOf(now, zone, language)}`,
+        `Last updated ${timeOf(now, zone, language)}`,
       ),
       costTokens,
       tokens: `${formatTokens(total, language)} ${tokenWord}`,
-      apiTitle: t("Bugün · API değeri", "Today · API value"),
+      apiTitle: t("Bugün · API karşılığı", "Today · API value"),
       others: t("Diğer hesaplar", "Other accounts"),
       todayWord: t("bugün", "today"),
       inClaude: t("Claude’da açık", "Open in Claude"),
@@ -507,8 +507,9 @@ function buildAccounts(
             ? ""
             : text.weekReset
               ? t(
-                  `Hafta ${pct(week)} · ${text.weekReset} sıfırlanır`,
-                  `Week ${pct(week)} · resets ${text.weekReset}`,
+                  // The clock takes the locative: "Cmt 21:30’da yenilenir".
+                  `Hafta ${pct(week)} · ${text.weekReset.replace(/\d{1,2}:\d{2}$/, (c) => clockLocative(c))} yenilenir`,
+                  `Week ${pct(week)} · renews ${text.weekReset}`,
                 )
               : t(`Hafta ${pct(week)}`, `Week ${pct(week)}`),
         costChip: t(`${text.cost} bugün`, `${text.cost} today`),

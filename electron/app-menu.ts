@@ -38,7 +38,7 @@ export function appMenuTemplate(
         ]
       : []),
     {
-      label: t("Düzenle", "Edit"),
+      label: t("Düzen", "Edit"),
       submenu: [
         { role: "undo", label: t("Geri al", "Undo") },
         { role: "redo", label: t("Yinele", "Redo") },
@@ -50,7 +50,7 @@ export function appMenuTemplate(
       ],
     },
     {
-      label: t("Görünüm", "View"),
+      label: t("Görüntü", "View"),
       submenu: [
         { role: "resetZoom", label: t("Gerçek boyut", "Actual Size") },
         { role: "zoomIn", label: t("Yakınlaştır", "Zoom In") },

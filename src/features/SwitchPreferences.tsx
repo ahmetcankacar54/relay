@@ -98,7 +98,7 @@ export function AccountSelection({
                       "Sign-ins belong to different accounts",
                     )
                   : a.desktop
-                    ? t("Claude uygulaması kayıtlı", "Claude app saved")
+                    ? t("Claude uygulaması girişi kayıtlı", "Claude app sign-in saved")
                     : t(
                         "Claude uygulaması girişi gerekli",
                         "Claude app sign-in needed",
@@ -159,8 +159,8 @@ export function DraftRetypePreference({
         }
         htmlFor="draft-retype"
         description={t(
-          "Kapalıyken taslaklar kurtarılır ve panelde Kopyala ile sunulur. Açıkken Relay geçişten sonra konuşmayı açar ve taslağı mesaj kutusuna yazar, göndermez. Erişilebilirlik izni ister.",
-          "While off, drafts are rescued and offered in the panel with Copy. While on, Relay opens the conversation after a switch and types the draft into its message box without sending it. It needs Accessibility permission.",
+          "Kapalıyken taslaklar kurtarılır ve panelde “Kopyala” düğmesiyle sunulur. Açıkken Relay geçişten sonra konuşmayı açar ve taslağı mesaj kutusuna yazar, göndermez. Erişilebilirlik izni ister.",
+          "While off, drafts are rescued and offered in the panel with “Copy”. While on, Relay opens the conversation after a switch and types the draft into its message box without sending it. It needs Accessibility permission.",
         )}
       >
         <Switch
@@ -293,8 +293,8 @@ export function SharedHistoryPreferences({
           {active
             ? sources.length
               ? t(
-                  `${active.name} için ${sources.length} hesabın geçmişi birleştirilecek.`,
-                  `${sources.length} account histories will be merged into ${active.name}.`,
+                  `${sources.length} hesabın geçmişi ${active.name} hesabında birleştirilecek.`,
+                  `History from ${sources.length} ${sources.length === 1 ? "account" : "accounts"} will be merged into ${active.name}.`,
                 )
               : t(
                   `${active.name} için paylaşılacak hesap seçili değil.`,

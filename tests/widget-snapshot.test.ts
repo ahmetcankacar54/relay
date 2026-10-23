@@ -82,10 +82,10 @@ test("the widget file carries today's numbers and every string, formatted in Tur
     change: "+%57,2",
     status: "",
     empty: "Bugün henüz token yok",
-    stale: "Güncel değil · 20:24",
+    stale: "Son güncelleme 20:24",
     costTokens: "$444,56 · 1,3 Mr token",
     tokens: "1,3 Mr token",
-    apiTitle: "Bugün · API değeri",
+    apiTitle: "Bugün · API karşılığı",
     others: "Diğer hesaplar",
     todayWord: "bugün",
     inClaude: "Claude’da açık",
@@ -108,7 +108,7 @@ test("English, an estimated cost, no change, the empty day and the scan each rea
   assert.equal(en.text.title, "Today");
   assert.equal(en.text.cost, "$444.56");
   assert.equal(en.text.change, "");
-  assert.equal(en.text.stale, "Not current · 20:24");
+  assert.equal(en.text.stale, "Last updated 20:24");
   const estimated = build({
     today: today({ totals: { ...today().totals, costEstimated: true } }),
   });
@@ -341,7 +341,7 @@ test("the active account carries its limits, its countdown and today's cost and 
     left: "1:50",
     weekReset: "Cmt 21:30",
     weekShort: "hafta %68",
-    weekLine: "Hafta %68 · Cmt 21:30 sıfırlanır",
+    weekLine: "Hafta %68 · Cmt 21:30’da yenilenir",
     costChip: "$69,18 bugün",
     tokensChip: "64,2 Mn token",
   });
@@ -426,7 +426,7 @@ test("today's split and the week's bars share one set of colours: the active acc
 test("the accounts and the week read in English too, and parts without data are left out", () => {
   const snap = plainDeep(withAccounts({ language: "en", hits: undefined }));
   assert.ok(snap.active && snap.week);
-  assert.equal(snap.active.text.weekLine, "Week 68% · resets Sat 21:30");
+  assert.equal(snap.active.text.weekLine, "Week 68% · renews Sat 21:30");
   assert.equal(snap.active.text.costChip, "$69.18 today");
   assert.equal(snap.active.text.tokensChip, "64.2m tokens");
   assert.equal(snap.accounts[0].text.switchTo, "Switch to Vertex · 22%");

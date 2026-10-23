@@ -140,7 +140,7 @@ function StatisticsContent({
     return (
       <StatisticsMessage
         scene="trouble"
-        title={t("Kayıt okunamadı", "Usage history could not be read")}
+        title={t("Kullanım geçmişi okunamadı", "Usage history could not be read")}
         description={t(
           "Kullanım istatistikleri gösterilemiyor. Canlı limitler çalışmaya devam eder.",
           "Usage statistics are unavailable. Live limits keep working.",
@@ -174,7 +174,7 @@ function StatisticsContent({
       <LimitHits view={view} zone={zone} />
       <Note className="px-1 text-xs">
         {t(
-          `Limit değerleri Relay’in gözlediği limit yüzdelerinden hesaplanır; token, mesaj ya da maliyet değildir. API değeri ayrıca Claude Code token kayıtlarının API liste fiyatıyla karşılığıdır; ödediğin tutar değildir. Gözlem kapsamı: ${formatPercent(view.coveragePercent, language)} (Relay kapalıyken veri yok). Pro birimi, gözlenen 5 saatlik kota yüzdesinin güncel plan kapasitesiyle çarpımıdır (Pro 1, Max 5× 5, Max 20× 20, Team = girilen ağırlık).`,
+          `Limit değerleri Relay’in gözlediği limit yüzdelerinden hesaplanır; token, mesaj ya da maliyet değildir. API karşılığı ise ayrı bir hesaptır: Claude Code’un kullandığı token’ların API liste fiyatıyla tutarı; ödediğin para değildir. Gözlem kapsamı: ${formatPercent(view.coveragePercent, language)} (Relay kapalıyken veri yok). Pro birimi, gözlenen 5 saatlik limit yüzdesinin güncel plan kapasitesiyle çarpımıdır (Pro 1, Max 5× 5, Max 20× 20, Team = girilen ağırlık).`,
           `Limit values come from the limit percentages Relay observed; they are not tokens, messages or cost. The API value is separate: Claude Code’s tokens at API list prices, not what you pay. Observed coverage: ${formatPercent(view.coveragePercent, language)} (no data while Relay is closed). A Pro unit is the observed 5-hour quota percentage times the current plan capacity (Pro 1, Max 5× 5, Max 20× 20, Team = the weight you set).`,
         )}
       </Note>
@@ -311,8 +311,8 @@ export function UsageWarnings() {
         </summary>
         <Note className="mt-1">
           {t(
-            "Kullanım sorgusu deneysel Anthropic OAuth servisini kullanır. Relay’de bağlı CLI profili okunur; gerektiğinde bağlantıyı sen yenilersin. Bu işlem yalnız Relay profilini günceller, açık Claude uygulamasına dokunmaz. Kullanılan yüzde mesaj sayısı veya süre garantisi değildir.",
-            "Usage comes from an experimental Anthropic OAuth endpoint. Relay reads its connected CLI profile; you can renew the connection when needed. Renewal updates only the Relay profile and leaves the open Claude app untouched. The percentage used is not a message count or time guarantee.",
+            "Limitler, Anthropic’in deneysel bir kullanım servisinden okunur. Relay bunun için hesabın limit okuma girişini kullanır; gerektiğinde bu girişi sen yenilersin. Yenileme yalnızca Relay’deki girişi günceller, açık Claude uygulamasına dokunmaz. Kullanılan yüzde, mesaj sayısı ya da süre garantisi değildir.",
+            "Usage comes from an experimental Anthropic endpoint, read with the account’s usage sign-in; you renew that sign-in when needed. Renewing updates only Relay’s copy and leaves the open Claude app untouched. The percentage used is not a message count or time guarantee.",
           )}
         </Note>
       </details>

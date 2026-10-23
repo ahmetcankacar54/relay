@@ -66,15 +66,15 @@ export const status: Command = async ({ io, deps, parsed, t }) => {
   const who = active
     ? active.name
     : state.currentAccountUuid
-      ? t(`kayıtsız bir hesap (${state.currentAccountUuid.slice(0, 8)})`, `an unsaved account (${state.currentAccountUuid.slice(0, 8)})`)
+      ? t(`kayıtlı olmayan bir hesap (${state.currentAccountUuid.slice(0, 8)})`, `an unsaved account (${state.currentAccountUuid.slice(0, 8)})`)
       : undefined;
   const desktopLine = !state.available
     ? t("kurulu değil", "not installed")
     : [
         state.running ? paint(ctx.color, "green", t("açık", "running")) : t("kapalı", "not running"),
-        who ? t(`${who} hesabıyla giriş yapılmış`, `signed in as ${who}`) : t("giriş yapılmamış", "not signed in"),
+        who ? t(`giriş yapılmış: ${who}`, `signed in as ${who}`) : t("giriş yapılmamış", "not signed in"),
       ].join(" · ");
-  const lines = [`Claude Desktop: ${desktopLine}`];
+  const lines = [`${t("Claude uygulaması", "Claude app")}: ${desktopLine}`];
   if (pendingSignIn)
     lines.push(
       paint(ctx.color, "yellow", t(`Yarım kalan giriş: ${pendingSignIn.name}`, `Pending sign-in: ${pendingSignIn.name}`)) +
@@ -99,9 +99,9 @@ export const status: Command = async ({ io, deps, parsed, t }) => {
       ),
     );
   if (ctx.vault.kind === "legacy")
-    lines.push(t("Kasa: eski biçimde → Relay.app'i 0.12 veya üstüne güncelleyip bir kez açın", "Vault: old format → update Relay.app to 0.12 or later and open it once"));
+    lines.push(t("Kasa: eski biçimde → Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç", "Vault: old format → update Relay.app to 0.12 or later and open it once"));
   if (ctx.vault.kind === "newer")
-    lines.push(t("Kasa: daha yeni bir Relay yazmış → relay'i güncelleyin", "Vault: written by a newer Relay → update relay"));
+    lines.push(t("Kasa: daha yeni bir Relay yazmış → relay’i güncelle", "Vault: written by a newer Relay → update relay"));
   lines.push(t(`Code geçmişi: ${historyModeText(historyMode, t)}`, `Code history: ${historyModeText(historyMode, t)}`));
   // A worker's result is shown once, after it ends; while it runs, every time.
   if (last && !last.shown) {

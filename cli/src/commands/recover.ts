@@ -12,7 +12,7 @@ export const recover: Command = async ({ io, deps, parsed, t, argv }) => {
   const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: true });
   const state = await ctx.desktop.snapshot();
   if (!state.recoveryRequired) {
-    io.stdout(t("Geri alınacak bir şey yok.", "Nothing to recover."));
+    io.stdout(t("Geri yüklenecek bir yedek yok.", "No backup to restore."));
     return EXIT.ok;
   }
   guiSessionGuard(ctx.deps, t);
@@ -22,8 +22,8 @@ export const recover: Command = async ({ io, deps, parsed, t, argv }) => {
     t,
     [
       t(
-        "Claude Desktop kapanacak, yarıda kalan geçişin dosyaları yedeğinden geri yüklenecek ve Claude yeniden açılacak.",
-        "Claude Desktop will quit, the interrupted switch's files will be restored from its backup, and Claude will reopen.",
+        "Claude uygulaması kapanacak, yarıda kalan geçişin dosyaları yedeğinden geri yüklenecek ve Claude yeniden açılacak.",
+        "The Claude app will quit, the interrupted switch’s files will be restored from its backup, and Claude will reopen.",
       ),
       ...quitLines(ctx),
       ...(inside ? [sessionEndsLine(ctx)] : []),
@@ -32,6 +32,6 @@ export const recover: Command = async ({ io, deps, parsed, t, argv }) => {
   );
   if (inside) return detach(ctx, argv);
   await runDesktopOperation(ctx, () => ctx.desktop.recover());
-  io.stdout(t("Yarıda kalan geçiş geri alındı.", "The interrupted switch was restored."));
+  io.stdout(t("Yarıda kalan geçişin yedeği geri yüklendi.", "The interrupted switch’s backup was restored."));
   return EXIT.ok;
 };

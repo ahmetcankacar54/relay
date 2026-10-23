@@ -38,7 +38,10 @@ export function Overview({
     .sort()
     .at(-1);
   const description = latest
-    ? `${date} · ${t("güncellendi", "updated")} ${formatRelative(latest, now, language)}`
+    ? t(
+        `${date} · ${formatRelative(latest, now, language)} güncellendi`,
+        `${date} · updated ${formatRelative(latest, now, language)}`,
+      )
     : date;
   const refreshing = usageBusy.size > 0;
   // Today plans a connected account; automatic switching needs two.
@@ -70,9 +73,7 @@ export function Overview({
               disabled={relay.desktopBusy}
               onClick={() => void relay.action("open", () => relay.api.openDesktop())}
             >
-              {relay.desktop?.running
-                ? t("Claude'u öne getir", "Bring Claude to front")
-                : t("Claude'u aç", "Open Claude")}
+              {t("Claude uygulamasını aç", "Open the Claude app")}
             </Button>
           )}
         </>

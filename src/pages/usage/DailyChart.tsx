@@ -250,7 +250,7 @@ export function DailyChart({
             `${estimatedRange ? "≈" : ""}${spoken(total)} in total over ${view.range} days; busiest day ${formatDay(busiest.date, language)} (${format(busiest.total)}).`,
           )
         : t(
-            `${view.range} günde API değeri ${estimatedRange ? "≈" : ""}${spoken(total)}; en yüksek gün ${formatDay(busiest.date, language)} (${format(busiest.total)}).`,
+            `${view.range} günde API karşılığı ${estimatedRange ? "≈" : ""}${spoken(total)}; en yüksek gün ${formatDay(busiest.date, language)} (${format(busiest.total)}).`,
             `API value ${estimatedRange ? "≈" : ""}${spoken(total)} over ${view.range} days; highest day ${formatDay(busiest.date, language)} (${format(busiest.total)}).`,
           );
   return (
@@ -274,7 +274,7 @@ export function DailyChart({
                   key={m}
                   value={m}
                   aria-label={
-                    m === "cost" ? t("API değeri", "API value") : undefined
+                    m === "cost" ? t("API karşılığı", "API value") : undefined
                   }
                 >
                   {labels[m]}
@@ -427,7 +427,7 @@ export function DailyChart({
                     ? t("Pro birimi", "Pro units")
                     : measure === "tokens"
                       ? t("Token", "Tokens")
-                      : t("API değeri", "API value")}
+                      : t("API karşılığı", "API value")}
                 </span>
                 <b className="tabular-nums">
                   {approx(shown)}

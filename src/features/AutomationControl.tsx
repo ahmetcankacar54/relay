@@ -109,7 +109,7 @@ export function AutomationStatusLine({
 export type AfterExitChipState = "open" | "next" | "stale" | "sign-in";
 
 /**
- * The accounts for "Claude'u kapatınca", as chips: whether each is selected, and where it stands.
+ * The accounts for "Claude uygulamasını kapatınca", as chips: whether each is selected, and where it stands.
  * "next" is the account the next switch goes to: the one Relay's watch has picked, else the one
  * it would pick now among the selected (fresh, under 90% in every window, history allowed),
  * ranked as automatic switching ranks them. "stale" is a reading too old to choose by.
@@ -169,11 +169,11 @@ export function afterExitChips({
 const CHIP_STATE: Record<AfterExitChipState, [tr: string, en: string]> = {
   open: ["şu an açık", "open now"],
   next: ["sıradaki", "next"],
-  stale: ["veri eski · seçilmez", "data is old · not picked"],
-  "sign-in": ["Claude girişi gerekli", "Claude sign-in needed"],
+  stale: ["limit verisi eski · seçilmez", "usage data is out of date · not picked"],
+  "sign-in": ["Claude uygulaması girişi gerekli", "Claude app sign-in needed"],
 };
 
-/** The always-visible account chips for "Claude'u kapatınca": a press selects or drops one. */
+/** The always-visible account chips for "Claude uygulamasını kapatınca": a press selects or drops one. */
 function AfterExitAccounts({ disabled }: { disabled: boolean }) {
   const relay = useRelay();
   const { t } = useI18n();
@@ -235,9 +235,9 @@ function AfterExitAccounts({ disabled }: { disabled: boolean }) {
 /** Each choice's card: an icon and a title that says who acts. */
 const MODE_ICON: Record<AutomationMode, LucideIcon> = { off: Hand, "after-exit": Power, quota: Zap };
 export const MODE_TITLE: Record<AutomationMode, [tr: string, en: string]> = {
-  off: ["Ben geçerim", "I switch"],
-  "after-exit": ["Claude'u kapatınca", "When I quit Claude"],
-  quota: ["Kota dolunca", "At quota"],
+  off: ["Kendim geçerim", "I switch myself"],
+  "after-exit": ["Claude uygulamasını kapatınca", "When I quit the Claude app"],
+  quota: ["Limit dolunca", "When the limit is reached"],
 };
 
 /** The Switching page card: one choice, what it does, and its status. */

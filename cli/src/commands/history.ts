@@ -12,14 +12,14 @@ import { detach, insideDesktop, sessionEndsLine } from "../inside-desktop";
 
 const MODES: RelaySettings["desktopHistoryTransfer"][] = ["all", "same-group", "selected", "off"];
 
-/** The named account, or the one active in Claude Desktop. */
+/** The named account, or the one open in the Claude app. */
 async function chosen(ctx: CliContext, query: string | undefined) {
   if (query) return resolveAccount(ctx.store.state.accounts, query, ctx.t);
   const active = (await ctx.desktop.snapshot()).activeProfileId;
   const account = ctx.store.state.accounts.find((a) => a.id === active);
   if (!account)
     throw new CliError(
-      ctx.t("Claude Desktop'ta kayıtlı bir hesap açık değil; bir hesap adı verin.", "No saved account is signed in to Claude Desktop; name an account."),
+      ctx.t("Claude uygulamasında kayıtlı bir hesap açık değil; bir hesap adı ver.", "No saved account is signed in to the Claude app; name an account."),
       EXIT.usage,
     );
   return account;
@@ -56,7 +56,7 @@ export const history: Command = async ({ io, deps, parsed, t, argv }) => {
       io,
       t,
       [
-        t(`${account.name} hesabına diğer hesapların Code geçmişi şimdi taşınacak; Claude Desktop kapanıp açılacak.`, `Code history from the other accounts will be brought into ${account.name} now; Claude Desktop will quit and reopen.`),
+        t(`${account.name} hesabına diğer hesapların Code geçmişi şimdi taşınacak; Claude uygulaması kapanıp yeniden açılacak.`, `Code history from the other accounts will be brought into ${account.name} now; the Claude app will quit and reopen.`),
         ...quitLines(ctx),
         ...(inside ? [sessionEndsLine(ctx)] : []),
       ],

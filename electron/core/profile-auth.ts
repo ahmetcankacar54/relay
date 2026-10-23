@@ -10,7 +10,7 @@ export function signedOut(previous: Account["auth"], checkedAt = new Date().toIS
     ...previous,
     loggedIn: false,
     checkedAt,
-    error: "Giriş durumu doğrulanamadı. Hesabı yeniden bağla.",
+    error: "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.",
   };
 }
 

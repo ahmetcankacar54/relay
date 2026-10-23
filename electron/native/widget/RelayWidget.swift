@@ -796,7 +796,7 @@ private struct Message: View {
 /** What the account widgets show before their content: nil when they can draw it. */
 private func blocked(_ entry: TodayEntry) -> Message? {
   guard let snapshot = entry.snapshot else {
-    return Message(title: "Relay", line: say("Relay'i açın", "Open Relay"), mood: "sleeping")
+    return Message(title: "Relay", line: say("Relay’i aç", "Open Relay"), mood: "sleeping")
   }
   if entry.newDay { return Message(title: snapshot.text.title, line: snapshot.text.empty, mood: entry.mood) }
   if snapshot.state == "scanning" {
@@ -1283,7 +1283,7 @@ struct TodayContent: View {
         medium(snapshot)
       }
     } else {
-      Message(title: "Relay", line: say("Relay'i açın", "Open Relay"), mood: "sleeping")
+      Message(title: "Relay", line: say("Relay’i aç", "Open Relay"), mood: "sleeping")
     }
   }
 
@@ -1430,7 +1430,7 @@ struct WeekContent: View {
     } else if let snapshot = entry.snapshot, let week = snapshot.week {
       content(snapshot, week)
     } else {
-      Message(title: "Relay", line: say("Relay'i açın", "Open Relay"), mood: "sleeping")
+      Message(title: "Relay", line: say("Relay’i aç", "Open Relay"), mood: "sleeping")
     }
   }
 
@@ -1523,8 +1523,8 @@ struct RelayAccount: Widget {
     .configurationDisplayName(say("Relay · Hesap", "Relay · Account"))
     .description(
       say(
-        "Açık hesabın limitleri, bugünkü maliyeti ve token’ları",
-        "The open account's limits, cost and tokens today"))
+        "Açık hesabın limitleri, bugünkü maliyeti ve tokenları",
+        "The open account’s limits, cost and tokens today"))
     .supportedFamilies([.systemSmall])
     .contentMarginsDisabled()
   }
@@ -1538,8 +1538,8 @@ struct RelayAccounts: Widget {
     .configurationDisplayName(say("Relay · Hesaplar", "Relay · Accounts"))
     .description(
       say(
-        "Hesapların limitleri ve bugünkü maliyeti; Geç, Relay’de geçişi açar",
-        "Your accounts' limits and cost today; Switch opens the switch in Relay"))
+        "Hesapların limitleri ve bugünkü maliyeti; Geç düğmesi Relay’de geçiş onayını açar",
+        "Your accounts’ limits and cost today; Switch opens the switch review in Relay"))
     .supportedFamilies([.systemMedium])
     .contentMarginsDisabled()
   }
@@ -1553,8 +1553,8 @@ struct RelayAccountsToday: Widget {
     .configurationDisplayName(say("Relay · Hesaplar ve bugün", "Relay · Accounts and today"))
     .description(
       say(
-        "Hesapların limitleri, bugünün maliyeti, token’ları ve hesaplara dağılımı",
-        "Your accounts' limits, and today's cost, tokens and split by account"))
+        "Hesapların limitleri, bugünkü maliyeti, tokenları ve hesaplara dağılımı",
+        "Your accounts’ limits, and today’s cost, tokens and split by account"))
     .supportedFamilies([.systemLarge])
     .contentMarginsDisabled()
   }
@@ -1568,8 +1568,8 @@ struct RelayToday: Widget {
     .configurationDisplayName(say("Relay · Bugün", "Relay · Today"))
     .description(
       say(
-        "Bugünkü Claude Code token’ları ve API karşılığı",
-        "Today's Claude Code tokens and their API value"))
+        "Bugünkü Claude Code tokenları ve API karşılığı",
+        "Today’s Claude Code tokens and their API value"))
     .supportedFamilies([.systemSmall, .systemMedium])
     .contentMarginsDisabled()
   }
@@ -1583,8 +1583,8 @@ struct RelayWeek: Widget {
     .configurationDisplayName(say("Relay · Son 7 gün", "Relay · Last 7 days"))
     .description(
       say(
-        "Son yedi günün maliyeti, token’ları ve hesaplara dağılımı",
-        "The last seven days' cost, tokens and split by account"))
+        "Son yedi günün maliyeti, tokenları ve hesaplara dağılımı",
+        "The last seven days’ cost, tokens and split by account"))
     .supportedFamilies([.systemMedium])
     .contentMarginsDisabled()
   }

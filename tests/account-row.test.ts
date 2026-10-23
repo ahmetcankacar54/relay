@@ -45,14 +45,14 @@ test("ringState reads how far an account's limits can be trusted", () => {
 });
 
 test("the Overview line leads with the plan, as the Accounts table names it", () => {
-  assert.equal(accountTileLine(row("window-open", use(22, 35)), tr, "tr", "UTC", NOW), "Team · dönem açık · 3 sa 10 dk");
-  assert.equal(accountTileLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "Team · period open · 3 h 10 m");
+  assert.equal(accountTileLine(row("window-open", use(22, 35)), tr, "tr", "UTC", NOW), "Team · dönem açık · 3 sa 10 dk kaldı");
+  assert.equal(accountTileLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "Team · period open · 3 h 10 m left");
   assert.equal(accountTileLine(row("ready", use(0, 35)), tr, "tr", "UTC", NOW), "Team · hazır");
   // Without a plan picked, the subscription the sign-in reported; without either, the status alone.
   assert.equal(accountTileLine(row("ready", use(0, 35), max()), tr, "tr", "UTC", NOW), "Max · hazır");
   const bare = acct({ planning: undefined });
   assert.equal(accountTileLine(row("ready", use(0, 35), bare), tr, "tr", "UTC", NOW), "Hazır");
-  assert.equal(accountTileLine(row("window-open", use(22, 35), bare), en, "en", "UTC", NOW), "Period open · 3 h 10 m");
+  assert.equal(accountTileLine(row("window-open", use(22, 35), bare), en, "en", "UTC", NOW), "Period open · 3 h 10 m left");
   // A full account says when it opens.
   const at = iso(NOW + 3_600_000);
   assert.equal(accountTileLine(row("exhausted", use(100, 35), acct(), at), tr, "tr", "UTC", NOW), "Team · 11:00’de açılır");
@@ -62,11 +62,11 @@ test("the Overview line leads with the plan, as the Accounts table names it", ()
 
 test("an old reading says its age on the Overview line, and a problem still outranks it", () => {
   const stale = row("unknown", old(use(22, 35)), max());
-  assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW), "Max · limit verisi 2 sa önce");
-  assert.equal(accountTileLine(stale, en, "en", "UTC", NOW), "Max · usage data 2 h ago");
+  assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW), "Max · limit verisi 2 sa önce okundu");
+  assert.equal(accountTileLine(stale, en, "en", "UTC", NOW), "Max · usage data read 2 h ago");
   // Marked stale by a failed read that kept the limits: also its age.
   const kept = row("unknown", old(use(22, 35, { status: "error", issue: "rate-limited", stale: true })), max());
-  assert.equal(accountTileLine(kept, tr, "tr", "UTC", NOW), "Max · limit verisi 2 sa önce");
+  assert.equal(accountTileLine(kept, tr, "tr", "UTC", NOW), "Max · limit verisi 2 sa önce okundu");
   // Nothing kept: no age to tell.
   const lost = row("unknown", { accountId: "x", status: "error", issue: "unavailable", stale: false }, max());
   assert.equal(accountTileLine(lost, tr, "tr", "UTC", NOW), "Max · limit verisi eski");
@@ -78,10 +78,10 @@ test("an old reading says its age on the Overview line, and a problem still outr
 });
 
 test("the panel line leads with the percents and says an old reading's age", () => {
-  assert.equal(panelRowLine(row("window-open", use(22, 35)), tr, "tr", "UTC", NOW), "%22 · %35 · dönem açık 3 sa 10 dk");
-  assert.equal(panelRowLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "22% · 35% · period open 3 h 10 m");
-  assert.equal(panelRowLine(row("unknown", old(use(22, 35))), tr, "tr", "UTC", NOW), "%22 · %35 · veri 2 sa önce");
-  assert.equal(panelRowLine(row("unknown", old(use(22, 35))), en, "en", "UTC", NOW), "22% · 35% · data 2 h ago");
+  assert.equal(panelRowLine(row("window-open", use(22, 35)), tr, "tr", "UTC", NOW), "%22 · %35 · dönem açık 3 sa 10 dk kaldı");
+  assert.equal(panelRowLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "22% · 35% · period open 3 h 10 m left");
+  assert.equal(panelRowLine(row("unknown", old(use(22, 35))), tr, "tr", "UTC", NOW), "%22 · %35 · 2 sa önce okundu");
+  assert.equal(panelRowLine(row("unknown", old(use(22, 35))), en, "en", "UTC", NOW), "22% · 35% · read 2 h ago");
   assert.equal(panelRowLine(row("ready", use(0, 35)), tr, "tr", "UTC", NOW), "%0 · %35 · hazır");
   // Without a reading, only the status.
   assert.equal(panelRowLine(row("unknown", undefined), tr, "tr", "UTC", NOW), "Limit verisi yok");
@@ -89,5 +89,5 @@ test("the panel line leads with the percents and says an old reading's age", () 
   // A reading without a week shows the one percent.
   const five = use(40, 0);
   delete five.sevenDay;
-  assert.equal(panelRowLine(row("window-open", five), tr, "tr", "UTC", NOW), "%40 · dönem açık 3 sa 10 dk");
+  assert.equal(panelRowLine(row("window-open", five), tr, "tr", "UTC", NOW), "%40 · dönem açık 3 sa 10 dk kaldı");
 });

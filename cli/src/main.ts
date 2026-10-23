@@ -5,10 +5,11 @@ import { StoreWriteRefused } from "../../electron/core/store";
 import { VaultFormatError } from "../../electron/core/vault-crypto";
 import { VaultKeyError } from "../../electron/core/vault-key";
 import { redact } from "../../electron/core/redact";
+import { localizeError } from "../../shared/error-text";
 import { parseCommand } from "./args";
 import type { CliDeps } from "./deps";
 import { helpText } from "./help";
-import { pickLang, translator, type Translate } from "./i18n";
+import { pickLang, translator, type Lang, type Translate } from "./i18n";
 import { CliError, EXIT, type CliIO } from "./io";
 import { CLI_VERSION } from "./version";
 import { lockHolderText } from "./describe";
@@ -18,28 +19,32 @@ import { relayPaths } from "../../electron/core/relay-paths";
 
 /** Core errors that mean "busy or blocked" (exit 3), with what to do about each. */
 const BLOCKED: [RegExp, string, string][] = [
-  [/Finish or cancel the current Desktop sign-in first/, "Yarım kalan bir giriş var: relay add --resume ile bitirin ya da relay add --cancel ile iptal edin.", "A sign-in is pending: finish it with relay add --resume or cancel it with relay add --cancel."],
-  [/Restore the interrupted Desktop switch first|Desktop recovery is required/, "Yarıda kalan bir geçiş var: önce relay recover çalıştırın.", "A switch was interrupted: run relay recover first."],
-  [/A Desktop operation is already in progress/, "Başka bir Desktop işlemi sürüyor.", "Another Desktop operation is running."],
+  [/Finish or cancel the current Desktop sign-in first/, "Yarım kalan bir giriş var: relay add --resume ile bitir ya da relay add --cancel ile iptal et.", "A sign-in is pending: finish it with relay add --resume or cancel it with relay add --cancel."],
+  [/Restore the interrupted Desktop switch first|Desktop recovery is required/, "Yarıda kalan bir geçiş var: önce relay recover çalıştır.", "A switch was interrupted: run relay recover first."],
+  [/A Desktop operation is already in progress/, "Claude uygulamasında başka bir işlem sürüyor.", "Another Claude app operation is running."],
 ];
 
 function lockMessage(error: LockBusyError, t: Translate, now: number): string {
   const { startedAt } = error.holder;
   const seconds = Math.max(0, Math.round((now - Date.parse(startedAt)) / 1000));
   return t(
-    `${lockHolderText(error.holder, t)} (${seconds} sn önce başladı). Bitince yeniden deneyin.`,
+    `${lockHolderText(error.holder, t)} (${seconds} sn önce başladı). Bitince yeniden dene.`,
     `${lockHolderText(error.holder, t)} (started ${seconds} s ago). Try again when it ends.`,
   );
 }
 
-/** The message and exit code an error ends the CLI with. Messages are always redacted. */
+/**
+ * The message and exit code an error ends the CLI with. Messages are always redacted, and a core
+ * error the app knows in both languages (shared/error-text.ts) is shown in the CLI's.
+ */
 export function describeError(error: unknown, t: Translate, now = Date.now()) {
+  const lang = t("tr", "en") as Lang;
   if (error instanceof CliError) return { message: redact(error.message, 600), code: error.code };
   if (error instanceof LockBusyError) return { message: lockMessage(error, t, now), code: EXIT.busy };
   if (error instanceof ProfileLockBusyError)
     return {
       message: t(
-        "Bu hesap şu an başka bir işlemde kullanılıyor (giriş, bağlantı yenileme ya da çalışan Claude Code). Bitince yeniden deneyin.",
+        "Bu hesap şu an başka bir işlemde kullanılıyor (giriş, bağlantı yenileme ya da çalışan Claude Code). Bitince yeniden dene.",
         "This account is in use by another process (a sign-in, a connection renewal or a running Claude Code). Try again when it ends.",
       ),
       code: EXIT.busy,
@@ -48,18 +53,18 @@ export function describeError(error: unknown, t: Translate, now = Date.now()) {
     const where = (error as ZodError).issues?.[0]?.path?.join(".");
     return {
       message: t(
-        `Relay'in hesap listesi (state.json) okunamadı${where ? `: ${where} beklenen biçimde değil` : ""}. relay'i güncelleyin ya da listeyi Relay.app ile açın.`,
-        `Relay's account list (state.json) could not be read${where ? `: ${where} is not in the expected format` : ""}. Update relay, or open the list with Relay.app.`,
+        `Relay’in hesap listesi (state.json) okunamadı${where ? `: ${where} beklenen biçimde değil` : ""}. relay’i güncelle ya da listeyi Relay.app ile aç.`,
+        `Relay’s account list (state.json) could not be read${where ? `: ${where} is not in the expected format` : ""}. Update relay, or open the list with Relay.app.`,
       ),
       code: EXIT.failed,
     };
   }
   if (error instanceof StoreWriteRefused || error instanceof VaultKeyError || error instanceof VaultFormatError)
-    return { message: redact(error.message, 600), code: EXIT.environment };
+    return { message: localizeError(redact(error.message, 600), lang), code: EXIT.environment };
   const message = redact(error, 600);
   for (const [pattern, tr, en] of BLOCKED)
     if (pattern.test(message)) return { message: t(tr, en), code: EXIT.busy };
-  return { message, code: EXIT.failed };
+  return { message: localizeError(message, lang), code: EXIT.failed };
 }
 
 /** Runs one `relay` invocation and returns its exit code. Never throws. */

@@ -246,7 +246,7 @@ function useRelayState(
                     `${account.name} is already the open account; no switch needed.`,
                   )
                 : t(
-                    "Relay şu anda kendisi geçiyor; elle geçiş yapılmadı.",
+                    "Relay şu an otomatik bir geçiş yapıyor; elle geçiş yapılmadı.",
                     "Relay is switching on its own right now; no manual switch was made.",
                   ),
             );

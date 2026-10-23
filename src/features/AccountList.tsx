@@ -70,7 +70,7 @@ export function AccountList({
           account.name,
           five === undefined ? undefined : t(`5 saat ${formatUsed(five, language)}`, `5 hours ${formatUsed(five, language)}`),
           week === undefined ? undefined : t(`hafta ${formatUsed(week, language)}`, `week ${formatUsed(week, language)}`),
-          ring === "stale" ? t("eski veri", "old data") : undefined,
+          ring === "stale" ? t("limit verisi eski", "usage data is out of date") : undefined,
         ]
           .filter(Boolean)
           .join(" · ");

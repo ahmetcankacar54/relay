@@ -20,8 +20,8 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
   if (!target.desktop)
     throw new CliError(
       t(
-        `${target.name} henüz Claude Desktop'a bağlı değil. Bağlamak için: relay add "${target.name}"`,
-        `${target.name} is not linked to Claude Desktop yet. Link it with: relay add "${target.name}"`,
+        `${target.name} hesabının Claude uygulaması girişi henüz kayıtlı değil. Kaydetmek için: relay add "${target.name}"`,
+        `${target.name} has no saved Claude app sign-in yet. Save it with: relay add "${target.name}"`,
       ),
       EXIT.failed,
     );
@@ -52,16 +52,16 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
         ctx.color,
         "bold",
         t(
-          `Claude Desktop kapanıp ${target.name} hesabıyla yeniden açılacak.`,
-          `Claude Desktop will quit and reopen signed in as ${target.name}.`,
+          `Claude uygulaması kapanıp ${target.name} hesabıyla yeniden açılacak.`,
+          `The Claude app will quit and reopen signed in as ${target.name}.`,
         ),
       ),
       ...quitLines(ctx),
       ...(browser
         ? [
             t(
-              `${browser} da kısa süreliğine kapanıp sekmeleriyle yeniden açılacak (Claude eklentisinin girişi için).`,
-              `${browser} will also quit for a moment and reopen with its tabs, for the Claude extension's sign-in.`,
+              `Claude eklentisinin girişi için ${browser} tarayıcısı da kısa süreliğine kapanıp sekmeleriyle yeniden açılacak.`,
+              `${browser} will also quit for a moment and reopen with its tabs, for the Claude extension’s sign-in.`,
             ),
           ]
         : []),

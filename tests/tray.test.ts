@@ -144,7 +144,7 @@ test("stale, reset, unknown and foreign quota stays unknown in the tray", () => 
   ])
     assert.equal(
       trayUsageLabel("target", u, "en", now),
-      "5h ? · wk ? · outdated",
+      "5h ? · wk ? · usage data is out of date",
     );
   assert.equal(
     trayUsageLabel(
@@ -231,7 +231,13 @@ test("the tooltip names the account and carries the five-hour percent used with 
   s.desktop!.activeProfileId = "target";
   // With the window's reset known, it also says when the window renews.
   assert.equal(trayTooltip(s, "en", now), "Relay — Max · 22% used · renews in 4:00");
-  assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %22 kullanıldı · 4:00 sonra yenilenir");
+  assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %22 kullanıldı · 4 sa sonra yenilenir");
+  // Turkish says the time left in hours and minutes, never as a clock ("1:50 sonra").
+  const soon = { ...usage("target"), fiveHour: { usedPercent: 22.5, resetsAt: new Date(now + 110 * 60_000).toISOString() } };
+  s.usage = { target: soon };
+  assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %22 kullanıldı · 1 sa 50 dk sonra yenilenir");
+  s.usage = { target: { ...soon, fiveHour: { usedPercent: 22.5, resetsAt: new Date(now + 7 * 60_000).toISOString() } } };
+  assert.equal(trayTooltip(s, "tr", now), "Relay — Max · %22 kullanıldı · 7 dk sonra yenilenir");
   // Without one, the percent alone.
   s.usage = { target: { ...usage("target"), fiveHour: { usedPercent: 22.5 } } };
   assert.equal(trayTooltip(s, "en", now), "Relay — Max · 22% used");
@@ -291,8 +297,8 @@ test("a full five-hour window shows the clock it reopens at, in the planning tim
   assert.equal(trayTitle(istanbul, now, "tr"), "22:50");
   assert.equal(trayTitle(istanbul, now, "en"), "22:50");
   assert.equal(trayTitle(onTarget(100, { timeZone: "UTC" }), now, "en"), "19:50");
-  assert.equal(trayTooltip(istanbul, "tr", now), "Relay — Max · %100 kullanıldı · 22:50’de yenilenir");
-  assert.equal(trayTooltip(istanbul, "en", now), "Relay — Max · 100% used · renews at 22:50");
+  assert.equal(trayTooltip(istanbul, "tr", now), "Relay — Max · %100 kullanıldı · 22:50’de açılır");
+  assert.equal(trayTooltip(istanbul, "en", now), "Relay — Max · 100% used · opens at 22:50");
   // 99.9 % is not full yet: the countdown stays.
   assert.equal(trayTitle(onTarget(99.9, { timeZone: "UTC" }), now, "tr"), "%99 · 9:50");
   // Without a reset time a full window still reads as a percent.
@@ -329,8 +335,8 @@ test("the title shows a dash while the panda sleeps: Claude closed, or the readi
   assert.equal(trayTooltip(closed, "en", now), "Relay — Max · Claude app closed");
   const old = onTarget(40, {}, { checkedAt: new Date(now - 31 * 60_000).toISOString() });
   assert.equal(trayTitle(old, now, "tr"), "—");
-  assert.equal(trayTooltip(old, "tr", now), "Relay — Max · limit bilinmiyor");
-  assert.equal(trayTooltip(old, "en", now), "Relay — Max · usage unknown");
+  assert.equal(trayTooltip(old, "tr", now), "Relay — Max · limit verisi eski");
+  assert.equal(trayTooltip(old, "en", now), "Relay — Max · usage data is out of date");
   assert.equal(trayTitle(onTarget(40, {}, { checkedAt: new Date(now - 29 * 60_000).toISOString() }), now, "tr"), "%40");
   assert.equal(trayTitle(onTarget(40, {}, { status: "error", issue: "rate-limited" }), now, "tr"), "—");
   // A refresh in progress keeps the reading it started from.

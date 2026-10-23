@@ -146,7 +146,7 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
     { autoStart: true, accounts: [{ id: a.id }, { id: randomUUID() }] },
     keeper,
   );
-  assert.match(html, /Dönem açık · Sıfırlanma 15:15/);
+  assert.match(html, /Dönem açık · 15:15’te yenilenir/);
   assert.match(html, /text-ok-foreground/);
   // Today's count comes from the plan itself; the next start comes from the
   // keeper's live view. The deleted account takes no slot: the plan is the one
@@ -330,10 +330,10 @@ test("the usage lane shows who works when, with switches and the comparison", ()
   const html = renderScenario(automatic, now);
   assert.match(html, />Kullanım</);
   assert.match(html, />tahmin</);
-  assert.match(html, /Kullanım şeridi Relay’in tahmini/);
+  assert.match(html, /Kullanım şeridi, Relay’in tahminidir/);
   assert.ok(
     html.includes(
-      "Soluk kısım planın tahmini, canlı kısım şu anki kullanımdan hesaplanır.",
+      "Soluk kısım planın tahmini, koyu kısım şu anki kullanımdan hesaplanır.",
     ),
   );
   const view = dayTimeline({
@@ -349,14 +349,14 @@ test("the usage lane shows who works when, with switches and the comparison", ()
     assert.ok(
       laneBlock(
         html,
-        `${s.accountId ? names[s.accountId] : "Kotasız"} ${clock(s.from)}–${clock(s.to)}`,
+        `${s.accountId ? names[s.accountId] : "Limit dolu"} ${clock(s.from)}–${clock(s.to)}`,
       ),
       `${s.accountId} ${clock(s.from)}`,
     );
   assert.equal(
     count(
       html,
-      /aria-label="(Kişisel - Max|Vertex Team|Pro|Kotasız) \d\d:\d\d–\d\d:\d\d"/g,
+      /aria-label="(Kişisel - Max|Vertex Team|Pro|Limit dolu) \d\d:\d\d–\d\d:\d\d"/g,
     ),
     view.lane.length,
   );
@@ -394,11 +394,11 @@ test("the usage lane shows who works when, with switches and the comparison", ()
   assert.match(html, /class="block [^"]*font-semibold">Kesintisiz · 3 geçiş</);
   assert.equal(
     forecastSummary(view.compare!.even, tr, clock),
-    "14:18–14:50 kotasız · 5 geçiş",
+    "14:18–14:50 limit dolu · 5 geçiş",
   );
   assert.match(
     html,
-    /class="[^"]*text-crit[^"]*">14:18–14:50 kotasız · 5 geçiş</,
+    /class="[^"]*text-crit[^"]*">14:18–14:50 limit dolu · 5 geçiş</,
   );
   // Each box says when its automatic accounts warm up, by name in planned
   // order, on one line.
@@ -408,13 +408,13 @@ test("the usage lane shows who works when, with switches and the comparison", ()
     );
   assert.match(
     html,
-    warmUps("Isıtma: Kişisel - Max 06:15 · Vertex Team 08:15 · Pro 06:30"),
+    warmUps("Önceden başlatma: Kişisel - Max 06:15 · Vertex Team 08:15 · Pro 06:30"),
   );
   assert.match(
     html,
-    warmUps("Isıtma: Kişisel - Max 04:50 · Vertex Team 06:30 · Pro 08:10"),
+    warmUps("Önceden başlatma: Kişisel - Max 04:50 · Vertex Team 06:30 · Pro 08:10"),
   );
-  assert.doesNotMatch(html, /ısıtma yapılmaz/);
+  assert.doesNotMatch(html, /dönemler erken başlatılmaz/);
 });
 
 test("with automatic start off the comparison says nothing is warmed up", () => {
@@ -426,16 +426,16 @@ test("with automatic start off the comparison says nothing is warmed up", () => 
   });
   assert.match(html, />Bu plan</);
   assert.match(html, /class="block [^"]*font-semibold">Kesintisiz · 3 geçiş</);
-  assert.match(html, />14:18–14:50 kotasız · 5 geçiş</);
-  assert.equal(count(html, />Önceden başlatma kapalı; ısıtma yapılmaz</g), 2);
-  assert.doesNotMatch(html, /Isıtma/);
+  assert.match(html, />14:18–14:50 limit dolu · 5 geçiş</);
+  assert.equal(count(html, />Önceden başlatma kapalı; dönemler erken başlatılmaz</g), 2);
+  assert.doesNotMatch(html, /Önceden başlatma: /);
   assert.doesNotMatch(html, /Otomatik başlatma/);
 });
 
 test("an all-manual plan shows its gap on the lane and no comparison", () => {
   const html = renderScenario(evenByHand, wednesday("08:00"));
   // Before work the lane is already live from the work start.
-  const gap = laneBlock(html, "Kotasız 14:18–14:50")!;
+  const gap = laneBlock(html, "Limit dolu 14:18–14:50")!;
   assert.match(gap.fill, /bg-crit\/25/);
   assert.doesNotMatch(gap.fill, /opacity-50/);
   const plan = dayPlan(
@@ -570,12 +570,12 @@ test("the hero forecasts the day before work and the rest of it during work", ()
   })!;
   assert.equal(
     forecastSummary(rest, tr, clock),
-    "16:02–16:15 kotasız · 3 geçiş",
+    "16:02–16:15 limit dolu · 3 geçiş",
   );
   const during = renderScenario(automatic, now);
   assert.match(
     during,
-    /<i class="[^"]*bg-warn[^"]*"[^>]*><\/i>Bugün kalan: 16:02–16:15 kotasız · 3 geçiş</,
+    /<i class="[^"]*bg-warn[^"]*"[^>]*><\/i>Bugün kalan: 16:02–16:15 limit dolu · 3 geçiş</,
   );
   assert.doesNotMatch(during, /Tahmin: /);
   // The tempo chip names the tempo's source.
@@ -629,7 +629,7 @@ test("before work the pill forecasts the day as the lane does", () => {
     activeId: team.id,
   });
   const summary = forecastSummary(view.live!.forecast, tr, clock);
-  assert.equal(summary, "2 kotasız aralık, ilk 12:52–13:00 · 5 geçiş");
+  assert.equal(summary, "2 aralıkta limit dolu, ilki 12:52–13:00 · 5 geçiş");
   const html = renderScenario(automatic, now, team.id, usage);
   assert.match(
     html,
@@ -678,7 +678,7 @@ test("the notes explain the order and the warm-ups", () => {
   assert.doesNotMatch(html, /Sıra, otomatik saatlerin dağıtım sırasıdır/);
   assert.ok(
     html.includes(
-      "Bitiş başlangıçtan önceyse aralık ertesi güne taşar. Relay hesapları kapasiteye ve tempoya göre işten önce ısıtır.",
+      "Bitiş saati başlangıçtan önceyse aralık ertesi güne uzar. Relay, kapasiteye ve tempoya göre hesapların limit dönemlerini işe başlamadan önce başlatır.",
     ),
   );
 });
@@ -928,7 +928,7 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
   assert.ok(html.indexOf(">ne hızla tüketiyorsun<") < html.indexOf(">Uyarla<"));
   assert.ok(html.indexOf(">Uyarla<") < html.indexOf("Saat dilimi"));
   // The hero: today's pace and the adapted plan, in the warning tone.
-  for (const text of ["Bugün planın 1,6× hızlısın", "Plan uyarlandı"]) {
+  for (const text of ["Bugün plandan 1,6 kat hızlısın", "Plan uyarlandı"]) {
     const classes = badgeClass(html, text);
     assert.ok(classes, text);
     assert.match(classes, /bg-warn\/15/);
@@ -946,9 +946,9 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
     adaptation: { factor: 1.6, schedule: { [pro.id]: wednesday("13:30") } },
   });
   const summary = forecastSummary(view.live!.forecast, tr, clock);
-  assert.equal(summary, "14:48–17:00 kotasız · 3 geçiş");
+  assert.equal(summary, "14:48–17:00 limit dolu · 3 geçiş");
   assert.ok(html.includes(`></i>Bugün kalan: ${summary}<`));
-  assert.ok(laneBlock(html, "Kotasız 14:48–17:00"));
+  assert.ok(laneBlock(html, "Limit dolu 14:48–17:00"));
   assert.doesNotMatch(html, /16:02–17:00/);
   // Pro's window row: its planned window is closed by now (only the past
   // part stays), nothing until 13:30, then a window from it.
@@ -958,7 +958,7 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
   // Pro's row: the adopted start, in the warning tone.
   assert.match(
     html,
-    /<small class="[^"]*text-warn-foreground[^"]*">Uyarlandı · başlatma 13:30<\/small>/,
+    /<small class="[^"]*text-warn-foreground[^"]*">Plan uyarlandı · 13:30’da başlatılacak<\/small>/,
   );
   // Each window lasts as long as it does at today's pace (1.6 × 205 an
   // hour); the tempo row keeps the plan's own.
@@ -1031,7 +1031,7 @@ test("a start deferred before the account's active range shows the adopted time"
   });
   assert.match(
     html,
-    /<small class="[^"]*text-warn-foreground[^"]*">Uyarlandı · başlatma 09:30<\/small>/,
+    /<small class="[^"]*text-warn-foreground[^"]*">Plan uyarlandı · 09:30’da başlatılacak<\/small>/,
   );
   assert.doesNotMatch(html, /Sonraki başlatma 06:30/);
   assert.match(html, />Sonraki başlatma 08:15</);
@@ -1039,7 +1039,7 @@ test("a start deferred before the account's active range shows the adopted time"
 
 test("only what was adapted shows, and nothing once adaptation is off", () => {
   const pace = renderAdapted({ adaptation: adapted(1.6, []), statuses: [] });
-  assert.ok(badgeClass(pace, "Bugün planın 1,6× hızlısın"));
+  assert.ok(badgeClass(pace, "Bugün plandan 1,6 kat hızlısın"));
   assert.equal(badgeClass(pace, "Plan uyarlandı"), undefined);
   const moved = renderAdapted({ adaptation: adapted(1, [[pro, "13:30"]]) });
   assert.ok(badgeClass(moved, "Plan uyarlandı"));
@@ -1056,7 +1056,7 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   );
   assert.match(off, />Bir dönem ~30 dk yeter/);
   assert.doesNotMatch(off, />Bir dönem ~20 dk yeter/);
-  assert.match(off, /><\/i>Bugün kalan: 16:02–16:15 kotasız · 3 geçiş</);
+  assert.match(off, /><\/i>Bugün kalan: 16:02–16:15 limit dolu · 3 geçiş</);
   assert.doesNotMatch(
     renderScenario(automatic, wednesday("12:00")),
     /hızlısın|Plan uyarlandı|Uyarlandı/,
@@ -1068,7 +1068,7 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   });
   assert.ok(badgeClass(en, "Today you’re at 2.0× the plan’s pace"));
   assert.ok(badgeClass(en, "Plan adapted"));
-  assert.match(en, />Adapted · starts at 13:30</);
+  assert.match(en, />Plan adapted · starts at 13:30</);
   assert.match(en, />Adapt</);
   assert.match(en, />Update the plan for today’s pace</);
 });

@@ -58,15 +58,15 @@ export function HistorySummary({
           : value
             ? t(
                 `${value.indexed} oturum · ${value.projects} yerel proje · ${value.archived} arşivlenmiş`,
-                `${value.indexed} sessions · ${value.projects} local projects · ${value.archived} archived`,
+                `${value.indexed} ${value.indexed === 1 ? "session" : "sessions"} · ${value.projects} local ${value.projects === 1 ? "project" : "projects"} · ${value.archived} archived`,
               )
             : t("Yerel kayıtlar kontrol ediliyor…", "Checking local records…")}
       </p>
       {value && (
         <p className="text-muted-foreground">
           {t(
-            `${value.transcriptsFound} konuşma dosyası bulundu; ${value.missingTranscripts} eksik, ${value.unknownTranscripts} konumu doğrulanamadı.`,
-            `${value.transcriptsFound} conversation files found; ${value.missingTranscripts} missing, ${value.unknownTranscripts} locations unverified.`,
+            `${value.transcriptsFound} konuşma dosyası bulundu; ${value.missingTranscripts} eksik, ${value.unknownTranscripts} dosyanın konumu doğrulanamadı.`,
+            `${value.transcriptsFound} conversation ${value.transcriptsFound === 1 ? "file" : "files"} found; ${value.missingTranscripts} missing, ${value.unknownTranscripts} ${value.unknownTranscripts === 1 ? "location" : "locations"} unverified.`,
           )}
         </p>
       )}
@@ -74,14 +74,14 @@ export function HistorySummary({
         <p className="text-muted-foreground">
           {t(
             `${value.duplicates} yinelenen kart sonraki geçiş veya birleştirmede temizlenecek.`,
-            `${value.duplicates} duplicate cards will be removed on the next switch or merge.`,
+            `${value.duplicates} duplicate ${value.duplicates === 1 ? "card" : "cards"} will be removed on the next switch or merge.`,
           )}
         </p>
       )}
       <small className="text-xs text-muted-foreground">
         {sources.length
           ? t(
-              `Sonraki birleştirmede: ${sources.map((a) => a.name).join(", ")}.`,
+              `Sonraki birleştirmede geçmişi alınacak hesaplar: ${sources.map((a) => a.name).join(", ")}.`,
               `Sources on next merge: ${sources.map((a) => a.name).join(", ")}.`,
             )
           : t(

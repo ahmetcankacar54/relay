@@ -65,7 +65,7 @@ test("the add-account dialog shows the three steps and the profile form", () => 
   assert.match(html, /placeholder="Örn. Kişisel Max"/);
   assert.match(html, /Kişisel/);
   assert.match(html, /Şirket/);
-  assert.match(html, /Kişisel hesapların Code geçmişi aynı grupta korunur./);
+  assert.match(html, /Kişisel hesaplar yerel Code geçmişini paylaşır./);
   assert.match(html, /Profil oluştur/);
   assert.match(html, /aria-current="step"/);
 });
@@ -84,7 +84,7 @@ test("the add-account dialog's group field and history note follow the sharing m
   assert.match(group, /id="add-account-group"/);
   assert.match(group, /Aynı gruptaki şirket hesapları Code geçmişini paylaşır/);
   assert.match(group, /Boş bırakırsan bu şirket hesabı ayrı tutulur\./);
-  assert.match(form("same-group", "personal"), /Kişisel hesapların Code geçmişi aynı grupta korunur\./);
+  assert.match(form("same-group", "personal"), /Kişisel hesaplar yerel Code geçmişini paylaşır\./);
   assert.doesNotMatch(form("same-group", "personal"), /id="add-account-group"/);
   // Anywhere else the group is ignored, so there is no field and no group sentence.
   for (const [mode, note] of [
@@ -96,7 +96,7 @@ test("the add-account dialog's group field and history note follow the sharing m
       const html = form(mode, kind);
       assert.doesNotMatch(html, /id="add-account-group"|add-account-groups/, `${mode} ${kind}`);
       assert.match(html, note, `${mode} ${kind}`);
-      assert.doesNotMatch(html, /Boş bırakırsan|Aynı gruptaki|aynı grupta korunur/, `${mode} ${kind}`);
+      assert.doesNotMatch(html, /Boş bırakırsan|Aynı gruptaki|yerel Code geçmişini paylaşır/, `${mode} ${kind}`);
     }
 });
 
@@ -110,7 +110,7 @@ test("the add-account dialog walks the Desktop and limit steps for the created p
   assert.doesNotMatch(pending, /üstteki panel/);
   assert.match(pending, /Claude uygulamasını yeniden aç/);
   assert.match(pending, /İptal et ve önceki hesaba dön/);
-  assert.doesNotMatch(pending, /Bağlantıyı tamamla/);
+  assert.doesNotMatch(pending, />Claude uygulaması girişini kaydet<|Girişi kaydet<\/button>/);
   const capture = wrap(
     relayFor({
       pendingDesktop: b, hasUnclaimedDesktop: true, targetOrg: "org-1",
@@ -118,7 +118,7 @@ test("the add-account dialog walks the Desktop and limit steps for the created p
     } as Partial<Relay>),
     createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }),
   );
-  assert.match(capture, /Bağlantıyı tamamla/);
+  assert.match(capture, /Girişi kaydet<\/button>/);
   assert.match(capture, /Code çalışma alanı/);
   assert.match(capture, /<option value="org-2">Çalışma alanı 2<\/option>/);
   const limitStep = wrap(relayFor(), createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }));
@@ -274,7 +274,7 @@ test("the pending sign-in names the Code step while no workspace folder exists",
     createElement(ConnectionPanels),
   );
   assert.match(html, /Claude uygulamasında sol menüden Code’u bir kez aç; liste kendiliğinden dolar\./);
-  assert.doesNotMatch(html, /Bağlantıyı tamamla<\/button>/);
+  assert.doesNotMatch(html, /Girişi kaydet<\/button>/);
 });
 
 test("with no account, the accounts header hides Desktop linking", () => {

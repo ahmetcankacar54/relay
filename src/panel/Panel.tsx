@@ -112,7 +112,10 @@ export function Panel({
         </Button>
         {latest && (
           <span className="truncate text-xs">
-            {`${t("Güncellendi", "Updated")} ${formatRelative(latest, now, language)}`}
+            {t(
+              `${formatRelative(latest, now, language)} güncellendi`,
+              `Updated ${formatRelative(latest, now, language)}`,
+            )}
           </span>
         )}
         <Button

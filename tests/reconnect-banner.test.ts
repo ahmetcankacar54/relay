@@ -48,8 +48,8 @@ const CAUSES: [string, UsageIssue | undefined, string, string][] = [
   [
     "expired",
     "expired",
-    "oturumun süresi doldu ve yenilenemedi",
-    "the session expired and could not be renewed",
+    "girişin süresi doldu ve yenilenemedi",
+    "the sign-in expired and could not be renewed",
   ],
   [
     "credentials-missing",
@@ -164,7 +164,7 @@ test("the sign-in banner says what is wrong and what Reconnect does", () => {
   const tr = render(relayFor({ a: usage("expired") }));
   assert.match(
     tr,
-    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu ve yenilenemedi\./,
   );
   assert.match(
     tr,
@@ -186,7 +186,7 @@ test("the explanation belongs to the sign-in banner only, not to the renewal ban
   const html = render(relayFor({ a: usage("renewal-required") }));
   assert.match(html, /Yenilemeye izin ver/);
   assert.doesNotMatch(html, /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda/);
-  assert.doesNotMatch(html, /oturumun süresi doldu/);
+  assert.doesNotMatch(html, /girişin süresi doldu/);
 });
 
 // Grouping and dismissal. The dismissal store is shared by every Banners, so each test starts empty.
@@ -237,7 +237,7 @@ test("one warning renders as a single banner, even beside healthy accounts", () 
   assert.equal(banners(html), 1);
   assert.match(
     html,
-    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu ve yenilenemedi\./,
   );
   assert.match(html, /<button[^>]*>Limit okuma girişini yenile<\/button>/);
   assert.match(html, /aria-label="Uyarıyı kapat"/);
@@ -279,7 +279,7 @@ test("the expanded group lists a row per warning with today's text, button and d
   assert.match(html, /<button[^>]*aria-expanded="true"[^>]*>Gizle<\/button>/);
   assert.match(
     html,
-    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: oturumun süresi doldu ve yenilenemedi\./,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu ve yenilenemedi\./,
   );
   assert.match(
     html,
@@ -800,7 +800,7 @@ test("the mismatch banner is not repeated when the read already reports a sign-i
   assert.deepEqual(expired.map((i) => [i.issue, i.action]), [["expired", "login"]]);
   assert.match(
     render(relayFor({ m: usage("expired", "m") }, [other()])),
-    /oturumun süresi doldu ve yenilenemedi/,
+    /girişin süresi doldu ve yenilenemedi/,
   );
 });
 

@@ -131,11 +131,11 @@ export async function migrateVault(
   // already migrated files with it: then what is left is damaged, and is set aside below.
   if (failed.length && !opened.size && !anyV2)
     throw new Error(
-      "None of the old vault files could be opened, so nothing was moved. Relay tries again at its next start.",
+      "None of the old saved sign-in files could be opened, so nothing was moved. Relay tries again at its next start.",
     );
   if (recovery && failed.some((relative) => relative.toLowerCase() === recovery))
     throw new Error(
-      "The recovery backup named in journal.json could not be opened, so the vault was not migrated.",
+      "The recovery backup named in journal.json could not be opened, so the saved sign-ins were not moved to the new format.",
     );
   let migrated = 0;
   for (const [relative, text] of opened) {
@@ -186,11 +186,11 @@ export async function prepareVault(options: {
   try {
     state = await vaultState(vault);
   } catch (error) {
-    const message = `Relay's vault could not be read: ${(error as Error).message}`;
+    const message = `Relay’s saved sign-ins could not be read: ${(error as Error).message}`;
     return { sealer: refusingSealer(message, legacyUnseal), error: message };
   }
   if (state.kind === "newer") {
-    const message = `Relay's vault was written by a newer version (format ${state.version}). Update Relay.`;
+    const message = `Relay’s saved sign-ins were written by a newer version (format ${state.version}). Update Relay.`;
     return { sealer: refusingSealer(message), error: message };
   }
   // A key is only ever made for a vault no format-2 file depends on: one a migration stopped
@@ -211,7 +211,7 @@ export async function prepareVault(options: {
     const lost = error instanceof VaultKeyError && error.reason !== "locked";
     const message =
       state.kind === "ready" || anyV2
-        ? `The Keychain item "${VAULT_KEY_SERVICE}" could not be read, so saved Desktop sign-ins cannot be opened. ${(error as Error).message}${lost ? " To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again." : ""}`
+        ? `The Keychain item "${VAULT_KEY_SERVICE}" could not be read, so saved Claude app sign-ins cannot be opened. ${(error as Error).message}${lost ? " To start over, run relay reset-vault (npm i -g @ahmetcankacar/relay) and save each account again." : ""}`
         : `The Keychain item "${VAULT_KEY_SERVICE}" could not be read. ${(error as Error).message}`;
     return { sealer: refusingSealer(message, legacyUnseal), error: message };
   }
@@ -222,14 +222,18 @@ export async function prepareVault(options: {
         return {
           sealer,
           error:
-            "Relay could not open its old vault this time (macOS did not allow access to its key). Nothing was moved; Relay tries again at its next start.",
+            "Relay could not open its old saved sign-ins this time (macOS did not allow access to their key). Nothing was moved; Relay tries again at its next start.",
         };
       const migration = await migrateVault(vault, sealer, legacyUnseal);
       return migration.movedAside.length
         ? {
             sealer,
             migration,
-            error: `${migration.movedAside.length} vault file(s) could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts again.`,
+            // shared/error-text.ts matches this sentence to give it in Turkish: change both together.
+            error:
+              migration.movedAside.length === 1
+                ? "1 saved sign-in file could not be opened and was set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again."
+                : `${migration.movedAside.length} saved sign-in files could not be opened and were set aside in desktop-vault/unreadable. Save the affected accounts’ Claude app sign-ins again.`,
           }
         : { sealer, migration };
     }

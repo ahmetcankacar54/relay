@@ -10,7 +10,7 @@ test("same-group keeps today's group field and its two sentences", () => {
     [
       tr,
       "Aynı gruptaki şirket hesapları Code geçmişini paylaşır",
-      "Kişisel hesapların Code geçmişi aynı grupta korunur.",
+      "Kişisel hesaplar yerel Code geçmişini paylaşır.",
       "Boş bırakırsan bu şirket hesabı ayrı tutulur.",
     ],
     [

@@ -205,7 +205,7 @@ export function Accounts() {
       title={t("Hesaplar", "Accounts")}
       description={t(
         `${accounts.length} hesap · ${linked} hesapta Claude uygulaması girişi kayıtlı`,
-        `${accounts.length} accounts · ${linked} with a saved Claude app sign-in`,
+        `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"} · ${linked} with a saved Claude app sign-in`,
       )}
       actions={
         <>
@@ -272,7 +272,7 @@ export function Accounts() {
             <SelectContent>
               <SelectItem value="all">{t("Tümü", "All accounts")}</SelectItem>
               <SelectItem value="connected">
-                {t("Claude uygulaması kayıtlı", "Claude app saved")}
+                {t("Claude girişi kayıtlı", "Claude sign-in saved")}
               </SelectItem>
               <SelectItem value="personal">
                 {t("Kişisel", "Personal")}
@@ -339,7 +339,7 @@ export function AccountsEmpty({
           ? t(`“${searched}” ile eşleşen hesap yok`, `No accounts match “${searched}”`)
           : hasAccounts
             ? t("Eşleşen hesap yok", "No matching accounts")
-            : t("Tek panel. Tüm hesapların.", "One panel. All your accounts.")}
+            : t("Tüm hesapların tek panelde.", "One panel. All your accounts.")}
       </h3>
       {searched && clearQuery ? (
         <Button variant="link" size="sm" className="h-auto px-0" onClick={clearQuery}>

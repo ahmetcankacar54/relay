@@ -1,6 +1,5 @@
 import type { Account } from "./types";
 import { formatPercent } from "./percent";
-import { withDative } from "./tr-dative";
 import { localDate, planCapacity, wallTime } from "./planning";
 import { historyIdentity, identityOwners } from "./usage-statistics";
 import type { UsageRollups } from "./usage-rollups";
@@ -397,7 +396,7 @@ function buildInsight(
   if (full && spare) {
     const days = idle.get(spare.row)!;
     return {
-      tr: `${spare.view.name} ${days} gündür boşta; ${full.view.name} açıldığında neredeyse hep doluyor. Sırayı ${withDative(spare.view.name)} kaydırmak 5 saatlik takılmaları azaltır.`,
+      tr: `${spare.view.name} ${days} gündür boşta; ${full.view.name} ise dönemi açıldığında neredeyse hep doluyor. ${spare.view.name} hesabını sırada öne almak 5 saatlik limite takılmayı azaltır.`,
       en: `${spare.view.name} has sat idle for ${days} days; ${full.view.name} is almost always full when it opens. Moving ${spare.view.name} up the order would cut 5-hour limit stops.`,
     };
   }

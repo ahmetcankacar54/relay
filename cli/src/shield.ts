@@ -16,8 +16,8 @@ export async function shielded<T>(
     told = true;
     io.stderr(
       t(
-        "Claude Desktop işlemi sürüyor; yarıda kesilmemesi için bitmesini bekleyin…",
-        "A Claude Desktop operation is running; wait for it to finish so it is not cut short…",
+        "Claude uygulamasında bir işlem sürüyor; yarıda kesilmemesi için bitmesini bekle…",
+        "A Claude app operation is running; wait for it to finish so it isn’t cut short…",
       ),
     );
   });

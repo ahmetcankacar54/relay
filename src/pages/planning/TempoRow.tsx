@@ -58,11 +58,11 @@ export function TempoRow({
       ? weekend && tempo.rate.weekend !== tempo.rate.weekday
         ? t(
             `Hafta sonu yoğun gün ≈ ${n} Pro birimi/sa · son 4 haftada ${days} iş günü`,
-            `Busy weekend day ≈ ${n} Pro units/h · ${days} work days in the last 4 weeks`,
+            `Busy weekend day ≈ ${n} Pro units/h · ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
           )
         : t(
             `Yoğun gün ≈ ${n} Pro birimi/sa · son 4 haftada ${days} iş günü`,
-            `Busy day ≈ ${n} Pro units/h · ${days} work days in the last 4 weeks`,
+            `Busy day ≈ ${n} Pro units/h · ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
           )
       : tempo.source === "preset"
         ? t(

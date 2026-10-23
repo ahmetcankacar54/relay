@@ -67,7 +67,7 @@ export function ForecastBadges({
       {factor > 1 && (
         <Badge variant="secondary" className={warnChip}>
           {t(
-            `Bugün planın ${pace}× hızlısın`,
+            `Bugün plandan ${pace} kat hızlısın`,
             `Today you’re at ${pace}× the plan’s pace`,
           )}
         </Badge>

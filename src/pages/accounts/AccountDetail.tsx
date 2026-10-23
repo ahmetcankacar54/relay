@@ -309,11 +309,11 @@ function ExtensionConnection({
         guide.where
           ? t(
               `Tarayıcıdaki Claude eklentisi de bu hesaba geçer · ${guide.where}`,
-              `The browser's Claude extension follows this account · ${guide.where}`,
+              `The browser’s Claude extension follows this account · ${guide.where}`,
             )
           : t(
               "Tarayıcıdaki Claude eklentisi de bu hesaba geçer.",
-              "The browser's Claude extension follows this account.",
+              "The browser’s Claude extension follows this account.",
             )
       }
       tone={guide.tone}

@@ -217,7 +217,7 @@ test("Switching offers draft re-typing, off unless turned on, marked experimenta
   assert.match(off, />Deneysel</);
   assert.match(
     off,
-    /Kapalıyken taslaklar kurtarılır ve panelde Kopyala ile sunulur\. Açıkken Relay geçişten sonra konuşmayı açar ve taslağı mesaj kutusuna yazar, göndermez\. Erişilebilirlik izni ister\./,
+    /Kapalıyken taslaklar kurtarılır ve panelde “Kopyala” düğmesiyle sunulur\. Açıkken Relay geçişten sonra konuşmayı açar ve taslağı mesaj kutusuna yazar, göndermez\. Erişilebilirlik izni ister\./,
   );
   assert.match(control(off), /role="switch"/);
   assert.match(control(off), /aria-checked="false"/);
@@ -244,7 +244,7 @@ test("Switching offers draft re-typing, off unless turned on, marked experimenta
   assert.match(en, />Experimental</);
   assert.match(
     en,
-    /While off, drafts are rescued and offered in the panel with Copy\. While on, Relay opens the conversation after a switch and types the draft into its message box without sending it\. It needs Accessibility permission\./,
+    /While off, drafts are rescued and offered in the panel with “Copy”\. While on, Relay opens the conversation after a switch and types the draft into its message box without sending it\. It needs Accessibility permission\./,
   );
 });
 
@@ -262,14 +262,14 @@ test("the single-conversation watch card appears only while a legacy watch needs
   assert.match(html, /Bu konuşmayı izle|İzlemeyi kapat/);
 });
 
-test("with Continue at quota and prepare-on-quit both on, the choice reads Kota dolunca", () => {
+test("with Continue at quota and prepare-on-quit both on, the choice reads Limit dolunca", () => {
   const html = render(relayFor({}, { autoSwitchMode: "after-exit" }));
   const checked = [
     ...html.matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g),
   ]
     .filter(([tag]) => tag.includes('aria-checked="true"'))
     .map(([, inner]) => /<span class="text-sm font-semibold">(.*?)<\/span>/.exec(inner)?.[1]);
-  assert.deepEqual(checked, ["Kota dolunca"]);
+  assert.deepEqual(checked, ["Limit dolunca"]);
   assert.doesNotMatch(html, /Otomatik geçişe dahil hesaplar/);
 });
 
@@ -283,9 +283,9 @@ test("each carry card holds its main control, bound to the same setting as the d
   assert.match(html, /<label for="carry-history" class="sr-only">Geçmişi paylaş<\/label>/);
   assert.match(html, /<button[^>]*id="carry-history"[^>]*>[\s\S]*?Tüm hesaplar arasında/);
   assert.match(html, />Tüm hesaplarda görünür</);
-  // Drafts: "Yerine yaz · Deneysel", off unless turned on.
+  // Drafts: "Konuşmaya yeniden yaz · Deneysel", off unless turned on.
   const retype = (h: string) => /<input[^>]*id="carry-retype"[^>]*>/.exec(h)?.[0] ?? "";
-  assert.match(html, /Yerine yaz<span[^>]*>Deneysel<\/span>/);
+  assert.match(html, /Konuşmaya yeniden yaz<span[^>]*>Deneysel<\/span>/);
   assert.match(retype(html), /type="checkbox"/);
   assert.doesNotMatch(retype(html), /checked/);
   assert.match(retype(carry(render(relayFor({}, { draftRetype: true })))), /checked=""/);
@@ -305,15 +305,15 @@ test("the sidebar card offers Copy recipe for the open account's missing section
   const gap = { id: "g1", to: "Kişisel · Max", from: ["Vertex"], missingSections: 9, sessions: 157 };
   const html = carry(render(relayFor({ sidebar: gap })));
   assert.match(html, />Kenar çubuğu bölümleri</);
-  assert.match(html, /Kişisel · Max hesabında 9 bölüm eksik, 157 oturum bölümsüz\. Kaynak: Vertex\./);
-  assert.match(html, /<button[^>]*>Tarifi kopyala<\/button>/);
+  assert.match(html, /Kişisel · Max hesabında 9 bölüm eksik, 157 oturum bir bölümde değil\. Kaynak: Vertex\./);
+  assert.match(html, /<button[^>]*>Talimatı kopyala<\/button>/);
   assert.match(
     carry(render({ ...relayFor({ sidebar: gap }), busy: "sidebar-copy:g1" } as Relay)),
-    /<button[^>]*disabled=""[^>]*>Tarifi kopyala<\/button>/,
+    /<button[^>]*disabled=""[^>]*>Talimatı kopyala<\/button>/,
   );
   const none = carry(render(relayFor()));
   assert.match(none, />Açık hesapta eksik bölüm yok\.</);
-  assert.doesNotMatch(none, /Tarifi kopyala/);
+  assert.doesNotMatch(none, /Talimatı kopyala/);
 });
 
 test("the extension card says where the extension stands for the open account, with Check when it helps", () => {
@@ -328,7 +328,7 @@ test("the extension card says where the extension stands for the open account, w
       ...over,
     }) as ExtensionStatus;
   assert.deepEqual(extensionCarry(undefined, a, accounts, t, "tr"), { value: "Kontrol ediliyor…", check: false });
-  assert.deepEqual(extensionCarry(null, a, accounts, t, "tr"), { value: "Bu Mac'te yok", check: false });
+  assert.deepEqual(extensionCarry(null, a, accounts, t, "tr"), { value: "Bu Mac’te yok", check: false });
   assert.deepEqual(extensionCarry(status({ setting: { mode: "off" } }), a, accounts, t, "tr"), {
     value: "Kapalı",
     tone: "off",

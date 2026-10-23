@@ -100,13 +100,13 @@ export function PlanTimeline({
   const warmUpLine = (ids: string[], times: number[]) => {
     if (!settings.autoStart)
       return t(
-        "Önceden başlatma kapalı; ısıtma yapılmaz",
-        "Early start is off; no warm-ups",
+        "Önceden başlatma kapalı; dönemler erken başlatılmaz",
+        "Early start is off; no period starts early",
       );
     const list = times
       .map((time, i) => `${name(ids[i])} ${clock(time)}`)
       .join(" · ");
-    return t(`Isıtma: ${list}`, `Warm-up: ${list}`);
+    return t(`Önceden başlatma: ${list}`, `Early start: ${list}`);
   };
   const comparison = compare && [
     {
@@ -216,7 +216,7 @@ export function PlanTimeline({
                 (r) => r.account.id === segment.accountId,
               );
               const name =
-                index < 0 ? t("Kotasız", "No quota") : rows[index].account.name;
+                index < 0 ? t("Limit dolu", "No quota") : rows[index].account.name;
               const text = `${name} ${clock(segment.from)}–${clock(segment.to)}`;
               return (
                 <div
@@ -296,7 +296,7 @@ export function PlanTimeline({
       )}
       <p className={cn(noteClass, "mt-2.5")}>
         {t(
-          "Kullanım şeridi Relay’in tahmini: hangi saatte hangi hesapla çalışacağın. Dikey çizgiler geçiş, taralı kırmızı kotasız. Alttaki çubuklar 5 saatlik dönemler; çubuğun sonu sıfırlanma. Soluk kısım planın tahmini, canlı kısım şu anki kullanımdan hesaplanır.",
+          "Kullanım şeridi, Relay’in tahminidir: hangi saatte hangi hesapla çalışacağını gösterir. Dikey çizgiler geçişleri, kırmızı taralı alanlar limitin dolu olduğu aralıkları gösterir. Alttaki çubuklar 5 saatlik dönemlerdir; çubuğun bittiği yerde limit yenilenir. Soluk kısım planın tahmini, koyu kısım şu anki kullanımdan hesaplanır.",
           "The usage lane is Relay’s forecast of which account you work on when. Vertical lines are switches, striped red is no quota. The bars below are five-hour periods; a bar ends at the reset. The faded part is the plan’s forecast; the solid part is computed from current usage.",
         )}
       </p>
