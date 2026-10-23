@@ -2,12 +2,11 @@ import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { act, createElement, type ReactElement } from "react";
 import { LostFound, describe, weekLabel } from "../src/pages/usage/LostFound";
-import { resetShelfForTests } from "../src/data/lost-found-shelf";
 import { resetCollectionForTests } from "../src/data/lost-found-collection";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type RelayAPI } from "../shared/types";
-import type { LostFoundWeek, LostItem } from "../shared/lost-found";
+import type { LostFoundCollection, LostItem } from "../shared/lost-found";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 
 const ZONE = "Europe/Istanbul";
@@ -94,33 +93,6 @@ test("every item tells what happened, when and to whom, with the panda's word, i
   );
 });
 
-const WEEK: LostFoundWeek = {
-  start: "2026-10-12",
-  end: "2026-10-18",
-  latest: "2026-10-12",
-  oldest: "2026-07-27",
-  items: [
-    { kind: "hourglass", at: "2026-10-14T06:56:00Z", accountId: "a", minutes: 66 },
-    { kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16 },
-  ],
-};
-const OLDER: LostFoundWeek = { ...WEEK, start: "2026-10-05", end: "2026-10-11", items: [] };
-
-function relayFor(api: Partial<RelayAPI>): Relay {
-  return { api, accounts, settings } as unknown as Relay;
-}
-const tree = (child: ReactElement, relay: Relay, language: Language = "tr") =>
-  createElement(
-    I18nContext.Provider,
-    { value: { language, setLanguage() {}, t: t(language) } },
-    createElement(RelayContext.Provider, { value: relay }, child),
-  );
-
-beforeEach(() => {
-  resetShelfForTests();
-  resetCollectionForTests();
-});
-
 test("the new finds tell their story in both languages", () => {
   const baton = { kind: "baton" as const, at: "2026-10-14T08:04:00Z", accountIds: ["a", "b"] as [string, string], minutes: 4, count: 3 };
   assert.equal(say(baton).story, "Bir hesap limite takılınca öbür hesap 4 dakika içinde devraldı. O hafta 3 kez oldu.");
@@ -136,8 +108,38 @@ test("the new finds tell their story in both languages", () => {
   assert.equal(say({ kind: "teaglass", at: "2026-10-15T02:00:00Z", hours: 3 }).title, "Sabah çayı");
 });
 
-test("the bureau shows last week's most striking find, its other finds, other weeks and a shelf that keeps", async () => {
-  const stored = new Map<string, string>();
+const hourglass = (minutes: number, at: string): LostItem => ({ kind: "hourglass", at, accountId: "a", minutes });
+const scroll: LostItem = { kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16 };
+const boomerang: LostItem = { kind: "boomerang", at: "2026-10-14T11:10:00Z", accountIds: ["a", "b"], minutes: 8 };
+/** What the main process finds within reach: the hourglass in three weeks (silver), the scroll and a boomerang last week. */
+const ANSWER: LostFoundCollection = {
+  latest: "2026-10-12",
+  oldest: "2026-07-27",
+  found: {
+    hourglass: [
+      { start: "2026-10-12", end: "2026-10-18", item: hourglass(66, "2026-10-14T06:56:00Z") },
+      { start: "2026-10-05", end: "2026-10-11", item: hourglass(90, "2026-10-07T06:56:00Z") },
+      { start: "2026-09-28", end: "2026-10-04", item: hourglass(120, "2026-09-30T06:56:00Z") },
+    ],
+    scroll: [{ start: "2026-10-12", end: "2026-10-18", item: scroll }],
+    boomerang: [{ start: "2026-10-12", end: "2026-10-18", item: boomerang }],
+  },
+};
+
+function relayFor(api: Partial<RelayAPI>, list: Account[] = accounts): Relay {
+  return { api, accounts: list, settings } as unknown as Relay;
+}
+const tree = (child: ReactElement, relay: Relay, language: Language = "tr") =>
+  createElement(
+    I18nContext.Provider,
+    { value: { language, setLanguage() {}, t: t(language) } },
+    createElement(RelayContext.Provider, { value: relay }, child),
+  );
+
+beforeEach(() => resetCollectionForTests());
+
+/** The page drawn with `api` over a storage holding `stored`; returns its helpers and the storage. */
+async function page(api: Partial<RelayAPI>, stored = new Map<string, string>(), list: Account[] = accounts) {
   const dom = fakeDom({
     localStorage: () => ({
       getItem: (key: string) => stored.get(key) ?? null,
@@ -146,178 +148,163 @@ test("the bureau shows last week's most striking find, its other finds, other we
   });
   dom.install();
   readableText();
-  const asked: { weekStart?: string }[] = [];
-  const api = {
-    lostFound: async (input: { weekStart?: string }) => {
-      asked.push(input);
-      return input.weekStart === "2026-10-05" ? OLDER : WEEK;
-    },
-  } as unknown as RelayAPI;
-  try {
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(tree(createElement(LostFound), relayFor(api))));
-    const container = dom.container as unknown as Fake;
-    const attr = (n: Fake, name: string) => (n as { attributes?: Map<string, string> }).attributes?.get?.(name);
-    const slot = (name: string) => find(container, (n) => attr(n, "data-slot") === name);
-    const button = (match: (text: string, node: Fake) => boolean) =>
-      find(container, (n) => n.tagName === "button" && match(textOf(n), n));
-    const click = async (node: Fake | undefined) => {
-      assert.ok(node);
-      await act(async () => dom.dispatch(node, "click", { detail: 1 }));
-    };
-    assert.deepEqual(asked, [{}]);
-    assert.match(textOf(slot("lost-item")), /Kum saati.*1 sa 6 dk sonra doldu.*Çarşamba 09:56.*Kişisel/);
-    assert.match(textOf(container), /12–18 Eki/);
-    // The newest week has no next one.
-    assert.equal(attr(button((_, n) => attr(n, "aria-label") === "Sonraki hafta")!, "disabled"), "");
-
-    // The week's other find.
-    await click(button((text) => text.endsWith("Uzun parşömen")));
-    // Its first find earns the bronze pin.
-    assert.match(textOf(slot("lost-item")), /^Uzun parşömenBronz · 1 haftaİlk kez bulundu16 saat aralıksız çalıştın\./);
-    assert.equal(attr(find(slot("lost-item")!, (n) => attr(n, "data-slot") === "lost-pin")!, "data-kind"), "scroll");
-
-    // Kept, it stays on the shelf, in storage, and opens from there.
-    await click(button((text) => text === "Rafa koy"));
-    assert.equal(JSON.parse(stored.get("relay.lostfound.shelf.v1")!)[0].id, "2026-10-12:scroll");
-    assert.ok(slot("lost-shelf"));
-    // The same button now says it is kept, and pressing it again would take it off.
-    assert.equal(attr(button((text) => text === "Rafta ✓")!, "aria-pressed"), "true");
-
-    // The week before: an empty drawer.
-    await click(button((_, n) => attr(n, "aria-label") === "Önceki hafta"));
-    assert.deepEqual(asked.at(-1), { weekStart: "2026-10-05" });
-    assert.match(textOf(container), /Bu hafta çekmece boş/);
-    assert.match(textOf(container), /O haftanın ardından kalanlar\./);
-
-    // The shelf still opens the kept scroll, named as from the shelf, and can let it go.
-    await click(find(slot("lost-shelf")!, (n) => n.tagName === "button"));
-    assert.match(textOf(slot("lost-item")), /Raftan · 12–18 Eki/);
-    await click(button((text) => text === "Rafta ✓"));
-    assert.equal(slot("lost-shelf"), undefined);
-    assert.deepEqual(JSON.parse(stored.get("relay.lostfound.shelf.v1")!), []);
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(dom.container as unknown as Element);
+  await act(async () => root.render(tree(createElement(LostFound), relayFor(api, list))));
+  const container = dom.container as unknown as Fake;
+  const attr = (n: Fake, name: string) => (n as { attributes?: Map<string, string> }).attributes?.get?.(name);
+  const slot = (name: string) => find(container, (n) => attr(n, "data-slot") === name);
+  const tile = (kind: string) => find(slot("lost-library")!, (n) => n.tagName === "li" && attr(n, "data-kind") === kind);
+  const click = async (node: Fake | undefined) => {
+    assert.ok(node);
+    await act(async () => dom.dispatch(node, "click", { detail: 1 }));
+  };
+  const button = (inside: Fake, match: (text: string) => boolean) =>
+    find(inside, (n) => n.tagName === "button" && match(textOf(n)));
+  const done = async () => {
     await act(async () => root.unmount());
-  } finally {
     dom.uninstall();
+  };
+  return { container, attr, slot, tile, click, button, stored, done };
+}
+
+test("the page opens like a game's achievements: progress, recent finds, next goals, every pin by category, and details", async () => {
+  const view = await page({ lostFoundCollection: async () => ANSWER });
+  try {
+    const { container, slot, tile, attr } = view;
+    // Three of twelve found: one silver, two bronze.
+    assert.match(textOf(slot("lost-overview")!), /3\/12%25/);
+    assert.match(textOf(slot("lost-overview")!), /0Altın1Gümüş2Bronz/);
+    // The newest finds, most striking first within a week; the hourglass just reached silver.
+    assert.match(
+      textOf(slot("lost-recent")!),
+      /Kum saatiGümüş seviyeye çıktı12–18 Eki.*Bumerang.*Yeni rozet.*Uzun parşömenYeni rozet/,
+    );
+    // The scroll and boomerang are two weeks from silver, the hourglass three from gold.
+    assert.match(textOf(slot("lost-next")!), /Uzun parşömen.*Gümüş için 2 hafta daha.*Kum saati.*Altın için 3 hafta daha/);
+    // Categories count what is found in them; locked pins say so, secret ones keep their name.
+    assert.match(textOf(slot("lost-library")!), /Tempo ve rekorlar2\/4.*Gün ve saat0\/3.*Hesaplar arasında1\/5/);
+    assert.match(textOf(tile("compass")!), /PusulaKilitli/);
+    assert.match(textOf(tile("clocks")!), /Gizli rozetKilitli/);
+    assert.equal(attr(tile("boomerang")!, "data-found"), "true");
+    // The details open on the newest find, with its finishes and its whole history.
+    const details = slot("lost-details")!;
+    assert.equal(attr(details, "data-kind"), "hourglass");
+    assert.match(textOf(details), /Kum saatiGümüş · 3 hafta/);
+    assert.match(textOf(details), /Nasıl kazanılırBir 5 saatlik dönem, başlamasından en geç 2,5 saat sonra dolsun\./);
+    assert.match(textOf(details), /Bronz✓ 1 haftaGümüş✓ 3 haftaAltın6 hafta/);
+    assert.match(textOf(details), /İlk bulunduğu hafta28 Eyl – 4 EkiSon bulunduğu hafta12–18 Eki/);
+    assert.match(textOf(details), /12–18 EkiBir 5 saatlik dönem, başlamasından yalnızca 1 sa 6 dk sonra doldu\.Çarşamba 09:56·Kişisel/);
+    assert.match(textOf(details), /5–11 Eki.*1 sa 30 dk.*28 Eyl – 4 Eki.*2 sa/);
+    assert.doesNotMatch(textOf(container), /Önceki hafta|Rafa koy|Aynı haftadan/);
+  } finally {
+    await view.done();
   }
 });
 
-test("a failed fetch says so", async () => {
-  const dom = fakeDom();
-  dom.install();
-  readableText();
-  const api = { lostFound: async () => Promise.reject(new Error("kapalı")) } as unknown as RelayAPI;
+test("choosing a pin shows it: a found one with its story, a locked one with how to earn it, a secret one sealed", async () => {
+  const view = await page({ lostFoundCollection: async () => ANSWER });
   try {
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(tree(createElement(LostFound), relayFor(api))));
-    assert.match(textOf(dom.container), /Eşyalar alınamadı\. kapalı/);
-    await act(async () => root.unmount());
+    const { slot, tile, click, attr } = view;
+    await click(find(tile("boomerang")!, (n) => n.tagName === "button"));
+    let details = slot("lost-details")!;
+    assert.equal(attr(details, "data-kind"), "boomerang");
+    // Found, the secret's condition is told; the story joins the accounts with arrows.
+    assert.match(textOf(details), /Başka bir hesaba geç ve 15 dakika içinde ilk hesaba dön\./);
+    assert.match(textOf(details), /Kişisel→Vertex→Kişisel/);
+    await click(find(tile("compass")!, (n) => n.tagName === "button"));
+    details = slot("lost-details")!;
+    assert.match(textOf(details), /PusulaHenüz bulunmadıNasıl kazanılırBir haftada en az 20 saat çalış ve hiç limite takılma\./);
+    assert.doesNotMatch(textOf(details), /Geçmiş/);
+    await click(find(tile("clocks")!, (n) => n.tagName === "button"));
+    details = slot("lost-details")!;
+    assert.match(textOf(details), /^Gizli rozetHenüz bulunmadıNasıl kazanılırGizli rozet\. Panda ipucu vermiyor\.$/);
+    // The recent strip and the next goals open their pin too.
+    await click(view.button(slot("lost-next")!, (text) => text.startsWith("Uzun parşömen")));
+    assert.equal(attr(slot("lost-details")!, "data-kind"), "scroll");
   } finally {
-    dom.uninstall();
+    await view.done();
   }
 });
 
-test("the preload exposes the bureau and the main process answers it", async () => {
-  const fs = await import("node:fs/promises");
-  const preload = await fs.readFile(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  const main = await fs.readFile(new URL("../electron/main.ts", import.meta.url), "utf8");
-  assert.match(preload, /lostFound: \(input\) => ipcRenderer\.invoke\("relay:lost-found", input\)/);
-  assert.match(main, /handle\("lost-found", \(input\) => \{\s*const \{ weekStart \} = lostFoundInput\.parse\(input\);/);
-  assert.match(preload, /lostFoundCollection: \(\) =>\s*ipcRenderer\.invoke\("relay:lost-found-collection"\)/);
-  assert.match(main, /handle\("lost-found-collection", \(\) =>\s*lostFoundCollection\(lostFoundSource\(\)\)/);
+test("the filter narrows the pins to earned or locked ones", async () => {
+  const view = await page({ lostFoundCollection: async () => ANSWER });
+  try {
+    const { slot, tile, click, button } = view;
+    await click(button(slot("lost-library")!, (text) => text.startsWith("Kazanılan")));
+    assert.ok(tile("hourglass"));
+    assert.equal(tile("compass"), undefined);
+    assert.doesNotMatch(textOf(slot("lost-library")!), /Gün ve saat/);
+    await click(button(slot("lost-library")!, (text) => text.startsWith("Kilitli")));
+    assert.equal(tile("hourglass"), undefined);
+    assert.ok(tile("compass"));
+  } finally {
+    await view.done();
+  }
 });
 
-test("kept items from another version that cannot be told are left off the shelf", async () => {
+test("finds are kept with their story and the account names of the day, and outlive the reach", async () => {
+  const stored = new Map<string, string>();
+  const first = await page({ lostFoundCollection: async () => ANSWER }, stored);
+  await first.done();
+  const kept = JSON.parse(stored.get("relay.lostfound.collection.v2")!);
+  assert.deepEqual(kept.boomerang, [
+    { start: "2026-10-12", end: "2026-10-18", item: boomerang, names: { a: "Kişisel", b: "Vertex" } },
+  ]);
+  // Later the weeks fall out of reach and Vertex is removed: the pins and their stories stay.
+  resetCollectionForTests();
+  const later = await page({ lostFoundCollection: async () => ({ ...ANSWER, found: {} }) }, stored, [a]);
+  try {
+    assert.match(textOf(later.slot("lost-overview")!), /3\/12/);
+    await later.click(find(later.tile("boomerang")!, (n) => n.tagName === "button"));
+    assert.match(textOf(later.slot("lost-details")!), /Kişisel→Vertex→Kişisel/);
+  } finally {
+    await later.done();
+  }
+});
+
+test("an earlier version's weeks and shelf carry over; what cannot be told keeps only its week", async () => {
   const stored = new Map<string, string>([
+    ["relay.lostfound.collection.v1", JSON.stringify({ feather: ["2026-07-20", "2026-07-13", "nope"], unicorn: ["2026-07-20"] })],
     [
       "relay.lostfound.shelf.v1",
       JSON.stringify([
-        { id: "2026-10-12:unicorn", start: "2026-10-12", end: "2026-10-18", item: { kind: "unicorn" }, names: {} },
-        { id: "2026-10-12:scroll", start: "2026-10-12", item: { kind: "scroll", at: "2026-10-16T08:00:00Z", hours: 16 } },
-        { id: "2026-10-12:hourglass", start: "2026-10-12", end: "2026-10-18", item: { kind: "hourglass", at: "2026-10-14T06:56:00Z", minutes: 66 }, names: {} },
+        { id: "2026-07-20:feather", start: "2026-07-20", end: "2026-07-26", item: { kind: "feather", at: "2026-07-22T22:00:00Z", hours: 3 }, names: {} },
+        { id: "x", start: "2026-07-06", end: "2026-07-12", item: { kind: "unicorn" } },
       ]),
     ],
   ]);
-  const dom = fakeDom({
-    localStorage: () => ({ getItem: (key: string) => stored.get(key) ?? null, setItem() {} }),
-  });
-  dom.install();
-  readableText();
-  const api = { lostFound: async () => ({ ...WEEK, items: [] }) } as unknown as RelayAPI;
+  const view = await page({ lostFoundCollection: async () => Promise.reject(new Error("kapalı")) }, stored);
   try {
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(tree(createElement(LostFound), relayFor(api))));
-    const shelf = find(dom.container as unknown as Fake, (n) => (n as { attributes?: Map<string, string> }).attributes?.get?.("data-slot") === "lost-shelf");
-    assert.ok(shelf);
-    assert.equal(textOf(shelf), "RafKum saati, 12–18 Eki");
-    await act(async () => root.unmount());
+    const { slot, tile, click } = view;
+    assert.match(textOf(tile("feather")!), /Gece kuşu tüyüBronz · 2 hafta/);
+    await click(find(tile("feather")!, (n) => n.tagName === "button"));
+    const details = textOf(slot("lost-details")!);
+    assert.match(details, /20–26 TemO hafta gece yarısından sonra toplam 3 saat çalıştın\./);
+    assert.match(details, /13–19 TemBu hafta bulundu; ayrıntısı eski bir sürümden kaldığı için yalnızca haftası biliniyor\./);
+    // A failed answer leaves the kept finds on show and says the scan is over.
+    assert.doesNotMatch(textOf(view.container), /haftaları tarıyor/);
   } finally {
-    dom.uninstall();
+    await view.done();
   }
 });
 
-test("the collection shows every pin: found ones in their finish, the rest with how to find them, secrets sealed", async () => {
-  // Six weeks of night hours kept from before the reach make the feather gold.
-  const older = ["2026-07-20", "2026-07-13", "2026-07-06", "2026-06-29", "2026-06-22"];
-  const stored = new Map<string, string>([
-    ["relay.lostfound.collection.v1", JSON.stringify({ feather: older, teaglass: ["2026-07-20"], unicorn: ["2026-07-20"], scroll: ["nope"] })],
-  ]);
-  const dom = fakeDom({
-    localStorage: () => ({
-      getItem: (key: string) => stored.get(key) ?? null,
-      setItem: (key: string, value: string) => void stored.set(key, value),
-    }),
-  });
-  dom.install();
-  readableText();
-  const asked: { weekStart?: string }[] = [];
-  const api = {
-    lostFound: async (input: { weekStart?: string }) => {
-      asked.push(input);
-      return input.weekStart === "2026-10-05" ? { ...OLDER, items: [WEEK.items[1]] } : WEEK;
-    },
-    lostFoundCollection: async () => ({
-      latest: "2026-10-12",
-      oldest: "2026-07-27",
-      found: { hourglass: ["2026-10-12"], scroll: ["2026-10-12", "2026-10-05"], feather: ["2026-08-03"] },
-    }),
-  } as unknown as RelayAPI;
+test("with nothing found yet the panda says when the first pin will turn up", async () => {
+  const view = await page({ lostFoundCollection: async () => ({ ...ANSWER, found: {} }) });
   try {
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(tree(createElement(LostFound), relayFor(api))));
-    const container = dom.container as unknown as Fake;
-    const attr = (n: Fake, name: string) => (n as { attributes?: Map<string, string> }).attributes?.get?.(name);
-    const tile = (kind: string) => find(container, (n) => n.tagName === "li" && attr(n, "data-kind") === kind);
-    const button = (match: (text: string) => boolean) =>
-      find(container, (n) => n.tagName === "button" && match(textOf(n)));
-    await act(async () => dom.dispatch(button((text) => text.startsWith("Koleksiyon"))!, "click", { detail: 1 }));
-    assert.match(textOf(container), /4 \/ 12rozet bulundu/);
-    assert.match(textOf(container), /Altın 1 · Gümüş 0 · Bronz 3/);
-    assert.match(textOf(tile("feather")!), /Gece kuşu tüyüAltın · 6 haftaEn üst seviye/);
-    assert.match(textOf(tile("scroll")!), /Uzun parşömenBronz · 2 haftaGümüş için 1 hafta daha/);
-    assert.match(textOf(tile("compass")!), /PusulaBir haftada en az 20 saat çalış ve hiç limite takılma\./);
-    assert.equal(attr(tile("compass")!, "data-found"), "false");
-    // A secret kind keeps its name and its object to itself until found.
-    assert.match(textOf(tile("clocks")!), /^Gizli rozetGizli rozet\. Panda ipucu vermiyor\.$/);
-    // What the main process found is kept, with the older weeks and without what cannot be read.
-    assert.deepEqual(JSON.parse(stored.get("relay.lostfound.collection.v1")!), {
-      hourglass: ["2026-10-12"],
-      scroll: ["2026-10-12", "2026-10-05"],
-      feather: ["2026-08-03", ...older],
-      teaglass: ["2026-07-20"],
-    });
-    // A tea glass found only out of reach has no week to open; the scroll opens its newest week.
-    assert.equal(find(tile("teaglass")!, (n) => n.tagName === "button"), undefined);
-    assert.ok(find(tile("feather")!, (n) => n.tagName === "button"));
-    await act(async () => dom.dispatch(find(tile("scroll")!, (n) => n.tagName === "button")!, "click", { detail: 1 }));
-    assert.deepEqual(asked.at(-1), { weekStart: "2026-10-12" });
-    assert.match(textOf(container), /Uzun parşömenBronz · 2 hafta16 saat aralıksız çalıştın\./);
-    await act(async () => root.unmount());
+    assert.match(textOf(view.slot("lost-overview")!), /0\/12%0/);
+    assert.match(textOf(view.slot("lost-recent")!), /Henüz rozet yok\./);
+    assert.equal(view.slot("lost-next"), undefined);
   } finally {
-    dom.uninstall();
+    await view.done();
   }
+});
+
+test("the preload exposes the collection and the main process answers it", async () => {
+  const fs = await import("node:fs/promises");
+  const preload = await fs.readFile(new URL("../electron/preload.ts", import.meta.url), "utf8");
+  const main = await fs.readFile(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(preload, /lostFoundCollection: \(\) =>\s*ipcRenderer\.invoke\("relay:lost-found-collection"\)/);
+  assert.match(main, /handle\("lost-found-collection", \(\) =>\s*lostFoundCollection\(lostFoundSource\(\)\)/);
+  assert.doesNotMatch(main + preload, /relay:lost-found"|handle\("lost-found"/);
 });

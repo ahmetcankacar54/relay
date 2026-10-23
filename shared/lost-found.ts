@@ -533,13 +533,22 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
   return { start, end, latest, oldest, items: found };
 }
 
+/** One find: the week it was found in and what happened. */
+export interface LostFind {
+  /** The week's Monday. */
+  start: string;
+  /** Its Sunday. */
+  end: string;
+  item: LostItem;
+}
+
 export interface LostFoundCollection {
   /** Monday of the newest complete week. */
   latest: string;
   /** Monday of the oldest week in reach. */
   oldest: string;
-  /** Each kind's weeks within reach, newest first; a kind never found is missing. */
-  found: Partial<Record<LostItemKind, string[]>>;
+  /** Each kind's finds within reach, newest first; a kind never found is missing. */
+  found: Partial<Record<LostItemKind, LostFind[]>>;
 }
 
 /** What every week within reach left behind, by kind: the collection's view of the bureau. */
@@ -547,13 +556,18 @@ export function lostFoundCollection(
   input: Omit<LostFoundInput, "weekStart">,
 ): LostFoundCollection {
   const newest = lostFoundWeek(input);
-  const found: Partial<Record<LostItemKind, string[]>> = {};
+  const found: Partial<Record<LostItemKind, LostFind[]>> = {};
   for (let start = newest.latest; start >= newest.oldest;) {
     const week =
       start === newest.start
         ? newest
         : lostFoundWeek({ ...input, weekStart: start });
-    for (const item of week.items) (found[item.kind] ??= []).push(week.start);
+    for (const item of week.items)
+      (found[item.kind] ??= []).push({
+        start: week.start,
+        end: week.end,
+        item,
+      });
     start = addDays(start, -7);
   }
   return { latest: newest.latest, oldest: newest.oldest, found };

@@ -7,8 +7,3 @@ export const usageStatisticsInput = z
     accountId: z.uuid().optional(),
   })
   .strict();
-
-/** Input of relay:lost-found: the Monday of the week to open, or the newest complete week. */
-export const lostFoundInput = z
-  .object({ weekStart: z.iso.date().optional() })
-  .strict();

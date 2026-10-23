@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useRef, useState } from "react";
 import {
   addDays,
   COMPASS_MIN_HOURS,
@@ -10,25 +9,18 @@ import {
   TROPHY_DAYS,
   LOST_ITEM_KINDS,
   LOST_TIERS,
-  type LostFoundWeek,
   type LostItem,
   type LostItemKind,
   type LostTier,
 } from "../../../shared/lost-found";
 import type { Account } from "../../../shared/types";
-import { PandaRig } from "@/components/Panda";
+import { Panda, PandaRig } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-  keepOnShelf,
-  removeFromShelf,
-  shelfId,
-  useShelf,
-} from "@/data/lost-found-shelf";
-import {
-  recordFinds,
   useCollection,
-  type CollectionWeeks,
+  type CollectionFinds,
+  type KeptFind,
 } from "@/data/lost-found-collection";
 import { useI18n, type Language, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -43,13 +35,8 @@ import {
   toneIndex,
 } from "./format";
 import { LostPin } from "./LostPins";
+import { METALS } from "./lost-pin-palette";
 import { formatCount } from "./panda-facts";
-import {
-  StatisticsRequests,
-  statisticsFailed,
-  statisticsLoading,
-  type UsageStatisticsState,
-} from "./useUsageStatistics";
 
 type Copy = [tr: string, en: string];
 
@@ -144,6 +131,11 @@ export function hintOf(kind: LostItemKind, t: T): string {
       "Gizli rozet. Panda ipucu vermiyor.",
       "A secret pin. The panda isn’t telling.",
     );
+  return howToEarn(kind, t);
+}
+
+/** How a kind is earned, secret or not: what a found pin's details say. */
+export function howToEarn(kind: LostItemKind, t: T): string {
   switch (kind) {
     case "hourglass":
       return t(
@@ -192,8 +184,16 @@ export function hintOf(kind: LostItemKind, t: T): string {
         "Sabah 05:00 ile 08:00 arasında çalış.",
         "Work between 05:00 and 08:00.",
       );
-    default:
-      return "";
+    case "boomerang":
+      return t(
+        "Başka bir hesaba geç ve 15 dakika içinde ilk hesaba dön.",
+        "Switch to another account and come back within 15 minutes.",
+      );
+    case "clocks":
+      return t(
+        "İki hesabın 5 saatlik dönemi en fazla 10 dakika arayla yenilensin.",
+        "Have two accounts’ five-hour windows reset within 10 minutes of each other.",
+      );
   }
 }
 
@@ -434,29 +434,7 @@ export function describe(
   }
 }
 
-type LostFoundState = UsageStatisticsState<LostFoundWeek>;
-
-/** The week the bureau shows: fetched on mount and when another week is opened; the last one stays while loading. */
-function useLostFound(weekStart?: string): LostFoundState {
-  const { api } = useRelay();
-  const [state, setState] = useState<LostFoundState>({ loading: true });
-  const [requests] = useState(() => new StatisticsRequests());
-  useEffect(() => {
-    const id = requests.start(Date.now());
-    setState(statisticsLoading);
-    api.lostFound(weekStart ? { weekStart } : {}).then(
-      (view) => {
-        if (requests.current(id)) setState({ view, loading: false });
-      },
-      (error: unknown) => {
-        if (requests.current(id)) setState((s) => statisticsFailed(s, error));
-      },
-    );
-  }, [api, weekStart, requests]);
-  return state;
-}
-
-/** Account chips: colour and name; a name the shelf kept wins over a removed account. */
+/** Account chips: colour and name; a name the collection kept wins over a removed account. */
 function AccountChips({
   ids,
   accounts,
@@ -496,8 +474,8 @@ function AccountChips({
 }
 
 /** The account colours an item's pin shows, in its story's order; a removed account keeps the pin's own. */
-function pinTints(item: LostItem, accounts: Account[]) {
-  const ids = "accountIds" in item ? item.accountIds : [];
+function pinTints(item: LostItem | undefined, accounts: Account[]) {
+  const ids = item && "accountIds" in item ? item.accountIds : [];
   return ids.map((id) =>
     accounts.some((a) => a.id === id)
       ? toneFill(toneIndex({ accountId: id }, accounts))
@@ -511,20 +489,28 @@ export interface Finish {
   tier?: LostTier;
   /** The earliest week it was found in. */
   first?: string;
+  /** The newest. */
+  last?: string;
 }
 
-export function finishOf(weeks: string[] | undefined): Finish {
-  const n = weeks?.length ?? 0;
-  return { weeks: n, tier: tierOf(n), first: weeks?.[n - 1] };
+export function finishOf(finds: KeptFind[] | undefined): Finish {
+  const n = finds?.length ?? 0;
+  return {
+    weeks: n,
+    tier: tierOf(n),
+    first: finds?.[n - 1]?.start,
+    last: finds?.[0]?.start,
+  };
 }
+
+/** "4 hafta" / "4 weeks". */
+const weeksLabel = (n: number, t: T) =>
+  t(`${n} hafta`, `${n} ${n === 1 ? "week" : "weeks"}`);
 
 /** "Gümüş · 4 hafta" / "Silver · 4 weeks". */
 function finishLabel(finish: Finish, t: T) {
   if (!finish.tier) return "";
-  return t(
-    `${tierName(finish.tier, t)} · ${finish.weeks} hafta`,
-    `${tierName(finish.tier, t)} · ${finish.weeks} ${finish.weeks === 1 ? "week" : "weeks"}`,
-  );
+  return `${tierName(finish.tier, t)} · ${weeksLabel(finish.weeks, t)}`;
 }
 
 /** The way to the next finish: "Gümüş için 1 hafta daha", or that gold is the last. */
@@ -537,6 +523,37 @@ function nextLabel(finish: Finish, t: T) {
     `${left} more ${left === 1 ? "week" : "weeks"} to ${tierName(next.tier, t).toLowerCase()}`,
   );
 }
+
+/** What a find did for its pin: earned it, raised its finish, or found it once more. */
+function stepLabel(count: number, t: T) {
+  if (count === 1) return t("Yeni rozet", "New pin");
+  const raised = LOST_TIERS.find((step) => step.weeks === count);
+  if (raised)
+    return t(
+      `${tierName(raised.tier, t)} seviyeye çıktı`,
+      `Reached ${tierName(raised.tier, t).toLowerCase()}`,
+    );
+  return t(`${count}. kez bulundu`, `Found ${timesEn(count)}`);
+}
+
+/** The pins, grouped like an awards library. */
+const CATEGORIES: { id: string; title: Copy; kinds: LostItemKind[] }[] = [
+  {
+    id: "pace",
+    title: ["Tempo ve rekorlar", "Pace and records"],
+    kinds: ["hourglass", "trophy", "scroll", "compass"],
+  },
+  {
+    id: "time",
+    title: ["Gün ve saat", "Days and hours"],
+    kinds: ["tally", "feather", "teaglass"],
+  },
+  {
+    id: "accounts",
+    title: ["Hesaplar arasında", "Across accounts"],
+    kinds: ["baton", "boomerang", "scarf", "clocks", "spare"],
+  },
+];
 
 /** A thin bar of `value` out of `max`. */
 function Meter({
@@ -567,551 +584,710 @@ function Meter({
   );
 }
 
-/**
- * The item on show: its pin in the drawer, the panda living that moment in it, its story, its finish and the shelf
- * toggle. The toggle stays one button whether the item is kept or not, so keyboard focus stays on it.
- */
-function Showcase({
-  item,
-  described,
-  accounts,
-  names,
-  label,
-  finish,
-  firstFind,
-  kept,
-  onToggle,
-  arrows,
-}: {
-  item: LostItem;
-  described: Described;
-  accounts: Account[];
-  names?: Record<string, string>;
-  /** Where the item comes from, when it is not the open week: "Raftan · 12–18 Eki". */
-  label?: string;
-  finish: Finish;
-  /** This was the first week the kind was ever found. */
-  firstFind?: boolean;
-  kept: boolean;
-  onToggle: () => void;
-  arrows?: boolean;
-}) {
+/** The collection's completion as a ring, the count inside it. */
+function ProgressRing({ found, total }: { found: number; total: number }) {
   const { t } = useI18n();
+  const r = 42;
+  const length = 2 * Math.PI * r;
+  const share = total ? found / total : 0;
   return (
-    <div className="flex flex-wrap items-start gap-4" data-slot="lost-item">
-      <div className="grid size-32 shrink-0 place-items-center rounded-2xl border bg-muted">
-        <LostPin
-          kind={item.kind}
-          tier={finish.tier}
-          tints={pinTints(item, accounts)}
-          size={116}
-          shine
+    <div className="relative grid size-28 shrink-0 place-items-center">
+      <svg
+        viewBox="0 0 100 100"
+        className="absolute inset-0 -rotate-90"
+        aria-hidden="true"
+      >
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          strokeWidth="9"
+          className="stroke-muted"
         />
-      </div>
-      <div className="min-w-0 flex-1 basis-60">
-        {label && <div className="text-xs text-muted-foreground">{label}</div>}
-        <h4 className="font-display text-lg font-semibold">
-          {described.title}
-        </h4>
-        {(finish.tier || firstFind) && (
-          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
-            {finish.tier && (
-              <span
-                className="rounded-full border px-2 py-0.5 text-muted-foreground"
-                data-slot="lost-finish"
-              >
-                {finishLabel(finish, t)}
-              </span>
-            )}
-            {firstFind && (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary">
-                {t("İlk kez bulundu", "First find")}
-              </span>
-            )}
-          </p>
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          strokeWidth="9"
+          strokeLinecap="round"
+          className="stroke-primary transition-[stroke-dashoffset] motion-reduce:transition-none"
+          strokeDasharray={length}
+          strokeDashoffset={length * (1 - share)}
+        />
+      </svg>
+      <div
+        className="text-center"
+        role="img"
+        aria-label={t(
+          `${total} rozetten ${found} tanesi bulundu`,
+          `${found} of ${total} pins found`,
         )}
-        <p className="mt-1.5 text-sm">{described.story}</p>
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-          <span>{described.when}</span>
-          {described.accounts.length > 0 && <span aria-hidden="true">·</span>}
-          <AccountChips
-            ids={described.accounts}
-            accounts={accounts}
-            names={names}
-            arrows={arrows}
-          />
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground italic">
-          <span className="sr-only">
-            {t("Panda diyor ki: ", "The panda says: ")}
-          </span>
-          “{described.quip}”
-        </p>
-        <Button
-          size="xs"
-          variant={kept ? "secondary" : "outline"}
-          className="mt-3"
-          aria-pressed={kept}
-          onClick={onToggle}
-        >
-          {kept
-            ? t("Rafta ✓", "On the shelf ✓")
-            : t("Rafa koy", "Keep on the shelf")}
-        </Button>
+      >
+        <div className="font-display text-2xl leading-none font-semibold tabular-nums">
+          {found}
+          <span className="text-sm text-muted-foreground">/{total}</span>
+        </div>
+        <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+          %{Math.round(share * 100)}
+        </div>
       </div>
     </div>
   );
 }
 
-/**
- * Every pin there is, in a fixed album order: found ones in the finish they earned, the rest greyed with
- * how to find them, and secret ones sealed until their first find. A found pin opens its newest week in reach.
- */
-function Collection({
-  weeks,
-  reach,
-  loading,
-  onOpen,
+/** A small medal in a finish's metal, for counts and the tier ladder. */
+function Medal({ tier, dim }: { tier: LostTier; dim?: boolean }) {
+  const metal = METALS[tier];
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className={cn("size-5 shrink-0", dim && "opacity-35 grayscale")}
+      aria-hidden="true"
+    >
+      <circle cx="10" cy="10.6" r="8.6" fill={metal.edge} />
+      <circle cx="10" cy="10" r="8.6" fill={metal.face} />
+      <circle cx="10" cy="10" r="5.6" fill={metal.edge} opacity="0.35" />
+      <path
+        d="M10 5.6L11.3 8.5L14.4 8.8L12 10.8L12.8 13.9L10 12.3L7.2 13.9L8 10.8L5.6 8.8L8.7 8.5Z"
+        fill={metal.light}
+      />
+    </svg>
+  );
+}
+
+/** The top of the page: how much of the collection is found, by finish, with the panda collecting. */
+function Overview({
+  finishes,
 }: {
-  weeks: CollectionWeeks;
-  reach?: { latest: string; oldest: string };
-  loading: boolean;
-  onOpen: (start: string, kind: LostItemKind) => void;
+  finishes: { kind: LostItemKind; finish: Finish }[];
 }) {
   const { t } = useI18n();
-  const finishes = LOST_ITEM_KINDS.map((kind) => ({
-    kind,
-    finish: finishOf(weeks[kind]),
-  }));
   const found = finishes.filter(({ finish }) => finish.tier).length;
   const count = (tier: LostTier) =>
     finishes.filter(({ finish }) => finish.tier === tier).length;
   return (
-    <div className="grid gap-3" data-slot="lost-collection">
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-        <div>
-          <div className="font-display text-2xl font-semibold tabular-nums">
-            {found}
-            <span className="text-base text-muted-foreground">
-              {" "}
-              / {LOST_ITEM_KINDS.length}
-            </span>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {t("rozet bulundu", "pins found")}
-          </div>
-        </div>
-        <div className="text-xs text-muted-foreground tabular-nums">
-          {(["gold", "silver", "bronze"] as const)
-            .map((tier) => `${tierName(tier, t)} ${count(tier)}`)
-            .join(" · ")}
-        </div>
+    <Card
+      className="min-w-0 flex-row flex-wrap items-center gap-5 px-5 py-4"
+      data-slot="lost-overview"
+    >
+      <ProgressRing found={found} total={finishes.length} />
+      <div className="min-w-0 flex-1 basis-56">
+        <h3 className="font-display text-lg font-semibold">
+          {t("Rozet koleksiyonu", "Pin collection")}
+        </h3>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          {t(
+            "Panda her hafta kullanımından geriye kalan anları topluyor. Her an bir rozet; aynı rozeti tekrar buldukça seviyesi yükseliyor.",
+            "Every week the panda collects the moments your use left behind. Each is a pin, and finding it again raises its finish.",
+          )}
+        </p>
+        <ul
+          className="mt-3 flex flex-wrap gap-2"
+          aria-label={t("Seviyeler", "Finishes")}
+        >
+          {(["gold", "silver", "bronze"] as const).map((tier) => (
+            <li
+              key={tier}
+              className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
+            >
+              <Medal tier={tier} />
+              <span className="font-semibold tabular-nums">{count(tier)}</span>
+              <span className="text-muted-foreground">{tierName(tier, t)}</span>
+            </li>
+          ))}
+        </ul>
       </div>
-      <Meter
-        value={found}
-        max={LOST_ITEM_KINDS.length}
-        label={t("Koleksiyon", "Collection")}
-      />
-      <ul className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2">
-        {finishes.map(({ kind, finish }) => {
-          const sealed = !finish.tier && SECRET_LOST_KINDS.includes(kind);
-          const title = sealed
-            ? t("Gizli rozet", "Secret pin")
-            : kindTitle(kind, t);
-          const open = reach
-            ? weeks[kind]?.find(
-                (start) => start >= reach.oldest && start <= reach.latest,
-              )
-            : undefined;
-          const body = (
-            <>
-              <LostPin
-                kind={kind}
-                tier={finish.tier}
-                locked={!finish.tier}
-                sealed={sealed}
-                size={76}
-              />
-              <span className="mt-2 block text-[13px] leading-tight font-semibold">
-                {title}
-              </span>
-              {finish.tier ? (
-                <>
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                    {finishLabel(finish, t)}
-                  </span>
-                  <Meter
-                    value={finish.weeks}
-                    max={nextTier(finish.weeks)?.weeks ?? finish.weeks}
-                    label={nextLabel(finish, t)}
-                    className="mt-2 h-1 w-full"
-                  />
-                  <span className="mt-1 block text-[10px] text-muted-foreground">
-                    {nextLabel(finish, t)}
-                  </span>
-                </>
-              ) : (
-                <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                  {hintOf(kind, t)}
-                </span>
-              )}
-            </>
-          );
-          const tile =
-            "flex h-full w-full flex-col items-center rounded-xl border px-2.5 pt-3 pb-2.5 text-center";
-          return (
-            <li key={kind} data-kind={kind} data-found={!!finish.tier}>
-              {open ? (
+      <Panda scene="collecting" size={96} playful className="hidden sm:block" />
+    </Card>
+  );
+}
+
+/** A find as a row of the recent list or a pin's history: its pin, name, week and what it did for the pin. */
+interface Recent {
+  kind: LostItemKind;
+  find: KeptFind;
+  /** Its place among the kind's finds, oldest first. */
+  count: number;
+}
+
+/** The newest finds, newest first; within a week the most striking first. */
+function recentFinds(finds: CollectionFinds, limit: number): Recent[] {
+  const all = LOST_ITEM_KINDS.flatMap((kind) => {
+    const list = finds[kind] ?? [];
+    return list.map((find, i) => ({ kind, find, count: list.length - i }));
+  });
+  const rank = (kind: LostItemKind) => LOST_ITEM_KINDS.indexOf(kind);
+  return all
+    .sort(
+      (a, b) =>
+        b.find.start.localeCompare(a.find.start) || rank(a.kind) - rank(b.kind),
+    )
+    .slice(0, limit);
+}
+
+/** The latest finds as a strip of cards, like a game's recently unlocked. */
+function RecentStrip({
+  recent,
+  latest,
+  accounts,
+  onSelect,
+}: {
+  recent: Recent[];
+  latest?: string;
+  accounts: Account[];
+  onSelect: (kind: LostItemKind) => void;
+}) {
+  const { t, language } = useI18n();
+  return (
+    <section
+      aria-labelledby="lost-recent"
+      className="grid gap-2"
+      data-slot="lost-recent"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4
+          id="lost-recent"
+          className="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+        >
+          {t("Son kazanılanlar", "Recently earned")}
+        </h4>
+        {recent.some(({ find }) => find.start === latest) && (
+          <span className="text-[11px] text-muted-foreground">
+            {t(
+              "Vurgulananlar geçen haftadan",
+              "Highlighted ones are from last week",
+            )}
+          </span>
+        )}
+      </div>
+      {recent.length ? (
+        <ul className="grid grid-cols-[repeat(auto-fill,minmax(12.5rem,1fr))] gap-2">
+          {recent.map(({ kind, find, count }) => {
+            const tier = tierOf(count);
+            return (
+              <li key={`${kind}-${find.start}`}>
                 <button
                   type="button"
+                  onClick={() => onSelect(kind)}
+                  data-latest={find.start === latest || undefined}
                   className={cn(
-                    tile,
-                    "outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    "flex w-full items-center gap-3 rounded-xl border bg-card p-2.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    find.start === latest && "border-primary/40 bg-primary/5",
                   )}
-                  title={t(
-                    `${weekLabel(open, addDays(open, 6), "tr")} haftasını aç`,
-                    `Open the week of ${weekLabel(open, addDays(open, 6), "en")}`,
-                  )}
-                  onClick={() => onOpen(open, kind)}
                 >
-                  {body}
+                  <LostPin
+                    kind={kind}
+                    tier={tier}
+                    tints={pinTints(find.item, accounts)}
+                    size={52}
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13px] font-semibold">
+                      {kindTitle(kind, t)}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      {stepLabel(count, t)}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] whitespace-nowrap text-muted-foreground tabular-nums">
+                      {weekLabel(find.start, find.end, language)}
+                    </span>
+                  </span>
                 </button>
-              ) : (
-                <div
-                  className={cn(
-                    tile,
-                    !finish.tier && "border-dashed bg-muted/40",
-                  )}
-                >
-                  {body}
-                </div>
-              )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="flex items-center gap-3 rounded-xl border border-dashed p-3">
+          <PandaRig pose="curl" expression="closed" props={["z"]} size={44} />
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Henüz rozet yok. Panda her pazartesi geçen haftaya bakar; ilk rozetin orada çıkacak.",
+              "No pins yet. The panda looks back every Monday; your first pin will turn up there.",
+            )}
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** The pins nearest their next finish, so the page says what to aim for. */
+function NextGoals({
+  finishes,
+  onSelect,
+}: {
+  finishes: { kind: LostItemKind; finish: Finish }[];
+  onSelect: (kind: LostItemKind) => void;
+}) {
+  const { t } = useI18n();
+  const goals = finishes
+    .filter(({ finish }) => finish.tier && nextTier(finish.weeks))
+    .sort(
+      (a, b) =>
+        nextTier(a.finish.weeks)!.weeks -
+        a.finish.weeks -
+        (nextTier(b.finish.weeks)!.weeks - b.finish.weeks),
+    )
+    .slice(0, 3);
+  if (!goals.length) return null;
+  return (
+    <section
+      aria-labelledby="lost-next"
+      className="grid gap-2"
+      data-slot="lost-next"
+    >
+      <h4
+        id="lost-next"
+        className="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+      >
+        {t("Sıradaki hedefler", "Up next")}
+      </h4>
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2">
+        {goals.map(({ kind, finish }) => {
+          const next = nextTier(finish.weeks)!;
+          return (
+            <li key={kind}>
+              <button
+                type="button"
+                onClick={() => onSelect(kind)}
+                className="grid w-full gap-1.5 rounded-xl border p-2.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <span className="flex items-center gap-2">
+                  <Medal tier={next.tier} />
+                  <span className="truncate text-[13px] font-semibold">
+                    {kindTitle(kind, t)}
+                  </span>
+                </span>
+                <Meter
+                  value={finish.weeks}
+                  max={next.weeks}
+                  label={nextLabel(finish, t)}
+                  className="h-1"
+                />
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {nextLabel(finish, t)}
+                </span>
+              </button>
             </li>
           );
         })}
       </ul>
-      <p className="text-[11px] text-muted-foreground">
-        {loading
-          ? t(
-              "Panda haftaları tarıyor…",
-              "The panda is going through the weeks…",
-            )
-          : t(
-              `Bir rozet bulunduğu ilk hafta bronz, ${LOST_TIERS[1].weeks} haftada gümüş, ${LOST_TIERS[2].weeks} haftada altın olur. Rozetler bu Mac’te kalır.`,
-              `A pin is bronze the first week it is found, silver after ${LOST_TIERS[1].weeks} weeks and gold after ${LOST_TIERS[2].weeks}. Pins stay on this Mac.`,
+    </section>
+  );
+}
+
+type Filter = "all" | "earned" | "locked";
+
+/** Every pin there is, by category, in a fixed album order; the filter narrows it to earned or locked ones. */
+function Library({
+  finishes,
+  selected,
+  onSelect,
+}: {
+  finishes: { kind: LostItemKind; finish: Finish }[];
+  selected?: LostItemKind;
+  onSelect: (kind: LostItemKind) => void;
+}) {
+  const { t } = useI18n();
+  const [filter, setFilter] = useState<Filter>("all");
+  const byKind = new Map(finishes.map(({ kind, finish }) => [kind, finish]));
+  const earned = finishes.filter(({ finish }) => finish.tier).length;
+  const shows = (kind: LostItemKind) => {
+    const found = !!byKind.get(kind)?.tier;
+    return filter === "all" || (filter === "earned") === found;
+  };
+  const filters: { id: Filter; label: string; count: number }[] = [
+    { id: "all", label: t("Tümü", "All"), count: finishes.length },
+    { id: "earned", label: t("Kazanılan", "Earned"), count: earned },
+    {
+      id: "locked",
+      label: t("Kilitli", "Locked"),
+      count: finishes.length - earned,
+    },
+  ];
+  return (
+    <section
+      aria-labelledby="lost-library"
+      className="grid gap-3"
+      data-slot="lost-library"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4
+          id="lost-library"
+          className="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+        >
+          {t("Tüm rozetler", "All pins")}
+        </h4>
+        <div
+          className="flex rounded-lg border p-0.5"
+          role="group"
+          aria-label={t("Göster", "Show")}
+        >
+          {filters.map(({ id, label, count }) => (
+            <Button
+              key={id}
+              size="xs"
+              variant={filter === id ? "secondary" : "ghost"}
+              aria-pressed={filter === id}
+              onClick={() => setFilter(id)}
+            >
+              {label}
+              <span className="text-muted-foreground tabular-nums">
+                {count}
+              </span>
+            </Button>
+          ))}
+        </div>
+      </div>
+      {CATEGORIES.map((category) => {
+        const kinds = category.kinds.filter(shows);
+        if (!kinds.length) return null;
+        const done = category.kinds.filter(
+          (kind) => byKind.get(kind)?.tier,
+        ).length;
+        return (
+          <div
+            key={category.id}
+            className="grid gap-2"
+            data-category={category.id}
+          >
+            <div className="flex items-baseline justify-between text-[13px]">
+              <span className="font-semibold">{t(...category.title)}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {done}/{category.kinds.length}
+              </span>
+            </div>
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
+              {kinds.map((kind) => {
+                const finish = byKind.get(kind)!;
+                const sealed = !finish.tier && SECRET_LOST_KINDS.includes(kind);
+                const on = kind === selected;
+                return (
+                  <li key={kind} data-kind={kind} data-found={!!finish.tier}>
+                    <button
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => onSelect(kind)}
+                      className={cn(
+                        "flex h-full w-full flex-col items-center rounded-xl border px-2 pt-3 pb-2.5 text-center outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        !finish.tier && "border-dashed bg-muted/40",
+                        on && "border-primary ring-1 ring-primary",
+                      )}
+                    >
+                      <LostPin
+                        kind={kind}
+                        tier={finish.tier}
+                        locked={!finish.tier}
+                        sealed={sealed}
+                        size={68}
+                      />
+                      <span className="mt-2 block text-[12.5px] leading-tight font-semibold">
+                        {sealed
+                          ? t("Gizli rozet", "Secret pin")
+                          : kindTitle(kind, t)}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                        {finish.tier
+                          ? finishLabel(finish, t)
+                          : t("Kilitli", "Locked")}
+                      </span>
+                      {finish.tier && (
+                        <Meter
+                          value={finish.weeks}
+                          max={nextTier(finish.weeks)?.weeks ?? finish.weeks}
+                          label={nextLabel(finish, t)}
+                          className="mt-2 h-1 w-full"
+                        />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+/** The ladder of finishes, each with the weeks it takes and whether it is reached. */
+function TierLadder({ finish }: { finish: Finish }) {
+  const { t } = useI18n();
+  return (
+    <ol
+      className="grid grid-cols-3 gap-1.5"
+      aria-label={t("Seviyeler", "Finishes")}
+    >
+      {LOST_TIERS.map((step) => {
+        const reached = finish.weeks >= step.weeks;
+        return (
+          <li
+            key={step.tier}
+            data-reached={reached}
+            className={cn(
+              "grid justify-items-center gap-1 rounded-lg border px-1.5 py-2 text-center",
+              reached ? "bg-muted" : "border-dashed",
             )}
-      </p>
+          >
+            <Medal tier={step.tier} dim={!reached} />
+            <span className="text-[11px] font-semibold">
+              {tierName(step.tier, t)}
+            </span>
+            <span className="text-[10px] text-muted-foreground tabular-nums">
+              {reached
+                ? `✓ ${weeksLabel(step.weeks, t)}`
+                : weeksLabel(step.weeks, t)}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** How many history rows show before "Tümünü göster". */
+const HISTORY_ROWS = 4;
+
+/**
+ * The chosen pin in full, like a game's achievement page: its pin large, how it is earned, its finishes and every
+ * week it was found in with what happened. A secret pin not found yet tells nothing.
+ */
+function Details({
+  kind,
+  finds,
+  accounts,
+}: {
+  kind: LostItemKind;
+  finds: KeptFind[];
+  accounts: Account[];
+}) {
+  const { t, language } = useI18n();
+  const { settings } = useRelay();
+  const zone = settings.planning.timeZone;
+  const [all, setAll] = useState(false);
+  const finish = finishOf(finds);
+  const found = !!finish.tier;
+  const sealed = !found && SECRET_LOST_KINDS.includes(kind);
+  const latest = finds.find((find) => find.item);
+  const latestStory = latest?.item
+    ? describe(latest.item, latest, zone, t, language)
+    : undefined;
+  const rows = all ? finds : finds.slice(0, HISTORY_ROWS);
+  return (
+    <div className="grid gap-4" data-slot="lost-details" data-kind={kind}>
+      <div className="grid justify-items-center gap-2 rounded-xl bg-muted/60 px-4 pt-5 pb-4 text-center">
+        <LostPin
+          kind={kind}
+          tier={finish.tier}
+          locked={!found}
+          sealed={sealed}
+          tints={pinTints(latest?.item, accounts)}
+          size={148}
+          shine
+        />
+        <h4 className="mt-1 font-display text-lg font-semibold">
+          {sealed ? t("Gizli rozet", "Secret pin") : kindTitle(kind, t)}
+        </h4>
+        <span
+          className={cn(
+            "rounded-full border px-2.5 py-0.5 text-xs",
+            found ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {found
+            ? finishLabel(finish, t)
+            : t("Henüz bulunmadı", "Not found yet")}
+        </span>
+      </div>
+      <div className="grid gap-1">
+        <div className="text-xs font-semibold text-muted-foreground">
+          {t("Nasıl kazanılır", "How to earn it")}
+        </div>
+        <p className="text-sm">
+          {found ? howToEarn(kind, t) : hintOf(kind, t)}
+        </p>
+      </div>
+      {!sealed && (
+        <div className="grid gap-2">
+          <TierLadder finish={finish} />
+          {found && (
+            <p className="text-xs text-muted-foreground">
+              {nextLabel(finish, t)}
+            </p>
+          )}
+        </div>
+      )}
+      {found && (
+        <dl className="grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-lg border px-2.5 py-2">
+            <dt className="text-muted-foreground">
+              {t("İlk bulunduğu hafta", "First found")}
+            </dt>
+            <dd className="mt-0.5 font-semibold tabular-nums">
+              {weekLabel(finish.first!, addDays(finish.first!, 6), language)}
+            </dd>
+          </div>
+          <div className="rounded-lg border px-2.5 py-2">
+            <dt className="text-muted-foreground">
+              {t("Son bulunduğu hafta", "Last found")}
+            </dt>
+            <dd className="mt-0.5 font-semibold tabular-nums">
+              {weekLabel(finish.last!, addDays(finish.last!, 6), language)}
+            </dd>
+          </div>
+        </dl>
+      )}
+      {latestStory && (
+        <p className="text-xs text-muted-foreground italic">
+          <span className="sr-only">
+            {t("Panda diyor ki: ", "The panda says: ")}
+          </span>
+          “{latestStory.quip}”
+        </p>
+      )}
+      {found && (
+        <section aria-labelledby="lost-history" className="grid gap-2">
+          <h5
+            id="lost-history"
+            className="text-xs font-semibold text-muted-foreground"
+          >
+            {t("Geçmiş", "History")}
+          </h5>
+          <ol className="grid gap-2">
+            {rows.map((find) => {
+              const story = find.item
+                ? describe(find.item, find, zone, t, language)
+                : undefined;
+              return (
+                <li
+                  key={find.start}
+                  className="rounded-lg border px-3 py-2"
+                  data-slot="lost-find"
+                >
+                  <div className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+                    {weekLabel(find.start, find.end, language)}
+                  </div>
+                  {story ? (
+                    <>
+                      <p className="mt-0.5 text-[13px]">{story.story}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                        <span>{story.when}</span>
+                        {story.accounts.length > 0 && (
+                          <span aria-hidden="true">·</span>
+                        )}
+                        <AccountChips
+                          ids={story.accounts}
+                          accounts={accounts}
+                          names={find.names}
+                          arrows={kind === "boomerang"}
+                        />
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-0.5 text-[13px] text-muted-foreground">
+                      {t(
+                        "Bu hafta bulundu; ayrıntısı eski bir sürümden kaldığı için yalnızca haftası biliniyor.",
+                        "Found this week; it was kept by an older version, so only the week is known.",
+                      )}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+          {finds.length > HISTORY_ROWS && (
+            <Button
+              size="xs"
+              variant="ghost"
+              className="justify-self-start"
+              onClick={() => setAll(!all)}
+            >
+              {all
+                ? t("Daha az göster", "Show fewer")
+                : t(
+                    `Tümünü göster (${finds.length})`,
+                    `Show all (${finds.length})`,
+                  )}
+            </Button>
+          )}
+        </section>
+      )}
     </div>
   );
 }
 
 /**
- * The panda's lost-and-found: each week it finds what the week left behind, real moments of it
- * (docs/superpowers/specs/2026-10-19-lost-found-design.md). One item is on show; the week's other finds
- * sit beside it, and the user can keep any on the shelf. The collection shows every pin there is.
+ * The panda's pin collection, laid out like a game's achievements page
+ * (docs/superpowers/specs/2026-10-23-lost-found-collection-design.md): the overall progress, the latest finds, the
+ * pins nearest their next finish, every pin by category, and the chosen pin's details with its whole history.
  */
 export function LostFound() {
-  const { accounts, settings, api } = useRelay();
-  const { t, language } = useI18n();
-  const zone = settings.planning.timeZone;
-  const [view, setView] = useState<"week" | "collection">("week");
-  const [weekStart, setWeekStart] = useState<string>();
-  const { view: week, loading, error } = useLostFound(weekStart);
-  const shelf = useShelf();
-  const collection = useCollection(api, shelf);
-  /** What is on show: one of a week's finds (for that week only), or a kept one. */
-  const [chosen, setChosen] = useState<
-    { start: string; kind: LostItem["kind"] } | { shelf: string }
-  >();
-  // A week's finds join the collection as soon as it is opened.
-  useEffect(() => {
-    if (!week) return;
-    recordFinds(
-      Object.fromEntries(week.items.map((item) => [item.kind, [week.start]])),
-    );
-  }, [week]);
-  const finish = (kind: LostItemKind) => finishOf(collection.weeks[kind]);
-
-  const fromShelf =
-    chosen && "shelf" in chosen
-      ? shelf.find((kept) => kept.id === chosen.shelf)
-      : undefined;
-  const weekItem =
-    week &&
-    (week.items.find(
-      (item) =>
-        chosen &&
-        "kind" in chosen &&
-        chosen.start === week.start &&
-        item.kind === chosen.kind,
-    ) ??
-      week.items[0]);
-  const toggleWeekItem = (item: LostItem) => {
-    if (!week) return;
-    const id = shelfId(week.start, item.kind);
-    if (shelf.some((kept) => kept.id === id)) return removeFromShelf(id);
-    const ids = describe(item, week, zone, t, language).accounts;
-    keepOnShelf({
-      id,
-      start: week.start,
-      end: week.end,
-      item,
-      names: Object.fromEntries(
-        ids.flatMap((accountId) => {
-          const account = accounts.find((a) => a.id === accountId);
-          return account ? [[accountId, account.name]] : [];
-        }),
-      ),
-    });
+  const { accounts, api } = useRelay();
+  const { t } = useI18n();
+  const collection = useCollection(api, accounts);
+  const finishes = LOST_ITEM_KINDS.map((kind) => ({
+    kind,
+    finish: finishOf(collection.finds[kind]),
+  }));
+  const recent = recentFinds(collection.finds, 4);
+  const [chosen, setChosen] = useState<LostItemKind>();
+  const selected = chosen ?? recent[0]?.kind ?? LOST_ITEM_KINDS[0];
+  const details = useRef<HTMLDivElement>(null);
+  const select = (kind: LostItemKind) => {
+    setChosen(kind);
+    // In a narrow window the details sit above the pins; bring them into view.
+    details.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
   };
-  /** What the showcase tells: a kept item (taking it off the shelf ends its showing), else the week's. */
-  const shownItem = fromShelf
-    ? {
-        item: fromShelf.item,
-        described: describe(fromShelf.item, fromShelf, zone, t, language),
-        names: fromShelf.names,
-        label: t(
-          `Raftan · ${weekLabel(fromShelf.start, fromShelf.end, "tr")}`,
-          `From the shelf · ${weekLabel(fromShelf.start, fromShelf.end, "en")}`,
-        ),
-        finish: finish(fromShelf.item.kind),
-        firstFind: finish(fromShelf.item.kind).first === fromShelf.start,
-        kept: true,
-        onToggle: () => removeFromShelf(fromShelf.id),
-        arrows: fromShelf.item.kind === "boomerang",
-      }
-    : week && weekItem
-      ? {
-          item: weekItem,
-          described: describe(weekItem, week, zone, t, language),
-          finish: finish(weekItem.kind),
-          firstFind: finish(weekItem.kind).first === week.start,
-          kept: shelf.some(
-            (kept) => kept.id === shelfId(week.start, weekItem.kind),
-          ),
-          onToggle: () => toggleWeekItem(weekItem),
-          arrows: weekItem.kind === "boomerang",
-        }
-      : undefined;
-  // Steps count from the week asked for, so a second click while the first loads still moves on.
-  const shownStart = weekStart ?? week?.start;
-  const step = (days: number) => {
-    if (!shownStart) return;
-    setChosen(undefined);
-    setWeekStart((asked) => {
-      const next = addDays(asked ?? shownStart, days);
-      // Never past the reach: the main process would answer that with the newest week.
-      if (!week) return next;
-      return next < week.oldest
-        ? week.oldest
-        : next > week.latest
-          ? week.latest
-          : next;
-    });
-  };
-  const isLatest = week ? (shownStart ?? week.start) >= week.latest : true;
-  const isOldest = week ? (shownStart ?? week.start) <= week.oldest : true;
-  const found = LOST_ITEM_KINDS.filter((kind) => finish(kind).tier).length;
-  /** A collection pin opens its week with that pin on show. */
-  const openFind = (start: string, kind: LostItemKind) => {
-    setWeekStart(start);
-    setChosen({ start, kind });
-    setView("week");
-  };
-
   return (
-    <Card className="min-w-0 gap-3 px-5 py-4" aria-busy={loading || undefined}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="font-display text-[15px] font-semibold">
-            {t("Kayıp Eşya Bürosu", "Lost and found")}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {view === "collection"
-              ? t(
-                  "Panda’nın bulduğu her rozet; eksikler gri.",
-                  "Every pin the panda has found; the missing ones are grey.",
-                )
-              : week?.start === week?.latest
+    <div
+      className="grid min-w-0 gap-4"
+      aria-busy={collection.loading || undefined}
+    >
+      <Overview finishes={finishes} />
+      <div className="@container min-w-0">
+        <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_20rem] @3xl:items-start">
+          <Card className="order-2 min-w-0 gap-5 px-5 py-4 @3xl:order-1">
+            <RecentStrip
+              recent={recent}
+              latest={collection.reach?.latest}
+              accounts={accounts}
+              onSelect={select}
+            />
+            <NextGoals finishes={finishes} onSelect={select} />
+            <Library
+              finishes={finishes}
+              selected={selected}
+              onSelect={select}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              {collection.loading
                 ? t(
-                    "Panda geçen haftanın ardından kalanları topladı.",
-                    "What last week left behind, collected by the panda.",
+                    "Panda haftaları tarıyor…",
+                    "The panda is going through the weeks…",
                   )
                 : t(
-                    "O haftanın ardından kalanlar.",
-                    "What that week left behind.",
+                    `Bir rozet bulunduğu ilk hafta bronz, ${LOST_TIERS[1].weeks} haftada gümüş, ${LOST_TIERS[2].weeks} haftada altın olur. Panda son 12 haftaya bakabilir; bulunan rozetler bu Mac’te kalır.`,
+                    `A pin is bronze the first week it is found, silver after ${LOST_TIERS[1].weeks} weeks and gold after ${LOST_TIERS[2].weeks}. The panda can look back 12 weeks; found pins stay on this Mac.`,
                   )}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {view === "week" && week && (
-            <div className="flex items-center gap-1">
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={t("Önceki hafta", "Previous week")}
-                disabled={isOldest}
-                onClick={() => step(-7)}
-              >
-                <ChevronLeft />
-              </Button>
-              <span className="min-w-24 text-center text-xs tabular-nums">
-                {weekLabel(week.start, week.end, language)}
-              </span>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={t("Sonraki hafta", "Next week")}
-                disabled={isLatest}
-                onClick={() => step(7)}
-              >
-                <ChevronRight />
-              </Button>
-            </div>
-          )}
-          <div
-            className="flex rounded-lg border p-0.5"
-            role="group"
-            aria-label={t("Görünüm", "View")}
+            </p>
+          </Card>
+          <Card
+            ref={details}
+            className="order-1 min-w-0 px-5 py-4 @3xl:sticky @3xl:top-4 @3xl:order-2"
           >
-            <Button
-              size="xs"
-              variant={view === "week" ? "secondary" : "ghost"}
-              aria-pressed={view === "week"}
-              onClick={() => setView("week")}
-            >
-              {t("Hafta", "Week")}
-            </Button>
-            <Button
-              size="xs"
-              variant={view === "collection" ? "secondary" : "ghost"}
-              aria-pressed={view === "collection"}
-              onClick={() => setView("collection")}
-            >
-              {t("Koleksiyon", "Collection")}
-              <span className="text-muted-foreground tabular-nums">
-                {found}/{LOST_ITEM_KINDS.length}
-              </span>
-            </Button>
-          </div>
+            <Details
+              key={selected}
+              kind={selected}
+              finds={collection.finds[selected] ?? []}
+              accounts={accounts}
+            />
+          </Card>
         </div>
       </div>
-
-      {view === "collection" ? (
-        <Collection
-          weeks={collection.weeks}
-          reach={collection.reach}
-          loading={collection.loading}
-          onOpen={openFind}
-        />
-      ) : (
-        <>
-          {error && (
-            <p role="alert" className="text-sm text-muted-foreground">
-              <b>
-                {t("Eşyalar alınamadı.", "Could not open the lost and found.")}
-              </b>{" "}
-              {error}
-            </p>
-          )}
-          {!week ? (
-            !error && (
-              <p className="text-sm text-muted-foreground">
-                {t("Çekmece açılıyor", "Opening the drawer")}
-              </p>
-            )
-          ) : shownItem ? (
-            // One tree for a kept item and a week's item, so the shelf toggle keeps its focus across both.
-            <>
-              <Showcase {...shownItem} accounts={accounts} />
-              {!fromShelf && weekItem && week.items.length > 1 && (
-                <div className="flex flex-wrap items-center gap-1.5 border-t pt-3">
-                  <span className="mr-1 text-xs text-muted-foreground">
-                    {t("Aynı haftadan:", "Same week:")}
-                  </span>
-                  {week.items.map((item) => {
-                    const look = lookOf(item, t);
-                    const on = item.kind === weekItem.kind;
-                    return (
-                      <Button
-                        key={item.kind}
-                        size="xs"
-                        variant={on ? "secondary" : "ghost"}
-                        aria-pressed={on}
-                        onClick={() =>
-                          setChosen({ start: week.start, kind: item.kind })
-                        }
-                      >
-                        <LostPin
-                          kind={item.kind}
-                          tier={finish(item.kind).tier}
-                          tints={pinTints(item, accounts)}
-                          size={22}
-                        />
-                        {look.title}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="flex items-center gap-3 py-2">
-              <PandaRig
-                pose="curl"
-                expression="closed"
-                props={["z"]}
-                size={48}
-              />
-              <p className="text-sm text-muted-foreground">
-                {t(
-                  "Bu hafta çekmece boş: kimse bir şey unutmamış.",
-                  "The drawer is empty this week: nobody left anything behind.",
-                )}
-              </p>
-            </div>
-          )}
-
-          {shelf.length > 0 && (
-            <div className="border-t pt-3" data-slot="lost-shelf">
-              <div className="mb-1.5 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                {t("Raf", "Shelf")}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {shelf.map((kept) => {
-                  const look = lookOf(kept.item, t);
-                  const on = fromShelf?.id === kept.id;
-                  const label = weekLabel(kept.start, kept.end, language);
-                  return (
-                    <button
-                      key={kept.id}
-                      type="button"
-                      aria-pressed={on}
-                      title={`${look.title} · ${label}`}
-                      onClick={() =>
-                        setChosen(on ? undefined : { shelf: kept.id })
-                      }
-                      className={cn(
-                        "grid w-16 justify-items-center gap-1 rounded-lg border px-1 py-1.5 text-[10px] text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                        on ? "border-primary bg-muted" : "hover:bg-muted",
-                      )}
-                    >
-                      <LostPin
-                        kind={kept.item.kind}
-                        tier={finish(kept.item.kind).tier}
-                        tints={pinTints(kept.item, accounts)}
-                        size={34}
-                      />
-                      <span className="sr-only">{look.title}, </span>
-                      <span className="tabular-nums">{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </Card>
+    </div>
   );
 }

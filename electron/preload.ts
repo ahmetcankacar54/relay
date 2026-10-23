@@ -63,7 +63,6 @@ const api: RelayAPI = {
   usageStatistics: (input) =>
     ipcRenderer.invoke("relay:usage-statistics", input),
   tokenUsage: (input) => ipcRenderer.invoke("relay:token-usage", input),
-  lostFound: (input) => ipcRenderer.invoke("relay:lost-found", input),
   lostFoundCollection: () => ipcRenderer.invoke("relay:lost-found-collection"),
   dismissDesktopError: (revision) =>
     ipcRenderer.invoke("relay:dismiss-desktop-error", revision),

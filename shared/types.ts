@@ -2,7 +2,7 @@ import type { UsageStatisticsView } from "./usage-statistics-view";
 export type { UsageStatisticsView } from "./usage-statistics-view";
 import type { TokenUsageView } from "./token-usage-view";
 export type { TokenUsageView } from "./token-usage-view";
-import type { LostFoundCollection, LostFoundWeek } from "./lost-found";
+import type { LostFoundCollection } from "./lost-found";
 export type { LostFoundCollection, LostFoundWeek, LostItem } from "./lost-found";
 import type { Tempo } from "./tempo";
 import type {
@@ -284,8 +284,6 @@ export interface RelayAPI {
     range: 7 | 30 | 90;
     accountId?: string;
   }): Promise<TokenUsageView>;
-  /** What a week left behind; the newest complete week without `weekStart`. */
-  lostFound(input: { weekStart?: string }): Promise<LostFoundWeek>;
   /** Each kind's finds over every week within reach, for the collection. */
   lostFoundCollection(): Promise<LostFoundCollection>;
   createAccount(input: CreateAccount): Promise<Account>;

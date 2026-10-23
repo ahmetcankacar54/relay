@@ -378,10 +378,15 @@ test("the collection lists each kind's weeks within reach, newest first", () => 
   const collection = lostFoundCollection({ ...input({ rollups: rollups({ hours }) }) });
   assert.equal(collection.latest, "2026-10-12");
   assert.equal(collection.oldest, "2026-07-27");
-  assert.deepEqual(collection.found, {
-    feather: ["2026-10-12", "2026-09-28", "2026-09-21"],
-    teaglass: ["2026-09-28"],
-  });
+  const weeks = (finds: { start: string; end: string }[] = []) => finds.map((find) => `${find.start}…${find.end}`);
+  assert.deepEqual(weeks(collection.found.feather), [
+    "2026-10-12…2026-10-18",
+    "2026-09-28…2026-10-04",
+    "2026-09-21…2026-09-27",
+  ]);
+  assert.deepEqual(weeks(collection.found.teaglass), ["2026-09-28…2026-10-04"]);
+  // Each find tells its own week's story.
+  assert.deepEqual(collection.found.feather?.[1].item, { kind: "feather", at: iso(oct(1, 23)), hours: 2 });
 });
 
 test("a pin's finish: bronze on the first week, silver on the third, gold on the sixth", () => {

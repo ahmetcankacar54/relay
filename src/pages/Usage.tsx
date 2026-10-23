@@ -321,8 +321,8 @@ export function UsageWarnings() {
 }
 
 /**
- * Usage in four tabs, so nothing needs a long scroll: the limit statistics, the token counts, the panda's lost and
- * found, and the warning preferences. The range and account filter belong to the first two and show only there.
+ * Usage in four tabs, so nothing needs a long scroll: the limit statistics, the token counts, the panda's pin
+ * collection, and the warning preferences. The range and account filter belong to the first two and show only there.
  */
 export function Usage() {
   const { accounts, settings } = useRelay();
@@ -366,7 +366,7 @@ export function Usage() {
           <TabsTrigger value="limits">{t("Limitler", "Limits")}</TabsTrigger>
           <TabsTrigger value="tokens">{t("Token ve ücret", "Tokens and cost")}</TabsTrigger>
           <TabsTrigger value="lost">
-            {t("Kayıp Eşya", "Lost and found")}
+            {t("Rozetler", "Pins")}
           </TabsTrigger>
           <TabsTrigger value="warnings">
             {t("Uyarılar", "Warnings")}

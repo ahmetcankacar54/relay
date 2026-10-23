@@ -5,12 +5,7 @@ import { foldSamples } from "../shared/usage-rollups";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { buildTokenUsageView } from "../shared/token-usage-view";
 import { estimateCost } from "../shared/model-prices";
-import {
-  addDays,
-  lostFoundCollection,
-  lostFoundWeek,
-  mondayOf,
-} from "../shared/lost-found";
+import { addDays, lostFoundCollection, mondayOf } from "../shared/lost-found";
 import type { LedgerSnapshot, TokenCounts } from "../shared/token-usage-view";
 import { localDate, localSlot } from "../shared/planning";
 import type {
@@ -671,11 +666,6 @@ export const previewApi: RelayAPI = {
       zone: state.settings.planning.timeZone,
       now: Date.now(),
       exactSince: Date.now() - 12 * 86_400_000,
-    }),
-  lostFound: async ({ weekStart }) =>
-    lostFoundWeek({
-      ...previewLostFoundSource(),
-      ...(weekStart ? { weekStart } : {}),
     }),
   lostFoundCollection: async () =>
     lostFoundCollection(previewLostFoundSource()),

@@ -436,13 +436,13 @@ test("the header offers 7/30/90 days and an account filter", () => {
 
 test("Usage is four tabs and opens the limits, with the range and account filter, by default", () => {
   const html = text(render(createElement(Usage)));
-  assert.match(html, /LimitlerToken ve ücretKayıp EşyaUyarılar/);
+  assert.match(html, /LimitlerToken ve ücretRozetlerUyarılar/);
   assert.match(html, /30 gün/);
   assert.match(html, /Tüm hesaplar/);
   assert.match(html, /İstatistikler yükleniyor/);
   // Only the open tab is drawn.
   assert.doesNotMatch(html, /Token kullanımı|Kayıp Eşya Bürosu|Limit uyarıları/);
-  assert.match(text(render(createElement(Usage), "en")), /LimitsTokens and costLost and foundWarnings/);
+  assert.match(text(render(createElement(Usage), "en")), /LimitsTokens and costPinsWarnings/);
 });
 
 test("the warnings tab holds the warning preferences and the data source", () => {
@@ -456,7 +456,7 @@ test("the warnings tab holds the warning preferences and the data source", () =>
 test("Usage reopens the tab last open, and shows the range and account filter only with limits and tokens", async () => {
   for (const [stored, shows, hides] of [
     ["warnings", /Limit uyarıları/, /30 gün|Tüm hesaplar/],
-    ["lost", /Kayıp Eşya Bürosu/, /30 gün|Tüm hesaplar/],
+    ["lost", /Rozet koleksiyonu/, /30 gün|Tüm hesaplar/],
     ["tokens", /Token kullanımı.*/, /İstatistikler yükleniyor/],
     ["nonsense", /İstatistikler yükleniyor/, /Limit uyarıları/],
   ] as const) {
@@ -468,7 +468,7 @@ test("Usage reopens the tab last open, and shows the range and account filter on
       api: {
         usageStatistics: () => new Promise(() => {}),
         tokenUsage: () => new Promise(() => {}),
-        lostFound: () => new Promise(() => {}),
+        lostFoundCollection: () => new Promise(() => {}),
         onChanged: () => () => {},
       },
     } as unknown as Relay;
