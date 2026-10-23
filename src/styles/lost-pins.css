@@ -1,0 +1,19 @@
+/* The lost and found's gold pins (src/pages/usage/LostPins.tsx): a foil band rests across the window and
+   sweeps over it while the pin is hovered or on show. */
+.lost-pin-foil {
+  transform: translateX(-14px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="lost-pin"]:hover .lost-pin-foil,
+  [data-slot="lost-pin"][data-shine] .lost-pin-foil {
+    animation: lost-pin-foil 2.8s ease-in-out infinite;
+  }
+}
+@keyframes lost-pin-foil {
+  from {
+    transform: translateX(-90px);
+  }
+  to {
+    transform: translateX(90px);
+  }
+}

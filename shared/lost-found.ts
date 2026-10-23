@@ -29,21 +29,59 @@ export const TROPHY_DAYS = 30;
 export const TROPHY_MIN_DAYS = 5;
 /** …and is at least this many times an ordinary one. */
 export const TROPHY_MIN_TIMES = 1.5;
+/** The baton is handed on when another account takes over this soon after a limit hit. */
+export const BATON_MAX_MS = 30 * MINUTE_MS;
+/** …or this little before it: the hit is recorded at the poll that saw it, after the switch. */
+export const BATON_EARLY_MS = 2 * MINUTE_MS;
+/** A compass week has at least this many active hours and no limit hit. */
+export const COMPASS_MIN_HOURS = 20;
+/** Morning hours run from the end of the night to this local hour. */
+export const MORNING_END_HOUR = 8;
 /** How many weeks back the bureau can look: the rollups keep 90 days. */
 export const LOST_FOUND_WEEKS = 12;
 
 /** The items, most striking first: the first one found is the week's featured item. */
 export const LOST_ITEM_KINDS = [
   "hourglass",
+  "baton",
   "boomerang",
   "trophy",
   "scroll",
+  "tally",
+  "compass",
   "scarf",
   "clocks",
   "spare",
   "feather",
+  "teaglass",
 ] as const;
 export type LostItemKind = (typeof LOST_ITEM_KINDS)[number];
+
+/** Items the collection keeps secret until found once: they are surprises, not goals. */
+export const SECRET_LOST_KINDS: readonly LostItemKind[] = [
+  "boomerang",
+  "clocks",
+];
+
+/** A pin's finish: how many weeks it was found in. */
+export const LOST_TIERS = [
+  { tier: "bronze", weeks: 1 },
+  { tier: "silver", weeks: 3 },
+  { tier: "gold", weeks: 6 },
+] as const;
+export type LostTier = (typeof LOST_TIERS)[number]["tier"];
+
+/** The finish `weeks` finds earn, or undefined before the first. */
+export function tierOf(weeks: number): LostTier | undefined {
+  let tier: LostTier | undefined;
+  for (const step of LOST_TIERS) if (weeks >= step.weeks) tier = step.tier;
+  return tier;
+}
+
+/** The next finish and the weeks it needs, or undefined at gold. */
+export function nextTier(weeks: number) {
+  return LOST_TIERS.find((step) => weeks < step.weeks);
+}
 
 export type LostItem =
   /** A five-hour window ran out `minutes` after it began; `at` is when it ran out. */
@@ -55,10 +93,25 @@ export type LostItem =
       accountIds: [string, string];
       minutes: number;
     }
+  /**
+   * `accountIds[0]` hit a limit and `accountIds[1]` took over `minutes` after it at `at`; `count` such
+   * hand-overs that week.
+   */
+  | {
+      kind: "baton";
+      at: string;
+      accountIds: [string, string];
+      minutes: number;
+      count: number;
+    }
   /** `date` was the busiest of the last 30 days, `times` an ordinary active day of them. */
   | { kind: "trophy"; date: string; tokens: number; times: number }
   /** `hours` active hours in a row from `at`. */
   | { kind: "scroll"; at: string; hours: number }
+  /** Every day of the week had active hours, `hours` in all. */
+  | { kind: "tally"; hours: number }
+  /** `hours` active hours and not one limit hit. */
+  | { kind: "compass"; hours: number }
   /** `accountIds.length` accounts were used on `date`, busiest first. */
   | { kind: "scarf"; date: string; accountIds: string[] }
   /** Two accounts' five-hour windows reset `gapMinutes` apart at `at`; `count` such pairs that week. */
@@ -72,7 +125,9 @@ export type LostItem =
   /** `accountIds` were never used while other accounts hit a five-hour limit `hits` times. */
   | { kind: "spare"; accountIds: string[]; hits: number }
   /** `hours` active hours after midnight; the latest began at `at`. */
-  | { kind: "feather"; at: string; hours: number };
+  | { kind: "feather"; at: string; hours: number }
+  /** `hours` active hours early in the morning; the earliest began at `at`. */
+  | { kind: "teaglass"; at: string; hours: number };
 
 export interface LostFoundWeek {
   /** The Monday the week starts, in the planning zone. */
@@ -158,10 +213,18 @@ export function validLostItem(value: unknown): value is LostItem {
       return time("at") && count("minutes");
     case "boomerang":
       return time("at") && ids("accountIds") && count("minutes");
+    case "baton":
+      return (
+        time("at") && ids("accountIds") && count("minutes") && count("count")
+      );
+    case "tally":
+    case "compass":
+      return count("hours");
     case "trophy":
       return date("date") && count("tokens") && count("times");
     case "scroll":
     case "feather":
+    case "teaglass":
       return time("at") && count("hours");
     case "scarf":
       return date("date") && ids("accountIds");
@@ -258,6 +321,42 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
   }
   if (boomerang) found.push(boomerang);
 
+  // Baton: an account hit a limit and the next one took over at once. The account in the Claude app
+  // when the limit hit hands over to another, without a gap between them.
+  let baton: Extract<LostItem, { kind: "baton" }> | undefined;
+  // A switch answers one hit: a five-hour and a weekly limit seen by the same poll hand over once.
+  const handOvers = new Set<number>();
+  for (const hit of rollups?.hits ?? []) {
+    const at = Date.parse(hit.at);
+    const giver = owner.get(hit.identity);
+    if (!giver || !within(at)) continue;
+    const next = segments.findIndex(
+      (s, i) =>
+        i > 0 &&
+        segments[i - 1].account === giver &&
+        s.account !== undefined &&
+        s.account !== giver &&
+        s.from >= at - BATON_EARLY_MS &&
+        s.from <= at + BATON_MAX_MS &&
+        s.from - segments[i - 1].to <= BOOMERANG_MAX_MS,
+    );
+    if (next < 0 || handOvers.has(next)) continue;
+    handOvers.add(next);
+    const minutes = Math.max(
+      0,
+      Math.round((segments[next].from - at) / MINUTE_MS),
+    );
+    if (baton && minutes >= baton.minutes) continue;
+    baton = {
+      kind: "baton",
+      at: isoAt(segments[next].from),
+      accountIds: [giver, segments[next].account!],
+      minutes,
+      count: 0,
+    };
+  }
+  if (baton) found.push({ ...baton, count: handOvers.size });
+
   // Trophy: the week's busiest token day, when it is also the busiest of the last 30 days, clearly
   // ahead of an ordinary one, compared with at least five other active days.
   const dayTotal = (date: string) =>
@@ -328,6 +427,19 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
         accountIds: [...day].sort((a, b) => b[1] - a[1]).map(([who]) => who),
       };
   if (scarf) found.push(scarf);
+
+  // Tally: every day of the week had active hours, one notch a day.
+  if (weekDays.every((date) => byDay.has(date)))
+    found.push({ kind: "tally", hours: activeHours.length });
+
+  // Compass: a full week of work that never ran into a limit, nor started inside one.
+  const blocked = (rollups?.hits ?? []).some((hit) => {
+    const at = Date.parse(hit.at);
+    const until = hit.until ? Date.parse(hit.until) : at;
+    return within(at) || (at < from && until > from);
+  });
+  if (activeHours.length >= COMPASS_MIN_HOURS && !blocked)
+    found.push({ kind: "compass", hours: activeHours.length });
 
   // Clocks: two accounts' five-hour windows resetting close together.
   const resets = Object.entries(rollups?.windows ?? {})
@@ -400,7 +512,49 @@ export function lostFoundWeek(input: LostFoundInput): LostFoundWeek {
     found.push({ kind: "feather", at: isoAt(latest), hours: night.length });
   }
 
+  // Tea glass: hours after the night and before eight; the earliest is the one nearest dawn.
+  const morning = activeHours.filter((time) => {
+    const hour = nightHour(time);
+    return hour >= NIGHT_END_HOUR && hour < MORNING_END_HOUR;
+  });
+  if (morning.length) {
+    const earliest = morning.reduce((best, time) =>
+      nightHour(time) < nightHour(best) ? time : best,
+    );
+    found.push({
+      kind: "teaglass",
+      at: isoAt(earliest),
+      hours: morning.length,
+    });
+  }
+
   const rank = (kind: LostItemKind) => LOST_ITEM_KINDS.indexOf(kind);
   found.sort((a, b) => rank(a.kind) - rank(b.kind));
   return { start, end, latest, oldest, items: found };
+}
+
+export interface LostFoundCollection {
+  /** Monday of the newest complete week. */
+  latest: string;
+  /** Monday of the oldest week in reach. */
+  oldest: string;
+  /** Each kind's weeks within reach, newest first; a kind never found is missing. */
+  found: Partial<Record<LostItemKind, string[]>>;
+}
+
+/** What every week within reach left behind, by kind: the collection's view of the bureau. */
+export function lostFoundCollection(
+  input: Omit<LostFoundInput, "weekStart">,
+): LostFoundCollection {
+  const newest = lostFoundWeek(input);
+  const found: Partial<Record<LostItemKind, string[]>> = {};
+  for (let start = newest.latest; start >= newest.oldest;) {
+    const week =
+      start === newest.start
+        ? newest
+        : lostFoundWeek({ ...input, weekStart: start });
+    for (const item of week.items) (found[item.kind] ??= []).push(week.start);
+    start = addDays(start, -7);
+  }
+  return { latest: newest.latest, oldest: newest.oldest, found };
 }

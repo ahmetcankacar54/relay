@@ -5,6 +5,7 @@
 @import "./pranks.css";
 @import "./token-panda.css";
 @import "./card-panda.css";
+@import "./lost-pins.css";
 
 :root {
   color-scheme: light;

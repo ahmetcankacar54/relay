@@ -5,7 +5,12 @@ import { foldSamples } from "../shared/usage-rollups";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { buildTokenUsageView } from "../shared/token-usage-view";
 import { estimateCost } from "../shared/model-prices";
-import { addDays, lostFoundWeek, mondayOf } from "../shared/lost-found";
+import {
+  addDays,
+  lostFoundCollection,
+  lostFoundWeek,
+  mondayOf,
+} from "../shared/lost-found";
 import type { LedgerSnapshot, TokenCounts } from "../shared/token-usage-view";
 import { localDate, localSlot } from "../shared/planning";
 import type {
@@ -502,6 +507,36 @@ if (scenario === "fleet-waiting" || scenario === "fleet-idle-full") {
           stopped: 0,
         };
 }
+/** The lost and found's sources in the preview. */
+function previewLostFoundSource() {
+  // Two accounts' Claude app sign-ins, with a short visit to the second one last Wednesday.
+  const [first, second] = accounts.filter((a) => a.desktop?.accountUuid);
+  const wednesday = addDays(
+    mondayOf(localDate(Date.now(), state.settings.planning.timeZone)),
+    -5,
+  );
+  const at = (hour: number, minute = 0) =>
+    new Date(
+      Date.parse(`${wednesday}T00:00:00Z`) + (hour * 60 + minute) * 60_000,
+    ).toISOString();
+  const segments =
+    first?.desktop && second?.desktop
+      ? [
+          { accountUuid: first.desktop.accountUuid, from: at(9), to: at(11, 10) },
+          { accountUuid: second.desktop.accountUuid, from: at(11, 10), to: at(11, 18) },
+          { accountUuid: first.desktop.accountUuid, from: at(11, 18), to: at(18) },
+        ]
+      : [];
+  return {
+    rollups: foldSamples(previewSamples(), Date.now()),
+    segments,
+    ledgerDays: previewTokenLedger().days,
+    accounts,
+    zone: state.settings.planning.timeZone,
+    now: Date.now(),
+  };
+}
+
 export const previewApi: RelayAPI = {
   inspectContinuation: async () => ({
     status: "off",
@@ -637,35 +672,13 @@ export const previewApi: RelayAPI = {
       now: Date.now(),
       exactSince: Date.now() - 12 * 86_400_000,
     }),
-  lostFound: async ({ weekStart }) => {
-    // Two accounts' Claude app sign-ins, with a short visit to the second one last Wednesday.
-    const [first, second] = accounts.filter((a) => a.desktop?.accountUuid);
-    const wednesday = addDays(
-      mondayOf(localDate(Date.now(), state.settings.planning.timeZone)),
-      -5,
-    );
-    const at = (hour: number, minute = 0) =>
-      new Date(
-        Date.parse(`${wednesday}T00:00:00Z`) + (hour * 60 + minute) * 60_000,
-      ).toISOString();
-    const segments =
-      first?.desktop && second?.desktop
-        ? [
-            { accountUuid: first.desktop.accountUuid, from: at(9), to: at(11, 10) },
-            { accountUuid: second.desktop.accountUuid, from: at(11, 10), to: at(11, 18) },
-            { accountUuid: first.desktop.accountUuid, from: at(11, 18), to: at(18) },
-          ]
-        : [];
-    return lostFoundWeek({
-      rollups: foldSamples(previewSamples(), Date.now()),
-      segments,
-      ledgerDays: previewTokenLedger().days,
-      accounts,
-      zone: state.settings.planning.timeZone,
-      now: Date.now(),
+  lostFound: async ({ weekStart }) =>
+    lostFoundWeek({
+      ...previewLostFoundSource(),
       ...(weekStart ? { weekStart } : {}),
-    });
-  },
+    }),
+  lostFoundCollection: async () =>
+    lostFoundCollection(previewLostFoundSource()),
   snapshot: async () => structuredClone(state),
   createAccount: async (input) => {
     if (scenario !== "unlinked-no-code" && scenario !== "mixed-connections")

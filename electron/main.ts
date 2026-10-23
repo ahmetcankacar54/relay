@@ -70,7 +70,7 @@ import {
   lostFoundInput,
   usageStatisticsInput,
 } from "./core/usage-statistics-input";
-import { lostFoundWeek } from "../shared/lost-found";
+import { lostFoundCollection, lostFoundWeek } from "../shared/lost-found";
 import { buildStatisticsView } from "../shared/usage-statistics-view";
 import { buildTokenUsageView } from "../shared/token-usage-view";
 import { buildWidgetSnapshot } from "../shared/widget-snapshot";
@@ -1701,18 +1701,22 @@ function bindIPC() {
       ...(exactSince === undefined ? {} : { exactSince }),
     });
   });
+  const lostFoundSource = () => ({
+    rollups: usageHistory.rollups(),
+    segments: activeTimeline.list(),
+    ledgerDays: tokenLedger?.snapshot().days ?? {},
+    accounts: service.store.state.accounts,
+    zone: service.store.state.settings.planning.timeZone,
+    now: Date.now(),
+  });
   handle("lost-found", (input) => {
     const { weekStart } = lostFoundInput.parse(input);
     return lostFoundWeek({
-      rollups: usageHistory.rollups(),
-      segments: activeTimeline.list(),
-      ledgerDays: tokenLedger?.snapshot().days ?? {},
-      accounts: service.store.state.accounts,
-      zone: service.store.state.settings.planning.timeZone,
-      now: Date.now(),
+      ...lostFoundSource(),
       ...(weekStart ? { weekStart } : {}),
     });
   });
+  handle("lost-found-collection", () => lostFoundCollection(lostFoundSource()));
   handle("create-account", (input) =>
     service.store.create(createAccountSchema.parse(input)),
   );

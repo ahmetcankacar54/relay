@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { act, createElement, type ReactElement } from "react";
 import { LostFound, describe, weekLabel } from "../src/pages/usage/LostFound";
 import { resetShelfForTests } from "../src/data/lost-found-shelf";
+import { resetCollectionForTests } from "../src/data/lost-found-collection";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type RelayAPI } from "../shared/types";
@@ -30,7 +31,6 @@ test("every item tells what happened, when and to whom, with the panda's word, i
   // 09:56 in Istanbul.
   const hourglass = say({ kind: "hourglass", at: "2026-10-14T06:56:00Z", accountId: "a", minutes: 66 });
   assert.deepEqual(hourglass, {
-    emoji: "⏳",
     title: "Kum saati",
     story: "Bir 5 saatlik dönem, başlamasından yalnızca 1 sa 6 dk sonra doldu.",
     when: "Çarşamba 09:56",
@@ -116,7 +116,25 @@ const tree = (child: ReactElement, relay: Relay, language: Language = "tr") =>
     createElement(RelayContext.Provider, { value: relay }, child),
   );
 
-beforeEach(() => resetShelfForTests());
+beforeEach(() => {
+  resetShelfForTests();
+  resetCollectionForTests();
+});
+
+test("the new finds tell their story in both languages", () => {
+  const baton = { kind: "baton" as const, at: "2026-10-14T08:04:00Z", accountIds: ["a", "b"] as [string, string], minutes: 4, count: 3 };
+  assert.equal(say(baton).story, "Bir hesap limite takılınca öbür hesap 4 dakika içinde devraldı. O hafta 3 kez oldu.");
+  assert.equal(say({ ...baton, minutes: 0, count: 1 }, "en").story, "An account hit its limit and another took over at once.");
+  assert.equal(say(baton).when, "Çarşamba 11:04");
+  assert.equal(say({ kind: "tally", hours: 31 }).story, "Haftanın yedi gününün her birinde çalıştın; toplam 31 saat.");
+  assert.equal(say({ kind: "tally", hours: 31 }).when, "12–18 Eki");
+  assert.equal(say({ kind: "compass", hours: 24 }, "en").story, "That week you worked 24 hours and never hit a limit.");
+  // 05:00 in Istanbul.
+  const tea = say({ kind: "teaglass", at: "2026-10-15T02:00:00Z", hours: 1 }, "en");
+  assert.equal(tea.story, "That week you worked 1 hour between 05:00 and 08:00 in all.");
+  assert.equal(tea.when, "Earliest: Thursday 05:00–06:00");
+  assert.equal(say({ kind: "teaglass", at: "2026-10-15T02:00:00Z", hours: 3 }).title, "Sabah çayı");
+});
 
 test("the bureau shows last week's most striking find, its other finds, other weeks and a shelf that keeps", async () => {
   const stored = new Map<string, string>();
@@ -156,7 +174,9 @@ test("the bureau shows last week's most striking find, its other finds, other we
 
     // The week's other find.
     await click(button((text) => text.endsWith("Uzun parşömen")));
-    assert.match(textOf(slot("lost-item")), /^📜Uzun parşömen16 saat aralıksız çalıştın\./);
+    // Its first find earns the bronze pin.
+    assert.match(textOf(slot("lost-item")), /^Uzun parşömenBronz · 1 haftaİlk kez bulundu16 saat aralıksız çalıştın\./);
+    assert.equal(attr(find(slot("lost-item")!, (n) => attr(n, "data-slot") === "lost-pin")!, "data-kind"), "scroll");
 
     // Kept, it stays on the shelf, in storage, and opens from there.
     await click(button((text) => text === "Rafa koy"));
@@ -205,6 +225,8 @@ test("the preload exposes the bureau and the main process answers it", async () 
   const main = await fs.readFile(new URL("../electron/main.ts", import.meta.url), "utf8");
   assert.match(preload, /lostFound: \(input\) => ipcRenderer\.invoke\("relay:lost-found", input\)/);
   assert.match(main, /handle\("lost-found", \(input\) => \{\s*const \{ weekStart \} = lostFoundInput\.parse\(input\);/);
+  assert.match(preload, /lostFoundCollection: \(\) =>\s*ipcRenderer\.invoke\("relay:lost-found-collection"\)/);
+  assert.match(main, /handle\("lost-found-collection", \(\) =>\s*lostFoundCollection\(lostFoundSource\(\)\)/);
 });
 
 test("kept items from another version that cannot be told are left off the shelf", async () => {
@@ -230,7 +252,70 @@ test("kept items from another version that cannot be told are left off the shelf
     await act(async () => root.render(tree(createElement(LostFound), relayFor(api))));
     const shelf = find(dom.container as unknown as Fake, (n) => (n as { attributes?: Map<string, string> }).attributes?.get?.("data-slot") === "lost-shelf");
     assert.ok(shelf);
-    assert.equal(textOf(shelf), "Raf⏳Kum saati, 12–18 Eki");
+    assert.equal(textOf(shelf), "RafKum saati, 12–18 Eki");
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("the collection shows every pin: found ones in their finish, the rest with how to find them, secrets sealed", async () => {
+  // Six weeks of night hours kept from before the reach make the feather gold.
+  const older = ["2026-07-20", "2026-07-13", "2026-07-06", "2026-06-29", "2026-06-22"];
+  const stored = new Map<string, string>([
+    ["relay.lostfound.collection.v1", JSON.stringify({ feather: older, teaglass: ["2026-07-20"], unicorn: ["2026-07-20"], scroll: ["nope"] })],
+  ]);
+  const dom = fakeDom({
+    localStorage: () => ({
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => void stored.set(key, value),
+    }),
+  });
+  dom.install();
+  readableText();
+  const asked: { weekStart?: string }[] = [];
+  const api = {
+    lostFound: async (input: { weekStart?: string }) => {
+      asked.push(input);
+      return input.weekStart === "2026-10-05" ? { ...OLDER, items: [WEEK.items[1]] } : WEEK;
+    },
+    lostFoundCollection: async () => ({
+      latest: "2026-10-12",
+      oldest: "2026-07-27",
+      found: { hourglass: ["2026-10-12"], scroll: ["2026-10-12", "2026-10-05"], feather: ["2026-08-03"] },
+    }),
+  } as unknown as RelayAPI;
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () => root.render(tree(createElement(LostFound), relayFor(api))));
+    const container = dom.container as unknown as Fake;
+    const attr = (n: Fake, name: string) => (n as { attributes?: Map<string, string> }).attributes?.get?.(name);
+    const tile = (kind: string) => find(container, (n) => n.tagName === "li" && attr(n, "data-kind") === kind);
+    const button = (match: (text: string) => boolean) =>
+      find(container, (n) => n.tagName === "button" && match(textOf(n)));
+    await act(async () => dom.dispatch(button((text) => text.startsWith("Koleksiyon"))!, "click", { detail: 1 }));
+    assert.match(textOf(container), /4 \/ 12rozet bulundu/);
+    assert.match(textOf(container), /Altın 1 · Gümüş 0 · Bronz 3/);
+    assert.match(textOf(tile("feather")!), /Gece kuşu tüyüAltın · 6 haftaEn üst seviye/);
+    assert.match(textOf(tile("scroll")!), /Uzun parşömenBronz · 2 haftaGümüş için 1 hafta daha/);
+    assert.match(textOf(tile("compass")!), /PusulaBir haftada en az 20 saat çalış ve hiç limite takılma\./);
+    assert.equal(attr(tile("compass")!, "data-found"), "false");
+    // A secret kind keeps its name and its object to itself until found.
+    assert.match(textOf(tile("clocks")!), /^Gizli rozetGizli rozet\. Panda ipucu vermiyor\.$/);
+    // What the main process found is kept, with the older weeks and without what cannot be read.
+    assert.deepEqual(JSON.parse(stored.get("relay.lostfound.collection.v1")!), {
+      hourglass: ["2026-10-12"],
+      scroll: ["2026-10-12", "2026-10-05"],
+      feather: ["2026-08-03", ...older],
+      teaglass: ["2026-07-20"],
+    });
+    // A tea glass found only out of reach has no week to open; the scroll opens its newest week.
+    assert.equal(find(tile("teaglass")!, (n) => n.tagName === "button"), undefined);
+    assert.ok(find(tile("feather")!, (n) => n.tagName === "button"));
+    await act(async () => dom.dispatch(find(tile("scroll")!, (n) => n.tagName === "button")!, "click", { detail: 1 }));
+    assert.deepEqual(asked.at(-1), { weekStart: "2026-10-12" });
+    assert.match(textOf(container), /Uzun parşömenBronz · 2 hafta16 saat aralıksız çalıştın\./);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
