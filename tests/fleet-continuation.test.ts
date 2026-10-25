@@ -691,26 +691,26 @@ test("the notice after a switch at the limit names the account and counts the co
   const last = { at: "", sourceId: "s", targetId: "t", conversations: 3 };
   assert.equal(
     fleetNotice({ ...last, started: 3, uncertain: 0, skipped: 0 }, "Alto", "tr"),
-    "Kota doldu: Claude Alto hesabına geçti. 3 sohbet kaldığı yerden devam ediyor.",
+    "Limit doldu: Claude uygulaması Alto hesabına geçti. 3 konuşma kaldığı yerden devam ediyor.",
   );
   assert.equal(
     fleetNotice({ ...last, started: 1, uncertain: 1, skipped: 1 }, "Alto", "tr"),
-    "Kota doldu: Claude Alto hesabına geçti. 1 sohbet devam ediyor; 1 sohbeti sen sürdür; 1 sohbetin durumuna bak.",
+    "Limit doldu: Claude uygulaması Alto hesabına geçti. 1 konuşma devam ediyor; 1 konuşmayı sen sürdür; 1 konuşmanın durumuna bak.",
   );
   assert.equal(
     fleetNotice({ ...last, started: 2, uncertain: 0, skipped: 1 }, "Alto", "en"),
-    "Out of quota: Claude switched to Alto. 2 conversations continue; continue 1 conversation yourself.",
+    "Limit reached: the Claude app switched to Alto. 2 conversations continue; continue 1 conversation yourself.",
   );
   assert.equal(
     fleetNotice({ ...last, started: 0, uncertain: 0, skipped: 3 }, "Alto", "en"),
-    "Out of quota: Claude switched to Alto. Continue 3 conversations yourself.",
+    "Limit reached: the Claude app switched to Alto. Continue 3 conversations yourself.",
   );
   assert.equal(
     fleetNotice({ ...last, started: 0, uncertain: 0, skipped: 0 }, "Alto", "en", "account-changed"),
-    "Out of quota: Claude switched to Alto. Its conversations were not continued; continue them yourself.",
+    "Limit reached: the Claude app switched to Alto. Its conversations were not continued; continue them yourself.",
   );
   assert.equal(
     fleetNotice({ ...last, conversations: 1, started: 1, uncertain: 0, skipped: 0 }, "Alto", "en"),
-    "Out of quota: Claude switched to Alto. 1 conversation continues where it stopped.",
+    "Limit reached: the Claude app switched to Alto. 1 conversation continues where it stopped.",
   );
 });

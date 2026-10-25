@@ -1274,7 +1274,7 @@ function notifyFleet(
   if (!Notification.isSupported()) return;
   const name =
     service.store.state.accounts.find((a) => a.id === last.targetId)?.name ??
-    say("diğer", "the other");
+    say("diğer", "another");
   new Notification({
     title: "Relay",
     body: fleetNotice(last, name, trayLanguage, reason),

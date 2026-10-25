@@ -174,18 +174,18 @@ export function fleetNotice(
 ): string {
   const en = language === "en";
   const head = en
-    ? `Out of quota: Claude switched to ${name}.`
-    : `Kota doldu: Claude ${name} hesabına geçti.`;
+    ? `Limit reached: the Claude app switched to ${name}.`
+    : `Limit doldu: Claude uygulaması ${name} hesabına geçti.`;
   const chats = (n: number) => `${n} ${n === 1 ? "conversation" : "conversations"}`;
   const go = (n: number) => `${chats(n)} ${n === 1 ? "continues" : "continue"}`;
   if (reason || last.started + last.uncertain + last.skipped === 0)
     return en
       ? `${head} Its conversations were not continued; continue them yourself.`
-      : `${head} Sohbetler devam ettirilemedi; onları sen sürdür.`;
+      : `${head} Konuşmalar devam ettirilemedi; onları sen sürdür.`;
   if (last.started === last.conversations)
     return en
       ? `${head} ${go(last.started)} where ${last.started === 1 ? "it" : "they"} stopped.`
-      : `${head} ${last.started} sohbet kaldığı yerden devam ediyor.`;
+      : `${head} ${last.started} konuşma kaldığı yerden devam ediyor.`;
   const parts = en
     ? [
         last.started ? go(last.started) : "",
@@ -193,9 +193,9 @@ export function fleetNotice(
         last.uncertain ? `check ${chats(last.uncertain)}` : "",
       ]
     : [
-        last.started ? `${last.started} sohbet devam ediyor` : "",
-        last.skipped ? `${last.skipped} sohbeti sen sürdür` : "",
-        last.uncertain ? `${last.uncertain} sohbetin durumuna bak` : "",
+        last.started ? `${last.started} konuşma devam ediyor` : "",
+        last.skipped ? `${last.skipped} konuşmayı sen sürdür` : "",
+        last.uncertain ? `${last.uncertain} konuşmanın durumuna bak` : "",
       ];
   const text = parts.filter(Boolean).join("; ");
   return `${head} ${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
