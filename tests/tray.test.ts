@@ -3,17 +3,24 @@ import assert from "node:assert/strict";
 import {
   buildTrayMenu,
   canRequestTraySwitch,
+  DEFAULT_MENU_BAR_ITEMS,
+  MENU_BAR_ITEMS,
+  MENU_BAR_MAX_ITEMS,
+  menuBarItems,
   trayAccountName,
+  trayCost,
   trayCountdown,
   trayResetClock,
   trayShortName,
   trayTitle,
+  trayTokens,
   trayTooltip,
   trayUsageLabel,
   unavailableTrayMenu,
   type TraySnapshot,
 } from "../shared/tray";
-import type { Account, AccountUsage, DesktopState } from "../shared/types";
+import { mascotPose, mascotRest } from "../shared/mascot";
+import type { Account, AccountUsage, DesktopState, MenuBarItem } from "../shared/types";
 
 const now = Date.parse("2026-10-13T10:00:00Z");
 const account = (id: string, name = id): Account => ({
@@ -126,26 +133,53 @@ test("tray only offers saved Desktop identities and blocks mismatched CLI identi
   );
 });
 
-test("stale, reset, unknown and foreign quota stays unknown in the tray", () => {
+test("unknown, future and foreign quota stays unknown in the tray", () => {
   assert.equal(trayUsageLabel("target", undefined, "en", now), "5h ? · wk ?");
   for (const u of [
-    { ...usage("target"), stale: true },
-    { ...usage("target"), status: "loading" as const },
-    {
-      ...usage("target"),
-      checkedAt: new Date(now - 36 * 60_000).toISOString(),
-    },
     { ...usage("target"), checkedAt: new Date(now + 5 * 60_000).toISOString() },
-    {
-      ...usage("target"),
-      fiveHour: { usedPercent: 0, resetsAt: new Date(now).toISOString() },
-    },
     usage("different"),
+    // A sign-in problem keeps nothing to show, whatever the cache still holds.
+    { ...usage("target"), status: "error" as const, stale: true, issue: "keychain-locked" as const },
+    { ...usage("target"), stale: true, connectionRenewalRequired: true },
   ])
     assert.equal(
       trayUsageLabel("target", u, "en", now),
       "5h ? · wk ? · usage data is out of date",
     );
+});
+
+test("a reading old for a passing reason keeps its figures in the menu, marked, until each window resets", () => {
+  for (const u of [
+    { ...usage("target"), stale: true },
+    { ...usage("target"), status: "loading" as const },
+    { ...usage("target"), status: "error" as const, stale: true, issue: "unavailable" as const },
+    { ...usage("target"), status: "error" as const, stale: true, issue: "rate-limited" as const },
+    {
+      ...usage("target"),
+      checkedAt: new Date(now - 36 * 60_000).toISOString(),
+    },
+  ])
+    assert.equal(
+      trayUsageLabel("target", u, "en", now),
+      "5h ~22% · wk ~92% used · usage data is out of date",
+    );
+  assert.equal(
+    trayUsageLabel("target", { ...usage("target"), stale: true }, "tr", now),
+    "5 sa ~%22 · hafta ~%92 kullanıldı · limit verisi eski",
+  );
+  // A window that has reset since is unknown; the other keeps its figure.
+  assert.equal(
+    trayUsageLabel(
+      "target",
+      { ...usage("target"), fiveHour: { usedPercent: 0, resetsAt: new Date(now).toISOString() } },
+      "en",
+      now,
+    ),
+    "5h ? · wk ~92% used · usage data is out of date",
+  );
+});
+
+test("a fresh reading's windows read as they are", () => {
   assert.equal(
     trayUsageLabel(
       "target",
@@ -328,23 +362,199 @@ test("while a switch runs the title names the account it opens, cut short when l
   assert.equal(trayTitle(onTarget(40, { switchingTo: "current" }), now, "tr"), "%40");
 });
 
-test("the title shows a dash while the panda sleeps: Claude closed, or the reading failed or is old", () => {
+test("the title shows a dash while Claude is closed or a sign-in problem keeps the limits unknown", () => {
   const closed = onTarget(40, { desktop: { ...desktop, activeProfileId: "target", running: false } });
   assert.equal(trayTitle(closed, now, "tr"), "—");
   assert.equal(trayTooltip(closed, "tr", now), "Relay — Max · Claude uygulaması kapalı");
   assert.equal(trayTooltip(closed, "en", now), "Relay — Max · Claude app closed");
-  const old = onTarget(40, {}, { checkedAt: new Date(now - 31 * 60_000).toISOString() });
-  assert.equal(trayTitle(old, now, "tr"), "—");
-  assert.equal(trayTooltip(old, "tr", now), "Relay — Max · limit verisi eski");
-  assert.equal(trayTooltip(old, "en", now), "Relay — Max · usage data is out of date");
+  // Expired, scope, a missing or foreign sign-in: the service keeps nothing of the last reading.
+  const expired: Partial<AccountUsage> = {
+    status: "error", stale: false, issue: "expired", fiveHour: undefined, sevenDay: undefined, checkedAt: undefined,
+  };
+  assert.equal(trayTitle(onTarget(40, {}, expired), now, "tr"), "—");
+  assert.equal(trayTooltip(onTarget(40, {}, expired), "en", now), "Relay — Max · usage data is out of date");
+  // A locked Keychain or a connection to renew keeps the figures in the cache, but they are not shown.
+  for (const signIn of [
+    { status: "error", stale: true, issue: "keychain-locked" },
+    { status: "error", stale: true, issue: "renewal-required" },
+    { stale: true, connectionRenewalRequired: true },
+  ] as Partial<AccountUsage>[]) {
+    const s = onTarget(40, {}, signIn);
+    assert.equal(trayTitle(s, now, "tr"), "—", signIn.issue);
+    assert.equal(trayTooltip(s, "tr", now), "Relay — Max · limit verisi eski", signIn.issue);
+  }
   assert.equal(trayTitle(onTarget(40, {}, { checkedAt: new Date(now - 29 * 60_000).toISOString() }), now, "tr"), "%40");
-  assert.equal(trayTitle(onTarget(40, {}, { status: "error", issue: "rate-limited" }), now, "tr"), "—");
   // A refresh in progress keeps the reading it started from.
   assert.equal(trayTitle(onTarget(40, {}, { status: "loading" }), now, "tr"), "%40");
   // Before the first reading, and with no saved account open, there is nothing to sleep over.
   assert.equal(trayTitle(onTarget(40, { usage: {} }), now, "tr"), "");
   assert.equal(trayTitle(onTarget(40, {}, { status: "loading", checkedAt: undefined }), now, "tr"), "");
   assert.equal(trayTitle({ ...snapshot(), desktop: { ...desktop, activeProfileId: undefined } }, now, "tr"), "");
+});
+
+test("a read that fails for a passing reason keeps the last figure in the title, marked, while the panda sleeps", () => {
+  // No network, a rate limit, the service down: Relay keeps the previous reading, marked stale.
+  for (const issue of ["unavailable", "rate-limited"] as const) {
+    const failed = onTarget(40, {}, { status: "error", stale: true, issue });
+    assert.equal(trayTitle(failed, now, "tr"), "~%40", issue);
+    assert.equal(trayTitle(failed, now, "en"), "~40%", issue);
+    assert.equal(mascotRest(failed, now), "unknown", issue);
+    assert.equal(mascotPose(failed, now), "sleeping", issue);
+    assert.equal(
+      trayTooltip(failed, "tr", now),
+      "Relay — Max · ~%40 kullanıldı · 9 sa 50 dk sonra yenilenir · limit verisi eski, az önce okundu",
+      issue,
+    );
+    // The read after it starts from the same reading.
+    assert.equal(trayTitle(onTarget(40, {}, { status: "loading", stale: true, issue }), now, "tr"), "~%40", issue);
+  }
+  // A reading that has only grown old.
+  const old = onTarget(40, {}, { checkedAt: new Date(now - 31 * 60_000).toISOString() });
+  assert.equal(trayTitle(old, now, "tr"), "~%40");
+  assert.equal(
+    trayTooltip(old, "en", now),
+    "Relay — Max · ~40% used · renews in 9:50 · usage data is out of date, read 31 min ago",
+  );
+  // From 80 % on the countdown still follows; it holds, the reset time does not change.
+  assert.equal(trayTitle(onTarget(94, {}, { stale: true }), now, "tr"), "~%94 · 9:50");
+  // A full window stays full until it resets: its clock needs no mark.
+  assert.equal(trayTitle(onTarget(100, { timeZone: "Europe/Istanbul" }, { stale: true }), now, "tr"), "22:50");
+  // Once the window has reset the old figure says nothing: the dash.
+  const later = Date.parse("2026-10-13T19:51:00Z");
+  assert.equal(trayTitle(onTarget(40, {}, { stale: true }), later, "tr"), "—");
+  // A reading from the future is not one.
+  assert.equal(trayTitle(onTarget(40, {}, { stale: true, checkedAt: new Date(now + 5 * 60_000).toISOString() }), now, "tr"), "—");
+});
+
+test("the title shows the items chosen, in their order", () => {
+  const today = { date: "2026-10-13", tokens: 12_430_000, cost: 18.2 };
+  const titled = (
+    titleItems: MenuBarItem[] | undefined,
+    language: "tr" | "en" = "tr",
+    usedPercent = 40,
+    extra: Partial<TraySnapshot> = {},
+    u: Partial<AccountUsage> = {},
+  ) => trayTitle(onTarget(usedPercent, { titleItems, today, timeZone: "UTC", ...extra }, u), now, language);
+  const thin = (...parts: string[]) => parts.join(" · ");
+  // Nothing chosen yet: the five-hour percent, as always.
+  assert.equal(titled(undefined), "%40");
+  assert.equal(titled(["five-hour"]), "%40");
+  assert.equal(titled(["week"]), "%92");
+  assert.equal(titled(["five-hour", "week"]), "%40 · %92");
+  // The time left has its own item; with it the percent never adds it again.
+  assert.equal(titled(["reset"]), "9:50");
+  assert.equal(titled(["five-hour", "reset"], "tr", 94), "%94 · 9:50");
+  assert.equal(titled(["five-hour", "reset"], "en", 40), "40% · 9:50");
+  assert.equal(titled(["five-hour", "reset"], "tr", 100, { timeZone: "Europe/Istanbul" }), "%100 · 22:50");
+  assert.equal(titled(["reset"], "tr", 100, { timeZone: "Europe/Istanbul" }), "22:50");
+  // Today's tokens in millions and their API value, across all accounts.
+  assert.equal(titled(["tokens"]), "12,4M");
+  assert.equal(titled(["tokens"], "en"), "12.4M");
+  assert.equal(titled(["cost"]), "$18,20");
+  assert.equal(titled(["cost"], "en"), "$18.20");
+  assert.equal(titled(["cost"], "tr", 40, { today: { ...today, costEstimated: true } }), "≈$18,20");
+  assert.equal(titled(["account"]), "Max");
+  assert.equal(titled(["cost", "five-hour", "tokens"]), "$18,20 · %40 · 12,4M");
+  // More than three parts get thin spaces around the dot.
+  assert.equal(titled(["five-hour", "week", "tokens", "cost"]), thin("%40", "%92", "12,4M", "$18,20"));
+  assert.equal(titled(["five-hour", "tokens", "cost"], "tr", 94), thin("%94", "9:50", "12,4M", "$18,20"));
+  // With four items there is no room left for the countdown the percent would add.
+  assert.equal(titled(["five-hour", "week", "tokens", "cost"], "tr", 94), thin("%94", "%92", "12,4M", "$18,20"));
+  // None chosen: the panda alone.
+  assert.equal(titled([]), "");
+  // Yesterday's figures, or none yet, are left out.
+  assert.equal(titled(["five-hour", "tokens"], "tr", 40, { today: { ...today, date: "2026-10-12" } }), "%40");
+  assert.equal(titled(["five-hour", "cost"], "tr", 40, { today: undefined }), "%40");
+  // Last known figures each carry the mark; today's figures do not need it.
+  assert.equal(titled(["five-hour", "week", "tokens"], "tr", 40, {}, { status: "error", stale: true, issue: "unavailable" }), "~%40 · ~%92 · 12,4M");
+  // Claude closed: one dash for the limits, whatever else is chosen stays.
+  const closed = { desktop: { ...desktop, activeProfileId: "target", running: false } };
+  assert.equal(titled(["five-hour", "week", "tokens", "account"], "tr", 40, closed), "— · 12,4M · Max");
+  assert.equal(titled(["week", "reset"], "tr", 40, closed), "—");
+  // A switch names its target whatever is chosen.
+  const switching = { switchingTo: "current", desktop: { ...desktop, activeProfileId: "target", busy: true } };
+  assert.equal(titled(["tokens", "cost"], "tr", 40, switching), "Current…");
+  // A long name is cut shorter than a switch's, and says so.
+  const long = onTarget(40, { titleItems: ["account", "five-hour"] });
+  long.accounts[1].name = "Şirket hesabı (ekip)";
+  assert.equal(trayTitle(long, now, "tr"), "Şirket he… · %40");
+});
+
+test("the title's items name themselves in the tooltip", () => {
+  const s = onTarget(40, {
+    titleItems: ["five-hour", "week", "tokens", "cost"],
+    today: { date: "2026-10-13", tokens: 12_430_000, cost: 18.2 },
+    timeZone: "UTC",
+  });
+  assert.equal(
+    trayTooltip(s, "tr", now),
+    "Relay — Max · %40 kullanıldı · 9 sa 50 dk sonra yenilenir · hafta %92 kullanıldı · bugün 12,4M token, $18,20 API karşılığı",
+  );
+  assert.equal(
+    trayTooltip(s, "en", now),
+    "Relay — Max · 40% used · renews in 9:50 · week 92% used · today 12.4M tokens, $18.20 API value",
+  );
+  // With Claude closed, today's figures still say what they are.
+  const closed = { ...s, desktop: { ...desktop, activeProfileId: "target", running: false } };
+  assert.equal(trayTooltip(closed, "tr", now), "Relay — Max · Claude uygulaması kapalı · bugün 12,4M token, $18,20 API karşılığı");
+});
+
+test("tokens read in millions and the API value in dollars, short", () => {
+  assert.equal(trayTokens(0, "tr"), "0,0M");
+  assert.equal(trayTokens(430_000, "en"), "0.4M");
+  assert.equal(trayTokens(12_430_000, "tr"), "12,4M");
+  // From 100M on, whole millions; never "100,0M".
+  assert.equal(trayTokens(99_960_000, "tr"), "100M");
+  assert.equal(trayTokens(184_400_000, "en"), "184M");
+  assert.equal(trayTokens(1_234_000_000, "tr"), "1.234M");
+  assert.equal(trayTokens(1_234_000_000, "en"), "1,234M");
+  assert.equal(trayTokens(NaN, "en"), "0.0M");
+  assert.equal(trayCost(18.2, "tr"), "$18,20");
+  assert.equal(trayCost(99.99, "en"), "$99.99");
+  assert.equal(trayCost(184.4, "en"), "$184");
+  assert.equal(trayCost(1234.5, "tr"), "$1.235");
+  assert.equal(trayCost(5, "en", true), "≈$5.00");
+  assert.equal(trayCost(-1, "en"), "$0.00");
+});
+
+test("the title's items are kept known, once each, and at most four", () => {
+  assert.deepEqual(menuBarItems(undefined), ["five-hour"]);
+  assert.deepEqual(menuBarItems("tokens"), ["five-hour"]);
+  assert.deepEqual(menuBarItems([]), []);
+  assert.deepEqual(
+    menuBarItems(["tokens", "bogus", "tokens", "cost", "week", "reset", "account"]),
+    ["tokens", "cost", "week", "reset"],
+  );
+  assert.equal(MENU_BAR_MAX_ITEMS, 4);
+  assert.deepEqual(MENU_BAR_ITEMS, ["five-hour", "week", "reset", "tokens", "cost", "account"]);
+  assert.deepEqual(DEFAULT_MENU_BAR_ITEMS, ["five-hour"]);
+});
+
+test("any four items stay a short title", () => {
+  // The widest figure of each item: a stale full week, a clock, a thousand millions, an estimated
+  // thousand dollars, a long name.
+  const wide = onTarget(99, {
+    timeZone: "UTC",
+    today: { date: "2026-10-13", tokens: 1_234_000_000, cost: 1234, costEstimated: true },
+  }, { stale: true, sevenDay: { usedPercent: 100, resetsAt: "2026-10-17T10:00:00Z" } });
+  wide.accounts[1].name = "Çok uzun bir hesap adı";
+  const combos = (from: number, size: number): MenuBarItem[][] =>
+    size === 0
+      ? [[]]
+      : MENU_BAR_ITEMS.slice(from).flatMap((item, i) =>
+          combos(from + i + 1, size - 1).map((rest) => [item, ...rest]),
+        );
+  let widest = "";
+  for (let size = 1; size <= MENU_BAR_MAX_ITEMS; size++)
+    for (const items of combos(0, size))
+      for (const language of ["tr", "en"] as const) {
+        const title = trayTitle({ ...wide, titleItems: items }, now, language);
+        // Never more than four parts, whatever is chosen.
+        assert.ok(title.split(/ · | · /).length <= MENU_BAR_MAX_ITEMS, title);
+        if (title.length > widest.length) widest = title;
+      }
+  assert.equal(widest, "~%100 · 1.234M · ≈$1.234 · Çok uzun…");
+  assert.ok(widest.length <= 36, widest);
 });
 
 test("a fresh recheck rejects a target when Desktop changes after menu creation", () => {

@@ -203,6 +203,16 @@ export interface ClaudeLaunchChoice {
   /** Claude starts without HTTP/3, so its requests go over HTTP/2. */
   quicOff: boolean;
 }
+/**
+ * One thing the macOS menu bar title can show: the percent used of the Claude-open account's
+ * five-hour or weekly window, the time left in its five-hour window, today's tokens or their API
+ * value across all accounts, or that account's name.
+ */
+export type MenuBarItem = "five-hour" | "week" | "reset" | "tokens" | "cost" | "account";
+/** What the menu bar title shows, in order; kept in its own file beside the registry, not in it. */
+export interface MenuBarTitleChoice {
+  items: MenuBarItem[];
+}
 export interface RelayAPI {
   inspectContinuation(): Promise<DesktopContinuationSnapshot>;
   /** "automatic" selects from identities enrolled when watching starts; UUIDs support existing watches. */
@@ -254,6 +264,10 @@ export interface RelayAPI {
   setClaudeLaunch(patch: Partial<ClaudeLaunchChoice>): Promise<ClaudeLaunchChoice>;
   /** Opens the switch diagnosis folder with its net logs in Finder. Takes no path. */
   showSwitchNetLogs(): Promise<void>;
+  /** What the menu bar title shows (macOS); the five-hour percent alone until changed. */
+  menuBarTitle(): Promise<MenuBarTitleChoice>;
+  /** Replaces the menu bar title's items and redraws it; resolves with the choice as kept. */
+  setMenuBarTitle(choice: MenuBarTitleChoice): Promise<MenuBarTitleChoice>;
   /** Main broadcast `relay:changed`: Relay state changed in another window or the tray. */
   onChanged(callback: () => void): () => void;
   /** Shows the main window on a page, with the intent its page acts on (and hides the menu bar panel). */

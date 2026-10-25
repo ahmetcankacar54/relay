@@ -1,6 +1,6 @@
 /** The part of Electron's Tray that shows the menu bar item. */
 export interface TrayFaceTarget<I> {
-  setTitle(title: string): void;
+  setTitle(title: string, options?: { fontType?: "monospacedDigit" }): void;
   setToolTip(tooltip: string): void;
   setImage(image: I): void;
 }
@@ -17,7 +17,8 @@ export class TrayFace<I> {
   constructor(private readonly tray: TrayFaceTarget<I>) {}
   setTitle(title: string) {
     if (title === this.title) return;
-    this.tray.setTitle(title);
+    // Digits of one width: a countdown or a percent that changes never shifts the menu bar items beside it.
+    this.tray.setTitle(title, { fontType: "monospacedDigit" });
     this.title = title;
   }
   setToolTip(tooltip: string) {

@@ -284,10 +284,46 @@ test("with no account yet, the panel offers adding one in the main window", asyn
   assert.deepEqual(opened, [["hesaplar", "ekle"]]);
 });
 
-test("stale usage on the active card says so", () => {
+test("stale usage on the active card says so, and keeps its last rings faded", () => {
   const html = render(relayFor(active, [active], { active: { ...use("active", 1, 1), checkedAt: iso(NOW - 3_600_000) } }));
-  assert.match(html, /Limit verisi eski/);
-  assert.doesNotMatch(html, /5 saatlik dönem/);
+  assert.match(html, /Limit verisi eski · 1 sa önce okundu ·/);
+  // The last known rings stay, on the stale ring's dashed track.
+  assert.match(html, /data-slot="limit-rings"/);
+  assert.match(html, /data-state="stale"/);
+});
+
+test("the active card keeps the last rings while the service cannot be reached, not after a sign-in problem", () => {
+  const rings = (usage: AccountUsage) => /data-slot="limit-rings"[^>]*>(?:(?!<\/section)[\s\S])*data-state="stale"/.test(activeCard(usage));
+  for (const issue of ["unavailable", "rate-limited"] as const) {
+    const kept: AccountUsage = { ...use("active", 40, 20, NOW + 3_600_000), status: "error", stale: true, issue };
+    const html = activeCard(kept);
+    assert.ok(rings(kept), issue);
+    assert.match(html, />%40</, issue);
+    assert.match(html, /Limit verisi eski · 1 dk önce okundu ·/, issue);
+    assert.match(html, /aria-label="Limitleri yenile"/, issue);
+  }
+  // A window that has reset since: nothing to keep.
+  const reset: AccountUsage = { ...use("active", 40, 20, NOW - 60_000), status: "error", stale: true, issue: "unavailable" };
+  assert.ok(!rings(reset));
+  assert.match(activeCard(reset), /Limit verisi eski ·/);
+  // A locked Keychain or a connection to renew keeps the cache, but the card asks for the fix instead.
+  for (const issue of ["keychain-locked", "renewal-required"] as const) {
+    const held: AccountUsage = { ...use("active", 40, 20, NOW + 3_600_000), status: "error", stale: true, issue };
+    assert.ok(!rings(held), issue);
+  }
+  // In English.
+  const en = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "en", setLanguage() {}, t: (_tr: string, en: string) => en } },
+      createElement(
+        RelayContext.Provider,
+        { value: relayFor(active, [active], { active: { ...use("active", 40, 20, NOW + 3_600_000), stale: true } }) },
+        createElement(PanelActiveCard, { now: NOW }),
+      ),
+    ),
+  );
+  assert.match(en, /Usage data is out of date · read 1 min ago ·/);
 });
 
 test("more than six other accounts collapse into an overflow line", () => {

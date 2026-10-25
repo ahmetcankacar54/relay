@@ -8,11 +8,13 @@ import { estimateCost } from "../shared/model-prices";
 import { addDays, lostFoundCollection, mondayOf } from "../shared/lost-found";
 import type { LedgerSnapshot, TokenCounts } from "../shared/token-usage-view";
 import { localDate, localSlot } from "../shared/planning";
+import { DEFAULT_MENU_BAR_ITEMS, menuBarItems } from "../shared/tray";
 import type {
   Account,
   AuthFlow,
   DesktopState,
   ExtensionStatus,
+  MenuBarItem,
   RelayAPI,
   Session,
   Snapshot,
@@ -278,6 +280,8 @@ const state: Snapshot = {
     dataDir: "Masaüstü uygulamasında yerel olarak saklanır",
   },
 };
+/** The menu bar title's items, kept in memory so Settings can be tried in the preview. */
+let previewMenuBar: MenuBarItem[] = [...DEFAULT_MENU_BAR_ITEMS];
 const desktopOnly = async (): Promise<never> => {
   throw new Error(
     "Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.",
@@ -593,6 +597,11 @@ export const previewApi: RelayAPI = {
   showDiagnostics: desktopOnly,
   claudeLaunch: async () => ({ netLog: false, quicOff: false }),
   setClaudeLaunch: desktopOnly,
+  menuBarTitle: async () => ({ items: [...previewMenuBar] }),
+  setMenuBarTitle: async (choice) => {
+    previewMenuBar = menuBarItems(choice.items);
+    return { items: [...previewMenuBar] };
+  },
   showSwitchNetLogs: desktopOnly,
   onChanged: () => () => {},
   openPage: async (page, intent) => {

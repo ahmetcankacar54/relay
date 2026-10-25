@@ -5,14 +5,17 @@ import { TrayFace } from "../electron/core/tray-face";
 
 function fakeTray() {
   const calls: string[] = [];
+  const fonts: (string | undefined)[] = [];
   let refuse = false;
   return {
     calls,
+    fonts,
     refuse: (value: boolean) => void (refuse = value),
     tray: {
-      setTitle: (title: string) => {
+      setTitle: (title: string, options?: { fontType?: string }) => {
         if (refuse) throw new Error("refused");
         calls.push(`title:${title}`);
+        fonts.push(options?.fontType);
       },
       setToolTip: (tooltip: string) => {
         if (refuse) throw new Error("refused");
@@ -50,6 +53,8 @@ test("the tray's title, tooltip and image are set only when they change", () => 
   face.setImage("blink", image("blink"));
   face.setToolTip("Relay · A");
   assert.deepEqual(fake.calls.slice(3), ["title: 41%", "image:blink.png"]);
+  // Digits of one width, so a changing figure never moves the menu bar items beside it.
+  assert.deepEqual(fake.fonts, ["monospacedDigit", "monospacedDigit"]);
 });
 
 test("a value the tray refused is set again next time", () => {
