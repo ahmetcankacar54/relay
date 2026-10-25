@@ -20,6 +20,7 @@ import {
 import {
   nativeDesktopWatch,
   parseWatchLine,
+  unpackedPath,
   type DesktopWatchEnd,
   type DesktopWatchHandlers,
   type DesktopWatchState,
@@ -662,4 +663,33 @@ test("the native watch runs the helper with its times, passes its states on, and
     });
   });
   assert.equal(missing, "desktop-ui-unsupported");
+  // Packaged, the helper is named inside app.asar, a file to spawn: it runs from the unpacked
+  // copy beside it, as execFile would find it.
+  const { mkdir } = await import("node:fs/promises");
+  await writeFile(path.join(scratch, "app.asar"), "archive");
+  await mkdir(path.join(scratch, "app.asar.unpacked", "dist-electron"), { recursive: true });
+  const packed = path.join(scratch, "app.asar.unpacked", "dist-electron", "desktop-automation");
+  await writeFile(packed, `#!/bin/sh\necho '{"gone":true}'\n`);
+  await chmod(packed, 0o755);
+  const fromArchive = await new Promise<DesktopWatchEnd>((resolve) => {
+    nativeDesktopWatch(
+      path.join(scratch!, "app.asar", "dist-electron", "desktop-automation"),
+      1_000,
+      3_000,
+    )({ state: () => {}, end: resolve });
+  });
+  assert.equal(fromArchive, "gone");
+});
+
+test("a path inside app.asar is its unpacked copy; any other path stays as it is", () => {
+  assert.equal(
+    unpackedPath("/Applications/Relay.app/Contents/Resources/app.asar/dist-electron/desktop-automation"),
+    "/Applications/Relay.app/Contents/Resources/app.asar.unpacked/dist-electron/desktop-automation",
+  );
+  for (const same of [
+    "/Applications/Relay.app/Contents/Resources/app.asar.unpacked/dist-electron/desktop-automation",
+    "/Users/me/cc-switch/dist-electron/desktop-automation",
+    "/Users/me/app.asar.d/helper",
+  ])
+    assert.equal(unpackedPath(same), same);
 });

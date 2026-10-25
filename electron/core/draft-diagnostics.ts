@@ -144,6 +144,8 @@ export function appendDraftEvent(
  */
 const REPEATED = new Set([
   "restore-start",
+  "record-start",
+  "skip",
   "restore-end",
   "stalls",
   "retry-accessibility",

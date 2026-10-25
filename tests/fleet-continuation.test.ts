@@ -474,7 +474,7 @@ test("the windows are told only when the fleet state changed, not for a new chec
   assert.equal(told, 3);
 });
 
-test("scans at most once a minute, and at once when the source's quota state changes", async () => {
+test("scans at most every 20 s, and at once when the source's quota state changes", async () => {
   const f = setup();
   let clock = NOW;
   let scans = 0;
@@ -489,17 +489,17 @@ test("scans at most once a minute, and at once when the source's quota state cha
   fleet.setEnabled(true);
   f.state.stops.set(f.a.id, []);
   f.state.usage[f.a.id] = usage(f.a, 70);
-  for (let i = 0; i < 3; i++, clock += 10_000)
+  for (let i = 0; i < 2; i++, clock += 10_000)
     assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
   assert.equal(scans, 1);
   // Out of quota: scanned at once, nothing stopped yet.
   f.state.usage[f.a.id] = usage(f.a, 100);
   assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
   assert.equal(scans, 2);
-  // A conversation stops: seen at the next scan, a minute after the last.
+  // A conversation stops: seen at the next scan, 20 s after the last.
   f.state.stops.set(f.a.id, [stop(0)]);
   f.state.automation = "accessibility-permission-required";
-  clock += 50_000;
+  clock += 10_000;
   assert.equal((await fleet.tick()).stopped, 0);
   assert.equal(scans, 2);
   clock += 10_000;
@@ -600,4 +600,117 @@ test("the switch acts on the conversations as scanned under the lock, not on an 
   const done = await fleet.tick();
   assert.deepEqual(f.state.switches, [f.b.id]);
   assert.equal(done.reason, "continued");
+});
+
+test("each change of the fleet's state is logged with what it waited on, and each continuation's end", async () => {
+  const f = setup();
+  const logs: Array<Record<string, unknown>> = [];
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    log: (event, fields) => void logs.push({ event, ...fields }),
+    quietDetail: () => ({ busy: "abcd1234", work: "node", sampled: true }),
+  });
+  fleet.setEnabled(true);
+  f.state.busy = "not-quiescent:busyWorkers";
+  await fleet.tick();
+  // The same wait again is not logged twice.
+  await fleet.tick();
+  const waits = logs.filter((l) => l.reason === "not-quiescent:busyWorkers");
+  assert.equal(waits.length, 1);
+  assert.deepEqual(waits[0], {
+    event: "state",
+    status: "waiting",
+    reason: "not-quiescent:busyWorkers",
+    source: f.a.id.slice(0, 8),
+    target: f.b.id.slice(0, 8),
+    stopped: 2,
+    quota: "full",
+    busy: "abcd1234",
+    work: "node",
+    sampled: true,
+  });
+  f.state.busy = undefined;
+  await fleet.tick();
+  const continued = logs.filter((l) => l.event === "continued");
+  assert.equal(continued.length, 2);
+  assert.equal(continued[0].result, "started");
+  assert.match(String(continued[0].conversation), /^[0-9a-f]{8}$/);
+  assert.ok(logs.some((l) => l.event === "state" && l.status === "switching"));
+});
+
+test("a target whose reading is only too old is read again at once, and taken once fresh", async () => {
+  const f = setup();
+  const reads: string[] = [];
+  const logs: Array<Record<string, unknown>> = [];
+  f.state.usage[f.b.id] = {
+    ...usage(f.b, 10),
+    checkedAt: new Date(NOW - 10 * 60_000).toISOString(),
+  };
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    log: (event, fields) => void logs.push({ event, ...fields }),
+    refreshUsage: async (id) => {
+      reads.push(id);
+      // Its quota is unreadable now, as with a 429.
+      if (reads.length === 1) throw new Error("rate-limited");
+      f.state.usage[id] = usage(id === f.b.id ? f.b : f.a, 10);
+    },
+  });
+  fleet.setEnabled(true);
+  const waiting = await fleet.tick();
+  assert.equal(waiting.reason, "no-target");
+  assert.deepEqual(reads, [f.b.id]);
+  const noTarget = logs.find((l) => l.reason === "no-target");
+  assert.equal(noTarget?.targets, `${f.b.id.slice(0, 8)}:quota-not-fresh`);
+  // Asked once a minute at most.
+  await fleet.tick();
+  assert.deepEqual(reads, [f.b.id]);
+  const later = new FleetContinuation({
+    ...f.deps,
+    now: () => NOW + 61_000,
+    refreshUsage: async (id) => {
+      reads.push(id);
+      f.state.usage[id] = {
+        ...usage(f.b, 10),
+        checkedAt: new Date(NOW + 60_000).toISOString(),
+      };
+    },
+  });
+  // A fresh source reading for the later clock.
+  f.state.usage[f.a.id] = {
+    ...usage(f.a, 100),
+    checkedAt: new Date(NOW + 30_000).toISOString(),
+  };
+  const switched = await later.tick();
+  assert.deepEqual(f.state.switches, [f.b.id]);
+  assert.equal(switched.status, "watching");
+});
+
+test("the notice after a switch at the limit names the account and counts the conversations", async () => {
+  const { fleetNotice } = await import("../electron/core/fleet-continuation");
+  const last = { at: "", sourceId: "s", targetId: "t", conversations: 3 };
+  assert.equal(
+    fleetNotice({ ...last, started: 3, uncertain: 0, skipped: 0 }, "Alto", "tr"),
+    "Kota doldu: Claude Alto hesabına geçti. 3 sohbet kaldığı yerden devam ediyor.",
+  );
+  assert.equal(
+    fleetNotice({ ...last, started: 1, uncertain: 1, skipped: 1 }, "Alto", "tr"),
+    "Kota doldu: Claude Alto hesabına geçti. 1 sohbet devam ediyor; 1 sohbeti sen sürdür; 1 sohbetin durumuna bak.",
+  );
+  assert.equal(
+    fleetNotice({ ...last, started: 2, uncertain: 0, skipped: 1 }, "Alto", "en"),
+    "Out of quota: Claude switched to Alto. 2 conversations continue; continue 1 conversation yourself.",
+  );
+  assert.equal(
+    fleetNotice({ ...last, started: 0, uncertain: 0, skipped: 3 }, "Alto", "en"),
+    "Out of quota: Claude switched to Alto. Continue 3 conversations yourself.",
+  );
+  assert.equal(
+    fleetNotice({ ...last, started: 0, uncertain: 0, skipped: 0 }, "Alto", "en", "account-changed"),
+    "Out of quota: Claude switched to Alto. Its conversations were not continued; continue them yourself.",
+  );
+  assert.equal(
+    fleetNotice({ ...last, conversations: 1, started: 1, uncertain: 0, skipped: 0 }, "Alto", "en"),
+    "Out of quota: Claude switched to Alto. 1 conversation continues where it stopped.",
+  );
 });

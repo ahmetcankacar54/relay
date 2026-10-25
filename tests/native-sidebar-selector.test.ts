@@ -198,11 +198,12 @@ test(
   { skip: process.platform !== "darwin" },
   async () => {
     const binary = await fixtureBinary();
-    const screen = (webAreaStrings: string[]) =>
-      runFixture(binary, { webAreaStrings }) as {
-        localSessionId: string | null;
-        newSession: boolean;
-      };
+    const screen = (webAreaStrings: string[]) => {
+      const { localSessionId, newSession } = runFixture(binary, {
+        webAreaStrings,
+      }) as { localSessionId: string | null; newSession: boolean };
+      return { localSessionId, newSession };
+    };
     const none = { localSessionId: null, newSession: false };
     const newSession = { localSessionId: null, newSession: true };
     // The path Desktop's own claude://code/new opens, with a trailing slash or a query.
@@ -257,6 +258,30 @@ test(
       ],
     ] as const)
       assert.deepEqual(screen([...strings]), none, name);
+  },
+);
+
+test(
+  "the screen's shape for the diagnosis log keeps the path and drops every id and query",
+  { skip: process.platform !== "darwin" },
+  async () => {
+    const binary = await fixtureBinary();
+    const shape = (webAreaStrings: string[]) =>
+      (runFixture(binary, { webAreaStrings }) as { screen: string }).screen;
+    assert.equal(shape([`https://claude.ai/epitaxy/${conversation}`]), "/epitaxy/local");
+    assert.equal(shape(["https://claude.ai/epitaxy?folder=%2FUsers%2Fme"]), "/epitaxy");
+    assert.equal(shape(["Claude", "https://claude.ai/new"]), "/new");
+    assert.equal(
+      shape(["https://claude.ai/chat/0f6c1b2a-1111-4222-8333-944445555666"]),
+      "/chat/:id",
+    );
+    assert.equal(shape(["https://claude.ai/project/p1"]), "/project/*");
+    assert.equal(shape([]), "none");
+    assert.equal(shape(["https://evil.example/claude.ai/new"]), "none");
+    assert.equal(
+      shape(["https://claude.ai/new", `https://claude.ai/epitaxy/${conversation}`]),
+      "several",
+    );
   },
 );
 

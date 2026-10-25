@@ -62,7 +62,20 @@ export interface FleetDeps {
   ): Promise<FleetResult>;
   withDesktopLock<T>(action: () => Promise<T>): Promise<T>;
   changed(): void;
+  /**
+   * A diagnosis log: each change of the fleet's state with what it waited on, and how each
+   * conversation's continuation ended. Fields are ids cut to 8 characters, states, reasons,
+   * counts and process names; never a conversation's text.
+   */
+  log?(event: string, fields: Record<string, unknown>): void;
+  /** What the last `quiet` found running, for the log: transcripts and process names. */
+  quietDetail?(): Record<string, unknown>;
+  /** A switch and its continuations are over: what became of them, to tell the user. */
+  finished?(last: NonNullable<FleetContinuationState["last"]>, reason?: string): void;
 }
+
+/** An id for the diagnosis log: its first 8 characters, which tell two apart. */
+const short = (id: string | undefined) => (id ? id.slice(0, 8) : null);
 
 interface Pending {
   id: string;
@@ -86,8 +99,12 @@ interface Saved {
 const stopKey = (account: Account, stop: QuotaStop) =>
   `${account.desktop!.accountUuid.toLowerCase()}:${stop.cliSessionId}:${stop.turnId}`;
 
-/** How long a quota-stop scan is reused while the source's quota state holds. */
-export const FLEET_SCAN_MS = 60_000;
+/**
+ * How long a quota-stop scan is reused while the source's quota state holds: a stop is seen
+ * within this long of happening, before its usage is read again. The scan reads only what
+ * transcripts gained since the last one.
+ */
+export const FLEET_SCAN_MS = 20_000;
 /** The least time between two usage reads the fleet asks for, per source. */
 export const FLEET_REREAD_MS = 60_000;
 /** A stop newer than the source's last usage reading, or one with no reading: it is out of date. */
@@ -146,6 +163,45 @@ export function chooseTarget(
 }
 
 /**
+ * The notification after the fleet switched Claude to `name` at the limit: how many
+ * conversations go on, and how many the user must continue or check. Counts only.
+ */
+export function fleetNotice(
+  last: NonNullable<FleetContinuationState["last"]>,
+  name: string,
+  language: "tr" | "en",
+  reason?: string,
+): string {
+  const en = language === "en";
+  const head = en
+    ? `Out of quota: Claude switched to ${name}.`
+    : `Kota doldu: Claude ${name} hesabına geçti.`;
+  const chats = (n: number) => `${n} ${n === 1 ? "conversation" : "conversations"}`;
+  const go = (n: number) => `${chats(n)} ${n === 1 ? "continues" : "continue"}`;
+  if (reason || last.started + last.uncertain + last.skipped === 0)
+    return en
+      ? `${head} Its conversations were not continued; continue them yourself.`
+      : `${head} Sohbetler devam ettirilemedi; onları sen sürdür.`;
+  if (last.started === last.conversations)
+    return en
+      ? `${head} ${go(last.started)} where ${last.started === 1 ? "it" : "they"} stopped.`
+      : `${head} ${last.started} sohbet kaldığı yerden devam ediyor.`;
+  const parts = en
+    ? [
+        last.started ? go(last.started) : "",
+        last.skipped ? `continue ${chats(last.skipped)} yourself` : "",
+        last.uncertain ? `check ${chats(last.uncertain)}` : "",
+      ]
+    : [
+        last.started ? `${last.started} sohbet devam ediyor` : "",
+        last.skipped ? `${last.skipped} sohbeti sen sürdür` : "",
+        last.uncertain ? `${last.uncertain} sohbetin durumuna bak` : "",
+      ];
+  const text = parts.filter(Boolean).join("; ");
+  return `${head} ${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
+
+/**
  * When the active Desktop account runs out of quota, waits until nothing else is
  * working, switches Claude to the best other account once and sends one
  * continuation message to every conversation that stopped at the limit. It stays
@@ -164,8 +220,8 @@ export class FleetContinuation {
     at: number;
     stops: QuotaStop[];
   };
-  /** When the fleet last asked for a usage read, and for which source. */
-  private reread?: { sourceId: string; at: number };
+  /** When the fleet last asked for a usage read of each account. */
+  private rereads = new Map<string, number>();
   private readonly file: string;
   private readonly now: () => number;
   constructor(private readonly deps: FleetDeps) {
@@ -221,10 +277,14 @@ export class FleetContinuation {
     writePrivateJson(this.file, next);
     this.saved = next;
   }
-  /** Tells the windows only when the state changed, not for a new check time alone. */
+  /**
+   * Tells the windows only when the state changed, not for a new check time alone, and logs
+   * the change with `detail`: what the fleet waited on.
+   */
   private publish(
     fields: Partial<FleetContinuationState> &
       Pick<FleetContinuationState, "status">,
+    detail?: Record<string, unknown>,
   ) {
     const previous = { ...this.view, checkedAt: undefined };
     this.view = {
@@ -236,9 +296,76 @@ export class FleetContinuation {
     if (
       JSON.stringify(previous) !==
       JSON.stringify({ ...this.view, checkedAt: undefined })
-    )
+    ) {
       this.deps.changed();
+      this.logEvent("state", {
+        status: this.view.status,
+        reason: this.view.reason ?? null,
+        source: short(this.view.sourceId),
+        target: short(this.view.targetId),
+        stopped: this.view.stopped ?? null,
+        ...detail,
+      });
+    }
     return this.snapshot();
+  }
+  private logEvent(event: string, fields: Record<string, unknown>) {
+    try {
+      this.deps.log?.(event, fields);
+    } catch {
+      // The log is an aid, never a part of a switch.
+    }
+  }
+  /** Each other account and why it cannot take over now, or `ok`, for the log. */
+  private targetReasons(
+    source: Account,
+    accounts: Account[],
+    settings: RelaySettings,
+    usage: Record<string, AccountUsage>,
+    now: number,
+  ) {
+    return accounts
+      .filter((account) => account.id !== source.id)
+      .map(
+        (account) =>
+          `${short(account.id)}:${
+            continuationTargetReadinessReason(
+              source,
+              account,
+              usage[account.id],
+              settings,
+              now,
+            ) ?? "ok"
+          }`,
+      )
+      .join(" ");
+  }
+  /**
+   * No account can take over only because its last reading is too old: read those again now,
+   * each at most once a minute. Whether any was read.
+   */
+  private async readTargetsAgain(
+    source: Account,
+    accounts: Account[],
+    settings: RelaySettings,
+    usage: Record<string, AccountUsage>,
+    now: number,
+  ) {
+    let read = false;
+    for (const account of accounts)
+      if (
+        account.id !== source.id &&
+        continuationTargetReadinessReason(
+          source,
+          account,
+          usage[account.id],
+          settings,
+          now,
+        ) === "quota-not-fresh" &&
+        (await this.readAgain(account.id))
+      )
+        read = true;
+    return read;
   }
   async tick(): Promise<FleetContinuationState> {
     if (this.running) return this.snapshot();
@@ -287,6 +414,7 @@ export class FleetContinuation {
       quota = sourceQuota(this.deps.snapshot().usage[source.id], this.now());
     // While a fresh reading shows room, no conversation waits for another account.
     if (quota === "room") stops = [];
+    const detail = { quota };
     if (!stops.length) {
       // Name the account the fleet would pick while the active one is full, so
       // the UI can offer it. Nothing switches until a conversation stops.
@@ -294,22 +422,24 @@ export class FleetContinuation {
         quota === "full"
           ? chooseTarget(source, accounts, settings, usage, now, tempoRate)
           : undefined;
-      return this.publish({
-        status: "watching",
-        reason: "awaiting-quota-stop",
-        sourceId: source.id,
-        stopped: 0,
-        ...(target ? { targetId: target.id } : {}),
-      });
+      return this.publish(
+        {
+          status: "watching",
+          reason: "awaiting-quota-stop",
+          sourceId: source.id,
+          stopped: 0,
+          ...(target ? { targetId: target.id } : {}),
+        },
+        detail,
+      );
     }
     const base = { sourceId: source.id, stopped: stops.length };
     if (quota !== "full")
-      return this.publish({
-        ...base,
-        status: "waiting",
-        reason: "source-quota-unconfirmed",
-      });
-    const target = chooseTarget(
+      return this.publish(
+        { ...base, status: "waiting", reason: "source-quota-unconfirmed" },
+        detail,
+      );
+    let target = chooseTarget(
       source,
       accounts,
       settings,
@@ -317,24 +447,49 @@ export class FleetContinuation {
       now,
       tempoRate,
     );
-    if (!target)
-      return this.publish({ ...base, status: "waiting", reason: "no-target" });
+    // An account whose reading is only too old is read again now rather than at its turn.
+    if (
+      !target &&
+      (await this.readTargetsAgain(source, accounts, settings, usage, now))
+    ) {
+      const fresh = this.deps.snapshot();
+      target = chooseTarget(
+        source,
+        fresh.accounts,
+        fresh.settings,
+        fresh.usage,
+        this.now(),
+        fresh.tempoRate,
+      );
+    }
+    if (!target) {
+      const fresh = this.deps.snapshot();
+      return this.publish(
+        { ...base, status: "waiting", reason: "no-target" },
+        {
+          ...detail,
+          targets: this.targetReasons(
+            source,
+            fresh.accounts,
+            fresh.settings,
+            fresh.usage,
+            this.now(),
+          ),
+        },
+      );
+    }
     const busy = await this.deps.quiet(stops);
     if (busy)
-      return this.publish({
-        ...base,
-        targetId: target.id,
-        status: "waiting",
-        reason: busy,
-      });
+      return this.publish(
+        { ...base, targetId: target.id, status: "waiting", reason: busy },
+        { ...detail, ...this.deps.quietDetail?.() },
+      );
     const automation = await this.deps.automationReady();
     if (automation)
-      return this.publish({
-        ...base,
-        targetId: target.id,
-        status: "attention",
-        reason: automation,
-      });
+      return this.publish(
+        { ...base, targetId: target.id, status: "attention", reason: automation },
+        detail,
+      );
     return this.deps.withDesktopLock(async () => {
       // Recheck under the lock: a new turn or task may have started meanwhile.
       // From here on only this fresh scan counts; the one above may be a minute old.
@@ -414,15 +569,16 @@ export class FleetContinuation {
       return this.continueAll({ ...pending, stage: "continuing" });
     });
   }
-  /** Asks for a fresh usage read of `sourceId`, unless one was asked for under a minute ago. Whether it read. */
-  private async readAgain(sourceId: string) {
+  /** Asks for a fresh usage read of `accountId`, unless one was asked for under a minute ago. Whether it read. */
+  private async readAgain(accountId: string) {
     if (!this.deps.refreshUsage) return false;
     const now = this.now();
-    if (this.reread?.sourceId === sourceId && now - this.reread.at < FLEET_REREAD_MS)
+    const last = this.rereads.get(accountId);
+    if (last !== undefined && now >= last && now - last < FLEET_REREAD_MS)
       return false;
-    this.reread = { sourceId, at: now };
+    this.rereads.set(accountId, now);
     try {
-      await this.deps.refreshUsage(sourceId);
+      await this.deps.refreshUsage(accountId);
       return true;
     } catch {
       // The scheduled reads go on; the next stop or minute asks again.
@@ -501,6 +657,10 @@ export class FleetContinuation {
       }
       pending.results[stop.localSessionId] = result;
       this.save({ ...this.saved, pending });
+      this.logEvent("continued", {
+        conversation: short(stop.localSessionId.replace(/^local_/, "")),
+        result,
+      });
     }
     return this.finish(pending, source);
   }
@@ -534,6 +694,11 @@ export class FleetContinuation {
           : []),
       ],
     });
+    try {
+      this.deps.finished?.(last, reason);
+    } catch {
+      // A notice that fails changes nothing about the conversations.
+    }
     return this.publish({
       status: reason || last.uncertain ? "attention" : "watching",
       reason: reason ?? (last.uncertain ? "delivery-uncertain" : "continued"),

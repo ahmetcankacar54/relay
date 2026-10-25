@@ -154,6 +154,8 @@ export interface QuiescenceInputs {
   busyTranscripts?: number;
   /** Processes whose CPU time advanced since the previous observation. Undefined: not measured yet. */
   activePids?: ReadonlySet<number>;
+  /** Filled with the name of each process counted as unknown work, for the diagnosis log. */
+  work?: string[];
 }
 
 /**
@@ -229,8 +231,10 @@ export function desktopProcessQuiescence(
     // Claude's own helpers (Chromium processes, engine wrappers, crash reporter).
     if (row.executable.startsWith(`${bundle}Contents/`)) continue;
     if (isDesktopClaudeEngine(row)) continue;
-    if (!inputs.activePids || inputs.activePids.has(row.pid))
+    if (!inputs.activePids || inputs.activePids.has(row.pid)) {
       result.unknownWork++;
+      inputs.work?.push(path.basename(row.executable));
+    }
   }
   result.coverage = "guarded-local";
   return result;
@@ -245,7 +249,12 @@ export function desktopProcessQuiescence(
 function mainTail(rows: Row[]) {
   const turns = rows.filter(
     (r) =>
-      !r.isSidechain && !r.isMeta && ["user", "assistant"].includes(r.type),
+      !r.isSidechain &&
+      !r.isMeta &&
+      // Written to the transcript only, as a background task's notice that came after the
+      // turn ended: Claude Code never answers it, so it is no turn.
+      r.queueTranscriptOnly !== true &&
+      ["user", "assistant"].includes(r.type),
   );
   let index = turns.length - 1;
   while (index >= 0 && isTaskNotification(turns[index])) index--;
@@ -399,6 +408,29 @@ function transcriptError(row: Row): "quota" | "other" | undefined {
   return undefined;
 }
 
+/**
+ * Rows written after a quota stop that start or queue another turn: a prompt or an answer on
+ * the main chain, or a queued prompt, but not a task notification Claude Code wrote itself,
+ * nor any row of its own bookkeeping.
+ */
+export function movedOn(appended: Row[]): boolean {
+  return appended.some((row) => {
+    if (row.isSidechain === true) return false;
+    if (row.type === "assistant") return true;
+    if (row.type === "user")
+      return row.isMeta !== true && !isTaskNotification(row);
+    if (row.type === "queue-operation" && row.operation === "enqueue") {
+      const content = row.content;
+      return !(
+        typeof content === "string" && content.startsWith("<task-notification>")
+      );
+    }
+    if (row.type === "attachment")
+      return row.attachment?.type === "queued_command";
+    return false;
+  });
+}
+
 export function latestQuotaEndedTurn(rows: Row[]) {
   const tail = mainTail(rows);
   if (!tail || tail.type !== "assistant" || !UUID.test(tail.uuid ?? "")) return;
@@ -497,8 +529,11 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   >();
   /** When each conversation no single folder held was last probed. */
   private readonly unplaced = new Map<string, number>();
-  /** Count other recently written transcripts whose turn is unfinished. */
-  private busyTranscripts(excluded: ReadonlySet<string>) {
+  /**
+   * Count other recently written transcripts whose turn is unfinished. Each one's session id,
+   * cut to 8 characters, goes into `names` for the diagnosis log.
+   */
+  private busyTranscripts(excluded: ReadonlySet<string>, names: string[] = []) {
     const root = path.join(this.options.transcriptRoot, "projects");
     const cutoff = this.now() - LIVE_TRANSCRIPT_MS;
     let busy = 0;
@@ -536,9 +571,13 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
             stat.size > length
               ? Buffer.concat([Buffer.from("\n"), buffer])
               : buffer;
-          if (transcriptTurnState(transcriptTail(data)) === "busy") busy++;
+          if (transcriptTurnState(transcriptTail(data)) === "busy") {
+            busy++;
+            names.push(name.slice(0, 8));
+          }
         } catch {
           busy++;
+          names.push(name.slice(0, 8));
         }
       }
     }
@@ -588,9 +627,11 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   }
   private async measure(
     excluded: string | ReadonlySet<string>,
+    names?: string[],
   ): Promise<QuiescenceInputs> {
     const busyTranscripts = this.busyTranscripts(
       typeof excluded === "string" ? new Set([excluded]) : excluded,
+      names,
     );
     return { busyTranscripts, activePids: await this.activePids() };
   }
@@ -816,11 +857,29 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     const raw = await (this.options.processes ?? collectProcesses)();
     const app = this.claudeApp(raw);
     if (typeof app !== "number") return app;
-    return this.quietReason(
-      raw,
-      app,
-      await this.measure(new Set(stops.map((stop) => stop.transcriptRelative))),
+    const busy: string[] = [];
+    const work: string[] = [];
+    const inputs = await this.measure(
+      new Set(stops.map((stop) => stop.transcriptRelative)),
+      busy,
     );
+    const reason = this.quietReason(raw, app, { ...inputs, work });
+    this.lastQuiet = { busy, work, sampled: inputs.activePids !== undefined };
+    return reason;
+  }
+  private lastQuiet?: { busy: string[]; work: string[]; sampled: boolean };
+  /**
+   * What the last `quietExcept` found running, for the diagnosis log: the session ids (cut to
+   * 8 characters) of the transcripts whose turn was unfinished, the names of the processes
+   * counted as work, and whether a CPU sample to compare with was there. Never a path or text.
+   */
+  quietDetail(): Record<string, string | boolean> {
+    const list = (names: string[]) =>
+      [...new Set(names)].slice(0, 6).join(" ").slice(0, 120);
+    const last = this.lastQuiet;
+    return last
+      ? { busy: list(last.busy), work: list(last.work), sampled: last.sampled }
+      : {};
   }
   /** Synchronous variant for the checks immediately before quit and writes. */
   quietExceptSync(stops: QuotaStop[]) {
@@ -856,15 +915,28 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
       if (key !== "coverage" && value !== 0) return `not-quiescent:${key}`;
     return undefined;
   }
-  /** The stopped transcript still ends where it was observed. */
+  /**
+   * The stopped conversation has not moved on: its transcript still begins with the bytes seen
+   * at the stop, and nothing written after them is a new turn. Claude keeps writing rows of its
+   * own to a stopped conversation, the more so as it quits and starts again (`last-prompt`,
+   * `cost-state`, titles, modes, queue operations, and background task notifications Claude
+   * Code never answers out of quota); none of them is a turn. A prompt, an answer, or a prompt
+   * queued to be sent is. A transcript that cannot be read, or one being written mid-line, is
+   * not known to be unchanged.
+   */
   unchanged(stop: QuotaStop) {
     try {
       const data = fsSync.readFileSync(
         path.join(this.options.transcriptRoot, stop.transcriptRelative),
       );
+      if (
+        data.length < stop.transcriptBytes ||
+        sha(data.subarray(0, stop.transcriptBytes)) !== stop.transcriptSha256
+      )
+        return false;
       return (
-        data.length === stop.transcriptBytes &&
-        sha(data) === stop.transcriptSha256
+        data.length === stop.transcriptBytes ||
+        !movedOn(parseDesktopTranscript(data.subarray(stop.transcriptBytes)))
       );
     } catch {
       return false;

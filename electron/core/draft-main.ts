@@ -604,9 +604,19 @@ export class DraftScheduler {
           if (reason === "expired" && this.targets.size) this.startWatch();
         },
       });
-    } catch {
+    } catch (error) {
       if (this.watching === entry) this.watching = undefined;
-      logDraft(log, "watch-end", { reason: "failed" });
+      // Its code alone, such as ENOTDIR: a message could name a path.
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      logDraft(log, "watch-end", {
+        reason: "failed",
+        error:
+          typeof code === "string"
+            ? code
+            : error instanceof Error
+              ? error.name
+              : "unknown",
+      });
     }
   }
 

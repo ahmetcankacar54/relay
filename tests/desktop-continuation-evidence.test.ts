@@ -13,6 +13,7 @@ import {
   parseCpuTimes,
   parseDesktopTranscript,
   transcriptTurnState,
+  movedOn,
   continuationTurn,
   NativeDesktopContinuationEvidence,
   type DesktopProcess,
@@ -970,6 +971,81 @@ test("a quota stop followed by background-task notifications is a quiet stop, an
   } finally {
     await fs.rm(f.root, { recursive: true, force: true });
   }
+});
+test("Claude's own rows after a stop, as it quits and opens again, leave the stop unchanged; a prompt does not", async () => {
+  const f = await recentFixture();
+  try {
+    const account = f.store.account(f.source.id);
+    const append = (...rows: unknown[]) =>
+      fs.appendFile(
+        f.transcriptFile,
+        rows.map((row) => JSON.stringify(row) + "\n").join(""),
+      );
+    const [stop] = await f.evidence.quotaStops(account);
+    // Seen in real transcripts after a switch: bookkeeping rows, a background task's notice
+    // queued and written to the transcript only, titles and modes.
+    await append(
+      { type: "last-prompt", lastPrompt: "x" },
+      { type: "cost-state", cost: 1 },
+      {
+        type: "queue-operation",
+        operation: "enqueue",
+        content: "<task-notification>\n<task-id>t1</task-id>",
+      },
+      { type: "queue-operation", operation: "dequeue" },
+      { ...notice(noticeA, assistantId), queueTranscriptOnly: true },
+      { type: "custom-title", customTitle: "t" },
+      { type: "isolation-latch" },
+      { type: "system", subtype: "stop_hook_summary" },
+    );
+    assert.equal(f.evidence.unchanged(stop), true);
+    // The stop is still the conversation's latest turn, and nothing reads as running.
+    assert.equal((await f.evidence.quotaStops(account))[0].turnId, stop.turnId);
+    assert.equal(await f.evidence.quietExcept([]), undefined);
+    // A prompt queued to be sent, or one sent, is the conversation moving on.
+    const queued = structuredClone(stop);
+    await append({
+      type: "queue-operation",
+      operation: "enqueue",
+      content: "carry on",
+    });
+    assert.equal(f.evidence.unchanged(queued), false);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
+test("the rows that move a stopped conversation on", () => {
+  const prompt = { type: "user", message: { content: "go" } };
+  for (const [rows, expected] of [
+    [[prompt], true],
+    [[{ type: "assistant", message: { content: [] } }], true],
+    [[{ type: "attachment", attachment: { type: "queued_command" } }], true],
+    [[{ type: "queue-operation", operation: "enqueue", content: [{ type: "image" }] }], true],
+    [[{ ...prompt, isSidechain: true }], false],
+    [[{ ...prompt, isMeta: true }], false],
+    [[{ type: "user", origin: { kind: "task-notification" }, message: { content: "<task-notification>" } }], false],
+    [[{ type: "attachment", attachment: { type: "todo_reminder" } }], false],
+    [[{ type: "queue-operation", operation: "remove" }], false],
+    [[], false],
+  ] as const)
+    assert.equal(movedOn([...rows] as never[]), expected, JSON.stringify(rows));
+});
+test("a notice written to the transcript only starts no turn, so it hides no finished turn", () => {
+  const finished = {
+    type: "assistant",
+    uuid: "a",
+    message: { content: [{ type: "text", text: "done" }], stop_reason: "end_turn" },
+  };
+  const notice = {
+    type: "user",
+    origin: { kind: "task-notification" },
+    queueTranscriptOnly: true,
+    message: { content: "<task-notification>\n<task-id>t</task-id>" },
+  };
+  assert.equal(transcriptTurnState([finished, notice]), "idle");
+  // One that is sent to the model starts a turn, as before.
+  const { queueTranscriptOnly: _, ...sent } = notice;
+  assert.equal(transcriptTurnState([finished, sent]), "busy");
 });
 test("quota-stop polling follows a growing transcript and refuses a malformed one", async () => {
   const f = await fixture();

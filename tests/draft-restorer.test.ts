@@ -1453,19 +1453,25 @@ test("a vault that fails to mark or remove does not stop the other drafts", asyn
 });
 
 test("the return point is used only when it was seen and differs from the last conversation", async () => {
-  // Where the user is cannot be told: Relay never takes them away, as it could not bring them
-  // back. The draft waits for them to open its conversation.
+  // Where the user is cannot be told, as on Claude's start screen after a switch: Relay takes
+  // them to the drafts all the same, and they stay at the last one.
   const unseen = harness({ shown: undefined, records: [record(1), fresh(2)] });
-  assert.deepEqual(await restoreDrafts(unseen.deps), {
+  const result = await restoreDrafts(unseen.deps);
+  assert.equal(result.restored, 2);
+  assert.deepEqual(unseen.opens(), [`open:${target(1)}`, "open:new-session"]);
+  assert.deepEqual(unseen.writes(), [`write:${target(1)}`, "write:new-session"]);
+  // Without visits, as once the first two minutes are over, it waits for the user instead.
+  const later = harness({ shown: undefined, records: [record(1), fresh(2)] });
+  assert.deepEqual(await restoreDrafts(later.deps, { visits: false }), {
     status: "waiting",
     restored: 0,
     left: 2,
     reason: "elsewhere",
   });
-  assert.deepEqual(unseen.opens(), []);
-  assert.deepEqual(unseen.writes(), []);
-  assert.deepEqual(unseen.marks, []);
-  assert.deepEqual(unseen.notes, []);
+  assert.deepEqual(later.opens(), []);
+  assert.deepEqual(later.writes(), []);
+  assert.deepEqual(later.marks, []);
+  assert.deepEqual(later.notes, []);
   // The user was already on the draft's conversation: nothing is opened at all.
   const same = harness({ shown: target(1) });
   assert.equal((await restoreDrafts(same.deps)).restored, 1);
@@ -1606,8 +1612,8 @@ test("without visits only the draft on screen is typed, and the rest wait as els
   assert.deepEqual(
     h.logs.filter((e) => e.event === "skip"),
     [
-      { event: "skip", id: "draft-1", visits: false, returnKnown: true },
-      { event: "skip", id: "draft-3", visits: false, returnKnown: true },
+      { event: "skip", id: "draft-1", visits: false, returnKnown: true, screen: null },
+      { event: "skip", id: "draft-3", visits: false, returnKnown: true, screen: null },
     ],
   );
   // Nothing on screen of theirs: nothing is opened, typed or told.
@@ -2024,8 +2030,10 @@ test("a restored draft logs each step of its run, and no text", async () => {
     status: "stopped",
     composerPresent: true,
     composerEmpty: true,
-    // The helper's reason; this fake's snapshots carry none.
+    // The helper's reason, count and page shape; this fake's snapshots carry none.
     composerEmptyAs: null,
+    composerChars: null,
+    screen: null,
     frontmost: true,
     idleMs: 60_000,
     guardable: true,

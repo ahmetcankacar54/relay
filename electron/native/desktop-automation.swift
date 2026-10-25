@@ -217,6 +217,24 @@ func screenOf(_ strings: [String]) -> (localSessionId: String?, newSession: Bool
     let ids = epitaxySessionIDs(strings)
     return (ids.count == 1 ? ids.first : nil, ids.isEmpty && epitaxyNewSession(strings))
 }
+// The shape of the claude.ai page the web areas show, for the diagnosis log: its path with
+// every id dropped, such as "/epitaxy/local", "/epitaxy" or "/new"; "none" without a
+// claude.ai URL, "several" for more than one shape. Never an id or a query.
+func screenShape(_ strings: [String]) -> String {
+    var shapes = Set<String>()
+    for text in strings {
+        guard let url = URLComponents(string: text), url.scheme == "https", url.host == "claude.ai" else { continue }
+        let parts = url.path.split(separator: "/").prefix(4).map { part -> String in
+            let segment = String(part)
+            if segment.hasPrefix("local_") { return "local" }
+            if segment.range(of: "^[a-z-]{1,24}$", options: .regularExpression) != nil { return segment }
+            return segment.range(of: "^[0-9a-fA-F-]{8,}$", options: .regularExpression) != nil ? ":id" : "*"
+        }
+        shapes.insert("/" + parts.joined(separator: "/"))
+    }
+    if shapes.isEmpty { return "none" }
+    return shapes.count == 1 ? shapes.first! : "several"
+}
 // Cheap re-read of only the web areas an earlier observe() already found: a few
 // attribute reads, no tree walk. Used right before a write that replaces text.
 func liveScreen(_ observation: Observation) -> (localSessionId: String?, newSession: Bool) {
@@ -311,6 +329,11 @@ func observe() throws -> Observation {
     fields["keyIdleMs"] = keyIdleMilliseconds()
     // How an empty composer read as empty, for the diagnosis log; never its text.
     if let reason = composerEmpty { fields["composerEmptyAs"] = reason }
+    // How much a composer that is not empty holds, as a count; never its text.
+    if let element = composer?.element, composerEmpty == nil {
+        fields["composerChars"] = visibleText(stringAttribute(element, kAXValueAttribute)).count
+    }
+    fields["screen"] = screenShape(webAreas.flatMap { $0.strings })
     return Observation(app: app, tree: tree, composer: composer, send: send, permission: permission, fields: fields)
 }
 // A guard names its screen by a conversation id or, for write-draft only
@@ -625,7 +648,7 @@ do {
         result = ["accountPath": accountPopupPath(tree) as Any? ?? NSNull()]
     } else if let object = json as? [String: Any], let strings = object["webAreaStrings"] as? [String] {
         let screen = screenOf(strings)
-        result = ["localSessionId": screen.localSessionId as Any? ?? NSNull(), "newSession": screen.newSession]
+        result = ["localSessionId": screen.localSessionId as Any? ?? NSNull(), "newSession": screen.newSession, "screen": screenShape(strings)]
     } else if let object = json as? [String: Any], let composer = object["composer"] as? [String: Any] {
         // {"composer": {value, emptyEditorMarked, placeholder}} says how such a composer reads.
         let value = composer["value"] as? String ?? ""

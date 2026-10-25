@@ -58,9 +58,8 @@ export type RestoreResult = {
    * - `active`: Claude was not in front, the user had input in the last 3 s before Relay
    *   would take them elsewhere, or pressed a key in the last 1 s before Relay would type
    *   where they are, so Relay did not open or type anything;
-   * - `elsewhere`: a draft's place was not on screen and Relay may not take the user there
-   *   now (the run allows no visits, or where the user is cannot be told, so they could not
-   *   be brought back); it stays pending for the user to open it;
+   * - `elsewhere`: a draft's place was not on screen and the run allows no visits; it stays
+   *   pending for the user to open it;
    * - `moved`: the user went to another conversation or screen;
    * - `changed`: Claude's account, uptime or process changed;
    * - `claude-not-running`;
@@ -189,8 +188,14 @@ interface Run {
   visits: boolean;
   /** Set by the first lock's look at the screen. */
   anchored: boolean;
-  /** The place the user was on, to take them back to. */
+  /**
+   * The place the user was on, to take them back to; undefined when the screen was one Relay
+   * does not name, such as Claude's start screen after a switch, and then the user stays at
+   * the last draft.
+   */
   returnTo?: Place;
+  /** The shape of the page the first lock's look found, for the diagnosis log. */
+  screen?: string;
   /** The place Relay last saw on screen. Anything else means the user moved. */
   lastSeen?: Place;
 }
@@ -218,16 +223,16 @@ export const draftPlace = (record: DraftRecord): string | undefined =>
  * The wipe is past once Desktop's marker says it finished after Claude started, or once Claude
  * has run 15 s; a run that finds Claude running but not there yet waits for it, checking the
  * marker every 500 ms. It waits for Desktop's UI without the Desktop lock, then takes the lock
- * for each draft and re-checks Claude under it. The draft whose place is on screen goes
- * first, and is typed where the user is while Claude is in front and no key has been pressed
- * for 1 s. Taking the user elsewhere needs the run to allow visits, a place to bring them
- * back to, and Claude in front with the user idle for 3 s; a draft that cannot be gone to now
- * stays pending, and the run ends `elsewhere`. It stops, leaving the rest pending, when the
- * lock is busy or another operation waits for it, the user is active or moves, Claude
- * changes or the run passes 5 minutes. A draft it cannot type, or cannot see in its composer
- * afterwards, is marked `needs-copy` with the reason: `maybe-typed` once a write was tried,
- * except a write the helper refused for want of accessibility, which typed nothing and stays
- * `accessibility`.
+ * for each draft and re-checks Claude under it. The draft whose place is on screen goes first,
+ * and is typed where the user is while Claude is in front and no key has been pressed for 1 s.
+ * Taking the user elsewhere needs the run to allow visits, and Claude in front with the user
+ * idle for 3 s; when the screen they were on is one Relay does not name, such as Claude's start
+ * screen after a switch, they stay at the last draft. A draft that cannot be gone to now stays
+ * pending, and the run ends `elsewhere`. It stops, leaving the rest pending, when the lock is
+ * busy or another operation waits for it, the user is active or moves, Claude changes or the
+ * run passes 5 minutes. A draft it cannot type, or cannot see in its composer afterwards, is
+ * marked `needs-copy` with the reason: `maybe-typed` once a write was tried, except a write the
+ * helper refused for want of accessibility, which typed nothing and stays `accessibility`.
  */
 export async function restoreDrafts(
   deps: RestorerDeps,
@@ -375,6 +380,7 @@ async function restore(
           id,
           visits: run.visits,
           returnKnown: run.returnTo !== undefined,
+          screen: run.screen ?? null,
         });
       } else if (reason !== undefined) await leave(record, reason);
       else {
@@ -500,8 +506,9 @@ async function locked<T>(deps: RestorerDeps, fn: () => Promise<T>): Promise<T> {
  * what Relay last saw there. The first lock's look is where the user is taken back to, and
  * nothing the screen showed before it counts as the user moving. With `target` on screen,
  * Claude must be in front with no key pressed for 1 s. Elsewhere, Relay goes there only when
- * the run allows visits and knows where to bring the user back, and then with Claude in front
- * and the user idle for 3 s; without both, SKIP.
+ * the run allows visits, and then with Claude in front and the user idle for 3 s; without
+ * visits, SKIP. A first look at a screen Relay does not name leaves nowhere to take the user
+ * back to: they stay where the drafts took them.
  */
 async function confirm(
   deps: RestorerDeps,
@@ -533,12 +540,13 @@ async function confirm(
     run.anchored = true;
     run.returnTo = place;
     run.lastSeen = place;
+    run.screen = view.screen;
   } else if (place !== run.lastSeen) throw new Stop("pending", "moved");
   if (place === target) {
     if (!letsType(view)) throw new Stop("pending", "active");
     return;
   }
-  if (!run.visits || run.returnTo === undefined) return SKIP;
+  if (!run.visits) return SKIP;
   if (!letsAct(view)) throw new Stop("pending", "active");
 }
 
@@ -614,6 +622,8 @@ async function restoreOne(
     composerPresent: view.composerPresent ?? null,
     composerEmpty: view.composerEmpty,
     composerEmptyAs: view.composerEmptyAs ?? null,
+    composerChars: view.composerChars ?? null,
+    screen: view.screen ?? null,
     frontmost: view.frontmost ?? null,
     idleMs: view.idleMs ?? null,
     guardable: guardable(view, target),

@@ -58,6 +58,17 @@ export interface DesktopAutomationSnapshot {
    * fingerprint, for the diagnosis log; older helpers omit it.
    */
   composerEmptyAs?: string;
+  /**
+   * How many visible characters a composer that is not empty holds: never its text. Outside
+   * the fingerprint, for the diagnosis log; older helpers omit it.
+   */
+  composerChars?: number;
+  /**
+   * The shape of the claude.ai page on screen with its ids dropped, such as `/epitaxy/local`,
+   * `/epitaxy` or `/new`; `none` without one, `several` for more than one. Outside the
+   * fingerprint, for the diagnosis log; older helpers omit it.
+   */
+  screen?: string;
   sendEnabled: boolean;
   quotaAutoResume?: boolean;
   visibleActiveTasks?: number;
@@ -238,6 +249,10 @@ function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
     typeof v.composerEmpty === "boolean" &&
     (v.composerEmptyAs === undefined ||
       (typeof v.composerEmptyAs === "string" && /^[a-z-]{1,16}$/.test(v.composerEmptyAs))) &&
+    (v.composerChars === undefined ||
+      (Number.isSafeInteger(v.composerChars) && v.composerChars >= 0)) &&
+    (v.screen === undefined ||
+      (typeof v.screen === "string" && /^[a-z0-9/:*_-]{1,80}$/.test(v.screen))) &&
     typeof v.sendEnabled === "boolean" &&
     (v.quotaAutoResume === undefined ||
       typeof v.quotaAutoResume === "boolean") &&

@@ -246,9 +246,16 @@ test("the repeat filter drops what a run that did nothing says again, and nothin
   assert.equal(allow("restore-start", { ...wait, ready: true }), true);
   assert.equal(allow("restore-end", { ...end, reason: "not-ready" }), true);
   assert.equal(allow("restore-start", { ...wait, ready: true }), false);
+  // A draft skipped the same way on each 10 s run is said once too.
+  const skip = { id: "x", visits: false, returnKnown: true, screen: "/new" };
+  assert.equal(allow("record-start", { id: "x" }), true);
+  assert.equal(allow("skip", skip), true);
+  assert.equal(allow("restore-start", { ...wait, ready: true }), false);
+  assert.equal(allow("record-start", { id: "x" }), false);
+  assert.equal(allow("skip", skip), false);
   // Any other event is always kept, and makes the next run's start count again.
-  assert.equal(allow("record-start", { id: "x" }), true);
-  assert.equal(allow("record-start", { id: "x" }), true);
+  assert.equal(allow("watch-start", { places: 1 }), true);
+  assert.equal(allow("watch-start", { places: 1 }), true);
   assert.equal(allow("restore-start", { ...wait, ready: true }), true);
   assert.equal(allow("restore-end", { ...end, reason: "not-ready" }), true);
   // An accessibility retry that moved nothing is said once, too.

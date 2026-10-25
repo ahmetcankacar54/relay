@@ -30,7 +30,7 @@ import {
 import { identity, readObject } from "./core/desktop-files";
 import { DesktopLock } from "./core/desktop-lock";
 import { lastDraftWipeAt } from "./core/desktop-wipe";
-import { nativeDesktopWatch } from "./core/desktop-watch";
+import { nativeDesktopWatch, unpackedPath } from "./core/desktop-watch";
 import { IDLE_MS, QUIET_MS } from "./core/draft-restorer";
 import {
   DraftScheduler,
@@ -92,7 +92,11 @@ import { WindowKeeper, type KeeperDeps } from "./core/window-keeper";
 import { TempoTracker } from "./core/tempo-tracker";
 import { runQuotaStarter } from "./core/routine-runner";
 import { readProfileIdentity } from "./core/profile-identity";
-import type { Account, DesktopState } from "../shared/types";
+import type {
+  Account,
+  DesktopState,
+  FleetContinuationState,
+} from "../shared/types";
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
 import {
@@ -111,7 +115,11 @@ import {
   type QuotaStop,
 } from "./core/desktop-continuation-evidence";
 import { CONTINUATION_TEXT } from "./core/continuation";
-import { FleetContinuation, type FleetResult } from "./core/fleet-continuation";
+import {
+  FleetContinuation,
+  fleetNotice,
+  type FleetResult,
+} from "./core/fleet-continuation";
 import { UsageCredentialRefresher, anthropicUnreachable } from "./core/usage-refresh";
 import { ProcessLock } from "./core/process-lock";
 import { prepareVault } from "./core/vault-migration";
@@ -234,6 +242,25 @@ function logDraftEvent(event: string, fields?: Record<string, unknown>) {
     // The log is an aid, never a part of a restore.
   }
 }
+/**
+ * One event of the fleet ("Kota dolunca devam"), for `fleet-events.json` in the user data
+ * folder: each change of its state with what it waited on, and how each conversation's
+ * continuation ended. Fields are short ids, states, reasons, counts and process names, never
+ * a conversation's text. Never throws.
+ */
+function logFleetEvent(event: string, fields?: Record<string, unknown>) {
+  try {
+    appendDraftEvent(
+      path.join(app.getPath("userData"), "fleet-events.json"),
+      { ...fields, event },
+      Date.now(),
+    );
+  } catch {
+    // The log is an aid, never a part of a switch.
+  }
+}
+/** How long a continuation waits for its conversation to show after a switch. */
+const CONTINUE_SHOW_MS = 3 * 60_000;
 /**
  * One Desktop operation at a time. The menu bar shows each as it begins rather than at the
  * next poll, and its end, for operations no caller refreshes the tray after.
@@ -640,7 +667,10 @@ else {
             Date.now(),
           ),
       );
-      const automationHelper = path.join(__dirname, "desktop-automation");
+      // The real file, so spawn can run it too (see unpackedPath).
+      const automationHelper = unpackedPath(
+        path.join(__dirname, "desktop-automation"),
+      );
       automation = nativeDesktopAutomation(automationHelper);
       draftRestore = new DraftScheduler({
         restorer: {
@@ -757,12 +787,26 @@ else {
       ): Promise<FleetResult> => {
         const sleep = (ms: number) =>
           new Promise((resolve) => setTimeout(resolve, ms));
+        const conversation = stop.localSessionId
+          .replace(/^local_/, "")
+          .slice(0, 8);
+        /** Leaves the conversation as it is, and says why in the fleet's log. */
+        const skip = (why: string, fields: Record<string, unknown> = {}) => {
+          logFleetEvent("continue-skip", { conversation, why, ...fields });
+          return "skipped" as const;
+        };
         let snapshot: DesktopAutomationSnapshot | undefined;
+        let last: DesktopAutomationSnapshot | undefined;
+        let issue: string | undefined;
         let openedAt = -Infinity;
-        // Claude may still be starting; resend the link until the view loads.
-        for (let attempt = 0; attempt < 120 && !snapshot; attempt++) {
+        // Claude may still be starting, or loading the account's pages: resend the link
+        // every 5 s until the conversation shows, for up to 3 minutes.
+        const deadline = Date.now() + CONTINUE_SHOW_MS;
+        while (!snapshot && Date.now() < deadline) {
           try {
             const view = await automation.inspect();
+            last = view;
+            issue = undefined;
             if (
               view.localSessionId === stop.localSessionId &&
               view.permissionMode
@@ -772,20 +816,26 @@ else {
               openedAt = Date.now();
               await automation.openSession(stop.localSessionId);
             }
-          } catch {
+          } catch (error) {
             // Not ready yet.
+            issue =
+              error instanceof DesktopAutomationError ? error.issue : "failed";
           }
           if (!snapshot) await sleep(500);
         }
-        if (!snapshot) return "skipped";
+        if (!snapshot)
+          return skip("not-shown", {
+            shown: last?.localSessionId === stop.localSessionId,
+            permissionMode: !!last?.permissionMode,
+            screen: last?.screen ?? null,
+            issue: issue ?? null,
+          });
         const state = await evidence.read(snapshot);
-        if (
-          state.identity.profileId !== target.id ||
-          state.session.id !== stop.cliSessionId ||
-          snapshot.status !== "stopped" ||
-          !evidence.unchanged(stop)
-        )
-          return "skipped";
+        if (state.identity.profileId !== target.id) return skip("account");
+        if (state.session.id !== stop.cliSessionId) return skip("session");
+        if (snapshot.status !== "stopped")
+          return skip("status", { status: snapshot.status });
+        if (!evidence.unchanged(stop)) return skip("moved-on");
         if (
           stop.permissionMode &&
           snapshot.permissionMode !== stop.permissionMode
@@ -794,7 +844,8 @@ else {
             automationGuard(snapshot),
             stop.permissionMode,
           );
-          if (snapshot.permissionMode !== stop.permissionMode) return "skipped";
+          if (snapshot.permissionMode !== stop.permissionMode)
+            return skip("permission-mode");
         }
         // Claude's own "continue when limits reset" would send a second prompt.
         if (snapshot.quotaAutoResume && automation.cancelQuotaResume)
@@ -805,8 +856,12 @@ else {
           } catch {
             // The banner may be gone on the new account; nothing to cancel.
           }
-        if (!snapshot.composerEmpty || snapshot.status !== "stopped")
-          return "skipped";
+        if (snapshot.status !== "stopped")
+          return skip("status", { status: snapshot.status });
+        if (!snapshot.composerEmpty)
+          return skip("composer-not-empty", {
+            composerChars: snapshot.composerChars ?? null,
+          });
         if ((await evidence.deliveryAfter(stop, requestId)) !== "absent")
           return "unknown";
         beforeSend();
@@ -864,6 +919,9 @@ else {
         continueOne: continueConversation,
         withDesktopLock,
         changed: broadcastChanged,
+        log: logFleetEvent,
+        quietDetail: () => evidence.quietDetail(),
+        finished: notifyFleet,
       });
       // Before the single choice both records could be saved on. The fleet wins,
       // as the mode reads; turning it off later must not leave prepare-on-quit on.
@@ -1206,6 +1264,20 @@ function notifySwitched(name: string) {
       `Claude uygulaması ${name} hesabına geçti.`,
       `The Claude app switched to ${name}.`,
     ),
+  }).show();
+}
+/** After the fleet switched at the limit: where Claude went, and what became of the conversations. */
+function notifyFleet(
+  last: NonNullable<FleetContinuationState["last"]>,
+  reason?: string,
+) {
+  if (!Notification.isSupported()) return;
+  const name =
+    service.store.state.accounts.find((a) => a.id === last.targetId)?.name ??
+    say("diğer", "the other");
+  new Notification({
+    title: "Relay",
+    body: fleetNotice(last, name, trayLanguage, reason),
   }).show();
 }
 /** After a draft restore: how many drafts were typed back, and how many wait in the panel. */

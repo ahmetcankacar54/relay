@@ -95,6 +95,16 @@ export function parseWatchLine(
 }
 
 /**
+ * Where a file Relay ships inside `app.asar` really is. Electron reads `app.asar` paths for
+ * `execFile`, but not for `spawn`: there `app.asar` is a file, and a path through it fails at
+ * once with ENOTDIR. The build unpacks the helper next to it, into `app.asar.unpacked`. A path
+ * outside an archive, or already unpacked, is returned as it is.
+ */
+export function unpackedPath(file: string): string {
+  return file.replace(/([\\/])app\.asar(?=[\\/])/, "$1app.asar.unpacked");
+}
+
+/**
  * The helper's `watch <quietMs> <idleMs>`, as a watcher. Its stdin stays open while it runs:
  * Relay ending closes it, and the helper ends with it. Lines that do not parse are skipped.
  */
@@ -114,7 +124,7 @@ export function nativeDesktopWatch(
         // A listener that throws changes nothing about the watch.
       }
     };
-    const child = spawn(helper, ["watch", String(quietMs), String(idleMs)], {
+    const child = spawn(unpackedPath(helper), ["watch", String(quietMs), String(idleMs)], {
       stdio: ["pipe", "pipe", "ignore"],
       windowsHide: true,
     });
