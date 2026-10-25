@@ -95,6 +95,31 @@ export function retryTime(header: string | null, now: number) {
         : now + 300_000,
   );
 }
+/** The error type and message of a refused response, from at most 4 KiB of its body. */
+async function errorBody(response: Response): Promise<{ type?: string; message?: string }> {
+  try {
+    const text = (await response.text()).slice(0, 4_096);
+    const error = JSON.parse(text)?.error;
+    return {
+      ...(typeof error?.type === "string" && /^[a-z_]{1,64}$/.test(error.type)
+        ? { type: error.type }
+        : {}),
+      ...(typeof error?.message === "string" ? { message: error.message.slice(0, 300) } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+/** A 403 that says the token lacks a scope: Anthropic's permission_error naming a scope. */
+export function scopeRefusal(error: { type?: string; message?: string }): boolean {
+  return error.type === "permission_error" && /scope/i.test(error.message ?? "");
+}
+/** What a request that never got an answer says: no network, a timeout, a refused connection. */
+export function networkDetail(error: unknown): string {
+  const e = error as { name?: string; message?: string; cause?: { code?: string } } | undefined;
+  const code = typeof e?.cause?.code === "string" ? ` ${e.cause.code}` : "";
+  return `no answer: ${e?.name ?? "Error"}${code}`.slice(0, 120);
+}
 export async function requestUsageJson(
   endpoint: "profile" | "usage",
   token: string,
@@ -113,15 +138,22 @@ export async function requestUsageJson(
     },
   );
   if (!response.ok) {
-    await response.body?.cancel();
-    if (response.status === 401) throw new UsageError("expired");
-    if (response.status === 403) throw new UsageError("scope");
+    const error = await errorBody(response);
+    const detail = `${endpoint} ${response.status}${error.type ? ` ${error.type}` : ""}`;
+    if (response.status === 401) throw new UsageError("expired", undefined, detail);
+    // Only a refusal for the token's scopes asks for a new sign-in. Any other 403 (a gateway
+    // or a passing refusal, seen while the saved sign-in had every scope) passes on its own.
+    if (response.status === 403)
+      throw scopeRefusal(error)
+        ? new UsageError("scope", undefined, detail)
+        : new UsageError("unavailable", undefined, detail);
     if (response.status === 429)
       throw new UsageError(
         "rate-limited",
         retryTime(response.headers.get("retry-after"), Date.now()),
+        detail,
       );
-    throw new UsageError("unavailable");
+    throw new UsageError("unavailable", undefined, detail);
   }
   const reader = response.body?.getReader();
   if (!reader) throw new UsageError("unavailable");
@@ -243,7 +275,7 @@ export class UsageManager {
     private refreshCredential?: RefreshUsageCredential,
     private refreshCredentialPending?: (account: Account) => boolean,
     /** Told once each time an account's issue changes; never given a credential. */
-    private onIssue?: (account: Account, issue: UsageIssue) => void,
+    private onIssue?: (account: Account, issue: UsageIssue, detail?: string) => void,
   ) {}
   invalidate(id: string) {
     this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
@@ -401,7 +433,7 @@ export class UsageManager {
           !this.refreshCredential ||
           (!credential.refreshToken && !pendingRefresh)
         )
-          throw new UsageError("expired");
+          throw new UsageError("expired", undefined, "saved sign-in has no refresh token");
         refreshed = true;
         credential = await this.refreshCredential(
           account,
@@ -411,7 +443,7 @@ export class UsageManager {
         );
       };
       if (!credential.scopes.includes("user:profile"))
-        throw new UsageError("scope");
+        throw new UsageError("scope", undefined, "saved sign-in lacks user:profile");
       if (
         this.refreshCredential &&
         (pendingRefresh ||
@@ -441,9 +473,9 @@ export class UsageManager {
         credential.expiresAt !== undefined &&
         credential.expiresAt <= this.now()
       )
-        throw new UsageError("expired");
+        throw new UsageError("expired", undefined, "saved sign-in expired, not renewed");
       if (!credential.scopes.includes("user:profile"))
-        throw new UsageError("scope");
+        throw new UsageError("scope", undefined, "saved sign-in lacks user:profile");
       // Verify on every poll: a reconnect may have changed the account behind this isolated profile.
       let profile: unknown;
       try {
@@ -461,9 +493,9 @@ export class UsageManager {
           credential.expiresAt !== undefined &&
           credential.expiresAt <= this.now()
         )
-          throw new UsageError("expired");
+          throw new UsageError("expired", undefined, "renewed sign-in already expired");
         if (!credential.scopes.includes("user:profile"))
-          throw new UsageError("scope");
+          throw new UsageError("scope", undefined, "renewed sign-in lacks user:profile");
         profile = await this.request("profile", credential.accessToken);
       }
       if (!current()) return this.view(this.store.account(account.id));
@@ -507,7 +539,8 @@ export class UsageManager {
       }
     } catch (e) {
       if (!current()) return this.view(this.store.account(account.id));
-      const error = e instanceof UsageError ? e : new UsageError("unavailable");
+      const error =
+        e instanceof UsageError ? e : new UsageError("unavailable", undefined, networkDetail(e));
       const failures = (this.failures.get(account.id) ?? 0) + 1;
       this.failures.set(account.id, failures);
       const retryAt =
@@ -534,7 +567,7 @@ export class UsageManager {
       // Only a change is worth a log line: a failing poll repeats every few minutes.
       if (error.issue !== previous.issue) {
         try {
-          this.onIssue?.(account, error.issue);
+          this.onIssue?.(account, error.issue, error.detail);
         } catch {
           // The diagnosis log must never turn a usage failure into another one.
         }

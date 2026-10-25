@@ -7,6 +7,11 @@ export class UsageError extends Error {
   constructor(
     readonly issue: UsageIssue,
     readonly retryAt?: number,
+    /**
+     * Where and why, for the private diagnosis log: a step, an HTTP status, an error type
+     * ("usage 403 permission_error", "refresh: no network"). Never a credential.
+     */
+    readonly detail?: string,
   ) {
     super(issue);
   }
@@ -89,36 +94,42 @@ export async function readCredential(
   allowPrompt: boolean,
   tool = "/usr/bin/security",
   platform = process.platform,
+  missingRetryMs = MISSING_RETRY_MS,
 ): Promise<UsageCredential> {
   if ((await fs.lstat(profile)).isSymbolicLink())
     throw new UsageError("credentials-missing");
   if (platform === "darwin") {
-    return new Promise((resolve, reject) => {
-      execFile(
-        tool,
-        ["find-generic-password", "-s", credentialService(profile), "-w"],
-        {
-          timeout: allowPrompt ? 120_000 : 15_000,
-          killSignal: "SIGKILL",
-          maxBuffer: 65_536,
-          windowsHide: true,
-        },
-        (error, stdout) => {
-          // The CLI falls back to a private file when Keychain rejects its write.
-          if (error?.code === SECURITY_ITEM_NOT_FOUND)
-            return readCredentialFile(profile).then(resolve, reject);
-          if (error) return reject(new UsageError("keychain-locked"));
-          try {
-            resolve(parseCredential(decodeSecret(stdout)));
-          } catch (e) {
-            reject(e);
-          }
-        },
-      );
-    });
+    const find = () =>
+      new Promise<{ code?: number | string | null; stdout: string }>((resolve) => {
+        execFile(
+          tool,
+          ["find-generic-password", "-s", credentialService(profile), "-w"],
+          {
+            timeout: allowPrompt ? 120_000 : 15_000,
+            killSignal: "SIGKILL",
+            maxBuffer: 65_536,
+            windowsHide: true,
+          },
+          (error, stdout) =>
+            resolve({ code: error ? (error.code ?? "failed") : undefined, stdout }),
+        );
+      });
+    let found = await find();
+    // The CLI rewrites its item when it renews a sign-in; a read in that moment finds none.
+    if (found.code === SECURITY_ITEM_NOT_FOUND) {
+      await new Promise((resolve) => setTimeout(resolve, missingRetryMs));
+      found = await find();
+    }
+    // The CLI falls back to a private file when Keychain rejects its write.
+    if (found.code === SECURITY_ITEM_NOT_FOUND) return readCredentialFile(profile);
+    if (found.code !== undefined)
+      throw new UsageError("keychain-locked", undefined, `keychain: security exit ${found.code}`);
+    return parseCredential(decodeSecret(found.stdout));
   }
   return readCredentialFile(profile);
 }
+/** How long a read that found no Keychain item waits before it looks once more. */
+export const MISSING_RETRY_MS = 1_500;
 async function readCredentialFile(profile: string) {
   try {
     const file = path.join(profile, ".credentials.json");
@@ -126,6 +137,6 @@ async function readCredentialFile(profile: string) {
     if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 65_536) throw 0;
     return parseCredential(await fs.readFile(file, "utf8"));
   } catch {
-    throw new UsageError("credentials-missing");
+    throw new UsageError("credentials-missing", undefined, "no Keychain item or credentials file");
   }
 }

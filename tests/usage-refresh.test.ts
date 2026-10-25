@@ -10,9 +10,11 @@ import {
   type UsageCredential,
 } from "../electron/core/usage-credentials";
 import {
+  anthropicUnreachable,
   needsUsageCredentialRefresh,
   UsageCredentialRefresher,
   USAGE_REFRESH_MAX_ATTEMPTS,
+  USAGE_REFRESH_OFFLINE_RETRY_MS,
   USAGE_REFRESH_RETRY_MS,
   type UsageRefreshCommand,
 } from "../electron/core/usage-refresh";
@@ -595,4 +597,82 @@ test("macOS background pending reconciliation verifies an already saved replacem
   assert.equal(f.calls.length, 1);
   assert.equal(refresher.hasPending(f.profile), false);
   assert.deepEqual(f.requests, ["profile"]);
+});
+
+test("a renewal that falls on a dropped network waits two minutes, counts nothing and asks for no sign-in", async (t) => {
+  const f = await fixture(t);
+  let clock = now;
+  let offline = true;
+  const refresher = new UsageCredentialRefresher({
+    ...f.deps,
+    now: () => clock,
+    unreachable: async () => offline,
+  });
+  f.run(async () => {
+    throw new Error("network");
+  });
+  // No answer from Anthropic: transient, retried soon.
+  await assert.rejects(refresher.refresh(f.account, f.profile, f.old), (e: any) => {
+    assert.equal(e.issue, "unavailable");
+    assert.equal(e.retryAt, clock + USAGE_REFRESH_OFFLINE_RETRY_MS);
+    assert.equal(e.detail, "refresh: no network");
+    return true;
+  });
+  assert.equal(f.calls.length, 1);
+  // Within the two minutes a background read neither exchanges nor asks for a sign-in.
+  clock += USAGE_REFRESH_OFFLINE_RETRY_MS - 1;
+  await assert.rejects(refresher.refresh(f.account, f.profile, f.old), /unavailable/);
+  assert.equal(f.calls.length, 1);
+  // Many offline tries never use up the attempts a real refusal gets.
+  for (let i = 0; i < USAGE_REFRESH_MAX_ATTEMPTS + 1; i++) {
+    clock += USAGE_REFRESH_OFFLINE_RETRY_MS;
+    await assert.rejects(refresher.refresh(f.account, f.profile, f.old), /unavailable/);
+  }
+  assert.equal(f.calls.length, USAGE_REFRESH_MAX_ATTEMPTS + 2);
+  // Back online, the next exchange renews the sign-in.
+  offline = false;
+  clock += USAGE_REFRESH_OFFLINE_RETRY_MS;
+  const renewed = { ...f.replacement, expiresAt: clock + 3_600_000 };
+  f.run(async () => {
+    f.save(renewed);
+  });
+  assert.deepEqual(await refresher.refresh(f.account, f.profile, f.old), renewed);
+  assert.equal(refresher.hasPending(f.profile), false);
+});
+
+test("a renewal Anthropic answered but saved nothing for still counts and waits half an hour", async (t) => {
+  const f = await fixture(t);
+  const refresher = new UsageCredentialRefresher({
+    ...f.deps,
+    unreachable: async () => false,
+  });
+  f.run(async () => {
+    throw new Error("refused");
+  });
+  await assert.rejects(refresher.refresh(f.account, f.profile, f.old), (e: any) => {
+    assert.equal(e.issue, "expired");
+    assert.equal(e.detail, "refresh: no new sign-in saved");
+    return true;
+  });
+  await assert.rejects(refresher.refresh(f.account, f.profile, f.old), /expired/);
+  assert.equal(f.calls.length, 1);
+});
+
+test("Anthropic is unreachable only when a request gets no answer at all", async () => {
+  const answer = async () => new Response(null, { status: 404 });
+  assert.equal(await anthropicUnreachable(answer as typeof fetch), false);
+  const refused = async () => new Response(null, { status: 403 });
+  assert.equal(await anthropicUnreachable(refused as typeof fetch), false);
+  const offline = async () => {
+    throw new TypeError("fetch failed");
+  };
+  assert.equal(await anthropicUnreachable(offline as typeof fetch), true);
+  const slow = async () => {
+    throw Object.assign(new Error("timed out"), { name: "TimeoutError" });
+  };
+  assert.equal(await anthropicUnreachable(slow as typeof fetch), true);
+  const other = async () => {
+    throw new Error("something else");
+  };
+  assert.equal(await anthropicUnreachable(other as typeof fetch), false);
 });

@@ -7,8 +7,11 @@ import { randomUUID } from "node:crypto";
 import { Store, settingsSchema } from "../electron/core/store";
 import {
   missingIdentity,
+  networkDetail,
   parseUsage,
+  requestUsageJson,
   retryTime,
+  scopeRefusal,
   UsageManager,
   verifyIdentity,
 } from "../electron/core/usage";
@@ -130,15 +133,26 @@ test("macOS reads the CLI credential through the security tool, falls back to th
   );
   await script("exit 44");
   await assert.rejects(
-    readCredential(profileDir, false, tool, "darwin"),
+    readCredential(profileDir, false, tool, "darwin", 0),
     /credentials-missing/,
   );
+  // The CLI rewrites its item when it renews: a read in that moment looks once more.
+  const seen = path.join(f.root, "security-calls");
+  await script(
+    `n=$(cat "${seen}" 2>/dev/null || echo 0); echo $((n+1)) > "${seen}"\n[ "$n" = 0 ] && exit 44\necho '${JSON.stringify({ claudeAiOauth: credential })}'`,
+  );
+  assert.deepEqual(
+    await readCredential(profileDir, false, tool, "darwin", 1),
+    credential,
+  );
+  assert.equal((await fs.readFile(seen, "utf8")).trim(), "2");
+  await script("exit 44");
   await fs.writeFile(
     path.join(profileDir, ".credentials.json"),
     JSON.stringify({ claudeAiOauth: credential }),
   );
   assert.deepEqual(
-    await readCredential(profileDir, false, tool, "darwin"),
+    await readCredential(profileDir, false, tool, "darwin", 0),
     credential,
   );
   await script("exit 51");
@@ -710,4 +724,48 @@ test("a verified read restores identity fields an older registry lost, never cha
     ),
     undefined,
   );
+});
+
+test("a 403 asks for a new sign-in only when Anthropic says the token lacks a scope", async (t) => {
+  const real = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = real;
+  });
+  const reply = (status: number, body: unknown, headers: Record<string, string> = {}) => {
+    globalThis.fetch = (async () =>
+      new Response(typeof body === "string" ? body : JSON.stringify(body), {
+        status,
+        headers: { "content-type": "application/json", ...headers },
+      })) as typeof fetch;
+  };
+  const issue = async () => {
+    try {
+      await requestUsageJson("usage", "fixture-token");
+      return undefined;
+    } catch (e: any) {
+      return [e.issue, e.detail];
+    }
+  };
+  reply(403, {
+    type: "error",
+    error: { type: "permission_error", message: "OAuth token does not meet scope requirement user:profile" },
+  });
+  assert.deepEqual(await issue(), ["scope", "usage 403 permission_error"]);
+  // A gateway's page, or a refusal that names no scope, passes on its own.
+  reply(403, "<html>Forbidden</html>", { "content-type": "text/html" });
+  assert.deepEqual(await issue(), ["unavailable", "usage 403"]);
+  reply(403, { type: "error", error: { type: "permission_error", message: "Request not allowed" } });
+  assert.deepEqual(await issue(), ["unavailable", "usage 403 permission_error"]);
+  reply(401, { type: "error", error: { type: "authentication_error", message: "Invalid bearer token" } });
+  assert.deepEqual(await issue(), ["expired", "usage 401 authentication_error"]);
+  reply(429, { type: "error", error: { type: "rate_limit_error", message: "Rate limited." } }, { "retry-after": "60" });
+  assert.deepEqual(await issue(), ["rate-limited", "usage 429 rate_limit_error"]);
+  assert.equal(scopeRefusal({ type: "permission_error", message: "missing Scope" }), true);
+  assert.equal(scopeRefusal({ type: "invalid_request_error", message: "scope" }), false);
+});
+
+test("a read that gets no answer says so in its issue's detail", () => {
+  const cause = Object.assign(new TypeError("fetch failed"), { cause: { code: "ENOTFOUND" } });
+  assert.equal(networkDetail(cause), "no answer: TypeError ENOTFOUND");
+  assert.equal(networkDetail(Object.assign(new Error("x"), { name: "TimeoutError" })), "no answer: TimeoutError");
 });

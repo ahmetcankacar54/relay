@@ -2,7 +2,7 @@ import { diagnoseCli } from "../../../electron/core/cli-diagnostics";
 import { profileLockHolders } from "../../../electron/core/profile-lock";
 import { UsageManager } from "../../../electron/core/usage";
 import { UsageError, readCredential } from "../../../electron/core/usage-credentials";
-import { UsageCredentialRefresher } from "../../../electron/core/usage-refresh";
+import { UsageCredentialRefresher, anthropicUnreachable } from "../../../electron/core/usage-refresh";
 import { acquireProfileLock } from "../../../electron/core/profile-lock";
 import { readsUsage } from "../../../shared/cli-version";
 import { formatUsed, percentUsed } from "../../../shared/percent";
@@ -58,6 +58,7 @@ export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
     read,
     request: ctx.deps.request,
     profileLock: (id) => acquireProfileLock(ctx.paths.locks, id, "exclusive"),
+    unreachable: () => anthropicUnreachable(),
   });
   const manager = new UsageManager(
     ctx.store,

@@ -112,7 +112,7 @@ import {
 } from "./core/desktop-continuation-evidence";
 import { CONTINUATION_TEXT } from "./core/continuation";
 import { FleetContinuation, type FleetResult } from "./core/fleet-continuation";
-import { UsageCredentialRefresher } from "./core/usage-refresh";
+import { UsageCredentialRefresher, anthropicUnreachable } from "./core/usage-refresh";
 import { ProcessLock } from "./core/process-lock";
 import { prepareVault } from "./core/vault-migration";
 import {
@@ -580,6 +580,8 @@ else {
         readCredential(profile, allowPrompt);
       usageCredentialRefresher = new UsageCredentialRefresher({
         read: readUsageCredential,
+        // A renewal that fell on a dropped network waits two minutes, not a new sign-in.
+        unreachable: () => anthropicUnreachable(),
         profileLock: (accountId) =>
           acquireProfileLock(profileLocks(), accountId, "exclusive"),
         executable: async () => {
@@ -631,10 +633,10 @@ else {
             service.store.profile(account.id),
           ),
         // A short private log, so the cause of a sign-in warning can be found later.
-        (account, issue) =>
+        (account, issue, detail) =>
           appendUsageIssue(
             path.join(app.getPath("userData"), "usage-issues.json"),
-            { accountId: account.id, issue },
+            { accountId: account.id, issue, detail },
             Date.now(),
           ),
       );

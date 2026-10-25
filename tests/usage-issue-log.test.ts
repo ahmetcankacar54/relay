@@ -242,6 +242,27 @@ test("main logs usage issues to usage-issues.json in the user data folder", () =
   );
   assert.match(
     main,
-    /appendUsageIssue\(\s*path\.join\(app\.getPath\("userData"\), "usage-issues\.json"\),\s*\{ accountId: account\.id, issue \},\s*Date\.now\(\),?\s*\)/,
+    /appendUsageIssue\(\s*path\.join\(app\.getPath\("userData"\), "usage-issues\.json"\),\s*\{ accountId: account\.id, issue, detail \},\s*Date\.now\(\),?\s*\)/,
   );
+});
+
+test("an issue's detail says where and why, on one short line with anything token-like masked", (t) => {
+  const file = path.join(directory(t), "usage-issues.json");
+  appendUsageIssue(file, { accountId: "a", issue: "scope", detail: "usage 403 permission_error" }, START);
+  appendUsageIssue(
+    file,
+    {
+      accountId: "a",
+      issue: "expired",
+      detail: `refresh failed\nBearer sk-ant-oat01-${"x".repeat(60)} ${"y".repeat(200)}`,
+    },
+    START + MINUTE,
+  );
+  appendUsageIssue(file, { accountId: "a", issue: "unavailable" }, START + 2 * MINUTE);
+  const entries = readLog(file).entries;
+  assert.equal(entries[0].detail, "usage 403 permission_error");
+  assert.equal(entries[1].detail.includes("\n"), false);
+  assert.equal(/x{20}|y{20}/.test(entries[1].detail), false);
+  assert.ok(entries[1].detail.length <= 160);
+  assert.equal("detail" in entries[2], false);
 });

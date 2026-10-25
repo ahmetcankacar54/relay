@@ -53,6 +53,11 @@ interface Dependencies {
    * returns its release; it throws ProfileLockBusyError while another process holds it.
    */
   profileLock?: (accountId: string) => () => void;
+  /**
+   * Whether Anthropic cannot be reached at all right now. Asked when an exchange saved nothing
+   * new; without it such an exchange always counts as one that reached the server.
+   */
+  unreachable?: () => Promise<boolean>;
 }
 interface Attempt {
   version: 1;
@@ -62,12 +67,20 @@ interface Attempt {
   generation: string;
   attemptedAt: number;
   scopes: string[];
-  /** Exchanges tried for this unchanged credential pair. */
+  /** Exchanges tried for this unchanged credential pair; one made without a network is not counted. */
   attempts?: number;
+  /** The last exchange could not reach Anthropic at all: it said nothing about the sign-in. */
+  offline?: boolean;
 }
 /** An unconfirmed exchange is retried only after this delay, at most MAX times. */
 export const USAGE_REFRESH_RETRY_MS = 30 * 60_000;
 export const USAGE_REFRESH_MAX_ATTEMPTS = 3;
+/**
+ * An exchange made while Anthropic could not be reached is retried this soon, and not counted:
+ * a renewal that fell on a dropped or changing network (all three "expired" sign-ins logged
+ * 2026-10-22 to 10-24 did) must not wait half an hour or ask for a new sign-in.
+ */
+export const USAGE_REFRESH_OFFLINE_RETRY_MS = 2 * 60_000;
 interface Owner {
   pid: number;
   token: string;
@@ -90,6 +103,28 @@ const fresh = (credential: UsageCredential, now: number) =>
   Number.isFinite(credential.expiresAt) &&
   credential.expiresAt > now &&
   credential.scopes.includes("user:profile");
+
+/**
+ * Whether Anthropic's API cannot be reached now: a request that gets no answer at all (no
+ * network, or 8 s without one). Any answer, a refusal included, means it can. No credential
+ * travels with it.
+ */
+export async function anthropicUnreachable(
+  request: typeof fetch = fetch,
+): Promise<boolean> {
+  try {
+    await request("https://api.anthropic.com/", {
+      method: "HEAD",
+      redirect: "manual",
+      signal: AbortSignal.timeout(8_000),
+    });
+    return false;
+  } catch (error) {
+    // fetch fails with a TypeError when there is no network, and times out by name.
+    const name = (error as { name?: string } | undefined)?.name;
+    return error instanceof TypeError || name === "AbortError" || name === "TimeoutError";
+  }
+}
 
 /** No terminal, model request, callback browser, renderer output or shell. */
 async function runRefresh(command: UsageRefreshCommand): Promise<void> {
@@ -258,9 +293,10 @@ export class UsageCredentialRefresher {
               !/^[A-Za-z0-9:._/-]{1,150}$/.test(scope),
           ) ||
           !saved.scopes.includes("user:profile") ||
-          !saved.scopes.includes("user:inference")
+          !saved.scopes.includes("user:inference") ||
+          (saved.offline !== undefined && typeof saved.offline !== "boolean")
         )
-          throw new UsageError("expired");
+          throw new UsageError("expired", undefined, "refresh: unreadable attempt record");
         attempt = saved;
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT")
@@ -274,12 +310,13 @@ export class UsageCredentialRefresher {
         // case another exchange simply fails; it cannot cost a saved login. Retry
         // after a delay (or when the user asks), then require browser reconnect.
         previousAttempts = attempt.attempts ?? 1;
-        if (
-          previousAttempts >= USAGE_REFRESH_MAX_ATTEMPTS ||
-          (!allowInteraction &&
-            this.now() - attempt.attemptedAt < USAGE_REFRESH_RETRY_MS)
-        )
-          throw new UsageError("expired");
+        if (previousAttempts >= USAGE_REFRESH_MAX_ATTEMPTS)
+          throw new UsageError("expired", undefined, `refresh: ${previousAttempts} exchanges without a new sign-in`);
+        const wait = attempt.offline ? USAGE_REFRESH_OFFLINE_RETRY_MS : USAGE_REFRESH_RETRY_MS;
+        if (!allowInteraction && this.now() - attempt.attemptedAt < wait)
+          throw attempt.offline
+            ? new UsageError("unavailable", attempt.attemptedAt + wait, "refresh: waiting for the network")
+            : new UsageError("expired", undefined, "refresh: waiting to retry an unconfirmed exchange");
         attempt = undefined;
         force = true;
       }
@@ -340,7 +377,7 @@ export class UsageCredentialRefresher {
         env.CLAUDE_CODE_OAUTH_TOKEN = current.accessToken;
         if (current.clientId)
           env.CLAUDE_CODE_OAUTH_CLIENT_ID = current.clientId;
-        writePrivateJson(file, {
+        const record = {
           version: 1,
           id: randomUUID(),
           accountUuid: account.auth!.accountUuid!,
@@ -349,7 +386,8 @@ export class UsageCredentialRefresher {
           attemptedAt: this.now(),
           scopes: current.scopes,
           attempts: previousAttempts + 1,
-        } satisfies Attempt);
+        } satisfies Attempt;
+        writePrivateJson(file, record);
         assertOwned();
         try {
           await (this.deps.run ?? runRefresh)({
@@ -373,8 +411,25 @@ export class UsageCredentialRefresher {
         // Even a successful CLI exit is insufficient; only persisted fresh
         // replacement credentials plus server UUID/org proof complete it.
         const saved = await this.deps.read(profile, false);
+        if (
+          fingerprint(saved) === generation &&
+          (await this.deps.unreachable?.().catch(() => false))
+        ) {
+          // The CLI could not reach Anthropic: nothing was exchanged or said about the sign-in.
+          writePrivateJson(file, {
+            ...record,
+            attempts: previousAttempts,
+            attemptedAt: this.now(),
+            offline: true,
+          } satisfies Attempt);
+          throw new UsageError(
+            "unavailable",
+            this.now() + USAGE_REFRESH_OFFLINE_RETRY_MS,
+            "refresh: no network",
+          );
+        }
         if (fingerprint(saved) === generation || !fresh(saved, this.now()))
-          throw new UsageError("expired");
+          throw new UsageError("expired", undefined, "refresh: no new sign-in saved");
         if (current.scopes.some((scope) => !saved.scopes.includes(scope)))
           throw new UsageError("scope");
         const verified = await this.verified(account, saved);
