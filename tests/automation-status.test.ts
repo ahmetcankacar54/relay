@@ -181,6 +181,22 @@ test("fleet waiting for other work offers switching now and says who continues",
   assert.equal(status.tone, "waiting");
 });
 
+test("fleet waiting for a background command says it stops it within 15 minutes, and offers switching now", () => {
+  const status = automationStatus(
+    input({ fleet: fleet("background-work"), autoSwitch: autoSwitch("disabled") }),
+  );
+  assert.equal(
+    status.text[0],
+    "Kişisel · Max %100 kullanıldı · 2 konuşma limit dolduğu için durdu. Arka planda bir komut (derleme, test gibi) hâlâ çalışıyor; bitince ya da en geç 15 dakika sonra onu durdurup Kişisel · İkinci’ye geçerim. Açık kalan sunucuları geçişte kapatırım. Şimdi geçersen devam mesajını sen yazarsın.",
+  );
+  assert.equal(
+    status.text[1],
+    "Kişisel · Max 100% used · 2 conversations stopped at the limit. A background command (a build or a test) is still running; when it ends, or after 15 minutes at most, I stop it and switch to Kişisel · İkinci. Servers left running are stopped at the switch. If you switch now, you type the continue message yourself.",
+  );
+  assert.equal(status.switchTo, b.id);
+  assert.equal(status.tone, "waiting");
+});
+
 test("quiescence-unverified reads like other work running", () => {
   const status = automationStatus(
     input({ fleet: fleet("quiescence-unverified") }),

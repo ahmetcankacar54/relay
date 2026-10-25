@@ -38,11 +38,14 @@ async function fixture(t: any) {
     starts = 0,
     quits = 0,
     failQuit = false;
+  /** The answer each quit was given for Claude's own question, in order. */
+  const quitAnswers: (boolean | undefined)[] = [];
   const host: DesktopHost = {
     available: async () => true,
     running: async () => running,
-    quit: async () => {
+    quit: async (answerGuard) => {
       quits++;
+      quitAnswers.push(answerGuard ? await answerGuard() : undefined);
       if (failQuit) throw new Error("still running");
       running = false;
     },
@@ -97,6 +100,7 @@ async function fixture(t: any) {
     },
     starts: () => starts,
     quits: () => quits,
+    quitAnswers,
   };
 }
 async function session(root: string, a: any, id = randomUUID(), extra = {}) {
@@ -197,6 +201,17 @@ test("a changed continuation guard blocks restart before Claude is asked to quit
   );
   assert.equal(f.quits(), quits + 1);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+});
+test("a switch hands its answer for Claude's quit question to the quit, and only a switch given one", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  await f.manager.switchTo(a.id);
+  f.setRunning(true);
+  await f.manager.switchTo(b.id, { answerQuitGuard: async () => true });
+  f.setRunning(true);
+  await f.manager.switchTo(a.id);
+  assert.deepEqual(f.quitAnswers.slice(-2), [true, undefined]);
 });
 test("only Desktop's own refusal shows as its error; a beforeQuit refusal is the caller's to tell", async (t) => {
   const f = await fixture(t);

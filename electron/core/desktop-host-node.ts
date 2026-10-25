@@ -220,18 +220,25 @@ export function nodeDesktopHost(options: {
     available: async () => !!exe(),
     running: () => liveness.running(),
     seemsRunning: () => liveness.seemsRunning(),
-    quit: async () => {
+    quit: async (answerGuard) => {
       const active = await pids();
       if (!active.length) return;
       if (process.platform === "darwin")
-        await exec(
-          "/usr/bin/osascript",
-          [
-            "-e",
-            'tell application id "com.anthropic.claudefordesktop" to quit',
-          ],
-          { timeout: 20_000 },
-        );
+        try {
+          await exec(
+            "/usr/bin/osascript",
+            [
+              "-e",
+              'tell application id "com.anthropic.claudefordesktop" to quit',
+            ],
+            { timeout: 20_000 },
+          );
+        } catch (error) {
+          // Claude answers "canceled" while it asks the user about work left running; the
+          // looks below decide whether it closed.
+          if (!(await pids()).length) return;
+          if (!answerGuard) throw error;
+        }
       else if (process.platform === "linux")
         // No app-level quit on Linux: ask each process to end, as closing its window would.
         for (const pid of active) {
@@ -254,6 +261,13 @@ export function nodeDesktopHost(options: {
       }
       for (let i = 0; i < 40; i++) {
         if (!(await pids()).length) return;
+        // Still open after 2 s, and again 3 s later: Claude may be asking before it quits.
+        if (answerGuard && (i === 8 || i === 20))
+          try {
+            await answerGuard();
+          } catch {
+            // Unanswered: the quit fails below as it would without an answer.
+          }
         await delay(250);
       }
       throw new Error(

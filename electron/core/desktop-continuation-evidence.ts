@@ -96,6 +96,126 @@ export function combineDesktopProcesses(
     });
   return JSON.stringify(processes);
 }
+/**
+ * A Bash command of a Claude Code session: the engine runs each in a shell of its own, the
+ * leader of its own process group, that first sources the session's shell snapshot.
+ */
+export function isEngineShell(row: DesktopProcess): boolean {
+  return (
+    /(?:^|\/)(?:zsh|bash|sh)$/.test(row.executable) &&
+    /\/shell-snapshots\/snapshot-/.test(row.args)
+  );
+}
+
+/** A command one of Claude's engines runs: its shell and every process under it. */
+export interface EngineCommand {
+  /** The command's shell, the leader of its process group. */
+  pid: number;
+  /** Every process of the command, the shell first. */
+  pids: number[];
+  /** The executable names under the shell, for the log: "node", "docker-buildx". */
+  names: string[];
+}
+
+/**
+ * The commands Claude's engines run in a census. Once every conversation has stopped, these
+ * are the ones a session left running in the background: dev servers, builds, watchers. Claude
+ * asks before it quits while one runs, and its quit stops them.
+ */
+export function engineCommands(
+  rows: readonly DesktopProcess[],
+  appPid: number,
+): EngineCommand[] {
+  const children = new Map<number, DesktopProcess[]>();
+  for (const row of rows)
+    children.set(row.ppid, [...(children.get(row.ppid) ?? []), row]);
+  const underApp = new Set<number>([appPid]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const row of rows)
+      if (!underApp.has(row.pid) && underApp.has(row.ppid)) {
+        underApp.add(row.pid);
+        grew = true;
+      }
+  }
+  const engines = new Set(
+    rows
+      .filter(
+        (row) =>
+          row.pid !== appPid &&
+          underApp.has(row.pid) &&
+          isDesktopClaudeEngine(row),
+      )
+      .map((row) => row.pid),
+  );
+  const commands: EngineCommand[] = [];
+  for (const shell of rows) {
+    if (!engines.has(shell.ppid) || !isEngineShell(shell)) continue;
+    const tree: DesktopProcess[] = [shell];
+    for (let i = 0; i < tree.length; i++)
+      tree.push(...(children.get(tree[i].pid) ?? []));
+    commands.push({
+      pid: shell.pid,
+      pids: tree.map((row) => row.pid),
+      names: [
+        ...new Set(tree.slice(1).map((row) => path.basename(row.executable))),
+      ],
+    });
+  }
+  return commands;
+}
+
+/** The TCP ports each of `pids` listens on, from `lsof -F pn` output. */
+export function parseListeningPorts(output: string): Map<number, number[]> {
+  const ports = new Map<number, number[]>();
+  let pid: number | undefined;
+  for (const line of output.split("\n")) {
+    if (line.startsWith("p")) pid = Number(line.slice(1));
+    else if (line.startsWith("n") && pid !== undefined) {
+      const port = Number(/:(\d+)$/.exec(line)?.[1]);
+      if (Number.isSafeInteger(port) && port > 0)
+        ports.set(pid, [...new Set([...(ports.get(pid) ?? []), port])]);
+    }
+  }
+  return ports;
+}
+
+/** The TCP ports these processes listen on; none when `lsof` cannot tell. */
+async function listeningPorts(pids: number[]): Promise<Map<number, number[]>> {
+  try {
+    const { stdout } = await exec(
+      "/usr/sbin/lsof",
+      ["-nP", "-a", "-iTCP", "-sTCP:LISTEN", "-p", pids.join(","), "-F", "pn"],
+      { timeout: 3000, maxBuffer: 1_048_576 },
+    );
+    return parseListeningPorts(stdout);
+  } catch (error) {
+    // lsof exits 1 when nothing listens; its output still says what it found.
+    const stdout = (error as { stdout?: unknown }).stdout;
+    return typeof stdout === "string" ? parseListeningPorts(stdout) : new Map();
+  }
+}
+
+/** `process.kill`, as true when it reached a process (or group) and false when none was there. */
+function sendSignal(pid: number, signal: NodeJS.Signals | 0): boolean {
+  try {
+    process.kill(pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A background command as the fleet weighs it: whether it serves, and when it last worked. */
+export interface BackgroundCommand extends EngineCommand {
+  /** TCP ports it listens on: a server, which never ends on its own. */
+  ports: number[];
+  /** When Relay first saw it. */
+  seenAt: number;
+  /** When Relay last saw it use CPU; undefined when never. */
+  activeAt?: number;
+}
+
 async function collectProcesses() {
   const [commands, arguments_] = await Promise.all([
     exec("/bin/ps", ["-axo", "pid=,ppid=,comm="], {
@@ -156,6 +276,8 @@ export interface QuiescenceInputs {
   activePids?: ReadonlySet<number>;
   /** Filled with the name of each process counted as unknown work, for the diagnosis log. */
   work?: string[];
+  /** Processes judged elsewhere, as the background commands the fleet waits for or stops. */
+  ignore?: ReadonlySet<number>;
 }
 
 /**
@@ -231,6 +353,7 @@ export function desktopProcessQuiescence(
     // Claude's own helpers (Chromium processes, engine wrappers, crash reporter).
     if (row.executable.startsWith(`${bundle}Contents/`)) continue;
     if (isDesktopClaudeEngine(row)) continue;
+    if (inputs.ignore?.has(row.pid)) continue;
     if (!inputs.activePids || inputs.activePids.has(row.pid)) {
       result.unknownWork++;
       inputs.work?.push(path.basename(row.executable));
@@ -348,6 +471,14 @@ export interface DesktopEvidenceOptions {
   /** `ps -axo pid=,time=` output; injectable for tests. */
   cpuTimes?: () => string | Promise<string>;
   now?: () => number;
+  /** The TCP ports each of these processes listens on; injectable for tests. */
+  listeningPorts?: (pids: number[]) => Promise<Map<number, number[]>>;
+  /**
+   * Sends `signal` to a process, or to a process group with a negative pid; signal 0 only
+   * asks whether it is there. Whether it reached one. Injectable for tests.
+   */
+  signal?: (pid: number, signal: NodeJS.Signals | 0) => boolean;
+  sleep?: (ms: number) => Promise<void>;
 }
 export function transcriptMessageText(row: Row) {
   const content = row.message?.content;
@@ -856,16 +987,107 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
   async quietExcept(stops: QuotaStop[]) {
     const raw = await (this.options.processes ?? collectProcesses)();
     const app = this.claudeApp(raw);
-    if (typeof app !== "number") return app;
+    if (typeof app !== "number") {
+      this.background = [];
+      return app;
+    }
     const busy: string[] = [];
     const work: string[] = [];
     const inputs = await this.measure(
       new Set(stops.map((stop) => stop.transcriptRelative)),
       busy,
     );
-    const reason = this.quietReason(raw, app, { ...inputs, work });
+    // Background commands are the fleet's to wait for or stop, not unknown work.
+    const commands = this.commandsIn(raw, app);
+    const reason = this.quietReason(raw, app, {
+      ...inputs,
+      work,
+      ignore: new Set(commands.flatMap((command) => command.pids)),
+    });
+    this.background = await this.weigh(commands, inputs.activePids);
     this.lastQuiet = { busy, work, sampled: inputs.activePids !== undefined };
     return reason;
+  }
+  private background: BackgroundCommand[] = [];
+  /** When each background command, by its shell, was first seen and last seen working. */
+  private commandTimes = new Map<number, { seenAt: number; activeAt?: number }>();
+  /**
+   * The commands Claude Code sessions left running in the background, as the last
+   * `quietExcept` found them: their ports, and when each was first seen and last used CPU.
+   */
+  backgroundCommands(): BackgroundCommand[] {
+    return this.background.map((command) => ({ ...command }));
+  }
+  private commandsIn(raw: string, app: number): EngineCommand[] {
+    try {
+      return engineCommands(JSON.parse(raw) as DesktopProcess[], app);
+    } catch {
+      return [];
+    }
+  }
+  /** Each command with its ports and times; a first look without a CPU sample counts as working. */
+  private async weigh(
+    commands: EngineCommand[],
+    active: ReadonlySet<number> | undefined,
+  ): Promise<BackgroundCommand[]> {
+    const now = this.now();
+    const times = new Map<number, { seenAt: number; activeAt?: number }>();
+    for (const command of commands) {
+      const before = this.commandTimes.get(command.pid);
+      const working = !active || command.pids.some((pid) => active.has(pid));
+      times.set(command.pid, {
+        seenAt: before?.seenAt ?? now,
+        activeAt: working ? now : before?.activeAt,
+      });
+    }
+    this.commandTimes = times;
+    const ports = commands.length
+      ? await (this.options.listeningPorts ?? listeningPorts)(
+          commands.flatMap((command) => command.pids),
+        )
+      : new Map<number, number[]>();
+    return commands.map((command) => ({
+      ...command,
+      ports: [...new Set(command.pids.flatMap((pid) => ports.get(pid) ?? []))],
+      ...times.get(command.pid)!,
+    }));
+  }
+  /**
+   * Stops the background commands whose shells are in `allowed`, right before Claude quits:
+   * each command's process group and every process in it is asked to end, and what is still
+   * there after 5 s is killed. Stops nothing when another command runs, one the fleet has not
+   * weighed. Resolves with the names it stopped, how many processes are left, and how many
+   * commands it did not expect.
+   */
+  async stopBackground(
+    allowed: ReadonlySet<number>,
+  ): Promise<{ stopped: string[]; left: number; unexpected: number }> {
+    const raw = await (this.options.processes ?? collectProcesses)();
+    const app = this.claudeApp(raw);
+    if (typeof app !== "number") return { stopped: [], left: 0, unexpected: 0 };
+    const commands = this.commandsIn(raw, app);
+    const unexpected = commands.filter((command) => !allowed.has(command.pid)).length;
+    if (unexpected || !commands.length)
+      return { stopped: [], left: 0, unexpected };
+    const signal = this.options.signal ?? sendSignal;
+    const pids = commands.flatMap((command) => command.pids);
+    const send = (name: NodeJS.Signals) => {
+      for (const command of commands) signal(-command.pid, name);
+      for (const pid of pids) signal(pid, name);
+    };
+    const alive = () => pids.filter((pid) => signal(pid, 0));
+    send("SIGTERM");
+    const wait = this.options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+    for (let i = 0; i < 20 && alive().length; i++) await wait(250);
+    if (alive().length) {
+      send("SIGKILL");
+      for (let i = 0; i < 8 && alive().length; i++) await wait(250);
+    }
+    return {
+      stopped: [...new Set(commands.flatMap((command) => command.names))],
+      left: alive().length,
+      unexpected: 0,
+    };
   }
   private lastQuiet?: { busy: string[]; work: string[]; sampled: boolean };
   /**
@@ -886,11 +1108,10 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     const raw = (this.options.processesSync ?? collectProcessesSync)();
     const app = this.claudeApp(raw);
     if (typeof app !== "number") return app;
-    return this.quietReason(
-      raw,
-      app,
-      this.measureSync(new Set(stops.map((stop) => stop.transcriptRelative))),
-    );
+    return this.quietReason(raw, app, {
+      ...this.measureSync(new Set(stops.map((stop) => stop.transcriptRelative))),
+      ignore: new Set(this.commandsIn(raw, app).flatMap((command) => command.pids)),
+    });
   }
   /** Claude's main pid in a census, its tree remembered; undefined while Claude is closed. */
   private claudeApp(raw: string): number | "quiescence-unverified" | undefined {

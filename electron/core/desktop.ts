@@ -87,7 +87,11 @@ export interface DesktopHost {
    * minute instead of a full listing. Never used to decide a quit, launch or write.
    */
   seemsRunning?(): Promise<boolean>;
-  quit(): Promise<void>;
+  /**
+   * Asks Claude to quit and waits for it to close. While Claude still runs after being asked,
+   * `answerGuard` may answer its own question about work left running; whether it did.
+   */
+  quit(answerGuard?: () => Promise<boolean>): Promise<void>;
   /** Starts Claude; with `netLog`, Chromium writes its net log to that file while it runs. */
   launch(options?: LaunchOptions): Promise<void>;
   seal(data: string): Buffer;
@@ -143,6 +147,8 @@ export interface DesktopSwitchOptions {
   canProceed?: () => boolean;
   /** Runs right before Claude is asked to quit; throw `DesktopSwitchRefused` to call it off. */
   beforeQuit?: () => Promise<void>;
+  /** While Claude, asked to quit, still runs: may answer its question about work left running. */
+  answerQuitGuard?: () => Promise<boolean>;
 }
 /**
  * A switch called off by its guards before Claude was asked to quit: Claude kept running and
@@ -692,7 +698,13 @@ export class DesktopManager {
           await this.extensionStep(target, !options.closedOnly);
       };
       if (options.closedOnly) await change();
-      else await this.restart(change, options.canProceed, options.beforeQuit);
+      else
+        await this.restart(
+          change,
+          options.canProceed,
+          options.beforeQuit,
+          options.answerQuitGuard,
+        );
     }).finally(() => {
       try {
         this.onSwitched?.();
@@ -1303,13 +1315,13 @@ export class DesktopManager {
     }
   }
   /** Quits Claude for the running operation, reporting the restart first. */
-  private async quitClaude() {
+  private async quitClaude(answerQuitGuard?: () => Promise<boolean>) {
     const current = this.operation;
     if (current && !current.restarted) {
       current.restarted = true;
       this.report("start", current);
     }
-    await this.host.quit();
+    await this.host.quit(answerQuitGuard);
   }
   private report(phase: "start" | "end", operation: Operation, ok = false) {
     const base = {
@@ -1354,6 +1366,7 @@ export class DesktopManager {
     fn: () => Promise<void>,
     canProceed?: () => boolean,
     beforeQuit?: () => Promise<void>,
+    answerQuitGuard?: () => Promise<boolean>,
   ) {
     // Check the live handoff guard immediately before asking Claude to quit.
     // File-write guards alone are too late to protect a newly started task.
@@ -1361,7 +1374,7 @@ export class DesktopManager {
     if (canProceed && !canProceed()) throw refuse();
     await beforeQuit?.();
     if (canProceed && !canProceed()) throw refuse();
-    await this.quitClaude();
+    await this.quitClaude(answerQuitGuard);
     try {
       await fn();
     } finally {

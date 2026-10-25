@@ -159,6 +159,12 @@ export interface DesktopAutomation {
     text: string,
     options?: { keysIdleMs?: number },
   ): Promise<DesktopAutomationSnapshot>;
+  /**
+   * Answers Claude's own question before it quits, "Background commands are still running",
+   * with "Quit anyway". Only that question: never one that says Claude is still working in a
+   * session. Whether it pressed.
+   */
+  answerQuitGuard?(): Promise<boolean>;
 }
 
 export interface DesktopContinuationObservation extends ContinuationState {
@@ -224,6 +230,9 @@ type NativeReply = {
   acceptedVisible?: boolean;
   markerPresent?: boolean;
   accessibilityGranted?: boolean;
+  /** quit-guard: the question Claude asks before quitting, and whether it was answered. */
+  guard?: "shells" | "working" | null;
+  pressed?: boolean;
 };
 export type DesktopNativeExecutor = (request: unknown) => Promise<unknown>;
 
@@ -383,6 +392,8 @@ export function nativeDesktopAutomation(
     },
     cancelQuotaResume: async (expected) =>
       snapshot(await call({ command: "cancel-quota-resume", guard: expected })),
+    answerQuitGuard: async () =>
+      (await call({ command: "quit-guard", answer: "quit-anyway" })).pressed === true,
     send: async (expected, requestId, text) => {
       if (
         !REQUEST.test(requestId) ||

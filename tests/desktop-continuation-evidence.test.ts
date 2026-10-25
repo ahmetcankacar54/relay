@@ -14,6 +14,8 @@ import {
   parseDesktopTranscript,
   transcriptTurnState,
   movedOn,
+  engineCommands,
+  parseListeningPorts,
   continuationTurn,
   NativeDesktopContinuationEvidence,
   type DesktopProcess,
@@ -1184,6 +1186,146 @@ test("the periodic CPU sample is read asynchronously; only the switch-time guard
       "async read(",
     ])
       assert.doesNotMatch(body(periodic), /Sync\(/, periodic);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
+
+const engineShell = (pid: number, ppid: number, command: string): DesktopProcess => ({
+  pid,
+  ppid,
+  executable: "/bin/zsh",
+  args: `/bin/zsh -c source /Users/me/.claude/shell-snapshots/snapshot-zsh-1-ab.sh 2>/dev/null || true && eval '${command}'`,
+});
+const devServer = [
+  engineShell(600, 457, "npm run dev"),
+  { pid: 601, ppid: 600, executable: "/usr/local/bin/node", args: "node vite" },
+  { pid: 602, ppid: 601, executable: "/x/esbuild", args: "esbuild --service" },
+];
+
+test("a command an engine runs in its own shell is a background command; MCP servers and other shells are not", () => {
+  const commands = engineCommands(
+    [
+      app,
+      sourceEngine,
+      { pid: 510, ppid: 457, executable: "/usr/local/bin/node", args: "node playwright-mcp" },
+      ...devServer,
+      // A shell under Claude but not under an engine, and a Terminal one outside Claude.
+      engineShell(700, 456, "ls"),
+      engineShell(800, 1, "ls"),
+    ],
+    456,
+  );
+  assert.deepEqual(commands, [
+    { pid: 600, pids: [600, 601, 602], names: ["node", "esbuild"] },
+  ]);
+});
+
+test("lsof's field output gives each process's listening ports", () => {
+  const ports = parseListeningPorts("p601\nn*:5173\nn[::1]:5173\np700\nn127.0.0.1:3000\nnbad\n");
+  assert.deepEqual([...ports], [
+    [601, [5173]],
+    [700, [3000]],
+  ]);
+});
+
+test("background commands are weighed apart from other work: servers by their ports, builds by their CPU", async () => {
+  const f = await fixture();
+  try {
+    let clock = Date.parse("2026-10-13T15:00:00.000Z");
+    let cpu = "601 0:01.00\n";
+    const build = [
+      engineShell(650, 457, "docker build ."),
+      { pid: 651, ppid: 650, executable: "/usr/local/bin/docker", args: "docker build ." },
+    ];
+    const evidence = new NativeDesktopContinuationEvidence({
+      store: f.store,
+      desktop: {} as DesktopManager,
+      automation: {} as DesktopAutomation,
+      claudeRoot: path.join(f.root, "desktop"),
+      transcriptRoot: path.join(f.root, "transcripts"),
+      processes: async () => roster(sourceEngine, ...devServer, ...build),
+      cpuTimes: () => cpu,
+      listeningPorts: async (pids) => {
+        assert.deepEqual(pids, [600, 601, 602, 650, 651]);
+        return new Map([[601, [5173]]]);
+      },
+      now: () => clock,
+    });
+    // Busy CPU in them is not unknown work: the fleet weighs them itself.
+    assert.equal(await evidence.quietExcept([]), undefined);
+    const first = evidence.backgroundCommands();
+    assert.deepEqual(
+      first.map((c) => [c.pid, c.ports, c.activeAt === clock]),
+      [
+        [600, [5173], true],
+        // Without a CPU sample to compare with, a command counts as working.
+        [650, [], true],
+      ],
+    );
+    // 10 s later the build used CPU and the server did not.
+    const seen = clock;
+    clock += 10_000;
+    cpu = "601 0:01.00\n651 0:05.00\n";
+    await evidence.quietExcept([]);
+    clock += 10_000;
+    cpu = "601 0:01.10\n651 0:09.00\n";
+    await evidence.quietExcept([]);
+    const later = evidence.backgroundCommands();
+    assert.equal(later[0].seenAt, seen);
+    assert.equal(later[0].activeAt, seen);
+    assert.equal(later[1].activeAt, clock);
+  } finally {
+    await fs.rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("stopping background commands ends their process groups, kills what stays, and refuses an unexpected one", async () => {
+  const f = await fixture();
+  try {
+    const signals: [number, string | number][] = [];
+    const alive = new Set([600, 601, 602]);
+    let stubborn = true;
+    const evidence = new NativeDesktopContinuationEvidence({
+      store: f.store,
+      desktop: {} as DesktopManager,
+      automation: {} as DesktopAutomation,
+      claudeRoot: path.join(f.root, "desktop"),
+      transcriptRoot: path.join(f.root, "transcripts"),
+      processes: async () => roster(sourceEngine, ...devServer),
+      signal: (pid, signal) => {
+        signals.push([pid, signal]);
+        if (signal === 0) return alive.has(pid);
+        if (signal === "SIGTERM") {
+          alive.delete(600);
+          alive.delete(601);
+        }
+        if (signal === "SIGKILL") stubborn = false;
+        if (!stubborn) alive.clear();
+        return pid < 0 || alive.has(pid);
+      },
+      sleep: async () => {},
+    });
+    // A command the fleet did not weigh: nothing is stopped.
+    assert.deepEqual(await evidence.stopBackground(new Set([999])), {
+      stopped: [],
+      left: 0,
+      unexpected: 1,
+    });
+    assert.equal(signals.length, 0);
+    // esbuild ignores TERM: it is killed.
+    assert.deepEqual(await evidence.stopBackground(new Set([600])), {
+      stopped: ["node", "esbuild"],
+      left: 0,
+      unexpected: 0,
+    });
+    assert.deepEqual(signals.slice(0, 4), [
+      [-600, "SIGTERM"],
+      [600, "SIGTERM"],
+      [601, "SIGTERM"],
+      [602, "SIGTERM"],
+    ]);
+    assert.ok(signals.some(([pid, s]) => pid === -600 && s === "SIGKILL"));
   } finally {
     await fs.rm(f.root, { recursive: true, force: true });
   }

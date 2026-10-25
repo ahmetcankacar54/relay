@@ -714,3 +714,119 @@ test("the notice after a switch at the limit names the account and counts the co
     "Limit reached: the Claude app switched to Alto. 1 conversation continues where it stopped.",
   );
 });
+
+test("a working background command holds the switch up to 15 minutes; servers and idle ones are stopped at the switch", async () => {
+  const { BACKGROUND_WAIT_MS } = await import("../electron/core/fleet-continuation");
+  const f = setup();
+  let clock = NOW;
+  const logs: Array<Record<string, unknown>> = [];
+  const build = { pid: 650, pids: [650, 651], names: ["docker"], ports: [], seenAt: NOW, activeAt: NOW };
+  const server = { pid: 600, pids: [600, 601], names: ["node"], ports: [5173], seenAt: NOW, activeAt: NOW };
+  let commands = [build, server];
+  const stops: ReadonlySet<number>[] = [];
+  let answered = 0;
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    now: () => clock,
+    log: (event, fields) => void logs.push({ event, ...fields }),
+    backgroundCommands: () => commands.map((c) => ({ ...c, activeAt: c === build ? clock : c.activeAt })),
+    stopBackground: async (allowed) => {
+      stops.push(allowed);
+      return { stopped: ["docker", "node"], left: 0, unexpected: 0 };
+    },
+    answerQuitGuard: async () => {
+      answered++;
+      return true;
+    },
+    switchTo: async (targetId, guards) => {
+      await guards.beforeQuit();
+      // Claude asks before it quits; the fleet answers, as it stopped the commands.
+      assert.equal(await guards.answerQuitGuard?.(), true);
+      f.state.switches.push(targetId);
+      f.state.active = targetId;
+    },
+  });
+  fleet.setEnabled(true);
+  const waiting = await fleet.tick();
+  assert.equal(waiting.reason, "background-work");
+  assert.deepEqual(f.state.switches, []);
+  const logged = logs.find((l) => l.reason === "background-work");
+  assert.equal(logged?.working, "docker");
+  assert.equal(logged?.commands, "docker node:5173");
+  // Readings as fresh as the scheduled reads keep them.
+  const reread = () => {
+    for (const [id, five] of [[f.a.id, 100], [f.b.id, 10]] as const)
+      f.state.usage[id] = {
+        ...usage(id === f.a.id ? f.a : f.b, five),
+        checkedAt: new Date(clock - 60_000).toISOString(),
+      };
+  };
+  // Still working 14 minutes on: still waiting.
+  clock += BACKGROUND_WAIT_MS - 60_000;
+  reread();
+  assert.equal((await fleet.tick()).reason, "background-work");
+  // Past 15 minutes: both are stopped at the switch, and the quit question is answered.
+  clock += 60_000;
+  reread();
+  const done = await fleet.tick();
+  assert.deepEqual(f.state.switches, [f.b.id]);
+  assert.deepEqual([...stops[0]].sort(), [600, 650]);
+  assert.equal(answered, 1);
+  assert.equal(done.status, "watching");
+  assert.ok(logs.some((l) => l.event === "background-stopped" && l.stopped === "docker node"));
+  // A server alone never holds the switch.
+  const g = setup();
+  commands = [server];
+  const quick = new FleetContinuation({
+    ...g.deps,
+    backgroundCommands: () => commands,
+    stopBackground: async () => ({ stopped: ["node"], left: 0, unexpected: 0 }),
+  });
+  quick.setEnabled(true);
+  await quick.tick();
+  assert.deepEqual(g.state.switches, [g.b.id]);
+});
+
+test("a background command the fleet did not weigh, or one that will not end, calls the switch off before Claude quits", async () => {
+  for (const result of [
+    { stopped: [], left: 0, unexpected: 1 },
+    { stopped: ["node"], left: 1, unexpected: 0 },
+  ]) {
+    const f = setup();
+    let quits = 0;
+    const fleet = new FleetContinuation({
+      ...f.deps,
+      backgroundCommands: () => [],
+      stopBackground: async () => result,
+      switchTo: async (targetId, guards) => {
+        await guards.beforeQuit();
+        quits++;
+      },
+    });
+    fleet.setEnabled(true);
+    const state = await fleet.tick();
+    assert.equal(quits, 0);
+    assert.equal(state.reason, "context-changed");
+    assert.deepEqual(f.state.switches, []);
+  }
+  // Without stopping anything, Claude's question is the user's to answer.
+  const f = setup();
+  let asked = 0;
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    backgroundCommands: () => [],
+    stopBackground: async () => ({ stopped: [], left: 0, unexpected: 0 }),
+    answerQuitGuard: async () => {
+      asked++;
+      return true;
+    },
+    switchTo: async (targetId, guards) => {
+      await guards.beforeQuit();
+      assert.equal(await guards.answerQuitGuard?.(), false);
+      f.state.active = targetId;
+    },
+  });
+  fleet.setEnabled(true);
+  await fleet.tick();
+  assert.equal(asked, 0);
+});

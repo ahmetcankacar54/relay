@@ -246,6 +246,10 @@ const OTHER_WORK: Copy = [
   "{n} konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince {tgt’e} geçip devam ettiririm.",
   "{n conversations} stopped at the limit. Other work is running in the Claude app; when it finishes I switch to {tgt} and continue.",
 ];
+const BACKGROUND_WORK: Copy = [
+  "{n} konuşma limit dolduğu için durdu. Arka planda bir komut (derleme, test gibi) hâlâ çalışıyor; bitince ya da en geç 15 dakika sonra onu durdurup {tgt’e} geçerim. Açık kalan sunucuları geçişte kapatırım.",
+  "{n conversations} stopped at the limit. A background command (a build or a test) is still running; when it ends, or after 15 minutes at most, I stop it and switch to {tgt}. Servers left running are stopped at the switch.",
+];
 const WATCHING: Copy = [
   "İzliyorum. Limit dolunca duran konuşmaları sıradaki hesapta devam ettiririm.",
   "Watching. When the limit is reached, I continue stopped conversations on the next account.",
@@ -261,6 +265,7 @@ const FULL_NOTHING_READY: Copy = [
 
 /** Reasons where Relay holds a stop it could switch for, if the user asks. */
 const holdsSwitch = (reason: string) =>
+  reason === "background-work" ||
   reason.startsWith("not-quiescent:") ||
   reason === "quiescence-unverified" ||
   reason === "awaiting-quota-stop";
@@ -419,6 +424,13 @@ export function automationStatus(
     if (!full && readsFull(activeUsage)) return show(waiting(USAGE_NOT_FRESH));
     return show(ok(WATCHING));
   }
+  if (reason === "background-work")
+    return show(
+      waiting(BACKGROUND_WORK),
+      vars,
+      switchTo,
+      switchTo ? SWITCH_NOW_SUFFIX : undefined,
+    );
   if (reason.startsWith("not-quiescent:") || reason === "quiescence-unverified")
     return show(
       waiting(OTHER_WORK),

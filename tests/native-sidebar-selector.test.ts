@@ -286,6 +286,34 @@ test(
 );
 
 test(
+  "Claude's quit question is told apart: background commands alone, or Claude still working",
+  { skip: process.platform !== "darwin" },
+  async () => {
+    const binary = await fixtureBinary();
+    const kind = (quitGuardTexts: string[]) =>
+      (runFixture(binary, { quitGuardTexts }) as { kind: string | null }).kind;
+    assert.equal(
+      kind([
+        "Background commands are still running",
+        "Background commands are running in 1 session. Quitting will stop them.",
+      ]),
+      "shells",
+    );
+    assert.equal(kind(["Arka plan komutları hâlâ çalışıyor"]), "shells");
+    // Claude still working wins, though the same alert names background commands too.
+    assert.equal(
+      kind([
+        "Claude is still working",
+        "Background commands are running in 2 sessions. Quitting will stop them, even if you wait for Claude.",
+      ]),
+      "working",
+    );
+    assert.equal(kind(["Claude hâlâ çalışıyor"]), "working");
+    assert.equal(kind(["Quit anyway", "Some other question"]), null);
+  },
+);
+
+test(
   "an empty tiptap composer reads as empty, and one with the user's text never does",
   { skip: process.platform !== "darwin" },
   async () => {

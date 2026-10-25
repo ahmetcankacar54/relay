@@ -15,7 +15,10 @@ import {
   readPrivateJson,
   writePrivateJson,
 } from "./continuation-journal";
-import type { QuotaStop } from "./desktop-continuation-evidence";
+import type {
+  BackgroundCommand,
+  QuotaStop,
+} from "./desktop-continuation-evidence";
 import { DesktopSwitchRefused } from "./desktop";
 
 export { sourceExhausted } from "../../shared/usage";
@@ -51,7 +54,15 @@ export interface FleetDeps {
   /** Throws `DesktopSwitchRefused` when a guard called the switch off before Claude quit. */
   switchTo(
     targetId: string,
-    guards: { canProceed: () => boolean; beforeQuit: () => Promise<void> },
+    guards: {
+      canProceed: () => boolean;
+      beforeQuit: () => Promise<void>;
+      /**
+       * While Claude, asked to quit, still runs: answers Claude's own question about background
+       * commands still running with "Quit anyway", once Relay has stopped them. Whether it did.
+       */
+      answerQuitGuard?: () => Promise<boolean>;
+    },
   ): Promise<void>;
   /** Reopen, verify and send once. `beforeSend` must run right before the send. */
   continueOne(
@@ -72,6 +83,20 @@ export interface FleetDeps {
   quietDetail?(): Record<string, unknown>;
   /** A switch and its continuations are over: what became of them, to tell the user. */
   finished?(last: NonNullable<FleetContinuationState["last"]>, reason?: string): void;
+  /**
+   * The commands the stopped sessions left running in the background (dev servers, builds,
+   * watchers), as the last `quiet` found them. Claude asks before it quits while one runs.
+   */
+  backgroundCommands?(): BackgroundCommand[];
+  /**
+   * Right before Claude quits: stops the background commands whose shells are `allowed`, and
+   * none when another one runs. What it stopped, what is left, what it did not expect.
+   */
+  stopBackground?(
+    allowed: ReadonlySet<number>,
+  ): Promise<{ stopped: string[]; left: number; unexpected: number }>;
+  /** Answers Claude's quit question about background commands with "Quit anyway"; whether it did. */
+  answerQuitGuard?(): Promise<boolean>;
 }
 
 /** An id for the diagnosis log: its first 8 characters, which tell two apart. */
@@ -107,6 +132,34 @@ const stopKey = (account: Account, stop: QuotaStop) =>
 export const FLEET_SCAN_MS = 20_000;
 /** The least time between two usage reads the fleet asks for, per source. */
 export const FLEET_REREAD_MS = 60_000;
+/**
+ * A background command that used CPU this recently is still working, as a build or a test run
+ * is, and the switch waits for it to end. A server, which listens on a port, never ends on its
+ * own; one that has been idle this long is waiting on nothing that will come.
+ */
+export const BACKGROUND_IDLE_MS = 2 * 60_000;
+/** The longest the fleet waits for working background commands before it stops them too. */
+export const BACKGROUND_WAIT_MS = 15 * 60_000;
+/** The background commands still working at `now`: not serving, and busy within BACKGROUND_IDLE_MS. */
+export function workingCommands(commands: readonly BackgroundCommand[], now: number) {
+  return commands.filter(
+    (command) =>
+      !command.ports.length &&
+      command.activeAt !== undefined &&
+      now - command.activeAt < BACKGROUND_IDLE_MS,
+  );
+}
+/** Background commands for the log: each one's names, and its ports when it serves. */
+const describeCommands = (commands: readonly BackgroundCommand[]) =>
+  commands
+    .map(
+      (command) =>
+        `${command.names.slice(0, 3).join("+") || "sh"}${
+          command.ports.length ? `:${command.ports.slice(0, 3).join(",")}` : ""
+        }`,
+    )
+    .join(" ")
+    .slice(0, 160);
 /** A stop newer than the source's last usage reading, or one with no reading: it is out of date. */
 function stoppedSinceReading(stops: QuotaStop[], usage: AccountUsage | undefined) {
   const checked = Date.parse(usage?.checkedAt ?? "");
@@ -222,6 +275,8 @@ export class FleetContinuation {
   };
   /** When the fleet last asked for a usage read of each account. */
   private rereads = new Map<string, number>();
+  /** Since when the fleet has waited for working background commands, for which stops. */
+  private backgroundWait?: { key: string; since: number };
   private readonly file: string;
   private readonly now: () => number;
   constructor(private readonly deps: FleetDeps) {
@@ -484,6 +539,30 @@ export class FleetContinuation {
         { ...base, targetId: target.id, status: "waiting", reason: busy },
         { ...detail, ...this.deps.quietDetail?.() },
       );
+    const key = (list: QuotaStop[]) =>
+      list
+        .map((stop) => stopKey(source, stop))
+        .sort()
+        .join(",");
+    // A build or a test a stopped session left running ends on its own: wait for it, up to
+    // BACKGROUND_WAIT_MS. Servers and idle commands never do; they are stopped at the switch.
+    const commands = this.deps.backgroundCommands?.() ?? [];
+    const working = workingCommands(commands, this.now());
+    if (!working.length) this.backgroundWait = undefined;
+    else {
+      if (this.backgroundWait?.key !== key(stops))
+        this.backgroundWait = { key: key(stops), since: this.now() };
+      const waited = this.now() - this.backgroundWait.since;
+      if (waited < BACKGROUND_WAIT_MS)
+        return this.publish(
+          { ...base, targetId: target.id, status: "waiting", reason: "background-work" },
+          {
+            ...detail,
+            working: describeCommands(working),
+            commands: describeCommands(commands),
+          },
+        );
+    }
     const automation = await this.deps.automationReady();
     if (automation)
       return this.publish(
@@ -496,17 +575,17 @@ export class FleetContinuation {
       const current = (await this.scanStops(source, quota, this.now())).filter(
         (stop) => !this.saved.handled.includes(stopKey(source, stop)),
       );
-      const key = (list: QuotaStop[]) =>
-        list
-          .map((stop) => stopKey(source, stop))
-          .sort()
-          .join(",");
       if (key(current) !== key(stops) || (await this.deps.quiet(current)))
         return this.publish({
           ...base,
           status: "waiting",
           reason: "context-changed",
         });
+      // The commands weighed above: the switch stops these, and no other.
+      const stoppable = new Set(
+        (this.deps.backgroundCommands?.() ?? []).map((command) => command.pid),
+      );
+      let stopped = false;
       const pending: Pending = {
         id: randomUUID(),
         key: key(current),
@@ -531,6 +610,26 @@ export class FleetContinuation {
               !current.every((stop) => this.deps.unchanged(stop))
             )
               throw new DesktopSwitchRefused("work-started");
+            // Claude would ask before quitting while a background command runs: stop them.
+            if (!this.deps.stopBackground) return;
+            const result = await this.deps.stopBackground(stoppable);
+            if (result.stopped.length || result.left || result.unexpected)
+              this.logEvent("background-stopped", {
+                stopped: result.stopped.join(" ").slice(0, 160),
+                left: result.left,
+                unexpected: result.unexpected,
+              });
+            if (result.unexpected || result.left)
+              throw new DesktopSwitchRefused("background-left");
+            stopped = result.stopped.length > 0;
+          },
+          // Only after Relay stopped them: a background command Claude still counts is one of
+          // those, ending. Without stopping, Claude's question stays the user's to answer.
+          answerQuitGuard: async () => {
+            if (!stopped || !this.deps.answerQuitGuard) return false;
+            const answered = await this.deps.answerQuitGuard();
+            this.logEvent("quit-guard", { answered });
+            return answered;
           },
         });
       } catch (error) {

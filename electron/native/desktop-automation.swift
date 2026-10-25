@@ -421,6 +421,44 @@ func writeComposer(_ observation: Observation, _ body: String) throws {
     // exact account/session/mode and whole composer before a separate send click.
     Thread.sleep(forTimeInterval: 0.15)
 }
+// Claude's own question before it quits while work is left running, an alert or a sheet,
+// by its title in English and Turkish: "shells" when it asks only about background
+// commands, "working" when Claude is still working in a session, nil for anything else.
+let shellsGuardTitles = ["Background commands are still running", "Arka plan komutları hâlâ çalışıyor"]
+let workingGuardTitles = ["Claude is still working", "Claude hâlâ çalışıyor"]
+let quitAnywayTitles = ["Quit anyway", "Yine de çık"]
+func quitGuardKind(_ texts: [String]) -> String? {
+    if texts.contains(where: { workingGuardTitles.contains($0) }) { return "working" }
+    if texts.contains(where: { shellsGuardTitles.contains($0) }) { return "shells" }
+    return nil
+}
+// Claude's quit question, if it shows one: its kind and its "Quit anyway" button. Looks only
+// in Claude's dialogs and sheets, never in a page.
+func quitGuard(_ app: NSRunningApplication) -> (kind: String?, quitAnyway: AXUIElement?) {
+    let root = AXUIElementCreateApplication(app.processIdentifier)
+    var containers: [AXUIElement] = []
+    for window in attribute(root, kAXWindowsAttribute) as? [AXUIElement] ?? [] {
+        if ["AXDialog", "AXSystemDialog"].contains(stringAttribute(window, kAXSubroleAttribute)) { containers.append(window) }
+        for child in attribute(window, kAXChildrenAttribute) as? [AXUIElement] ?? []
+            where stringAttribute(child, kAXRoleAttribute) == "AXSheet" { containers.append(child) }
+    }
+    for container in containers {
+        var texts: [String] = []
+        var buttons: [(title: String, element: AXUIElement)] = []
+        func walk(_ element: AXUIElement, _ depth: Int) {
+            let role = stringAttribute(element, kAXRoleAttribute)
+            if role == "AXStaticText" { texts += [valueText(element), stringAttribute(element, kAXTitleAttribute)] }
+            if role == "AXButton" { buttons.append((stringAttribute(element, kAXTitleAttribute), element)) }
+            guard depth < 4 else { return }
+            for child in (attribute(element, kAXChildrenAttribute) as? [AXUIElement] ?? []).prefix(40) { walk(child, depth + 1) }
+        }
+        walk(container, 0)
+        if let kind = quitGuardKind(texts) {
+            return (kind, buttons.first { quitAnywayTitles.contains($0.title) }?.element)
+        }
+    }
+    return (nil, nil)
+}
 func handle(_ request: [String: Any]) throws -> [String: Any] {
     guard let command = request["command"] as? String else { try fail("desktop-ui-unsupported") }
     if command == "request-accessibility" {
@@ -430,6 +468,19 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         return ["ok": true, "accessibilityGranted": trusted]
     }
     if command == "inspect" { return ["ok": true, "snapshot": try observe().fields] }
+    if command == "quit-guard" {
+        // Relay asked Claude to quit, after stopping the background commands it found. Only
+        // the question about background commands alone is answered, with "Quit anyway".
+        guard AXIsProcessTrusted() else { try fail("accessibility-permission-required") }
+        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).filter { !$0.isTerminated }
+        guard apps.count == 1, let app = apps.first else { return ["ok": true, "guard": NSNull(), "pressed": false] }
+        let found = quitGuard(app)
+        var pressed = false
+        if request["answer"] as? String == "quit-anyway", found.kind == "shells", let button = found.quitAnyway {
+            pressed = AXUIElementPerformAction(button, kAXPressAction as CFString) == .success
+        }
+        return ["ok": true, "guard": found.kind as Any? ?? NSNull(), "pressed": pressed]
+    }
     if command == "open-session" || command == "open-new-session" {
         let link: String
         if command == "open-session" {
@@ -649,6 +700,8 @@ do {
     } else if let object = json as? [String: Any], let strings = object["webAreaStrings"] as? [String] {
         let screen = screenOf(strings)
         result = ["localSessionId": screen.localSessionId as Any? ?? NSNull(), "newSession": screen.newSession, "screen": screenShape(strings)]
+    } else if let object = json as? [String: Any], let texts = object["quitGuardTexts"] as? [String] {
+        result = ["kind": quitGuardKind(texts) as Any? ?? NSNull()]
     } else if let object = json as? [String: Any], let composer = object["composer"] as? [String: Any] {
         // {"composer": {value, emptyEditorMarked, placeholder}} says how such a composer reads.
         let value = composer["value"] as? String ?? ""

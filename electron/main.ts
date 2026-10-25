@@ -939,6 +939,16 @@ else {
         log: logFleetEvent,
         quietDetail: () => evidence.quietDetail(),
         finished: notifyFleet,
+        // What the stopped sessions left running (dev servers, builds), stopped at the switch.
+        backgroundCommands: () => evidence.backgroundCommands(),
+        stopBackground: (allowed) => evidence.stopBackground(allowed),
+        answerQuitGuard: async () => {
+          try {
+            return (await automation.answerQuitGuard?.()) === true;
+          } catch {
+            return false;
+          }
+        },
       });
       // Before the single choice both records could be saved on. The fleet wins,
       // as the mode reads; turning it off later must not leave prepare-on-quit on.
