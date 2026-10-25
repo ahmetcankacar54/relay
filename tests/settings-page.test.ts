@@ -13,7 +13,10 @@ const settings = { ...DEFAULT_SETTINGS, usageRefreshMinutes: 0 as const };
 
 function relayFor(): Relay {
   return {
-    api: { claudeLaunch: async () => ({ netLog: false, quicOff: false }) }, preview: false, error: "", notice: "", accounts: [], active: undefined, settings, busy: "",
+    api: {
+      claudeLaunch: async () => ({ netLog: false, quicOff: false }),
+      menuBarTitle: async () => ({ items: ["five-hour"] }),
+    }, preview: false, error: "", notice: "", accounts: [], active: undefined, settings, busy: "",
     usageBusy: new Set<string>(), desktopBusy: false, hasUnclaimedDesktop: false, targetOrg: "", historyRevision: 0,
     version: "0.4.2",
     desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0 },
@@ -276,6 +279,7 @@ test("the system group shows how Relay starts Claude, and changes it through mai
     let choice = { netLog: false, quicOff: true };
     const relay = relayFor();
     relay.api = {
+      ...relay.api,
       claudeLaunch: async () => choice,
       setClaudeLaunch: async (patch: object) => {
         calls.push(patch);
@@ -313,4 +317,131 @@ test("the system group shows how Relay starts Claude, and changes it through mai
   } finally {
     dom.uninstall();
   }
+});
+
+test("the menu bar group says what the title can show, on macOS only", () => {
+  const render = (language: "tr" | "en", platform = "darwin") => {
+    const relay = relayFor();
+    const data = { ...relay.data!, diagnostics: { ...relay.data!.diagnostics, platform } } as Snapshot;
+    return renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
+        createElement(RelayContext.Provider, { value: { ...relay, data } as Relay }, createElement(Settings)),
+      ),
+    );
+  };
+  const tr = render("tr");
+  // First in the menu bar group, before the panda's own rows.
+  assert.match(tr, /id="settings-menu-bar"[\s\S]*Menü çubuğunda göster[\s\S]*Panda animasyonları/);
+  for (const re of [
+    /5 saatlik kullanım/, /Haftalık kullanım/, /5 saatlik dönemin kalan süresi/, /Bugünkü token/,
+    /Bugünkü API karşılığı/, /Hesap adı/,
+    /Yüzdeler ve süre, Claude uygulamasında açık hesabın; token ve API karşılığı tüm hesaplarının bugünkü toplamı\. En çok 4 değer seçebilirsin; sıra menü çubuğundaki sıradır\. Limitler okunamazsa son okunan değer başında ~ ile kalır\./,
+  ])
+    assert.match(tr, re);
+  // Each item shows a sample of what it puts in the title.
+  assert.match(tr, /Bugünkü token <span[^>]*>12,4M<\/span>/);
+  assert.match(tr, /Bugünkü API karşılığı <span[^>]*>\$18,20<\/span>/);
+  assert.match(tr, /5 saatlik dönemin kalan süresi <span[^>]*>1:50<\/span>/);
+  const en = render("en");
+  for (const re of [/Show in the menu bar/, /Tokens today <span[^>]*>12\.4M<\/span>/, /API value today/, /marked with ~\./])
+    assert.match(en, re);
+  for (const platform of ["win32", "linux"])
+    assert.doesNotMatch(render("tr", platform), /Menü çubuğunda göster/, platform);
+});
+
+test("the menu bar title's items are switched on, ordered and saved through main", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const saved: unknown[] = [];
+    let items = ["five-hour"];
+    const relay = relayFor();
+    relay.api = {
+      ...relay.api,
+      menuBarTitle: async () => ({ items }),
+      setMenuBarTitle: async (choice: { items: string[] }) => {
+        saved.push(choice.items);
+        items = choice.items;
+        return { items };
+      },
+    } as unknown as Relay["api"];
+    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+        ),
+      ),
+    );
+    const container = dom.container as unknown as Fake;
+    const attr = (n: Fake | undefined, name: string) =>
+      (n?.attributes as Map<string, string> | undefined)?.get(name);
+    const item = (id: string) => find(container, (n) => attr(n, "id") === `menu-bar-item-${id}`);
+    const preview = () => textOf(find(container, (n) => attr(n, "data-slot") === "menu-bar-preview"));
+    const click = (node: Fake | undefined) => act(async () => dom.dispatch(node!, "click", { detail: 1 }));
+    // Until changed: the five-hour percent alone.
+    assert.equal(attr(item("five-hour"), "aria-checked"), "true");
+    assert.equal(attr(item("tokens"), "aria-checked"), "false");
+    assert.equal(preview(), "%40");
+    await click(item("tokens"));
+    assert.deepEqual(saved, [["five-hour", "tokens"]]);
+    assert.equal(preview(), "%40 · 12,4M");
+    // Moved one place earlier.
+    await click(find(container, (n) => attr(n, "aria-label") === "Bugünkü token: öne al"));
+    assert.deepEqual(saved.at(-1), ["tokens", "five-hour"]);
+    assert.equal(preview(), "12,4M · %40");
+    // The first can go no earlier, the last no later.
+    assert.equal(attr(find(container, (n) => attr(n, "aria-label") === "Bugünkü token: öne al"), "disabled"), "");
+    assert.equal(attr(find(container, (n) => attr(n, "aria-label") === "5 saatlik kullanım: geriye al"), "disabled"), "");
+    // The two rows traded places; the rows between stayed where they were.
+    const rows = (node: Fake = container): string[] =>
+      attr(node, "data-item") ? [attr(node, "data-item")!] : node.childNodes.flatMap((child) => rows(child));
+    assert.deepEqual(rows(), ["tokens", "week", "reset", "five-hour", "cost", "account"]);
+    // Switching never moves a row; the title reads the switched-on rows top to bottom.
+    await click(item("cost"));
+    await click(item("week"));
+    assert.deepEqual(rows(), ["tokens", "week", "reset", "five-hour", "cost", "account"]);
+    assert.deepEqual(saved.at(-1), ["tokens", "week", "five-hour", "cost"]);
+    assert.equal(preview(), "12,4M · %35 · %40 · $18,20");
+    // Four at most: the rest wait.
+    assert.equal(attr(item("account"), "disabled"), "");
+    assert.equal(attr(item("reset"), "disabled"), "");
+    // Off again: removed from the title, and the others may be chosen.
+    await click(item("five-hour"));
+    assert.deepEqual(saved.at(-1), ["tokens", "week", "cost"]);
+    assert.equal(attr(item("account"), "disabled"), undefined);
+    // All off leaves the panda alone.
+    for (const id of ["tokens", "cost", "week"]) await click(item(id));
+    assert.deepEqual(saved.at(-1), []);
+    assert.equal(preview(), "Yalnızca panda");
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("main keeps the menu bar title beside the registry and redraws it on a change", () => {
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(main, /new MenuBarTitle\(path\.join\(app\.getPath\("userData"\), "menu-bar\.json"\)\)/);
+  const handler = main.slice(main.indexOf('handle("set-menu-bar-title"'));
+  assert.match(handler.slice(0, 500), /z\.array\(z\.enum\(MENU_BAR_ITEMS\)\)/);
+  assert.match(handler.slice(0, 500), /\.strict\(\)/);
+  assert.match(handler.slice(0, 500), /tray\?\.update\(\)/);
+  // The tray reads the choice and today's figures; the figures come from the widget's ledger read.
+  assert.match(main, /titleItems: menuBarTitle\?\.current\.items/);
+  assert.match(main, /today: trayToday/);
+  assert.match(main, /trayToday = complete/);
+  const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
+  assert.match(preload, /menuBarTitle: \(\) => ipcRenderer\.invoke\("relay:menu-bar-title"\)/);
+  assert.match(preload, /setMenuBarTitle: \(choice\) => ipcRenderer\.invoke\("relay:set-menu-bar-title", choice\)/);
+  // The registry's settings stay as they are: no schema change for an older CLI to refuse.
+  const store = readFileSync(new URL("../electron/core/store.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(store, /menuBar(Title|Items)/);
 });

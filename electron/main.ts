@@ -130,6 +130,8 @@ import {
 import { appendUsageIssue } from "./core/usage-issue-log";
 import { appendDraftEvent, draftEventFilter } from "./core/draft-diagnostics";
 import { SwitchDiagnostics } from "./core/switch-diagnostics";
+import { MenuBarTitle } from "./core/menu-bar-title";
+import { DEFAULT_MENU_BAR_ITEMS, MENU_BAR_ITEMS, type TrayToday } from "../shared/tray";
 import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
 
@@ -170,6 +172,10 @@ let usage: UsageManager;
 let usageCredentialRefresher: UsageCredentialRefresher;
 let autoSwitch: AutoSwitchManager;
 let tray: RelayTray | undefined;
+/** What the menu bar title shows, kept beside the registry. */
+let menuBarTitle: MenuBarTitle | undefined;
+/** Today's tokens and API value for the menu bar title, taken from the ledger when the widget is written. */
+let trayToday: TrayToday | undefined;
 let trayPanel: TrayPanel | undefined;
 let switchWindow: SwitchWindow | undefined;
 let switchStory: SwitchStory | undefined;
@@ -364,7 +370,7 @@ function scheduleTokenTick() {
   );
   tokenTimer.unref();
 }
-/** Today's numbers for the widget, from the ledger as it stands; never disturbs Relay. */
+/** Today's numbers for the widget and the menu bar title, from the ledger as it stands; never disturbs Relay. */
 function writeWidget(force = false) {
   widgetActiveId = observedDesktop?.activeProfileId;
   if (!tokenLedger || !widgetFile) return;
@@ -380,6 +386,17 @@ function writeWidget(force = false) {
         : 0;
     const { accounts, settings } = service.store.state;
     const tokens = buildTokenUsageView({ ledger, accounts, range: 7, zone, now });
+    // The menu bar title reads today's figures from here, so its 5-second timer never reads the
+    // ledger; until the first pass is done they are partial and left out.
+    const totals = tokens.today.totals;
+    trayToday = complete
+      ? {
+          date: tokens.today.date,
+          tokens: totals.input + totals.output + totals.cacheWrite + totals.cacheRead,
+          cost: totals.cost ?? 0,
+          ...(totals.costEstimated ? { costEstimated: true } : {}),
+        }
+      : undefined;
     widgetFile.write(
       buildWidgetSnapshot({
         today: tokens.today,
@@ -1029,6 +1046,7 @@ else {
           return undefined;
         }
       };
+      menuBarTitle = new MenuBarTitle(path.join(app.getPath("userData"), "menu-bar.json"));
       tray = new RelayTray({
         getSnapshot: async () => {
           const read = await readDesktopForTray({
@@ -1055,6 +1073,9 @@ else {
             // The title names a switch's target and gives a full window's reset in the planning zone.
             switchingTo: desktop.switchingTo,
             timeZone: service.store.state.settings.planning.timeZone,
+            // The items the user chose for the title, and today's figures some of them show.
+            titleItems: menuBarTitle?.current.items,
+            today: trayToday,
           };
         },
         showWindow,
@@ -1555,6 +1576,20 @@ function bindIPC() {
       .parse(patch);
     if (!switchDiagnostics) throw new Error("Invalid Claude launch choice.");
     return switchDiagnostics.set(parsed);
+  });
+  // What the menu bar title shows; kept beside the registry, redrawn at once.
+  handle("menu-bar-title", () =>
+    menuBarTitle?.current ?? { items: [...DEFAULT_MENU_BAR_ITEMS] },
+  );
+  handle("set-menu-bar-title", (choice) => {
+    const parsed = z
+      .object({ items: z.array(z.enum(MENU_BAR_ITEMS)).max(MENU_BAR_ITEMS.length) })
+      .strict()
+      .parse(choice);
+    if (!menuBarTitle) throw new Error("Invalid menu bar title.");
+    const kept = menuBarTitle.set(parsed);
+    void tray?.update();
+    return kept;
   });
   handle("show-switch-net-logs", async () => {
     if (!switchDiagnostics) return;

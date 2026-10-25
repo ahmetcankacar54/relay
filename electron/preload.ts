@@ -28,6 +28,8 @@ const api: RelayAPI = {
   claudeLaunch: () => ipcRenderer.invoke("relay:claude-launch"),
   setClaudeLaunch: (patch) => ipcRenderer.invoke("relay:set-claude-launch", patch),
   showSwitchNetLogs: () => ipcRenderer.invoke("relay:show-switch-net-logs"),
+  menuBarTitle: () => ipcRenderer.invoke("relay:menu-bar-title"),
+  setMenuBarTitle: (choice) => ipcRenderer.invoke("relay:set-menu-bar-title", choice),
   setTrayLanguage: (language) =>
     ipcRenderer.invoke("relay:tray-language", language),
   openPage: (page, intent) =>

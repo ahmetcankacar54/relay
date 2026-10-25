@@ -1,5 +1,6 @@
 import { KeyRound, RefreshCw } from "lucide-react";
-import { freshUsage } from "../../shared/usage";
+import type { AccountUsage } from "../../shared/types";
+import { freshUsage, lastKnownUsage, windowHolds } from "../../shared/usage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LimitRings } from "@/components/LimitRings";
@@ -8,7 +9,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
 import { pendingFlow, usageWindowRows } from "@/data/selectors";
 import { accountHealth, renewalIssue } from "@/lib/account-health";
-import { formatReset } from "@/lib/time";
+import { formatRelative, formatReset } from "@/lib/time";
 import { planLabel } from "../pages/accounts/accountLabels";
 
 export const panelEyebrow =
@@ -19,6 +20,14 @@ export const panelCard = "rounded-[10px] border bg-card px-3 py-2.5";
 export const openPendingDesktop = (relay: Pick<Relay, "api">) =>
   void relay.api.openPage("hesaplar");
 
+/** A reading the card keeps, faded: last known, with neither window reset since. */
+function keepsLastKnown(usage: AccountUsage | undefined, now: number): boolean {
+  return (
+    lastKnownUsage(usage, now) &&
+    [usage.fiveHour, usage.sevenDay].every((w) => !w || windowHolds(w, now))
+  );
+}
+
 /** The account open in Claude Desktop, with its limits. */
 export function PanelActiveCard({ now }: { now: number }) {
   const relay = useRelay();
@@ -27,24 +36,53 @@ export function PanelActiveCard({ now }: { now: number }) {
   const running = !!desktop?.running;
   const usage = active ? relay.data?.usage[active.id] : undefined;
   const plan = active && planLabel(active);
+  const waiting =
+    !!active &&
+    pendingFlow(relay.data?.authFlows.find((f) => f.accountId === active.id));
   // The account's status, the one the Accounts page shows, explains limits that cannot be read.
   const health =
     active &&
     accountHealth(
       active,
       usage,
-      {
-        active: true,
-        desktopRunning: running,
-        waiting: pendingFlow(
-          relay.data?.authFlows.find((f) => f.accountId === active.id),
-        ),
-      },
+      { active: true, desktopRunning: running, waiting },
       t,
     );
   // A plain refresh cannot clear a locked Keychain or a connection to renew: it has to prompt.
   const renew = health?.fix === "renew";
+  const readAt = usage?.checkedAt;
+  const fresh = freshUsage(usage, now);
+  // A reading old only because the service could not be reached (or that has just grown old) keeps
+  // its rings, faded on a dashed track, until a window resets; a problem the user must fix does not.
+  const lastKnown = !fresh && !health?.fix && keepsLastKnown(usage, now);
   const openRelay = () => void relay.api.openPage("genel");
+  const usageButton =
+    active &&
+    (renew ? (
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={
+          renewalIssue(usage) === "keychain-locked"
+            ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+            : t("Yenilemeye izin ver", "Allow renewal")
+        }
+        disabled={relay.usageBusy.has(active.id)}
+        onClick={() => void relay.refreshUsage(active, true)}
+      >
+        <KeyRound />
+      </Button>
+    ) : (
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={t("Limitleri yenile", "Refresh limits")}
+        disabled={relay.usageBusy.has(active.id)}
+        onClick={() => void relay.refreshUsage(active)}
+      >
+        <RefreshCw />
+      </Button>
+    ));
   const title = active && (
     <div className="flex min-w-0 items-center gap-1.5">
       <span className="truncate text-[13.5px] font-bold" title={active.name}>
@@ -79,13 +117,35 @@ export function PanelActiveCard({ now }: { now: number }) {
               {t("Relay’i aç", "Open Relay")}
             </Button>
           </div>
-        ) : freshUsage(usage, now) ? (
+        ) : fresh ? (
           <LimitRings
             usage={usage}
             now={now}
             zone={relay.settings.planning.timeZone}
             size={72}
             aside={title}
+          />
+        ) : lastKnown ? (
+          <LimitRings
+            usage={usage}
+            now={now}
+            zone={relay.settings.planning.timeZone}
+            size={72}
+            state="stale"
+            aside={
+              <>
+                {title}
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  {waiting && health
+                    ? health.label
+                    : t(
+                        `Limit verisi eski · ${formatRelative(readAt!, now, language)} okundu`,
+                        `Usage data is out of date · read ${formatRelative(readAt!, now, language)}`,
+                      )}{" "}
+                  · {usageButton}
+                </div>
+              </>
+            }
           />
         ) : (
           <>
@@ -94,32 +154,7 @@ export function PanelActiveCard({ now }: { now: number }) {
               {health && health.tone !== "ok"
                 ? health.label
                 : t("Limit verisi eski", "Usage data is out of date")}{" "}
-              ·
-              {renew ? (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={
-                    renewalIssue(usage) === "keychain-locked"
-                      ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
-                      : t("Yenilemeye izin ver", "Allow renewal")
-                  }
-                  disabled={relay.usageBusy.has(active.id)}
-                  onClick={() => void relay.refreshUsage(active, true)}
-                >
-                  <KeyRound />
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t("Limitleri yenile", "Refresh limits")}
-                  disabled={relay.usageBusy.has(active.id)}
-                  onClick={() => void relay.refreshUsage(active)}
-                >
-                  <RefreshCw />
-                </Button>
-              )}
+              ·{usageButton}
             </div>
           </>
         )}

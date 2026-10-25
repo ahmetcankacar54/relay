@@ -51,6 +51,12 @@ another.
 | The last read failed or is old | Limit verisi eski | Usage data is out of date |
 | The saved usage sign-in needs a renewal | Bağlantı yenilenmeli | Connection needs renewing |
 
+While a read fails only because the usage service cannot be reached (no network, rate limited, down)
+or the reading has grown old, the last figures stay until their window resets, marked as last known:
+a leading "~" in the menu bar title and the tray menu ("~%94" / "~94%"), faded rings on a dashed
+track in the panel, with "Limit verisi eski · 12 dk önce okundu" / "Usage data is out of date · read
+12 min ago". A sign-in problem hides them.
+
 ## Phrases
 
 | Avoid | Use |
