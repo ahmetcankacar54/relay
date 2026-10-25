@@ -196,6 +196,13 @@ export type DesktopOperationKind = "switch" | "save" | "link" | "cancel-link" | 
 export type DesktopRestartEvent =
   | { phase: "start"; kind: DesktopOperationKind; profileId?: string }
   | { phase: "end"; kind: DesktopOperationKind; profileId?: string; ok: boolean };
+/** How Relay starts Claude; kept beside the switch diagnosis's logs, not in the registry. */
+export interface ClaudeLaunchChoice {
+  /** The switch diagnosis: each Claude Relay starts writes Chromium's net log. */
+  netLog: boolean;
+  /** Claude starts without HTTP/3, so its requests go over HTTP/2. */
+  quicOff: boolean;
+}
 export interface RelayAPI {
   inspectContinuation(): Promise<DesktopContinuationSnapshot>;
   /** "automatic" selects from identities enrolled when watching starts; UUIDs support existing watches. */
@@ -238,6 +245,15 @@ export interface RelayAPI {
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;
+  /**
+   * How Relay starts Claude: `netLog`, the switch diagnosis (each Claude Relay starts writes a
+   * net log); `quicOff`, without HTTP/3, which Relay also turns on itself after a stuck start.
+   */
+  claudeLaunch(): Promise<ClaudeLaunchChoice>;
+  /** Changes what the patch names; resolves with the whole choice. */
+  setClaudeLaunch(patch: Partial<ClaudeLaunchChoice>): Promise<ClaudeLaunchChoice>;
+  /** Opens the switch diagnosis folder with its net logs in Finder. Takes no path. */
+  showSwitchNetLogs(): Promise<void>;
   /** Main broadcast `relay:changed`: Relay state changed in another window or the tray. */
   onChanged(callback: () => void): () => void;
   /** Shows the main window on a page, with the intent its page acts on (and hides the menu bar panel). */

@@ -66,7 +66,7 @@ import { ExtensionSwitcher } from "./extension-switch";
 import { ExtensionVault } from "./extension-vault";
 import { CookieVault } from "./cookie-vault";
 import type { CookieStorage } from "./cookie-store";
-import type { LaunchWatch } from "./desktop-launch";
+import type { LaunchWatch, PageOutcome } from "./desktop-launch";
 import {
   BROWSERS,
   DEFAULT_EXTENSION,
@@ -88,7 +88,8 @@ export interface DesktopHost {
    */
   seemsRunning?(): Promise<boolean>;
   quit(): Promise<void>;
-  launch(): Promise<void>;
+  /** Starts Claude; with `netLog`, Chromium writes its net log to that file while it runs. */
+  launch(options?: LaunchOptions): Promise<void>;
   seal(data: string): Buffer;
   unseal(data: Buffer): string;
   /**
@@ -110,6 +111,12 @@ export interface DesktopHost {
    * be told booted or stuck. Undefined when Claude's log cannot tell.
    */
   watchLaunch?(): Promise<LaunchWatch | undefined>;
+}
+export interface LaunchOptions {
+  /** Absolute path of the net log the started Claude writes, for the switch diagnosis. */
+  netLog?: string;
+  /** Start Claude without HTTP/3 (QUIC), so its requests go over HTTP/2. */
+  quicOff?: boolean;
 }
 interface SavedLogin {
   accountUuid: string;
@@ -241,6 +248,16 @@ export class DesktopManager {
    * states, reasons, counts and times, never a draft's text. May throw; nothing depends on it.
    */
   onDraftEvent?: (event: string, fields?: Record<string, unknown>) => void;
+  /**
+   * How Relay starts Claude, asked right before each start: where it writes Chromium's net log
+   * (undefined while the switch diagnosis is off), whether it starts without HTTP/3, and a way
+   * to keep HTTP/3 off once a stuck start loaded without it. Any of them may throw.
+   */
+  launchChoice?: {
+    netLog(): string | undefined;
+    quicOff(): boolean;
+    learnQuicOff(): void;
+  };
   /**
    * Told each Desktop state read fresh from disk and the process list, by `snapshot()` and by
    * `cachedSnapshot()` when its shared reading had expired; never for a reused reading. May
@@ -715,8 +732,15 @@ export class DesktopManager {
     });
   }
   async open() {
+    let quicOff = false;
     try {
-      await this.host.launch();
+      quicOff = this.launchChoice?.quicOff() === true;
+    } catch {
+      // Unknown: open as Claude opens by itself.
+    }
+    try {
+      // A Claude already running only comes forward; a new one starts as Relay starts it.
+      await this.host.launch(quicOff ? { quicOff } : undefined);
     } finally {
       this.invalidate();
     }
@@ -1352,21 +1376,55 @@ export class DesktopManager {
    * that fails, leaves Claude as it is; only a failed launch throws, as any launch does.
    */
   private async relaunch() {
-    const watch = await this.host.watchLaunch?.().catch(() => undefined);
-    await this.host.launch();
-    if (!watch) return;
-    const begun = this.now();
-    const outcome = await watch.wait(PAGE_BOOT_MS).catch(() => "unknown" as const);
-    this.diagnose("claude-boot", { outcome, waitedMs: this.now() - begun });
-    if (outcome !== "stalled") return;
+    let quicOff = false;
+    try {
+      quicOff = this.launchChoice?.quicOff() === true;
+    } catch {
+      // Unknown: start as Claude starts by itself.
+    }
+    const first = await this.launchWatched(1, quicOff);
+    if (first !== "stalled") return;
     try {
       await this.host.quit();
     } catch {
       this.diagnose("claude-boot-retry", { quit: false });
       return;
     }
-    await this.host.launch();
     this.diagnose("claude-boot-retry", { quit: true });
+    // The second start goes without HTTP/3, whose stalled transfers left pages grey on this
+    // Mac while HTTP/2 loaded them; it is watched too, and there is never a third start.
+    const second = await this.launchWatched(2, true);
+    if (second === "loaded" && !quicOff)
+      try {
+        this.launchChoice?.learnQuicOff();
+        this.diagnose("claude-quic-off", { learned: true });
+      } catch {
+        // Not kept: the next stuck start learns it again.
+      }
+  }
+  /**
+   * One launch, without HTTP/3 when `quicOff`: with the switch diagnosis on, Claude writes a net
+   * log of its own; the watch then says how its page did. Undefined when the watch cannot tell.
+   */
+  private async launchWatched(attempt: number, quicOff: boolean): Promise<PageOutcome | undefined> {
+    const watch = await this.host.watchLaunch?.().catch(() => undefined);
+    let netLog: string | undefined;
+    try {
+      netLog = this.launchChoice?.netLog();
+    } catch {
+      // A diagnosis that cannot make its folder never holds up a launch.
+    }
+    const options: LaunchOptions = {
+      ...(netLog ? { netLog } : {}),
+      ...(quicOff ? { quicOff: true } : {}),
+    };
+    await this.host.launch(netLog || quicOff ? options : undefined);
+    if (netLog) this.diagnose("claude-net-log", { attempt, file: path.basename(netLog) });
+    if (!watch) return undefined;
+    const begun = this.now();
+    const outcome = await watch.wait(PAGE_BOOT_MS).catch(() => "unknown" as const);
+    this.diagnose("claude-boot", { attempt, outcome, quicOff, waitedMs: this.now() - begun });
+    return outcome;
   }
   private async saveCurrent() {
     const config = await readObject(this.root, "config.json");

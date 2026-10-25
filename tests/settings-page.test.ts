@@ -13,7 +13,7 @@ const settings = { ...DEFAULT_SETTINGS, usageRefreshMinutes: 0 as const };
 
 function relayFor(): Relay {
   return {
-    api: {}, preview: false, error: "", notice: "", accounts: [], active: undefined, settings, busy: "",
+    api: { claudeLaunch: async () => ({ netLog: false, quicOff: false }) }, preview: false, error: "", notice: "", accounts: [], active: undefined, settings, busy: "",
     usageBusy: new Set<string>(), desktopBusy: false, hasUnclaimedDesktop: false, targetOrg: "", historyRevision: 0,
     version: "0.4.2",
     desktop: { available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0 },
@@ -244,7 +244,7 @@ test("Settings → Genel sets the warning threshold as Usage → Uyarılar does"
   try {
     const updates: Partial<RelaySettings>[] = [];
     const relay = relayFor();
-    relay.api = { updateSettings: async (patch: Partial<RelaySettings>) => void updates.push(patch) } as unknown as Relay["api"];
+    relay.api = { ...relay.api, updateSettings: async (patch: Partial<RelaySettings>) => void updates.push(patch) } as unknown as Relay["api"];
     relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
     const { createRoot } = await import("react-dom/client");
     const root = createRoot(dom.container as unknown as Element);
@@ -261,6 +261,54 @@ test("Settings → Genel sets the warning threshold as Usage → Uyarılar does"
     assert.ok(item);
     await act(async () => dom.dispatch(item, "click", { detail: 1 }));
     assert.deepEqual(updates, [{ usageWarningPercent: 95 }]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
+test("the system group shows how Relay starts Claude, and changes it through main", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const calls: unknown[] = [];
+    let choice = { netLog: false, quicOff: true };
+    const relay = relayFor();
+    relay.api = {
+      claudeLaunch: async () => choice,
+      setClaudeLaunch: async (patch: object) => {
+        calls.push(patch);
+        choice = { ...choice, ...patch };
+        return choice;
+      },
+      showSwitchNetLogs: async () => void calls.push("folder"),
+    } as unknown as Relay["api"];
+    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+        ),
+      ),
+    );
+    const container = dom.container as unknown as Fake;
+    const attr = (n: Fake | undefined, name: string) =>
+      (n?.attributes as Map<string, string> | undefined)?.get(name);
+    const byId = (id: string) => find(container, (n) => attr(n, "id") === id);
+    assert.equal(attr(byId("claude-quic-off"), "aria-checked"), "true");
+    assert.equal(attr(byId("switch-net-log"), "aria-checked"), "false");
+    await act(async () => dom.dispatch(byId("switch-net-log")!, "click", { detail: 1 }));
+    assert.deepEqual(calls, [{ netLog: true }]);
+    assert.equal(attr(byId("switch-net-log"), "aria-checked"), "true");
+    const folder = find(container, (n) => n.tagName === "button" && textOf(n) === "Klasörü aç");
+    assert.ok(folder);
+    await act(async () => dom.dispatch(folder, "click", { detail: 1 }));
+    assert.deepEqual(calls, [{ netLog: true }, "folder"]);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();

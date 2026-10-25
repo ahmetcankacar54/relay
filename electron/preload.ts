@@ -25,6 +25,9 @@ const api: RelayAPI = {
   checkExtension: () => ipcRenderer.invoke("relay:extension-check"),
   linkExtension: (accountId: string) => ipcRenderer.invoke("relay:extension-link", accountId),
   showDiagnostics: () => ipcRenderer.invoke("relay:show-diagnostics"),
+  claudeLaunch: () => ipcRenderer.invoke("relay:claude-launch"),
+  setClaudeLaunch: (patch) => ipcRenderer.invoke("relay:set-claude-launch", patch),
+  showSwitchNetLogs: () => ipcRenderer.invoke("relay:show-switch-net-logs"),
   setTrayLanguage: (language) =>
     ipcRenderer.invoke("relay:tray-language", language),
   openPage: (page, intent) =>

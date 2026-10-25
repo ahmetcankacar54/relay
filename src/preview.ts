@@ -591,6 +591,9 @@ export const previewApi: RelayAPI = {
   }),
   setTrayLanguage: async () => {},
   showDiagnostics: desktopOnly,
+  claudeLaunch: async () => ({ netLog: false, quicOff: false }),
+  setClaudeLaunch: desktopOnly,
+  showSwitchNetLogs: desktopOnly,
   onChanged: () => () => {},
   openPage: async (page, intent) => {
     location.hash = intentHash(page, intent);

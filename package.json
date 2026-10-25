@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit",
     "preflight:live": "node --import tsx scripts/live-preflight.ts",
     "test:continuation": "node --import tsx scripts/continuation-lab.ts",
+    "netlog": "node --import tsx scripts/netlog-summary.ts",
     "test": "node --import tsx --test tests/*.test.ts",
     "test:desktop": "node scripts/smoke.mjs",
     "check:mac-signing": "node scripts/check-macos-signing.mjs",

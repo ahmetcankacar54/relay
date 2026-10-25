@@ -11,6 +11,7 @@ import {
   DesktopSwitchRefused,
   PAGE_BOOT_MS,
   type DesktopHost,
+  type LaunchOptions,
 } from "../electron/core/desktop";
 import type { PageOutcome } from "../electron/core/desktop-launch";
 import type { DesktopRestartEvent } from "../shared/types";
@@ -2404,14 +2405,35 @@ test("a sidebar in a format Relay does not know costs the drafts nothing", async
   assert.equal(await f.manager.sidebarGap(), undefined);
 });
 
-/** A host whose launches are watched: each watch reports the next of `outcomes`. */
-function watchLaunches(f: Awaited<ReturnType<typeof fixture>>, outcomes: PageOutcome[]) {
+/**
+ * A host whose launches are watched: each watch reports the next of `outcomes`, and none is
+ * given once they run out. A launch is written as "launch", with ":quic-off" and ":net-log" for
+ * its options; `choice` is the launch choice Relay keeps.
+ */
+function watchLaunches(
+  f: Awaited<ReturnType<typeof fixture>>,
+  outcomes: PageOutcome[],
+  choice: { quicOff?: boolean; netLog?: () => string | undefined } = {},
+) {
   const events: Array<[string, Record<string, unknown> | undefined]> = [];
   const order: string[] = [];
+  const launches: Array<LaunchOptions | undefined> = [];
+  let learned = 0;
   f.manager.onDraftEvent = (event, fields) => void events.push([event, fields]);
+  f.manager.launchChoice = {
+    netLog: () => choice.netLog?.(),
+    quicOff: () => choice.quicOff === true,
+    learnQuicOff: () => {
+      learned++;
+      choice.quicOff = true;
+    },
+  };
   const launch = f.host.launch;
-  f.host.launch = async () => {
-    order.push("launch");
+  f.host.launch = async (options) => {
+    launches.push(options);
+    order.push(
+      `launch${options?.quicOff ? ":quic-off" : ""}${options?.netLog ? ":net-log" : ""}`,
+    );
     await launch();
   };
   const quit = f.host.quit;
@@ -2436,13 +2458,20 @@ function watchLaunches(f: Awaited<ReturnType<typeof fixture>>, outcomes: PageOut
   // How long the wait took is logged too; the fake watch answers at once.
   const boot = () =>
     events
-      .filter(([e]) => e.startsWith("claude-boot"))
+      .filter(([e]) => e.startsWith("claude-boot") || e === "claude-quic-off")
       .map(([e, fields]) => {
         const { waitedMs, ...rest } = fields ?? {};
         if (e === "claude-boot") assert.equal(typeof waitedMs, "number");
         return [e, rest] as const;
       });
-  return { order, boot, watches: () => watches };
+  return {
+    order,
+    boot,
+    events,
+    launches,
+    watches: () => watches,
+    learned: () => learned,
+  };
 }
 
 test("a switch waits for Claude's page to boot and restarts nothing more when it does", async (t) => {
@@ -2457,31 +2486,43 @@ test("a switch waits for Claude's page to boot and restarts nothing more when it
   await f.manager.switchTo(a.id);
 
   assert.deepEqual(w.order, ["quit", "watch", "launch", "wait:loaded"]);
-  assert.deepEqual(w.boot(), [["claude-boot", { outcome: "loaded" }]]);
+  assert.deepEqual(w.launches, [undefined], "a plain start, as Claude starts by itself");
+  assert.deepEqual(w.boot(), [["claude-boot", { attempt: 1, outcome: "loaded", quicOff: false }]]);
   assert.equal(ended, 1);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
 });
 
-test("a Claude whose page stays on the loading screen is restarted once", async (t) => {
+test("a stuck page is started once more without HTTP/3, and HTTP/3 stays off when that loads", async (t) => {
   const f = await fixture(t);
   const a = await f.account("A");
-  await f.account("B");
+  const b = await f.account("B");
   f.setRunning(true);
   const restarts: DesktopRestartEvent[] = [];
   f.manager.onRestart = (event) => restarts.push(event);
-  const w = watchLaunches(f, ["stalled"]);
+  const w = watchLaunches(f, ["stalled", "loaded", "loaded"]);
   const busy: boolean[] = [];
   f.manager.onSwitched = () => busy.push(f.manager.isBusy);
 
   await f.manager.switchTo(a.id);
 
-  // Quit and started again within the same operation, and never watched a second time.
-  assert.deepEqual(w.order, ["quit", "watch", "launch", "wait:stalled", "quit", "launch"]);
-  assert.equal(w.watches(), 1);
-  assert.deepEqual(w.boot(), [
-    ["claude-boot", { outcome: "stalled" }],
-    ["claude-boot-retry", { quit: true }],
+  // Quit and started again within the same operation, the second start watched too.
+  assert.deepEqual(w.order, [
+    "quit",
+    "watch",
+    "launch",
+    "wait:stalled",
+    "quit",
+    "watch",
+    "launch:quic-off",
+    "wait:loaded",
   ]);
+  assert.deepEqual(w.boot(), [
+    ["claude-boot", { attempt: 1, outcome: "stalled", quicOff: false }],
+    ["claude-boot-retry", { quit: true }],
+    ["claude-boot", { attempt: 2, outcome: "loaded", quicOff: true }],
+    ["claude-quic-off", { learned: true }],
+  ]);
+  assert.equal(w.learned(), 1);
   // One restart story: the second start belongs to the same switch.
   assert.deepEqual(
     restarts.map((e) => e.phase),
@@ -2490,6 +2531,51 @@ test("a Claude whose page stays on the loading screen is restarted once", async 
   assert.equal(restarts[1].phase === "end" && restarts[1].ok, true);
   assert.deepEqual(busy, [false]);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+  // Learned: the next switch starts without HTTP/3 from the first start.
+  await f.manager.switchTo(b.id);
+  assert.deepEqual(w.order.slice(8), ["quit", "watch", "launch:quic-off", "wait:loaded"]);
+  assert.equal(w.learned(), 1);
+});
+
+test("a second start that sticks too is left alone, learns nothing, and is never followed by a third", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  f.setRunning(true);
+  const w = watchLaunches(f, ["stalled", "stalled"]);
+  await f.manager.switchTo(a.id);
+  assert.deepEqual(w.order, [
+    "quit",
+    "watch",
+    "launch",
+    "wait:stalled",
+    "quit",
+    "watch",
+    "launch:quic-off",
+    "wait:stalled",
+  ]);
+  assert.equal(w.learned(), 0);
+  assert.equal(w.boot().at(-1)?.[0], "claude-boot");
+});
+
+test("with HTTP/3 already off, every start goes without it and nothing more is learned", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  await f.account("B");
+  f.setRunning(true);
+  const w = watchLaunches(f, ["stalled", "loaded"], { quicOff: true });
+  await f.manager.switchTo(a.id);
+  assert.deepEqual(w.order, [
+    "quit",
+    "watch",
+    "launch:quic-off",
+    "wait:stalled",
+    "quit",
+    "watch",
+    "launch:quic-off",
+    "wait:loaded",
+  ]);
+  assert.equal(w.learned(), 0);
 });
 
 test("a page Relay cannot tell about, or a Claude quit meanwhile, is left alone", async (t) => {
@@ -2533,7 +2619,7 @@ test("a stuck Claude that will not quit leaves the switch done and Claude as it 
   await f.manager.switchTo(a.id);
 
   assert.deepEqual(w.boot(), [
-    ["claude-boot", { outcome: "stalled" }],
+    ["claude-boot", { attempt: 1, outcome: "stalled", quicOff: false }],
     ["claude-boot-retry", { quit: false }],
   ]);
   assert.equal(f.starts(), starts + 1, "only the switch's own launch");
@@ -2561,6 +2647,50 @@ test("a watch that throws is as good as none", async (t) => {
   assert.equal(f.starts(), starts + 2);
 });
 
+test("with the switch diagnosis on, each start writes a net log of its own and says which", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  f.setRunning(true);
+  let n = 0;
+  const w = watchLaunches(f, ["stalled", "loaded"], {
+    netLog: () => `/logs/claude-net-${++n}.json`,
+  });
+  await f.manager.switchTo(a.id);
+  assert.deepEqual(
+    w.launches.map((o) => o?.netLog),
+    ["/logs/claude-net-1.json", "/logs/claude-net-2.json"],
+  );
+  assert.deepEqual(
+    w.events.filter(([e]) => e === "claude-net-log").map(([, fields]) => fields),
+    [
+      { attempt: 1, file: "claude-net-1.json" },
+      { attempt: 2, file: "claude-net-2.json" },
+    ],
+  );
+  // A diagnosis that cannot make its folder never holds up a start.
+  f.manager.launchChoice = {
+    netLog: () => {
+      throw new Error("EACCES");
+    },
+    quicOff: () => false,
+    learnQuicOff: () => {},
+  };
+  const starts = f.starts();
+  await f.manager.switchTo(b.id);
+  assert.equal(f.starts(), starts + 1);
+});
+
+test("opening the Claude app keeps HTTP/3 off when Relay keeps it off", async (t) => {
+  const f = await fixture(t);
+  const w = watchLaunches(f, [], { quicOff: true });
+  await f.manager.open();
+  assert.deepEqual(w.launches, [{ quicOff: true }]);
+  const plain = watchLaunches(f, []);
+  await f.manager.open();
+  assert.deepEqual(plain.launches, [undefined]);
+});
+
 test("recovery waits for Claude's page and restarts a stuck one too", async (t) => {
   const f = await fixture(t);
   const a = await f.account("A");
@@ -2583,6 +2713,14 @@ test("recovery waits for Claude's page and restarts a stuck one too", async (t) 
 
   await f.manager.recover();
 
-  assert.deepEqual(w.order, ["quit", "watch", "launch", "wait:stalled", "quit", "launch"]);
+  assert.deepEqual(w.order, [
+    "quit",
+    "watch",
+    "launch",
+    "wait:stalled",
+    "quit",
+    "watch",
+    "launch:quic-off",
+  ]);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
 });

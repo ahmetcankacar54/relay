@@ -121,6 +121,7 @@ import {
 } from "./core/profile-lock";
 import { appendUsageIssue } from "./core/usage-issue-log";
 import { appendDraftEvent, draftEventFilter } from "./core/draft-diagnostics";
+import { SwitchDiagnostics } from "./core/switch-diagnostics";
 import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
 
@@ -156,6 +157,7 @@ const windowRelease = new WindowRelease({
 });
 let service: Service;
 let desktop: DesktopManager;
+let switchDiagnostics: SwitchDiagnostics | undefined;
 let usage: UsageManager;
 let usageCredentialRefresher: UsageCredentialRefresher;
 let autoSwitch: AutoSwitchManager;
@@ -539,6 +541,19 @@ else {
       };
       // The captures and the vault's reads go to the same log as the restore.
       desktop.onDraftEvent = logDraftEvent;
+      // How Relay starts Claude: the switch diagnosis's net log, and HTTP/3 kept off once learned.
+      const diagnostics = new SwitchDiagnostics(
+        path.join(app.getPath("userData"), "switch-diagnostics"),
+      );
+      switchDiagnostics = diagnostics;
+      desktop.launchChoice = {
+        netLog: () => diagnostics.nextNetLog(),
+        quicOff: () => diagnostics.current.quicOff,
+        learnQuicOff: () => {
+          diagnostics.set({ quicOff: true });
+          broadcastChanged();
+        },
+      };
       // Which account was open when, from every fresh Desktop reading, set before the first one.
       activeTimeline = new ActiveAccountTimeline(
         path.join(app.getPath("userData"), "active-account-timeline.json"),
@@ -1453,6 +1468,24 @@ function bindIPC() {
     }
     // Neither exists yet: open the folder itself rather than highlight it in its parent.
     const failure = await shell.openPath(folder);
+    if (failure) throw new Error(failure);
+  });
+  // How Relay starts Claude (net log, HTTP/3), and the logs' folder. No path comes from the renderer.
+  handle("claude-launch", () =>
+    switchDiagnostics?.current ?? { netLog: false, quicOff: false },
+  );
+  handle("set-claude-launch", (patch) => {
+    const parsed = z
+      .object({ netLog: z.boolean().optional(), quicOff: z.boolean().optional() })
+      .strict()
+      .parse(patch);
+    if (!switchDiagnostics) throw new Error("Invalid Claude launch choice.");
+    return switchDiagnostics.set(parsed);
+  });
+  handle("show-switch-net-logs", async () => {
+    if (!switchDiagnostics) return;
+    await fsp.mkdir(switchDiagnostics.folder, { recursive: true, mode: 0o700 });
+    const failure = await shell.openPath(switchDiagnostics.folder);
     if (failure) throw new Error(failure);
   });
   handle("tray-language", (value) => {

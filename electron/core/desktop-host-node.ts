@@ -4,7 +4,7 @@ import os from "node:os";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { runDetached } from "./detached-exec";
-import type { DesktopHost } from "./desktop";
+import type { DesktopHost, LaunchOptions } from "./desktop";
 import {
   assertProcessListing,
   ClaudeLiveness,
@@ -38,6 +38,18 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Claude the user's standard one (HOME, PATH, TMPDIR…) and nothing of Relay's own.
  */
 export const CLEAN_LAUNCH_ENV: NodeJS.ProcessEnv = Object.freeze({});
+/**
+ * Claude's command-line switches for a launch, Chromium's own (Claude's Electron has them): the
+ * net log ("Default" leaves cookies and credentials out of it) and no HTTP/3.
+ */
+export function launchArgs(options?: LaunchOptions): string[] {
+  return [
+    ...(options?.netLog && path.isAbsolute(options.netLog)
+      ? [`--log-net-log=${options.netLog}`, "--net-log-capture-mode=Default"]
+      : []),
+    ...(options?.quicOff ? ["--disable-quic"] : []),
+  ];
+}
 /** The default Claude.app bundles, first found wins. */
 export const CLAUDE_APPS = [
   "/Applications/Claude.app",
@@ -248,13 +260,18 @@ export function nodeDesktopHost(options: {
         "Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.",
       );
     },
-    launch: async () => {
+    launch: async (launchOptions) => {
       const executable = exe();
       if (!executable) throw new Error("Claude Desktop is not installed.");
+      const args = launchArgs(launchOptions);
       if (process.platform === "darwin")
         await exec(
           "/usr/bin/open",
-          ["-a", executable.slice(0, executable.indexOf(".app/") + 4)],
+          [
+            "-a",
+            executable.slice(0, executable.indexOf(".app/") + 4),
+            ...(args.length ? ["--args", ...args] : []),
+          ],
           // `open` hands its own environment to the app it starts. Relay's may come from
           // whatever started Relay, such as a Claude Code session (CLAUDECODE, its session
           // id, socket and account); with none, Claude gets what a Dock launch gives it.
@@ -262,7 +279,7 @@ export function nodeDesktopHost(options: {
         );
       else
         await new Promise<void>((resolve, reject) => {
-          const child = spawn(executable, [], {
+          const child = spawn(executable, args, {
             detached: true,
             stdio: "ignore",
             windowsHide: true,

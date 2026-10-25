@@ -29,6 +29,7 @@ const pairs: Pair[] = [
     "Finish the Desktop operation before changing preferences.",
     "Finish the Claude app operation before changing preferences.",
   ],
+  ["Claude’u başlatma seçimi geçersiz.", "Invalid Claude launch choice."],
   [
     "Yalnızca var olan Relay hesaplarını seç; her birini bir kez.",
     "Select existing Relay accounts once each.",
