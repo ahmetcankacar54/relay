@@ -30,6 +30,12 @@ export interface RestorerDeps {
    * once it has run 15 s.
    */
   wipedAt?(): Promise<number | undefined>;
+  /**
+   * Whether the running Claude's claude.ai page has booted, from Claude's own log; undefined
+   * when the log cannot tell. Until it has, Relay opens and types nothing: a link Relay sends
+   * makes Claude load its page again, which a slow start never finishes.
+   */
+  pageBooted?(): Promise<boolean | undefined>;
   /** Runs `fn` holding Relay's Desktop lock; undefined, without running it, when busy. */
   withLock<T>(fn: () => Promise<T>): Promise<T | undefined>;
   /** True when another caller waits for the Desktop lock while the restore holds it. */
@@ -63,7 +69,9 @@ export type RestoreResult = {
    * - `moved`: the user went to another conversation or screen;
    * - `changed`: Claude's account, uptime or process changed;
    * - `claude-not-running`;
-   * - `budget`: the run took 5 minutes.
+   * - `budget`: the run took 5 minutes;
+   * - `loading`: Claude's page had not booted, or the draft's conversation showed without its
+   *   composer, so Relay waited rather than send links into a page still loading.
    */
   reason?: string;
 };
@@ -302,6 +310,11 @@ async function restore(
   }
   start(ready);
   if (!ready) return { status: "waiting", restored: 0, left: records.length };
+  // A link into a page still loading starts its load again: wait until it has booted.
+  if ((await deps.pageBooted?.().catch(() => undefined)) === false) {
+    logDraft(deps.log, "page-loading", { records: records.length });
+    return { status: "waiting", restored: 0, left: records.length, reason: "loading" };
+  }
 
   let restored = 0;
   let copied = 0;
@@ -631,6 +644,13 @@ async function restoreOne(
   });
   run.lastSeen = target;
   if (view.status === "running" || view.status === "waiting") return "busy";
+  // The conversation shows, but its content is still loading: the draft waits for a later run.
+  if (
+    view.composerPresent !== true &&
+    view.status === "unknown" &&
+    placeOf(view) === target
+  )
+    throw new Stop("pending", "loading");
   if (view.composerPresent !== true || view.status !== "stopped")
     return "no-composer";
   if (!view.composerEmpty) return "composer-not-empty";

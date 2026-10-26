@@ -2422,13 +2422,13 @@ test("a sidebar in a format Relay does not know costs the drafts nothing", async
 
 /**
  * A host whose launches are watched: each watch reports the next of `outcomes`, and none is
- * given once they run out. A launch is written as "launch", with ":quic-off" and ":net-log" for
- * its options; `choice` is the launch choice Relay keeps.
+ * given once they run out. A launch is written as "launch", with ":quic-off" for its option;
+ * `choice` is the launch choice Relay keeps.
  */
 function watchLaunches(
   f: Awaited<ReturnType<typeof fixture>>,
   outcomes: PageOutcome[],
-  choice: { quicOff?: boolean; netLog?: () => string | undefined } = {},
+  choice: { quicOff?: boolean } = {},
 ) {
   const events: Array<[string, Record<string, unknown> | undefined]> = [];
   const order: string[] = [];
@@ -2436,7 +2436,6 @@ function watchLaunches(
   let learned = 0;
   f.manager.onDraftEvent = (event, fields) => void events.push([event, fields]);
   f.manager.launchChoice = {
-    netLog: () => choice.netLog?.(),
     quicOff: () => choice.quicOff === true,
     learnQuicOff: () => {
       learned++;
@@ -2446,9 +2445,7 @@ function watchLaunches(
   const launch = f.host.launch;
   f.host.launch = async (options) => {
     launches.push(options);
-    order.push(
-      `launch${options?.quicOff ? ":quic-off" : ""}${options?.netLog ? ":net-log" : ""}`,
-    );
+    order.push(`launch${options?.quicOff ? ":quic-off" : ""}`);
     await launch();
   };
   const quit = f.host.quit;
@@ -2662,38 +2659,24 @@ test("a watch that throws is as good as none", async (t) => {
   assert.equal(f.starts(), starts + 2);
 });
 
-test("with the switch diagnosis on, each start writes a net log of its own and says which", async (t) => {
+test("a start without HTTP/3 that Claude refuses is followed at once by a plain one", async (t) => {
   const f = await fixture(t);
   const a = await f.account("A");
   const b = await f.account("B");
   f.setRunning(true);
-  let n = 0;
-  const w = watchLaunches(f, ["stalled", "loaded"], {
-    netLog: () => `/logs/claude-net-${++n}.json`,
-  });
+  const w = watchLaunches(f, ["refused", "loaded"], { quicOff: true });
   await f.manager.switchTo(a.id);
+  assert.deepEqual(w.order.filter((o) => o.startsWith("launch")), ["launch:quic-off", "launch"]);
   assert.deepEqual(
-    w.launches.map((o) => o?.netLog),
-    ["/logs/claude-net-1.json", "/logs/claude-net-2.json"],
+    w.events.filter(([e]) => e === "claude-boot-refused").map(([, fields]) => fields),
+    [{ attempt: 1, quicOff: true }],
   );
-  assert.deepEqual(
-    w.events.filter(([e]) => e === "claude-net-log").map(([, fields]) => fields),
-    [
-      { attempt: 1, file: "claude-net-1.json" },
-      { attempt: 2, file: "claude-net-2.json" },
-    ],
-  );
-  // A diagnosis that cannot make its folder never holds up a start.
-  f.manager.launchChoice = {
-    netLog: () => {
-      throw new Error("EACCES");
-    },
-    quicOff: () => false,
-    learnQuicOff: () => {},
-  };
+  // A plain start Claude refuses is not started again: nothing Relay passed can be the cause.
+  const plain = watchLaunches(f, ["refused"]);
   const starts = f.starts();
   await f.manager.switchTo(b.id);
   assert.equal(f.starts(), starts + 1);
+  assert.deepEqual(plain.order.filter((o) => o.startsWith("launch")), ["launch"]);
 });
 
 test("opening the Claude app keeps HTTP/3 off when Relay keeps it off", async (t) => {

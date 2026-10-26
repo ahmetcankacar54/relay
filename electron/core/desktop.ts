@@ -92,7 +92,7 @@ export interface DesktopHost {
    * `answerGuard` may answer its own question about work left running; whether it did.
    */
   quit(answerGuard?: () => Promise<boolean>): Promise<void>;
-  /** Starts Claude; with `netLog`, Chromium writes its net log to that file while it runs. */
+  /** Starts Claude, without HTTP/3 when `options.quicOff`. */
   launch(options?: LaunchOptions): Promise<void>;
   seal(data: string): Buffer;
   unseal(data: Buffer): string;
@@ -117,8 +117,6 @@ export interface DesktopHost {
   watchLaunch?(): Promise<LaunchWatch | undefined>;
 }
 export interface LaunchOptions {
-  /** Absolute path of the net log the started Claude writes, for the switch diagnosis. */
-  netLog?: string;
   /** Start Claude without HTTP/3 (QUIC), so its requests go over HTTP/2. */
   quicOff?: boolean;
 }
@@ -255,12 +253,10 @@ export class DesktopManager {
    */
   onDraftEvent?: (event: string, fields?: Record<string, unknown>) => void;
   /**
-   * How Relay starts Claude, asked right before each start: where it writes Chromium's net log
-   * (undefined while the switch diagnosis is off), whether it starts without HTTP/3, and a way
-   * to keep HTTP/3 off once a stuck start loaded without it. Any of them may throw.
+   * How Relay starts Claude, asked right before each start: whether it starts without HTTP/3,
+   * and a way to keep HTTP/3 off once a stuck start loaded without it. Either may throw.
    */
   launchChoice?: {
-    netLog(): string | undefined;
     quicOff(): boolean;
     learnQuicOff(): void;
   };
@@ -1385,7 +1381,9 @@ export class DesktopManager {
   /**
    * Starts Claude after Relay quit it, and holds the operation until its claude.ai page boots.
    * A page that has not booted after PAGE_BOOT_MS while Claude still runs gets what the user
-   * would do by hand: Claude is quit and started once more. A watch that cannot tell, or a quit
+   * would do by hand: Claude is quit and started once more. A start without HTTP/3 that Claude
+   * refuses (it exits before it logs its start, as it does for switches it will not run with) is
+   * followed at once by a plain start, as from the Dock. A watch that cannot tell, or a quit
    * that fails, leaves Claude as it is; only a failed launch throws, as any launch does.
    */
   private async relaunch() {
@@ -1396,6 +1394,11 @@ export class DesktopManager {
       // Unknown: start as Claude starts by itself.
     }
     const first = await this.launchWatched(1, quicOff);
+    if (first === "refused" && quicOff) {
+      this.diagnose("claude-boot-refused", { attempt: 1, quicOff });
+      await this.launchWatched(2, false);
+      return;
+    }
     if (first !== "stalled") return;
     try {
       await this.host.quit();
@@ -1416,23 +1419,12 @@ export class DesktopManager {
       }
   }
   /**
-   * One launch, without HTTP/3 when `quicOff`: with the switch diagnosis on, Claude writes a net
-   * log of its own; the watch then says how its page did. Undefined when the watch cannot tell.
+   * One launch, without HTTP/3 when `quicOff`; the watch then says how its page did. Undefined
+   * when the watch cannot tell.
    */
   private async launchWatched(attempt: number, quicOff: boolean): Promise<PageOutcome | undefined> {
     const watch = await this.host.watchLaunch?.().catch(() => undefined);
-    let netLog: string | undefined;
-    try {
-      netLog = this.launchChoice?.netLog();
-    } catch {
-      // A diagnosis that cannot make its folder never holds up a launch.
-    }
-    const options: LaunchOptions = {
-      ...(netLog ? { netLog } : {}),
-      ...(quicOff ? { quicOff: true } : {}),
-    };
-    await this.host.launch(netLog || quicOff ? options : undefined);
-    if (netLog) this.diagnose("claude-net-log", { attempt, file: path.basename(netLog) });
+    await this.host.launch(quicOff ? { quicOff: true } : undefined);
     if (!watch) return undefined;
     const begun = this.now();
     const outcome = await watch.wait(PAGE_BOOT_MS).catch(() => "unknown" as const);

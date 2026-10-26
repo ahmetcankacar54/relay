@@ -8,6 +8,7 @@ import {
   launchProgress,
   logSince,
   markLog,
+  pageBooted,
   waitForPage,
   watchClaudeLaunch,
   type ClaudeLogFiles,
@@ -119,6 +120,30 @@ test("a Claude quit while its page is stuck is left closed", async () => {
   const w = world([[1_000, started("a")]], (now) => now < 7_000);
   assert.equal(await waitForPage(w.deps, 30_000), "closed");
   assert.ok(w.now() < 30_000);
+});
+
+test("a Claude that exits before it logs its start refused the launch", async () => {
+  // Claude 3.6556 exits at once, before its first log line, when a switch it will not run
+  // with is on its command line.
+  const w = world([], (now) => now < 700);
+  assert.equal(await waitForPage(w.deps, 30_000), "refused");
+  assert.ok(w.now() < START_MS);
+});
+
+test("whether the running Claude's page booted, from the end of its log", async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "relay-page-booted-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const files: ClaudeLogFiles = {
+    current: path.join(dir, "main.log"),
+    rotated: path.join(dir, "main1.log"),
+  };
+  assert.equal(await pageBooted(files), undefined);
+  await writeFile(files.current, started("a") + loaded("b") + started("c") + other("d"));
+  assert.equal(await pageBooted(files), false);
+  await appendFile(files.current, loaded("e"));
+  assert.equal(await pageBooted(files), true);
+  await writeFile(files.current, other("f"));
+  assert.equal(await pageBooted(files), undefined);
 });
 
 test("no start in the log means the watch cannot tell, and it stops early", async () => {

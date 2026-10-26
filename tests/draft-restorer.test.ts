@@ -2290,3 +2290,37 @@ test("the restorer never sends and waits only through its deps", () => {
   ])
     assert.equal(source.includes(forbidden), false, forbidden);
 });
+
+test("nothing is opened or typed while Claude's page has not booted", async () => {
+  const h = harness({ shown: undefined, records: [record(1)] });
+  h.deps.pageBooted = async () => false;
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 1,
+    reason: "loading",
+  });
+  assert.deepEqual(h.calls, []);
+  assert.deepEqual(h.marks, []);
+  assert.ok(h.logs.some((l) => l.event === "page-loading"));
+  // Booted, or a log that cannot tell: the run goes on as before.
+  for (const booted of [true, undefined]) {
+    const next = harness({ shown: undefined, records: [record(1)] });
+    next.deps.pageBooted = async () => booted;
+    assert.equal((await restoreDrafts(next.deps)).restored, 1);
+  }
+});
+
+test("a conversation that shows without its composer yet keeps its draft pending", async () => {
+  const h = harness({ shown: undefined, records: [record(1)] });
+  // Its URL is on screen, but its content never loads while the run waits.
+  h.noComposer.add(target(1));
+  assert.deepEqual(await restoreDrafts(h.deps), {
+    status: "waiting",
+    restored: 0,
+    left: 1,
+    reason: "loading",
+  });
+  assert.deepEqual(h.marks, []);
+  assert.deepEqual(h.writes(), []);
+});

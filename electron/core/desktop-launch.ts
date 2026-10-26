@@ -28,11 +28,13 @@ const RUNNING_EVERY = 5;
 export type LaunchProgress = "none" | "started" | "loaded";
 /**
  * What a watch found: `loaded`, the page booted; `stalled`, Claude started and still runs but
- * its page never booted in time; `closed`, Claude was quit meanwhile; `unknown`, no start was
- * logged (Claude was already open, or wrote its log elsewhere) or Claude's state could not be
- * read. Only `stalled` is a reason to start Claude again.
+ * its page never booted in time; `closed`, Claude was quit after it started; `refused`, Claude
+ * exited before it logged its start, as Claude does when it will not run with a switch on its
+ * command line; `unknown`, no start was logged (Claude was already open, or wrote its log
+ * elsewhere) or Claude's state could not be read. Only `stalled`, and `refused` for a start
+ * that passed switches, are reasons to start Claude again.
  */
-export type PageOutcome = "loaded" | "stalled" | "closed" | "unknown";
+export type PageOutcome = "loaded" | "stalled" | "closed" | "refused" | "unknown";
 
 /** The last start in `text`, and whether its page reported its build after it. */
 export function launchProgress(text: string): LaunchProgress {
@@ -148,12 +150,32 @@ export async function waitForPage(deps: PageWaitDeps, timeoutMs: number): Promis
         if (due) return "unknown";
         running = true;
       }
-      if (!running) return "closed";
+      if (!running) return progress === "none" ? "refused" : "closed";
       if (due) return "stalled";
     }
     await deps.sleep(POLL_MS);
   }
 }
+
+/**
+ * Whether the page of the Claude that runs now has booted, from the end of its log: true once
+ * "Loaded https://claude.ai" follows its last "Starting app {", false before; undefined when the
+ * log cannot tell (unread, or that start is no longer in its last part).
+ */
+export async function pageBooted(files: ClaudeLogFiles): Promise<boolean | undefined> {
+  try {
+    const end = await sizeOf(files.current);
+    if (end === undefined) return undefined;
+    const progress = launchProgress(
+      await readRange(files.current, Math.max(0, end - TAIL_BYTES), end),
+    );
+    return progress === "none" ? undefined : progress === "loaded";
+  } catch {
+    return undefined;
+  }
+}
+/** How much of the log's end `pageBooted` reads: a start logs far less before its page loads. */
+const TAIL_BYTES = 2 * 1024 * 1024;
 
 /** A launch being watched: `wait` tells how the page of the Claude started since did. */
 export interface LaunchWatch {

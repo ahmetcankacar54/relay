@@ -31,6 +31,7 @@ import { identity, readObject } from "./core/desktop-files";
 import { DesktopLock } from "./core/desktop-lock";
 import { lastDraftWipeAt } from "./core/desktop-wipe";
 import { nativeDesktopWatch, unpackedPath } from "./core/desktop-watch";
+import { macClaudeLog, pageBooted } from "./core/desktop-launch";
 import { IDLE_MS, QUIET_MS } from "./core/draft-restorer";
 import {
   DraftScheduler,
@@ -265,6 +266,11 @@ function logFleetEvent(event: string, fields?: Record<string, unknown>) {
     // The log is an aid, never a part of a switch.
   }
 }
+/** Whether the running Claude's page has booted, from its own log; undefined when it cannot tell. */
+const claudePageBooted = () =>
+  process.platform === "darwin"
+    ? pageBooted(macClaudeLog(os.homedir()))
+    : Promise.resolve(undefined);
 /** How long a continuation waits for its conversation to show after a switch. */
 const CONTINUE_SHOW_MS = 3 * 60_000;
 /**
@@ -585,13 +591,12 @@ else {
       };
       // The captures and the vault's reads go to the same log as the restore.
       desktop.onDraftEvent = logDraftEvent;
-      // How Relay starts Claude: the switch diagnosis's net log, and HTTP/3 kept off once learned.
+      // How Relay starts Claude: HTTP/3 kept off once learned.
       const diagnostics = new SwitchDiagnostics(
         path.join(app.getPath("userData"), "switch-diagnostics"),
       );
       switchDiagnostics = diagnostics;
       desktop.launchChoice = {
-        netLog: () => diagnostics.nextNetLog(),
         quicOff: () => diagnostics.current.quicOff,
         learnQuicOff: () => {
           diagnostics.set({ quicOff: true });
@@ -704,6 +709,8 @@ else {
             lastDraftWipeAt(
               path.join(desktop.root, "Local Storage", "leveldb"),
             ),
+          // From Claude's own log, macOS only: no link goes into a page still loading.
+          ...(process.platform === "darwin" ? { pageBooted: claudePageBooted } : {}),
           withLock: (fn) => desktopLock.restore(fn, () => !desktop.isBusy),
           // The restore holds the lock as one caller: any more are waiting for it.
           yielding: () => desktopLock.callers > 1,
@@ -829,7 +836,11 @@ else {
               view.permissionMode
             )
               snapshot = view;
-            else if (Date.now() - openedAt >= 5_000) {
+            else if (
+              Date.now() - openedAt >= 5_000 &&
+              // A link makes Claude load its page again: none while it is still loading.
+              (await claudePageBooted()) !== false
+            ) {
               openedAt = Date.now();
               await automation.openSession(stop.localSessionId);
             }
@@ -1575,13 +1586,11 @@ function bindIPC() {
     const failure = await shell.openPath(folder);
     if (failure) throw new Error(failure);
   });
-  // How Relay starts Claude (net log, HTTP/3), and the logs' folder. No path comes from the renderer.
-  handle("claude-launch", () =>
-    switchDiagnostics?.current ?? { netLog: false, quicOff: false },
-  );
+  // How Relay starts Claude (HTTP/3).
+  handle("claude-launch", () => switchDiagnostics?.current ?? { quicOff: false });
   handle("set-claude-launch", (patch) => {
     const parsed = z
-      .object({ netLog: z.boolean().optional(), quicOff: z.boolean().optional() })
+      .object({ quicOff: z.boolean().optional() })
       .strict()
       .parse(patch);
     if (!switchDiagnostics) throw new Error("Invalid Claude launch choice.");
@@ -1600,12 +1609,6 @@ function bindIPC() {
     const kept = menuBarTitle.set(parsed);
     void tray?.update();
     return kept;
-  });
-  handle("show-switch-net-logs", async () => {
-    if (!switchDiagnostics) return;
-    await fsp.mkdir(switchDiagnostics.folder, { recursive: true, mode: 0o700 });
-    const failure = await shell.openPath(switchDiagnostics.folder);
-    if (failure) throw new Error(failure);
   });
   handle("tray-language", (value) => {
     const language = z.enum(["tr", "en"]).parse(value);

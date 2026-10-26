@@ -124,6 +124,7 @@ export function tallyStalls(
     reason === "busy" ||
     reason === "active" ||
     reason === "elsewhere" ||
+    reason === "loading" ||
     !account
   )
     return { counts: next, giveUp };

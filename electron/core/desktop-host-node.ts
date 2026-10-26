@@ -38,17 +38,11 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Claude the user's standard one (HOME, PATH, TMPDIR…) and nothing of Relay's own.
  */
 export const CLEAN_LAUNCH_ENV: NodeJS.ProcessEnv = Object.freeze({});
-/**
- * Claude's command-line switches for a launch, Chromium's own (Claude's Electron has them): the
- * net log ("Default" leaves cookies and credentials out of it) and no HTTP/3.
- */
+/** Claude's command-line switches for a launch, Chromium's own: no HTTP/3. */
 export function launchArgs(options?: LaunchOptions): string[] {
-  return [
-    ...(options?.netLog && path.isAbsolute(options.netLog)
-      ? [`--log-net-log=${options.netLog}`, "--net-log-capture-mode=Default"]
-      : []),
-    ...(options?.quicOff ? ["--disable-quic"] : []),
-  ];
+  // Never a debugging or network-override switch such as --log-net-log: Claude (3.6556 and
+  // later) refuses to start with one on its command line.
+  return options?.quicOff ? ["--disable-quic"] : [];
 }
 /** The default Claude.app bundles, first found wins. */
 export const CLAUDE_APPS = [

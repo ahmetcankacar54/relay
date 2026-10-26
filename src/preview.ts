@@ -595,14 +595,13 @@ export const previewApi: RelayAPI = {
   }),
   setTrayLanguage: async () => {},
   showDiagnostics: desktopOnly,
-  claudeLaunch: async () => ({ netLog: false, quicOff: false }),
+  claudeLaunch: async () => ({ quicOff: false }),
   setClaudeLaunch: desktopOnly,
   menuBarTitle: async () => ({ items: [...previewMenuBar] }),
   setMenuBarTitle: async (choice) => {
     previewMenuBar = menuBarItems(choice.items);
     return { items: [...previewMenuBar] };
   },
-  showSwitchNetLogs: desktopOnly,
   onChanged: () => () => {},
   openPage: async (page, intent) => {
     location.hash = intentHash(page, intent);

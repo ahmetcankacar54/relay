@@ -196,10 +196,8 @@ export type DesktopOperationKind = "switch" | "save" | "link" | "cancel-link" | 
 export type DesktopRestartEvent =
   | { phase: "start"; kind: DesktopOperationKind; profileId?: string }
   | { phase: "end"; kind: DesktopOperationKind; profileId?: string; ok: boolean };
-/** How Relay starts Claude; kept beside the switch diagnosis's logs, not in the registry. */
+/** How Relay starts Claude; kept in its own file beside the registry, not in it. */
 export interface ClaudeLaunchChoice {
-  /** The switch diagnosis: each Claude Relay starts writes Chromium's net log. */
-  netLog: boolean;
   /** Claude starts without HTTP/3, so its requests go over HTTP/2. */
   quicOff: boolean;
 }
@@ -256,14 +254,12 @@ export interface RelayAPI {
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;
   /**
-   * How Relay starts Claude: `netLog`, the switch diagnosis (each Claude Relay starts writes a
-   * net log); `quicOff`, without HTTP/3, which Relay also turns on itself after a stuck start.
+   * How Relay starts Claude: `quicOff`, without HTTP/3, which Relay also turns on itself after a
+   * stuck start.
    */
   claudeLaunch(): Promise<ClaudeLaunchChoice>;
   /** Changes what the patch names; resolves with the whole choice. */
   setClaudeLaunch(patch: Partial<ClaudeLaunchChoice>): Promise<ClaudeLaunchChoice>;
-  /** Opens the switch diagnosis folder with its net logs in Finder. Takes no path. */
-  showSwitchNetLogs(): Promise<void>;
   /** What the menu bar title shows (macOS); the five-hour percent alone until changed. */
   menuBarTitle(): Promise<MenuBarTitleChoice>;
   /** Replaces the menu bar title's items and redraws it; resolves with the choice as kept. */

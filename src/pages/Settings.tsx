@@ -36,11 +36,11 @@ export const showDiagnostics = ({
   action("diagnostics", () => api.showDiagnostics());
 
 /**
- * How Relay starts Claude: without HTTP/3, and with the switch diagnosis's net log. The choice
- * lives outside the registry, so these rows read it themselves, again after each Relay change
- * (Relay turns HTTP/3 off itself after a stuck start); the folder is opened by main.
+ * How Relay starts Claude: without HTTP/3. The choice lives outside the registry, so this row
+ * reads it itself, again after each Relay change (Relay turns HTTP/3 off itself after a stuck
+ * start).
  */
-function ClaudeLaunchRows({
+function ClaudeLaunchRow({
   api,
   action,
   data,
@@ -54,7 +54,7 @@ function ClaudeLaunchRows({
     api
       .claudeLaunch()
       .then((value) => live && setChoice(value))
-      .catch(() => live && setChoice({ netLog: false, quicOff: false }));
+      .catch(() => live && setChoice({ quicOff: false }));
     return () => {
       live = false;
     };
@@ -62,47 +62,21 @@ function ClaudeLaunchRows({
   const change = (patch: Partial<ClaudeLaunchChoice>) =>
     void action("claude-launch", async () => setChoice(await api.setClaudeLaunch(patch)));
   return (
-    <>
-      <SettingRow
-        label={t("Claude’u HTTP/3 olmadan aç", "Open Claude without HTTP/3")}
-        htmlFor="claude-quic-off"
-        description={t(
-          "Bazı ağlarda claude.ai’nin HTTP/3 aktarımları takılır ve Claude uygulaması gri ekranda kalır. Açıkken Relay, Claude uygulamasını HTTP/2 ile başlatır. Bir geçişte sayfa takılıp HTTP/2 ile açılırsa Relay bunu kendisi açar. Yalnızca Relay’in başlattığı Claude için geçerlidir.",
-          "On some networks claude.ai’s HTTP/3 transfers stall and the Claude app stays on a grey screen. While on, Relay starts the Claude app over HTTP/2. If a page sticks at a switch and loads over HTTP/2, Relay turns this on itself. It applies only to a Claude that Relay starts.",
-        )}
-      >
-        <Switch
-          id="claude-quic-off"
-          checked={choice?.quicOff === true}
-          disabled={choice === undefined}
-          onCheckedChange={(quicOff) => change({ quicOff })}
-        />
-      </SettingRow>
-      <SettingRow
-        label={t("Geçiş tanı kaydı", "Switch diagnosis")}
-        htmlFor="switch-net-log"
-        description={t(
-          "Açıkken Relay, Claude uygulamasını her geçişte bir ağ kaydıyla başlatır; sayfanın hangi isteği beklediği ve hangisinde takıldığı görülür. Kayıtlar bu Mac’te kalır; çerezler ve giriş bilgileri yazılmaz, adresler yazılır. Dosyalar büyüyebilir; sorunu yakalayınca kapat.",
-          "While on, Relay starts the Claude app with a network log at each switch, so the request a stuck page waits for can be seen. Logs stay on this Mac; cookies and sign-ins are left out, addresses are kept. The files can grow; turn it off once the problem is caught.",
-        )}
-      >
-        <span className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void action("switch-net-logs", () => api.showSwitchNetLogs())}
-          >
-            {t("Klasörü aç", "Open folder")}
-          </Button>
-          <Switch
-            id="switch-net-log"
-            checked={choice?.netLog === true}
-            disabled={choice === undefined}
-            onCheckedChange={(netLog) => change({ netLog })}
-          />
-        </span>
-      </SettingRow>
-    </>
+    <SettingRow
+      label={t("Claude’u HTTP/3 olmadan aç", "Open Claude without HTTP/3")}
+      htmlFor="claude-quic-off"
+      description={t(
+        "Bazı ağlarda claude.ai’nin HTTP/3 aktarımları takılır ve Claude uygulaması gri ekranda kalır. Açıkken Relay, Claude uygulamasını HTTP/2 ile başlatır. Bir geçişte sayfa takılıp HTTP/2 ile açılırsa Relay bunu kendisi açar. Yalnızca Relay’in başlattığı Claude için geçerlidir; Dock’tan açılan Claude HTTP/3 kullanır.",
+        "On some networks claude.ai’s HTTP/3 transfers stall and the Claude app stays on a grey screen. While on, Relay starts the Claude app over HTTP/2. If a page sticks at a switch and loads over HTTP/2, Relay turns this on itself. It applies only to a Claude that Relay starts; a Claude opened from the Dock uses HTTP/3.",
+      )}
+    >
+      <Switch
+        id="claude-quic-off"
+        checked={choice?.quicOff === true}
+        disabled={choice === undefined}
+        onCheckedChange={(quicOff) => change({ quicOff })}
+      />
+    </SettingRow>
   );
 }
 
@@ -515,7 +489,7 @@ export function Settings() {
               {t("Finder’da göster", "Show in Finder")}
             </Button>
           </SettingRow>
-          <ClaudeLaunchRows api={api} action={action} data={data} t={t} />
+          <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
         </SettingGroup>
         <SettingGroup
           id="settings-privacy"

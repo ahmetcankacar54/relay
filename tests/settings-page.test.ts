@@ -14,7 +14,7 @@ const settings = { ...DEFAULT_SETTINGS, usageRefreshMinutes: 0 as const };
 function relayFor(): Relay {
   return {
     api: {
-      claudeLaunch: async () => ({ netLog: false, quicOff: false }),
+      claudeLaunch: async () => ({ quicOff: false }),
       menuBarTitle: async () => ({ items: ["five-hour"] }),
     }, preview: false, error: "", notice: "", accounts: [], active: undefined, settings, busy: "",
     usageBusy: new Set<string>(), desktopBusy: false, hasUnclaimedDesktop: false, targetOrg: "", historyRevision: 0,
@@ -276,7 +276,7 @@ test("the system group shows how Relay starts Claude, and changes it through mai
   readableText();
   try {
     const calls: unknown[] = [];
-    let choice = { netLog: false, quicOff: true };
+    let choice = { quicOff: true };
     const relay = relayFor();
     relay.api = {
       ...relay.api,
@@ -286,7 +286,6 @@ test("the system group shows how Relay starts Claude, and changes it through mai
         choice = { ...choice, ...patch };
         return choice;
       },
-      showSwitchNetLogs: async () => void calls.push("folder"),
     } as unknown as Relay["api"];
     relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
     const { createRoot } = await import("react-dom/client");
@@ -305,14 +304,11 @@ test("the system group shows how Relay starts Claude, and changes it through mai
       (n?.attributes as Map<string, string> | undefined)?.get(name);
     const byId = (id: string) => find(container, (n) => attr(n, "id") === id);
     assert.equal(attr(byId("claude-quic-off"), "aria-checked"), "true");
-    assert.equal(attr(byId("switch-net-log"), "aria-checked"), "false");
-    await act(async () => dom.dispatch(byId("switch-net-log")!, "click", { detail: 1 }));
-    assert.deepEqual(calls, [{ netLog: true }]);
-    assert.equal(attr(byId("switch-net-log"), "aria-checked"), "true");
-    const folder = find(container, (n) => n.tagName === "button" && textOf(n) === "Klasörü aç");
-    assert.ok(folder);
-    await act(async () => dom.dispatch(folder, "click", { detail: 1 }));
-    assert.deepEqual(calls, [{ netLog: true }, "folder"]);
+    await act(async () => dom.dispatch(byId("claude-quic-off")!, "click", { detail: 1 }));
+    assert.deepEqual(calls, [{ quicOff: false }]);
+    assert.equal(attr(byId("claude-quic-off"), "aria-checked"), "false");
+    // Claude refuses to start with a net log, so there is no switch diagnosis to turn on.
+    assert.equal(byId("switch-net-log"), undefined);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
