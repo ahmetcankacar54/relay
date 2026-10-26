@@ -9,6 +9,7 @@ import {
   Monitor,
   MoreHorizontal,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import type { Account } from "../../../shared/types";
 import type { Relay } from "@/data/relay-context";
@@ -30,9 +31,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusDot } from "@/components/StatusDot";
-import { useI18n } from "@/data/i18n";
+import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { pendingFlow } from "@/data/selectors";
+import { limitFull, pendingFlow } from "@/data/selectors";
 import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
 import {
@@ -40,6 +41,7 @@ import {
   renewalIssue,
   usageSignInStatus,
 } from "@/lib/account-health";
+import { fullLimitNote } from "@/lib/account-row";
 import { extensionGuide } from "@/lib/extension-ui";
 import { formatPercent, percentUsed } from "@/lib/meter";
 import { formatRelative } from "@/lib/time";
@@ -151,11 +153,16 @@ export interface RowAction {
     | "renew"
     | "desktop-reconnect"
     | "desktop-link"
-    | "refresh";
+    | "refresh"
+    | "remove";
   label: string;
   icon: LucideIcon;
   disabled: boolean;
   run: () => void;
+  /** Said under the label: why the item is disabled, or what to know before choosing it. */
+  note?: string;
+  /** "warn": a switch to an account whose limit is full; "destructive": the removal. */
+  tone?: "warn" | "destructive";
 }
 
 /** Menu items for an account row, in display order. Pure so it can be tested. */
@@ -164,12 +171,21 @@ export function rowActions(
   relay: Relay,
   t: (tr: string, en: string) => string,
   link: (id: string) => void = () => {},
+  options: {
+    /** Asks to remove the account (the confirmation dialog). */
+    remove?: (id: string) => void;
+    language?: Language;
+    now?: number;
+  } = {},
 ): RowAction[] {
   const { desktop, desktopBusy, pendingDesktop } = relay;
+  const { language = "tr", now = Date.now() } = options;
   const isActive = a.id === relay.active?.id;
   const switchBlocked =
     desktopBusy || !!pendingDesktop || !!desktop?.recoveryRequired;
   const authFlow = relay.data?.authFlows.find((f) => f.accountId === a.id);
+  // A full account can still be switched to; the item is tinted and says when it opens.
+  const full = limitFull(relay.data?.usage[a.id], now);
   const items: RowAction[] = [];
   if (a.desktop && !isActive)
     items.push({
@@ -178,6 +194,10 @@ export function rowActions(
       icon: ArrowLeftRight,
       disabled: switchBlocked,
       run: () => relay.requestDesktop(a, "switch"),
+      ...(full && {
+        tone: "warn" as const,
+        note: fullLimitNote(full.availableAt, t, language, relay.settings.planning.timeZone, now),
+      }),
     });
   if (a.desktop && isActive)
     items.push({
@@ -244,7 +264,72 @@ export function rowActions(
     disabled: relay.usageBusy.has(a.id),
     run: () => void relay.refreshUsage(a),
   });
+  // Main refuses the same; the menu says why before it is chosen.
+  const running = relay.data?.runs?.some(
+    (r) => r.accountId === a.id && r.status === "running",
+  );
+  const removeBlock = isActive
+    ? t("Önce başka bir hesaba geç", "Switch to another account first")
+    : pendingDesktop?.id === a.id
+      ? t(
+          "Önce Claude uygulaması girişini tamamla ya da iptal et",
+          "Finish or cancel its Claude app sign-in first",
+        )
+      : pendingFlow(authFlow)
+        ? t(
+            "Önce limit okuma girişini tamamla ya da iptal et",
+            "Finish or cancel its usage sign-in first",
+          )
+        : running
+          ? t("Önce çalışan oturumu durdur", "Stop its running session first")
+          : desktopBusy
+            ? t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running")
+            : undefined;
+  items.push({
+    key: "remove",
+    label: t("Hesabı kaldır", "Remove account"),
+    icon: Trash2,
+    tone: "destructive",
+    disabled: !!removeBlock,
+    ...(removeBlock && { note: removeBlock }),
+    run: () => options.remove?.(a.id),
+  });
   return items;
+}
+
+/**
+ * The ⋯ menu's items, for the table row and the account page alike: the sign-in items, then
+ * Refresh limits and the removal, each after a separator. A note goes under its label.
+ */
+export function RowActionItems({
+  actions,
+  prank,
+}: {
+  actions: RowAction[];
+  prank: PrankApi;
+}) {
+  return actions.map(({ key, label, icon: Icon, disabled, run, note, tone }) => (
+    <Fragment key={key}>
+      {(key === "refresh" || key === "remove") && <DropdownMenuSeparator />}
+      <DropdownMenuItem
+        disabled={disabled}
+        variant={tone === "destructive" ? "destructive" : "default"}
+        data-tone={tone}
+        className={cn(tone === "warn" && "text-warn-foreground focus:text-warn-foreground")}
+        {...itemHandlers({ key, disabled, run }, prank)}
+      >
+        <Icon className={cn(tone === "warn" && "text-warn")} />
+        {note ? (
+          <span className="grid">
+            <span>{label}</span>
+            <span className="text-xs text-muted-foreground">{note}</span>
+          </span>
+        ) : (
+          label
+        )}
+      </DropdownMenuItem>
+    </Fragment>
+  ));
 }
 
 /**
@@ -272,6 +357,7 @@ export function AccountsTable({
   selected,
   open,
   link,
+  remove,
 }: {
   accounts: Account[];
   selected?: string;
@@ -279,6 +365,8 @@ export function AccountsTable({
   open: (id: string) => void;
   /** Starts Desktop setup for an account that has no saved Desktop sign-in. */
   link: (id: string) => void;
+  /** Asks to remove an account (the confirmation dialog). */
+  remove?: (id: string) => void;
 }) {
   const relay = useRelay();
   const prank = usePrank();
@@ -317,7 +405,7 @@ export function AccountsTable({
             { active: isActive, desktopRunning: !!desktop?.running, waiting },
             t,
           );
-          const actions = rowActions(a, relay, t, link);
+          const actions = rowActions(a, relay, t, link, { remove, language, now });
           // The inline fix is the matching ⋯ menu item: same label, same handler.
           const fix = health.fix && actions.find((x) => x.key === health.fix);
           // "Limit verisi eski" is the one warning without a fix: a refresh is its step.
@@ -485,20 +573,7 @@ export function AccountsTable({
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   >
-                    {actions.map(
-                      ({ key, label, icon: Icon, disabled, run }) => (
-                        <Fragment key={key}>
-                          {key === "refresh" && <DropdownMenuSeparator />}
-                          <DropdownMenuItem
-                            disabled={disabled}
-                            {...itemHandlers({ key, disabled, run }, prank)}
-                          >
-                            <Icon />
-                            {label}
-                          </DropdownMenuItem>
-                        </Fragment>
-                      ),
-                    )}
+                    <RowActionItems actions={actions} prank={prank} />
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>

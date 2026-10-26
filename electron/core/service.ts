@@ -8,6 +8,7 @@ import { AuthManager } from "./auth";
 import { Runner } from "./runner";
 import type { ProfileLockKind } from "./profile-lock";
 import { readProfileAuth, signedOut } from "./profile-auth";
+import { removeAccount, type AccountRemoval } from "./account-removal";
 import { diagnoseCli } from "./cli-diagnostics";
 import { command, profileEnvironment } from "./environment";
 import { readsUsage } from "../../shared/cli-version";
@@ -19,6 +20,7 @@ import {
 } from "./sessions";
 import type {
   Account,
+  AccountRemoved,
   AuthFlow,
   Diagnostics,
   LaunchRequest,
@@ -355,6 +357,36 @@ export class Service {
     this.store.update((s) => {
       s.pinned = s.pinned.filter((k) => k !== key);
       if (pinned) s.pinned.push(key);
+    });
+  }
+  /**
+   * Forgets an account (`removeAccount`, shared with `relay remove`): refused while one of its
+   * terminals runs or its usage sign-in is in progress; its usage sign-in is signed out with the
+   * CLI in its profile when one is found.
+   */
+  async remove(
+    id: string,
+    options: Omit<AccountRemoval, "store" | "signOut">,
+  ): Promise<AccountRemoved> {
+    this.store.account(id);
+    if (
+      this.runner
+        .list()
+        .some((r) => r.accountId === id && r.status === "running")
+    )
+      throw new Error("Bu hesapta çalışan oturumu önce durdur.");
+    if (this.auth.active(id))
+      throw new Error("Önce bu hesabın limit okuma girişini tamamla ya da iptal et.");
+    const executable = await this.executable().catch(() => undefined);
+    return removeAccount(id, {
+      ...options,
+      store: this.store,
+      signOut: executable
+        ? async (profile) => {
+            await command(executable, ["auth", "logout"], profileEnvironment(profile), profile);
+            return true;
+          }
+        : undefined,
     });
   }
   cooldown(id: string, hours: number) {

@@ -2,7 +2,12 @@ import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { overviewAccounts, pendingFlow, tempoRateNow } from "@/data/selectors";
-import { accountRowSubtitle, accountTileLine, ringState } from "@/lib/account-row";
+import {
+  accountRowSubtitle,
+  accountTileLine,
+  fullLimitNote,
+  ringState,
+} from "@/lib/account-row";
 import { AccountList } from "../../features/AccountList";
 import { Plus } from "lucide-react";
 import { intentHash, type PageId } from "@/app/routes";
@@ -88,13 +93,15 @@ export function AccountsCard({
           }
           canSwitch={(row) => row.state !== "not-linked"}
           blocked={(row) =>
-            row.state === "not-linked"
-              ? undefined
-              : row.state === "exhausted"
-                ? t("Limiti dolu", "Its limit is full")
-                : switchBlocked
-                  ? t("Şu an geçilemez", "Cannot switch right now")
-                  : undefined
+            row.state !== "not-linked" && switchBlocked
+              ? t("Şu an geçilemez", "Cannot switch right now")
+              : undefined
+          }
+          // A full account can still be switched to: its switch is tinted and says when it opens.
+          warn={(row) =>
+            row.state === "exhausted"
+              ? fullLimitNote(row.availableAt, t, language, zone, now)
+              : undefined
           }
           pick={(row, e) => {
             if (row.state === "not-linked") {
@@ -103,7 +110,7 @@ export function AccountsCard({
               window.location.hash = accountHash(row.account.id);
               return;
             }
-            if (switchBlocked || row.state === "exhausted") return;
+            if (switchBlocked) return;
             offerAfter(prank, "nibble-cursor", e, () =>
               relay.requestDesktop(row.account, "switch"),
             );

@@ -135,6 +135,11 @@ export interface CreateAccount {
   kind: AccountKind;
   group?: string;
 }
+/** What removing an account did. */
+export interface AccountRemoved {
+  /** Whether its usage sign-in was signed out; undefined when it had none. */
+  signedOut?: boolean;
+}
 export interface LaunchRequest {
   accountId: string;
   cwd?: string;
@@ -313,6 +318,8 @@ export interface RelayAPI {
   /** Each kind's finds over every week within reach, for the collection. */
   lostFoundCollection(): Promise<LostFoundCollection>;
   createAccount(input: CreateAccount): Promise<Account>;
+  /** Forgets an account: its profile, its saved sign-ins and its place in the lists. */
+  removeAccount(accountId: string): Promise<AccountRemoved>;
   checkAuth(accountId: string): Promise<Account>;
   login(accountId: string): Promise<AuthFlow>;
   reopenLogin(accountId: string, attemptId: string): Promise<void>;

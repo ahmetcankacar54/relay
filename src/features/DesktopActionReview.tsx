@@ -37,6 +37,7 @@ export function DesktopActionReview({
   cancel,
   historyAccounts = [],
   running = false,
+  fullLimit,
 }: {
   account?: Account;
   active?: Account;
@@ -48,6 +49,8 @@ export function DesktopActionReview({
   historyAccounts?: Account[];
   /** Confirmed here and still running: the panda replaces the confirmation. */
   running?: boolean;
+  /** A switch to an account whose limit is full: what that means, said before the switch. */
+  fullLimit?: string;
 }) {
   const [ready, setReady] = useState(false);
   const title =
@@ -153,6 +156,14 @@ export function DesktopActionReview({
                         "The Claude app restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the sign-in.",
                       )}
           </p>
+          {kind === "switch" && fullLimit && (
+            <p
+              data-slot="switch-full-limit"
+              className="rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-sm text-warn-foreground"
+            >
+              {fullLimit}
+            </p>
+          )}
           {(kind === "capture" ||
             kind === "login" ||
             kind === "reconnect" ||

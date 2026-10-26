@@ -366,6 +366,13 @@ if (scenario === "identity-mismatch") {
   accounts[1].auth!.orgId = ids[3];
 }
 if (scenario === "recovery") desktop.recoveryRequired = true;
+// Danışmanlık gets its Claude app sign-in: an account whose limit is full, with its tinted switch.
+if (scenario === "limit-full")
+  accounts[3].desktop = {
+    accountUuid: ids[3],
+    orgId: ids[3],
+    savedAt: new Date().toISOString(),
+  };
 // A new friend's Mac: no account, no CLI, Code never opened; `first-run-no-claude` lacks the app too.
 if (scenario === "first-run" || scenario === "first-run-no-claude") {
   accounts.splice(0);
@@ -706,6 +713,18 @@ export const previewApi: RelayAPI = {
       issue: "connect-cli",
     };
     return structuredClone(account);
+  },
+  // Forgets the sample account in memory, refusing the open one as the app does.
+  removeAccount: async (id) => {
+    if (id === desktop.activeProfileId)
+      throw new Error(
+        "Switch the Claude app to another account before removing this one.",
+      );
+    const index = accounts.findIndex((a) => a.id === id);
+    if (index < 0) throw new Error("Hesap bulunamadı.");
+    const [removed] = accounts.splice(index, 1);
+    delete state.usage[id];
+    return removed.auth?.loggedIn ? { signedOut: true } : {};
   },
   checkAuth: desktopOnly,
   login: async (id) => {

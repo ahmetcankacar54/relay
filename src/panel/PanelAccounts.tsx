@@ -12,6 +12,7 @@ import {
 } from "@/data/selectors";
 import {
   accountRowSubtitle,
+  fullLimitNote,
   panelRowLine,
   panelRowState,
   type PanelRowBlock,
@@ -27,8 +28,6 @@ export function blockWords(reason: PanelRowBlock, t: T): string {
   switch (reason) {
     case "not-linked":
       return t("Relay’de girişi kaydet", "Save its sign-in in Relay");
-    case "exhausted":
-      return t("Limiti dolu", "Its limit is full");
     case "busy":
       return t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running");
     case "pending":
@@ -155,6 +154,11 @@ export function PanelAccounts({
             const { reason } = panelRowState(row, relay);
             return reason && blockWords(reason, t);
           }}
+          warn={(row) =>
+            panelRowState(row, relay).full
+              ? fullLimitNote(row.availableAt, t, language, zone, now)
+              : undefined
+          }
           pick={(row, e) => {
             const { canSwitch, reason } = panelRowState(row, relay);
             if (reason === "not-linked") return void relay.api.openPage("hesaplar");
@@ -183,6 +187,12 @@ export function PanelAccounts({
             className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-warn/40 bg-warn/10 px-2.5 py-1.5 text-xs text-warn-foreground"
           >
             <span>
+              {/* A full account can be switched to; the strip says when it opens first. */}
+              {panelRowState(confirming, relay).full && (
+                <b data-slot="switch-confirm-full" className="block">
+                  {fullLimitNote(confirming.availableAt, t, language, zone, now)}
+                </b>
+              )}
               {language === "tr" ? (
                 <>
                   Claude uygulaması kapanır ve <b>{confirming.account.name}</b> hesabıyla

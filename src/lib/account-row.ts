@@ -56,25 +56,72 @@ export function accountRowSubtitle(
   }
 }
 
-export type PanelRowBlock =
-  | "not-linked"
-  | "exhausted"
-  | "busy"
-  | "pending"
-  | "recovery";
+export type PanelRowBlock = "not-linked" | "busy" | "pending" | "recovery";
 
-/** Whether the panel’s “Geç” button may switch Desktop to this row’s account. */
+/**
+ * Whether the panel’s “Geç” button may switch Desktop to this row’s account. An account whose
+ * limit is full can still be switched to (`full`): the switch is tinted and says when it opens.
+ */
 export function panelRowState(
   row: OverviewRow,
   relay: Pick<Relay, "desktopBusy" | "pendingDesktop" | "desktop">,
-): { canSwitch: boolean; reason?: PanelRowBlock } {
+): { canSwitch: boolean; reason?: PanelRowBlock; full?: boolean } {
   const blocked = (reason: PanelRowBlock) => ({ canSwitch: false, reason });
   if (row.state === "not-linked") return blocked("not-linked");
-  if (row.state === "exhausted") return blocked("exhausted");
   if (relay.desktopBusy) return blocked("busy");
   if (relay.pendingDesktop) return blocked("pending");
   if (relay.desktop?.recoveryRequired) return blocked("recovery");
-  return { canSwitch: true };
+  return row.state === "exhausted" ? { canSwitch: true, full: true } : { canSwitch: true };
+}
+
+/** How long until `ms`: days from a day on ("2 gün"), else `timeLeft`'s hours and minutes. */
+function leftUntil(ms: number, now: number, t: T): string | undefined {
+  if (ms - now < 86_400_000) return timeLeft(new Date(ms).toISOString(), now, t);
+  const days = Math.round((ms - now) / 86_400_000);
+  return t(`${days} gün`, `${days} ${days === 1 ? "day" : "days"}`);
+}
+
+/**
+ * A full account's switch, in a few words: "Limit dolu · 14:00’te açılır (2 sa 10 dk)", or
+ * "Limit dolu" when its reopening is unknown or past.
+ */
+export function fullLimitNote(
+  availableAt: string | undefined,
+  t: T,
+  language: Language,
+  zone: string,
+  now: number,
+): string {
+  const ms = availableAt ? Date.parse(availableAt) : NaN;
+  const left = Number.isFinite(ms) ? leftUntil(ms, now, t) : undefined;
+  if (!left) return t("Limit dolu", "Limit is full");
+  const at = formatClock(ms, language, zone);
+  return t(
+    `Limit dolu · ${clockLocative(at)} açılır (${left})`,
+    `Limit is full · opens ${at} (${left})`,
+  );
+}
+
+/** What switching to a full account means, for the confirmations before it. */
+export function fullLimitWarning(
+  availableAt: string | undefined,
+  t: T,
+  language: Language,
+  zone: string,
+  now: number,
+): string {
+  const ms = availableAt ? Date.parse(availableAt) : NaN;
+  const left = Number.isFinite(ms) ? leftUntil(ms, now, t) : undefined;
+  const at = left ? formatClock(ms, language, zone) : "";
+  return left
+    ? t(
+        `Bu hesabın limiti dolu; ${clockLocative(at)} açılır (${left} sonra). O zamana kadar bu hesapla yeni mesaj gönderemezsin.`,
+        `This account’s limit is full; it opens at ${at} (in ${left}). Until then you can’t send new messages on it.`,
+      )
+    : t(
+        "Bu hesabın limiti dolu ve ne zaman açılacağı bilinmiyor. Açılana kadar bu hesapla yeni mesaj gönderemezsin.",
+        "This account’s limit is full, and when it opens is unknown. Until it does, you can’t send new messages on it.",
+      );
 }
 
 /** Time left until `at` as "1 sa 50 dk" / "1 h 50 m" (minutes only under an hour); undefined once past. */

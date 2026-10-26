@@ -1872,6 +1872,32 @@ function bindIPC() {
   handle("create-account", (input) =>
     service.store.create(createAccountSchema.parse(input)),
   );
+  // Under the Desktop lock, so no switch to the account starts while it goes. Its usage history
+  // and token counts stay: they are the user's record; its profile's transcripts are gone.
+  handle("remove-account", (accountId) => {
+    const account = id.parse(accountId);
+    if (desktop.isBusy)
+      throw new Error(
+        "Finish the Desktop handoff before starting another Desktop operation.",
+      );
+    return manualDesktopLock(() =>
+      service.transaction(async () => {
+        const removed = await service.remove(account, {
+          vault: path.join(app.getPath("userData"), "desktop-vault"),
+          locks: profileLocks(),
+          desktop: () => desktop.snapshot(),
+        });
+        usage.forget(account);
+        keeper.resume();
+        void keeper.tick();
+        void autoSwitch.tick();
+        return removed;
+      }),
+    ).finally(() => {
+      void tray?.update();
+      broadcastChanged();
+    });
+  });
   handle("check-auth", (accountId) =>
     service.transaction(() => {
       const account = id.parse(accountId);
