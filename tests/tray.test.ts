@@ -506,8 +506,11 @@ test("tokens read in millions and the API value in dollars, short", () => {
   // From 100M on, whole millions; never "100,0M".
   assert.equal(trayTokens(99_960_000, "tr"), "100M");
   assert.equal(trayTokens(184_400_000, "en"), "184M");
-  assert.equal(trayTokens(1_234_000_000, "tr"), "1.234M");
-  assert.equal(trayTokens(1_234_000_000, "en"), "1,234M");
+  // From a billion, billions: "milyar" in Turkish, where "B" would read as "bin".
+  assert.equal(trayTokens(999_400_000, "en"), "999M");
+  assert.equal(trayTokens(999_600_000, "tr"), "1,0Mr");
+  assert.equal(trayTokens(1_823_000_000, "tr"), "1,8Mr");
+  assert.equal(trayTokens(1_234_000_000, "en"), "1.2B");
   assert.equal(trayTokens(NaN, "en"), "0.0M");
   assert.equal(trayCost(18.2, "tr"), "$18,20");
   assert.equal(trayCost(99.99, "en"), "$99.99");
@@ -553,7 +556,7 @@ test("any four items stay a short title", () => {
         assert.ok(title.split(/ · | · /).length <= MENU_BAR_MAX_ITEMS, title);
         if (title.length > widest.length) widest = title;
       }
-  assert.equal(widest, "~%100 · 1.234M · ≈$1.234 · Çok uzun…");
+  assert.equal(widest, "~%100 · 1,2Mr · ≈$1.234 · Çok uzun…");
   assert.ok(widest.length <= 36, widest);
 });
 

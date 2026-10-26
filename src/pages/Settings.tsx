@@ -182,8 +182,8 @@ export function MenuBarTitleRows({
           </span>
           <p className="mt-0.5 text-[13px] text-muted-foreground">
             {t(
-              `Yüzdeler ve süre, Claude uygulamasında açık hesabın; token ve API karşılığı tüm hesaplarının bugünkü toplamı. En çok ${MENU_BAR_MAX_ITEMS} değer seçebilirsin; sıra menü çubuğundaki sıradır. Limitler okunamazsa son okunan değer başında ~ ile kalır.`,
-              `Percents and time are for the account open in the Claude app; tokens and API value are today’s total across all your accounts. Pick up to ${MENU_BAR_MAX_ITEMS}; the order is the menu bar’s. If limits cannot be read, the last reading stays, marked with ~.`,
+              `Yüzdeler ve süre, Claude uygulamasında açık hesabın; token ve API karşılığı tüm hesaplarının bugünkü toplamı. En çok ${MENU_BAR_MAX_ITEMS} değer seçebilirsin; sıra menü çubuğundaki sıradır. Limitler okunamazsa son okunan değer başında ~ ile kalır. Simgeyi ⌘ tuşuyla sürükleyip taşırsan yeri hatırlanır.`,
+              `Percents and time are for the account open in the Claude app; tokens and API value are today’s total across all your accounts. Pick up to ${MENU_BAR_MAX_ITEMS}; the order is the menu bar’s. If limits cannot be read, the last reading stays, marked with ~. Drag the icon with ⌘ to move it; its place is kept.`,
             )}
           </p>
         </div>

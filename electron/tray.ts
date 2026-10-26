@@ -20,6 +20,7 @@ import { MascotPlayer } from "./core/mascot-player";
 import { TrayMascot } from "./core/tray-mascot";
 import { refreshTray } from "./core/tray-refresh";
 import { TrayFace } from "./core/tray-face";
+import { placeTray, TRAY_GUID } from "./core/tray-place";
 
 export interface RelayTrayOptions {
   getSnapshot(): TraySnapshot | Promise<TraySnapshot>;
@@ -91,7 +92,12 @@ export class RelayTray {
   constructor(private readonly options: RelayTrayOptions) {
     // macOS shows the panda; other platforms keep the colored R.
     const frames = process.platform === "darwin" ? mascotImages() : undefined;
-    this.tray = new Tray(frames ? frames[menuBarTone()].get("idle")! : image(trayIcons.color, false));
+    const icon = frames ? frames[menuBarTone()].get("idle")! : image(trayIcons.color, false);
+    if (process.platform === "darwin") {
+      // A stable id keeps the item's place across starts, clear of the notch (see tray-place.ts).
+      placeTray(systemPreferences);
+      this.tray = new Tray(icon, TRAY_GUID);
+    } else this.tray = new Tray(icon);
     this.face = new TrayFace(this.tray);
     this.face.setToolTip("Relay");
     if (frames) {

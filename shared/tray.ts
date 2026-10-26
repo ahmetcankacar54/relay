@@ -333,15 +333,21 @@ function trayNumber(language: TrayLanguage, options: Intl.NumberFormatOptions) {
   return format;
 }
 
-/** Tokens in millions, short: "12,4M" / "12.4M"; whole millions from 100M ("184M", "1.234M"). */
+/**
+ * Tokens in millions, short: "12,4M" / "12.4M"; whole millions from 100M ("184M"); from a billion,
+ * billions ("1,8Mr" / "1.8B"; "milyar" in Turkish, where B would read as "bin"), so a busy day's
+ * cache reads never make the menu bar title long.
+ */
 export function trayTokens(tokens: number, language: TrayLanguage = "en") {
-  const millions = Math.max(0, Number.isFinite(tokens) ? tokens : 0) / 1e6;
-  const digits = millions < 99.95 ? 1 : 0;
+  const count = Math.max(0, Number.isFinite(tokens) ? tokens : 0);
+  const billions = count >= 999.5e6;
+  const value = billions ? count / 1e9 : count / 1e6;
+  const digits = value < 99.95 ? 1 : 0;
   const format = trayNumber(language, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
-  return `${format.format(millions)}M`;
+  return `${format.format(value)}${billions ? (language === "tr" ? "Mr" : "B") : "M"}`;
 }
 
 /** An API value, short: "$18,20" / "$18.20"; whole dollars from $100 ("$184"); "≈" when partly estimated. */
