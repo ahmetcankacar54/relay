@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   AppWindow,
   ArrowLeft,
@@ -23,8 +23,6 @@ import { Card } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Disclosure } from "@/components/Disclosure";
@@ -48,7 +46,7 @@ import { formatRelative } from "@/lib/time";
 import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
 import { PlanEditor } from "../../features/PlanEditor";
-import { itemHandlers, rowActions } from "./AccountsTable";
+import { RowActionItems, rowActions } from "./AccountsTable";
 import { avatarClass, groupName, planLabel } from "./accountLabels";
 
 /** `#/hesaplar/<id>`: an account's own page, in place of the list. */
@@ -68,19 +66,28 @@ export function accountFromHash(hash: string): string | undefined {
 export function AccountDetail({
   account: a,
   back,
+  remove,
 }: {
   account: Account;
   back: () => void;
+  /** Asks to remove the account (the confirmation dialog). */
+  remove?: (id: string) => void;
 }) {
   const relay = useRelay();
   const prank = usePrank();
   const { t, language } = useI18n();
   const plan = planLabel(a);
   const email = a.desktop?.email ?? a.auth?.email;
-  const actions = rowActions(a, relay, t, (id) => {
-    relay.setSetupId(id);
-    relay.cancelDesktopRequest();
-  });
+  const actions = rowActions(
+    a,
+    relay,
+    t,
+    (id) => {
+      relay.setSetupId(id);
+      relay.cancelDesktopRequest();
+    },
+    { remove, language },
+  );
   const usage = relay.data?.usage[a.id];
   const waiting = pendingFlow(
     relay.data?.authFlows.find((f) => f.accountId === a.id),
@@ -134,9 +141,24 @@ export function AccountDetail({
       }
       actions={
         <>
+          {/* A full account's switch is tinted, and says when the limit opens beside it. */}
+          {primary?.tone === "warn" && primary.note && (
+            <span
+              data-slot="switch-note"
+              className="max-w-56 self-center text-xs text-warn-foreground"
+            >
+              {primary.note}
+            </span>
+          )}
           {primary && (
             <Button
               disabled={primary.disabled}
+              variant={primary.tone === "warn" ? "outline" : "default"}
+              className={cn(
+                primary.tone === "warn" &&
+                  "border-warn/40 bg-warn/10 text-warn-foreground hover:bg-warn/20 hover:text-warn-foreground dark:bg-warn/10 dark:hover:bg-warn/20",
+              )}
+              title={primary.note}
               onClick={(e) =>
                 primary.key === "switch"
                   ? offerAfter(prank, "nibble-cursor", e, primary.run)
@@ -158,20 +180,10 @@ export function AccountDetail({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {actions
-                .filter((x) => x !== primary)
-                .map(({ key, label, icon: Icon, disabled, run }) => (
-                  <Fragment key={key}>
-                    {key === "refresh" && <DropdownMenuSeparator />}
-                    <DropdownMenuItem
-                      disabled={disabled}
-                      {...itemHandlers({ key, disabled, run }, prank)}
-                    >
-                      <Icon />
-                      {label}
-                    </DropdownMenuItem>
-                  </Fragment>
-                ))}
+              <RowActionItems
+                actions={actions.filter((x) => x !== primary)}
+                prank={prank}
+              />
             </DropdownMenuContent>
           </DropdownMenu>
         </>

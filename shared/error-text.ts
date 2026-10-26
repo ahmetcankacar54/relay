@@ -372,6 +372,23 @@ const pairs: Pair[] = [
     "En fazla 20 canlı terminal açılabilir.",
     "You can open up to 20 live terminals.",
   ],
+  // electron/core/account-removal.ts and profile-lock.ts: removing an account.
+  [
+    "Bu hesabı kaldırmadan önce Claude uygulamasında başka bir hesaba geç.",
+    "Switch the Claude app to another account before removing this one.",
+  ],
+  [
+    "Bu hesabı kaldırmadan önce Claude uygulaması girişini tamamla ya da iptal et.",
+    "Finish or cancel this account’s Claude app sign-in before removing it.",
+  ],
+  [
+    "Claude Code bu hesapla çalışıyor.",
+    "Claude Code is running with this account.",
+  ],
+  [
+    "Başka bir işlem bu hesabın girişini yapıyor ya da bağlantısını yeniliyor.",
+    "Another process is signing this account in or renewing its connection.",
+  ],
   // electron/core/desktop.ts: the extension check.
   [
     "Önce bu hesabın Claude uygulaması girişini kaydet.",

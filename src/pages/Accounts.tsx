@@ -22,6 +22,7 @@ import {
 } from "./accounts/AccountDetail";
 import { AddAccountDialog } from "./accounts/AddAccountDialog";
 import { LinkDesktopDialog } from "./accounts/LinkDesktopDialog";
+import { RemoveAccountDialog } from "./accounts/RemoveAccountDialog";
 import { filterAccounts, type AccountFilter } from "./accounts/accountLabels";
 import { blockReason, type Block } from "@/lib/onboarding";
 
@@ -101,6 +102,7 @@ export function Accounts() {
   const [filter, setFilter] = useState<AccountFilter>("all");
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState(false);
+  const [removing, setRemoving] = useState<string>();
   // The open account lives in the hash (`#/hesaplar/<id>`), so Back and the panel can reach it.
   const [selected, setSelectedState] = useState<string | undefined>(() =>
     typeof window === "undefined" ? undefined : accountFromHash(window.location.hash),
@@ -184,6 +186,16 @@ export function Accounts() {
           show(id);
         }}
       />
+      <RemoveAccountDialog
+        account={accounts.find((a) => a.id === removing)}
+        close={() => setRemoving(undefined)}
+        removed={(id) => {
+          setRemoving(undefined);
+          if (setupId === id) setSetupId(undefined);
+          // Its page is gone with it: back to the list.
+          if (selected === id) setSelected(undefined);
+        }}
+      />
     </>
   );
   if (account)
@@ -192,6 +204,7 @@ export function Accounts() {
         <AccountDetail
           key={account.id}
           account={account}
+          remove={setRemoving}
           back={() => {
             if (setupId && setupId === selected) setSetupId(undefined);
             setSelected(undefined);
@@ -285,6 +298,7 @@ export function Accounts() {
           <AccountsTable
             accounts={visible}
             open={setSelected}
+            remove={setRemoving}
             link={(id) => {
               setSetupId(id);
               relay.cancelDesktopRequest();

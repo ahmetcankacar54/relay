@@ -19,6 +19,21 @@ export function tempoRateNow(data: Snapshot | undefined, settings: RelaySettings
   return data?.planning?.tempo ? tempoAt(data.planning.tempo, settings.planning, now) : undefined;
 }
 
+/**
+ * A fresh reading with a window used up: when the account opens again (the latest of those
+ * windows' resets, undefined when none is known). Undefined while no window is full.
+ */
+export function limitFull(
+  u: AccountUsage | undefined,
+  now: number,
+): { availableAt?: string } | undefined {
+  if (!freshUsage(u, now)) return undefined;
+  const full = (quotaWindows(u) ?? []).filter((w) => w.usedPercent >= 100);
+  if (!full.length) return undefined;
+  const availableAt = full.map((w) => w.resetsAt).filter((r): r is string => !!r).sort().at(-1);
+  return availableAt ? { availableAt } : {};
+}
+
 /** Other accounts best first, by the switch rule (`rate`: the tempo, Pro units per hour). */
 export function overviewAccounts(
   active: Account | undefined,
@@ -38,16 +53,14 @@ export function overviewAccounts(
     const u = usage[account.id];
     let state: OverviewState;
     let availableAt: string | undefined;
+    const full = limitFull(u, now);
     if (!account.desktop) state = "not-linked";
     else if (!freshUsage(u, now)) state = "unknown";
-    else {
-      const full = (quotaWindows(u) ?? []).filter((w) => w.usedPercent >= 100);
-      if (full.length) {
-        state = "exhausted";
-        availableAt = full.map((w) => w.resetsAt).filter((r): r is string => !!r).sort().at(-1);
-      } else if (u.fiveHour?.resetsAt && Date.parse(u.fiveHour.resetsAt) > now) state = "window-open";
-      else state = "ready";
-    }
+    else if (full) {
+      state = "exhausted";
+      availableAt = full.availableAt;
+    } else if (u.fiveHour?.resetsAt && Date.parse(u.fiveHour.resetsAt) > now) state = "window-open";
+    else state = "ready";
     const pick = !recommended && (state === "ready" || state === "window-open");
     if (pick) recommended = true;
     return { account, usage: u, state, availableAt, recommended: pick };

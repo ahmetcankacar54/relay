@@ -79,7 +79,9 @@ test("panelRowState explains why a switch is unavailable", () => {
   assert.deepEqual(panelRowState(row("ready"), idle), { canSwitch: true });
   assert.deepEqual(panelRowState(row("window-open"), idle), { canSwitch: true });
   assert.deepEqual(panelRowState(row("not-linked"), idle), { canSwitch: false, reason: "not-linked" });
-  assert.deepEqual(panelRowState(row("exhausted"), idle), { canSwitch: false, reason: "exhausted" });
+  // A full account can be switched to; the switch says its limit is full.
+  assert.deepEqual(panelRowState(row("exhausted"), idle), { canSwitch: true, full: true });
+  assert.deepEqual(panelRowState(row("exhausted"), { ...idle, desktopBusy: true }), { canSwitch: false, reason: "busy" });
   assert.deepEqual(panelRowState(row("ready"), { ...idle, desktopBusy: true }), { canSwitch: false, reason: "busy" });
   assert.deepEqual(panelRowState(row("ready"), { ...idle, pendingDesktop: a }), { canSwitch: false, reason: "pending" });
   assert.deepEqual(
@@ -371,6 +373,26 @@ test("confirm state warns before switching", () => {
   const strip = html.slice(html.indexOf('data-slot="switch-confirm"'));
   assert.match(strip, /Claude uygulaması kapanır ve <b>Vertex<\/b> hesabıyla yeniden açılır/);
   assert.match(strip, /<button[^>]*>Vazgeç<\/button><button[^>]*>Geç<\/button>/);
+});
+
+test("a full account keeps a tinted switch, and its confirmation says when the limit opens", () => {
+  const full = acct("full", "Dolu");
+  const usage = { ...baseUsage, full: use("full", 100, 40, NOW + 90 * 60_000) };
+  const [row] = panelRows(render(relayFor(active, [active, full], usage))).filter((r) => r.includes(">Dolu<"));
+  // Not dimmed and not refused: the row switches, with an amber "Geç" where others have a chevron.
+  assert.doesNotMatch(row, /^<button[^>]*class="[^"]*opacity-60/);
+  assert.match(row, /aria-label="Dolu hesabına geç · [^"]* · Limit dolu · [^"]+ açılır \(1 sa 30 dk\)"/);
+  assert.match(row, /<span class="[^"]*border-warn\/40 bg-warn\/10 text-warn-foreground[^"]*">Geç<\/span><\/button>$/);
+  assert.match(row, /title="[^"]*Limit dolu · [^"]+ açılır \(1 sa 30 dk\)"/);
+  // The confirmation strip says it first, and its Geç stays enabled.
+  const html = wrap(relayFor(active, [active, full], usage), createElement(PanelAccounts, { now: NOW, initialConfirm: "full" }));
+  const strip = html.slice(html.indexOf('data-slot="switch-confirm"'));
+  assert.match(strip, /<b data-slot="switch-confirm-full" class="block">Limit dolu · [^<]+ açılır \(1 sa 30 dk\)<\/b>/);
+  assert.match(strip, /<button[^>]*>Vazgeç<\/button><button(?![^>]*disabled="")[^>]*>Geç<\/button>/);
+  // Busy Claude still refuses it, like any other row.
+  const busy = panelRows(render(relayFor(active, [active, full], usage, { desktopBusy: true }))).find((r) => r.includes(">Dolu<"))!;
+  assert.match(busy, /^<button[^>]*class="[^"]*opacity-60/);
+  assert.doesNotMatch(busy, />Geç</);
 });
 
 test("a running switch replaces the confirm box with progress", () => {

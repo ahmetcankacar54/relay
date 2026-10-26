@@ -1,7 +1,9 @@
-import fs from "node:fs";
-import path from "node:path";
-import { writeBytes } from "../../../electron/core/desktop-files";
-import { acquireProfileLock } from "../../../electron/core/profile-lock";
+import {
+  AccountRemovalRefused,
+  removalBlock,
+  removeAccount,
+  type RemovalBlock,
+} from "../../../electron/core/account-removal";
 import { redact } from "../../../electron/core/redact";
 import { resolveAccount } from "../accounts";
 import { runClaude } from "../claude-cli";
@@ -16,20 +18,19 @@ export const remove: Command = async ({ io, deps, parsed, t }) => {
     throw new CliError(t("Kullanım: relay remove <ad>", "Usage: relay remove <name>"), EXIT.usage);
   const ctx = await openContext(io, deps, parsed.flags, { write: true, desktop: false });
   const account = resolveAccount(ctx.store.state.accounts, query, t);
-  const state = await ctx.desktop.snapshot();
-  if (state.activeProfileId === account.id)
+  const refuse = (reason: RemovalBlock): never => {
     throw new CliError(
-      t(
-        `${account.name} şu an Claude uygulamasında açık. Önce başka bir hesaba geç: relay switch <ad>`,
-        `${account.name} is signed in to the Claude app now. Switch to another account first: relay switch <name>`,
-      ),
+      reason === "active"
+        ? t(
+            `${account.name} şu an Claude uygulamasında açık. Önce başka bir hesaba geç: relay switch <ad>`,
+            `${account.name} is signed in to the Claude app now. Switch to another account first: relay switch <name>`,
+          )
+        : t("Bu hesabın girişi yarım kaldı; önce relay add --cancel çalıştır.", "This account’s sign-in is pending; run relay add --cancel first."),
       EXIT.busy,
     );
-  if (state.pendingProfileId === account.id)
-    throw new CliError(
-      t("Bu hesabın girişi yarım kaldı; önce relay add --cancel çalıştır.", "This account’s sign-in is pending; run relay add --cancel first."),
-      EXIT.busy,
-    );
+  };
+  const blocked = removalBlock(account.id, await ctx.desktop.snapshot());
+  if (blocked) refuse(blocked);
   await confirm(
     io,
     t,
@@ -41,42 +42,37 @@ export const remove: Command = async ({ io, deps, parsed, t }) => {
     ],
     ctx.yes,
   );
-  const release = acquireProfileLock(ctx.paths.locks, account.id, "exclusive");
+  const claude = ctx.deps.claude(ctx.store.state.executable);
+  let removed;
   try {
-    const profile = ctx.store.profile(account.id);
-    if (account.auth?.loggedIn) {
-      const claude = ctx.deps.claude(ctx.store.state.executable);
-      let signedOut = false;
-      if (claude)
-        try {
-          signedOut = (await runClaude(ctx.deps, claude, ["auth", "logout"], profile, { timeoutMs: 30_000, env: io.env })) === 0;
-        } catch (error) {
-          io.stderr(`relay: ${redact(error)}`);
-        }
-      if (!signedOut)
-        io.stderr(
-          t(
-            "Uyarı: Limit okuma girişinden çıkış yapılamadı; Anahtarlık’taki kaydı kalabilir.",
-            "Warning: could not sign out of the usage sign-in; its Keychain item may remain.",
-          ),
-        );
-    }
-    fs.rmSync(profile, { recursive: true, force: true });
-    if (account.desktop)
-      await writeBytes(ctx.paths.vault, `accounts/${account.desktop.accountUuid.toLowerCase()}.bin`, null);
-    // The Claude extension's saved sign-in goes with the account (kept under either uuid it has).
-    for (const uuid of new Set([account.desktop?.accountUuid, account.auth?.accountUuid]))
-      if (uuid) await writeBytes(ctx.paths.vault, `extension/${uuid.toLowerCase()}.bin`, null);
-    ctx.store.update((s) => {
-      s.accounts = s.accounts.filter((a) => a.id !== account.id);
-      s.settings.desktopHistoryAccounts = s.settings.desktopHistoryAccounts.filter((id) => id !== account.id);
-      s.settings.autoSwitchAccounts = s.settings.autoSwitchAccounts.filter((id) => id !== account.id);
-      s.settings.planning.accounts = s.settings.planning.accounts.filter((a) => a.id !== account.id);
+    // The shared core checks Desktop again, so a switch made while the question was open still counts.
+    removed = await removeAccount(account.id, {
+      store: ctx.store,
+      vault: ctx.paths.vault,
+      locks: ctx.paths.locks,
+      desktop: () => ctx.desktop.snapshot(),
+      signOut: claude
+        ? async (profile) => {
+            try {
+              return (await runClaude(ctx.deps, claude, ["auth", "logout"], profile, { timeoutMs: 30_000, env: io.env })) === 0;
+            } catch (error) {
+              io.stderr(`relay: ${redact(error)}`);
+              return false;
+            }
+          }
+        : undefined,
     });
-  } finally {
-    release();
-    fs.rmSync(path.join(ctx.paths.locks, account.id), { recursive: true, force: true });
+  } catch (error) {
+    if (error instanceof AccountRemovalRefused) refuse(error.reason);
+    throw error;
   }
+  if (removed.signedOut === false)
+    io.stderr(
+      t(
+        "Uyarı: Limit okuma girişinden çıkış yapılamadı; Anahtarlık’taki kaydı kalabilir.",
+        "Warning: could not sign out of the usage sign-in; its Keychain item may remain.",
+      ),
+    );
   io.stdout(t(`${account.name} unutuldu.`, `Forgot ${account.name}.`));
   return EXIT.ok;
 };

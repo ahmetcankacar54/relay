@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountTileLine, panelRowLine, ringState } from "../src/lib/account-row";
+import {
+  accountTileLine,
+  fullLimitNote,
+  fullLimitWarning,
+  panelRowLine,
+  ringState,
+} from "../src/lib/account-row";
 import type { OverviewRow } from "../src/data/selectors";
 import type { Account, AccountUsage, UsageIssue } from "../shared/types";
 
@@ -90,4 +96,23 @@ test("the panel line leads with the percents and says an old reading's age", () 
   const five = use(40, 0);
   delete five.sevenDay;
   assert.equal(panelRowLine(row("window-open", five), tr, "tr", "UTC", NOW), "%40 · dönem açık 3 sa 10 dk kaldı");
+});
+
+test("a full account's switch says when its limit opens, in days once it is a day away", () => {
+  const soon = iso(NOW + 90 * 60_000);
+  assert.equal(fullLimitNote(soon, tr, "tr", "UTC", NOW), "Limit dolu · 11:30’da açılır (1 sa 30 dk)");
+  assert.equal(fullLimitNote(soon, en, "en", "UTC", NOW), "Limit is full · opens 11:30 (1 h 30 m)");
+  assert.equal(fullLimitNote(iso(NOW + 2 * 86_400_000), tr, "tr", "UTC", NOW), "Limit dolu · 10:00’da açılır (2 gün)");
+  // Unknown, or already past: only that it is full.
+  assert.equal(fullLimitNote(undefined, tr, "tr", "UTC", NOW), "Limit dolu");
+  assert.equal(fullLimitNote(iso(NOW - 60_000), en, "en", "UTC", NOW), "Limit is full");
+  assert.equal(
+    fullLimitWarning(soon, tr, "tr", "UTC", NOW),
+    "Bu hesabın limiti dolu; 11:30’da açılır (1 sa 30 dk sonra). O zamana kadar bu hesapla yeni mesaj gönderemezsin.",
+  );
+  assert.equal(
+    fullLimitWarning(soon, en, "en", "UTC", NOW),
+    "This account’s limit is full; it opens at 11:30 (in 1 h 30 m). Until then you can’t send new messages on it.",
+  );
+  assert.match(fullLimitWarning(undefined, tr, "tr", "UTC", NOW), /ne zaman açılacağı bilinmiyor/);
 });

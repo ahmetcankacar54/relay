@@ -299,6 +299,23 @@ export class UsageManager {
       this.serverRetryUntil.delete(id);
     }
   }
+  /**
+   * Drops everything kept for a removed account. A read still running is ignored when it ends,
+   * and its failure to find the account is nobody's to report.
+   */
+  forget(id: string) {
+    this.inflight.get(id)?.catch(() => {});
+    this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
+    for (const map of [
+      this.inflight,
+      this.cache,
+      this.identities,
+      this.nextAttempt,
+      this.serverRetryUntil,
+      this.failures,
+    ])
+      map.delete(id);
+  }
   snapshot(): Record<string, AccountUsage> {
     return Object.fromEntries(
       this.store.state.accounts.map((a) => [a.id, this.view(a)]),

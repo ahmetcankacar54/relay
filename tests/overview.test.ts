@@ -4,6 +4,8 @@ import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Overview } from "../src/pages/Overview";
 import { AutomationCard } from "../src/pages/overview/AutomationCard";
+import { AccountsCard } from "../src/pages/overview/AccountsCard";
+import { DesktopActionBody } from "../src/app/DesktopActionDialog";
 import type { PageId } from "../src/app/routes";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 import { RelayContext, type Relay } from "../src/data/relay-context";
@@ -634,6 +636,71 @@ test("every account that can be switched to has its own Geç, filled only for th
   // Without a Claude app sign-in there is nothing to switch to: the row opens the account.
   assert.equal(geç("Studio"), null);
   assert.equal(switchButtons(html).length, 2);
+});
+
+test("a full account keeps its switch on the Overview, tinted, and the review says when it opens", async () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const full = acct("full", "Dolu", "pro");
+  const usage = { active: use("active", 10, 10), full: use("full", 100, 40, NOW + 90 * 60_000) };
+  const requested: string[] = [];
+  const relay = relayFor(active, [active, full], usage, {
+    requestDesktop: (account: Account, kind: string) => void requested.push(`${account.id}:${kind}`),
+  });
+  const row = rowFor(render(relay), "Dolu");
+  // Not dimmed: its switch is there, amber instead of the quiet outline, and says why.
+  assert.doesNotMatch(row, /opacity-60/);
+  const [button = ""] = switchButtons(render(relay));
+  assert.match(button, /aria-label="Dolu hesabına geç · Limit dolu · [^"]+ açılır \(1 sa 30 dk\)"/);
+  assert.match(button, /class="[^"]*border-warn\/40 bg-warn\/10 text-warn-foreground/);
+  // Clicking it opens the same review as any switch.
+  const dom = fakeDom();
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, createElement(AccountsCard, { go: () => {}, now: NOW })),
+        ),
+      ),
+    );
+    const label = (n: Fake) => (n as { attributes?: Map<string, string> }).attributes?.get("aria-label") ?? "";
+    const target = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && label(n).startsWith("Dolu hesabına geç"));
+    assert.ok(target);
+    await act(async () => dom.dispatch(target as never, "click", { detail: 1 }));
+    assert.deepEqual(requested, ["full:switch"]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+  // The review before the switch says the limit is full and when it opens.
+  const review = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      createElement(
+        RelayContext.Provider,
+        { value: relayFor(active, [active, full], usage, { desktopRequest: { accountId: "full", kind: "switch" } }) },
+        createElement(DesktopActionBody),
+      ),
+    ),
+  );
+  assert.match(review, /data-slot="switch-full-limit"[^>]*>Bu hesabın limiti dolu; [^<]+ açılır \(1 sa 30 dk sonra\)\. O zamana kadar bu hesapla yeni mesaj gönderemezsin\.</);
+  const plain = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      createElement(
+        RelayContext.Provider,
+        { value: relayFor(active, [active, full], { ...usage, full: use("full", 20, 40) }, { desktopRequest: { accountId: "full", kind: "switch" } }) },
+        createElement(DesktopActionBody),
+      ),
+    ),
+  );
+  assert.doesNotMatch(plain, /switch-full-limit/);
 });
 
 test("Overview rings say how far each reading can be trusted, and the key explains the faded ones", () => {

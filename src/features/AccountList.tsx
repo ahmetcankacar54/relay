@@ -14,7 +14,8 @@ import { cn } from "@/lib/utils";
  * dashed track is drawn (`ringState`). In the menu bar panel the whole row is the switch (`pick`)
  * and the suggested row shows "Switch"; in the app the row opens the account (`href`) and every
  * account that can be switched to now has its own "Switch" button, filled for the suggested one and
- * quiet for the rest. A row that cannot be switched to ends in a chevron.
+ * quiet for the rest. An account whose limit is full can still be switched to: its "Switch" is
+ * tinted amber and says when it opens (`warn`). A row that cannot be switched to ends in a chevron.
  */
 export function AccountList({
   rows,
@@ -24,6 +25,7 @@ export function AccountList({
   selected,
   switching,
   blocked,
+  warn,
   pick,
   href,
   variant = "app",
@@ -42,6 +44,8 @@ export function AccountList({
   switching?: string;
   /** Why a row cannot be switched to now; undefined when it can. */
   blocked?: (row: OverviewRow) => string | undefined;
+  /** What to know before switching to a row that can be switched to (its limit is full). */
+  warn?: (row: OverviewRow) => string | undefined;
   /** The switch (or, for an account without a Claude app sign-in, its setup). */
   pick: (row: OverviewRow, event: MouseEvent<HTMLElement>) => void;
   /** In the app: where the row leads (the account's page). */
@@ -65,6 +69,7 @@ export function AccountList({
         const week = usage?.sevenDay?.usedPercent;
         const why = blocked?.(row);
         const busy = switching === account.id;
+        const caution = why ? undefined : warn?.(row);
         const ring = ringState(usage, now);
         const said = [
           account.name,
@@ -74,10 +79,12 @@ export function AccountList({
         ]
           .filter(Boolean)
           .join(" · ");
-        const offer = row.recommended && !why && !busy;
+        const offer = (row.recommended || !!caution) && !why && !busy;
         // The app offers a switch on every account that can take one now; the panel row is the switch itself.
         const switchable = !why && !busy && (canSwitch?.(row) ?? true);
-        const tooltip = [title?.(row) ?? line(row), why].filter(Boolean).join(" · ");
+        const tooltip = [title?.(row) ?? line(row), why ?? caution].filter(Boolean).join(" · ");
+        // Amber, never the suggested blue: switching there works, but the limit is used up.
+        const tinted = "border border-warn/40 bg-warn/10 text-warn-foreground";
         const body = (
           <>
             <UsageRing outer={five} inner={week ?? null} size={panel ? 32 : 38} label={said} state={ring} />
@@ -138,13 +145,20 @@ export function AccountList({
                   <button
                     type="button"
                     disabled={!!switching}
-                    aria-label={t(`${account.name} hesabına geç`, `Switch to ${account.name}`)}
+                    aria-label={
+                      caution
+                        ? t(`${account.name} hesabına geç · ${caution}`, `Switch to ${account.name} · ${caution}`)
+                        : t(`${account.name} hesabına geç`, `Switch to ${account.name}`)
+                    }
+                    title={caution}
                     onClick={(e) => pick(row, e)}
                     className={cn(
                       "h-7 shrink-0 rounded-md px-3 text-xs font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50",
-                      row.recommended
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                        : "border bg-card text-foreground hover:bg-muted",
+                      caution
+                        ? `${tinted} hover:bg-warn/20`
+                        : row.recommended
+                          ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                          : "border bg-card text-foreground hover:bg-muted",
                     )}
                   >
                     {t("Geç", "Switch")}
@@ -158,7 +172,10 @@ export function AccountList({
                 type="button"
                 aria-pressed={selected === account.id}
                 aria-label={
-                  why ? `${said} · ${why}` : t(`${account.name} hesabına geç · ${said}`, `Switch to ${account.name} · ${said}`)
+                  why
+                    ? `${said} · ${why}`
+                    : t(`${account.name} hesabına geç · ${said}`, `Switch to ${account.name} · ${said}`) +
+                      (caution ? ` · ${caution}` : "")
                 }
                 title={tooltip}
                 disabled={!!switching}
@@ -167,7 +184,12 @@ export function AccountList({
               >
                 {body}
                 {offer ? (
-                  <span className="shrink-0 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground">
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold",
+                      caution ? tinted : "bg-primary text-primary-foreground",
+                    )}
+                  >
                     {t("Geç", "Switch")}
                   </span>
                 ) : (

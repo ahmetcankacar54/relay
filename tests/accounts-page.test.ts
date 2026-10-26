@@ -6,6 +6,7 @@ import { Accounts, AccountsEmpty } from "../src/pages/Accounts";
 import { AccountDetail, AccountDetailBody, accountFromHash, accountHash, historyLine } from "../src/pages/accounts/AccountDetail";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
+import { RemoveAccountBody, removedNotice } from "../src/pages/accounts/RemoveAccountDialog";
 import { filterAccounts, groupName, planColumn, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -182,7 +183,7 @@ test("the menu offers a prompting renewal only while the Keychain or the connect
   }
   // It sits with the sign-in items, before Refresh limits.
   assert.deepEqual(keys(relayWithUsage("a", usageOf("a", "renewal-required"))), [
-    "open", "cli", "renew", "desktop-reconnect", "refresh",
+    "open", "cli", "renew", "desktop-reconnect", "refresh", "remove",
   ]);
   // It asks the Keychain, where Refresh limits does not: the prompt is the fix.
   const calls: unknown[][] = [];
@@ -499,11 +500,13 @@ test("row actions follow the Desktop link state and the switch lock", () => {
     "Limit okuma girişini yenile",
     "Claude uygulaması girişini yenile…",
     "Limitleri yenile",
+    "Hesabı kaldır",
   ]);
   assert.deepEqual(labels(b, relay), [
     "Limit okuma girişi yap",
     "Claude uygulaması girişini kaydet",
     "Limitleri yenile",
+    "Hesabı kaldır",
   ]);
   const unlinkedActive = { ...a, desktop: undefined };
   const labelsUnlinked = labels(unlinkedActive, relayFor({ active: unlinkedActive }));
@@ -846,4 +849,129 @@ test("a search that matches nothing is named and can be cleared", () => {
   const filtered = wrap(relayFor(), createElement(AccountsEmpty, { hasAccounts: true, query: "", clearQuery() {} }));
   assert.match(filtered, /Eşleşen hesap yok/);
   assert.doesNotMatch(filtered, /Aramayı temizle/);
+});
+
+test("the menu offers to remove an account, except the one open in the Claude app, and says why", () => {
+  const t = (tr: string) => tr;
+  const asked: string[] = [];
+  const removeOf = (acct: Account, relay: Relay) =>
+    rowActions(acct, relay, t, undefined, { remove: (id) => asked.push(id) }).find((x) => x.key === "remove")!;
+  const relay = relayOf();
+  // The active account cannot go: switch first.
+  const active = removeOf(a, relay);
+  assert.equal(active.label, "Hesabı kaldır");
+  assert.equal(active.tone, "destructive");
+  assert.equal(active.disabled, true);
+  assert.equal(active.note, "Önce başka bir hesaba geç");
+  // Another account can; choosing it asks (the dialog), it does not remove.
+  const other = removeOf(c, relay);
+  assert.equal(other.disabled, false);
+  assert.equal(other.note, undefined);
+  other.run();
+  assert.deepEqual(asked, ["c"]);
+  // Main refuses these too; the menu says so first.
+  for (const [extra, note] of [
+    [{ desktopBusy: true }, "Claude uygulamasında bir işlem sürüyor"],
+    [{ pendingDesktop: c }, "Önce Claude uygulaması girişini tamamla ya da iptal et"],
+  ] as [Partial<Relay>, string][]) {
+    const item = removeOf(c, relayOf(extra));
+    assert.equal(item.disabled, true, note);
+    assert.equal(item.note, note);
+  }
+  const pending = { id: "f", accountId: "c", status: "waiting" };
+  assert.equal(removeOf(c, relayOf({}, {}, [pending])).note, "Önce limit okuma girişini tamamla ya da iptal et");
+  const running = relayOf();
+  (running.data as { runs?: unknown[] }).runs = [{ accountId: "c", status: "running" }];
+  assert.equal(removeOf(c, running).note, "Önce çalışan oturumu durdur");
+  // In English too.
+  const en = rowActions(a, relay, (_: string, english: string) => english).find((x) => x.key === "remove")!;
+  assert.equal(en.label, "Remove account");
+  assert.equal(en.note, "Switch to another account first");
+});
+
+test("the remove dialog says what goes and what stays, and removes only on confirm", async () => {
+  const removed: string[] = [];
+  const notices: string[] = [];
+  const calls: string[] = [];
+  const relay = relayOf({
+    api: { removeAccount: async (id: string) => (calls.push(id), { signedOut: true }) } as unknown as Relay["api"],
+    action: async (_key: string, fn: () => Promise<unknown>) => void (await fn()),
+    setNotice: (text: string) => void notices.push(text),
+  });
+  const body = () => createElement(RemoveAccountBody, { account: c, close() {}, removed: (id: string) => void removed.push(id) });
+  const html = wrap(relay, body());
+  // The CLI's own confirmation, then the two lists.
+  assert.match(html, /Üçüncü unutulacak: kayıtlı Claude uygulaması girişi ve Claude Code profili \(limit okuma girişi\) silinir\. Claude uygulamasının kendi verisine dokunulmaz\./);
+  assert.match(html, /data-slot="remove-goes".*Silinir.*Kayıtlı Claude uygulaması girişi.*Tarayıcı eklentisi için saklanan giriş/);
+  assert.match(html, /data-slot="remove-stays".*Kalır.*Claude uygulamasının kendi verisi.*Kullanım geçmişi ve token sayıları/);
+  assert.match(html, /<button[^>]*data-variant="ghost"[^>]*>Vazgeç<\/button><button[^>]*data-variant="destructive"[^>]*>.*Hesabı kaldır<\/button>/);
+  assert.equal(calls.length, 0);
+  // Confirming removes through the API, says so, and lets the page go back.
+  const dom = fakeDom();
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, body()),
+        ),
+      ),
+    );
+    type Node = { tagName?: string; attributes: Map<string, string>; childNodes: Node[] };
+    const all = (n: Node, found: Node[] = []): Node[] => {
+      found.push(n);
+      for (const child of n.childNodes) all(child, found);
+      return found;
+    };
+    const button = all(dom.container as unknown as Node).find(
+      (n) => n.tagName === "button" && n.attributes.get("data-variant") === "destructive",
+    );
+    assert.ok(button);
+    await act(async () => dom.dispatch(button as never, "click", { detail: 1 }));
+    await act(async () => {});
+    assert.deepEqual(calls, ["c"]);
+    assert.deepEqual(removed, ["c"]);
+    assert.deepEqual(notices, ["Üçüncü kaldırıldı."]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+  // A usage sign-in left signed in is said.
+  assert.equal(
+    removedNotice("Üçüncü", { signedOut: false }, (tr) => tr),
+    "Üçüncü kaldırıldı. Limit okuma girişinden çıkış yapılamadı; Anahtarlık’taki kaydı kalabilir.",
+  );
+  assert.equal(removedNotice("C", {}, (_, en) => en), "Removed C.");
+});
+
+test("a full account keeps its switch, tinted amber, saying when its limit opens", () => {
+  const t = (tr: string) => tr;
+  const full = (now: number): Record<string, AccountUsage> => ({
+    c: {
+      accountId: "c", status: "ready", stale: false, checkedAt: iso(now - 60_000),
+      fiveHour: { usedPercent: 100, resetsAt: iso(now + 90 * 60_000) },
+      sevenDay: { usedPercent: 40, resetsAt: iso(now + 3 * 86_400_000) },
+    },
+  });
+  const zone = DEFAULT_SETTINGS.planning.timeZone;
+  const opens = new Intl.DateTimeFormat("tr-TR", { timeZone: zone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(NOW + 90 * 60_000);
+  const sw = rowActions(c, relayOf({}, full(NOW)), t, undefined, { now: NOW }).find((x) => x.key === "switch")!;
+  assert.equal(sw.disabled, false);
+  assert.equal(sw.tone, "warn");
+  assert.match(sw.note ?? "", new RegExp(`^Limit dolu · ${opens}’[a-z]+ açılır \\(1 sa 30 dk\\)$`));
+  // An account with room has a plain switch.
+  const plain = rowActions(c, relayOf(), t, undefined, { now: NOW }).find((x) => x.key === "switch")!;
+  assert.equal(plain.tone, undefined);
+  assert.equal(plain.note, undefined);
+  // The account's page: the switch is its primary action, tinted, with the note beside it.
+  const header = headerOf(c, {}, full(Date.now()));
+  const [primary] = primaryButtons(header);
+  assert.match(primary, /class="[^"]*bg-warn\/10[^"]*text-warn-foreground/);
+  assert.match(primary, /title="Limit dolu · [^"]+ açılır \([^"]+\)"/);
+  assert.match(primary, />Geç<\/button>$/);
+  assert.match(header, /data-slot="switch-note"[^>]*>Limit dolu · /);
 });
