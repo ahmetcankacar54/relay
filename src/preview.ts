@@ -301,6 +301,8 @@ const desktop: DesktopState = {
 const scenario = import.meta.env.DEV
   ? new URLSearchParams(location.search).get("scenario")
   : null;
+// The macOS-only parts of Settings, such as the menu bar's items.
+if (scenario === "macos") state.diagnostics.platform = "darwin";
 if (scenario === "unlinked" || scenario === "unlinked-no-code") {
   for (const account of accounts) delete account.desktop;
   desktop.activeProfileId = undefined;

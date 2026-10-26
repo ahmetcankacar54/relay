@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, ChevronUp, CircleAlert } from "lucide-react";
+import { Check, CircleAlert } from "lucide-react";
 import { PageFrame } from "@/app/PageFrame";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -14,17 +14,10 @@ import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import type {
   ClaudeLaunchChoice,
-  MenuBarItem,
-  MenuBarNow,
   PrankLevel,
   RelaySettings,
 } from "../../shared/types";
-import {
-  DEFAULT_MENU_BAR_ITEMS,
-  MENU_BAR_ITEMS,
-  MENU_BAR_MAX_ITEMS,
-  menuBarPreview,
-} from "../../shared/tray";
+import { MenuBarTitleRows } from "./settings/MenuBarItems";
 import { chooseCliFile } from "../features/CliSetup";
 import { chooseClaudeApp } from "../features/ClaudeAppSetup";
 import { WarningThreshold } from "./Usage";
@@ -78,186 +71,6 @@ function ClaudeLaunchRow({
         onCheckedChange={(quicOff) => change({ quicOff })}
       />
     </SettingRow>
-  );
-}
-
-/** Why an item shows nothing for the account open in the Claude app now. */
-const MENU_BAR_ITEM_MISSING: Record<MenuBarItem, readonly [tr: string, en: string]> = {
-  "five-hour": ["şu an limit verisi yok", "no usage data now"],
-  week: ["bu hesap haftalık limit bildirmiyor", "this account reports no weekly limit"],
-  reset: ["5 saatlik dönem henüz başlamadı", "the 5-hour period has not started"],
-  tokens: ["bugünün toplamı henüz hazır değil", "today’s total is not ready yet"],
-  cost: ["bugünün toplamı henüz hazır değil", "today’s total is not ready yet"],
-  account: ["Claude uygulamasında açık hesap yok", "no account open in the Claude app"],
-};
-
-/** Each menu bar item's name in Settings. */
-const MENU_BAR_ITEM_LABELS: Record<MenuBarItem, readonly [tr: string, en: string]> = {
-  "five-hour": ["5 saatlik kullanım", "5-hour usage"],
-  week: ["Haftalık kullanım", "Weekly usage"],
-  reset: ["5 saatlik dönemin kalan süresi", "Time left in the 5-hour period"],
-  tokens: ["Bugünkü token", "Tokens today"],
-  cost: ["Bugünkü API karşılığı", "API value today"],
-  account: ["Hesap adı", "Account name"],
-};
-
-/** The items of `order` that are in `chosen`, in `order`'s order. */
-const chosenIn = (order: readonly MenuBarItem[], chosen: readonly MenuBarItem[]) =>
-  order.filter((item) => chosen.includes(item));
-
-/**
- * What the menu bar title shows: each item on or off, with a preview of the title. The title reads
- * the switched-on rows from top to bottom; a row moves only by its arrows, past the switched-on row
- * before or after it, never when switched, so the next switch is still under the pointer. The choice
- * lives outside the registry, so these rows read and save it themselves; main redraws the title at once.
- */
-export function MenuBarTitleRows({
-  api,
-  action,
-  data,
-  name,
-  t,
-  language,
-}: Pick<ReturnType<typeof useRelay>, "api" | "action"> & {
-  /** Relay's state; each change reads the menu bar again. */
-  data?: unknown;
-  /** The account open in the Claude app, for the name item's sample. */
-  name?: string;
-  t: ReturnType<typeof useI18n>["t"];
-  language: Language;
-}) {
-  const [items, setItems] = useState<MenuBarItem[]>();
-  // What the menu bar shows now, for the account open in the Claude app; samples without it.
-  const [now, setNow] = useState<MenuBarNow>();
-  const readNow = () =>
-    Promise.resolve()
-      .then(() => api.menuBarNow())
-      .then(setNow)
-      .catch(() => setNow(undefined));
-  useEffect(() => {
-    void readNow();
-  }, [api, data]);
-  // The rows: at first the chosen items in their order, then the others in Settings' order.
-  const [order, setOrder] = useState<MenuBarItem[]>([...MENU_BAR_ITEMS]);
-  useEffect(() => {
-    let live = true;
-    const show = (chosen: MenuBarItem[]) => {
-      if (!live) return;
-      setItems(chosen);
-      setOrder([...chosen, ...MENU_BAR_ITEMS.filter((item) => !chosen.includes(item))]);
-    };
-    api
-      .menuBarTitle()
-      .then((choice) => show(choice.items))
-      .catch(() => show([...DEFAULT_MENU_BAR_ITEMS]));
-    return () => {
-      live = false;
-    };
-  }, [api]);
-  const save = (next: MenuBarItem[]) =>
-    void action("menu-bar-title", async () => {
-      setItems((await api.setMenuBarTitle({ items: next })).items);
-      await readNow();
-    });
-  const chosen = chosenIn(order, items ?? []);
-  const full = chosen.length >= MENU_BAR_MAX_ITEMS;
-  const toggle = (item: MenuBarItem, on: boolean) =>
-    save(chosenIn(order, on ? [...chosen, item] : chosen.filter((i) => i !== item)));
-  // The row trades places with the switched-on row before or after it; the rows between stay.
-  const move = (item: MenuBarItem, by: -1 | 1) => {
-    const other = chosen[chosen.indexOf(item) + by];
-    if (!other) return;
-    const next = order.map((i) => (i === item ? other : i === other ? item : i));
-    setOrder(next);
-    save(chosenIn(next, chosen));
-  };
-  const sample = name ?? "Max";
-  const preview = items && menuBarPreview(items, language, sample);
-  return (
-    <div className="border-t border-border py-3 first:border-t-0">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <span id="menu-bar-title-label" className="text-sm font-medium">
-            {t("Menü çubuğunda göster", "Show in the menu bar")}
-          </span>
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
-            {t(
-              `Yüzdeler ve süre, Claude uygulamasında açık hesabın; token ve API karşılığı tüm hesaplarının bugünkü toplamı. En çok ${MENU_BAR_MAX_ITEMS} değer seçebilirsin; sıra menü çubuğundaki sıradır. Limitler okunamazsa son okunan değer başında ~ ile kalır. Simgeyi ⌘ tuşuyla sürükleyip taşırsan yeri hatırlanır.`,
-              `Percents and time are for the account open in the Claude app; tokens and API value are today’s total across all your accounts. Pick up to ${MENU_BAR_MAX_ITEMS}; the order is the menu bar’s. If limits cannot be read, the last reading stays, marked with ~. Drag the icon with ⌘ to move it; its place is kept.`,
-            )}
-          </p>
-        </div>
-        {items && (
-          <span className="flex shrink-0 items-center gap-2">
-            {now && (
-              <span className="text-xs text-muted-foreground">{t("Şu an", "Now")}</span>
-            )}
-            <span
-              data-slot="menu-bar-preview"
-              className="rounded-md border bg-muted/40 px-2 py-0.5 text-sm font-medium whitespace-pre tabular-nums"
-              title={now ? t("Menü çubuğunda şu an", "In the menu bar now") : t("Önizleme", "Preview")}
-            >
-              {(now ? now.title : preview) || t("Yalnızca panda", "Panda only")}
-            </span>
-          </span>
-        )}
-      </div>
-      <ul aria-labelledby="menu-bar-title-label" className="mt-2 grid gap-0.5">
-        {order.map((item) => {
-          const on = chosen.includes(item);
-          const place = chosen.indexOf(item);
-          const [tr, en] = MENU_BAR_ITEM_LABELS[item];
-          const label = t(tr, en);
-          return (
-            <li key={item} data-item={item} className="flex min-h-7 items-center gap-3">
-              <Switch
-                id={`menu-bar-item-${item}`}
-                checked={on}
-                disabled={!items || (!on && full)}
-                onCheckedChange={(checked) => items && toggle(item, checked)}
-              />
-              <label htmlFor={`menu-bar-item-${item}`} className="min-w-0 flex-1 truncate text-sm">
-                {label}{" "}
-                {now && !now.values[item] ? (
-                  // Nothing to show for this account now: say why, so a switch that changes nothing is clear.
-                  <span data-slot="menu-bar-missing" className="text-muted-foreground italic">
-                    {t(...MENU_BAR_ITEM_MISSING[item])}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground tabular-nums">
-                    {now ? now.values[item] : menuBarPreview([item], language, sample)}
-                  </span>
-                )}
-              </label>
-              {on && (
-                <span className="flex shrink-0 items-center gap-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={t(`${tr}: öne al`, `${en}: move earlier`)}
-                    title={t("Öne al", "Move earlier")}
-                    disabled={place === 0}
-                    onClick={() => move(item, -1)}
-                  >
-                    <ChevronUp />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={t(`${tr}: geriye al`, `${en}: move later`)}
-                    title={t("Geriye al", "Move later")}
-                    disabled={place === chosen.length - 1}
-                    onClick={() => move(item, 1)}
-                  >
-                    <ChevronDown />
-                  </Button>
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
   );
 }
 

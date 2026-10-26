@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
+import { moveItem, dropIndex } from "../src/pages/settings/MenuBarItems";
 import { Settings } from "../src/pages/Settings";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -333,147 +334,162 @@ test("the menu bar group says what the title can show, on macOS only", () => {
   for (const re of [
     /5 saatlik kullanım/, /Haftalık kullanım/, /5 saatlik dönemin kalan süresi/, /Bugünkü token/,
     /Bugünkü API karşılığı/, /Hesap adı/,
-    /Yüzdeler ve süre, Claude uygulamasında açık hesabın; token ve API karşılığı tüm hesaplarının bugünkü toplamı\. En çok 4 değer seçebilirsin; sıra menü çubuğundaki sıradır\. Limitler okunamazsa son okunan değer başında ~ ile kalır\./,
+    /Pandanın yanında görünecek değerleri seç ve sırala; en çok 4 değer\. Yüzdeler ve süre Claude uygulamasında açık hesabın, token ve API karşılığı tüm hesaplarının bugünkü toplamı\. Limitler okunamazsa son değer başında ~ ile kalır\./,
   ])
     assert.match(tr, re);
   // Each item shows a sample of what it puts in the title.
-  assert.match(tr, /Bugünkü token <span[^>]*>12,4M<\/span>/);
-  assert.match(tr, /Bugünkü API karşılığı <span[^>]*>\$18,20<\/span>/);
-  assert.match(tr, /5 saatlik dönemin kalan süresi <span[^>]*>1:50<\/span>/);
+  assert.match(tr, /Bugünkü token ?<span[^>]*>12,4M<\/span>/);
+  assert.match(tr, /Bugünkü API karşılığı ?<span[^>]*>\$18,20<\/span>/);
+  assert.match(tr, /5 saatlik dönemin kalan süresi ?<span[^>]*>1:50<\/span>/);
   const en = render("en");
-  for (const re of [/Show in the menu bar/, /Tokens today <span[^>]*>12\.4M<\/span>/, /API value today/, /marked with ~\./])
+  for (const re of [/Show in the menu bar/, /Tokens today ?<span[^>]*>12\.4M<\/span>/, /API value today/, /marked with ~\./])
     assert.match(en, re);
   for (const platform of ["win32", "linux"])
     assert.doesNotMatch(render("tr", platform), /Menü çubuğunda göster/, platform);
 });
 
-test("the menu bar title's items are switched on, ordered and saved through main", async () => {
+/** Settings on a fake DOM, with the menu bar choice kept in `state` and `saved`. */
+async function menuBarSettings(state: { items: string[]; now?: () => unknown }) {
   const dom = fakeDom();
   dom.install();
   readableText();
-  try {
-    const saved: unknown[] = [];
-    let items = ["five-hour"];
-    const relay = relayFor();
-    relay.api = {
-      ...relay.api,
-      menuBarTitle: async () => ({ items }),
-      setMenuBarTitle: async (choice: { items: string[] }) => {
-        saved.push(choice.items);
-        items = choice.items;
-        return { items };
-      },
-    } as unknown as Relay["api"];
-    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () =>
-      root.render(
-        createElement(
-          I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
-        ),
+  const saved: string[][] = [];
+  const relay = relayFor();
+  relay.api = {
+    ...relay.api,
+    menuBarTitle: async () => ({ items: state.items }),
+    setMenuBarTitle: async (choice: { items: string[] }) => {
+      saved.push(choice.items);
+      state.items = choice.items;
+      return { items: state.items };
+    },
+    ...(state.now ? { menuBarNow: async () => state.now!() } : {}),
+  } as unknown as Relay["api"];
+  relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(dom.container as unknown as Element);
+  await act(async () =>
+    root.render(
+      createElement(
+        I18nContext.Provider,
+        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
       ),
-    );
-    const container = dom.container as unknown as Fake;
-    const attr = (n: Fake | undefined, name: string) =>
-      (n?.attributes as Map<string, string> | undefined)?.get(name);
-    const item = (id: string) => find(container, (n) => attr(n, "id") === `menu-bar-item-${id}`);
-    const preview = () => textOf(find(container, (n) => attr(n, "data-slot") === "menu-bar-preview"));
-    const click = (node: Fake | undefined) => act(async () => dom.dispatch(node!, "click", { detail: 1 }));
-    // Until changed: the five-hour percent alone.
-    assert.equal(attr(item("five-hour"), "aria-checked"), "true");
-    assert.equal(attr(item("tokens"), "aria-checked"), "false");
-    assert.equal(preview(), "%40");
-    await click(item("tokens"));
-    assert.deepEqual(saved, [["five-hour", "tokens"]]);
-    assert.equal(preview(), "%40 · 12,4M");
-    // Moved one place earlier.
-    await click(find(container, (n) => attr(n, "aria-label") === "Bugünkü token: öne al"));
-    assert.deepEqual(saved.at(-1), ["tokens", "five-hour"]);
-    assert.equal(preview(), "12,4M · %40");
-    // The first can go no earlier, the last no later.
-    assert.equal(attr(find(container, (n) => attr(n, "aria-label") === "Bugünkü token: öne al"), "disabled"), "");
-    assert.equal(attr(find(container, (n) => attr(n, "aria-label") === "5 saatlik kullanım: geriye al"), "disabled"), "");
-    // The two rows traded places; the rows between stayed where they were.
-    const rows = (node: Fake = container): string[] =>
-      attr(node, "data-item") ? [attr(node, "data-item")!] : node.childNodes.flatMap((child) => rows(child));
-    assert.deepEqual(rows(), ["tokens", "week", "reset", "five-hour", "cost", "account"]);
-    // Switching never moves a row; the title reads the switched-on rows top to bottom.
-    await click(item("cost"));
-    await click(item("week"));
-    assert.deepEqual(rows(), ["tokens", "week", "reset", "five-hour", "cost", "account"]);
-    assert.deepEqual(saved.at(-1), ["tokens", "week", "five-hour", "cost"]);
-    assert.equal(preview(), "12,4M · %35 · %40 · $18,20");
-    // Four at most: the rest wait.
-    assert.equal(attr(item("account"), "disabled"), "");
-    assert.equal(attr(item("reset"), "disabled"), "");
-    // Off again: removed from the title, and the others may be chosen.
-    await click(item("five-hour"));
-    assert.deepEqual(saved.at(-1), ["tokens", "week", "cost"]);
-    assert.equal(attr(item("account"), "disabled"), undefined);
-    // All off leaves the panda alone.
-    for (const id of ["tokens", "cost", "week"]) await click(item(id));
-    assert.deepEqual(saved.at(-1), []);
-    assert.equal(preview(), "Yalnızca panda");
-    await act(async () => root.unmount());
+    ),
+  );
+  const container = dom.container as unknown as Fake;
+  const attr = (n: Fake | undefined, name: string) =>
+    (n?.attributes as Map<string, string> | undefined)?.get(name);
+  const byId = (id: string) => find(container, (n) => attr(n, "id") === id);
+  const shown = (node: Fake = container): string[] =>
+    attr(node, "aria-labelledby") === "menu-bar-shown-label"
+      ? node.childNodes.map((li) => attr(li, "data-item")!)
+      : node.childNodes.flatMap((child) => shown(child));
+  const handle = (item: string) =>
+    find(container, (n) => n.tagName === "button" && /sıra\. Taşımak için sürükle/.test(attr(n, "aria-label") ?? "") && attr(n, "aria-label")!.startsWith(item));
+  return {
+    dom,
+    root,
+    saved,
+    container,
+    attr,
+    byId,
+    shown,
+    handle,
+    row: (item: string) =>
+      find(container, (n) => n.tagName === "li" && attr(n, "data-item") === item && attr(n.parentNode as Fake, "aria-labelledby") === "menu-bar-shown-label"),
+    preview: () => textOf(find(container, (n) => attr(n, "data-slot") === "menu-bar-preview")),
+    live: () => textOf(find(container, (n) => attr(n, "aria-live") === "polite")),
+    click: (node: Fake | undefined) => act(async () => dom.dispatch(node!, "click", { detail: 1 })),
+    done: async () => {
+      await act(async () => root.unmount());
+      dom.uninstall();
+    },
+  };
+}
+
+test("the menu bar's values are added from the list below and listed in their order", async () => {
+  const s = await menuBarSettings({ items: ["five-hour"] });
+  try {
+    // Until changed: the five-hour percent alone, on sample figures without a menu bar to read.
+    assert.deepEqual(s.shown(), ["five-hour"]);
+    assert.equal(s.preview(), "%40");
+    await s.click(s.byId("menu-bar-add-tokens"));
+    assert.deepEqual(s.saved, [["five-hour", "tokens"]]);
+    assert.deepEqual(s.shown(), ["five-hour", "tokens"]);
+    assert.equal(s.preview(), "%40 · 12,4M");
+    assert.match(s.live(), /Bugünkü token 2\. sıraya eklendi/);
+    // Added items leave the list below; four at most, then the rest wait.
+    assert.equal(s.byId("menu-bar-add-tokens"), undefined);
+    await s.click(s.byId("menu-bar-add-cost"));
+    await s.click(s.byId("menu-bar-add-week"));
+    assert.deepEqual(s.saved.at(-1), ["five-hour", "tokens", "cost", "week"]);
+    assert.equal(s.attr(s.byId("menu-bar-add-account"), "disabled"), "");
+    assert.match(textOf(s.container), /Eklemek için önce birini kaldır; en çok 4 değer/);
   } finally {
-    dom.uninstall();
+    await s.done();
   }
 });
 
-test("with a menu bar to read, the rows show what it shows now and why an item shows nothing", async () => {
-  const dom = fakeDom();
-  dom.install();
-  readableText();
+test("a row moves with Option-arrows on its handle, and the move is said", async () => {
+  const s = await menuBarSettings({ items: ["five-hour", "tokens", "cost"] });
   try {
-    let items = ["five-hour", "week", "reset"];
-    // A Team seat with its five-hour period not started: no week, no time left.
-    const now = () => ({
-      title: items.includes("account") ? "%0 · Alto" : "%0",
-      values: { "five-hour": "%0", week: "", reset: "", tokens: "3,1M", cost: "$4,10", account: "Alto" },
-    });
-    const relay = relayFor();
-    relay.api = {
-      ...relay.api,
-      menuBarTitle: async () => ({ items }),
-      setMenuBarTitle: async (choice: { items: string[] }) => {
-        items = choice.items;
-        return { items };
-      },
-      menuBarNow: async () => now(),
-    } as unknown as Relay["api"];
-    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () =>
-      root.render(
-        createElement(
-          I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
-        ),
-      ),
-    );
-    const container = dom.container as unknown as Fake;
-    const attr = (n: Fake | undefined, name: string) =>
-      (n?.attributes as Map<string, string> | undefined)?.get(name);
-    const preview = () => textOf(find(container, (n) => attr(n, "data-slot") === "menu-bar-preview"));
-    const row = (id: string) => textOf(find(container, (n) => attr(n, "data-item") === id));
-    assert.equal(preview(), "%0");
-    assert.match(row("week"), /bu hesap haftalık limit bildirmiyor/);
-    assert.match(row("reset"), /5 saatlik dönem henüz başlamadı/);
-    assert.match(row("tokens"), /3,1M/);
-    // A change reads the menu bar again.
-    await act(async () =>
-      dom.dispatch(find(container, (n) => attr(n, "id") === "menu-bar-item-account")!, "click", { detail: 1 }),
-    );
-    assert.equal(preview(), "%0 · Alto");
-    await act(async () => root.unmount());
+    const key = (item: string, key: string, altKey = true) =>
+      act(async () => s.dom.dispatch(s.handle(item)!, "keydown", { key, altKey }));
+    await key("Bugünkü token", "ArrowUp");
+    assert.deepEqual(s.saved.at(-1), ["tokens", "five-hour", "cost"]);
+    assert.match(s.live(), /Bugünkü token, 1\. sırada/);
+    // The first goes no earlier; arrows without Option leave the order alone.
+    await key("Bugünkü token", "ArrowUp");
+    await key("Bugünkü token", "ArrowDown", false);
+    assert.equal(s.saved.length, 1);
+    await key("5 saatlik kullanım", "ArrowDown");
+    assert.deepEqual(s.saved.at(-1), ["tokens", "cost", "five-hour"]);
   } finally {
-    dom.uninstall();
+    await s.done();
   }
+});
+
+test("a row dragged by its handle lands where the pointer leaves it", async () => {
+  const s = await menuBarSettings({ items: ["five-hour", "tokens", "cost", "reset"] });
+  try {
+    // Rows 40 px tall, one under another.
+    ["five-hour", "tokens", "cost", "reset"].forEach((item, i) => {
+      (s.row(item) as unknown as { box: object }).box = { left: 0, top: 100 + i * 40, width: 400, height: 40 };
+    });
+    const grip = s.handle("5 saatlik dönemin kalan süresi")!;
+    const pointer = (type: string, clientY: number) =>
+      act(async () => s.dom.dispatch(grip, type, { button: 0, pointerId: 1, clientY }));
+    await pointer("pointerdown", 240);
+    // Halfway up the list, the rows it passes make room.
+    await pointer("pointermove", 160);
+    assert.match(String((s.row("tokens") as unknown as { style: Record<string, unknown> }).style.transform), /translateY\(40px\)/);
+    await pointer("pointermove", 110);
+    await pointer("pointerup", 110);
+    assert.deepEqual(s.saved.at(-1), ["reset", "five-hour", "tokens", "cost"]);
+  } finally {
+    await s.done();
+  }
+});
+
+test("with nothing chosen the menu bar shows the panda alone, and says so", async () => {
+  const s = await menuBarSettings({ items: [] });
+  try {
+    assert.equal(s.preview(), "Yalnızca panda");
+    assert.match(textOf(s.container), /Hiç değer seçili değil; menü çubuğunda yalnızca panda görünür\./);
+  } finally {
+    await s.done();
+  }
+});
+
+test("moving a row and the drop under the pointer", () => {
+  assert.deepEqual(moveItem(["a", "b", "c"], 2, 0), ["c", "a", "b"]);
+  assert.deepEqual(moveItem(["a", "b", "c"], 0, 2), ["b", "c", "a"]);
+  assert.deepEqual(moveItem(["a", "b"], 0, 5), ["a", "b"]);
+  // Middles at 120, 160, 200, 240; the last dragged to 150 passes one row.
+  assert.equal(dropIndex([120, 160, 200, 240], 3, 150), 1);
+  assert.equal(dropIndex([120, 160, 200, 240], 0, 300), 3);
+  assert.equal(dropIndex([120, 160, 200, 240], 1, 100), 0);
 });
 
 test("main keeps the menu bar title beside the registry and redraws it on a change", () => {
