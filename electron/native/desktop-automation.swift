@@ -136,8 +136,11 @@ func accountPopupPath(_ tree: [AccountSelectorNode]) -> String? {
         ($0.title == "Sidebar" || $0.description == "Sidebar")
     }
     guard sidebars.count == 1, let sidebar = sidebars.first else { return nil }
+    // "More navigation items" and each folder's "Group and sort" came with Claude 3.6556's
+    // sidebar (seen live 2026-10-26).
     let nonAccountActions = [
-        "Create project", "New from a template", "New from template", "Filter", "More options"
+        "Create project", "New from a template", "New from template", "Filter", "More options",
+        "More navigation items", "Group and sort"
     ]
     let accountMenus = tree.filter { node in
         guard node.role == "AXPopUpButton", !node.strings.isEmpty,
@@ -180,9 +183,32 @@ func nodes(_ root: AXUIElement) throws -> [Node] {
     return result
 }
 
+// Code's split view shows conversations side by side, each in a pane of its own with its own
+// composer, mode menu and Stop button. The page's URL, and so its title, is the conversation in
+// focus, and each pane names its conversation on its rename button ("<title>, rename session").
+// The path of the pane whose name the page's title carries; nil without panes side by side, and
+// "" when no single pane does, so that nothing in any pane is taken for the conversation's.
+let paneNames: Set<String> = ["Primary pane", "Secondary pane"]
+let renameSuffix = ", rename session"
+func focusedPanePath(_ tree: [AccountSelectorNode], _ pageTitles: [String]) -> String? {
+    let panes = tree.filter { $0.role == "AXGroup" && paneNames.contains($0.description) }
+    guard panes.count > 1 else { return nil }
+    let matching = panes.filter { pane in
+        tree.contains { node in
+            guard node.role == "AXButton", node.path.hasPrefix(pane.path + "/"),
+                  node.description.hasSuffix(renameSuffix) else { return false }
+            let name = String(node.description.dropLast(renameSuffix.count))
+            return !name.isEmpty && pageTitles.contains { $0 == name || $0.hasPrefix(name + " - ") }
+        }
+    }
+    return matching.count == 1 ? matching[0].path : ""
+}
+
 struct Observation {
     let app: NSRunningApplication
     let tree: [Node]
+    // The nodes of the conversation on screen: its pane in split view, else the whole tree.
+    let scope: [Node]
     let composer: Node?
     let send: Node?
     let permission: Node?
@@ -259,22 +285,26 @@ func observe() throws -> Observation {
     // targeting. A title or a sidebar card is never a conversation identity.
     let screen = screenOf(webAreas.flatMap { $0.strings })
     let localID = screen.localSessionId
-    let composers = tree.filter {
+    let pageTitles = webAreas.filter { !epitaxySessionIDs($0.strings).isEmpty }.map { $0.title }
+    let panePath = focusedPanePath(tree.map { $0.selectorNode }, pageTitles)
+    let scope = panePath.map { path in path.isEmpty ? [] : tree.filter { $0.path.hasPrefix(path + "/") } } ?? tree
+    let composers = scope.filter {
         ["AXTextArea", "AXTextField"].contains($0.role) &&
         ($0.description == "Prompt" || $0.title == "Prompt")
     }
     let composer = composers.count == 1 ? composers.first : nil
-    let sends = tree.filter { $0.role == "AXButton" && ($0.title == "Send" || $0.description == "Send") }
+    let sends = scope.filter { $0.role == "AXButton" && ($0.title == "Send" || $0.description == "Send") }
     let send = sends.count == 1 ? sends.first : nil
     // The selector carries the "Permission mode" label. Scheduled task rows also
     // show "Auto"/"Manual", so a bare mode label is only a fallback.
-    let buttons = tree.filter { ["AXPopUpButton", "AXButton"].contains($0.role) }
+    let buttons = scope.filter { ["AXPopUpButton", "AXButton"].contains($0.role) }
     let labeled = buttons.filter { node in
         node.strings.contains { $0.contains("PermissionMode") || $0.contains("Permission mode") }
     }
-    let permissionNodes = labeled.isEmpty
-        ? buttons.filter { node in node.strings.contains { modeLabel($0) != nil } }
-        : labeled
+    // The selector is a popup; a plan's "Accept" button reads as a mode too.
+    let byMode = buttons.filter { node in node.strings.contains { modeLabel($0) != nil } }
+    let modePopups = byMode.filter { $0.role == "AXPopUpButton" }
+    let permissionNodes = !labeled.isEmpty ? labeled : modePopups.isEmpty ? byMode : modePopups
     let permission = permissionNodes.count == 1 ? permissionNodes.first : nil
     let mode = permission.flatMap { node in node.strings.lazy.compactMap(modeLabel).first }
     // Account selection is scoped to the one named Sidebar container. Session
@@ -285,14 +315,15 @@ func observe() throws -> Observation {
             if !unique.contains(text) { unique.append(text) }
         }.joined(separator: " ")
     }
-    let finished = tree.contains { $0.strings.contains("Claude finished the response") }
+    let finished = scope.contains { $0.strings.contains("Claude finished the response") }
     // "Session", "Weekly", "Usage", "<model>" and "Monthly spend limit reached".
-    let quota = tree.contains { $0.strings.contains { $0.hasSuffix(" limit reached") } }
-    let working = tree.contains { $0.role == "AXButton" && ["Stop", "Stop response", "Stop Claude"].contains(where: $0.strings.contains) }
-    let waiting = tree.contains { node in
-        node.role == "AXDialog" || ["Approve", "Allow once", "Allow always", "Reject"].contains(where: node.strings.contains)
+    let quota = scope.contains { $0.strings.contains { $0.hasSuffix(" limit reached") } }
+    let working = scope.contains { $0.role == "AXButton" && ["Stop", "Stop response", "Stop Claude"].contains(where: $0.strings.contains) }
+    // A dialog is the whole window's; a permission question is its conversation's.
+    let waiting = tree.contains { $0.role == "AXDialog" } || scope.contains { node in
+        ["Approve", "Allow once", "Allow always", "Reject"].contains(where: node.strings.contains)
     }
-    let autoResume = tree.filter { $0.role == "AXCheckBox" && $0.strings.contains("Auto-continue when limits reset") }
+    let autoResume = scope.filter { $0.role == "AXCheckBox" && $0.strings.contains("Auto-continue when limits reset") }
     let autoChecked = autoResume.count == 1 ? attribute(autoResume[0].element, kAXValueAttribute) as? Bool : nil
     let visibleActive = tree.filter { ["Running", "Working"].contains(where: $0.strings.contains) }.count
     let visibleWaiting = tree.filter { ["Waiting", "Needs approval", "Waiting for permission"].contains(where: $0.strings.contains) }.count
@@ -334,7 +365,42 @@ func observe() throws -> Observation {
         fields["composerChars"] = visibleText(stringAttribute(element, kAXValueAttribute)).count
     }
     fields["screen"] = screenShape(webAreas.flatMap { $0.strings })
-    return Observation(app: app, tree: tree, composer: composer, send: send, permission: permission, fields: fields)
+    // Panes side by side, and whether the page's conversation was found among them; for the log.
+    if panePath != nil {
+        fields["panes"] = tree.filter { $0.role == "AXGroup" && paneNames.contains($0.description) }.count
+        fields["paneFound"] = panePath?.isEmpty == false
+    }
+    return Observation(app: app, tree: tree, scope: scope, composer: composer, send: send, permission: permission, fields: fields)
+}
+// Claude's controls as roles and labels, one line each, for finding what a new Claude renamed
+// when a guard can no longer be built. Groups, buttons, menus, fields and checkboxes only, with
+// their title and description; a popup's value too, which is the choice it shows. Never a
+// field's text, and no static text.
+func outline() throws -> [String] {
+    guard AXIsProcessTrusted() else { try fail("accessibility-permission-required") }
+    let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        .filter { !$0.isTerminated }
+    guard apps.count == 1, let app = apps.first else { try fail(apps.isEmpty ? "claude-not-running" : "desktop-ui-unsupported") }
+    let roles: Set<String> = [
+        "AXGroup", "AXLandmark", "AXSplitGroup", "AXWebArea", "AXButton", "AXPopUpButton",
+        "AXMenuButton", "AXTextArea", "AXTextField", "AXCheckBox", "AXRadioButton", "AXTabGroup",
+        "AXToolbar", "AXMenuItem", "AXLink"
+    ]
+    let cut = { (text: String) in String(text.prefix(60)) }
+    var lines: [String] = []
+    for node in try nodes(AXUIElementCreateApplication(app.processIdentifier)) where roles.contains(node.role) {
+        let named = !node.title.isEmpty || !node.description.isEmpty
+        if ["AXGroup", "AXLandmark", "AXSplitGroup", "AXLink"].contains(node.role) && !named { continue }
+        var line = "\(node.path.split(separator: "/").count) \(node.role)"
+        if !node.title.isEmpty { line += " t=\(cut(node.title))" }
+        if !node.description.isEmpty { line += " d=\(cut(node.description))" }
+        if node.role == "AXPopUpButton" && !node.value.isEmpty { line += " v=\(cut(node.value))" }
+        if node.role == "AXWebArea" { line += " screen=\(screenShape([node.url]))" }
+        if !node.enabled { line += " disabled" }
+        lines.append(line)
+        if lines.count >= 4000 { break }
+    }
+    return lines
 }
 // A guard names its screen by a conversation id or, for write-draft only
 // (allowNewSession), as Code's new-session screen, which has none. That screen may
@@ -354,7 +420,8 @@ func validateGuard(_ observation: Observation, _ expected: [String: Any], allowC
         guard expected["contextFingerprint"] as? String == observation.fields["contextFingerprint"] as? String else { try fail("context-changed") }
     }
     guard observation.fields["status"] as? String == "stopped" else { try fail("desktop-work-active") }
-    guard observation.composer != nil && observation.send != nil else { try fail("desktop-ui-unsupported") }
+    // Claude shows Send only once the composer holds text; an empty one has dictation there.
+    guard observation.composer != nil else { try fail("desktop-ui-unsupported") }
     if !allowComposer && observation.fields["composerEmpty"] as? Bool != true { try fail("composer-not-empty") }
 }
 func press(_ node: Node) throws {
@@ -468,6 +535,7 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         return ["ok": true, "accessibilityGranted": trusted]
     }
     if command == "inspect" { return ["ok": true, "snapshot": try observe().fields] }
+    if command == "outline" { return ["ok": true, "outline": try outline()] }
     if command == "quit-guard" {
         // Relay asked Claude to quit, after stopping the background commands it found. Only
         // the question about background commands alone is answered, with "Quit anyway".
@@ -513,7 +581,7 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
     let draft = command == "write-draft"
     try validateGuard(current, expected, allowNewSession: draft)
     if command == "cancel-quota-resume" {
-        let controls = current.tree.filter { $0.role == "AXCheckBox" && $0.strings.contains("Auto-continue when limits reset") }
+        let controls = current.scope.filter { $0.role == "AXCheckBox" && $0.strings.contains("Auto-continue when limits reset") }
         guard current.fields["quotaStopped"] as? Bool == true,
               controls.count == 1, let control = controls.first,
               let checked = attribute(control.element, kAXValueAttribute) as? Bool else { try fail("desktop-ui-unsupported") }
@@ -700,6 +768,12 @@ do {
     } else if let object = json as? [String: Any], let strings = object["webAreaStrings"] as? [String] {
         let screen = screenOf(strings)
         result = ["localSessionId": screen.localSessionId as Any? ?? NSNull(), "newSession": screen.newSession, "screen": screenShape(strings)]
+    } else if let object = json as? [String: Any], let nodes = object["paneTree"] as? [[String: String]],
+              let titles = object["pageTitles"] as? [String] {
+        let tree = nodes.map {
+            AccountSelectorNode(role: $0["role"] ?? "", title: $0["title"] ?? "", description: $0["description"] ?? "", value: $0["value"] ?? "", path: $0["path"] ?? "")
+        }
+        result = ["panePath": focusedPanePath(tree, titles) as Any? ?? NSNull()]
     } else if let object = json as? [String: Any], let texts = object["quitGuardTexts"] as? [String] {
         result = ["kind": quitGuardKind(texts) as Any? ?? NSNull()]
     } else if let object = json as? [String: Any], let composer = object["composer"] as? [String: Any] {

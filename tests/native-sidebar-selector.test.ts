@@ -173,6 +173,21 @@ test(
         accountPath,
         "an unlabeled control is not account identity evidence",
       );
+      // Claude 3.6556's sidebar, seen live 2026-10-26: navigation, a folder menu per project
+      // and the account, which shows its name as a title.
+      assert.equal(
+        select([
+          sidebar(),
+          popup("New from a template", "root/1/2/0"),
+          popup("More navigation items", "root/1/2/1"),
+          popup("Group and sort", "root/1/2/2/0"),
+          popup("More options for Avecoin arayüz tasarımı", "root/1/2/2/1"),
+          popup("Group and sort", "root/1/2/3/0"),
+          { role: "AXPopUpButton", path: accountPath, title: "Ahmet Can Kacar Vertex" },
+        ]),
+        accountPath,
+        "the 3.6556 sidebar's own menus are no account",
+      );
       assert.equal(
         select([
           sidebar(),
@@ -340,5 +355,43 @@ test(
       composer: { value: "a b\n\nc​" },
     }) as { visible: string };
     assert.equal(visible.visible, "abc");
+  },
+);
+
+test(
+  "in split view only the pane of the page's conversation is the conversation's",
+  { skip: process.platform !== "darwin" },
+  async () => {
+    const binary = await fixtureBinary();
+    const pane = (path: string, primary: boolean, name: string): SelectorNode[] => [
+      { role: "AXGroup", path, description: primary ? "Primary pane" : "Secondary pane" },
+      { role: "AXButton", path: `${path}/0/1`, description: `${name}, rename session` },
+      { role: "AXTextArea", path: `${path}/3/0`, description: "Prompt" },
+    ];
+    const panePath = (tree: SelectorNode[], pageTitles: string[]) =>
+      (runFixture(binary, { paneTree: tree, pageTitles }) as { panePath: string | null }).panePath;
+    // Seen live 2026-10-26: five panes, the page titled after the last one.
+    const live = [
+      ...pane("root/0/1/2", true, "Hesap geçişinde sonsuz yükleme ekranı"),
+      ...pane("root/0/1/3", false, "Avecoin arayüz tasarımı yeniden"),
+      ...pane("root/0/1/4", false, "Arayüz ve repo yönetimi tasarımı"),
+    ];
+    assert.equal(
+      panePath(live, ["Arayüz ve repo yönetimi tasarımı - Claude Code"]),
+      "root/0/1/4",
+    );
+    assert.equal(panePath(live, ["Hesap geçişinde sonsuz yükleme ekranı"]), "root/0/1/2");
+    // One conversation on screen: no panes to choose from, the whole window is it.
+    assert.equal(panePath(pane("root/0/1/2", true, "Only"), ["Only - Claude Code"]), null);
+    // No pane, or two, carry the page's title: none is taken for it.
+    assert.equal(panePath(live, ["Another conversation - Claude Code"]), "");
+    assert.equal(
+      panePath([...live, ...pane("root/0/1/5", false, "Avecoin arayüz tasarımı yeniden")], [
+        "Avecoin arayüz tasarımı yeniden - Claude Code",
+      ]),
+      "",
+    );
+    // A name that only begins the page's title is not it.
+    assert.equal(panePath(live, ["Avecoin arayüz tasarımı yeniden 2 - Claude Code"]), "");
   },
 );

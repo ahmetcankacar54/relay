@@ -6,6 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   FleetContinuation,
+  HANDOFF_MS,
   sourceExhausted as fleetSourceExhausted,
   type FleetDeps,
   type FleetResult,
@@ -877,4 +878,79 @@ test("a stop that Relay's own stopping of a background command caused is left al
   assert.deepEqual(f.state.switches, [f.b.id]);
   assert.deepEqual(f.state.sent.length, 1);
   assert.ok(logs.some((l) => l.event === "stop-skipped" && l.why === "relay-stopped-its-command"));
+});
+
+test("a switch made by hand while conversations wait at the limit continues them there", async () => {
+  const f = setup();
+  const logs: Record<string, unknown>[] = [];
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    log: (event, fields) => logs.push({ event, ...fields }),
+  });
+  fleet.setEnabled(true);
+  // The fleet waits on other work; the user switches to B meanwhile.
+  f.state.busy = "not-quiescent:unknownWork";
+  assert.equal((await fleet.tick()).status, "waiting");
+  f.state.busy = undefined;
+  f.state.active = f.b.id;
+  const done = await fleet.tick();
+  assert.deepEqual(f.state.switches, []);
+  assert.equal(f.state.sent.length, 2);
+  assert.equal(done.last?.targetId, f.b.id);
+  assert.equal(done.last?.started, 2);
+  assert.ok(logs.some((l) => l.event === "handoff" && l.stopped === 2));
+  // Continued once: nothing more on the next ticks.
+  await fleet.tick();
+  assert.equal(f.state.sent.length, 2);
+});
+
+test("after a failed automatic switch, a switch by hand still continues the conversations", async () => {
+  const f = setup();
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    switchTo: async (_targetId, guards) => {
+      await guards.beforeQuit();
+      throw new Error("Automatic Desktop switch was cancelled because its conditions changed.");
+    },
+  });
+  fleet.setEnabled(true);
+  assert.match((await fleet.tick()).reason ?? "", /^switch-failed:/);
+  // Claude is back on A, whose stops are handled now: the fleet only watches.
+  assert.equal((await fleet.tick()).reason, "awaiting-quota-stop");
+  f.state.active = f.b.id;
+  await fleet.tick();
+  assert.equal(f.state.sent.length, 2);
+});
+
+test("a switch by hand to a full account, or long after the stops, continues nothing", async () => {
+  for (const late of [false, true]) {
+    const f = setup();
+    let clock = NOW;
+    const fleet = new FleetContinuation({ ...f.deps, now: () => clock });
+    fleet.setEnabled(true);
+    f.state.busy = "not-quiescent:unknownWork";
+    await fleet.tick();
+    f.state.busy = undefined;
+    if (late) clock += HANDOFF_MS;
+    else f.state.usage[f.b.id] = usage(f.b, 100);
+    f.state.active = f.b.id;
+    // B's own empty scan and A's stops, read for B, are none of B's: nothing is sent.
+    await fleet.tick();
+    assert.equal(f.state.sent.length, 0, late ? "late" : "full");
+  }
+});
+
+test("room again in the account that stopped ends the wait for a switch by hand", async () => {
+  const f = setup();
+  const fleet = new FleetContinuation(f.deps);
+  fleet.setEnabled(true);
+  f.state.busy = "not-quiescent:unknownWork";
+  await fleet.tick();
+  f.state.busy = undefined;
+  // A's window reset before the user switched: A's conversations are theirs to continue there.
+  f.state.usage[f.a.id] = usage(f.a, 5);
+  await fleet.tick();
+  f.state.active = f.b.id;
+  await fleet.tick();
+  assert.equal(f.state.sent.length, 0);
 });

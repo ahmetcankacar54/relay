@@ -1021,6 +1021,20 @@ test("the rows that move a stopped conversation on", () => {
   for (const [rows, expected] of [
     [[prompt], true],
     [[{ type: "assistant", message: { content: [] } }], true],
+    // A stopped command's notification, answered by the limit again (seen live 2026-10-26).
+    [
+      [
+        { type: "user", origin: { kind: "task-notification" }, message: { content: "<task-notification>" } },
+        {
+          type: "assistant",
+          isApiErrorMessage: true,
+          error: "rate_limit",
+          message: { content: [{ type: "text", text: "You've hit your session limit" }] },
+        },
+      ],
+      false,
+    ],
+    [[{ type: "assistant", isApiErrorMessage: true, error: "overloaded", message: { content: [] } }], true],
     [[{ type: "attachment", attachment: { type: "queued_command" } }], true],
     [[{ type: "queue-operation", operation: "enqueue", content: [{ type: "image" }] }], true],
     [[{ ...prompt, isSidechain: true }], false],

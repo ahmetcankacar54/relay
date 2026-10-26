@@ -18,6 +18,7 @@ import { localizeError } from "../shared/error-text";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import { z } from "zod";
 import { ActiveAccountTimeline } from "./core/active-account-timeline";
@@ -279,6 +280,35 @@ const claudePageBooted = () =>
   process.platform === "darwin"
     ? pageBooted(macClaudeLog(os.homedir()))
     : Promise.resolve(undefined);
+/**
+ * Claude's controls, as roles and labels, written once to `file` for a developer whose Claude
+ * no longer matches what the helper looks for (Relay started with RELAY_UI_OUTLINE=1). It waits
+ * up to two minutes for Claude to run; the helper's issue, if any, is written instead.
+ */
+async function writeUiOutline(helper: string, file: string, running: () => Promise<boolean>) {
+  for (let tries = 0; tries < 24 && !(await running().catch(() => false)); tries += 1)
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+  const ask = (command: string) =>
+    new Promise<unknown>((resolve) => {
+      const child = execFile(
+        helper,
+        [],
+        { timeout: 60_000, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+        (error, stdout) => {
+          try {
+            resolve(error ? { ok: false, error: error.message } : JSON.parse(stdout));
+          } catch {
+            resolve({ ok: false, error: "unreadable" });
+          }
+        },
+      );
+      child.stdin?.on("error", () => {});
+      child.stdin?.end(JSON.stringify({ command }));
+    });
+  const result = { at: new Date().toISOString(), inspect: await ask("inspect"), outline: await ask("outline") };
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await fsp.writeFile(file, JSON.stringify(result, null, 1), { mode: 0o600 });
+}
 /** How long a continuation waits for its conversation to show after a switch. */
 const CONTINUE_SHOW_MS = 3 * 60_000;
 /**
@@ -702,6 +732,12 @@ else {
         path.join(__dirname, "desktop-automation"),
       );
       automation = nativeDesktopAutomation(automationHelper);
+      if (process.platform === "darwin" && process.env.RELAY_UI_OUTLINE === "1")
+        void writeUiOutline(
+          automationHelper,
+          path.join(app.getPath("userData"), "diagnostics", "ui-outline.json"),
+          () => host.running(),
+        ).catch(() => {});
       draftRestore = new DraftScheduler({
         restorer: {
           automation,

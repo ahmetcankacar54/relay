@@ -142,6 +142,12 @@ export const BACKGROUND_IDLE_MS = 2 * 60_000;
 export const BACKGROUND_WAIT_MS = 15 * 60_000;
 /** How long after Relay stopped background commands a notification's stop counts as its own doing. */
 const OWN_STOP_MS = 5 * 60_000;
+/**
+ * How long conversations stopped at the limit wait for a switch made by hand: the user may
+ * switch while the fleet still waits (for a build, or for Claude to settle) or after its own
+ * switch failed, and they are continued in the account switched to.
+ */
+export const HANDOFF_MS = 60 * 60_000;
 /** The background commands still working at `now`: not serving, and busy within BACKGROUND_IDLE_MS. */
 export function workingCommands(commands: readonly BackgroundCommand[], now: number) {
   return commands.filter(
@@ -281,6 +287,8 @@ export class FleetContinuation {
   private backgroundWait?: { key: string; since: number };
   /** When the fleet last stopped background commands, as a switch began. */
   private backgroundStoppedAt?: number;
+  /** The conversations the active account left stopped at the limit, last seen at `at`. */
+  private awaiting?: { sourceId: string; stops: QuotaStop[]; at: number };
   private readonly file: string;
   private readonly now: () => number;
   constructor(private readonly deps: FleetDeps) {
@@ -458,6 +466,15 @@ export class FleetContinuation {
     if (!source?.desktop)
       return this.publish({ status: "waiting", reason: "source-not-enrolled" });
     const now = this.now();
+    const handoff = this.awaiting;
+    if (handoff && handoff.sourceId !== source.id) {
+      this.awaiting = undefined;
+      if (
+        now - handoff.at < HANDOFF_MS &&
+        sourceQuota(usage[source.id], now) !== "full"
+      )
+        return this.continueHandoff(handoff, source);
+    }
     let quota = sourceQuota(usage[source.id], now);
     let stops = this.withoutOwnStops(
       source,
@@ -476,6 +493,7 @@ export class FleetContinuation {
       quota = sourceQuota(this.deps.snapshot().usage[source.id], this.now());
     // While a fresh reading shows room, no conversation waits for another account.
     if (quota === "room") stops = [];
+    this.await(source, stops, quota, now);
     const detail = { quota };
     if (!stops.length) {
       // Name the account the fleet would pick while the active one is full, so
@@ -607,6 +625,8 @@ export class FleetContinuation {
         startedAt: now,
       };
       this.save({ ...this.saved, pending });
+      // From here the switch continues them, or its failure hands them back below.
+      this.awaiting = undefined;
       this.publish({ ...base, targetId: target.id, status: "switching" });
       const stillSafe = () =>
         !this.deps.quietSync(current) &&
@@ -661,6 +681,8 @@ export class FleetContinuation {
           }
           // Not switched, and a quit or a write may have happened. Never retry this
           // limit automatically: a persistent failure must not restart Claude again and again.
+          // A switch the user then makes by hand still continues them.
+          this.awaiting = { sourceId: source.id, stops: current, at: this.now() };
           this.save({
             ...this.saved,
             pending: undefined,
@@ -706,6 +728,52 @@ export class FleetContinuation {
         why: "relay-stopped-its-command",
       });
     return stops.filter((stop) => !own.includes(stop));
+  }
+  /**
+   * Keeps what a switch by hand would continue: the source's stopped conversations, each by its
+   * latest stop, including those a failed switch left handled. Room again in the source ends
+   * the wait: they are the user's to continue there.
+   */
+  private await(source: Account, stops: QuotaStop[], quota: SourceQuota, now: number) {
+    const kept = this.awaiting?.sourceId === source.id ? this.awaiting.stops : [];
+    if (quota === "room") return void (this.awaiting = undefined);
+    const latest = new Map<string, QuotaStop>();
+    for (const stop of [...kept, ...stops]) {
+      const seen = latest.get(stop.localSessionId);
+      if (!seen || stop.stoppedAt >= seen.stoppedAt) latest.set(stop.localSessionId, stop);
+    }
+    this.awaiting = latest.size
+      ? { sourceId: source.id, stops: [...latest.values()], at: now }
+      : undefined;
+  }
+  /**
+   * The user switched by hand from an account whose conversations stopped at the limit, to
+   * `target`, which is not full: those conversations are continued there as after the fleet's
+   * own switch. Each is checked again before its send; one that moved on is skipped.
+   */
+  private continueHandoff(
+    handoff: NonNullable<FleetContinuation["awaiting"]>,
+    target: Account,
+  ) {
+    this.logEvent("handoff", {
+      source: short(handoff.sourceId),
+      target: short(target.id),
+      stopped: handoff.stops.length,
+    });
+    const pending: Pending = {
+      id: randomUUID(),
+      key: handoff.stops
+        .map((stop) => `${stop.cliSessionId}:${stop.turnId}`)
+        .sort()
+        .join(","),
+      sourceId: handoff.sourceId,
+      targetId: target.id,
+      stops: handoff.stops,
+      stage: "continuing",
+      results: {},
+      startedAt: this.now(),
+    };
+    return this.deps.withDesktopLock(() => this.continueAll(pending));
   }
   /** Asks for a fresh usage read of `accountId`, unless one was asked for under a minute ago. Whether it read. */
   private async readAgain(accountId: string) {

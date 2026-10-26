@@ -69,6 +69,12 @@ export interface DesktopAutomationSnapshot {
    * fingerprint, for the diagnosis log; older helpers omit it.
    */
   screen?: string;
+  /**
+   * With conversations side by side (Code's split view): how many panes, and whether the one
+   * the page's URL names was found, whose controls alone the snapshot read. For the log.
+   */
+  panes?: number;
+  paneFound?: boolean;
   sendEnabled: boolean;
   quotaAutoResume?: boolean;
   visibleActiveTasks?: number;
@@ -262,6 +268,8 @@ function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
       (Number.isSafeInteger(v.composerChars) && v.composerChars >= 0)) &&
     (v.screen === undefined ||
       (typeof v.screen === "string" && /^[a-z0-9/:*_-]{1,80}$/.test(v.screen))) &&
+    (v.panes === undefined || (Number.isSafeInteger(v.panes) && v.panes >= 0)) &&
+    (v.paneFound === undefined || typeof v.paneFound === "boolean") &&
     typeof v.sendEnabled === "boolean" &&
     (v.quotaAutoResume === undefined ||
       typeof v.quotaAutoResume === "boolean") &&

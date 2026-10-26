@@ -548,12 +548,14 @@ function transcriptError(row: Row): "quota" | "other" | undefined {
 /**
  * Rows written after a quota stop that start or queue another turn: a prompt or an answer on
  * the main chain, or a queued prompt, but not a task notification Claude Code wrote itself,
- * nor any row of its own bookkeeping.
+ * nor any row of its own bookkeeping. An answer that is the limit again is no work: a stopped
+ * command's notification starts a turn that ends there at once, and Relay stops commands just
+ * before it quits Claude.
  */
 export function movedOn(appended: Row[]): boolean {
   return appended.some((row) => {
     if (row.isSidechain === true) return false;
-    if (row.type === "assistant") return true;
+    if (row.type === "assistant") return transcriptError(row) !== "quota";
     if (row.type === "user")
       return row.isMeta !== true && !isTaskNotification(row);
     if (row.type === "queue-operation" && row.operation === "enqueue") {
