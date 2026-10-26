@@ -132,7 +132,13 @@ import { appendUsageIssue } from "./core/usage-issue-log";
 import { appendDraftEvent, draftEventFilter } from "./core/draft-diagnostics";
 import { SwitchDiagnostics } from "./core/switch-diagnostics";
 import { MenuBarTitle } from "./core/menu-bar-title";
-import { DEFAULT_MENU_BAR_ITEMS, MENU_BAR_ITEMS, type TrayToday } from "../shared/tray";
+import {
+  DEFAULT_MENU_BAR_ITEMS,
+  MENU_BAR_ITEMS,
+  trayTitle,
+  type TraySnapshot,
+  type TrayToday,
+} from "../shared/tray";
 import { UsageError } from "./core/usage-credentials";
 import { WindowRelease } from "./window-release";
 
@@ -177,6 +183,8 @@ let tray: RelayTray | undefined;
 let menuBarTitle: MenuBarTitle | undefined;
 /** Today's tokens and API value for the menu bar title, taken from the ledger when the widget is written. */
 let trayToday: TrayToday | undefined;
+/** The menu bar's last snapshot, so Settings can show what it shows. */
+let lastTraySnapshot: TraySnapshot | undefined;
 let trayPanel: TrayPanel | undefined;
 let switchWindow: SwitchWindow | undefined;
 let switchStory: SwitchStory | undefined;
@@ -890,14 +898,27 @@ else {
           return skip("composer-not-empty", {
             composerChars: snapshot.composerChars ?? null,
           });
-        if ((await evidence.deliveryAfter(stop, requestId)) !== "absent")
+        const before = await evidence.deliveryAfter(stop, requestId);
+        if (before !== "absent") {
+          logFleetEvent("continue-unsent", { conversation, delivery: before });
           return "unknown";
+        }
         beforeSend();
-        await automation.send(
-          automationGuard(snapshot),
-          requestId,
-          CONTINUATION_TEXT,
-        );
+        try {
+          await automation.send(
+            automationGuard(snapshot),
+            requestId,
+            CONTINUATION_TEXT,
+          );
+        } catch (error) {
+          // Past the guard a failed send may have typed or sent: never sent again, but said why.
+          logFleetEvent("continue-send-failed", {
+            conversation,
+            issue:
+              error instanceof DesktopAutomationError ? error.issue : "failed",
+          });
+          throw error;
+        }
         for (let attempt = 0; attempt < 110; attempt++) {
           const delivery = await evidence.deliveryAfter(stop, requestId);
           if (delivery === "started" || delivery === "unknown") return delivery;
@@ -1081,7 +1102,7 @@ else {
           observedDesktop = read.state;
           // The widgets show the account open in Claude: a switch reaches them now.
           if (read.state.activeProfileId !== widgetActiveId) writeWidget();
-          return {
+          return (lastTraySnapshot = {
             accounts: service.store.state.accounts,
             usage: usage.snapshot(),
             desktop: { ...read.state, busy: read.busy },
@@ -1097,7 +1118,7 @@ else {
             // The items the user chose for the title, and today's figures some of them show.
             titleItems: menuBarTitle?.current.items,
             today: trayToday,
-          };
+          });
         },
         showWindow,
         requestSwitch: (profileId) => void traySwitch(profileId),
@@ -1600,6 +1621,22 @@ function bindIPC() {
   handle("menu-bar-title", () =>
     menuBarTitle?.current ?? { items: [...DEFAULT_MENU_BAR_ITEMS] },
   );
+  // The title as the menu bar shows it now, and each item's value alone, from the last look.
+  handle("menu-bar-now", () => {
+    const snapshot = lastTraySnapshot;
+    if (!snapshot) return undefined;
+    const now = Date.now();
+    const alone = (item: (typeof MENU_BAR_ITEMS)[number]) => {
+      const text = trayTitle({ ...snapshot, titleItems: [item] }, now, trayLanguage);
+      return text === "—" ? "" : text;
+    };
+    // The saved choice, which the snapshot may not hold yet right after a change.
+    const titleItems = menuBarTitle?.current.items ?? snapshot.titleItems;
+    return {
+      title: trayTitle({ ...snapshot, titleItems }, now, trayLanguage),
+      values: Object.fromEntries(MENU_BAR_ITEMS.map((item) => [item, alone(item)])),
+    };
+  });
   handle("set-menu-bar-title", (choice) => {
     const parsed = z
       .object({ items: z.array(z.enum(MENU_BAR_ITEMS)).max(MENU_BAR_ITEMS.length) })

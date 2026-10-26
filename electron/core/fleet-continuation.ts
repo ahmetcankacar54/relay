@@ -140,6 +140,8 @@ export const FLEET_REREAD_MS = 60_000;
 export const BACKGROUND_IDLE_MS = 2 * 60_000;
 /** The longest the fleet waits for working background commands before it stops them too. */
 export const BACKGROUND_WAIT_MS = 15 * 60_000;
+/** How long after Relay stopped background commands a notification's stop counts as its own doing. */
+const OWN_STOP_MS = 5 * 60_000;
 /** The background commands still working at `now`: not serving, and busy within BACKGROUND_IDLE_MS. */
 export function workingCommands(commands: readonly BackgroundCommand[], now: number) {
   return commands.filter(
@@ -277,6 +279,8 @@ export class FleetContinuation {
   private rereads = new Map<string, number>();
   /** Since when the fleet has waited for working background commands, for which stops. */
   private backgroundWait?: { key: string; since: number };
+  /** When the fleet last stopped background commands, as a switch began. */
+  private backgroundStoppedAt?: number;
   private readonly file: string;
   private readonly now: () => number;
   constructor(private readonly deps: FleetDeps) {
@@ -455,8 +459,11 @@ export class FleetContinuation {
       return this.publish({ status: "waiting", reason: "source-not-enrolled" });
     const now = this.now();
     let quota = sourceQuota(usage[source.id], now);
-    let stops = (await this.quotaStops(source, quota, now)).filter(
-      (stop) => !this.saved.handled.includes(stopKey(source, stop)),
+    let stops = this.withoutOwnStops(
+      source,
+      (await this.quotaStops(source, quota, now)).filter(
+        (stop) => !this.saved.handled.includes(stopKey(source, stop)),
+      ),
     );
     // A conversation that stopped at the limit after the last reading makes that reading
     // out of date: a 99 % read a minute before the stop must not hold the switch until the
@@ -572,8 +579,11 @@ export class FleetContinuation {
     return this.deps.withDesktopLock(async () => {
       // Recheck under the lock: a new turn or task may have started meanwhile.
       // From here on only this fresh scan counts; the one above may be a minute old.
-      const current = (await this.scanStops(source, quota, this.now())).filter(
-        (stop) => !this.saved.handled.includes(stopKey(source, stop)),
+      const current = this.withoutOwnStops(
+        source,
+        (await this.scanStops(source, quota, this.now())).filter(
+          (stop) => !this.saved.handled.includes(stopKey(source, stop)),
+        ),
       );
       if (key(current) !== key(stops) || (await this.deps.quiet(current)))
         return this.publish({
@@ -612,6 +622,8 @@ export class FleetContinuation {
               throw new DesktopSwitchRefused("work-started");
             // Claude would ask before quitting while a background command runs: stop them.
             if (!this.deps.stopBackground) return;
+            // Set first: a stopped command's notification may land while the stop runs.
+            this.backgroundStoppedAt = this.now();
             const result = await this.deps.stopBackground(stoppable);
             if (result.stopped.length || result.left || result.unexpected)
               this.logEvent("background-stopped", {
@@ -667,6 +679,33 @@ export class FleetContinuation {
       }
       return this.continueAll({ ...pending, stage: "continuing" });
     });
+  }
+  /**
+   * `stops` without those Relay caused itself: stopping a session's background command sends
+   * the session a notification, and out of quota that turn stops at the limit too. Such a stop,
+   * a notification's turn that began once Relay stopped commands, is no work to continue: it is
+   * marked handled and logged.
+   */
+  private withoutOwnStops(source: Account, stops: QuotaStop[]) {
+    const since = this.backgroundStoppedAt;
+    if (since === undefined) return stops;
+    const own = stops.filter(
+      (stop) =>
+        stop.trigger === "task-notification" &&
+        stop.stoppedAt >= since &&
+        stop.stoppedAt - since < OWN_STOP_MS,
+    );
+    if (!own.length) return stops;
+    this.save({
+      ...this.saved,
+      handled: [...this.saved.handled, ...own.map((stop) => stopKey(source, stop))],
+    });
+    for (const stop of own)
+      this.logEvent("stop-skipped", {
+        conversation: short(stop.localSessionId.replace(/^local_/, "")),
+        why: "relay-stopped-its-command",
+      });
+    return stops.filter((stop) => !own.includes(stop));
   }
   /** Asks for a fresh usage read of `accountId`, unless one was asked for under a minute ago. Whether it read. */
   private async readAgain(accountId: string) {

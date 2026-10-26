@@ -211,6 +211,14 @@ export type MenuBarItem = "five-hour" | "week" | "reset" | "tokens" | "cost" | "
 export interface MenuBarTitleChoice {
   items: MenuBarItem[];
 }
+/**
+ * The menu bar as it is now: its title, and each item's value on its own for the account open in
+ * the Claude app ("" when it has none now, such as a week a Team seat does not report).
+ */
+export interface MenuBarNow {
+  title: string;
+  values: Record<MenuBarItem, string>;
+}
 export interface RelayAPI {
   inspectContinuation(): Promise<DesktopContinuationSnapshot>;
   /** "automatic" selects from identities enrolled when watching starts; UUIDs support existing watches. */
@@ -264,6 +272,8 @@ export interface RelayAPI {
   menuBarTitle(): Promise<MenuBarTitleChoice>;
   /** Replaces the menu bar title's items and redraws it; resolves with the choice as kept. */
   setMenuBarTitle(choice: MenuBarTitleChoice): Promise<MenuBarTitleChoice>;
+  /** What the menu bar shows now, and what each item would show; undefined before the first look. */
+  menuBarNow(): Promise<MenuBarNow | undefined>;
   /** Main broadcast `relay:changed`: Relay state changed in another window or the tray. */
   onChanged(callback: () => void): () => void;
   /** Shows the main window on a page, with the intent its page acts on (and hides the menu bar panel). */

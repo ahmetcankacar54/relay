@@ -15,6 +15,7 @@ import { useRelay } from "@/data/relay-context";
 import type {
   ClaudeLaunchChoice,
   MenuBarItem,
+  MenuBarNow,
   PrankLevel,
   RelaySettings,
 } from "../../shared/types";
@@ -80,6 +81,16 @@ function ClaudeLaunchRow({
   );
 }
 
+/** Why an item shows nothing for the account open in the Claude app now. */
+const MENU_BAR_ITEM_MISSING: Record<MenuBarItem, readonly [tr: string, en: string]> = {
+  "five-hour": ["şu an limit verisi yok", "no usage data now"],
+  week: ["bu hesap haftalık limit bildirmiyor", "this account reports no weekly limit"],
+  reset: ["5 saatlik dönem henüz başlamadı", "the 5-hour period has not started"],
+  tokens: ["bugünün toplamı henüz hazır değil", "today’s total is not ready yet"],
+  cost: ["bugünün toplamı henüz hazır değil", "today’s total is not ready yet"],
+  account: ["Claude uygulamasında açık hesap yok", "no account open in the Claude app"],
+};
+
 /** Each menu bar item's name in Settings. */
 const MENU_BAR_ITEM_LABELS: Record<MenuBarItem, readonly [tr: string, en: string]> = {
   "five-hour": ["5 saatlik kullanım", "5-hour usage"],
@@ -103,16 +114,29 @@ const chosenIn = (order: readonly MenuBarItem[], chosen: readonly MenuBarItem[])
 export function MenuBarTitleRows({
   api,
   action,
+  data,
   name,
   t,
   language,
 }: Pick<ReturnType<typeof useRelay>, "api" | "action"> & {
+  /** Relay's state; each change reads the menu bar again. */
+  data?: unknown;
   /** The account open in the Claude app, for the name item's sample. */
   name?: string;
   t: ReturnType<typeof useI18n>["t"];
   language: Language;
 }) {
   const [items, setItems] = useState<MenuBarItem[]>();
+  // What the menu bar shows now, for the account open in the Claude app; samples without it.
+  const [now, setNow] = useState<MenuBarNow>();
+  const readNow = () =>
+    Promise.resolve()
+      .then(() => api.menuBarNow())
+      .then(setNow)
+      .catch(() => setNow(undefined));
+  useEffect(() => {
+    void readNow();
+  }, [api, data]);
   // The rows: at first the chosen items in their order, then the others in Settings' order.
   const [order, setOrder] = useState<MenuBarItem[]>([...MENU_BAR_ITEMS]);
   useEffect(() => {
@@ -131,9 +155,10 @@ export function MenuBarTitleRows({
     };
   }, [api]);
   const save = (next: MenuBarItem[]) =>
-    void action("menu-bar-title", async () =>
-      setItems((await api.setMenuBarTitle({ items: next })).items),
-    );
+    void action("menu-bar-title", async () => {
+      setItems((await api.setMenuBarTitle({ items: next })).items);
+      await readNow();
+    });
   const chosen = chosenIn(order, items ?? []);
   const full = chosen.length >= MENU_BAR_MAX_ITEMS;
   const toggle = (item: MenuBarItem, on: boolean) =>
@@ -163,12 +188,17 @@ export function MenuBarTitleRows({
           </p>
         </div>
         {items && (
-          <span
-            data-slot="menu-bar-preview"
-            className="shrink-0 rounded-md border bg-muted/40 px-2 py-0.5 text-sm font-medium whitespace-pre tabular-nums"
-            title={t("Önizleme", "Preview")}
-          >
-            {preview || t("Yalnızca panda", "Panda only")}
+          <span className="flex shrink-0 items-center gap-2">
+            {now && (
+              <span className="text-xs text-muted-foreground">{t("Şu an", "Now")}</span>
+            )}
+            <span
+              data-slot="menu-bar-preview"
+              className="rounded-md border bg-muted/40 px-2 py-0.5 text-sm font-medium whitespace-pre tabular-nums"
+              title={now ? t("Menü çubuğunda şu an", "In the menu bar now") : t("Önizleme", "Preview")}
+            >
+              {(now ? now.title : preview) || t("Yalnızca panda", "Panda only")}
+            </span>
           </span>
         )}
       </div>
@@ -188,9 +218,16 @@ export function MenuBarTitleRows({
               />
               <label htmlFor={`menu-bar-item-${item}`} className="min-w-0 flex-1 truncate text-sm">
                 {label}{" "}
-                <span className="text-muted-foreground tabular-nums">
-                  {menuBarPreview([item], language, sample)}
-                </span>
+                {now && !now.values[item] ? (
+                  // Nothing to show for this account now: say why, so a switch that changes nothing is clear.
+                  <span data-slot="menu-bar-missing" className="text-muted-foreground italic">
+                    {t(...MENU_BAR_ITEM_MISSING[item])}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground tabular-nums">
+                    {now ? now.values[item] : menuBarPreview([item], language, sample)}
+                  </span>
+                )}
               </label>
               {on && (
                 <span className="flex shrink-0 items-center gap-0.5">
@@ -321,6 +358,7 @@ export function Settings() {
         {data?.diagnostics.platform === "darwin" && (
           <SettingGroup id="settings-menu-bar" title={t("Menü çubuğu", "Menu bar")}>
             <MenuBarTitleRows
+              data={data}
               api={api}
               action={action}
               name={active?.name}

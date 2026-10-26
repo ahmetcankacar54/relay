@@ -9,6 +9,7 @@ import {
   TranscriptScanner,
   isTaskNotification,
   type TranscriptSummary,
+  type TurnTrigger,
 } from "./transcript-scan";
 import type { Account } from "../../shared/types";
 import type { Store } from "./store";
@@ -256,6 +257,11 @@ export interface QuotaStop {
   transcriptRelative: string;
   transcriptBytes: number;
   transcriptSha256: string;
+  /**
+   * What started the turn that hit the limit: a person's prompt, a tool's result in a working
+   * turn, or a background task's notification, as a command that ended (or was stopped) sends.
+   */
+  trigger?: TurnTrigger;
 }
 /** Index values to the labels Claude shows; bypass and others are left alone. */
 export function uiPermissionMode(value: unknown) {
@@ -975,6 +981,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
         transcriptRelative: transcript.relative,
         transcriptBytes: transcript.summary.bytes,
         transcriptSha256: transcript.summary.sha256,
+        ...(transcript.summary.trigger ? { trigger: transcript.summary.trigger } : {}),
       });
     }
     this.scanner.retain(scanned);

@@ -674,7 +674,7 @@ test("draftReason words every reason in both languages, with a fallback", () => 
   const busy: [string, string] = ["Konuşma meşguldü", "The conversation was busy"];
   const labels: Record<string, [string, string]> = {
     accessibility: ["Erişilebilirlik izni yok", "Accessibility permission missing"],
-    "composer-not-empty": ["Mesaj kutusu doluydu", "The message box was not empty"],
+    "composer-not-empty": ["Mesaj kutusunda yazı vardı, üzerine yazmadım", "The message box already held text, so it was left alone"],
     "context-changed": ["Ekran değişti", "The screen changed"],
     lost: ["Claude uygulaması taslağı sildi", "The Claude app cleared the draft"],
     busy,
@@ -684,7 +684,8 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     "maybe-typed": maybeTyped,
     unconfirmed: maybeTyped,
     "delivery-ambiguous": maybeTyped,
-    "no-composer": ["Mesaj kutusu bulunamadı", "No message box was found"],
+    "no-composer": ["Konuşma açıldı ama mesaj kutusu yüklenmedi", "The conversation opened, but its message box never loaded"],
+    loading: ["Claude uygulaması hâlâ yükleniyordu", "The Claude app was still loading"],
     unsupported,
     // The helper's own issue names read as the restorer's.
     "desktop-ui-unsupported": unsupported,

@@ -260,3 +260,37 @@ test("the row before trailing task notifications is kept until another row follo
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("the scan says what started the latest assistant turn, past notifications after it", async () => {
+  const { root, file } = await scratch();
+  try {
+    const scanner = new TranscriptScanner();
+    const notice = (uuid: string) => ({
+      type: "user",
+      uuid,
+      origin: { kind: "task-notification" },
+      message: { content: "<task-notification>\n<task-id>t</task-id>" },
+    });
+    const limited = (uuid: string) => ({
+      type: "assistant",
+      uuid,
+      error: "rate_limit",
+      message: { content: [{ type: "text", text: "You've hit your session limit" }] },
+    });
+    await fs.writeFile(file, line({ type: "user", uuid: "u1", message: { content: "go" } }) + line(limited("a1")));
+    assert.equal((await scanner.scan(file)).trigger, "prompt");
+    await fs.appendFile(
+      file,
+      line({ type: "user", uuid: "u2", message: { content: [{ type: "tool_result", content: "ok" }] } }) +
+        line(limited("a2")),
+    );
+    assert.equal((await scanner.scan(file)).trigger, "tool");
+    // A notification's own turn hits the limit; later notifications leave the answer standing.
+    await fs.appendFile(file, line(notice("n1")) + line(limited("a3")) + line(notice("n2")));
+    const scanned = await scanner.scan(file);
+    assert.equal(scanned.trigger, "task-notification");
+    assert.equal(scanned.beforeNotifications?.uuid, "a3");
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

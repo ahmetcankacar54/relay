@@ -16,6 +16,23 @@ export interface TranscriptSummary {
   last?: Row;
   /** When `last` is a task notification, the latest other main-chain row before it. */
   beforeNotifications?: Row;
+  /**
+   * What started the turn of the latest main-chain assistant row: the user row right before it
+   * was a person's prompt, a background task's notification, or a tool's result.
+   */
+  trigger?: TurnTrigger;
+}
+
+/** What a main-chain user row is, as the start of the assistant turn after it. */
+export type TurnTrigger = "prompt" | "task-notification" | "tool";
+
+/** The kind of a main-chain user row: a task notification, a tool result, or a prompt. */
+export function turnTrigger(row: Row): TurnTrigger {
+  if (isTaskNotification(row)) return "task-notification";
+  const content = row.message?.content;
+  return Array.isArray(content) && content.some((c) => c?.type === "tool_result")
+    ? "tool"
+    : "prompt";
 }
 
 /**
@@ -45,6 +62,9 @@ interface Scan {
   cwds: Set<string>;
   last?: Row;
   beforeNotifications?: Row;
+  /** The kind of the latest main-chain user row, and of the one before the latest assistant row. */
+  lastUser?: TurnTrigger;
+  trigger?: TurnTrigger;
   /** A malformed or oversized line was consumed; its file is never usable. */
   invalid: boolean;
 }
@@ -120,6 +140,7 @@ export class TranscriptScanner {
         cwds: new Set(scan!.cwds),
         last: scan!.last,
         beforeNotifications: scan!.beforeNotifications,
+        trigger: scan!.trigger,
       };
     } finally {
       await handle.close();
@@ -217,6 +238,8 @@ export class TranscriptScanner {
       else if (scan.last && !isTaskNotification(scan.last))
         scan.beforeNotifications = scan.last;
       scan.last = value;
+      if (value.type === "user") scan.lastUser = turnTrigger(value);
+      else scan.trigger = scan.lastUser;
     }
   }
 }

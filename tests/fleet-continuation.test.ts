@@ -830,3 +830,51 @@ test("a background command the fleet did not weigh, or one that will not end, ca
   await fleet.tick();
   assert.equal(asked, 0);
 });
+
+test("a stop that Relay's own stopping of a background command caused is left alone", async () => {
+  const f = setup();
+  const logs: Array<Record<string, unknown>> = [];
+  let clock = NOW;
+  const real = { ...stop(0), trigger: "task-notification" as const, stoppedAt: NOW - 30_000 };
+  f.state.stops.set(f.a.id, [real]);
+  let stoppedCommands = 0;
+  const caused = {
+    ...stop(1),
+    trigger: "task-notification" as const,
+    stoppedAt: NOW + 4_000,
+  };
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    now: () => clock,
+    log: (event, fields) => void logs.push({ event, ...fields }),
+    backgroundCommands: () => [],
+    stopBackground: async () => {
+      stoppedCommands++;
+      // The stopped server's notification starts a turn in another conversation; out of quota,
+      // it stops at the limit as Claude is about to quit.
+      f.state.stops.set(f.a.id, [real, caused]);
+      clock += 5_000;
+      return { stopped: ["node"], left: 0, unexpected: 0 };
+    },
+    switchTo: async (targetId, guards) => {
+      await guards.beforeQuit();
+      if (!guards.canProceed()) throw new DesktopSwitchRefused("cancelled");
+      f.state.switches.push(targetId);
+      f.state.active = targetId;
+    },
+    quietSync: () => undefined,
+    unchanged: (s) => s !== real || f.state.stops.get(f.a.id)!.length === 1,
+  });
+  fleet.setEnabled(true);
+  // The first attempt is called off: the stop it saw moved on as the notification landed.
+  await fleet.tick();
+  assert.equal(stoppedCommands, 1);
+  assert.deepEqual(f.state.switches, []);
+  // The next sees the caused stop, leaves it as handled, and switches for the real one alone.
+  f.state.stops.set(f.a.id, [{ ...real, turnId: "later" }, caused]);
+  clock += 10_000;
+  await fleet.tick();
+  assert.deepEqual(f.state.switches, [f.b.id]);
+  assert.deepEqual(f.state.sent.length, 1);
+  assert.ok(logs.some((l) => l.event === "stop-skipped" && l.why === "relay-stopped-its-command"));
+});

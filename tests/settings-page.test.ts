@@ -423,6 +423,59 @@ test("the menu bar title's items are switched on, ordered and saved through main
   }
 });
 
+test("with a menu bar to read, the rows show what it shows now and why an item shows nothing", async () => {
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    let items = ["five-hour", "week", "reset"];
+    // A Team seat with its five-hour period not started: no week, no time left.
+    const now = () => ({
+      title: items.includes("account") ? "%0 · Alto" : "%0",
+      values: { "five-hour": "%0", week: "", reset: "", tokens: "3,1M", cost: "$4,10", account: "Alto" },
+    });
+    const relay = relayFor();
+    relay.api = {
+      ...relay.api,
+      menuBarTitle: async () => ({ items }),
+      setMenuBarTitle: async (choice: { items: string[] }) => {
+        items = choice.items;
+        return { items };
+      },
+      menuBarNow: async () => now(),
+    } as unknown as Relay["api"];
+    relay.action = (async (_name: string, fn: () => Promise<unknown>) => void (await fn())) as Relay["action"];
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+        ),
+      ),
+    );
+    const container = dom.container as unknown as Fake;
+    const attr = (n: Fake | undefined, name: string) =>
+      (n?.attributes as Map<string, string> | undefined)?.get(name);
+    const preview = () => textOf(find(container, (n) => attr(n, "data-slot") === "menu-bar-preview"));
+    const row = (id: string) => textOf(find(container, (n) => attr(n, "data-item") === id));
+    assert.equal(preview(), "%0");
+    assert.match(row("week"), /bu hesap haftalık limit bildirmiyor/);
+    assert.match(row("reset"), /5 saatlik dönem henüz başlamadı/);
+    assert.match(row("tokens"), /3,1M/);
+    // A change reads the menu bar again.
+    await act(async () =>
+      dom.dispatch(find(container, (n) => attr(n, "id") === "menu-bar-item-account")!, "click", { detail: 1 }),
+    );
+    assert.equal(preview(), "%0 · Alto");
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});
+
 test("main keeps the menu bar title beside the registry and redraws it on a change", () => {
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
   assert.match(main, /new MenuBarTitle\(path\.join\(app\.getPath\("userData"\), "menu-bar\.json"\)\)/);

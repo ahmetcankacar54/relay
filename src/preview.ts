@@ -602,6 +602,8 @@ export const previewApi: RelayAPI = {
     previewMenuBar = menuBarItems(choice.items);
     return { items: [...previewMenuBar] };
   },
+  // No menu bar in the browser: Settings shows its samples.
+  menuBarNow: async () => undefined,
   onChanged: () => () => {},
   openPage: async (page, intent) => {
     location.hash = intentHash(page, intent);
