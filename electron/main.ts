@@ -32,6 +32,7 @@ import { identity, readObject } from "./core/desktop-files";
 import { DesktopLock } from "./core/desktop-lock";
 import { lastDraftWipeAt } from "./core/desktop-wipe";
 import { nativeDesktopWatch, unpackedPath } from "./core/desktop-watch";
+import { waitForConversation } from "./core/fleet-show";
 import { macClaudeLog, pageBooted } from "./core/desktop-launch";
 import { IDLE_MS, QUIET_MS } from "./core/draft-restorer";
 import {
@@ -309,8 +310,6 @@ async function writeUiOutline(helper: string, file: string, running: () => Promi
   await fsp.mkdir(path.dirname(file), { recursive: true });
   await fsp.writeFile(file, JSON.stringify(result, null, 1), { mode: 0o600 });
 }
-/** How long a continuation waits for its conversation to show after a switch. */
-const CONTINUE_SHOW_MS = 3 * 60_000;
 /**
  * One Desktop operation at a time. The menu bar shows each as it begins rather than at the
  * next poll, and its end, for operations no caller refreshes the tray after.
@@ -854,7 +853,7 @@ else {
         beforeSend: () => void,
       ): Promise<FleetResult> => {
         const sleep = (ms: number) =>
-          new Promise((resolve) => setTimeout(resolve, ms));
+          new Promise<void>((resolve) => setTimeout(resolve, ms));
         const conversation = stop.localSessionId
           .replace(/^local_/, "")
           .slice(0, 8);
@@ -863,45 +862,24 @@ else {
           logFleetEvent("continue-skip", { conversation, why, ...fields });
           return "skipped" as const;
         };
-        let snapshot: DesktopAutomationSnapshot | undefined;
-        let last: DesktopAutomationSnapshot | undefined;
-        let issue: string | undefined;
-        let openedAt = -Infinity;
-        // Claude may still be starting, or loading the account's pages: resend the link
-        // every 5 s until the conversation shows, for up to 3 minutes.
-        const deadline = Date.now() + CONTINUE_SHOW_MS;
-        while (!snapshot && Date.now() < deadline) {
-          try {
-            const view = await automation.inspect();
-            last = view;
-            issue = undefined;
-            if (
-              view.localSessionId === stop.localSessionId &&
-              view.permissionMode
-            )
-              snapshot = view;
-            else if (
-              Date.now() - openedAt >= 5_000 &&
-              // A link makes Claude load its page again: none while it is still loading.
-              (await claudePageBooted()) !== false
-            ) {
-              openedAt = Date.now();
-              await automation.openSession(stop.localSessionId);
-            }
-          } catch (error) {
-            // Not ready yet.
-            issue =
-              error instanceof DesktopAutomationError ? error.issue : "failed";
-          }
-          if (!snapshot) await sleep(500);
-        }
-        if (!snapshot)
-          return skip("not-shown", {
-            shown: last?.localSessionId === stop.localSessionId,
-            permissionMode: !!last?.permissionMode,
-            screen: last?.screen ?? null,
-            issue: issue ?? null,
+        const shown = await waitForConversation(stop.localSessionId, {
+          inspect: () => automation.inspect(),
+          open: (id) => automation.openSession(id),
+          booted: claudePageBooted,
+          unchanged: () => evidence.unchanged(stop),
+          now: Date.now,
+          sleep,
+        });
+        if (!("shown" in shown))
+          return skip(shown.skipped, {
+            shown: shown.last?.localSessionId === stop.localSessionId,
+            permissionMode: !!shown.last?.permissionMode,
+            screen: shown.last?.screen ?? null,
+            panes: shown.last?.panes ?? null,
+            opened: shown.opened,
+            issue: shown.issue ?? null,
           });
+        let snapshot = shown.shown;
         const state = await evidence.read(snapshot);
         if (state.identity.profileId !== target.id) return skip("account");
         if (state.session.id !== stop.cliSessionId) return skip("session");
