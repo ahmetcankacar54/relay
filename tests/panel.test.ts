@@ -138,11 +138,10 @@ test("panel rows show the account's status when something is wrong", () => {
       relayFor(active, [active, other], { active: use("active", 10, 10), other: { ...r.usage!, accountId: "other" } }),
       createElement(PanelAccounts, { now: NOW }),
     );
-    // The row's one line names the problem after the percents of any reading, and its tooltip names it alone.
+    // The row's one line names the problem first, then the percents of any reading; its tooltip names it alone.
     assert.match(html, new RegExp(`title="${label}"`), name);
-    const reading = r.usage?.checkedAt ? "%1 · %1 · " : "";
-    const shown = reading ? label.charAt(0).toLocaleLowerCase("tr") + label.slice(1) : label;
-    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-\\[11\\.5px\\]">${reading}${shown}</span>`), name);
+    const reading = r.usage?.checkedAt ? " · %1 · %1" : "";
+    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-\\[11\\.5px\\]">${label}${reading}</span>`), name);
     assert.doesNotMatch(html, /Limit verisi eski|Hazır · dönem başlamadı/, name);
   }
   // A browser approval in progress for that account.
@@ -246,7 +245,7 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   // Its two limits are the ring's, used percent per window.
   assert.match(suggestedRow, /<div role="img" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
   // Its line starts with the two percents.
-  assert.match(suggestedRow, />Vertex<\/span><span[^>]*>önerilen<\/span><\/span><span[^>]*>%12 · %31 · hazır<\/span><\/span><span[^>]*>Geç<\/span><\/button>/);
+  assert.match(suggestedRow, />Vertex<\/span><span[^>]*>önerilen<\/span><\/span><span[^>]*>Hazır · %12 · %31<\/span><\/span><span[^>]*>Geç<\/span><\/button>/);
   assert.match(html, />Otomasyon</);
   // Automation reads as rows: the setting's name and its state, each opening its page.
   assert.match(html, /<button type="button" title="Kişisel · Max %78 kullanıldı · Kapalı\. Limit dolunca başka hesaba sen geçersin\."[^>]*>.*?>Otomatik geçiş<\/span><span[^>]*>Kapalı<\/span>/);

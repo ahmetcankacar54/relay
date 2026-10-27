@@ -154,8 +154,23 @@ const onward = (text: string, language: Language) =>
     : text.charAt(0).toLocaleLowerCase(language) + text.slice(1);
 
 /**
- * A row's status in a few words: what is wrong, how old a reading is that is no longer fresh, else
- * when the account matters next. `short` is the menu bar panel's wording.
+ * How long until the account's five-hour period changes on its own, as the reading has it: "3 sa
+ * 10 dk sonra yenilenir", or "… açılır" for a full one. Undefined without a reset still ahead. A
+ * reset time stays true however old the reading is.
+ */
+function nextReset(row: OverviewRow, t: T, now: number): string | undefined {
+  const five = row.usage?.fiveHour;
+  const full = row.state === "exhausted" || (five?.usedPercent ?? 0) >= 100;
+  const at = Date.parse((row.state === "exhausted" ? row.availableAt : five?.resetsAt) ?? "");
+  const left = Number.isFinite(at) ? leftUntil(at, now, t) : undefined;
+  if (!left) return undefined;
+  return full ? t(`${left} sonra açılır`, `Opens in ${left}`) : t(`${left} sonra yenilenir`, `Resets in ${left}`);
+}
+
+/**
+ * A row's status in a few words: what is wrong, how old a reading is that is no longer fresh (with
+ * when its period resets, while that is ahead), else when the account matters next. `short` is the
+ * menu bar panel's wording, which leads with the time left.
  */
 function rowStatus(
   row: OverviewRow,
@@ -179,7 +194,10 @@ function rowStatus(
   if (health.tone !== "ok" && !outOfDate) return health.label;
   if (row.usage?.checkedAt && ringState(row.usage, now) === "stale") {
     const age = formatRelative(row.usage.checkedAt, now, language);
-    return short ? t(`${age} okundu`, `Read ${age}`) : t(`Limit verisi ${age} okundu`, `Usage data read ${age}`);
+    const next = nextReset(row, t, now);
+    if (short) return next ? t(`${next} · ${age} okundu`, `${next} · read ${age}`) : t(`${age} okundu`, `Read ${age}`);
+    const read = t(`Limit verisi ${age} okundu`, `Usage data read ${age}`);
+    return next ? `${read} · ${onward(next, language)}` : read;
   }
   if (outOfDate) return health.label;
   switch (row.state) {
@@ -187,14 +205,20 @@ function rowStatus(
       const left = timeLeft(row.usage?.fiveHour?.resetsAt, now, t);
       if (!left) return t("Dönem açık", "Period open");
       return short
-        ? t(`Dönem açık ${left} kaldı`, `Period open ${left} left`)
+        ? nextReset(row, t, now)!
         : t(`Dönem açık · ${left} kaldı`, `Period open · ${left} left`);
     }
     case "ready":
       return t("Hazır", "Ready");
     case "exhausted": {
       const at = row.availableAt ? formatClock(row.availableAt, language, zone) : "";
-      return at ? t(`${clockLocative(at)} açılır`, `Opens ${at}`) : t("Dolu", "Full");
+      if (!at) return t("Dolu", "Full");
+      const next = nextReset(row, t, now);
+      if (short && next) return next;
+      const left = next && leftUntil(Date.parse(row.availableAt!), now, t);
+      return left
+        ? t(`${clockLocative(at)} açılır (${left})`, `Opens ${at} (${left})`)
+        : t(`${clockLocative(at)} açılır`, `Opens ${at}`);
     }
     default:
       return t("Limit verisi eski", "Usage data is out of date");
@@ -219,8 +243,9 @@ export function accountTileLine(
 }
 
 /**
- * The menu bar panel row's line: the reading's five-hour and week percents, then the short status
- * ("%22 · %35 · dönem açık 3 sa", "%22 · %35 · veri 2 sa önce").
+ * The menu bar panel row's line: the short status first, so a narrow panel cuts the percents and
+ * never the time left, then the reading's five-hour and week percents, which the ring shows too
+ * ("3 sa 10 dk sonra yenilenir · %22 · %35", "1 sa sonra açılır · %100 · %57").
  */
 export function panelRowLine(
   row: OverviewRow,
@@ -237,5 +262,5 @@ export function panelRowLine(
       : [row.usage?.fiveHour, row.usage?.sevenDay].flatMap((w) =>
           w ? [formatPercent(percentUsed(w.usedPercent), language)] : [],
         );
-  return percents.length ? [...percents, onward(status, language)].join(" · ") : status;
+  return [status, ...percents].join(" · ");
 }
