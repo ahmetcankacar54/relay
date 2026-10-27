@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import {
   KEEPER_COOLDOWN_MS,
   KEEPER_DAILY_LIMIT,
+  KEEPER_STOP_RETRY_MS,
   WindowKeeper,
   keeperDecision,
   type KeeperDeps,
@@ -315,7 +316,7 @@ test("a deleted planned account takes no slot in the staggering or today's count
   assert.equal(snapshot.plannedToday, only.windows.length);
 });
 
-test("local administrator policy stops the account until the plan changes", async () => {
+test("local administrator policy stops the account until the plan changes or six hours pass", async () => {
   const f = setup();
   f.calls.fail = new Error("routine-policy-unverified");
   const keeper = new WindowKeeper(f.deps);
@@ -796,4 +797,21 @@ test("the windows are told only when the keeper's snapshot changed", async () =>
   assert.equal(told, 2);
   await keeper.tick();
   assert.equal(told, 2);
+});
+
+test("a stopping refusal is tried again six hours later, also after a restart", async () => {
+  const f = setup();
+  f.calls.fail = new Error("routine-policy-unverified");
+  await new WindowKeeper(f.deps).tick();
+  assert.equal(f.calls.starts.length, 1);
+  // Seen 2026-10-18: one refusal left every account stopped for nine days.
+  f.calls.fail = undefined;
+  f.clock.now += KEEPER_STOP_RETRY_MS - 60_000;
+  const restarted = new WindowKeeper(f.deps);
+  await restarted.tick();
+  assert.equal(f.calls.starts.length, 1);
+  assert.equal(restarted.snapshot().accounts[0].reason, "routine-policy-unverified");
+  f.clock.now += 2 * 60_000;
+  await restarted.tick();
+  assert.equal(f.calls.starts.length, 2);
 });

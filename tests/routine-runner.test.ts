@@ -229,3 +229,45 @@ test("isolated starter disables every tool, MCP, customization and persistence w
   a.auth!.accountUuid = undefined;
   assert.equal(windowStartEligible(a), false);
 });
+
+test("Claude Code's empty server-settings cache is no policy; any setting in it is", async (t) => {
+  const f = await fixture(t);
+  const file = path.join(f.profile, "remote-settings.json");
+  f.options.policyPaths = [file];
+  // Claude Code writes {} on every run for an organization without server settings.
+  await fs.writeFile(file, "{}");
+  await runQuotaStarter(f.store, f.account, f.credentials, f.options);
+  assert.equal(f.commands.some((c) => c.args[0] === "--print"), true);
+  for (const content of ['{"permissions":{"deny":["Bash"]}}', "not json"]) {
+    const g = await fixture(t);
+    const other = path.join(g.profile, "remote-settings.json");
+    g.options.policyPaths = [other];
+    await fs.writeFile(other, content);
+    await assert.rejects(
+      runQuotaStarter(g.store, g.account, g.credentials, g.options),
+      /routine-policy-unverified/,
+    );
+    assert.equal(g.credentialCalls(), 0);
+  }
+});
+test("a policy check that ends without an answer is retried later, never read as a policy", { skip: process.platform !== "darwin" }, async (t) => {
+  for (const [failure, reason] of [
+    [{ code: null, killed: true, signal: "SIGTERM", stderr: "" }, /routine-policy-check-failed/],
+    [{ code: 1, stderr: "something else" }, /routine-policy-unverified/],
+    [undefined, /routine-policy-unverified/],
+  ] as const) {
+    const f = await fixture(t);
+    const execute = f.options.execute!;
+    f.options.execute = (async (file: string, args: string[], options: any) => {
+      if (file !== "/usr/bin/defaults") return execute(file, args, options);
+      // undefined: the domain exists, so `defaults` prints it.
+      if (!failure) return { stdout: "{ x = 1; }", stderr: "" };
+      throw Object.assign(new Error("defaults"), failure);
+    }) as NonNullable<QuotaStarterOptions["execute"]>;
+    await assert.rejects(
+      runQuotaStarter(f.store, f.account, f.credentials, f.options),
+      reason,
+    );
+    assert.equal(f.credentialCalls(), 0);
+  }
+});

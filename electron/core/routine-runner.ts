@@ -117,6 +117,22 @@ export function routinePolicyPaths(
 export function windowStartEligible(account: Account) {
   return !!planningIdentity(account);
 }
+/** Whether Claude Code's cached server settings at `file` are an empty object. */
+async function noRemoteSettings(file: string) {
+  try {
+    const stat = await fs.lstat(file);
+    if (!stat.isFile() || stat.size > 65_536) return false;
+    const value: unknown = JSON.parse(await fs.readFile(file, "utf8"));
+    return (
+      !!value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 0
+    );
+  } catch {
+    return false;
+  }
+}
 export interface QuotaStarterOptions {
   execute?: typeof execute;
   policyPaths?: string[];
@@ -156,14 +172,18 @@ export async function runQuotaStarter(
     identity.orgId !== account.auth!.orgId
   )
     throw new Error("identity-mismatch");
+  const remoteSettings = path.join(profile, "remote-settings.json");
   for (const file of options.policyPaths ?? routinePolicyPaths(profile)) {
     try {
       await fs.lstat(file);
-      throw new Error("routine-policy-unverified");
     } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "ENOENT")
-        throw new Error("routine-policy-unverified");
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw new Error("routine-policy-unverified");
     }
+    // Claude Code caches its organization's server settings here on every run, as {} for an
+    // organization that has none: that is no policy.
+    if (file === remoteSettings && (await noRemoteSettings(file))) continue;
+    throw new Error("routine-policy-unverified");
   }
   const executable = resolveExecutable(store.state.executable);
   if (!executable) throw new Error("routine-cli-unavailable");
@@ -180,8 +200,12 @@ export async function runQuotaStarter(
       });
       throw new Error("routine-policy-unverified");
     } catch (e) {
+      if (e instanceof Error && e.message === "routine-policy-unverified") throw e;
       const failure = e as { code?: number; stderr?: string };
-      if (failure.code !== 1 || !/does not exist/i.test(failure.stderr ?? ""))
+      // `defaults` says the domain is missing with exit 1. Any other end (a timeout on a busy
+      // Mac, a signal) neither shows a policy nor rules one out: the keeper tries again later.
+      if (failure.code !== 1) throw new Error("routine-policy-check-failed");
+      if (!/does not exist/i.test(failure.stderr ?? ""))
         throw new Error("routine-policy-unverified");
     }
   }

@@ -9,6 +9,10 @@ const ROUTINE_FAILURES: Record<string, Words> = {
     "yönetici politikası veya kimlik doğrulanamadı",
     "administrator policy or identity not verified",
   ],
+  "routine-policy-check-failed": [
+    "yönetici politikası denetlenemedi, yeniden denenecek",
+    "administrator policy could not be checked, will retry",
+  ],
   "routine-cli-unavailable": ["Claude CLI bulunamadı", "Claude CLI not found"],
   "routine-cli-unsupported": [
     "Claude CLI sürümü desteklenmiyor",

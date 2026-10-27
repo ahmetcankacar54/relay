@@ -36,7 +36,9 @@ const NOTIFY_MS = 60 * 60_000;
 const TRANSIENT_ISSUES = new Set(["rate-limited", "unavailable"]);
 /**
  * Refusals that repeat on every attempt (administrator policy, an unsupported
- * system or CLI). They stop the account until the plan changes.
+ * system or CLI). They stop the account until the plan changes, or for
+ * KEEPER_STOP_RETRY_MS: a policy removed or a CLI installed meanwhile must not
+ * leave the plan silently off for good.
  */
 export const KEEPER_STOP_REASONS = new Set([
   "routine-policy-unverified",
@@ -44,6 +46,8 @@ export const KEEPER_STOP_REASONS = new Set([
   "routine-cli-unavailable",
   "routine-cli-unsupported",
 ]);
+/** How long a stopping refusal holds before the keeper tries the account again. */
+export const KEEPER_STOP_RETRY_MS = 6 * 60 * 60_000;
 
 export interface KeeperState {
   settings: PlanningSettings;
@@ -194,8 +198,8 @@ export class WindowKeeper {
   private notified = new Map<string, number>();
   /** The snapshot the windows were last told about, as JSON. */
   private published?: string;
-  /** Identity → the refusal that stopped it; cleared when the plan changes. */
-  private stopped = new Map<string, string>();
+  /** Identity → the refusal that stopped it and when; cleared when the plan changes. */
+  private stopped = new Map<string, { reason: string; at: number }>();
   private readonly file: string;
   private readonly now: () => number;
   /** Today's next starts at today's pace; rebuilt after a restart. */
@@ -230,7 +234,10 @@ export class WindowKeeper {
         attempt.status === "failed" &&
         KEEPER_STOP_REASONS.has(attempt.reason ?? "")
       )
-        this.stopped.set(attempt.identityKey, attempt.reason!);
+        this.stopped.set(attempt.identityKey, {
+          reason: attempt.reason!,
+          at: Date.parse(attempt.at),
+        });
       else this.stopped.delete(attempt.identityKey);
   }
   private persist() {
@@ -242,6 +249,11 @@ export class WindowKeeper {
     this.timer = setInterval(() => void this.tick(), KEEPER_TICK_MS);
     this.timer.unref();
     void this.tick();
+  }
+  /** The refusal that still stops `identity` at `now`, if any. */
+  private stoppedFor(identity: string | undefined, now: number) {
+    const stop = this.stopped.get(identity ?? "");
+    return stop && now - stop.at < KEEPER_STOP_RETRY_MS ? stop.reason : undefined;
   }
   /** The plan changed: try stopped accounts again and re-plan today, quietly. */
   resume() {
@@ -325,7 +337,7 @@ export class WindowKeeper {
           this.attempts,
           now,
           state.busyAccountIds.includes(account.id),
-          this.stopped.get(planningIdentity(account) ?? ""),
+          this.stoppedFor(planningIdentity(account), now),
           schedule[account.id],
         ),
       );
@@ -444,7 +456,10 @@ export class WindowKeeper {
       attempt.reason =
         error instanceof Error ? error.message : "routine-request-failed";
       if (KEEPER_STOP_REASONS.has(attempt.reason))
-        this.stopped.set(attempt.identityKey, attempt.reason);
+        this.stopped.set(attempt.identityKey, {
+          reason: attempt.reason,
+          at: this.now(),
+        });
       const last = this.notified.get(account.id) ?? -Infinity;
       if (this.now() - last >= NOTIFY_MS) {
         this.notified.set(account.id, this.now());
