@@ -248,7 +248,8 @@ test("the settings card shows the mode with its sentence, the instance, the star
     createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "guide" } }) }),
   );
   assert.match(guided, /Sadece haber ver/);
-  assert.match(guided, /Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez/);
+  assert.match(guided, /Geçişte Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez/);
+  assert.match(guided, /menü çubuğu panelinde “Geçir” çıkar/);
   assert.match(guided, /aynı hesaba geçmesi için Relay o oturumu da değiştirebilir; sen seçmedikçe hiçbir şeyi değiştirmez/);
   assert.doesNotMatch(guided, /claude\.ai oturumunu da değiştirir/);
   const html = render(

@@ -6,6 +6,7 @@ import type { LostFoundCollection } from "./lost-found";
 export type { LostFoundCollection, LostFoundWeek, LostItem } from "./lost-found";
 import type { Tempo } from "./tempo";
 import type {
+  ExtensionOffer,
   ExtensionOutcome,
   ExtensionSetting,
   ExtensionStatus,
@@ -14,6 +15,7 @@ export type {
   ExtensionCurrent,
   ExtensionInstance,
   ExtensionMode,
+  ExtensionOffer,
   ExtensionOutcome,
   ExtensionSetting,
   ExtensionStatus,
@@ -121,6 +123,8 @@ export interface Snapshot {
   drafts?: DraftSummary[];
   /** What Desktop's current account lacks of the sidebar organization of the accounts it came from. */
   sidebar?: SidebarGapSummary;
+  /** The Claude extension is left on another account than Desktop's, and can be brought along. */
+  extension?: ExtensionOffer;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   accounts: Account[];

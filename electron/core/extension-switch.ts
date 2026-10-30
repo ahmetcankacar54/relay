@@ -67,7 +67,7 @@ export interface ExtensionRequest {
   known: string[];
 }
 
-type Core = Pick<ExtensionOutcome, "result" | "reason" | "saved">;
+type Core = Pick<ExtensionOutcome, "result" | "reason" | "saved" | "current">;
 
 const lower = (list: string[]) => list.map((value) => value.toLowerCase());
 
@@ -178,16 +178,17 @@ export class ExtensionSwitcher {
    */
   private async guide(request: ExtensionRequest): Promise<Core> {
     const current = await this.check({ setting: request.setting, known: request.known });
-    if (!current || current.state === "unreadable")
-      return { result: "failed", reason: "unreadable", saved: false };
+    if (!current) return { result: "failed", reason: "unreadable", saved: false };
+    if (current.state === "unreadable")
+      return { result: "failed", reason: "unreadable", saved: false, current };
     const saved = current.state === "signed-in" && current.known;
     if (
       current.state === "signed-in" &&
       current.accountUuid &&
       lower(request.target).includes(current.accountUuid)
     )
-      return { result: "unchanged", reason: "already-there", saved };
-    return { result: "skipped", reason: "guide-mismatch", saved };
+      return { result: "unchanged", reason: "already-there", saved, current };
+    return { result: "skipped", reason: "guide-mismatch", saved, current };
   }
 
   /**

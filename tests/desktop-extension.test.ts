@@ -239,3 +239,61 @@ test("without a saved choice Relay only guides: nothing is written and no browse
   assert.deepEqual(f.world.web.get(f.profile), loginFor(b.desktop!.accountUuid, 2));
   assert.equal((await f.manager.extensionStatus())!.setting.mode, "guide");
 });
+
+test("in mode 'guide' the panel is offered the extension, and sync now brings it along, quitting and reopening the browser", async (t) => {
+  const f = await fixture(t, { defaultSetting: true });
+  const a = await f.account("A");
+  const b = await f.account("B");
+  f.world.state.running = true;
+  f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
+  await f.vault.save(a.desktop!.accountUuid, signInFor(a.desktop!.accountUuid, 1));
+  await f.cookieVault.save(a.desktop!.accountUuid, loginFor(a.desktop!.accountUuid, 1));
+  // Before Relay has seen anything, there is nothing to offer.
+  assert.equal(await f.manager.extensionOffer(), undefined);
+  await f.manager.switchTo(a.id);
+  assert.equal(f.manager.extensionOutcome?.reason, "guide-mismatch");
+  assert.deepEqual(await f.manager.extensionOffer(), {
+    accountId: a.id,
+    to: "A",
+    on: "B",
+    browser: "Brave",
+  });
+  f.events.length = 0;
+  const outcome = await f.manager.syncExtension();
+  assert.equal(outcome.result, "switched");
+  assert.deepEqual(f.events, ["quit:brave", "launch:brave"]);
+  assert.deepEqual(f.world.stored.get(f.dir), signInFor(a.desktop!.accountUuid, 1));
+  assert.deepEqual(f.world.web.get(f.profile), loginFor(a.desktop!.accountUuid, 1));
+  // The setting stays "guide", and the offer is gone.
+  assert.equal((await f.manager.extensionStatus())!.setting.mode, "guide");
+  assert.equal(await f.manager.extensionOffer(), undefined);
+});
+
+test("no extension offer without the account's saved pair, in mode 'off', or once a check finds it on the account", async (t) => {
+  const f = await fixture(t, { defaultSetting: true });
+  const a = await f.account("A");
+  const b = await f.account("B");
+  f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
+  // Only the extension's hints are saved for A: half a pair cannot be put in place.
+  await f.vault.save(a.desktop!.accountUuid, signInFor(a.desktop!.accountUuid, 1));
+  await f.manager.switchTo(a.id);
+  assert.equal(f.manager.extensionOutcome?.reason, "guide-mismatch");
+  assert.equal(await f.manager.extensionOffer(), undefined);
+  await f.cookieVault.save(a.desktop!.accountUuid, loginFor(a.desktop!.accountUuid, 1));
+  assert.equal((await f.manager.extensionOffer())?.on, "B");
+  f.store.update((s) => {
+    s.settings.claudeExtension = { mode: "off" };
+  });
+  assert.equal(await f.manager.extensionOffer(), undefined);
+  // Sync now does not override "off".
+  assert.equal((await f.manager.syncExtension()).reason, "off");
+  f.store.update((s) => {
+    s.settings.claudeExtension = { mode: "guide" };
+  });
+  // The user signs the extension in to A by hand and checks.
+  f.world.stored.set(f.dir, signInFor(a.desktop!.accountUuid, 3));
+  await f.manager.checkExtension();
+  assert.equal(await f.manager.extensionOffer(), undefined);
+});

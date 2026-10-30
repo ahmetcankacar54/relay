@@ -11,6 +11,7 @@ import { PanelActiveCard } from "./PanelActiveCard";
 import { PanelAccounts } from "./PanelAccounts";
 import { PanelAutomation } from "./PanelAutomation";
 import { PanelDrafts } from "./PanelDrafts";
+import { PanelExtension } from "./PanelExtension";
 import { PanelSidebar } from "./PanelSidebar";
 import { panelHead } from "./panel-head";
 
@@ -108,6 +109,7 @@ export function Panel({
         </div>
         <PanelActiveCard now={now} />
         <PanelDrafts />
+        <PanelExtension />
         <PanelSidebar />
         <PanelAccounts
           now={now}

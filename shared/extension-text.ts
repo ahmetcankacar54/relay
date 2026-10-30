@@ -59,8 +59,8 @@ export function extensionLine(outcome: ExtensionOutcome, t: T): string | undefin
             );
           case "guide-mismatch":
             return t(
-              "Eklenti bu hesapta değil. Tarayıcıda claude.ai’ye bu hesapla gir, eklentiye giriş yap, sonra “Kontrol et”e bas. İstersen Geçiş → Claude tarayıcı eklentisi’nde “Eklentiyi de değiştir”i seç.",
-              "The extension isn’t on this account. Sign in to claude.ai in the browser with it, sign in to the extension, then press Check. Or choose “Change the extension too” under Switching → Claude browser extension.",
+              "Eklenti bu hesapta değil. Bu hesabın eklenti girişi kayıtlıysa “Şimdi eşitle” ya da menü çubuğu panelindeki “Geçir” onu yerine koyar. Değilse tarayıcıda claude.ai’ye bu hesapla gir, eklentiye giriş yap, sonra “Kontrol et”e bas.",
+              "The extension isn’t on this account. If this account’s extension sign-in is saved, Sync now or Switch in the menu bar panel puts it in place. If not, sign in to claude.ai in the browser with it, sign in to the extension, then press Check.",
             );
           case "ambiguous-owner":
             return t(

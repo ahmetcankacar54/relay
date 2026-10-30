@@ -7,6 +7,7 @@ import { panelHead } from "../src/panel/panel-head";
 import { PanelAccounts, confirmSwitch } from "../src/panel/PanelAccounts";
 import { PanelDrafts, allowAccessibilityAction, copyDraftAction, dismissDraftAction, draftReason } from "../src/panel/PanelDrafts";
 import { PanelSidebar } from "../src/panel/PanelSidebar";
+import { PanelExtension, extensionOfferLine, syncExtensionAction } from "../src/panel/PanelExtension";
 import { copySidebarRecipeAction, dismissSidebarGapAction, sidebarGapLine } from "../src/lib/sidebar-recipe";
 import { relayAction } from "../src/data/relay-action";
 import { panelRowState, accountRowSubtitle } from "../src/lib/account-row";
@@ -15,7 +16,7 @@ import { fakeDom } from "./fake-dom";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import type { OverviewRow } from "../src/data/selectors";
-import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type DesktopState, type DraftSummary, type KeeperAdaptation, type KeeperSnapshot, type SidebarGapSummary, type Snapshot, type UsageIssue } from "../shared/types";
+import { DEFAULT_SETTINGS, type Account, type AccountUsage, type AuthFlow, type DesktopState, type DraftSummary, type ExtensionOffer, type KeeperAdaptation, type KeeperSnapshot, type SidebarGapSummary, type Snapshot, type UsageIssue } from "../shared/types";
 
 const NOW = Date.now();
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -896,4 +897,63 @@ test("Copy recipe and Dismiss go through relay.action by offer id, and only a co
   assert.deepEqual(keys, ["sidebar-copy:g1", "sidebar-copy:g1", "sidebar-dismiss:g1"]);
   assert.deepEqual(calls, ["copy:g1", "dismiss:g1"]);
   assert.equal(copied, 1);
+});
+
+const offer = (over: Partial<ExtensionOffer> = {}): ExtensionOffer => ({
+  accountId: "u", to: "Vertex", on: "Alto", browser: "Brave", ...over,
+});
+const withOffer = (extension: ExtensionOffer | undefined, extra: Partial<Relay> = {}): Relay => {
+  const relay = relayFor(active, [active, vertex], baseUsage, extra);
+  relay.data = { ...relay.data, ...(extension ? { extension } : {}) } as Snapshot;
+  return relay;
+};
+const extensionRow = (relay: Relay) => wrap(relay, createElement(PanelExtension));
+
+test("the extension row says where the extension was left and offers Switch; without an offer it is empty", () => {
+  const html = extensionRow(withOffer(offer()));
+  assert.match(html, /Tarayıcı eklentisi/);
+  assert.match(html, /Eklenti Alto hesabında kaldı/);
+  assert.match(html, /Vertex hesabının eklenti girişi kayıtlı; istersen şimdi geçir\./);
+  assert.match(html, />Geçir</);
+  // Nothing happens before the user confirms.
+  assert.doesNotMatch(html, /Evet, geçir/);
+  assert.equal(extensionRow(withOffer(undefined)), "");
+  assert.match(extensionRow(withOffer(offer(), { busy: "draft-copy:d1" })), /disabled=""/);
+});
+
+test("the extension line names a signed-out extension, or an account Relay cannot name", () => {
+  const tr = (a: string) => a;
+  const en = (_: string, b: string) => b;
+  assert.equal(extensionOfferLine(offer({ on: undefined, signedOut: true }), tr), "Eklentide giriş yok");
+  assert.equal(extensionOfferLine(offer({ on: undefined }), tr), "Eklenti Vertex hesabına geçmedi");
+  assert.equal(extensionOfferLine(offer(), en), "The extension is still on Alto");
+});
+
+test("the panel places the extension row after rescued drafts and before the sidebar row", () => {
+  const relay = withDrafts([draft()]);
+  relay.data = { ...relay.data, sidebar: gap(), extension: offer() } as Snapshot;
+  const html = render(relay);
+  const at = (re: RegExp) => html.search(re);
+  assert.ok(at(/Kurtarılan taslaklar/) < at(/Tarayıcı eklentisi/));
+  assert.ok(at(/Tarayıcı eklentisi/) < at(/Kenar çubuğu düzeni/));
+});
+
+test("Switch runs the extension sync through relay.action and says nothing more when it switched", async () => {
+  const keys: string[] = [];
+  const said: (string | undefined)[] = [];
+  const tr = (a: string) => a;
+  const relay = (result: "switched" | "skipped") =>
+    withOffer(offer(), {
+      api: {
+        syncExtension: async () => ({ result, reason: result === "skipped" ? "browser-did-not-quit" : undefined, at: iso(NOW), restarted: true, reopened: true, saved: true }),
+      } as unknown as Relay["api"],
+      action: async (key: string, fn: () => Promise<unknown>) => {
+        keys.push(key);
+        await fn();
+      },
+    });
+  await syncExtensionAction(relay("switched"), tr, (line) => said.push(line));
+  await syncExtensionAction(relay("skipped"), tr, (line) => said.push(line));
+  assert.deepEqual(keys, ["extension-sync", "extension-sync"]);
+  assert.deepEqual(said, [undefined, "Tarayıcı kapanmadı, eklentiye dokunulmadı."]);
 });

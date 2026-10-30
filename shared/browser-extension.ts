@@ -132,6 +132,8 @@ export interface ExtensionOutcome {
   reopened?: boolean;
   /** The extension's sign-in was sealed into the vault. */
   saved: boolean;
+  /** Mode "guide": who the extension was signed in to when the step looked. */
+  current?: ExtensionCurrent;
 }
 /**
  * Who the extension is signed in to right now, read from a copy of its storage so a running
@@ -149,6 +151,21 @@ export type ExtensionCurrent =
     }
   | { state: "signed-out"; at: string }
   | { state: "unreadable"; at: string };
+/**
+ * The panel's offer to bring the extension to the account Claude Desktop is on: the last reading
+ * (a check, or a switch that did not change the extension) has it elsewhere, and that account's
+ * extension sign-in and claude.ai login are both saved. Names only.
+ */
+export interface ExtensionOffer {
+  /** The account Desktop is on: its Relay id and name. */
+  accountId: string;
+  to: string;
+  /** The Relay account the extension is on, by name; unset when that is not known. */
+  on?: string;
+  signedOut?: boolean;
+  /** The browser that is quit and opened again, by name. */
+  browser: string;
+}
 /** What the settings card and the account page show. */
 export interface ExtensionStatus {
   setting: ExtensionSetting;

@@ -74,9 +74,17 @@ import {
   pickInstance,
   startupRestores,
   type ExtensionCurrent,
+  type ExtensionMode,
+  type ExtensionOffer,
   type ExtensionOutcome,
   type ExtensionStatus,
 } from "../../shared/browser-extension";
+
+/** The account's uuids for the extension step: Desktop's and its own, any that exist. */
+const accountUuids = (account: Account) =>
+  [account.desktop?.accountUuid, account.auth?.accountUuid].filter(
+    (value): value is string => !!value,
+  );
 
 export interface DesktopHost {
   available(): Promise<boolean>;
@@ -839,21 +847,22 @@ export class DesktopManager {
   private async extensionStep(
     target: Account,
     mayQuit: boolean,
+    /** The mode the step runs in instead of the saved one; never one that reads less. */
+    mode?: ExtensionMode,
   ): Promise<ExtensionOutcome | undefined> {
     try {
       const switcher = this.switcher();
       if (!switcher) return undefined;
-      const uuids = (account: Account) =>
-        [account.desktop?.accountUuid, account.auth?.accountUuid].filter(
-          (value): value is string => !!value,
-        );
+      const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
       const outcome = await switcher.run({
-        setting: this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION,
+        setting: mode && setting.mode !== "off" ? { ...setting, mode } : setting,
         mayQuit,
-        target: uuids(target),
-        known: this.store.state.accounts.flatMap(uuids),
+        target: accountUuids(target),
+        known: this.store.state.accounts.flatMap(accountUuids),
       });
       this.lastExtension = outcome;
+      // Mode "guide" looked at who the extension is on: that is the newest check too.
+      if (outcome.current) this.lastExtensionCheck = outcome.current;
       this.diagnose("extension", {
         to: shortId(target.desktop?.accountUuid ?? target.id),
         result: outcome.result,
@@ -869,8 +878,9 @@ export class DesktopManager {
   }
   /**
    * Runs the extension step for the account Desktop is on, without changing Claude: how to bring
-   * the extension along after a switch that left a running browser alone, and a way to test the
-   * setup. A running browser is quit and opened again, in mode "restart".
+   * the extension along after a switch that left it alone, and a way to test the setup. The user
+   * asks for it, so it swaps as mode "restart" does in modes "guide" and "closed" too: a running
+   * browser is quit and opened again. Mode "off" still leaves the extension alone.
    */
   async syncExtension(): Promise<ExtensionOutcome> {
     return this.exclusive({ kind: "switch" }, async () => {
@@ -882,7 +892,7 @@ export class DesktopManager {
         : undefined;
       if (!active)
         throw new Error("Switch Claude Desktop to a saved account first.");
-      const outcome = await this.extensionStep(active, true);
+      const outcome = await this.extensionStep(active, true, "restart");
       if (!outcome)
         throw new Error("The Claude browser extension is not supported here.");
       return outcome;
@@ -905,6 +915,60 @@ export class DesktopManager {
     )
       return undefined;
     return BROWSERS[target.app].name;
+  }
+  /**
+   * The panel's offer to bring the extension to the account Desktop is on (see ExtensionOffer),
+   * from what Relay last saw: a check, or a switch whose step changed nothing. None while that
+   * reading has the extension on Desktop's account, when it is older than a step that switched,
+   * or when the account's extension sign-in or claude.ai login is not saved. Never throws.
+   */
+  async extensionOffer(): Promise<ExtensionOffer | undefined> {
+    try {
+      // What Relay last saw, from memory first: the panel asks every few seconds.
+      const check = this.lastExtensionCheck;
+      const last = this.lastExtension;
+      const fromCheck = !!check && (!last || Date.parse(check.at) >= Date.parse(last.at));
+      // Mode "closed" left a running browser alone at the switch; any other step is no miss.
+      const leftAlone = last?.result === "skipped" && last.reason === "browser-running";
+      if (fromCheck ? check!.state === "unreadable" : !leftAlone) return undefined;
+      const switcher = this.switcher();
+      if (!switcher || !this.extension) return undefined;
+      const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
+      if (setting.mode === "off") return undefined;
+      const current = identity(await readObject(this.root, "config.json"))?.toLowerCase();
+      const byUuid = (uuid: string) =>
+        this.store.state.accounts.find((a) =>
+          accountUuids(a).some((x) => x.toLowerCase() === uuid),
+        );
+      const active = current ? byUuid(current) : undefined;
+      if (!active) return undefined;
+      const mine = accountUuids(active).map((uuid) => uuid.toLowerCase());
+      let on: string | undefined;
+      const signedOut = fromCheck && check!.state === "signed-out";
+      if (fromCheck && check!.state === "signed-in" && check!.accountUuid) {
+        const uuid = check!.accountUuid.toLowerCase();
+        if (mine.includes(uuid)) return undefined;
+        on = byUuid(uuid)?.name;
+      }
+      const saved = (list: { accountUuid: string }[]) =>
+        list.some((x) => mine.includes(x.accountUuid.toLowerCase()));
+      if (
+        !saved(await this.extensionVault.list()) ||
+        !saved(await this.cookieVault.list())
+      )
+        return undefined;
+      const instance = chooseInstance(switcher.instances(), setting.browser);
+      if (!instance) return undefined;
+      return {
+        accountId: active.id,
+        to: active.name,
+        ...(on ? { on } : {}),
+        ...(signedOut ? { signedOut } : {}),
+        browser: BROWSERS[instance.app].name,
+      };
+    } catch {
+      return undefined;
+    }
   }
   /** The setting, the extension found, what is saved, and the last result; for the UI. */
   async extensionStatus(): Promise<ExtensionStatus | undefined> {
@@ -949,11 +1013,7 @@ export class DesktopManager {
     if (claimFor && !claim)
       throw new Error("Save this account’s Claude app sign-in first.");
     if (!this.busy) {
-      const uuids = this.store.state.accounts.flatMap((account) =>
-        [account.desktop?.accountUuid, account.auth?.accountUuid].filter(
-          (value): value is string => !!value,
-        ),
-      );
+      const uuids = this.store.state.accounts.flatMap(accountUuids);
       // A claim must not ride on a check already running without it.
       if (claim) await this.extensionChecking?.catch(() => undefined);
       this.extensionChecking ??= switcher

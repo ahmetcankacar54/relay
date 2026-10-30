@@ -303,6 +303,14 @@ const scenario = import.meta.env.DEV
   : null;
 // The macOS-only parts of Settings, such as the menu bar's items.
 if (scenario === "macos") state.diagnostics.platform = "darwin";
+// The panel's offer to bring the Claude extension along; Switch clears it.
+if (scenario === "extension-offer")
+  state.extension = {
+    accountId: accounts[0].id,
+    to: accounts[0].name,
+    on: accounts[1].name,
+    browser: "Brave",
+  };
 if (scenario === "unlinked" || scenario === "unlinked-no-code") {
   for (const account of accounts) delete account.desktop;
   desktop.activeProfileId = undefined;
@@ -602,13 +610,16 @@ export const previewApi: RelayAPI = {
     };
     return structuredClone(previewExtension);
   },
-  syncExtension: async () => ({
-    result: "switched",
-    at: new Date().toISOString(),
-    restarted: true,
-    reopened: true,
-    saved: true,
-  }),
+  syncExtension: async () => {
+    delete state.extension;
+    return {
+      result: "switched" as const,
+      at: new Date().toISOString(),
+      restarted: true,
+      reopened: true,
+      saved: true,
+    };
+  },
   setTrayLanguage: async () => {},
   showDiagnostics: desktopOnly,
   claudeLaunch: async () => ({ quicOff: false }),

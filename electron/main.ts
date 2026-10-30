@@ -1686,7 +1686,9 @@ function bindIPC() {
     return service.store.account(account.id);
   });
   handle("extension-status", () => desktop.extensionStatus());
-  handle("extension-sync", () => desktop.syncExtension());
+  // The panel's extension offer follows a sync at once. Not a check: the settings card checks
+  // again whenever the settings it reads change, and a broadcast would bring it new ones.
+  handle("extension-sync", () => desktop.syncExtension().finally(broadcastChanged));
   handle("extension-check", () => desktop.checkExtension());
   handle("extension-link", (accountId) => desktop.checkExtension(id.parse(accountId)));
   // The windows show it; every switch, sign-in or recovery rechecks fresh in main.
@@ -1852,6 +1854,7 @@ function bindIPC() {
     planning: keeper.snapshot(),
     drafts: await draftSummaries(desktop),
     sidebar: await sidebarSummary(desktop),
+    extension: await desktop.extensionOffer(),
   }));
   handle("snapshot", () =>
     service.transaction(async () => ({
@@ -1863,6 +1866,7 @@ function bindIPC() {
       planning: keeper.snapshot(),
       drafts: await draftSummaries(desktop),
       sidebar: await sidebarSummary(desktop),
+      extension: await desktop.extensionOffer(),
     })),
   );
   handle("usage-statistics", (input) => {

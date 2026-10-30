@@ -54,8 +54,8 @@ export function modeSentence(mode: ExtensionMode, t: T): string {
       )} ${web}`;
     case "guide":
       return t(
-        "Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez, tarayıcıyı da kapatmaz. Geçişten sonra eklenti başka bir hesapta kalmışsa ya da oturumu kapalıysa bunu söyler ve ne yapacağını gösterir.",
-        "Relay changes nothing in the browser or the extension and never quits the browser. After a switch it tells you when the extension is left on another account or signed out, and what to do.",
+        "Geçişte Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez, tarayıcıyı da kapatmaz. Eklenti başka bir hesapta kalırsa menü çubuğu panelinde “Geçir” çıkar: istediğin an eklentiyi de geçirirsin.",
+        "At a switch Relay changes nothing in the browser or the extension and never quits the browser. When the extension is left on another account, the menu bar panel offers Switch, so you bring it along whenever you like.",
       );
     case "off":
       return t("Relay eklentiye hiç dokunmaz.", "Relay never touches the extension.");

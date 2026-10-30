@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DEFAULT_EXTENSION } from "../../shared/browser-extension";
+import { BROWSERS, DEFAULT_EXTENSION } from "../../shared/browser-extension";
 import type { ExtensionMode, ExtensionStatus } from "../../shared/types";
 import { extensionLine } from "../../shared/extension-text";
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,8 @@ export function ExtensionPreference({
     initial: initialStatus,
   });
   const [result, setResult] = useState<string>();
+  // Sync now quits the browser in every mode, so it asks once before it does.
+  const [confirming, setConfirming] = useState(false);
   if (!status) return null;
   const current = status.current;
   const on =
@@ -143,24 +145,47 @@ export function ExtensionPreference({
       )}
       <SettingRow
         label={instanceLine(status, t)}
-        description={startup}
+        description={
+          confirming && status.target
+            ? t(
+                `${BROWSERS[status.target.app].name} açıksa kapanıp sekmeleriyle yeniden açılacak; eklenti ve claude.ai oturumu Claude uygulamasının hesabına geçecek.`,
+                `If ${BROWSERS[status.target.app].name} is open it closes and reopens with its tabs; the extension and the claude.ai login move to the Claude app’s account.`,
+              )
+            : startup
+        }
       >
-        <Button
-          variant="outline"
-          disabled={disabled || setting.mode === "off" || !status.target}
-          onClick={() =>
-            void action("extension-sync", async () => {
-              const outcome = await api.syncExtension();
-              setResult(
-                extensionLine(outcome, t) ??
-                  t("Eklentide değiştirilecek bir şey yok.", "Nothing to change in the extension."),
-              );
-              void reload();
-            })
-          }
-        >
-          {t("Şimdi eşitle", "Sync now")}
-        </Button>
+        {confirming ? (
+          <span className="flex gap-1">
+            <Button
+              variant="outline"
+              disabled={disabled}
+              onClick={() =>
+                void action("extension-sync", async () => {
+                  setConfirming(false);
+                  const outcome = await api.syncExtension();
+                  setResult(
+                    extensionLine(outcome, t) ??
+                      t("Eklentide değiştirilecek bir şey yok.", "Nothing to change in the extension."),
+                  );
+                  void reload();
+                })
+              }
+            >
+              {t("Evet, eşitle", "Yes, sync")}
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>
+              {t("Vazgeç", "Cancel")}
+            </Button>
+          </span>
+        ) : (
+          <Button
+            variant="outline"
+            disabled={disabled || setting.mode === "off" || !status.target}
+            onClick={() => setConfirming(true)}
+          >
+            {t("Şimdi eşitle", "Sync now")}
+          </Button>
+        )}
       </SettingRow>
       {status.target && setting.mode !== "off" && (
         <SettingRow
