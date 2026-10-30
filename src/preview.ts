@@ -375,6 +375,13 @@ if (scenario === "limit-full")
     orgId: ids[3],
     savedAt: new Date().toISOString(),
   };
+// The open account's reading has grown old: faded rings and the "Limit verisi eski" line.
+if (scenario === "stale-usage") {
+  const u = state.usage[ids[0]];
+  u.stale = true;
+  u.checkedAt = new Date(Date.now() - 5 * 60_000).toISOString();
+  delete u.sevenDay;
+}
 // A new friend's Mac: no account, no CLI, Code never opened; `first-run-no-claude` lacks the app too.
 if (scenario === "first-run" || scenario === "first-run-no-claude") {
   accounts.splice(0);

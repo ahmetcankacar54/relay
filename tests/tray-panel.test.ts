@@ -58,4 +58,6 @@ test("the panel opens under the icon and stays on screen", () => {
   assert.equal(clampPanelHeight(50, 875), 200);
   assert.equal(clampPanelHeight(2000, 875), 859);
   assert.equal(clampPanelHeight(512.4, 875), 513);
+  // The panel reports its exact, fractional height; rounding it down left the document scrollable.
+  assert.equal(clampPanelHeight(477.28125, 875), 478);
 });
