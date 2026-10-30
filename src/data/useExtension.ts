@@ -33,9 +33,12 @@ export function useExtensionStatus({
     },
     [api],
   );
+  // Each snapshot carries a fresh copy of the settings, every few seconds: a check follows a
+  // change of the setting's content, never a new copy of the same one.
+  const setting = JSON.stringify(settings.claudeExtension ?? null);
   useEffect(() => {
     if (!initial) void run(check);
-  }, [run, check, settings.claudeExtension]);
+  }, [run, check, setting]);
   return {
     status,
     checking,

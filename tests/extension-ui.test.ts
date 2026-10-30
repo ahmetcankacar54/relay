@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AccountDetailBody, ExtensionRow } from "../src/pages/accounts/AccountDetail";
 import { ExtensionPreference } from "../src/features/ExtensionPreference";
@@ -15,6 +15,8 @@ import {
 import { extensionLine } from "../shared/extension-text";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
+import { useExtensionStatus } from "../src/data/useExtension";
+import { fakeDom } from "./fake-dom";
 import { chooseInstance, type ExtensionOutcome, type ExtensionStatus } from "../shared/browser-extension";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 
@@ -309,4 +311,41 @@ test("a pair is complete only with the extension's hints and the claude.ai login
   assert.match(html, /Saved accounts/);
   assert.match(html, /Extension sign-in and claude\.ai login both saved: Vertex\./);
   assert.match(html, /Missing one of the two: Kişisel, Alto\./);
+});
+
+test("the extension check runs again when the setting changes, not for each snapshot's fresh copy of it", async () => {
+  let checks = 0;
+  // One api for the window's life, as the app's; the settings are a new copy each time.
+  const api = {
+    checkExtension: async () => {
+      checks++;
+      return undefined;
+    },
+    extensionStatus: async () => undefined,
+  };
+  const relay = (mode: "restart" | "guide") =>
+    ({ api, settings: { ...DEFAULT_SETTINGS, claudeExtension: { mode } } }) as unknown as Relay;
+  function Probe() {
+    useExtensionStatus({ check: true });
+    return null;
+  }
+  const dom = fakeDom();
+  dom.install();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    const draw = (value: Relay) =>
+      act(async () =>
+        root.render(createElement(RelayContext.Provider, { value }, createElement(Probe))),
+      );
+    await draw(relay("restart"));
+    await draw(relay("restart"));
+    await draw(relay("restart"));
+    assert.equal(checks, 1);
+    await draw(relay("guide"));
+    assert.equal(checks, 2);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
 });
