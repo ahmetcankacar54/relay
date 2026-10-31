@@ -7,6 +7,8 @@ import { isAccountUuid, type SignIn } from "../../shared/extension-auth";
 const DIR = "extension";
 /** Which account the extension was last on; not an account's file, so `list` skips it. */
 const OWNER = `${DIR}/owner.bin`;
+/** Present while a swap writes the profile's pair; left behind when Relay stopped in the middle. */
+const SWAPPING = `${DIR}/swapping.bin`;
 
 interface Saved {
   accountUuid: string;
@@ -80,6 +82,17 @@ export class ExtensionVault {
     }
   }
 
+  /** Written before a swap changes the profile's hints and cookies, and cleared once both are in place. */
+  async markSwap(): Promise<void> {
+    await writeBytes(this.vault, SWAPPING, Buffer.from(new Date().toISOString()));
+  }
+  async clearSwap(): Promise<void> {
+    await writeBytes(this.vault, SWAPPING, null);
+  }
+  /** A swap stopped between its two writes: the profile's hints and cookies may name different accounts. */
+  async swapInterrupted(): Promise<boolean> {
+    return (await readBytes(this.vault, SWAPPING).catch(() => null)) !== null;
+  }
   async setOwner(accountUuid: string): Promise<void> {
     if (!isAccountUuid(accountUuid)) return;
     await writeBytes(

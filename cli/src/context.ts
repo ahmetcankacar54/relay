@@ -13,7 +13,7 @@ import {
 } from "../../electron/core/vault-migration";
 import type { Flags } from "./args";
 import { defaultDeps, type CliDeps } from "./deps";
-import { olderThan, updateAppMessage } from "./guards";
+import { appOlderMessage, olderThan, updateAppMessage } from "./guards";
 import { pickLang, translator, type Lang, type Translate } from "./i18n";
 import { CliError, EXIT, type CliIO } from "./io";
 import { colorEnabled } from "./output";
@@ -74,7 +74,7 @@ export async function openContext(
     if (appVersion !== undefined && olderThan(appVersion, "0.12.0"))
       throw new CliError(updateAppMessage(t), EXIT.environment);
     if (appVersion !== undefined && stateExisted && store.fileSchema < STATE_SCHEMA)
-      throw new CliError(updateAppMessage(t), EXIT.environment);
+      throw new CliError(appOlderMessage(t), EXIT.environment);
     if (store.fileSchema > STATE_SCHEMA)
       throw new CliError(
         t(

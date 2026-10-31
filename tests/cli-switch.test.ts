@@ -46,6 +46,32 @@ test("in a terminal the prompt says what happens; declining quits nothing", asyn
   assert.equal(g.state.quits, 1);
 });
 
+test("the prompt and the result say that the terminal's claude follows the account", async (t) => {
+  const f = await cliFixture(t, { tty: true, answers: ["n"] });
+  await f.saved("A");
+  await f.saved("B");
+  // A signed-out terminal in memory: nothing real is read or written.
+  f.deps.terminal = {
+    keychain: { read: async () => undefined, write: async () => {}, remove: async () => {} },
+    config: { read: async () => ({}), writeAccount: async () => {} },
+    lock: (action) => action(),
+  };
+  assert.equal(await f.run("switch", "A"), 1);
+  assert.match(f.out(), /terminal claude’s sign-in \(Keychain and ~\/\.claude\.json\) will move to A too/);
+  const g = await cliFixture(t, { tty: true, answers: ["y"] });
+  await g.saved("A");
+  await g.saved("B");
+  g.deps.terminal = f.deps.terminal;
+  assert.equal(await g.run("switch", "A"), 0);
+  assert.match(g.out(), /terminal/i);
+  // With the terminal left alone, the prompt does not mention it.
+  const h = await cliFixture(t, { tty: true, answers: ["n"] });
+  await h.saved("A");
+  await h.saved("B");
+  assert.equal(await h.run("switch", "A"), 1);
+  assert.doesNotMatch(h.out(), /terminal claude/);
+});
+
 test("switching to the active account changes nothing", async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");

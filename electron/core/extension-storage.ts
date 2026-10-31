@@ -156,7 +156,26 @@ export async function restoreFolder(dir: string, backup: string): Promise<void> 
   await fs.cp(backup, dir, { recursive: true, force: true, verbatimSymlinks: true });
 }
 
-/** Removes Relay's scratch backups; never throws. */
+/** A scratch folder holding the backups of a failed restore says so, and keeps them for a week. */
+const KEPT_MARKER = ".kept";
+const KEPT_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Marks `scratch` as the only copy of what a failed restore could not put back. */
+export async function keepScratch(scratch: string): Promise<void> {
+  await fs.writeFile(path.join(scratch, KEPT_MARKER), "", { mode: 0o600 }).catch(() => {});
+}
+
+/** Removes one backup folder; never throws. */
+export async function removeBackup(backup: string): Promise<void> {
+  await fs.rm(backup, { recursive: true, force: true }).catch(() => {});
+}
+
+/**
+ * Removes Relay's scratch backups; never throws. A scratch folder marked by `keepScratch` stays
+ * for a week: the next switch and the next start must not delete the user's only copy.
+ */
 export async function clearScratch(scratch: string): Promise<void> {
+  const kept = await fs.stat(path.join(scratch, KEPT_MARKER)).catch(() => undefined);
+  if (kept && Date.now() - kept.mtimeMs < KEPT_MS) return;
   await fs.rm(scratch, { recursive: true, force: true }).catch(() => {});
 }

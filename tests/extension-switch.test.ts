@@ -186,6 +186,52 @@ test("a failed restore keeps the backup and says so", async (t) => {
   assert.ok(fs.existsSync(s.scratch), "the backup stays");
 });
 
+test("the backups of a failed restore survive the next switch", async (t) => {
+  const s = setup(t);
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  await s.vault.save(s.b, signInFor(s.b, 5));
+  await s.cookieVault.save(s.b, loginFor(s.b, 5));
+  s.world.state.failWrite = "failed";
+  const write = s.world.storage.write;
+  s.world.storage.write = async (dir, signIn) => {
+    try {
+      await write(dir, signIn);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  };
+  assert.equal((await s.switcher.run(s.request())).reason, "restore-failed");
+  const kept = fs.readdirSync(s.scratch).filter((name) => name !== ".kept");
+  assert.equal(kept.length, 1);
+  // A later, healthy switch must not take the only copy away.
+  s.world.storage.write = write;
+  s.world.state.failWrite = undefined;
+  fs.mkdirSync(s.dir, { recursive: true });
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  await s.switcher.run(s.request());
+  assert.ok(fs.existsSync(path.join(s.scratch, kept[0])), "the earlier backup stays");
+  assert.deepEqual(fs.readdirSync(s.scratch).filter((name) => name !== ".kept"), kept, "this run's own backup is gone");
+});
+
+test("after an interrupted swap nothing is saved from the profile, and the next swap mends it", async (t) => {
+  const s = setup(t);
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  await s.vault.save(s.a, signInFor(s.a, 7));
+  await s.cookieVault.save(s.a, loginFor(s.a, 7));
+  await s.vault.save(s.b, signInFor(s.b, 5));
+  await s.cookieVault.save(s.b, loginFor(s.b, 5));
+  const savedA = await s.vault.load([s.a]);
+  const savedLoginA = await s.cookieVault.load([s.a]);
+  await s.vault.markSwap();
+  assert.equal(await s.vault.swapInterrupted(), true);
+  const outcome = await s.switcher.run(s.request());
+  assert.equal(outcome.result, "switched");
+  assert.equal(outcome.saved, false, "the doubtful pair is not saved");
+  assert.deepEqual(await s.vault.load([s.a]), savedA);
+  assert.deepEqual(await s.cookieVault.load([s.a]), savedLoginA);
+  assert.equal(await s.vault.swapInterrupted(), false, "the mark goes once the pair is in place");
+});
+
 test("a browser that does not quit is left alone, and the extension is not touched", async (t) => {
   const s = setup(t);
   s.world.state.running = true;

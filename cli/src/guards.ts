@@ -19,6 +19,13 @@ export const updateAppMessage = (t: Translate) =>
     "Update Relay.app to 0.12 or later and open it once.",
   );
 
+/** The installed Relay.app writes an older account list than this relay: not the "older than 0.12" case. */
+export const appOlderMessage = (t: Translate) =>
+  t(
+    "Relay.app’in yazdığı hesap listesi bu relay’inkinden eski. Relay.app’i relay ile aynı sürüme güncelleyip bir kez aç ya da Relay.app’e uyan relay sürümünü kur.",
+    "Relay.app writes an older account list than this relay. Update Relay.app to the same version as relay and open it once, or install the relay version that matches Relay.app.",
+  );
+
 /** Refuses to quit or open Claude without a macOS desktop session (over SSH, for example). */
 export function guiSessionGuard(deps: CliDeps, t: Translate): void {
   if (!deps.guiSession())

@@ -41,6 +41,13 @@ test("Linux finds Claude's processes through its launcher, install folder or App
   // A chosen binary is matched by its own name too, unless that name is the CLI's.
   assert.deepEqual(linuxDesktopPids("  201 /opt/x/Claude-Desktop\n  202 /usr/bin/Claude-Desktop --x", "/opt/x/Claude-Desktop", 1), [201, 202]);
   assert.deepEqual(linuxDesktopPids("  301 /usr/local/bin/claude", "/opt/odd/claude", 1), []);
+  // A process that only names a file in the install folder or the launcher is not Claude.
+  const unrelated = [
+    "  401 /usr/bin/vim /usr/lib/claude-desktop/resources/notes.txt",
+    "  402 grep -r token /opt/claude-desktop/",
+    "  404 tail -f /usr/lib/claude-desktop/app.log",
+  ].join("\n");
+  assert.deepEqual(linuxDesktopPids(unrelated, "/usr/bin/claude-desktop", 1), []);
 });
 
 test("Settings and the setup checklist offer Choose location, and main keeps the choice", () => {

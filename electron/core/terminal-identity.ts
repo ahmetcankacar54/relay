@@ -531,7 +531,8 @@ export class TerminalSwitcher {
    * Saves the reading for its account when that is one of Relay's, it differs from the saved
    * copy and its token is verified to be that account's. A switch (`parked`) also keeps a token
    * that cannot be asked about: it is expired, so it is no sign-in made a moment ago, or the Mac
-   * is offline, and it is taken away under Claude Code's lock either way.
+   * is offline, and it is taken away under Claude Code's lock either way, unless a copy taken away
+   * at an earlier switch is saved: that one is not replaced by a token that cannot be asked about.
    */
   private async keep(
     reading: Reading,
@@ -558,6 +559,10 @@ export class TerminalSwitcher {
     const verified = await this.verify(reading);
     if (verified === "mismatch") return "mismatch";
     if (verified === "unknown" && !parked) return "unverified";
+    // A copy taken away at an earlier switch is the only good one. A token nobody can vouch for
+    // (a write that stopped between the Keychain and the config can leave another account's) must
+    // not replace it.
+    if (verified === "unknown" && saved?.parked) return "unverified";
     await this.vault.save(identity, oauth, account, parked);
     return "saved";
   }

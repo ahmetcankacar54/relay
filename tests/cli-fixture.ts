@@ -107,6 +107,8 @@ export async function cliFixture(t: any, options: FixtureOptions = {}) {
     selfPath: path.join(temp, "relay-cli.js"),
     transcriptRoot: path.join(temp, ".claude"),
     extension: { system: extension.system, storage: extension.storage },
+    // Never the real Keychain, `~/.claude.json` or Claude Code's locks: a switch leaves the terminal alone here.
+    terminal: undefined,
   };
   let secret = 0;
   /** Signs a new account in to the fixture's Claude folder; its secrets carry FIXTURE-SECRET. */

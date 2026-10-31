@@ -43,6 +43,9 @@ function fixture(t: any) {
       `extension/${desktop}.bin`,
       `extension/${auth}.bin`,
       `extension-cookies/${desktop}.bin`,
+      // The plain terminal's saved sign-ins: one file per organization.
+      `terminal/${auth}.${randomUUID()}.bin`,
+      `terminal/${desktop}.${randomUUID()}.bin`,
     ].map((relative) => path.join(vault, relative));
     for (const file of files) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -223,4 +226,18 @@ test("the app removes an account through one IPC handler under the Desktop lock"
   assert.match(source("../shared/types.ts"), /removeAccount\(accountId: string\): Promise<AccountRemoved>;/);
   // The relay CLI removes through the same function.
   assert.match(source("../cli/src/commands/remove.ts"), /removeAccount\(account\.id, \{/);
+});
+
+test("a stale not-logged-in check still signs the profile out, and other accounts' terminal copies stay", async (t) => {
+  const f = fixture(t);
+  f.store.update((s) => {
+    s.accounts.find((a) => a.id === f.b.id)!.auth!.loggedIn = false;
+  });
+  const keep = path.join(f.vault, "terminal", `${randomUUID()}.${randomUUID()}.bin`);
+  fs.writeFileSync(keep, "sealed");
+  assert.deepEqual(await removeAccount(f.b.id, f.options()), { signedOut: true });
+  assert.deepEqual(f.signedOut, [f.b.profile]);
+  for (const file of f.b.files) assert.equal(fs.existsSync(file), false, file);
+  assert.ok(fs.existsSync(keep));
+  for (const file of f.a.files) assert.ok(fs.existsSync(file), file);
 });

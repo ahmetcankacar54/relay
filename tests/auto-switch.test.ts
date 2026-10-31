@@ -296,6 +296,23 @@ test("re-enabling automatic preparation starts a new exit grace period", async (
   await f.manager.tick();
   assert.equal(f.calls(), 1);
 });
+test("the same exhaustion keeps its episode when the reset time moves by seconds", () => {
+  const f = scenario();
+  const keys = () => f.decide().exhausted!.map((episode) => episode.key).sort();
+  const before = keys();
+  assert.equal(before.length, 1);
+  for (const name of ["fiveHour", "sevenDay"] as const) {
+    const window = f.usage[f.a.id][name]!;
+    window.resetsAt = new Date(Date.parse(window.resetsAt!) + 3_000).toISOString();
+  }
+  assert.deepEqual(keys(), before);
+  // A reset an hour later is another episode.
+  for (const name of ["fiveHour", "sevenDay"] as const) {
+    const window = f.usage[f.a.id][name]!;
+    window.resetsAt = new Date(Date.parse(window.resetsAt!) + 3_600_000).toISOString();
+  }
+  assert.notDeepEqual(keys(), before);
+});
 test("manager prepares after exit without repeating the same exhaustion episode", async (t) => {
   const f = await managerFixture(t);
   f.desktop.running = true;

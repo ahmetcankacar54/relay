@@ -11,6 +11,8 @@ import {
   StorageError,
   backupFolder,
   clearScratch,
+  keepScratch,
+  removeBackup,
   restoreFolder,
   type ExtensionStorage,
 } from "./extension-storage";
@@ -299,9 +301,12 @@ export class ExtensionSwitcher {
     await clearScratch(scratch);
     await clearScratch(cookieScratch);
     let keepBackup = false;
+    const own: string[] = [];
     try {
       const backup = await backupFolder(dir, scratch);
+      own.push(backup);
       const cookieBackup = await backupCookieFiles(profile, cookieScratch);
+      own.push(cookieBackup);
       let saved = false;
       let entries;
       try {
@@ -333,11 +338,14 @@ export class ExtensionSwitcher {
         (current.account ?? (current.other ? undefined : await this.owner(request.known)));
       if (current && !account)
         return { result: "skipped", reason: "unknown-account", saved };
+      // An earlier swap stopped between its two writes: the hints and the login may be two
+      // accounts', so nothing is saved from the profile; putting the target's pair in place mends it.
+      const interrupted = await vault.swapInterrupted();
       // A web login nobody can name would be lost by the swap: its cookies are not saved anywhere.
       const webLogin = hasWebLogin(web);
       if (webLogin && !account)
         return { result: "skipped", reason: "unknown-account", saved };
-      if (current && account) {
+      if (current && account && !interrupted) {
         // The web login belongs to the hints' account unless it is newer than the hints: the user
         // signed in to claude.ai again without the extension following.
         const hintsAt = system.modifiedAt(dir);
@@ -364,9 +372,10 @@ export class ExtensionSwitcher {
           reason: "no-saved-login",
           saved,
         };
-      if (account && lower(request.target).includes(account))
+      if (account && lower(request.target).includes(account) && !interrupted)
         return { result: "unchanged", reason: "already-there", saved };
       try {
+        await vault.markSwap();
         await storage.write(dir, wanted);
         await cookies.write(profile, wantedWeb);
       } catch (error) {
@@ -379,9 +388,13 @@ export class ExtensionSwitcher {
         try {
           await restoreFolder(dir, backup);
           await restoreCookieFiles(profile, cookieBackup);
+          // Put back as it was, so the mark of an earlier interruption is not lost.
+          if (!interrupted) await vault.clearSwap();
         } catch {
           // Left for the user; the backups are kept.
           keepBackup = true;
+          await keepScratch(scratch);
+          await keepScratch(cookieScratch);
           return { result: "failed", reason: "restore-failed", saved };
         }
         return { result: "failed", reason, saved };
@@ -390,9 +403,12 @@ export class ExtensionSwitcher {
         listed.some((x) => x.accountUuid === uuid),
       );
       if (placed) await vault.setOwner(placed);
+      await vault.clearSwap();
       return { result: "switched", saved };
     } finally {
       if (!keepBackup) {
+        // Only this run's backups go; those of an earlier failed restore stay (clearScratch).
+        for (const backup of own) await removeBackup(backup);
         await clearScratch(scratch);
         await clearScratch(cookieScratch);
       }

@@ -39,10 +39,12 @@ export function macDesktopPids(stdout: string, executable: string): number[] {
 
 /**
  * Claude Desktop's pids in a Linux `ps -eo pid=,args=` listing. Linux builds start through a
- * launcher script or an AppImage, so a process counts when an argument is the chosen executable,
+ * launcher script or an AppImage, so a process counts when its command is the chosen executable,
  * lies inside a claude-desktop install or a mounted Claude AppImage, or shares the executable's
- * name. The Claude Code CLI is also called "claude", so that bare name never matches by itself;
- * `self` (Relay) is never Claude.
+ * name; or when it runs the launcher script or the install's `.asar` as its first argument. Only
+ * the command and its first argument are looked at: an editor or `grep` that merely names a file
+ * in the install folder is not Claude, and quitting sends it SIGTERM. The Claude Code CLI is also
+ * called "claude", so that bare name never matches by itself; `self` (Relay) is never Claude.
  */
 export function linuxDesktopPids(
   stdout: string,
@@ -51,16 +53,18 @@ export function linuxDesktopPids(
 ): number[] {
   const name = executable.slice(executable.lastIndexOf("/") + 1);
   const byName = name !== "" && name !== "claude";
+  const baseName = (arg: string) => arg.slice(arg.lastIndexOf("/") + 1);
+  const inInstall = (arg: string) => arg.includes("/claude-desktop/") || arg.includes("/.mount_Claude");
   return stdout.split("\n").flatMap((line) => {
     const match = /^\s*(\d+)\s+(.+)$/.exec(line);
     if (!match || Number(match[1]) === self) return [];
-    const hit = match[2].split(/\s+/).some(
-      (arg) =>
-        arg === executable ||
-        arg.includes("/claude-desktop/") ||
-        arg.includes("/.mount_Claude") ||
-        (byName && arg.slice(arg.lastIndexOf("/") + 1) === name),
-    );
+    const [command = "", first = ""] = match[2].split(/\s+/);
+    const hit =
+      command === executable ||
+      inInstall(command) ||
+      (byName && baseName(command) === name) ||
+      first === executable ||
+      (inInstall(first) && first.endsWith(".asar"));
     return hit ? [Number(match[1])] : [];
   });
 }

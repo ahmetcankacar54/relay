@@ -49,7 +49,7 @@ export interface AccountRemoval {
  * the account open in the Claude app and one whose Claude app sign-in is pending, and while
  * anything holds its profile lock (ProfileLockBusyError). Under that lock it signs the usage
  * sign-in out, deletes the profile folder, the sealed Claude app sign-in, the Claude extension's
- * sign-in and the browser's claude.ai login kept for it (under either uuid the account has), and
+ * sign-in, the plain terminal's saved sign-ins and the browser's claude.ai login kept for it (under either uuid the account has), and
  * drops it from the registry and the lists that name it. The Claude app's own data, the usage
  * history and the token ledger are left alone.
  */
@@ -62,15 +62,15 @@ export async function removeAccount(accountId: string, options: AccountRemoval):
   const result: AccountRemoved = {};
   try {
     const profile = store.profile(account.id);
-    if (account.auth?.loggedIn) {
-      result.signedOut = false;
-      if (options.signOut)
-        try {
-          result.signedOut = await options.signOut(profile);
-        } catch {
-          // Said as not signed out: its Keychain item may remain.
-        }
-    }
+    // Also when the stored check says "not logged in": a stale check must not leave the profile's
+    // Keychain item behind once its folder is gone.
+    if (account.auth?.loggedIn) result.signedOut = false;
+    if (account.auth && options.signOut)
+      try {
+        result.signedOut = await options.signOut(profile);
+      } catch {
+        // Said as not signed out: its Keychain item may remain.
+      }
     fs.rmSync(profile, { recursive: true, force: true });
     if (account.desktop)
       await writeBytes(options.vault, `accounts/${account.desktop.accountUuid.toLowerCase()}.bin`, null);
@@ -79,6 +79,16 @@ export async function removeAccount(accountId: string, options: AccountRemoval):
       if (uuid)
         for (const dir of ["extension", "extension-cookies"])
           await writeBytes(options.vault, `${dir}/${uuid.toLowerCase()}.bin`, null);
+    // The plain terminal's saved sign-ins, one file per organization: `terminal/<uuid>.<org>.bin`.
+    const uuids = [account.desktop?.accountUuid, account.auth?.accountUuid].flatMap((u) => (u ? [u.toLowerCase()] : []));
+    let saved: string[] = [];
+    try {
+      saved = fs.readdirSync(path.join(options.vault, "terminal"));
+    } catch (error: any) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    for (const name of saved)
+      if (uuids.some((uuid) => name.startsWith(`${uuid}.`))) await writeBytes(options.vault, `terminal/${name}`, null);
     store.update((s) => {
       s.accounts = s.accounts.filter((a) => a.id !== account.id);
       s.settings.desktopHistoryAccounts = s.settings.desktopHistoryAccounts.filter((id) => id !== account.id);

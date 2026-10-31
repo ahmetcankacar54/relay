@@ -1,5 +1,6 @@
 import { historySources } from "../../../shared/history-policy";
 import { extensionLine } from "../../../shared/extension-text";
+import { terminalLine } from "../../../shared/terminal-identity";
 import { resolveAccount } from "../accounts";
 import type { Command } from "../command";
 import { confirm } from "../confirm";
@@ -43,6 +44,9 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
           `Code history comes over from: ${sources.map((a) => a.name).join(", ")}.`,
         );
   const browser = await ctx.desktop.extensionQuitsBrowser();
+  // The plain `claude` in a terminal follows the account too, unless that is turned off.
+  const terminalStatus = await ctx.desktop.terminalStatus();
+  const terminalFollows = terminalStatus !== undefined && terminalStatus.mode !== "off";
   const inside = await insideDesktop(ctx);
   await confirm(
     io,
@@ -65,6 +69,14 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
             ),
           ]
         : []),
+      ...(terminalFollows
+        ? [
+            t(
+              `Terminaldeki claude’un girişi de (Anahtarlık ve ~/.claude.json) ${target.name} hesabına geçer; kapatmak için Relay.app → Ayarlar → Geçiş.`,
+              `The terminal claude’s sign-in (Keychain and ~/.claude.json) will move to ${target.name} too; turn that off in Relay.app → Settings → Switching.`,
+            ),
+          ]
+        : []),
       ...(inside ? [sessionEndsLine(ctx)] : []),
       history,
     ],
@@ -83,5 +95,9 @@ export const switchCommand: Command = async ({ io, deps, parsed, t, argv }) => {
   const extension = ctx.desktop.extensionOutcome;
   const line = extension && extensionLine(extension, t);
   if (line) io.stdout(line);
+  // And what became of the terminal's Claude Code sign-in.
+  const terminal = terminalFollows ? (await ctx.desktop.terminalStatus())?.last : undefined;
+  const terminalText = terminal && terminalLine(terminal, t, target.name);
+  if (terminalText) io.stdout(terminalText);
   return EXIT.ok;
 };

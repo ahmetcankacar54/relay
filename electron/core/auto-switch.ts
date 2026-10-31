@@ -74,6 +74,8 @@ function futureReset(window: UsageWindow, now: number) {
   const reset = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
   return Number.isFinite(reset) && reset > now ? reset : undefined;
 }
+/** The usage API's reset time moves by seconds between reads; an episode is one reset to the nearest 10 minutes. */
+const EPISODE_RESET_MS = 10 * 60_000;
 function exhaustion(account: Account, usage: AccountUsage, now: number) {
   return (["fiveHour", "sevenDay"] as const).flatMap((name) => {
     const window = usage[name];
@@ -81,7 +83,7 @@ function exhaustion(account: Account, usage: AccountUsage, now: number) {
     return validWindow(window) && window!.usedPercent >= 100 && expiresAt
       ? [
           {
-            key: `${account.desktop!.accountUuid.toLowerCase()}:${account.desktop!.orgId.toLowerCase()}:${name}:${expiresAt}`,
+            key: `${account.desktop!.accountUuid.toLowerCase()}:${account.desktop!.orgId.toLowerCase()}:${name}:${Math.round(expiresAt / EPISODE_RESET_MS)}`,
             expiresAt,
           },
         ]

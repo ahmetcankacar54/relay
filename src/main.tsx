@@ -2,6 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/fonts.css";
 import App from "./App";
+import { ErrorBoundary } from "./app/ErrorBoundary";
 import { pauseMotionWithoutAttention } from "./lib/motion";
 import "./styles/theme.css";
 pauseMotionWithoutAttention();
@@ -17,6 +18,8 @@ else if (sheet === "pins")
 else
   root.render(
     <React.StrictMode>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </React.StrictMode>,
   );

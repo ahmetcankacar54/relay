@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { ArrowRight, Code2, Lightbulb, ListTree, PencilLine, PanelsTopLeft } from "lucide-react";
 import { PageFrame } from "@/app/PageFrame";
 import { UsageRing } from "@/components/UsageRing";
@@ -55,6 +55,16 @@ function Side({ name, caption, percent, align }: { name: string; caption: string
  * What a switch brings along: one card per part, its state and its main control. The full
  * settings stay in Details below, which `href` jumps to.
  */
+/**
+ * Scrolls to the settings card `href` names. The page is a hash route (`#/gecis`), so letting the
+ * browser follow `#gecis-…` would make the router fall back to the overview.
+ */
+function jumpTo(event: MouseEvent<HTMLAnchorElement>, href: string) {
+  event.preventDefault();
+  const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  document.getElementById(href.slice(1))?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+}
+
 function Carry({
   icon,
   title,
@@ -80,6 +90,7 @@ function Carry({
         {href && (
           <a
             href={href}
+            onClick={(event) => jumpTo(event, href)}
             aria-label={t(`${title} · ayrıntılar`, `${title} · details`)}
             className="rounded-sm text-xs text-muted-foreground no-underline outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >

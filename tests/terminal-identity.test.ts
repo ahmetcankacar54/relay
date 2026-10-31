@@ -530,6 +530,18 @@ test("a token that cannot be asked about is saved by a switch only, never by a c
   assert.equal(parked?.parked, true);
 });
 
+test("a token that cannot be asked about never replaces the only copy taken away at a switch", async (t) => {
+  const w = world(t);
+  await w.vault.save(w.a, oauth(1), person(w.a.accountUuid, w.a.orgId, "a@x"), true);
+  await w.vault.save(w.b, oauth(2), person(w.b.accountUuid, w.b.orgId, "b@x"), true);
+  // A write stopped between the Keychain and the config: B's token, the config naming A.
+  w.signIn(w.a, 3, "a@x");
+  w.state.item = JSON.stringify({ claudeAiOauth: oauth(2) });
+  w.state.owners.clear();
+  await w.switcher.run({ mode: "follow", target: [w.b], known: [w.a, w.b] });
+  assert.deepEqual((await w.vault.load([w.a]))?.oauth, oauth(1));
+});
+
 test("a copy saved while in use is put back flagged; one taken away at a switch is not", async (t) => {
   const w = world(t);
   w.signIn(w.a, 1, "a@x");

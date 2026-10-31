@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Switching, extensionCarry } from "../src/pages/Switching";
@@ -352,4 +353,15 @@ test("the extension card says where the extension stands for the open account, w
   });
   // Rendered before the status loads, the card says it is checking.
   assert.match(carry(render(relayFor())), />Tarayıcı eklentisi<[\s\S]*?Kontrol ediliyor…/);
+});
+
+test("the Details links scroll to their card instead of letting the hash router read them", () => {
+  const source = readFileSync(new URL("../src/pages/Switching.tsx", import.meta.url), "utf8");
+  assert.match(source, /onClick=\{\(event\) => jumpTo\(event, href\)\}/);
+  assert.match(source, /event\.preventDefault\(\);[\s\S]*getElementById\(href\.slice\(1\)\)/);
+});
+
+test("the main window and the menu bar panel sit inside an error boundary", () => {
+  for (const entry of ["../src/main.tsx", "../src/panel/main.tsx"])
+    assert.match(readFileSync(new URL(entry, import.meta.url), "utf8"), /<ErrorBoundary>/, entry);
 });
