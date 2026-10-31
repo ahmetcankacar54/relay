@@ -1,3 +1,4 @@
+import type { TerminalMode, TerminalOutcome, TerminalStatus } from "./terminal-identity";
 import type { UsageStatisticsView } from "./usage-statistics-view";
 export type { UsageStatisticsView } from "./usage-statistics-view";
 import type { TokenUsageView } from "./token-usage-view";
@@ -267,6 +268,12 @@ export interface RelayAPI {
    * signed in to this account, and its sign-in is saved as this account's.
    */
   linkExtension(accountId: string): Promise<ExtensionStatus | undefined>;
+  /** The terminal's Claude Code: the setting, who it is on, what is saved, the last result; undefined outside macOS. */
+  terminalStatus(): Promise<TerminalStatus | undefined>;
+  /** Reads who the terminal's Claude Code is signed in to and saves that sign-in when it is one of Relay's accounts. */
+  checkTerminal(): Promise<TerminalStatus | undefined>;
+  /** Puts the saved terminal sign-in of the account Desktop is on in place. */
+  syncTerminal(): Promise<TerminalOutcome>;
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;
@@ -403,6 +410,8 @@ export interface RelaySettings {
   draftRetype?: boolean;
   /** What Relay does with the Claude browser extension's sign-in at a switch; missing means "restart". */
   claudeExtension?: ExtensionSetting;
+  /** What Relay does with the terminal's Claude Code sign-in at a switch; missing means "follow". */
+  terminalCli?: TerminalMode;
 }
 export type PrankLevel = "sometimes" | "rarely" | "off";
 export interface PlanningHours {

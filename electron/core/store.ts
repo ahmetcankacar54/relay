@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ProcessLock } from "./process-lock";
+import { TERMINAL_MODES } from "../../shared/terminal-identity";
 import {
   DEFAULT_PLANNING,
   DEFAULT_SETTINGS,
@@ -176,6 +177,8 @@ export const settingsSchema = z
     draftRetype: z.boolean().optional(),
     // Missing means the default, mode "restart"; no .default() so a patch keeps the stored choice.
     claudeExtension: extensionSettingSchema.optional(),
+    // Missing means "follow"; no .default() so a patch keeps the stored choice.
+    terminalCli: z.enum(TERMINAL_MODES).optional(),
   })
   .strict();
 // Migration defaults belong to a complete saved registry, never to an IPC patch.
@@ -201,8 +204,9 @@ const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
  * dropped when it is read. 5 added the extension mode "guide" and made "restart" and "closed"
  * also swap the browser profile's claude.ai login, so a 4 file's "restart" and "closed" (which
  * only swapped the extension's hints) are read as "guide" until the user picks them again.
+ * 6 added the terminal's Claude Code setting.
  */
-export const STATE_SCHEMA = 5;
+export const STATE_SCHEMA = 6;
 const stateSchema = z.object({
   version: z.literal(1),
   schema: z.number().int().min(1).optional(),

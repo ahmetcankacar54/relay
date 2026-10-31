@@ -3,6 +3,8 @@ import { diagnoseCli } from "../../../electron/core/cli-diagnostics";
 import { claudeExecutable } from "../../../electron/core/desktop-host-node";
 import { VaultKeyError, readVaultKey } from "../../../electron/core/vault-key";
 import { readsUsage } from "../../../shared/cli-version";
+import { peekTerminal } from "../../../electron/core/terminal-identity";
+import { DEFAULT_TERMINAL_MODE, sameIdentity, terminalIdentities } from "../../../shared/terminal-identity";
 import { localizeError } from "../../../shared/error-text";
 import type { Command } from "../command";
 import { openContext } from "../context";
@@ -107,6 +109,31 @@ export const doctor: Command = async ({ io, deps, parsed, t }) => {
         ? t("yarım giriş: relay add --resume / --cancel", "pending sign-in: relay add --resume / --cancel")
         : t("geçişe hazır", "ready to switch"),
   );
+  if (ctx.deps.terminal && (ctx.store.state.settings.terminalCli ?? DEFAULT_TERMINAL_MODE) !== "off") {
+    const accounts = ctx.store.state.accounts;
+    const seen = await peekTerminal(ctx.deps.terminal, accounts.flatMap(terminalIdentities));
+    const on =
+      seen.accountUuid && seen.orgId
+        ? accounts.find((a) => terminalIdentities(a).some((x) => sameIdentity(x, seen as { accountUuid: string; orgId: string })))
+        : undefined;
+    const active = state.activeProfileId ? accounts.find((a) => a.id === state.activeProfileId) : undefined;
+    add(
+      "terminal",
+      seen.state === "signed-in" && on && (!active || active.id === on.id) ? "ok" : "warn",
+      seen.state === "unreadable"
+        ? t("terminaldeki claude’un girişi okunamadı", "could not read the terminal claude’s sign-in")
+        : seen.state === "signed-out"
+          ? t("terminaldeki claude’da giriş yok: claude auth login", "the terminal claude is signed out: claude auth login")
+          : !on
+            ? t(
+                `terminaldeki claude Relay’de olmayan bir hesapta (${[seen.email, seen.orgName].filter(Boolean).join(" · ")}): claude auth login ile bir hesaba gir`,
+                `the terminal claude is on an account Relay does not have (${[seen.email, seen.orgName].filter(Boolean).join(" · ")}): sign it in to one with claude auth login`,
+              )
+            : active && active.id !== on.id
+              ? t(`terminaldeki claude ${on.name} hesabında, Desktop ${active.name} hesabında`, `the terminal claude is on ${on.name}, Desktop is on ${active.name}`)
+              : t(`terminaldeki claude ${on.name} hesabında`, `the terminal claude is on ${on.name}`),
+    );
+  }
   add(
     "gui-session",
     ctx.deps.guiSession() ? "ok" : "warn",

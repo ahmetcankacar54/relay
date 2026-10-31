@@ -27,6 +27,7 @@ import {
   historyTransferOptions,
 } from "../features/SwitchPreferences";
 import { ExtensionPreference } from "../features/ExtensionPreference";
+import { TerminalPreference } from "../features/TerminalPreference";
 import { ContinuationSettings } from "../features/ContinuationSettings";
 import { AutomationSettings, MODE_TITLE } from "../features/AutomationControl";
 
@@ -447,6 +448,9 @@ export function Switching() {
         </Card>
         <Card id="gecis-eklenti" className={cardClass}>
           <ExtensionPreference />
+        </Card>
+        <Card id="gecis-terminal" className={cardClass}>
+          <TerminalPreference />
         </Card>
         <Card id="gecis-taslak" className={cardClass}>
           <DraftRetypePreference

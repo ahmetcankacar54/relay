@@ -65,6 +65,14 @@ import { clearScratch, type ExtensionStorage } from "./extension-storage";
 import { ExtensionSwitcher } from "./extension-switch";
 import { ExtensionVault } from "./extension-vault";
 import { CookieVault } from "./cookie-vault";
+import { TerminalSwitcher, TerminalVault, type TerminalPorts } from "./terminal-identity";
+import {
+  DEFAULT_TERMINAL_MODE,
+  terminalIdentities,
+  type TerminalCurrent,
+  type TerminalOutcome,
+  type TerminalStatus,
+} from "../../shared/terminal-identity";
 import type { CookieStorage } from "./cookie-store";
 import type { LaunchWatch, PageOutcome } from "./desktop-launch";
 import {
@@ -299,6 +307,16 @@ export class DesktopManager {
   extension?: { system: BrowserSystem; storage: ExtensionStorage; cookies?: CookieStorage };
   /** Where an extension step keeps its backup of the extension's folder; the data folder's `extension-scratch` when unset. */
   extensionScratchDir?: string;
+  /**
+   * The terminal's Claude Code sign-in (Keychain item, `~/.claude.json`, its refresh lock), for
+   * keeping it with the account at a switch. Without it (not macOS) the step never runs.
+   */
+  terminal?: TerminalPorts;
+  /** The terminal's Claude Code sign-ins, sealed per account and organization. */
+  private terminalVault: TerminalVault;
+  private terminalSwitcher?: TerminalSwitcher;
+  private lastTerminal?: TerminalOutcome;
+  private lastTerminalCheck?: TerminalCurrent;
   /** The reading observers share; every Desktop operation drops it. */
   private shared?: { at: number; reading: Promise<DesktopReading> };
   constructor(
@@ -330,6 +348,12 @@ export class DesktopManager {
       this.now,
     );
     this.cookieVault = new CookieVault(
+      this.vault,
+      (text) => this.host.seal(text),
+      (data) => this.host.unseal(data),
+      this.now,
+    );
+    this.terminalVault = new TerminalVault(
       this.vault,
       (text) => this.host.seal(text),
       (data) => this.host.unseal(data),
@@ -611,7 +635,8 @@ export class DesktopManager {
     });
   }
   async switchTo(profileId: string, options: DesktopSwitchOptions = {}) {
-    return this.exclusive({ kind: "switch", profileId }, async () => {
+    let switched: Account | undefined;
+    await this.exclusive({ kind: "switch", profileId }, async () => {
       if (this.pending)
         throw new Error("Finish or cancel the current Desktop sign-in first.");
       const target = this.store.account(profileId);
@@ -709,6 +734,7 @@ export class DesktopManager {
           options.beforeQuit,
           options.answerQuitGuard,
         );
+      switched = target;
     }).finally(() => {
       try {
         this.onSwitched?.();
@@ -716,6 +742,9 @@ export class DesktopManager {
         // A listener never changes how a switch ends.
       }
     });
+    // After the operation: it needs no app closed and waits on Claude Code's own lock, which
+    // must not hold up the switch. Still awaited, so a CLI switch ends with it done.
+    if (switched) await this.terminalStep(switched);
   }
   async cancelLogin() {
     return this.exclusive({ kind: "cancel-link" }, async () => {
@@ -1040,6 +1069,89 @@ export class DesktopManager {
       }
     }
     return this.extensionStatus();
+  }
+  private terminalStepper(): TerminalSwitcher | undefined {
+    if (!this.terminal) return undefined;
+    this.terminalSwitcher ??= new TerminalSwitcher(this.terminal, this.terminalVault, this.now);
+    return this.terminalSwitcher;
+  }
+  private get terminalMode() {
+    return this.store.state.settings.terminalCli ?? DEFAULT_TERMINAL_MODE;
+  }
+  /**
+   * Keeps the terminal's Claude Code sign-in with `target` (see TerminalSwitcher). Never throws,
+   * so it can never fail or hold up a switch. Logs results and short ids only.
+   */
+  private async terminalStep(target: Account): Promise<TerminalOutcome | undefined> {
+    try {
+      const switcher = this.terminalStepper();
+      if (!switcher) return undefined;
+      const outcome = await switcher.run({
+        mode: this.terminalMode,
+        target: terminalIdentities(target),
+        known: this.store.state.accounts.flatMap(terminalIdentities),
+      });
+      this.lastTerminal = outcome;
+      if (outcome.current) this.lastTerminalCheck = outcome.current;
+      this.diagnose("terminal", {
+        to: shortId(target.desktop?.accountUuid ?? target.id),
+        result: outcome.result,
+        ...(outcome.reason ? { reason: outcome.reason } : {}),
+        saved: outcome.saved,
+      });
+      return outcome;
+    } catch {
+      return undefined;
+    }
+  }
+  /**
+   * Runs the terminal step for the account Desktop is on, without changing Claude: how to bring
+   * the terminal along after a switch that left it, or after signing it in by hand.
+   */
+  async syncTerminal(): Promise<TerminalOutcome> {
+    if (!this.terminalStepper())
+      throw new Error("The terminal's Claude Code is not supported here.");
+    const state = await this.snapshot();
+    const active = state.activeProfileId
+      ? this.store.state.accounts.find((a) => a.id === state.activeProfileId)
+      : undefined;
+    if (!active) throw new Error("Switch Claude Desktop to a saved account first.");
+    return (await this.terminalStep(active))!;
+  }
+  /** The setting, who the terminal is on, what is saved and the last result; undefined outside macOS. */
+  async terminalStatus(): Promise<TerminalStatus | undefined> {
+    if (!this.terminalStepper()) return undefined;
+    return {
+      mode: this.terminalMode,
+      current: this.lastTerminalCheck,
+      saved: await this.terminalVault.list(),
+      last: this.lastTerminal,
+    };
+  }
+  /**
+   * Reads who the terminal's Claude Code is signed in to, and saves that sign-in when it is one of
+   * Relay's accounts: how an account is linked. Writes nothing to Claude Code.
+   */
+  async checkTerminal(): Promise<TerminalStatus | undefined> {
+    const switcher = this.terminalStepper();
+    if (!switcher) return undefined;
+    const current = await switcher.check({
+      mode: this.terminalMode,
+      known: this.store.state.accounts.flatMap(terminalIdentities),
+    });
+    if (current) {
+      this.lastTerminalCheck = current;
+      this.diagnose("terminal-check", {
+        state: current.state,
+        ...(current.state === "signed-in"
+          ? {
+              known: !!current.known,
+              ...(current.accountUuid ? { account: shortId(current.accountUuid) } : {}),
+            }
+          : {}),
+      });
+    }
+    return this.terminalStatus();
   }
   private async historyPlan(
     target: Account,

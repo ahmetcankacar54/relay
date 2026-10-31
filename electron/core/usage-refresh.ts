@@ -9,6 +9,7 @@ import { readPrivateJson, writePrivateJson } from "./continuation-journal";
 import { requestUsageJson, verifyIdentity } from "./usage";
 import { UsageError, type UsageCredential } from "./usage-credentials";
 import { ProfileLockBusyError } from "./profile-lock";
+import { cliRefreshLockPaths, takeLockDir } from "./cli-refresh-lock";
 
 export const USAGE_REFRESH_BEFORE_MS = 5 * 60_000;
 export type RefreshUsageCredential = (
@@ -547,7 +548,14 @@ export class UsageCredentialRefresher {
     const stat = fs.lstatSync(directory);
     const ownerFile = path.join(profile, ".relay-usage-refresh.lock");
     let timer: ReturnType<typeof setInterval> | undefined;
+    // The CLI also takes the legacy `<profile>.lock` (2.1.314); hold both, as it does.
+    let legacy: Awaited<ReturnType<typeof takeLockDir>> | undefined;
     try {
+      try {
+        legacy = await takeLockDir(cliRefreshLockPaths(profile).legacy);
+      } catch {
+        throw new UsageError("unavailable");
+      }
       const owner = readPrivateJson(ownerFile) as Owner;
       // Rewrite the existing inode: the live owner descriptor remains valid.
       const fd = fs.openSync(
@@ -580,6 +588,7 @@ export class UsageCredentialRefresher {
             fs.utimesSync(directory, now, now);
           }
         } catch {}
+        legacy?.touch();
       };
       timer = setInterval(touch, 5_000);
       timer.unref();
@@ -598,6 +607,7 @@ export class UsageCredentialRefresher {
       return result;
     } finally {
       if (timer) clearInterval(timer);
+      legacy?.release();
       this.removeOwnedOfficial(profile, {
         pid: process.pid,
         token: "",

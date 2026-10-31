@@ -4,6 +4,7 @@ import { execFile, execFileSync, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { macBrowserSystem, type BrowserSystem } from "../../electron/core/browser-system";
 import { levelExtensionStorage, type ExtensionStorage } from "../../electron/core/extension-storage";
+import { macTerminalPorts, type TerminalPorts } from "../../electron/core/terminal-identity";
 import type { DesktopHost } from "../../electron/core/desktop";
 import { nodeDesktopHost } from "../../electron/core/desktop-host-node";
 import { resolveExecutable } from "../../electron/core/environment";
@@ -32,6 +33,8 @@ export interface CliDeps {
   transcriptRoot: string;
   /** The browsers and the Claude extension's storage; undefined when a switch leaves the extension alone. */
   extension?: { system: BrowserSystem; storage: ExtensionStorage };
+  /** The terminal's Claude Code sign-in; undefined when a switch leaves it alone. */
+  terminal?: TerminalPorts;
   platform: NodeJS.Platform;
 }
 
@@ -92,6 +95,7 @@ export function defaultDeps(): CliDeps {
       process.platform === "darwin"
         ? { system: macBrowserSystem(), storage: levelExtensionStorage }
         : undefined,
+    terminal: macTerminalPorts(),
     platform: process.platform,
   };
 }

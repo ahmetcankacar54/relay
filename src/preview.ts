@@ -7,6 +7,7 @@ import { buildTokenUsageView } from "../shared/token-usage-view";
 import { estimateCost } from "../shared/model-prices";
 import { addDays, lostFoundCollection, mondayOf } from "../shared/lost-found";
 import type { LedgerSnapshot, TokenCounts } from "../shared/token-usage-view";
+import type { TerminalStatus } from "../shared/terminal-identity";
 import { localDate, localSlot } from "../shared/planning";
 import { DEFAULT_MENU_BAR_ITEMS, menuBarItems } from "../shared/tray";
 import type {
@@ -82,6 +83,18 @@ const previewExtension: ExtensionStatus = {
   restoresTabs: false,
   saved: [{ accountUuid: ids[0], savedAt: new Date().toISOString() }],
   cookiesSaved: [],
+};
+/** The terminal on the first account; the second has its sign-in saved too. */
+const previewTerminal: TerminalStatus = {
+  mode: "follow",
+  current: {
+    state: "signed-in",
+    accountUuid: ids[0],
+    orgId: ids[2],
+    known: true,
+    at: new Date().toISOString(),
+  },
+  saved: [{ accountUuid: ids[0], orgId: ids[2], savedAt: new Date().toISOString(), parked: false }],
 };
 accounts[0].desktop = {
   accountUuid: ids[0],
@@ -620,6 +633,13 @@ export const previewApi: RelayAPI = {
       saved: true,
     };
   },
+  terminalStatus: async () => structuredClone(previewTerminal),
+  checkTerminal: async () => structuredClone(previewTerminal),
+  syncTerminal: async () => ({
+    result: "switched" as const,
+    saved: true,
+    at: new Date().toISOString(),
+  }),
   setTrayLanguage: async () => {},
   showDiagnostics: desktopOnly,
   claudeLaunch: async () => ({ quicOff: false }),

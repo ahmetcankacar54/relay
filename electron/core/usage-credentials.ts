@@ -30,7 +30,7 @@ export function credentialService(profile: string) {
   return `Claude Code-credentials-${createHash("sha256").update(path.resolve(profile).normalize("NFC")).digest("hex").slice(0, 8)}`;
 }
 /** `security -w` prints non-printable secrets as hex; the CLI stores JSON text. */
-function decodeSecret(output: string) {
+export function decodeSecret(output: string) {
   const text = output.trim();
   if (/^[0-9a-f]+$/i.test(text) && text.length % 2 === 0) {
     const decoded = Buffer.from(text, "hex").toString("utf8");

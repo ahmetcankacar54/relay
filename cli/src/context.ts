@@ -139,6 +139,8 @@ export async function openContext(
   // The Claude extension's sign-in follows the account here too; its backup stays out of the app's.
   desktop.extension = deps.extension;
   desktop.extensionScratchDir = path.join(paths.data, "cli-scratch", "extension");
+  // And the terminal's Claude Code sign-in.
+  desktop.terminal = deps.terminal;
   const lock = new ProcessLock(path.join(paths.vault, "operation.lock"), "cli");
   desktop.operationLock = {
     ensure: (kind) => {

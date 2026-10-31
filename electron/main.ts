@@ -55,6 +55,7 @@ import {
 import { accountPlanningSchema } from "./core/store";
 import { macBrowserSystem } from "./core/browser-system";
 import { levelExtensionStorage } from "./core/extension-storage";
+import { macTerminalPorts } from "./core/terminal-identity";
 import { sqliteCookieStorage } from "./core/cookie-store";
 import { RelayTray } from "./tray";
 import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
@@ -780,6 +781,10 @@ else {
           storage: levelExtensionStorage,
           cookies: sqliteCookieStorage,
         };
+      // So does the terminal's Claude Code sign-in; macOS only. Checked once at start, which links
+      // a terminal already signed in to one of the accounts.
+      desktop.terminal = macTerminalPorts();
+      void desktop.checkTerminal().catch(() => undefined);
       const evidence = new NativeDesktopContinuationEvidence({
         store: service.store,
         desktop,
@@ -1691,6 +1696,9 @@ function bindIPC() {
   handle("extension-sync", () => desktop.syncExtension().finally(broadcastChanged));
   handle("extension-check", () => desktop.checkExtension());
   handle("extension-link", (accountId) => desktop.checkExtension(id.parse(accountId)));
+  handle("terminal-status", () => desktop.terminalStatus());
+  handle("terminal-check", () => desktop.checkTerminal());
+  handle("terminal-sync", () => desktop.syncTerminal().finally(broadcastChanged));
   // The windows show it; every switch, sign-in or recovery rechecks fresh in main.
   handle("desktop-snapshot", async () => ({
     ...(await desktop.cachedSnapshot()),

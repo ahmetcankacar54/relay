@@ -126,8 +126,8 @@ test("a schema 3 registry with a browser profile opens without it and is written
   old.accounts[0].browser = { app: "brave", profile: "Default", name: "Work" };
   writeRaw(dir, old);
   const store = new Store(dir);
-  assert.equal(STATE_SCHEMA, 5);
-  assert.equal(raw(dir).schema, 5);
+  assert.equal(STATE_SCHEMA, 6);
+  assert.equal(raw(dir).schema, 6);
   assert.equal("browser" in raw(dir).accounts[0], false);
   assert.equal("browser" in store.state.accounts[0], false);
   // The rest of the account is as it was.
@@ -187,7 +187,7 @@ test("a schema 4 registry's extension mode never turns into one that writes to a
     assert.equal(store.state.settings.claudeExtension?.mode, expected);
     // The chosen browser profile stays.
     assert.deepEqual(store.state.settings.claudeExtension?.browser, { app: "brave", profile: "Default" });
-    assert.equal(raw(dir).schema, 5);
+    assert.equal(raw(dir).schema, 6);
     assert.equal(raw(dir).settings.claudeExtension.mode, expected);
   }
 });
@@ -199,7 +199,7 @@ test("a schema 5 registry keeps the modes that write to a browser, and accepts g
     first.update((state) => {
       state.settings.claudeExtension = { mode };
     });
-    assert.equal(raw(dir).schema, 5);
+    assert.equal(raw(dir).schema, 6);
     assert.equal(new Store(dir).state.settings.claudeExtension?.mode, mode);
   }
 });
