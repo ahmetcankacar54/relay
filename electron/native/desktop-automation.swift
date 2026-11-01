@@ -434,13 +434,13 @@ func markerPresent(_ observation: Observation, _ marker: String) -> Bool {
         return node.strings.contains { $0.contains(marker) }
     }
 }
-/// How the text went in: "ax-value" when the composer took it as its value, else "paste".
+/// How the text went in, for the parent's log: always "paste".
 @discardableResult
 func writeComposer(_ observation: Observation, _ body: String) throws -> String {
     guard let composer = observation.composer else { try fail("desktop-ui-unsupported") }
-    if AXUIElementSetAttributeValue(composer.element, kAXValueAttribute as CFString, body as CFString) == .success { return "ax-value" }
-    // Chromium contenteditable fields can reject AXSetValue. The fallback is a
-    // normal focused paste. Restore the prior clipboard only if it is still ours;
+    // Never AXSetValue: Claude's editor accepts it into the page and reads it back, but its
+    // own state stays empty, so Send takes nothing (seen live 2026-11-02). A focused paste
+    // goes through the editor. Restore the prior clipboard only if it is still ours;
     // never overwrite a clipboard change made by the user during this action.
     guard observation.app.activate(options: []),
           AXUIElementSetAttributeValue(composer.element, kAXFocusedAttribute as CFString, kCFBooleanTrue) == .success,

@@ -449,12 +449,12 @@ test("send passes on how the text went in, the screen after Send and the step a 
   const sent = nativeDesktopAutomation("/unused", async () => ({
     ok: true,
     acceptedVisible: false,
-    written: "ax-value",
+    written: "paste",
     after,
   }));
   assert.deepEqual(await sent.send(guard, "request", "Try again"), {
     acceptedVisible: false,
-    written: "ax-value",
+    written: "paste",
     after,
   });
   // An older helper, or one with a malformed report, still sends: only the extras drop.
@@ -1039,6 +1039,14 @@ test("the Swift composer reads as empty only from a readable value, the same way
   assert.match(read, /case \.noValue: return "no-value"/);
   assert.match(read, /default: return nil/);
   assert.match(read, /guard let text = value as\? String else \{ return nil \}/);
+});
+test("the Swift writeComposer only pastes: Claude's editor ignores a value set through AX", () => {
+  const body = swiftBlock("func writeComposer(");
+  // Setting the value shows the text but leaves the editor's own state empty, so Send took nothing.
+  assert.doesNotMatch(body, /kAXValueAttribute/);
+  assert.doesNotMatch(body, /"ax-value"/);
+  assert.match(body, /return "paste"/);
+  assert.match(body, /down\.post\(tap: \.cghidEventTap\)/);
 });
 test("the Swift writeComposer marks its clipboard text transient and concealed before it is owned", () => {
   const body = swiftBlock("func writeComposer(");

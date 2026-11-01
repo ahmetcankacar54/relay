@@ -53,8 +53,8 @@ export class DesktopAutomationError extends Error {
 
 export interface DesktopSendResult {
   acceptedVisible: boolean;
-  /** How the text went in: as the composer's value or by a paste. Older helpers omit it. */
-  written?: "ax-value" | "paste";
+  /** How the text went in: always a paste now. Older helpers omit it. */
+  written?: "paste";
   /** What the screen showed right after Send, for the log: never text. Older helpers omit it. */
   after?: {
     status: string;
@@ -488,9 +488,7 @@ export function nativeDesktopAutomation(
       });
       return {
         acceptedVisible: r.acceptedVisible === true,
-        ...(r.written === "ax-value" || r.written === "paste"
-          ? { written: r.written }
-          : {}),
+        ...(r.written === "paste" ? { written: r.written } : {}),
         ...(validSendAfter(r.after) ? { after: r.after } : {}),
       };
     },
