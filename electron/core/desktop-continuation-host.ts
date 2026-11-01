@@ -25,14 +25,47 @@ export type DesktopAutomationIssue =
    */
   | "user-active";
 
+/**
+ * Where a send stopped, or how the helper itself failed, for the log only: the send's
+ * `write`, `verify`, `press` or `after` step, or `helper-timeout`, `helper-exit` and
+ * `helper-output` when the helper gave no answer to read.
+ */
+export type DesktopAutomationStep =
+  | "write"
+  | "verify"
+  | "press"
+  | "after"
+  | "helper-timeout"
+  | "helper-exit"
+  | "helper-output";
+const STEPS = new Set<string>(["write", "verify", "press", "after"]);
+
 export class DesktopAutomationError extends Error {
   constructor(
     readonly issue: DesktopAutomationIssue,
     /** True when the failure happened before anything in Claude was changed. */
     readonly unchanged = false,
+    readonly step?: DesktopAutomationStep,
   ) {
     super(issue);
   }
+}
+
+export interface DesktopSendResult {
+  acceptedVisible: boolean;
+  /** How the text went in: as the composer's value or by a paste. Older helpers omit it. */
+  written?: "ax-value" | "paste";
+  /** What the screen showed right after Send, for the log: never text. Older helpers omit it. */
+  after?: {
+    status: string;
+    composerPresent: boolean;
+    composerEmpty: boolean;
+    /** The composer still holds exactly the text that was typed: Send did not take it. */
+    composerHoldsText: boolean;
+    composerChars?: number;
+    markerVisible: boolean;
+    sendPresent: boolean;
+  };
 }
 
 /** AX proves only the selected conversation, never all workers or their children. */
@@ -149,7 +182,7 @@ export interface DesktopAutomation {
     guard: DesktopAutomationGuard,
     requestId: string,
     text: string,
-  ): Promise<{ acceptedVisible: boolean }>;
+  ): Promise<DesktopSendResult>;
   hasRequestMarker(requestId: string): Promise<boolean>;
   /**
    * Types `text` into the empty composer of the open conversation, or of Code's
@@ -234,6 +267,9 @@ type NativeReply = {
   issue?: DesktopAutomationIssue;
   snapshot?: DesktopAutomationSnapshot;
   acceptedVisible?: boolean;
+  written?: unknown;
+  after?: unknown;
+  step?: unknown;
   markerPresent?: boolean;
   accessibilityGranted?: boolean;
   /** quit-guard: the question Claude asks before quitting, and whether it was answered. */
@@ -241,6 +277,21 @@ type NativeReply = {
   pressed?: boolean;
 };
 export type DesktopNativeExecutor = (request: unknown) => Promise<unknown>;
+
+function validSendAfter(value: unknown): value is DesktopSendResult["after"] {
+  if (!value || typeof value !== "object") return false;
+  const v = value as NonNullable<DesktopSendResult["after"]>;
+  return (
+    typeof v.status === "string" &&
+    v.status.length <= 32 &&
+    typeof v.composerPresent === "boolean" &&
+    typeof v.composerEmpty === "boolean" &&
+    typeof v.composerHoldsText === "boolean" &&
+    typeof v.markerVisible === "boolean" &&
+    typeof v.sendPresent === "boolean" &&
+    (v.composerChars === undefined || Number.isSafeInteger(v.composerChars))
+  );
+}
 
 function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
   if (!value || typeof value !== "object") return false;
@@ -263,12 +314,15 @@ function validSnapshot(value: unknown): value is DesktopAutomationSnapshot {
       typeof v.composerPresent === "boolean") &&
     typeof v.composerEmpty === "boolean" &&
     (v.composerEmptyAs === undefined ||
-      (typeof v.composerEmptyAs === "string" && /^[a-z-]{1,16}$/.test(v.composerEmptyAs))) &&
+      (typeof v.composerEmptyAs === "string" &&
+        /^[a-z-]{1,16}$/.test(v.composerEmptyAs))) &&
     (v.composerChars === undefined ||
       (Number.isSafeInteger(v.composerChars) && v.composerChars >= 0)) &&
     (v.screen === undefined ||
-      (typeof v.screen === "string" && /^[a-z0-9/:*_-]{1,80}$/.test(v.screen))) &&
-    (v.panes === undefined || (Number.isSafeInteger(v.panes) && v.panes >= 0)) &&
+      (typeof v.screen === "string" &&
+        /^[a-z0-9/:*_-]{1,80}$/.test(v.screen))) &&
+    (v.panes === undefined ||
+      (Number.isSafeInteger(v.panes) && v.panes >= 0)) &&
     (v.paneFound === undefined || typeof v.paneFound === "boolean") &&
     typeof v.sendEnabled === "boolean" &&
     (v.quotaAutoResume === undefined ||
@@ -341,12 +395,24 @@ export function nativeDesktopAutomation(
           (error, stdout) => {
             if (error)
               return reject(
-                new DesktopAutomationError("desktop-ui-unsupported"),
+                new DesktopAutomationError(
+                  "desktop-ui-unsupported",
+                  false,
+                  (error as { killed?: boolean }).killed
+                    ? "helper-timeout"
+                    : "helper-exit",
+                ),
               );
             try {
               resolve(JSON.parse(stdout));
             } catch {
-              reject(new DesktopAutomationError("desktop-ui-unsupported"));
+              reject(
+                new DesktopAutomationError(
+                  "desktop-ui-unsupported",
+                  false,
+                  "helper-output",
+                ),
+              );
             }
           },
         );
@@ -363,6 +429,10 @@ export function nativeDesktopAutomation(
         reply.issue && knownIssues.has(reply.issue)
           ? reply.issue
           : "desktop-ui-unsupported",
+        false,
+        typeof reply.step === "string" && STEPS.has(reply.step)
+          ? (reply.step as DesktopAutomationStep)
+          : undefined,
       );
     return reply;
   };
@@ -416,7 +486,13 @@ export function nativeDesktopAutomation(
         requestId,
         text,
       });
-      return { acceptedVisible: r.acceptedVisible === true };
+      return {
+        acceptedVisible: r.acceptedVisible === true,
+        ...(r.written === "ax-value" || r.written === "paste"
+          ? { written: r.written }
+          : {}),
+        ...(validSendAfter(r.after) ? { after: r.after } : {}),
+      };
     },
     writeDraft: async (expected, text, options) => {
       if (!text || text.length > MAX_DRAFT_LENGTH || text.includes("\0"))

@@ -924,26 +924,44 @@ else {
         }
         beforeSend();
         try {
-          await automation.send(
+          const sent = await automation.send(
             automationGuard(snapshot),
             requestId,
             CONTINUATION_TEXT,
           );
+          // Send was pressed: how the text went in and what the screen showed next.
+          logFleetEvent("continue-sent", {
+            conversation,
+            acceptedVisible: sent.acceptedVisible,
+            written: sent.written ?? null,
+            ...(sent.after ?? {}),
+          });
         } catch (error) {
           // Past the guard a failed send may have typed or sent: never sent again, but said why.
           logFleetEvent("continue-send-failed", {
             conversation,
             issue:
               error instanceof DesktopAutomationError ? error.issue : "failed",
+            step:
+              error instanceof DesktopAutomationError
+                ? (error.step ?? "guard")
+                : null,
           });
           throw error;
         }
+        // The transcript, not the screen, says whether the turn arrived.
+        const delivered = <T extends string>(delivery: T, polls: number) => {
+          logFleetEvent("continue-delivery", { conversation, delivery, polls });
+          return delivery;
+        };
         for (let attempt = 0; attempt < 110; attempt++) {
           const delivery = await evidence.deliveryAfter(stop, requestId);
-          if (delivery === "started" || delivery === "unknown") return delivery;
+          if (delivery === "started" || delivery === "unknown")
+            return delivered(delivery, attempt + 1);
           await sleep(attempt < 10 ? 500 : 2_000);
         }
         const final = await evidence.deliveryAfter(stop, requestId);
+        delivered(final, 111);
         return final === "started" || final === "accepted" ? final : "unknown";
       };
       fleet = new FleetContinuation({

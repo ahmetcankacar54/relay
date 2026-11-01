@@ -15,7 +15,9 @@ import {
 } from "../electron/core/continuation";
 
 const NOW = Date.parse("2026-10-13T14:00:00Z");
-function record(): ContinuationJournalRecord {
+function record(
+  continuationText = CONTINUATION_TEXT,
+): ContinuationJournalRecord {
   const id = randomUUID();
   const boundRequest = JSON.stringify({
     id,
@@ -34,7 +36,7 @@ function record(): ContinuationJournalRecord {
     transcriptRevision: "revision-1",
     permissionMode: "Auto",
     expectedContextRevision: 1,
-    continuationText: CONTINUATION_TEXT,
+    continuationText,
   });
   return {
     version: 1,
@@ -90,6 +92,33 @@ test("completed valid terminal records cease blocking; damaged terminal claims s
     assert.equal(pending.length, 2);
     assert.ok(
       pending.some((value) => value.id === "unreadable:damaged.journal.json"),
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("terminal records bound to an older Relay's continuation text stop blocking; unknown text still blocks", async () => {
+  const directory = temporary();
+  try {
+    const journal = new FileContinuationJournal(directory, () => NOW);
+    const legacy = {
+      ...record(
+        "Continue this same conversation from the saved checkpoint. First inspect " +
+          "the existing transcript and verify whether interrupted actions already took " +
+          "effect. Do not replay the last prompt or duplicate completed work. Preserve " +
+          "the existing permission mode, ask for any outstanding user decision, and do " +
+          "not claim that stopped subagents or shell processes are still running.",
+      ),
+      stage: "blocked" as const,
+    };
+    await journal.write(legacy);
+    assert.deepEqual(await journal.listPending(), []);
+    const unknown = { ...record("Something else"), stage: "blocked" as const };
+    await journal.write(unknown);
+    assert.deepEqual(
+      (await journal.listPending()).map((value) => value.id),
+      [unknown.id],
     );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

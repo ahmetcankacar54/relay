@@ -208,7 +208,7 @@ async function main() {
       throw new Error("delivery-checkpoint-mismatch");
     if (
       typeof command.text !== "string" ||
-      !command.text.toLowerCase().includes("continu") ||
+      !command.text.trim() ||
       command.text.length > 8_192
     )
       throw new Error("invalid-continuation-message");

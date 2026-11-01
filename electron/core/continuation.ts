@@ -150,8 +150,12 @@ export interface ContinuationResult {
 }
 
 // A continuation is a new turn after a stopped checkpoint, not a transfer of
-// running shells/subagents. Preserve permissions and reconcile interrupted work.
-export const CONTINUATION_TEXT =
+// running shells/subagents. It says what the user would type after a limit
+// stop; the marker the send appends is what proves delivery.
+export const CONTINUATION_TEXT = "Try again";
+// Journal entries written by an older Relay bound this text: they stay valid,
+// so a finished one never turns into a host-wide barrier.
+const LEGACY_CONTINUATION_TEXT =
   "Continue this same conversation from the saved checkpoint. First inspect " +
   "the existing transcript and verify whether interrupted actions already took " +
   "effect. Do not replay the last prompt or duplicate completed work. Preserve " +
@@ -444,7 +448,8 @@ export function isTerminalContinuationRecord(
       !textKey(b.transcriptRevision) ||
       !textKey(b.permissionMode) ||
       !clock(b.expectedContextRevision) ||
-      b.continuationText !== CONTINUATION_TEXT ||
+      (b.continuationText !== CONTINUATION_TEXT &&
+        b.continuationText !== LEGACY_CONTINUATION_TEXT) ||
       (b.executionPolicy !== undefined &&
         b.executionPolicy !== "guarded-native-at-most-once")
     )

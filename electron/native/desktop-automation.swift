@@ -22,7 +22,8 @@ func menuItemMatches(_ text: String, _ mode: String) -> Bool {
         (mode == "Accept edits" && (text == "Accept" || text.hasPrefix("Accept ")))
 }
 
-struct BridgeError: Error { let issue: String }
+// `step` names where a send stopped, for the parent's log: never text.
+struct BridgeError: Error { let issue: String; var step: String? = nil }
 func fail(_ issue: String) throws -> Never { throw BridgeError(issue: issue) }
 func match(_ value: String, _ pattern: String) -> Bool {
     value.range(of: pattern, options: .regularExpression) != nil
@@ -433,9 +434,11 @@ func markerPresent(_ observation: Observation, _ marker: String) -> Bool {
         return node.strings.contains { $0.contains(marker) }
     }
 }
-func writeComposer(_ observation: Observation, _ body: String) throws {
+/// How the text went in: "ax-value" when the composer took it as its value, else "paste".
+@discardableResult
+func writeComposer(_ observation: Observation, _ body: String) throws -> String {
     guard let composer = observation.composer else { try fail("desktop-ui-unsupported") }
-    if AXUIElementSetAttributeValue(composer.element, kAXValueAttribute as CFString, body as CFString) == .success { return }
+    if AXUIElementSetAttributeValue(composer.element, kAXValueAttribute as CFString, body as CFString) == .success { return "ax-value" }
     // Chromium contenteditable fields can reject AXSetValue. The fallback is a
     // normal focused paste. Restore the prior clipboard only if it is still ours;
     // never overwrite a clipboard change made by the user during this action.
@@ -487,6 +490,7 @@ func writeComposer(_ observation: Observation, _ body: String) throws {
     // Give this ordinary UI event bounded time to arrive. Caller rereads the
     // exact account/session/mode and whole composer before a separate send click.
     Thread.sleep(forTimeInterval: 0.15)
+    return "paste"
 }
 // Claude's own question before it quits while work is left running, an alert or a sheet,
 // by its title in English and Turkish: "shells" when it asks only about background
@@ -616,18 +620,38 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         // to send again. A durable transcript lookup is the parent's responsibility.
         if markerPresent(current, marker) { try fail("delivery-ambiguous") }
         let body = text + "\n\n" + marker
-        try writeComposer(current, body)
-        current = try observe()
-        try validateGuard(current, expected, allowComposer: true)
-        // The editor may give its paragraphs other line breaks than the text had: the
-        // characters that show must all be there, in order, and nothing else.
-        guard let typed = current.composer?.value, visibleText(typed) == visibleText(body),
-              let send = current.send, send.enabled else { try fail("delivery-ambiguous") }
-        // There is no atomic lock across AX clients. This is one guarded attempt,
-        // never an exactly-once transport. Ambiguous results must not be retried.
-        try press(send)
-        current = try observe()
-        return ["ok": true, "acceptedVisible": current.fields["composerEmpty"] as? Bool == true && markerPresent(current, marker)]
+        // Which step a failure came from goes to the parent's log with the issue.
+        var step = "write"
+        do {
+            let written = try writeComposer(current, body)
+            step = "verify"
+            current = try observe()
+            try validateGuard(current, expected, allowComposer: true)
+            // The editor may give its paragraphs other line breaks than the text had: the
+            // characters that show must all be there, in order, and nothing else.
+            guard let typed = current.composer?.value, visibleText(typed) == visibleText(body),
+                  let send = current.send, send.enabled else { try fail("delivery-ambiguous") }
+            // There is no atomic lock across AX clients. This is one guarded attempt,
+            // never an exactly-once transport. Ambiguous results must not be retried.
+            step = "press"
+            try press(send)
+            step = "after"
+            current = try observe()
+            let accepted = current.fields["composerEmpty"] as? Bool == true && markerPresent(current, marker)
+            // What the screen showed right after Send, for the log: counts and flags, never text.
+            var after: [String: Any] = [
+                "status": current.fields["status"] as? String ?? "unknown",
+                "composerPresent": current.composer != nil,
+                "composerEmpty": current.fields["composerEmpty"] as? Bool == true,
+                "composerHoldsText": current.composer.map { visibleText($0.value) == visibleText(body) } ?? false,
+                "markerVisible": markerPresent(current, marker),
+                "sendPresent": current.send != nil
+            ]
+            if let chars = current.fields["composerChars"] as? Int { after["composerChars"] = chars }
+            return ["ok": true, "acceptedVisible": accepted, "written": written, "after": after]
+        } catch let error as BridgeError {
+            throw BridgeError(issue: error.issue, step: step)
+        }
     }
     if command == "write-draft" {
         // Re-types an unsent draft, into a conversation or Code's new-session screen.
@@ -800,7 +824,9 @@ do {
     FileHandle.standardOutput.write(output)
 } catch {
     let issue = (error as? BridgeError)?.issue ?? "desktop-ui-unsupported"
-    if let output = try? JSONSerialization.data(withJSONObject: ["ok": false, "issue": issue], options: [.sortedKeys]) {
+    var reply: [String: Any] = ["ok": false, "issue": issue]
+    if let step = (error as? BridgeError)?.step { reply["step"] = step }
+    if let output = try? JSONSerialization.data(withJSONObject: reply, options: [.sortedKeys]) {
         FileHandle.standardOutput.write(output)
     }
 }

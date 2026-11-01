@@ -429,6 +429,90 @@ test("native transport validates exact IDs and never uses last-session navigatio
   );
   assert.equal(commands.length, 1);
 });
+test("send passes on how the text went in, the screen after Send and the step a failure came from", async () => {
+  const guard = {
+    pid: 1,
+    localSessionId: localId,
+    accountLabel: "test",
+    permissionMode: "Auto",
+    contextFingerprint: "a".repeat(64),
+  };
+  const after = {
+    status: "stopped",
+    composerPresent: true,
+    composerEmpty: false,
+    composerHoldsText: true,
+    composerChars: 47,
+    markerVisible: false,
+    sendPresent: true,
+  };
+  const sent = nativeDesktopAutomation("/unused", async () => ({
+    ok: true,
+    acceptedVisible: false,
+    written: "ax-value",
+    after,
+  }));
+  assert.deepEqual(await sent.send(guard, "request", "Try again"), {
+    acceptedVisible: false,
+    written: "ax-value",
+    after,
+  });
+  // An older helper, or one with a malformed report, still sends: only the extras drop.
+  const older = nativeDesktopAutomation("/unused", async () => ({
+    ok: true,
+    acceptedVisible: true,
+    written: "typed",
+    after: { ...after, status: 3 },
+  }));
+  assert.deepEqual(await older.send(guard, "request", "Try again"), {
+    acceptedVisible: true,
+  });
+  const failed = (step: unknown) =>
+    nativeDesktopAutomation("/unused", async () => ({
+      ok: false,
+      issue: "desktop-ui-unsupported",
+      step,
+    })).send(guard, "request", "Try again");
+  await assert.rejects(
+    failed("press"),
+    (error: unknown) =>
+      error instanceof DesktopAutomationError &&
+      error.issue === "desktop-ui-unsupported" &&
+      error.step === "press",
+  );
+  await assert.rejects(
+    failed("secret text"),
+    (error: unknown) =>
+      error instanceof DesktopAutomationError && error.step === undefined,
+  );
+});
+test("a helper that times out, exits or prints no JSON says which", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "relay-helper-"));
+  const script = (name: string, body: string) => {
+    const file = path.join(directory, name);
+    fs.writeFileSync(file, `#!/bin/sh\n${body}\n`, { mode: 0o700 });
+    return file;
+  };
+  try {
+    const step = async (helper: string) => {
+      try {
+        await nativeDesktopAutomation(helper).inspect();
+      } catch (error) {
+        return error instanceof DesktopAutomationError ? error.step : "other";
+      }
+      return "resolved";
+    };
+    assert.equal(await step(script("exit.sh", "exit 3")), "helper-exit");
+    assert.equal(
+      await step(script("text.sh", "echo not-json")),
+      "helper-output",
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
 test("openSession asks the helper to check the user only when asked", async () => {
   const commands: unknown[] = [];
   const adapter = nativeDesktopAutomation("/unused", async (input) => {
