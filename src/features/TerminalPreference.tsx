@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   DEFAULT_TERMINAL_MODE,
   sameIdentity,
@@ -16,6 +16,7 @@ import {
 } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { useTerminalStatus } from "@/data/useTerminal";
 
 /**
  * What Relay does with the terminal's Claude Code sign-in at a switch: the mode, who the terminal
@@ -28,27 +29,9 @@ export function TerminalPreference({
 }) {
   const { api, settings, busy, desktop, action, accounts } = useRelay();
   const { t } = useI18n();
-  // undefined: not read yet. null: this Mac does not run the step.
-  const [status, setStatus] = useState<TerminalStatus | null | undefined>(
-    initialStatus,
-  );
-  const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<string>();
-  const check = useCallback(() => {
-    setChecking(true);
-    return api
-      .checkTerminal()
-      .then(
-        (s) => setStatus(s ?? null),
-        () => {},
-      )
-      .finally(() => setChecking(false));
-  }, [api]);
+  const { status, checking, check } = useTerminalStatus({ initial: initialStatus });
   const mode = settings.terminalCli ?? DEFAULT_TERMINAL_MODE;
-  // Opening the card is a check: signing the terminal in and coming here links the account.
-  useEffect(() => {
-    if (!initialStatus) void check();
-  }, [check, mode]);
   if (!status) return null;
   const disabled = !!busy || !!desktop?.busy;
   const owner = (id: { accountUuid: string; orgId: string }) =>

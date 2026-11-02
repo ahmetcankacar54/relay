@@ -10,6 +10,7 @@ import {
   Monitor,
   MoreHorizontal,
   RefreshCw,
+  SquareTerminal,
 } from "lucide-react";
 import type { Account, ExtensionStatus, RelaySettings } from "../../../shared/types";
 import {
@@ -31,6 +32,9 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
 import { useExtensionStatus } from "@/data/useExtension";
+import { useTerminalStatus } from "@/data/useTerminal";
+import { terminalGuide } from "@/lib/terminal-ui";
+import type { TerminalStatus } from "../../../shared/terminal-identity";
 import { CliFlowPanel } from "@/app/ConnectionPanels";
 import { PageFrame } from "@/app/PageFrame";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
@@ -407,16 +411,85 @@ function ExtensionConnection({
   );
 }
 
+/** The terminal's Claude Code sign-in for this account: linked, or how to link it. macOS only. */
+function TerminalConnection({
+  account: a,
+  terminal: { status, checking, check },
+}: {
+  account: Account;
+  terminal: ReturnType<typeof useTerminalStatus>;
+}) {
+  const { t, language } = useI18n();
+  if (status === null) return null;
+  const guide = terminalGuide(a, status, t, language);
+  return (
+    <ConnectionRow
+      icon={<SquareTerminal />}
+      title={t("Terminal", "Terminal")}
+      purpose={t(
+        "Terminaldeki “claude” komutu da bu hesaba geçer.",
+        "The terminal’s “claude” command follows this account.",
+      )}
+      tone={guide.tone}
+      status={guide.label}
+      actions={
+        guide.action === "check" ? (
+          <Button size="sm" variant="outline" disabled={checking} onClick={() => void check()}>
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {t("Kontrol et", "Check")}
+          </Button>
+        ) : guide.action === "settings" ? (
+          <Button size="sm" variant="outline" asChild>
+            <a href={routeHash("gecis")}>{t("Geçiş ayarları", "Switching settings")}</a>
+          </Button>
+        ) : guide.tone === "ok" ? (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("Terminali yeniden kontrol et", "Check the terminal again")}
+            title={t("Terminali yeniden kontrol et", "Check the terminal again")}
+            disabled={checking}
+            onClick={() => void check()}
+          >
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+          </Button>
+        ) : undefined
+      }
+    >
+      {(guide.steps || guide.detail) && (
+        <>
+          {guide.steps && (
+            <ol className="grid gap-1.5 rounded-lg bg-muted/60 px-3 py-2.5 text-sm">
+              {guide.steps.map((step, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold tabular-nums">
+                    {i + 1}
+                  </span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+          {guide.detail && <p className="text-xs text-muted-foreground">{guide.detail}</p>}
+        </>
+      )}
+    </ConnectionRow>
+  );
+}
+
 /** The page's contents under its header; rendered apart so it can be tested statically. */
 export function AccountDetailBody({
   account: a,
   now,
   extensionStatus,
+  terminalStatus,
 }: {
   account: Account;
   now?: number;
   /** The browser extension's status, for static rendering; otherwise read, and checked, on mount. */
   extensionStatus?: ExtensionStatus;
+  /** The terminal's sign-in status, for static rendering; otherwise read, and checked, on mount. */
+  terminalStatus?: TerminalStatus;
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
@@ -461,12 +534,17 @@ export function AccountDetailBody({
   const ext = extension.status;
   const extensionCounts =
     macOS && ext !== null && !(ext && (ext.setting.mode === "off" || !ext.instances.length));
+  const terminal = useTerminalStatus({ check: macOS, initial: terminalStatus });
+  // The terminal counts like the extension: on macOS, unless it is turned off.
+  const term = terminal.status;
+  const terminalCounts = macOS && term !== null && term?.mode !== "off";
   const connections = [
     !!a.desktop,
     signIn.tone === "ok",
     ...(extensionCounts
       ? [!!ext && extensionGuide(a, ext, accounts, t, language).tone === "ok"]
       : []),
+    ...(terminalCounts ? [!!term && terminalGuide(a, term, t, language).tone === "ok"] : []),
   ];
   const ready = connections.filter(Boolean).length;
   const history = historySources(a, accounts, settings);
@@ -693,6 +771,7 @@ export function AccountDetailBody({
             </ConnectionRow>
             {/* The extension's sign-in is kept only on macOS; the browser preview shows the row too. */}
             {macOS && <ExtensionConnection account={a} extension={extension} />}
+            {macOS && <TerminalConnection account={a} terminal={terminal} />}
           </Card>
           {a.desktop && (
             <Card className={cardClass}>

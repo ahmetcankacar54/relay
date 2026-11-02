@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Pencil,
   RefreshCw,
+  SquareTerminal,
   Trash2,
 } from "lucide-react";
 import type { Account } from "../../../shared/types";
@@ -48,6 +49,9 @@ import { formatPercent, percentUsed } from "@/lib/meter";
 import { formatRelative } from "@/lib/time";
 import { UsageRing } from "@/components/UsageRing";
 import { useExtensionStatus } from "@/data/useExtension";
+import { useTerminalStatus } from "@/data/useTerminal";
+import { terminalGuide } from "@/lib/terminal-ui";
+import type { TerminalStatus } from "../../../shared/terminal-identity";
 import type { ExtensionStatus } from "../../../shared/types";
 import { avatarClass, planColumn } from "./accountLabels";
 
@@ -77,23 +81,27 @@ function CellMeter({ percent, label }: { percent?: number; label: string }) {
   );
 }
 
-/** The three connections as icons, each in its state's colour, with what it is in its title. */
+/** The connections as icons, each in its state's colour, with what it is in its title. */
 function ConnectionIcons({
   account,
   usage,
   waiting,
   extension,
+  terminal,
 }: {
   account: Account;
   usage: Parameters<typeof usageSignInStatus>[1];
   waiting: boolean;
   extension: ExtensionStatus | null | undefined;
+  terminal?: TerminalStatus | null;
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
   const signIn = usageSignInStatus(account, usage, waiting, t);
   const ext =
     extension && extensionGuide(account, extension, relay.accounts, t, language);
+  const term =
+    terminal && terminal.mode !== "off" ? terminalGuide(account, terminal, t, language) : undefined;
   const items: { key: string; icon: LucideIcon; tone: keyof typeof toneText; title: string }[] = [
     {
       key: "desktop",
@@ -117,6 +125,16 @@ function ConnectionIcons({
             icon: AppWindow,
             tone: ext.tone,
             title: t(`Tarayıcı eklentisi: ${ext.label}`, `Browser extension: ${ext.label}`),
+          },
+        ]
+      : []),
+    ...(term
+      ? [
+          {
+            key: "terminal",
+            icon: SquareTerminal,
+            tone: term.tone,
+            title: t(`Terminal: ${term.label}`, `Terminal: ${term.label}`),
           },
         ]
       : []),
@@ -389,6 +407,7 @@ export function AccountsTable({
   const { data, desktop, active } = relay;
   // Opening the list also checks the extension, so an account signed in to it gets linked.
   const extension = useExtensionStatus({ check: true }).status;
+  const terminal = useTerminalStatus({ check: true }).status;
   const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
   const now = Date.now();
   return (
@@ -567,6 +586,7 @@ export function AccountsTable({
                   usage={usage}
                   waiting={waiting}
                   extension={macOS ? extension : null}
+                  terminal={macOS ? terminal : null}
                 />
               </TableCell>
               <TableCell className="text-right">

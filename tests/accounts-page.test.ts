@@ -1,4 +1,5 @@
 import test from "node:test";
+import type { TerminalStatus } from "../shared/terminal-identity";
 import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -42,6 +43,8 @@ function relayFor(extra: Partial<Relay> = {}): Relay {
       desktopHistorySummary: () => new Promise(() => {}),
       extensionStatus: async () => undefined,
       checkExtension: async () => undefined,
+      terminalStatus: async () => undefined,
+      checkTerminal: async () => undefined,
     },
     preview: false, error: "", notice: "", accounts, active: a, settings: DEFAULT_SETTINGS, busy: "",
     usageBusy: new Set<string>(), desktopBusy: false, hasUnclaimedDesktop: false, targetOrg: "", historyRevision: 0,
@@ -688,12 +691,13 @@ test("on macOS the connections count the browser extension too, unless it is off
     saved: [{ accountUuid: desktop.accountUuid, savedAt: iso(NOW) }],
     ...over,
   });
-  const mac = (extensionStatus?: ExtensionStatus, platform = "darwin") =>
+  // The terminal is off here; the test after this one counts it.
+  const mac = (extensionStatus?: ExtensionStatus, platform = "darwin", terminalStatus: TerminalStatus = { mode: "off", saved: [] }) =>
     wrap(
       relayFor({
         data: { settings: DEFAULT_SETTINGS, usage, accounts, authFlows: [], diagnostics: { platform } } as unknown as Snapshot,
       }),
-      createElement(AccountDetailBody, { account: a, now: NOW, extensionStatus }),
+      createElement(AccountDetailBody, { account: a, now: NOW, extensionStatus, terminalStatus }),
     );
   const count = (html: string) => /<h2[^>]*>Bağlantılar<\/h2><span[^>]*>([^<]*)<\/span>/.exec(html)?.[1];
   assert.equal(count(mac(extension())), "3 / 3 hazır");
@@ -705,6 +709,12 @@ test("on macOS the connections count the browser extension too, unless it is off
   assert.equal(count(mac(extension({ instances: [], target: undefined }))), "2 / 2 hazır");
   // Elsewhere there is no extension row to count.
   assert.equal(count(mac(extension(), "win32")), "2 / 2 hazır");
+  // The terminal counts too while it follows the account: linked once its sign-in is saved.
+  const saved = { mode: "follow", saved: [{ accountUuid: desktop.accountUuid, orgId: desktop.orgId, savedAt: iso(NOW), parked: true }] } as TerminalStatus;
+  assert.equal(count(mac(extension(), "darwin", saved)), "4 / 4 hazır");
+  const missing = mac(extension(), "darwin", { mode: "follow", saved: [] });
+  assert.equal(count(missing), "3 / 4 hazır");
+  assert.match(missing, /Terminalde “claude auth login” çalıştır/);
 });
 
 test("the closed Code history row says whether, and with how many accounts, it is shared", () => {
