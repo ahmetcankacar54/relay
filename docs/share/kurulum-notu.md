@@ -12,6 +12,11 @@ KURULUM
    → "Yine de Aç" → Mac parolanı gir. Her yeni sürümde tekrar gerekebilir.
    Olmazsa Terminal’de şunu çalıştırıp Relay’i yeniden aç:
    xattr -dr com.apple.quarantine /Applications/Relay.app
+   Bu izin her sürüm için bir kez gerekir. Her açılışta yeniden soruyorsa Relay
+   DMG’nin içinden ya da İndirilenler’den açılıyordur: macOS orada izni
+   kaydedemez. DMG’yi çıkar (Finder’da ⏏), DMG dosyasını çöpe at ve Relay’i
+   yalnızca Uygulamalar klasöründen aç. Relay DMG’den açıldığını fark ederse
+   kendini Uygulamalar’a taşımayı önerir.
 5) Relay menü çubuğunda panda simgesiyle çalışır; panel oradan açılır.
    Paneldeki "Relay’i aç" ana pencereyi açar.
 

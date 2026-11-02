@@ -15,6 +15,13 @@ import { appMenuTemplate } from "./app-menu";
 import { pick } from "./language";
 import { routineFailureNotice } from "../shared/routine-failure";
 import { localizeError } from "../shared/error-text";
+import {
+  bundlePath,
+  bundlePlace,
+  clearOwnQuarantine,
+  forgetsApproval,
+} from "./core/install-location";
+import { runDetached } from "./core/detached-exec";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
@@ -570,6 +577,9 @@ else {
   app
     .whenReady()
     .then(async () => {
+      // Moving restarts Relay from Applications; this copy quits.
+      if (process.platform === "darwin" && app.isPackaged && (await settleInstallLocation()))
+        return;
       app.dock?.setIcon(path.join(__dirname, "icon.png"));
       service = new Service(
         app.getPath("userData"),
@@ -1243,6 +1253,56 @@ else {
       dialog.showErrorBox(say("Relay açılamadı", "Relay could not start"), String(error));
       app.exit(1);
     });
+}
+/**
+ * The share builds are not notarized, so macOS asks once ("Open Anyway") and keeps the answer
+ * on the bundle. Run from the disk image or a translocated copy it cannot keep it and asks at
+ * every launch: Relay offers to move itself to Applications, where Electron starts it again.
+ * From a writable place the download quarantine is cleared so the approval holds (see
+ * install-location.ts). True when Relay is moving and this copy quits.
+ */
+async function settleInstallLocation(): Promise<boolean> {
+  const bundle = bundlePath(app.getPath("exe"));
+  if (!bundle) return false;
+  const place = bundlePlace(bundle, app.isInApplicationsFolder());
+  if (!forgetsApproval(place)) {
+    void clearOwnQuarantine(bundle, (file, args) => runDetached(file, args, { timeout: 15_000 }))
+      .then((cleared) => logDraftEvent("install-location", { place, quarantineCleared: cleared }));
+    return false;
+  }
+  logDraftEvent("install-location", { place });
+  // Settings are not read yet; the system language decides.
+  const t = pick(app.getLocale().toLowerCase().startsWith("tr") ? "tr" : "en");
+  const { response } = await dialog.showMessageBox({
+    type: "warning",
+    buttons: [t("Uygulamalar klasörüne taşı", "Move to Applications"), t("Şimdi değil", "Not now")],
+    defaultId: 0,
+    cancelId: 1,
+    message: t("Relay’i Uygulamalar klasörüne taşı", "Move Relay to Applications"),
+    detail:
+      place === "disk-image"
+        ? t(
+            "Relay disk görüntüsünün (DMG) içinden çalışıyor. macOS burada verdiğin izni kaydedemez; her açılışta Sistem Ayarları’ndan yeniden izin istemesi bundandır. Relay kendini Uygulamalar klasörüne taşıyıp oradan açılır.",
+            "Relay is running from inside the disk image (DMG). macOS cannot record your approval there, which is why it asks in System Settings at every launch. Relay moves itself to Applications and opens from there.",
+          )
+        : t(
+            "Relay, indirildiği yerden macOS’un salt okunur bir kopyasıyla açıldı. macOS burada verdiğin izni kaydedemez; her açılışta Sistem Ayarları’ndan yeniden izin istemesi bundandır. Relay kendini Uygulamalar klasörüne taşıyıp oradan açılır.",
+            "Relay was opened where it was downloaded, through a read-only copy macOS makes. macOS cannot record your approval there, which is why it asks in System Settings at every launch. Relay moves itself to Applications and opens from there.",
+          ),
+  });
+  if (response !== 0) return false;
+  try {
+    return app.moveToApplicationsFolder();
+  } catch (error) {
+    dialog.showErrorBox(
+      t("Relay taşınamadı", "Relay could not be moved"),
+      t(
+        "Relay’i Finder’da Uygulamalar klasörüne sürükle, disk görüntüsünü çıkar ve Relay’i Uygulamalar’dan aç.",
+        "Drag Relay to Applications in Finder, eject the disk image and open Relay from Applications.",
+      ) + `\n\n${error instanceof Error ? error.message : String(error)}`,
+    );
+    return false;
+  }
 }
 function showWindow(hash?: string) {
   if (!initialized) return;
