@@ -160,24 +160,22 @@ function StatisticsContent({
     );
   return (
     <div className="grid gap-3" aria-busy={loading || undefined}>
-      <SummaryTiles view={view} cost={cost} tokens={tokens} />
-      <AccountBalance view={view} accounts={accounts} cost={cost} />
-      <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr]">
-        <DailyChart
-          view={view}
-          tokens={tokens}
-          accounts={accounts}
-          zone={zone}
-        />
-        <UsageHeatmap view={view} />
-      </div>
+      <SummaryTiles view={view} />
+      <UsageHeatmap view={view} />
+      <DailyChart view={view} accounts={accounts} zone={zone} />
+      <AccountBalance view={view} accounts={accounts} />
       <LimitHits view={view} zone={zone} />
-      <Note className="px-1 text-xs">
-        {t(
-          `Limit değerleri Relay’in gözlediği limit yüzdelerinden hesaplanır; token, mesaj ya da maliyet değildir. API karşılığı ise ayrı bir hesaptır: Claude Code’un kullandığı token’ların API liste fiyatıyla tutarı; ödediğin para değildir. Gözlem kapsamı: ${formatPercent(view.coveragePercent, language)} (Relay kapalıyken veri yok). Pro birimi, gözlenen 5 saatlik limit yüzdesinin güncel plan kapasitesiyle çarpımıdır (Pro 1, Max 5× 5, Max 20× 20, Team = girilen ağırlık).`,
-          `Limit values come from the limit percentages Relay observed; they are not tokens, messages or cost. The API value is separate: Claude Code’s tokens at API list prices, not what you pay. Observed coverage: ${formatPercent(view.coveragePercent, language)} (no data while Relay is closed). A Pro unit is the observed 5-hour quota percentage times the current plan capacity (Pro 1, Max 5× 5, Max 20× 20, Team = the weight you set).`,
-        )}
-      </Note>
+      <details className="px-1">
+        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+          {t("Bu sayılar nasıl hesaplanıyor?", "How are these numbers worked out?")}
+        </summary>
+        <Note className="mt-1 text-xs">
+          {t(
+            "Hepsi Relay’in gözlediği limit yüzdelerinden gelir; token, mesaj ya da maliyet değildir. Bir dolu dönem, bir hesabın 5 saatlik limitinin tamamıdır. Hesap payları planlara göre ağırlıklıdır (Pro 1, Max 5× 5, Max 20× 20, Team = girilen ağırlık). Token ve API karşılığı “Token ve ücret” sekmesindedir.",
+            "All of it comes from the limit percentages Relay observed; not tokens, messages or cost. A full period is an account’s whole 5-hour limit. Account shares are weighted by plan (Pro 1, Max 5× 5, Max 20× 20, Team = the weight you set). Tokens and API value are on the “Tokens and cost” tab.",
+          )}
+        </Note>
+      </details>
     </div>
   );
 }

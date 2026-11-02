@@ -1,4 +1,4 @@
-import type { Account } from "./types";
+import type { Account, PlanningHours } from "./types";
 import { formatPercent } from "./percent";
 import { localDate, planCapacity, wallTime } from "./planning";
 import { historyIdentity, identityOwners } from "./usage-statistics";
@@ -13,11 +13,18 @@ export interface UsageStatisticsView {
   coveragePercent: number;
   totals: {
     proUnits: number;
+    /** Full 5-hour periods used: each account's own limit points over 100, unweighted. */
+    periods?: number;
     previousProUnits?: number;
     windows: number;
     hits: { fiveHour: number; weekly: number };
-    /** weekday 0 = Monday; workShare is a percentage (0–100). */
+    /**
+     * weekday 0 = Monday. `workShare` is the percentage (0–100) of use inside the user's work
+     * hours (Planning), or weekdays 10–18 when none are given.
+     */
     busiest?: { weekday: number; hour: number; workShare: number };
+    /** The three local hours of the day with the most use: `start`…`end` (exclusive, may pass 24). */
+    busiestWindow?: { start: number; end: number };
   };
   /**
    * Rows with in-range hours, windows or hits. Unmatched identities form one
@@ -29,12 +36,17 @@ export interface UsageStatisticsView {
     name: string;
     plan?: string;
     proUnits: number;
+    /** Full 5-hour periods of this account used. */
+    periods?: number;
     share: number;
     averageFill?: number;
     idleDays: number;
   }[];
-  /** Pro units per local day; keys are account ids, or "former". */
-  daily: { date: string; byAccount: Record<string, number> }[];
+  /**
+   * Pro units per local day; keys are account ids, or "former". `periods` holds the same days in
+   * full 5-hour periods, unweighted.
+   */
+  daily: { date: string; byAccount: Record<string, number>; periods?: Record<string, number> }[];
   /** [weekday 0 = Monday][local hour] → Pro units */
   heatmap: number[][];
   hits: {
@@ -56,6 +68,28 @@ export interface StatisticsInput {
   accountId?: string;
   zone: string;
   now: number;
+  /** The user's work hours, for the share of use inside them. */
+  hours?: { weekday: PlanningHours; weekend: PlanningHours };
+}
+
+const minutes = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+/** Whether the local hour `hour` of `weekday` (0 = Monday) starts inside the work hours. */
+export function inWorkHours(
+  weekday: number,
+  hour: number,
+  hours: StatisticsInput["hours"],
+): boolean {
+  if (!hours) return weekday < 5 && hour >= 10 && hour < 18;
+  const day = weekday < 5 ? hours.weekday : hours.weekend;
+  if (!day.enabled) return false;
+  const start = minutes(day.start);
+  const end = minutes(day.end);
+  const at = hour * 60;
+  // An end before the start runs past midnight.
+  return end > start ? at >= start && at < end : at >= start || at < end;
 }
 
 export const FORMER_KEY = "former";
@@ -208,6 +242,11 @@ export function buildStatisticsView(
 
   const view = emptyView(range, "available", dates);
   const daily = new Map(view.daily.map((d) => [d.date, d.byAccount]));
+  const dailyPeriods = new Map(
+    view.daily.map((d) => [d.date, (d.periods = {} as Record<string, number>)]),
+  );
+  const periods = new Map<Row, number>();
+  let periodsTotal = 0;
   const units = new Map<Row, number>();
   const coveredDays = new Map<Row, Set<string>>();
   const present = new Set<Row>();
@@ -240,6 +279,11 @@ export function buildStatisticsView(
         );
         if (hour.points > 0) activeDays.get(row)!.add(date);
         if (!value) continue;
+        const used = hour.points / 100;
+        periodsTotal += used;
+        periods.set(row, (periods.get(row) ?? 0) + used);
+        const dayPeriods = dailyPeriods.get(date)!;
+        dayPeriods[row.key] = round2((dayPeriods[row.key] ?? 0) + used);
         total += value;
         units.set(row, units.get(row)! + value);
         const day = daily.get(date)!;
@@ -301,6 +345,7 @@ export function buildStatisticsView(
       name: row.account?.name ?? FORMER_NAME,
       ...(plan ? { plan } : {}),
       proUnits,
+      periods: round2(periods.get(row) ?? 0),
       share: total > 0 ? round1((units.get(row)! / total) * 100) : 0,
       ...(list.length
         ? { averageFill: round1(list.reduce((a, b) => a + b, 0) / list.length) }
@@ -310,6 +355,7 @@ export function buildStatisticsView(
   });
 
   view.totals.proUnits = round2(total);
+  view.totals.periods = round2(periodsTotal);
   // Compare only with a previous period that recording covers from its
   // start; a partly recorded one would read as growth.
   const previousStart =
@@ -321,10 +367,12 @@ export function buildStatisticsView(
   if (total > 0) {
     let best = { weekday: 0, hour: 0, value: -1 };
     let work = 0;
+    const byHour = Array<number>(24).fill(0);
     view.heatmap.forEach((row, day) =>
       row.forEach((value, hour) => {
         if (value > best.value) best = { weekday: day, hour, value };
-        if (day < 5 && hour >= 10 && hour < 18) work += value;
+        if (inWorkHours(day, hour, input.hours)) work += value;
+        byHour[hour] += value;
       }),
     );
     view.totals.busiest = {
@@ -332,6 +380,14 @@ export function buildStatisticsView(
       hour: best.hour,
       workShare: round1((work / total) * 100),
     };
+    // The three hours in a row (around midnight too) with the most use.
+    let start = 0;
+    let most = -1;
+    for (let h = 0; h < 24; h++) {
+      const sum = byHour[h] + byHour[(h + 1) % 24] + byHour[(h + 2) % 24];
+      if (sum > most) [most, start] = [sum, h];
+    }
+    view.totals.busiestWindow = { start, end: start + 3 };
   }
 
   const start = wallTime(dates[0], "00:00", zone) ?? now - range * DAY_MS;

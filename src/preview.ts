@@ -722,6 +722,7 @@ export const previewApi: RelayAPI = {
       range,
       ...(accountId ? { accountId } : {}),
       zone: state.settings.planning.timeZone,
+      hours: { weekday: state.settings.planning.weekday, weekend: state.settings.planning.weekend },
       now: Date.now(),
     }),
   tokenUsage: async ({ range, accountId }) =>

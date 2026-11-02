@@ -2010,6 +2010,10 @@ function bindIPC() {
       range,
       ...(accountId ? { accountId } : {}),
       zone: service.store.state.settings.planning.timeZone,
+      hours: {
+        weekday: service.store.state.settings.planning.weekday,
+        weekend: service.store.state.settings.planning.weekend,
+      },
       now: Date.now(),
     });
   });

@@ -1573,13 +1573,14 @@ function Details({
         </p>
       )}
       {found && (
-        <section aria-labelledby="lost-history" className="grid gap-2">
-          <h5
+        // Closed at first: the pin, how to earn it and its tier come first.
+        <details aria-labelledby="lost-history" className="group grid gap-2">
+          <summary
             id="lost-history"
-            className="text-xs font-semibold text-muted-foreground"
+            className="cursor-pointer text-xs font-semibold text-muted-foreground"
           >
-            {t("Geçmiş", "History")}
-          </h5>
+            {t(`Geçmiş (${finds.length})`, `History (${finds.length})`)}
+          </summary>
           <ol className="grid gap-2">
             {rows.map((find) => {
               const story = find.item
@@ -1658,7 +1659,7 @@ function Details({
                   )}
             </Button>
           )}
-        </section>
+        </details>
       )}
     </div>
   );

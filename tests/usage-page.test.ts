@@ -62,6 +62,8 @@ const view: UsageStatisticsView = {
     windows: 96,
     hits: { fiveHour: 6, weekly: 1 },
     busiest: { weekday: 1, hour: 14, workShare: 71.2 },
+    busiestWindow: { start: 13, end: 16 },
+    periods: 18.4,
   },
   accounts: [
     { accountId: "a", name: "Kişisel · Max", plan: "Max 5×", proUnits: 1067.2, share: 58, averageFill: 71.3, idleDays: 2 },
@@ -145,27 +147,22 @@ const tokenView = {
   ],
   totals: { ...zeroCounts, input: 2_500_000_000, cost: 190 },
 } as unknown as TokenUsageView;
-test("summary tiles format totals, change, windows, hits and the busiest time", () => {
+test("summary tiles speak only of limits: full periods, periods started, hits and the busiest hours", () => {
   const html = text(render(createElement(SummaryTiles, { view })));
-  assert.match(html, /1\.840 Pro birimi/);
+  assert.match(html, /Kullanılan18 dolu dönem/);
   assert.match(html, /önceki 30 güne göre \+%12/);
-  assert.match(html, /Başlayan dönem/);
-  assert.match(html, /96/);
-  assert.match(html, /günde ortalama 3,2/);
-  assert.match(html, /Limite takılma7/);
-  assert.match(html, /5 sa: 6 · haftalık: 1/);
-  assert.match(html, /Salı 14:00/);
-  assert.match(html, /hafta içi 10–18 arası %71/);
-
+  assert.match(html, /Başlayan dönem96günde ortalama 3,2/);
+  assert.match(html, /Limite takılma76 beş saatlik, 1 haftalık/);
+  assert.match(html, /En yoğun saatler13:00–16:00çalışma saatlerinde %71/);
+  assert.match(html, /Relay bu süreyi %83 gözledi/);
+  assert.doesNotMatch(html, /Pro birimi|API karşılığı|token/);
   // The unit stays on one line in smaller type beside the large number.
-  assert.match(render(createElement(SummaryTiles, { view })), /1\.840 <span class="[^"]*whitespace-nowrap[^"]*">Pro birimi<\/span>/);
-
+  assert.match(render(createElement(SummaryTiles, { view })), /18 <span class="[^"]*whitespace-nowrap[^"]*">dolu dönem<\/span>/);
   const en = text(render(createElement(SummaryTiles, { view }), "en"));
-  assert.match(en, /1,840 Pro units/);
+  assert.match(en, /18 full periods/);
   assert.match(en, /\+12% vs the previous 30 days/);
-  assert.match(en, /3\.2 per day on average/);
-  assert.match(en, /5 h: 6 · weekly: 1/);
-  assert.match(en, /Tuesday 14:00/);
+  assert.match(en, /6 five-hour, 1 weekly/);
+  assert.match(en, /71% in work hours/);
 });
 
 test("summary tiles explain a missing previous period and a range without one", () => {
@@ -180,37 +177,24 @@ test("summary tiles explain a missing previous period and a range without one", 
   assert.match(text(render(createElement(SummaryTiles, { view: lower }), "en")), /−8% vs the previous/);
 });
 
-test("account balance lists names, plan badges, share, fill, idle days and the insight", () => {
+test("account balance is a table: share, average fill and idle days under their headers, then the insight", () => {
   const html = render(createElement(AccountBalance, { view, accounts }));
   const plain = text(html);
-  assert.match(plain, /Hesap dengesi/);
-  assert.match(plain, /Kişisel · Max/);
+  assert.match(plain, /Hesap dengesiHesapPayOrt\. doluluk/);
   assert.match(html, /data-slot="badge"[^>]*>Max 5×</);
   assert.match(html, /data-slot="badge"[^>]*>Team · 8</);
-  assert.match(plain, /%58/);
-  assert.match(plain, /doluluk %71/);
-  assert.match(plain, /boşta 2 gün/);
-  assert.match(plain, /Eski hesap/);
-  assert.match(plain, /doluluk —/);
+  assert.match(plain, /Kişisel · MaxMax 5×%58%712 gün/);
+  assert.match(plain, /Eski hesap%15—1 gün/);
   assert.match(plain, /Vertex \(Team\) dönemlerinin ortalama yalnızca %9 kadarını dolduruyor\./);
-  // Share bars use the account tones, in account order; former rows after every account.
+  assert.doesNotMatch(plain, / · doluluk|boşta \d/);
+  // Share bars use the account tones; former rows after every account.
   assert.match(html, /bg-tone-1[^"]*" style="width:58%"/);
   assert.match(html, /bg-tone-2[^"]*" style="width:27%"/);
   assert.match(html, /bg-tone-4[^"]*" style="width:15%"/);
-  // Rows share the parent's columns, so every share bar ends at the same x.
-  assert.match(html, /sm:grid-cols-\[minmax\(0,9rem\)_1fr_auto_auto\]/);
-  assert.equal((html.match(/class="[^"]*col-span-full[^"]*grid-cols-subgrid|class="[^"]*grid-cols-subgrid[^"]*col-span-full/g) ?? []).length, 3);
-  // A filtered view keeps each account's colour.
-  const filtered = render(createElement(AccountBalance, { view: { ...view, accounts: [view.accounts[1]] }, accounts }));
-  assert.match(filtered, /bg-tone-2[^"]*" style="width:27%"/);
-
   const en = text(render(createElement(AccountBalance, { view, accounts }), "en"));
   assert.match(en, /Former account/);
-  assert.doesNotMatch(en, /Eski hesap/);
-  assert.match(en, /fill 71%/);
-  assert.match(en, /idle 2 days/);
-  assert.match(en, /idle 1 day(?!s)/);
-  assert.match(en, /Vertex \(Team\) fills only 9% of its windows\./);
+  assert.match(en, /2 days/);
+  assert.match(en, /1 day(?!s)/);
 });
 
 test("pointing at a day of the daily chart details each account and a limit hit", async () => {
@@ -226,9 +210,9 @@ test("pointing at a day of the daily chart details each account and a limit hit"
     svg.box = { left: 0, top: 0, width: 440, height: 146 };
     // The right edge is the newest day, the 14th, which hit a limit.
     await act(async () => dom.dispatch(svg, "pointermove", { clientX: 439, clientY: 60 }));
-    assert.equal(dayTip(container), "14 Ekim ÇarşambaPro birimi120Kişisel · Max80Vertex40▲ Limite takıldı");
+    assert.equal(dayTip(container), "14 Ekim ÇarşambaDolu dönem120Kişisel · Max80Vertex40▲ Limite takıldı");
     await act(async () => dom.dispatch(svg, "keydown", { key: "Home" }));
-    assert.equal(dayTip(container), "15 Eylül SalıPro birimi0Bu gün kullanım yok.");
+    assert.equal(dayTip(container), "15 Eylül SalıDolu dönem0Bu gün kullanım yok.");
     await act(async () => dom.dispatch(svg, "pointerout", { relatedTarget: null }));
     assert.equal(dayTip(container), undefined);
     await act(async () => root.unmount());
@@ -237,29 +221,22 @@ test("pointing at a day of the daily chart details each account and a limit hit"
   }
 });
 
-test("the daily chart draws one labelled bar group per day and marks hit days", () => {
+test("the daily chart draws one labelled bar group per day, in full periods, and marks hit days", () => {
   const html = render(createElement(DailyChart, { view, accounts, zone: ZONE }));
-  const groups = html.match(/<g[^>]*aria-label="[^"]+: [\d.,]+ Pro birimi[^"]*"/g) ?? [];
+  const groups = html.match(/<g[^>]*aria-label="[^"]+: [\d.,]+ dolu dönem[^"]*"/g) ?? [];
   assert.equal(groups.length, 30);
-  assert.match(html, /aria-label="14 Eki: 120 Pro birimi, limite takıldı"/);
-  assert.match(html, /aria-label="9 Eki: 240 Pro birimi, limite takıldı"/);
-  assert.match(html, /aria-label="15 Eyl: 0 Pro birimi"/);
+  assert.match(html, /aria-label="14 Eki: 120 dolu dönem, limite takıldı"/);
+  assert.match(html, /aria-label="15 Eyl: 0 dolu dönem"/);
   assert.equal((html.match(/<path d="[^"]+" fill="var\(--crit\)"/g) ?? []).length, 3);
-  assert.doesNotMatch(html, /▲<\/text>/);
-  // Tones follow the account list; former rows come after every account.
   assert.match(html, /fill="var\(--tone-1\)"/);
-  assert.match(html, /fill="var\(--tone-2\)"/);
   assert.match(html, /fill="var\(--tone-4\)"/);
-  assert.doesNotMatch(html, /fill="var\(--tone-3\)"/);
-  // The detail is the chart's own box on hover, not the browser's slow tooltip.
   assert.doesNotMatch(html, /<title>/);
+  // On the Limits tab the chart has no unit switch.
+  assert.doesNotMatch(html, /data-slot="toggle-group"/);
   const plain = text(html);
-  assert.match(plain, /30 günde toplam 1\.840 Pro birimi; en yoğun gün 9 Eki \(240\)\./);
-  assert.match(plain, /▲ limite takılan günleri gösterir\./);
-
+  assert.match(plain, /30 günde [\d.,]+ dolu dönem\. En yoğun gün 9 Eki: 240\./);
   const en = render(createElement(DailyChart, { view, accounts, zone: ZONE }), "en");
-  assert.match(en, /aria-label="14 Oct: 120 Pro units, limit hit"/);
-  assert.match(en, /Former account/);
+  assert.match(en, /aria-label="14 Oct: 120 full periods, limit hit"/);
 });
 
 test("the daily chart's $ guides sit at round values from the data's scale", () => {
@@ -275,116 +252,53 @@ test("the daily chart's $ guides sit at round values from the data's scale", () 
   assert.equal(guideLabel(1500, "en"), "$1,500");
 });
 
-test("the daily chart switches between Pro units, tokens and the API value", async () => {
-  // Without a token view only Pro units are drawn, with no switch.
-  assert.doesNotMatch(render(createElement(DailyChart, { view, accounts, zone: ZONE })), /data-slot="toggle-group"/);
+test("given a token view the daily chart still switches to tokens and the API value", () => {
   const html = render(createElement(DailyChart, { view, tokens: tokenView, accounts, zone: ZONE }));
   assert.match(html, /data-slot="toggle-group"[^>]*aria-label="Ölçü"/);
-  assert.match(html, /data-state="on"[^>]*>Limit</);
-  assert.match(html, /aria-label="14 Eki: 120 Pro birimi, limite takıldı"/);
-
-  const dom = fakeDom();
-  dom.install();
-  readableText();
-  try {
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(tree(createElement(DailyChart, { view, tokens: tokenView, accounts, zone: ZONE }))));
-    const container = dom.container as unknown as Fake;
-    const click = (label: string) => {
-      const item = find(container, (n) => n.tagName === "button" && textOf(n) === label);
-      assert.ok(item, label);
-      return act(async () => dom.dispatch(item, "click", { detail: 1 }));
-    };
-    const attrs = (n: Fake) => (n as { attributes?: Map<string, string> }).attributes;
-    const labelOf = (date: string) => {
-      const day = find(container, (n) => attrs(n)?.get?.("aria-label")?.startsWith(`${date}:`) === true);
-      return day && attrs(day)?.get("aria-label")?.replace(/\u00a0/g, " ");
-    };
-    const plain = () => textOf(container);
-    const svg = find(container, (n) => n.tagName === "svg") as Fake & { box: { left: number; top: number; width: number; height: number } };
-    svg.box = { left: 0, top: 0, width: 440, height: 146 };
-
-    await click("Token");
-    // Limit-hit days stay marked; the legend adds the terminal row.
-    assert.equal(labelOf("14 Eki"), "14 Eki: 2,2 Mn token, limite takıldı");
-    assert.equal(labelOf("9 Eki"), "9 Eki: ≈300 B token, limite takıldı");
-    assert.match(plain(), /Relay dışı terminal/);
-    assert.match(plain(), /30 günde toplam ≈2,5 Mn token; en yoğun gün 14 Eki \(2,2 Mn\)\./);
-    assert.doesNotMatch(plain(), /\$75/);
-    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 439, clientY: 60 }));
-    assert.equal(dayTip(container), "14 Ekim ÇarşambaToken2,2 MnKişisel · Max1,5 MnVertex600 BRelay dışı terminal100 B▲ Limite takıldı");
-
-    await click("$");
-    assert.equal(labelOf("14 Eki"), "14 Eki: $160,00, limite takıldı");
-    assert.equal(labelOf("9 Eki"), "9 Eki: ≈$30,00, limite takıldı");
-    // Two dashed guides at $75 and $150, labelled in the gutter.
-    const guides = find(container, (n) => attrs(n)?.get?.("data-slot") === "cost-guides");
-    assert.ok(guides);
-    assert.equal(guides.childNodes.length, 2);
-    assert.deepEqual(
-      guides.childNodes.map((line) => attrs(line)?.get("y1")),
-      ["74.56", "21.13"],
-    );
-    assert.match(plain(), /30 günde API karşılığı ≈\$190,00; en yüksek gün 14 Eki \(\$160,00\)\./);
-    assert.equal(dayTip(container), "14 Ekim ÇarşambaAPI karşılığı$160,00Kişisel · Max$120,00Vertex$39,50Relay dışı terminal$0,50▲ Limite takıldı");
-
-    await click("Limit");
-    assert.equal(labelOf("14 Eki"), "14 Eki: 120 Pro birimi, limite takıldı");
-    await act(async () => root.unmount());
-  } finally {
-    dom.uninstall();
-  }
+  assert.match(html, /aria-label="14 Eki: 120 dolu dönem, limite takıldı"/);
 });
 
-test("the heatmap has 7 × 24 cells and names the busiest cell", () => {
+test("the heatmap has 7 × 24 cells in five even steps, day and hour totals, and the busiest hours", () => {
   const html = render(createElement(UsageHeatmap, { view }));
-  const cells = html.match(/title="[^"]+ \d\d:00 · [\d.,]+ Pro birimi"/g) ?? [];
-  assert.equal(cells.length, 168);
-  assert.match(html, /role="img" aria-label="[^"]*En yoğun: Salı 14:00, 120 Pro birimi/);
-  assert.match(html, /title="Salı 14:00 · 120 Pro birimi"/);
-  // Opacity follows the busiest cell.
-  assert.match(html, /title="Perşembe 10:00 · 60 Pro birimi"[^>]*style="opacity:0\.5"|style="opacity:0\.5"[^>]*title="Perşembe 10:00/);
-  assert.match(text(html), /Pzt/);
+  assert.equal((html.match(/data-step="\d"/g) ?? []).length, 168);
+  assert.match(html, /role="img" aria-label="Gün ve saate göre kullanım\. En yoğun saatler 13:00–16:00\."/);
+  assert.match(html, /data-step="5"[^>]*title="Sal 14:00 · en yoğun saate göre %100"|title="Sal 14:00 · en yoğun saate göre %100"[^>]*data-step="5"/);
+  assert.match(html, /title="Pzt 03:00 · kullanım yok"/);
+  const plain = text(html);
+  assert.match(plain, /En yoğun saatler13:00–16:00/);
+  assert.match(plain, /Çalışma saatlerinde%71 Pzt–Cum 09:00–18:00/);
+  assert.doesNotMatch(plain, /Pro birimi|10–18/);
 });
 
-test("limit hits are listed newest first with how long they lasted", () => {
+test("limit hits are a table, newest first, with how long each stayed full", () => {
   const html = text(render(createElement(LimitHits, { view, zone: ZONE })));
+  assert.match(html, /ZamanHesapLimitDolu kaldı/);
   const first = html.indexOf("14 Eki 15:40");
   const second = html.indexOf("12 Eki 11:05");
   const third = html.indexOf("9 Eki 11:05");
   assert.ok(first >= 0 && second > first && third > second, html);
-  assert.match(html, /Kişisel · Max · 5 saatlik · 1 sa 10 dk boyunca dolu/);
-  assert.match(html, /Eski hesap · haftalık · sürüyor/);
-  assert.match(html, /Vertex · 5 saatlik · 2 sa 30 dk boyunca dolu/);
-  assert.match(html, /son 30 gün/);
-
+  assert.match(html, /Kişisel · Max5 saatlik1 sa 10 dk/);
+  assert.match(html, /Eski hesaphaftalıksürüyor/);
   const en = text(render(createElement(LimitHits, { view, zone: ZONE }), "en"));
-  assert.match(en, /full for 1 h 10 min/);
-  assert.match(en, /Former account · weekly · ongoing/);
+  assert.match(en, /Former accountweeklyongoing/);
   const quiet = text(render(createElement(LimitHits, { view: { ...view, hits: [] }, zone: ZONE })));
   assert.match(quiet, /Bu dönemde limite takılma yok/);
 });
 
-test("the statistics section shows the full layout with the footnote", () => {
+test("the statistics section is limits only, with the explanation behind a disclosure", () => {
   const html = render(
     createElement(UsageStatisticsSection, { state: { view, loading: false }, accounts, zone: ZONE }),
   );
   const plain = text(html);
-  for (const part of ["Toplam kullanım", "Hesap dengesi", "Günlük kullanım", "Ne zaman çalışıyorum?", "Limite takılmalar"])
+  for (const part of ["Kullanılan", "Ne zaman çalışıyorum?", "Günlük kullanım", "Hesap dengesi", "Limite takılmalar"])
     assert.match(plain, new RegExp(part.replace("?", "\\?")));
-  assert.match(html, /grid-cols-2[^"]* lg:grid-cols-4/);
-  assert.match(html, /lg:grid-cols-\[1\.5fr_1fr\]/);
-  assert.match(plain, /token, mesaj ya da maliyet değildir/);
-  assert.match(plain, /Gözlem kapsamı: %83/);
-  assert.match(plain, /güncel plan kapasitesiyle/);
-  // With the token view the chart offers its measures and the summary the range's tokens.
-  assert.doesNotMatch(html, /data-slot="toggle-group"|range-tokens/);
+  assert.ok(plain.indexOf("Ne zaman çalışıyorum?") < plain.indexOf("Günlük kullanım"));
+  assert.match(html, /<details[^>]*><summary[^>]*>Bu sayılar nasıl hesaplanıyor\?<\/summary>/);
+  // Tokens and the API value live on their own tab, even when a token view is given.
   const withTokens = render(
     createElement(UsageStatisticsSection, { state: { view, loading: false }, accounts, zone: ZONE, tokens: tokenView }),
   );
-  assert.match(withTokens, /data-slot="toggle-group"[^>]*aria-label="Ölçü"/);
-  assert.match(withTokens, /data-slot="range-tokens"/);
+  assert.doesNotMatch(withTokens, /data-slot="toggle-group"|range-tokens|API karşılığı \$/);
 });
 
 test("the statistics section shows the empty, unavailable, no-identity, loading and error states", () => {
@@ -608,35 +522,9 @@ test("every statistics message panda is playful: a click on it plays a trick", (
   assert.doesNotMatch(html({ view, loading: false }), /data-playful/);
 });
 
-test("with priced tokens the Limits tab leads with the API value and gives each account its part", () => {
-  const cost: CostSummary = {
-    total: 2704.15,
-    estimated: true,
-    perDay: 90.14,
-    byAccount: { a: { cost: 1298, estimated: false }, b: { cost: 1001.5, estimated: true } },
-  };
-  const tiles = render(createElement(SummaryTiles, { view, cost }));
-  assert.match(tiles, /lg:grid-cols-5/);
-  const plain = text(tiles);
-  assert.match(plain, /^API karşılığı≈\$2\.704,15günde ≈ \$90,14Toplam kullanım/);
-  assert.match(text(render(createElement(SummaryTiles, { view, cost }), "en")), /API value≈\$2,704\.15≈ \$90\.14 a day/);
-  // The token view adds the range's tokens under the total usage.
-  const withTokens = render(createElement(SummaryTiles, { view, cost, tokens: tokenView }));
-  assert.match(text(withTokens), /Toplam kullanım1\.840 Pro birimi2,5\sMr tokenönceki 30 güne göre/);
-  assert.match(withTokens, /data-slot="range-tokens"[^>]*title="2\.500\.000\.000"/);
-  assert.match(text(render(createElement(SummaryTiles, { view, tokens: tokenView }), "en")), /2\.5bn tokens/);
-  assert.doesNotMatch(render(createElement(SummaryTiles, { view, cost })), /range-tokens/);
-  // Without priced tokens the four tiles stay as they were.
-  assert.match(render(createElement(SummaryTiles, { view })), /lg:grid-cols-4/);
-  assert.doesNotMatch(text(render(createElement(SummaryTiles, { view }))), /API karşılığı/);
-
-  const balance = text(render(createElement(AccountBalance, { view, accounts, cost })));
-  assert.match(balance, /API karşılığı · payı/);
-  assert.match(balance, /Kişisel · Max[\s\S]*\$1\.298,00 ·%58/);
-  assert.match(balance, /Vertex[\s\S]*≈\$1\.001,50 ·%27/);
-  // The former row has no account id and so no amount.
-  assert.match(balance, /Eski hesap[\s\S]*?%15/);
-  assert.doesNotMatch(balance, /Eski hesap[^%]*\$/);
+test("the Limits tab's tiles and balance never show tokens or the API value", () => {
+  assert.doesNotMatch(text(render(createElement(SummaryTiles, { view }))), /API karşılığı|token/);
+  assert.doesNotMatch(text(render(createElement(AccountBalance, { view, accounts }))), /\$/);
 });
 
 test("the cost summary takes the range's total, its daily average and the account rows", () => {

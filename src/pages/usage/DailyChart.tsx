@@ -14,7 +14,7 @@ import {
   formatDayLong,
   formatNumber,
   formatTokens,
-  formatUnits,
+  formatPeriods,
   locale,
   rowKey,
   rowName,
@@ -110,17 +110,19 @@ function measured(
     }));
     return {
       series,
+      // Full 5-hour periods, unweighted; a view from an older main without them keeps Pro units.
       days: view.daily.map((day) => {
+        const values = day.periods ?? day.byAccount;
         const parts = series
           .map((s) => ({
             ...s,
-            value: day.byAccount[s.key] ?? 0,
+            value: values[s.key] ?? 0,
             estimated: false,
           }))
           .filter((part) => part.value > 0);
         return {
           date: day.date,
-          total: Object.values(day.byAccount).reduce((a, b) => a + b, 0),
+          total: Object.values(values).reduce((a, b) => a + b, 0),
           parts,
         };
       }),
@@ -190,7 +192,7 @@ export function DailyChart({
       ? formatCost(value, language)
       : measure === "tokens"
         ? `${formatTokens(value, language)} ${t("token", value === 1 ? "token" : "tokens")}`
-        : formatUnits(value, language, t);
+        : formatPeriods(value, language, t);
   const max = Math.max(0, ...days.map((d) => d.total));
   const scale = max > 0 ? (BASE - TOP) / max : 0;
   const guides = measure === "cost" ? costGuides(max) : undefined;
@@ -241,8 +243,8 @@ export function DailyChart({
       : t("Bu dönemde token yok.", "No tokens in this period.")
     : measure === "limit"
       ? t(
-          `${view.range} günde toplam ${formatUnits(view.totals.proUnits, language, t)}; en yoğun gün ${formatDay(busiest.date, language)} (${formatNumber(busiest.total, language)}).`,
-          `${formatUnits(view.totals.proUnits, language, t)} in total over ${view.range} days; busiest day ${formatDay(busiest.date, language)} (${formatNumber(busiest.total, language)}).`,
+          `${view.range} günde ${spoken(total)}. En yoğun gün ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
+          `${spoken(total)} over ${view.range} days. Busiest day ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
         )
       : measure === "tokens"
         ? t(
@@ -424,7 +426,7 @@ export function DailyChart({
               <div className="mt-0.5 flex items-baseline justify-between gap-4 border-b pb-1">
                 <span className="text-muted-foreground">
                   {measure === "limit"
-                    ? t("Pro birimi", "Pro units")
+                    ? t("Dolu dönem", "Full periods")
                     : measure === "tokens"
                       ? t("Token", "Tokens")
                       : t("API karşılığı", "API value")}

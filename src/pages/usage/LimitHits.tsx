@@ -42,37 +42,37 @@ export function LimitHits({
           {t("Bu dönemde limite takılma yok.", "No limit hits in this period.")}
         </p>
       ) : (
-        <ul className="grid gap-1 text-[13px]">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-x-4 text-[13px]">
+          <div className="col-span-full grid grid-cols-subgrid pb-1.5 text-xs text-muted-foreground">
+            <span>{t("Zaman", "When")}</span>
+            <span>{t("Hesap", "Account")}</span>
+            <span>{t("Limit", "Limit")}</span>
+            <span className="text-right">{t("Dolu kaldı", "Full for")}</span>
+          </div>
           {shown.map((hit) => {
             const at = Date.parse(hit.at);
             const until = hit.until ? Date.parse(hit.until) : undefined;
             return (
-              <li key={`${hit.accountId ?? "former"}-${hit.kind}-${hit.at}`}>
-                <time
-                  dateTime={hit.at}
-                  className="text-muted-foreground tabular-nums"
-                >
+              <div
+                key={`${hit.accountId ?? "former"}-${hit.kind}-${hit.at}`}
+                className="col-span-full grid grid-cols-subgrid border-t py-1.5"
+              >
+                <time dateTime={hit.at} className="text-muted-foreground tabular-nums">
                   {`${day.format(at)} ${formatClock(at, language, zone)}`}
                 </time>
-                {" · "}
-                <b>{rowName(hit, t)}</b>
-                {" · "}
-                {hit.kind === "five-hour"
-                  ? t("5 saatlik", "5-hour")
-                  : t("haftalık", "weekly")}
-                {" · "}
-                {until === undefined ? (
-                  <span className="text-crit">{t("sürüyor", "ongoing")}</span>
-                ) : (
-                  t(
-                    `${formatDuration(until - at, language)} boyunca dolu`,
-                    `full for ${formatDuration(until - at, language)}`,
-                  )
-                )}
-              </li>
+                <b className="truncate">{rowName(hit, t)}</b>
+                <span>{hit.kind === "five-hour" ? t("5 saatlik", "5-hour") : t("haftalık", "weekly")}</span>
+                <span className="text-right tabular-nums">
+                  {until === undefined ? (
+                    <span className="text-crit">{t("sürüyor", "ongoing")}</span>
+                  ) : (
+                    formatDuration(until - at, language)
+                  )}
+                </span>
+              </div>
             );
           })}
-        </ul>
+        </div>
       )}
       {hits.length > VISIBLE && (
         <Button

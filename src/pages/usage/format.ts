@@ -46,6 +46,14 @@ export function formatNumber(value: number, language: Language) {
 
 export { formatChange, formatCost, formatTokens } from "../../../shared/number-format";
 
+/** "12,4 dolu dönem" / "12.4 full periods": 5-hour periods used. */
+export const formatPeriods = (value: number, language: Language, t: T) =>
+  `${formatNumber(value, language)} ${t("dolu dönem", value === 1 ? "full period" : "full periods")}`;
+
+/** "12:00–15:00" for a busiest window of local hours; the end may pass midnight. */
+export const hourRange = (start: number, end: number) =>
+  `${String(start % 24).padStart(2, "0")}:00–${String(end % 24).padStart(2, "0")}:00`;
+
 /** "1.840 Pro birimi" / "1,840 Pro units". */
 export const formatUnits = (value: number, language: Language, t: T) =>
   `${formatNumber(value, language)} ${t("Pro birimi", "Pro units")}`;
