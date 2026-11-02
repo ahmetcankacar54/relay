@@ -52,12 +52,12 @@ const signedIn = (accountUuid: string) => ({ state: "signed-in" as const, accoun
 test("a saved sign-in reads as linked, matching the uuid in any case", () => {
   assert.deepEqual(
     { tone: guide(vertex).tone, label: guide(vertex).label },
-    { tone: "ok", label: "Bağlı · 20 Eki kaydedildi" },
+    { tone: "ok", label: "Bağlı" },
   );
-  assert.equal(guide(vertex, {}, en, "en").label, "Linked · saved 20 Oct");
+  assert.equal(guide(vertex, {}, en, "en").detail, "Saved 20 Oct. Switching to this account brings the extension along.");
   assert.equal(guide(vertex).where, "Brave · Kişisel");
   // The extension on this account now says so.
-  assert.equal(guide(vertex, { current: signedIn(ID) }).label, "Bağlı · eklenti şu an bu hesapta");
+  assert.equal(guide(vertex, { current: signedIn(ID) }).label, "Bağlı, şu an bu hesapta");
   assert.equal(extensionGuide(alto, undefined, [], tr, "tr").label, "Kontrol ediliyor…");
 });
 
@@ -67,25 +67,25 @@ test("an unlinked account gets the steps to link it, for each thing the extensio
   // Signed out: open it, sign in with this email, check.
   const out = guide(altoLinked, { current: { state: "signed-out", at: NOW } });
   assert.equal(out.tone, "warn");
-  assert.match(out.label, /eklentide giriş yok/);
+  assert.match(out.label, /Eklentide giriş yok/);
   assert.deepEqual(out.steps, [
     "Tarayıcıda Claude eklentisini aç.",
     "alto@example.com ile giriş yap.",
-    "“Kontrol et”e bas; Relay bağlar.",
+    "“Kontrol et”e bas.",
   ]);
   assert.match(out.detail ?? "", /tanıyamıyor/);
   // On another of Relay's accounts: sign out first, and that account stays saved.
   const other = guide(altoLinked, { current: signedIn(ID) });
-  assert.match(other.label, /eklenti şu an Vertex hesabında/);
+  assert.match(other.label, /Eklenti Vertex hesabında/);
   assert.match(other.steps?.[0] ?? "", /çıkış yap/);
   assert.match(other.detail ?? "", /Vertex için kayıt Relay’de duruyor/);
   // On an account Relay does not have.
   const stranger = guide(altoLinked, { current: { state: "signed-in", known: false, other: true, at: NOW } });
-  assert.match(stranger.label, /eklenti başka bir claude\.ai hesabında/);
+  assert.match(stranger.label, /Eklenti başka bir claude\.ai hesabında/);
   assert.match(stranger.detail ?? "", /Relay’deki hiçbir hesaba ait değil/);
   // Signed in, but no account can be told: the user links it as this one.
   const untold = guide(altoLinked, { current: { state: "signed-in", known: false, at: NOW } });
-  assert.match(untold.label, /eklentideki hesap tanınamadı/);
+  assert.match(untold.label, /Eklentideki hesap tanınamadı/);
   assert.equal(untold.action, "claim");
   assert.match(untold.steps?.[0] ?? "", /alto@example\.com/);
   // Unreadable: try again.
@@ -95,7 +95,7 @@ test("an unlinked account gets the steps to link it, for each thing the extensio
 });
 
 test("the guide says when the feature is off, there is no extension, or no browser can be told apart", () => {
-  assert.match(guide(vertex, { setting: { mode: "off" } }).label, /Kapalı · Relay eklentiye dokunmaz/);
+  assert.equal(guide(vertex, { setting: { mode: "off" } }).label, "Kapalı");
   assert.equal(guide(vertex, { setting: { mode: "off" } }).action, "settings");
   assert.match(guide(vertex, { instances: [], target: undefined }, en, "en").label, /No Claude extension found/);
   assert.equal(guide(vertex, { target: undefined }).action, "settings");
@@ -216,7 +216,7 @@ test("the account row shows the state and its steps, and no browser profile pick
     createElement(ExtensionRow, { account: vertex, initialStatus: status() }),
   );
   assert.match(html, /Tarayıcı eklentisi/);
-  assert.match(html, /Bağlı · 20 Eki kaydedildi/);
+  assert.match(html, />Bağlı<\/span>.*Nasıl çalışır\?/);
   assert.doesNotMatch(html, /Tarayıcı profili|Şimdi aç|Open now/);
   const none = render(
     relayFor("darwin", [vertex, altoLinked]),
@@ -226,7 +226,7 @@ test("the account row shows the state and its steps, and no browser profile pick
     }),
     "en",
   );
-  assert.match(none, /Not linked · the extension is signed out/);
+  assert.match(none, /The extension is signed out/);
   assert.match(none, /<ol[^>]*>.*Sign in with alto@example\.com\./);
   assert.match(none, />Check<\/button>/);
 });
@@ -362,12 +362,12 @@ test("an account without a saved Claude app sign-in is told to save it first, ne
   ]) {
     const g = guide(alto, current ? { current } : {});
     assert.equal(g.tone, "warn");
-    assert.match(g.label, /önce bu hesabın Claude uygulaması girişini kaydet/);
+    assert.match(g.label, /Önce Claude uygulaması girişini kaydet/);
     assert.equal(g.steps, undefined);
     assert.equal(g.action, undefined);
     assert.doesNotMatch(g.detail ?? "", /çıkış/);
   }
-  assert.match(guide(alto, {}, en, "en").label, /save this account’s Claude app sign-in first/);
+  assert.match(guide(alto, {}, en, "en").label, /Save the Claude app sign-in first/);
 });
 
 test("an extension that was never opened is to be opened and signed in to, then checked", () => {
@@ -378,8 +378,8 @@ test("an extension that was never opened is to be opened and signed in to, then 
     current: { state: "signed-out", unopened: true, at: NOW },
   });
   assert.equal(g.tone, "warn");
-  assert.match(g.label, /eklenti tarayıcıda hiç açılmamış/);
-  assert.equal(g.steps?.[0], "Eklentiyi tarayıcıda bir kez aç ve giriş yap.");
+  assert.match(g.label, /Eklenti hiç açılmamış/);
+  assert.equal(g.steps?.[0], "Eklentiyi tarayıcıda bir kez aç.");
   assert.equal(g.action, "check");
   assert.match(
     extensionLine({ result: "skipped", reason: "not-opened", at: NOW, restarted: false, saved: false }, en) ?? "",

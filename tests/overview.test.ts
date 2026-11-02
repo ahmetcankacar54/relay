@@ -81,7 +81,7 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(hint, />Limit dolmak üzere</);
   assert.match(hint, /En uygun hesap <b>Vertex<\/b>: %12 kullanıldı\./);
   assert.match(hint, /<button[^>]*>Vertex hesabına geç<\/button>/);
-  assert.match(html, />Kişisel · Max limiti dolmak üzere · önerilen üstte</);
+  assert.match(html, />Önerilen üstte</);
   assert.doesNotMatch(html, /en uygunu üstte</);
   // The suggested row carries a small "önerilen" by its name, and the row links to the account's page.
   const row = rowFor(html, "Vertex");
@@ -116,7 +116,7 @@ test("overview shows the active account, limits, accounts, today and automation"
 test("overview without an active account offers onboarding", () => {
   const emptyHtml = render(relayFor(undefined, [], {}));
   assert.match(emptyHtml, /Merhaba, ben Relay’in kuryesiyim/);
-  assert.match(emptyHtml, /İlk hesabını bağlayalım/);
+  assert.match(emptyHtml, /Her hesabı bir kez bağla, sonra buradan geç\./);
   assert.match(/<svg[^>]*data-scene="welcome"[^>]*>/.exec(emptyHtml)?.[0] ?? "", /width="120"/);
   assert.match(emptyHtml, /Hesap ekle/);
   assert.doesNotMatch(emptyHtml, /Henüz hesap yok/);
@@ -398,7 +398,7 @@ test("today's card calls automatic start early start in both languages", () => {
     } as unknown as Snapshot,
   });
   const html = render(relay);
-  assert.match(html, / · önceden başlatma açık · sonraki \d\d:\d\d Vertex/);
+  assert.match(html, / · sonraki başlatma \d\d:\d\d Vertex/);
   // The automation card names the next start's day, as Planning does.
   assert.match(html, />Sonraki başlatma<\/span>/);
   assert.match(html, /Vertex (bugün|yarın) \d\d:\d\d</);
@@ -420,7 +420,7 @@ test("today's card calls automatic start early start in both languages", () => {
       ),
     ),
   );
-  assert.match(en, /(?:Work 09:00–18:00|No work today) · early start on · next/);
+  assert.match(en, /(?:Work 09:00–18:00|No work today) · next start/);
   assert.doesNotMatch(en, /Automatic start/);
   const off = render(
     relayFor(active, [active], { active: use("active", 10, 10) }),
@@ -498,7 +498,7 @@ test("a first run lists the prerequisites, each with a mark, a reason and an act
   const code = item(list, "code");
   assert.match(code, /data-met="false"/);
   assert.match(code, /Code sekmesi açıldı/);
-  assert.match(code, /Claude uygulaması da limitleri okumak için gereken Claude Code’u kendisi indirir\./);
+  assert.match(code, /Code’u bir kez aç; Claude Code da böylece iner\./);
   const cli = item(checklist(render(codeOpenNoCli())), "cli");
   assert.match(cli, /data-met="false"/);
   assert.match(cli, /Claude Code CLI/);
@@ -561,7 +561,7 @@ test("the checklist speaks English with the glossary names", () => {
   assert.match(cli, /Needed to read usage limits\./);
   assert.match(cli, />Choose file<\/button>/);
   assert.match(html, /Code tab opened/);
-  assert.match(html, /Open Code once from the sidebar in the Claude app\. Relay sees the workspace/);
+  assert.match(html, /Open Code once from the Claude app’s sidebar/);
 });
 
 test("with no account, the overview offers the first one once and hides Today and automation", () => {
@@ -734,7 +734,7 @@ test("Overview rings say how far each reading can be trusted, and the key explai
   assert.match(ring("Full"), /data-state="full"/);
   // The stale row's line says how old its reading is; the key under the list says what faded rings mean.
   assert.match(rowFor(html, "Old"), />Pro · limit verisi 2 sa önce okundu</);
-  assert.match(html, /soluk ve kesikli: limit verisi eski/);
+  assert.match(html, /kesikli: veri eski/);
   // Without a stale row the key keeps its two entries.
   const current = render(relayFor(active, [active, fresh], { active: use("active", 10, 10), fresh: use("fresh", 20, 30) }));
   assert.match(current, /ince: hafta/);

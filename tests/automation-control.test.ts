@@ -457,7 +457,7 @@ test("Overview has no suggestion band: automation's switch-now stays its one off
     overview,
   );
   assert.doesNotMatch(suggested, /uyarı eşiğini geçti/);
-  assert.match(suggested, /limiti dolmak üzere · önerilen üstte/);
+  assert.match(suggested, />Önerilen üstte</);
   assert.match(suggested, />önerilen</);
   assert.doesNotMatch(suggested, /Geçişi incele/);
   assert.equal(count(suggested, SWITCH_NOW), 0);

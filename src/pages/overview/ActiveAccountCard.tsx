@@ -189,17 +189,17 @@ function Onboarding({ go }: { go: (to: Destination) => void }) {
             <p className="mt-0.5 text-sm text-muted-foreground">
               {unlinked
                 ? t(
-                    "Claude uygulamasında açık hesabı bir Relay profiliyle eşleştir. Limit okuma girişi bu adımı tamamlamaz.",
-                    "Link the account open in the Claude app to a Relay profile. The usage sign-in does not complete this step.",
+                    "Claude uygulamasında açık hesabı bir Relay profiliyle eşleştir.",
+                    "Link the account open in the Claude app to a Relay profile.",
                   )
                 : first
                   ? t(
-                      "İlk hesabını bağlayalım. Claude uygulamasındaki her hesabı bir kez bağla; sonra hesaplar arasında buradan geç.",
-                      "Let’s connect your first account. Connect each Claude app account once; switch between them here.",
+                      "Her hesabı bir kez bağla, sonra buradan geç.",
+                      "Connect each account once, then switch here.",
                     )
                   : t(
-                      "Claude uygulamasındaki her hesabı bir kez bağla. Sonra hesaplar arasında buradan geç.",
-                      "Connect each Claude app account once. Switch between them here.",
+                      "Claude uygulamasındaki her hesabı bir kez bağla, sonra buradan geç.",
+                      "Connect each Claude app account once, then switch here.",
                     )}
             </p>
           </div>
