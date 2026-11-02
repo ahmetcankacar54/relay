@@ -27,7 +27,8 @@ export function terminalGuide(
   if (status.mode === "off")
     return {
       tone: "off",
-      label: t("Kapalı · Relay terminale dokunmaz.", "Off · Relay does not touch the terminal."),
+      label: t("Kapalı", "Off"),
+      detail: t("Relay terminale dokunmaz.", "Relay does not touch the terminal."),
       action: "settings",
     };
   const ids = terminalIdentities(account);
@@ -53,15 +54,13 @@ export function terminalGuide(
       : undefined;
     return {
       tone: "ok",
-      label: here
-        ? t("Bağlı · terminal şu an bu hesapta", "Linked · the terminal is on this account now")
-        : t(`Bağlı · ${date} kaydedildi`, `Linked · saved ${date}`),
+      label: here ? t("Bağlı, şu an bu hesapta", "Linked, on this account now") : t("Bağlı", "Linked"),
       ...(here
         ? {}
         : {
             detail: t(
-              "Bu hesaba geçince terminaldeki “claude” da bu hesaba geçer.",
-              "Switching to this account moves the terminal’s “claude” too.",
+              `Kayıt: ${date}. Bu hesaba geçince terminaldeki “claude” da bu hesaba geçer.`,
+              `Saved ${date}. Switching to this account moves the terminal’s “claude” too.`,
             ),
           }),
     };
@@ -69,15 +68,15 @@ export function terminalGuide(
   const email = account.desktop?.email ?? account.auth?.email;
   return {
     tone: "warn",
-    label: t("Bağlı değil · terminal girişi kayıtlı değil", "Not linked · no terminal sign-in saved"),
+    label: t("Giriş kayıtlı değil", "No sign-in saved"),
     steps: [
       email
-        ? t(`Terminalde “claude auth login” çalıştır ve ${email} ile gir.`, `Run “claude auth login” in a terminal and sign in with ${email}.`)
-        : t("Terminalde “claude auth login” çalıştır ve bu hesapla gir.", "Run “claude auth login” in a terminal and sign in with this account."),
-      t("“Kontrol et”e bas; Relay bağlar.", "Press “Check”; Relay links it."),
+        ? t(`Terminalde “claude auth login” çalıştır, ${email} ile gir.`, `Run “claude auth login” in a terminal, sign in with ${email}.`)
+        : t("Terminalde “claude auth login” çalıştır, bu hesapla gir.", "Run “claude auth login” in a terminal, sign in with this account."),
+      t("“Kontrol et”e bas.", "Press “Check”."),
     ],
     detail: t(
-      "İstersen bu adımı atla: terminalde claude kullanmıyorsan gerekmez.",
+      "Terminalde claude kullanmıyorsan bu adım gerekmez.",
       "You can skip this if you do not use claude in a terminal.",
     ),
     action: "check",

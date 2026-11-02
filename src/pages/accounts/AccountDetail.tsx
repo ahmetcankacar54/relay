@@ -235,27 +235,51 @@ const toneSquare = {
   off: "bg-muted text-muted-foreground",
 } as const;
 
+/** A guide's numbered steps, shown while the connection is not linked. */
+function Steps({ steps }: { steps: string[] }) {
+  return (
+    <ol className="grid gap-1.5 rounded-lg bg-muted/60 px-3 py-2.5 text-sm">
+      {steps.map((step, i) => (
+        <li key={i} className="flex gap-2">
+          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold tabular-nums">
+            {i + 1}
+          </span>
+          <span>{step}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /**
- * A connection: what it is for, its state and its action, on one row; a guide or a setup panel
- * opens under it.
+ * A connection: what it is for in a few words, its state and its action, on one row; its steps,
+ * a closed "how it works" note and a setup panel open under it.
  */
 function ConnectionRow({
   icon,
   title,
   purpose,
   status,
+  where,
   tone,
   actions,
+  steps,
+  detail,
   children,
 }: {
   icon: ReactNode;
   title: string;
   purpose: string;
   status: string;
+  /** Where the connection lives (a browser profile), muted beside the status. */
+  where?: string;
   tone: "ok" | "warn" | "crit" | "off";
   actions?: ReactNode;
+  steps?: string[];
+  detail?: string;
   children?: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <div
       data-slot="connection"
@@ -278,6 +302,11 @@ function ConnectionRow({
               <StatusDot tone={tone} />
               <span className="min-w-0 break-words">{status}</span>
             </span>
+            {where && (
+              <span data-slot="connection-where" className="text-xs text-muted-foreground/70">
+                {where}
+              </span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">{purpose}</p>
         </div>
@@ -287,7 +316,17 @@ function ConnectionRow({
           </div>
         )}
       </div>
-      {children && <div className="grid gap-2 pl-11">{children}</div>}
+      {(steps || detail || children) && (
+        <div className="grid gap-2 pl-11">
+          {steps && <Steps steps={steps} />}
+          {detail && (
+            <Disclosure title={t("Nasıl çalışır?", "How it works")}>
+              <p className="text-xs text-muted-foreground">{detail}</p>
+            </Disclosure>
+          )}
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -324,19 +363,12 @@ function ExtensionConnection({
     <ConnectionRow
       icon={<AppWindow />}
       title={t("Tarayıcı eklentisi", "Browser extension")}
-      purpose={
-        guide.where
-          ? t(
-              `Tarayıcıdaki Claude eklentisi de bu hesaba geçer · ${guide.where}`,
-              `The browser’s Claude extension follows this account · ${guide.where}`,
-            )
-          : t(
-              "Tarayıcıdaki Claude eklentisi de bu hesaba geçer.",
-              "The browser’s Claude extension follows this account.",
-            )
-      }
+      purpose={t("Tarayıcı eklentisi de bu hesaba geçer.", "The browser extension follows this account.")}
       tone={guide.tone}
       status={guide.label}
+      where={guide.where}
+      steps={guide.steps}
+      detail={guide.detail}
       actions={
         guide.action === "claim" ? (
           <>
@@ -387,27 +419,7 @@ function ExtensionConnection({
           </Button>
         ) : undefined
       }
-    >
-      {(guide.steps || guide.detail) && (
-        <>
-          {guide.steps && (
-            <ol className="grid gap-1.5 rounded-lg bg-muted/60 px-3 py-2.5 text-sm">
-              {guide.steps.map((step, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold tabular-nums">
-                    {i + 1}
-                  </span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-          {guide.detail && (
-            <p className="text-xs text-muted-foreground">{guide.detail}</p>
-          )}
-        </>
-      )}
-    </ConnectionRow>
+    />
   );
 }
 
@@ -426,12 +438,11 @@ function TerminalConnection({
     <ConnectionRow
       icon={<SquareTerminal />}
       title={t("Terminal", "Terminal")}
-      purpose={t(
-        "Terminaldeki “claude” komutu da bu hesaba geçer.",
-        "The terminal’s “claude” command follows this account.",
-      )}
+      purpose={t("Terminaldeki claude da geçer.", "The terminal’s claude follows too.")}
       tone={guide.tone}
       status={guide.label}
+      steps={guide.steps}
+      detail={guide.detail}
       actions={
         guide.action === "check" ? (
           <Button size="sm" variant="outline" disabled={checking} onClick={() => void check()}>
@@ -455,25 +466,7 @@ function TerminalConnection({
           </Button>
         ) : undefined
       }
-    >
-      {(guide.steps || guide.detail) && (
-        <>
-          {guide.steps && (
-            <ol className="grid gap-1.5 rounded-lg bg-muted/60 px-3 py-2.5 text-sm">
-              {guide.steps.map((step, i) => (
-                <li key={i} className="flex gap-2">
-                  <span className="grid size-5 shrink-0 place-items-center rounded-full bg-background text-xs font-semibold tabular-nums">
-                    {i + 1}
-                  </span>
-                  <span>{step}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-          {guide.detail && <p className="text-xs text-muted-foreground">{guide.detail}</p>}
-        </>
-      )}
-    </ConnectionRow>
+    />
   );
 }
 
@@ -645,15 +638,12 @@ export function AccountDetailBody({
             <ConnectionRow
               icon={<Monitor />}
               title={t("Claude uygulaması", "Claude app")}
-              purpose={t(
-                "Relay, Claude uygulamasını bu hesapla açabilsin diye kaydedilir.",
-                "Saved so Relay can open the Claude app with this account.",
-              )}
+              purpose={t("Claude uygulamasını bu hesapla açar.", "Opens the Claude app with this account.")}
               tone={a.desktop ? "ok" : "off"}
               status={
                 a.desktop
-                  ? t("Kayıtlı · geçişe hazır", "Saved · ready to switch")
-                  : t("Kayıtlı değil · geçiş yapılamaz", "Not saved · cannot switch yet")
+                  ? t("Kayıtlı", "Saved")
+                  : t("Kayıtlı değil", "Not saved")
               }
               actions={
                 a.desktop ? (
@@ -704,17 +694,7 @@ export function AccountDetailBody({
             <ConnectionRow
               icon={<Globe2 />}
               title={t("Limit okuma", "Usage limits")}
-              purpose={
-                a.auth?.email
-                  ? t(
-                      `Limitleri okumak için tarayıcıda onaylanır · ${a.auth.email}`,
-                      `Approved in the browser to read limits · ${a.auth.email}`,
-                    )
-                  : t(
-                      "Limitleri okumak için tarayıcıda bir kez onaylanır.",
-                      "Approved once in the browser to read limits.",
-                    )
-              }
+              purpose={t("Limitleri okur.", "Reads the limits.")}
               tone={signIn.tone}
               status={signIn.label}
               actions={

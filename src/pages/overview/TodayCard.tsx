@@ -66,12 +66,12 @@ export function TodayCard({
       ? t("plana hesap eklenmedi", "no accounts in the plan")
       : upcoming
         ? t(
-            `önceden başlatma açık · sonraki ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
-            `early start on · next ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
+            `sonraki başlatma ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
+            `next start ${clock(upcoming.at)} ${name(upcoming.accountId)}`,
           )
         : t(
-            `önceden başlatma açık · bugün ${plannedToday} başlatma planlı`,
-            `early start on · ${plannedToday} ${plannedToday === 1 ? "start" : "starts"} planned today`,
+            `bugün ${plannedToday} başlatma planlı`,
+            `${plannedToday} ${plannedToday === 1 ? "start" : "starts"} planned today`,
           );
   const summary = `${work} · ${early}`;
   // The hour axis under the rows; 24 is the day's end, wherever DST puts it.

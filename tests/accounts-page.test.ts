@@ -355,7 +355,7 @@ test("the account page shows identity, usage, the connections and a closed histo
   assert.match(html, /<h2[^>]*>Planlama<\/h2>/);
   // The connections are always shown, each with what it is for and its action.
   assert.match(html, /Claude uygulaması<\/span>/);
-  assert.match(html, /Relay, Claude uygulamasını bu hesapla açabilsin diye kaydedilir\./);
+  assert.match(html, /Claude uygulamasını bu hesapla açar\./);
   assert.match(html, />Yenile…<\/button>/);
   assert.match(html, /Limit okuma<\/span>/);
   assert.match(html, /aria-label="Limit okuma girişini doğrula"/);

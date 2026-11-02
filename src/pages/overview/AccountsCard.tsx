@@ -60,10 +60,7 @@ export function AccountsCard({
         </h2>
         {relay.suggestion && relay.active ? (
           <span className="text-xs font-medium text-warn-foreground">
-            {t(
-              `${relay.active.name} limiti dolmak üzere · önerilen üstte`,
-              `${relay.active.name} is near its limit · suggested first`,
-            )}
+            {t("Önerilen üstte", "Suggested first")}
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">
@@ -147,7 +144,7 @@ export function AccountsCard({
           {rows.some((row) => ringState(row.usage, now) === "stale") && (
             <span className="inline-flex items-center gap-1.5">
               <span className="size-2 rounded-full border-[1.5px] border-dashed border-muted-foreground/60" />
-              {t("soluk ve kesikli: limit verisi eski", "faded and dashed: usage data is out of date")}
+              {t("kesikli: veri eski", "dashed: data out of date")}
             </span>
           )}
         </p>

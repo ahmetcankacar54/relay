@@ -140,7 +140,7 @@ export interface ExtensionGuide {
   detail?: string;
   steps?: string[];
   action?: "check" | "settings" | "claim";
-  /** The browser profile Relay manages, for the line under the status. */
+  /** The browser profile Relay manages, shown muted beside the status. */
   where?: string;
 }
 
@@ -155,7 +155,8 @@ export function extensionGuide(
   if (status.setting.mode === "off")
     return {
       tone: "off",
-      label: t("Kapalı · Relay eklentiye dokunmaz.", "Off · Relay does not touch the extension."),
+      label: t("Kapalı", "Off"),
+      detail: t("Relay eklentiye dokunmaz.", "Relay does not touch the extension."),
       action: "settings",
     };
   if (!status.instances.length)
@@ -170,10 +171,7 @@ export function extensionGuide(
   if (!status.target)
     return {
       tone: "warn",
-      label: t(
-        "Eklenti birden çok tarayıcıda var; Relay’in hangisini izleyeceğini seç.",
-        "The extension is in several browsers; choose the one to follow.",
-      ),
+      label: t("Birden çok tarayıcıda var, birini seç", "In several browsers, choose one"),
       action: "settings",
     };
   const where =
@@ -193,14 +191,12 @@ export function extensionGuide(
       : undefined;
     return {
       tone: "ok",
-      label: here
-        ? t("Bağlı · eklenti şu an bu hesapta", "Linked · the extension is on this account now")
-        : t(`Bağlı · ${date} kaydedildi`, `Linked · saved ${date}`),
+      label: here ? t("Bağlı, şu an bu hesapta", "Linked, on this account now") : t("Bağlı", "Linked"),
       detail: here
         ? undefined
         : t(
-            "Bu hesaba geçince eklenti de bu hesaba geçer.",
-            "Switching to this account brings the extension along.",
+            `Kayıt: ${date}. Bu hesaba geçince eklenti de bu hesaba geçer.`,
+            `Saved ${date}. Switching to this account brings the extension along.`,
           ),
       where,
     };
@@ -209,10 +205,7 @@ export function extensionGuide(
   if (!uuids.length)
     return {
       tone: "warn",
-      label: t(
-        "Bağlı değil · önce bu hesabın Claude uygulaması girişini kaydet",
-        "Not linked · save this account’s Claude app sign-in first",
-      ),
+      label: t("Önce Claude uygulaması girişini kaydet", "Save the Claude app sign-in first"),
       detail: t(
         "Relay eklentinin girişini hesabın kimliğiyle saklar; bu hesabın kimliği Claude uygulaması girişi kaydedilince öğrenilir. Sonra eklentiye bu hesapla giriş yapıp “Kontrol et”e bas.",
         "Relay keeps the extension’s sign-in by the account’s id, which it learns when this account’s Claude app sign-in is saved. Then sign in to the extension with this account and press Check.",
@@ -223,7 +216,7 @@ export function extensionGuide(
   const signIn = email
     ? t(`${email} ile giriş yap.`, `Sign in with ${email}.`)
     : t("Bu hesapla giriş yap.", "Sign in with this account.");
-  const check = t("“Kontrol et”e bas; Relay bağlar.", "Press “Check”; Relay links it.");
+  const check = t("“Kontrol et”e bas.", "Press “Check”.");
   if (!current)
     return { tone: "off", label: t("Kontrol ediliyor…", "Checking…"), where, action: "check" };
   if (current.state === "unreadable")
@@ -240,15 +233,9 @@ export function extensionGuide(
   if (current.state === "signed-out" && current.unopened)
     return {
       tone: "warn",
-      label: t(
-        "Bağlı değil · eklenti tarayıcıda hiç açılmamış",
-        "Not linked · the extension was never opened in the browser",
-      ),
+      label: t("Eklenti hiç açılmamış", "The extension was never opened"),
       steps: [
-        t(
-          "Eklentiyi tarayıcıda bir kez aç ve giriş yap.",
-          "Open the extension in the browser once and sign in.",
-        ),
+        t("Eklentiyi tarayıcıda bir kez aç.", "Open the extension in the browser once."),
         signIn,
         check,
       ],
@@ -258,7 +245,7 @@ export function extensionGuide(
   if (current.state === "signed-out")
     return {
       tone: "warn",
-      label: t("Bağlı değil · eklentide giriş yok", "Not linked · the extension is signed out"),
+      label: t("Eklentide giriş yok", "The extension is signed out"),
       steps: [
         t("Tarayıcıda Claude eklentisini aç.", "Open the Claude extension in the browser."),
         signIn,
@@ -277,10 +264,7 @@ export function extensionGuide(
   if (!other && !current.other)
     return {
       tone: "warn",
-      label: t(
-        "Bağlı değil · eklentideki hesap tanınamadı",
-        "Not linked · the extension’s account was not recognised",
-      ),
+      label: t("Eklentideki hesap tanınamadı", "The extension’s account was not recognised"),
       steps: [
         email
           ? t(
@@ -303,19 +287,10 @@ export function extensionGuide(
   return {
     tone: "warn",
     label: other
-      ? t(
-          `Bağlı değil · eklenti şu an ${other.name} hesabında`,
-          `Not linked · the extension is on ${other.name} now`,
-        )
-      : t(
-          "Bağlı değil · eklenti başka bir claude.ai hesabında",
-          "Not linked · the extension is on a different claude.ai account",
-        ),
+      ? t(`Eklenti ${other.name} hesabında`, `The extension is on ${other.name}`)
+      : t("Eklenti başka bir claude.ai hesabında", "The extension is on another claude.ai account"),
     steps: [
-      t(
-        "Tarayıcıda Claude eklentisini aç ve çıkış yap.",
-        "Open the Claude extension in the browser and sign out.",
-      ),
+      t("Eklentide çıkış yap.", "Sign out in the extension."),
       signIn,
       check,
     ],

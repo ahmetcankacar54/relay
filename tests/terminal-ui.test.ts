@@ -23,12 +23,12 @@ test("the terminal row: linked when saved or on the account now, a guide otherwi
   assert.match(missing.steps![0], /claude auth login.*me@x\.test/);
   const saved = terminalGuide(account(), status({ saved: [{ accountUuid: U, orgId: O, savedAt: "2026-11-01T10:00:00Z", parked: true }] }), tr, "tr");
   assert.equal(saved.tone, "ok");
-  assert.match(saved.label, /^Bağlı · /);
+  assert.equal(saved.label, "Bağlı");
   const here = terminalGuide(
     account(),
     status({ current: { state: "signed-in", accountUuid: U, orgId: O, known: true, at: "" } as TerminalStatus["current"] }),
     tr,
     "tr",
   );
-  assert.equal(here.label, "Bağlı · terminal şu an bu hesapta");
+  assert.equal(here.label, "Bağlı, şu an bu hesapta");
 });
