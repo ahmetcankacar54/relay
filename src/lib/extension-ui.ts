@@ -1,5 +1,6 @@
 import {
   BROWSERS,
+  browserNames,
   type ExtensionInstance,
   type ExtensionMode,
   type ExtensionStatus,
@@ -66,8 +67,8 @@ export function modeSentence(mode: ExtensionMode, t: T): string {
 export function instanceLine(status: ExtensionStatus, t: T): string {
   if (!status.instances.length)
     return t(
-      "Bu bilgisayarda Claude eklentisi bulunamadı (Chrome, Brave, Edge, Chromium, Vivaldi).",
-      "No Claude extension found on this Mac (Chrome, Brave, Edge, Chromium, Vivaldi).",
+      `Bu bilgisayarda Claude eklentisi bulunamadı (${browserNames("ve")}).`,
+      `No Claude extension found on this Mac (${browserNames("and")}).`,
     );
   if (!status.target)
     return t(
@@ -170,10 +171,7 @@ export function extensionGuide(
         "Bu Mac’te Claude eklentisi bulunamadı.",
         "No Claude extension found on this Mac.",
       ),
-      detail: t(
-        "Chrome, Brave, Edge, Chromium ve Vivaldi’ye bakıldı.",
-        "Looked in Chrome, Brave, Edge, Chromium and Vivaldi.",
-      ),
+      detail: t(`Bakılan tarayıcılar: ${browserNames("ve")}.`, `Looked in ${browserNames("and")}.`),
     };
   if (!status.target)
     return {
@@ -213,6 +211,20 @@ export function extensionGuide(
       where,
     };
   }
+  // Relay keeps the extension's sign-in by account uuid; an account without one cannot be linked.
+  if (!uuids.length)
+    return {
+      tone: "warn",
+      label: t(
+        "Bağlı değil · önce bu hesabın Claude uygulaması girişini kaydet",
+        "Not linked · save this account’s Claude app sign-in first",
+      ),
+      detail: t(
+        "Relay eklentinin girişini hesabın kimliğiyle saklar; bu hesabın kimliği Claude uygulaması girişi kaydedilince öğrenilir. Sonra eklentiye bu hesapla giriş yapıp “Kontrol et”e bas.",
+        "Relay keeps the extension’s sign-in by the account’s id, which it learns when this account’s Claude app sign-in is saved. Then sign in to the extension with this account and press Check.",
+      ),
+      where,
+    };
   const email = account.desktop?.email ?? account.auth?.email;
   const signIn = email
     ? t(`${email} ile giriş yap.`, `Sign in with ${email}.`)
@@ -228,6 +240,24 @@ export function extensionGuide(
         "Birkaç saniye sonra tekrar dene. Sürerse eklentinin yeni bir sürümü olabilir.",
         "Try again in a few seconds. If it persists, the extension may have changed.",
       ),
+      where,
+      action: "check",
+    };
+  if (current.state === "signed-out" && current.unopened)
+    return {
+      tone: "warn",
+      label: t(
+        "Bağlı değil · eklenti tarayıcıda hiç açılmamış",
+        "Not linked · the extension was never opened in the browser",
+      ),
+      steps: [
+        t(
+          "Eklentiyi tarayıcıda bir kez aç ve giriş yap.",
+          "Open the extension in the browser once and sign in.",
+        ),
+        signIn,
+        check,
+      ],
       where,
       action: "check",
     };
@@ -284,8 +314,8 @@ export function extensionGuide(
           `Not linked · the extension is on ${other.name} now`,
         )
       : t(
-          "Bağlı değil · eklenti Relay’de olmayan bir hesapta",
-          "Not linked · the extension is on an account Relay does not have",
+          "Bağlı değil · eklenti başka bir claude.ai hesabında",
+          "Not linked · the extension is on a different claude.ai account",
         ),
     steps: [
       t(
@@ -300,7 +330,10 @@ export function extensionGuide(
           `${other.name} için kayıt Relay’de duruyor; o hesaba geçince eklenti de geri gelir.`,
           `${other.name}’s sign-in stays saved in Relay; switching to it brings the extension back.`,
         )
-      : undefined,
+      : t(
+          "Eklentideki claude.ai hesabı bu hesap değil ve Relay’deki hiçbir hesaba ait değil. Bu hesapla giriş yaptığını düşünüyorsan tarayıcıdaki claude.ai oturumunu kontrol et: eklenti onun hesabını kullanır.",
+          "The extension’s claude.ai account is not this one, nor any account in Relay. If you think you signed in with this account, check the browser’s claude.ai login: the extension uses its account.",
+        ),
     where,
     action: "check",
   };

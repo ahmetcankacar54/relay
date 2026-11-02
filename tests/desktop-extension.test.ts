@@ -297,3 +297,44 @@ test("no extension offer without the account's saved pair, in mode 'off', or onc
   await f.manager.checkExtension();
   assert.equal(await f.manager.extensionOffer(), undefined);
 });
+
+test("the extension check logs who it saw, how many instances there are, which one and whether it was opened", async (t) => {
+  const f = await fixture(t, { defaultSetting: true });
+  const a = await f.account("A");
+  const logged: Record<string, unknown>[] = [];
+  f.manager.onDraftEvent = (event, fields) => {
+    if (event === "extension-check") logged.push(fields ?? {});
+  };
+  f.world.stored.set(f.dir, signInFor(a.desktop!.accountUuid, 1));
+  await f.manager.checkExtension();
+  assert.deepEqual(logged.pop(), {
+    state: "signed-in",
+    known: true,
+    other: false,
+    account: a.desktop!.accountUuid.slice(0, 8),
+    instances: 1,
+    target: "brave:Default",
+    opened: true,
+  });
+  // Another claude.ai account: `other`, and no account id.
+  f.world.stored.set(f.dir, signInFor(randomUUID(), 1));
+  await f.manager.checkExtension();
+  assert.deepEqual(logged.pop(), { state: "signed-in", known: false, other: true, instances: 1, target: "brave:Default", opened: true });
+  // Only an unopened one, chosen: signed out, and it says so.
+  f.world.install("chrome", "Default", "Kişi 1", { opened: false });
+  f.store.update((s) => {
+    s.settings.claudeExtension = { mode: "guide", browser: { app: "chrome", profile: "Default" } };
+  });
+  await f.manager.checkExtension();
+  assert.deepEqual(logged.pop(), { state: "signed-out", instances: 2, target: "chrome:Default", opened: false });
+  assert.deepEqual((await f.manager.extensionStatus())?.current, { state: "signed-out", unopened: true, at: (await f.manager.extensionStatus())?.current?.at });
+  // An unopened extension has nothing to bring along: no offer.
+  await f.vault.save(a.desktop!.accountUuid, signInFor(a.desktop!.accountUuid, 1));
+  await f.cookieVault.save(a.desktop!.accountUuid, loginFor(a.desktop!.accountUuid, 1));
+  assert.equal(await f.manager.extensionOffer(), undefined);
+  // None at all: "none".
+  await fs.rm(path.join(f.world.support, "BraveSoftware"), { recursive: true, force: true });
+  await fs.rm(path.join(f.world.support, "Google"), { recursive: true, force: true });
+  await f.manager.checkExtension();
+  assert.deepEqual(logged.pop(), { state: "none", instances: 0 });
+});

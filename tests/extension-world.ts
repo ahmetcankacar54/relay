@@ -161,8 +161,16 @@ export function extensionWorld(temp: string) {
       web.set(dir, structuredClone(snapshot));
     },
   };
-  /** Adds a profile with the extension's folder; returns that folder. */
-  function install(app: BrowserApp, profile = "Default", name = profile): string {
+  /**
+   * Adds a profile with the extension installed and, unless `opened` is false, its storage folder;
+   * returns that folder (which then does not exist).
+   */
+  function install(
+    app: BrowserApp,
+    profile = "Default",
+    name = profile,
+    { opened = true }: { opened?: boolean } = {},
+  ): string {
     const data = path.join(support, BROWSERS[app].dataDir);
     fs.mkdirSync(data, { recursive: true });
     const file = path.join(data, "Local State");
@@ -170,7 +178,11 @@ export function extensionWorld(temp: string) {
     local.profile ??= { info_cache: {} };
     local.profile.info_cache[profile] = { name };
     fs.writeFileSync(file, JSON.stringify(local));
+    fs.mkdirSync(path.join(data, profile, "Extensions", CLAUDE_EXTENSION_ID, "1.0.102_0"), {
+      recursive: true,
+    });
     const dir = path.join(data, profile, "Local Extension Settings", CLAUDE_EXTENSION_ID);
+    if (!opened) return dir;
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "data.txt"), "ORIGINAL");
     fs.writeFileSync(path.join(dir, "source.txt"), dir);

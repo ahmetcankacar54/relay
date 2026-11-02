@@ -322,8 +322,8 @@ test("the extension card says where the extension stands for the open account, w
   const status = (over: Partial<ExtensionStatus> = {}): ExtensionStatus =>
     ({
       setting: { mode: "restart" },
-      instances: [{ app: "chrome", profile: "Default", name: "Kişi 1" }],
-      target: { app: "chrome", profile: "Default", name: "Kişi 1" },
+      instances: [{ app: "chrome", profile: "Default", name: "Kişi 1", opened: true }],
+      target: { app: "chrome", profile: "Default", name: "Kişi 1", opened: true },
       picked: "only",
       saved: [],
       ...over,

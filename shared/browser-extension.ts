@@ -7,6 +7,12 @@ export const BROWSER_APPS = [
   "edge",
   "chromium",
   "vivaldi",
+  "arc",
+  "chrome-beta",
+  "chrome-dev",
+  "chrome-canary",
+  "dia",
+  "comet",
 ] as const;
 export type BrowserApp = (typeof BROWSER_APPS)[number];
 export const BROWSERS: Record<
@@ -50,7 +56,49 @@ export const BROWSERS: Record<
     dataDir: "Vivaldi",
     executable: "Vivaldi",
   },
+  arc: {
+    name: "Arc",
+    bundleId: "company.thebrowser.Browser",
+    dataDir: "Arc/User Data",
+    executable: "Arc",
+  },
+  "chrome-beta": {
+    name: "Chrome Beta",
+    bundleId: "com.google.Chrome.beta",
+    dataDir: "Google/Chrome Beta",
+    executable: "Google Chrome Beta",
+  },
+  "chrome-dev": {
+    name: "Chrome Dev",
+    bundleId: "com.google.Chrome.dev",
+    dataDir: "Google/Chrome Dev",
+    executable: "Google Chrome Dev",
+  },
+  "chrome-canary": {
+    name: "Chrome Canary",
+    bundleId: "com.google.Chrome.canary",
+    dataDir: "Google/Chrome Canary",
+    executable: "Google Chrome Canary",
+  },
+  // Dia and Comet: bundle ids and folders as reported, not yet seen on a Mac with the extension.
+  dia: {
+    name: "Dia",
+    bundleId: "company.thebrowser.dia",
+    dataDir: "Dia/User Data",
+    executable: "Dia",
+  },
+  comet: {
+    name: "Comet",
+    bundleId: "ai.perplexity.comet",
+    dataDir: "Comet",
+    executable: "Comet",
+  },
 };
+/** The browsers Relay looks in, by name: "Chrome, Brave, … and Comet". */
+export function browserNames(and: string): string {
+  const names = BROWSER_APPS.map((app) => BROWSERS[app].name);
+  return `${names.slice(0, -1).join(", ")} ${and} ${names[names.length - 1]}`;
+}
 /** A profile folder: "Default", "Profile 1" and the like. */
 export const PROFILE_FOLDER = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/;
 /** Profiles the browser keeps for itself; never a user's. */
@@ -82,9 +130,14 @@ export const DEFAULT_EXTENSION: ExtensionSetting = { mode: "guide" };
 /** Modes that change a browser profile's files: the claude.ai login and the extension's sign-in. */
 export const writesBrowser = (mode: ExtensionMode) => mode === "restart" || mode === "closed";
 
-/** A browser profile that has the Claude extension's storage. */
+/** A browser profile that has the Claude extension installed. */
 export interface ExtensionInstance extends ExtensionTarget {
   name: string;
+  /**
+   * The extension has its storage in this profile. An extension that was installed but never
+   * opened has none yet: it reads as signed out and a swap leaves it alone.
+   */
+  opened: boolean;
   /** When the extension last wrote its storage in this profile (ms); the one in use is the newest. */
   usedAt?: number;
 }
@@ -103,6 +156,8 @@ export type ExtensionReason =
   | "browser-did-not-quit"
   | "unknown-account"
   | "no-saved-login"
+  /** The extension is installed but was never opened, so it has no storage to swap. */
+  | "not-opened"
   | "already-there"
   | "locked"
   | "unreadable"
@@ -149,7 +204,8 @@ export type ExtensionCurrent =
       other?: boolean;
       at: string;
     }
-  | { state: "signed-out"; at: string }
+  /** `unopened`: the extension is installed but was never opened in this profile. */
+  | { state: "signed-out"; unopened?: boolean; at: string }
   | { state: "unreadable"; at: string };
 /**
  * The panel's offer to bring the extension to the account Claude Desktop is on: the last reading

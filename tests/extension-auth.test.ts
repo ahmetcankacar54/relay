@@ -128,8 +128,8 @@ test("the startup setting restores tabs only for 'last session' (1 or 5)", () =>
 });
 
 test("the chosen instance wins, the only one is used, several without a choice are none", () => {
-  const brave = { app: "brave", profile: "Default", name: "A" } as const;
-  const chrome = { app: "chrome", profile: "Default", name: "B" } as const;
+  const brave = { app: "brave", profile: "Default", name: "A", opened: true } as const;
+  const chrome = { app: "chrome", profile: "Default", name: "B", opened: true } as const;
   assert.equal(chooseInstance([brave], undefined), brave);
   assert.equal(chooseInstance([brave, chrome], undefined), undefined);
   assert.equal(chooseInstance([brave, chrome], { app: "chrome", profile: "Default" }), chrome);

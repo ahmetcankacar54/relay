@@ -741,3 +741,68 @@ test("a login that is not the extension's account's (newer than the hints) is no
   await s.switcher.check({ setting: mode("restart"), known: [s.a, s.b] });
   assert.equal(await s.cookieVault.load([s.a]), undefined);
 });
+
+test("Arc, Chrome Beta, Dev and Canary, Dia and Comet are looked in, each in its own folder", async (t) => {
+  const s = setup(t);
+  const arc = s.world.install("arc", "Default", "Arc");
+  const canary = s.world.install("chrome-canary", "Profile 1", "Canary");
+  s.world.install("chrome-beta");
+  s.world.install("chrome-dev");
+  s.world.install("dia");
+  s.world.install("comet");
+  assert.equal(arc, path.join(s.world.support, "Arc", "User Data", "Default", "Local Extension Settings", "fcoeoabgfenejglbffodgkkbkcdhcgfn"));
+  assert.ok(canary.startsWith(path.join(s.world.support, "Google", "Chrome Canary", "Profile 1")));
+  assert.deepEqual(
+    s.switcher.instances().map((i) => `${i.app}:${i.profile}:${i.opened}`),
+    [
+      "brave:Default:true",
+      "arc:Default:true",
+      "chrome-beta:Default:true",
+      "chrome-dev:Default:true",
+      "chrome-canary:Profile 1:true",
+      "dia:Default:true",
+      "comet:Default:true",
+    ],
+  );
+  // A chosen one of them is read like any other.
+  s.world.stored.set(arc, signInFor(s.a, 2));
+  const current = await s.switcher.check({ setting: { mode: "guide", browser: { app: "arc", profile: "Default" } }, known: [s.a] });
+  assert.equal(current?.state === "signed-in" && current.accountUuid, s.a.toLowerCase());
+});
+
+test("an extension installed but never opened is listed, reads as signed out, and is never swapped", async (t) => {
+  const s = setup(t);
+  const dir = s.world.install("chrome", "Default", "Kişi 1", { opened: false });
+  // A profile without the extension at all is not listed.
+  const localState = path.join(s.world.support, "Google", "Chrome", "Local State");
+  const local = JSON.parse(fs.readFileSync(localState, "utf8"));
+  local.profile.info_cache["Profile 2"] = { name: "Bare" };
+  fs.writeFileSync(localState, JSON.stringify(local));
+  fs.mkdirSync(path.join(s.world.support, "Google", "Chrome", "Profile 2"), { recursive: true });
+  const instances = s.switcher.instances();
+  assert.deepEqual(
+    instances.map((i) => `${i.app}:${i.profile}:${i.opened}`),
+    ["chrome:Default:false", "brave:Default:true"],
+  );
+  assert.equal(instances[0].usedAt, undefined);
+  const chrome = { app: "chrome", profile: "Default" } as const;
+  const current = await s.switcher.check({ setting: { mode: "guide", browser: chrome }, known: [s.a, s.b] });
+  assert.deepEqual(current, { state: "signed-out", unopened: true, at: current?.at });
+  assert.deepEqual(s.world.opened, [], "nothing is opened for it");
+  // A swap leaves it alone, even with a complete pair saved and the browser running.
+  await s.vault.save(s.b, signInFor(s.b, 5));
+  await s.cookieVault.save(s.b, loginFor(s.b, 5));
+  s.world.state.running = true;
+  const swap = await s.switcher.run(s.request({ setting: { mode: "restart", browser: chrome } }));
+  assert.deepEqual({ result: swap.result, reason: swap.reason, restarted: swap.restarted }, { result: "skipped", reason: "not-opened", restarted: false });
+  assert.deepEqual(s.world.events, [], "the browser is not quit");
+  assert.deepEqual(s.world.opened, []);
+  assert.equal(fs.existsSync(dir), false, "no storage is made for it");
+  // Mode "guide" says so too, with what it saw.
+  const guide = await s.switcher.run(s.request({ setting: { mode: "guide", browser: chrome } }));
+  assert.equal(guide.reason, "not-opened");
+  assert.equal(guide.current?.state === "signed-out" && guide.current.unopened, true);
+  // The only one found is managed: Brave gone, Chrome is still left alone.
+  fs.rmSync(path.join(s.world.support, "BraveSoftware"), { recursive: true, force: true });
+  assert.equal((await s.switcher.run(s.request())).reason, "not-opened");
+});

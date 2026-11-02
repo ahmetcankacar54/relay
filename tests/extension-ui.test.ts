@@ -15,9 +15,9 @@ import {
 import { extensionLine } from "../shared/extension-text";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { useExtensionStatus } from "../src/data/useExtension";
+import { FOCUS_CHECK_MS, focusChecks, useExtensionStatus } from "../src/data/useExtension";
 import { fakeDom } from "./fake-dom";
-import { chooseInstance, type ExtensionOutcome, type ExtensionStatus } from "../shared/browser-extension";
+import { BROWSER_APPS, BROWSERS, chooseInstance, type ExtensionOutcome, type ExtensionStatus } from "../shared/browser-extension";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 
 const tr = (text: string) => text;
@@ -32,7 +32,7 @@ const vertex: Account = {
   desktop: { accountUuid: ID.toUpperCase(), orgId: "22222222-2222-4222-8222-222222222222", savedAt: NOW },
 };
 const alto: Account = { ...base, id: "k", name: "Alto" };
-const brave = { app: "brave", profile: "Default", name: "Kişisel" } as const;
+const brave = { app: "brave", profile: "Default", name: "Kişisel", opened: true } as const;
 const status = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
   setting: { mode: "restart" },
   instances: [brave],
@@ -81,7 +81,8 @@ test("an unlinked account gets the steps to link it, for each thing the extensio
   assert.match(other.detail ?? "", /Vertex için kayıt Relay’de duruyor/);
   // On an account Relay does not have.
   const stranger = guide(altoLinked, { current: { state: "signed-in", known: false, other: true, at: NOW } });
-  assert.match(stranger.label, /Relay’de olmayan bir hesapta/);
+  assert.match(stranger.label, /eklenti başka bir claude\.ai hesabında/);
+  assert.match(stranger.detail ?? "", /Relay’deki hiçbir hesaba ait değil/);
   // Signed in, but no account can be told: the user links it as this one.
   const untold = guide(altoLinked, { current: { state: "signed-in", known: false, at: NOW } });
   assert.match(untold.label, /eklentideki hesap tanınamadı/);
@@ -103,7 +104,7 @@ test("the guide says when the feature is off, there is no extension, or no brows
 });
 
 test("with several browsers and none chosen, the one whose extension was used last is followed", () => {
-  const chrome = { app: "chrome", profile: "Default", name: "Kişi 1", usedAt: 1 } as const;
+  const chrome = { app: "chrome", profile: "Default", name: "Kişi 1", opened: true, usedAt: 1 } as const;
   const braveUsed = { ...brave, usedAt: 2 };
   assert.equal(chooseInstance([chrome, braveUsed], undefined), braveUsed);
   assert.equal(chooseInstance([chrome, braveUsed], { app: "chrome", profile: "Default" }), chrome);
@@ -136,7 +137,7 @@ test("each mode has a label and a sentence in both languages", () => {
 test("the card names the instance, asks to choose among several, and explains the startup setting", () => {
   assert.equal(instanceLine(status(), en), "Brave · Kişisel · extension installed");
   assert.match(
-    instanceLine(status({ instances: [brave, { app: "chrome", profile: "Default", name: "Your Chrome" }], target: undefined }), en),
+    instanceLine(status({ instances: [brave, { app: "chrome", profile: "Default", name: "Your Chrome", opened: true }], target: undefined }), en),
     /several browser profiles/,
   );
   assert.match(instanceLine(status({ instances: [], target: undefined }), tr), /bulunamadı/);
@@ -271,7 +272,7 @@ test("the settings card shows the mode with its sentence, the instance, the star
     relayFor("darwin", [vertex]),
     createElement(ExtensionPreference, {
       initialStatus: status({
-        instances: [brave, { app: "chrome", profile: "Default", name: "Your Chrome" }],
+        instances: [brave, { app: "chrome", profile: "Default", name: "Your Chrome", opened: true }],
         target: undefined,
       }),
     }),
@@ -346,6 +347,116 @@ test("the extension check runs again when the setting changes, not for each snap
     assert.equal(checks, 2);
     await act(async () => root.unmount());
   } finally {
+    dom.uninstall();
+  }
+});
+
+test("an account without a saved Claude app sign-in is told to save it first, never to sign out", () => {
+  // Alto has no uuid: whatever the extension is on, nothing can be linked to it yet.
+  for (const current of [
+    undefined,
+    { state: "signed-out", at: NOW } as const,
+    { state: "signed-in", known: false, other: true, at: NOW } as const,
+    { state: "signed-in", known: false, at: NOW } as const,
+    signedIn(ID),
+  ]) {
+    const g = guide(alto, current ? { current } : {});
+    assert.equal(g.tone, "warn");
+    assert.match(g.label, /önce bu hesabın Claude uygulaması girişini kaydet/);
+    assert.equal(g.steps, undefined);
+    assert.equal(g.action, undefined);
+    assert.doesNotMatch(g.detail ?? "", /çıkış/);
+  }
+  assert.match(guide(alto, {}, en, "en").label, /save this account’s Claude app sign-in first/);
+});
+
+test("an extension that was never opened is to be opened and signed in to, then checked", () => {
+  const unopened = { ...brave, opened: false };
+  const g = guide(altoLinked, {
+    instances: [unopened],
+    target: unopened,
+    current: { state: "signed-out", unopened: true, at: NOW },
+  });
+  assert.equal(g.tone, "warn");
+  assert.match(g.label, /eklenti tarayıcıda hiç açılmamış/);
+  assert.equal(g.steps?.[0], "Eklentiyi tarayıcıda bir kez aç ve giriş yap.");
+  assert.equal(g.action, "check");
+  assert.match(
+    extensionLine({ result: "skipped", reason: "not-opened", at: NOW, restarted: false, saved: false }, en) ?? "",
+    /never opened/,
+  );
+});
+
+test("the browsers looked in are every browser Relay knows, in both places", () => {
+  const names = BROWSER_APPS.map((app) => BROWSERS[app].name);
+  assert.ok(names.includes("Arc") && names.includes("Chrome Canary") && names.includes("Comet"));
+  const none = { instances: [], target: undefined };
+  const line = instanceLine(status(none), en);
+  const detail = guide(vertex, none, en, "en").detail ?? "";
+  for (const name of names) {
+    assert.ok(line.includes(name), name);
+    assert.ok(detail.includes(name), name);
+  }
+  assert.match(detail, /, Dia and Comet\.$/);
+  assert.match(guide(vertex, none).detail ?? "", / ve Comet\.$/);
+});
+
+test("a focus checks again only while shown, at most once every few seconds", () => {
+  assert.equal(focusChecks(10_000, undefined, true), true);
+  assert.equal(focusChecks(10_000, 10_000 - FOCUS_CHECK_MS + 1, true), false);
+  assert.equal(focusChecks(10_000, 10_000 - FOCUS_CHECK_MS, true), true);
+  assert.equal(focusChecks(10_000, undefined, false), false);
+});
+
+test("coming back to the window checks the extension again, throttled and only with check", async () => {
+  let checks = 0;
+  const api = {
+    checkExtension: async () => {
+      checks++;
+      return undefined;
+    },
+    extensionStatus: async () => undefined,
+  };
+  const value = { api, settings: { ...DEFAULT_SETTINGS, claudeExtension: { mode: "guide" } } } as unknown as Relay;
+  function Probe({ check }: { check: boolean }) {
+    useExtensionStatus({ check });
+    return null;
+  }
+  const dom = fakeDom();
+  dom.install();
+  const realNow = Date.now;
+  let now = 1_000_000;
+  Date.now = () => now;
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    const draw = (check: boolean) =>
+      act(async () => root.render(createElement(RelayContext.Provider, { value }, createElement(Probe, { check }))));
+    const focus = () => act(async () => void dom.emit("focus"));
+    await draw(true);
+    assert.equal(checks, 1);
+    // Right after the check on open: too soon.
+    await focus();
+    assert.equal(checks, 1);
+    now += FOCUS_CHECK_MS;
+    await focus();
+    assert.equal(checks, 2);
+    await focus();
+    assert.equal(checks, 2);
+    // Hidden: a focus does nothing.
+    now += FOCUS_CHECK_MS;
+    dom.setVisibility("hidden");
+    await focus();
+    assert.equal(checks, 2);
+    dom.setVisibility("visible");
+    await focus();
+    assert.equal(checks, 3);
+    // Without check there is no focus listener at all.
+    await draw(false);
+    assert.equal(dom.windowListeners("focus"), 0);
+    await act(async () => root.unmount());
+  } finally {
+    Date.now = realNow;
     dom.uninstall();
   }
 });
