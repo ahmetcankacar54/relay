@@ -1,0 +1,192 @@
+/* The puppet (src/components/Panda.tsx): the root's data attributes pick what shows. */
+.panda [data-expression],
+.panda [data-prop] {
+  display: none;
+}
+.panda[data-expression="open"] [data-expression="open"],
+.panda[data-expression="closed"] [data-expression="closed"],
+.panda[data-expression="happy"] [data-expression="happy"],
+.panda[data-expression="worried"] [data-expression="worried"],
+.panda[data-expression="wide"] [data-expression="wide"],
+.panda[data-props~="bamboo"] [data-prop="bamboo"],
+.panda[data-props~="notebook"] [data-prop="notebook"],
+.panda[data-props~="bowl"] [data-prop="bowl"],
+.panda[data-props~="rumble"] [data-prop="rumble"],
+.panda[data-props~="bang"] [data-prop="bang"],
+.panda[data-props~="fedora"] [data-prop="fedora"],
+.panda[data-props~="mustache"] [data-prop="mustache"],
+.panda[data-props~="sunglasses"] [data-prop="sunglasses"],
+.panda[data-props~="scarf"] [data-prop="scarf"],
+.panda[data-props~="deerstalker"] [data-prop="deerstalker"],
+.panda[data-props~="coat"] [data-prop="coat"],
+.panda[data-props~="z"] [data-prop="z"],
+.panda[data-props~="wheel"] [data-prop="wheel"],
+.panda[data-props~="cursor"] [data-prop="cursor"],
+.panda[data-props~="cursor-bitten"] [data-prop="cursor-bitten"],
+.panda[data-props~="crumbs"] [data-prop="crumbs"] {
+  display: inline;
+}
+
+/* Light motions; parts turn around their pivots (transform-origin from the generator). */
+@media (prefers-reduced-motion: no-preference) {
+  .panda[data-motion~="blink"] [data-part="eyes"] {
+    animation: panda-blink 5s infinite;
+  }
+  .panda[data-motion~="tail"] [data-part="tail"] {
+    animation: panda-tail 3.2s ease-in-out infinite alternate;
+  }
+  .panda[data-motion~="wave"] [data-part="arm-left"] {
+    animation: panda-wave 4s ease-in-out infinite;
+  }
+  .panda[data-motion~="look"] [data-part="head"] {
+    animation: panda-look 7s ease-in-out infinite;
+  }
+  .panda[data-motion~="nod"] [data-part="head"] {
+    animation: panda-nod 3s ease-in-out infinite;
+  }
+  .panda[data-motion~="walk"] [data-part="leg-front"] {
+    animation: panda-step 0.5s ease-in-out infinite alternate;
+  }
+  .panda[data-motion~="walk"] [data-part="leg-back"] {
+    animation: panda-step 0.5s ease-in-out infinite alternate-reverse;
+  }
+  .panda[data-motion~="chew"] [data-part="head"] {
+    animation: panda-chew 0.33s ease-in-out infinite;
+  }
+  .panda[data-motion~="chew"] [data-part="held"] {
+    animation: panda-gnaw 0.33s ease-in-out infinite;
+  }
+  .panda[data-motion~="breathe"] [data-part="body"] {
+    animation: panda-breathe 3.2s ease-in-out infinite;
+  }
+
+  /*
+   * Tricks: a click on a playful panda (src/components/Panda.tsx) sets data-trick for 1.2 s. These rules
+   * come after the plain motions they replace on the same part (same specificity, so the later one wins).
+   * Each trick has keyframes of its own: a rule change that keeps the animation's name would update the
+   * running motion in place, keeping its old start time, and the finished trick would snap the part to rest.
+   */
+  .panda[data-trick="swish"] [data-part="tail"] {
+    animation: panda-swish 1.2s ease-in-out 1;
+  }
+  .panda[data-trick="wave"] [data-part="arm-left"] {
+    animation: panda-wave-once 1.2s ease-in-out 1;
+  }
+  .panda[data-trick="happy"] {
+    animation: panda-happy 1.2s ease-in-out 1;
+  }
+  .panda[data-trick="grumpy"] {
+    animation: panda-grumpy 1.2s ease-in-out 1;
+  }
+  .panda[data-trick="hide"] {
+    animation: panda-hide 1.2s ease-in-out 1;
+  }
+  .panda[data-trick="rawr"] {
+    animation: panda-rawr 1.2s ease-out 1;
+  }
+  /* The peek has no tail and no arm: its swish flicks the ears, and its wave lifts a paw off the edge. */
+  .panda[data-pose="peek"][data-trick="swish"] [data-part="ear-left"] {
+    animation: panda-ear-flick-left 1.2s ease-in-out 1;
+  }
+  .panda[data-pose="peek"][data-trick="swish"] [data-part="ear-right"] {
+    animation: panda-ear-flick-right 1.2s ease-in-out 1;
+  }
+  .panda[data-pose="peek"][data-trick="wave"] [data-part="paw-right"] {
+    animation: panda-paw-wave 1.2s ease-in-out 1;
+  }
+}
+@keyframes panda-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+@keyframes panda-tail {
+  from { transform: rotate(-4deg); }
+  to { transform: rotate(5deg); }
+}
+/* Positive angles swing the viewer's-left arm outwards and up. */
+@keyframes panda-wave {
+  0%, 55%, 100% { transform: rotate(0deg); }
+  65%, 85% { transform: rotate(80deg); }
+  75% { transform: rotate(60deg); }
+}
+@keyframes panda-look {
+  0%, 30%, 100% { transform: rotate(0deg); }
+  40%, 55% { transform: rotate(-6deg); }
+  70%, 85% { transform: rotate(6deg); }
+}
+@keyframes panda-nod {
+  0%, 70%, 100% { transform: rotate(0deg); }
+  80% { transform: rotate(5deg); }
+  90% { transform: rotate(-2deg); }
+}
+@keyframes panda-step {
+  from { transform: rotate(-12deg); }
+  to { transform: rotate(12deg); }
+}
+/* The head dips into each bite; what it holds shakes as it is gnawed. */
+@keyframes panda-chew {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(4deg); }
+}
+@keyframes panda-gnaw {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-7deg); }
+}
+/* The curled body swells and settles about its own pivot. */
+@keyframes panda-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+/*
+ * Tricks that move one part: a wider, faster swing than the idle tail's, to read at 40 px. The tail swings
+ * every 0.15 s (12.5% of the trick's 1.2 s) between -14 and 16 degrees, eases in from rest over the first
+ * 0.075 s and back to rest over the last, so the finished trick leaves it where it was instead of snapping.
+ */
+@keyframes panda-swish {
+  0%, 100% { transform: rotate(0deg); }
+  6.25%, 31.25%, 56.25%, 81.25% { transform: rotate(-14deg); }
+  18.75%, 43.75%, 68.75%, 93.75% { transform: rotate(16deg); }
+}
+/* One raise-and-wave of the arm over the trick's 1.2 s: up, a single dip, down to rest. */
+@keyframes panda-wave-once {
+  0%, 100% { transform: rotate(0deg); }
+  15%, 55% { transform: rotate(80deg); }
+  35% { transform: rotate(60deg); }
+}
+/*
+ * Tricks that move the whole puppet: its root turns about its own centre, and the playful box around it
+ * clips what slides out. The stand pose has about 6% of free canvas above its ears, which the hops stay within.
+ */
+/* A small bounce, smaller than rawr's hop; it shows even when the panda already looks happy. */
+@keyframes panda-happy {
+  0%, 50%, 100% { transform: translateY(0); }
+  25%, 75% { transform: translateY(-2.5%); }
+}
+@keyframes panda-grumpy {
+  0%, 100% { transform: scaleX(1); }
+  15%, 85% { transform: scaleX(-1); }
+}
+@keyframes panda-hide {
+  0%, 100% { transform: translateY(0); }
+  20%, 80% { transform: translateY(78%); }
+}
+/* The ears flick outwards and back three times, from rest to rest. */
+@keyframes panda-ear-flick-left {
+  0%, 30%, 60%, 90%, 100% { transform: rotate(0deg); }
+  15%, 45%, 75% { transform: rotate(-12deg); }
+}
+@keyframes panda-ear-flick-right {
+  0%, 30%, 60%, 90%, 100% { transform: rotate(0deg); }
+  15%, 45%, 75% { transform: rotate(12deg); }
+}
+/* The paw comes up off the edge, waves once and goes back down; it turns about its elbow, behind the card. */
+@keyframes panda-paw-wave {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  20%, 60% { transform: translate(8px, -60px) rotate(16deg); }
+  40% { transform: translate(8px, -60px) rotate(2deg); }
+}
+@keyframes panda-rawr {
+  0%, 50%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-5%); }
+  75% { transform: translateY(-3%); }
+}

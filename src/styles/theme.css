@@ -1,0 +1,167 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./panda.css";
+@import "./switch-stage.css";
+@import "./pranks.css";
+@import "./token-panda.css";
+@import "./card-panda.css";
+@import "./lost-pins.css";
+
+:root {
+  color-scheme: light;
+  --radius: 0.75rem;
+  /* Direction A: a calm, native ground; one orange accent for the primary action and the selection. */
+  --background: #fafaf9;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  --primary: #c2410c;
+  --primary-foreground: #ffffff;
+  --secondary: #f3f2ef;
+  --secondary-foreground: #1d1d1f;
+  --muted: #f3f2ef;
+  /* 4.9:1 on white, 4.7:1 on the ground. */
+  --muted-foreground: #6e6e73;
+  --accent: #fdebdd;
+  --accent-foreground: #c2410c;
+  --destructive: #d92d20;
+  --border: #e7e5e2;
+  --input: #dcdad6;
+  --ring: #c2410c;
+  --sidebar: #f3f2ef;
+  --sidebar-foreground: #1d1d1f;
+  --brand: #c2410c;
+  --track: #efede9;
+  --ok: #1f9d55;
+  /* Success text on light surfaces; --ok is for dots and fills. */
+  --ok-foreground: #166534;
+  --warn: #d97706;
+  --warn-foreground: #92400e;
+  --crit: #d92d20;
+  /* Timeline window tones, one per planned account (cycled). */
+  --tone-1: #c2410c;
+  --tone-2: #2563eb;
+  --tone-3: #9ca3af;
+  --tone-4: #0f766e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: #161514;
+    --foreground: #f2f1ef;
+    --card: #201f1d;
+    --card-foreground: #f2f1ef;
+    --popover: #242321;
+    --popover-foreground: #f2f1ef;
+    --primary: #ff8a4c;
+    --primary-foreground: #1c1b19;
+    --secondary: #2a2927;
+    --secondary-foreground: #f2f1ef;
+    --muted: #2a2927;
+    --muted-foreground: #a3a19c;
+    --accent: #3a2316;
+    --accent-foreground: #ff9a62;
+    --destructive: #ff6159;
+    --border: #2f2d2a;
+    --input: #3a3835;
+    --ring: #ff8a4c;
+    --sidebar: #1b1a18;
+    --sidebar-foreground: #f2f1ef;
+    --brand: #ff8a4c;
+    --track: #3e3c38;
+    --ok: #34c759;
+    --ok-foreground: #6ee7a0;
+    --warn: #f5b83d;
+    --warn-foreground: #f5c35a;
+    --crit: #ff6159;
+    --tone-1: #ff8a4c;
+    --tone-2: #7c9cff;
+    --tone-3: #8e8e93;
+    --tone-4: #3dd6a3;
+  }
+}
+@theme inline {
+  /* The system font (SF Pro on macOS), so Relay reads like the rest of the Mac. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
+  /* The smallest text: 12.5 px, so no main-window text is smaller (panel text stays 12 px or more). */
+  --text-xs: 0.78125rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-brand: var(--brand);
+  --color-track: var(--track);
+  --color-ok: var(--ok);
+  --color-ok-foreground: var(--ok-foreground);
+  --color-warn: var(--warn);
+  --color-warn-foreground: var(--warn-foreground);
+  --color-crit: var(--crit);
+  --color-tone-1: var(--tone-1);
+  --color-tone-2: var(--tone-2);
+  --color-tone-3: var(--tone-3);
+  --color-tone-4: var(--tone-4);
+}
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  h1, h2, h3 {
+    @apply font-display;
+  }
+}
+/*
+ * Reduce motion turns animations and transitions off everywhere: the dialog zoom, the sheet
+ * slide, pulses and the disclosure chevron. A spinner (animate-spin, or [data-spinner]) keeps
+ * turning so a wait still shows; the panda's own rules (panda.css) already honour the setting.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin,
+  [data-spinner] {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+/*
+ * A window nobody sees holds the panda still (src/lib/motion.ts): the hidden menu bar panel,
+ * the main window behind another app. Only the panda's loops pause; one-shot animations that
+ * mount or unmount content (dialogs, the page fade, the confetti) run on, since a paused one
+ * would leave content invisible or a closed dialog's overlay in place.
+ */
+:root[data-motion-paused] .panda,
+:root[data-motion-paused] .panda * {
+  animation-play-state: paused !important;
+}

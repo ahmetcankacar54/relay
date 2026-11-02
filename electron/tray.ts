@@ -1,0 +1,260 @@
+import { Menu, nativeImage, systemPreferences, Tray, type Rectangle } from "electron";
+import {
+  buildTrayMenu,
+  canRequestTraySwitch,
+  trayTitle,
+  trayTooltip,
+  unavailableTrayMenu,
+  type TrayCommand,
+  type TrayLanguage,
+  type TrayMenuItem,
+  type TraySnapshot,
+} from "../shared/tray";
+import { pick } from "./language";
+import { TrayMenuLifecycle } from "./core/tray-menu-lifecycle";
+import { trayIcons } from "./tray-icons";
+import { trayClickAction } from "../shared/tray-panel";
+import { MASCOT_FRAMES, type MascotFrame } from "../shared/mascot-frames";
+import { mascotTrayFrames, mascotTrayFramesDark } from "./mascot-tray-frames";
+import { MascotPlayer } from "./core/mascot-player";
+import { TrayMascot } from "./core/tray-mascot";
+import { refreshTray } from "./core/tray-refresh";
+import { TrayFace } from "./core/tray-face";
+import { placeTray, TRAY_GUID } from "./core/tray-place";
+
+export interface RelayTrayOptions {
+  getSnapshot(): TraySnapshot | Promise<TraySnapshot>;
+  showWindow(): void;
+  /** Confirm natively, then switch Claude Desktop to this saved account. */
+  requestSwitch(profileId: string): void;
+  quit(): void;
+  language?(): TrayLanguage;
+  /** macOS menu bar popover; when present, left click toggles it instead of the menu. */
+  panel?: { toggle(bounds: Rectangle): void; usable(): boolean };
+  /** Whether the menu bar panda may animate (setting and Reduce motion); poses change regardless. */
+  motionAllowed?(): boolean;
+}
+
+function image(
+  representations: readonly { scaleFactor: number; png: string }[],
+  template: boolean,
+) {
+  const icon = nativeImage.createEmpty();
+  for (const representation of representations)
+    icon.addRepresentation({
+      scaleFactor: representation.scaleFactor,
+      buffer: Buffer.from(representation.png, "base64"),
+    });
+  icon.setTemplateImage(template);
+  return icon;
+}
+type MenuBarTone = "light" | "dark";
+/**
+ * Every panda frame for each menu bar, decoded once. macOS tints a template image black on a light
+ * menu bar and white on a dark one; alpha alone cannot say which parts are dark, so the dark menu bar
+ * gets its own set with the tones swapped (a white mask and dark eyes, not their negative).
+ */
+function mascotImages() {
+  const set = (frames: typeof mascotTrayFrames) =>
+    new Map<MascotFrame, Electron.NativeImage>(MASCOT_FRAMES.map((frame) => [frame, image(frames[frame], true)]));
+  return { light: set(mascotTrayFrames), dark: set(mascotTrayFramesDark) } satisfies Record<MenuBarTone, unknown>;
+}
+/**
+ * The menu bar follows macOS's own appearance, not Relay's: the Appearance setting overrides
+ * nativeTheme for Relay's windows only, so the system default is read directly.
+ */
+const menuBarTone = (): MenuBarTone =>
+  systemPreferences.getUserDefault("AppleInterfaceStyle", "string") === "Dark" ? "dark" : "light";
+
+export class RelayTray {
+  private readonly tray: Tray;
+  /** Title, tooltip and image, set only when they change. */
+  private readonly face: TrayFace<Electron.NativeImage>;
+  private menu?: Menu;
+  private readonly mascot?: TrayMascot;
+  /** The panda frame on screen, redrawn in the other set when the appearance changes. */
+  private frame: MascotFrame = "idle";
+  /** The appearance-change subscription, while the panda shows. */
+  private readonly themeSubscription?: number;
+  private revision = 0;
+  private destroyed = false;
+  /**
+   * macOS with a panel: left click opens the popover. The full native menu is
+   * still built but only popped up when the panel failed to load.
+   */
+  private readonly panelMode: boolean;
+  private readonly menuLifecycle = new TrayMenuLifecycle<TrayMenuItem[]>({
+    apply: (items, generation) => this.installMenu(items, generation),
+    schedule: (callback) => setImmediate(callback),
+    onApplyError: () => void this.update(),
+  });
+
+  constructor(private readonly options: RelayTrayOptions) {
+    // macOS shows the panda; other platforms keep the colored R.
+    const frames = process.platform === "darwin" ? mascotImages() : undefined;
+    const icon = frames ? frames[menuBarTone()].get("idle")! : image(trayIcons.color, false);
+    if (process.platform === "darwin") {
+      // A stable id keeps the item's place across starts, clear of the notch (see tray-place.ts).
+      placeTray(systemPreferences);
+      this.tray = new Tray(icon, TRAY_GUID);
+    } else this.tray = new Tray(icon);
+    this.face = new TrayFace(this.tray);
+    this.face.setToolTip("Relay");
+    if (frames) {
+      const show = (frame: MascotFrame) => {
+        this.frame = frame;
+        const tone = menuBarTone();
+        this.face.setImage(`${tone}:${frame}`, () => frames[tone].get(frame)!);
+      };
+      this.mascot = new TrayMascot(
+        new MascotPlayer({ show, motionAllowed: () => options.motionAllowed?.() ?? true }),
+      );
+      this.themeSubscription = systemPreferences.subscribeNotification(
+        "AppleInterfaceThemeChangedNotification",
+        () => {
+          if (!this.destroyed) show(this.frame);
+        },
+      );
+    }
+    const panel = options.panel;
+    this.panelMode = process.platform === "darwin" && !!panel;
+    if (panel && this.panelMode) {
+      this.tray.on("click", () => {
+        if (this.destroyed) return;
+        if (trayClickAction(panel.usable()) === "toggle")
+          panel.toggle(this.tray.getBounds());
+        else if (this.menu) this.tray.popUpContextMenu(this.menu);
+        else this.popUpShortMenu();
+      });
+      this.tray.on("right-click", () => this.popUpShortMenu());
+    } else {
+      // Native context menus are retained for Linux AppIndicator support. Menus
+      // are refreshed by update(); clicks are revalidated against a fresh state.
+      this.tray.on("double-click", () => this.options.showWindow());
+      if (process.platform === "win32")
+        this.tray.on("click", () => this.tray.popUpContextMenu());
+    }
+    void this.update();
+  }
+
+  /** The menu bar icon, for windows that open under it. */
+  bounds(): Rectangle | undefined {
+    return this.destroyed || this.tray.isDestroyed() ? undefined : this.tray.getBounds();
+  }
+
+  update() {
+    const revision = ++this.revision;
+    return refreshTray<TraySnapshot>({
+      current: () => !this.destroyed && revision === this.revision,
+      snapshot: () => this.options.getSnapshot(),
+      mascot: this.mascot,
+      show: (snapshot) => {
+        const language = this.options.language?.() ?? "en";
+        // AppKit leaves 2 pt between the panda and the title; a leading space would widen the gap.
+        if (process.platform === "darwin") this.face.setTitle(trayTitle(snapshot, Date.now(), language));
+        this.face.setToolTip(trayTooltip(snapshot, language));
+        const items = buildTrayMenu(snapshot, language);
+        this.menuLifecycle.update(items, JSON.stringify(items));
+      },
+      unavailable: () => this.showUnavailable(),
+    });
+  }
+
+  /**
+   * Opening Relay remains available if a read-only snapshot fails. A stale
+   * menu must not offer an action against unknown Desktop state.
+   */
+  private showUnavailable() {
+    const items = unavailableTrayMenu(this.options.language?.() ?? "en");
+    try {
+      if (process.platform === "darwin") this.face.setTitle("");
+      this.menuLifecycle.update(items, JSON.stringify(items));
+      this.face.setToolTip("Relay");
+    } catch {
+      // Retain the existing menu if even a native fallback cannot be built.
+      // Every account action still rechecks Desktop state before review.
+    }
+  }
+
+  /** Right click in panel mode: open the main window or quit. */
+  private popUpShortMenu() {
+    if (this.destroyed) return;
+    const t = pick(this.options.language?.() ?? "en");
+    this.tray.popUpContextMenu(
+      Menu.buildFromTemplate([
+        {
+          label: t("Relay’i aç", "Open Relay"),
+          click: () => this.options.showWindow(),
+        },
+        { type: "separator" },
+        {
+          label: t("Relay’den çık", "Quit Relay"),
+          click: () => this.options.quit(),
+        },
+      ]),
+    );
+  }
+
+  private installMenu(items: TrayMenuItem[], generation: number) {
+    const menu = Menu.buildFromTemplate(
+      items.map((item): Electron.MenuItemConstructorOptions =>
+        item.type === "separator"
+          ? item
+          : {
+              type: item.type,
+              label: item.label,
+              checked: item.checked,
+              enabled: item.enabled,
+              ...(item.command
+                ? { click: () => void this.run(item.command!) }
+                : {}),
+            },
+      ),
+    );
+    menu.on("menu-will-show", () => {
+      if (!this.destroyed && this.menu === menu)
+        this.menuLifecycle.opened(generation);
+    });
+    menu.on("menu-will-close", () => {
+      if (!this.destroyed && this.menu === menu)
+        this.menuLifecycle.closed(generation);
+    });
+    const previous = this.menu;
+    this.menu = menu;
+    try {
+      // In panel mode the menu is popped up on demand, never attached, so a
+      // left click reaches the panel.
+      if (!this.panelMode) this.tray.setContextMenu(menu);
+    } catch (error) {
+      this.menu = previous;
+      throw error;
+    }
+  }
+
+  private async run(command: TrayCommand) {
+    if (this.destroyed) return;
+    if (command.type === "show") return this.options.showWindow();
+    if (command.type === "quit") return this.options.quit();
+    try {
+      const snapshot = await this.options.getSnapshot();
+      if (this.destroyed) return;
+      if (canRequestTraySwitch(snapshot, command.profileId))
+        this.options.requestSwitch(command.profileId);
+      else this.options.showWindow();
+    } catch {
+      if (!this.destroyed) this.options.showWindow();
+    }
+    void this.update();
+  }
+
+  destroy() {
+    this.destroyed = true;
+    this.revision++;
+    this.menuLifecycle.destroy();
+    this.mascot?.destroy();
+    if (this.themeSubscription !== undefined)
+      systemPreferences.unsubscribeNotification(this.themeSubscription);
+    if (!this.tray.isDestroyed()) this.tray.destroy();
+    this.menu = undefined;
+  }
+}

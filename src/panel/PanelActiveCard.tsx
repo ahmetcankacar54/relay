@@ -1,0 +1,201 @@
+import { KeyRound, RefreshCw } from "lucide-react";
+import type { AccountUsage } from "../../shared/types";
+import { freshUsage, lastKnownUsage, windowHolds } from "../../shared/usage";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { LimitRings } from "@/components/LimitRings";
+import { StatusDot } from "@/components/StatusDot";
+import { useI18n } from "@/data/i18n";
+import { useRelay, type Relay } from "@/data/relay-context";
+import { pendingFlow, usageWindowRows } from "@/data/selectors";
+import { accountHealth, renewalIssue } from "@/lib/account-health";
+import { formatRelative, formatReset } from "@/lib/time";
+import { planLabel } from "../pages/accounts/accountLabels";
+
+export const panelEyebrow =
+  "mb-1 flex items-center justify-between gap-2 px-1 text-[11.5px] font-medium text-muted-foreground";
+export const panelCard = "rounded-[10px] border bg-card px-3 py-2.5";
+
+/** The pending-Desktop hint links to the accounts page, where it is completed. */
+export const openPendingDesktop = (relay: Pick<Relay, "api">) =>
+  void relay.api.openPage("hesaplar");
+
+/** A reading the card keeps, faded: last known, with neither window reset since. */
+function keepsLastKnown(usage: AccountUsage | undefined, now: number): boolean {
+  return (
+    lastKnownUsage(usage, now) &&
+    [usage.fiveHour, usage.sevenDay].every((w) => !w || windowHolds(w, now))
+  );
+}
+
+/** The account open in Claude Desktop, with its limits. */
+export function PanelActiveCard({ now }: { now: number }) {
+  const relay = useRelay();
+  const { t, language } = useI18n();
+  const { active, desktop } = relay;
+  const running = !!desktop?.running;
+  const usage = active ? relay.data?.usage[active.id] : undefined;
+  const plan = active && planLabel(active);
+  const waiting =
+    !!active &&
+    pendingFlow(relay.data?.authFlows.find((f) => f.accountId === active.id));
+  // The account's status, the one the Accounts page shows, explains limits that cannot be read.
+  const health =
+    active &&
+    accountHealth(
+      active,
+      usage,
+      { active: true, desktopRunning: running, waiting },
+      t,
+    );
+  // A plain refresh cannot clear a locked Keychain or a connection to renew: it has to prompt.
+  const renew = health?.fix === "renew";
+  const readAt = usage?.checkedAt;
+  const fresh = freshUsage(usage, now);
+  // A reading old only because the service could not be reached (or that has just grown old) keeps
+  // its rings, faded on a dashed track, until a window resets; a problem the user must fix does not.
+  const lastKnown = !fresh && !health?.fix && keepsLastKnown(usage, now);
+  const openRelay = () => void relay.api.openPage("genel");
+  const usageButton =
+    active &&
+    (renew ? (
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={
+          renewalIssue(usage) === "keychain-locked"
+            ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+            : t("Yenilemeye izin ver", "Allow renewal")
+        }
+        disabled={relay.usageBusy.has(active.id)}
+        onClick={() => void relay.refreshUsage(active, true)}
+      >
+        <KeyRound />
+      </Button>
+    ) : (
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={t("Limitleri yenile", "Refresh limits")}
+        disabled={relay.usageBusy.has(active.id)}
+        onClick={() => void relay.refreshUsage(active)}
+      >
+        <RefreshCw />
+      </Button>
+    ));
+  const title = active && (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className="truncate text-[13.5px] font-bold" title={active.name}>
+        {active.name}
+      </span>
+      {plan && <Badge variant="secondary">{plan}</Badge>}
+      <span
+        className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+        title={t("Claude uygulamasında açık hesap", "The account open in the Claude app")}
+      >
+        <StatusDot tone={running ? "ok" : "off"} />
+        {running ? t("Claude açık", "Claude open") : t("Claude kapalı", "Claude closed")}
+      </span>
+    </div>
+  );
+  return (
+    <section className="px-3 py-1.5">
+      <div className={panelCard}>
+        {!active ? (
+          <div className="flex flex-wrap items-center gap-1 text-muted-foreground">
+            {t(
+              "Claude uygulamasında kayıtlı hesap açık değil",
+              "No saved account is open in the Claude app",
+            )}{" "}
+            ·
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto px-0 text-[12.5px]"
+              onClick={openRelay}
+            >
+              {t("Relay’i aç", "Open Relay")}
+            </Button>
+          </div>
+        ) : fresh ? (
+          <LimitRings
+            usage={usage}
+            now={now}
+            zone={relay.settings.planning.timeZone}
+            size={72}
+            aside={title}
+          />
+        ) : lastKnown ? (
+          <LimitRings
+            usage={usage}
+            now={now}
+            zone={relay.settings.planning.timeZone}
+            size={72}
+            state="stale"
+            aside={
+              <>
+                {title}
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  {waiting && health
+                    ? health.label
+                    : t(
+                        `Limit verisi eski · ${formatRelative(readAt!, now, language)} okundu`,
+                        `Usage data is out of date · read ${formatRelative(readAt!, now, language)}`,
+                      )}{" "}
+                  · {usageButton}
+                </div>
+              </>
+            }
+          />
+        ) : (
+          <>
+            {title}
+            <div className="mt-1 flex items-center gap-1 text-muted-foreground">
+              {health && health.tone !== "ok"
+                ? health.label
+                : t("Limit verisi eski", "Usage data is out of date")}{" "}
+              ·{usageButton}
+            </div>
+          </>
+        )}
+      </div>
+      {relay.desktopBusy ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running")}
+        </p>
+      ) : desktop?.recoveryRequired ? (
+        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+          {t(
+            "Önce yedeği geri yükle",
+            "Restore the backup first",
+          )}{" "}
+          ·
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto px-0 text-xs"
+            onClick={openRelay}
+          >
+            {t("Relay’i aç", "Open Relay")}
+          </Button>
+        </p>
+      ) : relay.pendingDesktop ? (
+        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+          {t(
+            "Claude uygulaması girişi tamamlanmayı bekliyor",
+            "Claude app sign-in is waiting to be completed",
+          )}{" "}
+          ·
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto px-0 text-xs"
+            onClick={() => openPendingDesktop(relay)}
+          >
+            {t("Relay’i aç", "Open Relay")}
+          </Button>
+        </p>
+      ) : null}
+    </section>
+  );
+}

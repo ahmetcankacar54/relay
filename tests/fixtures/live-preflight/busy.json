@@ -1,0 +1,41 @@
+{
+  "expectedScopeIds": ["desktop-fixture"],
+  "expectedSessions": [
+    {
+      "scopeId": "desktop-fixture",
+      "sessionId": "00000000-0000-0000-0000-000000000001"
+    }
+  ],
+  "rosters": [
+    {
+      "scopeId": "desktop-fixture",
+      "collectedAt": 1791892800000,
+      "includeCompleted": true,
+      "rows": [
+        {
+          "kind": "interactive",
+          "cwd": "/fixture/project",
+          "startedAt": 1791892790000,
+          "pid": 42,
+          "status": "busy",
+          "sessionId": "00000000-0000-0000-0000-000000000001"
+        }
+      ]
+    }
+  ],
+  "children": [
+    {
+      "scopeId": "desktop-fixture",
+      "sessionId": "00000000-0000-0000-0000-000000000001",
+      "collectedAt": 1791892800000,
+      "complete": true,
+      "tasks": [
+        {
+          "id": "background-subagent",
+          "kind": "subagent",
+          "state": "working"
+        }
+      ]
+    }
+  ]
+}

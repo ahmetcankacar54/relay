@@ -1,0 +1,36 @@
+{
+  "name": "@ahmetcankacar/relay",
+  "version": "0.1.0",
+  "description": "Switch the Claude desktop app between saved accounts from the terminal. Unofficial; not affiliated with Anthropic.",
+  "license": "MIT",
+  "author": "Ahmet Can Kacar",
+  "type": "module",
+  "bin": {
+    "relay": "dist/relay.js"
+  },
+  "files": [
+    "dist/relay.js",
+    "dist/relay-cli.js",
+    "README.md",
+    "README.tr.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "os": [
+    "darwin"
+  ],
+  "keywords": [
+    "claude",
+    "claude-desktop",
+    "claude-code",
+    "accounts",
+    "switcher",
+    "macos",
+    "cli"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -1,0 +1,395 @@
+import type {
+  Account,
+  AccountUsage,
+  PlanningSettings,
+} from "../../shared/types";
+import {
+  PACE_WINDOW_MS,
+  replanStarts,
+  todaysPace,
+} from "../../shared/adaptive-plan";
+import type { Forecast } from "../../shared/capacity-plan";
+import {
+  WINDOW_MS,
+  dayPlan,
+  planContext,
+  shiftDate,
+  type DayPlan,
+  type PlanContext,
+} from "../../shared/day-plan";
+import { liveForecast, type LiveInput } from "../../shared/live-forecast";
+import { localDate } from "../../shared/planning";
+import type { Tempo } from "../../shared/tempo";
+import { freshUsage } from "../../shared/usage";
+import { sameReset } from "../../shared/usage-rollups";
+import type { UsageSample } from "../../shared/usage-statistics";
+
+const MINUTE_MS = 60_000;
+/** At most one search, and one check whether to drop the schedule, this often. */
+export const SEARCH_EVERY_MS = 15 * MINUTE_MS;
+/** At most one notice this often. */
+export const NOTIFY_EVERY_MS = 30 * MINUTE_MS;
+// This many more minutes without quota than the plan makes a forecast worse.
+const WORSE_BY_MINUTES = 5;
+// A warm-up still not started this long after its time was missed (the Mac
+// slept), rather than being on its way with the keeper's next tick.
+const MISSED_MS = 10 * MINUTE_MS;
+
+export interface AdaptiveInput {
+  /** Planned accounts only (deleted ones filtered out). */
+  settings: PlanningSettings;
+  accounts: Account[];
+  usage: Record<string, AccountUsage>;
+  tempo: Tempo;
+  /** Raw usage samples of the last hour: today's pace. */
+  recentSamples: UsageSample[];
+  /** The account Claude Desktop uses now. */
+  activeId?: string;
+  /** Accounts the keeper cannot start now; they keep their default start. */
+  blocked: string[];
+  now: number;
+}
+export interface AdaptiveNotice {
+  kind: "updated" | "normal";
+  schedule: Record<string, number>;
+}
+export interface AdaptiveResult {
+  /** accountId → next window start, only where it differs from the default. */
+  schedule: Record<string, number>;
+  /** Today's pace multiplier for the tempo. */
+  factor: number;
+  /** Pro units an hour over the last hour, when observed long enough. */
+  observedRate?: number;
+  /** When the current schedule was adopted. */
+  since?: number;
+  /** Set when the user should hear about a change (already throttled). */
+  notice?: AdaptiveNotice;
+}
+
+type Schedule = Record<string, number>;
+const empty = (schedule: Schedule) => !Object.keys(schedule).length;
+/** The accounts and their times, comparable across objects. */
+const key = (schedule: Schedule) =>
+  Object.entries(schedule)
+    .map(([id, time]) => `${id}@${time}`)
+    .sort()
+    .join(",");
+const unmet = (forecast: Forecast) => Math.round(forecast.unmet * 2) / 2;
+/** Strictly better on unmet demand (to half a Pro unit), then on switches. */
+const beats = (a: Forecast, b: Forecast) =>
+  unmet(a) < unmet(b) || (unmet(a) === unmet(b) && a.switches < b.switches);
+/**
+ * The schedule still beats the default with live times exactly as read. Near
+ * times count as the plan's own, so two resets a minute apart can become one
+ * instant at which the simulation refills the larger account first; a gain
+ * that rests on that tie is none.
+ */
+const winsAsRead = (live: LiveInput, schedule: Schedule) =>
+  empty(schedule) ||
+  beats(
+    liveForecast({ ...live, schedule, exact: true })!,
+    liveForecast({ ...live, exact: true })!,
+  );
+
+/** The plan's own forecast in [from, to): minutes without quota and switches. */
+function planAfter(forecast: Forecast, from: number, to: number) {
+  let outage = 0;
+  let switches = 0;
+  let last: string | undefined;
+  for (const s of forecast.segments) {
+    if (s.to <= from || s.from >= to) continue;
+    if (!s.accountId) outage += Math.min(s.to, to) - Math.max(s.from, from);
+    else {
+      if (last !== undefined && s.accountId !== last) switches++;
+      last = s.accountId;
+    }
+  }
+  return { outageMinutes: outage / MINUTE_MS, switches };
+}
+
+/**
+ * The plan in force at `now`: yesterday's, today's or tomorrow's (first
+ * match) from its first warm-up to the end of its work.
+ */
+function planAt(
+  { settings, usage, now }: AdaptiveInput,
+  context: PlanContext,
+): DayPlan | undefined {
+  // Live resets place the window chain as the Planning page draws it.
+  const live = Object.fromEntries(
+    Object.entries(usage).map(([id, u]) => [
+      id,
+      Date.parse(u.fiveHour?.resetsAt ?? "") || undefined,
+    ]),
+  );
+  const today = localDate(now, settings.timeZone);
+  for (const delta of [-1, 0, 1]) {
+    const plan = dayPlan(shiftDate(today, delta), settings, context, live);
+    const interval = plan.interval;
+    if (!interval || !plan.forecast) continue;
+    const first = Math.min(
+      interval.start,
+      ...plan.accounts.map((a) => a.activeFrom),
+    );
+    if (first <= now && now < interval.end) return plan;
+  }
+}
+
+/** A planned account the keeper could start is still closed well after its warm-up time. */
+function missedWarmUp(plan: DayPlan, { usage, blocked, now }: AdaptiveInput) {
+  return plan.accounts.some((p) => {
+    const u = usage[p.accountId];
+    return (
+      now - p.activeFrom >= MISSED_MS &&
+      !blocked.includes(p.accountId) &&
+      freshUsage(u, now) &&
+      !u.fiveHour?.resetsAt
+    );
+  });
+}
+
+/**
+ * Each planned account's next window start for the rest of the plan in
+ * force (from its first warm-up to the end of work), re-chosen only when the
+ * live forecast falls behind the plan's own. A search result is adopted only
+ * when strictly better than the schedule held, and than the default with live
+ * times exactly as read; the schedule is dropped once the default does as
+ * well at two reviews in a row, unless every start left comes before the next
+ * review; reviews come at most every 15 minutes. Turning adaptation or auto
+ * start off, and a planning edit (`reset`), drop it without a notice.
+ * Kept in memory; the keeper updates it before its decisions.
+ */
+export class AdaptiveSchedule {
+  private schedule: Schedule = {};
+  /** What the user last heard, less the entries dropped quietly since. */
+  private announced: Schedule = {};
+  private since?: number;
+  private date?: string;
+  private lastUpdate?: number;
+  /** The last search or check whether to drop the schedule. */
+  private lastReview?: number;
+  /** The default did as well as the schedule held at the last review. */
+  private defaultNoWorse = false;
+  private lastNotice?: number;
+  /**
+   * The user turned adaptation off or edited the plan: what they last heard
+   * may go without a notice. At the next update with adaptation on it stands
+   * only where the schedule still holds it.
+   */
+  private quiet = false;
+  private last: AdaptiveResult = { schedule: {}, factor: 1 };
+  private readonly now: () => number;
+  private readonly search: typeof replanStarts;
+  constructor(
+    options: { now?: () => number; search?: typeof replanStarts } = {},
+  ) {
+    this.now = options.now ?? Date.now;
+    this.search = options.search ?? replanStarts;
+  }
+
+  update(input: AdaptiveInput): AdaptiveResult {
+    const { settings, usage, now } = input;
+    // A clock moved back leaves every kept time meaningless.
+    if (this.lastUpdate !== undefined && now < this.lastUpdate) {
+      this.restart();
+      // The last notice counts as just now.
+      if (this.lastNotice !== undefined)
+        this.lastNotice = Math.min(this.lastNotice, now);
+    }
+    this.lastUpdate = now;
+    const on = settings.adaptive !== false && settings.autoStart;
+    if (!on) this.quiet = true;
+    const context = planContext(input.accounts, input.tempo);
+    const plan = on ? planAt(input, context) : undefined;
+    if (plan && plan.date !== this.date) {
+      this.restart();
+      this.date = plan.date;
+    }
+    // Dropped quietly: starts whose time came (the keeper starts them now),
+    // accounts used by hand, accounts no longer planned, and outside the plan
+    // whatever is left.
+    const planned = new Set(settings.accounts.map((a) => a.id));
+    for (const [id, time] of Object.entries(this.schedule))
+      if (
+        (on && !plan) ||
+        time <= now ||
+        !planned.has(id) ||
+        this.usedByHand(usage[id], now)
+      ) {
+        delete this.schedule[id];
+        delete this.announced[id];
+        // What the last review compared is gone.
+        this.defaultNoWorse = false;
+      }
+    if (empty(this.schedule)) this.since = undefined;
+    for (const [id, time] of Object.entries(this.announced))
+      if (time <= now || !planned.has(id)) delete this.announced[id];
+    let factor = 1;
+    let observed: number | undefined;
+    // Turned off (or outside the plan): dropped.
+    if (!plan) this.clear();
+    else {
+      const pace = todaysPace({
+        samples: input.recentSamples,
+        accounts: input.accounts.filter((a) => planned.has(a.id)),
+        tempo: input.tempo,
+        settings,
+        from: now - PACE_WINDOW_MS,
+        // `to` is exclusive: a sample read just now counts.
+        to: now + 1,
+      });
+      factor = pace.factor;
+      observed = pace.observed;
+      const live = {
+        plan,
+        settings,
+        context,
+        usage,
+        activeId: input.activeId,
+        now,
+        factor,
+      } satisfies LiveInput;
+      let current = liveForecast({ ...live, schedule: this.schedule })!;
+      const reference = planAfter(plan.forecast!, now, plan.interval!.end);
+      const worse =
+        current.outageMinutes >= reference.outageMinutes + WORSE_BY_MINUTES ||
+        current.switches > reference.switches;
+      const due =
+        this.lastReview === undefined ||
+        now - this.lastReview >= SEARCH_EVERY_MS;
+      // Before work a search is worth it only when a warm-up was missed;
+      // otherwise the keeper is still warming the windows up as planned.
+      const search =
+        worse && (now >= plan.interval!.start || missedWarmUp(plan, input));
+      if (due && (search || !empty(this.schedule))) {
+        this.lastReview = now;
+        if (search) {
+          const replan = this.search({ ...live, blocked: input.blocked });
+          if (
+            replan &&
+            beats(replan.forecast, current) &&
+            winsAsRead(live, replan.schedule)
+          ) {
+            this.adopt(replan.schedule, now);
+            current = replan.forecast;
+          }
+        }
+        // The pace dropped, or the day turned out fine: the default does as
+        // well. Only two reviews in a row clear the schedule, so a single
+        // read on the wrong side of a reset cannot flap it. When every start
+        // left comes before the next review, it goes then, quietly, rather
+        // than with "back to normal" now.
+        if (!empty(this.schedule)) {
+          if (beats(current, liveForecast(live)!)) this.defaultNoWorse = false;
+          else if (!this.defaultNoWorse) this.defaultNoWorse = true;
+          else if (
+            Object.values(this.schedule).some(
+              (time) => time - now > SEARCH_EVERY_MS,
+            )
+          )
+            this.clear();
+        }
+      }
+    }
+    if (on && this.quiet) {
+      this.announced = Object.fromEntries(
+        Object.entries(this.announced).filter(
+          ([id, time]) => this.schedule[id] === time,
+        ),
+      );
+      this.quiet = false;
+    }
+    return this.finish(now, factor, observed, on);
+  }
+
+  /**
+   * The plan was edited: nothing adopted still applies. It goes without a
+   * notice, and the next update reviews the day at once.
+   */
+  reset() {
+    this.restart();
+    this.quiet = true;
+    this.last = { ...this.last, schedule: {} };
+    delete this.last.since;
+  }
+
+  /** The last result without its notice, less any start whose time has come. */
+  current(): AdaptiveResult {
+    const now = this.now();
+    const { since, ...rest } = this.last;
+    const schedule = Object.fromEntries(
+      Object.entries(rest.schedule).filter(([, time]) => time > now),
+    );
+    return {
+      ...rest,
+      schedule,
+      ...(since === undefined || empty(schedule) ? {} : { since }),
+    };
+  }
+
+  /**
+   * The result; a notice when the schedule differs from what the user last
+   * heard, never while adaptation is off.
+   */
+  private finish(
+    now: number,
+    factor: number,
+    observed: number | undefined,
+    on: boolean,
+  ): AdaptiveResult {
+    this.last = {
+      schedule: { ...this.schedule },
+      factor,
+      ...(observed === undefined ? {} : { observedRate: observed }),
+      ...(this.since === undefined ? {} : { since: this.since }),
+    };
+    if (
+      !on ||
+      key(this.schedule) === key(this.announced) ||
+      (this.lastNotice !== undefined && now - this.lastNotice < NOTIFY_EVERY_MS)
+    )
+      return this.last;
+    this.lastNotice = now;
+    this.announced = { ...this.schedule };
+    return {
+      ...this.last,
+      notice: {
+        kind: empty(this.schedule) ? "normal" : "updated",
+        schedule: { ...this.schedule },
+      },
+    };
+  }
+
+  /**
+   * The account runs a window opened after the adoption: someone used it. A
+   * window that opened by the adoption, give or take the jitter of reported
+   * resets, does not count.
+   */
+  private usedByHand(usage: AccountUsage | undefined, now: number) {
+    const resetsAt = usage?.fiveHour?.resetsAt;
+    if (this.since === undefined || !freshUsage(usage, now) || !resetsAt)
+      return false;
+    return (
+      Date.parse(resetsAt) - WINDOW_MS > this.since &&
+      !sameReset(resetsAt, new Date(this.since + WINDOW_MS).toISOString())
+    );
+  }
+
+  private adopt(schedule: Schedule, now: number) {
+    this.schedule = { ...schedule };
+    this.since = empty(schedule) ? undefined : now;
+    this.defaultNoWorse = false;
+  }
+
+  private clear() {
+    this.schedule = {};
+    this.since = undefined;
+    this.defaultNoWorse = false;
+  }
+
+  /** A new plan date or a clock moved back: nothing kept still applies. */
+  private restart() {
+    this.clear();
+    this.lastReview = undefined;
+  }
+}

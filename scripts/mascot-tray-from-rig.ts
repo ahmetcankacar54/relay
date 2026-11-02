@@ -1,0 +1,179 @@
+/**
+ * Builds the menu bar frames (assets/mascot/source/tray/*.png) from the puppet rig's head
+ * (assets/mascot/source/rig/head.svg), so the menu bar shows the same red panda as the app
+ * instead of a hand-drawn stand-in. A template image has alpha only, so the mascot's colours
+ * become three tones: the dark brown (eyes, nose, mouth, inner ears) is solid, the orange fur is
+ * half-transparent, and the cream (cheek mask, brow spots, muzzle, ear rims, eye glints) is cut
+ * out. Each frame picks one of the rig's expressions; "!" and "z" sit beside the head as before.
+ *
+ * A dark menu bar tints the template white, which would turn that face into its negative (white
+ * eyes in a dark mask), so a second set (assets/mascot/source/tray-dark/*.png) maps the tones the
+ * other way: the cream is solid, the fur three quarters, and the dark brown is cut out.
+ *
+ *   node --import tsx scripts/mascot-tray-from-rig.ts && npm run mascot
+ */
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import sharp, { type OverlayOptions } from "sharp";
+import { MASCOT_FRAME_SIZE, type MascotFrame } from "../shared/mascot-frames";
+
+const root = path.resolve(import.meta.dirname, "..");
+const RIG_HEAD = path.join(root, "assets/mascot/source/rig/head.svg");
+const TRAY = path.join(root, "assets/mascot/source/tray");
+const TRAY_DARK = path.join(root, "assets/mascot/source/tray-dark");
+type Polarity = "light" | "dark";
+
+type Expression = "open" | "closed" | "happy" | "worried" | "wide";
+
+/** The rig expression each frame shows, and the mark beside it. */
+const FRAMES: Record<MascotFrame, { expression: Expression; mark?: keyof typeof MARKS }> = {
+  idle: { expression: "open" },
+  blink: { expression: "closed" },
+  // The limit is close or reached: big, startled eyes.
+  hungry: { expression: "wide" },
+  sleep: { expression: "closed", mark: "z" },
+  alert: { expression: "open", mark: "bang" },
+  // A Desktop operation (a switch) runs: a happy panda.
+  away: { expression: "happy" },
+  // The five-hour window is used up: the startled eyes, and a clock for the time it reopens.
+  full: { expression: "wide", mark: "clock" },
+};
+
+/**
+ * The marks, in frame points (24 × 20), as in the frames they replace; the "z" half a point further left, so
+ * its edge does not end on the 23 pt line, where scaling to 1x would smear it into a 24th point. The clock is a
+ * ring (its inner circle runs the other way, so it is a hole) with its two hands, inside the same 19.5–22.5 pt
+ * column as the "z" plus a point to the left for the ring to read.
+ */
+const MARKS = {
+  bang: "M 20.75 2 H 22.25 V 7 H 20.75 Z M 20.75 9.25 A 0.75 0.75 0 1 0 22.25 9.25 A 0.75 0.75 0 1 0 20.75 9.25 Z",
+  z: "M 19.5 2 H 22.5 V 3.5 H 19.5 Z M 21.107 2.614 L 22.393 3.386 L 20.893 5.886 L 19.607 5.114 Z M 19.5 5 H 22.5 V 6.5 H 19.5 Z",
+  clock:
+    "M 18.5 4.25 A 2 2 0 1 1 22.5 4.25 A 2 2 0 1 1 18.5 4.25 Z M 19.2 4.25 A 1.3 1.3 0 1 0 21.8 4.25 A 1.3 1.3 0 1 0 19.2 4.25 Z " +
+    "M 20.2 3.1 H 20.8 V 4.55 H 20.2 Z M 20.8 3.95 H 21.4 V 4.55 H 20.8 Z",
+};
+
+/** The head's extent in the rig's 512 canvas: ear tips to chin, cheek tuft to cheek tuft. */
+const HEAD_BOX = { x: 22, y: 36, width: 468, height: 420 };
+/** The head in the frame, in points: 19 pt wide from the left edge, centred on the 20 pt height. */
+const HEAD_WIDTH = 19;
+
+const SCALE = 3;
+/** Rendered this much larger than the 3x frame, then reduced, for clean edges. */
+const SUPERSAMPLE = 8;
+
+/** The rig's head with one expression shown and every other expression and prop hidden. */
+function withExpression(svg: string, expression: Expression) {
+  return svg
+    .replace(/(<g data-expression="(\w+)")(?: style="display:none")?/g, (_, open: string, name: string) =>
+      name === expression ? open : `${open} style="display:none"`,
+    )
+    .replace(/(<g data-prop="\w+")(?: style="display:none")?/g, '$1 style="display:none"');
+}
+
+/** CIE L* (0–100) of an sRGB colour. */
+function lightness(r: number, g: number, b: number) {
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const y = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return y > 216 / 24389 ? 116 * Math.cbrt(y) - 16 : (24389 / 27) * y;
+}
+
+/**
+ * The template tone of a mascot colour by its lightness: cream (L* ≈ 94) is a hole, the fur's
+ * orange and its darker shade (L* ≈ 47–62) half, the dark brown (L* ≈ 20) solid. Edges between
+ * them fall in between.
+ */
+function tone(l: number) {
+  if (l >= 88) return 0;
+  if (l >= 66) return ((88 - l) / 22) * 0.5;
+  if (l >= 40) return 0.5;
+  if (l >= 26) return 0.5 + ((40 - l) / 14) * 0.5;
+  return 1;
+}
+
+/** Prototyping overrides: `--dark-fur=0.75 --dark-out=<dir>` writes only the dark set there. */
+const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
+/**
+ * The fur's tone on a dark menu bar. Half, as on a light one, sank into a busy wallpaper next to
+ * the white percent; three quarters reads clearly and still keeps the white mask apart from it.
+ * Fully solid lost the mask and looked like a cat.
+ */
+const DARK_FUR = Number(arg("dark-fur") ?? 0.75);
+
+/** The tone for a dark menu bar: the cream solid, the fur at DARK_FUR, the dark brown cut out. */
+function darkTone(l: number) {
+  if (l >= 88) return 1;
+  if (l >= 66) return DARK_FUR + ((l - 66) / 22) * (1 - DARK_FUR);
+  if (l >= 40) return DARK_FUR;
+  if (l >= 26) return (DARK_FUR * (l - 26)) / 14;
+  return 0;
+}
+
+async function headLayer(expression: Expression, polarity: Polarity) {
+  const toneOf = polarity === "dark" ? darkTone : tone;
+  const svg = withExpression(await readFile(RIG_HEAD, "utf8"), expression);
+  const px = HEAD_WIDTH * SCALE * SUPERSAMPLE;
+  const height = Math.round((px * HEAD_BOX.height) / HEAD_BOX.width);
+  const cropped = svg.replace(
+    /viewBox="[^"]*"/,
+    `viewBox="${HEAD_BOX.x} ${HEAD_BOX.y} ${HEAD_BOX.width} ${HEAD_BOX.height}" width="${px}" height="${height}"`,
+  );
+  const { data, info } = await sharp(Buffer.from(cropped), { density: 72 * 4 })
+    .resize(px, height, { fit: "fill" })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const out = Buffer.alloc(info.width * info.height * 4);
+  for (let i = 0, o = 0; i < data.length; i += info.channels, o += 4) {
+    const alpha = data[i + 3] / 255;
+    out[o + 3] = Math.round(255 * alpha * toneOf(lightness(data[i], data[i + 1], data[i + 2])));
+  }
+  return sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } })
+    .resize(HEAD_WIDTH * SCALE, Math.round((HEAD_WIDTH * SCALE * HEAD_BOX.height) / HEAD_BOX.width), {
+      kernel: "lanczos3",
+    })
+    .png()
+    .toBuffer();
+}
+
+async function frame(name: MascotFrame, polarity: Polarity) {
+  const { expression, mark } = FRAMES[name];
+  const width = MASCOT_FRAME_SIZE.width * SCALE;
+  const height = MASCOT_FRAME_SIZE.height * SCALE;
+  const head = await headLayer(expression, polarity);
+  const headHeight = (await sharp(head).metadata()).height ?? height;
+  const layers: OverlayOptions[] = [
+    { input: head, left: 0, top: Math.round((height - headHeight) / 2) },
+  ];
+  if (mark)
+    layers.push({
+      input: Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 20" width="${width}" height="${height}"><path fill="#000" d="${MARKS[mark]}"/></svg>`,
+      ),
+      left: 0,
+      top: 0,
+    });
+  const png = await sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite(layers)
+    .png()
+    .toBuffer();
+  const dir = polarity === "dark" ? (arg("dark-out") ?? TRAY_DARK) : TRAY;
+  await mkdir(dir, { recursive: true });
+  await rm(path.join(dir, `${name}.svg`), { force: true });
+  await writeFile(path.join(dir, `${name}.png`), png);
+}
+
+async function main() {
+  // With --dark-out only the dark set is written there, for comparing variants.
+  const polarities = arg("dark-out") ? (["dark"] as const) : (["light", "dark"] as const);
+  for (const name of Object.keys(FRAMES) as MascotFrame[])
+    for (const polarity of polarities) await frame(name, polarity);
+  console.log("Built the menu bar frames from the rig's head. Run npm run mascot next.");
+}
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

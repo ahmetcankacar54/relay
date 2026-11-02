@@ -1,0 +1,84 @@
+/* The prank stage (src/pranks/PrankStage.tsx). Every animation property goes inside the reduced-motion "no-preference" block below. */
+/* The nibble prank hides the real cursor while a drawn one flies; the stage always takes this class off again. */
+.prank-cursor-hidden,
+.prank-cursor-hidden * {
+  cursor: none !important;
+}
+
+/* The confetti: bamboo leaves above the window, each placed and delayed by its inline style. The delays reach 0.715 s,
+   so with a 1.2 s fall the last leaf lands within CONFETTI_MS. Without motion the leaves stay unseen. */
+.prank-leaf {
+  position: absolute;
+  top: -24px;
+  width: 10px;
+  height: 18px;
+  border-radius: 0 100% 0 100%;
+  background: #7aa65a;
+  opacity: 0;
+}
+.prank-leaf:nth-child(even) {
+  background: #9cc06b;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .prank-leaf {
+    animation-name: prank-leaf-fall;
+    animation-duration: 1.2s;
+    animation-timing-function: ease-in;
+    animation-fill-mode: backwards;
+  }
+
+  /* The nibbling panda slides in from its edge over the peek's 250 ms and out over the withdraw's 200 ms. It sits in
+     its own turned box, so "down" is toward the edge it peeks from. */
+  .prank-nibble-panda[data-phase="peek"] {
+    animation-name: prank-nibble-peek;
+    animation-duration: 250ms;
+    animation-timing-function: ease-out;
+    animation-fill-mode: backwards;
+  }
+  .prank-nibble-panda[data-phase="withdraw"] {
+    animation-name: prank-nibble-withdraw;
+    animation-duration: 200ms;
+    animation-timing-function: ease-in;
+    animation-fill-mode: forwards;
+  }
+  /* Three nibbles fit the chew phase's 600 ms only at 200 ms a bite; the plain chew motion (src/styles/panda.css) takes
+     0.33 s. The extra class wins over its shorthand, whatever order the sheets load in. */
+  .prank-nibble-panda .panda[data-motion~="chew"] [data-part="head"],
+  .prank-nibble-panda .panda[data-motion~="chew"] [data-part="held"] {
+    animation-duration: 200ms;
+  }
+  /* The wheel's panda runs: its legs step in 0.2 s, not the walk motion's 0.5 s (src/styles/panda.css). The extra class
+     wins over that shorthand, whatever order the sheets load in. Only the pace changes, and the wheel itself stays still. */
+  .prank-wheel .panda[data-motion~="walk"] [data-part="leg-front"],
+  .prank-wheel .panda[data-motion~="walk"] [data-part="leg-back"] {
+    animation-duration: 0.2s;
+  }
+  /* The drawn cursor flies to the panda over the fly-in's 200 ms (the same element moves), and back from the panda's
+     hand over the fly-out's 250 ms (a new element, so it starts from a custom property). */
+  .prank-cursor[data-flight="in"] {
+    transition-property: transform;
+    transition-duration: 200ms;
+    transition-timing-function: ease-in-out;
+  }
+  .prank-cursor[data-flight="out"] {
+    animation-name: prank-cursor-fly-out;
+    animation-duration: 250ms;
+    animation-timing-function: ease-in-out;
+    animation-fill-mode: backwards;
+  }
+}
+@keyframes prank-nibble-peek {
+  from { transform: translateY(100%); }
+}
+@keyframes prank-nibble-withdraw {
+  to { transform: translateY(100%); }
+}
+@keyframes prank-cursor-fly-out {
+  from { transform: translate(var(--prank-from-x), var(--prank-from-y)); }
+}
+@keyframes prank-leaf-fall {
+  from { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+  40% { transform: translate3d(14px, 40vh, 0) rotate(150deg); }
+  70% { transform: translate3d(-10px, 75vh, 0) rotate(260deg); }
+  to { transform: translate3d(6px, 110vh, 0) rotate(380deg); opacity: 1; }
+}
