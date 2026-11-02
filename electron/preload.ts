@@ -85,6 +85,7 @@ const api: RelayAPI = {
   desktopHistorySummary: (id) =>
     ipcRenderer.invoke("relay:desktop-history-summary", id),
   openDesktop: () => ipcRenderer.invoke("relay:open-desktop"),
+  openCodeTab: () => ipcRenderer.invoke("relay:open-code-tab"),
   recoverDesktop: () => ipcRenderer.invoke("relay:recover-desktop"),
   panelSnapshot: () => ipcRenderer.invoke("relay:panel-snapshot"),
   snapshot: () => ipcRenderer.invoke("relay:snapshot"),

@@ -327,6 +327,8 @@ export interface RelayAPI {
   syncDesktopHistory(profileId: string): Promise<void>;
   desktopHistorySummary(profileId: string): Promise<DesktopHistorySummary>;
   openDesktop(): Promise<void>;
+  /** Opens Claude on Code's new-session screen, which creates the account's Code workspace. */
+  openCodeTab(): Promise<void>;
   recoverDesktop(): Promise<void>;
   snapshot(): Promise<Snapshot>;
   panelSnapshot(): Promise<Snapshot>;

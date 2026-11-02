@@ -65,10 +65,10 @@ export function SetupChecklist() {
           size="sm"
           disabled={relay.desktopBusy}
           onClick={() =>
-            void relay.action("open", () => relay.api.openDesktop())
+            void relay.action("open", () => relay.api.openCodeTab())
           }
         >
-          {t("Claude uygulamasını aç", "Open the Claude app")}
+          {t("Code’u aç", "Open Code")}
         </Button>
       ),
     },

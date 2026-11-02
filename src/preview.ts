@@ -708,6 +708,7 @@ export const previewApi: RelayAPI = {
     checkedAt: new Date().toISOString(),
   }),
   openDesktop: desktopOnly,
+  openCodeTab: desktopOnly,
   recoverDesktop: desktopOnly,
   panelSnapshot: async () => structuredClone(state),
   usageStatistics: async ({ range, accountId }) =>

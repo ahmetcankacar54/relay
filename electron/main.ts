@@ -22,6 +22,7 @@ import {
   forgetsApproval,
 } from "./core/install-location";
 import { runDetached } from "./core/detached-exec";
+import { openCodeTab } from "./core/code-tab";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
@@ -1868,6 +1869,20 @@ function bindIPC() {
     desktop.historySummary(id.parse(profileId)),
   );
   handle("open-desktop", () => manualDesktopLock(() => desktop.open()));
+  // Setup's "Open Code": the fixed claude:// link to Code's new-session screen, macOS only.
+  handle("open-code-tab", () =>
+    manualDesktopLock(async () => {
+      if (process.platform !== "darwin") return desktop.open();
+      await openCodeTab({
+        open: () => desktop.open(),
+        booted: claudePageBooted,
+        running: async () => (await desktop.snapshot()).running,
+        openLink: (url) => shell.openExternal(url),
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        now: Date.now,
+      });
+    }),
+  );
   handle("recover-desktop", () => manualDesktopLock(() => desktop.recover()));
   handle("update-settings", (input) => {
     if (desktop.isBusy || desktopLock.busy)

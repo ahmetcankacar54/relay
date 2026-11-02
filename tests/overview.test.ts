@@ -512,9 +512,9 @@ test("met prerequisites are ticked and the list hides once all three are met", (
   const partial = checklist(render(firstRun()));
   assert.match(item(partial, "desktop"), /data-met="true"[\s\S]*Bulundu/);
   assert.doesNotMatch(item(partial, "desktop"), /İndir/);
-  // With the Claude app there, the Code step can open it.
-  assert.match(item(partial, "code"), /<button[^>]*>Claude uygulamasını aç<\/button>/);
-  assert.match(item(checklist(render(firstRun({ desktop: { running: true } }))), "code"), /<button[^>]*>Claude uygulamasını aç<\/button>/);
+  // With the Claude app there, the Code step opens Claude on Code.
+  assert.match(item(partial, "code"), /<button[^>]*>Code’u aç<\/button>/);
+  assert.match(item(checklist(render(firstRun({ desktop: { running: true } }))), "code"), /<button[^>]*>Code’u aç<\/button>/);
   const ready = render(
     firstRun({
       desktop: { currentAccountUuid: "00000000-0000-4000-8000-000000000001", organizations: ["00000000-0000-4000-8000-000000000002"] },
