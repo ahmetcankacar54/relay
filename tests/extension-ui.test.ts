@@ -248,19 +248,26 @@ test("the settings card shows the mode with its sentence, the instance, the star
   // Nothing chosen yet: Relay only guides.
   const guided = render(
     relayFor("darwin", [vertex]),
-    createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "guide" } }) }),
+    createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "guide" } }), openDetails: true }),
   );
   assert.match(guided, /Sadece haber ver/);
   assert.match(guided, /Geçişte Relay tarayıcıda ve eklentide hiçbir şeyi değiştirmez/);
   assert.match(guided, /menü çubuğu panelinde “Geçir” çıkar/);
-  assert.match(guided, /aynı hesaba geçmesi için Relay o oturumu da değiştirebilir; sen seçmedikçe hiçbir şeyi değiştirmez/);
   assert.doesNotMatch(guided, /claude\.ai oturumunu da değiştirir/);
   const html = render(
     relayFor("darwin", [vertex], { mode: "restart" }),
-    createElement(ExtensionPreference, { initialStatus: status() }),
+    createElement(ExtensionPreference, { initialStatus: status(), openDetails: true }),
   );
   assert.match(html, /Claude tarayıcı eklentisi/);
-  assert.match(html, /Eklentinin hesabını da değiştir · tarayıcıyı kapatıp aç/);
+  assert.match(html, />Tarayıcıyı kapatıp aç</);
+  // Closed, Gelişmiş keeps the profile, Sync now and the long sentences out of sight.
+  const closed = render(
+    relayFor("darwin", [vertex], { mode: "restart" }),
+    createElement(ExtensionPreference, { initialStatus: status() }),
+  );
+  assert.match(closed, /Eklenti de geçsin/);
+  assert.match(closed, />Gelişmiş</);
+  assert.doesNotMatch(closed, /Şimdi eşitle|Açık bir tarayıcıyı kısa süreliğine/);
   assert.match(html, /Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar/);
   assert.match(html, /claude\.ai oturumunu da değiştirir/);
   assert.match(html, /Brave · Kişisel · eklenti yüklü/);
@@ -306,7 +313,7 @@ test("a pair is complete only with the extension's hints and the claude.ai login
   assert.deepEqual(pairedAccounts(status({ saved: [], cookiesSaved: [] }), accounts), { paired: [], half: [] });
   const html = render(
     relayFor("darwin", accounts, { mode: "closed" }),
-    createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "closed" }, saved: [saved(1), saved(2)], cookiesSaved: [saved(1), saved(3)] }) }),
+    createElement(ExtensionPreference, { initialStatus: status({ setting: { mode: "closed" }, saved: [saved(1), saved(2)], cookiesSaved: [saved(1), saved(3)] }), openDetails: true }),
     "en",
   );
   assert.match(html, /Saved accounts/);

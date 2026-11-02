@@ -265,8 +265,8 @@ function SidebarSections() {
         icon={<ListTree />}
         title={t("Kenar çubuğu bölümleri", "Sidebar sections")}
         description={t(
-          "Claude’un Code kenar çubuğundaki bölümler hesaba göre saklanır; geçtiğin hesapta eksik olanları bir Code oturumu talimatla kurar.",
-          "Claude keeps the Code sidebar’s sections per account; a Code session sets up the ones the account you switched to lacks, from a recipe.",
+          "Geçtiğin hesapta eksik bölümleri bir Code oturumu talimatla kurar.",
+          "A Code session sets up the sections the new account lacks, from a recipe.",
         )}
       />
       <SettingRow

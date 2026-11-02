@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { SettingGroup } from "@/components/SettingRow";
+import { Disclosure } from "@/components/Disclosure";
 import { cn } from "@/lib/utils";
 import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
@@ -363,8 +364,8 @@ export function PlanningPanel({
   const upcoming = nextPlannedWindow(settings, accounts, keeper, now);
   const summary = !settings.autoStart
     ? t(
-        "Kapalı. Açınca Relay 5 saatlik limit dönemlerini planlanan saatlerde başlatır ve gün boyu canlı tutar.",
-        "Off. When on, Relay starts 5-hour limit periods at the planned times and keeps them running.",
+        "Kapalı. Açınca dönemler planlanan saatlerde başlar.",
+        "Off. When on, periods start at the planned times.",
       )
     : !included.length
       ? t(
@@ -440,8 +441,8 @@ export function PlanningPanel({
             )}
             <small className={cn(noteClass, "mt-0.5 block")}>
               {t(
-                "Her başlatma küçük bir istek kadar limit harcar. Relay açık ve Mac uyanık olmalı.",
-                "Each start uses a small request of quota. Relay must be open and the Mac awake.",
+                "Relay açık, Mac uyanık olmalı; her başlatma küçük bir istek harcar.",
+                "Relay must be open and the Mac awake; each start costs a small request.",
               )}
             </small>
           </div>
@@ -525,8 +526,8 @@ export function PlanningPanel({
           </div>
           <p className={noteClass}>
             {t(
-              "Bitiş saati başlangıçtan önceyse aralık ertesi güne uzar. Relay, kapasiteye ve tempoya göre hesapların limit dönemlerini işe başlamadan önce başlatır.",
-              "An end before the start runs into the next day. Relay starts accounts’ limit periods before work, by capacity and tempo.",
+              "Bitiş başlangıçtan önceyse aralık ertesi güne uzar.",
+              "An end before the start runs into the next day.",
             )}
           </p>
         </div>
@@ -534,18 +535,7 @@ export function PlanningPanel({
 
       <SettingGroup
         id="planning-accounts"
-        title={
-          <>
-            {t("Hesaplar", "Accounts")}
-            <span className="font-normal">
-              {" · "}
-              {t(
-                "Sıra yalnızca eşitlikte öncelik verir.",
-                "Order only breaks ties.",
-              )}
-            </span>
-          </>
-        }
+        title={t("Hesaplar", "Accounts")}
         className="@container"
       >
         {included.map((entry, index) => {
@@ -736,6 +726,16 @@ export function PlanningPanel({
             </div>
           </div>
         ))}
+        <div className="border-t py-2">
+          <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
+            <p className={noteClass}>
+              {t(
+                "Relay, kapasiteye ve tempoya göre hesapların limit dönemlerini işe başlamadan önce başlatır. Sıra yalnızca eşitlikte öncelik verir.",
+                "Relay starts accounts’ limit periods before work, by capacity and tempo. Order only breaks ties.",
+              )}
+            </p>
+          </Disclosure>
+        </div>
       </SettingGroup>
 
       {!!keeper?.attempts.length && (

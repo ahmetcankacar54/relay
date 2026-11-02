@@ -108,6 +108,32 @@ export function PlanTimeline({
       .join(" · ");
     return t(`Önceden başlatma: ${list}`, `Early start: ${list}`);
   };
+  // What the lanes' marks mean: work hours, the faded forecast, no quota and a switch.
+  const legend = [
+    {
+      label: t("Çalışma", "Work"),
+      swatch: <i aria-hidden="true" className="h-2.5 w-4 rounded-sm bg-brand/20" />,
+    },
+    {
+      label: t("Tahmin", "Forecast"),
+      swatch: (
+        <i aria-hidden="true" className={cn("h-2.5 w-4 rounded-sm opacity-50 dark:opacity-65", windowTone(0))} />
+      ),
+    },
+    {
+      label: t("Dolu", "No quota"),
+      swatch: (
+        <i
+          aria-hidden="true"
+          className="h-2.5 w-4 rounded-sm bg-crit/25 bg-[repeating-linear-gradient(135deg,var(--crit)_0_2px,transparent_2px_6px)]"
+        />
+      ),
+    },
+    {
+      label: t("Geçiş", "Switch"),
+      swatch: <i aria-hidden="true" className="h-3 w-0.5 rounded-[1px] bg-foreground/55" />,
+    },
+  ];
   const comparison = compare && [
     {
       title: t("Bu plan", "This plan"),
@@ -294,12 +320,17 @@ export function PlanTimeline({
           {t("Bu gün için plan yok.", "No plan for this day.")}
         </p>
       )}
-      <p className={cn(noteClass, "mt-2.5")}>
-        {t(
-          "Kullanım şeridi, Relay’in tahminidir: hangi saatte hangi hesapla çalışacağını gösterir. Dikey çizgiler geçişleri, kırmızı taralı alanlar limitin dolu olduğu aralıkları gösterir. Alttaki çubuklar 5 saatlik dönemlerdir; çubuğun bittiği yerde limit yenilenir. Soluk kısım planın tahmini, koyu kısım şu anki kullanımdan hesaplanır.",
-          "The usage lane is Relay’s forecast of which account you work on when. Vertical lines are switches, striped red is no quota. The bars below are five-hour periods; a bar ends at the reset. The faded part is the plan’s forecast; the solid part is computed from current usage.",
-        )}
-      </p>
+      <ul
+        data-slot="timeline-legend"
+        className={cn(noteClass, "mt-2.5 flex flex-wrap gap-x-4 gap-y-1")}
+      >
+        {legend.map(({ label, swatch }) => (
+          <li key={label} className="flex items-center gap-1.5">
+            {swatch}
+            {label}
+          </li>
+        ))}
+      </ul>
       {comparison && (
         <div className="mt-2.5 grid gap-2.5 @xl:grid-cols-2">
           {comparison.map(({ title, forecast, warmUps }) => (

@@ -57,12 +57,12 @@ export function TempoRow({
     tempo.source === "learned"
       ? weekend && tempo.rate.weekend !== tempo.rate.weekday
         ? t(
-            `Hafta sonu yoğun gün ≈ ${n} Pro birimi/sa · son 4 haftada ${days} iş günü`,
-            `Busy weekend day ≈ ${n} Pro units/h · ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
+            `Hafta sonu yoğun gün ≈ ${n} Pro birimi/sa, son 4 haftanın ${days} iş gününden`,
+            `Busy weekend day ≈ ${n} Pro units/h, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
           )
         : t(
-            `Yoğun gün ≈ ${n} Pro birimi/sa · son 4 haftada ${days} iş günü`,
-            `Busy day ≈ ${n} Pro units/h · ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
+            `Yoğun gün ≈ ${n} Pro birimi/sa, son 4 haftanın ${days} iş gününden`,
+            `Busy day ≈ ${n} Pro units/h, from ${days} work ${days === 1 ? "day" : "days"} in the last 4 weeks`,
           )
       : tempo.source === "preset"
         ? t(
@@ -70,8 +70,8 @@ export function TempoRow({
             `Fixed tempo ≈ ${n} Pro units/h`,
           )
         : t(
-            "Orta (varsayılan) ≈ 50 Pro birimi/sa · veri birikiyor",
-            "Medium (default) ≈ 50 Pro units/h · collecting data",
+            "Veri birikene kadar orta tempo ≈ 50 Pro birimi/sa",
+            "Medium tempo ≈ 50 Pro units/h until data builds up",
           );
   // Each kind of plan once, largest first.
   const kinds = new Map<string, number>();
@@ -117,7 +117,7 @@ export function TempoRow({
         {parts.length > 0 && (
           <p className={noteClass}>
             {t("Bu tempoyla bir dönem: ", "At this tempo one period lasts: ") +
-              parts.join(" · ") +
+              parts.join(", ") +
               t(" yeter.", ".")}
           </p>
         )}

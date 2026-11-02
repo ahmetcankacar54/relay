@@ -8,6 +8,7 @@ import { AutomationTab, CarryTab } from "../src/pages/settings/SwitchingTabs";
 /** Settings' Automation tab, then its What comes along tab: what used to be the Switching page. */
 const Switching = () => createElement(Fragment, null, createElement(AutomationTab), createElement(CarryTab));
 import { RelayContext, type Relay } from "../src/data/relay-context";
+import { historyScopeNote } from "../src/features/SwitchPreferences";
 import { I18nContext } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type ExtensionStatus, type Snapshot } from "../shared/types";
 
@@ -117,30 +118,24 @@ test("Automation is the status, when to switch and the suggestion; What comes al
   assert.doesNotMatch(html, /Bu konuşmayı izle/);
 });
 
-test("the history scope and its local-only limit are one note", () => {
-  const historyNotes = (html: string) =>
-    [...html.matchAll(/<p class="text-\[13px\] text-muted-foreground">([^<]*)<\/p>/g)]
-      .map(([, text]) => text)
-      .filter((text) => /Code geçmişi/.test(text));
+test("the history scope and its local-only limit are one note, under Gelişmiş", () => {
+  const tr = (text: string) => text;
   const local =
     "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.";
-  assert.deepEqual(historyNotes(render(relayFor())), [
+  assert.equal(
+    historyScopeNote("all", tr),
     `Claude uygulaması girişi kayıtlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır. ${local}`,
-  ]);
-  const selected = historyNotes(
-    render(relayFor({}, { desktopHistoryTransfer: "selected" })),
   );
-  assert.deepEqual(selected, [
+  assert.equal(
+    historyScopeNote("selected", tr),
     `Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır. ${local}`,
-  ]);
-  assert.deepEqual(
-    historyNotes(render(relayFor({}, { desktopHistoryTransfer: "same-group" }))),
-    [local],
   );
-  assert.doesNotMatch(
-    render(relayFor()),
-    /Yalnızca yerel Code geçmişi; Chat/,
-  );
+  assert.equal(historyScopeNote("same-group", tr), local);
+  assert.equal(historyScopeNote("off", tr), "");
+  // Closed by default: the card shows the select and the merge, the note waits under Gelişmiş.
+  const html = render(relayFor());
+  assert.match(html.slice(html.indexOf('id="gecis-gecmis"')), /Açık hesapla birleştir[\s\S]*>Gelişmiş</);
+  assert.doesNotMatch(html, /Yalnızca yerel Code geçmişi/);
 });
 
 /** The description under "Geçmişi paylaş". */
@@ -154,7 +149,7 @@ test("Paylaşma says history is not shared, and never that it is", () => {
   ]
     .map(([, text]) => text)
     .filter((text) => /Code geçmişi/.test(text));
-  assert.deepEqual(notes, ["Code geçmişi hesaplar arasında paylaşılmaz."]);
+  assert.deepEqual(notes, []);
   assert.equal(shareDescription(off), "Hesaplar arasında birleştirilmez.");
   assert.doesNotMatch(off, /paylaşılır/);
   assert.doesNotMatch(off, /Her hesap geçişinde birleştirilir/);
@@ -178,7 +173,6 @@ test("Paylaşma says history is not shared, and never that it is", () => {
       ),
     ),
   );
-  assert.match(en, /Code history is not shared between accounts\./);
   assert.match(en, /Not merged between accounts\./);
   assert.doesNotMatch(en, /Only local Code history is shared|Merged on every account switch/);
   // The sharing modes keep their wording, and the header says where the conversations appear.
@@ -190,7 +184,6 @@ test("Paylaşma says history is not shared, and never that it is", () => {
   for (const mode of ["all", "same-group", "selected"]) {
     const html = render(relayFor({}, { desktopHistoryTransfer: mode }));
     assert.equal(shareDescription(html), "Her hesap geçişinde birleştirilir.", mode);
-    assert.match(html, /Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez\./, mode);
     assert.doesNotMatch(html, /hesaplar arasında paylaşılmaz|Hesaplar arasında birleştirilmez/, mode);
     assert.match(html, where[mode], mode);
     assert.doesNotMatch(html, /diğer hesapta da görünür/, mode);
@@ -219,10 +212,7 @@ test("Switching offers draft re-typing, off unless turned on, marked experimenta
   const off = render(relayFor());
   assert.match(off, /for="draft-retype"[^>]*>[\s\S]*Taslakları Claude uygulamasına yeniden yaz/);
   assert.match(off, />Deneysel</);
-  assert.match(
-    off,
-    /Kapalıyken taslaklar kurtarılır ve panelde “Kopyala” düğmesiyle sunulur\. Açıkken Relay geçişten sonra konuşmayı açar ve taslağı mesaj kutusuna yazar, göndermez\. Erişilebilirlik izni ister\./,
-  );
+  assert.match(off, /Geçişten sonra taslağı mesaj kutusuna yazar, göndermez\. Erişilebilirlik izni ister\./);
   assert.match(control(off), /role="switch"/);
   assert.match(control(off), /aria-checked="false"/);
   assert.match(control(render(relayFor({}, { draftRetype: false }))), /aria-checked="false"/);
@@ -246,10 +236,7 @@ test("Switching offers draft re-typing, off unless turned on, marked experimenta
   );
   assert.match(en, /Re-type drafts into the Claude app/);
   assert.match(en, />Experimental</);
-  assert.match(
-    en,
-    /While off, drafts are rescued and offered in the panel with “Copy”\. While on, Relay opens the conversation after a switch and types the draft into its message box without sending it\. It needs Accessibility permission\./,
-  );
+  assert.match(en, /Types the draft into the message box after a switch, unsent\. Needs Accessibility\./);
 });
 
 test("the single-conversation watch card appears only while a legacy watch needs attention", () => {

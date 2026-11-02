@@ -18,16 +18,10 @@ export const instanceValue = (i: ExtensionTarget) => `${i.app}:${i.profile}`;
 
 export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
   const labels: Record<ExtensionMode, string> = {
-    off: t("Hiçbir şey yapma", "Do nothing"),
+    off: t("Dokunma", "Leave it alone"),
     guide: t("Sadece haber ver", "Only tell me"),
-    closed: t(
-      "Eklentinin hesabını da değiştir · tarayıcı kapalıysa",
-      "Switch the extension too · if the browser is closed",
-    ),
-    restart: t(
-      "Eklentinin hesabını da değiştir · tarayıcıyı kapatıp aç",
-      "Switch the extension too · quit and reopen the browser",
-    ),
+    closed: t("Tarayıcı kapalıysa", "If the browser is closed"),
+    restart: t("Tarayıcıyı kapatıp aç", "Quit and reopen the browser"),
   };
   // From the least to the most Relay does.
   return (["off", "guide", "closed", "restart"] as const).map((value) => ({

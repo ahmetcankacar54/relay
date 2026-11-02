@@ -4,7 +4,7 @@ import { act, createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { moveItem, dropIndex } from "../src/pages/settings/MenuBarItems";
-import { Settings } from "../src/pages/Settings";
+import { PrivacyNotes, Settings } from "../src/pages/Settings";
 import { SETTINGS_TABS } from "../src/app/routes";
 
 /** Every Settings tab, one after another: the page shows one at a time. */
@@ -175,7 +175,7 @@ test("Settings offers the panda pranks setting on every platform", () => {
   };
   for (const platform of ["darwin", "win32", "linux"]) {
     const html = render({ platform });
-    for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /Seyrek şakalar; hiçbir işlemi geciktirmez\. Panda imleci kısa süre saklayabilir\./])
+    for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /Seyrek şakalar; imleci kısa süre saklayabilir\./])
       assert.match(html, re, platform);
     assert.match(html, /id="panda-pranks-label"/, platform);
     assert.deepEqual(selected(html), ["Ara sıra"], platform);
@@ -192,21 +192,23 @@ test("Settings shows the panda pranks setting in English", () => {
       createElement(RelayContext.Provider, { value: relayFor() }, createElement(AllSettings)),
     ),
   );
-  for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Rare pranks; they never delay anything\. The panda may briefly hide the cursor\./])
+  for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Rare pranks; it may briefly hide the cursor\./])
     assert.match(html, re);
 });
 
 test("Settings explains the Keychain prompt in Turkish and English, under privacy and security", () => {
-  const render = (language: "tr" | "en") =>
+  const render = (language: "tr" | "en", child: ReturnType<typeof createElement> = createElement(AllSettings)) =>
     renderToStaticMarkup(
       createElement(
         I18nContext.Provider,
         { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
-        createElement(RelayContext.Provider, { value: relayFor() }, createElement(AllSettings)),
+        createElement(RelayContext.Provider, { value: relayFor() }, child),
       ),
     );
-  const tr = render("tr");
-  const en = render("en");
+  const notes = (language: "tr" | "en") =>
+    render(language, createElement(PrivacyNotes, { t: (tr: string, en: string) => (language === "tr" ? tr : en) }));
+  const tr = notes("tr");
+  const en = notes("en");
   const note = (html: string) => /<p class="[^"]*text-muted-foreground[^"]*">(Relay [^<]*(?:Anahtarlık|Keychain)[^<]*)<\/p>/.exec(html)?.[1];
   assert.equal(
     note(tr),
@@ -216,10 +218,12 @@ test("Settings explains the Keychain prompt in Turkish and English, under privac
     note(en),
     "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
   );
-  // It belongs to the privacy group, after the note on how sign-ins are kept.
-  assert.ok(tr.indexOf("Gizlilik ve güvenlik") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
+  // After the note on how sign-ins are kept; the three notes sit in one closed section.
   assert.ok(tr.indexOf("Limit okuma girişi resmi Claude Code") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
-  assert.ok(tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler") < tr.indexOf("Yerelde saklanır"));
+  const page = render("tr");
+  assert.match(page, /id="settings-privacy"[\s\S]*>Gizlilik ve güvenlik</);
+  assert.doesNotMatch(page, /Anahtarlık’ta tuttuğu bir anahtarla şifreler/);
+  assert.ok(page.indexOf("Gizlilik ve güvenlik") < page.indexOf("Yerelde saklanır"));
 });
 
 test("Settings → Notifications holds the warnings, their threshold and the refresh interval", async () => {
@@ -344,7 +348,7 @@ test("the menu bar group says what the title can show, on macOS only", () => {
   for (const re of [
     /5 saatlik kullanım/, /Haftalık kullanım/, /5 saatlik dönemin kalan süresi/, /Bugünkü token/,
     /Bugünkü API karşılığı/, /Hesap adı/,
-    /Pandanın yanında görünecek değerleri seç ve sırala; en çok 4 değer\. Yüzdeler ve süre Claude uygulamasında açık hesabın, token ve API karşılığı tüm hesaplarının bugünkü toplamı\. Limitler okunamazsa son değer başında ~ ile kalır\./,
+    /Pandanın yanında en çok 4 değer seç ve sırala\./,
   ])
     assert.match(tr, re);
   // Each item shows a sample of what it puts in the title.
@@ -352,7 +356,7 @@ test("the menu bar group says what the title can show, on macOS only", () => {
   assert.match(tr, /Bugünkü API karşılığı ?<span[^>]*>\$18,20<\/span>/);
   assert.match(tr, /5 saatlik dönemin kalan süresi ?<span[^>]*>1:50<\/span>/);
   const en = render("en");
-  for (const re of [/Show in the menu bar/, /Tokens today ?<span[^>]*>12\.4M<\/span>/, /API value today/, /marked with ~\./])
+  for (const re of [/Show in the menu bar/, /Tokens today ?<span[^>]*>12\.4M<\/span>/, /API value today/, /up to 4 values beside the panda\./])
     assert.match(en, re);
   for (const platform of ["win32", "linux"])
     assert.doesNotMatch(render("tr", platform), /Menü çubuğunda göster/, platform);
