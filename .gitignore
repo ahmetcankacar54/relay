@@ -11,3 +11,5 @@ config/local-signing.json
 .superpowers/
 .claude/worktrees/
 cli/dist/
+.playwright-mcp/
+docs/audit-*/
