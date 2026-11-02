@@ -429,7 +429,7 @@ const sidebar = (compact: boolean, extra: Record<string, unknown> = {}) =>
 test("the panda sits in the account card, which leaves room above it; the compact rail shows none", () => {
   const html = renderToStaticMarkup(sidebar(false));
   assert.match(html, /<div data-slot="account-card" class="relative mt-8 [^"]*"><i data-test-panda=""><\/i><button/);
-  assert.equal(html.match(/<button/g)?.length, 7, "the panda adds no control");
+  assert.equal(html.match(/<button/g)?.length, 5, "the panda adds no control");
   // The rail's tooltips need the shell's provider.
   assert.doesNotMatch(renderToStaticMarkup(createElement(TooltipProvider, null, sidebar(true))), /data-test-panda|account-card/);
 });
@@ -555,11 +555,11 @@ test("a refresh, a setting and a click each play their reaction once; the sideba
       root.render(sidebar(false, { onPoke: (where: string) => pokes.push(where), go: (page: string) => went.push(page) })),
     );
     const buttons = nodes(dom.container as unknown as FakeNode).filter((n) => n.tagName === "button");
-    assert.equal(buttons.length, 7);
+    assert.equal(buttons.length, 5);
     for (const button of buttons) await act(async () => dom.dispatch(button, "click", { detail: 1 }));
-    // Five pages above the card, then the card itself, then Settings below it.
-    assert.deepEqual(went, ["genel", "hesaplar", "kullanim", "planlama", "gecis", "genel", "ayarlar"]);
-    assert.deepEqual(pokes, ["above", "above", "above", "above", "above", "below", "below"]);
+    // Three pages above the card, then the card itself, then Settings below it.
+    assert.deepEqual(went, ["genel", "hesaplar", "kullanim", "genel", "ayarlar"]);
+    assert.deepEqual(pokes, ["above", "above", "above", "below", "below"]);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();

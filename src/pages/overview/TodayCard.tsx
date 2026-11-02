@@ -16,13 +16,13 @@ import {
 } from "@/lib/day-timeline";
 import { formatClock } from "@/lib/time";
 import { cn } from "@/lib/utils";
-import type { PageId } from "@/app/routes";
+import type { Destination } from "@/app/routes";
 
 export function TodayCard({
   go,
   now,
 }: {
-  go: (page: PageId) => void;
+  go: (to: Destination) => void;
   now: number;
 }) {
   const relay = useRelay();

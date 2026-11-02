@@ -2,13 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { createElement, type ReactElement } from "react";
+import { createElement, Fragment, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { applyAutomationMode } from "../src/features/automation-actions";
 import { afterExitChips } from "../src/features/AutomationControl";
-import { Switching } from "../src/pages/Switching";
+import { AutomationTab, CarryTab } from "../src/pages/settings/SwitchingTabs";
 import { Overview } from "../src/pages/Overview";
-import { Planning } from "../src/pages/Planning";
+import { Usage } from "../src/pages/Usage";
+
+/** Settings' Automation and What comes along tabs: what used to be the Switching page. */
+const Switching = () => createElement(Fragment, null, createElement(AutomationTab), createElement(CarryTab));
 import { Banners } from "../src/app/Banners";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -431,7 +434,7 @@ test("Switching and Overview show the offer inline, not in the page banner", () 
     assert.equal(count(html, "2 konuşma limit dolduğu için durdu."), 1, label);
   }
   // Pages without the inline status keep the banner.
-  const planning = render(relay, createElement(Planning));
+  const planning = render(relay, createElement(Usage));
   assert.match(planning, /Otomatik geçiş ·/);
   assert.equal(count(planning, SWITCH_NOW), 1);
 });
@@ -513,19 +516,19 @@ test("the menu bar panel does not bundle the Switching card", () => {
 
 test("Switching shows the extension, terminal and draft steps on macOS only", () => {
   const mac = render(relayFor({ fleet: otherWork, usage: fullUsage }));
-  assert.match(mac, /Code geçmişi, eklenti ve taslaklar da gelir/);
+  assert.match(mac, /Code geçmişi, eklenti, terminal ve taslaklar da gelir/);
   assert.match(mac, /id="gecis-eklenti"/);
   assert.match(mac, /id="gecis-terminal"/);
   assert.match(mac, /id="gecis-taslak"/);
-  assert.match(mac, /Gönderilmemiş taslaklar/);
+  assert.match(mac, /Kurtarılan taslaklar/);
   for (const platform of ["win32", "linux"]) {
     const html = render(
       relayFor({ fleet: otherWork, usage: fullUsage, diagnostics: { platform } } as never),
     );
     assert.match(html, /Code geçmişi de gelir/, platform);
-    assert.doesNotMatch(html, /eklenti ve taslaklar/, platform);
+    assert.doesNotMatch(html, /eklenti, terminal ve taslaklar/, platform);
     assert.doesNotMatch(html, /Tarayıcı eklentisi/, platform);
-    assert.doesNotMatch(html, /Gönderilmemiş taslaklar/, platform);
+    assert.doesNotMatch(html, /Kurtarılan taslaklar/, platform);
     for (const id of ["gecis-eklenti", "gecis-terminal", "gecis-taslak"])
       assert.doesNotMatch(html, new RegExp(`id="${id}"`), `${platform}: ${id}`);
   }

@@ -15,15 +15,15 @@ export function historyCopy(
     case "all":
       return {
         note: t(
-          "Code geçmişi bağlı tüm hesaplar arasında ortak. Geçiş sayfasından değiştirebilirsin.",
-          "Code history is shared across every connected account. You can change this on the Switching page.",
+          "Code geçmişi bağlı tüm hesaplar arasında ortak. Ayarlar → Geçişte taşınanlar’dan değiştirebilirsin.",
+          "Code history is shared across every connected account. You can change this in Settings → What comes along.",
         ),
       };
     case "selected":
       return {
         note: t(
-          "Code geçmişi yalnızca Geçiş sayfasında seçtiğin hesaplar arasında ortak.",
-          "Code history is shared only between the accounts you pick on the Switching page.",
+          "Code geçmişi yalnızca Ayarlar → Geçişte taşınanlar’da seçtiğin hesaplar arasında ortak.",
+          "Code history is shared only between the accounts you pick in Settings → What comes along.",
         ),
       };
     case "off":

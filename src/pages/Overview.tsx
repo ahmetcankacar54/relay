@@ -6,7 +6,7 @@ import { formatRelative } from "@/lib/time";
 import { overviewCards } from "@/lib/onboarding";
 import { PageFrame } from "@/app/PageFrame";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
-import type { PageId } from "@/app/routes";
+import type { Destination } from "@/app/routes";
 import { ActiveAccountCard } from "./overview/ActiveAccountCard";
 import { AccountsCard } from "./overview/AccountsCard";
 import { TodayCard } from "./overview/TodayCard";
@@ -17,7 +17,7 @@ export function Overview({
   go,
   now = Date.now(),
 }: {
-  go: (page: PageId) => void;
+  go: (to: Destination) => void;
   /** Injected by tests; the page re-renders with the snapshot poll. */
   now?: number;
 }) {

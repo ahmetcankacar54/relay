@@ -8,10 +8,8 @@ import { sidebarStatus } from "@/data/selectors";
 import { linkedSwitchAccount } from "../../shared/relay-link";
 import { Usage } from "@/pages/Usage";
 import { Settings } from "@/pages/Settings";
-import { Switching } from "@/pages/Switching";
 import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
-import { Planning } from "@/pages/Planning";
 // 24 px in the sidebar: the 64 px rendering is sharp at 2×, without the 1 MB icon.png.
 import relayIcon from "../../assets/icons/app-64.png";
 import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
@@ -137,8 +135,6 @@ export function Shell() {
               {page === "genel" && <Overview go={go} />}
               {page === "hesaplar" && <Accounts />}
               {page === "kullanim" && <Usage />}
-              {page === "planlama" && <Planning />}
-              {page === "gecis" && <Switching />}
               {page === "ayarlar" && <Settings />}
             </div>
           </main>

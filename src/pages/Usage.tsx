@@ -198,7 +198,7 @@ function LimitsTab({
 }
 
 /** The page's tabs; only the open one is drawn, so a hidden token scan asks for nothing. */
-const TABS = ["limits", "tokens", "lost", "warnings"] as const;
+const TABS = ["limits", "tokens", "lost"] as const;
 export type UsageTab = (typeof TABS)[number];
 /** Where the open tab is remembered, a convenience for this window only. */
 const TAB_KEY = "relay.usage.tab.v1";
@@ -221,8 +221,8 @@ function storeTab(tab: UsageTab) {
 }
 
 /**
- * The warning threshold as a segmented control, off while warnings are; Usage → Uyarılar and
- * Settings → Genel both show it. `short` drops the "kullanılınca" for a narrow row.
+ * The warning threshold as a segmented control, off while warnings are; Settings → Notifications
+ * shows it. `short` drops the "kullanılınca" for a narrow row.
  */
 export function WarningThreshold({
   labelledBy,
@@ -267,62 +267,9 @@ export function WarningThreshold({
   );
 }
 
-/** Whether the page will warn about accounts near their limit, and at what share; with where the figures come from. */
-export function UsageWarnings() {
-  const { api, settings, busy, desktop, action } = useRelay();
-  const { t } = useI18n();
-  const disabled = !!busy || !!desktop?.busy;
-  const update = (patch: Partial<typeof settings>) =>
-    void action("settings", () => api.updateSettings(patch));
-  return (
-    <Card className={cardClass}>
-      <SectionHeading title={t("Uyarılar", "Warnings")} />
-      <SettingRow
-        label={t("Limit uyarıları", "Usage warnings")}
-        htmlFor="usage-warnings"
-        description={t(
-          "Eşiğe ulaşan hesapları bu panelde işaretle.",
-          "Highlight accounts approaching their limit in this panel.",
-        )}
-      >
-        <Switch
-          id="usage-warnings"
-          checked={settings.usageWarnings}
-          disabled={disabled}
-          onCheckedChange={(usageWarnings) => update({ usageWarnings })}
-        />
-      </SettingRow>
-      <SettingRow
-        label={
-          <span id="usage-threshold">
-            {t("Uyarı eşiği", "Warning threshold")}
-          </span>
-        }
-        description={t(
-          "Beş saatlik veya haftalık kullanım için geçerli.",
-          "Applies to either the 5-hour or weekly usage limit.",
-        )}
-      >
-        <WarningThreshold labelledBy="usage-threshold" />
-      </SettingRow>
-      <details className="border-t border-border pt-3">
-        <summary className="cursor-pointer text-sm font-medium">
-          {t("Veri kaynağı ve sınırlar", "Data source and limits")}
-        </summary>
-        <Note className="mt-1">
-          {t(
-            "Limitler, Anthropic’in deneysel bir kullanım servisinden okunur. Relay bunun için hesabın limit okuma girişini kullanır; gerektiğinde bu girişi sen yenilersin. Yenileme yalnızca Relay’deki girişi günceller, açık Claude uygulamasına dokunmaz. Kullanılan yüzde, mesaj sayısı ya da süre garantisi değildir.",
-            "Usage comes from an experimental Anthropic endpoint, read with the account’s usage sign-in; you renew that sign-in when needed. Renewing updates only Relay’s copy and leaves the open Claude app untouched. The percentage used is not a message count or time guarantee.",
-          )}
-        </Note>
-      </details>
-    </Card>
-  );
-}
-
 /**
- * Usage in four tabs, so nothing needs a long scroll: the limit statistics, the token counts, the panda's pin
- * collection, and the warning preferences. The range and account filter belong to the first two and show only there.
+ * Usage in three tabs, so nothing needs a long scroll: the limit statistics, the token counts and the panda's
+ * pin collection. The range and account filter belong to the first two and show only there.
  */
 export function Usage() {
   const { accounts, settings } = useRelay();
@@ -368,9 +315,6 @@ export function Usage() {
           <TabsTrigger value="lost">
             {t("Rozetler", "Pins")}
           </TabsTrigger>
-          <TabsTrigger value="warnings">
-            {t("Uyarılar", "Warnings")}
-          </TabsTrigger>
         </TabsList>
         <TabsContent value="limits">
           <LimitsTab
@@ -386,9 +330,6 @@ export function Usage() {
         </TabsContent>
         <TabsContent value="lost">
           <LostFound />
-        </TabsContent>
-        <TabsContent value="warnings">
-          <UsageWarnings />
         </TabsContent>
       </Tabs>
     </PageFrame>

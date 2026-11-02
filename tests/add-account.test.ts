@@ -89,8 +89,8 @@ test("the profile fields' group field and history note follow the sharing mode",
   assert.doesNotMatch(form("same-group", "personal"), /id="add-account-group"/);
   // Anywhere else the group is ignored, so there is no field and no group sentence.
   for (const [mode, note] of [
-    ["all", /Code geçmişi bağlı tüm hesaplar arasında ortak\. Geçiş sayfasından değiştirebilirsin\./],
-    ["selected", /Code geçmişi yalnızca Geçiş sayfasında seçtiğin hesaplar arasında ortak\./],
+    ["all", /Code geçmişi bağlı tüm hesaplar arasında ortak\. Ayarlar → Geçişte taşınanlar’dan değiştirebilirsin\./],
+    ["selected", /Code geçmişi yalnızca Ayarlar → Geçişte taşınanlar’da seçtiğin hesaplar arasında ortak\./],
     ["off", /Code geçmişi hesaplar arasında paylaşılmıyor\./],
   ] as const)
     for (const kind of ["personal", "work"] as const) {

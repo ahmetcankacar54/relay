@@ -164,7 +164,7 @@ test("the Overview automation rows open their pages instead of setting the choic
   const active = acct("active", "Kişisel · Max", "max5");
   // The automation card needs two connected accounts.
   const accounts = [active, acct("other", "Vertex", "pro")];
-  // The choice and its lock while a handoff runs live on the Switching page; Overview only shows rows.
+  // The choice and its lock while a handoff runs live in Settings → Automation; Overview only shows rows.
   for (const status of ["switching", "continuing", "watching"] as const) {
     const relay = relayFor(active, accounts, { active: use("active", 10, 10) });
     (relay.data as Snapshot).fleet = { enabled: true, status, sourceId: "active", targetId: "active" };
@@ -195,7 +195,7 @@ test("the Overview automation rows open their pages instead of setting the choic
                 api: { extensionStatus: async () => null } as unknown as Relay["api"],
               }),
             },
-            createElement(AutomationCard, { go: (page: PageId) => void opened.push(page), now: NOW }),
+            createElement(AutomationCard, { go: (page: string) => void opened.push(page as PageId), now: NOW }),
           ),
         ),
       ),

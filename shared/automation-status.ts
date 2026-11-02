@@ -90,12 +90,12 @@ const OFF: Copy = [
   "Off. When the limit is reached, you switch accounts yourself.",
 ];
 const OFF_LEGACY_WATCH: Copy = [
-  "Kapalı, ama Geçiş sayfasındaki “Limit dolunca geç ve devam et” kartı hâlâ açık; oradan kapat.",
-  "Off, but the “Switch and continue when the limit is reached” card on the Switching page is still on; turn it off there.",
+  "Kapalı, ama Ayarlar → Otomasyon’daki “Limit dolunca geç ve devam et” kartı hâlâ açık; oradan kapat.",
+  "Off, but the “Switch and continue when the limit is reached” card in Settings → Automation is still on; turn it off there.",
 ];
 const HANDOFF_INTERRUPTED: Copy = [
-  "Yarım kalan bir konuşma devri var; Geçiş sayfasındaki kartından sürdür veya iptal et.",
-  "A conversation handoff was interrupted; resume or cancel it on the Switching page.",
+  "Yarım kalan bir konuşma devri var; Ayarlar → Otomasyon’daki kartından sürdür veya iptal et.",
+  "A conversation handoff was interrupted; resume or cancel it in Settings → Automation.",
 ];
 const SWITCH_NOW_SUFFIX: Copy = [
   " Şimdi geçersen devam mesajını sen yazarsın.",
@@ -156,13 +156,13 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
     false,
   ),
   "continuation-active": attention([
-    "Geçiş sayfasındaki “Limit dolunca geç ve devam et” kartı açık; o kapanana kadar hesap hazırlamıyorum. Kartı oradan kapat.",
-    "The “Switch and continue when the limit is reached” card on the Switching page is on; preparing waits until it is off. Turn it off there.",
+    "Ayarlar → Otomasyon’daki “Limit dolunca geç ve devam et” kartı açık; o kapanana kadar hesap hazırlamıyorum. Kartı oradan kapat.",
+    "The “Switch and continue when the limit is reached” card in Settings → Automation is on; preparing waits until it is off. Turn it off there.",
   ]),
   "unknown-active": attention(UNKNOWN_ACTIVE),
   "not-selected": attention([
-    "Bu hesap otomatik geçişe dahil değil. Geçiş sayfasında hesapları seç.",
-    "This account is not included. Choose accounts on the Switching page.",
+    "Bu hesap otomatik geçişe dahil değil. Ayarlar → Otomasyon’da hesapları seç.",
+    "This account is not included. Choose accounts in Settings → Automation.",
   ]),
   "source-not-ready": attention([
     "Açık hesabın Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Hesaplar’da kontrol et.",

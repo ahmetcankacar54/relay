@@ -208,8 +208,8 @@ const explanations: Record<string, [string, string]> = {
     "The current and target accounts need matching, verified Claude app and usage sign-ins.",
   ],
   "history-boundary": [
-    "Bu iki hesap ortak geçmiş kapsamında değil. Kapsamı Geçiş sayfasındaki “Code geçmişi” bölümünden düzenle.",
-    "These accounts are outside the shared history scope. Change the scope under “Code history” on the Switching page.",
+    "Bu iki hesap ortak geçmiş kapsamında değil. Kapsamı Ayarlar → Geçişte taşınanlar → “Code geçmişi” bölümünden düzenle.",
+    "These accounts are outside the shared history scope. Change the scope under Settings → What comes along → “Code history”.",
   ],
   "browser-sign-in": [
     "Bir hesabın limit okuma girişi sürüyor. Giriş tamamlanana kadar geçiş bekler.",

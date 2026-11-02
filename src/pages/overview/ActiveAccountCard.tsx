@@ -11,7 +11,7 @@ import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
-import { intentHash, type PageId } from "@/app/routes";
+import { intentHash, type Destination } from "@/app/routes";
 import { ringState } from "@/lib/account-row";
 import { blockReason, desktopBlock } from "@/lib/onboarding";
 import { UsageCard } from "../../features/UsageCard";
@@ -25,7 +25,7 @@ export function ActiveAccountCard({
   go,
   now,
 }: {
-  go: (page: PageId) => void;
+  go: (to: Destination) => void;
   now: number;
 }) {
   const relay = useRelay();
@@ -152,7 +152,7 @@ export function ActiveAccountCard({
   );
 }
 
-function Onboarding({ go }: { go: (page: PageId) => void }) {
+function Onboarding({ go }: { go: (to: Destination) => void }) {
   const relay = useRelay();
   const { t } = useI18n();
   const { accounts, hasUnclaimedDesktop } = relay;

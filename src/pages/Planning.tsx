@@ -1,21 +1,13 @@
-import { PageFrame } from "@/app/PageFrame";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { PlanningPanel } from "../features/PlanningPanel";
 
-export function Planning() {
+/** Settings → Planning: work hours, tempo, early start and each account's plan. */
+export function PlanningTab() {
   const { api, data, accounts, active, settings, busy, desktop, action } =
     useRelay();
   const { t } = useI18n();
   return (
-    <PageFrame
-      title={t("Planlama", "Planning")}
-      description={t(
-        "Limit dönemlerini önceden başlat",
-        "Start limit periods early",
-      )}
-    >
-      <div className="px-6 pb-6">
         <PlanningPanel
           settings={settings.planning}
           keeper={data?.planning}
@@ -33,7 +25,5 @@ export function Planning() {
             )
           }
         />
-      </div>
-    </PageFrame>
   );
 }

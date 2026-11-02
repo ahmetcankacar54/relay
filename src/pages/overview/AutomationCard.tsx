@@ -4,7 +4,7 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { useExtensionStatus } from "@/data/useExtension";
 import { instanceLabel } from "@/lib/extension-ui";
-import type { PageId } from "@/app/routes";
+import type { Destination } from "@/app/routes";
 import { AUTOMATION_DOT, automationModeCopy, useAutomation } from "../../features/useAutomation";
 import { nextPlannedWindow, nextStartLabel } from "@/lib/day-timeline";
 import { SwitchNowButton } from "../../features/AutomationControl";
@@ -50,7 +50,7 @@ export function AutomationCard({
   go,
   now,
 }: {
-  go: (page: PageId) => void;
+  go: (to: Destination) => void;
   now: number;
 }) {
   const relay = useRelay();
@@ -105,7 +105,7 @@ export function AutomationCard({
                   ? t(`${instanceLabel(extension.target)} · izliyor`, `${instanceLabel(extension.target)} · following`)
                   : t("Tarayıcı seç", "Choose a browser")
             }
-            onClick={() => go("gecis")}
+            onClick={() => go("ayarlar/tasinanlar")}
           />
         )}
       </div>

@@ -372,7 +372,7 @@ function ExtensionConnection({
           </Button>
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("gecis")}>{t("Geçiş ayarları", "Switching settings")}</a>
+            <a href={routeHash("ayarlar/tasinanlar")}>{t("Ayarlar", "Settings")}</a>
           </Button>
         ) : guide.tone === "ok" ? (
           <Button
@@ -440,7 +440,7 @@ function TerminalConnection({
           </Button>
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("gecis")}>{t("Geçiş ayarları", "Switching settings")}</a>
+            <a href={routeHash("ayarlar/tasinanlar")}>{t("Ayarlar", "Settings")}</a>
           </Button>
         ) : guide.tone === "ok" ? (
           <Button

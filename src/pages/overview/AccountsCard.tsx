@@ -10,7 +10,7 @@ import {
 } from "@/lib/account-row";
 import { AccountList } from "../../features/AccountList";
 import { Plus } from "lucide-react";
-import { intentHash, type PageId } from "@/app/routes";
+import { intentHash, type Destination } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { accountHash } from "../accounts/AccountDetail";
 
@@ -18,7 +18,7 @@ export function AccountsCard({
   go,
   now,
 }: {
-  go: (page: PageId) => void;
+  go: (to: Destination) => void;
   now: number;
 }) {
   const relay = useRelay();

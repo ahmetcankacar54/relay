@@ -17,10 +17,10 @@ const t = (tr: string) => tr;
 const inShell = (child: ReturnType<typeof createElement>) =>
   createElement(TooltipProvider, null, child);
 
-test("sidebar lists the six pages, marks the current one and shows automation dots", () => {
+test("sidebar lists the four pages, marks the current one and puts the automation dot on Settings", () => {
   const html = renderToStaticMarkup(
     createElement(Sidebar, {
-      page: "planlama",
+      page: "ayarlar",
       go: () => {},
       t,
       compact: false,
@@ -32,12 +32,12 @@ test("sidebar lists the six pages, marks the current one and shows automation do
     "Genel bakış",
     "Hesaplar",
     "Kullanım",
-    "Planlama",
-    "Geçiş",
     "Ayarlar",
   ])
     assert.match(html, new RegExp(label));
-  assert.match(html, /aria-current="page"[^>]*>[\s\S]*?Planlama/);
+  // Planning and Switching are tabs in Settings now.
+  assert.doesNotMatch(html, />Planlama<|>Geçiş</);
+  assert.match(html, /aria-current="page"[^>]*>[\s\S]*?Ayarlar/);
   assert.match(html, />4</);
   assert.equal(html.match(/data-status="on"/g)?.length, 1);
   assert.match(html, /Kişisel · Max/);
@@ -53,7 +53,7 @@ test("compact sidebar keeps accessible names", () => {
       status: { accounts: 0, planning: false, switching: false },
     })),
   );
-  assert.match(html, /aria-label="Planlama"/);
+  assert.match(html, /aria-label="Ayarlar"/);
 });
 
 test("limit meter shows what is used and uses its tone colour", () => {
@@ -137,15 +137,15 @@ test("sidebar buttons override the legacy centred button style and the summary c
     );
   const html = sidebar(true);
   const buttons = html.match(/<button[\s\S]*?<\/button>/g) ?? [];
-  assert.equal(buttons.length, 7);
+  assert.equal(buttons.length, 5);
   for (const b of buttons) {
     const tag = /^<button[^>]*>/.exec(b)?.[0] ?? "";
     assert.match(tag, /class="[^"]*text-left/);
     assert.doesNotMatch(tag, /justify-center/);
   }
-  // The six pages start their row on the left.
+  // The four pages start their row on the left.
   const pages = buttons.filter((b) => !b.includes("Kişisel · Max"));
-  assert.equal(pages.length, 6);
+  assert.equal(pages.length, 4);
   for (const b of pages) assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
   // The summary card: a single 30 px ring for the five hours and its percent, inside the card's button.
   const summary = buttons.find((b) => b.includes("Kişisel · Max")) ?? "";
@@ -275,7 +275,7 @@ test("the shell fades the current page in inside a keyed wrapper, below the drag
   const open = wrapper.index;
   const close = shell.indexOf("</div>", shell.indexOf("{page === \"ayarlar\""));
   assert.ok(drag >= 0 && drag < open, "the drag region stays outside the wrapper");
-  for (const page of ["genel", "hesaplar", "kullanim", "planlama", "gecis", "ayarlar"]) {
+  for (const page of ["genel", "hesaplar", "kullanim", "ayarlar"]) {
     const at = shell.indexOf(`{page === "${page}"`);
     assert.ok(at > open && at < close, `${page} renders inside the wrapper`);
   }

@@ -7,9 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import {
-  ArrowLeftRight,
   BarChart3,
-  CalendarClock,
   LayoutDashboard,
   Settings2,
   Users,
@@ -230,25 +228,19 @@ export function Sidebar({
       tail: status.accounts,
     },
     { id: "kullanim", icon: BarChart3, label: t("Kullanım", "Usage") },
-    {
-      id: "planlama",
-      icon: CalendarClock,
-      label: t("Planlama", "Planning"),
-      on: status.planning,
-      onLabel: t("Önceden başlatma açık", "Early start on"),
-    },
-    {
-      id: "gecis",
-      icon: ArrowLeftRight,
-      label: t("Geçiş", "Switching"),
-      on: status.switching,
-      onLabel: t("Otomatik geçiş açık", "Automatic switching on"),
-    },
   ];
+  // Automation and planning live in Settings now; its dot says when either runs by itself.
   const settings: Item = {
     id: "ayarlar",
     icon: Settings2,
     label: t("Ayarlar", "Settings"),
+    on: status.switching || status.planning,
+    onLabel:
+      status.switching && status.planning
+        ? t("Otomatik geçiş ve önceden başlatma açık", "Automatic switching and early start on")
+        : status.switching
+          ? t("Otomatik geçiş açık", "Automatic switching on")
+          : t("Önceden başlatma açık", "Early start on"),
   };
   return (
     <aside

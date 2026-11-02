@@ -165,7 +165,7 @@ test("each outcome says what happened, or nothing when there is nothing to say",
   assert.match(extensionLine(outcome({ result: "skipped", reason: "browser-did-not-quit" }), en)!, /did not quit/);
   assert.match(extensionLine(outcome({ result: "skipped", reason: "unknown-account" }), en)!, /does not have/);
   assert.match(extensionLine(outcome({ result: "skipped", reason: "choose-instance" }), en)!, /several browser profiles/);
-  assert.match(extensionLine(outcome({ result: "skipped", reason: "unavailable" }), en)!, /use Relay\.app: Switching → Claude browser extension → Sync now/);
+  assert.match(extensionLine(outcome({ result: "skipped", reason: "unavailable" }), en)!, /use Relay\.app: Settings → What comes along → Claude browser extension → Sync now/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "write-failed" }), en)!, /was put back/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "locked" }), en)!, /open in another process/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "restore-failed" }), en)!, /extension-scratch/);

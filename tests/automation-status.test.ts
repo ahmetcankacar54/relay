@@ -481,15 +481,15 @@ test("the sign-in and legacy-watch reasons name what to finish and where", () =>
   );
   assert.match(status("desktop-sign-in").text[0], /Claude uygulaması girişi/);
   assert.match(status("desktop-sign-in").text[1], /Claude app sign-in/);
-  // The legacy watch is named by its card's title on the Switching page.
+  // The legacy watch is named by its card's title in Settings → Automation.
   assert.match(
     status("continuation-active").text[0],
-    /Geçiş sayfasındaki “Limit dolunca geç ve devam et” kartı açık/,
+    /Ayarlar → Otomasyon’daki “Limit dolunca geç ve devam et” kartı açık/,
   );
   assert.match(status("continuation-active").text[0], /Kartı oradan kapat\./);
   assert.match(
     status("continuation-active").text[1],
-    /“Switch and continue when the limit is reached” card on the Switching page is on/,
+    /“Switch and continue when the limit is reached” card in Settings → Automation is on/,
   );
 });
 
@@ -672,12 +672,12 @@ test("an interrupted legacy handoff wins over every mode", () => {
     assert.equal(status.switchTo, undefined, label);
     assert.match(
       status.text[0],
-      /Yarım kalan bir konuşma devri var; Geçiş sayfasındaki kartından sürdür veya iptal et\./,
+      /Yarım kalan bir konuşma devri var; Ayarlar → Otomasyon’daki kartından sürdür veya iptal et\./,
       label,
     );
     assert.match(
       status.text[1],
-      /A conversation handoff was interrupted; resume or cancel it on the Switching page\./,
+      /A conversation handoff was interrupted; resume or cancel it in Settings → Automation\./,
       label,
     );
   }
@@ -709,8 +709,8 @@ test("off with the old single-conversation watch still armed says so", () => {
   assert.equal(status.banner, true);
   assert.equal(status.switchTo, undefined);
   assert.deepEqual(status.text, [
-    "Kişisel · Max %40 kullanıldı · Kapalı, ama Geçiş sayfasındaki “Limit dolunca geç ve devam et” kartı hâlâ açık; oradan kapat.",
-    "Kişisel · Max 40% used · Off, but the “Switch and continue when the limit is reached” card on the Switching page is still on; turn it off there.",
+    "Kişisel · Max %40 kullanıldı · Kapalı, ama Ayarlar → Otomasyon’daki “Limit dolunca geç ve devam et” kartı hâlâ açık; oradan kapat.",
+    "Kişisel · Max 40% used · Off, but the “Switch and continue when the limit is reached” card in Settings → Automation is still on; turn it off there.",
   ]);
   const disarmed = automationStatus(
     input({ continuation: { enabled: false, status: "off" } }, 40),

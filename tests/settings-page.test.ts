@@ -1,10 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { act, createElement } from "react";
+import { act, createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { moveItem, dropIndex } from "../src/pages/settings/MenuBarItems";
 import { Settings } from "../src/pages/Settings";
+import { SETTINGS_TABS } from "../src/app/routes";
+
+/** Every Settings tab, one after another: the page shows one at a time. */
+const AllSettings = () =>
+  createElement(Fragment, null, ...SETTINGS_TABS.map((tab) => createElement(Settings, { key: tab, tab })));
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type RelaySettings, type Snapshot } from "../shared/types";
@@ -40,7 +45,7 @@ test("the system group offers the diagnostics files, and say which ones to send"
       createElement(
         I18nContext.Provider,
         { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
-        createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: relay }, createElement(AllSettings)),
       ),
     );
   assert.match(
@@ -64,17 +69,22 @@ test("the system group offers the diagnostics files, and say which ones to send"
   assert.match(preload, /showDiagnostics: \(\) => ipcRenderer\.invoke\("relay:show-diagnostics"\)/);
 });
 
-test("Settings groups appearance, the menu bar, general, the system and privacy", () => {
+test("Settings has six tabs: automation, what comes along, planning, notifications, appearance, advanced", () => {
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
       { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-      createElement(RelayContext.Provider, { value: relayFor() }, createElement(Settings)),
+      createElement(RelayContext.Provider, { value: relayFor() }, createElement(AllSettings)),
     ),
+  );
+  const tabs = /<div[^>]*role="tablist"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
+  assert.deepEqual(
+    [...tabs.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]),
+    ["Otomasyon", "Geçişte taşınanlar", "Planlama", "Bildirimler", "Görünüm", "Gelişmiş"],
   );
   for (const re of [
     /Görünüm/, /Sistem/, /Açık/, /Koyu/, /Arayüz dili/, /Türkçe/, /English/,
-    /Menü çubuğu/, /Genel/, /Limitleri otomatik yenile/, /Elle/, /Gizlilik ve güvenlik/, /Bulundu/, /2\.1\.0/,
+    /Menü çubuğu/, /Limitleri otomatik yenile/, /Elle/, /Gizlilik ve güvenlik/, /Bulundu/, /2\.1\.0/,
     // The path the missing-CLI error names: Ayarlar → Claude Code CLI → Dosyayı seç.
     /Claude Code CLI<\/[^>]+>(?:(?!<button)[\s\S])*?2\.1\.0(?:(?!<button)[\s\S])*?<button[^>]*>Dosyayı seç<\/button>/,
     /Yerelde saklanır\. Kontrol sende\./, /Bağımsız araç · 0\.\d+\.\d+/,
@@ -90,7 +100,7 @@ test("Settings offers the menu bar animation switch, on unless turned off", () =
       createElement(
         I18nContext.Provider,
         { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-        createElement(RelayContext.Provider, { value: { ...relay, settings: value } as Relay }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: { ...relay, settings: value } as Relay }, createElement(AllSettings)),
       ),
     );
   };
@@ -109,7 +119,7 @@ test("the menu bar animation switch is shown on macOS only", () => {
       createElement(
         I18nContext.Provider,
         { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-        createElement(RelayContext.Provider, { value: { ...relay, data } as Relay }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: { ...relay, data } as Relay }, createElement(AllSettings)),
       ),
     );
   };
@@ -131,7 +141,7 @@ test("Settings offers the switch window, on unless turned off, on macOS only", (
       createElement(
         I18nContext.Provider,
         { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-        createElement(RelayContext.Provider, { value: { ...relay, settings: value, data } as Relay }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: { ...relay, settings: value, data } as Relay }, createElement(AllSettings)),
       ),
     );
   };
@@ -154,7 +164,7 @@ test("Settings offers the panda pranks setting on every platform", () => {
       createElement(
         I18nContext.Provider,
         { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-        createElement(RelayContext.Provider, { value: { ...relay, settings: value, data } as Relay }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: { ...relay, settings: value, data } as Relay }, createElement(AllSettings)),
       ),
     );
   };
@@ -179,7 +189,7 @@ test("Settings shows the panda pranks setting in English", () => {
     createElement(
       I18nContext.Provider,
       { value: { language: "en", setLanguage() {}, t: (_tr: string, en: string) => en } },
-      createElement(RelayContext.Provider, { value: relayFor() }, createElement(Settings)),
+      createElement(RelayContext.Provider, { value: relayFor() }, createElement(AllSettings)),
     ),
   );
   for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Rare pranks; they never delay anything\. The panda may briefly hide the cursor\./])
@@ -192,7 +202,7 @@ test("Settings explains the Keychain prompt in Turkish and English, under privac
       createElement(
         I18nContext.Provider,
         { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
-        createElement(RelayContext.Provider, { value: relayFor() }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: relayFor() }, createElement(AllSettings)),
       ),
     );
   const tr = render("tr");
@@ -212,7 +222,7 @@ test("Settings explains the Keychain prompt in Turkish and English, under privac
   assert.ok(tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler") < tr.indexOf("Yerelde saklanır"));
 });
 
-test("Settings → Genel sets the warning threshold as Usage → Uyarılar does", async () => {
+test("Settings → Notifications holds the warnings, their threshold and the refresh interval", async () => {
   const render = (extra: Partial<RelaySettings> = {}, language: "tr" | "en" = "tr") => {
     const relay = relayFor();
     const value = { ...settings, ...extra };
@@ -220,16 +230,16 @@ test("Settings → Genel sets the warning threshold as Usage → Uyarılar does"
       createElement(
         I18nContext.Provider,
         { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
-        createElement(RelayContext.Provider, { value: { ...relay, settings: value } as Relay }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: { ...relay, settings: value } as Relay }, createElement(AllSettings)),
       ),
     );
   };
   const group = (html: string) =>
     /<div[^>]*aria-labelledby="settings-threshold-label"[^>]*>.*?<\/div>/s.exec(html)?.[0] ?? "";
   const html = render();
-  // In the general group, after the refresh interval.
-  assert.match(html, /Limitleri otomatik yenile[\s\S]*id="settings-threshold-label">Uyarı eşiği<[\s\S]*id="settings-system"/);
-  assert.match(html, /Beş saatlik veya haftalık kullanım bu paya ulaşınca hesap işaretlenir\./);
+  // One group: the warnings switch, then the threshold, then the refresh interval.
+  assert.match(html, /id="settings-notifications"[\s\S]*id="usage-warnings"[\s\S]*id="settings-threshold-label">Uyarı eşiği<[\s\S]*Limitleri otomatik yenile/);
+  assert.match(html, /Beş saatlik veya haftalık kullanım bu paya ulaşınca\./);
   assert.deepEqual(
     [...group(html).matchAll(/<button[^>]*>(.*?)<\/button>/gs)].map((m) => m[1]),
     ["%80", "%90", "%95"],
@@ -237,10 +247,10 @@ test("Settings → Genel sets the warning threshold as Usage → Uyarılar does"
   assert.match(group(html), /data-state="on"[^>]*>%90</);
   assert.match(group(render({ usageWarningPercent: 95 })), /data-state="on"[^>]*>%95</);
   assert.match(group(render({}, "en")), />80%<\/button>/);
-  // With warnings off the threshold waits, and the row says where to turn them on.
+  // With warnings off the threshold waits; the switch beside it turns them on.
   const off = render({ usageWarnings: false });
   assert.match(group(off), /<button[^>]*disabled=""/);
-  assert.match(off, /Limit uyarıları kapalı; Kullanım → Uyarılar’dan açılır\./);
+  assert.match(off, /id="usage-warnings"[^>]*aria-checked="false"|aria-checked="false"[^>]*id="usage-warnings"/);
 
   const dom = fakeDom();
   dom.install();
@@ -257,7 +267,7 @@ test("Settings → Genel sets the warning threshold as Usage → Uyarılar does"
         createElement(
           I18nContext.Provider,
           { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+          createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "bildirimler" })),
         ),
       ),
     );
@@ -296,7 +306,7 @@ test("the system group shows how Relay starts Claude, and changes it through mai
         createElement(
           I18nContext.Provider,
           { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+          createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "gelismis" })),
         ),
       ),
     );
@@ -324,7 +334,7 @@ test("the menu bar group says what the title can show, on macOS only", () => {
       createElement(
         I18nContext.Provider,
         { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
-        createElement(RelayContext.Provider, { value: { ...relay, data } as Relay }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: { ...relay, data } as Relay }, createElement(AllSettings)),
       ),
     );
   };
@@ -373,7 +383,7 @@ async function menuBarSettings(state: { items: string[]; now?: () => unknown }) 
       createElement(
         I18nContext.Provider,
         { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-        createElement(RelayContext.Provider, { value: relay }, createElement(Settings)),
+        createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "gorunum" })),
       ),
     ),
   );
