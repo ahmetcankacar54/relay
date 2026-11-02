@@ -680,7 +680,7 @@ test("no view mixes the old Desktop and connection wording with the two sign-in 
 });
 
 test("on macOS the connections count the browser extension too, unless it is off or in no browser", () => {
-  const brave = { app: "brave", profile: "Default", name: "Kişisel" } as const;
+  const brave = { app: "brave", profile: "Default", name: "Kişisel", opened: true } as const;
   const extension = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
     setting: { mode: "restart" },
     instances: [brave],

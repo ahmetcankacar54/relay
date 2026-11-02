@@ -129,16 +129,38 @@ export const extensionStorageDir = (
   );
 };
 
-/** Every browser profile whose extension storage exists, in the browsers' own order. */
+/** The folder the extension is installed in, in a profile; it has no storage until first opened. */
+export const extensionInstallDir = (
+  system: BrowserSystem,
+  app: BrowserApp,
+  profile: string,
+) => {
+  if (!PROFILE_FOLDER.test(profile)) throw new Error("Invalid browser profile.");
+  return path.join(dataDir(system, app), profile, "Extensions", CLAUDE_EXTENSION_ID);
+};
+
+/**
+ * Every browser profile that has the extension, in the browsers' own order: those with its
+ * storage, and those where it is installed but was never opened (`opened` false).
+ */
 export function extensionInstances(system: BrowserSystem): ExtensionInstance[] {
   return BROWSER_APPS.flatMap((app) => {
     const state = readJson(system, path.join(dataDir(system, app), "Local State"));
-    return localStateProfiles(state)
-      .filter((p) => system.exists(extensionStorageDir(system, app, p.profile)))
-      .map((p) => {
-        const usedAt = system.modifiedAt(extensionStorageDir(system, app, p.profile));
-        return { app, profile: p.profile, name: p.name, ...(usedAt === undefined ? {} : { usedAt }) };
-      });
+    return localStateProfiles(state).flatMap((p) => {
+      const storage = extensionStorageDir(system, app, p.profile);
+      const opened = system.exists(storage);
+      if (!opened && !system.exists(extensionInstallDir(system, app, p.profile))) return [];
+      const usedAt = opened ? system.modifiedAt(storage) : undefined;
+      return [
+        {
+          app,
+          profile: p.profile,
+          name: p.name,
+          opened,
+          ...(usedAt === undefined ? {} : { usedAt }),
+        },
+      ];
+    });
   });
 }
 

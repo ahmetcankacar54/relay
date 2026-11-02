@@ -109,7 +109,7 @@ function cookieReason(error: unknown): ExtensionReason {
 export class ExtensionSwitcher {
   constructor(private readonly ports: ExtensionPorts) {}
 
-  /** Browser profiles that have the extension's storage. */
+  /** Browser profiles that have the extension, opened or not. */
   instances(): ExtensionInstance[] {
     return extensionInstances(this.ports.system);
   }
@@ -137,6 +137,8 @@ export class ExtensionSwitcher {
       // Before any browser is quit: without the library nothing could be read or written.
       if (!(await this.ports.storage.available())) return skipped("unavailable");
       if (request.setting.mode === "guide") return done(await this.guide(request));
+      // Never opened: no storage to save or write; it gets one once the user opens it.
+      if (!instance.opened) return skipped("not-opened");
       if (!(await this.pairReady())) return skipped("unavailable");
       let restarted = false;
       if (await browserRunning(system, instance.app)) {
@@ -183,6 +185,8 @@ export class ExtensionSwitcher {
     if (!current) return { result: "failed", reason: "unreadable", saved: false };
     if (current.state === "unreadable")
       return { result: "failed", reason: "unreadable", saved: false, current };
+    if (current.state === "signed-out" && current.unopened)
+      return { result: "skipped", reason: "not-opened", saved: false, current };
     const saved = current.state === "signed-in" && current.known;
     if (
       current.state === "signed-in" &&
@@ -216,6 +220,8 @@ export class ExtensionSwitcher {
     if (!instance) return undefined;
     try {
       if (!(await storage.available())) return undefined;
+      // Installed, never opened: nobody has signed in to it in this profile.
+      if (!instance.opened) return { state: "signed-out", unopened: true, at };
       await clearScratch(peekScratch);
       const copy = await backupFolder(
         extensionStorageDir(system, instance.app, instance.profile),

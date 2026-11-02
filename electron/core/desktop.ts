@@ -960,6 +960,8 @@ export class DesktopManager {
       // Mode "closed" left a running browser alone at the switch; any other step is no miss.
       const leftAlone = last?.result === "skipped" && last.reason === "browser-running";
       if (fromCheck ? check!.state === "unreadable" : !leftAlone) return undefined;
+      // An extension never opened has nothing to swap; it is opened and signed in to first.
+      if (fromCheck && check!.state === "signed-out" && check!.unopened) return undefined;
       const switcher = this.switcher();
       if (!switcher || !this.extension) return undefined;
       const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
@@ -1055,6 +1057,9 @@ export class DesktopManager {
           this.extensionChecking = undefined;
         });
       const current = await this.extensionChecking;
+      const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
+      const instances = setting.mode === "off" ? [] : switcher.instances();
+      const target = chooseInstance(instances, setting.browser);
       if (current) {
         this.lastExtensionCheck = current;
         this.diagnose("extension-check", {
@@ -1062,11 +1067,15 @@ export class DesktopManager {
           ...(current.state === "signed-in"
             ? {
                 known: current.known,
+                other: !!current.other,
                 ...(current.accountUuid ? { account: shortId(current.accountUuid) } : {}),
               }
             : {}),
+          instances: instances.length,
+          ...(target ? { target: `${target.app}:${target.profile}`, opened: target.opened } : {}),
         });
-      }
+      } else if (setting.mode !== "off" && !instances.length)
+        this.diagnose("extension-check", { state: "none", instances: 0 });
     }
     return this.extensionStatus();
   }

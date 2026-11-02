@@ -57,6 +57,11 @@ export function extensionLine(outcome: ExtensionOutcome, t: T): string | undefin
               "Eklenti ya da tarayıcıdaki claude.ai oturumu Relay’de olmayan bir hesaba ait; dokunulmadı.",
               "The extension or the browser’s claude.ai login belongs to an account Relay does not have; it was left alone.",
             );
+          case "not-opened":
+            return t(
+              "Claude eklentisi tarayıcıda hiç açılmamış; dokunulmadı. Eklentiyi bir kez açıp giriş yap, sonra “Kontrol et”e bas.",
+              "The Claude extension was never opened in the browser; it was left alone. Open it once and sign in, then press Check.",
+            );
           case "guide-mismatch":
             return t(
               "Eklenti bu hesapta değil. Bu hesabın eklenti girişi kayıtlıysa “Şimdi eşitle” ya da menü çubuğu panelindeki “Geçir” onu yerine koyar. Değilse tarayıcıda claude.ai’ye bu hesapla gir, eklentiye giriş yap, sonra “Kontrol et”e bas.",

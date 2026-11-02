@@ -75,10 +75,10 @@ const accounts: Account[] = [
 const previewExtension: ExtensionStatus = {
   setting: { mode: "guide" },
   instances: [
-    { app: "chrome", profile: "Default", name: "Kişi 1", usedAt: Date.now() - 9 * 86_400_000 },
-    { app: "brave", profile: "Default", name: "Kişisel", usedAt: Date.now() - 60_000 },
+    { app: "chrome", profile: "Default", name: "Kişi 1", opened: true, usedAt: Date.now() - 9 * 86_400_000 },
+    { app: "brave", profile: "Default", name: "Kişisel", opened: true, usedAt: Date.now() - 60_000 },
   ],
-  target: { app: "brave", profile: "Default", name: "Kişisel" },
+  target: { app: "brave", profile: "Default", name: "Kişisel", opened: true },
   picked: "recent",
   restoresTabs: false,
   saved: [{ accountUuid: ids[0], savedAt: new Date().toISOString() }],
