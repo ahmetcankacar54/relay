@@ -1,8 +1,8 @@
-Relay 0.14.0 — account switcher for the Claude app (Claude Desktop)
+Relay 0.14.1 — account switcher for the Claude app (Claude Desktop)
 Unofficial personal tool; not an Anthropic product.
 
 INSTALL
-1) Relay-0.14.0-arm64.dmg is for Apple silicon Macs (M1 and later).
+1) Relay-0.14.1-arm64.dmg is for Apple silicon Macs (M1 and later).
    Apple menu → About This Mac should say "Chip: Apple M…". Intel Macs are
    not supported by this build. Requires macOS 13 or later.
 2) Open the DMG and drag Relay into the Applications folder. Do not run it
@@ -18,7 +18,7 @@ INSTALL
    xattr -dr com.apple.quarantine /Applications/Relay.app
 5) Relay lives in the menu bar as a panda icon; the panel opens from there.
    "Open Relay" in the panel opens the main window.
-6) Relay 0.14.0 opens in Turkish. For English, go to Ayarlar (Settings) →
+6) Relay opens in Turkish. For English, go to Ayarlar (Settings) →
    Görünüm (Appearance) → Arayüz dili (Interface language) → English.
 
 START WITH OVERVIEW
