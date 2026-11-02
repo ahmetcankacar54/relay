@@ -86,6 +86,10 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:desktop-history-summary", id),
   openDesktop: () => ipcRenderer.invoke("relay:open-desktop"),
   openCodeTab: () => ipcRenderer.invoke("relay:open-code-tab"),
+  armAutoCapture: (id) => ipcRenderer.invoke("relay:arm-auto-capture", id),
+  disarmAutoCapture: (id) => ipcRenderer.invoke("relay:disarm-auto-capture", id),
+  chooseAutoCaptureOrg: (id, orgId) =>
+    ipcRenderer.invoke("relay:choose-auto-capture-org", id, orgId),
   recoverDesktop: () => ipcRenderer.invoke("relay:recover-desktop"),
   panelSnapshot: () => ipcRenderer.invoke("relay:panel-snapshot"),
   snapshot: () => ipcRenderer.invoke("relay:snapshot"),

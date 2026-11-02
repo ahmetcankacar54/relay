@@ -108,7 +108,7 @@ test("the add-account dialog walks the Desktop and limit steps for the created p
   const pending = wrap(relayFor({ pendingDesktop: b }), createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }));
   assert.match(pending, /Claude uygulamasında giriş bekleniyor/);
   assert.doesNotMatch(pending, /üstteki panel/);
-  assert.match(pending, /Claude uygulamasını yeniden aç/);
+  assert.match(pending, /Claude’u Code’da aç/);
   assert.match(pending, /İptal et ve önceki hesaba dön/);
   assert.doesNotMatch(pending, />Claude uygulaması girişini kaydet<|Girişi kaydet<\/button>/);
   const capture = wrap(
@@ -145,7 +145,7 @@ test("connection panels keep their ids, live regions and copy", () => {
   assert.match(html, /id="desktop-pending-panel"[^>]*aria-live="polite"|aria-live="polite"[^>]*id="desktop-pending-panel"/);
   assert.match(html, /id="cli-connection-panel"/);
   assert.match(html, /Studio · Claude uygulaması girişi/);
-  assert.match(html, /Claude uygulamasını yeniden aç/);
+  assert.match(html, /Claude’u Code’da aç/);
   assert.match(html, /Tarayıcı onayı bekleniyor/);
   assert.match(html, /Tarayıcıyı yeniden aç/);
   assert.match(html, /2 \/ 3/);

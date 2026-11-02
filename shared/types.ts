@@ -198,6 +198,21 @@ export interface DesktopState {
   recoveryRequired: boolean;
   errorRevision: number;
   lastBackup?: string;
+  /** Relay saves the Claude app sign-in for this profile by itself once it is complete. */
+  autoCapture?: AutoCaptureState;
+}
+/**
+ * The automatic save of a Claude app sign-in: waiting for the sign-in and Code, waiting for the
+ * user to pick one of several workspaces, saving (Claude restarts), saved, or failed. `alreadySaved`
+ * names a saved account that is signed in instead of a new one.
+ */
+export interface AutoCaptureState {
+  accountId: string;
+  status: "waiting" | "choose-org" | "saving" | "saved" | "failed";
+  orgs?: string[];
+  alreadySaved?: string;
+  /** "timeout", "other-pending", or the save's own error. */
+  error?: string;
 }
 /** A DesktopManager operation; each may restart Claude. */
 export type DesktopOperationKind = "switch" | "save" | "link" | "cancel-link" | "merge" | "restore";
@@ -329,6 +344,10 @@ export interface RelayAPI {
   openDesktop(): Promise<void>;
   /** Opens Claude on Code's new-session screen, which creates the account's Code workspace. */
   openCodeTab(): Promise<void>;
+  /** Saves this profile's Claude app sign-in by itself once it is complete (see AutoCaptureState). */
+  armAutoCapture(profileId: string): Promise<void>;
+  disarmAutoCapture(profileId?: string): Promise<void>;
+  chooseAutoCaptureOrg(profileId: string, orgId: string): Promise<void>;
   recoverDesktop(): Promise<void>;
   snapshot(): Promise<Snapshot>;
   panelSnapshot(): Promise<Snapshot>;

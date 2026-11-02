@@ -257,7 +257,11 @@ function useRelayState(
           await api.syncDesktopHistory(account.id);
         else if (request.kind === "capture")
           await api.captureDesktop(account.id, targetOrg);
-        else await api.beginDesktopLogin(account.id);
+        else {
+          await api.beginDesktopLogin(account.id);
+          // One confirmation covers both restarts: the sign-in is saved once it is complete.
+          await api.armAutoCapture(account.id);
+        }
       }
       setSetupId(undefined);
       setDesktopRequest(undefined);
@@ -284,8 +288,8 @@ function useRelayState(
                     "The previous Claude app sign-in was restored.",
                   )
                 : t(
-                    "Claude uygulamasında bu hesabın girişini tamamla, ardından Relay’e dön.",
-                    "Complete this account’s sign-in in the Claude app, then return to Relay.",
+                    "Claude uygulamasında bu hesapla giriş yap ve Code’u aç; Relay girişi kendisi kaydeder.",
+                    "Sign in with this account in the Claude app and open Code; Relay saves the sign-in by itself.",
                   ),
       );
     });

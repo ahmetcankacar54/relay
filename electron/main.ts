@@ -23,6 +23,7 @@ import {
 } from "./core/install-location";
 import { runDetached } from "./core/detached-exec";
 import { openCodeTab } from "./core/code-tab";
+import { AutoCapture } from "./core/auto-capture";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
@@ -185,6 +186,8 @@ const windowRelease = new WindowRelease({
 });
 let service: Service;
 let desktop: DesktopManager;
+/** Saves a Claude app sign-in by itself once the user has signed in and opened Code. */
+let autoCapture: AutoCapture | undefined;
 let switchDiagnostics: SwitchDiagnostics | undefined;
 let usage: UsageManager;
 let usageCredentialRefresher: UsageCredentialRefresher;
@@ -658,6 +661,16 @@ else {
       );
       desktop.onState = (state) => activeTimeline.observe(state);
       await desktop.initialize();
+      autoCapture = new AutoCapture({
+        snapshot: () => desktop.snapshot(),
+        accounts: () => service.store.state.accounts,
+        capture: (accountId, orgId) =>
+          manualDesktopLock(() => desktop.capture(accountId, orgId)),
+        changed: broadcastChanged,
+        now: Date.now,
+      });
+      // Reads Claude only while armed.
+      setInterval(() => void autoCapture?.tick(), 2_000).unref();
       if (vault.error) desktop.reportVaultError(vault.error);
       usageHistory = new UsageHistory(app.getPath("userData"));
       tempo = new TempoTracker({
@@ -1781,6 +1794,7 @@ function bindIPC() {
   // The windows show it; every switch, sign-in or recovery rechecks fresh in main.
   handle("desktop-snapshot", async () => ({
     ...(await desktop.cachedSnapshot()),
+    ...(autoCapture?.state() ? { autoCapture: autoCapture.state() } : {}),
     busy:
       desktop.isBusy || desktopLock.busy || usageCredentialRefresher?.anyActive,
   }));
@@ -1795,8 +1809,16 @@ function bindIPC() {
   handle("begin-desktop-login", (profileId) =>
     manualDesktopLock(() => desktop.beginLogin(id.parse(profileId))),
   );
-  handle("cancel-desktop-login", () =>
-    manualDesktopLock(() => desktop.cancelLogin()),
+  handle("cancel-desktop-login", async () => {
+    autoCapture?.disarm();
+    await manualDesktopLock(() => desktop.cancelLogin());
+  });
+  handle("arm-auto-capture", (profileId) => autoCapture?.arm(id.parse(profileId)));
+  handle("disarm-auto-capture", (profileId) =>
+    autoCapture?.disarm(profileId === undefined ? undefined : id.parse(profileId)),
+  );
+  handle("choose-auto-capture-org", (profileId, orgId) =>
+    autoCapture?.choose(id.parse(profileId), id.parse(orgId)),
   );
   // Registered directly so a panel-initiated switch can confirm with a notification.
   ipcMain.handle("relay:switch-desktop", async (event, profileId) => {

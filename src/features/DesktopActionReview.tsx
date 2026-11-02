@@ -152,8 +152,8 @@ export function DesktopActionReview({
                         "The account currently open in the Claude app is saved to this profile. Saving restarts the Claude app.",
                       )
                     : t(
-                        "Claude uygulaması yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yaptıktan sonra Relay’e dön ve girişi kaydet.",
-                        "The Claude app restarts and opens sign-in. Sign in with this profile’s account, then return to Relay to save the sign-in.",
+                        "Claude uygulaması yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yap ve Code’u bir kez aç: Relay girişi kendisi kaydeder, bunun için Claude uygulamasını bir kez daha yeniden başlatır.",
+                        "The Claude app restarts and opens sign-in. Sign in with this profile’s account and open Code once: Relay saves the sign-in by itself, restarting the Claude app once more to do so.",
                       )}
           </p>
           {kind === "switch" && fullLimit && (

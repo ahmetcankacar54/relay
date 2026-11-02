@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { readObject } from "../../../electron/core/desktop-files";
+import { readSignIn } from "../../../electron/core/sign-in-wait";
 import type { Account } from "../../../shared/types";
 import { assertFreeName, foldName } from "../accounts";
 import type { Command } from "../command";
@@ -121,9 +122,9 @@ async function waitForSignIn(
         io.stdout(stillPending);
         return undefined;
       }
-      const uuid = state.currentAccountUuid;
-      const saved = uuid ? ctx.store.state.accounts.find((a) => a.desktop?.accountUuid === uuid) : undefined;
-      if (uuid && !saved && state.organizations.length) return { accountUuid: uuid, orgs: state.organizations };
+      const reading = readSignIn(state, ctx.store.state.accounts, accountId);
+      if (reading.kind === "ready") return { accountUuid: reading.accountUuid, orgs: reading.orgs };
+      const saved = reading.kind === "saved-elsewhere" ? reading.account : undefined;
       // Signed back in with a saved account: say so once, and keep waiting for the new one.
       if (saved && saved.desktop?.accountUuid !== alreadyToldOf) {
         alreadyToldOf = saved.desktop?.accountUuid;

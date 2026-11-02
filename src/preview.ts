@@ -709,6 +709,9 @@ export const previewApi: RelayAPI = {
   }),
   openDesktop: desktopOnly,
   openCodeTab: desktopOnly,
+  armAutoCapture: desktopOnly,
+  disarmAutoCapture: async () => {},
+  chooseAutoCaptureOrg: desktopOnly,
   recoverDesktop: desktopOnly,
   panelSnapshot: async () => structuredClone(state),
   usageStatistics: async ({ range, accountId }) =>

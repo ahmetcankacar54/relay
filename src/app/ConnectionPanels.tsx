@@ -12,6 +12,7 @@ import { ConnectionProgress } from "../features/ConnectionProgress";
 import { WorkspaceSelect } from "../features/DesktopSetup";
 import { codeTabStep } from "@/lib/onboarding";
 import { localizeError } from "../messages";
+import type { AutoCaptureState } from "../../shared/types";
 
 const cardClass = "gap-3 px-4 py-4";
 const panelClass = `mx-6 mb-3 ${cardClass}`;
@@ -19,10 +20,59 @@ const titleClass = "flex items-start gap-3";
 const iconClass = "mt-0.5 size-5 shrink-0 text-brand";
 const actionsClass = "flex flex-wrap items-center gap-2";
 
+/**
+ * What Relay's automatic save of a Claude app sign-in is doing for `accountId`, as one line;
+ * undefined when it is not armed for that profile or has nothing to say.
+ */
+export function autoCaptureLine(
+  state: AutoCaptureState | undefined,
+  accountId: string,
+  t: (tr: string, en: string) => string,
+  language: "tr" | "en",
+): string | undefined {
+  if (state?.accountId !== accountId) return undefined;
+  switch (state.status) {
+    case "waiting":
+      return state.alreadySaved
+        ? t(
+            `Claude uygulamasında ${state.alreadySaved} açık; o zaten kayıtlı. Yeni hesapla giriş yap.`,
+            `The Claude app is signed in as ${state.alreadySaved}, which is already saved. Sign in with the new account.`,
+          )
+        : t(
+            "Claude uygulamasında giriş yap ve Code’u bir kez aç; Relay girişi kendisi kaydeder.",
+            "Sign in in the Claude app and open Code once; Relay saves the sign-in by itself.",
+          );
+    case "choose-org":
+      return t(
+        "Bu hesabın birden çok Code çalışma alanı var; kaydedilecek olanı seç.",
+        "This account has several Code workspaces; choose the one to save.",
+      );
+    case "saving":
+      return t(
+        "Giriş kaydediliyor; Claude uygulaması yeniden başlıyor…",
+        "Saving the sign-in; the Claude app is restarting…",
+      );
+    case "saved":
+      return t("Claude uygulaması girişi kaydedildi.", "Claude app sign-in saved.");
+    case "failed":
+      return state.error === "timeout"
+        ? t(
+            "Relay beklemeyi bıraktı; giriş tamamlandıysa “Girişi kaydet”e bas.",
+            "Relay stopped waiting; if the sign-in is complete, press Save sign-in.",
+          )
+        : state.error === "other-pending"
+          ? t(
+              "Başka bir profilin girişi bekliyor; önce onu tamamla veya iptal et.",
+              "Another profile’s sign-in is pending; finish or cancel it first.",
+            )
+          : localizeError(state.error ?? "", language);
+  }
+}
+
 /** Workspace choice and the reopen / cancel / complete actions for a pending Desktop sign-in. */
 export function DesktopPendingActions() {
   const relay = useRelay();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const {
     api,
     desktop,
@@ -37,18 +87,40 @@ export function DesktopPendingActions() {
   const identityReady =
     hasUnclaimedDesktop || desktop?.activeProfileId === pendingDesktop.id;
   const workspaces = desktop?.organizations.length ?? 0;
+  const auto = desktop?.autoCapture?.accountId === pendingDesktop.id ? desktop.autoCapture : undefined;
+  // Saved by Relay unless that stopped: the manual save stays as the way out.
+  const manual = !auto || auto.status === "failed";
+  const line = autoCaptureLine(auto, pendingDesktop.id, t, language);
   return (
     <>
-      {workspaces > 1 && (
+      {line && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {line}
+        </p>
+      )}
+      {auto?.status === "choose-org" && auto.orgs ? (
         <WorkspaceSelect
           accounts={relay.accounts}
-          organizations={desktop!.organizations}
-          value={targetOrg}
-          onChange={setOrg}
+          organizations={auto.orgs}
+          value=""
+          onChange={(orgId) =>
+            void action("auto-capture", () => api.chooseAutoCaptureOrg(pendingDesktop.id, orgId))
+          }
           t={t}
         />
+      ) : (
+        manual &&
+        workspaces > 1 && (
+          <WorkspaceSelect
+            accounts={relay.accounts}
+            organizations={desktop!.organizations}
+            value={targetOrg}
+            onChange={setOrg}
+            t={t}
+          />
+        )
       )}
-      {identityReady && !workspaces && (
+      {manual && identityReady && !workspaces && (
         <p className="text-sm text-muted-foreground">{codeTabStep(t)}</p>
       )}
       <div className={actionsClass}>
@@ -56,15 +128,15 @@ export function DesktopPendingActions() {
           variant="outline"
           size="sm"
           disabled={desktopBusy}
-          onClick={() => void action("open", () => api.openDesktop())}
+          onClick={() => void action("open", () => api.openCodeTab())}
         >
           <ArrowUpRight />
-          {t("Claude uygulamasını yeniden aç", "Reopen the Claude app")}
+          {t("Claude’u Code’da aç", "Open Claude on Code")}
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          disabled={desktopBusy}
+          disabled={desktopBusy || auto?.status === "saving"}
           onClick={() => relay.requestDesktop(pendingDesktop, "cancel")}
         >
           {t(
@@ -72,7 +144,7 @@ export function DesktopPendingActions() {
             "Cancel and return to previous account",
           )}
         </Button>
-        {identityReady && targetOrg && (
+        {manual && identityReady && targetOrg && (
           <Button
             size="sm"
             disabled={desktopBusy}
@@ -105,8 +177,8 @@ export function DesktopPendingPanel() {
           </h3>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç. Sonra girişi buradan kaydet.",
-              "Sign in to the matching account inside the Claude app and open Code. Then save the sign-in here.",
+              "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç; Relay girişi kendisi kaydeder.",
+              "Sign in to the matching account inside the Claude app and open Code; Relay saves the sign-in by itself.",
             )}
           </p>
         </div>
@@ -145,8 +217,8 @@ export function DesktopPendingPanel() {
           {
             title: t("Code’u aç ve bağla", "Open Code & connect"),
             detail: t(
-              "Girişi Relay’de kaydet",
-              "Save the sign-in in Relay",
+              "Relay girişi kendisi kaydeder",
+              "Relay saves the sign-in itself",
             ),
           },
         ]}
