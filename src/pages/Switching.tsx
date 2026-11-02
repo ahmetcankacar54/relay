@@ -202,6 +202,8 @@ export function Switching() {
     setData,
   } = relay;
   const disabled = !!busy || !!desktop?.busy;
+  // The extension and drafts come along on macOS only; Windows and Linux bring Code history.
+  const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
   const continuation = data?.continuation;
   const automation = useAutomation();
   const target =
@@ -250,7 +252,9 @@ export function Switching() {
                 <ArrowRight className="size-4" />
               </span>
               <span className="text-xs text-muted-foreground">
-                {t("Code geçmişi, eklenti ve taslaklar da gelir", "Code history, the extension and drafts come along")}
+                {macOS
+                  ? t("Code geçmişi, eklenti ve taslaklar da gelir", "Code history, the extension and drafts come along")
+                  : t("Code geçmişi de gelir", "Code history comes along")}
               </span>
             </div>
             {target ? (
@@ -300,32 +304,34 @@ export function Switching() {
                 options={historyTransferOptions(t)}
               />
             </Carry>
-            <ExtensionCarry disabled={disabled} />
-            <Carry
-              icon={<PencilLine />}
-              title={t("Gönderilmemiş taslaklar", "Unsent drafts")}
-              value={
-                settings.draftRetype
-                  ? t("Konuşmaya yeniden yazılır", "Typed back into the conversation")
-                  : t("Panelde kopyalanmaya hazır bekler", "Offered to copy in the panel")
-              }
-              href="#gecis-taslak"
-            >
-              <label className="flex items-center gap-2 text-[13px]">
-                <input
-                  id="carry-retype"
-                  type="checkbox"
-                  className="size-4 shrink-0 accent-primary"
-                  checked={settings.draftRetype === true}
-                  disabled={disabled}
-                  onChange={(e) => update({ draftRetype: e.target.checked })}
-                />
-                {t("Konuşmaya yeniden yaz", "Type it back into the conversation")}
-                <Badge variant="outline" className="text-muted-foreground">
-                  {t("Deneysel", "Experimental")}
-                </Badge>
-              </label>
-            </Carry>
+            {macOS && <ExtensionCarry disabled={disabled} />}
+            {macOS && (
+              <Carry
+                icon={<PencilLine />}
+                title={t("Gönderilmemiş taslaklar", "Unsent drafts")}
+                value={
+                  settings.draftRetype
+                    ? t("Konuşmaya yeniden yazılır", "Typed back into the conversation")
+                    : t("Panelde kopyalanmaya hazır bekler", "Offered to copy in the panel")
+                }
+                href="#gecis-taslak"
+              >
+                <label className="flex items-center gap-2 text-[13px]">
+                  <input
+                    id="carry-retype"
+                    type="checkbox"
+                    className="size-4 shrink-0 accent-primary"
+                    checked={settings.draftRetype === true}
+                    disabled={disabled}
+                    onChange={(e) => update({ draftRetype: e.target.checked })}
+                  />
+                  {t("Konuşmaya yeniden yaz", "Type it back into the conversation")}
+                  <Badge variant="outline" className="text-muted-foreground">
+                    {t("Deneysel", "Experimental")}
+                  </Badge>
+                </label>
+              </Carry>
+            )}
             <Carry
               icon={<Lightbulb />}
               title={t("Hesap önerisi", "Account suggestion")}
@@ -457,20 +463,25 @@ export function Switching() {
             t={t}
           />
         </Card>
-        <Card id="gecis-eklenti" className={cardClass}>
-          <ExtensionPreference />
-        </Card>
-        <Card id="gecis-terminal" className={cardClass}>
-          <TerminalPreference />
-        </Card>
-        <Card id="gecis-taslak" className={cardClass}>
-          <DraftRetypePreference
-            value={settings}
-            update={update}
-            disabled={disabled}
-            t={t}
-          />
-        </Card>
+        {/* macOS only: elsewhere these steps do not run, and their cards would stand empty. */}
+        {macOS && (
+          <>
+            <Card id="gecis-eklenti" className={cardClass}>
+              <ExtensionPreference />
+            </Card>
+            <Card id="gecis-terminal" className={cardClass}>
+              <TerminalPreference />
+            </Card>
+            <Card id="gecis-taslak" className={cardClass}>
+              <DraftRetypePreference
+                value={settings}
+                update={update}
+                disabled={disabled}
+                t={t}
+              />
+            </Card>
+          </>
+        )}
         <Card id="gecis-oneri" className={cardClass}>
           <SectionHeading
             title={t(

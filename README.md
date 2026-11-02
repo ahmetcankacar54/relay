@@ -111,6 +111,13 @@ adapts the menu-bar icon to light and dark appearances.
   reused; the conversation text still continues.
 - Relay depends on Claude Desktop's private local file formats and, for automatic
   continuation, on its accessibility tree. A Claude update can break either.
-- Windows packaging exists but is untested; Linux can only preview the UI.
+- macOS is the main platform. The Windows installer (`.exe`) and the Linux
+  AppImage switch Claude Desktop by hand, read usage limits and manage accounts,
+  but have no automatic switch, continuation, draft re-typing, Claude extension
+  or terminal `claude` carry-over, menu bar panel or widget. Planned limit
+  periods run on Linux, not Windows. The Windows build is untested on a real
+  machine; Linux has no official Claude Desktop, so Relay looks for the community
+  packages.
+- The `relay` CLI runs on macOS only.
 
 Older design notes and acceptance records are in [docs](docs).

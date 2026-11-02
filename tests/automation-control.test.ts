@@ -510,3 +510,23 @@ test("the menu bar panel does not bundle the Switching card", () => {
     !imported("src/features/AutomationControl.tsx").has("src/app/Banners.tsx"),
   );
 });
+
+test("Switching shows the extension, terminal and draft steps on macOS only", () => {
+  const mac = render(relayFor({ fleet: otherWork, usage: fullUsage }));
+  assert.match(mac, /Code geçmişi, eklenti ve taslaklar da gelir/);
+  assert.match(mac, /id="gecis-eklenti"/);
+  assert.match(mac, /id="gecis-terminal"/);
+  assert.match(mac, /id="gecis-taslak"/);
+  assert.match(mac, /Gönderilmemiş taslaklar/);
+  for (const platform of ["win32", "linux"]) {
+    const html = render(
+      relayFor({ fleet: otherWork, usage: fullUsage, diagnostics: { platform } } as never),
+    );
+    assert.match(html, /Code geçmişi de gelir/, platform);
+    assert.doesNotMatch(html, /eklenti ve taslaklar/, platform);
+    assert.doesNotMatch(html, /Tarayıcı eklentisi/, platform);
+    assert.doesNotMatch(html, /Gönderilmemiş taslaklar/, platform);
+    for (const id of ["gecis-eklenti", "gecis-terminal", "gecis-taslak"])
+      assert.doesNotMatch(html, new RegExp(`id="${id}"`), `${platform}: ${id}`);
+  }
+});
