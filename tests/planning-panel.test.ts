@@ -330,12 +330,13 @@ test("the usage lane shows who works when, with switches and the comparison", ()
   const html = renderScenario(automatic, now);
   assert.match(html, />Kullanım</);
   assert.match(html, />tahmin</);
-  assert.match(html, /Kullanım şeridi, Relay’in tahminidir/);
-  assert.ok(
-    html.includes(
-      "Soluk kısım planın tahmini, koyu kısım şu anki kullanımdan hesaplanır.",
-    ),
+  // A small legend instead of a paragraph: one word per mark.
+  const legend = /data-slot="timeline-legend"[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? "";
+  assert.deepEqual(
+    [...legend.matchAll(/<\/i>([^<]*)<\/li>/g)].map(([, word]) => word),
+    ["Çalışma", "Tahmin", "Dolu", "Geçiş"],
   );
+  assert.doesNotMatch(html, /Kullanım şeridi, Relay’in tahminidir/);
   const view = dayTimeline({
     settings: scenarioSettings(automatic),
     accounts: scenarioAccounts,
@@ -383,7 +384,7 @@ test("the usage lane shows who works when, with switches and the comparison", ()
   // A switch marker wherever work moves to another account: max → pro →
   // vertex by plan, then (the seam at now is none) pro, vertex and, after the
   // gap, max again.
-  assert.equal(count(html, /bg-foreground\/55/g), 5);
+  assert.equal(count(html, /-ml-px w-0\.5 rounded-\[1px\] bg-foreground\/55/g), 5);
   // The comparison: this plan against the even spread, which has a gap.
   assert.match(html, />Bu plan</);
   assert.match(html, />Eşit aralıklı dağıtım</);
@@ -445,7 +446,7 @@ test("an all-manual plan shows its gap on the lane and no comparison", () => {
   );
   assert.equal(plan.forecast!.outageMinutes, 32);
   // With the windows as planned the live forecast is the plan's, switches and all.
-  assert.equal(count(html, /bg-foreground\/55/g), plan.forecast!.switches);
+  assert.equal(count(html, /-ml-px w-0\.5 rounded-\[1px\] bg-foreground\/55/g), plan.forecast!.switches);
   assert.doesNotMatch(html, /Bu plan|Eşit aralıklı dağıtım/);
 });
 
@@ -510,18 +511,18 @@ test("the hours card shows the learned tempo and how long a window lasts at it",
   for (const label of ["Hafif", "Orta", "Yoğun"])
     assert.match(toggleItem(html, label), /data-state="off"/, label);
   assert.ok(
-    html.includes("Yoğun gün ≈ 205 Pro birimi/sa · son 4 haftada 17 iş günü"),
+    html.includes("Yoğun gün ≈ 205 Pro birimi/sa, son 4 haftanın 17 iş gününden"),
   );
   // Each plan once (both Max 5× accounts share a line), largest first; the
   // unplanned Team account is not listed.
   assert.ok(
     html.includes(
-      "Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk · Pro ~30 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk, Pro ~30 dk yeter.",
     ),
   );
   assert.ok(
     renderScenario(automatic, wednesday("08:00")).includes(
-      "Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk · Team · 2 ~1 sa · Pro ~30 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk, Team · 2 ~1 sa, Pro ~30 dk yeter.",
     ),
   );
 });
@@ -529,12 +530,12 @@ test("the hours card shows the learned tempo and how long a window lasts at it",
 test("the default and a fixed tempo say so, and the toggle shows the choice", () => {
   const fallback = renderPlanning({ planned: [a, pro] });
   assert.ok(
-    fallback.includes("Orta (varsayılan) ≈ 50 Pro birimi/sa · veri birikiyor"),
+    fallback.includes("Veri birikene kadar orta tempo ≈ 50 Pro birimi/sa"),
   );
   assert.match(toggleItem(fallback, "Otomatik"), /data-state="on"/);
   assert.ok(
     fallback.includes(
-      "Bu tempoyla bir dönem: Max 5× ~10 sa · Pro ~2 sa yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~10 sa, Pro ~2 sa yeter.",
     ),
   );
   const heavy = renderPlanning({ planned: [a, pro], choice: "heavy" });
@@ -544,7 +545,7 @@ test("the default and a fixed tempo say so, and the toggle shows the choice", ()
   assert.match(toggleItem(heavy, "Otomatik"), /data-state="off"/);
   assert.ok(
     heavy.includes(
-      "Bu tempoyla bir dönem: Max 5× ~4 sa 10 dk · Pro ~50 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~4 sa 10 dk, Pro ~50 dk yeter.",
     ),
   );
 });
@@ -674,13 +675,11 @@ test("each planned account says how long its window lasts and when it works toda
 
 test("the notes explain the order and the warm-ups", () => {
   const html = renderScenario(automatic, wednesday("08:00"));
-  assert.match(html, /Sıra yalnızca eşitlikte öncelik verir\./);
+  // The order note waits under “Nasıl çalışır?”; the time-zone note is one line.
+  assert.match(html, /id="planning-accounts"[\s\S]*>Nasıl çalışır\?</);
+  assert.doesNotMatch(html, /Sıra yalnızca eşitlikte öncelik verir/);
   assert.doesNotMatch(html, /Sıra, otomatik saatlerin dağıtım sırasıdır/);
-  assert.ok(
-    html.includes(
-      "Bitiş saati başlangıçtan önceyse aralık ertesi güne uzar. Relay, kapasiteye ve tempoya göre hesapların limit dönemlerini işe başlamadan önce başlatır.",
-    ),
-  );
+  assert.ok(html.includes("Bitiş başlangıçtan önceyse aralık ertesi güne uzar."));
 });
 
 // Saturday work with a learned weekend rate well below the weekday one.
@@ -704,12 +703,12 @@ test("on a weekend work day the tempo row and the account rows use the weekend r
   });
   assert.ok(
     html.includes(
-      "Hafta sonu yoğun gün ≈ 60 Pro birimi/sa · son 4 haftada 21 iş günü",
+      "Hafta sonu yoğun gün ≈ 60 Pro birimi/sa, son 4 haftanın 21 iş gününden",
     ),
   );
   assert.ok(
     html.includes(
-      "Bu tempoyla bir dönem: Max 5× ~8 sa 20 dk · Pro ~1 sa 40 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~8 sa 20 dk, Pro ~1 sa 40 dk yeter.",
     ),
   );
   assert.ok(html.includes("Bir dönem ~8 sa 20 dk yeter · bugün 11:00–17:00"));
@@ -722,7 +721,7 @@ test("on a weekend work day the tempo row and the account rows use the weekend r
       tempo: busyTempo,
       now: wallTime(SATURDAY, "08:00", ZONE)!,
       settings: weekendHours,
-    }).includes("Yoğun gün ≈ 205 Pro birimi/sa · son 4 haftada 17 iş günü"),
+    }).includes("Yoğun gün ≈ 205 Pro birimi/sa, son 4 haftanın 17 iş gününden"),
   );
 });
 
@@ -769,7 +768,7 @@ test("a fixed tempo applies at once, before the keeper reports it", () => {
   assert.ok(html.includes("Sabit tempo ≈ 120 Pro birimi/sa"));
   assert.ok(
     html.includes(
-      "Bu tempoyla bir dönem: Max 5× ~4 sa 10 dk · Pro ~50 dk yeter.",
+      "Bu tempoyla bir dönem: Max 5× ~4 sa 10 dk, Pro ~50 dk yeter.",
     ),
   );
   assert.match(html, />Bir dönem ~4 sa 10 dk yeter/);
@@ -967,7 +966,7 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
   assert.match(html, />Bir dönem ~20 dk yeter/);
   assert.match(
     html,
-    /Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk · Team · 2 ~1 sa · Pro ~30 dk yeter\./,
+    /Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk, Team · 2 ~1 sa, Pro ~30 dk yeter\./,
   );
 });
 

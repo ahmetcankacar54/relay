@@ -47,16 +47,16 @@ export const AUTOMATION_MODES: {
     value: "after-exit",
     label: ["Claude uygulaması kapanınca", "When the Claude app quits"],
     description: [
-      "Limit dolunca, sen Claude uygulamasını kapattığında sıradaki hesabı hazırlar. Claude uygulamasını kendisi kapatmaz.",
-      "When the limit is reached, prepares the next account once you quit the Claude app. Never quits the Claude app itself.",
+      "Limit dolunca, sen Claude’u kapatınca sıradaki hesabı hazırlar.",
+      "At the limit, prepares the next account once you quit Claude.",
     ],
   },
   {
     value: "quota",
     label: ["Limit dolunca", "When the limit is reached"],
     description: [
-      "Limit dolunca, çalışan iş bitince Claude uygulamasını sıradaki hesapla yeniden açar ve limit dolduğu için duran Code konuşmalarını devam ettirir.",
-      "When the limit is reached and running work finishes, reopens the Claude app on the next account and continues the Code conversations that stopped at the limit.",
+      "Limit dolunca Claude’u sıradaki hesapla açar, duran konuşmaları sürdürür.",
+      "At the limit, reopens Claude on the next account and continues stopped conversations.",
     ],
   },
 ];

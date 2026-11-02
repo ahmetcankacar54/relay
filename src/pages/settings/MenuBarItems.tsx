@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { useI18n, Language } from "@/data/i18n";
 import type { useRelay } from "@/data/relay-context";
 import type { MenuBarItem, MenuBarNow } from "../../../shared/types";
+import { Disclosure } from "@/components/Disclosure";
 import {
   DEFAULT_MENU_BAR_ITEMS,
   MENU_BAR_ITEMS,
@@ -200,10 +201,20 @@ export function MenuBarTitleRows({
       </span>
       <p className="mt-0.5 text-[13px] text-muted-foreground">
         {t(
-          `Pandanın yanında görünecek değerleri seç ve sırala; en çok ${MENU_BAR_MAX_ITEMS} değer. Yüzdeler ve süre Claude uygulamasında açık hesabın, token ve API karşılığı tüm hesaplarının bugünkü toplamı. Limitler okunamazsa son değer başında ~ ile kalır. Simgeyi ⌘ tuşuyla sürükleyip taşırsan yeri hatırlanır.`,
-          `Pick and order the values shown beside the panda; ${MENU_BAR_MAX_ITEMS} at most. Percents and time are for the account open in the Claude app; tokens and API value are today’s total across all your accounts. If limits cannot be read, the last value stays, marked with ~. Drag the icon with ⌘ to move it; its place is kept.`,
+          `Pandanın yanında en çok ${MENU_BAR_MAX_ITEMS} değer seç ve sırala.`,
+          `Pick and order up to ${MENU_BAR_MAX_ITEMS} values beside the panda.`,
         )}
       </p>
+      <div className="mt-1">
+        <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
+          <p className="text-[13px] text-muted-foreground">
+            {t(
+              "Yüzdeler ve süre Claude uygulamasında açık hesabın, token ve API karşılığı tüm hesaplarının bugünkü toplamı. Limitler okunamazsa son değer başında ~ ile kalır. Simgeyi ⌘ tuşuyla sürükleyip taşırsan yeri hatırlanır.",
+              "Percents and time are for the account open in the Claude app; tokens and API value are today’s total across all your accounts. If limits cannot be read, the last value stays, marked with ~. Drag the icon with ⌘ to move it; its place is kept.",
+            )}
+          </p>
+        </Disclosure>
+      </div>
       {/* The menu bar as it reads now, or as these items would read on sample figures. */}
       <div
         className="mt-3 flex h-9 items-center gap-3 rounded-lg border bg-muted/40 px-3"

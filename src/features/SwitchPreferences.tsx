@@ -11,6 +11,7 @@ import {
   SettingRow,
 } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
+import { Disclosure } from "@/components/Disclosure";
 
 type T = (tr: string, en: string) => string;
 
@@ -159,8 +160,8 @@ export function DraftRetypePreference({
         }
         htmlFor="draft-retype"
         description={t(
-          "Kapalıyken taslaklar kurtarılır ve panelde “Kopyala” düğmesiyle sunulur. Açıkken Relay geçişten sonra konuşmayı açar ve taslağı mesaj kutusuna yazar, göndermez. Erişilebilirlik izni ister.",
-          "While off, drafts are rescued and offered in the panel with “Copy”. While on, Relay opens the conversation after a switch and types the draft into its message box without sending it. It needs Accessibility permission.",
+          "Geçişten sonra taslağı mesaj kutusuna yazar, göndermez. Erişilebilirlik izni ister.",
+          "Types the draft into the message box after a switch, unsent. Needs Accessibility.",
         )}
       >
         <Switch
@@ -172,6 +173,36 @@ export function DraftRetypePreference({
       </SettingRow>
     </div>
   );
+}
+
+/** What the chosen scope shares, and that only local Code history is; nothing when it is off. */
+export function historyScopeNote(
+  transfer: RelaySettings["desktopHistoryTransfer"],
+  t: T,
+): string {
+  if (transfer === "off") return "";
+  // "same-group" is explained by its label.
+  const scope =
+    transfer === "all"
+      ? t(
+          "Claude uygulaması girişi kayıtlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
+          "All accounts with a saved Claude app sign-in, personal or work, share Code history.",
+        )
+      : transfer === "selected"
+        ? t(
+            "Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır.",
+            "Selected accounts share Code history, even across companies.",
+          )
+        : "";
+  return [
+    scope,
+    t(
+      "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.",
+      "Only local Code history is shared; Chat and cloud sessions are not synced.",
+    ),
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /** Shared Code history: scope, selection and the merge into the open account. */
@@ -198,19 +229,6 @@ export function SharedHistoryPreferences({
   const sources = active ? historySources(active, accounts, value) : [];
   // "Paylaşma": nothing is shared, so nothing may say it is.
   const off = value.desktopHistoryTransfer === "off";
-  // What the chosen scope shares; "same-group" is explained by its label.
-  const scope =
-    value.desktopHistoryTransfer === "all"
-      ? t(
-          "Claude uygulaması girişi kayıtlı tüm hesaplar, kişisel ya da şirket, Code geçmişini paylaşır.",
-          "All accounts with a saved Claude app sign-in, personal or work, share Code history.",
-        )
-      : value.desktopHistoryTransfer === "selected"
-        ? t(
-            "Seçili hesaplar, farklı şirketlerden olsalar da Code geçmişini paylaşır.",
-            "Selected accounts share Code history, even across companies.",
-          )
-        : "";
   return (
     <div className="grid gap-1">
       <SectionHeading
@@ -262,22 +280,6 @@ export function SharedHistoryPreferences({
           options={historyTransferOptions(t)}
         />
       </SettingRow>
-      <Note>
-        {off
-          ? t(
-              "Code geçmişi hesaplar arasında paylaşılmaz.",
-              "Code history is not shared between accounts.",
-            )
-          : [
-              scope,
-              t(
-                "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.",
-                "Only local Code history is shared; Chat and cloud sessions are not synced.",
-              ),
-            ]
-              .filter(Boolean)
-              .join(" ")}
-      </Note>
       {value.desktopHistoryTransfer === "selected" && (
         <AccountSelection
           accounts={accounts}
@@ -315,6 +317,11 @@ export function SharedHistoryPreferences({
           {t("Açık hesapla birleştir…", "Merge into current account…")}
         </Button>
       </div>
+      {!off && (
+        <Disclosure title={t("Gelişmiş", "Advanced")}>
+          <Note>{historyScopeNote(value.desktopHistoryTransfer, t)}</Note>
+        </Disclosure>
+      )}
     </div>
   );
 }

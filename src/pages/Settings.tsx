@@ -18,6 +18,7 @@ import type {
   RelaySettings,
 } from "../../shared/types";
 import { MenuBarTitleRows } from "./settings/MenuBarItems";
+import { Disclosure } from "@/components/Disclosure";
 import { chooseCliFile } from "../features/CliSetup";
 import { chooseClaudeApp } from "../features/ClaudeAppSetup";
 import { WarningThreshold } from "./Usage";
@@ -60,21 +61,33 @@ function ClaudeLaunchRow({
   const change = (patch: Partial<ClaudeLaunchChoice>) =>
     void action("claude-launch", async () => setChoice(await api.setClaudeLaunch(patch)));
   return (
-    <SettingRow
-      label={t("Claude’u HTTP/3 olmadan aç", "Open Claude without HTTP/3")}
-      htmlFor="claude-quic-off"
-      description={t(
-        "Bazı ağlarda claude.ai’nin HTTP/3 aktarımları takılır ve Claude uygulaması gri ekranda kalır. Açıkken Relay, Claude uygulamasını HTTP/2 ile başlatır. Bir geçişte sayfa takılıp HTTP/2 ile açılırsa Relay bunu kendisi açar. Yalnızca Relay’in başlattığı Claude için geçerlidir; Dock’tan açılan Claude HTTP/3 kullanır.",
-        "On some networks claude.ai’s HTTP/3 transfers stall and the Claude app stays on a grey screen. While on, Relay starts the Claude app over HTTP/2. If a page sticks at a switch and loads over HTTP/2, Relay turns this on itself. It applies only to a Claude that Relay starts; a Claude opened from the Dock uses HTTP/3.",
-      )}
-    >
-      <Switch
-        id="claude-quic-off"
-        checked={choice?.quicOff === true}
-        disabled={choice === undefined}
-        onCheckedChange={(quicOff) => change({ quicOff })}
-      />
-    </SettingRow>
+    <>
+      <SettingRow
+        label={t("Claude’u HTTP/3 olmadan aç", "Open Claude without HTTP/3")}
+        htmlFor="claude-quic-off"
+        description={t(
+          "Claude gri ekranda kalıyorsa onu HTTP/2 ile başlatır.",
+          "Starts Claude over HTTP/2 when it stays on a grey screen.",
+        )}
+      >
+        <Switch
+          id="claude-quic-off"
+          checked={choice?.quicOff === true}
+          disabled={choice === undefined}
+          onCheckedChange={(quicOff) => change({ quicOff })}
+        />
+      </SettingRow>
+      <div className="pb-3">
+        <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
+          <Note>
+            {t(
+              "Bazı ağlarda claude.ai’nin HTTP/3 aktarımları takılır. Bir geçişte sayfa takılıp HTTP/2 ile açılırsa Relay bunu kendisi açar. Yalnızca Relay’in başlattığı Claude için geçerlidir; Dock’tan açılan Claude HTTP/3 kullanır.",
+              "On some networks claude.ai’s HTTP/3 transfers stall. If a page sticks at a switch and loads over HTTP/2, Relay turns this on itself. It applies only to a Claude that Relay starts; a Claude opened from the Dock uses HTTP/3.",
+            )}
+          </Note>
+        </Disclosure>
+      </div>
+    </>
   );
 }
 
@@ -268,8 +281,8 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
               </span>
             }
             description={t(
-              "Seyrek şakalar; hiçbir işlemi geciktirmez. Panda imleci kısa süre saklayabilir.",
-              "Rare pranks; they never delay anything. The panda may briefly hide the cursor.",
+              "Seyrek şakalar; imleci kısa süre saklayabilir.",
+              "Rare pranks; it may briefly hide the cursor.",
             )}
           >
             <ToggleGroup
@@ -332,8 +345,8 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                 </span>
               }
               description={t(
-                "Kapalıyken panda yalnızca ifade değiştirir. macOS’ta “Hareketi azalt” açıksa animasyon zaten oynamaz.",
-                "When off, the panda only changes expression. With Reduce motion on in macOS it never animates.",
+                "Kapalıyken panda yalnızca ifade değiştirir.",
+                "When off, the panda only changes expression.",
               )}
             >
               <Switch
@@ -429,30 +442,11 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
           </SettingRow>
           <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
         </SettingGroup>
-        <SettingGroup
-          id="settings-privacy"
-          title={t("Gizlilik ve güvenlik", "Privacy and security")}
-          className="grid gap-2 py-3"
-        >
-          <Note>
-            {t(
-              "Claude uygulaması girişleri bu cihazda işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. Limit okuma girişi resmi Claude Code üzerinden tamamlanır.",
-              "Claude app sign-ins are encrypted on this device using the operating system. Every switch creates a backup. The usage sign-in uses the official Claude Code.",
-            )}
-          </Note>
-          <Note>
-            {t(
-              "Relay kayıtlı girişleri macOS Anahtarlık’ta tuttuğu bir anahtarla şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
-              "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
-            )}
-          </Note>
-          <Note>
-            {t(
-              "Hesap geçişi, Claude uygulamasının yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",
-              "Switching accounts is an experimental integration with the Claude app’s local file format. Code sessions and local project records merge within your chosen sharing scope. Chat history and server-managed project groups remain account-specific.",
-            )}
-          </Note>
-        </SettingGroup>
+        <div id="settings-privacy" className="px-1">
+          <Disclosure title={t("Gizlilik ve güvenlik", "Privacy and security")}>
+            <PrivacyNotes t={t} />
+          </Disclosure>
+        </div>
         <p className="px-1 text-center text-xs text-muted-foreground">
           {t(
             "Yerelde saklanır. Kontrol sende.",
@@ -464,5 +458,31 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
         </TabsContent>
       </Tabs>
     </PageFrame>
+  );
+}
+
+/** How Relay keeps sign-ins, the Keychain prompt, and what a switch merges: the privacy section. */
+export function PrivacyNotes({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
+  return (
+    <>
+      <Note>
+        {t(
+          "Claude uygulaması girişleri bu cihazda işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. Limit okuma girişi resmi Claude Code üzerinden tamamlanır.",
+          "Claude app sign-ins are encrypted on this device using the operating system. Every switch creates a backup. The usage sign-in uses the official Claude Code.",
+        )}
+      </Note>
+      <Note>
+        {t(
+          "Relay kayıtlı girişleri macOS Anahtarlık’ta tuttuğu bir anahtarla şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
+          "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
+        )}
+      </Note>
+      <Note>
+        {t(
+          "Hesap geçişi, Claude uygulamasının yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",
+          "Switching accounts is an experimental integration with the Claude app’s local file format. Code sessions and local project records merge within your chosen sharing scope. Chat history and server-managed project groups remain account-specific.",
+        )}
+      </Note>
+    </>
   );
 }
