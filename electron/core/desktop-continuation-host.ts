@@ -55,6 +55,8 @@ export interface DesktopSendResult {
   acceptedVisible: boolean;
   /** How the text went in: always a paste now. Older helpers omit it. */
   written?: "paste";
+  /** How it was sent: with Return in the focused composer. Older helpers omit it. */
+  submitted?: "return";
   /** What the screen showed right after Send, for the log: never text. Older helpers omit it. */
   after?: {
     status: string;
@@ -65,6 +67,8 @@ export interface DesktopSendResult {
     composerChars?: number;
     markerVisible: boolean;
     sendPresent: boolean;
+    /** How long the screen took to show the composer again after the send. */
+    waitedMs?: number;
   };
 }
 
@@ -268,6 +272,7 @@ type NativeReply = {
   snapshot?: DesktopAutomationSnapshot;
   acceptedVisible?: boolean;
   written?: unknown;
+  submitted?: unknown;
   after?: unknown;
   step?: unknown;
   markerPresent?: boolean;
@@ -289,7 +294,8 @@ function validSendAfter(value: unknown): value is DesktopSendResult["after"] {
     typeof v.composerHoldsText === "boolean" &&
     typeof v.markerVisible === "boolean" &&
     typeof v.sendPresent === "boolean" &&
-    (v.composerChars === undefined || Number.isSafeInteger(v.composerChars))
+    (v.composerChars === undefined || Number.isSafeInteger(v.composerChars)) &&
+    (v.waitedMs === undefined || Number.isSafeInteger(v.waitedMs))
   );
 }
 
@@ -489,6 +495,7 @@ export function nativeDesktopAutomation(
       return {
         acceptedVisible: r.acceptedVisible === true,
         ...(r.written === "paste" ? { written: r.written } : {}),
+        ...(r.submitted === "return" ? { submitted: r.submitted } : {}),
         ...(validSendAfter(r.after) ? { after: r.after } : {}),
       };
     },

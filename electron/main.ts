@@ -966,6 +966,7 @@ else {
             conversation,
             acceptedVisible: sent.acceptedVisible,
             written: sent.written ?? null,
+            submitted: sent.submitted ?? null,
             ...(sent.after ?? {}),
           });
         } catch (error) {

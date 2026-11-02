@@ -492,6 +492,20 @@ func writeComposer(_ observation: Observation, _ body: String) throws -> String 
     Thread.sleep(forTimeInterval: 0.15)
     return "paste"
 }
+/// Sends what the composer holds with Return, as the user would. Pressing Send through AX does
+/// not reach Claude's handler: the text stayed in the box (seen live 2026-11-02), while the
+/// paste's key events do. Only into Claude in front with its composer focused, checked right
+/// before the key, so the Return never lands anywhere else.
+func submitComposer(_ observation: Observation) throws {
+    guard let composer = observation.composer,
+          let down = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: true),
+          let up = CGEvent(keyboardEventSource: nil, virtualKey: 36, keyDown: false) else { try fail("desktop-ui-unsupported") }
+    guard NSWorkspace.shared.frontmostApplication?.processIdentifier == observation.app.processIdentifier,
+          attribute(composer.element, kAXFocusedAttribute) as? Bool == true else { try fail("context-changed") }
+    down.post(tap: .cghidEventTap)
+    up.post(tap: .cghidEventTap)
+    Thread.sleep(forTimeInterval: 0.3)
+}
 // Claude's own question before it quits while work is left running, an alert or a sheet,
 // by its title in English and Turkish: "shells" when it asks only about background
 // commands, "working" when Claude is still working in a session, nil for anything else.
@@ -629,14 +643,23 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
             try validateGuard(current, expected, allowComposer: true)
             // The editor may give its paragraphs other line breaks than the text had: the
             // characters that show must all be there, in order, and nothing else.
+            // An enabled Send also says the editor itself holds the text, not just the page.
             guard let typed = current.composer?.value, visibleText(typed) == visibleText(body),
                   let send = current.send, send.enabled else { try fail("delivery-ambiguous") }
             // There is no atomic lock across AX clients. This is one guarded attempt,
             // never an exactly-once transport. Ambiguous results must not be retried.
             step = "press"
-            try press(send)
+            try submitComposer(current)
             step = "after"
+            // The page redraws the conversation as the turn starts: read again until it shows
+            // the composer, for up to 3 s.
+            var waited = 0
             current = try observe()
+            while current.composer == nil && waited < 3000 {
+                Thread.sleep(forTimeInterval: 0.3)
+                waited += 300
+                current = try observe()
+            }
             let accepted = current.fields["composerEmpty"] as? Bool == true && markerPresent(current, marker)
             // What the screen showed right after Send, for the log: counts and flags, never text.
             var after: [String: Any] = [
@@ -648,7 +671,8 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
                 "sendPresent": current.send != nil
             ]
             if let chars = current.fields["composerChars"] as? Int { after["composerChars"] = chars }
-            return ["ok": true, "acceptedVisible": accepted, "written": written, "after": after]
+            after["waitedMs"] = waited
+            return ["ok": true, "acceptedVisible": accepted, "written": written, "submitted": "return", "after": after]
         } catch let error as BridgeError {
             throw BridgeError(issue: error.issue, step: step)
         }

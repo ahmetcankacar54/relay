@@ -450,12 +450,14 @@ test("send passes on how the text went in, the screen after Send and the step a 
     ok: true,
     acceptedVisible: false,
     written: "paste",
-    after,
+    submitted: "return",
+    after: { ...after, waitedMs: 600 },
   }));
   assert.deepEqual(await sent.send(guard, "request", "Try again"), {
     acceptedVisible: false,
     written: "paste",
-    after,
+    submitted: "return",
+    after: { ...after, waitedMs: 600 },
   });
   // An older helper, or one with a malformed report, still sends: only the extras drop.
   const older = nativeDesktopAutomation("/unused", async () => ({
@@ -821,8 +823,10 @@ test("the Swift write-draft branch and writeComposer never press, send or add a 
   );
   assert.ok(keys.length > 0);
   assert.deepEqual([...new Set(keys)], ["9"]);
-  // send presses its button outside both blocks, and still does.
-  assert.match(swiftBlock('if command == "send" {'), /try press\(send\)/);
+  // send submits outside both blocks: with Return, since Send pressed through AX did nothing.
+  const send = swiftBlock('if command == "send" {');
+  assert.match(send, /try submitComposer\(current\)/);
+  assert.doesNotMatch(send, /press\(send\)/);
 });
 test("the Swift write-draft branch checks the user, then re-reads the composer and conversation, right before writing", () => {
   const branch = swiftBlock('if command == "write-draft" {');
@@ -1039,6 +1043,19 @@ test("the Swift composer reads as empty only from a readable value, the same way
   assert.match(read, /case \.noValue: return "no-value"/);
   assert.match(read, /default: return nil/);
   assert.match(read, /guard let text = value as\? String else \{ return nil \}/);
+});
+test("the Swift submitComposer posts Return only into Claude in front with its composer focused", () => {
+  const body = swiftBlock("func submitComposer(");
+  const keys = [...body.matchAll(/virtualKey:\s*([^,)\s]+)/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(keys)], ["36"]);
+  // No modifier: Shift+Return is a new line, Cmd+Return something else.
+  assert.doesNotMatch(body, /flags/);
+  const focus = body.indexOf("kAXFocusedAttribute");
+  const front = body.indexOf("frontmostApplication");
+  const post = body.indexOf("down.post(");
+  assert.ok(focus !== -1 && front !== -1 && post !== -1);
+  assert.ok(focus < post && front < post);
+  assert.match(body, /fail\("context-changed"\)/);
 });
 test("the Swift writeComposer only pastes: Claude's editor ignores a value set through AX", () => {
   const body = swiftBlock("func writeComposer(");
