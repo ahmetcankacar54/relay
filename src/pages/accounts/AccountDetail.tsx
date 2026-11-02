@@ -67,11 +67,14 @@ export function AccountDetail({
   account: a,
   back,
   remove,
+  edit,
 }: {
   account: Account;
   back: () => void;
   /** Asks to remove the account (the confirmation dialog). */
   remove?: (id: string) => void;
+  /** Opens the account's name, type and group for editing. */
+  edit?: (id: string) => void;
 }) {
   const relay = useRelay();
   const prank = usePrank();
@@ -86,7 +89,7 @@ export function AccountDetail({
       relay.setSetupId(id);
       relay.cancelDesktopRequest();
     },
-    { remove, language },
+    { remove, edit, language },
   );
   const usage = relay.data?.usage[a.id];
   const waiting = pendingFlow(

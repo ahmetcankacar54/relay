@@ -100,10 +100,10 @@ test("the account sheet shows the current error too, since it covers the page ba
 // 2. Browser sign-in started inside the dialog or sheet must be completable there.
 const waitingFlow = { id: "f", accountId: "b", status: "waiting", browserReady: true, codeRequested: true } as unknown as AuthFlow;
 
-test("step 3 of the add dialog embeds the browser sign-in controls without the panel id", () => {
+test("the usage step of the add dialog embeds the browser sign-in controls without the panel id", () => {
   const html = wrap(
     relayFor({ flow: waitingFlow, flowAccount: b }),
-    createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }),
+    createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }),
   );
   assert.match(html, /Kodu gönder/);
   assert.match(html, /Tarayıcıyı yeniden aç/);
@@ -111,12 +111,12 @@ test("step 3 of the add dialog embeds the browser sign-in controls without the p
   assert.doesNotMatch(html, /id="cli-connection-panel"/);
   const failed = wrap(
     relayFor({ flow: { ...waitingFlow, status: "failed", codeRequested: false, error: "Sign-in failed badly" }, flowAccount: b }),
-    createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }),
+    createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }),
   );
   assert.match(failed, /Sign-in failed badly/);
   const other = wrap(
     relayFor({ flow: { ...waitingFlow, accountId: "a" }, flowAccount: a }),
-    createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }),
+    createElement(AddAccountSteps, { close() {}, initial: { step: 2, id: "b" } }),
   );
   assert.doesNotMatch(other, /Kodu gönder/);
 });

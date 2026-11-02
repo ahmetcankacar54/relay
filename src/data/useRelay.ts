@@ -225,6 +225,8 @@ function useRelayState(
     const request = desktopRequest;
     const account = accounts.find((a) => a.id === request.accountId);
     void action(`desktop-action:${request.accountId}`, async () => {
+      // A capture with no workspace to save yet waits for Code instead (see AutoCapture).
+      const later = request.kind === "capture" && !targetOrg;
       if (request.kind === "recover") await api.recoverDesktop();
       else if (request.kind === "cancel") await api.cancelDesktopLogin();
       else {
@@ -255,8 +257,11 @@ function useRelayState(
           await api.switchDesktop(account.id);
         } else if (request.kind === "history")
           await api.syncDesktopHistory(account.id);
-        else if (request.kind === "capture")
-          await api.captureDesktop(account.id, targetOrg);
+        else if (request.kind === "capture") {
+          // Code not opened yet, or several workspaces: saved once Code has the one to keep.
+          if (targetOrg) await api.captureDesktop(account.id, targetOrg);
+          else await api.armAutoCapture(account.id);
+        }
         else {
           await api.beginDesktopLogin(account.id);
           // One confirmation covers both restarts: the sign-in is saved once it is complete.
@@ -277,7 +282,12 @@ function useRelayState(
                 `${account?.name} · Claude uygulamasında bu hesaba geçildi.`,
                 `${account?.name} · Switched the Claude app to this account.`,
               )
-            : request.kind === "capture"
+            : later
+              ? t(
+                  "Claude uygulamasında Code’u bir kez aç; Relay girişi kendisi kaydeder.",
+                  "Open Code once in the Claude app; Relay saves the sign-in by itself.",
+                )
+              : request.kind === "capture"
               ? t(
                   `${account?.name} · Claude uygulaması girişi kaydedildi.`,
                   `${account?.name} · Claude app sign-in saved.`,

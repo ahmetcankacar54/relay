@@ -760,6 +760,15 @@ export const previewApi: RelayAPI = {
     };
     return structuredClone(account);
   },
+  // Edits the sample account in memory, as the app's store does.
+  updateAccount: async (id, input) => {
+    const account = accounts.find((a) => a.id === id);
+    if (!account) throw new Error("Hesap bulunamadı.");
+    account.name = input.name.trim();
+    account.kind = input.kind;
+    account.group = input.kind === "personal" ? "personal" : `work:${input.group?.trim() || id}`;
+    return structuredClone(account);
+  },
   // Forgets the sample account in memory, refusing the open one as the app does.
   removeAccount: async (id) => {
     if (id === desktop.activeProfileId)

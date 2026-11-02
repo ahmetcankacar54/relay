@@ -8,6 +8,7 @@ import {
   KeyRound,
   Monitor,
   MoreHorizontal,
+  Pencil,
   RefreshCw,
   Trash2,
 } from "lucide-react";
@@ -154,6 +155,7 @@ export interface RowAction {
     | "desktop-reconnect"
     | "desktop-link"
     | "refresh"
+    | "edit"
     | "remove";
   label: string;
   icon: LucideIcon;
@@ -174,6 +176,8 @@ export function rowActions(
   options: {
     /** Asks to remove the account (the confirmation dialog). */
     remove?: (id: string) => void;
+    /** Opens the account's name, type and group for editing. */
+    edit?: (id: string) => void;
     language?: Language;
     now?: number;
   } = {},
@@ -264,6 +268,14 @@ export function rowActions(
     disabled: relay.usageBusy.has(a.id),
     run: () => void relay.refreshUsage(a),
   });
+  if (options.edit)
+    items.push({
+      key: "edit",
+      label: t("Adı ve türü düzenle…", "Edit name and type…"),
+      icon: Pencil,
+      disabled: !!relay.busy,
+      run: () => options.edit?.(a.id),
+    });
   // Main refuses the same; the menu says why before it is chosen.
   const running = relay.data?.runs?.some(
     (r) => r.accountId === a.id && r.status === "running",
@@ -358,6 +370,7 @@ export function AccountsTable({
   open,
   link,
   remove,
+  edit,
 }: {
   accounts: Account[];
   selected?: string;
@@ -367,6 +380,8 @@ export function AccountsTable({
   link: (id: string) => void;
   /** Asks to remove an account (the confirmation dialog). */
   remove?: (id: string) => void;
+  /** Opens an account's name, type and group for editing. */
+  edit?: (id: string) => void;
 }) {
   const relay = useRelay();
   const prank = usePrank();
@@ -405,7 +420,7 @@ export function AccountsTable({
             { active: isActive, desktopRunning: !!desktop?.running, waiting },
             t,
           );
-          const actions = rowActions(a, relay, t, link, { remove, language, now });
+          const actions = rowActions(a, relay, t, link, { remove, edit, language, now });
           // The inline fix is the matching ⋯ menu item: same label, same handler.
           const fix = health.fix && actions.find((x) => x.key === health.fix);
           // "Limit verisi eski" is the one warning without a fix: a refresh is its step.

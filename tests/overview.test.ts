@@ -119,7 +119,7 @@ test("overview without an active account offers onboarding", () => {
   assert.match(emptyHtml, /İlk hesabını bağlayalım/);
   assert.match(/<svg[^>]*data-scene="welcome"[^>]*>/.exec(emptyHtml)?.[0] ?? "", /width="120"/);
   assert.match(emptyHtml, /Hesap ekle/);
-  assert.match(emptyHtml, /Henüz hesap yok/);
+  assert.doesNotMatch(emptyHtml, /Henüz hesap yok/);
   assert.doesNotMatch(emptyHtml, /Başka hesap yok/);
   assert.doesNotMatch(emptyHtml, /CLAUDE UYGULAMASINDA AÇIK/);
 });
@@ -564,15 +564,17 @@ test("the checklist speaks English with the glossary names", () => {
   assert.match(html, /Open Code once from the sidebar in the Claude app\. Relay sees the workspace/);
 });
 
-test("with no account, the overview offers the first one and hides Today and automation", () => {
+test("with no account, the overview offers the first one once and hides Today and automation", () => {
   const html = render(firstRun());
-  assert.match(html, /Henüz hesap yok ·\s*<button[^>]*>Hesap ekle<\/button>/);
+  // The greeting's button is the only offer; the empty accounts card is not shown.
+  assert.equal(html.match(/>Hesap ekle<\/button>/g)?.length, 1);
+  assert.doesNotMatch(html, /Henüz hesap yok/);
   assert.doesNotMatch(html, /Başka hesap yok/);
   assert.doesNotMatch(html, /Planlama →/);
   assert.doesNotMatch(html, /Otomatik geçiş/);
   assert.doesNotMatch(html, /Otomasyon/);
   const en = renderIn("en", firstRun());
-  assert.match(en, /No accounts yet ·\s*<button[^>]*>Add account<\/button>/);
+  assert.equal(en.match(/>Add account<\/button>/g)?.length, 1);
 });
 
 test("Today shows from one connected account, automation from two", () => {

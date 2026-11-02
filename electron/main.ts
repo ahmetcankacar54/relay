@@ -2058,6 +2058,12 @@ function bindIPC() {
   handle("create-account", (input) =>
     service.store.create(createAccountSchema.parse(input)),
   );
+  handle("update-account", (accountId, input) => {
+    const updated = service.store.edit(id.parse(accountId), createAccountSchema.parse(input));
+    void tray?.update();
+    broadcastChanged();
+    return updated;
+  });
   // Under the Desktop lock, so no switch to the account starts while it goes. Its usage history
   // and token counts stay: they are the user's record; its profile's transcripts are gone.
   handle("remove-account", (accountId) => {

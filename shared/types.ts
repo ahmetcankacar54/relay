@@ -364,6 +364,8 @@ export interface RelayAPI {
   /** Each kind's finds over every week within reach, for the collection. */
   lostFoundCollection(): Promise<LostFoundCollection>;
   createAccount(input: CreateAccount): Promise<Account>;
+  /** Renames an account and sets its type and sharing group. */
+  updateAccount(accountId: string, input: CreateAccount): Promise<Account>;
   /** Forgets an account: its profile, its saved sign-ins and its place in the lists. */
   removeAccount(accountId: string): Promise<AccountRemoved>;
   checkAuth(accountId: string): Promise<Account>;

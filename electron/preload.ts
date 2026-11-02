@@ -94,6 +94,7 @@ const api: RelayAPI = {
   panelSnapshot: () => ipcRenderer.invoke("relay:panel-snapshot"),
   snapshot: () => ipcRenderer.invoke("relay:snapshot"),
   createAccount: (input) => ipcRenderer.invoke("relay:create-account", input),
+  updateAccount: (id, input) => ipcRenderer.invoke("relay:update-account", id, input),
   removeAccount: (id) => ipcRenderer.invoke("relay:remove-account", id),
   checkAuth: (id) => ipcRenderer.invoke("relay:check-auth", id),
   login: (id) => ipcRenderer.invoke("relay:login", id),

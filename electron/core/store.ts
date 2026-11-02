@@ -475,4 +475,16 @@ export class Store {
     });
     return account;
   }
+  /** Renames an account and sets its type and sharing group, checked as `create` checks them. */
+  edit(id: string, input: CreateAccount): Account {
+    const data = createAccountSchema.parse(input);
+    this.account(id);
+    this.update((state) => {
+      const account = state.accounts.find((a) => a.id === id)!;
+      account.name = data.name;
+      account.kind = data.kind;
+      account.group = data.kind === "personal" ? "personal" : `work:${data.group || id}`;
+    });
+    return this.account(id);
+  }
 }

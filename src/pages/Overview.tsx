@@ -91,7 +91,8 @@ export function Overview({
             </div>
           </div>
         ) : (
-          <AccountsCard go={go} now={now} />
+          // With no account yet, the card above already offers the first one.
+          accounts.length > 0 && <AccountsCard go={go} now={now} />
         )}
       </div>
     </PageFrame>

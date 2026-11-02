@@ -23,6 +23,7 @@ import {
 import { AddAccountDialog } from "./accounts/AddAccountDialog";
 import { LinkDesktopDialog } from "./accounts/LinkDesktopDialog";
 import { RemoveAccountDialog } from "./accounts/RemoveAccountDialog";
+import { EditAccountDialog } from "./accounts/EditAccountDialog";
 import { filterAccounts, type AccountFilter } from "./accounts/accountLabels";
 import { blockReason, type Block } from "@/lib/onboarding";
 
@@ -103,6 +104,7 @@ export function Accounts() {
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState(false);
   const [removing, setRemoving] = useState<string>();
+  const [editing, setEditing] = useState<string>();
   // The open account lives in the hash (`#/hesaplar/<id>`), so Back and the panel can reach it.
   const [selected, setSelectedState] = useState<string | undefined>(() =>
     typeof window === "undefined" ? undefined : accountFromHash(window.location.hash),
@@ -186,6 +188,10 @@ export function Accounts() {
           show(id);
         }}
       />
+      <EditAccountDialog
+        account={accounts.find((a) => a.id === editing)}
+        onOpenChange={(open) => !open && setEditing(undefined)}
+      />
       <RemoveAccountDialog
         account={accounts.find((a) => a.id === removing)}
         close={() => setRemoving(undefined)}
@@ -205,6 +211,7 @@ export function Accounts() {
           key={account.id}
           account={account}
           remove={setRemoving}
+          edit={setEditing}
           back={() => {
             if (setupId && setupId === selected) setSetupId(undefined);
             setSelected(undefined);
@@ -299,6 +306,7 @@ export function Accounts() {
             accounts={visible}
             open={setSelected}
             remove={setRemoving}
+          edit={setEditing}
             link={(id) => {
               setSetupId(id);
               relay.cancelDesktopRequest();
