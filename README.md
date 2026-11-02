@@ -11,7 +11,7 @@ Independent tool, not an Anthropic product.
 
 Get the latest build from [Releases](../../releases): a DMG for Apple silicon Macs
 (M1 and later), a Windows installer and a Linux AppImage. The builds are not
-notarized; `KURULUM-NOTU.txt` in each release (Turkish) walks through macOS's
+notarized; `INSTALL.txt` in each release walks through macOS’s
 one-time "Open Anyway" step.
 
 ## Screens
@@ -19,12 +19,12 @@ one-time "Open Anyway" step.
 A sidebar (a 56 px icon rail in narrow windows) opens four pages; the keyboard
 shortcuts are ⌘1–⌘3 and ⌘, for Settings.
 
-- **Genel** (Overview) — the active account, setup steps, today's plan and automation status.
-- **Hesaplar** (Accounts) — add accounts with a three-step wizard, see each account's
+- **Overview** (Genel) — the active account, setup steps, today's plan and automation status.
+- **Accounts** (Hesaplar) — add accounts with a three-step wizard, see each account's
   connections (Claude app, usage access, browser extension, terminal) and edit them.
-- **Kullanım** (Usage) — limits (full 5-hour periods, when you work, account balance,
+- **Usage** (Kullanım) — limits (full 5-hour periods, when you work, account balance,
   limit hits), tokens and API value, and pins.
-- **Ayarlar** (Settings) — every setting in six tabs: Automation, What comes along,
+- **Settings** (Ayarlar) — every setting in six tabs: Automation, What comes along,
   Planning, Notifications, Appearance and Advanced.
 
 ## What it does
