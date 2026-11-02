@@ -124,7 +124,7 @@ test("the Code tab counts as opened once the current sign-in has a workspace fol
   assert.equal(codeTabOpened(desktop({ organizations: [] }), []), false);
 });
 
-test("prerequisites wait for both snapshots, then list the three items in order", () => {
+test("prerequisites wait for both snapshots; the CLI is a step only when Code is open and it is still missing", () => {
   assert.equal(prerequisites({ desktop: undefined, diagnostics: diagnostics(), accounts: [] }), undefined);
   assert.equal(prerequisites({ desktop: desktop(), diagnostics: undefined, accounts: [] }), undefined);
   const none = prerequisites({
@@ -132,10 +132,10 @@ test("prerequisites wait for both snapshots, then list the three items in order"
     diagnostics: diagnostics({ executable: undefined, version: undefined, error: "x" }),
     accounts: [],
   });
+  // Opening Code makes the Claude app download its own Claude Code: no CLI step before it.
   assert.deepEqual(none, {
     items: [
       { key: "desktop", met: false },
-      { key: "cli", met: false },
       { key: "code", met: false },
     ],
     cli: "missing",
@@ -146,7 +146,11 @@ test("prerequisites wait for both snapshots, then list the three items in order"
     diagnostics: diagnostics({ version: "2.1.100" }),
     accounts: [],
   });
-  assert.deepEqual(outdated?.items.map((i) => i.met), [true, false, true]);
+  assert.deepEqual(outdated?.items, [
+    { key: "desktop", met: true },
+    { key: "code", met: true },
+    { key: "cli", met: false },
+  ]);
   assert.equal(outdated?.cli, "outdated");
   assert.equal(outdated?.complete, false);
   const all = prerequisites({
@@ -154,7 +158,7 @@ test("prerequisites wait for both snapshots, then list the three items in order"
     diagnostics: diagnostics(),
     accounts: [],
   });
-  assert.deepEqual(all?.items.map((i) => i.met), [true, true, true]);
+  assert.deepEqual(all?.items.map((i) => i.met), [true, true]);
   assert.equal(all?.complete, true);
 });
 
@@ -246,11 +250,11 @@ test("a missing CLI error says where to choose the file, in both languages", asy
   assert.ok(error);
   assert.equal(
     localizeError(error, "tr"),
-    "Claude Code bulunamadı. Resmi CLI’yi kur veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+    "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
   );
   assert.equal(
     localizeError(error, "en"),
-    "Claude Code was not found. Install the official CLI or pick it in Settings → Claude Code CLI → Choose file.",
+    "Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Claude Code CLI → Choose file.",
   );
 });
 

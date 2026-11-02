@@ -58,7 +58,11 @@ export interface Prerequisites {
   complete: boolean;
 }
 
-/** The Overview checklist; undefined until both snapshots have arrived. */
+/**
+ * The Overview checklist; undefined until both snapshots have arrived. Opening Code makes the
+ * Claude app download its own Claude Code, which Relay reads limits with, so the CLI is a step
+ * of its own only when it is still missing or too old after Code was opened.
+ */
 export function prerequisites(input: {
   desktop?: DesktopState;
   diagnostics?: Diagnostics;
@@ -67,12 +71,13 @@ export function prerequisites(input: {
   const { desktop, diagnostics, accounts } = input;
   if (!desktop || !diagnostics) return;
   const cli = cliState(diagnostics);
+  const code = codeTabOpened(desktop, accounts);
   const items: Prerequisites["items"] = [
     { key: "desktop", met: desktop.available },
-    { key: "cli", met: cli === "ok" },
-    { key: "code", met: codeTabOpened(desktop, accounts) },
+    { key: "code", met: code },
+    ...(code && cli !== "ok" ? [{ key: "cli" as const, met: false }] : []),
   ];
-  return { items, cli, complete: items.every((i) => i.met) };
+  return { items, cli, complete: items.every((i) => i.met) && cli === "ok" };
 }
 
 /** Why an onboarding button is disabled; "loading" lasts one snapshot and has no words. */

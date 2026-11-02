@@ -6,7 +6,6 @@ import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import {
   cliDetail,
-  codeTabStep,
   prerequisites,
   type PrerequisiteKey,
 } from "@/lib/onboarding";
@@ -44,7 +43,10 @@ export function SetupChecklist() {
     cli: {
       title: "Claude Code CLI",
       status: cliDetail(state.cli, diagnostics?.version, t),
-      reason: t("Limitleri okumak için gerekir.", "Needed to read usage limits."),
+      reason: t(
+        "Limitleri okumak için gerekir. Claude uygulaması Code açılınca kendisi indirir; birkaç dakika içinde görünmezse resmi CLI’yi kur.",
+        "Needed to read usage limits. The Claude app downloads it once Code is opened; if it does not show up within a few minutes, install the official CLI.",
+      ),
       action: <CliSetupActions />,
     },
     code: {
@@ -52,7 +54,10 @@ export function SetupChecklist() {
       status: met("code")
         ? t("Çalışma alanı bulundu", "Workspace found")
         : t("Henüz açılmadı", "Not opened yet"),
-      reason: codeTabStep(t),
+      reason: t(
+        "Claude uygulamasında sol menüden Code’u bir kez aç. Relay çalışma alanını görür; Claude uygulaması da limitleri okumak için gereken Claude Code’u kendisi indirir.",
+        "Open Code once from the sidebar in the Claude app. Relay sees the workspace, and the Claude app downloads the Claude Code that reads usage limits.",
+      ),
       // Without the Claude app the first row already names the step.
       action: desktop?.available && (
         <Button

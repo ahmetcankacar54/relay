@@ -2,14 +2,16 @@ import path from "node:path";
 import type { Diagnostics } from "../../shared/types";
 import {
   command,
+  executableSource,
   profileEnvironment,
   resolveExecutable,
   supportsDesktop,
 } from "./environment";
 
 /**
- * Finds the official Claude Code CLI (`explicit` first, then the usual places) and reads its
- * version, in a throwaway profile under `dataDir` so no account is involved.
+ * Finds the official Claude Code CLI (`explicit` first, then the usual places, then the one the
+ * Claude app downloaded) and reads its version, in a throwaway profile under `dataDir` so no
+ * account is involved.
  */
 export async function diagnoseCli(
   explicit: string | undefined,
@@ -18,6 +20,7 @@ export async function diagnoseCli(
   const executable = resolveExecutable(explicit);
   const base = {
     executable,
+    ...(executable ? { source: executableSource(executable, explicit) } : {}),
     platform: process.platform,
     dataDir,
     desktopSupported: false,
@@ -26,7 +29,7 @@ export async function diagnoseCli(
     return {
       ...base,
       error:
-        "Claude Code bulunamadı. Resmi CLI’yi kur veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+        "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
     };
   try {
     const { stdout } = await command(

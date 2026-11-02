@@ -83,6 +83,8 @@ export interface Run {
 }
 export interface Diagnostics {
   executable?: string;
+  /** Chosen in Settings, found in the usual places, or the one the Claude app downloaded for Code. */
+  source?: "chosen" | "path" | "claude-app";
   version?: string;
   desktopSupported: boolean;
   platform: string;

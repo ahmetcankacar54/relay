@@ -474,12 +474,17 @@ const checklist = (html: string) => {
   const start = html.indexOf('aria-label="Başlamadan önce"');
   return start < 0 ? "" : html.slice(start, html.indexOf("</ul>", start));
 };
+const codeOpenNoCli = (diagnostics: Partial<Diagnostics> = {}) =>
+  firstRun({
+    desktop: { currentAccountUuid: "00000000-0000-4000-8000-000000000001", organizations: ["00000000-0000-4000-8000-000000000002"] },
+    diagnostics,
+  });
 const item = (html: string, key: string) =>
   [...html.matchAll(/<li([^>]*data-prerequisite="([^"]+)"[^>]*)>([\s\S]*?)<\/li>/g)]
     .filter((m) => m[2] === key)
     .map((m) => m[1] + m[3])[0] ?? "";
 
-test("a first run lists the three prerequisites, each with a mark, a reason and an action", () => {
+test("a first run lists the prerequisites, each with a mark, a reason and an action; the CLI waits for Code", () => {
   const html = render(firstRun({ desktop: { available: false } }));
   const list = checklist(html);
   assert.ok(list, "the checklist renders");
@@ -488,17 +493,19 @@ test("a first run lists the three prerequisites, each with a mark, a reason and 
   assert.match(app, /Claude uygulaması/);
   assert.match(app, /Relay, Claude uygulamasında hesaplar arasında geçiş yapar\./);
   assert.match(app, /<a[^>]*href="https:\/\/claude\.ai\/download"[^>]*target="_blank"[^>]*>İndir<\/a>/);
-  const cli = item(list, "cli");
+  // Opening Code makes the Claude app download its own Claude Code: no CLI row before it.
+  assert.equal(item(list, "cli"), "");
+  const code = item(list, "code");
+  assert.match(code, /data-met="false"/);
+  assert.match(code, /Code sekmesi açıldı/);
+  assert.match(code, /Claude uygulaması da limitleri okumak için gereken Claude Code’u kendisi indirir\./);
+  const cli = item(checklist(render(codeOpenNoCli())), "cli");
   assert.match(cli, /data-met="false"/);
   assert.match(cli, /Claude Code CLI/);
   assert.match(cli, /Bulunamadı/);
   assert.match(cli, /Limitleri okumak için gerekir\./);
   assert.match(cli, /<a[^>]*href="https:\/\/docs\.anthropic\.com\/en\/docs\/claude-code\/setup"[^>]*target="_blank"/);
   assert.match(cli, /<button[^>]*>Dosyayı seç<\/button>/);
-  const code = item(list, "code");
-  assert.match(code, /data-met="false"/);
-  assert.match(code, /Code sekmesi açıldı/);
-  assert.match(code, /Claude uygulamasında sol menüden Code’u bir kez aç; liste kendiliğinden dolar\./);
 });
 
 test("met prerequisites are ticked and the list hides once all three are met", () => {
@@ -521,11 +528,11 @@ test("met prerequisites are ticked and the list hides once all three are met", (
 });
 
 test("an outdated CLI names the version found and the minimum", () => {
-  const cli = item(checklist(render(firstRun({ diagnostics: { executable: "/usr/local/bin/claude", version: "2.1.200 (Claude Code)", error: undefined } }))), "cli");
+  const cli = item(checklist(render(codeOpenNoCli({ executable: "/usr/local/bin/claude", version: "2.1.200 (Claude Code)", error: undefined }))), "cli");
   assert.match(cli, /data-met="false"/);
   assert.match(cli, /2\.1\.200 \(Claude Code\) · 2\.1\.296 veya üstü gerekir/);
   // A CLI the Claude app accepts but that cannot read limits is not ticked.
-  const between = item(checklist(render(firstRun({ diagnostics: { executable: "/usr/local/bin/claude", version: "2.1.290 (Claude Code)", error: undefined } }))), "cli");
+  const between = item(checklist(render(codeOpenNoCli({ executable: "/usr/local/bin/claude", version: "2.1.290 (Claude Code)", error: undefined }))), "cli");
   assert.match(between, /data-met="false"/);
   assert.match(between, /2\.1\.290 \(Claude Code\) · 2\.1\.296 veya üstü gerekir/);
 });
@@ -546,14 +553,15 @@ test("the CLI's Choose file reuses the Settings picker", async () => {
 
 test("the checklist speaks English with the glossary names", () => {
   const html = renderIn("en", firstRun({ desktop: { available: false } }));
+  const cli = renderIn("en", codeOpenNoCli());
   assert.match(html, /Before you start/);
   assert.match(html, /Claude app/);
   assert.match(html, /Relay switches the Claude app between accounts\./);
   assert.match(html, />Download<\/a>/);
-  assert.match(html, /Needed to read usage limits\./);
-  assert.match(html, />Choose file<\/button>/);
+  assert.match(cli, /Needed to read usage limits\./);
+  assert.match(cli, />Choose file<\/button>/);
   assert.match(html, /Code tab opened/);
-  assert.match(html, /Open Code once from the sidebar in the Claude app; the list fills in on its own\./);
+  assert.match(html, /Open Code once from the sidebar in the Claude app\. Relay sees the workspace/);
 });
 
 test("with no account, the overview offers the first one and hides Today and automation", () => {

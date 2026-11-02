@@ -310,7 +310,17 @@ export function Settings() {
             </span>
           </SettingRow>
           {/* The missing-CLI error names this path: Ayarlar → Claude Code CLI → Dosyayı seç. */}
-          <SettingRow label="Claude Code CLI">
+          <SettingRow
+            label="Claude Code CLI"
+            description={
+              data?.diagnostics.source === "claude-app"
+                ? t(
+                    "Claude uygulamasının Code için indirdiği kopya kullanılıyor; ayrıca kurman gerekmez.",
+                    "Using the copy the Claude app downloaded for Code; no separate install needed.",
+                  )
+                : undefined
+            }
+          >
             <span className="flex items-center gap-3">
               <Status ok={!!data?.diagnostics.version}>
                 {data?.diagnostics.version ?? t("Bulunamadı", "Not found")}
