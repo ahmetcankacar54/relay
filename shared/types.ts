@@ -25,7 +25,7 @@ export type {
 import type { DesktopContinuationSnapshot } from "../electron/core/desktop-continuation";
 import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
-import type { PageId, PageIntent } from "../src/app/routes";
+import type { Destination, PageId, PageIntent } from "../src/app/routes";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
 export interface AccountPlanning {
@@ -314,7 +314,7 @@ export interface RelayAPI {
   /** Shows the main window on a page, with the intent its page acts on (and hides the menu bar panel). */
   openPage(page: PageId, intent?: PageIntent): Promise<void>;
   /** Main window: a page (and intent) requested from the menu bar panel. */
-  onNavigate(callback: (page: PageId, intent?: PageIntent) => void): () => void;
+  onNavigate(callback: (page: Destination, intent?: PageIntent) => void): () => void;
   /**
    * Main window: the account a widget's Geç link asked to switch to, taken once (undefined
    * without one, or once it is two minutes old). The window opens its switch review for it.

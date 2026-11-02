@@ -27,6 +27,7 @@ import {
   writeBytes,
   jsonBytes,
   planHistory,
+  planPermissionPreferences,
   safeFile,
 } from "../electron/core/desktop-files";
 async function fixture(t: any) {
@@ -1220,6 +1221,86 @@ test("the same conversation under different aliases produces one card per accoun
   // The conversation keeps its Auto mode on the other account.
   assert.equal(kept.permissionMode, "auto");
   assert.equal(plan.size, 2);
+});
+
+test("a conversation Claude dropped to Manual goes back to Auto on the next account; one the user set to Manual stays", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A"),
+    b = await f.account("B");
+  const dropped = randomUUID(),
+    chosen = randomUUID();
+  await session(f.root, a, dropped, { permissionMode: "default", autoChosenInApp: true });
+  await session(f.root, a, chosen, { permissionMode: "default", autoChosenInApp: false });
+  const plan = await planHistory(f.root, b.desktop!, [a.desktop!]);
+  const dest = `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}`;
+  const mode = (id: string) =>
+    JSON.parse(plan.get(`${dest}/local_${id}.json`)!.toString()).permissionMode;
+  assert.equal(mode(dropped), "auto");
+  assert.equal(mode(chosen), "default");
+});
+
+test("permission modes for new conversations fill what the next account has not chosen", () => {
+  const from = randomUUID(),
+    to = randomUUID();
+  const config = {
+    deploymentMode: "1p",
+    preferences: {
+      other: true,
+      epitaxyPrefs: {
+        [`cc-landing-draft-permission-mode.${from}`]: "auto",
+        [`epitaxy-folder-permission-mode-v2.${from}`]: {
+          "/work/a": "auto",
+          "/work/b": "bypassPermissions",
+          "/work/c": "plan",
+        },
+        [`epitaxy-folder-permission-mode-v2.${to}`]: { "/work/c": "default" },
+      },
+    },
+  };
+  const next = planPermissionPreferences(config, from, to)!;
+  const prefs = next.preferences.epitaxyPrefs;
+  assert.equal(prefs[`cc-landing-draft-permission-mode.${to}`], "auto");
+  // Bypass never travels; what the next account chose stays.
+  assert.deepEqual(prefs[`epitaxy-folder-permission-mode-v2.${to}`], {
+    "/work/a": "auto",
+    "/work/c": "default",
+  });
+  assert.equal(next.deploymentMode, "1p");
+  assert.equal(next.preferences.other, true);
+  assert.equal(config.preferences.epitaxyPrefs[`cc-landing-draft-permission-mode.${to}` as never], undefined);
+  // Nothing left to fill, a Bypass-only choice, or no preferences: no write.
+  assert.equal(planPermissionPreferences(next, from, to), null);
+  assert.equal(
+    planPermissionPreferences(
+      { preferences: { epitaxyPrefs: { [`cc-landing-draft-permission-mode.${from}`]: "bypassPermissions" } } },
+      from,
+      to,
+    ),
+    null,
+  );
+  assert.equal(planPermissionPreferences({}, from, to), null);
+});
+
+test("a switch carries the left account's new-conversation mode into Claude's preferences", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  await f.manager.switchTo(a.id);
+  await writeBytes(
+    f.root,
+    "claude_desktop_config.json",
+    jsonBytes({
+      preferences: {
+        epitaxyPrefs: {
+          [`cc-landing-draft-permission-mode.${a.desktop!.accountUuid}`]: "auto",
+        },
+      },
+    }),
+  );
+  await f.manager.switchTo(b.id);
+  const prefs = (await readObject(f.root, "claude_desktop_config.json"))!.preferences
+    .epitaxyPrefs;
+  assert.equal(prefs[`cc-landing-draft-permission-mode.${b.desktop!.accountUuid}`], "auto");
 });
 
 test("a stale alias superseded by a resumed lineage collapses into the live conversation", async (t) => {

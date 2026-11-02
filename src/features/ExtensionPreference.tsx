@@ -92,6 +92,14 @@ export function ExtensionPreference({
   const follows = !!status.target && setting.mode !== "off";
   const choose = !status.target && status.instances.length > 1;
   // One line on top: what Relay does when off, why it manages nothing, or who the extension is on.
+  // Desktop is on another account than the extension and Relay only guides: Claude's browser
+  // tools need both on one account, so the one-step way to keep them together is offered here.
+  const active = accounts.find((a) => a.id === desktop?.activeProfileId);
+  const leftBehind =
+    setting.mode === "guide" &&
+    !!status.target &&
+    !!active &&
+    ((!!on && on.id !== active.id) || status.last?.reason === "guide-mismatch");
   const statusLine =
     setting.mode === "off"
       ? modeSentence("off", t)
@@ -122,6 +130,26 @@ export function ExtensionPreference({
           )}
         </span>
       </SettingRow>
+      {leftBehind && (
+        <SettingRow
+          label={t(
+            `Claude’un tarayıcı araçları ${active!.name} ile çalışmaz`,
+            `Claude’s browser tools won’t work with ${active!.name}`,
+          )}
+          description={t(
+            "Eklenti Claude uygulamasıyla aynı hesapta olmalı. Relay her geçişte onu da taşıyabilir.",
+            "The extension must be on the Claude app’s account. Relay can move it at every switch.",
+          )}
+        >
+          <Button
+            variant="outline"
+            disabled={disabled}
+            onClick={() => update({ ...setting, mode: "restart" })}
+          >
+            {t("Her geçişte taşı", "Move it at every switch")}
+          </Button>
+        </SettingRow>
+      )}
       <Disclosure
         title={t("Gelişmiş", "Advanced")}
         // A profile has to be chosen before anything else works, so the section opens for it.

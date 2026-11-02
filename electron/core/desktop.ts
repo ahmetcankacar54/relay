@@ -13,6 +13,8 @@ import {
   writeBytes,
   jsonBytes,
   planHistoryDetailed,
+  planPermissionPreferences,
+  DESKTOP_PREFERENCES,
   scopePath,
   uuid,
   type CarriedConversation,
@@ -704,6 +706,7 @@ export class DesktopManager {
         const changes = await this.historyPlan(target);
         const carried = this.carried;
         if (current !== saved.accountUuid) {
+          if (current) await this.permissionPreferences(changes, current, target);
           changes.set("config.json", jsonBytes(config));
           for (const f of COOKIE_FILES)
             changes.set(
@@ -1161,6 +1164,39 @@ export class DesktopManager {
       });
     }
     return this.terminalStatus();
+  }
+  /**
+   * Adds Claude's preferences file to `changes` when the account switched to has not chosen
+   * the permission modes that the one being left has (see `planPermissionPreferences`). Follows
+   * the history policy, like the conversations; an unreadable file is left alone.
+   */
+  private async permissionPreferences(
+    changes: Map<string, Buffer | null>,
+    from: string,
+    target: Account,
+  ) {
+    const settings = this.store.state.settings;
+    const source = this.store.state.accounts.find(
+      (a) => a.desktop?.accountUuid === from,
+    );
+    if (
+      !target.desktop ||
+      settings.desktopHistoryTransfer === "off" ||
+      !source ||
+      !allowedHistoryPair(source, target, settings)
+    )
+      return;
+    let next: JsonObject | null;
+    try {
+      next = planPermissionPreferences(
+        await readObject(this.root, DESKTOP_PREFERENCES),
+        from,
+        target.desktop.accountUuid,
+      );
+    } catch {
+      return;
+    }
+    if (next) changes.set(DESKTOP_PREFERENCES, jsonBytes(next));
   }
   private async historyPlan(
     target: Account,

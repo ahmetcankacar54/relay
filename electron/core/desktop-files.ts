@@ -161,6 +161,15 @@ function groupSessions(records: SessionRecord[]) {
   }
   return [...groups.values()];
 }
+/**
+ * Auto mode turned into Manual by Claude rather than by the user. Claude Code drops a
+ * conversation to Manual where auto mode is unavailable (on an account or organization
+ * without it, for one) and Claude records that mode while keeping `autoChosenInApp`;
+ * choosing Manual in Claude sets `autoChosenInApp` to false. Carried as Manual, the
+ * conversation would stay Manual on accounts that do have auto mode.
+ */
+export const forcedManual = (obj: JsonObject) =>
+  obj.permissionMode === "default" && obj.autoChosenInApp === true;
 /** The most recently active record is the live conversation; ties prefer the target. */
 function newest(records: SessionRecord[]) {
   return [...records].sort(
@@ -220,6 +229,58 @@ export async function duplicateSessions(root: string, scope: Scope) {
   return groupSessions(records)
     .filter((group) => group.length > 1)
     .map((group) => group.map((record) => record.name).sort());
+}
+
+/** Where Claude keeps its per-account choices, among them the permission modes below. */
+export const DESKTOP_PREFERENCES = "claude_desktop_config.json";
+const MODES = new Set(["default", "acceptEdits", "plan", "auto"]);
+/** The mode a new Code conversation starts in, per account. */
+const NEW_CHAT_MODE = "cc-landing-draft-permission-mode";
+/** The mode each folder's new conversations start in, per account: `{ [folder]: mode }`. */
+const FOLDER_MODES = "epitaxy-folder-permission-mode-v2";
+
+/**
+ * Claude keeps the permission mode for new conversations, overall and per folder, under each
+ * account's id, so an account Claude never set them on starts every conversation in Manual.
+ * Fills what `to` has not chosen with the choices of `from`, the account being left; what `to`
+ * chose stays, and Bypass, an account-local decision, never travels. The whole new file, or
+ * null when nothing changes.
+ */
+export function planPermissionPreferences(
+  config: JsonObject | null,
+  from: string,
+  to: string,
+): JsonObject | null {
+  const prefs = config?.preferences?.epitaxyPrefs;
+  if (!prefs || typeof prefs !== "object" || Array.isArray(prefs) || from === to)
+    return null;
+  const next: JsonObject = { ...prefs };
+  let changed = false;
+  const fromId = uuid.parse(from),
+    toId = uuid.parse(to);
+  const mode = prefs[`${NEW_CHAT_MODE}.${fromId}`];
+  if (MODES.has(mode) && prefs[`${NEW_CHAT_MODE}.${toId}`] === undefined) {
+    next[`${NEW_CHAT_MODE}.${toId}`] = mode;
+    changed = true;
+  }
+  const isMap = (value: unknown): value is JsonObject =>
+    !!value && typeof value === "object" && !Array.isArray(value);
+  const folders = prefs[`${FOLDER_MODES}.${fromId}`];
+  const own = prefs[`${FOLDER_MODES}.${toId}`];
+  if (isMap(folders) && (own === undefined || isMap(own))) {
+    const merged: JsonObject = { ...own };
+    for (const [folder, value] of Object.entries(folders))
+      if (MODES.has(value) && merged[folder] === undefined) merged[folder] = value;
+    if (Object.keys(merged).length > Object.keys(own ?? {}).length) {
+      next[`${FOLDER_MODES}.${toId}`] = merged;
+      changed = true;
+    }
+  }
+  if (!changed) return null;
+  return {
+    ...config,
+    preferences: { ...config!.preferences, epitaxyPrefs: next },
+  };
 }
 
 /** One conversation the merge carries into the target account. */
@@ -308,6 +369,7 @@ export async function planHistoryDetailed(
       obj[key] = own?.[key] ?? fallback;
     // The conversation keeps its mode (Manual, Auto, Plan, Accept edits) on the
     // other account. Bypass is an account-local decision and is never carried over.
+    if (forcedManual(obj)) obj.permissionMode = "auto";
     if (
       typeof obj.permissionMode !== "string" ||
       obj.permissionMode === "bypassPermissions"

@@ -76,7 +76,13 @@ import {
   sceneView,
   type SwitchSceneView,
 } from "../shared/switch-scene";
-import { intentHash, PAGE_INTENTS, PAGES } from "../src/app/routes";
+import {
+  intentHash,
+  PAGE_INTENTS,
+  PAGES,
+  type Destination,
+  type PageIntent,
+} from "../src/app/routes";
 import { isExternalLink } from "../shared/external-links";
 import { readsUsage } from "../shared/cli-version";
 import { UsageHistory } from "./core/usage-history";
@@ -1327,6 +1333,19 @@ async function settleInstallLocation(): Promise<boolean> {
     return false;
   }
 }
+/** Shows the main window on `target`: a window made now opens there, a loaded one is told to go. */
+function openPage(target: Destination, want?: PageIntent) {
+  const fresh = !window;
+  showWindow(intentHash(target, want));
+  const contents = window?.webContents;
+  if (contents && !fresh) {
+    if (contents.isLoading())
+      contents.once("did-finish-load", () =>
+        contents.send("relay:navigate", target, want),
+      );
+    else contents.send("relay:navigate", target, want);
+  }
+}
 function showWindow(hash?: string) {
   if (!initialized) return;
   if (!window && service) createWindow(hash);
@@ -1425,6 +1444,7 @@ async function traySwitch(profileId: string) {
   try {
     await manualDesktopLock(() => desktop.switchTo(profileId));
     notifySwitched(account.name);
+    notifyExtensionLeft(account);
   } catch (error) {
     dialog.showErrorBox(
       say("Geçiş yapılamadı", "Switch failed"),
@@ -1437,6 +1457,49 @@ async function traySwitch(profileId: string) {
     void tray?.update();
     broadcastChanged();
   }
+}
+/** Accounts the extension notice was shown for since Relay started: once each, not every switch. */
+const extensionNoticeShown = new Set<string>();
+/**
+ * After a manual switch whose extension step left the Claude browser extension on another
+ * account (mode "guide", or "closed" with the browser open): Claude's browser tools only work
+ * when the extension is on the conversation's account, so the user hears it here and not only
+ * in the panel. A click opens Settings → What comes along.
+ */
+function notifyExtensionLeft(target: Account) {
+  const outcome = desktop.extensionOutcome;
+  if (
+    !Notification.isSupported() ||
+    outcome?.result !== "skipped" ||
+    (outcome.reason !== "guide-mismatch" && outcome.reason !== "browser-running") ||
+    Date.now() - Date.parse(outcome.at) > 5 * 60_000 ||
+    extensionNoticeShown.has(target.id)
+  )
+    return;
+  extensionNoticeShown.add(target.id);
+  const current = outcome.current;
+  const on =
+    current?.state === "signed-in" && current.accountUuid
+      ? service.store.state.accounts.find((a) =>
+          [a.desktop?.accountUuid, a.auth?.accountUuid].some(
+            (uuid) => uuid?.toLowerCase() === current.accountUuid!.toLowerCase(),
+          ),
+        )?.name
+      : undefined;
+  const notice = new Notification({
+    title: "Relay",
+    body: on
+      ? say(
+          `Claude tarayıcı eklentisi ${on} hesabında kaldı; Claude’un tarayıcı araçları ${target.name} ile çalışmaz. Ayarlamak için tıkla.`,
+          `The Claude browser extension stayed on ${on}, so Claude’s browser tools won’t work with ${target.name}. Click to set it up.`,
+        )
+      : say(
+          `Claude tarayıcı eklentisi ${target.name} hesabına geçmedi; Claude’un tarayıcı araçları çalışmaz. Ayarlamak için tıkla.`,
+          `The Claude browser extension did not move to ${target.name}, so Claude’s browser tools won’t work. Click to set it up.`,
+        ),
+  });
+  notice.on("click", () => openPage("ayarlar/tasinanlar"));
+  notice.show();
 }
 /** Same copy as the menu bar switch; shown after a tray or panel switch. */
 function notifySwitched(name: string) {
@@ -1835,12 +1898,10 @@ function bindIPC() {
     const target = id.parse(profileId);
     try {
       const result = await manualDesktopLock(() => desktop.switchTo(target));
-      if (event.sender === trayPanel?.webContents()) {
-        const account = service.store.state.accounts.find(
-          (a) => a.id === target,
-        );
-        if (account) notifySwitched(account.name);
-      }
+      const account = service.store.state.accounts.find((a) => a.id === target);
+      if (account && event.sender === trayPanel?.webContents())
+        notifySwitched(account.name);
+      if (account) notifyExtensionLeft(account);
       return result;
     } finally {
       void tray?.update();
@@ -1854,19 +1915,10 @@ function bindIPC() {
     return takeLinkedSwitch();
   });
   handle("open-page", (page, intent) => {
-    const target = z.enum(PAGES).parse(page);
-    const want = z.enum(PAGE_INTENTS).optional().parse(intent);
-    // A window made now opens on the page itself; a loaded one is told to go there.
-    const fresh = !window;
-    showWindow(intentHash(target, want));
-    const contents = window?.webContents;
-    if (contents && !fresh) {
-      if (contents.isLoading())
-        contents.once("did-finish-load", () =>
-          contents.send("relay:navigate", target, want),
-        );
-      else contents.send("relay:navigate", target, want);
-    }
+    openPage(
+      z.enum(PAGES).parse(page),
+      z.enum(PAGE_INTENTS).optional().parse(intent),
+    );
     trayPanel?.hide();
   });
   handle("quit", () => {
