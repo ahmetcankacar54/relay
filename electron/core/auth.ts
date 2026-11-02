@@ -39,18 +39,39 @@ export function authorizationURL(text: string): string | undefined {
     }
   }
 }
+/**
+ * Where the sign-in page opens instead of the system browser: Relay's own window for the
+ * account. The CLI runs the program in `BROWSER` with the page's address, so `env` points it at a
+ * small script that writes the address where `take` reads it. That page sends the approval back
+ * to the CLI on localhost, so nothing has to be pasted.
+ */
+export interface AuthBrowser {
+  env(attemptId: string): Record<string, string>;
+  /** The page the CLI handed over for this attempt, once, then forgotten; undefined before. */
+  take(attemptId: string): Promise<string | undefined>;
+  show(accountId: string, url: string): void;
+  close(accountId: string): void;
+}
+/** How long the CLI gets to hand its page to `BROWSER` before the printed one is shown instead. */
+const HANDOFF_MS = 5_000;
 interface Entry {
   flow: AuthFlow;
   child: ChildProcessWithoutNullStreams;
   output: string;
   url?: string;
+  /** The page the CLI printed, shown when it hands none to BROWSER. */
+  printed?: string;
   timer?: ReturnType<typeof setTimeout>;
+  /** Polls for the page the CLI hands to `BROWSER`. */
+  handoff?: ReturnType<typeof setInterval>;
   closed: Promise<void>;
   stopping: boolean;
   continued: boolean;
 }
 export class AuthManager {
   private entries = new Map<string, Entry>();
+  /** Set by the app where it can show the sign-in page in its own window. */
+  browser?: AuthBrowser;
   constructor(
     private verify: (id: string) => Promise<boolean>,
     private emit: (flow: AuthFlow) => void,
@@ -86,9 +107,11 @@ export class AuthManager {
         );
       throw error;
     }
+    const attemptId = randomUUID();
+    const browser = this.browser;
     const child = spawn(executable, ["auth", "login", "--claudeai"], {
       cwd,
-      env,
+      env: browser ? { ...env, ...browser.env(attemptId) } : env,
       windowsHide: true,
       stdio: "pipe",
       shell: false,
@@ -96,7 +119,7 @@ export class AuthManager {
     let resolveClose!: () => void;
     const e: Entry = {
       flow: {
-        id: randomUUID(),
+        id: attemptId,
         accountId,
         status: "starting",
         browserReady: false,
@@ -121,10 +144,11 @@ export class AuthManager {
         Math.max(e.output.lastIndexOf("\n"), e.output.lastIndexOf("\r")) + 1,
       );
       const url = authorizationURL(complete);
-      if (url && !e.url) {
+      // With a window, the page the CLI hands to BROWSER wins; the printed one is the fallback.
+      if (url && !e.url && !browser) {
         e.url = url;
         this.update(e, { status: "waiting", browserReady: true });
-      }
+      } else if (url && !e.printed) e.printed = url;
       if (
         /paste (?:the )?(?:authorization )?code|enter (?:the )?(?:authorization )?code/i.test(
           stripVTControlCharacters(e.output),
@@ -157,6 +181,7 @@ export class AuthManager {
     child.once("close", (code) => {
       releaseProfile?.();
       resolveClose();
+      clearInterval(e.handoff);
       if (e.stopping || !authPending(e.flow)) return;
       e.output = "";
       e.url = undefined;
@@ -178,16 +203,35 @@ export class AuthManager {
     e.timer = setTimeout(() => {
       void this.cancel(accountId, e.flow.id, true);
     }, this.timeoutMs);
+    if (browser) {
+      const started = Date.now();
+      e.handoff = setInterval(() => {
+        void (async () => {
+          if (e.stopping || !authPending(e.flow) || e.url) return;
+          const handed = await browser.take(attemptId).catch(() => undefined);
+          const url =
+            (handed && authorizationURL(`${handed}\n`)) ??
+            (Date.now() - started >= HANDOFF_MS ? e.printed : undefined);
+          if (!url || e.url || e.stopping || !authPending(e.flow)) return;
+          e.url = url;
+          clearInterval(e.handoff);
+          this.update(e, { status: "waiting", browserReady: true, inWindow: true });
+          browser.show(accountId, url);
+        })();
+      }, 250);
+    }
     this.emit({ ...e.flow });
     return { ...e.flow };
   }
-  async reopen(accountId: string, attemptId: string) {
+  /** Opens the sign-in page again: in Relay's window, or in the system browser when asked. */
+  async reopen(accountId: string, attemptId: string, where: "window" | "browser" = "browser") {
     const e = this.get(accountId, attemptId);
     if (e.stopping || e.flow.status !== "waiting" || !e.url)
       throw new Error(
         "Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.",
       );
-    await this.open(e.url);
+    if (where === "window" && this.browser) this.browser.show(accountId, e.url);
+    else await this.open(e.url);
   }
   submitCode(accountId: string, attemptId: string, code: string) {
     const e = this.get(accountId, attemptId);
@@ -261,8 +305,11 @@ export class AuthManager {
   }
   private finish(e: Entry, status: AuthFlow["status"], error?: string) {
     clearTimeout(e.timer);
+    clearInterval(e.handoff);
+    if (e.flow.inWindow) this.browser?.close(e.flow.accountId);
     e.output = "";
     e.url = undefined;
+    e.printed = undefined;
     this.update(e, {
       status,
       error,

@@ -97,8 +97,8 @@ const api: RelayAPI = {
   removeAccount: (id) => ipcRenderer.invoke("relay:remove-account", id),
   checkAuth: (id) => ipcRenderer.invoke("relay:check-auth", id),
   login: (id) => ipcRenderer.invoke("relay:login", id),
-  reopenLogin: (id, attempt) =>
-    ipcRenderer.invoke("relay:reopen-login", id, attempt),
+  reopenLogin: (id, attempt, where) =>
+    ipcRenderer.invoke("relay:reopen-login", id, attempt, where),
   cancelLogin: (id, attempt) =>
     ipcRenderer.invoke("relay:cancel-login", id, attempt),
   submitLoginCode: (id, attempt, code) =>

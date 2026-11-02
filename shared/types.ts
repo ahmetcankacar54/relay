@@ -98,6 +98,8 @@ export interface AuthFlow {
     "starting" | "waiting" | "verifying" | "connected" | "failed" | "cancelled";
   browserReady: boolean;
   codeRequested: boolean;
+  /** The sign-in page is open in Relay's own window for the account, not the system browser. */
+  inWindow?: boolean;
   startedAt: string;
   error?: string;
 }
@@ -366,7 +368,8 @@ export interface RelayAPI {
   removeAccount(accountId: string): Promise<AccountRemoved>;
   checkAuth(accountId: string): Promise<Account>;
   login(accountId: string): Promise<AuthFlow>;
-  reopenLogin(accountId: string, attemptId: string): Promise<void>;
+  /** Opens the sign-in page again: Relay's window for the account, or the system browser. */
+  reopenLogin(accountId: string, attemptId: string, where?: "window" | "browser"): Promise<void>;
   cancelLogin(accountId: string, attemptId: string): Promise<void>;
   submitLoginCode(
     accountId: string,

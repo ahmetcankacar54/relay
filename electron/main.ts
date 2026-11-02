@@ -24,6 +24,7 @@ import {
 import { runDetached } from "./core/detached-exec";
 import { openCodeTab } from "./core/code-tab";
 import { AutoCapture } from "./core/auto-capture";
+import { authWindows, forgetSignInSession } from "./auth-window";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
@@ -603,6 +604,13 @@ else {
         (url) => shell.openExternal(url),
         (accountId, kind) => acquireProfileLock(profileLocks(), accountId, kind),
       );
+      // The usage sign-in opens in Relay's own window per account; Windows keeps the browser.
+      if (process.platform !== "win32")
+        service.auth.browser = authWindows(
+          app.getPath("userData"),
+          say,
+          path.join(__dirname, "icon.png"),
+        );
       watchRegistry();
       nativeTheme.themeSource = themeSource(service.store.state.settings);
       const vaultDir = path.join(app.getPath("userData"), "desktop-vault");
@@ -2066,6 +2074,7 @@ function bindIPC() {
           desktop: () => desktop.snapshot(),
         });
         usage.forget(account);
+        void forgetSignInSession(account).catch(() => {});
         keeper.resume();
         void keeper.tick();
         void autoSwitch.tick();
@@ -2094,8 +2103,12 @@ function bindIPC() {
       return service.login(account);
     });
   });
-  handle("reopen-login", (accountId, attemptId) =>
-    service.auth.reopen(id.parse(accountId), id.parse(attemptId)),
+  handle("reopen-login", (accountId, attemptId, where) =>
+    service.auth.reopen(
+      id.parse(accountId),
+      id.parse(attemptId),
+      z.enum(["window", "browser"]).optional().parse(where),
+    ),
   );
   handle("cancel-login", (accountId, attemptId) =>
     service.auth.cancel(id.parse(accountId), id.parse(attemptId)),

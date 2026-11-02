@@ -278,10 +278,15 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
                         "Giriş iptal edildi. İstediğinde yeniden bağlanabilirsin.",
                         "Sign-in cancelled. You can reconnect whenever you like.",
                       )
-                    : t(
-                        "Tarayıcıda seçtiğin hesabı onayla. Bu ekran otomatik güncellenecek.",
-                        "Authorize your chosen account in the browser. This screen updates automatically.",
-                      )}
+                    : flow.inWindow
+                      ? t(
+                          "Açılan Relay penceresinde Claude’a bu hesapla gir ve izin ver. Google ile giriş açılmazsa e-posta ile gir ya da “Tarayıcıda aç”.",
+                          "In the Relay window that opened, sign in to Claude with this account and allow access. If Google sign-in does not open, use email or Open in browser.",
+                        )
+                      : t(
+                          "Tarayıcıda seçtiğin hesabı onayla. Bu ekran otomatik güncellenecek.",
+                          "Authorize your chosen account in the browser. This screen updates automatically.",
+                        )}
           </p>
         </div>
       </div>
@@ -343,7 +348,9 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
             ),
           },
           {
-            title: t("Tarayıcıda onayla", "Approve in browser"),
+            title: flow.inWindow
+              ? t("Pencerede onayla", "Approve in the window")
+              : t("Tarayıcıda onayla", "Approve in browser"),
             detail: t(
               "Hesabını seç ve izin ver",
               "Choose and authorize your account",
@@ -389,18 +396,34 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
       <div className={actionsClass}>
         {pending(flow) ? (
           <>
+            {flow.inWindow && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!!busy || !flow.browserReady}
+                onClick={() =>
+                  void action("reopen", () =>
+                    api.reopenLogin(flow.accountId, flow.id, "window"),
+                  )
+                }
+              >
+                {t("Pencereyi göster", "Show the window")}
+              </Button>
+            )}
             <Button
-              variant="outline"
+              variant={flow.inWindow ? "ghost" : "outline"}
               size="sm"
               disabled={!!busy || !flow.browserReady}
               onClick={() =>
                 void action("reopen", () =>
-                  api.reopenLogin(flow.accountId, flow.id),
+                  api.reopenLogin(flow.accountId, flow.id, "browser"),
                 )
               }
             >
               <ArrowUpRight />
-              {t("Tarayıcıyı yeniden aç", "Reopen browser")}
+              {flow.inWindow
+                ? t("Tarayıcıda aç", "Open in browser")
+                : t("Tarayıcıyı yeniden aç", "Reopen browser")}
             </Button>
             <Button
               variant="ghost"
