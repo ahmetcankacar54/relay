@@ -196,6 +196,8 @@ export interface DesktopSwitchOptions {
  */
 export class DesktopSwitchRefused extends Error {}
 const SWITCH_CANCELLED = "Automatic Desktop switch was cancelled before restart.";
+/** Keys of the main Claude's config.json a window takes: how it looks, never who is signed in. */
+const WINDOW_CONFIG_KEYS = ["locale", "userThemeMode"] as const;
 export const WINDOW_HOLDS_ACCOUNT =
   "This account is open in a separate Claude window. Close that window first.";
 export const WINDOW_PAUSES_AUTOMATIC =
@@ -1702,7 +1704,10 @@ export class DesktopManager {
   async seedWindow(accountUuid: string, dir: string) {
     await this.windowOperation(async () => {
       const saved = await this.readLogin(accountUuid);
+      const main = (await readObject(this.root, "config.json")) ?? {};
       const config = (await readObject(dir, "config.json")) ?? {};
+      // The main Claude's language and theme, so the window looks like it.
+      for (const key of WINDOW_CONFIG_KEYS) if (key in main) config[key] = main[key];
       for (const key of AUTH_KEYS) {
         delete config[key];
         if (key in saved.auth) config[key] = saved.auth[key];
@@ -1711,6 +1716,20 @@ export class DesktopManager {
       for (const f of COOKIE_FILES) {
         const cookie = saved.cookies[f];
         await writeBytes(dir, f, cookie == null ? null : Buffer.from(cookie, "base64"));
+      }
+      // The user's MCP servers and preferences are the main Claude's.
+      const preferences = await readBytes(this.root, DESKTOP_PREFERENCES);
+      if (preferences) await writeBytes(dir, DESKTOP_PREFERENCES, preferences);
+      // The account's own Code conversations, as the main Claude has them. Only its own: a
+      // conversation of another account could then run in both Claudes at once.
+      const account = this.store.state.accounts.find(
+        (a) => a.desktop?.accountUuid.toLowerCase() === accountUuid.toLowerCase(),
+      );
+      if (account?.desktop) {
+        const { writes } = await planHistoryDetailed(dir, account.desktop, [], {
+          outside: [{ root: this.root, scope: account.desktop }],
+        });
+        for (const [relative, data] of writes) await writeBytes(dir, relative, data);
       }
     });
   }

@@ -342,3 +342,32 @@ test("a window sealing back leaves an earlier Desktop error to read", async (t) 
   await f.desktopWindows.close(a.desktop!.accountUuid);
   assert.equal((await f.manager.snapshot()).error, "Earlier problem.");
 });
+
+test("a window opens with its own account's conversations, the main Claude's preferences and its look", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B"); // The main Claude is on B.
+  const record = (account: typeof a, title: string) => {
+    const cliSessionId = randomUUID();
+    return {
+      relative: `claude-code-sessions/${account.desktop!.accountUuid}/${account.desktop!.orgId}/local_${cliSessionId}.json`,
+      body: jsonBytes({ sessionId: `local_${cliSessionId}`, cliSessionId, cwd: f.temp, title, lastActivityAt: 42 }),
+    };
+  };
+  const own = record(a, "A's own");
+  const other = record(b, "B's");
+  await writeBytes(f.root, own.relative, own.body);
+  await writeBytes(f.root, other.relative, other.body);
+  await writeBytes(f.root, "claude_desktop_config.json", jsonBytes({ mcpServers: { tool: { command: "x" } } }));
+  const main = (await readObject(f.root, "config.json"))!;
+  await writeBytes(f.root, "config.json", jsonBytes({ ...main, locale: "tr-TR", userThemeMode: "dark", updaterLastSeenVersion: "1" }));
+  f.desktopWindows.setEnabled(true);
+  await f.desktopWindows.open(a.desktop!.accountUuid);
+  const dir = f.desktopWindows.dataDir(a.desktop!.accountUuid);
+  assert.equal((await readObject(dir, own.relative))?.title, "A's own");
+  assert.equal(await readObject(dir, other.relative), null);
+  assert.deepEqual((await readObject(dir, "claude_desktop_config.json"))?.mcpServers, { tool: { command: "x" } });
+  const config = (await readObject(dir, "config.json"))!;
+  assert.deepEqual([config.locale, config.userThemeMode, config.updaterLastSeenVersion], ["tr-TR", "dark", undefined]);
+  assert.equal(config.lastKnownAccountUuid, a.desktop!.accountUuid);
+});
