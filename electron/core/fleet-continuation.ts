@@ -55,6 +55,7 @@ export interface FleetDeps {
   switchTo(
     targetId: string,
     guards: {
+      automatic: true;
       canProceed: () => boolean;
       beforeQuit: () => Promise<void>;
       /**
@@ -461,6 +462,7 @@ export class FleetContinuation {
       this.deps.busy()
     )
       return this.publish({ status: "waiting", reason: "desktop-busy" });
+    if (desktop.windows) return this.publish({ status: "waiting", reason: "separate-window" });
     const { accounts, settings, usage, tempoRate } = this.deps.snapshot();
     const source = accounts.find((a) => a.id === desktop.activeProfileId);
     if (!source?.desktop)
@@ -633,6 +635,7 @@ export class FleetContinuation {
         current.every((stop) => this.deps.unchanged(stop));
       try {
         await this.deps.switchTo(target.id, {
+          automatic: true,
           canProceed: stillSafe,
           beforeQuit: async () => {
             if (

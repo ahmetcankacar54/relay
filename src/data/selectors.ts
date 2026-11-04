@@ -34,13 +34,21 @@ export function limitFull(
   return availableAt ? { availableAt } : {};
 }
 
-/** Other accounts best first, by the switch rule (`rate`: the tempo, Pro units per hour). */
+/** The ids of the accounts open in a separate Claude window. */
+export const windowAccounts = (data: Snapshot | undefined): ReadonlySet<string> =>
+  new Set(data?.windows?.open.map((w) => w.accountId));
+
+/**
+ * Other accounts best first, by the switch rule (`rate`: the tempo, Pro units per hour). One open
+ * in its own Claude window (`inWindows`, by id) cannot be switched to, so it is never recommended.
+ */
 export function overviewAccounts(
   active: Account | undefined,
   accounts: Account[],
   usage: Record<string, AccountUsage>,
   now = Date.now(),
   rate?: number,
+  inWindows: ReadonlySet<string> = new Set(),
 ): OverviewRow[] {
   const others = accounts.filter((a) => a.id !== active?.id);
   const ranked = rankContinuationTargets(
@@ -61,7 +69,8 @@ export function overviewAccounts(
       availableAt = full.availableAt;
     } else if (u.fiveHour?.resetsAt && Date.parse(u.fiveHour.resetsAt) > now) state = "window-open";
     else state = "ready";
-    const pick = !recommended && (state === "ready" || state === "window-open");
+    const pick =
+      !recommended && !inWindows.has(account.id) && (state === "ready" || state === "window-open");
     if (pick) recommended = true;
     return { account, usage: u, state, availableAt, recommended: pick };
   });

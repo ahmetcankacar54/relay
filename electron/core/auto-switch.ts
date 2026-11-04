@@ -146,6 +146,7 @@ export function autoSwitchDecision(
   if (!desktop.available) return state("blocked", "desktop-unavailable");
   if (desktop.recoveryRequired) return state("blocked", "desktop-recovery");
   if (desktop.busy) return state("blocked", "desktop-busy");
+  if (desktop.windows) return state("blocked", "separate-window");
   if (desktop.pendingProfileId) return state("blocked", "desktop-sign-in");
   if (continuationOwns) return state("blocked", "continuation-active");
   if (pendingAuth) return state("blocked", "browser-sign-in");
@@ -466,6 +467,7 @@ export class AutoSwitchManager {
       try {
         const switchAccount = () =>
           this.desktop.switchTo(targetId, {
+            automatic: true,
             closedOnly: true,
             expectedActiveProfileId: sourceId,
             canProceed: allowed,

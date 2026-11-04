@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { execFile, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 import { readObject, readBytes, safeFile, scopePath } from "./desktop-files";
+import { userDataDir } from "./desktop-instances";
 import {
   TranscriptScanner,
   isTaskNotification,
@@ -45,6 +46,17 @@ export interface DesktopProcess {
   ppid: number;
   executable: string;
   args: string;
+}
+
+/**
+ * The main Claude's own process: Claude.app's executable, started without its own data folder. A
+ * separate window (`--user-data-dir`) is another app that a switch neither quits nor waits for.
+ */
+export function isMainClaudeApp(process: DesktopProcess): boolean {
+  return (
+    /\/Claude\.app\/Contents\/MacOS\/Claude$/.test(process.executable) &&
+    userDataDir(process.args) === undefined
+  );
 }
 
 /** Native installs use a version filename; npm installs can run under Node. */
@@ -1130,9 +1142,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
     } catch {
       return "quiescence-unverified";
     }
-    const app = rows.find((row) =>
-      /\/Claude\.app\/Contents\/MacOS\/Claude$/.test(row.executable),
-    );
+    const app = rows.find(isMainClaudeApp);
     // A closed Claude cannot be interrupted.
     if (!app) return undefined;
     this.remember(raw, app.pid);
@@ -1495,7 +1505,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
           return !parsed.some(
             (p) =>
               (this.family.has(p.pid) && isDesktopClaudeEngine(p)) ||
-              /\/Claude\.app\/Contents\/MacOS\/Claude$/.test(p.executable),
+              isMainClaudeApp(p),
           );
         }
         this.remember(raw, currentSnapshot.pid);
@@ -1551,6 +1561,7 @@ export class NativeDesktopContinuationEvidence implements DesktopContinuationEvi
         throw new DesktopAutomationError("desktop-work-active");
     };
     await this.options.desktop.switchTo(input.target.profileId, {
+      automatic: true,
       canProceed,
       beforeQuit,
     });

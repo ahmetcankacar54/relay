@@ -8,6 +8,7 @@ import {
   overviewAccounts,
   pendingFlow,
   tempoRateNow,
+  windowAccounts,
   type OverviewRow,
 } from "@/data/selectors";
 import {
@@ -28,6 +29,8 @@ export function blockWords(reason: PanelRowBlock, t: T): string {
   switch (reason) {
     case "not-linked":
       return t("Relay’de girişi kaydet", "Save its sign-in in Relay");
+    case "window":
+      return t("Ayrı pencerede açık", "Open in its own window");
     case "busy":
       return t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running");
     case "pending":
@@ -45,6 +48,7 @@ export function panelRows(relay: Relay, now: number): OverviewRow[] {
     relay.data?.usage ?? {},
     now,
     tempoRateNow(relay.data, relay.settings, now),
+    windowAccounts(relay.data),
   ).map((row) =>
     relay.suggestion
       ? { ...row, recommended: row.account.id === relay.suggestion.id }
@@ -162,6 +166,10 @@ export function PanelAccounts({
           pick={(row, e) => {
             const { canSwitch, reason } = panelRowState(row, relay);
             if (reason === "not-linked") return void relay.api.openPage("hesaplar");
+            if (reason === "window")
+              return void relay.action(`window:${row.account.id}`, () =>
+                relay.api.openWindow(row.account.id),
+              );
             if (!canSwitch) return;
             // Closing an open confirmation is a cancel, not a switch request: no prank.
             if (confirmId === row.account.id) return setConfirmId(undefined);

@@ -385,10 +385,21 @@ export function newSessionGuard(
   };
 }
 
+/**
+ * Which Claude the helper looks at, asked before every command: undefined while only the main
+ * Claude can run (the helper takes the one app running), its pid while separate windows run
+ * beside it, and null while windows run but the main Claude does not.
+ */
+export type DesktopTarget = () => Promise<number | null | undefined>;
+
+/** Commands that open a `claude://` link: macOS hands it to any Claude, a window included. */
+const LINK_COMMANDS = new Set(["open-session", "open-new-session"]);
+
 /** The helper never starts Claude, reads credentials or invokes a CLI. */
 export function nativeDesktopAutomation(
   helper: string,
   executor?: DesktopNativeExecutor,
+  target?: DesktopTarget,
 ): DesktopAutomation {
   const invoke =
     executor ??
@@ -425,8 +436,12 @@ export function nativeDesktopAutomation(
         child.stdin?.on("error", () => {});
         child.stdin?.end(JSON.stringify(request));
       }));
-  const call = async (request: unknown) => {
-    const raw = await invoke(request);
+  const call = async (request: { command: string } & Record<string, unknown>) => {
+    const pid = request.command === "request-accessibility" ? undefined : await target?.();
+    if (pid === null) throw new DesktopAutomationError("claude-not-running", true);
+    if (pid !== undefined && LINK_COMMANDS.has(request.command))
+      throw new DesktopAutomationError("desktop-ui-unsupported", true);
+    const raw = await invoke(pid === undefined ? request : { ...request, pid });
     if (!raw || typeof raw !== "object")
       throw new DesktopAutomationError("desktop-ui-unsupported");
     const reply = raw as NativeReply;

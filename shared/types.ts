@@ -130,6 +130,8 @@ export interface Snapshot {
   sidebar?: SidebarGapSummary;
   /** The Claude extension is left on another account than Desktop's, and can be brought along. */
   extension?: ExtensionOffer;
+  /** Accounts opened in a separate Claude window, next to the main Claude. */
+  windows?: SeparateWindows;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   accounts: Account[];
@@ -138,6 +140,18 @@ export interface Snapshot {
   diagnostics: Diagnostics;
   importEnabled: boolean;
   warnings: string[];
+}
+/**
+ * Separate Claude windows: an account opened in its own Claude, on a data folder of its own,
+ * while the main Claude stays on its account. Off until turned on in Settings; macOS only.
+ */
+export interface SeparateWindows {
+  supported: boolean;
+  enabled: boolean;
+  /** The Relay accounts whose window runs now. */
+  open: { accountId: string; openedAt?: number }[];
+  /** Claudes on a data folder of their own that Relay did not open. */
+  others: number;
 }
 export interface CreateAccount {
   name: string;
@@ -202,6 +216,11 @@ export interface DesktopState {
   lastBackup?: string;
   /** Relay saves the Claude app sign-in for this profile by itself once it is complete. */
   autoCapture?: AutoCaptureState;
+  /**
+   * How many separate Claude windows (a Claude on its own data folder) run beside the main one.
+   * Automatic switching, the fleet and continuation wait while one does.
+   */
+  windows?: number;
 }
 /**
  * The automatic save of a Claude app sign-in: waiting for the sign-in and Code, waiting for the
@@ -217,7 +236,14 @@ export interface AutoCaptureState {
   error?: string;
 }
 /** A DesktopManager operation; each may restart Claude. */
-export type DesktopOperationKind = "switch" | "save" | "link" | "cancel-link" | "merge" | "restore";
+export type DesktopOperationKind =
+  | "switch"
+  | "save"
+  | "link"
+  | "cancel-link"
+  | "merge"
+  | "restore"
+  | "window";
 /**
  * An operation about to quit Claude (`start`, once), then its end (`end`).
  * Operations that never quit Claude report nothing.
@@ -303,6 +329,12 @@ export interface RelayAPI {
   claudeLaunch(): Promise<ClaudeLaunchChoice>;
   /** Changes what the patch names; resolves with the whole choice. */
   setClaudeLaunch(patch: Partial<ClaudeLaunchChoice>): Promise<ClaudeLaunchChoice>;
+  /** Turns separate Claude windows on or off (Settings). */
+  setSeparateWindows(enabled: boolean): Promise<void>;
+  /** Opens the account in a separate Claude window, or brings its window forward. */
+  openWindow(accountId: string): Promise<"opened" | "shown">;
+  /** Closes the account's separate window and gives its sign-in back to the vault. */
+  closeWindow(accountId: string): Promise<void>;
   /** What the menu bar title shows (macOS); the five-hour percent alone until changed. */
   menuBarTitle(): Promise<MenuBarTitleChoice>;
   /** Replaces the menu bar title's items and redraws it; resolves with the choice as kept. */
@@ -556,6 +588,7 @@ export type AutoSwitchReason =
   | "not-selected"
   | "desktop-unavailable"
   | "desktop-busy"
+  | "separate-window"
   | "desktop-recovery"
   | "desktop-sign-in"
   | "browser-sign-in"

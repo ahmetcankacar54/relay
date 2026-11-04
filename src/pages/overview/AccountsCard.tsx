@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { overviewAccounts, pendingFlow, tempoRateNow } from "@/data/selectors";
+import { overviewAccounts, pendingFlow, tempoRateNow, windowAccounts } from "@/data/selectors";
 import {
   accountRowSubtitle,
   accountTileLine,
@@ -32,6 +32,7 @@ export function AccountsCard({
     relay.data?.usage ?? {},
     now,
     tempoRateNow(relay.data, relay.settings, now),
+    windowAccounts(relay.data),
   ).map((row) =>
     relay.suggestion
       ? { ...row, recommended: row.account.id === relay.suggestion.id }

@@ -307,7 +307,14 @@ export async function planHistoryDetailed(
   root: string,
   target: Scope,
   sources: Scope[],
-  options: { seenSpaceIds?: string[] } = {},
+  options: {
+    seenSpaceIds?: string[];
+    /**
+     * Sessions in another Claude data folder (a separate window's), read as sources even under
+     * the target's own scope: the window's conversations of the target account.
+     */
+    outside?: { root: string; scope: Scope }[];
+  } = {},
 ): Promise<{
   writes: Map<string, Buffer | null>;
   conversations: CarriedConversation[];
@@ -327,6 +334,11 @@ export async function planHistoryDetailed(
     )
       continue;
     const found = await readSessions(root, source, false);
+    all.push(...found.records);
+    found.deleted.forEach((id) => deleted.add(id));
+  }
+  for (const source of options.outside ?? []) {
+    const found = await readSessions(source.root, source.scope, false);
     all.push(...found.records);
     found.deleted.forEach((id) => deleted.add(id));
   }

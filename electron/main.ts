@@ -39,6 +39,12 @@ import {
   safeStorageSealer,
 } from "./core/desktop-host";
 import { identity, readObject } from "./core/desktop-files";
+import {
+  DesktopWindows,
+  WINDOWS_UNSUPPORTED,
+  type SessionOwner,
+} from "./core/desktop-windows";
+import { desktopAccountFor } from "../shared/desktop-account";
 import { DesktopLock } from "./core/desktop-lock";
 import { lastDraftWipeAt } from "./core/desktop-wipe";
 import { nativeDesktopWatch, unpackedPath } from "./core/desktop-watch";
@@ -116,6 +122,7 @@ import type {
   Account,
   DesktopState,
   FleetContinuationState,
+  SeparateWindows,
 } from "../shared/types";
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
@@ -196,6 +203,10 @@ let desktop: DesktopManager;
 /** Saves a Claude app sign-in by itself once the user has signed in and opened Code. */
 let autoCapture: AutoCapture | undefined;
 let switchDiagnostics: SwitchDiagnostics | undefined;
+/** Accounts opened in a separate Claude window beside the main one; macOS only. */
+let desktopWindows: DesktopWindows | undefined;
+/** Which account's window holds each Claude Code session, for token attribution. */
+let windowSessionOwners = new Map<string, SessionOwner>();
 let usage: UsageManager;
 let usageCredentialRefresher: UsageCredentialRefresher;
 let autoSwitch: AutoSwitchManager;
@@ -402,6 +413,8 @@ async function tokenTickOnce() {
   try {
     await addTokenRoots();
     refreshTokenSamples();
+    if (desktopWindows)
+      windowSessionOwners = await desktopWindows.sessionOwners().catch(() => windowSessionOwners);
     tokenLastTick = await tokenLedger.tick();
     writeWidget();
   } catch {
@@ -546,6 +559,10 @@ function startTokenScan() {
           timeline: activeTimeline,
           samples: tokenSamples,
           accounts: service.store.state.accounts,
+          windowOwner: (sessionId, time) => {
+            const owner = windowSessionOwners.get(sessionId.toLowerCase());
+            return owner && time <= owner.until ? owner.accountUuid : undefined;
+          },
         }),
       zone: () => service.store.state.settings.planning.timeZone,
     });
@@ -669,6 +686,34 @@ else {
           broadcastChanged();
         },
       };
+      if (process.platform === "darwin") {
+        const windows = new DesktopWindows({
+          folder: path.join(app.getPath("userData"), "claude-windows"),
+          host,
+          current: async () => identity(await readObject(desktop.root, "config.json")),
+          seed: (accountUuid, dir) => desktop.seedWindow(accountUuid, dir),
+          seal: (accountUuid, dir) => desktop.sealWindow(accountUuid, dir),
+          quicOff: () => diagnostics.current.quicOff,
+          now: Date.now,
+          log: logDraftEvent,
+        });
+        desktopWindows = windows;
+        desktop.windows = {
+          openAccounts: () => windows.openAccounts(),
+          anyOpen: () => windows.anyOpen(),
+          folder: (accountUuid) => windows.folderOf(accountUuid),
+        };
+        // A window closed by hand gives its sign-in back to the vault within seconds.
+        const settle = () =>
+          void windows.reconcile().then(
+            (sealed) => {
+              if (sealed.length) broadcastChanged();
+            },
+            () => {},
+          );
+        settle();
+        setInterval(settle, 15_000).unref();
+      }
       // Which account was open when, from every fresh Desktop reading, set before the first one.
       activeTimeline = new ActiveAccountTimeline(
         path.join(app.getPath("userData"), "active-account-timeline.json"),
@@ -769,7 +814,9 @@ else {
       const automationHelper = unpackedPath(
         path.join(__dirname, "desktop-automation"),
       );
-      automation = nativeDesktopAutomation(automationHelper);
+      // While separate windows run, the helper looks only at the main Claude.
+      const automationTarget = async () => host.automationTarget?.();
+      automation = nativeDesktopAutomation(automationHelper, undefined, automationTarget);
       if (process.platform === "darwin" && process.env.RELAY_UI_OUTLINE === "1")
         void writeUiOutline(
           automationHelper,
@@ -807,7 +854,7 @@ else {
         retype: draftRetype,
         // Where the user is in Claude, while drafts wait: one long-lived helper, macOS only.
         ...(process.platform === "darwin"
-          ? { watch: nativeDesktopWatch(automationHelper, QUIET_MS, IDLE_MS) }
+          ? { watch: nativeDesktopWatch(automationHelper, QUIET_MS, IDLE_MS, automationTarget) }
           : {}),
       });
       // One hook for every switch: tray, panel, automatic, continuation and fleet.
@@ -1592,6 +1639,25 @@ function watchRegistry() {
   }
 }
 /** Tell every Relay renderer (main window and menu bar panel) that state changed. */
+/** The accounts open in a separate Claude window, for the windows; undefined off macOS. */
+async function separateWindows(): Promise<SeparateWindows | undefined> {
+  if (!desktopWindows) return undefined;
+  const { windows, others } = await desktopWindows
+    .running(2_000)
+    .catch(() => ({ windows: [], others: 0 }));
+  const accounts = service.store.state.accounts;
+  return {
+    supported: true,
+    enabled: desktopWindows.enabled,
+    open: windows.flatMap((window) => {
+      const account = desktopAccountFor({ accountUuid: window.accountUuid }, accounts);
+      return account
+        ? [{ accountId: account.id, ...(window.openedAt ? { openedAt: window.openedAt } : {}) }]
+        : [];
+    }),
+    others,
+  };
+}
 function broadcastChanged() {
   if (window && !window.isDestroyed()) window.webContents.send("relay:changed");
   trayPanel?.webContents()?.send("relay:changed");
@@ -1792,6 +1858,41 @@ function bindIPC() {
   });
   // How Relay starts Claude (HTTP/3).
   handle("claude-launch", () => switchDiagnostics?.current ?? { quicOff: false });
+  // Separate Claude windows: an account opened in its own Claude beside the main one.
+  handle("set-separate-windows", (enabled) => {
+    if (!desktopWindows) throw new Error(WINDOWS_UNSUPPORTED);
+    desktopWindows.setEnabled(z.boolean().parse(enabled));
+    broadcastChanged();
+  });
+  const windowAccount = (accountId: unknown) => {
+    if (!desktopWindows) throw new Error(WINDOWS_UNSUPPORTED);
+    const account = service.store.account(id.parse(accountId));
+    if (!account.desktop) throw new Error("Connect this account in Claude Desktop first.");
+    return { windows: desktopWindows, accountUuid: account.desktop.accountUuid };
+  };
+  handle("open-window", async (accountId) => {
+    const { windows, accountUuid } = windowAccount(accountId);
+    try {
+      return await manualDesktopLock(async () => {
+        // A sign-in in progress may be for this very account: one holder at a time.
+        const state = await desktop.snapshot();
+        if (state.pendingProfileId)
+          throw new Error("Finish or cancel the current Desktop sign-in first.");
+        if (state.recoveryRequired) throw new Error("Restore the interrupted Desktop switch first.");
+        return windows.open(accountUuid);
+      });
+    } finally {
+      broadcastChanged();
+    }
+  });
+  handle("close-window", async (accountId) => {
+    const { windows, accountUuid } = windowAccount(accountId);
+    try {
+      await manualDesktopLock(() => windows.close(accountUuid));
+    } finally {
+      broadcastChanged();
+    }
+  });
   handle("set-claude-launch", (patch) => {
     const parsed = z
       .object({ quicOff: z.boolean().optional() })
@@ -2031,6 +2132,7 @@ function bindIPC() {
   );
   handle("panel-snapshot", async () => ({
     ...(await service.panelSnapshot()),
+    windows: await separateWindows(),
     usage: displayUsage(),
     continuation: continuation.snapshot(),
     fleet: fleet.snapshot(),
@@ -2043,6 +2145,7 @@ function bindIPC() {
   handle("snapshot", () =>
     service.transaction(async () => ({
       ...(await service.snapshot()),
+      windows: await separateWindows(),
       usage: displayUsage(),
       continuation: continuation.snapshot(),
       fleet: fleet.snapshot(),

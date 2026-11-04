@@ -91,6 +91,52 @@ function ClaudeLaunchRow({
   );
 }
 
+/**
+ * Separate Claude windows: each account's ⋯ menu can open it in its own Claude, beside the main
+ * one. macOS only; off until turned on here. Read from the snapshot, which says which are open.
+ */
+export function SeparateWindowsRow({
+  api,
+  action,
+  data,
+  t,
+}: Pick<ReturnType<typeof useRelay>, "api" | "action" | "data"> & {
+  t: ReturnType<typeof useI18n>["t"];
+}) {
+  const windows = data?.windows;
+  if (!windows?.supported) return null;
+  return (
+    <>
+      <SettingRow
+        label={t("Ayrı Claude pencereleri (deneysel)", "Separate Claude windows (experimental)")}
+        htmlFor="separate-windows"
+        description={t(
+          "Bir hesabı kendi Claude penceresinde, ana Claude’un yanında açar.",
+          "Opens an account in its own Claude window, next to the main Claude.",
+        )}
+      >
+        <Switch
+          id="separate-windows"
+          checked={windows.enabled}
+          onCheckedChange={(enabled) =>
+            void action("separate-windows", () => api.setSeparateWindows(enabled))
+          }
+        />
+      </SettingRow>
+      <div className="pb-3">
+        <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
+          <Note>
+            {t(
+              "Hesabın ⋯ menüsündeki “Ayrı pencerede aç”, o hesabı kendi veri klasörüyle ikinci bir Claude’da açar; giriş Relay’in kaydından gelir, pencere kapanınca geri kaydedilir. Pencere açıkken ana Claude o hesaba geçemez, Relay kendiliğinden geçiş yapmaz ve konuşmaları sürdürmez. Claude in Chrome yalnızca ana Claude’da çalışır; claude:// bağlantıları hangi Claude’a gideceğini macOS seçer. Claude bunu resmi olarak desteklemez, bir güncelleme bozabilir.",
+              "“Open in a separate window” in an account’s ⋯ menu opens it in a second Claude with its own data folder; it signs in with Relay’s saved sign-in, which is saved back when the window closes. While the window is open the main Claude cannot switch to that account, and Relay neither switches nor continues conversations by itself. Claude in Chrome works only in the main Claude, and macOS picks which Claude a claude:// link goes to. Claude does not officially support this, and an update may break it.",
+            )}
+          </Note>
+        </Disclosure>
+      </div>
+    </>
+  );
+}
+
 /** A system row's value: a check when it is in place, a mark when it is not. */
 function Status({ ok, children }: { ok: boolean; children: string }) {
   const Icon = ok ? Check : CircleAlert;
@@ -441,6 +487,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             </Button>
           </SettingRow>
           <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
+          <SeparateWindowsRow api={api} action={action} data={data} t={t} />
         </SettingGroup>
         <div id="settings-privacy" className="px-1">
           <Disclosure title={t("Gizlilik ve güvenlik", "Privacy and security")}>

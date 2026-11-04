@@ -3,6 +3,7 @@ import readline from "node:readline";
 import {
   isLocalSessionId,
   type DesktopAutomationIssue,
+  type DesktopTarget,
 } from "./desktop-continuation-host";
 
 /**
@@ -105,16 +106,19 @@ export function unpackedPath(file: string): string {
 }
 
 /**
- * The helper's `watch <quietMs> <idleMs>`, as a watcher. Its stdin stays open while it runs:
- * Relay ending closes it, and the helper ends with it. Lines that do not parse are skipped.
+ * The helper's `watch <quietMs> <idleMs> [pid]`, as a watcher. Its stdin stays open while it runs:
+ * Relay ending closes it, and the helper ends with it. Lines that do not parse are skipped. With
+ * `target`, the helper watches the Claude it names (the main one while windows run beside it).
  */
 export function nativeDesktopWatch(
   helper: string,
   quietMs: number,
   idleMs: number,
+  target?: DesktopTarget,
 ): DesktopWatcher {
   return (handlers) => {
     let ended = false;
+    let stopChild: (() => void) | undefined;
     const finish = (reason: DesktopWatchEnd) => {
       if (ended) return;
       ended = true;
@@ -124,32 +128,48 @@ export function nativeDesktopWatch(
         // A listener that throws changes nothing about the watch.
       }
     };
-    const child = spawn(unpackedPath(helper), ["watch", String(quietMs), String(idleMs)], {
-      stdio: ["pipe", "pipe", "ignore"],
-      windowsHide: true,
-    });
-    child.stdin?.on("error", () => {});
-    child.once("error", () => finish("desktop-ui-unsupported"));
-    // After its output: a last line, such as `gone`, says why first.
-    child.once("close", () => finish("exited"));
-    const lines = readline.createInterface({ input: child.stdout! });
-    lines.on("line", (line) => {
-      if (ended) return;
-      const parsed = parseWatchLine(line);
-      if (!parsed) return;
-      if ("end" in parsed) return finish(parsed.end);
-      try {
-        handlers.state(parsed.state);
-      } catch {
-        // As above.
-      }
-    });
-    return {
-      stop() {
-        ended = true;
+    const start = (pid?: number) => {
+      const args = ["watch", String(quietMs), String(idleMs), ...(pid === undefined ? [] : [String(pid)])];
+      const child = spawn(unpackedPath(helper), args, {
+        stdio: ["pipe", "pipe", "ignore"],
+        windowsHide: true,
+      });
+      child.stdin?.on("error", () => {});
+      child.once("error", () => finish("desktop-ui-unsupported"));
+      // After its output: a last line, such as `gone`, says why first.
+      child.once("close", () => finish("exited"));
+      const lines = readline.createInterface({ input: child.stdout! });
+      lines.on("line", (line) => {
+        if (ended) return;
+        const parsed = parseWatchLine(line);
+        if (!parsed) return;
+        if ("end" in parsed) return finish(parsed.end);
+        try {
+          handlers.state(parsed.state);
+        } catch {
+          // As above.
+        }
+      });
+      stopChild = () => {
         lines.close();
         child.stdin?.end();
         child.kill();
+      };
+    };
+    if (!target) start();
+    else
+      target().then(
+        (pid) => {
+          if (ended) return;
+          if (pid === null) finish("claude-not-running");
+          else start(pid);
+        },
+        () => finish("desktop-ui-unsupported"),
+      );
+    return {
+      stop() {
+        ended = true;
+        stopChild?.();
       },
     };
   };

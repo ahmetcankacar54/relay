@@ -89,6 +89,9 @@ test("panelRowState explains why a switch is unavailable", () => {
     panelRowState(row("ready"), { ...idle, desktop: { ...desktopState("active"), recoveryRequired: true } }),
     { canSwitch: false, reason: "recovery" },
   );
+  // An account open in its own window cannot be switched to until it closes.
+  const windowed = { ...idle, data: { windows: { supported: true, enabled: true, open: [{ accountId: "x" }], others: 0 } } } as Pick<Relay, "desktopBusy" | "pendingDesktop" | "desktop" | "data">;
+  assert.deepEqual(panelRowState(row("ready"), windowed), { canSwitch: false, reason: "window" });
   // Order: not-linked wins over busy.
   assert.deepEqual(panelRowState(row("not-linked"), { ...idle, desktopBusy: true }), { canSwitch: false, reason: "not-linked" });
 });

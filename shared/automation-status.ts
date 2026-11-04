@@ -71,6 +71,10 @@ const DESKTOP_BUSY: Copy = [
   "Relay Claude uygulamasında başka bir işlem yapıyor; bitince yeniden bakarım.",
   "Relay is busy with another Claude app action; I’ll check again after it.",
 ];
+const SEPARATE_WINDOW: Copy = [
+  "Ayrı bir Claude penceresi açık; kapanana kadar kendiliğimden geçmem.",
+  "A separate Claude window is open; I won’t switch by myself until it closes.",
+];
 const DESKTOP_UNAVAILABLE: Copy = [
   "Claude uygulaması bulunamadı.",
   "The Claude app was not found.",
@@ -106,6 +110,7 @@ const SWITCH_NOW_SUFFIX: Copy = [
 const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
   disabled: waiting(CHECKING),
   "desktop-busy": waiting(DESKTOP_BUSY),
+  "separate-window": waiting(SEPARATE_WINDOW),
   "desktop-sign-in": waiting([
     "Bir hesabın Claude uygulaması girişi sürüyor; Hesaplar’da tamamla veya iptal et.",
     "An account’s Claude app sign-in is in progress; finish or cancel it on Accounts.",
@@ -205,6 +210,7 @@ const FLEET: Record<string, Row> = {
   ]),
   checking: waiting(CHECKING),
   "desktop-busy": waiting(DESKTOP_BUSY),
+  "separate-window": waiting(SEPARATE_WINDOW),
   "context-changed": waiting([
     "Durum değişti; yeniden kontrol ediyorum.",
     "Something changed; checking again.",

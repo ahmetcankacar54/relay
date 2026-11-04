@@ -543,6 +543,18 @@ if (scenario === "fleet-waiting" || scenario === "fleet-idle-full") {
           stopped: 0,
         };
 }
+// The second account open in a separate Claude window beside the main one: its row offers to
+// bring it forward or close it, it cannot be switched to, and automatic switching waits.
+if (scenario === "windows") {
+  state.diagnostics.platform = "darwin";
+  state.windows = {
+    supported: true,
+    enabled: true,
+    open: [{ accountId: accounts[1].id, openedAt: Date.now() - 25 * 60_000 }],
+    others: 0,
+  };
+  desktop.windows = 1;
+}
 /** The lost and found's sources in the preview. */
 function previewLostFoundSource() {
   // Two accounts' Claude app sign-ins, with a short visit to the second one last Wednesday.
@@ -644,6 +656,23 @@ export const previewApi: RelayAPI = {
   showDiagnostics: desktopOnly,
   claudeLaunch: async () => ({ quicOff: false }),
   setClaudeLaunch: desktopOnly,
+  setSeparateWindows: async (enabled) => {
+    state.windows = { supported: true, open: [], others: 0, ...state.windows, enabled };
+  },
+  openWindow: async (accountId) => {
+    const windows = state.windows;
+    if (!windows?.enabled) return desktopOnly();
+    if (windows.open.some((w) => w.accountId === accountId)) return "shown";
+    windows.open.push({ accountId, openedAt: Date.now() });
+    desktop.windows = windows.open.length;
+    return "opened";
+  },
+  closeWindow: async (accountId) => {
+    const windows = state.windows;
+    if (!windows) return;
+    windows.open = windows.open.filter((w) => w.accountId !== accountId);
+    desktop.windows = windows.open.length || undefined;
+  },
   menuBarTitle: async () => ({ items: [...previewMenuBar] }),
   setMenuBarTitle: async (choice) => {
     previewMenuBar = menuBarItems(choice.items);

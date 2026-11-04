@@ -853,3 +853,14 @@ test("main passes the fleet and continuation conditions to continuationOwns, and
   assert.doesNotMatch(pending, /fleet/);
   assert.doesNotMatch(pending, /continuation\./);
 });
+
+test("automatic preparation waits while a separate Claude window runs", () => {
+  const f = scenario();
+  f.desktop.windows = 1;
+  assert.deepEqual(
+    [f.decide().state.status, f.decide().state.reason],
+    ["blocked", "separate-window"],
+  );
+  delete f.desktop.windows;
+  assert.notEqual(f.decide().state.reason, "separate-window");
+});

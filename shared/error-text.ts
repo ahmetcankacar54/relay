@@ -30,6 +30,31 @@ const pairs: Pair[] = [
     "Finish the Claude app operation before changing preferences.",
   ],
   ["Claude’u başlatma seçimi geçersiz.", "Invalid Claude launch choice."],
+  [
+    "Bu hesap ayrı bir Claude penceresinde açık. Önce o pencereyi kapat.",
+    "This account is open in a separate Claude window. Close that window first.",
+  ],
+  [
+    "Ayrı bir Claude penceresi açık, bu yüzden Relay kendiliğinden geçiş yapmaz.",
+    "A separate Claude window is open, so Relay does not switch by itself.",
+  ],
+  [
+    "Ayrı Claude pencereleri Ayarlar’da kapalı.",
+    "Separate Claude windows are turned off in Settings.",
+  ],
+  ["Ayrı Claude pencereleri macOS gerektirir.", "Separate Claude windows need macOS."],
+  [
+    "Bu hesap zaten Claude uygulamasında açık. Önce Claude uygulamasını başka bir hesaba geçir.",
+    "This account is already open in the Claude app. Switch the Claude app to another account first.",
+  ],
+  [
+    "Claude ayrı pencereyi açmadı. Yeniden dene.",
+    "Claude did not open the separate window. Try again.",
+  ],
+  [
+    "Ayrı pencere hâlâ açık. Claude orada çalışan işler için soru soruyor olabilir.",
+    "The separate window is still open. Claude may be asking about work left running there.",
+  ],
   ["Menü çubuğu seçimi geçersiz.", "Invalid menu bar title."],
   [
     "Yalnızca var olan Relay hesaplarını seç; her birini bir kez.",

@@ -32,6 +32,7 @@ import {
   historySources,
 } from "../../shared/history-policy";
 import { summarizeHistory } from "./desktop-history";
+import type { ClaudeWindowProcess } from "./desktop-instances";
 import { errorMessage, type DraftJob, type DraftResult } from "../draft-job";
 import {
   CLAUDE_RUNNING,
@@ -133,6 +134,24 @@ export interface DesktopHost {
    * be told booted or stuck. Undefined when Claude's log cannot tell.
    */
   watchLaunch?(): Promise<LaunchWatch | undefined>;
+  /**
+   * The Claudes that run on their own data folder (`--user-data-dir`), next to the main one: the
+   * separate windows. None of their processes count in `running`, `quit` or `launch`. macOS only.
+   */
+  windows?(): Promise<ClaudeWindowProcess[]>;
+  /** Starts a new Claude on the data folder `dir`. */
+  launchWindow?(dir: string, options?: LaunchOptions): Promise<void>;
+  /** Asks the window whose main process is `pid` to quit; Claude may still ask the user first. */
+  quitWindow?(pid: number): Promise<void>;
+  /** Brings the window whose main process is `pid` forward. */
+  activateWindow?(pid: number): Promise<void>;
+  /**
+   * The Claude the accessibility helper is to look at: undefined while no window runs, the main
+   * Claude's pid while one does, and null while one does but the main Claude is closed.
+   */
+  automationTarget?(): Promise<number | null | undefined>;
+  /** How many windows the last full process listing saw; 0 before one. */
+  windowsSeen?(): number;
 }
 export interface LaunchOptions {
   /** Start Claude without HTTP/3 (QUIC), so its requests go over HTTP/2. */
@@ -158,6 +177,8 @@ interface Pending {
   startedAt: string;
 }
 export interface DesktopSwitchOptions {
+  /** Relay switches by itself (auto-switch, the fleet, continuation): never while a window runs. */
+  automatic?: boolean;
   closedOnly?: boolean;
   expectedActiveProfileId?: string;
   canProceed?: () => boolean;
@@ -175,6 +196,10 @@ export interface DesktopSwitchOptions {
  */
 export class DesktopSwitchRefused extends Error {}
 const SWITCH_CANCELLED = "Automatic Desktop switch was cancelled before restart.";
+export const WINDOW_HOLDS_ACCOUNT =
+  "This account is open in a separate Claude window. Close that window first.";
+export const WINDOW_PAUSES_AUTOMATIC =
+  "A separate Claude window is open, so Relay does not switch by itself.";
 interface Operation {
   kind: DesktopOperationKind;
   profileId?: string;
@@ -198,6 +223,7 @@ export const PAGE_BOOT_MS = 30_000;
 interface DesktopReading {
   available: boolean;
   running: boolean;
+  windows: number;
   currentAccountUuid?: string;
   organizations: string[];
   recoveryRequired: boolean;
@@ -277,6 +303,17 @@ export class DesktopManager {
   launchChoice?: {
     quicOff(): boolean;
     learnQuicOff(): void;
+  };
+  /**
+   * The separate Claude windows Relay keeps for accounts, asked by a switch: the accounts open in
+   * one now (the main Claude cannot take them over while their window holds their sign-in), and
+   * the data folder of an account's window, whose Code conversations the main Claude takes over
+   * when it switches to that account.
+   */
+  windows?: {
+    openAccounts(): Promise<string[]>;
+    anyOpen(): Promise<boolean>;
+    folder(accountUuid: string): string | undefined;
   };
   /**
    * Told each Desktop state read fresh from disk and the process list, by `snapshot()` and by
@@ -487,6 +524,8 @@ export class DesktopManager {
     return {
       available: await this.host.available(),
       running: await running(),
+      // From the same listing: the windows it saw.
+      windows: this.host.windowsSeen?.() ?? 0,
       currentAccountUuid,
       organizations,
       recoveryRequired: recovery,
@@ -497,6 +536,7 @@ export class DesktopManager {
     return {
       available: reading.available,
       running: reading.running,
+      ...(reading.windows ? { windows: reading.windows } : {}),
       currentAccountUuid,
       organizations: [...organizations],
       activeProfileId: this.store.state.accounts.find(
@@ -649,6 +689,11 @@ export class DesktopManager {
         target.desktop.accountUuid,
         target.desktop.orgId,
       );
+      if ((await this.windows?.openAccounts())?.includes(target.desktop.accountUuid))
+        throw new Error(WINDOW_HOLDS_ACCOUNT);
+      // Its own processes and log lines sit beside the main Claude's: only a person switches.
+      if (options.automatic && (await this.windows?.anyOpen()))
+        throw new DesktopSwitchRefused(WINDOW_PAUSES_AUTOMATIC);
       const assertClosedSwitch = async () => {
         if (!options.closedOnly) return;
         if (
@@ -1204,11 +1249,11 @@ export class DesktopManager {
     this.pendingHistorySeen = undefined;
     this.carried = [];
     this.written = 0;
-    if (
-      !target.desktop ||
-      this.store.state.settings.desktopHistoryTransfer === "off"
-    )
-      return new Map();
+    if (!target.desktop) return new Map();
+    // The account's own window holds its own conversations: no transfer between accounts.
+    const window = this.windows?.folder(target.desktop.accountUuid);
+    const off = this.store.state.settings.desktopHistoryTransfer === "off";
+    if (off && !window) return new Map();
     const previous = (await readObject(this.vault, "history-seen.json")) ?? {};
     for (const [key, values] of Object.entries(previous)) {
       const parts = key.split("/");
@@ -1224,16 +1269,18 @@ export class DesktopManager {
         throw new Error("Invalid Desktop history tracking data.");
     }
     const key = `${target.desktop.accountUuid}/${target.desktop.orgId}`;
-    const sources = historySources(
-      target,
-      this.store.state.accounts,
-      this.store.state.settings,
-    );
+    const sources = off
+      ? []
+      : historySources(target, this.store.state.accounts, this.store.state.settings);
     const { writes: plan, conversations } = await planHistoryDetailed(
       this.root,
       target.desktop,
       sources.map((a) => a.desktop!),
-      { seenSpaceIds: previous[key] },
+      {
+        seenSpaceIds: previous[key],
+        // The conversations the account had in its own window, which it no longer has open.
+        ...(window ? { outside: [{ root: window, scope: target.desktop }] } : {}),
+      },
     );
     const spacesPath = `${scopePath("local-agent-mode-sessions", target.desktop)}/spaces.json`;
     const planned = plan.get(spacesPath);
@@ -1648,8 +1695,47 @@ export class DesktopManager {
     this.diagnose("claude-boot", { attempt, outcome, quicOff, waitedMs: this.now() - begun });
     return outcome;
   }
-  private async saveCurrent() {
-    const config = await readObject(this.root, "config.json");
+  /**
+   * Puts `accountUuid`'s saved sign-in into a separate window's data folder `dir`, in place of
+   * any other, so the window opens signed in. The window must not run yet.
+   */
+  async seedWindow(accountUuid: string, dir: string) {
+    await this.windowOperation(async () => {
+      const saved = await this.readLogin(accountUuid);
+      const config = (await readObject(dir, "config.json")) ?? {};
+      for (const key of AUTH_KEYS) {
+        delete config[key];
+        if (key in saved.auth) config[key] = saved.auth[key];
+      }
+      await writeBytes(dir, "config.json", jsonBytes(config));
+      for (const f of COOKIE_FILES) {
+        const cookie = saved.cookies[f];
+        await writeBytes(dir, f, cookie == null ? null : Buffer.from(cookie, "base64"));
+      }
+    });
+  }
+  /**
+   * Saves the sign-in a closed window left in `dir` back to the vault, so a token Claude renewed
+   * there is the one the next switch uses. Only while it is still `accountUuid`'s: a window
+   * signed out or into another account changes nothing. Whether it saved.
+   */
+  async sealWindow(accountUuid: string, dir: string): Promise<boolean> {
+    return this.windowOperation(async () => {
+      if (identity(await readObject(dir, "config.json")) !== accountUuid) return false;
+      return (await this.saveCurrent(dir)) === accountUuid;
+    });
+  }
+  /** A window's step, which never hides the error an earlier operation left to read. */
+  private async windowOperation<T>(fn: () => Promise<T>): Promise<T> {
+    const shown = this.lastError;
+    try {
+      return await this.exclusive({ kind: "window" }, fn);
+    } finally {
+      if (this.lastError === undefined) this.lastError = shown;
+    }
+  }
+  private async saveCurrent(root = this.root) {
+    const config = await readObject(root, "config.json");
     const accountUuid = identity(config);
     if (!accountUuid) return;
     const auth: JsonObject = {};
@@ -1657,7 +1743,7 @@ export class DesktopManager {
     const cookies: SavedLogin["cookies"] = {};
     for (const name of COOKIE_FILES)
       cookies[name] =
-        (await readBytes(this.root, name))?.toString("base64") ?? null;
+        (await readBytes(root, name))?.toString("base64") ?? null;
     await writeBytes(
       this.vault,
       `accounts/${accountUuid}.bin`,
