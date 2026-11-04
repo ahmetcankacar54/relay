@@ -1,7 +1,7 @@
 {
   "name": "relay-workspace",
   "productName": "Relay",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "private": true,
   "engines": {
     "node": ">=22.12.0"
@@ -47,6 +47,7 @@
     "clsx": "2.1.1",
     "electron": "^44.7.0",
     "electron-builder": "^26.0.12",
+    "electron-updater": "6.8.11",
     "esbuild": "^0.25.0",
     "lucide-react": "^0.468.0",
     "prettier": "^3.9.10",
@@ -119,13 +120,22 @@
       ],
       "category": "public.app-category.developer-tools"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ahmetcankacar54",
+        "repo": "relay"
+      }
+    ],
     "win": {
+      "artifactName": "Relay-Setup-${version}-x64.${ext}",
       "icon": "assets/icon.png",
       "target": [
         "nsis"
       ]
     },
     "linux": {
+      "artifactName": "Relay-${version}-x86_64.${ext}",
       "icon": "assets/icon.png",
       "target": [
         "AppImage"

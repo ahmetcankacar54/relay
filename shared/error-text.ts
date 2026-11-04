@@ -31,6 +31,35 @@ const pairs: Pair[] = [
   ],
   ["Claude’u başlatma seçimi geçersiz.", "Invalid Claude launch choice."],
   [
+    "Relay Claude uygulamasında bir işlem yapıyor. Bitince güncelle.",
+    "Relay is busy with the Claude app. Update when it is done.",
+  ],
+  ["Kurulmaya hazır bir güncelleme yok.", "No update is ready to install."],
+  [
+    "İndirilen güncelleme sağlama toplamıyla eşleşmiyor.",
+    "The downloaded update does not match its checksum.",
+  ],
+  [
+    "İndirilen güncelleme bu Relay gibi imzalanmamış, bu yüzden kurulmadı.",
+    "The downloaded update is not signed like this Relay, so it was not installed.",
+  ],
+  ["Sürüm, güncelleme için sağlama toplamı listelemiyor.", "The release lists no checksum for the update."],
+  [
+    "Relay disk görüntüsünden çalışıyor. Uygulamalar klasörüne taşı, sonra güncelle.",
+    "Relay runs from the disk image. Move it to Applications, then update.",
+  ],
+  [
+    "Relay kendi klasöründe kendini değiştiremiyor. Güncellemeyi sürüm sayfasından indir.",
+    "Relay cannot replace itself in its folder. Download the update from the release page.",
+  ],
+  [
+    "Relay’in bu kopyası kendini güncelleyemez.",
+    "Updates are not available in this copy of Relay.",
+  ],
+  ["Güncelleme kaynağında kullanılabilir bir sürüm yok.", "The update feed has no usable release."],
+  ["Güncelleme çok büyük.", "The update is too large."],
+  ["Güncelleme sunucusu çok fazla veri gönderdi.", "The update server sent too much data."],
+  [
     "Bu hesap ayrı bir Claude penceresinde açık. Önce o pencereyi kapat.",
     "This account is open in a separate Claude window. Close that window first.",
   ],

@@ -19,6 +19,8 @@ import type {
 } from "../../shared/types";
 import { MenuBarTitleRows } from "./settings/MenuBarItems";
 import { Disclosure } from "@/components/Disclosure";
+import { localizeError } from "../../shared/error-text";
+import { updateShown, updateTitle } from "@/lib/update-text";
 import { chooseCliFile } from "../features/CliSetup";
 import { chooseClaudeApp } from "../features/ClaudeAppSetup";
 import { WarningThreshold } from "./Usage";
@@ -134,6 +136,74 @@ export function SeparateWindowsRow({
         </Disclosure>
       </div>
     </>
+  );
+}
+
+/**
+ * Relay's own updates: the running version, the automatic check, a check now, and how the last
+ * one went. Read from the snapshot; absent where Relay does not update itself (a dev run).
+ */
+export function UpdatesGroup({
+  api,
+  action,
+  data,
+  busy,
+  t,
+  language,
+}: Pick<ReturnType<typeof useRelay>, "api" | "action" | "data" | "busy"> & {
+  t: ReturnType<typeof useI18n>["t"];
+  language: Language;
+}) {
+  const update = data?.update;
+  if (!update) return null;
+  const checked = update.checkedAt
+    ? new Date(update.checkedAt).toLocaleString(language === "tr" ? "tr-TR" : "en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : undefined;
+  const status =
+    update.status === "checking"
+      ? t("Kontrol ediliyor…", "Checking…")
+      : update.status === "error"
+        ? `${t("Kontrol edilemedi", "Could not check")}: ${localizeError(update.error ?? "", language)}`
+        : updateShown(update)
+          ? updateTitle(update, t)
+          : update.status === "up-to-date"
+            ? t("Relay güncel.", "Relay is up to date.")
+            : "";
+  return (
+    <SettingGroup id="settings-updates" title={t("Güncellemeler", "Updates")}>
+      <SettingRow
+        label={t(`Relay ${update.current}`, `Relay ${update.current}`)}
+        description={[status, checked && t(`Son kontrol: ${checked}`, `Last checked: ${checked}`)]
+          .filter(Boolean)
+          .join(" · ")}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!!busy || update.status === "checking" || update.status === "downloading"}
+          onClick={() => void action("update-check", () => api.checkUpdate())}
+        >
+          {t("Şimdi kontrol et", "Check now")}
+        </Button>
+      </SettingRow>
+      <SettingRow
+        label={t("Güncellemeleri kendiliğinden ara", "Check for updates automatically")}
+        htmlFor="update-auto"
+        description={t(
+          "Açılışta ve altı saatte bir bakar; yeni sürümü indirip hazırlar, kurmak için senin onayını bekler.",
+          "Looks at start and every six hours; downloads and readies a new version, then waits for you to install it.",
+        )}
+      >
+        <Switch
+          id="update-auto"
+          checked={update.autoCheck}
+          onCheckedChange={(enabled) => void action("update-auto", () => api.setUpdateAuto(enabled))}
+        />
+      </SettingRow>
+    </SettingGroup>
   );
 }
 
@@ -489,6 +559,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
           <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
           <SeparateWindowsRow api={api} action={action} data={data} t={t} />
         </SettingGroup>
+        <UpdatesGroup api={api} action={action} data={data} busy={busy} t={t} language={language} />
         <div id="settings-privacy" className="px-1">
           <Disclosure title={t("Gizlilik ve güvenlik", "Privacy and security")}>
             <PrivacyNotes t={t} />
