@@ -66,8 +66,19 @@ export interface TerminalPorts {
 // --- macOS -----------------------------------------------------------------------------------
 
 /**
+ * The longest command line interactive `security -i` takes whole. It reads one command per line
+ * into a 4 KB buffer and silently cuts a longer one (measured 2026-11-04: a 4,016-character line
+ * was stored whole, an 8,016-character one kept 2,013 of its 4,008 bytes). Claude Code writes
+ * through stdin up to this length and through the arguments above it; Relay does the same. Before,
+ * an item holding several MCP servers' sign-ins was cut, which left Claude Code with an unreadable
+ * item: every MCP sign-in and the terminal's Claude sign-in were lost at once.
+ */
+export const SECURITY_STDIN_LIMIT = 4032;
+
+/**
  * The Keychain item, read and written through `/usr/bin/security` exactly as Claude Code does
- * (its trusted application, so no dialog). The secret goes in on stdin and never in arguments.
+ * (its trusted application, so no dialog). The secret goes in on stdin when its command fits
+ * `SECURITY_STDIN_LIMIT`, and in the arguments when it does not, as Claude Code does too.
  */
 export function securityKeychain(
   user = os.userInfo().username,
@@ -114,6 +125,13 @@ export function securityKeychain(
     async write(text) {
       if (unsupported) throw new TerminalError("unsupported");
       const hex = Buffer.from(text, "utf8").toString("hex");
+      const line = `add-generic-password -U -a "${user}" -s "${service}" -X "${hex}"\n`;
+      if (line.length > SECURITY_STDIN_LIMIT) {
+        // Too long for one interactive line: the arguments, briefly visible to this user's processes.
+        const done = await run(["add-generic-password", "-U", "-a", user, "-s", service, "-X", hex]);
+        if (done.code !== undefined) throw new TerminalError("write-failed");
+        return;
+      }
       // Interactive `security` exits 0 whatever happens: the caller reads the item back.
       await new Promise<void>((resolve, reject) => {
         const child = spawn(tool, ["-i"], {
@@ -128,9 +146,7 @@ export function securityKeychain(
           clearTimeout(timer);
           resolve();
         });
-        child.stdin.end(
-          `add-generic-password -U -a "${user}" -s "${service}" -X "${hex}"\nquit\n`,
-        );
+        child.stdin.end(`${line}quit\n`);
       });
     },
     async remove() {
