@@ -132,6 +132,8 @@ export interface Snapshot {
   extension?: ExtensionOffer;
   /** Accounts opened in a separate Claude window, next to the main Claude. */
   windows?: SeparateWindows;
+  /** Relay's own updates: a newer release found, downloaded and ready to install. */
+  update?: UpdateState;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   accounts: Account[];
@@ -152,6 +154,40 @@ export interface SeparateWindows {
   open: { accountId: string; openedAt?: number }[];
   /** Claudes on a data folder of their own that Relay did not open. */
   others: number;
+}
+/**
+ * Relay's own update, as the main process sees it. `available`: a newer release exists; it is
+ * downloading, then `ready` once downloaded and verified. `manual`: it cannot install itself
+ * here (`manualReason`), so the release page is offered instead.
+ */
+export type UpdateStatus =
+  | "idle"
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "installing"
+  | "manual"
+  | "error";
+export type UpdateManualReason = "no-asset" | "location" | "not-writable" | "not-appimage";
+export interface UpdateState {
+  status: UpdateStatus;
+  /** The running version. */
+  current: string;
+  /** Checks run by themselves at start and every few hours. */
+  autoCheck: boolean;
+  /** The newer release's version. */
+  version?: string;
+  /** Its release page. */
+  notesUrl?: string;
+  /** Download progress, 0–1, while downloading. */
+  progress?: number;
+  manualReason?: UpdateManualReason;
+  /** Why the last check, download or install failed. */
+  error?: string;
+  /** When the last check finished. */
+  checkedAt?: string;
 }
 export interface CreateAccount {
   name: string;
@@ -333,6 +369,14 @@ export interface RelayAPI {
   claudeLaunch(): Promise<ClaudeLaunchChoice>;
   /** Changes what the patch names; resolves with the whole choice. */
   setClaudeLaunch(patch: Partial<ClaudeLaunchChoice>): Promise<ClaudeLaunchChoice>;
+  /** Looks for a newer Relay now; resolves with the update state. */
+  checkUpdate(): Promise<UpdateState>;
+  /** Installs the downloaded update: Relay quits and the new version opens. */
+  installUpdate(): Promise<void>;
+  /** Turns the automatic update check on or off. */
+  setUpdateAuto(enabled: boolean): Promise<void>;
+  /** Opens the newer release's page in the browser. */
+  openUpdateNotes(): Promise<void>;
   /** Turns separate Claude windows on or off (Settings). */
   setSeparateWindows(enabled: boolean): Promise<void>;
   /** Opens the account in a separate Claude window, or brings its window forward. */

@@ -22,13 +22,21 @@ import {
   forgetsApproval,
 } from "./core/install-location";
 import { runDetached } from "./core/detached-exec";
+import {
+  AppUpdates,
+  LATEST_RELEASE_FEED,
+  UPDATE_BUSY,
+  releasePage,
+} from "./core/app-update";
+import { MacUpdateDriver } from "./core/mac-update";
+import { ElectronUpdateDriver } from "./core/win-linux-update";
 import { openCodeTab } from "./core/code-tab";
 import { AutoCapture } from "./core/auto-capture";
 import { authWindows, forgetSignInSession } from "./auth-window";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import os from "node:os";
 import { z } from "zod";
 import { ActiveAccountTimeline } from "./core/active-account-timeline";
@@ -205,6 +213,8 @@ let autoCapture: AutoCapture | undefined;
 let switchDiagnostics: SwitchDiagnostics | undefined;
 /** Accounts opened in a separate Claude window beside the main one; macOS only. */
 let desktopWindows: DesktopWindows | undefined;
+/** Relay's own updates; only in a packaged app, or with RELAY_UPDATE_FEED to test one. */
+let appUpdates: AppUpdates | undefined;
 /** Which account's window holds each Claude Code session, for token attribution. */
 let windowSessionOwners = new Map<string, SessionOwner>();
 let usage: UsageManager;
@@ -714,6 +724,7 @@ else {
         settle();
         setInterval(settle, 15_000).unref();
       }
+      startAppUpdates();
       // Which account was open when, from every fresh Desktop reading, set before the first one.
       activeTimeline = new ActiveAccountTimeline(
         path.join(app.getPath("userData"), "active-account-timeline.json"),
@@ -1570,6 +1581,90 @@ function notifyExtensionBroken(account: Account) {
   notice.on("click", () => openPage("ayarlar/tasinanlar"));
   notice.show();
 }
+/** Says once per version that a downloaded update is ready; a click opens Overview's banner. */
+function notifyUpdate(version: string) {
+  if (!Notification.isSupported()) return;
+  const notice = new Notification({
+    title: "Relay",
+    body: say(
+      `Relay ${version} hazır. Güncellemek için tıkla.`,
+      `Relay ${version} is ready. Click to update.`,
+    ),
+  });
+  notice.on("click", () => openPage("genel"));
+  notice.show();
+}
+/**
+ * Starts Relay's own updates: on macOS Relay downloads, verifies and swaps its app itself; on
+ * Windows and Linux electron-updater does. A development run never updates unless
+ * RELAY_UPDATE_FEED points it at a test feed.
+ */
+function startAppUpdates() {
+  const testFeed = process.env.RELAY_UPDATE_FEED;
+  if (!app.isPackaged && !testFeed) return;
+  const folder = path.join(app.getPath("userData"), "updates");
+  const current = app.getVersion();
+  const bundle = bundlePath(app.getPath("exe"));
+  const mac =
+    process.platform === "darwin" && bundle
+      ? new MacUpdateDriver({
+          feed: testFeed ?? LATEST_RELEASE_FEED,
+          folder,
+          current,
+          arch: process.arch,
+          bundle,
+          place: () => bundlePlace(bundle, app.isInApplicationsFolder()),
+          pid: process.pid,
+          run: (file, args) =>
+            new Promise((resolve, reject) =>
+              execFile(file, args, { timeout: 120_000, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) =>
+                error ? reject(error) : resolve({ stdout: String(stdout), stderr: String(stderr) }),
+              ),
+            ),
+          spawnDetached: (file, args) => {
+            // Nothing of Relay's environment reaches the app the script opens (it uses env -i).
+            spawn(file, args, { detached: true, stdio: "ignore", env: { PATH: "/usr/bin:/bin" } }).unref();
+          },
+          writable: (dir) => {
+            try {
+              fs.accessSync(dir, fs.constants.W_OK);
+              return true;
+            } catch {
+              return false;
+            }
+          },
+        })
+      : undefined;
+  if (process.platform === "darwin" && !mac) return;
+  try {
+    mac?.prune();
+  } catch {
+    // Old downloads stay until the next start.
+  }
+  appUpdates = new AppUpdates({
+    folder,
+    current,
+    driver:
+      mac ??
+      new ElectronUpdateDriver({
+        updater: async () => (await import("electron-updater")).autoUpdater,
+        current,
+        platform: process.platform,
+        env: process.env,
+      }),
+    now: Date.now,
+    notify: notifyUpdate,
+    changed: broadcastChanged,
+    busy: () => (desktop?.isBusy || desktopLock.busy ? UPDATE_BUSY : undefined),
+    quit: () => {
+      app.quit();
+      // Still here a while later: the quit was cancelled (running terminals), so the update waits.
+      setTimeout(() => appUpdates?.quitCancelled(), 20_000).unref();
+    },
+    log: logDraftEvent,
+  });
+  appUpdates.start();
+}
 /** Same copy as the menu bar switch; shown after a tray or panel switch. */
 function notifySwitched(name: string) {
   if (!Notification.isSupported()) return;
@@ -1880,6 +1975,24 @@ function bindIPC() {
   });
   // How Relay starts Claude (HTTP/3).
   handle("claude-launch", () => switchDiagnostics?.current ?? { quicOff: false });
+  // Relay's own updates.
+  handle("update-check", async () => {
+    if (!appUpdates) throw new Error("Updates are not available in this copy of Relay.");
+    return appUpdates.check();
+  });
+  handle("update-install", () => {
+    if (!appUpdates) throw new Error("Updates are not available in this copy of Relay.");
+    return appUpdates.install();
+  });
+  handle("set-update-auto", (enabled) => {
+    if (!appUpdates) throw new Error("Updates are not available in this copy of Relay.");
+    appUpdates.setAuto(z.boolean().parse(enabled));
+  });
+  handle("update-notes", async () => {
+    const version = appUpdates?.state().version;
+    // Only the release page of a version the feed named, never a URL from the renderer.
+    if (version && /^\d+\.\d+\.\d+$/.test(version)) await shell.openExternal(releasePage(version));
+  });
   // Separate Claude windows: an account opened in its own Claude beside the main one.
   handle("set-separate-windows", (enabled) => {
     if (!desktopWindows) throw new Error(WINDOWS_UNSUPPORTED);
@@ -2160,6 +2273,7 @@ function bindIPC() {
   handle("panel-snapshot", async () => ({
     ...(await service.panelSnapshot()),
     windows: await separateWindows(),
+    update: appUpdates?.state(),
     usage: displayUsage(),
     continuation: continuation.snapshot(),
     fleet: fleet.snapshot(),
@@ -2173,6 +2287,7 @@ function bindIPC() {
     service.transaction(async () => ({
       ...(await service.snapshot()),
       windows: await separateWindows(),
+      update: appUpdates?.state(),
       usage: displayUsage(),
       continuation: continuation.snapshot(),
       fleet: fleet.snapshot(),
@@ -2512,6 +2627,7 @@ app.on("before-quit", (event) => {
 });
 
 app.on("will-quit", () => {
+  appUpdates?.stop();
   keeperAbort.abort();
   if (trayTimer) clearInterval(trayTimer);
   tokenScanStopped = true;

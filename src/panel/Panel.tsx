@@ -11,6 +11,7 @@ import { PanelActiveCard } from "./PanelActiveCard";
 import { PanelAccounts } from "./PanelAccounts";
 import { PanelAutomation } from "./PanelAutomation";
 import { PanelDrafts } from "./PanelDrafts";
+import { PanelUpdate } from "./PanelUpdate";
 import { PanelExtension } from "./PanelExtension";
 import { PanelSidebar } from "./PanelSidebar";
 import { panelHead } from "./panel-head";
@@ -107,6 +108,7 @@ export function Panel({
         <div className="px-3 empty:hidden">
           <RelayErrorAlert />
         </div>
+        <PanelUpdate />
         <PanelActiveCard now={now} />
         <PanelDrafts />
         <PanelExtension />

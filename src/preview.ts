@@ -14,6 +14,7 @@ import type {
   Account,
   AuthFlow,
   DesktopState,
+  UpdateState,
   ExtensionStatus,
   MenuBarItem,
   RelayAPI,
@@ -555,6 +556,18 @@ if (scenario === "windows") {
   };
   desktop.windows = 1;
 }
+/** Relay's own update in the preview: up to date, unless the update scenario says otherwise. */
+function previewUpdate(): UpdateState {
+  return { status: "up-to-date", current: "0.15.0", autoCheck: true, checkedAt: new Date().toISOString() };
+}
+// A newer Relay downloaded and ready: the banner, the panel row and Settings → Advanced offer it.
+if (scenario === "update")
+  state.update = {
+    ...previewUpdate(),
+    status: "ready",
+    version: "0.16.0",
+    notesUrl: "https://github.com/ahmetcankacar54/relay/releases/tag/v0.16.0",
+  };
 /** The lost and found's sources in the preview. */
 function previewLostFoundSource() {
   // Two accounts' Claude app sign-ins, with a short visit to the second one last Wednesday.
@@ -658,6 +671,20 @@ export const previewApi: RelayAPI = {
   showDiagnostics: desktopOnly,
   claudeLaunch: async () => ({ quicOff: false }),
   setClaudeLaunch: desktopOnly,
+  checkUpdate: async () => {
+    const update: UpdateState = {
+      ...(state.update ?? previewUpdate()),
+      status: "up-to-date",
+      checkedAt: new Date().toISOString(),
+    };
+    state.update = update;
+    return structuredClone(update);
+  },
+  installUpdate: desktopOnly,
+  setUpdateAuto: async (enabled) => {
+    state.update = { ...(state.update ?? previewUpdate()), autoCheck: enabled };
+  },
+  openUpdateNotes: async () => {},
   setSeparateWindows: async (enabled) => {
     state.windows = { supported: true, open: [], others: 0, ...state.windows, enabled };
   },
