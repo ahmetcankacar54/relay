@@ -276,6 +276,15 @@ test("macOS: the DMG is downloaded, checked, unpacked and accepted when signed l
   assert.ok(before > 0);
 });
 
+test("macOS: once a version runs, its download and older ones are removed, newer ones kept", async (t) => {
+  const w = macWorld(t);
+  const folder = path.join(w.root, "updates");
+  for (const v of ["0.14.1", "0.15.0", "0.16.0"]) fs.mkdirSync(path.join(folder, v), { recursive: true });
+  fs.writeFileSync(path.join(folder, "state.json"), "{}");
+  w.driver.prune();
+  assert.deepEqual(fs.readdirSync(folder).sort(), ["0.16.0", "state.json"]);
+});
+
 test("macOS: a wrong checksum, another signature or another version is never accepted", async (t) => {
   const tampered = macWorld(t, { sums: () => `${"0".repeat(64)}  Relay-0.16.0-arm64.dmg\n` });
   await assert.rejects(tampered.driver.check(tampered.report), new RegExp(UPDATE_CHECKSUM_MISMATCH));

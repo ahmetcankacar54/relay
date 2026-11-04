@@ -240,10 +240,10 @@ export class MacUpdateDriver implements UpdateDriver {
       script, String(this.deps.pid), ready.app, this.deps.bundle, path.join(this.deps.folder, "install.log"),
     ]);
   }
-  /** Removes downloads of versions other than `keep` (the running one, once it started). */
-  prune(keep = this.deps.current) {
+  /** Removes downloads of this version and older ones: once running, a version needs none. */
+  prune(running = this.deps.current) {
     for (const name of fs.existsSync(this.deps.folder) ? fs.readdirSync(this.deps.folder) : [])
-      if (/^\d+\.\d+\.\d+$/.test(name) && name !== keep && compareVersions(name, keep) <= 0)
+      if (/^\d+\.\d+\.\d+$/.test(name) && compareVersions(name, running) <= 0)
         fs.rmSync(path.join(this.deps.folder, name), { recursive: true, force: true });
   }
 }
