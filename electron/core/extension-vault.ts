@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { readBytes, safeFile, writeBytes } from "./desktop-files";
-import { isAccountUuid, type SignIn } from "../../shared/extension-auth";
+import { isAccountUuid, withoutFailure, type SignIn } from "../../shared/extension-auth";
 
 /** Inside the vault, one sealed file per account: `extension/<account uuid>.bin`. */
 const DIR = "extension";
@@ -34,14 +34,17 @@ export class ExtensionVault {
     private readonly now: () => number = Date.now,
   ) {}
 
-  /** Keeps `signIn` as the account's (the account the extension named), replacing the one saved. */
+  /**
+   * Keeps `signIn` as the account's (the account the extension named), replacing the one saved.
+   * The extension's record of a failed sign-in is never kept (see `FAILURE_KEYS`).
+   */
   async save(accountUuid: string, signIn: SignIn): Promise<void> {
     if (!isAccountUuid(accountUuid)) throw new Error("This sign-in names no account.");
     const saved: Saved = {
       accountUuid: accountUuid.toLowerCase(),
       savedAt: new Date(this.now()).toISOString(),
-      signIn: Object.fromEntries(
-        Object.entries(signIn).filter(([, value]) => typeof value === "string"),
+      signIn: withoutFailure(
+        Object.fromEntries(Object.entries(signIn).filter(([, value]) => typeof value === "string")),
       ),
     };
     await writeBytes(this.vault, file(accountUuid), this.seal(JSON.stringify(saved)));
@@ -49,7 +52,9 @@ export class ExtensionVault {
 
   /**
    * The sign-in saved for the first of `accountUuids` that has one; undefined when none does.
-   * Throws when a file is damaged or sealed with another key, or names another account.
+   * Without the record of a failed sign-in, which Relay 0.14.1 and earlier kept too: put back, it made
+   * the extension refuse browser tools on that account at every switch to it. Throws when a file
+   * is damaged or sealed with another key, or names another account.
    */
   async load(accountUuids: string[]): Promise<SignIn | undefined> {
     for (const accountUuid of accountUuids) {
@@ -62,7 +67,7 @@ export class ExtensionVault {
         saved.accountUuid !== accountUuid.toLowerCase()
       )
         throw new Error("Invalid saved extension sign-in.");
-      return saved.signIn;
+      return withoutFailure(saved.signIn);
     }
     return undefined;
   }

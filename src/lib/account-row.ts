@@ -2,7 +2,7 @@ import type { AccountUsage } from "../../shared/types";
 import type { RingState } from "@/components/UsageRing";
 import type { Language, T } from "@/data/i18n";
 import type { Relay } from "@/data/relay-context";
-import type { OverviewRow } from "@/data/selectors";
+import { windowAccounts, type OverviewRow } from "@/data/selectors";
 import { accountHealth } from "@/lib/account-health";
 import { formatPercent, percentUsed } from "@/lib/meter";
 import { formatClock, formatRelative, formatReset } from "@/lib/time";
@@ -56,7 +56,7 @@ export function accountRowSubtitle(
   }
 }
 
-export type PanelRowBlock = "not-linked" | "busy" | "pending" | "recovery";
+export type PanelRowBlock = "not-linked" | "window" | "busy" | "pending" | "recovery";
 
 /**
  * Whether the panel’s “Geç” button may switch Desktop to this row’s account. An account whose
@@ -64,10 +64,13 @@ export type PanelRowBlock = "not-linked" | "busy" | "pending" | "recovery";
  */
 export function panelRowState(
   row: OverviewRow,
-  relay: Pick<Relay, "desktopBusy" | "pendingDesktop" | "desktop">,
+  relay: Pick<Relay, "desktopBusy" | "pendingDesktop" | "desktop" | "data">,
 ): { canSwitch: boolean; reason?: PanelRowBlock; full?: boolean } {
   const blocked = (reason: PanelRowBlock) => ({ canSwitch: false, reason });
   if (row.state === "not-linked") return blocked("not-linked");
+  // Its own window holds its sign-in until it closes.
+  if (windowAccounts(relay.data).has(row.account.id))
+    return blocked("window");
   if (relay.desktopBusy) return blocked("busy");
   if (relay.pendingDesktop) return blocked("pending");
   if (relay.desktop?.recoveryRequired) return blocked("recovery");

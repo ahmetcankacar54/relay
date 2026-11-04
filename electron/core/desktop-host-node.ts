@@ -9,12 +9,15 @@ import {
   assertProcessListing,
   ClaudeLiveness,
   linuxDesktopPids,
-  macDesktopPids,
-  macMainPid,
   parseEtime,
   pidAlive,
   retryOnce,
 } from "./desktop-processes";
+import {
+  macInstances,
+  processRows,
+  type ClaudeInstances,
+} from "./desktop-instances";
 import type { Sealer } from "./vault-crypto";
 import { macClaudeLog, watchClaudeLaunch } from "./desktop-launch";
 const execFileAsync = promisify(execFile);
@@ -43,6 +46,20 @@ export function launchArgs(options?: LaunchOptions): string[] {
   // Never a debugging or network-override switch such as --log-net-log: Claude (3.6556 and
   // later) refuses to start with one on its command line.
   return options?.quicOff ? ["--disable-quic"] : [];
+}
+/**
+ * Asks the macOS app with `pid` to quit as its Quit menu item would (so Claude still asks about
+ * work left running), or brings it forward. Prints "gone" when no app has that pid.
+ */
+export function appScript(action: "terminate" | "activate", pid: number): string {
+  if (!Number.isSafeInteger(pid) || pid <= 1) throw new Error("Invalid process id.");
+  const call =
+    action === "terminate" ? "app.terminate" : "app.activateWithOptions($.NSApplicationActivateAllWindows)";
+  return `ObjC.import("AppKit"); var app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(${pid}); app.isNil() ? "gone" : String(${call})`;
+}
+/** `open`'s arguments for a Claude: a new app when `fresh`, with `args` as its switches. */
+export function openArgs(bundle: string, args: string[], fresh: boolean): string[] {
+  return [...(fresh ? ["-n"] : []), "-a", bundle, ...(args.length ? ["--args", ...args] : [])];
 }
 /** The default Claude.app bundles, first found wins. */
 export const CLAUDE_APPS = [
@@ -127,18 +144,36 @@ export function nodeDesktopHost(options: {
 }): DesktopHost {
   const candidates = claudeCandidates(process.platform, { apps: options.apps });
   const exe = () => resolveClaudeExecutable(options.chosen?.(), candidates);
-  /** Every process's pid and executable. macOS only. */
+  /** Every process's pid, parent, executable and command line. macOS only. */
   const macListing = () =>
     // A busy main process can cut ps short (its timeout fires before the output is read), so
     // an empty listing is a failure, not "closed"; one retry rides out such a moment.
     retryOnce(async () => {
-      const { stdout } = await exec("/bin/ps", ["-axo", "pid=,comm="], {
-        timeout: 5000,
-      });
-      assertProcessListing(stdout);
-      return stdout;
+      const [commands, arguments_] = await Promise.all([
+        exec("/bin/ps", ["-axo", "pid=,ppid=,comm="], { timeout: 5000, maxBuffer: 8 * 1024 * 1024 }),
+        exec("/bin/ps", ["-axo", "pid=,args="], { timeout: 5000, maxBuffer: 8 * 1024 * 1024 }),
+      ]);
+      assertProcessListing(commands.stdout);
+      assertProcessListing(arguments_.stdout);
+      return processRows(commands.stdout, arguments_.stdout);
     }, 250);
-  /** Claude's pids, and its main pid on macOS, from one full listing. */
+  /** The main Claude and its windows, from one full listing. macOS only. */
+  const macClaude = async (): Promise<ClaudeInstances> => {
+    const executable = exe();
+    return executable
+      ? macInstances(await macListing(), executable)
+      : { main: [], mainApps: [], windows: [] };
+  };
+  const bundleOf = (executable: string) => executable.slice(0, executable.indexOf(".app/") + 4);
+  const app = (action: "terminate" | "activate", pid: number) =>
+    exec("/usr/bin/osascript", ["-l", "JavaScript", "-e", appScript(action, pid)], {
+      timeout: 10_000,
+    });
+  /**
+   * The main Claude's pids, and its main pid on macOS, from one full listing. A window (a Claude
+   * with its own data folder) is never part of it.
+   */
+  let seenWindows = 0;
   const listClaude = async (): Promise<{ pids: number[]; main?: number }> => {
     const executable = exe();
     if (!executable) return { pids: [] };
@@ -150,11 +185,9 @@ export function nodeDesktopHost(options: {
       return { pids: linuxDesktopPids(stdout, executable) };
     }
     if (process.platform === "darwin") {
-      const listing = await macListing();
-      return {
-        pids: macDesktopPids(listing, executable),
-        main: macMainPid(listing, executable),
-      };
+      const claude = macInstances(await macListing(), executable);
+      seenWindows = claude.windows.length;
+      return { pids: claude.main, main: claude.mainPid };
     }
     const { stdout } = await exec(
       "powershell.exe",
@@ -219,14 +252,18 @@ export function nodeDesktopHost(options: {
       if (!active.length) return;
       if (process.platform === "darwin")
         try {
-          await exec(
-            "/usr/bin/osascript",
-            [
-              "-e",
-              'tell application id "com.anthropic.claudefordesktop" to quit',
-            ],
-            { timeout: 20_000 },
-          );
+          // By bundle id, AppleScript could reach a window instead; then each main app by pid.
+          const { windows, mainApps } = await macClaude();
+          if (windows.length) for (const pid of mainApps) await app("terminate", pid);
+          else
+            await exec(
+              "/usr/bin/osascript",
+              [
+                "-e",
+                'tell application id "com.anthropic.claudefordesktop" to quit',
+              ],
+              { timeout: 20_000 },
+            );
         } catch (error) {
           // Claude answers "canceled" while it asks the user about work left running; the
           // looks below decide whether it closed.
@@ -272,20 +309,23 @@ export function nodeDesktopHost(options: {
       const executable = exe();
       if (!executable) throw new Error("Claude Desktop is not installed.");
       const args = launchArgs(launchOptions);
-      if (process.platform === "darwin")
+      if (process.platform === "darwin") {
+        // While a window runs, `open -a` could only bring that one forward: the main Claude
+        // comes forward by pid when it runs, and otherwise starts as a new app.
+        const { windows, mainPid } = await macClaude();
+        if (windows.length && mainPid !== undefined) {
+          await app("activate", mainPid);
+          return;
+        }
         await exec(
           "/usr/bin/open",
-          [
-            "-a",
-            executable.slice(0, executable.indexOf(".app/") + 4),
-            ...(args.length ? ["--args", ...args] : []),
-          ],
+          openArgs(bundleOf(executable), args, windows.length > 0),
           // `open` hands its own environment to the app it starts. Relay's may come from
           // whatever started Relay, such as a Claude Code session (CLAUDECODE, its session
           // id, socket and account); with none, Claude gets what a Dock launch gives it.
           { timeout: 10_000, env: CLEAN_LAUNCH_ENV },
         );
-      else
+      } else
         await new Promise<void>((resolve, reject) => {
           const child = spawn(executable, args, {
             detached: true,
@@ -308,11 +348,34 @@ export function nodeDesktopHost(options: {
     unseal: (data) => options.sealer.unseal(data),
     claudeElectron: async () =>
       process.platform === "darwin" ? readClaudeElectron() : undefined,
+    windows: async () => (process.platform === "darwin" ? (await macClaude()).windows : []),
+    launchWindow: async (dir, launchOptions) => {
+      const executable = exe();
+      if (process.platform !== "darwin") throw new Error("Separate Claude windows need macOS.");
+      if (!executable) throw new Error("Claude Desktop is not installed.");
+      await exec(
+        "/usr/bin/open",
+        openArgs(bundleOf(executable), [`--user-data-dir=${dir}`, ...launchArgs(launchOptions)], true),
+        { timeout: 10_000, env: CLEAN_LAUNCH_ENV },
+      );
+    },
+    quitWindow: async (pid) => {
+      await app("terminate", pid);
+    },
+    activateWindow: async (pid) => {
+      await app("activate", pid);
+    },
+    windowsSeen: () => seenWindows,
+    automationTarget: async () => {
+      if (process.platform !== "darwin") return undefined;
+      const { windows, mainPid } = await macClaude();
+      return windows.length ? (mainPid ?? null) : undefined;
+    },
     claudeUptimeMs: async () => {
       const executable = exe();
       if (process.platform !== "darwin" || !executable) return undefined;
       try {
-        const main = macMainPid(await macListing(), executable);
+        const main = macInstances(await macListing(), executable).mainPid;
         if (main === undefined) return undefined;
         const { stdout } = await exec(
           "/bin/ps",

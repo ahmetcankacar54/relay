@@ -453,3 +453,22 @@ test("attribution over 50k samples handles 10k rows in under a second", () => {
   assert.ok(estimated > 0);
   assert.ok(elapsed < 1000, `took ${elapsed} ms`);
 });
+
+test("a separate window's session goes to its own account, whatever the main Claude has open", () => {
+  const owners = new Map([["33333333-3333-4333-8333-333333333333", UUID_B]]);
+  const deps = {
+    timeline: { accountAt: timelineOf(UUID_A, ORG_A) },
+    samples: [],
+    accounts,
+    windowOwner: (id: string) => owners.get(id),
+  };
+  assert.deepEqual(
+    attribute({ time: T0, entrypoint: "claude-desktop", sessionId: "33333333-3333-4333-8333-333333333333" }, deps),
+    { kind: "account", accountId: "b", estimated: false },
+  );
+  // Another session follows the main Claude, as before.
+  assert.deepEqual(
+    attribute({ time: T0, entrypoint: "claude-desktop", sessionId: "44444444-4444-4444-8444-444444444444" }, deps),
+    { kind: "account", accountId: "a", estimated: false },
+  );
+});

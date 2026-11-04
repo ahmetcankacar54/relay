@@ -10,8 +10,15 @@ import {
   type CookieStorage,
 } from "../electron/core/cookie-store";
 
-/** A browser profile's claude.ai login as the cookie database holds it; `n` tells copies apart. */
-export function loginFor(accountUuid: string, n = 1, createdMs = 1_700_000_000_000): CookieSnapshot {
+/**
+ * A browser profile's claude.ai login as the cookie database holds it; `n` tells copies apart.
+ * Each login (account and `n`) is created at its own moment, as two real logins always are.
+ */
+export function loginFor(
+  accountUuid: string,
+  n = 1,
+  createdMs = 1_700_000_000_000 + (parseInt(accountUuid.slice(0, 6), 16) % 100_000) * 7 + n * 13,
+): CookieSnapshot {
   const row = (name: string, host: string, value: string) => ({
     creation_utc: BigInt(createdMs + 11_644_473_600_000) * 1000n,
     host_key: host,
@@ -101,6 +108,9 @@ export function extensionWorld(temp: string) {
       events.push(`launch:${app}`);
       if (state.failLaunch) throw new Error("open failed");
       state.running = true;
+    },
+    openUrl: async (app, url, profile) => {
+      events.push(`open:${app}:${profile}:${url}`);
     },
     sleep: async () => {},
   };

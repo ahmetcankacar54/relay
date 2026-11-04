@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { overviewAccounts, pendingFlow, tempoRateNow } from "@/data/selectors";
+import { overviewAccounts, pendingFlow, tempoRateNow, windowAccounts } from "@/data/selectors";
 import {
   accountRowSubtitle,
   accountTileLine,
@@ -9,7 +9,8 @@ import {
   ringState,
 } from "@/lib/account-row";
 import { AccountList } from "../../features/AccountList";
-import { Plus } from "lucide-react";
+import { AppWindow, Plus, X } from "lucide-react";
+import type { OverviewRow } from "@/data/selectors";
 import { intentHash, type Destination } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { accountHash } from "../accounts/AccountDetail";
@@ -32,6 +33,7 @@ export function AccountsCard({
     relay.data?.usage ?? {},
     now,
     tempoRateNow(relay.data, relay.settings, now),
+    windowAccounts(relay.data),
   ).map((row) =>
     relay.suggestion
       ? { ...row, recommended: row.account.id === relay.suggestion.id }
@@ -49,6 +51,54 @@ export function AccountsCard({
     !relay.desktop?.available ||
     !!relay.pendingDesktop ||
     !!relay.desktop?.recoveryRequired;
+  // Separate Claude windows: opened, brought forward and closed right from the row.
+  const windows = relay.data?.windows;
+  const inWindows = windowAccounts(relay.data);
+  const windowAction = (row: OverviewRow, label: string, run: () => Promise<unknown>) => ({
+    label,
+    disabled: !!relay.busy,
+    onClick: () => void relay.action(`window:${row.account.id}`, run),
+  });
+  const windowActions = (row: OverviewRow) => {
+    const { account } = row;
+    const open = inWindows.has(account.id);
+    if (!account.desktop || !windows?.supported || (!open && !windows.enabled)) return undefined;
+    const button =
+      "h-7 shrink-0 rounded-md border bg-card text-xs font-semibold text-foreground outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";
+    if (!open) {
+      const { label, ...props } = windowAction(
+        row,
+        t(`${account.name} hesabını ayrı pencerede aç`, `Open ${account.name} in a separate window`),
+        () => relay.api.openWindow(account.id),
+      );
+      return (
+        <button type="button" aria-label={label} title={label} className={`${button} grid w-7 place-items-center`} {...props}>
+          <AppWindow aria-hidden="true" className="size-3.5" />
+        </button>
+      );
+    }
+    const show = windowAction(
+      row,
+      t(`${account.name} penceresini öne getir`, `Bring ${account.name}’s window forward`),
+      () => relay.api.openWindow(account.id),
+    );
+    const close = windowAction(
+      row,
+      t(`${account.name} penceresini kapat`, `Close ${account.name}’s window`),
+      () => relay.api.closeWindow(account.id),
+    );
+    return (
+      <>
+        <button type="button" aria-label={show.label} title={show.label} disabled={show.disabled} onClick={show.onClick} className={`${button} grid w-7 place-items-center`}>
+          <AppWindow aria-hidden="true" className="size-3.5" />
+        </button>
+        <button type="button" aria-label={close.label} title={close.label} disabled={close.disabled || relay.desktopBusy} onClick={close.onClick} className={`${button} flex items-center gap-1 px-2.5`}>
+          <X aria-hidden="true" className="size-3.5" />
+          {t("Kapat", "Close")}
+        </button>
+      </>
+    );
+  };
   const addAccount = () => {
     window.location.hash = intentHash("hesaplar", "ekle");
   };
@@ -82,13 +132,18 @@ export function AccountsCard({
           rows={rows}
           now={now}
           href={(row) => accountHash(row.account.id)}
-          line={(row) =>
-            accountTileLine(row, t, language, zone, now, waitingFor(row))
-          }
+          line={(row) => {
+            const tile = accountTileLine(row, t, language, zone, now, waitingFor(row));
+            return inWindows.has(row.account.id)
+              ? `${t("Ayrı pencerede açık", "Open in its own window")} · ${tile}`
+              : tile;
+          }}
+          actions={windowActions}
           title={(row) =>
             accountRowSubtitle(row, t, language, zone, now, waitingFor(row))
           }
-          canSwitch={(row) => row.state !== "not-linked"}
+          // An account in its own window is not switched to: its sign-in is there until it closes.
+          canSwitch={(row) => row.state !== "not-linked" && !inWindows.has(row.account.id)}
           blocked={(row) =>
             row.state !== "not-linked" && switchBlocked
               ? t("Şu an geçilemez", "Cannot switch right now")

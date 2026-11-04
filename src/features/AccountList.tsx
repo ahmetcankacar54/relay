@@ -31,6 +31,7 @@ export function AccountList({
   variant = "app",
   footer,
   canSwitch,
+  actions,
 }: {
   rows: OverviewRow[];
   now: number;
@@ -55,6 +56,8 @@ export function AccountList({
   footer?: ReactNode;
   /** In the app: whether a row's action is a switch (false for an account without a Claude app sign-in). */
   canSwitch?: (row: OverviewRow) => boolean;
+  /** In the app: more buttons before the row's switch, such as its separate window's. */
+  actions?: (row: OverviewRow) => ReactNode;
 }) {
   const { t, language } = useI18n();
   const panel = variant === "panel";
@@ -141,6 +144,7 @@ export function AccountList({
                 >
                   {body}
                 </a>
+                {actions?.(row)}
                 {switchable ? (
                   <button
                     type="button"

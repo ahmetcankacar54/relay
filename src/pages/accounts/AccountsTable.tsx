@@ -12,6 +12,7 @@ import {
   RefreshCw,
   SquareTerminal,
   Trash2,
+  X,
 } from "lucide-react";
 import type { Account } from "../../../shared/types";
 import type { Relay } from "@/data/relay-context";
@@ -35,7 +36,7 @@ import {
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { limitFull, pendingFlow } from "@/data/selectors";
+import { limitFull, pendingFlow, windowAccounts } from "@/data/selectors";
 import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
 import {
@@ -164,10 +165,41 @@ function ConnectionIcons({
   );
 }
 
+/**
+ * Says an account runs in its own Claude window, beside the main Claude. `compact`, in the table,
+ * shows the icon alone, so a narrow row keeps the account's name.
+ */
+export function WindowBadge({
+  t,
+  compact = false,
+}: {
+  t: (tr: string, en: string) => string;
+  compact?: boolean;
+}) {
+  const label = t("ayrı pencere", "own window");
+  return (
+    <Badge
+      variant="outline"
+      data-slot="window-badge"
+      className={cn("shrink-0 gap-1 text-[11px]", compact ? "px-1" : "px-1.5")}
+      title={t(
+        "Bu hesap ayrı bir Claude penceresinde açık",
+        "This account is open in a separate Claude window",
+      )}
+    >
+      <AppWindow className="size-3" />
+      {compact ? <span className="sr-only">{label}</span> : label}
+    </Badge>
+  );
+}
+
 export interface RowAction {
   key:
     | "switch"
     | "open"
+    | "window"
+    | "window-show"
+    | "window-close"
     | "cli"
     | "renew"
     | "desktop-reconnect"
@@ -208,19 +240,55 @@ export function rowActions(
   const authFlow = relay.data?.authFlows.find((f) => f.accountId === a.id);
   // A full account can still be switched to; the item is tinted and says when it opens.
   const full = limitFull(relay.data?.usage[a.id], now);
+  const windows = relay.data?.windows;
+  // Its own window holds its sign-in: the main Claude cannot take it over until it closes.
+  const inWindow = windowAccounts(relay.data).has(a.id);
+  const windowNote = t("Ayrı pencerede açık; önce pencereyi kapat", "Open in a separate window; close it first");
   const items: RowAction[] = [];
   if (a.desktop && !isActive)
     items.push({
       key: "switch",
       label: t("Geç", "Switch"),
       icon: ArrowLeftRight,
-      disabled: switchBlocked,
+      disabled: switchBlocked || inWindow,
       run: () => relay.requestDesktop(a, "switch"),
-      ...(full && {
-        tone: "warn" as const,
-        note: fullLimitNote(full.availableAt, t, language, relay.settings.planning.timeZone, now),
-      }),
+      ...(inWindow
+        ? { note: windowNote }
+        : full && {
+            tone: "warn" as const,
+            note: fullLimitNote(full.availableAt, t, language, relay.settings.planning.timeZone, now),
+          }),
     });
+  // An open window can always be brought forward or closed, even once the feature is turned off.
+  if (a.desktop && !isActive && windows?.supported && (windows.enabled || inWindow))
+    items.push(
+      ...(inWindow
+        ? [
+            {
+              key: "window-show" as const,
+              label: t("Penceresini öne getir", "Bring its window forward"),
+              icon: AppWindow,
+              disabled: false,
+              run: () => void relay.action(`window:${a.id}`, () => relay.api.openWindow(a.id)),
+            },
+            {
+              key: "window-close" as const,
+              label: t("Penceresini kapat", "Close its window"),
+              icon: X,
+              disabled: desktopBusy,
+              run: () => void relay.action(`window:${a.id}`, () => relay.api.closeWindow(a.id)),
+            },
+          ]
+        : [
+            {
+              key: "window" as const,
+              label: t("Ayrı pencerede aç", "Open in a separate window"),
+              icon: AppWindow,
+              disabled: switchBlocked,
+              run: () => void relay.action(`window:${a.id}`, () => relay.api.openWindow(a.id)),
+            },
+          ]),
+    );
   if (a.desktop && isActive)
     items.push({
       key: "open",
@@ -261,7 +329,8 @@ export function rowActions(
             "Renew Claude app sign-in…",
           ),
           icon: Monitor,
-          disabled: desktopBusy || !!pendingDesktop,
+          disabled: desktopBusy || !!pendingDesktop || inWindow,
+          ...(inWindow && { note: windowNote }),
           run: () => relay.requestDesktop(a, "reconnect"),
         }
       : {
@@ -300,7 +369,9 @@ export function rowActions(
   );
   const removeBlock = isActive
     ? t("Önce başka bir hesaba geç", "Switch to another account first")
-    : pendingDesktop?.id === a.id
+    : inWindow
+      ? t("Önce ayrı penceresini kapat", "Close its separate window first")
+      : pendingDesktop?.id === a.id
       ? t(
           "Önce Claude uygulaması girişini tamamla ya da iptal et",
           "Finish or cancel its Claude app sign-in first",
@@ -428,6 +499,7 @@ export function AccountsTable({
       </TableHeader>
       <TableBody>
         {accounts.map((a) => {
+          const inWindows = windowAccounts(relay.data);
           const isActive = a.id === active?.id;
           const usage = data?.usage[a.id];
           const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
@@ -447,7 +519,11 @@ export function AccountsTable({
             !waiting && !health.fix && !!usage && (usage.stale || usage.status === "error");
           const refresh = stale && actions.find((x) => x.key === "refresh");
           const suggested = relay.suggestion?.id === a.id;
-          const switchTo = suggested && actions.find((x) => x.key === "switch");
+          // An account in its own window is not switched to from here.
+          const switchTo =
+            suggested &&
+            !inWindows.has(a.id) &&
+            actions.find((x) => x.key === "switch");
           const five = usage?.fiveHour?.usedPercent;
           const week = usage?.sevenDay?.usedPercent;
           return (
@@ -479,6 +555,9 @@ export function AccountsTable({
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-1.5">
                       <span className="truncate font-semibold">{a.name}</span>
+                      {inWindows.has(a.id) && (
+                        <WindowBadge t={t} compact />
+                      )}
                       {suggested && (
                         <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-[11px] font-semibold text-accent-foreground">
                           {t("önerilen", "suggested")}

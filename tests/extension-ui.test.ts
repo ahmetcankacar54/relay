@@ -43,10 +43,10 @@ const status = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
   ...over,
 });
 
-const ANKA = "33333333-3333-4333-8333-333333333333";
-const ankaLinked: Account = { ...alto, desktop: { accountUuid: ANKA, orgId: ID, savedAt: NOW, email: "alto@example.com" } };
+const ALTO = "33333333-3333-4333-8333-333333333333";
+const altoLinked: Account = { ...alto, desktop: { accountUuid: ALTO, orgId: ID, savedAt: NOW, email: "alto@example.com" } };
 const guide = (account: Account, over: Partial<ExtensionStatus> = {}, t: (tr: string, en: string) => string = tr, language: "tr" | "en" = "tr") =>
-  extensionGuide(account, status(over), [vertex, ankaLinked], t, language);
+  extensionGuide(account, status(over), [vertex, altoLinked], t, language);
 const signedIn = (accountUuid: string) => ({ state: "signed-in" as const, accountUuid, known: true, at: NOW });
 
 test("a saved sign-in reads as linked, matching the uuid in any case", () => {
@@ -58,14 +58,22 @@ test("a saved sign-in reads as linked, matching the uuid in any case", () => {
   assert.equal(guide(vertex).where, "Brave · Kişisel");
   // The extension on this account now says so.
   assert.equal(guide(vertex, { current: signedIn(ID) }).label, "Bağlı, şu an bu hesapta");
+  // On this account but its sign-in expired: not "linked"; the steps to reconnect, in Settings.
+  const expired = guide(vertex, { current: { ...signedIn(ID), expired: true } });
+  assert.deepEqual(
+    { tone: expired.tone, label: expired.label, action: expired.action },
+    { tone: "crit", label: "Yeniden bağlanmalı", action: "settings" },
+  );
+  assert.equal(expired.steps?.length, 3);
+  assert.match(expired.steps![0], /Brave’da claude\.ai’yi aç/);
   assert.equal(extensionGuide(alto, undefined, [], tr, "tr").label, "Kontrol ediliyor…");
 });
 
 test("an unlinked account gets the steps to link it, for each thing the extension is on", () => {
   // Not checked yet: it is being checked.
-  assert.equal(guide(ankaLinked).action, "check");
+  assert.equal(guide(altoLinked).action, "check");
   // Signed out: open it, sign in with this email, check.
-  const out = guide(ankaLinked, { current: { state: "signed-out", at: NOW } });
+  const out = guide(altoLinked, { current: { state: "signed-out", at: NOW } });
   assert.equal(out.tone, "warn");
   assert.match(out.label, /Eklentide giriş yok/);
   assert.deepEqual(out.steps, [
@@ -75,21 +83,21 @@ test("an unlinked account gets the steps to link it, for each thing the extensio
   ]);
   assert.match(out.detail ?? "", /tanıyamıyor/);
   // On another of Relay's accounts: sign out first, and that account stays saved.
-  const other = guide(ankaLinked, { current: signedIn(ID) });
+  const other = guide(altoLinked, { current: signedIn(ID) });
   assert.match(other.label, /Eklenti Vertex hesabında/);
   assert.match(other.steps?.[0] ?? "", /çıkış yap/);
   assert.match(other.detail ?? "", /Vertex için kayıt Relay’de duruyor/);
   // On an account Relay does not have.
-  const stranger = guide(ankaLinked, { current: { state: "signed-in", known: false, other: true, at: NOW } });
+  const stranger = guide(altoLinked, { current: { state: "signed-in", known: false, other: true, at: NOW } });
   assert.match(stranger.label, /Eklenti başka bir claude\.ai hesabında/);
   assert.match(stranger.detail ?? "", /Relay’deki hiçbir hesaba ait değil/);
   // Signed in, but no account can be told: the user links it as this one.
-  const untold = guide(ankaLinked, { current: { state: "signed-in", known: false, at: NOW } });
+  const untold = guide(altoLinked, { current: { state: "signed-in", known: false, at: NOW } });
   assert.match(untold.label, /Eklentideki hesap tanınamadı/);
   assert.equal(untold.action, "claim");
   assert.match(untold.steps?.[0] ?? "", /alto@example\.com/);
   // Unreadable: try again.
-  const unreadable = guide(ankaLinked, { current: { state: "unreadable", at: NOW } });
+  const unreadable = guide(altoLinked, { current: { state: "unreadable", at: NOW } });
   assert.equal(unreadable.tone, "crit");
   assert.equal(unreadable.action, "check");
 });
@@ -219,9 +227,9 @@ test("the account row shows the state and its steps, and no browser profile pick
   assert.match(html, />Bağlı<\/span>.*Nasıl çalışır\?/);
   assert.doesNotMatch(html, /Tarayıcı profili|Şimdi aç|Open now/);
   const none = render(
-    relayFor("darwin", [vertex, ankaLinked]),
+    relayFor("darwin", [vertex, altoLinked]),
     createElement(ExtensionRow, {
-      account: ankaLinked,
+      account: altoLinked,
       initialStatus: status({ current: { state: "signed-out", at: NOW } }),
     }),
     "en",
@@ -379,7 +387,7 @@ test("an account without a saved Claude app sign-in is told to save it first, ne
 
 test("an extension that was never opened is to be opened and signed in to, then checked", () => {
   const unopened = { ...brave, opened: false };
-  const g = guide(ankaLinked, {
+  const g = guide(altoLinked, {
     instances: [unopened],
     target: unopened,
     current: { state: "signed-out", unopened: true, at: NOW },
@@ -466,4 +474,74 @@ test("coming back to the window checks the extension again, throttled and only w
     Date.now = realNow;
     dom.uninstall();
   }
+});
+
+test("the reconnect guide names the account, why, and the steps; Sync now only while a login is saved", async () => {
+  const { reconnectGuide } = await import("../src/lib/extension-ui");
+  // Not needed: signed in fine, or no extension managed.
+  assert.equal(reconnectGuide(status({ current: signedIn(ID) }), [vertex, altoLinked], tr), undefined);
+  assert.equal(reconnectGuide(undefined, [vertex], tr), undefined);
+  // Expired on Vertex with its login saved: try Sync now first.
+  const expired = reconnectGuide(
+    status({ current: { ...signedIn(ID), expired: true }, cookiesSaved: [{ accountUuid: ID, savedAt: NOW }] }),
+    [vertex, altoLinked],
+    tr,
+  )!;
+  assert.equal(expired.account.id, vertex.id);
+  assert.equal(expired.canSync, true);
+  assert.equal(expired.title, "Eklentiyi Vertex hesabına yeniden bağla");
+  // Relay saw the login fail and forgot it: no Sync now, and it says why.
+  const broken = reconnectGuide(
+    status({
+      current: { ...signedIn(ALTO), expired: true },
+      broken: { accountUuid: ALTO, at: NOW },
+    }),
+    [vertex, altoLinked],
+    en,
+  )!;
+  assert.equal(broken.account.id, altoLinked.id);
+  assert.equal(broken.canSync, false);
+  assert.match(broken.why, /another account’s, or it ended/);
+  assert.match(broken.steps[0], /log in with alto@example\.com/);
+  // Once the extension is on that account again without a failure, the guide is gone.
+  assert.equal(
+    reconnectGuide(status({ current: signedIn(ALTO), broken: { accountUuid: ALTO, at: NOW } }), [vertex, altoLinked], en),
+    undefined,
+  );
+});
+
+test("the settings card shows the reconnect steps and Open claude.ai while the extension cannot sign in", () => {
+  const broken = render(
+    relayFor("darwin", [vertex], { mode: "restart" }),
+    createElement(ExtensionPreference, {
+      initialStatus: status({
+        current: { ...signedIn(ID), expired: true },
+        broken: { accountUuid: ID, at: NOW },
+      }),
+    }),
+  );
+  assert.match(broken, /Eklentiyi Vertex hesabına yeniden bağla/);
+  assert.match(broken, /Relay onu sildi/);
+  assert.match(broken, /claude\.ai’yi aç</);
+  assert.match(broken, /“Log in”e bas/);
+  // Gelişmiş stays closed: without a saved login, Sync now cannot help.
+  assert.doesNotMatch(broken, /Önce Gelişmiş’teki/);
+  // Expired with the login saved: try Sync now first, and Gelişmiş opens for it.
+  const expired = render(
+    relayFor("darwin", [vertex], { mode: "restart" }),
+    createElement(ExtensionPreference, {
+      initialStatus: status({
+        current: { ...signedIn(ID), expired: true },
+        cookiesSaved: [{ accountUuid: ID, savedAt: NOW }],
+      }),
+    }),
+  );
+  assert.match(expired, /Önce Gelişmiş’teki “Şimdi eşitle”yi dene/);
+  assert.match(expired, />Şimdi eşitle</);
+  // Signed in fine: no reconnect.
+  const fine = render(
+    relayFor("darwin", [vertex], { mode: "restart" }),
+    createElement(ExtensionPreference, { initialStatus: status({ current: signedIn(ID) }) }),
+  );
+  assert.doesNotMatch(fine, /yeniden bağla/);
 });

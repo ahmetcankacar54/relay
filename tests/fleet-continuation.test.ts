@@ -954,3 +954,15 @@ test("room again in the account that stopped ends the wait for a switch by hand"
   await fleet.tick();
   assert.equal(f.state.sent.length, 0);
 });
+
+test("the fleet waits, and never switches, while a separate Claude window runs", async () => {
+  const f = setup();
+  const fleet = new FleetContinuation({
+    ...f.deps,
+    desktop: async () => ({ ...(await f.deps.desktop()), windows: 1 }),
+  });
+  fleet.setEnabled(true);
+  const state = await fleet.tick();
+  assert.deepEqual([state.status, state.reason], ["waiting", "separate-window"]);
+  assert.deepEqual(f.state.switches, []);
+});

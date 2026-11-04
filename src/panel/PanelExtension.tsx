@@ -17,6 +17,13 @@ export function extensionOfferLine(offer: ExtensionOffer, t: T): string {
     );
   if (offer.signedOut)
     return t("Eklentide giriş yok", "The extension is signed out");
+  if (offer.reconnect)
+    return t(
+      `Eklenti ${offer.to} hesabına giriş yapamıyor`,
+      `The extension cannot sign in to ${offer.to}`,
+    );
+  if (offer.expired)
+    return t("Eklentinin girişi düşmüş", "The extension’s sign-in expired");
   return t(
     `Eklenti ${offer.to} hesabına geçmedi`,
     `The extension did not move to ${offer.to}`,
@@ -29,6 +36,21 @@ export function extensionOfferHint(
   confirming: boolean,
   t: T,
 ): string {
+  if (offer.reconnect)
+    return t(
+      `claude.ai’de ${offer.to} ile giriş yapıp eklentide “Log in”e basman gerekiyor; Ayarlar adım adım gösterir.`,
+      `Sign in to claude.ai with ${offer.to} and press “Log in” in the extension; Settings shows each step.`,
+    );
+  if (offer.expired)
+    return confirming
+      ? t(
+          `${offer.browser} kapanıp sekmeleriyle yeniden açılacak; eklenti ${offer.to} ile yeniden giriş yapacak.`,
+          `${offer.browser} closes and reopens with its tabs, and the extension signs in to ${offer.to} again.`,
+        )
+      : t(
+          `Eklenti ${offer.to} hesabında ama Claude’un tarayıcı araçlarını reddediyor. Düzelt işe yaramazsa eklentinin yan panelinden giriş yap.`,
+          `The extension is on ${offer.to} but refuses Claude’s browser tools. If Fix does not help, sign in from the extension’s side panel.`,
+        );
   return confirming
     ? t(
         `${offer.browser} kapanıp sekmeleriyle yeniden açılacak, claude.ai oturumu da ${offer.to} olacak.`,
@@ -90,7 +112,17 @@ export function PanelExtension() {
         <span
           className={`flex shrink-0 gap-1 ${confirming ? "justify-end" : ""}`}
         >
-          {offer && !confirming && (
+          {offer?.reconnect && (
+            // Nothing is quit or written: it opens the steps in Settings.
+            <Button
+              size="xs"
+              disabled={disabled}
+              onClick={() => void relay.api.openExtensionSettings()}
+            >
+              {t("Yeniden bağla", "Reconnect")}
+            </Button>
+          )}
+          {offer && !offer.reconnect && !confirming && (
             <Button
               size="xs"
               disabled={disabled}
@@ -99,7 +131,7 @@ export function PanelExtension() {
                 setConfirming(true);
               }}
             >
-              {t("Geçir", "Switch")}
+              {offer.expired ? t("Düzelt", "Fix") : t("Geçir", "Switch")}
             </Button>
           )}
           {offer && confirming && (
@@ -113,7 +145,7 @@ export function PanelExtension() {
                   )
                 }
               >
-                {t("Evet, geçir", "Yes, switch")}
+                {offer.expired ? t("Evet, düzelt", "Yes, fix") : t("Evet, geçir", "Yes, switch")}
               </Button>
               <Button
                 size="xs"

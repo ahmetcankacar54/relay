@@ -806,3 +806,200 @@ test("an extension installed but never opened is listed, reads as signed out, an
   fs.rmSync(path.join(s.world.support, "BraveSoftware"), { recursive: true, force: true });
   assert.equal((await s.switcher.run(s.request())).reason, "not-opened");
 });
+
+/** What extension 1.0.105 keeps after a failed sign-in: tools are refused until one works. */
+const failed = (signIn: SignIn): SignIn => ({
+  ...signIn,
+  lastAuthFailureReason: JSON.stringify("session_expired"),
+  startupReauthState: JSON.stringify({ terminal: true, stop: "definitive", lastProbeAt: 1 }),
+  pairingOrgMismatch: JSON.stringify({ org: "11111111-1111-4111-8111-111111111111" }),
+});
+
+test("a failed sign-in's record is never saved with an account and never put back", async (t) => {
+  const s = setup(t);
+  s.world.stored.set(s.dir, failed(signInFor(s.a, 1)));
+  // A record Relay 0.14.1 kept for B along with its failure.
+  fs.mkdirSync(path.join(s.temp, "vault", "extension"), { recursive: true });
+  const sealer = createSealer(Buffer.alloc(32, 7));
+  fs.writeFileSync(
+    path.join(s.temp, "vault", "extension", `${s.b}.bin`),
+    sealer.seal(
+      JSON.stringify({ accountUuid: s.b, savedAt: "2026-11-02T20:12:07.000Z", signIn: failed(signInFor(s.b, 5)) }),
+    ),
+  );
+  await s.cookieVault.save(s.b, loginFor(s.b, 5));
+  const outcome = await s.switcher.run(s.request());
+  assert.equal(outcome.result, "switched");
+  assert.deepEqual(s.world.stored.get(s.dir), signInFor(s.b, 5), "B's record goes without its failure");
+  assert.deepEqual(await s.vault.load([s.a]), signInFor(s.a, 1), "A is kept without its failure");
+  assert.deepEqual(await s.vault.load([s.b]), signInFor(s.b, 5));
+});
+
+test("already on the target with a failed sign-in's record: the record goes, nothing else changes", async (t) => {
+  const s = setup(t);
+  await s.vault.save(s.b, signInFor(s.b, 1));
+  await s.cookieVault.save(s.b, loginFor(s.b, 1));
+  s.world.web.set(s.profile, loginFor(s.b, 2));
+  s.world.stored.set(s.dir, failed(signInFor(s.b, 3)));
+  const outcome = await s.switcher.run(s.request());
+  assert.deepEqual(
+    { result: outcome.result, reason: outcome.reason, cleared: outcome.cleared, saved: outcome.saved },
+    { result: "unchanged", reason: "already-there", cleared: true, saved: true },
+  );
+  assert.deepEqual(s.world.stored.get(s.dir), signInFor(s.b, 3));
+  assert.deepEqual(s.world.web.get(s.profile), loginFor(s.b, 2), "the claude.ai login is left as it is");
+  assert.deepEqual(await s.vault.load([s.b]), signInFor(s.b, 3));
+  // Without a record there is nothing to write.
+  const opened = s.world.opened.length;
+  const again = await s.switcher.run(s.request());
+  assert.equal(again.cleared, undefined);
+  assert.equal(
+    s.world.opened.slice(opened).filter((o) => o.dir === s.dir).length,
+    1,
+    "the folder is only read",
+  );
+});
+
+test("the record goes even when the target's claude.ai login was never saved", async (t) => {
+  const s = setup(t);
+  s.world.stored.set(s.dir, failed(signInFor(s.b, 3)));
+  const outcome = await s.switcher.run(s.request());
+  assert.deepEqual(
+    { result: outcome.result, reason: outcome.reason, cleared: outcome.cleared },
+    { result: "unchanged", reason: "already-there", cleared: true },
+  );
+  assert.deepEqual(s.world.stored.get(s.dir), signInFor(s.b, 3));
+});
+
+test("a failed removal of the record puts the folder back", async (t) => {
+  const s = setup(t);
+  await s.vault.save(s.b, signInFor(s.b, 1));
+  await s.cookieVault.save(s.b, loginFor(s.b, 1));
+  s.world.web.set(s.profile, loginFor(s.b, 2));
+  s.world.stored.set(s.dir, failed(signInFor(s.b, 3)));
+  s.world.state.failWrite = "failed";
+  const outcome = await s.switcher.run(s.request());
+  assert.deepEqual({ result: outcome.result, reason: outcome.reason }, { result: "failed", reason: "write-failed" });
+  assert.equal(fs.readFileSync(path.join(s.dir, "data.txt"), "utf8"), "ORIGINAL");
+  assert.equal(fs.existsSync(s.scratch), false);
+});
+
+test("a check says when the extension's sign-in expired, and saves it without the record", async (t) => {
+  const s = setup(t);
+  s.world.state.running = true;
+  s.world.stored.set(s.dir, failed(signInFor(s.a, 3)));
+  const current = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b] });
+  assert.equal(current?.state === "signed-in" && current.accountUuid, s.a.toLowerCase());
+  assert.equal(current?.state === "signed-in" && current.expired, true);
+  assert.deepEqual(await s.vault.load([s.a]), signInFor(s.a, 3));
+  s.world.stored.set(s.dir, signInFor(s.a, 4));
+  const fresh = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b] });
+  assert.equal(fresh?.state === "signed-in" && fresh.expired, undefined);
+});
+
+/** A login on an organization: the browser encrypts the same organization id to the same bytes. */
+const onOrg = (login: ReturnType<typeof loginFor>, org: string) => ({
+  ...login,
+  rows: [
+    ...login.rows,
+    {
+      ...login.rows[0],
+      name: "lastActiveOrg",
+      encrypted_value: new Uint8Array(Buffer.from(`v10ORG-${org}`)),
+    },
+  ],
+});
+
+test("a claude.ai login already saved for another account is never kept as the hints' account's", async (t) => {
+  const s = setup(t);
+  const told: string[] = [];
+  const switcher = new ExtensionSwitcher({
+    system: s.world.system,
+    storage: s.world.storage,
+    cookies: s.world.cookies,
+    vault: s.vault,
+    cookieVault: s.cookieVault,
+    scratch: s.scratch,
+    onForeignLogin: (account, other, why) => told.push(`${account}:${other}:${why}`),
+  });
+  // The user signed in to claude.ai with B while the extension stayed on A: the login is B's.
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  s.world.web.set(s.profile, loginFor(s.b, 5));
+  await s.vault.save(s.b, signInFor(s.b, 5));
+  await s.cookieVault.save(s.b, loginFor(s.b, 5));
+  const outcome = await switcher.run(s.request());
+  assert.equal(outcome.result, "switched");
+  assert.deepEqual(await s.vault.load([s.a]), signInFor(s.a, 1), "A's hints are kept");
+  assert.equal(await s.cookieVault.load([s.a]), undefined, "B's login is not kept as A's");
+  assert.deepEqual(told, [`${s.a}:${s.b}:same-login`]);
+});
+
+test("a login on another account's organization is not kept when their organizations differ", async (t) => {
+  const s = setup(t);
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  // A second claude.ai login of B (another session), on B's organization.
+  s.world.web.set(s.profile, onOrg(loginFor(s.a, 9), "org-b"));
+  await s.vault.save(s.b, signInFor(s.b, 5));
+  await s.cookieVault.save(s.b, onOrg(loginFor(s.b, 5), "org-b"));
+  await s.switcher.run(s.request({ orgs: { [s.a]: "org-a", [s.b]: "org-b" } }));
+  assert.equal(await s.cookieVault.load([s.a]), undefined);
+  // Two seats of one organization share it: that says nothing, and the login is kept.
+  const s2 = setup(t);
+  s2.world.stored.set(s2.dir, signInFor(s2.a, 1));
+  s2.world.web.set(s2.profile, onOrg(loginFor(s2.a, 9), "org-team"));
+  await s2.vault.save(s2.b, signInFor(s2.b, 5));
+  await s2.cookieVault.save(s2.b, onOrg(loginFor(s2.b, 5), "org-team"));
+  await s2.switcher.run(s2.request({ orgs: { [s2.a]: "org-team", [s2.b]: "org-team" } }));
+  assert.deepEqual(await s2.cookieVault.load([s2.a]), onOrg(loginFor(s2.a, 9), "org-team"));
+});
+
+test("a check never keeps another account's claude.ai login either", async (t) => {
+  const s = setup(t);
+  s.world.state.running = true;
+  s.world.stored.set(s.dir, signInFor(s.a, 3));
+  s.world.web.set(s.profile, loginFor(s.b, 5));
+  await s.cookieVault.save(s.b, loginFor(s.b, 5));
+  const current = await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b] });
+  assert.equal(current?.state === "signed-in" && current.accountUuid, s.a.toLowerCase());
+  assert.equal(await s.cookieVault.load([s.a]), undefined);
+  // Its own login is kept.
+  s.world.web.set(s.profile, loginFor(s.a, 3));
+  await s.switcher.check({ setting: DEFAULT_EXTENSION, known: [s.a, s.b] });
+  assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 3));
+});
+
+test("a rejected login is forgotten, waits for a reconnect, and is never kept for that account again", async (t) => {
+  const s = setup(t);
+  await s.cookieVault.save(s.b, loginFor(s.b, 5));
+  await s.cookieVault.reject(s.b);
+  assert.equal(await s.cookieVault.load([s.b]), undefined);
+  assert.deepEqual(await s.cookieVault.list(), [], "the rejection file is not an account's");
+  assert.equal((await s.cookieVault.waiting())?.accountUuid, s.b.toLowerCase());
+  assert.equal(await s.cookieVault.isRejected(s.b, loginFor(s.b, 5)), true);
+  assert.equal(await s.cookieVault.isRejected(s.b, loginFor(s.b, 5, 1_800_000_000_000)), false);
+  assert.equal(await s.cookieVault.isRejected(s.a, loginFor(s.b, 5)), false);
+  // The switch away from B saves B's hints, never that login again.
+  s.world.stored.set(s.dir, signInFor(s.b, 6));
+  s.world.web.set(s.profile, loginFor(s.b, 5));
+  await s.vault.save(s.a, signInFor(s.a, 1));
+  await s.cookieVault.save(s.a, loginFor(s.a, 1));
+  await s.switcher.run(s.request({ target: [s.a] }));
+  assert.deepEqual(await s.vault.load([s.b]), signInFor(s.b, 6));
+  assert.equal(await s.cookieVault.load([s.b]), undefined);
+  // Signed in fine again: no longer waiting; the login stays rejected.
+  await s.cookieVault.reconnected(s.b);
+  assert.equal(await s.cookieVault.waiting(), undefined);
+  assert.equal(await s.cookieVault.isRejected(s.b, loginFor(s.b, 5)), true);
+});
+
+test("a login saved under the same account's other uuid is not another account's", async (t) => {
+  const s = setup(t);
+  const alias = randomUUID();
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  s.world.web.set(s.profile, loginFor(s.a, 2));
+  await s.cookieVault.save(alias, loginFor(s.a, 2));
+  await s.vault.save(s.b, signInFor(s.b, 5));
+  await s.cookieVault.save(s.b, loginFor(s.b, 5));
+  await s.switcher.run(s.request({ known: [s.a, s.b, alias], groups: [[s.a, alias], [s.b]] }));
+  assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 2));
+});

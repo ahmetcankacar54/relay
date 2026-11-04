@@ -985,3 +985,36 @@ test("a full account keeps its switch, tinted amber, saying when its limit opens
   assert.match(primary, />Geç<\/button>$/);
   assert.match(header, /data-slot="switch-note"[^>]*>Limit dolu · /);
 });
+
+test("separate windows: the menu opens one, then offers it forward or closed, and holds the switch", () => {
+  const en = (_: string, english: string) => english;
+  const windows = (open: string[], enabled = true) =>
+    relayFor({
+      data: {
+        settings: DEFAULT_SETTINGS, usage, accounts, authFlows: [],
+        windows: { supported: true, enabled, open: open.map((accountId) => ({ accountId })), others: 0 },
+      } as unknown as Snapshot,
+      active: w,
+    } as Partial<Relay>);
+  const keys = (relay: Relay) => rowActions(a, relay, en).map((x) => x.key);
+  assert.ok(!keys(windows([], false)).some((key) => key.startsWith("window")));
+  // Turned off with a window open: it can still be brought forward and closed.
+  assert.deepEqual(keys(windows(["a"], false)).slice(0, 3), ["switch", "window-show", "window-close"]);
+  assert.deepEqual(keys(windows([])).slice(0, 2), ["switch", "window"]);
+  const open = rowActions(a, windows(["a"]), en);
+  assert.deepEqual(open.map((x) => x.key).slice(0, 3), ["switch", "window-show", "window-close"]);
+  const sw = open.find((x) => x.key === "switch")!;
+  assert.equal(sw.disabled, true);
+  assert.equal(sw.note, "Open in a separate window; close it first");
+  assert.equal(open.find((x) => x.key === "remove")!.disabled, true);
+  assert.equal(open.find((x) => x.key === "desktop-reconnect")!.disabled, true);
+  // The main Claude's own account is never offered a window.
+  assert.ok(!rowActions(w, windows([]), en).some((x) => x.key.startsWith("window")));
+  // Its calls go to the window API.
+  const calls: string[] = [];
+  const relay = windows(["a"]);
+  (relay as any).action = async (_key: string, fn: () => Promise<unknown>) => fn();
+  (relay as any).api = { ...relay.api, openWindow: async (id: string) => void calls.push(`open:${id}`), closeWindow: async (id: string) => void calls.push(`close:${id}`) };
+  for (const item of rowActions(a, relay, en)) if (item.key.startsWith("window")) item.run();
+  assert.deepEqual(calls, ["open:a", "close:a"]);
+});

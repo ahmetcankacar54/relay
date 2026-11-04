@@ -32,6 +32,7 @@ import {
   historySources,
 } from "../../shared/history-policy";
 import { summarizeHistory } from "./desktop-history";
+import type { ClaudeWindowProcess } from "./desktop-instances";
 import { errorMessage, type DraftJob, type DraftResult } from "../draft-job";
 import {
   CLAUDE_RUNNING,
@@ -64,6 +65,7 @@ import {
   type BrowserSystem,
 } from "./browser-system";
 import { clearScratch, type ExtensionStorage } from "./extension-storage";
+import { anthropicUnreachable } from "./usage-refresh";
 import { ExtensionSwitcher } from "./extension-switch";
 import { ExtensionVault } from "./extension-vault";
 import { CookieVault } from "./cookie-vault";
@@ -133,6 +135,24 @@ export interface DesktopHost {
    * be told booted or stuck. Undefined when Claude's log cannot tell.
    */
   watchLaunch?(): Promise<LaunchWatch | undefined>;
+  /**
+   * The Claudes that run on their own data folder (`--user-data-dir`), next to the main one: the
+   * separate windows. None of their processes count in `running`, `quit` or `launch`. macOS only.
+   */
+  windows?(): Promise<ClaudeWindowProcess[]>;
+  /** Starts a new Claude on the data folder `dir`. */
+  launchWindow?(dir: string, options?: LaunchOptions): Promise<void>;
+  /** Asks the window whose main process is `pid` to quit; Claude may still ask the user first. */
+  quitWindow?(pid: number): Promise<void>;
+  /** Brings the window whose main process is `pid` forward. */
+  activateWindow?(pid: number): Promise<void>;
+  /**
+   * The Claude the accessibility helper is to look at: undefined while no window runs, the main
+   * Claude's pid while one does, and null while one does but the main Claude is closed.
+   */
+  automationTarget?(): Promise<number | null | undefined>;
+  /** How many windows the last full process listing saw; 0 before one. */
+  windowsSeen?(): number;
 }
 export interface LaunchOptions {
   /** Start Claude without HTTP/3 (QUIC), so its requests go over HTTP/2. */
@@ -158,6 +178,8 @@ interface Pending {
   startedAt: string;
 }
 export interface DesktopSwitchOptions {
+  /** Relay switches by itself (auto-switch, the fleet, continuation): never while a window runs. */
+  automatic?: boolean;
   closedOnly?: boolean;
   expectedActiveProfileId?: string;
   canProceed?: () => boolean;
@@ -175,6 +197,12 @@ export interface DesktopSwitchOptions {
  */
 export class DesktopSwitchRefused extends Error {}
 const SWITCH_CANCELLED = "Automatic Desktop switch was cancelled before restart.";
+/** Keys of the main Claude's config.json a window takes: how it looks, never who is signed in. */
+const WINDOW_CONFIG_KEYS = ["locale", "userThemeMode"] as const;
+export const WINDOW_HOLDS_ACCOUNT =
+  "This account is open in a separate Claude window. Close that window first.";
+export const WINDOW_PAUSES_AUTOMATIC =
+  "A separate Claude window is open, so Relay does not switch by itself.";
 interface Operation {
   kind: DesktopOperationKind;
   profileId?: string;
@@ -198,6 +226,7 @@ export const PAGE_BOOT_MS = 30_000;
 interface DesktopReading {
   available: boolean;
   running: boolean;
+  windows: number;
   currentAccountUuid?: string;
   organizations: string[];
   recoveryRequired: boolean;
@@ -279,6 +308,17 @@ export class DesktopManager {
     learnQuicOff(): void;
   };
   /**
+   * The separate Claude windows Relay keeps for accounts, asked by a switch: the accounts open in
+   * one now (the main Claude cannot take them over while their window holds their sign-in), and
+   * the data folder of an account's window, whose Code conversations the main Claude takes over
+   * when it switches to that account.
+   */
+  windows?: {
+    openAccounts(): Promise<string[]>;
+    anyOpen(): Promise<boolean>;
+    folder(accountUuid: string): string | undefined;
+  };
+  /**
    * Told each Desktop state read fresh from disk and the process list, by `snapshot()` and by
    * `cachedSnapshot()` when its shared reading had expired; never for a reused reading. May
    * throw; nothing depends on it.
@@ -302,6 +342,23 @@ export class DesktopManager {
   private lastExtension?: ExtensionOutcome;
   private lastExtensionCheck?: ExtensionCurrent;
   private extensionChecking?: Promise<ExtensionCurrent | undefined>;
+  /** The last extension check written to the diagnosis log, so a repeated one is not. */
+  private extensionCheckLogged?: string;
+  private extensionVerifyTimer?: ReturnType<typeof setTimeout>;
+  /**
+   * How long after a step reopened the browser Relay looks whether the extension could sign in:
+   * it signs in again on its own within a second or two of starting (live, 2026-11-04).
+   */
+  extensionVerifyMs = 25_000;
+  /** The last scheduled look, settled once it ran; for tests. */
+  extensionVerified?: Promise<void>;
+  /**
+   * Told when the extension could not sign in to `account` with the login a step put in place;
+   * Relay forgot that login, and the user has to sign in again (Settings → What comes along).
+   */
+  onExtensionBroken?: (account: Account) => void;
+  /** Whether Anthropic cannot be reached now; a failed sign-in then proves nothing. */
+  extensionOffline: () => Promise<boolean> = () => anthropicUnreachable();
   /**
    * The browsers and the extension's storage, for keeping the Claude extension's sign-in with
    * the account at a switch. Without it (not macOS) the step never runs.
@@ -487,6 +544,8 @@ export class DesktopManager {
     return {
       available: await this.host.available(),
       running: await running(),
+      // From the same listing: the windows it saw.
+      windows: this.host.windowsSeen?.() ?? 0,
       currentAccountUuid,
       organizations,
       recoveryRequired: recovery,
@@ -497,6 +556,7 @@ export class DesktopManager {
     return {
       available: reading.available,
       running: reading.running,
+      ...(reading.windows ? { windows: reading.windows } : {}),
       currentAccountUuid,
       organizations: [...organizations],
       activeProfileId: this.store.state.accounts.find(
@@ -649,6 +709,11 @@ export class DesktopManager {
         target.desktop.accountUuid,
         target.desktop.orgId,
       );
+      if ((await this.windows?.openAccounts())?.includes(target.desktop.accountUuid))
+        throw new Error(WINDOW_HOLDS_ACCOUNT);
+      // Its own processes and log lines sit beside the main Claude's: only a person switches.
+      if (options.automatic && (await this.windows?.anyOpen()))
+        throw new DesktopSwitchRefused(WINDOW_PAUSES_AUTOMATIC);
       const assertClosedSwitch = async () => {
         if (!options.closedOnly) return;
         if (
@@ -864,8 +929,87 @@ export class DesktopManager {
           count: names.length,
           names: names.map((name) => name.slice(0, 40)).join(" "),
         }),
+      onForeignLogin: (account, other, why) =>
+        this.diagnose("extension-foreign-login", {
+          account: shortId(account),
+          other: shortId(other),
+          why,
+        }),
     });
     return this.extensionSwitcher;
+  }
+  /**
+   * Each account uuid's organization and each account's uuids (lower case), for telling
+   * claude.ai logins apart (see ExtensionSwitcher's `foreignLogin`).
+   */
+  private extensionAccounts(): { orgs: Record<string, string>; groups: string[][] } {
+    const orgs: Record<string, string> = {};
+    const groups: string[][] = [];
+    for (const account of this.store.state.accounts) {
+      const uuids = accountUuids(account).map((uuid) => uuid.toLowerCase());
+      groups.push(uuids);
+      const org = (account.desktop?.orgId ?? account.auth?.orgId)?.toLowerCase();
+      if (org) for (const uuid of uuids) orgs[uuid] = org;
+    }
+    return { orgs, groups };
+  }
+  /** Runs `verifyExtension` once `extensionVerifyMs` has passed; a newer step replaces it. */
+  private verifyExtensionLater(target: Account, after: string) {
+    if (this.extensionVerifyTimer) clearTimeout(this.extensionVerifyTimer);
+    this.extensionVerified = new Promise((resolve) => {
+      this.extensionVerifyTimer = setTimeout(() => {
+        this.extensionVerifyTimer = undefined;
+        void this.verifyExtension(target, after).finally(resolve);
+      }, this.extensionVerifyMs);
+      this.extensionVerifyTimer.unref?.();
+    });
+  }
+  /**
+   * After a step reopened the browser: when a check made since then finds the extension on
+   * `target` but recording a failed sign-in, the claude.ai login put in place does not sign in to
+   * that account (it is another account's, or it ended). That login is forgotten, so the next
+   * switch does not put it back and sign the extension out again, and `onExtensionBroken` is told.
+   * Never throws.
+   */
+  private async verifyExtension(target: Account, after: string): Promise<void> {
+    try {
+      // A check is skipped while a Desktop operation runs, and the switch that put the sign-in in
+      // place may still wait for Claude to open: the look waits for it, up to five minutes.
+      const pause = this.extensionVerifyMs > 0 ? 5_000 : 20;
+      for (let tries = 0; this.busy && tries < 60; tries++)
+        await new Promise<void>((resolve) => setTimeout(resolve, pause).unref?.());
+      await this.checkExtension();
+      const current = this.lastExtensionCheck;
+      // Skipped while a Desktop operation ran: an older reading proves nothing.
+      if (!current || Date.parse(current.at) <= Date.parse(after)) return;
+      const mine = accountUuids(target).map((uuid) => uuid.toLowerCase());
+      const failed =
+        current.state === "signed-in" &&
+        !!current.expired &&
+        !!current.accountUuid &&
+        mine.includes(current.accountUuid);
+      this.diagnose("extension-verify", {
+        to: shortId(target.desktop?.accountUuid ?? target.id),
+        state: current.state,
+        ...(current.state === "signed-in" && current.accountUuid
+          ? { account: shortId(current.accountUuid) }
+          : {}),
+        signedIn: !failed,
+      });
+      if (!failed) return;
+      // Without a network the extension's sign-in could not have worked with any login.
+      if (await this.extensionOffline().catch(() => false)) {
+        this.diagnose("extension-verify-offline", { account: shortId(current.accountUuid!) });
+        return;
+      }
+      const saved = await this.cookieVault.list();
+      for (const uuid of mine)
+        if (saved.some((x) => x.accountUuid === uuid)) await this.cookieVault.reject(uuid);
+      this.diagnose("extension-pair-broken", { account: shortId(current.accountUuid!) });
+      this.onExtensionBroken?.(target);
+    } catch {
+      // A look that fails says nothing; the next check shows the state.
+    }
   }
   /** What the last extension step did, or undefined when none ran since Relay started. */
   get extensionOutcome(): ExtensionOutcome | undefined {
@@ -891,10 +1035,17 @@ export class DesktopManager {
         mayQuit,
         target: accountUuids(target),
         known: this.store.state.accounts.flatMap(accountUuids),
+        ...this.extensionAccounts(),
       });
       this.lastExtension = outcome;
       // Mode "guide" looked at who the extension is on: that is the newest check too.
       if (outcome.current) this.lastExtensionCheck = outcome.current;
+      // The step removed the record of a failed sign-in: the last check's "expired" is no longer
+      // true, and Settings and the account page read it until the next check.
+      else if (outcome.cleared && this.lastExtensionCheck?.state === "signed-in") {
+        const { expired: _gone, ...check } = this.lastExtensionCheck;
+        this.lastExtensionCheck = { ...check, at: outcome.at };
+      }
       this.diagnose("extension", {
         to: shortId(target.desktop?.accountUuid ?? target.id),
         result: outcome.result,
@@ -902,7 +1053,12 @@ export class DesktopManager {
         restarted: outcome.restarted,
         ...(outcome.reopened === undefined ? {} : { reopened: outcome.reopened }),
         saved: outcome.saved,
+        ...(outcome.cleared ? { cleared: true } : {}),
       });
+      // The browser was opened again with a sign-in put in place or a failure record removed:
+      // the extension signs in on its own right away, and Relay looks whether that worked.
+      if (outcome.restarted && outcome.reopened && (outcome.result === "switched" || outcome.cleared))
+        this.verifyExtensionLater(target, outcome.at);
       return outcome;
     } catch {
       return undefined;
@@ -978,19 +1134,22 @@ export class DesktopManager {
       if (!active) return undefined;
       const mine = accountUuids(active).map((uuid) => uuid.toLowerCase());
       let on: string | undefined;
+      let expired = false;
       const signedOut = fromCheck && check!.state === "signed-out";
       if (fromCheck && check!.state === "signed-in" && check!.accountUuid) {
         const uuid = check!.accountUuid.toLowerCase();
-        if (mine.includes(uuid)) return undefined;
-        on = byUuid(uuid)?.name;
+        // On Desktop's account: nothing to bring along, unless its sign-in expired there.
+        if (mine.includes(uuid)) {
+          if (!check!.expired) return undefined;
+          expired = true;
+        } else on = byUuid(uuid)?.name;
       }
       const saved = (list: { accountUuid: string }[]) =>
         list.some((x) => mine.includes(x.accountUuid.toLowerCase()));
-      if (
-        !saved(await this.extensionVault.list()) ||
-        !saved(await this.cookieVault.list())
-      )
-        return undefined;
+      const paired =
+        saved(await this.extensionVault.list()) && saved(await this.cookieVault.list());
+      // Expired with no login to put in place: only signing in again helps, in Settings.
+      if (!paired && !expired) return undefined;
       const instance = chooseInstance(switcher.instances(), setting.browser);
       if (!instance) return undefined;
       return {
@@ -998,6 +1157,8 @@ export class DesktopManager {
         to: active.name,
         ...(on ? { on } : {}),
         ...(signedOut ? { signedOut } : {}),
+        ...(expired ? { expired: true as const } : {}),
+        ...(expired && !paired ? { reconnect: true as const } : {}),
         browser: BROWSERS[instance.app].name,
       };
     } catch {
@@ -1013,6 +1174,7 @@ export class DesktopManager {
     const pick = pickInstance(instances, setting.browser);
     const target = pick?.instance;
     const { system } = this.extension;
+    const broken = await this.cookieVault.waiting().catch(() => undefined);
     return {
       setting,
       instances,
@@ -1030,7 +1192,20 @@ export class DesktopManager {
       cookiesSaved: await this.cookieVault.list(),
       last: this.lastExtension,
       current: this.lastExtensionCheck,
+      ...(broken ? { broken } : {}),
     };
+  }
+  /**
+   * Opens claude.ai in the browser whose extension Relay manages, in front, for signing in there
+   * with the account the extension should be on. Throws when there is no such browser.
+   */
+  async openClaudeWeb(): Promise<void> {
+    const switcher = this.switcher();
+    if (!switcher || !this.extension) throw new Error("The Claude browser extension is not supported here.");
+    const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
+    const instance = chooseInstance(switcher.instances(), setting.browser);
+    if (!instance) throw new Error("No browser with the Claude extension was found.");
+    await this.extension.system.openUrl(instance.app, "https://claude.ai/", instance.profile);
   }
   /**
    * Reads who the extension is signed in to from a copy of its storage, without quitting a
@@ -1054,6 +1229,7 @@ export class DesktopManager {
         .check({
           setting: this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION,
           known: uuids,
+          ...this.extensionAccounts(),
           ...(claim ? { claim } : {}),
         })
         .finally(() => {
@@ -1065,18 +1241,28 @@ export class DesktopManager {
       const target = chooseInstance(instances, setting.browser);
       if (current) {
         this.lastExtensionCheck = current;
-        this.diagnose("extension-check", {
+        // Signed in to that account without a failure: it waits for no reconnect any more.
+        if (current.state === "signed-in" && !current.expired && current.accountUuid)
+          await this.cookieVault.reconnected(current.accountUuid).catch(() => undefined);
+        const fields = {
           state: current.state,
           ...(current.state === "signed-in"
             ? {
                 known: current.known,
                 other: !!current.other,
                 ...(current.accountUuid ? { account: shortId(current.accountUuid) } : {}),
+                ...(current.expired ? { expired: true } : {}),
               }
             : {}),
           instances: instances.length,
           ...(target ? { target: `${target.app}:${target.profile}`, opened: target.opened } : {}),
-        });
+        };
+        // Settings checks every few seconds while a reconnect waits: only a change is logged.
+        const logged = JSON.stringify(fields);
+        if (logged !== this.extensionCheckLogged) {
+          this.extensionCheckLogged = logged;
+          this.diagnose("extension-check", fields);
+        }
       } else if (setting.mode !== "off" && !instances.length)
         this.diagnose("extension-check", { state: "none", instances: 0 });
     }
@@ -1204,11 +1390,11 @@ export class DesktopManager {
     this.pendingHistorySeen = undefined;
     this.carried = [];
     this.written = 0;
-    if (
-      !target.desktop ||
-      this.store.state.settings.desktopHistoryTransfer === "off"
-    )
-      return new Map();
+    if (!target.desktop) return new Map();
+    // The account's own window holds its own conversations: no transfer between accounts.
+    const window = this.windows?.folder(target.desktop.accountUuid);
+    const off = this.store.state.settings.desktopHistoryTransfer === "off";
+    if (off && !window) return new Map();
     const previous = (await readObject(this.vault, "history-seen.json")) ?? {};
     for (const [key, values] of Object.entries(previous)) {
       const parts = key.split("/");
@@ -1224,16 +1410,18 @@ export class DesktopManager {
         throw new Error("Invalid Desktop history tracking data.");
     }
     const key = `${target.desktop.accountUuid}/${target.desktop.orgId}`;
-    const sources = historySources(
-      target,
-      this.store.state.accounts,
-      this.store.state.settings,
-    );
+    const sources = off
+      ? []
+      : historySources(target, this.store.state.accounts, this.store.state.settings);
     const { writes: plan, conversations } = await planHistoryDetailed(
       this.root,
       target.desktop,
       sources.map((a) => a.desktop!),
-      { seenSpaceIds: previous[key] },
+      {
+        seenSpaceIds: previous[key],
+        // The conversations the account had in its own window, which it no longer has open.
+        ...(window ? { outside: [{ root: window, scope: target.desktop }] } : {}),
+      },
     );
     const spacesPath = `${scopePath("local-agent-mode-sessions", target.desktop)}/spaces.json`;
     const planned = plan.get(spacesPath);
@@ -1648,8 +1836,64 @@ export class DesktopManager {
     this.diagnose("claude-boot", { attempt, outcome, quicOff, waitedMs: this.now() - begun });
     return outcome;
   }
-  private async saveCurrent() {
-    const config = await readObject(this.root, "config.json");
+  /**
+   * Puts `accountUuid`'s saved sign-in into a separate window's data folder `dir`, in place of
+   * any other, so the window opens signed in. The window must not run yet.
+   */
+  async seedWindow(accountUuid: string, dir: string) {
+    await this.windowOperation(async () => {
+      const saved = await this.readLogin(accountUuid);
+      const main = (await readObject(this.root, "config.json")) ?? {};
+      const config = (await readObject(dir, "config.json")) ?? {};
+      // The main Claude's language and theme, so the window looks like it.
+      for (const key of WINDOW_CONFIG_KEYS) if (key in main) config[key] = main[key];
+      for (const key of AUTH_KEYS) {
+        delete config[key];
+        if (key in saved.auth) config[key] = saved.auth[key];
+      }
+      await writeBytes(dir, "config.json", jsonBytes(config));
+      for (const f of COOKIE_FILES) {
+        const cookie = saved.cookies[f];
+        await writeBytes(dir, f, cookie == null ? null : Buffer.from(cookie, "base64"));
+      }
+      // The user's MCP servers and preferences are the main Claude's.
+      const preferences = await readBytes(this.root, DESKTOP_PREFERENCES);
+      if (preferences) await writeBytes(dir, DESKTOP_PREFERENCES, preferences);
+      // The account's own Code conversations, as the main Claude has them. Only its own: a
+      // conversation of another account could then run in both Claudes at once.
+      const account = this.store.state.accounts.find(
+        (a) => a.desktop?.accountUuid.toLowerCase() === accountUuid.toLowerCase(),
+      );
+      if (account?.desktop) {
+        const { writes } = await planHistoryDetailed(dir, account.desktop, [], {
+          outside: [{ root: this.root, scope: account.desktop }],
+        });
+        for (const [relative, data] of writes) await writeBytes(dir, relative, data);
+      }
+    });
+  }
+  /**
+   * Saves the sign-in a closed window left in `dir` back to the vault, so a token Claude renewed
+   * there is the one the next switch uses. Only while it is still `accountUuid`'s: a window
+   * signed out or into another account changes nothing. Whether it saved.
+   */
+  async sealWindow(accountUuid: string, dir: string): Promise<boolean> {
+    return this.windowOperation(async () => {
+      if (identity(await readObject(dir, "config.json")) !== accountUuid) return false;
+      return (await this.saveCurrent(dir)) === accountUuid;
+    });
+  }
+  /** A window's step, which never hides the error an earlier operation left to read. */
+  private async windowOperation<T>(fn: () => Promise<T>): Promise<T> {
+    const shown = this.lastError;
+    try {
+      return await this.exclusive({ kind: "window" }, fn);
+    } finally {
+      if (this.lastError === undefined) this.lastError = shown;
+    }
+  }
+  private async saveCurrent(root = this.root) {
+    const config = await readObject(root, "config.json");
     const accountUuid = identity(config);
     if (!accountUuid) return;
     const auth: JsonObject = {};
@@ -1657,7 +1901,7 @@ export class DesktopManager {
     const cookies: SavedLogin["cookies"] = {};
     for (const name of COOKIE_FILES)
       cookies[name] =
-        (await readBytes(this.root, name))?.toString("base64") ?? null;
+        (await readBytes(root, name))?.toString("base64") ?? null;
     await writeBytes(
       this.vault,
       `accounts/${accountUuid}.bin`,

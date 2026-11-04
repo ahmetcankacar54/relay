@@ -17,6 +17,18 @@ const APP_WINDOW_PHRASES = [
   // The macOS Window menu and its Close Window item, in electron/app-menu.ts.
   't("Pencere", "Window")',
   't("Pencereyi kapat", "Close Window")',
+  // A separate Claude window: an account opened in its own Claude app, beside the main one.
+  "Claude pencere",
+  "Claude penceresi",
+  "ayrı pencere",
+  "Ayrı pencere",
+  "ayrı penceresini",
+  "Penceresini öne getir",
+  "Penceresini kapat",
+  "penceresini öne getir",
+  "penceresini kapat",
+  "pencere kapanınca geri kaydedilir. Pencere açıkken",
+  "o pencereyi kapat",
 ];
 
 const ROOTS = ["src", "shared", "electron"];

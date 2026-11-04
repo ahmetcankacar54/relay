@@ -5,6 +5,7 @@ import { ProcessLock } from "../../electron/core/process-lock";
 import { relayPaths, type RelayPaths } from "../../electron/core/relay-paths";
 import { STATE_SCHEMA, Store } from "../../electron/core/store";
 import { createSealer, type Sealer } from "../../electron/core/vault-crypto";
+import { DesktopWindows } from "../../electron/core/desktop-windows";
 import { VAULT_KEY_SERVICE, VaultKeyError, loadVaultKey } from "../../electron/core/vault-key";
 import {
   markVaultFormat,
@@ -141,6 +142,23 @@ export async function openContext(
   desktop.extensionScratchDir = path.join(paths.data, "cli-scratch", "extension");
   // And the terminal's Claude Code sign-in.
   desktop.terminal = deps.terminal;
+  // The app's separate Claude windows: a switch to an account open in one is refused here too,
+  // and the main Claude takes over a closed window's conversations.
+  const windows = new DesktopWindows({
+    folder: path.join(paths.data, "claude-windows"),
+    host,
+    current: async () => undefined,
+    seed: async () => {
+      throw new Error("relay opens no separate windows.");
+    },
+    seal: async () => false,
+    now: Date.now,
+  });
+  desktop.windows = {
+    openAccounts: () => windows.openAccounts(),
+    anyOpen: () => windows.anyOpen(),
+    folder: (accountUuid) => windows.folderOf(accountUuid),
+  };
   const lock = new ProcessLock(path.join(paths.vault, "operation.lock"), "cli");
   desktop.operationLock = {
     ensure: (kind) => {

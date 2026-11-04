@@ -1090,3 +1090,35 @@ test("the Swift writeComposer re-checks focus after its re-observe and before th
     "focus must be checked between the re-observe and the clipboard write",
   );
 });
+
+test("while separate windows run, the helper is told the main Claude's pid, and sends no claude:// link", async () => {
+  const requests: Record<string, unknown>[] = [];
+  let target: number | null | undefined = 4242;
+  const adapter = nativeDesktopAutomation(
+    "/unused",
+    async (request) => {
+      requests.push(request as Record<string, unknown>);
+      return { ok: true, snapshot: snapshot(), pressed: false, accessibilityGranted: true };
+    },
+    async () => target,
+  );
+  await adapter.inspect();
+  assert.equal(requests.at(-1)?.pid, 4242);
+  await adapter.answerQuitGuard!();
+  assert.equal(requests.at(-1)?.pid, 4242);
+  // A link would reach whichever Claude macOS picks.
+  const before = requests.length;
+  await assert.rejects(adapter.openNewSession(), blocked("desktop-ui-unsupported"));
+  assert.equal(requests.length, before);
+  // Asking for the permission names no Claude.
+  await adapter.requestAccessibility!();
+  assert.equal(requests.at(-1)?.pid, undefined);
+  // Windows run but the main Claude does not: never the window.
+  target = null;
+  await assert.rejects(adapter.inspect(), blocked("claude-not-running"));
+  assert.equal(requests.length, before + 1);
+  // No window: as before.
+  target = undefined;
+  await adapter.inspect();
+  assert.equal("pid" in requests.at(-1)!, false);
+});

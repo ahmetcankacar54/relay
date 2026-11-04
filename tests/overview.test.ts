@@ -778,3 +778,66 @@ test("the hero says why its switch to the suggestion is disabled", () => {
     assert.match(block(extra), new RegExp(`disabled=""[^>]*>Vertex hesabına geç</button><p class="text-xs text-muted-foreground">${reason}</p>`), reason);
   }
 });
+
+test("an overview row opens its account in a separate window, then brings it forward or closes it instead of switching", async () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const vertex = acct("vertex", "Vertex", "pro");
+  const usage = { active: use("active", 38, 78), vertex: use("vertex", 12, 31) };
+  const card = (relay: Relay) =>
+    renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+        createElement(RelayContext.Provider, { value: relay }, createElement(AccountsCard, { go: () => {}, now: NOW })),
+      ),
+    );
+  const withWindows = (open: string[], enabled = true) =>
+    relayFor(active, [active, vertex], usage, {
+      data: {
+        settings: DEFAULT_SETTINGS, usage, accounts: [active, vertex], authFlows: [],
+        windows: { supported: true, enabled, open: open.map((accountId) => ({ accountId })), others: 0 },
+      } as unknown as Snapshot,
+    });
+  // Off and closed: nothing new on the row.
+  assert.doesNotMatch(card(withWindows([], false)), /ayrı pencerede aç/);
+  const closed = card(withWindows([]));
+  assert.match(closed, /aria-label="Vertex hesabını ayrı pencerede aç"/);
+  assert.match(closed, /Vertex hesabına geç/);
+  const open = card(withWindows(["vertex"]));
+  assert.match(open, /aria-label="Vertex penceresini öne getir"/);
+  assert.match(open, /aria-label="Vertex penceresini kapat"/);
+  assert.match(open, /Ayrı pencerede açık · /);
+  assert.doesNotMatch(open, /Vertex hesabına geç/);
+  // Turned off with the window open: it can still be closed.
+  assert.match(card(withWindows(["vertex"], false)), /aria-label="Vertex penceresini kapat"/);
+  // The buttons call the window API.
+  const calls: string[] = [];
+  const dom = fakeDom();
+  dom.install();
+  try {
+    const relay = withWindows(["vertex"]);
+    (relay as any).action = async (_key: string, fn: () => Promise<unknown>) => fn();
+    (relay as any).api = { openWindow: async (id: string) => void calls.push(`open:${id}`), closeWindow: async (id: string) => void calls.push(`close:${id}`) };
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, createElement(AccountsCard, { go: () => {}, now: NOW })),
+        ),
+      ),
+    );
+    const label = (n: Fake) => (n as { attributes?: Map<string, string> }).attributes?.get("aria-label") ?? "";
+    for (const name of ["Vertex penceresini öne getir", "Vertex penceresini kapat"]) {
+      const button = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && label(n) === name);
+      assert.ok(button, name);
+      await act(async () => dom.dispatch(button as never, "click", { detail: 1 }));
+    }
+    assert.deepEqual(calls, ["open:vertex", "close:vertex"]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});

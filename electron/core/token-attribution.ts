@@ -233,13 +233,18 @@ function indexFor(
  * `samples` is indexed once per array and must not change after.
  */
 export function attribute(
-  row: { time: number; entrypoint?: string; profileAccountId?: string },
+  row: { time: number; entrypoint?: string; profileAccountId?: string; sessionId?: string },
   deps: {
     timeline: {
       accountAt(t: number): { accountUuid: string; orgId?: string } | undefined;
     };
     samples: readonly UsageSample[];
     accounts: readonly Account[];
+    /**
+     * The account whose separate Claude window held a session at time `t`, by Claude Code
+     * session id.
+     */
+    windowOwner?(sessionId: string, t: number): string | undefined;
   },
 ): Attribution {
   if (row.profileAccountId)
@@ -250,6 +255,12 @@ export function attribute(
     };
   if (row.entrypoint && row.entrypoint !== "claude-desktop")
     return { kind: "terminal" };
+  // A separate window's conversation runs on its own account, whatever the main Claude has open.
+  const windowAccount = row.sessionId ? deps.windowOwner?.(row.sessionId, row.time) : undefined;
+  if (windowAccount) {
+    const owner = desktopAccountFor({ accountUuid: windowAccount }, deps.accounts);
+    if (owner) return { kind: "account", accountId: owner.id, estimated: false };
+  }
   const known = deps.timeline.accountAt(row.time);
   if (known) {
     const owner = desktopAccountFor(known, deps.accounts);

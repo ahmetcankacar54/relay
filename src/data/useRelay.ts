@@ -20,7 +20,7 @@ import packageInfo from "../../package.json";
 import { targetWorkspace } from "../lib/workspaces";
 import { errorMessage } from "./error-message";
 import { useI18n } from "./i18n";
-import { pendingFlow, tempoRateNow } from "./selectors";
+import { pendingFlow, tempoRateNow, windowAccounts } from "./selectors";
 import {
   errorAfterRefresh,
   hiddenRefresh,
@@ -178,9 +178,11 @@ function useRelayState(
   const active = accounts.find((a) => a.id === desktop?.activeProfileId);
   const settings = data?.settings ?? DEFAULT_SETTINGS;
   const now = Date.now();
+  // An account in its own Claude window cannot be switched to, so it is never suggested.
+  const inWindows = windowAccounts(data);
   const suggestion = suggestedAccount(
     active,
-    accounts,
+    accounts.filter((a) => !inWindows.has(a.id)),
     data?.usage ?? {},
     settings,
     now,

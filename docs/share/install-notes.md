@@ -1,8 +1,8 @@
-Relay 0.14.1 — account switcher for the Claude app (Claude Desktop)
+Relay 0.15.0 — account switcher for the Claude app (Claude Desktop)
 Unofficial personal tool; not an Anthropic product.
 
 INSTALL
-1) Relay-0.14.1-arm64.dmg is for Apple silicon Macs (M1 and later).
+1) Relay-0.15.0-arm64.dmg is for Apple silicon Macs (M1 and later).
    Apple menu → About This Mac should say "Chip: Apple M…". Intel Macs are
    not supported by this build. Requires macOS 13 or later.
 2) Open the DMG and drag Relay into the Applications folder. Do not run it
@@ -65,6 +65,16 @@ GOOD TO KNOW
   reply is still running.
 • ⌘Q only closes the Relay window. To quit completely, use ⌥⌘Q or "Quit" in
   the panel.
+
+TWO ACCOUNTS AT ONCE (EXPERIMENTAL, macOS)
+Settings → Advanced → "Separate Claude windows". Then "Open in a separate
+window" on an account (its "…" menu, or the window button on Overview) opens
+it in a second Claude app with its own sign-in and conversations, while the
+main Claude stays on its account. Close it from the same place.
+• While it is open, the main Claude cannot switch to that account, and Relay
+  does not switch by itself.
+• Claude in Chrome works only in the main Claude.
+• Claude does not officially support this; a Claude update may break it.
 
 TROUBLESHOOTING
 Relay → Settings → Advanced → Diagnostics files → "Show in Finder".

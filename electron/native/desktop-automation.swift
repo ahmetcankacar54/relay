@@ -274,10 +274,18 @@ func liveScreen(_ observation: Observation) -> (localSessionId: String?, newSess
 func sameField(_ a: [String: Any], _ b: [String: Any], _ field: String) -> Bool {
     a[field].map { String(describing: $0) } == b[field].map { String(describing: $0) }
 }
+// The main Claude's pid when Relay names it, which it does while separate Claude windows (the
+// same app on another data folder) run beside it; nil means the only Claude running.
+var targetPid: Int32?
+// Claude's running apps: just the one with targetPid when it is set, else every one.
+func claudeApps() -> [NSRunningApplication] {
+    let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).filter { !$0.isTerminated }
+    guard let pid = targetPid else { return apps }
+    return apps.filter { $0.processIdentifier == pid }
+}
 func observe() throws -> Observation {
     guard AXIsProcessTrusted() else { try fail("accessibility-permission-required") }
-    let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-        .filter { !$0.isTerminated }
+    let apps = claudeApps()
     guard apps.count == 1, let app = apps.first else { try fail(apps.isEmpty ? "claude-not-running" : "desktop-ui-unsupported") }
     let root = AXUIElementCreateApplication(app.processIdentifier)
     let tree = try nodes(root)
@@ -379,8 +387,7 @@ func observe() throws -> Observation {
 // field's text, and no static text.
 func outline() throws -> [String] {
     guard AXIsProcessTrusted() else { try fail("accessibility-permission-required") }
-    let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-        .filter { !$0.isTerminated }
+    let apps = claudeApps()
     guard apps.count == 1, let app = apps.first else { try fail(apps.isEmpty ? "claude-not-running" : "desktop-ui-unsupported") }
     let roles: Set<String> = [
         "AXGroup", "AXLandmark", "AXSplitGroup", "AXWebArea", "AXButton", "AXPopUpButton",
@@ -546,6 +553,10 @@ func quitGuard(_ app: NSRunningApplication) -> (kind: String?, quitAnyway: AXUIE
 }
 func handle(_ request: [String: Any]) throws -> [String: Any] {
     guard let command = request["command"] as? String else { try fail("desktop-ui-unsupported") }
+    if let pid = request["pid"] {
+        guard let number = pid as? Int, number > 1, number <= Int(Int32.max) else { try fail("desktop-ui-unsupported") }
+        targetPid = Int32(number)
+    }
     if command == "request-accessibility" {
         // Only the foreground explicit Relay permission action requests this.
         // Polling inspect never calls AXIsProcessTrustedWithOptions(prompt:true).
@@ -558,7 +569,7 @@ func handle(_ request: [String: Any]) throws -> [String: Any] {
         // Relay asked Claude to quit, after stopping the background commands it found. Only
         // the question about background commands alone is answered, with "Quit anyway".
         guard AXIsProcessTrusted() else { try fail("accessibility-permission-required") }
-        let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).filter { !$0.isTerminated }
+        let apps = claudeApps()
         guard apps.count == 1, let app = apps.first else { return ["ok": true, "guard": NSNull(), "pressed": false] }
         let found = quitGuard(app)
         var pressed = false
@@ -746,9 +757,13 @@ func emit(_ object: [String: Any]) {
 // no key for quietMs, or no input for idleMs changes. It never opens, types or presses
 // anything, and reads no text. It ends when stdin closes, Claude quits, or after 10 minutes.
 func watch(_ arguments: [String]) -> Never {
-    guard arguments.count == 4, let quietMs = Int(arguments[2]), let idleMs = Int(arguments[3]),
+    guard arguments.count == 4 || arguments.count == 5, let quietMs = Int(arguments[2]), let idleMs = Int(arguments[3]),
           (250...10000).contains(quietMs), (250...10000).contains(idleMs) else {
         emit(["issue": "desktop-ui-unsupported"]); exit(2)
+    }
+    if arguments.count == 5 {
+        guard let pid = Int32(arguments[4]), pid > 1 else { emit(["issue": "desktop-ui-unsupported"]); exit(2) }
+        targetPid = pid
     }
     // The parent holds stdin open: its end, or the parent's, ends the watch.
     Thread.detachNewThread {
@@ -756,7 +771,7 @@ func watch(_ arguments: [String]) -> Never {
         exit(0)
     }
     guard AXIsProcessTrusted() else { emit(["issue": "accessibility-permission-required"]); exit(0) }
-    let apps = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).filter { !$0.isTerminated }
+    let apps = claudeApps()
     guard apps.count == 1, let app = apps.first else {
         emit(["issue": apps.isEmpty ? "claude-not-running" : "desktop-ui-unsupported"]); exit(0)
     }

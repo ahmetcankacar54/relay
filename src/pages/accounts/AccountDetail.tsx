@@ -30,7 +30,7 @@ import { Disclosure } from "@/components/Disclosure";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { pendingFlow } from "@/data/selectors";
+import { pendingFlow, windowAccounts } from "@/data/selectors";
 import { useExtensionStatus } from "@/data/useExtension";
 import { useTerminalStatus } from "@/data/useTerminal";
 import { terminalGuide } from "@/lib/terminal-ui";
@@ -50,7 +50,7 @@ import { formatRelative } from "@/lib/time";
 import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
 import { PlanEditor } from "../../features/PlanEditor";
-import { RowActionItems, rowActions } from "./AccountsTable";
+import { RowActionItems, rowActions, WindowBadge } from "./AccountsTable";
 import { avatarClass, groupName, planLabel } from "./accountLabels";
 
 /** `#/hesaplar/<id>`: an account's own page, in place of the list. */
@@ -109,8 +109,12 @@ export function AccountDetail({
     },
     t,
   );
-  // One primary action: the fix, else the switch (which the active account does not have).
-  const primary = actions.find((x) => x.key === (health.fix ?? "switch"));
+  const inWindow = windowAccounts(relay.data).has(a.id);
+  // One primary action: the fix, else the switch (which the active account does not have), or
+  // its window while it has one open.
+  const primary = actions.find(
+    (x) => x.key === (health.fix ?? (inWindow ? "window-show" : "switch")),
+  );
   return (
     <PageFrame
       title={a.name}
@@ -130,6 +134,7 @@ export function AccountDetail({
       badge={
         <>
           {plan && <Badge variant="secondary">{plan}</Badge>}
+          {inWindow && <WindowBadge t={t} />}
           <span
             data-slot="account-health"
             title={health.detail}

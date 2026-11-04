@@ -10,6 +10,7 @@ import {
   TerminalVault,
   jsonConfig,
   peekTerminal,
+  SECURITY_STDIN_LIMIT,
   securityKeychain,
   type TerminalPorts,
 } from "../electron/core/terminal-identity";
@@ -389,6 +390,43 @@ exit 9
     securityKeychain('bad"user', tool).read(),
     TerminalError,
   );
+});
+
+test("an item too long for one interactive line is written through the arguments, whole", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-terminal-security-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const tool = path.join(dir, "security");
+  // Like the real one: an interactive line is cut at 4 KB; the arguments are taken whole.
+  fs.writeFileSync(
+    tool,
+    `#!/bin/sh
+dir="$(dirname "$0")"
+if [ "$1" = "-i" ]; then head -c 4095 | sed -n 's/.*-X "\\([0-9a-f]*\\).*/\\1/p' | head -1 > "$dir/item"; echo stdin >> "$dir/how.log"; exit 0; fi
+if [ "$1" = "add-generic-password" ]; then shift; while [ "$1" != "-X" ]; do shift; done; echo "$2" > "$dir/item"; echo argv >> "$dir/how.log"; exit 0; fi
+if [ "$1" = "find-generic-password" ]; then [ -f "$dir/item" ] || exit 44; cat "$dir/item"; exit 0; fi
+exit 9
+`,
+    { mode: 0o755 },
+  );
+  const keychain = securityKeychain("someone", tool, "Test-credentials");
+  // Several MCP servers' sign-ins make the item many kilobytes long.
+  const mcpOAuth = Object.fromEntries(
+    Array.from({ length: 12 }, (_, i) => [
+      `plugin:server-${i}|0123456789abcdef`,
+      { accessToken: `access-${i}-${"a".repeat(300)}`, refreshToken: `refresh-${i}-${"r".repeat(300)}` },
+    ]),
+  );
+  const large = JSON.stringify({ claudeAiOauth: oauth(1), mcpOAuth });
+  assert.ok(Buffer.byteLength(large) * 2 > SECURITY_STDIN_LIMIT);
+  await keychain.write(large);
+  assert.equal(await keychain.read(), large, "nothing is cut");
+  const small = JSON.stringify({ claudeAiOauth: oauth(2) });
+  await keychain.write(small);
+  assert.equal(await keychain.read(), small);
+  assert.deepEqual(fs.readFileSync(path.join(dir, "how.log"), "utf8").trim().split("\n"), ["argv", "stdin"]);
+  // A refused write through the arguments says so.
+  fs.writeFileSync(tool, "#!/bin/sh\nexit 51\n", { mode: 0o755 });
+  await assert.rejects(keychain.write(large), TerminalError);
 });
 
 test("the config keeps every other key and its mode when the account changes", async (t) => {

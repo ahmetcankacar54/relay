@@ -187,6 +187,11 @@ export interface ExtensionOutcome {
   reopened?: boolean;
   /** The extension's sign-in was sealed into the vault. */
   saved: boolean;
+  /**
+   * The extension was on the target but held the record of a failed sign-in; the step removed it,
+   * so the extension signs in again on its own with the profile's claude.ai login.
+   */
+  cleared?: true;
   /** Mode "guide": who the extension was signed in to when the step looked. */
   current?: ExtensionCurrent;
 }
@@ -202,6 +207,11 @@ export type ExtensionCurrent =
       known: boolean;
       /** The data names an account that is not Relay's. */
       other?: boolean;
+      /**
+       * The extension recorded that its sign-in expired: it refuses Claude's browser tools until
+       * it signs in again (a sync clears the record so it tries on its own, or the side panel).
+       */
+      expired?: true;
       at: string;
     }
   /** `unopened`: the extension is installed but was never opened in this profile. */
@@ -219,6 +229,13 @@ export interface ExtensionOffer {
   /** The Relay account the extension is on, by name; unset when that is not known. */
   on?: string;
   signedOut?: boolean;
+  /** The extension is on `to` already, but its sign-in expired; syncing lets it sign in again. */
+  expired?: true;
+  /**
+   * Expired, and no claude.ai login of `to` is saved to put in place: the user signs in again
+   * (Settings → What comes along) instead of syncing.
+   */
+  reconnect?: true;
   /** The browser that is quit and opened again, by name. */
   browser: string;
 }
@@ -239,6 +256,11 @@ export interface ExtensionStatus {
   last?: ExtensionOutcome;
   /** The last check of who the extension is signed in to; undefined before one ran. */
   current?: ExtensionCurrent;
+  /**
+   * The extension could not sign in to this account (uuid, lower case) with the claude.ai login a
+   * step put in place, so Relay forgot that login; cleared once it is signed in there again.
+   */
+  broken?: { accountUuid: string; at: string };
 }
 
 const record = (value: unknown): Record<string, unknown> | undefined =>

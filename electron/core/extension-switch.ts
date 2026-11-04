@@ -22,12 +22,14 @@ import {
   backupCookieFiles,
   hasWebLogin,
   restoreCookieFiles,
+  sameLogin,
+  sameOrganization,
   sessionCreatedMs,
   type CookieSnapshot,
   type CookieStorage,
 } from "./cookie-store";
 import type { CookieVault } from "./cookie-vault";
-import { pickSignIn } from "../../shared/extension-auth";
+import { FAILURE_KEYS, pickSignIn, sessionExpired } from "../../shared/extension-auth";
 import {
   chooseInstance,
   type ExtensionCurrent,
@@ -56,6 +58,8 @@ export interface ExtensionPorts {
   peekScratch?: string;
   /** Told the key names (never values) a check saw when it found no account of Relay's. */
   onUnknownLayout?: (names: string[]) => void;
+  /** Told when the profile's claude.ai login was not kept for `account` (see `foreignLogin`). */
+  onForeignLogin?: (account: string, other: string, why: ForeignWhy) => void;
   now?: () => number;
 }
 
@@ -67,9 +71,19 @@ export interface ExtensionRequest {
   target: string[];
   /** Every Relay account's uuids: the only extension sign-ins ever kept or replaced. */
   known: string[];
+  /** Each account uuid's organization, as Relay knows it (lower case), where it knows one. */
+  orgs?: Record<string, string>;
+  /** Each Relay account's uuids (lower case): two uuids of one account are never "another". */
+  groups?: string[][];
 }
 
-type Core = Pick<ExtensionOutcome, "result" | "reason" | "saved" | "current">;
+/**
+ * Why a claude.ai login is not kept as an account's: it is another account's login, it is on
+ * another account's organization, or the extension already failed to sign in with it there.
+ */
+export type ForeignWhy = "same-login" | "other-org" | "rejected";
+
+type Core = Pick<ExtensionOutcome, "result" | "reason" | "saved" | "cleared" | "current">;
 
 const lower = (list: string[]) => list.map((value) => value.toLowerCase());
 
@@ -205,7 +219,7 @@ export class ExtensionSwitcher {
    * no extension, no library). Never throws.
    */
   async check(
-    request: Pick<ExtensionRequest, "setting" | "known"> & {
+    request: Pick<ExtensionRequest, "setting" | "known" | "orgs" | "groups"> & {
       /** The account the user says the extension is signed in to, for data that names none. */
       claim?: string;
     },
@@ -232,6 +246,7 @@ export class ExtensionSwitcher {
       if (!reading?.account)
         this.ports.onUnknownLayout?.(entries.map(([key]) => key));
       if (!reading) return { state: "signed-out", at };
+      const expired = sessionExpired(entries) ? { expired: true as const } : {};
       const claim = request.claim?.toLowerCase();
       const account =
         reading.account ??
@@ -241,11 +256,17 @@ export class ExtensionSwitcher {
             ? claim
             : await this.owner(request.known));
       if (!account)
-        return { state: "signed-in", known: false, ...(reading.other ? { other: true } : {}), at };
+        return {
+          state: "signed-in",
+          known: false,
+          ...(reading.other ? { other: true } : {}),
+          ...expired,
+          at,
+        };
       await vault.save(account, reading.signIn);
       await vault.setOwner(account);
-      await this.keepWebLogin(account, instance, peekScratch);
-      return { state: "signed-in", accountUuid: account, known: true, at };
+      await this.keepWebLogin(account, instance, peekScratch, request);
+      return { state: "signed-in", accountUuid: account, known: true, ...expired, at };
     } catch {
       return { state: "unreadable", at };
     } finally {
@@ -262,6 +283,7 @@ export class ExtensionSwitcher {
     account: string,
     instance: ExtensionInstance,
     peekScratch: string,
+    request: Pick<ExtensionRequest, "orgs" | "groups">,
   ): Promise<void> {
     const { cookies, cookieVault, system } = this.ports;
     try {
@@ -276,10 +298,51 @@ export class ExtensionSwitcher {
       const created = sessionCreatedMs(web);
       if (created !== undefined && hintsAt !== undefined && created > hintsAt + OWNER_SLACK_MS)
         return;
+      if (await this.foreignLogin(account, web, request)) return;
       await cookieVault.save(account, web);
     } catch {
       // The hints are saved; the login is kept at the next check or switch.
     }
+  }
+
+  /**
+   * Whether the profile's claude.ai login is another account's, so it must not be kept as
+   * `account`'s: it is the login saved for another account, or it is on the organization of
+   * another account's saved login while the two accounts' organizations differ. The extension's
+   * hints say nothing about who is signed in to claude.ai: the user may sign in there with another
+   * account while the extension keeps its tokens, and a login kept under the wrong account signs
+   * the extension out at every switch to it (seen 2026-11-04). A login the extension already
+   * failed to sign in to `account` with is never kept again either. Told to `onForeignLogin`.
+   */
+  private async foreignLogin(
+    account: string,
+    web: CookieSnapshot,
+    { orgs, groups }: Pick<ExtensionRequest, "orgs" | "groups">,
+  ): Promise<boolean> {
+    const cookieVault = this.ports.cookieVault;
+    if (!cookieVault) return false;
+    if (await cookieVault.isRejected(account, web)) {
+      this.ports.onForeignLogin?.(account, account, "rejected");
+      return true;
+    }
+    const mine = orgs?.[account];
+    const self = groups?.find((uuids) => uuids.includes(account)) ?? [account];
+    for (const { accountUuid: other } of await cookieVault.list()) {
+      if (self.includes(other)) continue;
+      const theirs = await cookieVault.load([other]).catch(() => undefined);
+      if (!theirs) continue;
+      const theirOrg = orgs?.[other];
+      const why: ForeignWhy | undefined = sameLogin(web, theirs)
+        ? "same-login"
+        : mine && theirOrg && mine !== theirOrg && sameOrganization(web, theirs)
+          ? "other-org"
+          : undefined;
+      if (why) {
+        this.ports.onForeignLogin?.(account, other, why);
+        return true;
+      }
+    }
+    return false;
   }
 
   /** The owner Relay remembers, when it is still one of its accounts. */
@@ -365,8 +428,53 @@ export class ExtensionSwitcher {
           return { result: "skipped", reason: "ambiguous-owner", saved };
         await vault.save(account, current.signIn);
         await vault.setOwner(account);
-        if (webLogin) await cookieVault.save(account, web);
+        // The hints are the account's; the login is kept only when it is not another account's.
+        if (webLogin && !(await this.foreignLogin(account, web, request)))
+          await cookieVault.save(account, web);
         saved = true;
+      }
+      /** Why a write failed. */
+      const writeReason = (error: unknown): ExtensionReason =>
+        error instanceof CookieStoreError
+          ? cookieReason(error)
+          : error instanceof StorageError && error.reason === "mismatch"
+            ? "verify-failed"
+            : "write-failed";
+      /**
+       * Puts back what a failed write changed: the extension's folder, and the cookie files when
+       * they were written too. False when that failed as well; the backups are then kept.
+       */
+      const putBack = async (withCookies: boolean): Promise<boolean> => {
+        try {
+          await restoreFolder(dir, backup);
+          if (withCookies) {
+            await restoreCookieFiles(profile, cookieBackup);
+            // Put back as it was, so the mark of an earlier interruption is not lost.
+            if (!interrupted) await vault.clearSwap();
+          }
+          return true;
+        } catch {
+          // Left for the user.
+          keepBackup = true;
+          await keepScratch(scratch);
+          if (withCookies) await keepScratch(cookieScratch);
+          return false;
+        }
+      };
+      const onTarget = !!account && lower(request.target).includes(account) && !interrupted;
+      // On the account, but holding a stale record (`FAILURE_KEYS`): the extension would refuse
+      // Claude's browser tools without trying again. The record goes and the rest is written back
+      // as it is, so it signs in on its own with the profile's claude.ai login. No saved pair is
+      // needed for that, so this comes before the pair is asked for.
+      if (onTarget && entries.some(([key]) => FAILURE_KEYS.includes(key))) {
+        try {
+          await storage.write(dir, current!.signIn);
+        } catch (error) {
+          return (await putBack(false))
+            ? { result: "failed", reason: writeReason(error), saved }
+            : { result: "failed", reason: "restore-failed", saved };
+        }
+        return { result: "unchanged", reason: "already-there", saved, cleared: true };
       }
       const wanted = await vault.load(request.target);
       const wantedWeb = await cookieVault.load(request.target);
@@ -378,32 +486,15 @@ export class ExtensionSwitcher {
           reason: "no-saved-login",
           saved,
         };
-      if (account && lower(request.target).includes(account) && !interrupted)
-        return { result: "unchanged", reason: "already-there", saved };
+      if (onTarget) return { result: "unchanged", reason: "already-there", saved };
       try {
         await vault.markSwap();
         await storage.write(dir, wanted);
         await cookies.write(profile, wantedWeb);
       } catch (error) {
-        const reason: ExtensionReason =
-          error instanceof CookieStoreError
-            ? cookieReason(error)
-            : error instanceof StorageError && error.reason === "mismatch"
-              ? "verify-failed"
-              : "write-failed";
-        try {
-          await restoreFolder(dir, backup);
-          await restoreCookieFiles(profile, cookieBackup);
-          // Put back as it was, so the mark of an earlier interruption is not lost.
-          if (!interrupted) await vault.clearSwap();
-        } catch {
-          // Left for the user; the backups are kept.
-          keepBackup = true;
-          await keepScratch(scratch);
-          await keepScratch(cookieScratch);
-          return { result: "failed", reason: "restore-failed", saved };
-        }
-        return { result: "failed", reason, saved };
+        return (await putBack(true))
+          ? { result: "failed", reason: writeReason(error), saved }
+          : { result: "failed", reason: "restore-failed", saved };
       }
       const placed = lower(request.target).find((uuid) =>
         listed.some((x) => x.accountUuid === uuid),
