@@ -25,6 +25,8 @@ const APP_WINDOW_PHRASES = [
   "ayrı penceresini",
   "Penceresini öne getir",
   "Penceresini kapat",
+  "penceresini öne getir",
+  "penceresini kapat",
   "pencere kapanınca geri kaydedilir. Pencere açıkken",
   "o pencereyi kapat",
 ];
