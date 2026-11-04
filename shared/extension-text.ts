@@ -24,6 +24,11 @@ export function extensionLine(outcome: ExtensionOutcome, t: T): string | undefin
           "The extension’s previous sign-in was saved, but this account has no saved extension sign-in yet. Sign in to the extension once with this account; Relay saves it at the next switch.",
         );
       case "unchanged":
+        if (outcome.cleared)
+          return t(
+            "Eklenti zaten bu hesaptaydı ama girişi düşmüştü. Relay düşen girişin izini sildi; eklenti tarayıcıdaki claude.ai oturumuyla kendisi yeniden giriş yapacak. Claude’un tarayıcı araçları yine çalışmazsa eklentinin yan panelinden giriş yap.",
+            "The extension was on this account already, but its sign-in had expired. Relay removed the record of it, so the extension signs in again by itself with the browser’s claude.ai login. If Claude’s browser tools still don’t work, sign in from the extension’s side panel.",
+          );
         return outcome.reason === "no-saved-login"
           ? t(
               "Bu hesap için kayıtlı eklenti girişi yok. Eklentiye bu hesapla bir kez giriş yap, Relay sonraki geçişte kaydeder.",

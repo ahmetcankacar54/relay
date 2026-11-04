@@ -22,6 +22,8 @@ const api: RelayAPI = {
     ipcRenderer.invoke("relay:account-planning", id, input),
   extensionStatus: () => ipcRenderer.invoke("relay:extension-status"),
   syncExtension: () => ipcRenderer.invoke("relay:extension-sync"),
+  openClaudeWeb: () => ipcRenderer.invoke("relay:extension-web"),
+  openExtensionSettings: () => ipcRenderer.invoke("relay:extension-settings"),
   checkExtension: () => ipcRenderer.invoke("relay:extension-check"),
   linkExtension: (accountId: string) => ipcRenderer.invoke("relay:extension-link", accountId),
   terminalStatus: () => ipcRenderer.invoke("relay:terminal-status"),

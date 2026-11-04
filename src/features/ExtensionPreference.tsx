@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BROWSERS, DEFAULT_EXTENSION } from "../../shared/browser-extension";
 import type { ExtensionMode, ExtensionStatus } from "../../shared/types";
 import { extensionLine } from "../../shared/extension-text";
@@ -16,9 +16,13 @@ import {
   modeOptions,
   modeSentence,
   pairedAccounts,
+  reconnectGuide,
   startupLine,
   accountUuids,
 } from "@/lib/extension-ui";
+
+/** While the extension waits to be reconnected, Relay looks this often whether it signed in. */
+const RECONNECT_CHECK_MS = 5_000;
 
 /** Which accounts have the extension's sign-in and the browser's claude.ai login saved, and which only one. */
 function pairLine(
@@ -69,6 +73,17 @@ export function ExtensionPreference({
   const [result, setResult] = useState<string>();
   // Sync now quits the browser in every mode, so it asks once before it does.
   const [confirming, setConfirming] = useState(false);
+  const reconnect = status ? reconnectGuide(status, accounts, t) : undefined;
+  // The user signs in in the browser; the line goes as soon as a check sees it worked.
+  const waiting = !!reconnect;
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void check();
+    }, RECONNECT_CHECK_MS);
+    return () => clearInterval(timer);
+    // `check` is a new function each render; the interval follows `waiting` only.
+  }, [waiting]);
   if (!status) return null;
   const current = status.current;
   const on =
@@ -79,7 +94,12 @@ export function ExtensionPreference({
     ? undefined
     : current.state === "signed-in"
       ? on
-        ? t(`Eklenti şu an ${on.name} hesabında.`, `The extension is on ${on.name} now.`)
+        ? current.expired
+          ? t(
+              `Eklenti ${on.name} hesabında ama girişi düşmüş; Claude’un tarayıcı araçları çalışmaz.`,
+              `The extension is on ${on.name}, but its sign-in expired, so Claude’s browser tools won’t work.`,
+            )
+          : t(`Eklenti şu an ${on.name} hesabında.`, `The extension is on ${on.name} now.`)
         : t("Eklenti Relay’de olmayan bir hesapta.", "The extension is on an account Relay does not have.")
       : current.state === "signed-out"
         ? t("Eklentide giriş yok.", "The extension is signed out.")
@@ -130,6 +150,37 @@ export function ExtensionPreference({
           )}
         </span>
       </SettingRow>
+      {reconnect && (
+        <SettingRow
+          label={reconnect.title}
+          description={
+            <span className="grid gap-1">
+              <span>{reconnect.why}</span>
+              {reconnect.canSync && (
+                <span>
+                  {t(
+                    "Önce Gelişmiş’teki “Şimdi eşitle”yi dene: Relay bu hesabın kayıtlı claude.ai oturumunu yerine koyar. Olmazsa:",
+                    "Try Sync now under Advanced first: Relay puts this account’s saved claude.ai login in place. If that does not help:",
+                  )}
+                </span>
+              )}
+              <ol className="list-decimal pl-4">
+                {reconnect.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </span>
+          }
+        >
+          <Button
+            variant="outline"
+            disabled={disabled}
+            onClick={() => void action("extension-web", () => api.openClaudeWeb())}
+          >
+            {t("claude.ai’yi aç", "Open claude.ai")}
+          </Button>
+        </SettingRow>
+      )}
       {leftBehind && (
         <SettingRow
           label={t(
@@ -152,9 +203,10 @@ export function ExtensionPreference({
       )}
       <Disclosure
         title={t("Gelişmiş", "Advanced")}
-        // A profile has to be chosen before anything else works, so the section opens for it.
-        defaultOpen={openDetails || choose}
-        openKey={choose ? "choose-profile" : undefined}
+        // A profile has to be chosen before anything else works, so the section opens for it; a
+        // reconnect that Sync now may do opens it for that button.
+        defaultOpen={openDetails || choose || !!reconnect?.canSync}
+        openKey={choose ? "choose-profile" : reconnect?.canSync ? "extension-expired" : undefined}
       >
         {setting.mode !== "off" && <Note>{modeSentence(setting.mode, t)}</Note>}
         {status.instances.length > 1 && (

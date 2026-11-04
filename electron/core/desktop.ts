@@ -65,6 +65,7 @@ import {
   type BrowserSystem,
 } from "./browser-system";
 import { clearScratch, type ExtensionStorage } from "./extension-storage";
+import { anthropicUnreachable } from "./usage-refresh";
 import { ExtensionSwitcher } from "./extension-switch";
 import { ExtensionVault } from "./extension-vault";
 import { CookieVault } from "./cookie-vault";
@@ -341,6 +342,23 @@ export class DesktopManager {
   private lastExtension?: ExtensionOutcome;
   private lastExtensionCheck?: ExtensionCurrent;
   private extensionChecking?: Promise<ExtensionCurrent | undefined>;
+  /** The last extension check written to the diagnosis log, so a repeated one is not. */
+  private extensionCheckLogged?: string;
+  private extensionVerifyTimer?: ReturnType<typeof setTimeout>;
+  /**
+   * How long after a step reopened the browser Relay looks whether the extension could sign in:
+   * it signs in again on its own within a second or two of starting (live, 2026-11-04).
+   */
+  extensionVerifyMs = 25_000;
+  /** The last scheduled look, settled once it ran; for tests. */
+  extensionVerified?: Promise<void>;
+  /**
+   * Told when the extension could not sign in to `account` with the login a step put in place;
+   * Relay forgot that login, and the user has to sign in again (Settings → What comes along).
+   */
+  onExtensionBroken?: (account: Account) => void;
+  /** Whether Anthropic cannot be reached now; a failed sign-in then proves nothing. */
+  extensionOffline: () => Promise<boolean> = () => anthropicUnreachable();
   /**
    * The browsers and the extension's storage, for keeping the Claude extension's sign-in with
    * the account at a switch. Without it (not macOS) the step never runs.
@@ -911,8 +929,87 @@ export class DesktopManager {
           count: names.length,
           names: names.map((name) => name.slice(0, 40)).join(" "),
         }),
+      onForeignLogin: (account, other, why) =>
+        this.diagnose("extension-foreign-login", {
+          account: shortId(account),
+          other: shortId(other),
+          why,
+        }),
     });
     return this.extensionSwitcher;
+  }
+  /**
+   * Each account uuid's organization and each account's uuids (lower case), for telling
+   * claude.ai logins apart (see ExtensionSwitcher's `foreignLogin`).
+   */
+  private extensionAccounts(): { orgs: Record<string, string>; groups: string[][] } {
+    const orgs: Record<string, string> = {};
+    const groups: string[][] = [];
+    for (const account of this.store.state.accounts) {
+      const uuids = accountUuids(account).map((uuid) => uuid.toLowerCase());
+      groups.push(uuids);
+      const org = (account.desktop?.orgId ?? account.auth?.orgId)?.toLowerCase();
+      if (org) for (const uuid of uuids) orgs[uuid] = org;
+    }
+    return { orgs, groups };
+  }
+  /** Runs `verifyExtension` once `extensionVerifyMs` has passed; a newer step replaces it. */
+  private verifyExtensionLater(target: Account, after: string) {
+    if (this.extensionVerifyTimer) clearTimeout(this.extensionVerifyTimer);
+    this.extensionVerified = new Promise((resolve) => {
+      this.extensionVerifyTimer = setTimeout(() => {
+        this.extensionVerifyTimer = undefined;
+        void this.verifyExtension(target, after).finally(resolve);
+      }, this.extensionVerifyMs);
+      this.extensionVerifyTimer.unref?.();
+    });
+  }
+  /**
+   * After a step reopened the browser: when a check made since then finds the extension on
+   * `target` but recording a failed sign-in, the claude.ai login put in place does not sign in to
+   * that account (it is another account's, or it ended). That login is forgotten, so the next
+   * switch does not put it back and sign the extension out again, and `onExtensionBroken` is told.
+   * Never throws.
+   */
+  private async verifyExtension(target: Account, after: string): Promise<void> {
+    try {
+      // A check is skipped while a Desktop operation runs, and the switch that put the sign-in in
+      // place may still wait for Claude to open: the look waits for it, up to five minutes.
+      const pause = this.extensionVerifyMs > 0 ? 5_000 : 20;
+      for (let tries = 0; this.busy && tries < 60; tries++)
+        await new Promise<void>((resolve) => setTimeout(resolve, pause).unref?.());
+      await this.checkExtension();
+      const current = this.lastExtensionCheck;
+      // Skipped while a Desktop operation ran: an older reading proves nothing.
+      if (!current || Date.parse(current.at) <= Date.parse(after)) return;
+      const mine = accountUuids(target).map((uuid) => uuid.toLowerCase());
+      const failed =
+        current.state === "signed-in" &&
+        !!current.expired &&
+        !!current.accountUuid &&
+        mine.includes(current.accountUuid);
+      this.diagnose("extension-verify", {
+        to: shortId(target.desktop?.accountUuid ?? target.id),
+        state: current.state,
+        ...(current.state === "signed-in" && current.accountUuid
+          ? { account: shortId(current.accountUuid) }
+          : {}),
+        signedIn: !failed,
+      });
+      if (!failed) return;
+      // Without a network the extension's sign-in could not have worked with any login.
+      if (await this.extensionOffline().catch(() => false)) {
+        this.diagnose("extension-verify-offline", { account: shortId(current.accountUuid!) });
+        return;
+      }
+      const saved = await this.cookieVault.list();
+      for (const uuid of mine)
+        if (saved.some((x) => x.accountUuid === uuid)) await this.cookieVault.reject(uuid);
+      this.diagnose("extension-pair-broken", { account: shortId(current.accountUuid!) });
+      this.onExtensionBroken?.(target);
+    } catch {
+      // A look that fails says nothing; the next check shows the state.
+    }
   }
   /** What the last extension step did, or undefined when none ran since Relay started. */
   get extensionOutcome(): ExtensionOutcome | undefined {
@@ -938,10 +1035,17 @@ export class DesktopManager {
         mayQuit,
         target: accountUuids(target),
         known: this.store.state.accounts.flatMap(accountUuids),
+        ...this.extensionAccounts(),
       });
       this.lastExtension = outcome;
       // Mode "guide" looked at who the extension is on: that is the newest check too.
       if (outcome.current) this.lastExtensionCheck = outcome.current;
+      // The step removed the record of a failed sign-in: the last check's "expired" is no longer
+      // true, and Settings and the account page read it until the next check.
+      else if (outcome.cleared && this.lastExtensionCheck?.state === "signed-in") {
+        const { expired: _gone, ...check } = this.lastExtensionCheck;
+        this.lastExtensionCheck = { ...check, at: outcome.at };
+      }
       this.diagnose("extension", {
         to: shortId(target.desktop?.accountUuid ?? target.id),
         result: outcome.result,
@@ -949,7 +1053,12 @@ export class DesktopManager {
         restarted: outcome.restarted,
         ...(outcome.reopened === undefined ? {} : { reopened: outcome.reopened }),
         saved: outcome.saved,
+        ...(outcome.cleared ? { cleared: true } : {}),
       });
+      // The browser was opened again with a sign-in put in place or a failure record removed:
+      // the extension signs in on its own right away, and Relay looks whether that worked.
+      if (outcome.restarted && outcome.reopened && (outcome.result === "switched" || outcome.cleared))
+        this.verifyExtensionLater(target, outcome.at);
       return outcome;
     } catch {
       return undefined;
@@ -1025,19 +1134,22 @@ export class DesktopManager {
       if (!active) return undefined;
       const mine = accountUuids(active).map((uuid) => uuid.toLowerCase());
       let on: string | undefined;
+      let expired = false;
       const signedOut = fromCheck && check!.state === "signed-out";
       if (fromCheck && check!.state === "signed-in" && check!.accountUuid) {
         const uuid = check!.accountUuid.toLowerCase();
-        if (mine.includes(uuid)) return undefined;
-        on = byUuid(uuid)?.name;
+        // On Desktop's account: nothing to bring along, unless its sign-in expired there.
+        if (mine.includes(uuid)) {
+          if (!check!.expired) return undefined;
+          expired = true;
+        } else on = byUuid(uuid)?.name;
       }
       const saved = (list: { accountUuid: string }[]) =>
         list.some((x) => mine.includes(x.accountUuid.toLowerCase()));
-      if (
-        !saved(await this.extensionVault.list()) ||
-        !saved(await this.cookieVault.list())
-      )
-        return undefined;
+      const paired =
+        saved(await this.extensionVault.list()) && saved(await this.cookieVault.list());
+      // Expired with no login to put in place: only signing in again helps, in Settings.
+      if (!paired && !expired) return undefined;
       const instance = chooseInstance(switcher.instances(), setting.browser);
       if (!instance) return undefined;
       return {
@@ -1045,6 +1157,8 @@ export class DesktopManager {
         to: active.name,
         ...(on ? { on } : {}),
         ...(signedOut ? { signedOut } : {}),
+        ...(expired ? { expired: true as const } : {}),
+        ...(expired && !paired ? { reconnect: true as const } : {}),
         browser: BROWSERS[instance.app].name,
       };
     } catch {
@@ -1060,6 +1174,7 @@ export class DesktopManager {
     const pick = pickInstance(instances, setting.browser);
     const target = pick?.instance;
     const { system } = this.extension;
+    const broken = await this.cookieVault.waiting().catch(() => undefined);
     return {
       setting,
       instances,
@@ -1077,7 +1192,20 @@ export class DesktopManager {
       cookiesSaved: await this.cookieVault.list(),
       last: this.lastExtension,
       current: this.lastExtensionCheck,
+      ...(broken ? { broken } : {}),
     };
+  }
+  /**
+   * Opens claude.ai in the browser whose extension Relay manages, in front, for signing in there
+   * with the account the extension should be on. Throws when there is no such browser.
+   */
+  async openClaudeWeb(): Promise<void> {
+    const switcher = this.switcher();
+    if (!switcher || !this.extension) throw new Error("The Claude browser extension is not supported here.");
+    const setting = this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION;
+    const instance = chooseInstance(switcher.instances(), setting.browser);
+    if (!instance) throw new Error("No browser with the Claude extension was found.");
+    await this.extension.system.openUrl(instance.app, "https://claude.ai/", instance.profile);
   }
   /**
    * Reads who the extension is signed in to from a copy of its storage, without quitting a
@@ -1101,6 +1229,7 @@ export class DesktopManager {
         .check({
           setting: this.store.state.settings.claudeExtension ?? DEFAULT_EXTENSION,
           known: uuids,
+          ...this.extensionAccounts(),
           ...(claim ? { claim } : {}),
         })
         .finally(() => {
@@ -1112,18 +1241,28 @@ export class DesktopManager {
       const target = chooseInstance(instances, setting.browser);
       if (current) {
         this.lastExtensionCheck = current;
-        this.diagnose("extension-check", {
+        // Signed in to that account without a failure: it waits for no reconnect any more.
+        if (current.state === "signed-in" && !current.expired && current.accountUuid)
+          await this.cookieVault.reconnected(current.accountUuid).catch(() => undefined);
+        const fields = {
           state: current.state,
           ...(current.state === "signed-in"
             ? {
                 known: current.known,
                 other: !!current.other,
                 ...(current.accountUuid ? { account: shortId(current.accountUuid) } : {}),
+                ...(current.expired ? { expired: true } : {}),
               }
             : {}),
           instances: instances.length,
           ...(target ? { target: `${target.app}:${target.profile}`, opened: target.opened } : {}),
-        });
+        };
+        // Settings checks every few seconds while a reconnect waits: only a change is logged.
+        const logged = JSON.stringify(fields);
+        if (logged !== this.extensionCheckLogged) {
+          this.extensionCheckLogged = logged;
+          this.diagnose("extension-check", fields);
+        }
       } else if (setting.mode !== "off" && !instances.length)
         this.diagnose("extension-check", { state: "none", instances: 0 });
     }

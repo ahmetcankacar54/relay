@@ -921,6 +921,16 @@ test("the extension row says where the extension was left and offers Switch; wit
   // Nothing happens before the user confirms.
   assert.doesNotMatch(html, /Evet, geçir/);
   assert.equal(extensionRow(withOffer(undefined)), "");
+  // On the account already, but its sign-in expired: the row offers a fix instead.
+  const expired = extensionRow(withOffer(offer({ on: undefined, expired: true })));
+  assert.match(expired, /Eklentinin girişi düşmüş/);
+  assert.match(expired, /Eklenti Vertex hesabında ama Claude’un tarayıcı araçlarını reddediyor\./);
+  assert.match(expired, />Düzelt</);
+  // Nothing saved to put in place: Reconnect opens the steps in Settings, with no confirmation.
+  const reconnect = extensionRow(withOffer(offer({ on: undefined, expired: true, reconnect: true })));
+  assert.match(reconnect, /Eklenti Vertex hesabına giriş yapamıyor/);
+  assert.match(reconnect, />Yeniden bağla</);
+  assert.doesNotMatch(reconnect, />Düzelt</);
   assert.match(extensionRow(withOffer(offer(), { busy: "draft-copy:d1" })), /disabled=""/);
 });
 
@@ -930,6 +940,7 @@ test("the extension line names a signed-out extension, or an account Relay canno
   assert.equal(extensionOfferLine(offer({ on: undefined, signedOut: true }), tr), "Eklentide giriş yok");
   assert.equal(extensionOfferLine(offer({ on: undefined }), tr), "Eklenti Vertex hesabına geçmedi");
   assert.equal(extensionOfferLine(offer(), en), "The extension is still on Alto");
+  assert.equal(extensionOfferLine(offer({ on: undefined, expired: true }), tr), "Eklentinin girişi düşmüş");
 });
 
 test("the panel places the extension row after rescued drafts and before the sidebar row", () => {

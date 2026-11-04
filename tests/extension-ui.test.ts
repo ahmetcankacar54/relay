@@ -58,6 +58,14 @@ test("a saved sign-in reads as linked, matching the uuid in any case", () => {
   assert.equal(guide(vertex).where, "Brave · Kişisel");
   // The extension on this account now says so.
   assert.equal(guide(vertex, { current: signedIn(ID) }).label, "Bağlı, şu an bu hesapta");
+  // On this account but its sign-in expired: not "linked"; the steps to reconnect, in Settings.
+  const expired = guide(vertex, { current: { ...signedIn(ID), expired: true } });
+  assert.deepEqual(
+    { tone: expired.tone, label: expired.label, action: expired.action },
+    { tone: "crit", label: "Yeniden bağlanmalı", action: "settings" },
+  );
+  assert.equal(expired.steps?.length, 3);
+  assert.match(expired.steps![0], /Brave’da claude\.ai’yi aç/);
   assert.equal(extensionGuide(alto, undefined, [], tr, "tr").label, "Kontrol ediliyor…");
 });
 
@@ -466,4 +474,74 @@ test("coming back to the window checks the extension again, throttled and only w
     Date.now = realNow;
     dom.uninstall();
   }
+});
+
+test("the reconnect guide names the account, why, and the steps; Sync now only while a login is saved", async () => {
+  const { reconnectGuide } = await import("../src/lib/extension-ui");
+  // Not needed: signed in fine, or no extension managed.
+  assert.equal(reconnectGuide(status({ current: signedIn(ID) }), [vertex, altoLinked], tr), undefined);
+  assert.equal(reconnectGuide(undefined, [vertex], tr), undefined);
+  // Expired on Vertex with its login saved: try Sync now first.
+  const expired = reconnectGuide(
+    status({ current: { ...signedIn(ID), expired: true }, cookiesSaved: [{ accountUuid: ID, savedAt: NOW }] }),
+    [vertex, altoLinked],
+    tr,
+  )!;
+  assert.equal(expired.account.id, vertex.id);
+  assert.equal(expired.canSync, true);
+  assert.equal(expired.title, "Eklentiyi Vertex hesabına yeniden bağla");
+  // Relay saw the login fail and forgot it: no Sync now, and it says why.
+  const broken = reconnectGuide(
+    status({
+      current: { ...signedIn(ALTO), expired: true },
+      broken: { accountUuid: ALTO, at: NOW },
+    }),
+    [vertex, altoLinked],
+    en,
+  )!;
+  assert.equal(broken.account.id, altoLinked.id);
+  assert.equal(broken.canSync, false);
+  assert.match(broken.why, /another account’s, or it ended/);
+  assert.match(broken.steps[0], /log in with alto@example\.com/);
+  // Once the extension is on that account again without a failure, the guide is gone.
+  assert.equal(
+    reconnectGuide(status({ current: signedIn(ALTO), broken: { accountUuid: ALTO, at: NOW } }), [vertex, altoLinked], en),
+    undefined,
+  );
+});
+
+test("the settings card shows the reconnect steps and Open claude.ai while the extension cannot sign in", () => {
+  const broken = render(
+    relayFor("darwin", [vertex], { mode: "restart" }),
+    createElement(ExtensionPreference, {
+      initialStatus: status({
+        current: { ...signedIn(ID), expired: true },
+        broken: { accountUuid: ID, at: NOW },
+      }),
+    }),
+  );
+  assert.match(broken, /Eklentiyi Vertex hesabına yeniden bağla/);
+  assert.match(broken, /Relay onu sildi/);
+  assert.match(broken, /claude\.ai’yi aç</);
+  assert.match(broken, /“Log in”e bas/);
+  // Gelişmiş stays closed: without a saved login, Sync now cannot help.
+  assert.doesNotMatch(broken, /Önce Gelişmiş’teki/);
+  // Expired with the login saved: try Sync now first, and Gelişmiş opens for it.
+  const expired = render(
+    relayFor("darwin", [vertex], { mode: "restart" }),
+    createElement(ExtensionPreference, {
+      initialStatus: status({
+        current: { ...signedIn(ID), expired: true },
+        cookiesSaved: [{ accountUuid: ID, savedAt: NOW }],
+      }),
+    }),
+  );
+  assert.match(expired, /Önce Gelişmiş’teki “Şimdi eşitle”yi dene/);
+  assert.match(expired, />Şimdi eşitle</);
+  // Signed in fine: no reconnect.
+  const fine = render(
+    relayFor("darwin", [vertex], { mode: "restart" }),
+    createElement(ExtensionPreference, { initialStatus: status({ current: signedIn(ID) }) }),
+  );
+  assert.doesNotMatch(fine, /yeniden bağla/);
 });

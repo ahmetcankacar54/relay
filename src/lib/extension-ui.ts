@@ -130,6 +130,83 @@ export function pairedAccounts(
 }
 
 /**
+ * What reconnecting the extension to an account takes, when its sign-in there failed: the
+ * extension is on the account but recorded that its sign-in expired, or Relay saw it fail with the
+ * claude.ai login a step put in place (`broken`) and forgot that login. Undefined otherwise. The
+ * extension signs in through the browser's claude.ai login, so that login comes first.
+ */
+export interface ReconnectGuide {
+  account: Account;
+  title: string;
+  why: string;
+  steps: string[];
+  /** A claude.ai login of the account is saved: syncing may be enough, before the steps. */
+  canSync: boolean;
+}
+
+export function reconnectGuide(
+  status: ExtensionStatus | undefined,
+  accounts: Account[],
+  t: T,
+): ReconnectGuide | undefined {
+  if (!status?.target || status.setting.mode === "off") return undefined;
+  const current = status.current;
+  const byUuid = (uuid: string) => accounts.find((a) => accountUuids(a).includes(uuid));
+  const expiredOn =
+    current?.state === "signed-in" && current.expired && current.accountUuid
+      ? byUuid(current.accountUuid)
+      : undefined;
+  const brokenOn = status.broken ? byUuid(status.broken.accountUuid) : undefined;
+  const account = expiredOn ?? brokenOn;
+  if (!account) return undefined;
+  // Once the extension is on this account again without a failure, nothing is left to do.
+  if (
+    !expiredOn &&
+    current?.state === "signed-in" &&
+    current.accountUuid &&
+    accountUuids(account).includes(current.accountUuid)
+  )
+    return undefined;
+  const uuids = accountUuids(account);
+  const broken = !!brokenOn && brokenOn.id === account.id;
+  const browser = BROWSERS[status.target.app].name;
+  const email = account.desktop?.email ?? account.auth?.email;
+  const as = email ?? account.name;
+  return {
+    account,
+    title: t(
+      `Eklentiyi ${account.name} hesabına yeniden bağla`,
+      `Reconnect the extension to ${account.name}`,
+    ),
+    why: broken
+      ? t(
+          `Eklenti, Relay’in ${account.name} için sakladığı claude.ai oturumuyla giriş yapamadı: o oturum başka bir hesabın ya da süresi dolmuş. Relay onu sildi; Claude’un tarayıcı araçları sen yeniden bağlayana kadar çalışmaz.`,
+          `The extension could not sign in with the claude.ai login Relay kept for ${account.name}: that login is another account’s, or it ended. Relay removed it; Claude’s browser tools won’t work until you reconnect.`,
+        )
+      : t(
+          `Eklenti ${account.name} hesabında ama girişi düşmüş; Claude’un tarayıcı araçları çalışmaz.`,
+          `The extension is on ${account.name}, but its sign-in expired, so Claude’s browser tools won’t work.`,
+        ),
+    steps: [
+      t(
+        `${browser}’da claude.ai’yi aç. Açılan hesap ${account.name} değilse sol alttaki menüden çıkış yap, ${as} ile giriş yap.`,
+        `Open claude.ai in ${browser}. If it is not on ${account.name}, log out from the menu at the bottom left and log in with ${as}.`,
+      ),
+      t(
+        `${browser}’ın araç çubuğundaki Claude simgesine tıkla, “Log in”e bas.`,
+        `Click the Claude icon in ${browser}’s toolbar and press “Log in”.`,
+      ),
+      t(
+        "Relay bağlandığını kendisi görür ve bu hesabın girişini saklar.",
+        "Relay sees it connect by itself and keeps this account’s sign-in.",
+      ),
+    ],
+    canSync:
+      !broken && !!status.cookiesSaved?.some((s) => uuids.includes(s.accountUuid)),
+  };
+}
+
+/**
  * Where an account stands with the browser extension, and what to do next. `steps` is the
  * sign-in to make in the browser, `check` that Relay should look again after it, `settings`
  * that the fix is on the Switching page.
@@ -182,6 +259,16 @@ export function extensionGuide(
   const current = status.current;
   const here =
     current?.state === "signed-in" && !!current.accountUuid && uuids.includes(current.accountUuid);
+  const reconnect = reconnectGuide(status, accounts, t);
+  if (reconnect && reconnect.account.id === account.id)
+    return {
+      tone: "crit",
+      label: t("Yeniden bağlanmalı", "Needs reconnecting"),
+      detail: reconnect.why,
+      steps: reconnect.steps,
+      where,
+      action: "settings",
+    };
   if (saved || here) {
     const date = saved
       ? new Date(saved.savedAt).toLocaleDateString(language === "tr" ? "tr-TR" : "en-GB", {

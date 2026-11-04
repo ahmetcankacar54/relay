@@ -860,12 +860,17 @@ else {
       // One hook for every switch: tray, panel, automatic, continuation and fleet.
       desktop.onSwitched = () => void draftRestore.afterSwitch();
       // The Claude extension's sign-in follows the account at each switch; macOS only.
-      if (process.platform === "darwin")
+      if (process.platform === "darwin") {
         desktop.extension = {
           system: macBrowserSystem(),
           storage: levelExtensionStorage,
           cookies: sqliteCookieStorage,
         };
+        desktop.onExtensionBroken = (account) => {
+          notifyExtensionBroken(account);
+          broadcastChanged();
+        };
+      }
       // So does the terminal's Claude Code sign-in; macOS only. Checked once at start, which links
       // a terminal already signed in to one of the accounts.
       desktop.terminal = macTerminalPorts();
@@ -1548,6 +1553,23 @@ function notifyExtensionLeft(target: Account) {
   notice.on("click", () => openPage("ayarlar/tasinanlar"));
   notice.show();
 }
+/**
+ * After a step put a claude.ai login in place and the extension could not sign in to `account`
+ * with it: Relay forgot that login, and Claude's browser tools stay off until the user signs in
+ * again. A click opens Settings → What comes along, where the reconnect steps are.
+ */
+function notifyExtensionBroken(account: Account) {
+  if (!Notification.isSupported()) return;
+  const notice = new Notification({
+    title: "Relay",
+    body: say(
+      `Claude tarayıcı eklentisi ${account.name} hesabına giriş yapamadı: tarayıcıdaki claude.ai oturumu bu hesabın değil ya da süresi dolmuş. Claude’un tarayıcı araçları çalışmaz. Yeniden bağlamak için tıkla.`,
+      `The Claude browser extension could not sign in to ${account.name}: the browser’s claude.ai login is not this account’s, or it ended. Claude’s browser tools won’t work. Click to reconnect.`,
+    ),
+  });
+  notice.on("click", () => openPage("ayarlar/tasinanlar"));
+  notice.show();
+}
 /** Same copy as the menu bar switch; shown after a tray or panel switch. */
 function notifySwitched(name: string) {
   if (!Notification.isSupported()) return;
@@ -1959,6 +1981,11 @@ function bindIPC() {
   // The panel's extension offer follows a sync at once. Not a check: the settings card checks
   // again whenever the settings it reads change, and a broadcast would bring it new ones.
   handle("extension-sync", () => desktop.syncExtension().finally(broadcastChanged));
+  handle("extension-web", () => desktop.openClaudeWeb());
+  handle("extension-settings", () => {
+    openPage("ayarlar/tasinanlar");
+    trayPanel?.hide();
+  });
   handle("extension-check", () => desktop.checkExtension());
   handle("extension-link", (accountId) => desktop.checkExtension(id.parse(accountId)));
   handle("terminal-status", () => desktop.terminalStatus());

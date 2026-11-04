@@ -645,6 +645,8 @@ export const previewApi: RelayAPI = {
       saved: true,
     };
   },
+  openClaudeWeb: async () => {},
+  openExtensionSettings: async () => {},
   terminalStatus: async () => structuredClone(previewTerminal),
   checkTerminal: async () => structuredClone(previewTerminal),
   syncTerminal: async () => ({

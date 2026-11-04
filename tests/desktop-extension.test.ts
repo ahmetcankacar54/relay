@@ -338,3 +338,133 @@ test("the extension check logs who it saw, how many instances there are, which o
   await f.manager.checkExtension();
   assert.deepEqual(logged.pop(), { state: "none", instances: 0 });
 });
+
+test("an extension on Desktop's account whose sign-in expired is offered a fix, and syncing removes the record", async (t) => {
+  const f = await fixture(t, { defaultSetting: true });
+  const a = await f.account("A");
+  await f.manager.switchTo(a.id);
+  const uuid = a.desktop!.accountUuid;
+  f.world.stored.set(f.dir, {
+    ...signInFor(uuid, 2),
+    lastAuthFailureReason: JSON.stringify("session_expired"),
+  });
+  f.world.web.set(f.profile, loginFor(uuid, 2));
+  await f.cookieVault.save(uuid, loginFor(uuid, 2));
+  await f.manager.checkExtension();
+  assert.deepEqual(await f.manager.extensionOffer(), {
+    accountId: a.id,
+    to: "A",
+    expired: true,
+    browser: "Brave",
+  });
+  const outcome = await f.manager.syncExtension();
+  assert.deepEqual(
+    { result: outcome.result, reason: outcome.reason, cleared: outcome.cleared },
+    { result: "unchanged", reason: "already-there", cleared: true },
+  );
+  assert.deepEqual(f.world.stored.get(f.dir), signInFor(uuid, 2));
+  assert.equal(await f.manager.extensionOffer(), undefined);
+  // Settings and the account page stop saying it expired without waiting for another check.
+  const current = (await f.manager.extensionStatus())!.current;
+  assert.equal(current?.state === "signed-in" && current.accountUuid, uuid.toLowerCase());
+  assert.equal(current?.state === "signed-in" && current.expired, undefined);
+});
+
+test("after a switch, an extension that cannot sign in with the login put in place is caught, the login is forgotten, and reconnecting clears it", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B"); // Claude is on B
+  const ua = a.desktop!.accountUuid;
+  f.manager.extensionVerifyMs = 0;
+  f.manager.extensionOffline = async () => false;
+  const broken: string[] = [];
+  f.manager.onExtensionBroken = (account) => broken.push(account.name);
+  f.setRunning(true);
+  f.world.state.running = true;
+  await f.vault.save(ua, signInFor(ua, 1));
+  // The login Relay kept for A is not A's: the extension's silent sign-in fails at start.
+  await f.cookieVault.save(ua, loginFor(ua, 1));
+  f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
+  const launch = f.world.system.launch;
+  f.world.system.launch = async (app) => {
+    await launch(app);
+    f.world.stored.set(f.dir, {
+      ...f.world.stored.get(f.dir)!,
+      lastAuthFailureReason: JSON.stringify("session_expired"),
+    });
+  };
+  await f.manager.switchTo(a.id);
+  assert.equal(f.manager.extensionOutcome?.result, "switched");
+  await f.manager.extensionVerified;
+  assert.deepEqual(broken, ["A"]);
+  assert.equal(await f.cookieVault.load([ua]), undefined, "the login that failed is forgotten");
+  assert.deepEqual(await f.vault.load([ua]), signInFor(ua, 1), "A's hints stay");
+  const status = (await f.manager.extensionStatus())!;
+  assert.equal(status.broken?.accountUuid, ua.toLowerCase());
+  assert.deepEqual(await f.manager.extensionOffer(), {
+    accountId: a.id,
+    to: "A",
+    expired: true,
+    reconnect: true,
+    browser: "Brave",
+  });
+  // The user signs in to claude.ai with A and to the extension: a check sees it and keeps both.
+  f.world.stored.set(f.dir, signInFor(ua, 3));
+  f.world.web.set(f.profile, loginFor(ua, 3));
+  const after = (await f.manager.checkExtension())!;
+  assert.equal(after.broken, undefined);
+  assert.equal(after.current?.state === "signed-in" && after.current.expired, undefined);
+  assert.deepEqual(await f.cookieVault.load([ua]), loginFor(ua, 3));
+  assert.equal(await f.manager.extensionOffer(), undefined);
+});
+
+test("a switch whose extension signs in fine forgets nothing", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  const ua = a.desktop!.accountUuid;
+  f.manager.extensionVerifyMs = 0;
+  f.manager.extensionOffline = async () => false;
+  f.manager.onExtensionBroken = () => assert.fail("nothing is broken");
+  f.setRunning(true);
+  f.world.state.running = true;
+  await f.vault.save(ua, signInFor(ua, 1));
+  await f.cookieVault.save(ua, loginFor(ua, 1));
+  f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
+  await f.manager.switchTo(a.id);
+  await f.manager.extensionVerified;
+  assert.deepEqual(await f.cookieVault.load([ua]), loginFor(ua, 1));
+  assert.equal((await f.manager.extensionStatus())!.broken, undefined);
+});
+
+test("a failed sign-in while Anthropic cannot be reached forgets nothing", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  const ua = a.desktop!.accountUuid;
+  f.manager.extensionVerifyMs = 0;
+  f.manager.extensionOffline = async () => true;
+  f.manager.onExtensionBroken = () => assert.fail("offline proves nothing");
+  f.setRunning(true);
+  f.world.state.running = true;
+  await f.vault.save(ua, signInFor(ua, 1));
+  await f.cookieVault.save(ua, loginFor(ua, 1));
+  f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
+  const launch = f.world.system.launch;
+  f.world.system.launch = async (app) => {
+    await launch(app);
+    f.world.stored.set(f.dir, { ...f.world.stored.get(f.dir)!, lastAuthFailureReason: '"session_expired"' });
+  };
+  await f.manager.switchTo(a.id);
+  await f.manager.extensionVerified;
+  assert.deepEqual(await f.cookieVault.load([ua]), loginFor(ua, 1));
+});
+
+test("Open claude.ai opens it in the managed browser", async (t) => {
+  const f = await fixture(t);
+  await f.manager.openClaudeWeb();
+  assert.deepEqual(f.events, ["open:brave:Default:https://claude.ai/"]);
+});

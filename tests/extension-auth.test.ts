@@ -1,7 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { holdsToken, namedAccount, pickSignIn, sameSignIn } from "../shared/extension-auth";
+import {
+  holdsToken,
+  isSignInEntry,
+  namedAccount,
+  pickSignIn,
+  sameSignIn,
+  sessionExpired,
+} from "../shared/extension-auth";
 import {
   chooseInstance,
   localStateProfiles,
@@ -136,4 +143,39 @@ test("the chosen instance wins, the only one is used, several without a choice a
   // A chosen instance that is gone does not pick another of several.
   assert.equal(chooseInstance([brave, chrome], { app: "edge", profile: "Default" }), undefined);
   assert.equal(chooseInstance([], undefined), undefined);
+});
+
+test("extension 1.0.105: the org hint and the PKCE pair go with the sign-in, a failed sign-in's record never", () => {
+  const uuid = randomUUID();
+  const org = randomUUID();
+  const entries: [string, string][] = [
+    ["accountUuid", JSON.stringify(uuid)],
+    ["tokenOrg", JSON.stringify({ hybrid: false, uuid: org })],
+    ["lastActiveOrgHint", JSON.stringify(randomUUID())],
+    ["codeVerifier", JSON.stringify("v".repeat(43))],
+    ["signInState", JSON.stringify("s".repeat(43))],
+    ["oauthState", JSON.stringify("o".repeat(43))],
+    ["lastAuthFailureReason", JSON.stringify("session_expired")],
+    ["startupReauthState", JSON.stringify({ terminal: true, stop: "definitive" })],
+    ["pairingOrgMismatch", JSON.stringify({ org: randomUUID() })],
+    ["selectedModel", JSON.stringify("claude-sonnet-4-5")],
+  ];
+  const picked = pickSignIn(entries, [uuid])!;
+  assert.equal(picked.account, uuid);
+  assert.deepEqual(Object.keys(picked.signIn).sort(), [
+    "accountUuid",
+    "codeVerifier",
+    "lastActiveOrgHint",
+    "oauthState",
+    "signInState",
+    "tokenOrg",
+  ]);
+  // Still part of a sign-in, so a write that lacks them removes them from the profile.
+  assert.equal(isSignInEntry("lastAuthFailureReason", '"session_expired"'), true);
+  assert.equal(isSignInEntry("startupReauthState", "{}"), true);
+  assert.equal(isSignInEntry("pairingOrgMismatch", "{}"), true);
+  assert.equal(isSignInEntry("selectedModel", '"claude-sonnet-4-5"'), false);
+  assert.equal(sessionExpired(entries), true);
+  assert.equal(sessionExpired(entries.filter(([key]) => key !== "lastAuthFailureReason")), false);
+  assert.equal(sessionExpired([["lastAuthFailureReason", '"network_error"']]), false);
 });

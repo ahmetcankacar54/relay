@@ -162,3 +162,18 @@ test("a backup refuses a folder that holds a link", async (t) => {
   fs.symlinkSync(path.join(root, "target"), path.join(dir, "link"));
   await assert.rejects(backupFolder(dir, path.join(root, "scratch")), /symbolic link/);
 });
+
+test("writing a sign-in removes the record of a failed one and the previous org hint, and keeps the rest", async (t) => {
+  const dir = path.join(temp(t), "ext");
+  const a = randomUUID();
+  const b = randomUUID();
+  await extensionDb(dir, {
+    ...signInFor(a),
+    lastActiveOrgHint: JSON.stringify(randomUUID()),
+    lastAuthFailureReason: JSON.stringify("session_expired"),
+    startupReauthState: JSON.stringify({ terminal: true, stop: "definitive" }),
+    savedPrompts: '["p"]',
+  });
+  await levelExtensionStorage.write(dir, signInFor(b));
+  assert.deepEqual(await dump(dir), { ...signInFor(b), savedPrompts: '["p"]' });
+});

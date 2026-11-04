@@ -32,6 +32,8 @@ export interface BrowserSystem {
   quit(app: BrowserApp): Promise<void>;
   /** Opens the browser in the background, restoring the windows it had. */
   launch(app: BrowserApp): Promise<void>;
+  /** Opens `url` in the browser, in front, in the profile folder `profile`. */
+  openUrl(app: BrowserApp, url: string, profile: string): Promise<void>;
   sleep(ms: number): Promise<void>;
 }
 
@@ -39,6 +41,13 @@ export interface BrowserSystem {
 const MAX_JSON = 16 * 1024 * 1024;
 
 export function macBrowserSystem(home = os.homedir()): BrowserSystem {
+  const processes = async () =>
+    (
+      await runDetached("/bin/ps", ["-axo", "comm="], {
+        timeout: 5000,
+        maxBuffer: 8 * 1024 * 1024,
+      })
+    ).stdout;
   return {
     support: path.join(home, "Library", "Application Support"),
     readText: (file) => {
@@ -68,13 +77,7 @@ export function macBrowserSystem(home = os.homedir()): BrowserSystem {
       }
     },
     alive: pidAlive,
-    processes: async () =>
-      (
-        await runDetached("/bin/ps", ["-axo", "comm="], {
-          timeout: 5000,
-          maxBuffer: 8 * 1024 * 1024,
-        })
-      ).stdout,
+    processes,
     quit: async (app) => {
       // Guarded: `tell … to quit` on an app that is not running would launch it first.
       const id = BROWSERS[app].bundleId;
@@ -95,6 +98,26 @@ export function macBrowserSystem(home = os.homedir()): BrowserSystem {
         ["-g", "-b", BROWSERS[app].bundleId, "--args", "--restore-last-session"],
         { timeout: 15_000 },
       );
+    },
+    openUrl: async (app, url, profile) => {
+      const args = [`--profile-directory=${profile}`, url];
+      // `open` hands arguments only to a browser it starts. A running one is reached through its
+      // own executable: Chromium passes a second start's command line to the running browser,
+      // which opens the page in that profile. Only HOME and PATH travel, never Relay's environment.
+      const main = `.app/Contents/MacOS/${BROWSERS[app].executable}`;
+      const running = (await processes())
+        .split("\n")
+        .map((line) => line.trim())
+        .find((line) => line.startsWith("/") && line.endsWith(main));
+      if (running)
+        await runDetached(running, args, {
+          timeout: 15_000,
+          env: { HOME: home, PATH: "/usr/bin:/bin" },
+        });
+      else
+        await runDetached("/usr/bin/open", ["-b", BROWSERS[app].bundleId, "--args", ...args], {
+          timeout: 15_000,
+        });
     },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };

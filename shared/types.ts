@@ -302,6 +302,10 @@ export interface RelayAPI {
   extensionStatus(): Promise<ExtensionStatus | undefined>;
   /** Runs the extension step for the account Desktop is on, without changing Claude. */
   syncExtension(): Promise<ExtensionOutcome>;
+  /** Opens claude.ai in the browser whose extension Relay manages, for signing in there again. */
+  openClaudeWeb(): Promise<void>;
+  /** Opens Settings → What comes along in the main window, where the extension is reconnected. */
+  openExtensionSettings(): Promise<void>;
   /**
    * Reads who the extension is signed in to from a copy of its storage (a running browser is
    * left alone) and saves that sign-in when the account is one of Relay's: how an account is

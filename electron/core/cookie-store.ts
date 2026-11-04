@@ -82,6 +82,44 @@ const isLoginRow = (row: CookieRow) =>
 export const hasWebLogin = (snapshot: CookieSnapshot) =>
   snapshot.rows.some((row) => row.name === SESSION_NAME && row.host_key === ".claude.ai");
 
+const unpartitioned = (snapshot: CookieSnapshot, name: string) =>
+  snapshot.rows.find(
+    (r) =>
+      r.name === name &&
+      (r.top_frame_site_key ?? "") === "" &&
+      (r.host_key === ".claude.ai" || r.host_key === "claude.ai"),
+  );
+const bytes = (value: CookieValue | undefined) =>
+  value instanceof Uint8Array ? Buffer.from(value) : undefined;
+
+/**
+ * Whether two snapshots hold the same web login: their `sessionKey` rows were created at the same
+ * moment. The browser keeps a cookie's creation time when the site sets it again, so a login the
+ * server renewed still matches; two separate logins never share the microsecond.
+ */
+export function sameLogin(a: CookieSnapshot, b: CookieSnapshot): boolean {
+  const x = loginId(a);
+  return x !== undefined && x === loginId(b);
+}
+
+/** A web login's identity: its `sessionKey` row's creation time (see `sameLogin`). */
+export function loginId(snapshot: CookieSnapshot): string | undefined {
+  const created = unpartitioned(snapshot, SESSION_NAME)?.creation_utc;
+  return typeof created === "bigint" ? created.toString() : undefined;
+}
+
+/**
+ * Whether two snapshots' web logins are on the same organization: their `lastActiveOrg` cookies
+ * hold the same encrypted bytes. On macOS the browser encrypts a cookie the same way every time
+ * (one key, a fixed IV), so the same organization id gives the same bytes; nothing is decrypted.
+ * Where a browser encrypts with a random IV this never matches, which only makes it say less.
+ */
+export function sameOrganization(a: CookieSnapshot, b: CookieSnapshot): boolean {
+  const x = bytes(unpartitioned(a, "lastActiveOrg")?.encrypted_value);
+  const y = bytes(unpartitioned(b, "lastActiveOrg")?.encrypted_value);
+  return !!x && !!y && x.length > 0 && x.equals(y);
+}
+
 /** When the web session was created (ms since the epoch), from `creation_utc`; undefined without one. */
 export function sessionCreatedMs(snapshot: CookieSnapshot): number | undefined {
   const row = snapshot.rows.find(

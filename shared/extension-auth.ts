@@ -9,7 +9,8 @@
  * - the account is the one such a key holds; without one, the one of Relay's account uuids a
  *   value names;
  * - the sign-in is every key that looks like part of it (by name or by holding a token) and
- *   every key naming that account. Nothing else is read into the vault or written back.
+ *   every key naming that account, except the extension's record of a failed sign-in
+ *   (`FAILURE_KEYS`). Nothing else is read into the vault or written back.
  *
  * Seen in extension 1.0.102 on 2026-10-22: `accountUuid` is a plain key, no token is kept in
  * this storage, and `permissionConsentByAccount` maps every account that ever used the
@@ -36,9 +37,54 @@ const EMPTY = new Set(["", "null", "undefined", "false", "true", "0", '""', "{}"
 
 const filled = (value: string) => !EMPTY.has(value.trim()) && value.trim().length >= 12;
 
+/**
+ * The extension's records of its own last failed attempts (extension 1.0.105, read 2026-11-04).
+ * With `lastAuthFailureReason` "session_expired" it refuses every browser tool call ("Open the
+ * side panel and sign in again") without trying to sign in; `startupReauthState` holds the
+ * backoff of its silent sign-in at startup, or a stop after which it never tries again; and
+ * `pairingOrgMismatch` makes the side panel offer to move to the organization a pairing with
+ * Claude Desktop named. Each describes an attempt made with the profile's login and Desktop's
+ * account of that moment, so none is kept with an account nor put back: a write removes them, and
+ * the extension tries again on its own with what is put in place (recording anew if that fails).
+ * 1.0.105 keeps only `lastAuthFailureReason` on disk; the other two are in chrome.storage.session
+ * there (gone at every browser quit) and are listed for versions that keep them on disk. Live
+ * 2026-11-04: right after a sync removed the record, the extension's silent sign-in at startup
+ * failed and wrote it again, so removing it helps only when the profile's claude.ai login works.
+ */
+export const FAILURE_KEYS: readonly string[] = [
+  "lastAuthFailureReason",
+  "startupReauthState",
+  "pairingOrgMismatch",
+];
+const isFailureKey = (key: string) => FAILURE_KEYS.includes(key);
+
+/** `signIn` without the extension's record of a failed sign-in. */
+export const withoutFailure = (signIn: SignIn): SignIn =>
+  Object.fromEntries(Object.entries(signIn).filter(([key]) => !isFailureKey(key)));
+
+/** Whether the extension recorded a failed sign-in: it then refuses browser tools until one works. */
+export function sessionExpired(entries: Iterable<readonly [string, string | undefined]>): boolean {
+  for (const [key, value] of entries)
+    if (key === "lastAuthFailureReason" && typeof value === "string")
+      try {
+        return JSON.parse(value) === "session_expired";
+      } catch {
+        return false;
+      }
+  return false;
+}
+
+/**
+ * Sign-in keys the name pattern misses (extension 1.0.105): the organization the claude.ai page
+ * last named (the extension drops it itself when its account changes; left behind it names the
+ * previous account's organization), the PKCE pair that belongs with `oauthState`, and the record
+ * of a failed sign-in, which a write must replace like any other part.
+ */
+const SIGN_IN_KEYS = new Set(["lastActiveOrgHint", "codeVerifier", "signInState", ...FAILURE_KEYS]);
+
 /** Whether this entry is part of a sign-in, by its name or by holding a token. */
 export function isSignInEntry(key: string, value: string): boolean {
-  return SIGN_IN_NAME.test(key) || TOKEN_VALUE.test(value);
+  return SIGN_IN_KEYS.has(key) || SIGN_IN_NAME.test(key) || TOKEN_VALUE.test(value);
 }
 
 /** Whether the stored entries hold a token: someone is signed in. */
@@ -146,7 +192,10 @@ export function pickSignIn(
   const account = namedAccount(all, known);
   const signIn: SignIn = {};
   for (const [key, value] of all)
-    if (isSignInEntry(key, value) || (account && value.toLowerCase().includes(account)))
+    if (
+      !isFailureKey(key) &&
+      (isSignInEntry(key, value) || (account && value.toLowerCase().includes(account)))
+    )
       signIn[key] = value;
   return {
     signIn,

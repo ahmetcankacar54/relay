@@ -264,3 +264,27 @@ test("a saved login encodes to JSON text and decodes to the same rows; foreign r
 test("SQLite is available here", async () => {
   assert.equal(await sqliteCookieStorage.available(), true);
 });
+
+test("two snapshots are the same login by the session's creation time, and on one organization by its bytes", async () => {
+  const { sameLogin, sameOrganization } = await import("../electron/core/cookie-store");
+  const row = (name: string, created: bigint, value: string) => ({
+    creation_utc: created,
+    host_key: name === "lastActiveOrg" || name === "sessionKey" ? ".claude.ai" : "claude.ai",
+    top_frame_site_key: "",
+    name,
+    encrypted_value: new Uint8Array(Buffer.from(value)),
+  });
+  const snap = (created: bigint, session: string, org?: string) => ({
+    version: "24",
+    columns: ["creation_utc", "host_key", "top_frame_site_key", "name", "encrypted_value"],
+    rows: [row("sessionKey", created, session), ...(org ? [row("lastActiveOrg", created, org)] : [])],
+    unlisted: [],
+  });
+  // The server set the session again (new bytes): the browser kept its creation time.
+  assert.equal(sameLogin(snap(10n, "v10a"), snap(10n, "v10b")), true);
+  assert.equal(sameLogin(snap(10n, "v10a"), snap(11n, "v10a")), false);
+  assert.equal(sameLogin(snap(10n, "v10a"), { ...snap(10n, "v10a"), rows: [] }), false);
+  assert.equal(sameOrganization(snap(1n, "x", "v10ORG"), snap(2n, "y", "v10ORG")), true);
+  assert.equal(sameOrganization(snap(1n, "x", "v10ORG"), snap(2n, "y", "v10OTHER")), false);
+  assert.equal(sameOrganization(snap(1n, "x"), snap(2n, "y", "v10ORG")), false);
+});
