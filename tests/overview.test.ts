@@ -459,7 +459,8 @@ const firstRun = (extra: { desktop?: Partial<DesktopState>; diagnostics?: Partia
     desktop: { available: true, running: false, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0, ...extra.desktop },
     data: {
       settings: DEFAULT_SETTINGS, usage: {}, accounts, authFlows: [],
-      diagnostics: { platform: "darwin", dataDir: "/tmp", desktopSupported: false, executable: undefined, error: "Claude Code bulunamadı.", ...extra.diagnostics },
+      // The CLI step exists only off macOS: there the Claude app's sign-in reads the limits.
+      diagnostics: { platform: "linux", dataDir: "/tmp", desktopSupported: false, executable: undefined, error: "Claude Code bulunamadı.", ...extra.diagnostics },
     } as unknown as Snapshot,
   });
 };

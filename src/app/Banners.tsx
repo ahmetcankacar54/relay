@@ -4,6 +4,7 @@ import type { Account, AccountUsage } from "../../shared/types";
 import {
   cliNeedsReconnect,
   desktopCliMismatch,
+  readsThroughApp,
 } from "../../shared/account-state";
 import { Button } from "@/components/ui/button";
 import { Banner } from "@/components/Banner";
@@ -46,8 +47,17 @@ export function reconnectIssues(
 ): ReconnectIssue[] {
   const result: ReconnectIssue[] = [];
   for (const account of accounts) {
-    if (!account.auth?.loggedIn) continue;
     const u = usage[account.id];
+    if (!account.auth?.loggedIn) {
+      // Read through the Claude app's sign-in, only the Keychain can need the user here.
+      if (
+        readsThroughApp(account, u) &&
+        renewalIssue(u) === "keychain-locked" &&
+        !dismissed.has(dismissalKey(account.id, "keychain-locked"))
+      )
+        result.push({ account, issue: "keychain-locked", action: "renew" });
+      continue;
+    }
     const reported = cliNeedsReconnect(account, u);
     const mismatch = !reported && desktopCliMismatch(account);
     const issue = mismatch ? "identity-mismatch" : (displayedIssue(u) ?? "");
@@ -121,7 +131,7 @@ export function Banners({
   const unread = accounts
     .filter((a) => {
       const u = usage[a.id];
-      if (!a.auth?.loggedIn) return false;
+      if (!a.auth?.loggedIn && !readsThroughApp(a, u)) return false;
       if (u?.issue === "unavailable" || u?.issue === "rate-limited")
         return true;
       return !u?.issue && (!u || u.status === "idle" || u.status === "loading");

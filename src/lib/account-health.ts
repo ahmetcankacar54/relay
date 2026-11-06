@@ -3,6 +3,7 @@ import {
   cliNeedsReconnect,
   desktopCliMismatch,
   displayedIssue,
+  readsThroughApp,
 } from "../../shared/account-state";
 
 // The helper lives in shared/ so the tray and the keeper read it too; the app keeps importing it from here.
@@ -46,6 +47,11 @@ export function renewalIssue(
  * A usage sign-in of another account than the Claude app sign-in reads the wrong limits: it is needed again.
  */
 function signInState(account: Account, usage: AccountUsage | undefined) {
+  // No Claude Code sign-in: the Claude app's own sign-in reads the limits where it can.
+  if (readsThroughApp(account, usage)) {
+    if (cliNeedsReconnect(account, usage)) return "needed";
+    return renewalIssue(usage) === "keychain-locked" ? "keychain" : "app";
+  }
   if (!account.auth) return "none";
   if (cliNeedsReconnect(account, usage) || desktopCliMismatch(account))
     return "needed";
@@ -61,6 +67,8 @@ const SIGN_IN_WORDS = {
   // The sign-in itself is fine; the Keychain has to be allowed to read it.
   keychain: ["Bağlı", "Connected"],
   connected: ["Bağlı", "Connected"],
+  // No usage sign-in of its own: the Claude app's sign-in reads the limits.
+  app: ["Claude uygulamasından", "Through the Claude app"],
 } as const satisfies Record<ReturnType<typeof signInState>, Words>;
 
 /**
@@ -78,6 +86,7 @@ export function usageSignInStatus(
   const [tr, en] = SIGN_IN_WORDS[state];
   switch (state) {
     case "connected":
+    case "app":
       return { tone: "ok", label: t(tr, en) };
     case "needed":
       return { tone: "crit", label: t(tr, en) };

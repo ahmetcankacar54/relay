@@ -41,6 +41,8 @@ import os from "node:os";
 import { z } from "zod";
 import { ActiveAccountTimeline } from "./core/active-account-timeline";
 import { DesktopManager } from "./core/desktop";
+import { DesktopUsageReader, safeStoragePassword } from "./core/desktop-usage";
+import { claudeWebRequest } from "./desktop-usage-request";
 import {
   desktopHost,
   safeStorageAvailable,
@@ -218,6 +220,28 @@ let appUpdates: AppUpdates | undefined;
 /** Which account's window holds each Claude Code session, for token attribution. */
 let windowSessionOwners = new Map<string, SessionOwner>();
 let usage: UsageManager;
+/**
+ * Usage read through each account's Claude app sign-in. Whether the user allowed the Keychain
+ * read of "Claude Safe Storage" is remembered in a small file, never the password itself.
+ */
+function desktopUsageSource() {
+  const marker = path.join(app.getPath("userData"), "desktop-usage-keychain.json");
+  const reader = new DesktopUsageReader({
+    cookieFiles: (accountUuid) => desktop.loginCookieFiles(accountUuid),
+    password: safeStoragePassword({
+      allowed: async () => JSON.parse(await fsp.readFile(marker, "utf8"))?.allowed === true,
+      remember: async (allowed) =>
+        allowed
+          ? fsp.writeFile(marker, JSON.stringify({ allowed: true }), { mode: 0o600 })
+          : fsp.rm(marker, { force: true }),
+    }),
+    request: claudeWebRequest,
+  });
+  return {
+    usable: (account: Account) => DesktopUsageReader.usable(account),
+    read: (account: Account, allowPrompt: boolean) => reader.read(account, allowPrompt),
+  };
+}
 let usageCredentialRefresher: UsageCredentialRefresher;
 let autoSwitch: AutoSwitchManager;
 let tray: RelayTray | undefined;
@@ -820,6 +844,8 @@ else {
             { accountId: account.id, issue, detail },
             Date.now(),
           ),
+        // Without a Claude Code sign-in, the Claude app's own sign-in reads the limits (macOS).
+        process.platform === "darwin" ? desktopUsageSource() : undefined,
       );
       // The real file, so spawn can run it too (see unpackedPath).
       const automationHelper = unpackedPath(

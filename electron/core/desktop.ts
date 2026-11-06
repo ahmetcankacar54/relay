@@ -1917,6 +1917,31 @@ export class DesktopManager {
     );
     return accountUuid;
   }
+  /**
+   * The cookie files of `accountUuid`'s Claude app sign-in, for a usage read: Claude's own while
+   * it is signed in to that account (the newest), else the copy saved in the vault. Read only;
+   * while an operation swaps files only the vault copy is used.
+   */
+  async loginCookieFiles(accountUuid: string): Promise<Record<string, Buffer | null>> {
+    const read = async (root: string) => {
+      const files: Record<string, Buffer | null> = {};
+      for (const name of COOKIE_FILES) files[name] = await readBytes(root, name);
+      return files;
+    };
+    const live = async () => identity(await readObject(this.root, "config.json").catch(() => null));
+    if (!this.busy && (await live()) === accountUuid) {
+      const files = await read(this.root);
+      // Another account could have come in while the files were read.
+      if (!this.busy && (await live()) === accountUuid) return files;
+    }
+    const saved = await this.readLogin(accountUuid);
+    return Object.fromEntries(
+      COOKIE_FILES.map((name) => {
+        const data = saved.cookies[name];
+        return [name, typeof data === "string" ? Buffer.from(data, "base64") : null];
+      }),
+    );
+  }
   private async readLogin(accountUuid: string): Promise<SavedLogin> {
     const data = await readBytes(
       this.vault,

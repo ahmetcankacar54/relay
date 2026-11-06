@@ -33,7 +33,7 @@ const desktop = (extra: Partial<DesktopState> = {}): DesktopState => ({
   errorRevision: 0,
   ...extra,
 });
-const diagnostics = (extra: Partial<Diagnostics> = {}): Diagnostics => ({
+const darwinDiagnostics = (extra: Partial<Diagnostics> = {}): Diagnostics => ({
   platform: "darwin",
   dataDir: "/tmp/relay",
   desktopSupported: true,
@@ -41,6 +41,7 @@ const diagnostics = (extra: Partial<Diagnostics> = {}): Diagnostics => ({
   version: "2.1.300 (Claude Code)",
   ...extra,
 });
+const diagnostics = darwinDiagnostics;
 const account = (id: string, linked = true): Account => ({
   id,
   name: id,
@@ -124,7 +125,22 @@ test("the Code tab counts as opened once the current sign-in has a workspace fol
   assert.equal(codeTabOpened(desktop({ organizations: [] }), []), false);
 });
 
-test("prerequisites wait for both snapshots; the CLI is a step only when Code is open and it is still missing", () => {
+test("on macOS the CLI is never a step: the Claude app's own sign-in reads the limits", () => {
+  const missing = prerequisites({
+    desktop: desktop({ currentAccountUuid: "u", organizations: [ORG] }),
+    diagnostics: diagnostics({ executable: undefined, version: undefined }),
+    accounts: [],
+  });
+  assert.deepEqual(missing?.items, [
+    { key: "desktop", met: true },
+    { key: "code", met: true },
+  ]);
+  assert.equal(missing?.cli, "missing");
+  assert.equal(missing?.complete, true);
+});
+
+test("elsewhere prerequisites wait for both snapshots; the CLI is a step only when Code is open and it is still missing", () => {
+  const diagnostics = (extra: Partial<Diagnostics> = {}) => darwinDiagnostics({ platform: "linux", ...extra });
   assert.equal(prerequisites({ desktop: undefined, diagnostics: diagnostics(), accounts: [] }), undefined);
   assert.equal(prerequisites({ desktop: desktop(), diagnostics: undefined, accounts: [] }), undefined);
   const none = prerequisites({

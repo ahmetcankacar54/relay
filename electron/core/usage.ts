@@ -276,7 +276,20 @@ export class UsageManager {
     private refreshCredentialPending?: (account: Account) => boolean,
     /** Told once each time an account's issue changes; never given a credential. */
     private onIssue?: (account: Account, issue: UsageIssue, detail?: string) => void,
+    /**
+     * The second source: the account's Claude app sign-in, for an account without a Claude Code
+     * sign-in. Answers with the usage endpoint's shape. Undefined where it cannot be read.
+     */
+    private desktopUsage?: {
+      usable: (account: Account) => boolean;
+      read: (account: Account, allowPrompt: boolean) => Promise<unknown>;
+    },
   ) {}
+  /** Which sign-in a read of this account goes through; undefined when it has none. */
+  private source(account: Account): AccountUsage["source"] {
+    if (account.auth?.loggedIn) return "cli";
+    if (this.desktopUsage?.usable(account)) return "desktop";
+  }
   invalidate(id: string) {
     this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
     this.inflight.delete(id);
@@ -322,7 +335,7 @@ export class UsageManager {
     );
   }
   private view(account: Account): AccountUsage {
-    if (!account.auth?.loggedIn)
+    if (!this.source(account))
       return {
         accountId: account.id,
         status: "idle",
@@ -341,6 +354,8 @@ export class UsageManager {
         stale: false,
       },
     );
+    // The source this account is read through, also before its first read.
+    u.source ??= this.source(account);
     if (
       u.checkedAt &&
       (this.now() - Date.parse(u.checkedAt) >= 35 * 60_000 ||
@@ -368,7 +383,7 @@ export class UsageManager {
     for (const a of this.store.state.accounts) {
       const cached = this.view(a);
       if (
-        a.auth?.loggedIn &&
+        this.source(a) &&
         (!cached?.checkedAt ||
           // Poll a little early: automation accepts data up to five minutes old
           // and this timer only ticks every 30 seconds.
@@ -397,7 +412,7 @@ export class UsageManager {
     const account = this.store.account(id);
     const existing = this.inflight.get(id);
     if (existing) return existing;
-    if (!account.auth?.loggedIn) return Promise.resolve(this.view(account));
+    if (!this.source(account)) return Promise.resolve(this.view(account));
     const previous = this.view(account);
     if (
       this.now() < (this.nextAttempt.get(id) ?? 0) &&
@@ -437,6 +452,16 @@ export class UsageManager {
       (this.generations.get(account.id) ?? 0) === generation;
     try {
       if (!current()) return this.view(this.store.account(account.id));
+      if (this.source(account) === "desktop") {
+        const raw = await this.desktopUsage!.read(account, allowPrompt);
+        if (!current()) return this.view(this.store.account(account.id));
+        const limits = parseUsage(raw);
+        const latest = this.store.account(account.id);
+        if (identityKey(latest) !== identityKey(account))
+          throw new UsageError("identity-mismatch");
+        this.succeed(latest, limits, "desktop", false);
+        return this.view(latest);
+      }
       let credential = await this.credentials(
         this.store.profile(account.id),
         allowPrompt,
@@ -523,21 +548,7 @@ export class UsageManager {
       const latest = this.store.account(account.id);
       if (identityKey(latest) !== identityKey(account))
         throw new UsageError("identity-mismatch");
-      this.failures.delete(account.id);
-      this.serverRetryUntil.delete(account.id);
-      this.cache.set(account.id, {
-        accountId: account.id,
-        status: "ready",
-        stale: false,
-        checkedAt: new Date(this.now()).toISOString(),
-        ...(renewalRequired ? { connectionRenewalRequired: true } : {}),
-        ...limits,
-      });
-      // History is optional: failed local persistence must not turn a verified
-      // live quota response into an authentication/usage error.
-      try {
-        this.onSample(latest, structuredClone(this.cache.get(account.id)!));
-      } catch {}
+      this.succeed(latest, limits, "cli", renewalRequired);
       const repair = missingIdentity(latest, profile);
       if (repair) {
         this.store.update((state) => {
@@ -580,6 +591,7 @@ export class UsageManager {
         stale: !!("checkedAt" in retained && retained.checkedAt),
         issue: error.issue,
         retryAt: new Date(retryAt).toISOString(),
+        ...(this.source(account) ? { source: this.source(account) } : {}),
       });
       // Only a change is worth a log line: a failing poll repeats every few minutes.
       if (error.issue !== previous.issue) {
@@ -595,5 +607,28 @@ export class UsageManager {
       else this.active--;
     }
     return this.view(this.store.account(account.id));
+  }
+  private succeed(
+    account: Account,
+    limits: ReturnType<typeof parseUsage>,
+    source: NonNullable<AccountUsage["source"]>,
+    renewalRequired: boolean,
+  ) {
+    this.failures.delete(account.id);
+    this.serverRetryUntil.delete(account.id);
+    this.cache.set(account.id, {
+      accountId: account.id,
+      status: "ready",
+      stale: false,
+      checkedAt: new Date(this.now()).toISOString(),
+      source,
+      ...(renewalRequired ? { connectionRenewalRequired: true } : {}),
+      ...limits,
+    });
+    // History is optional: failed local persistence must not turn a verified
+    // live quota response into an authentication/usage error.
+    try {
+      this.onSample(account, structuredClone(this.cache.get(account.id)!));
+    } catch {}
   }
 }
