@@ -9,9 +9,10 @@ import { mediaBlock } from "./css";
 
 const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
 
-test("panel and meter text is 11 px or more; text-xs stays 12.5 px", () => {
+test("panel and meter text is 11 px or more; text-xs is 12 px and text-2xs 11 px", () => {
   const theme = read("../src/styles/theme.css");
-  assert.match(theme, /--text-xs: 0\.78125rem;/);
+  assert.match(theme, /--text-xs: 0\.75rem;/);
+  assert.match(theme, /--text-2xs: 0\.6875rem;/);
   for (const file of [
     "../src/panel/Panel.tsx",
     "../src/panel/PanelAccounts.tsx",

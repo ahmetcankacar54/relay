@@ -1805,9 +1805,12 @@ function createWindow(hash?: string) {
     minHeight: 560,
     title: "Relay",
     icon: path.join(__dirname, "icon.png"),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#1d1916" : "#fbf8f3",
+    // On macOS the sidebar shows the system material (src/styles/theme.css, the `vibrant` variant).
+    ...(process.platform === "darwin"
+      ? { vibrancy: "sidebar" as const, visualEffectState: "followWindow" as const, backgroundColor: "#00000000" }
+      : { backgroundColor: nativeTheme.shouldUseDarkColors ? "#1e1e1f" : "#f6f6f7" }),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    trafficLightPosition: { x: 22, y: 22 },
+    trafficLightPosition: { x: 20, y: 20 },
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

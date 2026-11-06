@@ -1,4 +1,9 @@
 import type { ReactNode } from "react";
+/**
+ * The page toolbar: title and actions in one 52 px row beside the traffic lights, as in a macOS
+ * window. It stays at the top while the page scrolls and drags the window from its empty space.
+ * In the 56 px rail the traffic lights overhang this column by 16 px; the 24 px inset clears them.
+ */
 export function PageHeader({
   title,
   description,
@@ -10,7 +15,7 @@ export function PageHeader({
   title: string;
   description?: string;
   actions?: ReactNode;
-  /** A way back to the page this one was opened from, above the title. */
+  /** A way back to the page this one was opened from, before the title. */
   back?: ReactNode;
   /** Beside the title, before it (an avatar). */
   leading?: ReactNode;
@@ -18,23 +23,28 @@ export function PageHeader({
   badge?: ReactNode;
 }) {
   return (
-    <header className="px-6 pt-6 pb-3">
-      {back && <div className="mb-2">{back}</div>}
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          {leading}
-          <div className="min-w-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <h1 className="truncate text-xl font-bold tracking-tight">{title}</h1>
-              {badge}
-            </div>
-            {description && (
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">{description}</p>
-            )}
+    <header
+      data-slot="toolbar"
+      className="sticky top-0 z-20 flex min-h-13 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-transparent bg-background/85 px-6 py-2 backdrop-blur-xl transition-colors select-none [-webkit-app-region:drag] group-data-scrolled/main:border-border"
+    >
+      <div className="flex min-w-0 items-center gap-2.5">
+        {back && <div className="-ml-2 shrink-0 [-webkit-app-region:no-drag]">{back}</div>}
+        {leading}
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate text-lg font-semibold">{title}</h1>
+            {badge}
           </div>
+          {description && (
+            <p className="truncate text-xs text-muted-foreground">{description}</p>
+          )}
         </div>
-        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </div>
+      {actions && (
+        <div className="flex flex-wrap items-center gap-1.5 [-webkit-app-region:no-drag]">
+          {actions}
+        </div>
+      )}
     </header>
   );
 }
