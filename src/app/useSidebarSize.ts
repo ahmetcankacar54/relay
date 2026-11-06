@@ -31,6 +31,16 @@ export function dragSidebar(startWidth: number, dx: number, expanded: number): S
     : { width: clampSidebarWidth(next), collapsed: false };
 }
 
+/**
+ * Where an arrow key on the focused edge leaves the sidebar: → unfolds the rail at the kept width,
+ * ← at the narrowest width folds it, and otherwise each press moves the edge by `step` px.
+ */
+export function keySidebar(size: SidebarSize, direction: 1 | -1, step: number): SidebarSize {
+  if (size.collapsed) return direction > 0 ? { ...size, collapsed: false } : size;
+  if (direction < 0 && size.width <= SIDEBAR.min) return { ...size, collapsed: true };
+  return { width: clampSidebarWidth(size.width + direction * step), collapsed: false };
+}
+
 /** The saved size; a missing, broken or blocked store gives the initial one. */
 export function readSidebarSize(raw: string | null): SidebarSize {
   try {

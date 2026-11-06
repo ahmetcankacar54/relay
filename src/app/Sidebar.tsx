@@ -35,7 +35,7 @@ import { RelayContext, type Relay } from "@/data/relay-context";
 import { pendingFlow, type sidebarStatus } from "@/data/selectors";
 import { accountFromHash, accountHash } from "@/pages/accounts/AccountDetail";
 import type { PageId } from "./routes";
-import { SIDEBAR, dragSidebar, type SidebarSize } from "./useSidebarSize";
+import { SIDEBAR, dragSidebar, keySidebar, type SidebarSize } from "./useSidebarSize";
 
 type Status = ReturnType<typeof sidebarStatus>;
 export interface SidebarSummary {
@@ -207,7 +207,8 @@ function AccountLinks({
 
 /**
  * The sidebar's edge: drag it to set the width, past `SIDEBAR.collapseBelow` to fold it into the
- * rail; double-click for the initial width. With the keyboard: ←/→ move it 16 px (⇧ 48 px).
+ * rail; double-click for the initial width. With the keyboard: ←/→ move it 16 px (⇧ 48 px), → opens
+ * the rail and ← at the narrowest width folds it.
  */
 function ResizeHandle({
   width,
@@ -228,10 +229,10 @@ function ResizeHandle({
     onResize(dragSidebar(start.current.width, e.clientX - start.current.x, start.current.expanded), save);
   };
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
-    const step = (e.shiftKey ? 48 : 16) * (e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0);
-    if (!step) return;
+    const direction = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!direction) return;
     e.preventDefault();
-    onResize(dragSidebar(shown, step, width));
+    onResize(keySidebar({ width, collapsed }, direction, e.shiftKey ? 48 : 16));
   };
   return (
     <div
