@@ -42,8 +42,6 @@ export interface SidebarProps {
   compact: boolean;
   status: Status;
   summary?: SidebarSummary;
-  /** App icon URL; injected by the shell so this module stays importable under Node. */
-  icon?: string;
   /** The panda over the account card (src/app/CardPanda.tsx); the shell draws it, the rail shows none. */
   panda?: ReactNode;
   /** A click in the sidebar, above the account card (the pages) or below it (Settings and the card itself). */
@@ -85,16 +83,15 @@ function NavItem({
           : undefined
       }
       className={cn(
-        "relative flex w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium whitespace-nowrap text-muted-foreground hover:bg-card/60 [-webkit-app-region:no-drag]",
-        compact && "justify-center px-2",
-        active &&
-          "bg-card font-semibold text-accent-foreground shadow-xs hover:bg-card",
+        "relative flex h-7 w-full items-center justify-start gap-2 rounded-md px-2 text-left text-sm whitespace-nowrap text-sidebar-foreground [-webkit-app-region:no-drag]",
+        compact && "h-8 justify-center px-2",
+        active && "bg-sidebar-accent",
       )}
     >
-      <Icon className="size-4 shrink-0" aria-hidden />
+      <Icon className="size-4 shrink-0 text-primary" aria-hidden />
       {!compact && <span className="truncate">{item.label}</span>}
       {!compact && item.tail !== undefined && (
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+        <span className="ml-auto text-xs tabular-nums text-sidebar-muted">
           {item.tail}
         </span>
       )}
@@ -151,7 +148,7 @@ function AccountLinks({
   return (
     <ul
       aria-label={t("Hesap listesi", "Account list")}
-      className="ml-[18px] grid min-h-0 gap-px overflow-y-auto border-l py-0.5 pl-1.5"
+      className="ml-4 grid min-h-0 gap-px overflow-y-auto py-0.5 pl-2"
     >
       {relay.accounts.map((a) => {
         const health = accountHealth(
@@ -175,9 +172,8 @@ function AccountLinks({
               aria-current={current ? "true" : undefined}
               title={`${a.name} · ${health.label}`}
               className={cn(
-                "flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-[12.5px] text-muted-foreground hover:bg-card/60 [-webkit-app-region:no-drag]",
-                current &&
-                  "bg-card font-semibold text-accent-foreground shadow-xs hover:bg-card",
+                "flex h-6 min-w-0 items-center gap-2 rounded-md px-2 text-xs text-sidebar-muted [-webkit-app-region:no-drag]",
+                current && "bg-sidebar-accent text-sidebar-foreground",
               )}
             >
               <StatusDot tone={health.tone === "ok" ? "ok" : "off"} />
@@ -198,7 +194,6 @@ export function Sidebar({
   compact,
   status,
   summary,
-  icon,
   panda,
   onPoke,
 }: SidebarProps) {
@@ -245,29 +240,12 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col border-r bg-sidebar pb-3 text-sidebar-foreground",
-        compact ? "w-14 items-center px-1.5" : "w-[200px] px-2.5",
+        "flex h-full shrink-0 flex-col border-r bg-sidebar pb-2 text-sidebar-foreground select-none vibrant:border-foreground/10 vibrant:bg-transparent",
+        compact ? "w-14 items-center px-1.5" : "w-50 px-2.5",
       )}
     >
-      <div className="h-10 w-full shrink-0 [-webkit-app-region:drag]" />
-      <div
-        className={cn(
-          "mb-4 flex items-center gap-2 font-display text-[15px] font-bold",
-          compact ? "justify-center" : "px-1.5",
-        )}
-      >
-        {icon ? (
-          <img src={icon} alt="" className="size-6 rounded-md" />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="grid size-6 place-items-center rounded-md bg-brand text-xs text-white"
-          >
-            R
-          </span>
-        )}
-        {!compact && "Relay"}
-      </div>
+      {/* The traffic lights sit in this strip, which also drags the window. */}
+      <div className="h-13 w-full shrink-0 [-webkit-app-region:drag]" />
       <nav
         aria-label={t("Sayfalar", "Pages")}
         className="flex min-h-0 w-full flex-col gap-0.5"
@@ -295,7 +273,7 @@ export function Sidebar({
       {summary && !compact && (
         <div
           data-slot="account-card"
-          className="relative mt-8 mb-2 w-full rounded-lg border bg-card p-2.5 text-xs [-webkit-app-region:no-drag]"
+          className="relative mt-8 mb-1.5 w-full rounded-lg border bg-card p-2 text-xs shadow-xs [-webkit-app-region:no-drag]"
         >
           {panda}
           <button
@@ -305,7 +283,7 @@ export function Sidebar({
           >
             <UsageRing
               outer={summary.fiveHour}
-              size={30}
+              size={28}
               label={
                 summary.fiveHour === undefined
                   ? t("5 saatlik dönem bilinmiyor", "5-hour period unknown")

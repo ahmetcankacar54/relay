@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -10,8 +9,6 @@ import { Usage } from "@/pages/Usage";
 import { Settings } from "@/pages/Settings";
 import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
-// 24 px in the sidebar: the 64 px rendering is sharp at 2×, without the 1 MB icon.png.
-import relayIcon from "../../assets/icons/app-64.png";
 import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
 import { RelayPrankStage } from "@/pranks/RelayPrankStage";
 import { cardState, cardYields, desktopWorking } from "@/mascot/card-panda";
@@ -27,6 +24,8 @@ export function Shell() {
   const { t } = useI18n();
   const [page, go] = useHashRoute();
   const compact = useMediaQuery("(max-width: 839px)");
+  // The page toolbar shows its bottom edge once content scrolls under it.
+  const [scrolled, setScrolled] = useState(false);
   const relayRef = useRef(relay);
   const mainRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -99,13 +98,12 @@ export function Shell() {
     <TooltipProvider delayDuration={300}>
       <RelayPrankStage>
         <MainWindowPranks />
-        <div className="flex h-screen overflow-hidden bg-background text-foreground">
+        <div className="flex h-screen overflow-hidden text-foreground">
           <Sidebar
             page={page}
             go={go}
             t={t}
             compact={compact}
-            icon={relayIcon}
             panda={<CardPanda view={panda.view} />}
             onPoke={panda.poke}
             status={sidebarStatus(relay.data)}
@@ -118,16 +116,11 @@ export function Shell() {
             }
           />
           <main
-            className="relative flex min-w-0 flex-1 flex-col overflow-y-auto"
+            className="group/main relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-background"
             ref={mainRef}
+            data-scrolled={scrolled || undefined}
+            onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
           >
-            {/* In the 56 px rail the macOS traffic lights overhang into this column; keep it clear. */}
-            <div
-              className={cn(
-                "shrink-0 [-webkit-app-region:drag]",
-                compact ? "h-8" : "h-2",
-              )}
-            />
             <div
               key={page}
               className="flex flex-1 flex-col animate-in fade-in-0 duration-150 motion-reduce:animate-none"

@@ -7,11 +7,14 @@
 @import "./card-panda.css";
 @import "./lost-pins.css";
 
+/*
+ * Tokens follow the macOS system look: neutral greys, white grouped boxes on a light grey window
+ * (dark: grey boxes on a near-black window), 13 px body text, 28 px controls and one orange accent.
+ */
 :root {
   color-scheme: light;
-  --radius: 0.75rem;
-  /* Direction A: a calm, native ground; one orange accent for the primary action and the selection. */
-  --background: #fafaf9;
+  --radius: 0.625rem;
+  --background: #f6f6f7;
   --foreground: #1d1d1f;
   --card: #ffffff;
   --card-foreground: #1d1d1f;
@@ -19,21 +22,27 @@
   --popover-foreground: #1d1d1f;
   --primary: #c2410c;
   --primary-foreground: #ffffff;
-  --secondary: #f3f2ef;
+  --secondary: #f2f2f3;
   --secondary-foreground: #1d1d1f;
-  --muted: #f3f2ef;
-  /* 4.9:1 on white, 4.7:1 on the ground. */
+  --muted: #f2f2f3;
+  /* 5.1:1 on white, 4.5:1 or better on the window and on muted grounds. */
   --muted-foreground: #6e6e73;
   --accent: #fdebdd;
-  --accent-foreground: #c2410c;
+  --accent-foreground: #b13a0a;
   --destructive: #d92d20;
-  --border: #e7e5e2;
-  --input: #dcdad6;
+  --border: #e3e3e5;
+  --input: #d2d2d6;
   --ring: #c2410c;
-  --sidebar: #f3f2ef;
+  /* A raised control face: the selected segment, outline buttons. */
+  --control: #ffffff;
+  --sidebar: #f2f2f4;
   --sidebar-foreground: #1d1d1f;
+  /* Secondary sidebar text: 5:1 on the sidebar grey and on the light window material. */
+  --sidebar-muted: #5c5c61;
+  /* The selected sidebar row; translucent so it also sits on the window material. */
+  --sidebar-accent: rgb(0 0 0 / 0.075);
   --brand: #c2410c;
-  --track: #efede9;
+  --track: #e6e6e8;
   --ok: #1f9d55;
   /* Success text on light surfaces; --ok is for dots and fills. */
   --ok-foreground: #166534;
@@ -49,28 +58,31 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --background: #161514;
-    --foreground: #f2f1ef;
-    --card: #201f1d;
-    --card-foreground: #f2f1ef;
-    --popover: #242321;
-    --popover-foreground: #f2f1ef;
+    --background: #1e1e1f;
+    --foreground: #f5f5f7;
+    --card: #28282a;
+    --card-foreground: #f5f5f7;
+    --popover: #2c2c2e;
+    --popover-foreground: #f5f5f7;
     --primary: #ff8a4c;
     --primary-foreground: #1c1b19;
-    --secondary: #2a2927;
-    --secondary-foreground: #f2f1ef;
-    --muted: #2a2927;
-    --muted-foreground: #a3a19c;
+    --secondary: #333336;
+    --secondary-foreground: #f5f5f7;
+    --muted: #333336;
+    --muted-foreground: #a1a1a6;
     --accent: #3a2316;
     --accent-foreground: #ff9a62;
     --destructive: #ff6159;
-    --border: #2f2d2a;
-    --input: #3a3835;
+    --border: #38383b;
+    --input: #48484c;
     --ring: #ff8a4c;
-    --sidebar: #1b1a18;
-    --sidebar-foreground: #f2f1ef;
+    --control: #48484c;
+    --sidebar: #252527;
+    --sidebar-foreground: #f5f5f7;
+    --sidebar-muted: #a8a8ad;
+    --sidebar-accent: rgb(255 255 255 / 0.1);
     --brand: #ff8a4c;
-    --track: #3e3c38;
+    --track: #3a3a3d;
     --ok: #34c759;
     --ok-foreground: #6ee7a0;
     --warn: #f5b83d;
@@ -86,8 +98,21 @@
   /* The system font (SF Pro on macOS), so Relay reads like the rest of the Mac. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
-  /* The smallest text: 12.5 px, so no main-window text is smaller (panel text stays 12 px or more). */
-  --text-xs: 0.78125rem;
+  /* The macOS type ramp: 13 px body, 12 px secondary text, 11 px for the smallest labels. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 0.875rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.25rem;
+  --text-lg: 0.9375rem;
+  --text-lg--line-height: 1.25rem;
+  --text-xl: 1.0625rem;
+  --text-xl--line-height: 1.375rem;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.75rem;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -110,8 +135,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-control: var(--control);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-muted: var(--sidebar-muted);
   --color-brand: var(--brand);
   --color-track: var(--track);
   --color-ok: var(--ok);
@@ -124,12 +152,17 @@
   --color-tone-3: var(--tone-3);
   --color-tone-4: var(--tone-4);
 }
+/* The main window on macOS shows the system sidebar material (electron/main.ts sets vibrancy). */
+@custom-variant vibrant (&:where([data-vibrancy] *));
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-background text-sm text-foreground font-sans antialiased;
+  }
+  :root[data-vibrancy] body {
+    @apply bg-transparent;
   }
   h1, h2, h3 {
     @apply font-display;
