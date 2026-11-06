@@ -78,7 +78,8 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
               )
             : t("Gün ve saate göre kullanım. Bu aralıkta kullanım yok.", "Usage by day and hour. No usage in this range.")
         }
-        className="grid grid-cols-[2rem_repeat(24,minmax(0,1fr))_3rem] gap-[3px] text-2xs leading-none text-muted-foreground"
+        // Square cells: they take the width they get and as much height, up to a 768 px grid.
+        className="grid max-w-3xl grid-cols-[2.5rem_repeat(24,minmax(0,1fr))_3rem] items-center gap-[3px] text-2xs leading-none text-muted-foreground"
       >
         <span />
         {HOURS.map((hour) => (
@@ -106,7 +107,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
                       )
                     : t(`${cellName(weekday, hour)} · kullanım yok`, `${cellName(weekday, hour)} · no usage`)
                 }
-                className={step ? "h-5 rounded-[3px] bg-brand" : "h-5 rounded-[3px] bg-track"}
+                className={step ? "aspect-square rounded-[3px] bg-brand" : "aspect-square rounded-[3px] bg-track"}
                 style={step ? { opacity: STEP_OPACITY[step] } : undefined}
               />
             );
@@ -131,13 +132,13 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
       </div>
       {window ? (
         <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-          <div className="flex items-baseline gap-2">
-            <dt className="text-muted-foreground">{t("En yoğun saatler", "Busiest hours")}</dt>
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <dt className="whitespace-nowrap text-muted-foreground">{t("En yoğun saatler", "Busiest hours")}</dt>
             <dd className="font-semibold tabular-nums">{hourRange(window.start, window.end)}</dd>
           </div>
           {share !== undefined && hours && (
-            <div className="flex items-baseline gap-2">
-              <dt className="text-muted-foreground">{t("Çalışma saatlerinde", "In work hours")}</dt>
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <dt className="whitespace-nowrap text-muted-foreground">{t("Çalışma saatlerinde", "In work hours")}</dt>
               <dd className="font-semibold tabular-nums">
                 {formatPercent(share, language)}{" "}
                 <span className="font-normal text-muted-foreground">{hours}</span>

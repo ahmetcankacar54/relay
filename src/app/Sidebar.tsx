@@ -14,8 +14,10 @@ import { Button } from "@/components/ui/button";
 import {
   AccountsIcon,
   OverviewIcon,
+  PinsIcon,
   SettingsIcon,
   SidebarIcon,
+  TokensIcon,
   UsageIcon,
 } from "@/components/icons";
 import {
@@ -299,7 +301,12 @@ export function Sidebar({
       label: t("Hesaplar", "Accounts"),
       tail: status.accounts,
     },
-    { id: "kullanim", icon: UsageIcon, label: t("Kullanım", "Usage") },
+  ];
+  // Usage is three pages, grouped under one heading.
+  const usage: Item[] = [
+    { id: "kullanim", icon: UsageIcon, label: t("Limitler", "Limits") },
+    { id: "tokenlar", icon: TokensIcon, label: t("Token ve ücret", "Tokens and cost") },
+    { id: "rozetler", icon: PinsIcon, label: t("Rozetler", "Pins") },
   ];
   // Automation and planning live in Settings now; its dot says when either runs by itself.
   const settings: Item = {
@@ -365,6 +372,30 @@ export function Sidebar({
             )}
           </Fragment>
         ))}
+        <div
+          role="group"
+          aria-labelledby={compact ? undefined : "sidebar-usage"}
+          aria-label={compact ? t("Kullanım", "Usage") : undefined}
+          className={cn(
+            "flex w-full flex-col gap-0.5",
+            compact ? "mt-2 items-center border-t pt-2" : "mt-4",
+          )}
+        >
+          {!compact && (
+            <h2 id="sidebar-usage" className="px-2.5 pb-1 text-xs font-medium text-sidebar-muted">
+              {t("Kullanım", "Usage")}
+            </h2>
+          )}
+          {usage.map((item) => (
+            <NavItem
+              key={item.id}
+              item={item}
+              active={page === item.id}
+              compact={compact}
+              go={goFrom("above")}
+            />
+          ))}
+        </div>
       </nav>
       <div className="flex-1" />
       {summary && !compact && (

@@ -54,7 +54,13 @@ Section labels above grouped boxes are `text-xs font-semibold text-muted-foregro
   beside the traffic lights, or a window under 900 px. Rows are 32 px with 20 px icons; rail items
   are 40 px squares. The top 52 px strip holds the traffic lights (16 px in, so they fit the rail)
   and drags the window. The size is kept in `localStorage`.
+- Pages in the sidebar: Overview, Accounts, then a "Usage" group with Limits, Tokens and cost, and
+  Pins (each its own page, no tabs), then Settings at the bottom. ⌘1–⌘5 open them in order.
 - Page: the window colour, with a hairline border on the sidebar side.
+- Rows with actions (the account page's connections) share columns: a refresh icon button, then the
+  text button at the right edge, so both line up across rows. Leading marks have no ground.
+- Icon-only buttons in the toolbar are ghost buttons (no ground until hover).
+- The "When do I work?" heatmap has square cells that scale with the width (the grid stops at 768 px).
 - Toolbar: each page header is a sticky 52 px row with the title, an optional subtitle and the page
   actions. It drags the window and shows its bottom edge only when content scrolls under it.
 - Limits read as rows of bars (`LimitBars`), as in the macOS Battery and Storage panes: the name, a

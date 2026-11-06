@@ -145,7 +145,9 @@ export function Shell() {
             >
               {page === "genel" && <Overview go={go} />}
               {page === "hesaplar" && <Accounts />}
-              {page === "kullanim" && <Usage />}
+              {page === "kullanim" && <Usage section="limits" />}
+              {page === "tokenlar" && <Usage section="tokens" />}
+              {page === "rozetler" && <Usage section="lost" />}
               {page === "ayarlar" && <Settings />}
             </div>
           </main>

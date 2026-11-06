@@ -58,6 +58,28 @@ export function UsageIcon(props: IconProps) {
   );
 }
 
+/** Tokens and cost: a stack of three coins. */
+export function TokensIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <ellipse cx="12" cy="6.5" rx="7.25" ry="2.75" />
+      <path d="M4.75 6.5v5.5c0 1.5 3.25 2.75 7.25 2.75s7.25-1.25 7.25-2.75V6.5" />
+      <path d="M4.75 12v5.5c0 1.5 3.25 2.75 7.25 2.75s7.25-1.25 7.25-2.75V12" />
+    </Icon>
+  );
+}
+
+/** Pins: a round badge on a ribbon. */
+export function PinsIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="9.25" r="5.5" />
+      <path d="m8.75 13.75-1.5 6.5 4.75-2.25 4.75 2.25-1.5-6.5" />
+      <circle cx="12" cy="9.25" r="2" />
+    </Icon>
+  );
+}
+
 /** Settings: two sliders. */
 export function SettingsIcon(props: IconProps) {
   return (
