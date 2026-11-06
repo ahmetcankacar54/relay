@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 /**
  * The page toolbar: title and actions in one 52 px row beside the traffic lights, as in a macOS
  * window. It stays at the top while the page scrolls and drags the window from its empty space.
- * In the 56 px rail the traffic lights overhang this column by 16 px; the 24 px inset clears them.
+ * It sits inside the page panel, which starts after the sidebar, so the traffic lights stay clear of it.
  */
 export function PageHeader({
   title,
@@ -25,7 +25,7 @@ export function PageHeader({
   return (
     <header
       data-slot="toolbar"
-      className="sticky top-0 z-20 flex min-h-13 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-transparent bg-background/85 px-6 py-2 backdrop-blur-xl transition-colors select-none [-webkit-app-region:drag] group-data-scrolled/main:border-border"
+      className="sticky top-0 z-20 flex min-h-13 shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-transparent bg-background/85 px-5 py-2 backdrop-blur-xl transition-colors select-none [-webkit-app-region:drag] group-data-scrolled/main:border-border"
     >
       <div className="flex min-w-0 items-center gap-2.5">
         {back && <div className="-ml-2 shrink-0 [-webkit-app-region:no-drag]">{back}</div>}

@@ -44,7 +44,8 @@ import { accountUuids, extensionGuide } from "@/lib/extension-ui";
 import { cn } from "@/lib/utils";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { UsageCard } from "../../features/UsageCard";
-import { LimitRings } from "@/components/LimitRings";
+import { LimitBars } from "@/components/LimitBars";
+import { ringState } from "@/lib/account-row";
 import { freshUsage } from "../../../shared/usage";
 import { formatRelative } from "@/lib/time";
 import { HistorySummary } from "../../features/HistorySummary";
@@ -234,7 +235,7 @@ function CardTitle({ title, aside }: { title: string; aside?: ReactNode }) {
 
 /** A connection's leading square: a check when it is ready, a mark when it needs a step, its kind when absent. */
 const toneSquare = {
-  ok: "bg-ok/12 text-ok-foreground",
+  ok: "bg-secondary text-foreground",
   warn: "bg-warn/15 text-warn-foreground",
   crit: "bg-crit/12 text-crit",
   off: "bg-muted text-muted-foreground",
@@ -547,7 +548,7 @@ export function AccountDetailBody({
   const ready = connections.filter(Boolean).length;
   const history = historySources(a, accounts, settings);
   return (
-    <div className="@container grid gap-3 px-6 pb-8">
+    <div className="@container grid gap-3 px-5 pb-6">
       <RelayErrorAlert />
       {/* The header says the status; a problem also says what is wrong, here. */}
       {(health.tone === "warn" || health.tone === "crit") && (
@@ -614,12 +615,14 @@ export function AccountDetailBody({
               }
             />
             {freshUsage(usage, now ?? Date.now()) ? (
-              <LimitRings
-                usage={usage}
-                now={now ?? Date.now()}
-                zone={settings.planning.timeZone}
-                size={88}
-              />
+              <div className="mt-2">
+                <LimitBars
+                  usage={usage}
+                  now={now ?? Date.now()}
+                  zone={settings.planning.timeZone}
+                  state={ringState(usage, now ?? Date.now())}
+                />
+              </div>
             ) : (
             <UsageCard
               usage={usage}

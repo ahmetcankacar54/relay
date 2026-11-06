@@ -60,10 +60,11 @@ import { avatarClass, planColumn } from "./accountLabels";
  * A connection icon's three states: green when ready, amber with a dot when it needs a step (a
  * sign-in to renew reads the same; the Durum column says how bad), grey when absent.
  */
+/** Connection icons are grey: present, or faint when absent; a step to take adds the amber dot. */
 const toneText = {
-  ok: "text-ok",
-  warn: "text-warn",
-  crit: "text-warn",
+  ok: "text-foreground/75",
+  warn: "text-foreground/75",
+  crit: "text-foreground/75",
   off: "text-muted-foreground/40",
 } as const;
 
@@ -153,9 +154,9 @@ function ConnectionIcons({
             className={cn("relative", toneText[tone])}
           >
             <Icon className="size-4" />
-            {/* Shape as well as colour: a step to take is never told by the amber alone. */}
+            {/* The dot marks a step to take; its title and label say which. */}
             {step && (
-              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-current ring-2 ring-card" />
+              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-warn ring-2 ring-card" />
             )}
           </span>
         );
@@ -707,11 +708,11 @@ function ConnectionLegend() {
       className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-2xs text-muted-foreground"
     >
       <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-ok" />
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-foreground/75" />
         {t("hazır", "ready")}
       </span>
       <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="relative size-1.5 rounded-full bg-warn">
+        <span aria-hidden="true" className="relative size-1.5 rounded-full bg-foreground/75">
           <span className="absolute -top-1 -right-1 size-1 rounded-full bg-warn ring-1 ring-background" />
         </span>
         {t("adım gerekiyor", "step needed")}

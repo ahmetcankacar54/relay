@@ -15,7 +15,7 @@ import { localizeError } from "../messages";
 import type { AutoCaptureState } from "../../shared/types";
 
 const cardClass = "gap-3 px-4 py-4";
-const panelClass = `mx-6 mb-3 ${cardClass}`;
+const panelClass = `mx-5 mb-3 ${cardClass}`;
 const titleClass = "flex items-start gap-3";
 const iconClass = "mt-0.5 size-5 shrink-0 text-brand";
 const actionsClass = "flex flex-wrap items-center gap-2";

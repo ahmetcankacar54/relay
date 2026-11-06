@@ -70,8 +70,10 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Kişisel · Max/);
   assert.match(html, /Max 5×/);
   assert.match(html, /Çalışıyor/);
-  // The hero is the large ring with the account beside it.
-  assert.match(html, /<div role="img" aria-label="5 saatlik dönem %38 · Haftalık · tüm modeller %78"[^>]*style="width:104px;height:104px"/);
+  // The hero is a grouped box: the account, then one bar per limit with its percent.
+  assert.match(html, /data-slot="active-account"/);
+  assert.match(html, /role="meter" aria-label="5 saatlik dönem"[^>]*aria-valuenow="38"/);
+  assert.match(html, /role="meter" aria-label="Haftalık · tüm modeller"[^>]*aria-valuenow="78"/);
   assert.match(html, /Haftalık · tüm modeller/);
   assert.match(html, /Haftalık · Opus/);
   // No suggestion band: the hero says the limit is near and offers the suggested account, and the
@@ -753,9 +755,10 @@ test("the hero shows the plan, else the subscription, and a hollow dot while Cla
     desktop: { available: true, running: false, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0, activeProfileId: "active" },
   }));
   assert.match(closed, /<span aria-hidden="true" class="[^"]*border-\[1\.5px\] border-muted-foreground\/60[^"]*"><\/span>Kapalı/);
-  // A used-up limit draws the hero's rings critical.
+  // A used-up limit draws the hero's bars red; nothing else in the box is coloured.
   const exhausted = render(relayFor(active, [active], { active: use("active", 100, 40, NOW + 3_600_000) }));
-  assert.match(exhausted, /<div role="img"[^>]*data-state="full"[^>]*style="width:104px;height:104px"/);
+  assert.match(exhausted, /role="meter" aria-label="5 saatlik dönem"[^>]*><div class="h-full rounded-full bg-crit"/);
+  assert.match(exhausted, /role="meter" aria-label="Haftalık · tüm modeller"[^>]*><div class="h-full rounded-full bg-crit"/);
 });
 
 test("the hero says why its switch to the suggestion is disabled", () => {
@@ -765,16 +768,16 @@ test("the hero says why its switch to the suggestion is disabled", () => {
   const block = (extra: Partial<Relay>) => {
     const html = render(relayFor(active, [active, other], usage, { suggestion: other, ...extra }));
     const start = html.indexOf('data-slot="suggestion"');
-    return html.slice(start, html.indexOf("</div>", start));
+    return html.slice(start, html.indexOf("</section>", start));
   };
-  assert.doesNotMatch(block({}), /<p class="text-xs text-muted-foreground">/);
+  assert.doesNotMatch(block({}), /data-slot="switch-reason"/);
   const recovery = { available: true, running: true, organizations: [], busy: false, recoveryRequired: true, errorRevision: 0, activeProfileId: "active" };
   for (const [extra, reason] of [
     [{ desktopBusy: true }, "Claude uygulamasında bir işlem sürüyor."],
     [{ pendingDesktop: other }, "Önce devam eden Claude uygulaması girişini tamamla veya iptal et."],
     [{ desktop: recovery }, "Önce Claude uygulaması yedeğini geri yükle."],
   ] as [Partial<Relay>, string][]) {
-    assert.match(block(extra), new RegExp(`disabled=""[^>]*>Vertex hesabına geç</button><p class="text-xs text-muted-foreground">${reason}</p>`), reason);
+    assert.match(block(extra), new RegExp(`disabled=""[^>]*>Vertex hesabına geç</button><p data-slot="switch-reason" class="[^"]*">${reason}</p>`), reason);
   }
 });
 

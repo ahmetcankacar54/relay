@@ -12,14 +12,14 @@ const circles = (html: string) => html.match(/<circle[^>]*>/g) ?? [];
 const tracks = (html: string) => circles(html).filter((c) => !c.includes("stroke-linecap"));
 const arcs = (html: string) => circles(html).filter((c) => c.includes("stroke-linecap"));
 
-test("a fresh ring draws solid tracks and arcs in the meter's tone", () => {
+test("a fresh ring draws solid tracks and grey arcs", () => {
   for (const html of [ring(), ring("fresh")]) {
     assert.doesNotMatch(html, /data-state/);
     assert.equal(tracks(html).length, 2);
     for (const track of tracks(html)) assert.doesNotMatch(track, /stroke-dasharray/);
     assert.equal(arcs(html).length, 2);
     for (const arc of arcs(html)) {
-      assert.match(arc, /stroke-brand/);
+      assert.match(arc, /stroke-meter/);
       assert.doesNotMatch(arc, /opacity-/);
     }
   }

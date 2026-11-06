@@ -227,7 +227,7 @@ test("the daily chart draws one labelled bar group per day, in full periods, and
   assert.equal(groups.length, 30);
   assert.match(html, /aria-label="14 Eki: 120 dolu dönem, limite takıldı"/);
   assert.match(html, /aria-label="15 Eyl: 0 dolu dönem"/);
-  assert.equal((html.match(/<path d="[^"]+" fill="var\(--crit\)"/g) ?? []).length, 3);
+  assert.equal((html.match(/<path d="[^"]+" fill="var\(--muted-foreground\)"/g) ?? []).length, 3);
   assert.match(html, /fill="var\(--tone-1\)"/);
   assert.match(html, /fill="var\(--tone-4\)"/);
   assert.doesNotMatch(html, /<title>/);

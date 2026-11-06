@@ -391,7 +391,7 @@ export function DailyChart({
                 {hit && (
                   <path
                     d={triangle(x + bar / 2, Math.max(TOP - 2, y - 2), mark)}
-                    fill="var(--crit)"
+                    fill="var(--muted-foreground)"
                   />
                 )}
               </g>

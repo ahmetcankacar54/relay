@@ -1802,10 +1802,8 @@ function createWindow(hash?: string) {
     minHeight: 560,
     title: "Relay",
     icon: path.join(__dirname, "icon.png"),
-    // On macOS the sidebar shows the system material (src/styles/theme.css, the `vibrant` variant).
-    ...(process.platform === "darwin"
-      ? { vibrancy: "sidebar" as const, visualEffectState: "followWindow" as const, backgroundColor: "#00000000" }
-      : { backgroundColor: nativeTheme.shouldUseDarkColors ? "#1e1e1f" : "#f6f6f7" }),
+    // The window grey of src/styles/theme.css (--sidebar), so nothing flashes before the page draws.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f0f11" : "#f4f4f5",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 20, y: 20 },
     webPreferences: {

@@ -6,9 +6,6 @@ import { ErrorBoundary } from "./app/ErrorBoundary";
 import { pauseMotionWithoutAttention } from "./lib/motion";
 import "./styles/theme.css";
 pauseMotionWithoutAttention();
-// The Electron main window on macOS has a vibrant sidebar (electron/main.ts); the browser preview has none.
-if (/\bElectron\//.test(navigator.userAgent) && navigator.userAgent.includes("Macintosh"))
-  document.documentElement.dataset.vibrancy = "";
 const root = createRoot(document.getElementById("root")!);
 // Development only: review sheets for the mascot artwork and the lost and found's pins.
 const sheet = import.meta.env.DEV

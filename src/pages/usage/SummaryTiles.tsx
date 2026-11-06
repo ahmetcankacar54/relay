@@ -83,7 +83,6 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
         <Tile
           label={t("Limite takılma", "Limit hits")}
           value={formatNumber(hits, language)}
-          className={hits ? "text-crit" : undefined}
           detail={t(
             `${totals.hits.fiveHour} beş saatlik, ${totals.hits.weekly} haftalık`,
             `${totals.hits.fiveHour} five-hour, ${totals.hits.weekly} weekly`,
