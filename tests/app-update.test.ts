@@ -310,7 +310,7 @@ test("macOS: without a DMG for this Mac, from a disk image or an unwritable fold
 });
 
 /** Runs INSTALL_SCRIPT for real against fake apps; the tools that touch the system are stand-ins. */
-function runScript(t: any, ditto = "/usr/bin/ditto") {
+function runScript(t: any, ditto = "/usr/bin/ditto", rsync = "/usr/bin/rsync") {
   const root = temp(t);
   const target = path.join(root, "Applications", "Relay.app");
   const next = path.join(root, "updates", "Relay.app");
@@ -318,6 +318,8 @@ function runScript(t: any, ditto = "/usr/bin/ditto") {
   fs.writeFileSync(path.join(target, "version"), "old");
   fs.mkdirSync(next, { recursive: true });
   fs.writeFileSync(path.join(next, "version"), "new");
+  // A file the new version no longer ships: an in-place copy must remove it.
+  fs.writeFileSync(path.join(target, "dropped"), "old only");
   const script = path.join(root, "install.sh");
   fs.writeFileSync(script, INSTALL_SCRIPT, { mode: 0o700 });
   const log = path.join(root, "install.log");
@@ -329,6 +331,7 @@ function runScript(t: any, ditto = "/usr/bin/ditto") {
       PATH: "/usr/bin:/bin",
       RELAY_UPDATE_OPEN: "/usr/bin/touch",
       RELAY_UPDATE_DITTO: ditto,
+      RELAY_UPDATE_RSYNC: rsync,
       RELAY_UPDATE_LSREGISTER: "/usr/bin/true",
       RELAY_UPDATE_PLUGINKIT: "/usr/bin/true",
     },
@@ -337,25 +340,33 @@ function runScript(t: any, ditto = "/usr/bin/ditto") {
   return { root, target, log: fs.readFileSync(log, "utf8"), status: result.status, opened, gone };
 }
 
-test("the install script swaps the app once Relay has quit, and reopens it", (t) => {
+test("the install script updates the app in place once Relay has quit, and reopens it", (t) => {
   if (process.platform === "win32") return t.skip("macOS script");
   const r = runScript(t);
   assert.equal(r.status, 0, r.log);
   assert.equal(fs.readFileSync(path.join(r.target, "version"), "utf8"), "new");
-  assert.ok(!fs.existsSync(path.join(path.dirname(r.target), ".Relay.app.previous")));
-  assert.ok(!fs.existsSync(path.join(path.dirname(r.target), ".Relay.app.installing")));
+  assert.ok(!fs.existsSync(path.join(r.target, "dropped")));
+  // The old app never leaves for a sibling path in Applications, and its copy is gone.
+  assert.deepEqual(fs.readdirSync(path.dirname(r.target)), ["Relay.app"]);
+  assert.ok(!fs.existsSync(path.join(r.root, "previous")));
   assert.match(r.log, /installed/);
-  // "open" ran on the app (touch stands in for it).
-  assert.ok(fs.existsSync(r.target));
 });
 
-test("the install script keeps the old app when the copy fails", (t) => {
+test("the install script keeps the old app when it cannot copy it first", (t) => {
   if (process.platform === "win32") return t.skip("macOS script");
   const r = runScript(t, "/usr/bin/false");
   assert.equal(r.status, 1);
   assert.equal(fs.readFileSync(path.join(r.target, "version"), "utf8"), "old");
-  assert.match(r.log, /copy failed; nothing changed/);
-  assert.ok(!fs.existsSync(path.join(path.dirname(r.target), ".Relay.app.installing")));
+  assert.match(r.log, /nothing changed/);
+});
+
+test("the install script puts the old app back when the copy fails", (t) => {
+  if (process.platform === "win32") return t.skip("macOS script");
+  const r = runScript(t, "/usr/bin/ditto", "/usr/bin/false");
+  assert.equal(r.status, 1);
+  assert.equal(fs.readFileSync(path.join(r.target, "version"), "utf8"), "old");
+  assert.ok(fs.existsSync(path.join(r.target, "dropped")));
+  assert.match(r.log, /old app put back/);
 });
 
 function fakeUpdater(version: string | undefined): ElectronUpdater & { installs: unknown[][] } {

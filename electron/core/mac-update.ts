@@ -58,15 +58,19 @@ export function designatedRequirement(display: string): string {
 }
 
 /**
- * Swaps the app at TARGET for NEW once Relay (PID) has quit, keeping the old one until the new one
- * is in place and putting it back when a step fails; then opens the app. Run by bash, detached.
- * Tests override the tools it calls through RELAY_UPDATE_* variables.
+ * Updates the app at TARGET to NEW once Relay (PID) has quit, in place: the bundle's path never
+ * goes away, so macOS keeps the Relay widgets placed on the desktop (moving the old bundle aside
+ * and deleting it reads as the widget extension being uninstalled, and its widgets vanish). A
+ * copy of the old app is kept beside LOG, outside Applications, and put back when the copy
+ * fails; then the app is opened. Run by bash, detached. Tests override the tools it calls
+ * through RELAY_UPDATE_* variables.
  */
 export const INSTALL_SCRIPT = `#!/bin/bash
 set -u
 PID="$1"; NEW="$2"; TARGET="$3"; LOG="$4"
 OPEN="\${RELAY_UPDATE_OPEN:-/usr/bin/open}"
 DITTO="\${RELAY_UPDATE_DITTO:-/usr/bin/ditto}"
+RSYNC="\${RELAY_UPDATE_RSYNC:-/usr/bin/rsync}"
 LSREGISTER="\${RELAY_UPDATE_LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}"
 PLUGINKIT="\${RELAY_UPDATE_PLUGINKIT:-/usr/bin/pluginkit}"
 exec >>"$LOG" 2>&1
@@ -74,15 +78,21 @@ echo "$(date '+%Y-%m-%dT%H:%M:%S') install $NEW -> $TARGET"
 for _ in $(seq 1 240); do kill -0 "$PID" 2>/dev/null || break; sleep 0.25; done
 if kill -0 "$PID" 2>/dev/null; then echo "Relay did not quit; nothing changed"; exit 1; fi
 DIR="$(dirname "$TARGET")"; NAME="$(basename "$TARGET")"
-STAGED="$DIR/.$NAME.installing"; PREVIOUS="$DIR/.$NAME.previous"
+BACKUP="$(dirname "$LOG")/previous"
 reopen() { /usr/bin/env -i "$OPEN" "$TARGET"; }
-rm -rf "$STAGED" "$PREVIOUS"
-if ! "$DITTO" "$NEW" "$STAGED"; then echo "copy failed; nothing changed"; rm -rf "$STAGED"; reopen; exit 1; fi
-if [ -e "$TARGET" ] && ! mv "$TARGET" "$PREVIOUS"; then echo "could not move the old app; nothing changed"; rm -rf "$STAGED"; reopen; exit 1; fi
-if ! mv "$STAGED" "$TARGET"; then echo "could not place the new app; old one put back"; mv "$PREVIOUS" "$TARGET"; rm -rf "$STAGED"; reopen; exit 1; fi
+# Left by older Relays, which swapped the bundle by moving it.
+rm -rf "$DIR/.$NAME.installing" "$DIR/.$NAME.previous" "$BACKUP"
+if [ -e "$TARGET" ]; then
+  if ! /bin/mkdir -p "$BACKUP" || ! "$DITTO" "$TARGET" "$BACKUP/$NAME"; then echo "could not keep a copy of the old app; nothing changed"; rm -rf "$BACKUP"; reopen; exit 1; fi
+  if ! "$RSYNC" -rlpt --ignore-times --delete "$NEW/" "$TARGET/"; then
+    echo "copy failed; old app put back"
+    /usr/bin/rsync -rlpt --ignore-times --delete "$BACKUP/$NAME/" "$TARGET/" || echo "could not put the old app back; it is in $BACKUP"
+    reopen; exit 1
+  fi
+elif ! "$DITTO" "$NEW" "$TARGET"; then echo "copy failed; nothing changed"; exit 1; fi
 "$LSREGISTER" -f -R "$TARGET" || true
 if [ -d "$TARGET/Contents/PlugIns/RelayWidget.appex" ]; then "$PLUGINKIT" -a "$TARGET/Contents/PlugIns/RelayWidget.appex" || true; fi
-rm -rf "$PREVIOUS"
+rm -rf "$BACKUP"
 echo "installed"
 reopen
 `;
