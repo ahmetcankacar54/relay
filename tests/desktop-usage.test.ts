@@ -291,3 +291,35 @@ test("the account's status names the Claude app as its usage source", () => {
   assert.equal(usageIdentity(account()), JSON.stringify(["uuid", ACCOUNT, ORG]));
   assert.equal(historyIdentity(account()), JSON.stringify(["uuid", ACCOUNT, ORG]));
 });
+
+test("claude.ai's usage answer, as seen live on 2026-11-07, parses like the CLI endpoint's", async () => {
+  const { parseUsage } = await import("../electron/core/usage");
+  const window = (utilization: number, resets_at: string) => ({
+    utilization,
+    resets_at,
+    limit_dollars: null,
+    used_dollars: null,
+    remaining_dollars: null,
+    locked_reason: null,
+  });
+  // Shape only: the many other keys (null model windows, extra_usage, limits, spend) are ignored.
+  assert.deepEqual(
+    parseUsage({
+      five_hour: window(9, "2026-11-07T03:40:00.996524+00:00"),
+      seven_day: window(2, "2026-11-13T21:00:00.996541+00:00"),
+      seven_day_oauth_apps: null,
+      seven_day_opus: null,
+      seven_day_sonnet: null,
+      seven_day_cowork: null,
+      pace: null,
+      indicator: null,
+      extra_usage: { is_enabled: false, utilization: null },
+      limits: [{}, {}, {}],
+      spend: { used: { amount_minor: 0, currency: "USD", exponent: 2 }, percent: 0 },
+    }),
+    {
+      fiveHour: { usedPercent: 9, resetsAt: "2026-11-07T03:40:00.996Z" },
+      sevenDay: { usedPercent: 2, resetsAt: "2026-11-13T21:00:00.996Z" },
+    },
+  );
+});
