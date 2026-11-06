@@ -12,7 +12,7 @@ import { DEFAULT_EXTENSION, type ExtensionSetting } from "../shared/browser-exte
 import { CookieVault } from "../electron/core/cookie-vault";
 import { extensionWorld, loginFor, signInFor } from "./extension-world";
 
-function setup(t: any) {
+function setup(t: any, ports: Partial<ConstructorParameters<typeof ExtensionSwitcher>[0]> = {}) {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "relay-ext-switch-"));
   t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
   const world = extensionWorld(temp);
@@ -36,6 +36,7 @@ function setup(t: any) {
     vault,
     cookieVault,
     scratch,
+    ...ports,
   });
   const profile = path.dirname(path.dirname(dir));
   const a = randomUUID();
@@ -648,7 +649,8 @@ test("a web login newer than the hints is not saved under the hints' account", a
 });
 
 test("a claude.ai login cookie this build does not list stops the swap", async (t) => {
-  const s = setup(t);
+  const layouts: Record<string, string>[] = [];
+  const s = setup(t, { onCookieLayout: (detail) => void layouts.push(detail) });
   s.world.stored.set(s.dir, signInFor(s.a, 1));
   const web = loginFor(s.a, 1);
   web.unlisted = ["sessionKeyV9"];
@@ -658,6 +660,8 @@ test("a claude.ai login cookie this build does not list stops the swap", async (
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.reason, "schema-changed");
   assert.deepEqual(s.world.stored.get(s.dir), signInFor(s.a, 1));
+  // The log learns which cookie it was, by name.
+  assert.deepEqual(layouts, [{ why: "unlisted", names: "sessionKeyV9" }]);
 });
 
 test("without SQLite nothing is quit, read or written", async (t) => {

@@ -19,6 +19,8 @@ export class CookieStoreError extends Error {
       | "schema-changed"
       | "journal-pending",
     message: string,
+    /** For the log: what did not match (names and versions only, never cookie values). */
+    readonly detail?: Record<string, string>,
   ) {
     super(message);
   }
@@ -234,6 +236,34 @@ interface Read {
   quick: string;
 }
 
+/**
+ * The columns a saved login is written with when the browser changed its `cookies` table within
+ * one database version: columns it dropped are left out, and a column it added is left to the
+ * database only when it may be empty or has a default. Any other difference is refused.
+ */
+export function writableColumns(db: DatabaseSync, saved: string[]): string[] {
+  const table = db.prepare("pragma table_info(cookies)").all() as {
+    name: string;
+    notnull: number | bigint;
+    dflt_value: unknown;
+  }[];
+  const have = new Set(saved);
+  const added = table.filter((c) => !have.has(String(c.name)));
+  const required = added.filter((c) => Number(c.notnull) === 1 && c.dflt_value === null);
+  const names = new Set(table.map((c) => String(c.name)));
+  if (required.length || !saved.includes("host_key"))
+    throw new CookieStoreError(
+      "schema-changed",
+      "The cookie database is not the one the login was saved from.",
+      {
+        why: "columns",
+        missing: required.map((c) => String(c.name)).join(" "),
+        dropped: saved.filter((c) => !names.has(c)).join(" "),
+      },
+    );
+  return saved.filter((c) => names.has(c));
+}
+
 function tableColumns(db: DatabaseSync): string[] {
   const rows = db.prepare("pragma table_info(cookies)").all() as { name: string }[];
   return rows.map((r) => String(r.name));
@@ -334,27 +364,32 @@ export const sqliteCookieStorage: CookieStorage = {
     const hasDbsc = await exists(dbscFile);
     if (hasDbsc) await assertQuiet(dbscFile);
     let before: Read;
+    let columns = snapshot.columns;
     let db: DatabaseSync | undefined;
     try {
       db = new Database(file);
       before = readDatabase(db);
-      if (
-        before.quick !== "ok" ||
-        before.snapshot.version !== snapshot.version ||
-        before.snapshot.columns.join(",") !== snapshot.columns.join(",")
-      )
+      if (before.quick !== "ok")
+        throw new CookieStoreError("schema-changed", "The cookie database failed its check.", {
+          why: "damaged",
+        });
+      // Another database version may store values another way (Chromium 24 hashes the host
+      // into the encrypted value), so a login saved under one is never written under another.
+      if (before.snapshot.version !== snapshot.version)
         throw new CookieStoreError(
           "schema-changed",
           "The cookie database is not the one the login was saved from.",
+          { why: "version", saved: snapshot.version, current: before.snapshot.version },
         );
+      columns = writableColumns(db, snapshot.columns);
       db.exec("BEGIN IMMEDIATE");
       try {
         const remove = db.prepare(`delete from cookies where ${IDENTITY}`);
         for (const row of before.snapshot.rows) remove.run(...identityOf(row));
         const insert = db.prepare(
-          `insert into cookies (${snapshot.columns.join(", ")}) values (${snapshot.columns.map(() => "?").join(", ")})`,
+          `insert into cookies (${columns.join(", ")}) values (${columns.map(() => "?").join(", ")})`,
         );
-        for (const row of snapshot.rows) insert.run(...snapshot.columns.map((c) => row[c] ?? null));
+        for (const row of snapshot.rows) insert.run(...columns.map((c) => row[c] ?? null));
         db.exec("COMMIT");
       } catch (error) {
         try {
@@ -429,8 +464,10 @@ export const sqliteCookieStorage: CookieStorage = {
       stillThere ||
       after.snapshot.rows.length !== snapshot.rows.length ||
       !snapshot.rows.every((row) => {
-        const found = after.snapshot.rows.find((r) => rowKey(r) === rowKey(row));
-        return !!found && snapshot.columns.every((c) => sameValue(found[c] ?? null, row[c] ?? null));
+        const found = after.snapshot.rows.find((r) =>
+          columns.every((c) => sameValue(r[c] ?? null, row[c] ?? null)),
+        );
+        return !!found;
       })
     )
       throw new CookieStoreError("mismatch", "The login did not read back.");

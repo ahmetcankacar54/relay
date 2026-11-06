@@ -58,6 +58,11 @@ export interface ExtensionPorts {
   peekScratch?: string;
   /** Told the key names (never values) a check saw when it found no account of Relay's. */
   onUnknownLayout?: (names: string[]) => void;
+  /**
+   * Told why a saved claude.ai login could not be used: the browser holds login-like cookies this
+   * build does not know (their names), or its cookie database differs from the saved one.
+   */
+  onCookieLayout?: (detail: Record<string, string>) => void;
   /** Told when the profile's claude.ai login was not kept for `account` (see `foreignLogin`). */
   onForeignLogin?: (account: string, other: string, why: ForeignWhy) => void;
   now?: () => number;
@@ -399,7 +404,10 @@ export class ExtensionSwitcher {
         };
       }
       // A login cookie this build does not know: the layout changed, nothing is guessed.
-      if (web.unlisted.length) return { result: "skipped", reason: "schema-changed", saved };
+      if (web.unlisted.length) {
+        this.ports.onCookieLayout?.({ why: "unlisted", names: web.unlisted.join(" ") });
+        return { result: "skipped", reason: "schema-changed", saved };
+      }
       const current = pickSignIn(entries, request.known);
       // Data that names no account is the one Relay last knew the extension to be on.
       const account =
@@ -434,12 +442,15 @@ export class ExtensionSwitcher {
         saved = true;
       }
       /** Why a write failed. */
-      const writeReason = (error: unknown): ExtensionReason =>
-        error instanceof CookieStoreError
+      const writeReason = (error: unknown): ExtensionReason => {
+        if (error instanceof CookieStoreError && error.detail)
+          this.ports.onCookieLayout?.(error.detail);
+        return error instanceof CookieStoreError
           ? cookieReason(error)
           : error instanceof StorageError && error.reason === "mismatch"
             ? "verify-failed"
             : "write-failed";
+      };
       /**
        * Puts back what a failed write changed: the extension's folder, and the cookie files when
        * they were written too. False when that failed as well; the backups are then kept.

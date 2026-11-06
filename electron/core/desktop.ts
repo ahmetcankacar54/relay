@@ -929,6 +929,14 @@ export class DesktopManager {
           count: names.length,
           names: names.map((name) => name.slice(0, 40)).join(" "),
         }),
+      // Cookie names and database versions only, never values.
+      onCookieLayout: (detail) =>
+        this.diagnose(
+          "extension-cookie-layout",
+          Object.fromEntries(
+            Object.entries(detail).map(([key, value]) => [key, value.slice(0, 200)]),
+          ),
+        ),
       onForeignLogin: (account, other, why) =>
         this.diagnose("extension-foreign-login", {
           account: shortId(account),

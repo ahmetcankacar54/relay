@@ -188,14 +188,40 @@ test("write refuses a database that is not the one the login was saved from", as
   const a = profile(t, "A");
   const newer = profile(t, "B", { version: "25" });
   const saved = await sqliteCookieStorage.read(newer.dir);
-  await assert.rejects(sqliteCookieStorage.write(a.dir, saved), (e: any) => e instanceof CookieStoreError && e.reason === "schema-changed");
+  await assert.rejects(
+    sqliteCookieStorage.write(a.dir, saved),
+    (e: any) =>
+      e instanceof CookieStoreError &&
+      e.reason === "schema-changed" &&
+      e.detail?.why === "version" &&
+      e.detail.saved === "25",
+  );
   const odd = profile(t, "C");
   const db = new DatabaseSync(path.join(odd.folder, "Cookies"));
-  db.exec("alter table cookies add column extra integer default 0");
+  // A column that must be filled and has no default: only a rebuilt table can have one.
+  const sql = (db.prepare("select sql from sqlite_master where name = 'cookies'").get() as { sql: string }).sql;
+  db.exec("alter table cookies rename to cookies_old");
+  db.exec(sql.replace(/\)\s*$/, ", needed integer not null)"));
+  db.exec("drop table cookies_old");
   db.close();
-  await assert.rejects(sqliteCookieStorage.write(odd.dir, await sqliteCookieStorage.read(profile(t, "D").dir)), (e: any) => e.reason === "schema-changed");
+  await assert.rejects(
+    sqliteCookieStorage.write(odd.dir, await sqliteCookieStorage.read(profile(t, "D").dir)),
+    (e: any) => e.reason === "schema-changed" && e.detail?.why === "columns" && e.detail.missing === "needed",
+  );
   // Nothing was written.
   assert.ok(Buffer.from((await sqliteCookieStorage.read(a.dir)).rows[0].encrypted_value as Uint8Array).toString().endsWith("-A"));
+});
+
+test("a login saved before the browser added a column with a default is still written", async (t) => {
+  const a = profile(t, "A");
+  const saved = await sqliteCookieStorage.read(profile(t, "B").dir);
+  const db = new DatabaseSync(path.join(a.folder, "Cookies"));
+  db.exec("alter table cookies add column extra integer not null default 7");
+  db.close();
+  await sqliteCookieStorage.write(a.dir, saved);
+  const after = await sqliteCookieStorage.read(a.dir);
+  assert.ok(Buffer.from(after.rows[0].encrypted_value as Uint8Array).toString().endsWith("-B"));
+  assert.ok(after.rows.every((row) => row.extra === 7n));
 });
 
 test("write refuses a database with a pending journal and rows that are not a login", async (t) => {
