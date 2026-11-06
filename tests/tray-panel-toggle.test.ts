@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   INITIAL_PANEL_LOAD,
+  pointerOnTray,
   ToggleGuard,
   panelLoadState,
   trayClickAction,
@@ -13,11 +14,28 @@ import {
 test("a tray click right after a blur-hide does not reopen the panel", () => {
   const guard = new ToggleGuard();
   assert.equal(guard.shouldOpen(1000), true);
-  guard.hidden(1000);
+  guard.hidden(1000, true);
   assert.equal(guard.shouldOpen(1250), false);
   // A slow (long-press) click still lands inside the 400 ms window.
   assert.equal(guard.shouldOpen(1400), false);
   assert.equal(guard.shouldOpen(1401), true);
+});
+
+test("a blur from a click elsewhere never swallows the next tray click", () => {
+  const guard = new ToggleGuard();
+  guard.hidden(1000, false);
+  assert.equal(guard.shouldOpen(1050), true);
+  guard.hidden(2000, true);
+  guard.hidden(2100, false);
+  assert.equal(guard.shouldOpen(2150), true);
+});
+
+test("the pointer counts as on the tray icon only inside its bounds", () => {
+  const tray = { x: 1400, y: 0, width: 40, height: 24 };
+  assert.equal(pointerOnTray(tray, { x: 1420, y: 12 }), true);
+  assert.equal(pointerOnTray(tray, { x: 1442, y: 26 }), true);
+  assert.equal(pointerOnTray(tray, { x: 900, y: 400 }), false);
+  assert.equal(pointerOnTray(undefined, { x: 900, y: 400 }), true);
 });
 
 test("a tray click falls back to the native menu until the panel has loaded", () => {

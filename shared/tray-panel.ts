@@ -25,9 +25,23 @@ export class ToggleGuard {
   shouldOpen(now: number) {
     return now - this.hiddenAt > TOGGLE_GUARD_MS;
   }
-  hidden(now: number) {
-    this.hiddenAt = now;
+  /**
+   * `byTrayClick` false (the panel lost focus to a click somewhere else, or Esc) arms nothing:
+   * the user's next tray click, however soon, must open the panel.
+   */
+  hidden(now: number, byTrayClick = false) {
+    this.hiddenAt = byTrayClick ? now : -Infinity;
   }
+}
+/** Whether the pointer is over the tray icon, with a little slack around it. */
+export function pointerOnTray(tray: Rect | undefined, point: { x: number; y: number }, slack = 4) {
+  if (!tray) return true;
+  return (
+    point.x >= tray.x - slack &&
+    point.x <= tray.x + tray.width + slack &&
+    point.y >= tray.y - slack &&
+    point.y <= tray.y + tray.height + slack
+  );
 }
 /** Left tray click: the popover once it has loaded, else today's native menu. */
 export function trayClickAction(panelUsable: boolean): "toggle" | "menu" {

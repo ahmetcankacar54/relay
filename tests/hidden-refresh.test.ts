@@ -67,8 +67,8 @@ test("the panel counts as hidden until main reports it shown, then follows the r
 
 test("main reports the panel's shown and hidden state, and only the panel follows it", () => {
   const panelWindow = readFileSync(new URL("../electron/tray-panel.ts", import.meta.url), "utf8");
-  const toggle = panelWindow.slice(panelWindow.indexOf("toggle("), panelWindow.indexOf("hide() {"));
-  const hide = panelWindow.slice(panelWindow.indexOf("hide() {"), panelWindow.indexOf("isOpen()"));
+  const toggle = panelWindow.slice(panelWindow.indexOf("toggle("), panelWindow.indexOf("  hide("));
+  const hide = panelWindow.slice(panelWindow.indexOf("  hide("), panelWindow.indexOf("isOpen()"));
   assert.match(toggle, /this\.reportVisibility\(win, true\)/);
   assert.match(hide, /this\.reportVisibility\(win, false\)/);
   assert.match(panelWindow, /webContents\.send\("relay:panel-visibility", shown\)/);

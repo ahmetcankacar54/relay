@@ -5,6 +5,7 @@ import {
   PANEL_WIDTH,
   panelLoadState,
   panelPosition,
+  pointerOnTray,
   ToggleGuard,
   type PanelLoadEvent,
   type Rect,
@@ -75,7 +76,11 @@ export class TrayPanel {
       },
     );
     win.webContents.on("render-process-gone", () => this.dispatch("gone"));
-    win.on("blur", () => this.hide());
+    // A blur from a click on the tray icon is followed by that click, which must not reopen the
+    // panel; a blur from a click anywhere else must not swallow the next tray click.
+    win.on("blur", () =>
+      this.hide(pointerOnTray(this.anchor, screen.getCursorScreenPoint())),
+    );
     win.on("closed", () => {
       this.win = undefined;
     });
@@ -103,13 +108,13 @@ export class TrayPanel {
     this.onVisibilityChange?.();
   }
 
-  hide() {
+  hide(byTrayClick = false) {
     const win = this.live();
     if (!win || !win.isVisible()) return;
     // Only the panel hides; never app.hide(), which would also hide the main
     // window. Focus returns to the previous app because Relay never activated.
     win.hide();
-    this.guard.hidden(this.now());
+    this.guard.hidden(this.now(), byTrayClick);
     this.reportVisibility(win, false);
     this.onVisibilityChange?.();
   }
