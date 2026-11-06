@@ -21,14 +21,14 @@ import { useTerminalStatus } from "@/data/useTerminal";
 
 /**
  * What Relay does with the terminal's Claude Code sign-in at a switch: on top the mode, who the
- * terminal is on and Check; under Gelişmiş the saved accounts and Sync now. Hidden outside macOS.
+ * terminal is on and Check; under Ayrıntılar the saved accounts and Sync now. Hidden outside macOS.
  */
 export function TerminalPreference({
   initialStatus,
   openDetails,
 }: {
   initialStatus?: TerminalStatus;
-  /** For static rendering: Gelişmiş drawn open. */
+  /** For static rendering: Ayrıntılar drawn open. */
   openDetails?: boolean;
 }) {
   const { api, settings, busy, desktop, action, accounts } = useRelay();
@@ -130,7 +130,7 @@ export function TerminalPreference({
     <div className="grid gap-1">
       <SectionHeading title={t("Terminaldeki Claude Code", "Claude Code in the terminal")} />
       <SettingRow
-        label={t("Terminal de geçsin", "The terminal follows")}
+        label={t("Geçişte", "At a switch")}
         htmlFor="terminal-mode"
         description={
           mode === "off"
@@ -157,7 +157,7 @@ export function TerminalPreference({
           )}
         </span>
       </SettingRow>
-      <Disclosure title={t("Gelişmiş", "Advanced")} defaultOpen={openDetails}>
+      <Disclosure title={t("Ayrıntılar", "Details")} defaultOpen={openDetails}>
         <Note>
           {t(
             "Relay geçişte yeni hesabın terminal girişini yerine koyar; tanımadığı bir girişe dokunmaz.",

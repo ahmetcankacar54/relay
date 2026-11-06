@@ -68,8 +68,11 @@ export function UsageCard({
   connect,
   busy = false,
   connectBusy = false,
+  connectElsewhere = false,
   now = Date.now(),
 }: {
+  /** The sign-in has its own button nearby (the account page's connection row): name the problem, offer no second button. */
+  connectElsewhere?: boolean;
   usage?: AccountUsage;
   settings: RelaySettings;
   t: T;
@@ -245,9 +248,11 @@ export function UsageCard({
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed px-3 py-2.5 text-sm text-muted-foreground">
         <span>{t(...issues["connect-cli"])}</span>
-        <Button size="sm" variant="outline" disabled={connectBusy} onClick={connect}>
-          {t("Limit okuma girişi yap", "Sign in to read usage")}
-        </Button>
+        {!connectElsewhere && (
+          <Button size="sm" variant="outline" disabled={connectBusy} onClick={connect}>
+            {t("Limit okuma girişi yap", "Sign in to read usage")}
+          </Button>
+        )}
       </div>
     );
   return (
@@ -271,7 +276,9 @@ export function UsageCard({
             !renewal &&
             ` ${t("Tekrar", "Next try")} ${clock(usage!.retryAt!)}`}
         </span>
-        {reconnect ? (
+        {reconnect && connectElsewhere ? (
+          <span className="shrink-0">{t("Bağlantılar’dan yenile", "Renew it under Connections")}</span>
+        ) : reconnect ? (
           <Button
             size="sm"
             variant="link"

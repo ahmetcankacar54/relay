@@ -13,8 +13,11 @@ export function PageFrame({
   back,
   leading,
   badge,
+  account,
   children,
 }: {
+  /** The account this page is about: its sign-in warning stays on the page, not in a banner. */
+  account?: string;
   title: string;
   description?: string;
   actions?: ReactNode;
@@ -37,7 +40,7 @@ export function PageFrame({
         leading={leading}
         badge={badge}
       />
-      <Banners automation={!automationInline} />
+      <Banners automation={!automationInline} exceptAccount={account} />
       <ConnectionPanels cliFlow={!cliFlowInline} />
       {children}
     </>

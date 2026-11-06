@@ -6,12 +6,12 @@ import { createElement, Fragment, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { applyAutomationMode } from "../src/features/automation-actions";
 import { afterExitChips } from "../src/features/AutomationControl";
-import { AutomationTab, CarryTab } from "../src/pages/settings/SwitchingTabs";
+import { ExperimentalSwitchRows, SwitchingTab } from "../src/pages/settings/SwitchingTabs";
 import { Overview } from "../src/pages/Overview";
 import { Usage } from "../src/pages/Usage";
 
-/** Settings' Automation and What comes along tabs: what used to be the Switching page. */
-const Switching = () => createElement(Fragment, null, createElement(AutomationTab), createElement(CarryTab));
+/** Settings' Switching tab and the switch's experimental rows under Advanced. */
+const Switching = () => createElement(Fragment, null, createElement(SwitchingTab), createElement(ExperimentalSwitchRows));
 import { Banners } from "../src/app/Banners";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
@@ -270,9 +270,9 @@ const render = (
       createElement(RelayContext.Provider, { value: relay }, element),
     ),
   );
-/** The choice cards: each card's title, and whether it is the chosen one. */
-const radios = (html: string) =>
-  [...html.matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g)].map(([tag, inner]) => ({
+/** The choice cards: each card's title, and whether it is the chosen one (the threshold below is a radio group too). */
+const radios = (page: string) =>
+  [...(page.includes('id="gecis-birlikte"') ? page.slice(0, page.indexOf('id="gecis-birlikte"')) : page).matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g)].map(([tag, inner]) => ({
     label: (/<span class="text-sm font-semibold">(.*?)<\/span>/.exec(inner)?.[1] ?? "").replace(/&#x27;/g, "'"),
     checked: tag.includes('aria-checked="true"'),
   }));
@@ -516,7 +516,7 @@ test("the menu bar panel does not bundle the Switching card", () => {
 
 test("Switching shows the extension, terminal and draft steps on macOS only", () => {
   const mac = render(relayFor({ fleet: otherWork, usage: fullUsage }));
-  assert.match(mac, /Code geçmişi, eklenti, terminal ve taslaklar da gelir/);
+  assert.match(mac, /Eklenti ve terminal isteğe bağlıdır/);
   assert.match(mac, /id="gecis-eklenti"/);
   assert.match(mac, /id="gecis-terminal"/);
   assert.match(mac, /id="gecis-taslak"/);
@@ -525,8 +525,8 @@ test("Switching shows the extension, terminal and draft steps on macOS only", ()
     const html = render(
       relayFor({ fleet: otherWork, usage: fullUsage, diagnostics: { platform } } as never),
     );
-    assert.match(html, /Code geçmişi de gelir/, platform);
-    assert.doesNotMatch(html, /eklenti, terminal ve taslaklar/, platform);
+    assert.match(html, /Code geçmişin de gelebilir/, platform);
+    assert.doesNotMatch(html, /Eklenti ve terminal/, platform);
     assert.doesNotMatch(html, /Tarayıcı eklentisi/, platform);
     assert.doesNotMatch(html, /Kurtarılan taslaklar/, platform);
     for (const id of ["gecis-eklenti", "gecis-terminal", "gecis-taslak"])

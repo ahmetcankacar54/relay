@@ -51,7 +51,7 @@ function pairLine(
 
 /**
  * What Relay does with the Claude browser extension's sign-in at a switch: on top the mode, one
- * status line and Check; under Gelişmiş the browser profile, "Sync now" and the saved accounts.
+ * status line and Check; under Ayrıntılar the browser profile, "Sync now" and the saved accounts.
  * Hidden where the step does not run.
  */
 export function ExtensionPreference({
@@ -60,7 +60,7 @@ export function ExtensionPreference({
 }: {
   /** For static rendering; otherwise read on mount. */
   initialStatus?: ExtensionStatus;
-  /** For static rendering: Gelişmiş drawn open. */
+  /** For static rendering: Ayrıntılar drawn open. */
   openDetails?: boolean;
 }) {
   const { api, settings, busy, desktop, action, accounts } = useRelay();
@@ -130,7 +130,7 @@ export function ExtensionPreference({
     <div className="grid gap-1">
       <SectionHeading title={t("Claude tarayıcı eklentisi", "Claude browser extension")} />
       <SettingRow
-        label={t("Eklenti de geçsin", "The extension follows")}
+        label={t("Geçişte", "At a switch")}
         htmlFor="extension-mode"
         description={statusLine}
       >
@@ -159,8 +159,8 @@ export function ExtensionPreference({
               {reconnect.canSync && (
                 <span>
                   {t(
-                    "Önce Gelişmiş’teki “Şimdi eşitle”yi dene. Olmazsa:",
-                    "First, try “Sync now” under Advanced. If that does not help:",
+                    "Önce Ayrıntılar’daki “Şimdi eşitle”yi dene. Olmazsa:",
+                    "First, try “Sync now” under Details. If that does not help:",
                   )}
                 </span>
               )}
@@ -202,7 +202,7 @@ export function ExtensionPreference({
         </SettingRow>
       )}
       <Disclosure
-        title={t("Gelişmiş", "Advanced")}
+        title={t("Ayrıntılar", "Details")}
         // A profile has to be chosen before anything else works, so the section opens for it; a
         // reconnect that Sync now may do opens it for that button.
         defaultOpen={openDetails || choose || !!reconnect?.canSync}

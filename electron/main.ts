@@ -1527,7 +1527,7 @@ const extensionNoticeShown = new Set<string>();
  * After a manual switch whose extension step left the Claude browser extension on another
  * account (mode "guide", or "closed" with the browser open): Claude's browser tools only work
  * when the extension is on the conversation's account, so the user hears it here and not only
- * in the panel. A click opens Settings → What comes along.
+ * in the panel. A click opens Settings → Switching.
  */
 function notifyExtensionLeft(target: Account) {
   const outcome = desktop.extensionOutcome;
@@ -1558,13 +1558,13 @@ function notifyExtensionLeft(target: Account) {
       `Claude’s browser tools do not work with ${target.name}; click to fix.`,
     ),
   });
-  notice.on("click", () => openPage("ayarlar/tasinanlar"));
+  notice.on("click", () => openPage("ayarlar/gecis"));
   notice.show();
 }
 /**
  * After a step put a claude.ai login in place and the extension could not sign in to `account`
  * with it: Relay forgot that login, and Claude's browser tools stay off until the user signs in
- * again. A click opens Settings → What comes along, where the reconnect steps are.
+ * again. A click opens Settings → Switching, where the reconnect steps are.
  */
 function notifyExtensionBroken(account: Account) {
   if (!Notification.isSupported()) return;
@@ -1575,7 +1575,7 @@ function notifyExtensionBroken(account: Account) {
       `Claude’s browser tools do not work with ${account.name}; click to reconnect.`,
     ),
   });
-  notice.on("click", () => openPage("ayarlar/tasinanlar"));
+  notice.on("click", () => openPage("ayarlar/gecis"));
   notice.show();
 }
 /** Says once per version that a downloaded update is ready; a click opens Overview's banner. */
@@ -2098,7 +2098,7 @@ function bindIPC() {
   handle("extension-sync", () => desktop.syncExtension().finally(broadcastChanged));
   handle("extension-web", () => desktop.openClaudeWeb());
   handle("extension-settings", () => {
-    openPage("ayarlar/tasinanlar");
+    openPage("ayarlar/gecis");
     trayPanel?.hide();
   });
   handle("extension-check", () => desktop.checkExtension());

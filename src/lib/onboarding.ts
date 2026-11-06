@@ -1,4 +1,4 @@
-import type { Account, DesktopState, Diagnostics } from "../../shared/types";
+import type { Account, DesktopState, Diagnostics, RelaySettings } from "../../shared/types";
 import { USAGE_CLI_VERSION, readsUsage } from "../../shared/cli-version";
 
 type T = (tr: string, en: string) => string;
@@ -149,4 +149,71 @@ export const codeTabStep = (t: T) =>
 export function overviewCards(accounts: readonly Account[]) {
   const connected = accounts.filter((a) => !!a.desktop).length;
   return { today: connected >= 1, automation: connected >= 2 };
+}
+
+/** The Overview's setup list: the prerequisites, then what makes Relay useful. */
+export type SetupKey = PrerequisiteKey | "first" | "second" | "mode" | "extension";
+
+export interface SetupStep {
+  key: SetupKey;
+  met: boolean;
+  /** Can be skipped; never keeps the list open on its own. */
+  optional: boolean;
+}
+
+export interface SetupState {
+  steps: SetupStep[];
+  /** Every required step is met: Relay can switch. */
+  ready: boolean;
+  /** Ready, and every optional step is met or was skipped: the list has nothing left to say. */
+  complete: boolean;
+}
+
+/**
+ * The guided first run: the Claude app and Code (and the CLI when it is still missing), a first
+ * and a second account with a saved Claude app sign-in (Relay switches between two), the choice
+ * of when to switch, and on macOS the optional browser extension. `seen` holds the steps the user
+ * settled by hand: "mode" once the choice was opened (I switch myself is a choice too),
+ * "extension" once skipped. Undefined until both snapshots have arrived.
+ */
+export function setupState(input: {
+  desktop?: DesktopState;
+  diagnostics?: Diagnostics;
+  accounts: readonly Account[];
+  settings: Pick<RelaySettings, "autoSwitchMode" | "claudeExtension">;
+  /** Continue at quota is on: a mode was chosen. */
+  quota?: boolean;
+  seen?: ReadonlySet<string>;
+}): SetupState | undefined {
+  const base = prerequisites(input);
+  if (!base) return;
+  const seen = input.seen ?? new Set<string>();
+  const connected = input.accounts.filter((a) => !!a.desktop).length;
+  const macOS = input.diagnostics?.platform === "darwin";
+  const extensionMode = input.settings.claudeExtension?.mode;
+  const steps: SetupStep[] = [
+    ...base.items.map((i) => ({ ...i, optional: false })),
+    { key: "first", met: connected >= 1, optional: false },
+    { key: "second", met: connected >= 2, optional: false },
+    {
+      key: "mode",
+      met: input.settings.autoSwitchMode !== "off" || !!input.quota || seen.has("mode"),
+      optional: false,
+    },
+    ...(macOS
+      ? [
+          {
+            key: "extension" as const,
+            met: extensionMode === "restart" || extensionMode === "closed",
+            optional: true,
+          },
+        ]
+      : []),
+  ];
+  const ready = base.complete && steps.every((s) => s.optional || s.met);
+  return {
+    steps,
+    ready,
+    complete: ready && steps.every((s) => s.met || seen.has(s.key)),
+  };
 }

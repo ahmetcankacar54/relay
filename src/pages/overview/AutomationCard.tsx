@@ -105,7 +105,7 @@ export function AutomationCard({
                   ? t(`${instanceLabel(extension.target)} · izliyor`, `${instanceLabel(extension.target)} · following`)
                   : t("Tarayıcı seç", "Choose a browser")
             }
-            onClick={() => go("ayarlar/tasinanlar")}
+            onClick={() => go("ayarlar/gecis")}
           />
         )}
       </div>

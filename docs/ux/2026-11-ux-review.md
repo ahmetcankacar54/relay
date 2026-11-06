@@ -167,3 +167,38 @@ until the required rows are done (optional rows can be skipped):
   sidebar shortcuts (⌘1–⌘5) and the widget's deep links; propose separately.
 - Simplifying the extension's eight states (P1, `extension-ui.ts`): the states are real; the fix
   here is to hide them behind "Optional" until the user turns the extension on.
+
+## What was implemented (approved 2026-11-07)
+
+- Settings has four tabs: Geçiş / Switching, Planlama / Planning, Genel / General, Gelişmiş /
+  Advanced (`src/app/routes.ts`, `src/pages/Settings.tsx`, `src/pages/settings/SwitchingTabs.tsx`).
+  The "Now → Next · Switch now" card and the "1" badge are gone. The near-the-limit switches
+  sit together, with the suggestion saying what it needs while it is off. Old hashes
+  (`otomasyon`, `tasinanlar`, `bildirimler`, `gorunum`, `#/gecis`) open the new tabs, and every
+  "Settings → …" sentence in errors, notices and the CLI names the new tab.
+- General holds language, theme, the refresh interval, the menu bar, one Panda group and updates.
+  Advanced holds System, Troubleshooting ("If the Claude app stays on a grey screen"),
+  Experimental (separate windows, draft re-typing, the sidebar recipe) and Privacy.
+- The Overview checklist is "Set up Relay": the prerequisites, then first account, second
+  account, when to switch, and on macOS the optional extension (`setupState` in
+  `src/lib/onboarding.ts`). The later steps open one at a time. Choose and Skip are remembered in
+  `localStorage` (`relay.setup.v1`). The list hides once done, or with Hide once Relay is ready.
+- The account page counts only the Claude app sign-in and the usage sign-in ("2 / 2 ready"). The
+  extension and terminal rows carry an "Optional" badge. Its sign-in problem shows once, on the
+  connection row: no banner for this account, and the Limits card points to Connections.
+- The Accounts table legend names each icon and marks the extension and the terminal optional.
+  The add-account step labels wrap instead of truncating. Step 2 says what the usage sign-in is.
+- The extension and terminal rows read "At a switch: <mode>" instead of "The extension follows:
+  Only tell me".
+
+Deviations from the proposal:
+
+- The extension and terminal details (browser profile, Sync now, saved accounts) stay in their
+  cards, under a disclosure renamed from "Gelişmiş" to "Ayrıntılar" / "Details". Moving them to
+  the Advanced tab would split a reconnect across two tabs. The card opens that disclosure by
+  itself when a profile must be chosen or Sync now can help. "Advanced" now means only the tab.
+- "Merge into the open account…" and "Check" stay on the Switching tab next to the setting they
+  act on.
+- No terminal step in the setup list: the terminal follows the account by default, so the step
+  would always be ticked.
+- P7 (the extension row on the Overview automation card) is not changed in this pass.

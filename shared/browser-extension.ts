@@ -233,7 +233,7 @@ export interface ExtensionOffer {
   expired?: true;
   /**
    * Expired, and no claude.ai login of `to` is saved to put in place: the user signs in again
-   * (Settings → What comes along) instead of syncing.
+   * (Settings → Switching) instead of syncing.
    */
   reconnect?: true;
   /** The browser that is quit and opened again, by name. */

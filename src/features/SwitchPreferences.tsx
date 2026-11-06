@@ -307,7 +307,7 @@ export function SharedHistoryPreferences({
         </Button>
       </div>
       {!off && (
-        <Disclosure title={t("Gelişmiş", "Advanced")}>
+        <Disclosure title={t("Ayrıntılar", "Details")}>
           <Note>{historyScopeNote(value.desktopHistoryTransfer, t)}</Note>
         </Disclosure>
       )}

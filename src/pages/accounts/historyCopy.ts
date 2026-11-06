@@ -22,8 +22,8 @@ export function historyCopy(
     case "selected":
       return {
         note: t(
-          "Code geçmişi yalnızca Ayarlar → Geçişte taşınanlar’da seçtiğin hesaplar arasında ortak.",
-          "Only the accounts you select in Settings → What comes along share Code history.",
+          "Code geçmişi yalnızca Ayarlar → Geçiş’te seçtiğin hesaplar arasında ortak.",
+          "Only the accounts you select in Settings → Switching share Code history.",
         ),
       };
     case "off":

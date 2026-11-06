@@ -413,7 +413,7 @@ test("the warning threshold is phrased as what is used, for the stored values 80
 });
 
 test("Settings calls the warning threshold's scope usage, not a window, in English", () => {
-  const html = text(render(createElement(Settings, { tab: "bildirimler" as const }), "en"));
+  const html = text(render(createElement(Settings, { tab: "gecis" as const }), "en"));
   assert.match(html, /For the 5-hour and weekly periods\./);
   assert.doesNotMatch(html, /usage window/);
 });

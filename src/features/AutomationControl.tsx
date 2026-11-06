@@ -250,10 +250,7 @@ export function AutomationSettings() {
   const fleet = relay.data?.fleet;
   return (
     <section aria-labelledby="automation-title" className="grid gap-3">
-      <h2 id="automation-title" className="flex items-center gap-2 text-sm font-semibold">
-        <span aria-hidden="true" className="grid size-5 place-items-center rounded-full bg-foreground text-2xs text-background">
-          1
-        </span>
+      <h2 id="automation-title" className="px-1 text-sm font-semibold">
         {t("Ne zaman geçilsin?", "When to switch?")}
       </h2>
       <div
@@ -326,8 +323,8 @@ export function AutomationSettings() {
           {settings.usageRefreshMinutes === 0 && (
             <Note>
               {t(
-                "Otomatik geçiş için Bildirimler’de “Limitleri otomatik yenile”yi aç.",
-                "For automatic switching, turn on “Refresh limits automatically” in Notifications.",
+                "Otomatik geçiş için Genel’de “Limitleri otomatik yenile”yi aç.",
+                "For automatic switching, turn on “Refresh limits automatically” in General.",
               )}
             </Note>
           )}

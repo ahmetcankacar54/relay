@@ -165,7 +165,7 @@ test("the Overview automation rows open their pages instead of setting the choic
   const active = acct("active", "Kişisel · Max", "max5");
   // The automation card needs two connected accounts.
   const accounts = [active, acct("other", "Vertex", "pro")];
-  // The choice and its lock while a handoff runs live in Settings → Automation; Overview only shows rows.
+  // The choice and its lock while a handoff runs live in Settings → Switching; Overview only shows rows.
   for (const status of ["switching", "continuing", "watching"] as const) {
     const relay = relayFor(active, accounts, { active: use("active", 10, 10) });
     (relay.data as Snapshot).fleet = { enabled: true, status, sourceId: "active", targetId: "active" };
@@ -472,7 +472,7 @@ const renderIn = (language: "tr" | "en", relay: Relay) =>
     ),
   );
 const checklist = (html: string) => {
-  const start = html.indexOf('aria-label="Başlamadan önce"');
+  const start = html.indexOf('aria-label="Relay’i kur"');
   return start < 0 ? "" : html.slice(start, html.indexOf("</ul>", start));
 };
 const codeOpenNoCli = (diagnostics: Partial<Diagnostics> = {}) =>
@@ -481,7 +481,7 @@ const codeOpenNoCli = (diagnostics: Partial<Diagnostics> = {}) =>
     diagnostics,
   });
 const item = (html: string, key: string) =>
-  [...html.matchAll(/<li([^>]*data-prerequisite="([^"]+)"[^>]*)>([\s\S]*?)<\/li>/g)]
+  [...html.matchAll(/<li([^>]*data-step="([^"]+)"[^>]*)>([\s\S]*?)<\/li>/g)]
     .filter((m) => m[2] === key)
     .map((m) => m[1] + m[3])[0] ?? "";
 
@@ -509,20 +509,38 @@ test("a first run lists the prerequisites, each with a mark, a reason and an act
   assert.match(cli, /<button[^>]*>Dosyayı seç<\/button>/);
 });
 
-test("met prerequisites are ticked and the list hides once all three are met", () => {
+test("met prerequisites are ticked, then the list guides to the accounts and hides once Relay can switch", () => {
   const partial = checklist(render(firstRun()));
   assert.match(item(partial, "desktop"), /data-met="true"[\s\S]*Bulundu/);
   assert.doesNotMatch(item(partial, "desktop"), /İndir/);
   // With the Claude app there, the Code step opens Claude on Code.
   assert.match(item(partial, "code"), /<button[^>]*>Code’u aç<\/button>/);
   assert.match(item(checklist(render(firstRun({ desktop: { running: true } }))), "code"), /<button[^>]*>Code’u aç<\/button>/);
-  const ready = render(
-    firstRun({
-      desktop: { currentAccountUuid: "00000000-0000-4000-8000-000000000001", organizations: ["00000000-0000-4000-8000-000000000002"] },
-      diagnostics: { executable: "/usr/local/bin/claude", version: "2.1.300 (Claude Code)", error: undefined },
-    }),
-  );
-  assert.equal(checklist(ready), "");
+  const codeOpen = {
+    desktop: { currentAccountUuid: "00000000-0000-4000-8000-000000000001", organizations: ["00000000-0000-4000-8000-000000000002"] },
+    diagnostics: { executable: "/usr/local/bin/claude", version: "2.1.300 (Claude Code)", error: undefined },
+  };
+  // The prerequisites met, the list goes on: a first account, a second, when to switch.
+  const ready = checklist(render(firstRun(codeOpen)));
+  assert.match(item(ready, "code"), /data-met="true"/);
+  assert.match(item(ready, "first"), /data-met="false"[\s\S]*İlk hesabını ekle[\s\S]*yukarıdaki “Hesap ekle” ile ekle/);
+  // One step at a time: the later ones wait, without their buttons.
+  assert.match(item(ready, "second"), /İkinci hesabını ekle/);
+  assert.doesNotMatch(item(ready, "second"), /<button/);
+  assert.doesNotMatch(item(ready, "mode"), /<button/);
+  // One account: the second step opens with its own Add account.
+  const one = checklist(render(firstRun({ ...codeOpen, accounts: [acct("one", "Kişisel", "pro")] })));
+  assert.match(item(one, "first"), /data-met="true"/);
+  assert.match(item(one, "second"), /1 \/ 2[\s\S]*en az iki hesap gerekir[\s\S]*<button[^>]*>Hesap ekle<\/button>/);
+  // Two accounts: when to switch, with Choose; on macOS the extension is optional.
+  const two = [acct("one", "Kişisel", "pro"), acct("two", "Vertex", "pro")];
+  const pair = checklist(render(firstRun({ ...codeOpen, accounts: two })));
+  assert.match(item(pair, "mode"), /Ne zaman geçileceğini seç[\s\S]*<button[^>]*>Seç<\/button>/);
+  assert.match(item(pair, "extension"), /İsteğe bağlı/);
+  // A mode chosen and no optional step (not macOS): nothing left to say.
+  const done = firstRun({ ...codeOpen, accounts: two, diagnostics: { ...codeOpen.diagnostics, platform: "linux" } });
+  done.settings = { ...done.settings, autoSwitchMode: "after-exit" };
+  assert.equal(checklist(render(done)), "");
   // Until both snapshots arrive, nothing is ticked or crossed.
   const loading = relayFor(undefined, [], {});
   assert.equal(checklist(render(loading)), "");
@@ -555,7 +573,7 @@ test("the CLI's Choose file reuses the Settings picker", async () => {
 test("the checklist speaks English with the glossary names", () => {
   const html = renderIn("en", firstRun({ desktop: { available: false } }));
   const cli = renderIn("en", codeOpenNoCli());
-  assert.match(html, /Before you start/);
+  assert.match(html, /Set up Relay/);
   assert.match(html, /Claude app/);
   assert.match(html, /Relay needs the Claude app\./);
   assert.match(html, />Download<\/a>/);
@@ -597,7 +615,7 @@ test("the welcome says what to do first, in both languages", () => {
 });
 
 const welcomeButton = (html: string) => {
-  const card = html.slice(0, html.indexOf('aria-label="Başlamadan önce"'));
+  const card = html.slice(0, html.indexOf('aria-label="Relay’i kur"'));
   const button = /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle<\/button>/.exec(card)?.[0] ?? "";
   return { button, after: card.slice(card.indexOf(button) + button.length) };
 };

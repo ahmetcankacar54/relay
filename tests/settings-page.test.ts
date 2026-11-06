@@ -22,6 +22,11 @@ function relayFor(): Relay {
     api: {
       claudeLaunch: async () => ({ quicOff: false }),
       menuBarTitle: async () => ({ items: ["five-hour"] }),
+      // The Switching tab reads the extension and the terminal; neither runs here.
+      checkExtension: async () => null,
+      extensionStatus: async () => null,
+      checkTerminal: async () => null,
+      terminalStatus: async () => null,
     }, preview: false, error: "", notice: "", accounts: [], active: undefined, settings, busy: "",
     usageBusy: new Set<string>(), desktopBusy: false, hasUnclaimedDesktop: false, targetOrg: "", historyRevision: 0,
     version: "0.4.2",
@@ -69,7 +74,7 @@ test("the system group offers the diagnostics files, and say which ones to send"
   assert.match(preload, /showDiagnostics: \(\) => ipcRenderer\.invoke\("relay:show-diagnostics"\)/);
 });
 
-test("Settings has six tabs: automation, what comes along, planning, notifications, appearance, advanced", () => {
+test("Settings has four tabs: switching, planning, general, advanced", () => {
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
@@ -80,12 +85,12 @@ test("Settings has six tabs: automation, what comes along, planning, notificatio
   const tabs = /<div[^>]*role="tablist"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
   assert.deepEqual(
     [...tabs.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]),
-    ["Otomasyon", "Geçişte taşınanlar", "Planlama", "Bildirimler", "Görünüm", "Gelişmiş"],
+    ["Geçiş", "Planlama", "Genel", "Gelişmiş"],
   );
   for (const re of [
-    /Görünüm/, /Sistem/, /Açık/, /Koyu/, /Arayüz dili/, /Türkçe/, /English/,
+    /Tema/, /Sistem/, /Açık/, /Koyu/, /Arayüz dili/, /Türkçe/, /English/,
     /Menü çubuğu/, /Limitleri otomatik yenile/, /Elle/, /Gizlilik ve güvenlik/, /Bulundu/, /2\.1\.0/,
-    // The path the missing-CLI error names: Ayarlar → Claude Code CLI → Dosyayı seç.
+    // The path the missing-CLI error names: Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç.
     /Claude Code CLI<\/[^>]+>(?:(?!<button)[\s\S])*?2\.1\.0(?:(?!<button)[\s\S])*?<button[^>]*>Dosyayı seç<\/button>/,
     /Yerelde saklanır\. Bağımsız araç · 0\.\d+\.\d+/,
   ])
@@ -129,7 +134,7 @@ test("the menu bar animation switch is shown on macOS only", () => {
     const html = render(platform);
     assert.doesNotMatch(html, /Panda animasyonları/, platform);
     assert.doesNotMatch(html, /menu-bar-animation-label/, platform);
-    assert.match(html, /Görünüm/, platform);
+    assert.match(html, /Tema/, platform);
   }
 });
 
@@ -227,7 +232,7 @@ test("Settings explains the Keychain prompt in Turkish and English, under privac
   assert.ok(page.indexOf("Gizlilik ve güvenlik") < page.indexOf("Yerelde saklanır"));
 });
 
-test("Settings → Notifications holds the warnings, their threshold and the refresh interval", async () => {
+test("Settings → Switching holds the warnings and their threshold; General the refresh interval", async () => {
   const render = (extra: Partial<RelaySettings> = {}, language: "tr" | "en" = "tr") => {
     const relay = relayFor();
     const value = { ...settings, ...extra };
@@ -242,8 +247,10 @@ test("Settings → Notifications holds the warnings, their threshold and the ref
   const group = (html: string) =>
     /<div[^>]*aria-labelledby="settings-threshold-label"[^>]*>.*?<\/div>/s.exec(html)?.[0] ?? "";
   const html = render();
-  // One group: the warnings switch, then the threshold, then the refresh interval.
-  assert.match(html, /id="settings-notifications"[\s\S]*id="usage-warnings"[\s\S]*id="settings-threshold-label">Uyarı eşiği<[\s\S]*Limitleri otomatik yenile/);
+  // Near the limit: the warnings switch, then the threshold, then the suggestion that needs them.
+  assert.match(html, /id="gecis-oneri"[\s\S]*id="usage-warnings"[\s\S]*id="settings-threshold-label">Uyarı eşiği<[\s\S]*id="usage-suggestions"/);
+  // The refresh interval is not a notification: it sits in General.
+  assert.match(html, /id="settings-general"[\s\S]*Limitleri otomatik yenile/);
   assert.match(html, /5 saatlik ve haftalık dönem için\./);
   assert.deepEqual(
     [...group(html).matchAll(/<button[^>]*>(.*?)<\/button>/gs)].map((m) => m[1]),
@@ -272,7 +279,7 @@ test("Settings → Notifications holds the warnings, their threshold and the ref
         createElement(
           I18nContext.Provider,
           { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "bildirimler" })),
+          createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "gecis" })),
         ),
       ),
     );
@@ -388,7 +395,7 @@ async function menuBarSettings(state: { items: string[]; now?: () => unknown }) 
       createElement(
         I18nContext.Provider,
         { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-        createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "gorunum" })),
+        createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "genel" })),
       ),
     ),
   );
