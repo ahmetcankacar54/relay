@@ -317,6 +317,13 @@ const scenario = import.meta.env.DEV
   : null;
 // The macOS-only parts of Settings, such as the menu bar's items.
 if (scenario === "macos") state.diagnostics.platform = "darwin";
+// Drafts rescued at a switch: two still waiting to be typed back, one left for Copy.
+if (scenario === "drafts")
+  state.drafts = [
+    { id: "11111111-1111-4111-8111-111111111111", to: accounts[0].id, title: "Video pipeline review", newSession: false, attachments: true, state: "pending", capturedAt: new Date().toISOString() },
+    { id: "22222222-2222-4222-8222-222222222222", to: accounts[0].id, title: "Weekly roadmap", newSession: false, attachments: false, state: "pending", capturedAt: new Date().toISOString() },
+    { id: "33333333-3333-4333-8333-333333333333", to: accounts[0].id, title: "Release notes", newSession: false, attachments: false, state: "needs-copy", reason: "busy", capturedAt: new Date().toISOString() },
+  ];
 // The panel's offer to bring the Claude extension along; Switch clears it.
 if (scenario === "extension-offer")
   state.extension = {

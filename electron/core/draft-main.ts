@@ -798,15 +798,25 @@ export function draftActions(deps: {
       throw new Error(WAITING);
   };
   return {
+    /**
+     * Puts a draft's text on the clipboard. One left for copy goes once copied; one still
+     * waiting to be restored stays, so Relay still types it if its composer is empty when the
+     * user opens it (a pasted copy fills the composer, and Relay then types nothing).
+     */
     async copy(raw: unknown): Promise<void> {
       const id = draftId.parse(raw);
       try {
-        await leftForCopy(id);
+        const draft = (await deps.drafts.pendingDrafts()).find((d) => d.id === id);
+        if (!draft) throw new Error(GONE);
         const text = await deps.drafts.draftText(id);
         if (text === undefined) throw new Error(GONE);
         deps.writeClipboard(text);
-        await deps.drafts.dismissDraft(id);
-        logDraft(deps.log, "draft-copy", { id: shortId(id), ok: true });
+        if (draft.state === "needs-copy") await deps.drafts.dismissDraft(id);
+        logDraft(deps.log, "draft-copy", {
+          id: shortId(id),
+          ok: true,
+          ...(draft.state === "needs-copy" ? {} : { kept: true }),
+        });
       } catch (error) {
         logDraft(deps.log, "draft-copy", { id: shortId(id), ...outcome(error) });
         throw error;

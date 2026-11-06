@@ -128,7 +128,7 @@ test("copy-draft writes the clipboard in main and removes the record", async (t)
   assert.equal(changed, 4);
 });
 
-test("copy and dismiss leave a draft still waiting to be restored alone", async (t) => {
+test("a draft still waiting is copied and kept, and cannot be dismissed", async (t) => {
   const f = await vaultFixture(t);
   const clipboard: string[] = [];
   const actions = draftActions({
@@ -137,10 +137,11 @@ test("copy and dismiss leave a draft still waiting to be restored alone", async 
     changed: () => {},
   });
   for (const record of f.records) {
-    await assert.rejects(actions.copy(record.id), /still waiting/);
+    assert.equal(await actions.copy(record.id), undefined);
     await assert.rejects(actions.dismiss(record.id), /still waiting/);
   }
-  assert.deepEqual(clipboard, []);
+  assert.equal(clipboard.length, f.records.length);
+  assert.ok(clipboard.every((text) => text.length > 0));
   assert.deepEqual(
     (await f.manager.pendingDrafts()).map((draft) => [draft.id, draft.state]),
     f.records.map((record) => [record.id, "pending"]),
@@ -552,7 +553,8 @@ test("copy and dismiss log the draft's id and how they ended, never its text", a
     log: (event, fields) => void logs.push([event, fields]),
   });
   logs.length = 0;
-  await assert.rejects(refused.copy(DRAFT_ID), /still waiting/);
+  // A waiting draft is copied and kept: nothing is dismissed.
+  assert.equal(await refused.copy(DRAFT_ID), undefined);
   await assert.rejects(refused.dismiss(DRAFT_ID), /still waiting/);
   const broken = draftActions({
     drafts: {
@@ -572,7 +574,7 @@ test("copy and dismiss log the draft's id and how they ended, never its text", a
   await assert.rejects(broken.copy(DRAFT_ID), /EIO/);
   const id = DRAFT_ID.slice(0, 8);
   assert.deepEqual(logs, [
-    ["draft-copy", { id, ok: false, reason: "This draft is still waiting to be restored." }],
+    ["draft-copy", { id, ok: true, kept: true }],
     ["draft-dismiss", { id, ok: false, reason: "This draft is still waiting to be restored." }],
     ["draft-copy", { id, ok: false, reason: "failed" }],
   ]);

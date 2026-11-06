@@ -110,10 +110,16 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
   const name = draft.newSession
     ? t("Yeni oturum", "New session")
     : draft.title.trim() || t("Adsız konuşma", "Untitled conversation");
-  const reason = draftReason(draft.reason, t, draft.newSession);
+  // A draft still waiting can be copied, and stays: Relay types it into an empty composer.
+  const waiting = draft.state === "pending";
+  const reason = waiting
+    ? draft.newSession
+      ? t("Bekliyor: yeni oturumu açınca geri yazılır", "Waiting: typed back when you open a new session")
+      : t("Bekliyor: konuşmayı açınca geri yazılır", "Waiting: typed back when you open the conversation")
+    : draftReason(draft.reason, t, draft.newSession);
   // Only re-typing needs the permission: with it off, nothing here asks for it.
   const needsPermission =
-    relay.settings.draftRetype === true && draft.reason === "accessibility";
+    !waiting && relay.settings.draftRetype === true && draft.reason === "accessibility";
   const running = [
     `draft-copy:${draft.id}`,
     `draft-dismiss:${draft.id}`,
@@ -155,30 +161,35 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
         >
           {t("Kopyala", "Copy")}
         </Button>
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={running}
-          onClick={() => void dismissDraftAction(relay, draft.id)}
-        >
-          {t("Kapat", "Dismiss")}
-        </Button>
+        {!waiting && (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={running}
+            onClick={() => void dismissDraftAction(relay, draft.id)}
+          >
+            {t("Kapat", "Dismiss")}
+          </Button>
+        )}
       </span>
     </div>
   );
 }
 
 /**
- * Drafts Relay rescued at a switch: the ones it could not re-type, or with re-typing off all of
- * them, with Copy and Dismiss, and a count of those still waiting. It shows titles and reasons
- * only, never draft text. With re-typing on, the heading says it is experimental.
+ * Drafts Relay rescued at a switch: those still waiting to be typed back, with Copy, and the
+ * ones it could not re-type (or with re-typing off all of them), with Copy and Dismiss. It shows
+ * titles and reasons only, never draft text. With re-typing on, the heading says it is
+ * experimental.
  */
 export function PanelDrafts() {
   const relay = useRelay();
   const { t } = useI18n();
   const all = relay.data?.drafts ?? [];
-  const waiting = all.filter((d) => d.state === "pending").length;
-  const rows = all.filter((d) => d.state === "needs-copy");
+  const waitingRows = all.filter((d) => d.state === "pending");
+  const waiting = waitingRows.length;
+  const rows = [...waitingRows, ...all.filter((d) => d.state === "needs-copy")];
+  const left = rows.length - waiting;
   if (waiting === 0 && rows.length === 0) return null;
   return (
     <section className="px-3 py-1.5">
@@ -197,7 +208,7 @@ export function PanelDrafts() {
       </div>
       {waiting > 0 && (
         <p
-          className={`text-xs text-muted-foreground ${rows.length > 0 ? "mb-1.5" : ""}`}
+          className="mb-1.5 text-xs text-muted-foreground"
         >
           {t(
             `${waiting} taslak geri yazılmayı bekliyor`,
@@ -205,7 +216,7 @@ export function PanelDrafts() {
           )}
         </p>
       )}
-      {rows.length > 0 && (
+      {left > 0 && (
         <p className="mb-1.5 text-xs text-muted-foreground">
           {t(
             "Geçişte geri yazılamayan taslaklar.",

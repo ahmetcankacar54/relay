@@ -572,7 +572,7 @@ const drafts = (relay: Relay) => wrap(relay, createElement(PanelDrafts));
 /** Draft re-typing turned on in Settings; it is off unless the user turns it on. */
 const retyping: Partial<Relay> = { settings: { ...DEFAULT_SETTINGS, draftRetype: true } };
 
-test("the rescued drafts section lists only needs-copy records with reason, Copy and Dismiss", () => {
+test("the rescued drafts section lists needs-copy records with reason, Copy and Dismiss, and waiting ones with Copy", () => {
   const html = drafts(withDrafts([
     draft({ title: "Fix the login bug", reason: "lost" }),
     draft({ id: "d2", title: "Waiting for its turn", state: "pending", reason: undefined }),
@@ -582,8 +582,9 @@ test("the rescued drafts section lists only needs-copy records with reason, Copy
   assert.match(html, /Claude uygulaması taslağı sildi/);
   assert.match(html, />Kopyala</);
   assert.match(html, />Kapat</);
-  assert.equal((html.match(/>Kopyala</g) ?? []).length, 1);
-  assert.doesNotMatch(html, /Waiting for its turn/);
+  assert.equal((html.match(/>Kopyala</g) ?? []).length, 2);
+  assert.equal((html.match(/>Kapat</g) ?? []).length, 1);
+  assert.match(html, /Waiting for its turn/);
   assert.doesNotMatch(html, /İzin ver/);
 });
 
@@ -627,14 +628,18 @@ test("the rescued drafts heading is tagged experimental only while re-typing is 
   assert.match(en, />experimental</);
 });
 
-test("pending records show only the count line", () => {
+test("waiting records show the count line and a row each with Copy, never Dismiss", () => {
   const html = drafts(withDrafts([
-    draft({ id: "a", title: "First secret", state: "pending", reason: undefined }),
-    draft({ id: "b", to: "other", title: "Second secret", state: "pending", reason: undefined }),
+    draft({ id: "a", title: "First", state: "pending", reason: undefined }),
+    draft({ id: "b", to: "other", title: "Second", state: "pending", reason: undefined }),
   ]));
   assert.match(html, /Kurtarılan taslaklar/);
   assert.match(html, /2 taslak geri yazılmayı bekliyor/);
-  assert.doesNotMatch(html, /First secret|Second secret|Kopyala|Kapat/);
+  assert.match(html, /First/);
+  assert.match(html, /Second/);
+  assert.equal((html.match(/>Bekliyor: konuşmayı açınca geri yazılır</g) ?? []).length, 2);
+  assert.equal((html.match(/>Kopyala</g) ?? []).length, 2);
+  assert.doesNotMatch(html, />Kapat<|Geçişte geri yazılamayan/);
 });
 
 test("no drafts render nothing", () => {
