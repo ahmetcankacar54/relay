@@ -535,7 +535,7 @@ test("met prerequisites are ticked, then the list guides to the accounts and hid
   assert.match(item(one, "second"), /1 \/ 2[\s\S]*en az iki hesap gerekir[\s\S]*<button[^>]*>Hesap ekle<\/button>/);
   // Two accounts: when to switch, with Choose; on macOS the extension is optional.
   const two = [acct("one", "Kişisel", "pro"), acct("two", "Vertex", "pro")];
-  const pair = checklist(render(firstRun({ ...codeOpen, accounts: two })));
+  const pair = checklist(render(firstRun({ ...codeOpen, accounts: two, diagnostics: { ...codeOpen.diagnostics, platform: "darwin" } })));
   assert.match(item(pair, "mode"), /Ne zaman geçileceğini seç[\s\S]*<button[^>]*>Seç<\/button>/);
   assert.match(item(pair, "extension"), /İsteğe bağlı/);
   // A mode chosen and no optional step (not macOS): nothing left to say.
