@@ -29,7 +29,7 @@ function Lines({ lines, total }: { lines: Line[]; total: number }) {
         const share = total > 0 ? (line.cost / total) * 100 : 0;
         return (
           <li key={line.key} data-slot="cost-line" className="grid gap-1">
-            <div className="flex items-center gap-2 text-[13px]">
+            <div className="flex items-center gap-2 text-sm">
               {line.tone !== undefined || line.muted ? (
                 <Swatch tone={line.tone} muted={line.muted} />
               ) : (
@@ -110,16 +110,16 @@ export function CostBreakdown({
   const perDay = total / days;
   const estimated = view.totals.costEstimated === true;
   return (
-    <Card data-slot="cost-breakdown" className="min-w-0 gap-4 px-5 py-4">
+    <Card data-slot="cost-breakdown" className="min-w-0 gap-4 px-4 py-3.5">
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
         <div>
-          <h3 className="font-display text-[15px] font-semibold">
+          <h3 className="font-display text-sm font-semibold">
             {t("API karşılığı", "API value")}
           </h3>
           <p className="text-xs text-muted-foreground">
             {t(
-              "Bu token’lar API liste fiyatıyla ödenseydi tutacak tutar. Aboneliğinin ücreti ayrıdır.",
-              "What these tokens would cost at API list prices. Your subscription is priced separately.",
+              "Bu token’ların API liste fiyatıyla tutarı. Aboneliğinin ücreti değildir.",
+              "The cost of these tokens at API list prices. It is not your subscription price.",
             )}
           </p>
         </div>
@@ -130,13 +130,13 @@ export function CostBreakdown({
           </div>
           <div className="text-xs text-muted-foreground tabular-nums">
             {t(
-              `son ${view.range} gün · günde ${formatCost(perDay, "tr")}`,
-              `last ${view.range} days · ${formatCost(perDay, "en")} a day`,
+              `günde ${formatCost(perDay, "tr")}`,
+              `${formatCost(perDay, "en")} per day`,
             )}
           </div>
         </div>
       </div>
-      <div className={cn("grid gap-6", byAccount.length > 0 && byModel.length > 0 && "lg:grid-cols-2")}>
+      <div className={cn("grid gap-4", byAccount.length > 0 && byModel.length > 0 && "lg:grid-cols-2")}>
         {byAccount.length > 0 && (
           <section className="grid content-start gap-2">
             <h4 className="text-xs font-semibold text-muted-foreground">{t("Hesaba göre", "By account")}</h4>

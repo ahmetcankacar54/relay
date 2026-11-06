@@ -71,18 +71,17 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /Max 5×/);
   assert.match(html, /Çalışıyor/);
   // The hero is the large ring with the account beside it.
-  assert.match(html, /<div role="img" aria-label="5 saatlik dönem %38 · Haftalık · tüm modeller %78"[^>]*style="width:140px;height:140px"/);
+  assert.match(html, /<div role="img" aria-label="5 saatlik dönem %38 · Haftalık · tüm modeller %78"[^>]*style="width:104px;height:104px"/);
   assert.match(html, /Haftalık · tüm modeller/);
   assert.match(html, /Haftalık · Opus/);
   // No suggestion band: the hero says the limit is near and offers the suggested account, and the
-  // accounts card's heading says so too, with the suggestion leading.
+  // suggestion leads the accounts list.
   assert.doesNotMatch(html, /uyarı eşiğini geçti|Önerilen:/);
   const hint = suggestionBlock(html);
   assert.match(hint, />Limit dolmak üzere</);
   assert.match(hint, /En uygun hesap <b>Vertex<\/b>: %12 kullanıldı\./);
   assert.match(hint, /<button[^>]*>Vertex hesabına geç<\/button>/);
-  assert.match(html, />Önerilen üstte</);
-  assert.doesNotMatch(html, /en uygunu üstte</);
+  assert.doesNotMatch(html, /Önerilen üstte|en uygunu üstte/);
   // The suggested row carries a small "önerilen" by its name, and the row links to the account's page.
   const row = rowFor(html, "Vertex");
   assert.match(row, /<a href="#\/hesaplar\/vertex"/);
@@ -93,10 +92,10 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.doesNotMatch(html, /Geçişi incele/);
   // The suggested row's "Geç" is the filled one.
   assert.match(row, /<button[^>]*aria-label="Vertex hesabına geç"[^>]*class="[^"]*bg-primary[^"]*"[^>]*>Geç<\/button>/);
-  // The list ends in "Hesap ekle" with the rings' key under it.
+  // The list ends in "Hesap ekle"; the heading above it holds the rings' key.
   assert.match(listOf(html), /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle(?:(?!<\/button>)[\s\S])*?<\/button>/);
-  assert.match(html, /kalın: 5 saatlik dönem/);
-  assert.match(html, /ince: hafta/);
+  assert.match(html, /bg-muted-foreground"><\/span>5 saat</);
+  assert.match(html, /border border-muted-foreground"><\/span>hafta</);
   assert.match(html, /Bugün/);
   assert.match(html, /(?:Çalışma 09:00–18:00|Bugün çalışma yok) · önceden başlatma kapalı/);
   assert.doesNotMatch(html, /Otomatik başlatma/);
@@ -115,9 +114,9 @@ test("overview shows the active account, limits, accounts, today and automation"
 
 test("overview without an active account offers onboarding", () => {
   const emptyHtml = render(relayFor(undefined, [], {}));
-  assert.match(emptyHtml, /Merhaba, ben Relay’in kuryesiyim/);
-  assert.match(emptyHtml, /Her hesabı bir kez bağla, sonra buradan geç\./);
-  assert.match(/<svg[^>]*data-scene="welcome"[^>]*>/.exec(emptyHtml)?.[0] ?? "", /width="120"/);
+  assert.match(emptyHtml, /İlk hesabını ekle/);
+  assert.match(emptyHtml, /Her hesabı bir kez bağla\. Sonra buradan geç\./);
+  assert.match(/<svg[^>]*data-scene="welcome"[^>]*>/.exec(emptyHtml)?.[0] ?? "", /width="88"/);
   assert.match(emptyHtml, /Hesap ekle/);
   assert.doesNotMatch(emptyHtml, /Henüz hesap yok/);
   assert.doesNotMatch(emptyHtml, /Başka hesap yok/);
@@ -137,10 +136,10 @@ test("unlinked accounts lead to their page instead of offering a switch", () => 
   assert.doesNotMatch(html, />önerilen</);
 });
 
-/** The other-accounts list, up to the rings' key under it. */
+/** The other-accounts list, up to the end of its section. */
 const listOf = (html: string) => {
   const start = html.indexOf('data-slot="account-list"');
-  return start < 0 ? "" : html.slice(start, html.indexOf("kalın: 5 saatlik dönem", start));
+  return start < 0 ? "" : html.slice(start, html.indexOf("</section>", start));
 };
 const rowsOf = (html: string) => listOf(html).split('data-slot="account-row"').slice(1);
 const rowFor = (html: string, name: string) => rowsOf(html).find((r) => r.includes(`>${name}<`)) ?? "";
@@ -274,8 +273,8 @@ test("stale and unlinked accounts are never recommended", () => {
   assert.equal(switchButtons(html).length, 1);
   assert.match(rowFor(html, "Stale"), /aria-label="Stale hesabına geç"[^>]*class="[^"]*border bg-card/);
   assert.doesNotMatch(rowFor(html, "Loose"), />Geç</);
-  // Without a suggestion the heading only says how the rows are ordered.
-  assert.match(html, />en uygunu üstte</);
+  // Without a suggestion the heading holds only the rings' key.
+  assert.doesNotMatch(html, /en uygunu üstte|Önerilen üstte/);
   assert.doesNotMatch(html, /dolmak üzere/);
   assert.match(rowFor(html, "Stale"), /Limit verisi eski/);
 });
@@ -303,7 +302,7 @@ test("overview rows show the account's status where something is wrong, and stal
   const flows = { authFlows: [{ id: "f", accountId: "other", status: "waiting" }] as unknown as AuthFlow[] };
   const waiting = relayFor(active, [active, other], { active: use("active", 10, 10), other: stale });
   Object.assign(waiting.data as Snapshot, flows);
-  assert.match(rowFor(render(waiting), "Vertex"), /Tarayıcı onayı bekleniyor/);
+  assert.match(rowFor(render(waiting), "Vertex"), /Tarayıcıda onayla/);
   // Stale but healthy: the line says how old the reading is.
   assert.deepEqual(status(other, stale), ["Pro · limit verisi 1 sa önce okundu", "Limit verisi eski"]);
   assert.deepEqual(status(other, use("other", 1, 1)), ["Pro · hazır", "Hazır · dönem başlamadı"]);
@@ -312,8 +311,8 @@ test("overview rows show the account's status where something is wrong, and stal
 test("onboarding with saved accounts but none open looks out instead of greeting", () => {
   const other = acct("other", "Studio", "pro");
   const html = render(relayFor(undefined, [other], {}, { hasUnclaimedDesktop: true }));
-  assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="72"/);
-  assert.doesNotMatch(html, /data-scene="welcome"|Merhaba, ben Relay’in kuryesiyim/);
+  assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="56"/);
+  assert.doesNotMatch(html, /data-scene="welcome"|İlk hesabını ekle/);
   assert.match(html, /Claude uygulaması hesabı eşleştirilmedi/);
   // Every profile has a Claude app sign-in, so the button adds, as its click does.
   assert.match(html, /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle<\/button>/);
@@ -326,7 +325,7 @@ test("today's card shows a lookout panda when automatic start has no planned acc
   const settings = { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_PLANNING, autoStart: true, accounts: [] } };
   const html = render(relayFor(active, [active], usage, { settings }));
   assert.match(html, / · plana hesap eklenmedi/);
-  assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="40"/);
+  assert.match(/<svg[^>]*data-scene="lookout"[^>]*>/.exec(html)?.[0] ?? "", /width="32"/);
   assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-scene="lookout"/);
 });
 
@@ -431,14 +430,14 @@ test("today's card calls automatic start early start in both languages", () => {
 test("the onboarding and the today lookout pandas are playful, the welcome and the lookouts alike", () => {
   const playful = (scene: string, size: number) =>
     new RegExp(`<span data-playful="true" class="inline-block shrink-0 overflow-hidden" style="width:${size}px;height:${size}px"><svg[^>]*data-scene="${scene}"`);
-  // The welcome (no account yet) is 120 px and the pairing lookout 72 px.
-  assert.match(render(relayFor(undefined, [], {})), playful("welcome", 120));
-  assert.match(render(relayFor(undefined, [acct("other", "Studio", "pro")], {}, { hasUnclaimedDesktop: true })), playful("lookout", 72));
-  // Today's lookout is 40 px.
+  // The welcome (no account yet) is 88 px and the pairing lookout 56 px.
+  assert.match(render(relayFor(undefined, [], {})), playful("welcome", 88));
+  assert.match(render(relayFor(undefined, [acct("other", "Studio", "pro")], {}, { hasUnclaimedDesktop: true })), playful("lookout", 56));
+  // Today's lookout is 32 px.
   const active = acct("active", "Kişisel · Max", "max5");
   const usage = { active: use("active", 10, 10) };
   const settings = { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_PLANNING, autoStart: true, accounts: [] } };
-  assert.match(render(relayFor(active, [active], usage, { settings })), playful("lookout", 40));
+  assert.match(render(relayFor(active, [active], usage, { settings })), playful("lookout", 32));
   // An overview with an account open and a plan has no panda to click.
   assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-playful/);
 });
@@ -491,14 +490,14 @@ test("a first run lists the prerequisites, each with a mark, a reason and an act
   const app = item(list, "desktop");
   assert.match(app, /data-met="false"/);
   assert.match(app, /Claude uygulaması/);
-  assert.match(app, /Relay, Claude uygulamasında hesaplar arasında geçiş yapar\./);
+  assert.match(app, /Relay için Claude uygulaması gerekir\./);
   assert.match(app, /<a[^>]*href="https:\/\/claude\.ai\/download"[^>]*target="_blank"[^>]*>İndir<\/a>/);
   // Opening Code makes the Claude app download its own Claude Code: no CLI row before it.
   assert.equal(item(list, "cli"), "");
   const code = item(list, "code");
   assert.match(code, /data-met="false"/);
   assert.match(code, /Code sekmesi açıldı/);
-  assert.match(code, /Code’u bir kez aç; Claude Code da böylece iner\./);
+  assert.match(code, /Claude uygulamasında sol menüden Code’u bir kez aç\./);
   const cli = item(checklist(render(codeOpenNoCli())), "cli");
   assert.match(cli, /data-met="false"/);
   assert.match(cli, /Claude Code CLI/);
@@ -556,12 +555,12 @@ test("the checklist speaks English with the glossary names", () => {
   const cli = renderIn("en", codeOpenNoCli());
   assert.match(html, /Before you start/);
   assert.match(html, /Claude app/);
-  assert.match(html, /Relay switches the Claude app between accounts\./);
+  assert.match(html, /Relay needs the Claude app\./);
   assert.match(html, />Download<\/a>/);
-  assert.match(cli, /Needed to read usage limits\./);
+  assert.match(cli, /Relay uses it to read the limits\./);
   assert.match(cli, />Choose file<\/button>/);
   assert.match(html, /Code tab opened/);
-  assert.match(html, /Open Code once from the Claude app’s sidebar/);
+  assert.match(html, /Open Code one time from the Claude app sidebar/);
 });
 
 test("with no account, the overview offers the first one once and hides Today and automation", () => {
@@ -590,9 +589,9 @@ test("Today shows from one connected account, automation from two", () => {
   assert.match(pair, /Otomatik geçiş/);
 });
 
-test("the welcome says what Relay does, in both languages", () => {
-  assert.match(render(firstRun()), /Merhaba, ben Relay’in kuryesiyim<\/div><p[^>]*>Claude hesapların arasında tek tıkla geç; Code konuşmaların seninle gelsin\.<\/p>/);
-  assert.match(renderIn("en", firstRun()), /Switch between your Claude accounts in one click; your Code conversations come with you\./);
+test("the welcome says what to do first, in both languages", () => {
+  assert.match(render(firstRun()), /İlk hesabını ekle<\/div><p[^>]*>Her hesabı bir kez bağla\. Sonra buradan geç\.<\/p>/);
+  assert.match(renderIn("en", firstRun()), /Add your first account<\/div><p[^>]*>Connect each account one time\. Then switch here\.<\/p>/);
 });
 
 const welcomeButton = (html: string) => {
@@ -622,7 +621,7 @@ test("with no profile yet, an unlinked Claude sign-in is added, not linked", () 
   const relay = firstRun({ desktop: { currentAccountUuid: "00000000-0000-4000-8000-000000000001" } });
   relay.hasUnclaimedDesktop = true;
   const html = render(relay);
-  assert.match(html, /Merhaba, ben Relay’in kuryesiyim/);
+  assert.match(html, /İlk hesabını ekle/);
   assert.match(html, /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle<\/button>/);
   assert.doesNotMatch(html, /Hesabı eşleştir/);
 });
@@ -732,13 +731,13 @@ test("Overview rings say how far each reading can be trusted, and the key explai
   assert.match(ring("Old"), /aria-label="Old · 5 saat %20 kullanıldı · hafta %30 kullanıldı · limit verisi eski"/);
   assert.match(ring("None"), /data-state="unknown"/);
   assert.match(ring("Full"), /data-state="full"/);
-  // The stale row's line says how old its reading is; the key under the list says what faded rings mean.
+  // The stale row's line says how old its reading is; the key above the list says what faded rings mean.
   assert.match(rowFor(html, "Old"), />Pro · limit verisi 2 sa önce okundu</);
-  assert.match(html, /kesikli: veri eski/);
+  assert.match(html, /border-dashed border-muted-foreground"><\/span>limit verisi eski</);
   // Without a stale row the key keeps its two entries.
   const current = render(relayFor(active, [active, fresh], { active: use("active", 10, 10), fresh: use("fresh", 20, 30) }));
-  assert.match(current, /ince: hafta/);
-  assert.doesNotMatch(current, /eski veri/);
+  assert.match(current, /border border-muted-foreground"><\/span>hafta</);
+  assert.doesNotMatch(current, /border-dashed border-muted-foreground"><\/span>/);
 });
 
 test("the hero shows the plan, else the subscription, and a hollow dot while Claude is closed", () => {
@@ -756,7 +755,7 @@ test("the hero shows the plan, else the subscription, and a hollow dot while Cla
   assert.match(closed, /<span aria-hidden="true" class="[^"]*border-\[1\.5px\] border-muted-foreground\/60[^"]*"><\/span>Kapalı/);
   // A used-up limit draws the hero's rings critical.
   const exhausted = render(relayFor(active, [active], { active: use("active", 100, 40, NOW + 3_600_000) }));
-  assert.match(exhausted, /<div role="img"[^>]*data-state="full"[^>]*style="width:140px;height:140px"/);
+  assert.match(exhausted, /<div role="img"[^>]*data-state="full"[^>]*style="width:104px;height:104px"/);
 });
 
 test("the hero says why its switch to the suggestion is disabled", () => {

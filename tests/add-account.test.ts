@@ -59,15 +59,13 @@ test("routeQuery reads the intent after the page id", () => {
 
 test("the add-account dialog starts with the Claude app sign-in: no form, one button", () => {
   const html = wrap(relayFor(), createElement(AddAccountSteps, { close() {} }));
-  assert.match(html, /Adım 1 \/ 3/);
-  assert.match(html, /1 · Claude girişi/);
-  assert.match(html, /2 · Limit izni/);
+  assert.match(html, /1 · Claude uygulaması/);
+  assert.match(html, /2 · Limit okuma girişi/);
   assert.match(html, /3 · Hazır/);
   assert.match(html, /aria-current="step"/);
   assert.doesNotMatch(html, /Hesap adı/);
   assert.match(html, /Yeni hesapla giriş yap/);
-  assert.match(html, /Relay girişi kendisi kaydeder/);
-  assert.match(html, /<button[^>]*>Claude’u giriş ekranıyla aç…<\/button>/);
+  assert.match(html, /<button[^>]*>Claude uygulamasında giriş ekranını aç…<\/button>/);
   // An account open in the Claude app that Relay has not saved is offered instead.
   const current = wrap(relayFor({ hasUnclaimedDesktop: true }), createElement(AddAccountSteps, { close() {} }));
   assert.match(current, /Claude uygulamasında açık hesabı ekle/);
@@ -89,7 +87,7 @@ test("the profile fields' group field and history note follow the sharing mode",
   assert.doesNotMatch(form("same-group", "personal"), /id="add-account-group"/);
   // Anywhere else the group is ignored, so there is no field and no group sentence.
   for (const [mode, note] of [
-    ["all", /Code geçmişi bağlı tüm hesaplar arasında ortak\. Ayarlar → Geçişte taşınanlar’dan değiştirebilirsin\./],
+    ["all", /Code geçmişi bağlı tüm hesaplar arasında ortak\./],
     ["selected", /Code geçmişi yalnızca Ayarlar → Geçişte taşınanlar’da seçtiğin hesaplar arasında ortak\./],
     ["off", /Code geçmişi hesaplar arasında paylaşılmıyor\./],
   ] as const)
@@ -104,8 +102,8 @@ test("the profile fields' group field and history note follow the sharing mode",
 test("the add-account dialog follows the created profile through its sign-ins", () => {
   // Waiting for a new sign-in in the Claude app: Relay saves it itself.
   const pending = wrap(relayFor({ pendingDesktop: b }), createElement(AddAccountSteps, { close() {}, initial: { step: 1, id: "b" } }));
-  assert.match(pending, /Claude uygulamasında giriş bekleniyor/);
-  assert.match(pending, /Claude’u Code’da aç/);
+  assert.match(pending, /Claude uygulamasına giriş yap/);
+  assert.match(pending, /Code’u aç<\/button>/);
   assert.match(pending, /İptal et ve önceki hesaba dön/);
   assert.doesNotMatch(pending, /Girişi kaydet<\/button>/);
   // The account open in Claude, waiting for Code: the automatic save's own line and Open Code.
@@ -113,7 +111,7 @@ test("the add-account dialog follows the created profile through its sign-ins", 
     relayFor({ desktop: claude({ autoCapture: { accountId: "b", status: "waiting" } }) }),
     createElement(AddAccountSteps, { close() {}, initial: { step: 1, id: "b" } }),
   );
-  assert.match(auto, /Code’u bir kez aç; Relay girişi kendisi kaydeder\./);
+  assert.match(auto, /Code’u açınca Relay girişi kaydeder\./);
   assert.match(auto, /<button[^>]*>Code’u aç<\/button>/);
   // Several workspaces: the pick, by name, never a raw id.
   const choose = wrap(
@@ -123,9 +121,9 @@ test("the add-account dialog follows the created profile through its sign-ins", 
   assert.match(choose, new RegExp(`<option value="${B}"[^>]*>Çalışma alanı 2</option>`));
   // The usage step: started on its own, with a way to do it later.
   const limit = step(2, relayFor());
-  assert.match(limit, /“Studio” için limit izni/);
-  assert.match(limit, /Relay’in kendi penceresinde açılır/);
-  assert.match(limit, /Limit iznini başlat/);
+  assert.match(limit, /“Studio” için limit okuma girişi/);
+  assert.match(limit, /Relay’in bu hesabın limitlerini okuyabilmesi için bir kez giriş yap\./);
+  assert.match(limit, /Limit okuma girişi yap<\/button>/);
   assert.match(limit, /Sonra yap/);
 });
 test("the Desktop link dialog lists unlinked profiles", () => {
@@ -147,8 +145,8 @@ test("connection panels keep their ids, live regions and copy", () => {
   assert.match(html, /id="desktop-pending-panel"[^>]*aria-live="polite"|aria-live="polite"[^>]*id="desktop-pending-panel"/);
   assert.match(html, /id="cli-connection-panel"/);
   assert.match(html, /Studio · Claude uygulaması girişi/);
-  assert.match(html, /Claude’u Code’da aç/);
-  assert.match(html, /Tarayıcı onayı bekleniyor/);
+  assert.match(html, /Code’u aç<\/button>/);
+  assert.match(html, /Tarayıcıda onayla/);
   assert.match(html, /Tarayıcıyı yeniden aç/);
   assert.match(html, /2 \/ 3/);
 });
@@ -176,9 +174,9 @@ const withCli = (diagnostics: Partial<Diagnostics>) =>
 const step = (n: 2 | 3, relay: Relay) => wrap(relay, createElement(AddAccountSteps, { close() {}, initial: { step: n, id: "b" } }));
 
 test("saving a Claude app sign-in warns that macOS may ask for the Mac password once", () => {
-  const hint = /macOS bir kez Mac parolanı isteyebilir \(Relay Safe Storage\); “Her Zaman İzin Ver”i seç\./;
-  // The add-account dialog's sign-in step, before the sign-in is saved.
-  assert.match(wrap(relayFor(), createElement(AddAccountSteps, { close() {} })), hint);
+  const hint = /macOS Mac parolanı isterse \(Relay Safe Storage\) “Her Zaman İzin Ver”i seç\./;
+  // Said once, in the confirmation: the add-account dialog's sign-in step does not repeat it.
+  assert.doesNotMatch(wrap(relayFor(), createElement(AddAccountSteps, { close() {} })), hint);
   // The confirmations that save a sign-in say it, and so does a switch, which unseals one.
   const review = (kind: DesktopActionKind, language: "tr" | "en" = "tr") =>
     renderToStaticMarkup(
@@ -194,7 +192,7 @@ test("saving a Claude app sign-in warns that macOS may ask for the Mac password 
   for (const kind of ["history", "cancel", "recover"] as const) assert.doesNotMatch(review(kind), hint, kind);
   assert.match(
     review("capture", "en"),
-    /macOS may ask for your Mac password once \(Relay Safe Storage\); choose “Always Allow”\./,
+    /If macOS asks for your Mac password \(Relay Safe Storage\), select “Always Allow”\./,
   );
 });
 
@@ -204,14 +202,14 @@ test("without a usable CLI, the usage step is not started: the reason, the guide
     { executable: "/usr/local/bin/claude", version: "2.1.200 (Claude Code)" },
   ]) {
     const html = step(2, relayFor({ data: withCli(diagnostics) }));
-    assert.doesNotMatch(html, /Limit iznini başlat/, JSON.stringify(diagnostics));
+    assert.doesNotMatch(html, /Limit okuma girişi yap<\/button>/, JSON.stringify(diagnostics));
     assert.match(html, /Limitleri okumak için Claude Code gerekir\./);
     assert.match(html, /<a[^>]*href="https:\/\/docs\.anthropic\.com\/en\/docs\/claude-code\/setup"[^>]*target="_blank"/);
     assert.match(html, /<button[^>]*>Dosyayı seç<\/button>/);
     assert.match(html, /Sonra yap/);
   }
   const ready = step(2, relayFor({ data: withCli({ executable: "/usr/local/bin/claude", version: "2.1.300 (Claude Code)" }) }));
-  assert.match(ready, /Limit iznini başlat/);
+  assert.match(ready, /Limit okuma girişi yap<\/button>/);
   assert.doesNotMatch(ready, /Dosyayı seç/);
 });
 
@@ -223,12 +221,12 @@ test("the first step says why its button is disabled, next to it", () => {
   };
   const first = (relay: Relay) => wrap(relay, createElement(AddAccountSteps, { close() {} }));
   assert.match(
-    reasonAfter(first(relayFor({ desktop: claude({ available: false }) })), "Claude’u giriş ekranıyla aç…"),
+    reasonAfter(first(relayFor({ desktop: claude({ available: false }) })), "Claude uygulamasında giriş ekranını aç…"),
     /^<small[^>]*>Claude uygulaması bulunamadı; önce onu kur\.<\/small>/,
   );
   // Another profile's sign-in in progress.
   assert.match(
-    reasonAfter(first(relayFor({ pendingDesktop: w })), "Claude’u giriş ekranıyla aç…"),
+    reasonAfter(first(relayFor({ pendingDesktop: w })), "Claude uygulamasında giriş ekranını aç…"),
     /^<small[^>]*>Önce devam eden Claude uygulaması girişini tamamla veya iptal et\.<\/small>/,
   );
 });
@@ -241,7 +239,7 @@ test("the last step suggests the name, type and group from the sign-in", () => {
   const html = wrap(relayFor({ accounts: [a, named, w] }), createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }));
   assert.match(html, /Hesap hazır/);
   assert.match(html, /Claude uygulaması girişi kaydedildi/);
-  assert.match(html, /Limit izni verildi · ahmet@vertex\.com/);
+  assert.match(html, /Limit okuma girişi bağlı · ahmet@vertex\.com/);
   assert.match(html, /Kaydet ve bitir/);
   assert.match(html, /Başka hesap ekle/);
 });
@@ -276,7 +274,7 @@ test("the pending sign-in names the Code step while no workspace folder exists",
     relayFor({ pendingDesktop: b, hasUnclaimedDesktop: true, desktop: claude({ currentAccountUuid: "u" }) } as Partial<Relay>),
     createElement(ConnectionPanels),
   );
-  assert.match(html, /Claude uygulamasında sol menüden Code’u bir kez aç; liste kendiliğinden dolar\./);
+  assert.match(html, /Claude uygulamasında sol menüden Code’u bir kez aç\./);
   assert.doesNotMatch(html, /Girişi kaydet<\/button>/);
 });
 

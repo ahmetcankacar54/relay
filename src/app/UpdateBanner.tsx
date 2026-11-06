@@ -36,7 +36,7 @@ export function UpdateBanner() {
   const busy = !!relay.busy || !!relay.desktop?.busy;
   const notes = (
     <Button size="sm" variant="ghost" onClick={() => void relay.api.openUpdateNotes()}>
-      {status === "manual" ? t("İndirme sayfası", "Download page") : t("Neler yeni?", "What’s new")}
+      {status === "manual" ? t("İndirme sayfası", "Download page") : t("Sürüm notları", "Release notes")}
     </Button>
   );
   const hint = updateHint(update, t);

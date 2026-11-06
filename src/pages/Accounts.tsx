@@ -292,7 +292,7 @@ export function Accounts() {
             <SelectContent>
               <SelectItem value="all">{t("Tümü", "All accounts")}</SelectItem>
               <SelectItem value="connected">
-                {t("Claude girişi kayıtlı", "Claude sign-in saved")}
+                {t("Claude uygulaması girişi kayıtlı", "Claude app sign-in saved")}
               </SelectItem>
               <SelectItem value="personal">
                 {t("Kişisel", "Personal")}
@@ -354,14 +354,14 @@ export function AccountsEmpty({
   const { t } = useI18n();
   const searched = hasAccounts ? query.trim() : "";
   return (
-    <div className="grid justify-items-center gap-1.5 rounded-xl border border-dashed px-6 py-10 text-center">
+    <div className="grid justify-items-center gap-1.5 rounded-lg border border-dashed px-6 py-10 text-center">
       <Panda scene={hasAccounts ? "lookout" : "welcome"} size={72} playful />
       <h3 className="font-semibold break-words">
         {searched
           ? t(`“${searched}” ile eşleşen hesap yok`, `No accounts match “${searched}”`)
           : hasAccounts
-            ? t("Eşleşen hesap yok", "No matching accounts")
-            : t("Tüm hesapların tek panelde.", "One panel. All your accounts.")}
+            ? t("Eşleşen hesap yok", "No accounts match the filter")
+            : t("Henüz hesap yok", "No accounts yet")}
       </h3>
       {searched && clearQuery ? (
         <Button variant="link" size="sm" className="h-auto px-0" onClick={clearQuery}>
@@ -370,10 +370,10 @@ export function AccountsEmpty({
       ) : (
         <p className="text-sm text-muted-foreground">
           {hasAccounts
-            ? t("Aramayı veya filtreyi değiştir.", "Try a different search or filter.")
+            ? t("Aramayı veya filtreyi değiştir.", "Change the search or the filter.")
             : t(
-                "Önce Claude uygulamasında açık hesabını kaydet; ardından diğerlerini ekle.",
-                "Save the account open in the Claude app, then add your other accounts.",
+                "Önce Claude uygulamasında açık hesabı ekle.",
+                "Add the account open in the Claude app first.",
               )}
         </p>
       )}

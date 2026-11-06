@@ -282,7 +282,7 @@ test("limit hits are a table, newest first, with how long each stayed full", () 
   const en = text(render(createElement(LimitHits, { view, zone: ZONE }), "en"));
   assert.match(en, /Former accountweeklyongoing/);
   const quiet = text(render(createElement(LimitHits, { view: { ...view, hits: [] }, zone: ZONE })));
-  assert.match(quiet, /Bu dönemde limite takılma yok/);
+  assert.match(quiet, /Bu aralıkta limite takılma yok/);
 });
 
 test("the statistics section is limits only, with the explanation behind a disclosure", () => {
@@ -304,19 +304,19 @@ test("the statistics section is limits only, with the explanation behind a discl
 test("the statistics section shows the empty, unavailable, no-identity, loading and error states", () => {
   const section = (state: Parameters<typeof UsageStatisticsSection>[0]["state"], accountId?: string) =>
     text(render(createElement(UsageStatisticsSection, { state, accounts, zone: ZONE, accountId })));
-  assert.match(section({ view: emptyView("empty"), loading: false }), /Veri birikiyor/);
+  assert.match(section({ view: emptyView("empty"), loading: false }), /Henüz veri yok/);
   const unavailable = section({ view: emptyView("unavailable"), loading: false });
   assert.match(unavailable, /Kullanım geçmişi okunamadı/);
   assert.match(unavailable, /Canlı limitler çalışmaya devam eder/);
   assert.match(section({ view: emptyView("empty"), loading: false }, "c"), /Bu hesap için kullanım kaydı yok/);
   // A connected account with no rows yet is still "collecting".
-  assert.match(section({ view: emptyView("empty"), loading: false }, "a"), /Veri birikiyor/);
+  assert.match(section({ view: emptyView("empty"), loading: false }, "a"), /Henüz veri yok/);
   // A signed-out account keeps the history recorded under its identity.
   const signedOut: Account = { ...a, id: "d", name: "Signed out", auth: { ...a.auth!, loggedIn: false } };
   const withSignedOut = text(render(createElement(UsageStatisticsSection, {
     state: { view: emptyView("empty"), loading: false }, accounts: [...accounts, signedOut], zone: ZONE, accountId: "d",
   })));
-  assert.match(withSignedOut, /Veri birikiyor/);
+  assert.match(withSignedOut, /Henüz veri yok/);
   assert.doesNotMatch(withSignedOut, /Bu hesap için kullanım kaydı yok/);
   assert.match(section({ loading: true }), /İstatistikler yükleniyor/);
   assert.match(section({ loading: false, error: "boom" }), /İstatistikler alınamadı/);
@@ -330,8 +330,8 @@ test("the statistics section shows the empty, unavailable, no-identity, loading 
 
   const en = (state: Parameters<typeof UsageStatisticsSection>[0]["state"], accountId?: string) =>
     text(render(createElement(UsageStatisticsSection, { state, accounts, zone: ZONE, accountId }), "en"));
-  assert.match(en({ view: emptyView("empty"), loading: false }), /Collecting data/);
-  assert.match(en({ view: emptyView("unavailable"), loading: false }), /Usage history could not be read/);
+  assert.match(en({ view: emptyView("empty"), loading: false }), /No data yet/);
+  assert.match(en({ view: emptyView("unavailable"), loading: false }), /Cannot read the usage history/);
   assert.match(en({ view: emptyView("empty"), loading: false }, "c"), /No usage record for this account/);
 });
 
@@ -415,7 +415,7 @@ test("the warning threshold is phrased as what is used, for the stored values 80
 
 test("Settings calls the warning threshold's scope usage, not a window, in English", () => {
   const html = text(render(createElement(Settings, { tab: "bildirimler" as const }), "en"));
-  assert.match(html, /When 5-hour or weekly usage reaches this share\./);
+  assert.match(html, /For the 5-hour and weekly periods\./);
   assert.doesNotMatch(html, /usage window/);
 });
 

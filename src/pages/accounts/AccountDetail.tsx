@@ -124,7 +124,7 @@ export function AccountDetail({
         <span
           aria-hidden="true"
           className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full text-base font-semibold",
+            "grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold",
             avatarClass[a.color] ?? "bg-muted text-muted-foreground",
           )}
         >
@@ -206,7 +206,7 @@ export function AccountDetail({
   );
 }
 
-const cardClass = "gap-0 px-5 py-4";
+const cardClass = "gap-0 px-4 py-3.5";
 
 /**
  * The closed Code history row's summary: how many other accounts' history the next merge brings
@@ -368,7 +368,7 @@ function ExtensionConnection({
     <ConnectionRow
       icon={<AppWindow />}
       title={t("Tarayıcı eklentisi", "Browser extension")}
-      purpose={t("Tarayıcı eklentisi de bu hesaba geçer.", "The browser extension follows this account.")}
+      purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
       tone={guide.tone}
       status={guide.label}
       where={guide.where}
@@ -443,7 +443,7 @@ function TerminalConnection({
     <ConnectionRow
       icon={<SquareTerminal />}
       title={t("Terminal", "Terminal")}
-      purpose={t("Terminaldeki claude da geçer.", "The terminal’s claude follows too.")}
+      purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
       tone={guide.tone}
       status={guide.label}
       steps={guide.steps}
@@ -554,7 +554,7 @@ export function AccountDetailBody({
         <div
           data-slot="account-status"
           className={cn(
-            "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5 text-sm",
+            "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-4 py-2.5 text-sm",
             health.tone === "crit" && "border-crit/40 bg-crit/5",
             health.tone === "warn" && "border-warn/40 bg-warn/5",
           )}
@@ -569,22 +569,22 @@ export function AccountDetailBody({
       {duplicate && (
         <p
           role="status"
-          className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm"
+          className="rounded-lg border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm"
         >
           {t(
-            `Bu hesap ${duplicate.name} profiline de bağlı. İki profil aynı kullanım limitlerini paylaşır.`,
-            `This account is also connected to ${duplicate.name}. Both profiles share the same usage limits.`,
+            `Bu hesap ${duplicate.name} profiline de bağlı. İki profil aynı limitleri paylaşır.`,
+            `This account is also connected to ${duplicate.name}. Both profiles share the same limits.`,
           )}
         </p>
       )}
       {mismatch && (
         <p
           role="alert"
-          className="rounded-xl border border-crit/40 bg-crit/10 px-4 py-2.5 text-sm"
+          className="rounded-lg border border-crit/40 bg-crit/10 px-4 py-2.5 text-sm"
         >
           {t(
             "Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Limit okuma girişini bu profilin hesabıyla yenile.",
-            "The Claude app sign-in and the usage sign-in belong to different accounts. Renew the usage sign-in with this profile’s account.",
+            "The Claude app sign-in and the usage sign-in are for different accounts. Renew the usage sign-in with this profile’s account.",
           )}
         </p>
       )}
@@ -596,8 +596,10 @@ export function AccountDetailBody({
               aside={
                 freshUsage(usage, now ?? Date.now()) && usage?.checkedAt ? (
                   <span className="flex items-center gap-1">
-                    {t("Güncellendi", "Updated")}{" "}
-                    {formatRelative(usage.checkedAt, now ?? Date.now(), language)}
+                    {t(
+                      `${formatRelative(usage.checkedAt, now ?? Date.now(), language)} güncellendi`,
+                      `Updated ${formatRelative(usage.checkedAt, now ?? Date.now(), language)}`,
+                    )}
                     <Button
                       size="icon-xs"
                       variant="ghost"
@@ -698,7 +700,7 @@ export function AccountDetailBody({
             </ConnectionRow>
             <ConnectionRow
               icon={<Globe2 />}
-              title={t("Limit okuma", "Usage limits")}
+              title={t("Limit okuma girişi", "Usage sign-in")}
               purpose={t("Limitleri okur.", "Reads the limits.")}
               tone={signIn.tone}
               status={signIn.label}
@@ -710,11 +712,7 @@ export function AccountDetailBody({
                     disabled={!!busy || waiting}
                     onClick={() => void relay.startCli(a)}
                   >
-                    {waiting
-                      ? t("Bağlanıyor…", "Connecting…")
-                      : a.auth?.email
-                        ? t("Yenile", "Renew")
-                        : t("Giriş yap", "Sign in")}
+                    {a.auth?.email ? t("Yenile", "Renew") : t("Giriş yap", "Sign in")}
                   </Button>
                   {a.auth?.email && (
                     <Button
@@ -740,7 +738,7 @@ export function AccountDetailBody({
                                 )
                               : t(
                                   "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.",
-                                  "Could not verify the usage sign-in. Renew the usage sign-in.",
+                                  "Relay cannot verify the usage sign-in. Renew it.",
                                 ),
                           );
                         })
@@ -778,9 +776,9 @@ export function AccountDetailBody({
         <div className="grid gap-3">
           <Card className={cardClass}>
             <CardTitle title={t("Hesap", "Account")} />
-            <dl className="-mx-1 grid text-[13px]">
+            <dl className="-mx-1 grid text-sm">
               {[
-                [t("E-posta", "Email"), a.desktop?.email ?? a.auth?.email ?? t("Giriş bekleniyor", "Waiting for sign-in")],
+                [t("E-posta", "Email"), a.desktop?.email ?? a.auth?.email ?? "—"],
                 [t("Kuruluş", "Organization"), a.auth?.orgName ?? "—"],
                 [
                   t("Tür · grup", "Type · group"),

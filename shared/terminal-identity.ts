@@ -115,13 +115,13 @@ export function terminalLine(
   if (outcome.result === "switched")
     return [
       t(
-        `Terminaldeki Claude Code ${to} hesabına geçti. Açık terminal oturumlarını yeniden başlat; eski hesabın kurum bilgisiyle devam ederler.`,
-        `The terminal’s Claude Code moved to ${to}. Restart terminal sessions that are open: they carry on with the old account’s organization details.`,
+        `Terminaldeki Claude Code ${to} hesabına geçti. Açık terminal oturumlarını yeniden başlat.`,
+        `Claude Code in the terminal moved to ${to}. Restart open terminal sessions.`,
       ),
       outcome.unconfirmed
         ? t(
-            "Bu giriş, hesap terminalden elle değiştirilmeden önce kaydedilmişti; giriş isterse bir kez “claude auth login” yap.",
-            "This sign-in was saved before the account left the terminal by hand; if it asks you to sign in, run “claude auth login” once.",
+            "Bu giriş eski olabilir. Giriş isterse bir kez “claude auth login” yap.",
+            "This sign-in can be old. If Claude Code asks you to sign in, run “claude auth login” once.",
           )
         : "",
     ]
@@ -131,58 +131,58 @@ export function terminalLine(
     case "already-there":
       return t(
         `Terminaldeki Claude Code zaten ${to} hesabında.`,
-        `The terminal’s Claude Code is already on ${to}.`,
+        `Claude Code in the terminal is already on ${to}.`,
       );
     case "no-saved-login":
       return t(
-        `${to} için kayıtlı terminal girişi yok. Terminalde bir kez “claude auth login” ile bu hesaba gir; Relay girişi kaydeder.`,
-        `${to} has no saved terminal sign-in. Sign in once in a terminal with “claude auth login”; Relay saves it.`,
+        `${to} için kayıtlı terminal girişi yok. Terminalde bir kez “claude auth login” ile bu hesaba gir. Relay girişi kaydeder.`,
+        `${to} has no saved terminal sign-in. Sign in once in a terminal with “claude auth login”. Relay saves it.`,
       );
     case "unknown-account":
       return t(
         "Terminaldeki Claude Code, Relay’de olmayan bir hesapta; Relay o girişe dokunmaz. Terminalde “claude auth login” ile Relay hesaplarından birine gir.",
-        "The terminal’s Claude Code is on an account Relay does not have, and Relay leaves that sign-in alone. Sign it in to one of Relay’s accounts with “claude auth login”.",
+        "Claude Code in the terminal is on an account that is not in Relay. Relay does not change that sign-in. Sign in to a Relay account with “claude auth login”.",
       );
     case "mismatch":
       return t(
         "Terminaldeki giriş, ~/.claude.json’un söylediğinden başka bir hesaba ait; Relay kaydetmedi ve değiştirmedi. Terminalde “claude auth login” ile yeniden gir.",
-        "The terminal’s sign-in belongs to another account than ~/.claude.json names, so Relay neither saved nor replaced it. Sign in again with “claude auth login”.",
+        "The terminal sign-in is for a different account than ~/.claude.json shows. Relay did not save or replace it. Sign in again with “claude auth login”.",
       );
     case "unsupported":
       return t(
         "Bu Mac’te terminal girişi yönetilemiyor.",
-        "The terminal’s sign-in cannot be managed on this Mac.",
+        "Relay cannot manage the terminal sign-in on this Mac.",
       );
     case "busy":
       return t(
         "Claude Code o sırada girişini yeniliyordu; terminal değiştirilmedi. “Şimdi eşitle” ile tekrar dene.",
-        "Claude Code was renewing its sign-in at that moment, so the terminal was not changed. Try Sync now.",
+        "Claude Code renewed its sign-in at that moment, so Relay did not change the terminal. Try again with “Sync now”.",
       );
     case "locked":
       return t(
-        "Anahtar Zinciri okunamadı. Kilidini açıp tekrar dene.",
-        "The Keychain could not be read. Unlock it and try again.",
+        "Anahtarlık okunamadı. Kilidini açıp tekrar dene.",
+        "Relay cannot read the Keychain. Unlock it and try again.",
       );
     case "unreadable":
       return t(
         "Terminaldeki Claude Code girişi okunamadı.",
-        "Could not read the terminal’s Claude Code sign-in.",
+        "Relay cannot read the Claude Code sign-in in the terminal.",
       );
     case "write-failed":
       return t(
         "Terminal girişi yazılamadı; önceki giriş yerinde bırakıldı.",
-        "The terminal sign-in could not be written; the previous one was left in place.",
+        "Relay cannot write the terminal sign-in. The previous sign-in stays in place.",
       );
     case "restore-failed":
       return t(
         "Terminal girişi yazılamadı ve önceki giriş geri konamadı. Terminalde “claude auth login” ile yeniden gir.",
-        "The terminal sign-in could not be written and the previous one could not be put back. Sign in again with “claude auth login”.",
+        "Relay cannot write the terminal sign-in or put back the previous one. Sign in again with “claude auth login”.",
       );
     default:
       return outcome.result === "failed"
         ? t(
             "Terminal girişi değiştirilemedi.",
-            "The terminal’s sign-in could not be changed.",
+            "Relay cannot change the terminal sign-in.",
           )
         : undefined;
   }

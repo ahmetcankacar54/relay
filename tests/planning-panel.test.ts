@@ -334,7 +334,7 @@ test("the usage lane shows who works when, with switches and the comparison", ()
   const legend = /data-slot="timeline-legend"[^>]*>([\s\S]*?)<\/ul>/.exec(html)?.[1] ?? "";
   assert.deepEqual(
     [...legend.matchAll(/<\/i>([^<]*)<\/li>/g)].map(([, word]) => word),
-    ["Çalışma", "Tahmin", "Dolu", "Geçiş"],
+    ["Çalışma", "Tahmin", "Limit dolu", "Geçiş"],
   );
   assert.doesNotMatch(html, /Kullanım şeridi, Relay’in tahminidir/);
   const view = dayTimeline({
@@ -415,7 +415,7 @@ test("the usage lane shows who works when, with switches and the comparison", ()
     html,
     warmUps("Önceden başlatma: Kişisel - Max 04:50 · Vertex Team 06:30 · Pro 08:10"),
   );
-  assert.doesNotMatch(html, /dönemler erken başlatılmaz/);
+  assert.doesNotMatch(html, warmUps("Önceden başlatma kapalı"));
 });
 
 test("with automatic start off the comparison says nothing is warmed up", () => {
@@ -428,7 +428,7 @@ test("with automatic start off the comparison says nothing is warmed up", () => 
   assert.match(html, />Bu plan</);
   assert.match(html, /class="block [^"]*font-semibold">Kesintisiz · 3 geçiş</);
   assert.match(html, />14:18–14:50 limit dolu · 5 geçiş</);
-  assert.equal(count(html, />Önceden başlatma kapalı; dönemler erken başlatılmaz</g), 2);
+  assert.equal(count(html, />Önceden başlatma kapalı</g), 2);
   assert.doesNotMatch(html, /Önceden başlatma: /);
   assert.doesNotMatch(html, /Otomatik başlatma/);
 });
@@ -595,7 +595,7 @@ test("the hero forecasts the day before work and the rest of it during work", ()
     tempo: busyTempo,
     settings: { autoStart: false },
   });
-  assert.match(off, /Kapalı\. Açınca/);
+  assert.match(off, />Açınca dönemler planlanan saatlerde başlar\.</);
   assert.doesNotMatch(off, /Tahmin: |Bugün kalan: |tempoyla</);
 });
 
@@ -1065,7 +1065,7 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
     adaptation: adapted(2, [[pro, "13:30"]]),
     t: (_, text) => text,
   });
-  assert.ok(badgeClass(en, "Today you’re at 2.0× the plan’s pace"));
+  assert.ok(badgeClass(en, "Today: 2.0× the planned pace"));
   assert.ok(badgeClass(en, "Plan adapted"));
   assert.match(en, />Plan adapted · starts at 13:30</);
   assert.match(en, />Adapt</);

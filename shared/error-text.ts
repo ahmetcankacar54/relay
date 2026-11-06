@@ -12,22 +12,22 @@ const pairs: Pair[] = [
   [
     "Relay.app şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.",
     "Relay.app is using Claude Desktop. Try again when it ends.",
-    "Relay is working in the Claude app. Try again when it’s done.",
+    "A Relay action is running in the Claude app. Try again when it ends.",
   ],
   [
     "Terminaldeki bir relay komutu şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.",
     "A relay command in a terminal is using Claude Desktop. Try again when it ends.",
-    "A relay command in a terminal is working in the Claude app. Try again when it’s done.",
+    "A relay command in a terminal uses the Claude app. Try again when it ends.",
   ],
   [
     "Başka bir Relay işlemi şu an Claude uygulamasında çalışıyor. Bitince yeniden dene.",
     "Another Relay process is using Claude Desktop. Try again when it ends.",
-    "Another Relay process is working in the Claude app. Try again when it’s done.",
+    "Another Relay process uses the Claude app. Try again when it ends.",
   ],
   [
     "Tercihleri değiştirmeden önce Claude uygulamasındaki işlemi tamamla.",
     "Finish the Desktop operation before changing preferences.",
-    "Finish the Claude app operation before changing preferences.",
+    "Finish the Claude app action before you change preferences.",
   ],
   ["Claude’u başlatma seçimi geçersiz.", "Invalid Claude launch choice."],
   [
@@ -42,6 +42,7 @@ const pairs: Pair[] = [
   [
     "İndirilen güncelleme bu Relay gibi imzalanmamış, bu yüzden kurulmadı.",
     "The downloaded update is not signed like this Relay, so it was not installed.",
+    "The downloaded update has a different signature. Relay did not install it.",
   ],
   ["Sürüm, güncelleme için sağlama toplamı listelemiyor.", "The release lists no checksum for the update."],
   [
@@ -83,6 +84,7 @@ const pairs: Pair[] = [
   [
     "Ayrı pencere hâlâ açık. Claude orada çalışan işler için soru soruyor olabilir.",
     "The separate window is still open. Claude may be asking about work left running there.",
+    "The separate window is still open. Check it for a question from Claude.",
   ],
   ["Menü çubuğu seçimi geçersiz.", "Invalid menu bar title."],
   [
@@ -92,31 +94,32 @@ const pairs: Pair[] = [
   [
     "Geçmişini birleştirmeden önce Claude uygulamasında bu hesaba geç.",
     "Switch to this Desktop account before syncing its history.",
-    "Switch the Claude app to this account before syncing its history.",
+    "Switch the Claude app to this account before you sync its history.",
   ],
   [
     "Claude uygulamasının geçmiş takip verisi geçersiz.",
     "Invalid Desktop history tracking data.",
-    "Invalid Claude app history tracking data.",
+    "The history data of the Claude app is not valid.",
   ],
   [
     "Koşullar değiştiği için otomatik geçiş iptal edildi.",
     "Automatic Desktop switch was cancelled because its conditions changed.",
-    "The automatic switch was cancelled because its conditions changed.",
+    "Relay stopped the automatic switch because the conditions changed.",
   ],
   [
     "Geçiş sırasında Claude uygulaması açıldı. Uygulamayı kapattıktan sonra yedeği geri yükle.",
     "Claude opened during the Desktop switch. Restore its backup after closing Claude.",
-    "The Claude app opened during the switch. Restore its backup after quitting the Claude app.",
+    "The Claude app opened during the switch. Quit it, then restore the backup.",
   ],
   [
     "Bu profil farklı bir Claude hesabına bağlı. Claude uygulamasında eşleşen hesabı seç.",
     "This profile is connected to a different Claude account. Choose the matching Desktop account.",
-    "This profile is connected to a different Claude account. Choose the matching account in the Claude app.",
+    "This profile is connected to a different Claude account. Select the matching account in the Claude app.",
   ],
   [
     "Bu profil farklı bir Claude kuruluşuna bağlı. Eşleşen Code çalışma alanını seç.",
     "This profile is connected to a different Claude organization. Choose its matching Code workspace.",
+    "This profile is connected to a different Claude organization. Select the matching Code workspace.",
   ],
   [
     "Kurulum sırasında Claude uygulamasındaki hesap değişti. Tekrar dene.",
@@ -131,17 +134,17 @@ const pairs: Pair[] = [
   [
     "Kayıtlı Claude uygulaması girişi eksik. Hesabı yeniden bağla.",
     "Saved Desktop sign-in is missing. Connect this account again.",
-    "Saved Claude app sign-in is missing. Connect this account again.",
+    "The saved Claude app sign-in is missing. Connect this account again.",
   ],
   [
     "Kayıtlı Claude uygulaması girişi geçersiz.",
     "Invalid saved Desktop sign-in.",
-    "Invalid saved Claude app sign-in.",
+    "The saved Claude app sign-in is not valid.",
   ],
   [
     "Claude uygulaması hâlâ açık. Dosyalar değiştirilmedi.",
     "Claude is still running. No files were changed.",
-    "The Claude app is still running. No files were changed.",
+    "The Claude app is still running. Relay did not change any files.",
   ],
   [
     "Kurtarma yedeği bulunamadı.",
@@ -151,7 +154,7 @@ const pairs: Pair[] = [
   [
     "Claude uygulaması yedeği geçersiz.",
     "Invalid Desktop backup.",
-    "Invalid Claude app backup.",
+    "The Claude app backup is not valid.",
   ],
   ["Kurtarma dosya yolu geçersiz.", "Invalid recovery path."],
   ["Kurtarma verisi geçersiz.", "Invalid recovery data."],
@@ -178,19 +181,27 @@ const pairs: Pair[] = [
   [
     "Code oturum biçimi tanınmadı. Claude uygulaması dosyaları değiştirilmedi.",
     "Unrecognized Code session format. No Desktop files changed.",
-    "Unrecognized Code session format. No Claude app files changed.",
+    "Unknown Code session format. Relay did not change any Claude app files.",
   ],
-  ["Proje biçimi tanınmadı.", "Unrecognized project format."],
-  ["Proje kaydı tanınmadı.", "Unrecognized project record."],
+  [
+    "Proje biçimi tanınmadı.",
+    "Unrecognized project format.",
+    "Unknown project format.",
+  ],
+  [
+    "Proje kaydı tanınmadı.",
+    "Unrecognized project record.",
+    "Unknown project record.",
+  ],
   [
     "Geçişten önce yedeğin geri yüklenmesi gerekiyor.",
     "Desktop recovery is required before switching.",
-    "Restore the backup before switching.",
+    "Restore the backup before you switch.",
   ],
   [
     "Claude uygulaması verisi okunamadı. Dosyalar değiştirilmedi.",
     "Claude Desktop data could not be read. No files were changed.",
-    "The Claude app’s data could not be read. No files were changed.",
+    "Relay cannot read the Claude app data. It did not change any files.",
   ],
   [
     "İşletim sistemi şifrelemesi kullanılamıyor.",
@@ -200,10 +211,12 @@ const pairs: Pair[] = [
     // Thrown in Turkish by electron/core/service.ts; this text is the key there too.
     "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
     "Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Claude Code CLI → Choose file.",
+    "Relay cannot find Claude Code. Open Code once in the Claude app, or select the file in Settings → Claude Code CLI.",
   ],
   [
     "Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.",
     "This is a UI preview. Open the Relay desktop application to manage real accounts.",
+    "This is a preview. Open the Relay app to manage real accounts.",
   ],
   ["En fazla 50 hesap eklenebilir.", "You can add up to 50 accounts."],
 
@@ -226,22 +239,27 @@ const pairs: Pair[] = [
   [
     "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.",
     "The usage sign-in could not be verified. Renew the usage sign-in.",
+    "Relay cannot verify the usage sign-in. Renew the usage sign-in.",
   ],
   [
     "Limit okuma girişi başlatılamadı. Ayarlar’daki Claude Code CLI bölümünü kontrol et.",
     "Could not start the usage sign-in. Check Claude Code CLI in Settings.",
+    "The usage sign-in did not start. Check Claude Code CLI in Settings.",
   ],
   [
     "Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
     "The browser approval came through, but the account could not be verified. Refresh limits; if it persists, renew the usage sign-in.",
+    "The browser approval is done, but Relay cannot verify the account. Refresh limits. If the problem continues, renew the usage sign-in.",
   ],
   [
     "Hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
     "The account could not be verified. Refresh limits; if it persists, renew the usage sign-in.",
+    "Relay cannot verify the account. Refresh limits. If the problem continues, renew the usage sign-in.",
   ],
   [
     "Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.",
     "The sign-in page isn’t ready yet or has expired. Start the sign-in again.",
+    "The sign-in page is not ready or has expired. Start the sign-in again.",
   ],
   [
     "Bu giriş denemesi artık geçerli değil.",
@@ -250,6 +268,7 @@ const pairs: Pair[] = [
   [
     "Bu giriş işlemi kod beklemiyor.",
     "This sign-in attempt is not waiting for a code.",
+    "This sign-in attempt does not need a code.",
   ],
   [
     "Tarayıcının verdiği tek satırlık kodu yapıştır.",
@@ -268,12 +287,12 @@ const pairs: Pair[] = [
   [
     "Önce Claude uygulamasında açık hesabı bir profile kaydet.",
     "Save the current Desktop account into a profile before adding another account.",
-    "Save the account open in the Claude app into a profile before adding another account.",
+    "Save the account open in the Claude app before you add another account.",
   ],
   [
     "Geçişten önce Claude uygulamasında açık hesabı kaydet.",
     "Save the current Desktop account before switching.",
-    "Save the account open in the Claude app before switching.",
+    "Save the account open in the Claude app before you switch.",
   ],
   [
     "Önce devam eden Claude uygulaması girişini tamamla veya iptal et.",
@@ -283,12 +302,12 @@ const pairs: Pair[] = [
   [
     "Claude uygulamasında bir işlem sürüyor.",
     "A Desktop operation is already in progress.",
-    "A Claude app operation is already in progress.",
+    "A Claude app action is already in progress.",
   ],
   [
     "Bu platformda Claude uygulaması bulunamadı.",
     "Claude Desktop was not found on this platform.",
-    "The Claude app was not found on this platform.",
+    "Relay cannot find the Claude app on this computer.",
   ],
   [
     "Önce yarım kalan geçişi geri yükle.",
@@ -313,12 +332,12 @@ const pairs: Pair[] = [
   [
     "Claude uygulaması kapanmadı. Açık çalışmanı bitirip uygulamayı kapattıktan sonra tekrar dene. Dosyalar değiştirilmedi.",
     "Claude Desktop did not close. Finish running work and quit Claude, then try again. No files changed.",
-    "The Claude app did not close. Finish running work and quit the Claude app, then try again. No files changed.",
+    "The Claude app did not close. Finish the work in progress and quit the Claude app. Then try again. Relay did not change any files.",
   ],
   [
     "İşletim sistemi şifrelemesi kullanılamıyor. Claude uygulaması girişi kaydedilmedi.",
     "System encryption is unavailable. Desktop sign-in was not saved.",
-    "System encryption is unavailable. Claude app sign-in was not saved.",
+    "System encryption is not available. Relay did not save the Claude app sign-in.",
   ],
   // electron/main.ts and the Desktop lock.
   [
@@ -329,19 +348,19 @@ const pairs: Pair[] = [
   [
     "Giriş yapmadan önce Claude uygulamasındaki işlemin bitmesini bekle.",
     "Finish the Desktop handoff before signing in.",
-    "Wait for the Claude app operation to finish before signing in.",
+    "Wait for the Claude app action to finish. Then sign in.",
   ],
   [
     "Claude uygulamasındaki işlemin bitmesini bekle, sonra yenisini başlat.",
     "Finish the Desktop handoff before starting another Desktop operation.",
-    "Wait for the Claude app operation to finish before starting another.",
+    "Wait for the Claude app action to finish. Then start the next one.",
   ],
   ["Geçersiz IPC kaynağı.", "Invalid IPC source."],
   // electron/core/desktop.ts: automatic preparation refused.
   [
     "Otomatik hazırlıktan önce Claude uygulamasında açık hesap bilinmeli.",
     "The active Desktop account must be known before automatic preparation.",
-    "The account open in the Claude app must be known before automatic preparation.",
+    "Relay must know the account open in the Claude app before automatic preparation.",
   ],
   [
     "Otomatik hazırlıktan önce Claude uygulamasındaki hesap değişti.",
@@ -351,6 +370,7 @@ const pairs: Pair[] = [
   [
     "Otomatik hazırlığa artık izin yok.",
     "Automatic preparation is no longer authorized.",
+    "Automatic preparation is no longer allowed.",
   ],
   [
     "Otomatik hazırlıktan önce seçilen hesap değişti.",
@@ -360,23 +380,34 @@ const pairs: Pair[] = [
   [
     "Otomatik geçiş, yeniden başlatmadan önce iptal edildi.",
     "Automatic Desktop switch was cancelled before restart.",
-    "The automatic switch was cancelled before the restart.",
+    "Relay stopped the automatic switch before the restart.",
   ],
   ["Code kaydı bulunamadı.", "Missing Code record."],
-  ["İşlem listesi okunamadı.", "The process list could not be read."],
-  ["Claude CLI giriş durumu geçersiz.", "Invalid CLI authentication status."],
+  [
+    "İşlem listesi okunamadı.",
+    "The process list could not be read.",
+    "Relay cannot read the process list.",
+  ],
+  [
+    "Claude CLI giriş durumu geçersiz.",
+    "Invalid CLI authentication status.",
+    "The CLI sign-in status is not valid.",
+  ],
   // Thrown in Turkish by electron/core/service.ts and runner.ts; their English follows.
   [
     "Claude uygulamasında doğru hesabın açık olduğunu doğrula.",
     "Check that the right account is open in the Claude app.",
+    "Make sure that the correct account is open in the Claude app.",
   ],
   [
     "Claude uygulamasına aktarım bu platformda veya CLI sürümünde desteklenmiyor.",
     "Sending to the Claude app is not supported on this platform or CLI version.",
+    "This platform or CLI version cannot send sessions to the Claude app.",
   ],
   [
     "Önce Relay içinde seçilen hesapla devam et; ardından o oturumu Claude uygulamasına gönder.",
     "Continue with the chosen account in Relay first, then send that session to the Claude app.",
+    "Continue with the selected account in Relay first. Then send that session to the Claude app.",
   ],
   [
     "Önce bu hesabın limit okuma girişini tamamla ya da iptal et.",
@@ -385,12 +416,12 @@ const pairs: Pair[] = [
   [
     "Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.",
     "Bu hesap beklemede. Hesaplar ekranından beklemeyi kaldır veya başka hesap seç.",
-    "This account is on hold. Lift the hold on Accounts or choose another account.",
+    "This account is on hold. Remove the hold on Accounts, or select another account.",
   ],
   [
     "Proje klasörü bulunamadı. Klasörü yeniden seç.",
     "Proje klasörü bulunamadı. Klasörü yeniden seç.",
-    "The project folder was not found. Choose it again.",
+    "Relay cannot find the project folder. Select it again.",
   ],
   [
     "Bu projede çalışan oturumu önce Canlı çalışma sekmesinden durdur.",
@@ -430,10 +461,12 @@ const pairs: Pair[] = [
   [
     "Bu hesabı kaldırmadan önce Claude uygulamasında başka bir hesaba geç.",
     "Switch the Claude app to another account before removing this one.",
+    "Switch the Claude app to another account before you remove this one.",
   ],
   [
     "Bu hesabı kaldırmadan önce Claude uygulaması girişini tamamla ya da iptal et.",
     "Finish or cancel this account’s Claude app sign-in before removing it.",
+    "Finish or cancel this account’s Claude app sign-in before you remove it.",
   ],
   [
     "Claude Code bu hesapla çalışıyor.",
@@ -442,6 +475,7 @@ const pairs: Pair[] = [
   [
     "Başka bir işlem bu hesabın girişini yapıyor ya da bağlantısını yeniliyor.",
     "Another process is signing this account in or renewing its connection.",
+    "Another process signs this account in or renews its connection.",
   ],
   // electron/core/desktop.ts: the extension check.
   [
@@ -452,37 +486,45 @@ const pairs: Pair[] = [
   [
     "Claude Code sürümü okunamadı. Çalıştırılabilir dosyayı kontrol et.",
     "The Claude Code version could not be read. Check the executable.",
+    "Relay cannot read the Claude Code version. Check the Claude Code CLI file.",
   ],
   // electron/main.ts: where saved Claude app sign-ins cannot be sealed (Linux, Windows).
   [
     "Sistem anahtarlığı bulunamadı (Secret Service ya da KWallet), bu yüzden Claude uygulaması girişleri kaydedilemiyor. gnome-keyring ya da KWallet’i kurup kilidini aç, sonra Relay’i yeniden başlat.",
     "No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay.",
+    "Relay cannot find a system keyring (Secret Service or KWallet), so it cannot save Claude app sign-ins. Install and unlock gnome-keyring or KWallet. Then restart Relay.",
   ],
   [
     "İşletim sistemi şifrelemesi kullanılamıyor, bu yüzden Claude uygulaması girişleri kaydedilemiyor.",
     "System encryption is unavailable, so Claude app sign-ins cannot be saved.",
+    "System encryption is not available, so Relay cannot save Claude app sign-ins.",
   ],
   // electron/core/store.ts (StoreWriteRefused).
   [
     "Relay’in hesap listesini daha yeni bir sürüm yazmış. Değiştirmeden önce bu Relay kopyasını güncelle.",
     "Relay’s account list was written by a newer version. Update this copy of Relay before changing it.",
+    "A newer Relay version wrote the account list. Update this copy of Relay before you change it.",
   ],
   [
     "Relay’in hesap listesini Relay 0.11 ya da daha eski bir sürüm yazmış. Relay.app’i 0.12 veya üstüne güncelleyip bir kez aç.",
     "Relay’s account list was written by Relay 0.11 or older. Update Relay.app to 0.12 or later and open it once.",
+    "Relay 0.11 or older wrote the account list. Update Relay.app to 0.12 or later and open it once.",
   ],
   // electron/core/vault-migration.ts: moving the saved sign-ins to the Keychain-keyed format.
   [
     "Eski kayıtlı giriş dosyalarının hiçbiri açılamadı, bu yüzden hiçbir şey taşınmadı. Relay bir sonraki açılışta yeniden dener.",
     "None of the old saved sign-in files could be opened, so nothing was moved. Relay tries again at its next start.",
+    "Relay cannot open any of the old saved sign-in files, so it did not move them. Relay tries again at its next start.",
   ],
   [
     "journal.json’daki kurtarma yedeği açılamadı, bu yüzden kayıtlı girişler yeni biçime taşınmadı.",
     "The recovery backup named in journal.json could not be opened, so the saved sign-ins were not moved to the new format.",
+    "Relay cannot open the recovery backup named in journal.json, so it did not move the saved sign-ins to the new format.",
   ],
   [
     "Relay eski kayıtlı girişleri bu sefer açamadı (macOS anahtarlarına erişim izni vermedi). Hiçbir şey taşınmadı; Relay bir sonraki açılışta yeniden dener.",
     "Relay could not open its old saved sign-ins this time (macOS did not allow access to their key). Nothing was moved; Relay tries again at its next start.",
+    "Relay cannot open its old saved sign-ins: macOS did not allow access to their key. Relay did not move them and tries again at its next start.",
   ],
 ];
 

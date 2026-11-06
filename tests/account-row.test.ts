@@ -52,13 +52,13 @@ test("ringState reads how far an account's limits can be trusted", () => {
 
 test("the Overview line leads with the plan, as the Accounts table names it", () => {
   assert.equal(accountTileLine(row("window-open", use(22, 35)), tr, "tr", "UTC", NOW), "Team · dönem açık · 3 sa 10 dk kaldı");
-  assert.equal(accountTileLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "Team · period open · 3 h 10 m left");
+  assert.equal(accountTileLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "Team · period open · 3 h 10 min left");
   assert.equal(accountTileLine(row("ready", use(0, 35)), tr, "tr", "UTC", NOW), "Team · hazır");
   // Without a plan picked, the subscription the sign-in reported; without either, the status alone.
   assert.equal(accountTileLine(row("ready", use(0, 35), max()), tr, "tr", "UTC", NOW), "Max · hazır");
   const bare = acct({ planning: undefined });
   assert.equal(accountTileLine(row("ready", use(0, 35), bare), tr, "tr", "UTC", NOW), "Hazır");
-  assert.equal(accountTileLine(row("window-open", use(22, 35), bare), en, "en", "UTC", NOW), "Period open · 3 h 10 m left");
+  assert.equal(accountTileLine(row("window-open", use(22, 35), bare), en, "en", "UTC", NOW), "Period open · 3 h 10 min left");
   // A full account says when it opens.
   const at = iso(NOW + 3_600_000);
   assert.equal(accountTileLine(row("exhausted", use(100, 35), acct(), at), tr, "tr", "UTC", NOW), "Team · 11:00’de açılır (1 sa)");
@@ -70,7 +70,7 @@ test("an old reading says its age on the Overview line, and a problem still outr
   const stale = row("unknown", old(use(22, 35)), max());
   // Its period's reset is still ahead, and a reset time does not grow old.
   assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW), "Max · limit verisi 2 sa önce okundu · 3 sa 10 dk sonra yenilenir");
-  assert.equal(accountTileLine(stale, en, "en", "UTC", NOW), "Max · usage data read 2 h ago · resets in 3 h 10 m");
+  assert.equal(accountTileLine(stale, en, "en", "UTC", NOW), "Max · usage data read 2 h ago · resets in 3 h 10 min");
   // Marked stale by a failed read that kept the limits: also its age.
   const kept = row("unknown", old(use(22, 35, { status: "error", issue: "rate-limited", stale: true })), max());
   assert.equal(accountTileLine(kept, tr, "tr", "UTC", NOW), "Max · limit verisi 2 sa önce okundu · 3 sa 10 dk sonra yenilenir");
@@ -81,15 +81,15 @@ test("an old reading says its age on the Overview line, and a problem still outr
   const locked = row("unknown", old(use(22, 35, { status: "error", issue: "keychain-locked", stale: true })), max());
   assert.equal(accountTileLine(locked, tr, "tr", "UTC", NOW), "Max · anahtarlık izni gerekli");
   assert.equal(accountTileLine(locked, en, "en", "UTC", NOW), "Max · Keychain access needed");
-  assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW, true), "Max · tarayıcı onayı bekleniyor");
+  assert.equal(accountTileLine(stale, tr, "tr", "UTC", NOW, true), "Max · tarayıcıda onayla");
 });
 
 test("the panel line leads with the time left, so a narrow panel cuts the percents instead", () => {
   assert.equal(panelRowLine(row("window-open", use(22, 35)), tr, "tr", "UTC", NOW), "3 sa 10 dk sonra yenilenir · %22 · %35");
-  assert.equal(panelRowLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "Resets in 3 h 10 m · 22% · 35%");
+  assert.equal(panelRowLine(row("window-open", use(22, 35)), en, "en", "UTC", NOW), "Resets in 3 h 10 min · 22% · 35%");
   // An old reading keeps its reset, which does not grow old, and says its age.
   assert.equal(panelRowLine(row("unknown", old(use(22, 35))), tr, "tr", "UTC", NOW), "3 sa 10 dk sonra yenilenir · 2 sa önce okundu · %22 · %35");
-  assert.equal(panelRowLine(row("unknown", old(use(22, 35))), en, "en", "UTC", NOW), "Resets in 3 h 10 m · read 2 h ago · 22% · 35%");
+  assert.equal(panelRowLine(row("unknown", old(use(22, 35))), en, "en", "UTC", NOW), "Resets in 3 h 10 min · read 2 h ago · 22% · 35%");
   assert.equal(panelRowLine(row("ready", use(0, 35)), tr, "tr", "UTC", NOW), "Hazır · %0 · %35");
   // A full account says how long until it opens.
   const opens = iso(NOW + 90 * 60_000);
@@ -106,7 +106,7 @@ test("the panel line leads with the time left, so a narrow panel cuts the percen
 test("a full account's switch says when its limit opens, in days once it is a day away", () => {
   const soon = iso(NOW + 90 * 60_000);
   assert.equal(fullLimitNote(soon, tr, "tr", "UTC", NOW), "Limit dolu · 11:30’da açılır (1 sa 30 dk)");
-  assert.equal(fullLimitNote(soon, en, "en", "UTC", NOW), "Limit is full · opens 11:30 (1 h 30 m)");
+  assert.equal(fullLimitNote(soon, en, "en", "UTC", NOW), "Limit is full · opens 11:30 (1 h 30 min)");
   assert.equal(fullLimitNote(iso(NOW + 2 * 86_400_000), tr, "tr", "UTC", NOW), "Limit dolu · 10:00’da açılır (2 gün)");
   // Unknown, or already past: only that it is full.
   assert.equal(fullLimitNote(undefined, tr, "tr", "UTC", NOW), "Limit dolu");
@@ -117,7 +117,7 @@ test("a full account's switch says when its limit opens, in days once it is a da
   );
   assert.equal(
     fullLimitWarning(soon, en, "en", "UTC", NOW),
-    "This account’s limit is full; it opens at 11:30 (in 1 h 30 m). Until then you can’t send new messages on it.",
+    "This account’s limit is full. It opens at 11:30 (in 1 h 30 min). Until then, you cannot send new messages with it.",
   );
   assert.match(fullLimitWarning(undefined, tr, "tr", "UTC", NOW), /ne zaman açılacağı bilinmiyor/);
 });

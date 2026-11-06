@@ -64,7 +64,7 @@ export function AccountList({
   return (
     <div
       data-slot="account-list"
-      className="overflow-hidden rounded-xl border bg-card"
+      className="overflow-hidden rounded-lg border bg-card"
     >
       {rows.map((row, i) => {
         const { account, usage } = row;
@@ -90,24 +90,24 @@ export function AccountList({
         const tinted = "border border-warn/40 bg-warn/10 text-warn-foreground";
         const body = (
           <>
-            <UsageRing outer={five} inner={week ?? null} size={panel ? 32 : 38} label={said} state={ring} />
+            <UsageRing outer={five} inner={week ?? null} size={32} label={said} state={ring} />
             <span className="min-w-0 flex-1">
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className={cn("truncate font-semibold", panel ? "text-[13px]" : "text-[13.5px]")}>
+                <span className="truncate text-sm font-semibold">
                   {account.name}
                 </span>
                 {row.recommended && (
-                  <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-[11px] font-semibold text-accent-foreground">
+                  <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-2xs font-semibold text-accent-foreground">
                     {t("önerilen", "suggested")}
                   </span>
                 )}
               </span>
-              <span className={cn("block truncate text-muted-foreground", panel ? "text-[11.5px]" : "text-xs")}>
-                {busy ? t("Geçiliyor…", "Switching…") : line(row)}
+              <span className={cn("block truncate text-muted-foreground", panel ? "text-2xs" : "text-xs")}>
+                {busy ? t("Geçiliyor…", "Switch in progress…") : line(row)}
               </span>
             </span>
             {!panel && (
-              <span className="shrink-0 text-[12.5px] tabular-nums">
+              <span className="shrink-0 text-xs tabular-nums">
                 <b className="font-semibold">{five === undefined ? "—" : formatPercent(percentUsed(five), language)}</b>
                 <span className="text-muted-foreground">
                   {" / "}
@@ -124,7 +124,7 @@ export function AccountList({
         );
         const rowClass = cn(
           "flex min-w-0 items-center gap-3 text-left outline-none",
-          panel ? "px-3 py-2" : "px-4 py-3",
+          "px-3 py-2",
           row.recommended && "bg-accent/40",
           selected === account.id && "bg-accent/60",
           why && "opacity-60",
@@ -184,7 +184,7 @@ export function AccountList({
                 title={tooltip}
                 disabled={!!switching}
                 onClick={(e) => pick(row, e)}
-                className={cn(rowClass, "w-full hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50 disabled:pointer-events-none")}
+                className={cn(rowClass, "w-full hover:bg-foreground/3 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50 disabled:pointer-events-none")}
               >
                 {body}
                 {offer ? (

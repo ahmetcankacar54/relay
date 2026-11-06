@@ -48,14 +48,14 @@ const CAUSES: [string, UsageIssue | undefined, string, string][] = [
   [
     "expired",
     "expired",
-    "girişin süresi doldu ve yenilenemedi",
-    "the sign-in expired and could not be renewed",
+    "girişin süresi doldu",
+    "the sign-in expired",
   ],
   [
     "credentials-missing",
     "credentials-missing",
     "kayıtlı giriş bulunamadı",
-    "the saved sign-in was not found",
+    "the saved sign-in is missing",
   ],
   [
     "scope",
@@ -164,28 +164,28 @@ test("the sign-in banner says what is wrong and what Reconnect does", () => {
   const tr = render(relayFor({ a: usage("expired") }));
   assert.match(
     tr,
-    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu ve yenilenemedi\./,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu\./,
   );
   assert.match(
     tr,
-    /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda açar\. Onaylayınca uyarı kapanır\./,
+    /Tarayıcıda açılan girişi onayla\./,
   );
   assert.match(tr, /<button[^>]*>Limit okuma girişini yenile<\/button>/);
   const en = render(relayFor({ a: usage("scope") }), "en");
   assert.match(
     en,
-    /Kişisel · Max · the usage sign-in needs to be renewed: the sign-in cannot read usage\./,
+    /Kişisel · Max · the usage sign-in needs renewal: the sign-in cannot read usage\./,
   );
   assert.match(
     en,
-    /“Renew usage sign-in” opens this account’s sign-in in the browser\. The warning closes once you approve it\./,
+    /Approve the sign-in that opens in the browser\./,
   );
 });
 
 test("the explanation belongs to the sign-in banner only, not to the renewal banner", () => {
   const html = render(relayFor({ a: usage("renewal-required") }));
   assert.match(html, /Yenilemeye izin ver/);
-  assert.doesNotMatch(html, /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda/);
+  assert.doesNotMatch(html, /Tarayıcıda açılan girişi onayla/);
   assert.doesNotMatch(html, /girişin süresi doldu/);
 });
 
@@ -237,7 +237,7 @@ test("one warning renders as a single banner, even beside healthy accounts", () 
   assert.equal(banners(html), 1);
   assert.match(
     html,
-    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu ve yenilenemedi\./,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu\./,
   );
   assert.match(html, /<button[^>]*>Limit okuma girişini yenile<\/button>/);
   assert.match(html, /aria-label="Uyarıyı kapat"/);
@@ -263,7 +263,7 @@ test("two or more warnings share one banner with a count and a Show button", () 
     /Kişisel · Max|Limit okuma girişini yenile|Yenilemeye izin ver|Anahtarlık erişimine izin ver/,
   );
   const en = render(relayFor(all3, [max, team, pro]), "en");
-  assert.match(en, /3 accounts need usage sign-in attention\./);
+  assert.match(en, /3 usage sign-ins need attention\./);
   assert.match(en, /<button[^>]*aria-expanded="false"[^>]*>Show<\/button>/);
   assert.match(en, /aria-label="Dismiss all warnings"/);
   const two = render(relayFor({ a: all3.a, b: all3.b }, [max, team]));
@@ -279,11 +279,11 @@ test("the expanded group lists a row per warning with today's text, button and d
   assert.match(html, /<button[^>]*aria-expanded="true"[^>]*>Gizle<\/button>/);
   assert.match(
     html,
-    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu ve yenilenemedi\./,
+    /Kişisel · Max · limit okuma girişinin yenilenmesi gerekiyor: girişin süresi doldu\./,
   );
   assert.match(
     html,
-    /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda açar\./,
+    /Tarayıcıda açılan girişi onayla\./,
   );
   assert.match(
     html,
@@ -644,8 +644,7 @@ test("a single warning keeps its flat one-line layout", () => {
   assert.doesNotMatch(html, /flex-col gap-2 rounded-lg/);
 });
 
-const EXPLAIN_TR =
-  "“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda açar. Onaylayınca uyarı kapanır.";
+const EXPLAIN_TR = "Tarayıcıda açılan girişi onayla.";
 
 test("the expanded group explains Reconnect once, under the list, and only when a row offers it", () => {
   const twoLogins = {
@@ -663,7 +662,7 @@ test("the expanded group explains Reconnect once, under the list, and only when 
   });
   assert.equal(
     en.split(
-      "“Renew usage sign-in” opens this account’s sign-in in the browser. The warning closes once you approve it.",
+      "Approve the sign-in that opens in the browser.",
     ).length - 1,
     1,
   );
@@ -677,7 +676,7 @@ test("the expanded group explains Reconnect once, under the list, and only when 
   // Collapsed, no explanation either.
   assert.doesNotMatch(
     render(relayFor(twoLogins, [max, team, pro])),
-    /“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda/,
+    /Tarayıcıda açılan girişi onayla/,
   );
   // A single sign-in banner keeps its own.
   assert.equal(
@@ -696,7 +695,7 @@ test("while a browser approval is pending, the sign-in banner says so and Reconn
     relayFor({ a: usage("expired") }, [max], true, pending),
     "en",
   );
-  assert.match(en, /Kişisel · Max · waiting for browser approval\./);
+  assert.match(en, /Kişisel · Max · browser approval pending\./);
   assert.match(en, /<button[^>]*disabled=""[^>]*>Renew usage sign-in<\/button>/);
   // Every pending status counts; a finished flow does not.
   for (const status of ["starting", "verifying"])
@@ -780,7 +779,7 @@ test("a usage sign-in of another account than the Claude app sign-in gets the si
   const en = render(relayFor({ m: ready("m") }, [other()]), "en");
   assert.match(
     en,
-    /Ek · Pro · the usage sign-in needs to be renewed: the sign-in belongs to another account\./,
+    /Ek · Pro · the usage sign-in needs renewal: the sign-in belongs to another account\./,
   );
   assert.match(en, /<button[^>]*>Renew usage sign-in<\/button>/);
   // A different organization is a mismatch too.
@@ -800,7 +799,7 @@ test("the mismatch banner is not repeated when the read already reports a sign-i
   assert.deepEqual(expired.map((i) => [i.issue, i.action]), [["expired", "login"]]);
   assert.match(
     render(relayFor({ m: usage("expired", "m") }, [other()])),
-    /girişin süresi doldu ve yenilenemedi/,
+    /girişin süresi doldu\./,
   );
 });
 

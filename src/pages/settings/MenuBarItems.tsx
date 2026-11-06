@@ -33,11 +33,11 @@ export const MENU_BAR_ITEM_LABELS: Record<MenuBarItem, readonly [tr: string, en:
 
 /** Why an item shows nothing for the account open in the Claude app now. */
 const MENU_BAR_ITEM_MISSING: Record<MenuBarItem, readonly [tr: string, en: string]> = {
-  "five-hour": ["şu an limit verisi yok", "no usage data now"],
+  "five-hour": ["limit verisi yok", "no usage data"],
   week: ["bu hesap haftalık limit bildirmiyor", "this account reports no weekly limit"],
   reset: ["5 saatlik dönem henüz başlamadı", "the 5-hour period has not started"],
-  tokens: ["bugünün toplamı henüz hazır değil", "today’s total is not ready yet"],
-  cost: ["bugünün toplamı henüz hazır değil", "today’s total is not ready yet"],
+  tokens: ["bugünün toplamı hazır değil", "today’s total is not ready"],
+  cost: ["bugünün toplamı hazır değil", "today’s total is not ready"],
   account: ["Claude uygulamasında açık hesap yok", "no account open in the Claude app"],
 };
 
@@ -199,27 +199,18 @@ export function MenuBarTitleRows({
       <span id="menu-bar-title-label" className="text-sm font-medium">
         {t("Menü çubuğunda göster", "Show in the menu bar")}
       </span>
-      <p className="mt-0.5 text-[13px] text-muted-foreground">
-        {t(
-          `Pandanın yanında en çok ${MENU_BAR_MAX_ITEMS} değer seç ve sırala.`,
-          `Pick and order up to ${MENU_BAR_MAX_ITEMS} values beside the panda.`,
-        )}
-      </p>
       <div className="mt-1">
         <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
-          <p className="text-[13px] text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             {t(
-              "Yüzdeler ve süre Claude uygulamasında açık hesabın, token ve API karşılığı tüm hesaplarının bugünkü toplamı. Limitler okunamazsa son değer başında ~ ile kalır. Simgeyi ⌘ tuşuyla sürükleyip taşırsan yeri hatırlanır.",
-              "Percents and time are for the account open in the Claude app; tokens and API value are today’s total across all your accounts. If limits cannot be read, the last value stays, marked with ~. Drag the icon with ⌘ to move it; its place is kept.",
+              "Yüzdeler ve süre Claude uygulamasında açık hesabın; token ve API karşılığı tüm hesapların bugünkü toplamı. ~ son bilinen değeri gösterir. Simgeyi taşımak için ⌘ ile sürükle.",
+              "Percentages and time are for the account open in the Claude app. Tokens and API value are today’s total for all accounts. ~ marks the last known value. To move the icon, drag it with ⌘.",
             )}
           </p>
         </Disclosure>
       </div>
       {/* The menu bar as it reads now, or as these items would read on sample figures. */}
-      <div
-        className="mt-3 flex h-9 items-center gap-3 rounded-lg border bg-muted/40 px-3"
-        title={now ? t("Menü çubuğunda şu an", "In the menu bar now") : t("Önizleme", "Preview")}
-      >
+      <div className="mt-3 flex h-9 items-center gap-3 rounded-lg border bg-muted/40 px-3">
         <span className="text-xs text-muted-foreground">
           {now ? t("Şu an", "Now") : t("Önizleme", "Preview")}
         </span>
@@ -229,7 +220,7 @@ export function MenuBarTitleRows({
             <span
               data-slot="menu-bar-preview"
               className={cn(
-                "truncate text-[13px] font-medium whitespace-pre tabular-nums",
+                "truncate text-sm font-medium whitespace-pre tabular-nums",
                 !title && "text-muted-foreground",
               )}
             >
@@ -242,16 +233,10 @@ export function MenuBarTitleRows({
         <span id="menu-bar-shown-label">
           {t("Menü çubuğunda", "In the menu bar")} · {chosen.length}/{MENU_BAR_MAX_ITEMS}
         </span>
-        {chosen.length > 1 && (
-          <span>{t("Sıralamak için sürükle", "Drag to reorder")}</span>
-        )}
       </div>
       {items && chosen.length === 0 ? (
         <p className="mt-1 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
-          {t(
-            "Hiç değer seçili değil; menü çubuğunda yalnızca panda görünür.",
-            "No values chosen; the menu bar shows the panda alone.",
-          )}
+          {t("Değer seçili değil.", "No values selected.")}
         </p>
       ) : (
         <ol
@@ -288,7 +273,7 @@ export function MenuBarTitleRows({
                   )}
                   aria-label={t(
                     `${label(item)}, ${index + 1}. sıra. Taşımak için sürükle ya da ⌥↑ ⌥↓`,
-                    `${label(item)}, position ${index + 1}. Drag, or ⌥↑ ⌥↓, to move`,
+                    `${label(item)}, position ${index + 1}. Drag or press ⌥↑ ⌥↓ to move`,
                   )}
                   title={t("Sürükleyerek sırala", "Drag to reorder")}
                   onKeyDown={(event) => keys(event, index)}
@@ -354,8 +339,8 @@ export function MenuBarTitleRows({
           <div id="menu-bar-more-label" className="text-xs text-muted-foreground">
             {full
               ? t(
-                  `Eklemek için önce birini kaldır; en çok ${MENU_BAR_MAX_ITEMS} değer`,
-                  `Remove one to add another; ${MENU_BAR_MAX_ITEMS} at most`,
+                  `En çok ${MENU_BAR_MAX_ITEMS} değer. Eklemek için birini kaldır`,
+                  `Maximum ${MENU_BAR_MAX_ITEMS} values. Remove one to add another`,
                 )
               : t("Eklenebilecekler", "More to add")}
           </div>

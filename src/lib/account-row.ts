@@ -47,7 +47,7 @@ export function accountRowSubtitle(
         : "";
       return at
         ? t(`${clockLocative(at)} açılır`, `Opens ${at}`)
-        : t("Açılış saati bilinmiyor", "Opening time unknown");
+        : t("Limit dolu", "Limit is full");
     }
     case "not-linked":
       return t("Claude uygulaması girişi yok", "No Claude app sign-in");
@@ -119,15 +119,15 @@ export function fullLimitWarning(
   return left
     ? t(
         `Bu hesabın limiti dolu; ${clockLocative(at)} açılır (${left} sonra). O zamana kadar bu hesapla yeni mesaj gönderemezsin.`,
-        `This account’s limit is full; it opens at ${at} (in ${left}). Until then you can’t send new messages on it.`,
+        `This account’s limit is full. It opens at ${at} (in ${left}). Until then, you cannot send new messages with it.`,
       )
     : t(
         "Bu hesabın limiti dolu ve ne zaman açılacağı bilinmiyor. Açılana kadar bu hesapla yeni mesaj gönderemezsin.",
-        "This account’s limit is full, and when it opens is unknown. Until it does, you can’t send new messages on it.",
+        "This account’s limit is full. The time it opens is unknown. Until then, you cannot send new messages with it.",
       );
 }
 
-/** Time left until `at` as "1 sa 50 dk" / "1 h 50 m" (minutes only under an hour); undefined once past. */
+/** Time left until `at` as "1 sa 50 dk" / "1 h 50 min" (minutes only under an hour); undefined once past. */
 export function timeLeft(at: string | undefined, now: number, t: T): string | undefined {
   const ms = at ? Date.parse(at) - now : NaN;
   if (!Number.isFinite(ms) || ms <= 0) return undefined;
@@ -135,8 +135,8 @@ export function timeLeft(at: string | undefined, now: number, t: T): string | un
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   return h
-    ? t(`${h} sa${m ? ` ${m} dk` : ""}`, `${h} h${m ? ` ${m} m` : ""}`)
-    : t(`${m} dk`, `${m} m`);
+    ? t(`${h} sa${m ? ` ${m} dk` : ""}`, `${h} h${m ? ` ${m} min` : ""}`)
+    : t(`${m} dk`, `${m} min`);
 }
 
 

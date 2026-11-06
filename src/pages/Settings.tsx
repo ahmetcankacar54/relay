@@ -65,11 +65,11 @@ function ClaudeLaunchRow({
   return (
     <>
       <SettingRow
-        label={t("Claude’u HTTP/3 olmadan aç", "Open Claude without HTTP/3")}
+        label={t("Claude uygulamasını HTTP/3 olmadan aç", "Open the Claude app without HTTP/3")}
         htmlFor="claude-quic-off"
         description={t(
-          "Claude gri ekranda kalıyorsa onu HTTP/2 ile başlatır.",
-          "Starts Claude over HTTP/2 when it stays on a grey screen.",
+          "Claude uygulaması gri ekranda kalırsa aç. Takılan bir geçişten sonra Relay bunu kendisi açar.",
+          "Turn on if the Claude app stays on a grey screen. Relay turns it on after a stuck switch.",
         )}
       >
         <Switch
@@ -79,16 +79,6 @@ function ClaudeLaunchRow({
           onCheckedChange={(quicOff) => change({ quicOff })}
         />
       </SettingRow>
-      <div className="pb-3">
-        <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
-          <Note>
-            {t(
-              "Bazı ağlarda claude.ai’nin HTTP/3 aktarımları takılır. Bir geçişte sayfa takılıp HTTP/2 ile açılırsa Relay bunu kendisi açar. Yalnızca Relay’in başlattığı Claude için geçerlidir; Dock’tan açılan Claude HTTP/3 kullanır.",
-              "On some networks claude.ai’s HTTP/3 transfers stall. If a page sticks at a switch and loads over HTTP/2, Relay turns this on itself. It applies only to a Claude that Relay starts; a Claude opened from the Dock uses HTTP/3.",
-            )}
-          </Note>
-        </Disclosure>
-      </div>
     </>
   );
 }
@@ -113,8 +103,8 @@ export function SeparateWindowsRow({
         label={t("Ayrı Claude pencereleri (deneysel)", "Separate Claude windows (experimental)")}
         htmlFor="separate-windows"
         description={t(
-          "Bir hesabı kendi Claude penceresinde, ana Claude’un yanında açar.",
-          "Opens an account in its own Claude window, next to the main Claude.",
+          "Hesabın ⋯ menüsüne “Ayrı pencerede aç” ekler.",
+          "Adds “Open in a separate window” to the account ⋯ menu.",
         )}
       >
         <Switch
@@ -129,8 +119,8 @@ export function SeparateWindowsRow({
         <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
           <Note>
             {t(
-              "Hesabın ⋯ menüsündeki “Ayrı pencerede aç”, o hesabı kendi veri klasörüyle ikinci bir Claude’da açar; giriş Relay’in kaydından gelir, pencere kapanınca geri kaydedilir. Pencere açıkken ana Claude o hesaba geçemez, Relay kendiliğinden geçiş yapmaz ve konuşmaları sürdürmez. Claude in Chrome yalnızca ana Claude’da çalışır; claude:// bağlantıları hangi Claude’a gideceğini macOS seçer. Claude bunu resmi olarak desteklemez, bir güncelleme bozabilir.",
-              "“Open in a separate window” in an account’s ⋯ menu opens it in a second Claude with its own data folder; it signs in with Relay’s saved sign-in, which is saved back when the window closes. While the window is open the main Claude cannot switch to that account, and Relay neither switches nor continues conversations by itself. Claude in Chrome works only in the main Claude, and macOS picks which Claude a claude:// link goes to. Claude does not officially support this, and an update may break it.",
+              "Ayrı pencere açıkken ana Claude uygulaması o hesaba geçemez. Relay kendiliğinden geçmez ve konuşmaları sürdürmez. Claude in Chrome yalnızca ana Claude uygulamasında çalışır. Claude uygulaması bunu resmi olarak desteklemez; bir güncelleme bozabilir.",
+              "While the separate window is open, the main Claude app cannot switch to that account. Relay does not switch or continue conversations automatically. Claude in Chrome works only in the main Claude app. The Claude app does not support this officially. An update can break it.",
             )}
           </Note>
         </Disclosure>
@@ -164,9 +154,9 @@ export function UpdatesGroup({
     : undefined;
   const status =
     update.status === "checking"
-      ? t("Kontrol ediliyor…", "Checking…")
+      ? t("Kontrol ediliyor…", "Check in progress…")
       : update.status === "error"
-        ? `${t("Kontrol edilemedi", "Could not check")}: ${localizeError(update.error ?? "", language)}`
+        ? `${t("Kontrol edilemedi", "Check failed")}: ${localizeError(update.error ?? "", language)}`
         : updateShown(update)
           ? updateTitle(update, t)
           : update.status === "up-to-date"
@@ -193,8 +183,8 @@ export function UpdatesGroup({
         label={t("Güncellemeleri kendiliğinden ara", "Check for updates automatically")}
         htmlFor="update-auto"
         description={t(
-          "Açılışta ve altı saatte bir bakar; yeni sürümü indirip hazırlar, kurmak için senin onayını bekler.",
-          "Looks at start and every six hours; downloads and readies a new version, then waits for you to install it.",
+          "Yeni sürümü indirir; kurmak için onayını bekler.",
+          "Downloads a new version. Relay installs it only when you approve.",
         )}
       >
         <Switch
@@ -267,10 +257,6 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
     <PageFrame
       automationInline
       title={t("Ayarlar", "Settings")}
-      description={t(
-        "Otomasyon, geçişte taşınanlar, planlama ve uygulama ayarları",
-        "Automation, what comes along, planning and app settings",
-      )}
     >
       <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className="grid gap-5 px-6 pb-8">
         <TabsList aria-label={t("Ayar bölümleri", "Settings sections")} className="h-auto w-fit flex-wrap justify-start">
@@ -290,14 +276,14 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
           <PlanningTab />
         </TabsContent>
         <TabsContent value="bildirimler">
-          <div className="grid max-w-2xl gap-6">
+          <div className="grid max-w-2xl gap-4">
             <SettingGroup id="settings-notifications" title={t("Limit uyarıları", "Usage warnings")}>
               <SettingRow
                 label={t("Limite yaklaşan hesabı işaretle", "Mark accounts near their limit")}
                 htmlFor="usage-warnings"
                 description={t(
-                  "Eşiğe ulaşan hesap panelde ve listelerde işaretlenir; hesap önerisi de buna bağlıdır.",
-                  "An account at the threshold is marked in the panel and lists; account suggestions depend on it.",
+                  "Hesap önerileri de bu ayarı kullanır.",
+                  "Account suggestions also use this setting.",
                 )}
               >
                 <Switch
@@ -310,8 +296,8 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
               <SettingRow
                 label={<span id="settings-threshold-label">{t("Uyarı eşiği", "Warning threshold")}</span>}
                 description={t(
-                  "Beş saatlik veya haftalık kullanım bu paya ulaşınca.",
-                  "When 5-hour or weekly usage reaches this share.",
+                  "5 saatlik ve haftalık dönem için.",
+                  "For the 5-hour and weekly periods.",
                 )}
               >
                 <WarningThreshold labelledBy="settings-threshold-label" short />
@@ -319,10 +305,6 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
               <SettingRow
             label={t("Limitleri otomatik yenile", "Refresh limits automatically")}
             htmlFor="usage-interval"
-            description={t(
-              "Yalnızca kullanım verisi okunur; Claude uygulaması çalışmaya devam eder.",
-              "Reads usage data while the Claude app keeps running.",
-            )}
           >
             <OptionSelect
               id="usage-interval"
@@ -332,7 +314,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                 { value: "0", label: t("Elle", "Manually") },
                 ...[5, 15, 30].map((n) => ({
                   value: String(n),
-                  label: t(`${n} dakikada bir`, `Every ${n} minutes`),
+                  label: t(`${n} dakikada bir`, `Every ${n} min`),
                 })),
               ]}
               onChange={(v) =>
@@ -345,28 +327,13 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             />
           </SettingRow>
             </SettingGroup>
-            <details className="px-1">
-              <summary className="cursor-pointer text-sm font-medium">
-                {t("Limitler nereden okunur?", "Where do the limits come from?")}
-              </summary>
-              <Note className="mt-1">
-                {t(
-                  "Limitler, Anthropic’in deneysel bir kullanım servisinden, hesabın limit izniyle okunur. Gerektiğinde izni yenilersin; bu yalnızca Relay’deki kopyayı günceller, açık Claude uygulamasına dokunmaz. Kullanılan yüzde, mesaj sayısı ya da süre garantisi değildir.",
-                  "Usage comes from an experimental Anthropic endpoint, read with the account’s usage access. You renew that access when needed; it updates only Relay’s copy and leaves the open Claude app untouched. The percentage used is not a message count or time guarantee.",
-                )}
-              </Note>
-            </details>
           </div>
         </TabsContent>
         <TabsContent value="gorunum">
-          <div className="grid max-w-2xl gap-6">
+          <div className="grid max-w-2xl gap-4">
         <SettingGroup id="settings-appearance" title={t("Görünüm", "Appearance")}>
           <SettingRow
             label={<span id="appearance-label">{t("Tema", "Theme")}</span>}
-            description={t(
-              "Sistem seçeneği macOS görünümünü izler.",
-              "System follows the macOS appearance.",
-            )}
           >
             <ToggleGroup
               type="single"
@@ -397,8 +364,8 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
               </span>
             }
             description={t(
-              "Seyrek şakalar; imleci kısa süre saklayabilir.",
-              "Rare pranks; it may briefly hide the cursor.",
+              "İmleci kısa süre saklayabilir.",
+              "Can hide the cursor for a short time.",
             )}
           >
             <ToggleGroup
@@ -425,10 +392,6 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                 {t("Arayüz dili", "Interface language")}
               </span>
             }
-            description={t(
-              "Menü çubuğu da bu dili izler.",
-              "The menu bar follows this language.",
-            )}
           >
             <ToggleGroup
               type="single"
@@ -475,13 +438,9 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             <SettingRow
               label={
                 <span id="switch-window-label">
-                  {t("Geçişte panda penceresini göster", "Show the panda window when switching")}
+                  {t("Geçişte panda penceresini göster", "Show the panda window during a switch")}
                 </span>
               }
-              description={t(
-                "Claude uygulaması yeniden başlarken menü çubuğunun altında kısa bir sahne oynar.",
-                "A short scene plays under the menu bar while the Claude app restarts.",
-              )}
             >
               <Switch
                 aria-labelledby="switch-window-label"
@@ -495,14 +454,14 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
           </div>
         </TabsContent>
         <TabsContent value="gelismis">
-          <div className="grid max-w-2xl gap-6">
+          <div className="grid max-w-2xl gap-4">
         <SettingGroup id="settings-system" title={t("Sistem", "System")}>
           {/* An install Relay does not look for (every Linux build) is chosen here: Konumu seç. */}
           <SettingRow label="Claude Desktop">
             <span className="flex items-center gap-3">
               <Status ok={!!desktop?.available}>
                 {desktop?.available
-                  ? t("Bulundu", "Detected")
+                  ? t("Bulundu", "Found")
                   : t("Bulunamadı", "Not found")}
               </Status>
               <Button
@@ -521,8 +480,8 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             description={
               data?.diagnostics.source === "claude-app"
                 ? t(
-                    "Claude uygulamasının Code için indirdiği kopya kullanılıyor; ayrıca kurman gerekmez.",
-                    "Using the copy the Claude app downloaded for Code; no separate install needed.",
+                    "Claude uygulamasının indirdiği kopya kullanılır.",
+                    "Uses the copy that the Claude app downloaded.",
                   )
                 : undefined
             }
@@ -544,8 +503,8 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
           <SettingRow
             label={t("Tanılama dosyaları", "Diagnostics files")}
             description={t(
-              "Yalnızca draft-events.json ve usage-issues.json dosyalarını gönder; klasörün geri kalanında kayıtlı girişlerin var.",
-              "Send only draft-events.json and usage-issues.json; the rest of the folder holds your saved sign-ins.",
+              "Yalnızca draft-events.json ve usage-issues.json dosyalarını gönder. Diğer dosyalarda kayıtlı girişlerin var.",
+              "Send only draft-events.json and usage-issues.json. The other files hold your saved sign-ins.",
             )}
           >
             <Button
@@ -566,10 +525,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
           </Disclosure>
         </div>
         <p className="px-1 text-center text-xs text-muted-foreground">
-          {t(
-            "Yerelde saklanır. Kontrol sende.",
-            "Stored locally. You stay in control.",
-          )}{" "}
+          {t("Yerelde saklanır.", "Stored locally.")}{" "}
           {t("Bağımsız araç", "Independent tool")} · {version}
         </p>
           </div>
@@ -585,20 +541,20 @@ export function PrivacyNotes({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
     <>
       <Note>
         {t(
-          "Claude uygulaması girişleri bu cihazda işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. Limit okuma girişi resmi Claude Code üzerinden tamamlanır.",
-          "Claude app sign-ins are encrypted on this device using the operating system. Every switch creates a backup. The usage sign-in uses the official Claude Code.",
+          "Claude uygulaması girişleri bu cihazda, işletim sistemi şifrelemesiyle saklanır. Her geçişten önce yedek alınır. Limit okuma girişi resmi Claude Code ile yapılır.",
+          "Relay keeps Claude app sign-ins on this device, encrypted by the operating system. Relay makes a backup before each switch. The usage sign-in uses the official Claude Code.",
         )}
       </Note>
       <Note>
         {t(
-          "Relay kayıtlı girişleri macOS Anahtarlık’ta tuttuğu bir anahtarla şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
-          "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
+          "Relay şifreleme anahtarını macOS Anahtarlık’ta tutar. Relay güncellendikten sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
+          "Relay keeps the encryption key in the macOS Keychain. After a Relay update, macOS can ask for your password once. Select “Always Allow”.",
         )}
       </Note>
       <Note>
         {t(
-          "Hesap geçişi, Claude uygulamasının yerel dosya biçimine bağlı deneysel bir entegrasyondur. Code oturumları ve yerel proje kayıtları seçtiğin paylaşım kapsamında birleştirilir. Chat geçmişi ve sunucudaki proje grupları hesaplarına bağlı kalır.",
-          "Switching accounts is an experimental integration with the Claude app’s local file format. Code sessions and local project records merge within your chosen sharing scope. Chat history and server-managed project groups remain account-specific.",
+          "Geçiş deneyseldir ve Claude uygulamasının yerel dosya biçimine bağlıdır. Code oturumları ve yerel projeler seçtiğin paylaşım kapsamında birleşir. Chat geçmişi ve sunucudaki projeler her hesapta ayrı kalır.",
+          "Account switch is experimental and depends on the Claude app’s local file format. Code sessions and local projects merge within the sharing scope you set. Chat history and server projects stay with each account.",
         )}
       </Note>
     </>

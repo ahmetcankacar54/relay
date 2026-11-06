@@ -50,11 +50,11 @@ test("the system group offers the diagnostics files, and say which ones to send"
     );
   assert.match(
     html("tr"),
-    /Tanılama dosyaları<\/label><p[^>]*text-muted-foreground[^>]*>Yalnızca draft-events\.json ve usage-issues\.json dosyalarını gönder; klasörün geri kalanında kayıtlı girişlerin var\.<\/p>(?:(?!<button)[\s\S])*<button[^>]*>Finder’da göster<\/button>/,
+    /Tanılama dosyaları<\/label><p[^>]*text-muted-foreground[^>]*>Yalnızca draft-events\.json ve usage-issues\.json dosyalarını gönder\. Diğer dosyalarda kayıtlı girişlerin var\.<\/p>(?:(?!<button)[\s\S])*<button[^>]*>Finder’da göster<\/button>/,
   );
   assert.match(
     html("en"),
-    /Diagnostics files<\/label><p[^>]*>Send only draft-events\.json and usage-issues\.json; the rest of the folder holds your saved sign-ins\.<\/p>(?:(?!<button)[\s\S])*<button[^>]*>Show in Finder<\/button>/,
+    /Diagnostics files<\/label><p[^>]*>Send only draft-events\.json and usage-issues\.json\. The other files hold your saved sign-ins\.<\/p>(?:(?!<button)[\s\S])*<button[^>]*>Show in Finder<\/button>/,
   );
   // The button asks main; main takes no path from the renderer.
   const { showDiagnostics } = await import("../src/pages/Settings");
@@ -87,9 +87,10 @@ test("Settings has six tabs: automation, what comes along, planning, notificatio
     /Menü çubuğu/, /Limitleri otomatik yenile/, /Elle/, /Gizlilik ve güvenlik/, /Bulundu/, /2\.1\.0/,
     // The path the missing-CLI error names: Ayarlar → Claude Code CLI → Dosyayı seç.
     /Claude Code CLI<\/[^>]+>(?:(?!<button)[\s\S])*?2\.1\.0(?:(?!<button)[\s\S])*?<button[^>]*>Dosyayı seç<\/button>/,
-    /Yerelde saklanır\. Kontrol sende\./, /Bağımsız araç · 0\.\d+\.\d+/,
+    /Yerelde saklanır\. Bağımsız araç · 0\.\d+\.\d+/,
   ])
     assert.match(html, re);
+  assert.doesNotMatch(html, /Kontrol sende/);
 });
 
 test("Settings offers the menu bar animation switch, on unless turned off", () => {
@@ -148,7 +149,7 @@ test("Settings offers the switch window, on unless turned off, on macOS only", (
   const control = (html: string) => /<button[^>]*aria-labelledby="switch-window-label"[^>]*>/.exec(html)?.[0] ?? "";
   const on = render();
   assert.match(on, /Geçişte panda penceresini göster/);
-  assert.match(on, /Claude uygulaması yeniden başlarken menü çubuğunun altında kısa bir sahne oynar\./);
+  assert.doesNotMatch(on, /Claude uygulaması yeniden başlarken menü çubuğunun altında kısa bir sahne oynar\./);
   assert.match(control(on), /aria-checked="true"/);
   assert.match(control(render({ switchWindow: false })), /aria-checked="false"/);
   for (const platform of ["win32", "linux"])
@@ -175,7 +176,7 @@ test("Settings offers the panda pranks setting on every platform", () => {
   };
   for (const platform of ["darwin", "win32", "linux"]) {
     const html = render({ platform });
-    for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /Seyrek şakalar; imleci kısa süre saklayabilir\./])
+    for (const re of [/Panda şakaları/, /Ara sıra/, /Nadiren/, /Kapalı/, /İmleci kısa süre saklayabilir\./])
       assert.match(html, re, platform);
     assert.match(html, /id="panda-pranks-label"/, platform);
     assert.deepEqual(selected(html), ["Ara sıra"], platform);
@@ -192,7 +193,7 @@ test("Settings shows the panda pranks setting in English", () => {
       createElement(RelayContext.Provider, { value: relayFor() }, createElement(AllSettings)),
     ),
   );
-  for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Rare pranks; it may briefly hide the cursor\./])
+  for (const re of [/Panda pranks/, />Sometimes</, />Rarely</, />Off</, /Can hide the cursor for a short time\./])
     assert.match(html, re);
 });
 
@@ -212,17 +213,17 @@ test("Settings explains the Keychain prompt in Turkish and English, under privac
   const note = (html: string) => /<p class="[^"]*text-muted-foreground[^"]*">(Relay [^<]*(?:Anahtarlık|Keychain)[^<]*)<\/p>/.exec(html)?.[1];
   assert.equal(
     note(tr),
-    "Relay kayıtlı girişleri macOS Anahtarlık’ta tuttuğu bir anahtarla şifreler. Yeni bir Relay sürümünden sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
+    "Relay şifreleme anahtarını macOS Anahtarlık’ta tutar. Relay güncellendikten sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
   );
   assert.equal(
     note(en),
-    "Relay encrypts saved sign-ins with a key it keeps in the macOS Keychain. After a new Relay version, macOS may ask for your password once; choose “Always Allow”.",
+    "Relay keeps the encryption key in the macOS Keychain. After a Relay update, macOS can ask for your password once. Select “Always Allow”.",
   );
   // After the note on how sign-ins are kept; the three notes sit in one closed section.
-  assert.ok(tr.indexOf("Limit okuma girişi resmi Claude Code") < tr.indexOf("Anahtarlık’ta tuttuğu bir anahtarla şifreler"));
+  assert.ok(tr.indexOf("Limit okuma girişi resmi Claude Code") < tr.indexOf("şifreleme anahtarını macOS Anahtarlık’ta tutar"));
   const page = render("tr");
   assert.match(page, /id="settings-privacy"[\s\S]*>Gizlilik ve güvenlik</);
-  assert.doesNotMatch(page, /Anahtarlık’ta tuttuğu bir anahtarla şifreler/);
+  assert.doesNotMatch(page, /şifreleme anahtarını macOS Anahtarlık’ta tutar/);
   assert.ok(page.indexOf("Gizlilik ve güvenlik") < page.indexOf("Yerelde saklanır"));
 });
 
@@ -243,7 +244,7 @@ test("Settings → Notifications holds the warnings, their threshold and the ref
   const html = render();
   // One group: the warnings switch, then the threshold, then the refresh interval.
   assert.match(html, /id="settings-notifications"[\s\S]*id="usage-warnings"[\s\S]*id="settings-threshold-label">Uyarı eşiği<[\s\S]*Limitleri otomatik yenile/);
-  assert.match(html, /Beş saatlik veya haftalık kullanım bu paya ulaşınca\./);
+  assert.match(html, /5 saatlik ve haftalık dönem için\./);
   assert.deepEqual(
     [...group(html).matchAll(/<button[^>]*>(.*?)<\/button>/gs)].map((m) => m[1]),
     ["%80", "%90", "%95"],
@@ -348,15 +349,15 @@ test("the menu bar group says what the title can show, on macOS only", () => {
   for (const re of [
     /5 saatlik kullanım/, /Haftalık kullanım/, /5 saatlik dönemin kalan süresi/, /Bugünkü token/,
     /Bugünkü API karşılığı/, /Hesap adı/,
-    /Pandanın yanında en çok 4 değer seç ve sırala\./,
   ])
     assert.match(tr, re);
+  assert.doesNotMatch(tr, /Pandanın yanında en çok 4 değer seç ve sırala\./);
   // Each item shows a sample of what it puts in the title.
   assert.match(tr, /Bugünkü token ?<span[^>]*>12,4M<\/span>/);
   assert.match(tr, /Bugünkü API karşılığı ?<span[^>]*>\$18,20<\/span>/);
   assert.match(tr, /5 saatlik dönemin kalan süresi ?<span[^>]*>1:50<\/span>/);
   const en = render("en");
-  for (const re of [/Show in the menu bar/, /Tokens today ?<span[^>]*>12\.4M<\/span>/, /API value today/, /up to 4 values beside the panda\./])
+  for (const re of [/Show in the menu bar/, /Tokens today ?<span[^>]*>12\.4M<\/span>/, /API value today/])
     assert.match(en, re);
   for (const platform of ["win32", "linux"])
     assert.doesNotMatch(render("tr", platform), /Menü çubuğunda göster/, platform);
@@ -439,7 +440,7 @@ test("the menu bar's values are added from the list below and listed in their or
     await s.click(s.byId("menu-bar-add-week"));
     assert.deepEqual(s.saved.at(-1), ["five-hour", "tokens", "cost", "week"]);
     assert.equal(s.attr(s.byId("menu-bar-add-account"), "disabled"), "");
-    assert.match(textOf(s.container), /Eklemek için önce birini kaldır; en çok 4 değer/);
+    assert.match(textOf(s.container), /En çok 4 değer\. Eklemek için birini kaldır/);
   } finally {
     await s.done();
   }
@@ -490,7 +491,7 @@ test("with nothing chosen the menu bar shows the panda alone, and says so", asyn
   const s = await menuBarSettings({ items: [] });
   try {
     assert.equal(s.preview(), "Yalnızca panda");
-    assert.match(textOf(s.container), /Hiç değer seçili değil; menü çubuğunda yalnızca panda görünür\./);
+    assert.match(textOf(s.container), /Değer seçili değil\./);
   } finally {
     await s.done();
   }

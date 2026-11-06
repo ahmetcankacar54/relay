@@ -246,12 +246,12 @@ function useRelayState(
             setNotice(
               stale === "already-active"
                 ? t(
-                    `${account.name} zaten açık hesap; geçişe gerek kalmadı.`,
-                    `${account.name} is already the open account; no switch needed.`,
+                    `${account.name} zaten Claude uygulamasında açık.`,
+                    `${account.name} is already open in the Claude app.`,
                   )
                 : t(
-                    "Relay şu an otomatik bir geçiş yapıyor; elle geçiş yapılmadı.",
-                    "Relay is switching on its own right now; no manual switch was made.",
+                    "Otomatik bir geçiş sürüyor; elle geçiş başlamadı.",
+                    "An automatic switch is in progress; your switch did not start.",
                   ),
             );
             return;
@@ -277,17 +277,17 @@ function useRelayState(
         request.kind === "history"
           ? t(
               "Ortak Code geçmişi açık hesapla birleştirildi.",
-              "Shared Code history was merged into the current account.",
+              "Relay merged the shared Code history into the open account.",
             )
           : request.kind === "switch"
             ? t(
-                `${account?.name} · Claude uygulamasında bu hesaba geçildi.`,
-                `${account?.name} · Switched the Claude app to this account.`,
+                `Claude uygulaması ${account?.name} hesabına geçti.`,
+                `The Claude app switched to ${account?.name}.`,
               )
             : later
               ? t(
-                  "Claude uygulamasında Code’u bir kez aç; Relay girişi kendisi kaydeder.",
-                  "Open Code once in the Claude app; Relay saves the sign-in by itself.",
+                  "Girişi kaydetmek için Claude uygulamasında Code’u bir kez aç.",
+                  "Open Code once in the Claude app to save the sign-in.",
                 )
               : request.kind === "capture"
               ? t(
@@ -297,11 +297,11 @@ function useRelayState(
               : request.kind === "cancel" || request.kind === "recover"
                 ? t(
                     "Önceki Claude uygulaması girişi geri yüklendi.",
-                    "The previous Claude app sign-in was restored.",
+                    "Relay restored the previous Claude app sign-in.",
                   )
                 : t(
-                    "Claude uygulamasında bu hesapla giriş yap ve Code’u aç; Relay girişi kendisi kaydeder.",
-                    "Sign in with this account in the Claude app and open Code; Relay saves the sign-in by itself.",
+                    "Claude uygulamasında bu hesapla giriş yap, sonra Code’u aç.",
+                    "Sign in with this account in the Claude app, then open Code.",
                   ),
       );
     });

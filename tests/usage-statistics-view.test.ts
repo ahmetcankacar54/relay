@@ -204,7 +204,7 @@ test("insight rule 1: highest-capacity account barely fills five or more windows
   const view = build({ rollups: insightRollups([10, 10, 10, 10, 20], [90]) });
   assert.deepEqual(view.insight, {
     tr: "Max (Max 5×) dönemlerinin ortalama yalnızca %12 kadarını dolduruyor.",
-    en: "Max (Max 5×) fills only 12% of its periods.",
+    en: "Max (Max 5×) fills only 12% of its periods on average.",
   });
 });
 
@@ -240,8 +240,8 @@ test("insight: an idle account beside a full one suggests shifting the order", (
   };
   const both = [alto, kisisel];
   assert.deepEqual(build({ accounts: both, rollups: idleRollups(9) }).insight, {
-    tr: "Alto 5 gündür boşta; Kişisel ise dönemi açıldığında neredeyse hep doluyor. Alto hesabını sırada öne almak 5 saatlik limite takılmayı azaltır.",
-    en: "Alto has sat idle for 5 days; Kişisel is almost always full when it opens. Moving Alto up the order would cut 5-hour limit stops.",
+    tr: "Alto 5 gündür boşta; Kişisel ise dönemi açıldığında neredeyse hep doluyor. 5 saatlik limite daha az takılmak için Alto hesabını sırada öne al.",
+    en: "Alto was idle for the last 5 days; Kişisel is almost always full when it opens. Move Alto up the order to hit the 5-hour limit less often.",
   });
   // Idle for two days only, or a single account's view: the plain note that Kişisel fills.
   const plain = {

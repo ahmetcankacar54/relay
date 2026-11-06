@@ -34,10 +34,11 @@ const render = (relay: Relay, el: ReactElement, language: "tr" | "en" = "tr") =>
 test("the banner offers a ready update with What's new, Update and Later, in both languages", () => {
   const tr = render(relayFor(base), createElement(UpdateBanner));
   assert.match(tr, /Relay 0\.16\.0 hazır\./);
-  assert.match(tr, />Neler yeni\?</);
+  assert.match(tr, />Sürüm notları</);
   assert.match(tr, />Güncelle</);
   assert.match(tr, /aria-label="Sonra hatırlat"/);
-  assert.match(tr, /Ayarların ve girişlerin kalır/);
+  assert.match(tr, /Güncelle’ye basınca Relay kapanır, yeni sürüm birkaç saniyede açılır\./);
+  assert.doesNotMatch(tr, /Ayarların ve girişlerin kalır/);
   const en = render(relayFor(base), createElement(UpdateBanner), "en");
   assert.match(en, /Relay 0\.16\.0 is ready\./);
   assert.match(en, />Update</);
@@ -52,11 +53,11 @@ test("the banner offers a ready update with What's new, Update and Later, in bot
 test("downloading, installing and by-hand updates read as such; nothing shows when up to date", () => {
   assert.match(render(relayFor({ ...base, status: "downloading", progress: 0.42 }), createElement(UpdateBanner)), /Relay 0\.16\.0 indiriliyor… %42/);
   const installing = render(relayFor({ ...base, status: "installing" }), createElement(UpdateBanner));
-  assert.match(installing, /birazdan yeniden açılacak/);
+  assert.match(installing, /birazdan yeniden açılır/);
   assert.doesNotMatch(installing, /Sonra hatırlat/);
   const manual = render(relayFor({ ...base, status: "manual", manualReason: "location" }), createElement(UpdateBanner));
   assert.match(manual, /Relay 0\.16\.0 çıktı\./);
-  assert.match(manual, /önce Uygulamalar klasörüne taşı/);
+  assert.match(manual, /Önce Uygulamalar klasörüne taşı/);
   assert.match(manual, />İndirme sayfası</);
   assert.doesNotMatch(manual, />Güncelle</);
   for (const status of ["up-to-date", "checking", "available", "error", "idle"] as const)

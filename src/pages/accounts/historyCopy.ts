@@ -15,22 +15,22 @@ export function historyCopy(
     case "all":
       return {
         note: t(
-          "Code geçmişi bağlı tüm hesaplar arasında ortak. Ayarlar → Geçişte taşınanlar’dan değiştirebilirsin.",
-          "Code history is shared across every connected account. You can change this in Settings → What comes along.",
+          "Code geçmişi bağlı tüm hesaplar arasında ortak.",
+          "All connected accounts share Code history.",
         ),
       };
     case "selected":
       return {
         note: t(
           "Code geçmişi yalnızca Ayarlar → Geçişte taşınanlar’da seçtiğin hesaplar arasında ortak.",
-          "Code history is shared only between the accounts you pick in Settings → What comes along.",
+          "Only the accounts you select in Settings → What comes along share Code history.",
         ),
       };
     case "off":
       return {
         note: t(
           "Code geçmişi hesaplar arasında paylaşılmıyor.",
-          "Code history is not shared between accounts.",
+          "Accounts do not share Code history.",
         ),
       };
     case "same-group":

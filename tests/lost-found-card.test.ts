@@ -38,7 +38,7 @@ test("every item tells what happened, when and to whom, with the panda's word, i
   });
   assert.equal(
     say({ kind: "hourglass", at: "2026-10-14T06:56:00Z", minutes: 66 }, "en").story,
-    "A five-hour window ran out just 1 h 6 min after it began.",
+    "A 5-hour period was full only 1 h 6 min after it started.",
   );
 
   const boomerang = say({ kind: "boomerang", at: "2026-10-14T11:10:00Z", accountIds: ["a", "b"], minutes: 8 });
@@ -67,10 +67,10 @@ test("every item tells what happened, when and to whom, with the panda's word, i
   assert.equal(together.story, "İki hesabın 5 saatlik dönemi aynı anda yenilendi. O hafta 3 kez oldu.");
   assert.equal(
     say({ kind: "clocks", at: "2026-10-16T14:10:00Z", accountIds: ["a", "b"], gapMinutes: 1, count: 2 }, "en").story,
-    "Two accounts’ five-hour windows reset 1 minute apart. It happened twice that week.",
+    "The 5-hour periods of 2 accounts reset 1 minute apart. It happened twice that week.",
   );
   const apart = say({ kind: "clocks", at: "2026-10-16T14:10:00Z", accountIds: ["a", "b"], gapMinutes: 6, count: 1 }, "en");
-  assert.equal(apart.story, "Two accounts’ five-hour windows reset 6 minutes apart.");
+  assert.equal(apart.story, "The 5-hour periods of 2 accounts reset 6 minutes apart.");
 
   assert.equal(
     say({ kind: "spare", accountIds: ["b"], hits: 2 }).story,
@@ -98,7 +98,7 @@ test("the new finds tell their story in both languages", () => {
   assert.equal(say(baton).story, "Bir hesap limite takılınca öbür hesap 4 dakika içinde devraldı. O hafta 3 kez oldu.");
   assert.equal(say({ ...baton, minutes: 0, count: 1 }, "en").story, "An account hit its limit and another took over at once.");
   assert.equal(say(baton).when, "Çarşamba 11:04");
-  assert.equal(say({ kind: "tally", hours: 31 }).story, "Haftanın yedi gününün her birinde çalıştın; toplam 31 saat.");
+  assert.equal(say({ kind: "tally", hours: 31 }).story, "Haftanın 7 gününün her birinde çalıştın; toplam 31 saat.");
   assert.equal(say({ kind: "tally", hours: 31 }).when, "12–18 Eki");
   assert.equal(say({ kind: "compass", hours: 24 }, "en").story, "That week you worked 24 hours and never hit a limit.");
   // 05:00 in Istanbul.
@@ -325,7 +325,7 @@ test("an earlier version's weeks and shelf carry over; what cannot be told keeps
     await click(find(tile("feather")!, (n) => n.tagName === "button"));
     const details = textOf(slot("lost-details")!);
     assert.match(details, /20–26 TemRekorO hafta gece yarısından sonra toplam 3 saat çalıştın\./);
-    assert.match(details, /13–19 TemBu hafta bulundu; ayrıntısı eski bir sürümden kaldığı için yalnızca haftası biliniyor\./);
+    assert.match(details, /13–19 TemBu hafta bulundu\. Ayrıntısı yok\./);
     // A failed answer leaves the kept finds on show and says the scan is over.
     assert.doesNotMatch(textOf(view.container), /haftaları tarıyor/);
   } finally {

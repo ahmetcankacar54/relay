@@ -79,12 +79,9 @@ export function reconnectCause(
     t("giriş başka bir hesaba ait", "the sign-in belongs to another account");
   switch (usage?.issue) {
     case "expired":
-      return t(
-        "girişin süresi doldu ve yenilenemedi",
-        "the sign-in expired and could not be renewed",
-      );
+      return t("girişin süresi doldu", "the sign-in expired");
     case "credentials-missing":
-      return t("kayıtlı giriş bulunamadı", "the saved sign-in was not found");
+      return t("kayıtlı giriş bulunamadı", "the saved sign-in is missing");
     case "scope":
       return t(
         "giriş kullanım verisine erişemiyor",
@@ -144,8 +141,8 @@ export function Banners({
   const explanation = (
     <p className="mt-0.5 text-xs text-muted-foreground">
       {t(
-        "“Limit okuma girişini yenile” bu hesabın girişini tarayıcıda açar. Onaylayınca uyarı kapanır.",
-        "“Renew usage sign-in” opens this account’s sign-in in the browser. The warning closes once you approve it.",
+        "Tarayıcıda açılan girişi onayla.",
+        "Approve the sign-in that opens in the browser.",
       )}
     </p>
   );
@@ -195,11 +192,11 @@ export function Banners({
             {waiting(a)
               ? t(
                   `${a.name} · tarayıcı onayı bekleniyor.`,
-                  `${a.name} · waiting for browser approval.`,
+                  `${a.name} · browser approval pending.`,
                 )
               : t(
                   `${a.name} · limit okuma girişinin yenilenmesi gerekiyor: ${cause}.`,
-                  `${a.name} · the usage sign-in needs to be renewed: ${cause}.`,
+                  `${a.name} · the usage sign-in needs renewal: ${cause}.`,
                 )}
           </span>
           {explain && explanation}
@@ -211,11 +208,11 @@ export function Banners({
         {issue === "keychain-locked"
           ? t(
               `${a.name} · limitleri okumak için Anahtarlık erişimi gerekiyor.`,
-              `${a.name} · Keychain access is needed to read usage limits.`,
+              `${a.name} · Relay needs Keychain access to read the limits.`,
             )
           : t(
               `${a.name} · limit okuma girişinin yenilenmesi gerekiyor.`,
-              `${a.name} · the usage sign-in needs to be renewed.`,
+              `${a.name} · the usage sign-in needs renewal.`,
             )}
       </span>
     );
@@ -228,7 +225,7 @@ export function Banners({
           <span>
             {t(
               "Tarayıcı önizlemesi · Hesaplar örnektir. Geçişler Relay uygulamasında çalışır.",
-              "Browser preview · Sample accounts. Switching works in the Relay app.",
+              "Browser preview · Sample accounts. Switches work in the Relay app.",
             )}
           </span>
         </Banner>
@@ -264,7 +261,7 @@ export function Banners({
           <span>
             {t(
               "Yarım kalan bir geçiş var. Önce yedeği geri yükle.",
-              "A switch was interrupted. Restore the backup first.",
+              "A switch did not finish. Restore the backup first.",
             )}
           </span>
         </Banner>
@@ -338,7 +335,7 @@ export function Banners({
           <span>
             {t(
               `${reconnect.length} hesabın limit okuma girişi dikkat istiyor.`,
-              `${reconnect.length} accounts need usage sign-in attention.`,
+              `${reconnect.length} usage sign-ins need attention.`,
             )}
           </span>
         </Banner>

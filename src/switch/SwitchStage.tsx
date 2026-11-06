@@ -71,7 +71,7 @@ export function SwitchStage({ view }: { view: SwitchSceneView }) {
       <div className="grid place-items-center">
         <p
           className={cn(
-            "switch-line text-center text-[12px] leading-[15px] font-semibold",
+            "switch-line text-center text-xs leading-[15px] font-semibold",
             pair ? "line-clamp-1" : "line-clamp-2",
           )}
           title={view.line}
@@ -82,7 +82,7 @@ export function SwitchStage({ view }: { view: SwitchSceneView }) {
       {pair && (
         <div
           data-slot="switch-accounts"
-          className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 text-[11px]"
+          className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 text-2xs"
         >
           {pair.from ? <Side account={pair.from} /> : <span />}
           <ArrowRight aria-hidden="true" className="size-3 text-muted-foreground" />

@@ -36,7 +36,7 @@ export function AccountSelection({
       className="mt-1 rounded-lg border border-border p-3 disabled:opacity-60"
       disabled={disabled}
     >
-      <legend className="px-1 text-[13px] font-medium">
+      <legend className="px-1 text-sm font-medium">
         {label}{" "}
         <span className="text-muted-foreground">
           {selected.filter((id) => accounts.some((a) => a.id === id)).length} /{" "}
@@ -122,7 +122,7 @@ export function historyTransferOptions(
 ): { value: RelaySettings["desktopHistoryTransfer"]; label: string }[] {
   return [
     { value: "all", label: t("Tüm hesaplar arasında", "Between all accounts") },
-    { value: "same-group", label: t("Aynı paylaşım grubunda", "Within sharing group") },
+    { value: "same-group", label: t("Aynı paylaşım grubunda", "In the same sharing group") },
     { value: "selected", label: t("Seçtiğim hesaplar arasında", "Between selected accounts") },
     { value: "off", label: t("Paylaşma", "Do not share") },
   ];
@@ -161,7 +161,7 @@ export function DraftRetypePreference({
         htmlFor="draft-retype"
         description={t(
           "Geçişten sonra taslağı mesaj kutusuna yazar, göndermez. Erişilebilirlik izni ister.",
-          "Types the draft into the message box after a switch, unsent. Needs Accessibility.",
+          "After a switch, types the draft into the message box but does not send it. Needs Accessibility permission.",
         )}
       >
         <Switch
@@ -198,7 +198,7 @@ export function historyScopeNote(
     scope,
     t(
       "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.",
-      "Only local Code history is shared; Chat and cloud sessions are not synced.",
+      "Relay shares only local Code history. Chat and cloud sessions do not sync.",
     ),
   ]
     .filter(Boolean)
@@ -247,7 +247,7 @@ export function SharedHistoryPreferences({
               : value.desktopHistoryTransfer === "selected"
                 ? t(
                     "Geçişten sonra Code konuşmaların seçtiğin hesaplarda görünür.",
-                    "After a switch, your Code conversations appear in the accounts you picked.",
+                    "After a switch, your Code conversations appear in the accounts you selected.",
                   )
                 : t(
                     "Geçişten sonra Code konuşmaların aynı gruptaki hesaplarda görünür.",
@@ -258,17 +258,6 @@ export function SharedHistoryPreferences({
       <SettingRow
         label={t("Geçmişi paylaş", "Share history")}
         htmlFor="history-transfer"
-        description={
-          off
-            ? t(
-                "Hesaplar arasında birleştirilmez.",
-                "Not merged between accounts.",
-              )
-            : t(
-                "Her hesap geçişinde birleştirilir.",
-                "Merged on every account switch.",
-              )
-        }
       >
         <OptionSelect
           id="history-transfer"
@@ -286,25 +275,25 @@ export function SharedHistoryPreferences({
           selected={value.desktopHistoryAccounts}
           update={(ids) => update({ desktopHistoryAccounts: ids })}
           disabled={disabled}
-          label={t("Geçmişi paylaşan hesaplar", "Accounts sharing history")}
+          label={t("Geçmişi paylaşan hesaplar", "Accounts that share history")}
           t={t}
         />
       )}
       <div className="mt-1 flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-        <p className="text-[13px]">
+        <p className="text-sm">
           {active
             ? sources.length
               ? t(
-                  `${sources.length} hesabın geçmişi ${active.name} hesabında birleştirilecek.`,
-                  `History from ${sources.length} ${sources.length === 1 ? "account" : "accounts"} will be merged into ${active.name}.`,
+                  `${sources.length} hesabın geçmişi ${active.name} hesabında birleştirilir.`,
+                  `Relay merges the history of ${sources.length} ${sources.length === 1 ? "account" : "accounts"} into ${active.name}.`,
                 )
               : t(
                   `${active.name} için paylaşılacak hesap seçili değil.`,
-                  `No sharing sources are selected for ${active.name}.`,
+                  `No accounts are selected to share with ${active.name}.`,
                 )
             : t(
-                "Önce Claude uygulamasında açık hesabı bağla.",
-                "Link the account open in the Claude app first.",
+                "Önce Claude uygulamasında açık hesabın girişini kaydet.",
+                "First, save the Claude app sign-in of the open account.",
               )}
         </p>
         <Button
@@ -314,7 +303,7 @@ export function SharedHistoryPreferences({
           disabled={syncDisabled || disabled || !active || !sources.length}
           onClick={sync}
         >
-          {t("Açık hesapla birleştir…", "Merge into current account…")}
+          {t("Açık hesapla birleştir…", "Merge into the open account…")}
         </Button>
       </div>
       {!off && (

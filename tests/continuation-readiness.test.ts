@@ -299,15 +299,15 @@ function render(
 test("preparation distinguishes connected enrollment from fresh target capacity without authorizing a watch", () => {
   const teamSeat = render(false);
   assert.match(teamSeat, /1 connected account · checked at handoff/);
-  assert.match(teamSeat, /Enough quota verified on 1 account</);
-  assert.match(teamSeat, /5-hour quota is available; no weekly limit reported/);
-  assert.match(render(), /Enough quota verified on 1 account</);
-  assert.match(render(), /5-hour and weekly quota are available/);
-  assert.match(render(true, false, 15), /Choose “Every 5 minutes” for “Refresh limits automatically” in Settings/);
+  assert.match(teamSeat, /Enough limit verified on 1 account</);
+  assert.match(teamSeat, /5-hour limit is available\. No weekly limit reported/);
+  assert.match(render(), /Enough limit verified on 1 account</);
+  assert.match(render(), /5-hour and weekly limits are available/);
+  assert.match(render(true, false, 15), /In Settings, set “Refresh limits automatically” to “Every 5 min”/);
 });
 test("a frozen watch does not show newly connected accounts as current authorized targets", () => {
   const html = render(true, true);
   assert.doesNotMatch(html, /have verified target capacity/);
   assert.match(html, /Turn off watching/);
-  assert.match(html, /enable watching again to include accounts added later/);
+  assert.match(html, /To include accounts that you add later, turn watching on again/);
 });

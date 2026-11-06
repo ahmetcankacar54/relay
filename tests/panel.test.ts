@@ -127,7 +127,7 @@ test("accountRowSubtitle shows the account's status when something is wrong", ()
     assert.equal(accountRowSubtitle(r, en, "en", "UTC", NOW), enLabel, name);
   }
   // A pending browser approval says so.
-  assert.equal(accountRowSubtitle(row("unknown"), tr, "tr", "UTC", NOW, true), "Tarayıcı onayı bekleniyor");
+  assert.equal(accountRowSubtitle(row("unknown"), tr, "tr", "UTC", NOW, true), "Tarayıcıda onayla");
   // A stale but healthy row keeps its old text, and so do the other healthy states.
   const staleHealthy: OverviewRow = { account: acct("x", "X"), usage: { ...use("x", 1, 1), checkedAt: iso(NOW - 3_600_000) }, state: "unknown", recommended: false };
   assert.equal(accountRowSubtitle(staleHealthy, tr, "tr", "UTC", NOW), "Limit verisi eski");
@@ -145,14 +145,14 @@ test("panel rows show the account's status when something is wrong", () => {
     // The row's one line names the problem first, then the percents of any reading; its tooltip names it alone.
     assert.match(html, new RegExp(`title="${label}"`), name);
     const reading = r.usage?.checkedAt ? " · %1 · %1" : "";
-    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-\\[11\\.5px\\]">${label}${reading}</span>`), name);
+    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-2xs">${label}${reading}</span>`), name);
     assert.doesNotMatch(html, /Limit verisi eski|Hazır · dönem başlamadı/, name);
   }
   // A browser approval in progress for that account.
   const flows = [{ id: "f", accountId: "vertex", status: "waiting" }] as unknown as AuthFlow[];
   const waiting = relayFor(active, [active, vertex], baseUsage);
   (waiting.data as Snapshot).authFlows = flows;
-  assert.match(wrap(waiting, createElement(PanelAccounts, { now: NOW })), /title="Tarayıcı onayı bekleniyor"/);
+  assert.match(wrap(waiting, createElement(PanelAccounts, { now: NOW })), /title="Tarayıcıda onayla"/);
 });
 
 /** The active card's stale line, as the panel draws it. */
@@ -238,7 +238,7 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(html, /5 saatlik dönem/);
   assert.match(html, /Haftalık · Opus/);
   // No suggestion strip: the accounts heading says the limit is near and the suggestion leads.
-  assert.match(html, />Limit dolmak üzere · önerilen üstte</);
+  assert.match(html, />Limit dolmak üzere</);
   assert.doesNotMatch(html, /Önerilen:/);
   assert.equal((html.match(/Limit dolmak üzere/g) ?? []).length, 1);
   // The rings' key sits by the heading: the filled dot is the five hours, the hollow one the week.
@@ -413,7 +413,7 @@ test("the active name keeps a tooltip when truncated", () => {
 
 test("a pending Desktop connection explains itself and links to accounts", () => {
   const html = render(relayFor(active, [active, vertex], baseUsage, { pendingDesktop: vertex }));
-  assert.match(html, /Claude uygulaması girişi tamamlanmayı bekliyor/);
+  assert.match(html, /Claude uygulaması girişini tamamla/);
   const opened: string[] = [];
   const relay = relayFor(active, [active, vertex], baseUsage, {
     pendingDesktop: vertex,
@@ -681,8 +681,8 @@ test("a draft's reason wraps while its name stays on one line", () => {
 });
 
 test("the attachment note shows only when attachments could not be restored", () => {
-  assert.match(drafts(withDrafts([draft({ attachments: true })])), /Ekleri geri yüklenemedi/);
-  assert.doesNotMatch(drafts(withDrafts([draft({ attachments: false })])), /Ekleri geri yüklenemedi/);
+  assert.match(drafts(withDrafts([draft({ attachments: true })])), /Ekler geri yüklenmedi/);
+  assert.doesNotMatch(drafts(withDrafts([draft({ attachments: false })])), /Ekler geri yüklenmedi/);
 });
 
 test("draftReason words every reason in both languages, with a fallback", () => {
@@ -690,7 +690,7 @@ test("draftReason words every reason in both languages, with a fallback", () => 
   const en = (_a: string, b: string) => b;
   const maybeTyped: [string, string] = [
     "Konuşmaya yazılmış olabilir, yapıştırmadan önce bak",
-    "It may already be in the conversation; check before pasting",
+    "Possibly in the conversation already; check before you paste",
   ];
   const unsupported: [string, string] = [
     "Claude uygulamasının arayüzü desteklenmiyor",
@@ -699,32 +699,32 @@ test("draftReason words every reason in both languages, with a fallback", () => 
   const busy: [string, string] = ["Konuşma meşguldü", "The conversation was busy"];
   const labels: Record<string, [string, string]> = {
     accessibility: ["Erişilebilirlik izni yok", "Accessibility permission missing"],
-    "composer-not-empty": ["Mesaj kutusunda yazı vardı, üzerine yazmadım", "The message box already held text, so it was left alone"],
+    "composer-not-empty": ["Mesaj kutusunda zaten yazı vardı", "The message box already had text"],
     "context-changed": ["Ekran değişti", "The screen changed"],
     lost: ["Claude uygulaması taslağı sildi", "The Claude app cleared the draft"],
     busy,
     manual: ["Elle yapıştır", "Paste it yourself"],
-    error: ["Geri yazılamadı", "Could not be restored"],
+    error: ["Geri yazılamadı", "Restore failed"],
     // A draft that may already be in its composer says so, whichever way that came about.
     "maybe-typed": maybeTyped,
     unconfirmed: maybeTyped,
     "delivery-ambiguous": maybeTyped,
-    "no-composer": ["Konuşma açıldı ama mesaj kutusu yüklenmedi", "The conversation opened, but its message box never loaded"],
-    loading: ["Claude uygulaması hâlâ yükleniyordu", "The Claude app was still loading"],
+    "no-composer": ["Mesaj kutusu yüklenmedi", "The message box did not load"],
+    loading: ["Claude uygulaması henüz yüklenmemişti", "The Claude app was not loaded yet"],
     unsupported,
     // The helper's own issue names read as the restorer's.
     "desktop-ui-unsupported": unsupported,
     "desktop-work-active": busy,
-    "exact-session-not-observed": ["Konuşma açılamadı", "The conversation could not be opened"],
+    "exact-session-not-observed": ["Konuşma açılamadı", "The conversation did not open"],
     "not-ready": ["Claude uygulaması hazır değildi", "The Claude app was not ready"],
     moved: ["Başka bir ekrana geçtin", "You went to another screen"],
     changed: ["Ekran değişti", "The screen changed"],
     "claude-not-running": ["Claude uygulaması çalışmıyordu", "The Claude app was not running"],
-    budget: ["Süre doldu", "Ran out of time"],
+    budget: ["Süre doldu", "Time ran out"],
     // Fast restore's watch window ran out before the user opened the conversation.
     "not-opened": [
       "Konuşmayı 30 dakika içinde açmadın",
-      "You didn’t open the conversation within 30 minutes",
+      "You did not open the conversation in 30 minutes",
     ],
   };
   for (const [reason, [turkish, english]] of Object.entries(labels)) {
@@ -733,12 +733,12 @@ test("draftReason words every reason in both languages, with a fallback", () => 
   }
   for (const reason of [undefined, "", "something-new"]) {
     assert.equal(draftReason(reason, tr), "Geri yazılamadı");
-    assert.equal(draftReason(reason, en), "Could not be restored");
+    assert.equal(draftReason(reason, en), "Restore failed");
   }
   // A new-session draft's reasons name its screen where a conversation's would mislead.
   const maybeOnScreen: [string, string] = [
     "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bak",
-    "It may already be on the new-session screen; check before pasting",
+    "Possibly on the new-session screen already; check before you paste",
   ];
   const screenBusy: [string, string] = [
     "Yeni oturum ekranı meşguldü",
@@ -753,11 +753,11 @@ test("draftReason words every reason in both languages, with a fallback", () => 
     "desktop-work-active": screenBusy,
     "exact-session-not-observed": [
       "Yeni oturum ekranı açılamadı",
-      "The new-session screen could not be opened",
+      "The new-session screen did not open",
     ],
     "not-opened": [
       "Yeni oturum ekranını 30 dakika içinde açmadın",
-      "You didn’t open the new-session screen within 30 minutes",
+      "You did not open the new-session screen in 30 minutes",
     ],
   };
   for (const [reason, [turkish, english]] of Object.entries(fresh)) {
@@ -783,7 +783,7 @@ test("the panel places rescued drafts after the active card and before the accou
   const at = (re: RegExp) => html.search(re);
   assert.ok(at(/>Claude açık</) >= 0);
   assert.ok(at(/>Claude açık</) < at(/Kurtarılan taslaklar/));
-  assert.ok(at(/Kurtarılan taslaklar/) < at(/>Limit dolmak üzere · önerilen üstte</));
+  assert.ok(at(/Kurtarılan taslaklar/) < at(/>Limit dolmak üzere</));
 });
 
 test("a draft row's buttons are disabled while that row's action runs", () => {
@@ -833,7 +833,7 @@ test("the sidebar row says what the account lacks and where it comes from, with 
   const html = sidebar(withSidebar(gap()));
   assert.match(html, /Kenar çubuğu düzeni/);
   assert.match(html, /Alto hesabında 9 bölüm eksik, 157 oturum bir bölümde değil/);
-  assert.match(html, /Kaynak: Vertex\. Talimatı bir Code oturumuna yapıştırınca Claude bölümleri kurar\./);
+  assert.match(html, /Kaynak: Vertex\. Claude bölümleri bir Code oturumunda talimatla kurar\./);
   assert.match(html, />Talimatı kopyala</);
   assert.match(html, />Kapat</);
   // No session id ever reaches the panel.
@@ -844,7 +844,7 @@ test("the sidebar row says what the account lacks and where it comes from, with 
 test("a sidebar offer that only restores the account's own filing names no source", () => {
   const html = sidebar(withSidebar(gap({ from: [] })));
   assert.doesNotMatch(html, /Kaynak:/);
-  assert.match(html, /Talimatı bir Code oturumuna yapıştırınca Claude bölümleri kurar\./);
+  assert.match(html, /Claude bölümleri bir Code oturumunda talimatla kurar\./);
 });
 
 test("the sidebar line names only what is missing, in both languages", () => {
@@ -863,7 +863,7 @@ test("the panel places the sidebar row after rescued drafts and before the accou
   const at = (re: RegExp) => html.search(re);
   assert.ok(at(/Kurtarılan taslaklar/) >= 0);
   assert.ok(at(/Kurtarılan taslaklar/) < at(/Kenar çubuğu düzeni/));
-  assert.ok(at(/Kenar çubuğu düzeni/) < at(/>Geç · en uygunu üstte</));
+  assert.ok(at(/Kenar çubuğu düzeni/) < at(/>Diğer hesaplar</));
 });
 
 test("the sidebar row's buttons are disabled while its action runs", () => {
@@ -916,15 +916,15 @@ test("the extension row says where the extension was left and offers Switch; wit
   const html = extensionRow(withOffer(offer()));
   assert.match(html, /Tarayıcı eklentisi/);
   assert.match(html, /Eklenti Alto hesabında kaldı/);
-  assert.match(html, /Vertex hesabının eklenti girişi kayıtlı; istersen şimdi geçir\./);
+  assert.match(html, /Vertex hesabının eklenti girişi kayıtlı\./);
   assert.match(html, />Geçir</);
   // Nothing happens before the user confirms.
   assert.doesNotMatch(html, /Evet, geçir/);
   assert.equal(extensionRow(withOffer(undefined)), "");
   // On the account already, but its sign-in expired: the row offers a fix instead.
   const expired = extensionRow(withOffer(offer({ on: undefined, expired: true })));
-  assert.match(expired, /Eklentinin girişi düşmüş/);
-  assert.match(expired, /Eklenti Vertex hesabında ama Claude’un tarayıcı araçlarını reddediyor\./);
+  assert.match(expired, /Eklenti girişinin süresi doldu/);
+  assert.match(expired, /Claude’un tarayıcı araçları çalışmıyor\./);
   assert.match(expired, />Düzelt</);
   // Nothing saved to put in place: Reconnect opens the steps in Settings, with no confirmation.
   const reconnect = extensionRow(withOffer(offer({ on: undefined, expired: true, reconnect: true })));
@@ -940,7 +940,7 @@ test("the extension line names a signed-out extension, or an account Relay canno
   assert.equal(extensionOfferLine(offer({ on: undefined, signedOut: true }), tr), "Eklentide giriş yok");
   assert.equal(extensionOfferLine(offer({ on: undefined }), tr), "Eklenti Vertex hesabına geçmedi");
   assert.equal(extensionOfferLine(offer(), en), "The extension is still on Alto");
-  assert.equal(extensionOfferLine(offer({ on: undefined, expired: true }), tr), "Eklentinin girişi düşmüş");
+  assert.equal(extensionOfferLine(offer({ on: undefined, expired: true }), tr), "Eklenti girişinin süresi doldu");
 });
 
 test("the panel places the extension row after rescued drafts and before the sidebar row", () => {
@@ -969,5 +969,5 @@ test("Switch runs the extension sync through relay.action and says nothing more 
   await syncExtensionAction(relay("switched"), tr, (line) => said.push(line));
   await syncExtensionAction(relay("skipped"), tr, (line) => said.push(line));
   assert.deepEqual(keys, ["extension-sync", "extension-sync"]);
-  assert.deepEqual(said, [undefined, "Tarayıcı kapanmadı, eklentiye dokunulmadı."]);
+  assert.deepEqual(said, [undefined, "Tarayıcı kapanmadı; eklentiye dokunulmadı."]);
 });

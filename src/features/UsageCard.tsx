@@ -19,44 +19,44 @@ import { cn } from "@/lib/utils";
 type T = (tr: string, en: string) => string;
 const issues: Record<UsageIssue, [string, string]> = {
   "connect-cli": [
-    "Limitleri görmek için limit okuma girişini yap.",
-    "Complete the usage sign-in to see your usage limits.",
+    "Henüz limit okuma girişi yok.",
+    "No usage sign-in yet.",
   ],
   "credentials-missing": [
-    "Bu profilin giriş bilgisi okunamadı. Limit okuma girişini yenile.",
-    "This profile’s sign-in is unavailable. Renew the usage sign-in.",
+    "Bu profilin giriş bilgisi okunamadı.",
+    "Relay cannot read this profile’s sign-in.",
   ],
   "keychain-locked": [
     "Limitleri okumak için Anahtarlık erişimi gerekiyor.",
-    "Keychain access is needed to read usage limits.",
+    "Relay needs Keychain access to read limits.",
   ],
   "renewal-required": [
     "Limit okuma girişinin yenilenmesi gerekiyor.",
     "The usage sign-in needs to be renewed.",
   ],
   expired: [
-    "Limit okuma girişi kendiliğinden yenilenemedi. Limit okuma girişini yenile.",
-    "The usage sign-in could not be renewed. Renew the usage sign-in.",
+    "Limit okuma girişi kendiliğinden yenilenemedi.",
+    "Relay cannot renew the usage sign-in automatically.",
   ],
   scope: [
-    "Bu giriş kullanım verisine erişemiyor. Limit okuma girişini yenile.",
-    "This sign-in cannot access usage. Renew the usage sign-in.",
+    "Bu giriş kullanım verisine erişemiyor.",
+    "This sign-in cannot read usage.",
   ],
   "identity-mismatch": [
-    "Limit okuma girişi bu profilin hesabına ait değil. Limit okuma girişini yenile.",
-    "The usage sign-in does not belong to this profile’s account. Renew the usage sign-in.",
+    "Limit okuma girişi bu profilin hesabına ait değil.",
+    "The usage sign-in does not belong to this profile’s account.",
   ],
   "rate-limited": [
     "Kullanım servisi kısa bir süre beklenmesini istedi.",
-    "The usage service requested a pause.",
+    "The usage service asked Relay to wait.",
   ],
   unavailable: [
     "Kullanım servisine ulaşılamadı.",
-    "The usage service is unavailable.",
+    "Cannot reach the usage service.",
   ],
   unsupported: [
     "Bu hesap için limit verisi okunamıyor.",
-    "Usage data is unavailable for this account.",
+    "Relay cannot read limits for this account.",
   ],
 };
 export function UsageCard({
@@ -228,7 +228,7 @@ export function UsageCard({
               </div>
             </>
           ) : notReported ? null : (
-            t("Yenilenme zamanı yok", "Reset time unavailable")
+            t("Yenilenme zamanı yok", "No reset time")
           )}
           {warning && (
             <b className="font-semibold text-crit">
@@ -260,7 +260,7 @@ export function UsageCard({
         <span className="min-w-0">
           {usage?.stale && <b className="font-semibold text-warn-foreground">{t("Limit verisi eski · ", "Usage data is out of date · ")}</b>}
           {loading
-            ? t("Limitler okunuyor…", "Reading usage…")
+            ? t("Limitler okunuyor…", "Relay reads the limits…")
             : shownIssue
               ? t(...issues[shownIssue])
               : usage?.checkedAt
@@ -269,7 +269,7 @@ export function UsageCard({
           {retry &&
             !reconnect &&
             !renewal &&
-            ` ${t("Tekrar", "Retry")} ${clock(usage!.retryAt!)}`}
+            ` ${t("Tekrar", "Next try")} ${clock(usage!.retryAt!)}`}
         </span>
         {reconnect ? (
           <Button

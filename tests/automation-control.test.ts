@@ -290,7 +290,7 @@ test("the Switching card shows one choice with the status and a switch-now butto
     html
       .replace(/<[^>]+>/g, "")
       .includes(
-        "Kişisel · Max %100 kullanıldı · 2 konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+        "Kişisel · Max %100 kullanıldı · 2 konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince Relay Kişisel · İkinci’ye geçip devam ettirir. Şimdi geçersen devam mesajını sen yazarsın.",
       ),
   );
   assert.ok(html.includes("Şimdi Kişisel · İkinci’ye geç"));
@@ -331,7 +331,7 @@ test("the after-exit card lists accounts and the quota card does not", () => {
   assert.doesNotMatch(quota, /Otomatik geçişe dahil hesaplar/);
   assert.match(
     quota,
-    /Relay açık kalmalı\. Çalışan iş bitmeden Claude uygulaması yeniden başlatılmaz; her konuşmaya en fazla bir devam mesajı gider\./,
+    /Relay açık kalmalı\. Çalışan iş bitmeden Claude uygulaması yeniden başlatılmaz\. Her konuşmaya en fazla bir devam mesajı gider\./,
   );
 });
 
@@ -457,7 +457,7 @@ test("Overview has no suggestion band: automation's switch-now stays its one off
     overview,
   );
   assert.doesNotMatch(suggested, /uyarı eşiğini geçti/);
-  assert.match(suggested, />Önerilen üstte</);
+  assert.doesNotMatch(suggested, /Önerilen üstte|en uygunu üstte/);
   assert.match(suggested, />önerilen</);
   assert.doesNotMatch(suggested, /Geçişi incele/);
   assert.equal(count(suggested, SWITCH_NOW), 0);
@@ -469,7 +469,7 @@ test("the status line keeps the usage prefix out of the live announcement", () =
     ...html.matchAll(/<span role="status" aria-live="polite">(.*?)<\/span>/g),
   ].map(([, text]) => text);
   assert.deepEqual(live, [
-    "2 konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince Kişisel · İkinci’ye geçip devam ettiririm. Şimdi geçersen devam mesajını sen yazarsın.",
+    "2 konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince Relay Kişisel · İkinci’ye geçip devam ettirir. Şimdi geçersen devam mesajını sen yazarsın.",
   ]);
   // The prefix is still shown, just outside the live region.
   assert.ok(html.includes('Kişisel · Max %100 kullanıldı · <span role="status"'));

@@ -10,7 +10,7 @@ test("a known reason is named in words, in both languages", () => {
   );
   assert.equal(
     routineFailureNotice("Studio", "routine-cli-unavailable", "en"),
-    "Could not start Studio’s limit period (Claude CLI not found).",
+    "Studio’s limit period did not start (Claude CLI not found).",
   );
   assert.deepEqual(routineFailure("interrupted"), ["Relay kapandı", "Relay quit"]);
 });
@@ -18,7 +18,7 @@ test("a known reason is named in words, in both languages", () => {
 test("a reason without a label is left out, never shown as a code", () => {
   for (const reason of ["routine-request-failed", "Wait for the account connection refresh to finish.", ""]) {
     assert.equal(routineFailureNotice("Studio", reason, "tr"), "Studio hesabının limit dönemi başlatılamadı.");
-    assert.equal(routineFailureNotice("Studio", reason, "en"), "Could not start Studio’s limit period.");
+    assert.equal(routineFailureNotice("Studio", reason, "en"), "Studio’s limit period did not start.");
   }
   assert.equal(routineFailure(undefined), undefined);
 });

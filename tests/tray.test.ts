@@ -67,7 +67,7 @@ test("tray account action requests a review and never bypasses restart consent",
   assert.equal(current.command, undefined);
   const target = menu.find((item) => item.type === "checkbox" && !item.checked);
   assert.ok(target && target.type === "checkbox");
-  assert.equal(target.label, "Max · 5h 22% · wk 92% used");
+  assert.equal(target.label, "Max · 5 h 22% · week 92% used");
   assert.deepEqual(target.command, {
     type: "review-switch",
     profileId: "target",
@@ -134,7 +134,7 @@ test("tray only offers saved Desktop identities and blocks mismatched CLI identi
 });
 
 test("unknown, future and foreign quota stays unknown in the tray", () => {
-  assert.equal(trayUsageLabel("target", undefined, "en", now), "5h ? · wk ?");
+  assert.equal(trayUsageLabel("target", undefined, "en", now), "5 h ? · week ?");
   for (const u of [
     { ...usage("target"), checkedAt: new Date(now + 5 * 60_000).toISOString() },
     usage("different"),
@@ -144,7 +144,7 @@ test("unknown, future and foreign quota stays unknown in the tray", () => {
   ])
     assert.equal(
       trayUsageLabel("target", u, "en", now),
-      "5h ? · wk ? · usage data is out of date",
+      "5 h ? · week ? · usage data is out of date",
     );
 });
 
@@ -161,7 +161,7 @@ test("a reading old for a passing reason keeps its figures in the menu, marked, 
   ])
     assert.equal(
       trayUsageLabel("target", u, "en", now),
-      "5h ~22% · wk ~92% used · usage data is out of date",
+      "5 h ~22% · week ~92% used · usage data is out of date",
     );
   assert.equal(
     trayUsageLabel("target", { ...usage("target"), stale: true }, "tr", now),
@@ -175,7 +175,7 @@ test("a reading old for a passing reason keeps its figures in the menu, marked, 
       "en",
       now,
     ),
-    "5h ? · wk ~92% used · usage data is out of date",
+    "5 h ? · week ~92% used · usage data is out of date",
   );
 });
 
@@ -187,7 +187,7 @@ test("a fresh reading's windows read as they are", () => {
       "en",
       now,
     ),
-    "5h 22% · wk ? used",
+    "5 h 22% · week ? used",
   );
   assert.equal(
     trayUsageLabel(
@@ -196,7 +196,7 @@ test("a fresh reading's windows read as they are", () => {
       "en",
       now,
     ),
-    "5h ? · wk 92% used",
+    "5 h ? · week 92% used",
   );
   // With no reading for either window there is nothing the word could describe.
   assert.equal(
@@ -206,7 +206,7 @@ test("a fresh reading's windows read as they are", () => {
       "en",
       now,
     ),
-    "5h ? · wk ?",
+    "5 h ? · week ?",
   );
   assert.equal(
     trayUsageLabel(
@@ -245,19 +245,19 @@ test("every menu row gives the percent used of both windows with its word once, 
       item.type === "checkbox" && item.label.startsWith("Max") ? [item.label] : [],
     );
   assert.deepEqual(rows("tr"), ["Max · 5 sa %22 · hafta %92 kullanıldı"]);
-  assert.deepEqual(rows("en"), ["Max · 5h 22% · wk 92% used"]);
+  assert.deepEqual(rows("en"), ["Max · 5 h 22% · week 92% used"]);
   // The word closes the row once, never after each figure.
   for (const label of [...rows("tr"), ...rows("en")]) {
     assert.equal(label.match(/kullanıldı|used/g)?.length, 1, label);
     assert.match(label, /(kullanıldı|used)$/, label);
   }
-  // The header over the rows says the same direction.
+  // The header over the rows says what a click does.
   const header = (language: "tr" | "en") =>
     buildTrayMenu(snapshot(), language, now).flatMap((item) =>
-      item.type === "normal" && /limit|quota/i.test(item.label) ? [item.label] : [],
+      item.type === "normal" && /hesap seç|select an account/i.test(item.label) ? [item.label] : [],
     );
-  assert.deepEqual(header("tr"), ["Kullanılan limit · geçmek için hesap seç"]);
-  assert.deepEqual(header("en"), ["Quota used · select an account to switch"]);
+  assert.deepEqual(header("tr"), ["Geçmek için hesap seç"]);
+  assert.deepEqual(header("en"), ["Select an account to switch"]);
 });
 
 test("the tooltip names the account and carries the five-hour percent used with its word", () => {
@@ -350,7 +350,7 @@ test("while a switch runs the title names the account it opens, cut short when l
     onTarget(40, { switchingTo, desktop: { ...desktop, activeProfileId: "target", busy: true, running: false } });
   assert.equal(trayTitle(busy("current"), now, "tr"), "Current…");
   assert.equal(trayTooltip(busy("current"), "tr", now), "Relay — Current hesabına geçiliyor…");
-  assert.equal(trayTooltip(busy("current"), "en", now), "Relay — Switching to Current…");
+  assert.equal(trayTooltip(busy("current"), "en", now), "Relay switches to Current…");
   const long = busy("current");
   long.accounts[0].name = "Şirket hesabı (ekip)\nikinci";
   assert.equal(trayTitle(long, now, "tr"), "Şirket hesabı…");

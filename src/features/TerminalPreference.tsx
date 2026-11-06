@@ -49,12 +49,12 @@ export function TerminalPreference({
       : undefined;
   const other = [current?.email, current?.orgName].filter(Boolean).join(", ");
   const currentLine = !current
-    ? t("Terminal kontrol ediliyor…", "Checking the terminal…")
+    ? t("Terminal kontrol ediliyor…", "Terminal check in progress…")
     : current.state === "signed-in"
       ? current.mismatch
         ? t(
-            "Terminalin girişi başka bir hesaba ait; “claude auth login” ile yeniden gir.",
-            "The terminal’s sign-in belongs to another account; sign in again with “claude auth login”.",
+            "Terminalin girişi başka bir hesaba ait. “claude auth login” ile yeniden gir.",
+            "The terminal sign-in belongs to another account. Sign in again with “claude auth login”.",
           )
         : on
           ? t(
@@ -63,16 +63,16 @@ export function TerminalPreference({
             )
           : t(
               `Terminal, Relay’de olmayan bir hesapta${other ? ` (${other})` : ""}.`,
-              `The terminal is on an account Relay does not have${other ? ` (${other})` : ""}.`,
+              `The terminal is on an account that is not in Relay${other ? ` (${other})` : ""}.`,
             )
       : current.state === "signed-out"
         ? t(
             "Terminaldeki Claude Code’da giriş yok.",
-            "The terminal’s Claude Code is signed out.",
+            "Claude Code in the terminal is signed out.",
           )
         : t(
             "Terminaldeki Claude Code girişi okunamadı.",
-            "Could not read the terminal’s Claude Code sign-in.",
+            "Relay cannot read the Claude Code sign-in in the terminal.",
           );
   const linked = accounts.filter((a) =>
     status.saved.some((s) =>
@@ -102,13 +102,13 @@ export function TerminalPreference({
     unsure.length
       ? t(
           `${unsure.map((a) => a.name).join(", ")}: giriş kullanımdayken kaydedildi; geçişte bir kez “claude auth login” isteyebilir.`,
-          `${unsure.map((a) => a.name).join(", ")}: saved while in use; a switch may ask for “claude auth login” once.`,
+          `${unsure.map((a) => a.name).join(", ")}: saved while in use. A switch can ask for “claude auth login” once.`,
         )
       : "",
     missing.length
       ? t(
           `Eksik: ${missing.map((a) => a.name).join(", ")}. Her biri için terminalde “claude auth login” ile o hesaba gir, sonra “Kontrol et”e bas.`,
-          `Missing: ${missing.map((a) => a.name).join(", ")}. For each, sign in with “claude auth login” in a terminal, then press Check.`,
+          `Missing: ${missing.map((a) => a.name).join(", ")}. For each one, sign in with “claude auth login” in a terminal. Then select “Check”.`,
         )
       : "",
   ]
@@ -134,7 +134,7 @@ export function TerminalPreference({
         htmlFor="terminal-mode"
         description={
           mode === "off"
-            ? t("Relay terminaldeki girişe hiç dokunmaz.", "Relay never touches the terminal’s sign-in.")
+            ? t("Relay terminaldeki girişe dokunmaz.", "Relay does not change the terminal sign-in.")
             : currentLine
         }
       >
@@ -144,7 +144,7 @@ export function TerminalPreference({
             value={mode}
             options={[
               { value: "follow", label: t("Hesapla değişsin", "Follow the account") },
-              { value: "off", label: t("Dokunma", "Leave it alone") },
+              { value: "off", label: t("Dokunma", "Do not change") },
             ]}
             className="w-52"
             disabled={disabled}
@@ -160,16 +160,16 @@ export function TerminalPreference({
       <Disclosure title={t("Gelişmiş", "Advanced")} defaultOpen={openDetails}>
         <Note>
           {t(
-            "Relay her hesabın terminal girişini kasada saklar ve geçişte yenisini yerine koyar; tanımadığı bir girişe dokunmaz.",
-            "Relay keeps each account’s terminal sign-in in the vault and puts the new one in place at a switch; it never touches a sign-in it does not know.",
+            "Relay geçişte yeni hesabın terminal girişini yerine koyar; tanımadığı bir girişe dokunmaz.",
+            "At a switch, Relay puts in the terminal sign-in of the new account. Relay does not change a sign-in that it does not know.",
           )}
         </Note>
         {mode !== "off" && (
           <>
             <Note>
               {t(
-                "Yeni açılan terminal oturumları yeni hesapla başlar. Açık olanlar, erişim anahtarları yenilenince yeni hesaba geçer ama eski hesabın kurum bilgisini taşır: geçişten sonra onları yeniden başlat.",
-                "New terminal sessions start on the new account. Open ones move to it when their access token renews but keep the old account’s organization details: restart them after a switch.",
+                "Yeni terminal oturumları yeni hesapla başlar. Açık oturumları geçişten sonra yeniden başlat.",
+                "New terminal sessions start on the new account. Restart open sessions after a switch.",
               )}
             </Note>
             <SettingRow
@@ -183,7 +183,7 @@ export function TerminalPreference({
             <Note>
               {t(
                 "Terminalde bir hesapla giriş yaptıktan sonra “Kontrol et”e bas; o hesap bağlanır.",
-                "After signing the terminal in with an account, press Check and that account is linked.",
+                "After you sign in to the terminal, select “Check” to link that account.",
               )}
             </Note>
           </>
@@ -191,7 +191,7 @@ export function TerminalPreference({
         {status.last && <Note>{terminalLine(status.last, t) ?? ""}</Note>}
       </Disclosure>
       {result && (
-        <p role="status" className="text-[13px]">
+        <p role="status" className="text-sm">
           {result}
         </p>
       )}
