@@ -258,7 +258,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
       automationInline
       title={t("Ayarlar", "Settings")}
     >
-      <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className="grid gap-5 px-6 pb-8">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as SettingsTab)} className="grid gap-4 px-5 pb-6">
         <TabsList aria-label={t("Ayar bölümleri", "Settings sections")} className="h-auto w-fit flex-wrap justify-start">
           {SETTINGS_TABS.map((id) => (
             <TabsTrigger key={id} value={id}>

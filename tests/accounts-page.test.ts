@@ -834,12 +834,12 @@ test("connection icons that need a step carry a dot, and a short key under the t
   const html = suggestedTable();
   const [activeRow, , unlinkedRow] = rowsOf(html);
   // `b` has no usage sign-in: a step, so amber with a dot; no Claude app sign-in: grey, no dot.
-  assert.match(unlinkedRow, /aria-label="Limit okuma girişi: Yok" role="img" data-step="true" class="relative text-warn"/);
+  assert.match(unlinkedRow, /aria-label="Limit okuma girişi: Yok" role="img" data-step="true" class="relative text-foreground\/75"/);
   assert.match(unlinkedRow, /aria-label="Claude uygulaması: kayıtlı değil" role="img" class="relative text-muted-foreground\/40"/);
   assert.doesNotMatch(activeRow, /data-step/);
   // A sign-in to renew is a step too, in the same amber.
   const critical = rowsOf(suggestedTable({}, { c: { accountId: "c", status: "error", issue: "expired", stale: true } }))[1];
-  assert.match(critical, /aria-label="Limit okuma girişi: Gerekli" role="img" data-step="true" class="relative text-warn"/);
+  assert.match(critical, /aria-label="Limit okuma girişi: Gerekli" role="img" data-step="true" class="relative text-foreground\/75"/);
   assert.match(html, /data-slot="connection-legend".*hazır.*adım gerekiyor.*yok/);
   assert.match(suggestedTable({}, {}, "en"), /aria-label="Usage sign-in: None" role="img" data-step="true"/);
   assert.match(suggestedTable({}, {}, "en"), /data-slot="connection-legend".*ready.*step needed.*none/);

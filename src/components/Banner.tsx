@@ -47,23 +47,21 @@ export function Banner({
       )}
     </>
   );
-  const box = "rounded-lg border px-3 py-2 text-sm";
-  const tones = cn(
-    tone === "error" && "border-destructive/30 bg-destructive/10",
-    tone === "warn" && "border-warn/40 bg-warn/10",
-    tone === "info" && "bg-accent",
-  );
+  // Neutral boxes: an error keeps a red edge; the icon in the line carries the rest.
+  const box = "rounded-lg border bg-card px-3 py-2 text-sm";
+  const tones = cn(tone === "error" && "border-destructive/40");
   if (detail === undefined)
     return (
       <div
         role={role}
+        data-tone={tone}
         className={cn("flex items-center justify-between gap-3", box, tones)}
       >
         {line}
       </div>
     );
   return (
-    <div role={role} className={cn("flex flex-col gap-2", box, tones)}>
+    <div role={role} data-tone={tone} className={cn("flex flex-col gap-2", box, tones)}>
       <div className="flex items-center justify-between gap-3">{line}</div>
       {detail}
     </div>

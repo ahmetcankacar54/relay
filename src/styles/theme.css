@@ -8,90 +8,93 @@
 @import "./lost-pins.css";
 
 /*
- * Tokens follow the macOS system look: neutral greys, white grouped boxes on a light grey window
- * (dark: grey boxes on a near-black window), 13 px body text, 28 px controls and one orange accent.
+ * A monochrome theme: greys only, as in the macOS system apps and Linear. The window is the sidebar
+ * grey; pages sit on a slightly lighter panel. Colour is kept for small status marks (running,
+ * attention, a used-up limit) and nothing else.
  */
 :root {
   color-scheme: light;
   --radius: 0.625rem;
-  --background: #f6f6f7;
-  --foreground: #1d1d1f;
+  --sidebar: #f4f4f5;
+  --sidebar-foreground: #18181b;
+  /* Secondary sidebar text: 5:1 or better on the sidebar grey. */
+  --sidebar-muted: #5f5f66;
+  --sidebar-accent: rgb(0 0 0 / 0.06);
+  --background: #fcfcfd;
+  --foreground: #18181b;
   --card: #ffffff;
-  --card-foreground: #1d1d1f;
+  --card-foreground: #18181b;
   --popover: #ffffff;
-  --popover-foreground: #1d1d1f;
-  --primary: #c2410c;
-  --primary-foreground: #ffffff;
-  --secondary: #f2f2f3;
-  --secondary-foreground: #1d1d1f;
-  --muted: #f2f2f3;
-  /* 5.1:1 on white, 4.5:1 or better on the window and on muted grounds. */
-  --muted-foreground: #6e6e73;
-  --accent: #fdebdd;
-  --accent-foreground: #b13a0a;
-  --destructive: #d92d20;
-  --border: #e3e3e5;
-  --input: #d2d2d6;
-  --ring: #c2410c;
-  /* A raised control face: the selected segment, outline buttons. */
+  --popover-foreground: #18181b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f1f1f3;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  /* 4.5:1 or better on every ground: the panel, boxes, popovers, muted grounds and the sidebar. */
+  --muted-foreground: #66666d;
+  --accent: #f1f1f3;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626;
+  --border: #e7e7ea;
+  --input: #dcdce1;
+  --ring: #a1a1aa;
+  /* A raised control face: buttons, the selected segment. */
   --control: #ffffff;
-  --sidebar: #f2f2f4;
-  --sidebar-foreground: #1d1d1f;
-  /* Secondary sidebar text: 5:1 on the sidebar grey and on the light window material. */
-  --sidebar-muted: #5c5c61;
-  /* The selected sidebar row; translucent so it also sits on the window material. */
-  --sidebar-accent: rgb(0 0 0 / 0.075);
-  --brand: #c2410c;
-  --track: #e6e6e8;
-  --ok: #1f9d55;
-  /* Success text on light surfaces; --ok is for dots and fills. */
+  --brand: #3f3f46;
+  /* What a limit has used: rings and bars. */
+  --meter: #3f3f46;
+  --track: #e8e8eb;
+  --ok: #2f9e5b;
+  /* Success text on light surfaces; --ok is for dots. */
   --ok-foreground: #166534;
-  --warn: #d97706;
-  --warn-foreground: #92400e;
-  --crit: #d92d20;
-  /* Timeline window tones, one per planned account (cycled). */
-  --tone-1: #c2410c;
-  --tone-2: #2563eb;
-  --tone-3: #9ca3af;
-  --tone-4: #0f766e;
+  --warn: #b7791f;
+  --warn-foreground: #8a5a12;
+  --crit: #d9363e;
+  /* Timeline rows, one grey per planned account (cycled). */
+  --tone-1: #27272a;
+  --tone-2: #71717a;
+  --tone-3: #a1a1aa;
+  --tone-4: #d4d4d8;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --background: #1e1e1f;
-    --foreground: #f5f5f7;
-    --card: #28282a;
-    --card-foreground: #f5f5f7;
-    --popover: #2c2c2e;
-    --popover-foreground: #f5f5f7;
-    --primary: #ff8a4c;
-    --primary-foreground: #1c1b19;
-    --secondary: #333336;
-    --secondary-foreground: #f5f5f7;
-    --muted: #333336;
-    --muted-foreground: #a1a1a6;
-    --accent: #3a2316;
-    --accent-foreground: #ff9a62;
-    --destructive: #ff6159;
-    --border: #38383b;
-    --input: #48484c;
-    --ring: #ff8a4c;
-    --control: #48484c;
-    --sidebar: #252527;
-    --sidebar-foreground: #f5f5f7;
-    --sidebar-muted: #a8a8ad;
-    --sidebar-accent: rgb(255 255 255 / 0.1);
-    --brand: #ff8a4c;
-    --track: #3a3a3d;
-    --ok: #34c759;
-    --ok-foreground: #6ee7a0;
-    --warn: #f5b83d;
-    --warn-foreground: #f5c35a;
-    --crit: #ff6159;
-    --tone-1: #ff8a4c;
-    --tone-2: #7c9cff;
-    --tone-3: #8e8e93;
-    --tone-4: #3dd6a3;
+    --sidebar: #0f0f11;
+    --sidebar-foreground: #d9d9de;
+    --sidebar-muted: #8e8e96;
+    --sidebar-accent: rgb(255 255 255 / 0.07);
+    --background: #151517;
+    --foreground: #ededef;
+    --card: #1a1a1d;
+    --card-foreground: #ededef;
+    --popover: #1d1d20;
+    --popover-foreground: #ededef;
+    --primary: #e6e6e9;
+    --primary-foreground: #111113;
+    --secondary: #232326;
+    --secondary-foreground: #ededef;
+    --muted: #1f1f22;
+    --muted-foreground: #8e8e96;
+    --accent: #242428;
+    --accent-foreground: #ededef;
+    --destructive: #e5484d;
+    --border: #27272b;
+    --input: #323237;
+    --ring: #6b6b73;
+    --control: #242428;
+    --brand: #d4d4d8;
+    --meter: #d4d4d8;
+    --track: #2a2a2e;
+    --ok: #4cb782;
+    --ok-foreground: #7bcf9f;
+    --warn: #d4a63a;
+    --warn-foreground: #dcb45a;
+    --crit: #e5484d;
+    --tone-1: #e4e4e7;
+    --tone-2: #a1a1aa;
+    --tone-3: #71717a;
+    --tone-4: #4b4b52;
   }
 }
 @theme inline {
@@ -141,6 +144,7 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-muted: var(--sidebar-muted);
   --color-brand: var(--brand);
+  --color-meter: var(--meter);
   --color-track: var(--track);
   --color-ok: var(--ok);
   --color-ok-foreground: var(--ok-foreground);
@@ -152,17 +156,12 @@
   --color-tone-3: var(--tone-3);
   --color-tone-4: var(--tone-4);
 }
-/* The main window on macOS shows the system sidebar material (electron/main.ts sets vibrancy). */
-@custom-variant vibrant (&:where([data-vibrancy] *));
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-sm text-foreground font-sans antialiased;
-  }
-  :root[data-vibrancy] body {
-    @apply bg-transparent;
+    @apply bg-sidebar text-sm text-foreground font-sans antialiased;
   }
   h1, h2, h3 {
     @apply font-display;

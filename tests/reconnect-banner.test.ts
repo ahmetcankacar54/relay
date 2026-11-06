@@ -228,7 +228,7 @@ const all3 = {
   b: usage("renewal-required", "b"),
   c: usage("keychain-locked", "c"),
 };
-const banners = (html: string) => html.split("bg-warn/10").length - 1;
+const banners = (html: string) => html.split('data-tone="warn"').length - 1;
 
 test("one warning renders as a single banner, even beside healthy accounts", () => {
   const html = render(
@@ -639,7 +639,7 @@ test("a single warning keeps its flat one-line layout", () => {
   const html = render(relayFor({ a: usage("expired") }));
   assert.match(
     html,
-    /class="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm border-warn\/40 bg-warn\/10"/,
+    /data-tone="warn" class="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2 text-sm"/,
   );
   assert.doesNotMatch(html, /flex-col gap-2 rounded-lg/);
 });

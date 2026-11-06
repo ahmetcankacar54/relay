@@ -83,12 +83,12 @@ function NavItem({
           : undefined
       }
       className={cn(
-        "relative flex h-7 w-full items-center justify-start gap-2 rounded-md px-2 text-left text-sm whitespace-nowrap text-sidebar-foreground [-webkit-app-region:no-drag]",
+        "relative flex h-7 w-full items-center justify-start gap-2 rounded-md px-2 text-left text-sm whitespace-nowrap text-sidebar-muted hover:text-sidebar-foreground [-webkit-app-region:no-drag]",
         compact && "h-8 justify-center px-2",
-        active && "bg-sidebar-accent",
+        active && "bg-sidebar-accent font-medium text-sidebar-foreground",
       )}
     >
-      <Icon className="size-4 shrink-0 text-primary" aria-hidden />
+      <Icon className={cn("size-4 shrink-0", active ? "text-sidebar-foreground" : "text-sidebar-muted")} aria-hidden />
       {!compact && <span className="truncate">{item.label}</span>}
       {!compact && item.tail !== undefined && (
         <span className="ml-auto text-xs tabular-nums text-sidebar-muted">
@@ -240,8 +240,8 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col border-r bg-sidebar pb-2 text-sidebar-foreground select-none vibrant:border-foreground/10 vibrant:bg-transparent",
-        compact ? "w-14 items-center px-1.5" : "w-50 px-2.5",
+        "flex h-full shrink-0 flex-col pb-2 text-sidebar-foreground select-none",
+        compact ? "w-20 items-center px-3" : "w-50 px-2.5",
       )}
     >
       {/* The traffic lights sit in this strip, which also drags the window. */}
@@ -273,7 +273,7 @@ export function Sidebar({
       {summary && !compact && (
         <div
           data-slot="account-card"
-          className="relative mt-8 mb-1.5 w-full rounded-lg border bg-card p-2 text-xs shadow-xs [-webkit-app-region:no-drag]"
+          className="relative mt-8 mb-1.5 w-full rounded-lg border bg-card p-2 text-xs [-webkit-app-region:no-drag]"
         >
           {panda}
           <button

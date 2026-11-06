@@ -56,7 +56,7 @@ test("compact sidebar keeps accessible names", () => {
   assert.match(html, /aria-label="Ayarlar"/);
 });
 
-test("limit meter shows what is used and uses its tone colour", () => {
+test("limit meter shows what is used, with a grey fill below a used-up limit", () => {
   const html = renderToStaticMarkup(
     createElement(LimitMeter, {
       label: "Haftalık",
@@ -66,7 +66,7 @@ test("limit meter shows what is used and uses its tone colour", () => {
   );
   assert.match(html, /%78/);
   assert.match(html, /kullanıldı/);
-  assert.match(html, /bg-warn/);
+  assert.match(html, /bg-meter/);
   assert.match(html, /role="meter"/);
 });
 
@@ -296,8 +296,8 @@ test("the shell starts each page at the top by resetting the scroller when the p
 test("muted text keeps AA contrast on the page, cards and muted grounds in light and dark", () => {
   const css = fs.readFileSync(path.join(import.meta.dirname, "../src/styles/theme.css"), "utf8");
   const [light, dark] = css.split("@media (prefers-color-scheme: dark)");
-  assert.match(light, /--muted-foreground:\s*#6e6e73;/);
-  assert.match(dark, /--muted-foreground:\s*#a1a1a6;/);
+  assert.match(light, /--muted-foreground:\s*#66666d;/);
+  assert.match(dark, /--muted-foreground:\s*#8e8e96;/);
   // The earlier warm greys are gone.
   assert.doesNotMatch(css, /#685d52|#b3a89b|#73685c|#a3988c/);
   const token = (block: string, name: string) => {

@@ -79,7 +79,7 @@ export function Overview({
         </>
       }
     >
-      <div className="grid gap-4 px-6 pb-6">
+      <div className="grid gap-4 px-5 pb-5">
         <ActiveAccountCard go={go} now={now} />
         <SetupChecklist />
         {cards.today ? (

@@ -295,7 +295,7 @@ export function Usage() {
       }
     >
       <Tabs
-        className="px-6 pb-6"
+        className="px-5 pb-5"
         value={tab}
         onValueChange={(value) => {
           const next = value as UsageTab;

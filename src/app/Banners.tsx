@@ -218,7 +218,7 @@ export function Banners({
     );
   };
   return (
-    <div className="flex flex-col gap-2 px-6 pb-3 empty:hidden">
+    <div className="flex flex-col gap-2 px-5 pb-3 empty:hidden">
       {relay.preview && (
         <Banner tone="info">
           <Monitor className="size-4 shrink-0" aria-hidden />

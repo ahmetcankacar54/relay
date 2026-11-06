@@ -98,7 +98,7 @@ export function Shell() {
     <TooltipProvider delayDuration={300}>
       <RelayPrankStage>
         <MainWindowPranks />
-        <div className="flex h-screen overflow-hidden text-foreground">
+        <div className="flex h-screen overflow-hidden bg-sidebar text-foreground">
           <Sidebar
             page={page}
             go={go}
@@ -116,7 +116,7 @@ export function Shell() {
             }
           />
           <main
-            className="group/main relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-background"
+            className="group/main relative my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-y-auto rounded-lg border bg-background"
             ref={mainRef}
             data-scrolled={scrolled || undefined}
             onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}

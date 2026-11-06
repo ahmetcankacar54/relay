@@ -3,15 +3,15 @@ import { cn } from "@/lib/utils";
 import { meterTone, type MeterTone } from "@/lib/meter";
 
 const strokeClass: Record<MeterTone, string> = {
-  ok: "stroke-brand",
-  warn: "stroke-warn",
-  crit: "stroke-crit",
+  ok: "stroke-meter",
+  warn: "stroke-meter",
+  crit: "stroke-meter",
   none: "stroke-transparent",
 };
 const dotClass: Record<MeterTone, string> = {
-  ok: "bg-brand",
-  warn: "bg-warn",
-  crit: "bg-crit",
+  ok: "bg-meter",
+  warn: "bg-meter",
+  crit: "bg-meter",
   none: "bg-track",
 };
 
@@ -64,7 +64,7 @@ function Arc({
           strokeDasharray={`${used} 100`}
           transform="rotate(-90 50 50)"
           className={cn(
-            strokeClass[state === "full" ? "crit" : meterTone(used)],
+            state === "full" || used >= 100 ? "stroke-crit" : strokeClass[meterTone(used)],
             state === "stale" && "opacity-45",
             "transition-[stroke-dasharray] duration-500 ease-out motion-reduce:transition-none",
           )}
@@ -77,7 +77,7 @@ function Arc({
 /**
  * Two limits at a glance, as concentric rings: the outer one the five-hour window, thick, the
  * inner one the week, thin, so the two read apart by weight rather than by colour. Each fills with
- * what is used, in the meter's tone (brand, warning from 75 %, critical from 90 %). `children` sits
+ * what is used, in grey, and in red once a limit is used up. `children` sits
  * in the middle, usually the five-hour percent, inside a clear zone the rings never touch.
  * Without `inner` it is a single ring. `state` says how far the reading can be trusted (`RingState`).
  */
@@ -131,9 +131,9 @@ export function UsageRing({
 }
 
 const ringClass: Record<MeterTone, string> = {
-  ok: "border-brand",
-  warn: "border-warn",
-  crit: "border-crit",
+  ok: "border-meter",
+  warn: "border-meter",
+  crit: "border-meter",
   none: "border-track",
 };
 

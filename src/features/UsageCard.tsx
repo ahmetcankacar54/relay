@@ -10,8 +10,7 @@ import { displayedIssue, renewalIssue } from "@/lib/account-health";
 import {
   formatPercent,
   formatUsed,
-  meterClass,
-  meterTone,
+  meterFill,
   percentUsed,
   usedWord,
 } from "@/lib/meter";
@@ -194,7 +193,7 @@ export function UsageCard({
               "block h-full rounded-full",
               usage?.stale
                 ? "bg-muted-foreground/40"
-                : meterClass[meterTone(window?.usedPercent)],
+                : meterFill(window?.usedPercent),
             )}
             style={{ width: `${used ?? 0}%` }}
           />
