@@ -33,7 +33,10 @@ export function PageHeader({
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <h1 className="truncate text-lg font-semibold">{title}</h1>
-            {badge}
+            {/* Out of the drag region, so a badge's tooltip shows in Electron. */}
+            {badge && (
+              <div className="flex shrink-0 items-center gap-2 [-webkit-app-region:no-drag]">{badge}</div>
+            )}
           </div>
           {description && (
             <p className="truncate text-xs text-muted-foreground">{description}</p>

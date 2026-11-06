@@ -28,12 +28,15 @@ export function Shell() {
   const narrow = useMediaQuery("(max-width: 899px)");
   const [sidebar, setSidebar] = useSidebarSize();
   const compact = narrow || sidebar.collapsed;
-  const sidebarRef = useRef(sidebar);
+  const sidebarRef = useRef({ sidebar, narrow });
   useEffect(() => {
-    sidebarRef.current = sidebar;
+    sidebarRef.current = { sidebar, narrow };
   });
-  const toggleSidebar = () =>
-    setSidebar({ ...sidebarRef.current, collapsed: !sidebarRef.current.collapsed });
+  // A narrow window always shows the rail, so the toggle would only flip a hidden, saved state.
+  const toggleSidebar = () => {
+    const { sidebar: current, narrow: forced } = sidebarRef.current;
+    if (!forced) setSidebar({ ...current, collapsed: !current.collapsed });
+  };
   // The page toolbar shows its bottom edge once content scrolls under it.
   const [scrolled, setScrolled] = useState(false);
   const relayRef = useRef(relay);
