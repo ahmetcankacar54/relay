@@ -150,7 +150,7 @@ test("Paylaşma says history is not shared, and never that it is", () => {
     .map(([, text]) => text)
     .filter((text) => /Code geçmişi/.test(text));
   assert.deepEqual(notes, []);
-  assert.equal(shareDescription(off), "Hesaplar arasında birleştirilmez.");
+  assert.equal(shareDescription(off), undefined);
   assert.doesNotMatch(off, /paylaşılır/);
   assert.doesNotMatch(off, /Her hesap geçişinde birleştirilir/);
   assert.match(off, /Code konuşmaların her hesapta ayrı kalır\./);
@@ -173,8 +173,8 @@ test("Paylaşma says history is not shared, and never that it is", () => {
       ),
     ),
   );
-  assert.match(en, /Not merged between accounts\./);
-  assert.doesNotMatch(en, /Only local Code history is shared|Merged on every account switch/);
+  assert.doesNotMatch(en, /Not merged between accounts|Merged on every account switch/);
+  assert.doesNotMatch(en, /Relay shares only local Code history/);
   // The sharing modes keep their wording, and the header says where the conversations appear.
   const where: Record<string, RegExp> = {
     all: /Geçişten sonra Code konuşmaların bağlı her hesapta görünür\./,
@@ -183,7 +183,7 @@ test("Paylaşma says history is not shared, and never that it is", () => {
   };
   for (const mode of ["all", "same-group", "selected"]) {
     const html = render(relayFor({}, { desktopHistoryTransfer: mode }));
-    assert.equal(shareDescription(html), "Her hesap geçişinde birleştirilir.", mode);
+    assert.equal(shareDescription(html), undefined, mode);
     assert.doesNotMatch(html, /hesaplar arasında paylaşılmaz|Hesaplar arasında birleştirilmez/, mode);
     assert.match(html, where[mode], mode);
     assert.doesNotMatch(html, /diğer hesapta da görünür/, mode);
@@ -202,7 +202,7 @@ test("Paylaşma says history is not shared, and never that it is", () => {
     );
   assert.match(english("all"), /appear in every connected account\./);
   assert.match(english("same-group"), /appear in the accounts of the same group\./);
-  assert.match(english("selected"), /appear in the accounts you picked\./);
+  assert.match(english("selected"), /appear in the accounts you selected\./);
   assert.match(english("off"), /Your Code conversations stay separate in each account\./);
 });
 
@@ -236,7 +236,7 @@ test("Switching offers draft re-typing, off unless turned on, marked experimenta
   );
   assert.match(en, /Re-type drafts into the Claude app/);
   assert.match(en, />Experimental</);
-  assert.match(en, /Types the draft into the message box after a switch, unsent\. Needs Accessibility\./);
+  assert.match(en, /After a switch, types the draft into the message box but does not send it\. Needs Accessibility permission\./);
 });
 
 test("the single-conversation watch card appears only while a legacy watch needs attention", () => {

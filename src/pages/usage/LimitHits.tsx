@@ -28,21 +28,18 @@ export function LimitHits({
     timeZone: zone,
   });
   return (
-    <Card className="gap-0 px-5 py-4">
+    <Card className="gap-0 px-4 py-3.5">
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h3 className="font-display text-[15px] font-semibold">
+        <h3 className="font-display text-sm font-semibold">
           {t("Limite takılmalar", "Limit hits")}
         </h3>
-        <span className="text-xs text-muted-foreground">
-          {t(`son ${view.range} gün`, `last ${view.range} days`)}
-        </span>
       </div>
       {hits.length === 0 ? (
-        <p className="text-[13px] text-muted-foreground">
-          {t("Bu dönemde limite takılma yok.", "No limit hits in this period.")}
+        <p className="text-sm text-muted-foreground">
+          {t("Bu aralıkta limite takılma yok.", "No limit hits in this range.")}
         </p>
       ) : (
-        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-x-4 text-[13px]">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-x-4 text-sm">
           <div className="col-span-full grid grid-cols-subgrid pb-1.5 text-xs text-muted-foreground">
             <span>{t("Zaman", "When")}</span>
             <span>{t("Hesap", "Account")}</span>

@@ -7,87 +7,137 @@
 @import "./card-panda.css";
 @import "./lost-pins.css";
 
+/*
+ * A monochrome theme: greys only, as in the macOS system apps and Linear. The window is the sidebar
+ * grey; pages sit on a slightly lighter panel. Colour is kept for small status marks (running,
+ * attention, a used-up limit) and nothing else.
+ */
 :root {
   color-scheme: light;
-  --radius: 0.75rem;
-  /* Direction A: a calm, native ground; one orange accent for the primary action and the selection. */
-  --background: #fafaf9;
-  --foreground: #1d1d1f;
+  --radius: 0.625rem;
+  --sidebar: #f4f4f5;
+  --sidebar-foreground: #18181b;
+  /* Secondary sidebar text: 5:1 or better on the sidebar grey. */
+  --sidebar-muted: #5f5f66;
+  --sidebar-accent: rgb(0 0 0 / 0.06);
+  --background: #f4f4f5;
+  --foreground: #18181b;
   --card: #ffffff;
-  --card-foreground: #1d1d1f;
+  --card-foreground: #18181b;
   --popover: #ffffff;
-  --popover-foreground: #1d1d1f;
-  --primary: #c2410c;
-  --primary-foreground: #ffffff;
-  --secondary: #f3f2ef;
-  --secondary-foreground: #1d1d1f;
-  --muted: #f3f2ef;
-  /* 4.9:1 on white, 4.7:1 on the ground. */
-  --muted-foreground: #6e6e73;
-  --accent: #fdebdd;
-  --accent-foreground: #c2410c;
-  --destructive: #d92d20;
-  --border: #e7e5e2;
-  --input: #dcdad6;
-  --ring: #c2410c;
-  --sidebar: #f3f2ef;
-  --sidebar-foreground: #1d1d1f;
-  --brand: #c2410c;
-  --track: #efede9;
-  --ok: #1f9d55;
-  /* Success text on light surfaces; --ok is for dots and fills. */
+  --popover-foreground: #18181b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f1f1f3;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  /* 4.5:1 or better on every ground: the panel, boxes, popovers, muted grounds and the sidebar. */
+  --muted-foreground: #66666d;
+  --accent: #f1f1f3;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626;
+  --border: #e7e7ea;
+  --input: #dcdce1;
+  --ring: #a1a1aa;
+  /* A raised control face: buttons, the selected segment. */
+  --control: #ffffff;
+  --brand: #3f3f46;
+  /* What a limit has used: rings and bars. */
+  --meter: #3f3f46;
+  --track: #e8e8eb;
+  --ok: #2f9e5b;
+  /* Success text on light surfaces; --ok is for dots. */
   --ok-foreground: #166534;
-  --warn: #d97706;
-  --warn-foreground: #92400e;
-  --crit: #d92d20;
-  /* Timeline window tones, one per planned account (cycled). */
-  --tone-1: #c2410c;
-  --tone-2: #2563eb;
-  --tone-3: #9ca3af;
-  --tone-4: #0f766e;
+  --warn: #b7791f;
+  --warn-foreground: #8a5a12;
+  --crit: #d9363e;
+  /* Timeline rows, one grey per planned account (cycled). */
+  --tone-1: #27272a;
+  --tone-2: #71717a;
+  --tone-3: #a1a1aa;
+  --tone-4: #d4d4d8;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --background: #161514;
-    --foreground: #f2f1ef;
-    --card: #201f1d;
-    --card-foreground: #f2f1ef;
-    --popover: #242321;
-    --popover-foreground: #f2f1ef;
-    --primary: #ff8a4c;
-    --primary-foreground: #1c1b19;
-    --secondary: #2a2927;
-    --secondary-foreground: #f2f1ef;
-    --muted: #2a2927;
-    --muted-foreground: #a3a19c;
-    --accent: #3a2316;
-    --accent-foreground: #ff9a62;
-    --destructive: #ff6159;
-    --border: #2f2d2a;
-    --input: #3a3835;
-    --ring: #ff8a4c;
-    --sidebar: #1b1a18;
-    --sidebar-foreground: #f2f1ef;
-    --brand: #ff8a4c;
-    --track: #3e3c38;
-    --ok: #34c759;
-    --ok-foreground: #6ee7a0;
-    --warn: #f5b83d;
-    --warn-foreground: #f5c35a;
-    --crit: #ff6159;
-    --tone-1: #ff8a4c;
-    --tone-2: #7c9cff;
-    --tone-3: #8e8e93;
-    --tone-4: #3dd6a3;
+    --sidebar: #0f0f11;
+    --sidebar-foreground: #d9d9de;
+    --sidebar-muted: #8e8e96;
+    --sidebar-accent: rgb(255 255 255 / 0.07);
+    --background: #0f0f11;
+    --foreground: #ededef;
+    --card: #1a1a1d;
+    --card-foreground: #ededef;
+    --popover: #1d1d20;
+    --popover-foreground: #ededef;
+    --primary: #e6e6e9;
+    --primary-foreground: #111113;
+    --secondary: #232326;
+    --secondary-foreground: #ededef;
+    --muted: #1f1f22;
+    --muted-foreground: #8e8e96;
+    --accent: #242428;
+    --accent-foreground: #ededef;
+    --destructive: #e5484d;
+    --border: #27272b;
+    --input: #323237;
+    --ring: #6b6b73;
+    --control: #242428;
+    --brand: #d4d4d8;
+    --meter: #d4d4d8;
+    --track: #2a2a2e;
+    --ok: #4cb782;
+    --ok-foreground: #7bcf9f;
+    --warn: #d4a63a;
+    --warn-foreground: #dcb45a;
+    --crit: #e5484d;
+    --tone-1: #e4e4e7;
+    --tone-2: #a1a1aa;
+    --tone-3: #71717a;
+    --tone-4: #4b4b52;
   }
+}
+/*
+ * Type: 16 px body text, 14 px secondary text, 12 px for the smallest labels. A plain @theme (not
+ * inline), so the utilities read these variables and a small surface can swap them below.
+ */
+@theme {
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+}
+/* The menu bar panel and the switch window are small surfaces: they keep a compact ramp. */
+:root[data-density="compact"] {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 0.875rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.125rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.25rem;
+  --text-lg: 0.9375rem;
+  --text-lg--line-height: 1.25rem;
+  --text-xl: 1.0625rem;
+  --text-xl--line-height: 1.375rem;
+  --text-2xl: 1.375rem;
+  --text-2xl--line-height: 1.75rem;
 }
 @theme inline {
   /* The system font (SF Pro on macOS), so Relay reads like the rest of the Mac. */
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
-  /* The smallest text: 12.5 px, so no main-window text is smaller (panel text stays 12 px or more). */
-  --text-xs: 0.78125rem;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -110,9 +160,13 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-control: var(--control);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-muted: var(--sidebar-muted);
   --color-brand: var(--brand);
+  --color-meter: var(--meter);
   --color-track: var(--track);
   --color-ok: var(--ok);
   --color-ok-foreground: var(--ok-foreground);
@@ -124,12 +178,21 @@
   --color-tone-3: var(--tone-3);
   --color-tone-4: var(--tone-4);
 }
+/* The Electron main window on macOS shows the system sidebar material (electron/main.ts). */
+@custom-variant vibrant (&:where([data-vibrancy] *));
+/* Icons draw with a 1.5 px line, as in the macOS and Claude apps (lucide's default is 2). */
+svg.lucide {
+  stroke-width: 1.5;
+}
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-sidebar text-sm text-foreground font-sans antialiased;
+  }
+  :root[data-vibrancy] body {
+    @apply bg-transparent;
   }
   h1, h2, h3 {
     @apply font-display;

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { overviewAccounts, pendingFlow, tempoRateNow, windowAccounts } from "@/data/selectors";
@@ -9,7 +10,8 @@ import {
   ringState,
 } from "@/lib/account-row";
 import { AccountList } from "../../features/AccountList";
-import { AppWindow, Plus, X } from "lucide-react";
+import { AppWindow, X } from "lucide-react";
+import { PlusIcon } from "@/components/icons";
 import type { OverviewRow } from "@/data/selectors";
 import { intentHash, type Destination } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
@@ -63,8 +65,6 @@ export function AccountsCard({
     const { account } = row;
     const open = inWindows.has(account.id);
     if (!account.desktop || !windows?.supported || (!open && !windows.enabled)) return undefined;
-    const button =
-      "h-7 shrink-0 rounded-md border bg-card text-xs font-semibold text-foreground outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50";
     if (!open) {
       const { label, ...props } = windowAction(
         row,
@@ -72,9 +72,9 @@ export function AccountsCard({
         () => relay.api.openWindow(account.id),
       );
       return (
-        <button type="button" aria-label={label} title={label} className={`${button} grid w-7 place-items-center`} {...props}>
-          <AppWindow aria-hidden="true" className="size-3.5" />
-        </button>
+        <Button variant="outline" size="icon-sm" aria-label={label} title={label} {...props}>
+          <AppWindow aria-hidden="true" />
+        </Button>
       );
     }
     const show = windowAction(
@@ -89,13 +89,13 @@ export function AccountsCard({
     );
     return (
       <>
-        <button type="button" aria-label={show.label} title={show.label} disabled={show.disabled} onClick={show.onClick} className={`${button} grid w-7 place-items-center`}>
-          <AppWindow aria-hidden="true" className="size-3.5" />
-        </button>
-        <button type="button" aria-label={close.label} title={close.label} disabled={close.disabled || relay.desktopBusy} onClick={close.onClick} className={`${button} flex items-center gap-1 px-2.5`}>
-          <X aria-hidden="true" className="size-3.5" />
+        <Button variant="outline" size="icon-sm" aria-label={show.label} title={show.label} disabled={show.disabled} onClick={show.onClick}>
+          <AppWindow aria-hidden="true" />
+        </Button>
+        <Button variant="outline" size="sm" aria-label={close.label} title={close.label} disabled={close.disabled || relay.desktopBusy} onClick={close.onClick}>
+          <X aria-hidden="true" />
           {t("Kapat", "Close")}
-        </button>
+        </Button>
       </>
     );
   };
@@ -104,22 +104,32 @@ export function AccountsCard({
   };
   return (
     <section className="grid content-start gap-2">
-      <div className="flex items-baseline justify-between gap-2 px-1">
-        <h2 className="text-[13px] font-semibold text-muted-foreground">
+      <div className="flex items-center justify-between gap-2 px-1">
+        <h2 className="text-xs font-semibold text-muted-foreground">
           {t("Diğer hesaplar", "Other accounts")}
         </h2>
-        {relay.suggestion && relay.active ? (
-          <span className="text-xs font-medium text-warn-foreground">
-            {t("Önerilen üstte", "Suggested first")}
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            {t("en uygunu üstte", "best first")}
-          </span>
+        {/* What the two rings and the two figures in each row are. */}
+        {rows.length > 0 && (
+          <p className="flex flex-wrap items-center gap-x-2.5 text-2xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground" />
+              {t("5 saat", "5 hours")}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden="true" className="size-1.5 rounded-full border border-muted-foreground" />
+              {t("hafta", "week")}
+            </span>
+            {rows.some((row) => ringState(row.usage, now) === "stale") && (
+              <span className="inline-flex items-center gap-1">
+                <span aria-hidden="true" className="size-1.5 rounded-full border border-dashed border-muted-foreground" />
+                {t("limit verisi eski", "out of date")}
+              </span>
+            )}
+          </p>
         )}
       </div>
       {rows.length === 0 ? (
-        <div className="flex items-center gap-1 rounded-xl border bg-card px-4 py-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-1 rounded-lg border bg-card px-3 py-2.5 text-sm text-muted-foreground">
           {relay.accounts.length
             ? `${t("Başka hesap yok", "No other accounts")} ·`
             : `${t("Henüz hesap yok", "No accounts yet")} ·`}
@@ -171,38 +181,18 @@ export function AccountsCard({
             <button
               type="button"
               onClick={addAccount}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left outline-none hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50"
+              className={cn(
+                "flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-primary outline-none hover:bg-foreground/3",
+                "focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50",
+              )}
             >
-              <span className="grid size-[38px] shrink-0 place-items-center rounded-full border-[1.5px] border-dashed border-input">
-                <Plus aria-hidden="true" className="size-4 text-muted-foreground" />
+              <span className="grid size-8 shrink-0 place-items-center">
+                <PlusIcon aria-hidden="true" className="size-4" />
               </span>
-              <span>
-                <span className="block text-[13.5px] font-medium">{t("Hesap ekle", "Add account")}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {t("Claude uygulamasındaki hesabı bir kez kaydet", "Save the account open in the Claude app once")}
-                </span>
-              </span>
+              {t("Hesap ekle", "Add account")}
             </button>
           }
         />
-      )}
-      {rows.length > 0 && (
-        <p className="flex flex-wrap items-center gap-3 px-1 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full bg-muted-foreground" />
-            {t("kalın: 5 saatlik dönem", "thick: 5-hour period")}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="size-2 rounded-full border-[1.5px] border-muted-foreground" />
-            {t("ince: hafta", "thin: week")}
-          </span>
-          {rows.some((row) => ringState(row.usage, now) === "stale") && (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-full border-[1.5px] border-dashed border-muted-foreground/60" />
-              {t("kesikli: veri eski", "dashed: data out of date")}
-            </span>
-          )}
-        </p>
       )}
     </section>
   );

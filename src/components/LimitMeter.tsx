@@ -3,8 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   formatPercent,
   formatUsed,
-  meterClass,
-  meterTone,
+  meterFill,
   percentUsed,
   usedWord,
 } from "@/lib/meter";
@@ -115,7 +114,7 @@ export function LimitMeter({
       >
         <div
           ref={fill}
-          className={cn("h-full rounded-full", meterClass[meterTone(value)])}
+          className={cn("h-full rounded-full", meterFill(value))}
           style={{ width: `${value ?? 0}%` }}
         />
       </div>

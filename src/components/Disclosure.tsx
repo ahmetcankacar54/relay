@@ -36,7 +36,7 @@ export function Disclosure({
           onClick={() => setOpen((value) => !value)}
           className="flex w-full items-center justify-between gap-2 rounded-md py-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          <span className="text-xs font-semibold text-muted-foreground">
             {title}
           </span>
           {summary && !open && (

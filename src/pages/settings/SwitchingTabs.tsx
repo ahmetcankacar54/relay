@@ -24,7 +24,7 @@ import { TerminalPreference } from "../../features/TerminalPreference";
 import { ContinuationSettings } from "../../features/ContinuationSettings";
 import { AutomationSettings, MODE_TITLE } from "../../features/AutomationControl";
 
-const cardClass = "gap-0 px-5 py-4";
+const cardClass = "gap-0 px-4 py-3.5";
 
 /** An account as the switch sees it: a ring for its five hours, its name above a caption. */
 function Side({ name, caption, percent, align }: { name: string; caption: string; percent?: number; align?: "end" }) {
@@ -32,13 +32,13 @@ function Side({ name, caption, percent, align }: { name: string; caption: string
   return (
     <div className={align === "end" ? "flex flex-row-reverse items-center gap-3 text-right" : "flex items-center gap-3"}>
       <UsageRing outer={percent} size={60} label={`${name} ${percent === undefined ? "" : formatPercent(percentUsed(percent), language)}`}>
-        <span className="text-[13px] font-bold tabular-nums">
+        <span className="text-sm font-bold tabular-nums">
           {percent === undefined ? "—" : formatPercent(percentUsed(percent), language)}
         </span>
       </UsageRing>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{caption}</div>
-        <div className="truncate text-[15px] font-bold">{name}</div>
+        <div className="truncate text-base font-semibold">{name}</div>
       </div>
     </div>
   );
@@ -79,9 +79,9 @@ export function AutomationTab() {
     (continuation.observationReason === "accessibility-permission-required" ||
       continuation.reason === "accessibility-permission-required");
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-4">
         {active && (
-          <Card data-slot="switch-status" className="flex-row flex-wrap items-center gap-6 px-6 py-5">
+          <Card data-slot="switch-status" className="flex-row flex-wrap items-center gap-5 px-4 py-4">
             <Side
               name={active.name}
               caption={t("Şu an", "Now")}
@@ -112,14 +112,14 @@ export function AutomationTab() {
               <div className="text-sm text-muted-foreground">{t("Geçilecek hesap yok", "No account to switch to")}</div>
             )}
             {target && (
-              <div className="flex w-40 flex-col gap-1.5 border-l pl-6">
+              <div className="flex w-40 flex-col gap-1.5 border-l pl-5">
                 <Button
                   disabled={desktopBusy || !!pendingDesktop || !!desktop?.recoveryRequired}
                   onClick={() => relay.requestDesktop(target, "switch")}
                 >
                   {t("Şimdi geç", "Switch now")}
                 </Button>
-                <span className="text-center text-[11.5px] text-muted-foreground">
+                <span className="text-center text-2xs text-muted-foreground">
                   {t("Claude uygulaması ~15 sn kapalı kalır", "The Claude app closes for ~15 s")}
                 </span>
               </div>
@@ -190,7 +190,7 @@ export function AutomationTab() {
                   >
                     {t(
                       "Yarım kalan geçişi sürdür ve doğrula",
-                      "Resume and verify the interrupted switch",
+                      "Continue and verify the interrupted switch",
                     )}
                   </Button>
                   <Button
@@ -210,8 +210,8 @@ export function AutomationTab() {
                 </div>
                 <Note>
                   {t(
-                    "Relay, Claude uygulamasındaki “Auto-continue when limits reset” seçeneğini kapattıysa bu işlemi iptal etmek onu yeniden açmaz. Bu seçeneği Claude uygulamasında kontrol et.",
-                    "If Relay turned off “Auto-continue when limits reset” in the Claude app, cancelling this handoff does not turn it back on. Check that option in the Claude app.",
+                    "İptal, Claude uygulamasındaki “Auto-continue when limits reset” seçeneğini yeniden açmaz. Bu seçeneği Claude uygulamasında kontrol et.",
+                    "Cancel does not turn “Auto-continue when limits reset” back on in the Claude app. Check this option in the Claude app.",
                   )}
                 </Note>
               </div>
@@ -230,7 +230,7 @@ export function AutomationTab() {
             htmlFor="usage-suggestions"
             description={t(
               "Code geçmişini paylaşan ve iki limitinde de yer olan bir hesap önerir. Geçişi sen başlatırsın.",
-              "Suggests an account that shares Code history and has room in both limits. You start the switch.",
+              "Suggests an account with shared Code history and room in both limits. You start the switch.",
             )}
           >
             <Switch
@@ -264,16 +264,12 @@ function SidebarSections() {
       <SectionHeading
         icon={<ListTree />}
         title={t("Kenar çubuğu bölümleri", "Sidebar sections")}
-        description={t(
-          "Geçtiğin hesapta eksik bölümleri bir Code oturumu talimatla kurar.",
-          "A Code session sets up the sections the new account lacks, from a recipe.",
-        )}
       />
       <SettingRow
         label={
           gap
             ? `${sidebarGapLine(gap, t)}. ${sidebarRecipeHint(gap, copiedId === gap.id, t)}`
-            : t("Açık hesapta eksik bölüm yok.", "The open account has every section.")
+            : t("Açık hesapta eksik bölüm yok.", "The open account has all sections.")
         }
       >
         {gap ? (
@@ -302,7 +298,7 @@ export function CarryTab() {
   const { t } = useI18n();
   const { desktop, accounts, active, settings, desktopBusy, pendingDesktop } = relay;
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-4">
         <Card id="gecis-gecmis" className={cardClass}>
           <SharedHistoryPreferences
             value={settings}

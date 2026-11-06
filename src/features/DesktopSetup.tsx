@@ -41,18 +41,25 @@ export function DesktopSetup({
 }) {
   // Folders under the current sign-in appear once Code has been opened in Claude.
   const workspaces = desktop?.organizations.length ?? 0;
+  const hint =
+    (busy && reason) ||
+    (unclaimed && !org
+      ? workspaces
+        ? t("Bir Code çalışma alanı seç.", "Select a Code workspace.")
+        : codeTabStep(t)
+      : undefined);
   return (
     <section
       id={account ? `setup-${account.id}` : "desktop-setup-picker"}
       className={
         bare ? "grid gap-3" : "grid gap-3 rounded-lg border bg-card p-3"
       }
-      aria-label={t("İlk Claude uygulaması girişi", "First Claude app sign-in")}
+      aria-label={t("Claude uygulaması girişi", "Claude app sign-in")}
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="flex items-center gap-1.5 text-sm font-semibold">
           <Monitor className="size-4 text-brand" />
-          {t("İlk Claude uygulaması girişi", "First Claude app sign-in")}
+          {t("Claude uygulaması girişi", "Claude app sign-in")}
         </h3>
         {!bare && (
           <Button
@@ -70,23 +77,23 @@ export function DesktopSetup({
         {unclaimed
           ? t(
               "Claude uygulamasında açık hesabı doğru Relay profiliyle eşleştir. E-posta ve çalışma alanı aynı hesaba ait olmalı.",
-              "Link the account open in the Claude app to the matching Relay profile. The email and workspace must belong to that account.",
+              "Link the account open in the Claude app to its Relay profile. The email and workspace must belong to that account.",
             )
           : t(
-              "Bu profilin Claude uygulaması girişi henüz kayıtlı değil. Limit okuma girişi kullanım limitlerini okur; hesap geçişi için bir kez Claude uygulaması girişi de gerekir.",
-              "This profile has no saved Claude app sign-in yet. The usage sign-in reads usage limits; switching also needs one Claude app sign-in.",
+              "Bu hesaba geçmek için Claude uygulaması girişini bir kez kaydet.",
+              "To switch to this account, save its Claude app sign-in once.",
             )}
       </p>
       {!account && (
         <label className="grid gap-1.5 text-sm font-medium">
-          {t("Claude uygulamasında açık olan hesap", "Account currently open in the Claude app")}
+          {t("Claude uygulamasında açık olan hesap", "Account open in the Claude app")}
           <select
             className={selectClass}
             value=""
             onChange={(e) => selectAccount?.(e.target.value)}
             disabled={busy}
           >
-            <option value="">{t("Profil seç", "Choose a profile")}</option>
+            <option value="">{t("Profil seç", "Select a profile")}</option>
             {accounts
               .filter((a) => !a.desktop)
               .map((a) => (
@@ -126,17 +133,7 @@ export function DesktopSetup({
                   "Start Claude app sign-in…",
                 )}
           </Button>
-          <small className="text-xs text-muted-foreground">
-            {(busy && reason) ||
-              (unclaimed && !org
-                ? workspaces
-                  ? t("Bir Code çalışma alanı seç.", "Choose a Code workspace.")
-                  : codeTabStep(t)
-                : t(
-                    "Sonraki adımda yeniden başlatmayı onaylarsın.",
-                    "Review the restart in the next step.",
-                  ))}
-          </small>
+          {hint && <small className="text-xs text-muted-foreground">{hint}</small>}
         </div>
       )}
     </section>
@@ -177,7 +174,7 @@ export function WorkspaceSelect({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
       >
-        <option value="">{t("Çalışma alanı seç", "Choose a workspace")}</option>
+        <option value="">{t("Çalışma alanı seç", "Select a workspace")}</option>
         {options.map((o) => (
           <option key={o.id} value={o.id}>
             {o.label}

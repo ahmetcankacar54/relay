@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Check, ChevronDown, Globe2, LocateFixed, Search } from "lucide-react";
+import { SearchIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -193,7 +194,7 @@ export function TimeZonePicker({
           ref={panel}
           align="start"
           collisionPadding={12}
-          aria-label={t("Saat dilimi seç", "Choose a time zone")}
+          aria-label={t("Saat dilimi seç", "Select a time zone")}
           className="flex max-h-[min(420px,var(--radix-popover-content-available-height))] w-[min(max(var(--radix-popover-trigger-width),360px),calc(100vw-24px))] flex-col gap-0 p-0"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
@@ -230,7 +231,7 @@ export function TimeZonePicker({
           }}
         >
           <div className="flex items-center gap-2 border-b px-3">
-            <Search
+            <SearchIcon
               className="size-4 shrink-0 text-muted-foreground"
               aria-hidden="true"
             />
@@ -328,8 +329,8 @@ export function TimeZonePicker({
             )}
             <small className="px-2 text-xs text-muted-foreground">
               {t(
-                "UTC farkları şu an içindir; yaz saatine göre değişebilir.",
-                "Offsets are current and may change with daylight saving time.",
+                "UTC farkları yaz saatine göre değişebilir.",
+                "Offsets can change with daylight saving time.",
               )}
             </small>
           </div>

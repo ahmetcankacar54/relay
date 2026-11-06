@@ -44,10 +44,10 @@ export function LimitRings({
     <div data-slot="limit-rings" className={cn("flex min-w-0 items-center gap-3.5", className)}>
       <UsageRing outer={five} inner={week ?? null} size={size} label={label} state={state}>
         <span className="grid gap-0.5">
-          <b className={cn("tabular-nums", size >= 88 ? "text-xl" : "text-[15px]")}>
+          <b className={cn("tabular-nums", size >= 88 ? "text-2xl font-semibold" : "text-lg")}>
             {five === undefined ? "—" : formatPercent(percentUsed(five), language)}
           </b>
-          <span className="text-[11px] text-muted-foreground">{t("5 saat", "5 hours")}</span>
+          <span className="text-2xs text-muted-foreground">{t("5 saat", "5 hours")}</span>
         </span>
       </UsageRing>
       <div className="grid min-w-0 flex-1 gap-1 overflow-hidden">
@@ -69,7 +69,7 @@ export function LimitRings({
                     row.key === "five_hour"
                       ? t(
                           `${timeLeft(row.resetsAt, now, t) ?? "0 dk"} kaldı`,
-                          `${timeLeft(row.resetsAt, now, t) ?? "0 m"} left`,
+                          `${timeLeft(row.resetsAt, now, t) ?? "0 min"} left`,
                         )
                       : formatReset(row.resetsAt, now, language, zone)
                   }`}

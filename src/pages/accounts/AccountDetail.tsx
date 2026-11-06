@@ -1,17 +1,6 @@
 import type { ReactNode } from "react";
-import {
-  AppWindow,
-  ArrowLeft,
-  Check,
-  CircleAlert,
-  Link2,
-  Globe2,
-  LoaderCircle,
-  Monitor,
-  MoreHorizontal,
-  RefreshCw,
-  SquareTerminal,
-} from "lucide-react";
+import { AppWindow, Check, CircleAlert, Link2, Globe2, LoaderCircle, Monitor, MoreHorizontal, SquareTerminal } from "lucide-react";
+import { BackIcon, RefreshIcon } from "@/components/icons";
 import type { Account, ExtensionStatus, RelaySettings } from "../../../shared/types";
 import {
   desktopCliMismatch,
@@ -44,7 +33,8 @@ import { accountUuids, extensionGuide } from "@/lib/extension-ui";
 import { cn } from "@/lib/utils";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { UsageCard } from "../../features/UsageCard";
-import { LimitRings } from "@/components/LimitRings";
+import { LimitBars } from "@/components/LimitBars";
+import { ringState } from "@/lib/account-row";
 import { freshUsage } from "../../../shared/usage";
 import { formatRelative } from "@/lib/time";
 import { HistorySummary } from "../../features/HistorySummary";
@@ -124,7 +114,7 @@ export function AccountDetail({
         <span
           aria-hidden="true"
           className={cn(
-            "grid size-10 shrink-0 place-items-center rounded-full text-base font-semibold",
+            "grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold",
             avatarClass[a.color] ?? "bg-muted text-muted-foreground",
           )}
         >
@@ -147,7 +137,7 @@ export function AccountDetail({
       }
       back={
         <Button variant="ghost" size="sm" className="-ml-2 h-7 px-2 text-muted-foreground" onClick={back}>
-          <ArrowLeft />
+          <BackIcon />
           {t("Hesaplar", "Accounts")}
         </Button>
       }
@@ -184,7 +174,7 @@ export function AccountDetail({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 aria-label={t(`${a.name} işlemleri`, `${a.name} actions`)}
               >
@@ -206,7 +196,7 @@ export function AccountDetail({
   );
 }
 
-const cardClass = "gap-0 px-5 py-4";
+const cardClass = "gap-0 px-4 py-3.5";
 
 /**
  * The closed Code history row's summary: how many other accounts' history the next merge brings
@@ -232,13 +222,28 @@ function CardTitle({ title, aside }: { title: string; aside?: ReactNode }) {
   );
 }
 
-/** A connection's leading square: a check when it is ready, a mark when it needs a step, its kind when absent. */
-const toneSquare = {
-  ok: "bg-ok/12 text-ok-foreground",
-  warn: "bg-warn/15 text-warn-foreground",
-  crit: "bg-crit/12 text-crit",
-  off: "bg-muted text-muted-foreground",
+/** A connection's leading mark: a check when it is ready, a mark when it needs a step, its kind when absent. */
+const toneMark = {
+  ok: "text-muted-foreground",
+  warn: "text-warn-foreground",
+  crit: "text-crit",
+  off: "text-muted-foreground",
 } as const;
+
+/**
+ * The connections as one grid: mark, text, a refresh column and an action column. Each row is a
+ * subgrid, so every refresh button and every Renew button sits in the same column.
+ */
+function ConnectionList({ children }: { children: ReactNode }) {
+  return (
+    <div
+      data-slot="connection-list"
+      className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] gap-x-3"
+    >
+      {children}
+    </div>
+  );
+}
 
 /** A guide's numbered steps, shown while the connection is not linked. */
 function Steps({ steps }: { steps: string[] }) {
@@ -257,8 +262,8 @@ function Steps({ steps }: { steps: string[] }) {
 }
 
 /**
- * A connection: what it is for in a few words, its state and its action, on one row; its steps,
- * a closed "how it works" note and a setup panel open under it.
+ * A connection: what it is for in a few words, its state, a refresh button and its action, on one
+ * row; its steps, a closed "how it works" note and a setup panel open under it.
  */
 function ConnectionRow({
   icon,
@@ -267,7 +272,8 @@ function ConnectionRow({
   status,
   where,
   tone,
-  actions,
+  refresh,
+  action,
   steps,
   detail,
   children,
@@ -279,7 +285,10 @@ function ConnectionRow({
   /** Where the connection lives (a browser profile), muted beside the status. */
   where?: string;
   tone: "ok" | "warn" | "crit" | "off";
-  actions?: ReactNode;
+  /** An icon button that reads the connection again; it sits just left of the action. */
+  refresh?: ReactNode;
+  /** The row's one text button (Renew, Sign in, Check…), at the right edge. */
+  action?: ReactNode;
   steps?: string[];
   detail?: string;
   children?: ReactNode;
@@ -288,41 +297,37 @@ function ConnectionRow({
   return (
     <div
       data-slot="connection"
-      className="grid gap-2 border-t py-3.5 first:border-0 first:pt-0 last:pb-0"
+      className="col-span-full grid grid-cols-subgrid gap-y-2 border-t py-3.5 last:pb-0"
     >
-      <div className="flex min-w-0 items-start gap-3">
-        <span
-          aria-hidden="true"
-          className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-lg [&_svg]:size-4",
-            toneSquare[tone],
-          )}
-        >
-          {tone === "ok" ? <Check strokeWidth={2.6} /> : tone === "off" ? icon : <CircleAlert strokeWidth={2.4} />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="text-sm font-semibold">{title}</span>
-            <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-              <StatusDot tone={tone} />
-              <span className="min-w-0 break-words">{status}</span>
+      <span
+        aria-hidden="true"
+        className={cn("mt-0.5 grid size-5 shrink-0 place-items-center [&_svg]:size-5", toneMark[tone])}
+      >
+        {tone === "ok" ? <Check /> : tone === "off" ? icon : <CircleAlert />}
+      </span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="text-sm font-semibold">{title}</span>
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <StatusDot tone={tone} />
+            <span className="min-w-0 break-words">{status}</span>
+          </span>
+          {where && (
+            <span data-slot="connection-where" className="text-xs text-muted-foreground/70">
+              {where}
             </span>
-            {where && (
-              <span data-slot="connection-where" className="text-xs text-muted-foreground/70">
-                {where}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">{purpose}</p>
+          )}
         </div>
-        {actions && (
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-            {actions}
-          </div>
-        )}
+        <p className="text-xs text-muted-foreground">{purpose}</p>
+      </div>
+      <div data-slot="connection-refresh" className="flex items-center self-center">
+        {refresh}
+      </div>
+      <div data-slot="connection-action" className="flex items-center justify-end gap-1.5 self-center">
+        {action}
       </div>
       {(steps || detail || children) && (
-        <div className="grid gap-2 pl-11">
+        <div className="col-span-3 col-start-2 grid gap-2">
           {steps && <Steps steps={steps} />}
           {detail && (
             <Disclosure title={t("Nasıl çalışır?", "How it works")}>
@@ -368,50 +373,14 @@ function ExtensionConnection({
     <ConnectionRow
       icon={<AppWindow />}
       title={t("Tarayıcı eklentisi", "Browser extension")}
-      purpose={t("Tarayıcı eklentisi de bu hesaba geçer.", "The browser extension follows this account.")}
+      purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
       tone={guide.tone}
       status={guide.label}
       where={guide.where}
       steps={guide.steps}
       detail={guide.detail}
-      actions={
-        guide.action === "claim" ? (
-          <>
-            <Button
-              size="sm"
-              disabled={checking || !accountUuids(a).length}
-              title={accountUuids(a).length ? undefined : t("Önce Claude uygulaması girişini kaydet.", "Save the Claude app sign-in first.")}
-              onClick={() => void link(a.id)}
-            >
-              {checking ? <LoaderCircle className="animate-spin" /> : <Link2 />}
-              {t("Bu hesap olarak bağla", "Link as this account")}
-            </Button>
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t("Eklentiyi yeniden kontrol et", "Check the extension again")}
-              title={t("Eklentiyi yeniden kontrol et", "Check the extension again")}
-              disabled={checking}
-              onClick={() => void check()}
-            >
-              <RefreshCw />
-            </Button>
-          </>
-        ) : guide.action === "check" ? (
-          <Button
-            size="sm"
-            variant={guide.steps ? "default" : "outline"}
-            disabled={checking}
-            onClick={() => void check()}
-          >
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
-            {t("Kontrol et", "Check")}
-          </Button>
-        ) : guide.action === "settings" ? (
-          <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("ayarlar/tasinanlar")}>{t("Ayarlar", "Settings")}</a>
-          </Button>
-        ) : guide.tone === "ok" ? (
+      refresh={
+        guide.action === "claim" || (!guide.action && guide.tone === "ok") ? (
           <Button
             size="icon-sm"
             variant="ghost"
@@ -420,7 +389,34 @@ function ExtensionConnection({
             disabled={checking}
             onClick={() => void check()}
           >
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {checking && guide.action !== "claim" ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
+          </Button>
+        ) : undefined
+      }
+      action={
+        guide.action === "claim" ? (
+          <Button
+            size="sm"
+            disabled={checking || !accountUuids(a).length}
+            title={accountUuids(a).length ? undefined : t("Önce Claude uygulaması girişini kaydet.", "Save the Claude app sign-in first.")}
+            onClick={() => void link(a.id)}
+          >
+            {checking ? <LoaderCircle className="animate-spin" /> : <Link2 />}
+            {t("Bu hesap olarak bağla", "Link as this account")}
+          </Button>
+        ) : guide.action === "check" ? (
+          <Button
+            size="sm"
+            variant={guide.steps ? "default" : "outline"}
+            disabled={checking}
+            onClick={() => void check()}
+          >
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
+            {t("Kontrol et", "Check")}
+          </Button>
+        ) : guide.action === "settings" ? (
+          <Button size="sm" variant="outline" asChild>
+            <a href={routeHash("ayarlar/tasinanlar")}>{t("Ayarlar", "Settings")}</a>
           </Button>
         ) : undefined
       }
@@ -443,22 +439,13 @@ function TerminalConnection({
     <ConnectionRow
       icon={<SquareTerminal />}
       title={t("Terminal", "Terminal")}
-      purpose={t("Terminaldeki claude da geçer.", "The terminal’s claude follows too.")}
+      purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
       tone={guide.tone}
       status={guide.label}
       steps={guide.steps}
       detail={guide.detail}
-      actions={
-        guide.action === "check" ? (
-          <Button size="sm" variant="outline" disabled={checking} onClick={() => void check()}>
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
-            {t("Kontrol et", "Check")}
-          </Button>
-        ) : guide.action === "settings" ? (
-          <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("ayarlar/tasinanlar")}>{t("Ayarlar", "Settings")}</a>
-          </Button>
-        ) : guide.tone === "ok" ? (
+      refresh={
+        !guide.action && guide.tone === "ok" ? (
           <Button
             size="icon-sm"
             variant="ghost"
@@ -467,7 +454,19 @@ function TerminalConnection({
             disabled={checking}
             onClick={() => void check()}
           >
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
+          </Button>
+        ) : undefined
+      }
+      action={
+        guide.action === "check" ? (
+          <Button size="sm" variant="outline" disabled={checking} onClick={() => void check()}>
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
+            {t("Kontrol et", "Check")}
+          </Button>
+        ) : guide.action === "settings" ? (
+          <Button size="sm" variant="outline" asChild>
+            <a href={routeHash("ayarlar/tasinanlar")}>{t("Ayarlar", "Settings")}</a>
           </Button>
         ) : undefined
       }
@@ -547,14 +546,14 @@ export function AccountDetailBody({
   const ready = connections.filter(Boolean).length;
   const history = historySources(a, accounts, settings);
   return (
-    <div className="@container grid gap-3 px-6 pb-8">
+    <div className="@container grid gap-3 px-5 pb-6">
       <RelayErrorAlert />
       {/* The header says the status; a problem also says what is wrong, here. */}
       {(health.tone === "warn" || health.tone === "crit") && (
         <div
           data-slot="account-status"
           className={cn(
-            "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-2.5 text-sm",
+            "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-4 py-2.5 text-sm",
             health.tone === "crit" && "border-crit/40 bg-crit/5",
             health.tone === "warn" && "border-warn/40 bg-warn/5",
           )}
@@ -569,22 +568,22 @@ export function AccountDetailBody({
       {duplicate && (
         <p
           role="status"
-          className="rounded-xl border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm"
+          className="rounded-lg border border-warn/40 bg-warn/10 px-4 py-2.5 text-sm"
         >
           {t(
-            `Bu hesap ${duplicate.name} profiline de bağlı. İki profil aynı kullanım limitlerini paylaşır.`,
-            `This account is also connected to ${duplicate.name}. Both profiles share the same usage limits.`,
+            `Bu hesap ${duplicate.name} profiline de bağlı. İki profil aynı limitleri paylaşır.`,
+            `This account is also connected to ${duplicate.name}. Both profiles share the same limits.`,
           )}
         </p>
       )}
       {mismatch && (
         <p
           role="alert"
-          className="rounded-xl border border-crit/40 bg-crit/10 px-4 py-2.5 text-sm"
+          className="rounded-lg border border-crit/40 bg-crit/10 px-4 py-2.5 text-sm"
         >
           {t(
             "Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Limit okuma girişini bu profilin hesabıyla yenile.",
-            "The Claude app sign-in and the usage sign-in belong to different accounts. Renew the usage sign-in with this profile’s account.",
+            "The Claude app sign-in and the usage sign-in are for different accounts. Renew the usage sign-in with this profile’s account.",
           )}
         </p>
       )}
@@ -596,8 +595,10 @@ export function AccountDetailBody({
               aside={
                 freshUsage(usage, now ?? Date.now()) && usage?.checkedAt ? (
                   <span className="flex items-center gap-1">
-                    {t("Güncellendi", "Updated")}{" "}
-                    {formatRelative(usage.checkedAt, now ?? Date.now(), language)}
+                    {t(
+                      `${formatRelative(usage.checkedAt, now ?? Date.now(), language)} güncellendi`,
+                      `Updated ${formatRelative(usage.checkedAt, now ?? Date.now(), language)}`,
+                    )}
                     <Button
                       size="icon-xs"
                       variant="ghost"
@@ -605,19 +606,21 @@ export function AccountDetailBody({
                       disabled={usageBusy.has(a.id)}
                       onClick={() => void relay.refreshUsage(a)}
                     >
-                      <RefreshCw className={usageBusy.has(a.id) ? "animate-spin" : undefined} />
+                      <RefreshIcon className={usageBusy.has(a.id) ? "animate-spin" : undefined} />
                     </Button>
                   </span>
                 ) : undefined
               }
             />
             {freshUsage(usage, now ?? Date.now()) ? (
-              <LimitRings
-                usage={usage}
-                now={now ?? Date.now()}
-                zone={settings.planning.timeZone}
-                size={88}
-              />
+              <div className="mt-2">
+                <LimitBars
+                  usage={usage}
+                  now={now ?? Date.now()}
+                  zone={settings.planning.timeZone}
+                  state={ringState(usage, now ?? Date.now())}
+                />
+              </div>
             ) : (
             <UsageCard
               usage={usage}
@@ -640,6 +643,7 @@ export function AccountDetailBody({
                 `${ready} / ${connections.length} ready`,
               )}
             />
+            <ConnectionList>
             <ConnectionRow
               icon={<Monitor />}
               title={t("Claude uygulaması", "Claude app")}
@@ -650,7 +654,7 @@ export function AccountDetailBody({
                   ? t("Kayıtlı", "Saved")
                   : t("Kayıtlı değil", "Not saved")
               }
-              actions={
+              action={
                 a.desktop ? (
                   <Button
                     size="sm"
@@ -698,25 +702,22 @@ export function AccountDetailBody({
             </ConnectionRow>
             <ConnectionRow
               icon={<Globe2 />}
-              title={t("Limit okuma", "Usage limits")}
+              title={t("Limit okuma girişi", "Usage sign-in")}
               purpose={t("Limitleri okur.", "Reads the limits.")}
               tone={signIn.tone}
               status={signIn.label}
-              actions={
-                <>
-                  <Button
-                    size="sm"
-                    variant={a.auth?.email ? "outline" : "default"}
-                    disabled={!!busy || waiting}
-                    onClick={() => void relay.startCli(a)}
-                  >
-                    {waiting
-                      ? t("Bağlanıyor…", "Connecting…")
-                      : a.auth?.email
-                        ? t("Yenile", "Renew")
-                        : t("Giriş yap", "Sign in")}
-                  </Button>
-                  {a.auth?.email && (
+              action={
+                <Button
+                  size="sm"
+                  variant={a.auth?.email ? "outline" : "default"}
+                  disabled={!!busy || waiting}
+                  onClick={() => void relay.startCli(a)}
+                >
+                  {a.auth?.email ? t("Yenile", "Renew") : t("Giriş yap", "Sign in")}
+                </Button>
+              }
+              refresh={
+                a.auth?.email && (
                     <Button
                       size="icon-sm"
                       variant="ghost"
@@ -740,16 +741,15 @@ export function AccountDetailBody({
                                 )
                               : t(
                                   "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.",
-                                  "Could not verify the usage sign-in. Renew the usage sign-in.",
+                                  "Relay cannot verify the usage sign-in. Renew it.",
                                 ),
                           );
                         })
                       }
                     >
-                      <RefreshCw />
+                      <RefreshIcon />
                     </Button>
-                  )}
-                </>
+                )
               }
             >
               {relay.flow?.accountId === a.id && <CliFlowPanel embedded />}
@@ -757,6 +757,7 @@ export function AccountDetailBody({
             {/* The extension's sign-in is kept only on macOS; the browser preview shows the row too. */}
             {macOS && <ExtensionConnection account={a} extension={extension} />}
             {macOS && <TerminalConnection account={a} terminal={terminal} />}
+            </ConnectionList>
           </Card>
           {a.desktop && (
             <Card className={cardClass}>
@@ -778,9 +779,9 @@ export function AccountDetailBody({
         <div className="grid gap-3">
           <Card className={cardClass}>
             <CardTitle title={t("Hesap", "Account")} />
-            <dl className="-mx-1 grid text-[13px]">
+            <dl className="-mx-1 grid text-sm">
               {[
-                [t("E-posta", "Email"), a.desktop?.email ?? a.auth?.email ?? t("Giriş bekleniyor", "Waiting for sign-in")],
+                [t("E-posta", "Email"), a.desktop?.email ?? a.auth?.email ?? "—"],
                 [t("Kuruluş", "Organization"), a.auth?.orgName ?? "—"],
                 [
                   t("Tür · grup", "Type · group"),

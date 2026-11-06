@@ -1,4 +1,5 @@
-import { LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
+import { RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -54,7 +55,7 @@ export function Overview({
       actions={
         <>
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             aria-label={t("Limitleri yenile", "Refresh limits")}
             title={t("Limitleri yenile", "Refresh limits")}
@@ -65,7 +66,7 @@ export function Overview({
               })
             }
           >
-            {refreshing ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {refreshing ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
           </Button>
           {relay.active && (
             <Button
@@ -79,13 +80,13 @@ export function Overview({
         </>
       }
     >
-      <div className="grid gap-3 px-6 pb-6">
+      <div className="grid gap-4 px-5 pb-5">
         <ActiveAccountCard go={go} now={now} />
         <SetupChecklist />
         {cards.today ? (
-          <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr]">
+          <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
             <AccountsCard go={go} now={now} />
-            <div className="grid content-start gap-3">
+            <div className="grid content-start gap-4">
               <TodayCard go={go} now={now} />
               {cards.automation && <AutomationCard go={go} now={now} />}
             </div>

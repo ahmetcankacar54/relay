@@ -27,13 +27,13 @@ export function SectionHeading({
       <div className="min-w-0">
         <h3
           id={id}
-          className="flex items-center gap-2 font-display text-[15px] font-semibold"
+          className="flex items-center gap-2 font-display text-sm font-semibold"
         >
           {icon}
           {title}
         </h3>
         {description && (
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {description}
           </p>
         )}
@@ -63,7 +63,7 @@ export function SettingGroup({
       <h3 id={id} className="px-1 text-xs font-semibold text-muted-foreground">
         {title}
       </h3>
-      <div className={cn("rounded-xl border bg-card px-4", className)}>{children}</div>
+      <div className={cn("rounded-lg border bg-card px-3", className)}>{children}</div>
     </section>
   );
 }
@@ -81,13 +81,13 @@ export function SettingRow({
   children: ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-border py-3 first:border-t-0">
+    <div className="flex min-h-10 items-center justify-between gap-4 border-t border-border py-2 first:border-t-0">
       <div className="min-w-0">
-        <label htmlFor={htmlFor} className="text-sm font-medium">
+        <label htmlFor={htmlFor} className="text-sm">
           {label}
         </label>
         {description && (
-          <p className="mt-0.5 text-[13px] text-muted-foreground">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             {description}
           </p>
         )}
@@ -105,7 +105,7 @@ export function Note({
   className?: string;
 }) {
   return (
-    <p className={cn("text-[13px] text-muted-foreground", className)}>
+    <p className={cn("text-xs text-muted-foreground", className)}>
       {children}
     </p>
   );

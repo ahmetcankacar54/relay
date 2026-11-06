@@ -239,8 +239,8 @@ export function DailyChart({
   };
   const footer = !busiest
     ? measure === "limit"
-      ? t("Bu dönemde kullanım yok.", "No usage in this period.")
-      : t("Bu dönemde token yok.", "No tokens in this period.")
+      ? t("Bu aralıkta kullanım yok.", "No usage in this range.")
+      : t("Bu aralıkta token yok.", "No tokens in this range.")
     : measure === "limit"
       ? t(
           `${view.range} günde ${spoken(total)}. En yoğun gün ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
@@ -248,18 +248,18 @@ export function DailyChart({
         )
       : measure === "tokens"
         ? t(
-            `${view.range} günde toplam ${estimatedRange ? "≈" : ""}${spoken(total)}; en yoğun gün ${formatDay(busiest.date, language)} (${format(busiest.total)}).`,
-            `${estimatedRange ? "≈" : ""}${spoken(total)} in total over ${view.range} days; busiest day ${formatDay(busiest.date, language)} (${format(busiest.total)}).`,
+            `${view.range} günde ${estimatedRange ? "≈" : ""}${spoken(total)}. En yoğun gün ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
+            `${estimatedRange ? "≈" : ""}${spoken(total)} over ${view.range} days. Busiest day ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
           )
         : t(
-            `${view.range} günde API karşılığı ${estimatedRange ? "≈" : ""}${spoken(total)}; en yüksek gün ${formatDay(busiest.date, language)} (${format(busiest.total)}).`,
-            `API value ${estimatedRange ? "≈" : ""}${spoken(total)} over ${view.range} days; highest day ${formatDay(busiest.date, language)} (${format(busiest.total)}).`,
+            `${view.range} günde API karşılığı ${estimatedRange ? "≈" : ""}${spoken(total)}. En yüksek gün ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
+            `API value over ${view.range} days: ${estimatedRange ? "≈" : ""}${spoken(total)}. Highest day ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
           );
   return (
-    <Card className="gap-0 px-5 py-4">
+    <Card className="gap-0 px-4 py-3.5">
       <div className="mb-2 grid gap-1">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <h3 className="font-display text-[15px] font-semibold">
+          <h3 className="font-display text-sm font-semibold">
             {t("Günlük kullanım", "Daily usage")}
           </h3>
           {tokens && (
@@ -302,7 +302,7 @@ export function DailyChart({
           role="group"
           aria-label={t(
             "Günlük kullanım grafiği; günler arasında ok tuşlarıyla gezilir",
-            "Daily usage chart; arrow keys move between days",
+            "Daily usage chart. Arrow keys move between days.",
           )}
         >
           <g aria-hidden className="stroke-border" strokeWidth={1}>
@@ -391,7 +391,7 @@ export function DailyChart({
                 {hit && (
                   <path
                     d={triangle(x + bar / 2, Math.max(TOP - 2, y - 2), mark)}
-                    fill="var(--crit)"
+                    fill="var(--muted-foreground)"
                   />
                 )}
               </g>

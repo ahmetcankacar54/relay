@@ -9,9 +9,14 @@ import { mediaBlock } from "./css";
 
 const read = (file: string) => readFileSync(new URL(file, import.meta.url), "utf8");
 
-test("panel and meter text is 11 px or more; text-xs stays 12.5 px", () => {
+test("body text is 16 px; the compact panel ramp keeps every text at 11 px or more", () => {
   const theme = read("../src/styles/theme.css");
-  assert.match(theme, /--text-xs: 0\.78125rem;/);
+  const [main, compact] = theme.split(':root[data-density="compact"]');
+  assert.match(main, /--text-sm: 1rem;/);
+  assert.match(main, /--text-xs: 0\.875rem;/);
+  assert.match(compact, /--text-sm: 0\.8125rem;/);
+  assert.match(compact, /--text-2xs: 0\.6875rem;/);
+  assert.match(read("../src/panel/main.tsx"), /dataset\.density = "compact"/);
   for (const file of [
     "../src/panel/Panel.tsx",
     "../src/panel/PanelAccounts.tsx",

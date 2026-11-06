@@ -110,7 +110,7 @@ test("cliDetail names the version found, and the minimum when it is too old", ()
   assert.equal(cliDetail("missing", undefined, tr), "Bulunamadı");
   assert.equal(cliDetail("missing", undefined, en), "Not found");
   assert.equal(cliDetail("unreadable", undefined, tr), "Sürümü okunamadı");
-  assert.equal(cliDetail("unreadable", undefined, en), "Its version couldn’t be read");
+  assert.equal(cliDetail("unreadable", undefined, en), "Cannot read its version");
   assert.equal(cliDetail("outdated", "2.1.200", tr), "2.1.200 · 2.1.296 veya üstü gerekir");
   assert.equal(cliDetail("outdated", "2.1.200", en), "2.1.200 · needs 2.1.296 or later");
 });
@@ -174,13 +174,13 @@ test("a disabled onboarding button has a reason for every Claude app lock", () =
   assert.equal(blockReason("loading", tr), undefined);
   assert.equal(blockReason(undefined, tr), undefined);
   const words = {
-    "no-desktop": ["Claude uygulaması bulunamadı; önce onu kur.", "The Claude app wasn’t found; install it first."],
+    "no-desktop": ["Claude uygulaması bulunamadı; önce onu kur.", "Relay cannot find the Claude app. Install it first."],
     recovery: ["Önce Claude uygulaması yedeğini geri yükle.", "Restore the Claude app backup first."],
     pending: [
       "Önce devam eden Claude uygulaması girişini tamamla veya iptal et.",
       "Finish or cancel the current Claude app sign-in first.",
     ],
-    busy: ["Claude uygulamasında bir işlem sürüyor.", "A Claude app operation is in progress."],
+    busy: ["Claude uygulamasında bir işlem sürüyor.", "A Claude app action is in progress."],
     limit: ["En fazla 50 hesap eklenebilir.", "You can add up to 50 accounts."],
     "all-linked": [
       "Her profilin Claude uygulaması girişi kayıtlı.",
@@ -254,7 +254,7 @@ test("a missing CLI error says where to choose the file, in both languages", asy
   );
   assert.equal(
     localizeError(error, "en"),
-    "Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Claude Code CLI → Choose file.",
+    "Relay cannot find Claude Code. Open Code once in the Claude app, or select the file in Settings → Claude Code CLI.",
   );
 });
 

@@ -45,7 +45,7 @@ export function AccountWindowLine({
       <small className="text-xs text-warn-foreground">
         {t(
           `Plan türünü seç; ${capacity}× sayılıyor`,
-          `Choose the plan type; counted as ${capacity}×`,
+          `Select the plan type. Counted as ${capacity}×`,
         )}
       </small>
     );

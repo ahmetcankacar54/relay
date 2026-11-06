@@ -2,17 +2,24 @@ import {
   Fragment,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ComponentType,
+  type KeyboardEvent,
+  type PointerEvent,
   type ReactNode,
 } from "react";
-import {
-  BarChart3,
-  LayoutDashboard,
-  Settings2,
-  Users,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  AccountsIcon,
+  OverviewIcon,
+  PinsIcon,
+  SettingsIcon,
+  SidebarIcon,
+  TokensIcon,
+  UsageIcon,
+} from "@/components/icons";
 import {
   Tooltip,
   TooltipContent,
@@ -28,6 +35,7 @@ import { RelayContext, type Relay } from "@/data/relay-context";
 import { pendingFlow, type sidebarStatus } from "@/data/selectors";
 import { accountFromHash, accountHash } from "@/pages/accounts/AccountDetail";
 import type { PageId } from "./routes";
+import { SIDEBAR, dragSidebar, keySidebar, type SidebarSize } from "./useSidebarSize";
 
 type Status = ReturnType<typeof sidebarStatus>;
 export interface SidebarSummary {
@@ -42,17 +50,23 @@ export interface SidebarProps {
   compact: boolean;
   status: Status;
   summary?: SidebarSummary;
-  /** App icon URL; injected by the shell so this module stays importable under Node. */
-  icon?: string;
   /** The panda over the account card (src/app/CardPanda.tsx); the shell draws it, the rail shows none. */
   panda?: ReactNode;
   /** A click in the sidebar, above the account card (the pages) or below it (Settings and the card itself). */
   onPoke?(where: "above" | "below"): void;
+  /** The expanded width in px (src/app/useSidebarSize.ts). */
+  width?: number;
+  /** Folded into the icon rail by the user (a narrow window folds it too, through `compact`). */
+  collapsed?: boolean;
+  /** Moves the edge; without it the sidebar has no handle (a narrow window, the tests). */
+  onResize?(size: SidebarSize, save?: boolean): void;
+  /** Folds or unfolds the sidebar; without it there is no toggle button. */
+  onToggle?(): void;
 }
 
 interface Item {
   id: PageId;
-  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   tail?: number;
   on?: boolean;
@@ -85,16 +99,17 @@ function NavItem({
           : undefined
       }
       className={cn(
-        "relative flex w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium whitespace-nowrap text-muted-foreground hover:bg-card/60 [-webkit-app-region:no-drag]",
-        compact && "justify-center px-2",
-        active &&
-          "bg-card font-semibold text-accent-foreground shadow-xs hover:bg-card",
+        "relative flex items-center rounded-md text-sm whitespace-nowrap text-sidebar-muted outline-none hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [-webkit-app-region:no-drag]",
+        compact
+          ? "size-10 justify-center"
+          : "h-8 w-full justify-start gap-2.5 px-2.5 text-left",
+        active && "bg-sidebar-accent text-sidebar-foreground hover:bg-sidebar-accent",
       )}
     >
-      <Icon className="size-4 shrink-0" aria-hidden />
+      <Icon className="size-5 shrink-0" />
       {!compact && <span className="truncate">{item.label}</span>}
       {!compact && item.tail !== undefined && (
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+        <span className="ml-auto text-xs tabular-nums text-sidebar-muted">
           {item.tail}
         </span>
       )}
@@ -103,7 +118,7 @@ function NavItem({
           data-status="on"
           className={cn(
             "flex",
-            compact ? "absolute top-1.5 right-1.5" : "ml-auto",
+            compact ? "absolute top-2 right-2" : "ml-auto",
           )}
         >
           <StatusDot tone="ok" />
@@ -151,7 +166,7 @@ function AccountLinks({
   return (
     <ul
       aria-label={t("Hesap listesi", "Account list")}
-      className="ml-[18px] grid min-h-0 gap-px overflow-y-auto border-l py-0.5 pl-1.5"
+      className="ml-5 grid min-h-0 gap-px overflow-y-auto py-0.5 pl-2"
     >
       {relay.accounts.map((a) => {
         const health = accountHealth(
@@ -175,9 +190,8 @@ function AccountLinks({
               aria-current={current ? "true" : undefined}
               title={`${a.name} · ${health.label}`}
               className={cn(
-                "flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-[12.5px] text-muted-foreground hover:bg-card/60 [-webkit-app-region:no-drag]",
-                current &&
-                  "bg-card font-semibold text-accent-foreground shadow-xs hover:bg-card",
+                "flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-xs text-sidebar-muted hover:text-sidebar-foreground [-webkit-app-region:no-drag]",
+                current && "bg-sidebar-accent text-sidebar-foreground",
               )}
             >
               <StatusDot tone={health.tone === "ok" ? "ok" : "off"} />
@@ -191,6 +205,64 @@ function AccountLinks({
   );
 }
 
+/**
+ * The sidebar's edge: drag it to set the width, past `SIDEBAR.collapseBelow` to fold it into the
+ * rail; double-click for the initial width. With the keyboard: ←/→ move it 16 px (⇧ 48 px), → opens
+ * the rail and ← at the narrowest width folds it.
+ */
+function ResizeHandle({
+  width,
+  collapsed,
+  onResize,
+  t,
+}: {
+  width: number;
+  collapsed: boolean;
+  onResize(size: SidebarSize, save?: boolean): void;
+  t: T;
+}) {
+  // Where the drag started, and the expanded width to keep if it ends folded.
+  const start = useRef<{ x: number; width: number; expanded: number }>(undefined);
+  const shown = collapsed ? SIDEBAR.rail : width;
+  const move = (e: PointerEvent<HTMLDivElement>, save: boolean) => {
+    if (!start.current) return;
+    onResize(dragSidebar(start.current.width, e.clientX - start.current.x, start.current.expanded), save);
+  };
+  const key = (e: KeyboardEvent<HTMLDivElement>) => {
+    const direction = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!direction) return;
+    e.preventDefault();
+    onResize(keySidebar({ width, collapsed }, direction, e.shiftKey ? 48 : 16));
+  };
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={t("Kenar çubuğu genişliği", "Sidebar width")}
+      aria-valuemin={SIDEBAR.rail}
+      aria-valuemax={SIDEBAR.max}
+      aria-valuenow={shown}
+      tabIndex={0}
+      className="group/handle absolute inset-y-0 -right-1 z-30 w-2 cursor-col-resize outline-none [-webkit-app-region:no-drag] focus-visible:bg-ring/30"
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        start.current = { x: e.clientX, width: shown, expanded: width };
+      }}
+      onPointerMove={(e) => move(e, false)}
+      onPointerUp={(e) => {
+        move(e, true);
+        start.current = undefined;
+      }}
+      onPointerCancel={() => (start.current = undefined)}
+      onDoubleClick={() => onResize({ width: SIDEBAR.initial, collapsed: false })}
+      onKeyDown={key}
+    >
+      <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 transition-colors group-hover/handle:bg-ring/60 group-active/handle:bg-ring" />
+    </div>
+  );
+}
+
 export function Sidebar({
   page,
   go,
@@ -198,9 +270,12 @@ export function Sidebar({
   compact,
   status,
   summary,
-  icon,
   panda,
   onPoke,
+  width = SIDEBAR.initial,
+  collapsed = false,
+  onResize,
+  onToggle,
 }: SidebarProps) {
   const goFrom = (where: "above" | "below") => (page: PageId) => {
     onPoke?.(where);
@@ -220,19 +295,24 @@ export function Sidebar({
         )
       : undefined;
   const items: Item[] = [
-    { id: "genel", icon: LayoutDashboard, label: t("Genel bakış", "Overview") },
+    { id: "genel", icon: OverviewIcon, label: t("Genel bakış", "Overview") },
     {
       id: "hesaplar",
-      icon: Users,
+      icon: AccountsIcon,
       label: t("Hesaplar", "Accounts"),
       tail: status.accounts,
     },
-    { id: "kullanim", icon: BarChart3, label: t("Kullanım", "Usage") },
+  ];
+  // Usage is three pages, grouped under one heading.
+  const usage: Item[] = [
+    { id: "kullanim", icon: UsageIcon, label: t("Limitler", "Limits") },
+    { id: "tokenlar", icon: TokensIcon, label: t("Token ve ücret", "Tokens and cost") },
+    { id: "rozetler", icon: PinsIcon, label: t("Rozetler", "Pins") },
   ];
   // Automation and planning live in Settings now; its dot says when either runs by itself.
   const settings: Item = {
     id: "ayarlar",
-    icon: Settings2,
+    icon: SettingsIcon,
     label: t("Ayarlar", "Settings"),
     on: status.switching || status.planning,
     onLabel:
@@ -242,36 +322,39 @@ export function Sidebar({
           ? t("Otomatik geçiş açık", "Automatic switching on")
           : t("Önceden başlatma açık", "Early start on"),
   };
+  const toggleLabel = compact
+    ? t("Kenar çubuğunu göster", "Show the sidebar")
+    : t("Kenar çubuğunu gizle", "Hide the sidebar");
+  const toggle = onToggle && (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={toggleLabel}
+      title={`${toggleLabel} (⌃⌘S)`}
+      aria-expanded={!collapsed}
+      onClick={onToggle}
+      className="text-sidebar-muted [-webkit-app-region:no-drag] hover:text-sidebar-foreground"
+    >
+      <SidebarIcon className="size-4.5" />
+    </Button>
+  );
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col border-r bg-sidebar pb-3 text-sidebar-foreground",
-        compact ? "w-14 items-center px-1.5" : "w-[200px] px-2.5",
+        "relative flex h-full shrink-0 flex-col pb-2 text-sidebar-foreground select-none",
+        compact ? "w-21 items-center px-2" : "px-2.5",
       )}
+      style={compact ? undefined : { width }}
     >
-      <div className="h-10 w-full shrink-0 [-webkit-app-region:drag]" />
-      <div
-        className={cn(
-          "mb-4 flex items-center gap-2 font-display text-[15px] font-bold",
-          compact ? "justify-center" : "px-1.5",
-        )}
-      >
-        {icon ? (
-          <img src={icon} alt="" className="size-6 rounded-md" />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="grid size-6 place-items-center rounded-md bg-brand text-xs text-white"
-          >
-            R
-          </span>
-        )}
-        {!compact && "Relay"}
+      {/* The traffic lights sit in this strip, which also drags the window; the toggle sits beside them. */}
+      <div className="relative h-13 w-full shrink-0 [-webkit-app-region:drag]">
+        {!compact && toggle && <div className="absolute top-2.75 left-17.5">{toggle}</div>}
       </div>
       <nav
         aria-label={t("Sayfalar", "Pages")}
-        className="flex min-h-0 w-full flex-col gap-0.5"
+        className={cn("flex min-h-0 w-full flex-col gap-0.5", compact && "items-center")}
       >
+        {compact && toggle && <div className="mb-1">{toggle}</div>}
         {items.map((item) => (
           <Fragment key={item.id}>
             <NavItem
@@ -290,12 +373,36 @@ export function Sidebar({
             )}
           </Fragment>
         ))}
+        <div
+          role="group"
+          aria-labelledby={compact ? undefined : "sidebar-usage"}
+          aria-label={compact ? t("Kullanım", "Usage") : undefined}
+          className={cn(
+            "flex w-full flex-col gap-0.5",
+            compact ? "mt-2 items-center border-t pt-2" : "mt-4",
+          )}
+        >
+          {!compact && (
+            <h2 id="sidebar-usage" className="px-2.5 pb-1 text-xs font-medium text-sidebar-muted">
+              {t("Kullanım", "Usage")}
+            </h2>
+          )}
+          {usage.map((item) => (
+            <NavItem
+              key={item.id}
+              item={item}
+              active={page === item.id}
+              compact={compact}
+              go={goFrom("above")}
+            />
+          ))}
+        </div>
       </nav>
       <div className="flex-1" />
       {summary && !compact && (
         <div
           data-slot="account-card"
-          className="relative mt-8 mb-2 w-full rounded-lg border bg-card p-2.5 text-xs [-webkit-app-region:no-drag]"
+          className="relative mt-8 mb-1.5 w-full rounded-lg border bg-card/80 p-2.5 text-xs [-webkit-app-region:no-drag]"
         >
           {panda}
           <button
@@ -305,7 +412,7 @@ export function Sidebar({
           >
             <UsageRing
               outer={summary.fiveHour}
-              size={30}
+              size={32}
               label={
                 summary.fiveHour === undefined
                   ? t("5 saatlik dönem bilinmiyor", "5-hour period unknown")
@@ -331,7 +438,7 @@ export function Sidebar({
           </button>
         </div>
       )}
-      <div className="w-full">
+      <div className={cn("w-full", compact && "flex justify-center")}>
         <NavItem
           item={settings}
           active={page === "ayarlar"}
@@ -339,6 +446,9 @@ export function Sidebar({
           go={goFrom("below")}
         />
       </div>
+      {onResize && (
+        <ResizeHandle width={width} collapsed={collapsed} onResize={onResize} t={t} />
+      )}
     </aside>
   );
 }

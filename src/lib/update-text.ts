@@ -22,15 +22,15 @@ export function updateTitle(update: UpdateState & { version: string }, t: T): st
     case "downloading":
       return t(
         `Relay ${v} indiriliyor… %${Math.round((update.progress ?? 0) * 100)}`,
-        `Downloading Relay ${v}… ${Math.round((update.progress ?? 0) * 100)}%`,
+        `Relay ${v}: ${Math.round((update.progress ?? 0) * 100)}% downloaded`,
       );
     case "installing":
       return t(
-        `Relay ${v} kuruluyor; birazdan yeniden açılacak.`,
-        `Installing Relay ${v}; it opens again in a moment.`,
+        `Relay ${v} kuruluyor; birazdan yeniden açılır.`,
+        `Relay ${v} install in progress. Relay opens again soon.`,
       );
     case "manual":
-      return t(`Relay ${v} çıktı.`, `Relay ${v} is out.`);
+      return t(`Relay ${v} çıktı.`, `Relay ${v} is available.`);
     default:
       return t(`Relay ${v} hazır.`, `Relay ${v} is ready.`);
   }
@@ -42,29 +42,29 @@ export function updateHint(update: UpdateState, t: T): string {
     switch (update.manualReason) {
       case "location":
         return t(
-          "Relay disk görüntüsünden çalışıyor; önce Uygulamalar klasörüne taşı.",
-          "Relay runs from the disk image; move it to Applications first.",
+          "Relay disk görüntüsünden çalışıyor. Önce Uygulamalar klasörüne taşı.",
+          "Relay runs from the disk image. Move it to Applications first.",
         );
       case "not-writable":
         return t(
-          "Relay kendi klasörünü değiştiremiyor; sayfadan indirip kur.",
-          "Relay cannot replace itself in its folder; download it from the page.",
+          "Relay kendi klasörünü değiştiremiyor. Sayfadan indirip kur.",
+          "Relay cannot replace its own files. Download the new version from the page.",
         );
       case "not-appimage":
         return t(
-          "Relay AppImage olarak çalışmıyor; sayfadan indirip kur.",
-          "Relay is not running as an AppImage; download it from the page.",
+          "Relay AppImage olarak çalışmıyor. Sayfadan indirip kur.",
+          "Relay does not run as an AppImage. Download the new version from the page.",
         );
       default:
         return t(
-          "Bu bilgisayar için otomatik güncelleme yok; sayfadan indirip kur.",
-          "There is no automatic update for this computer; download it from the page.",
+          "Bu bilgisayar için otomatik güncelleme yok. Sayfadan indirip kur.",
+          "No automatic update for this computer. Download the new version from the page.",
         );
     }
   if (update.status === "ready")
     return t(
-      "Güncelle’ye basınca Relay kapanır, yeni sürüm birkaç saniyede açılır. Ayarların ve girişlerin kalır.",
-      "Update quits Relay and opens the new version in a few seconds. Your settings and sign-ins stay.",
+      "Güncelle’ye basınca Relay kapanır, yeni sürüm birkaç saniyede açılır.",
+      "“Update” quits Relay and opens the new version in a few seconds.",
     );
   return "";
 }

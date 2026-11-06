@@ -698,14 +698,14 @@ test("a step that cannot run here, or fails for no named reason, says so", () =>
       { result: "failed", reason: "unsupported", saved: false, at },
       t,
     )!,
-    /cannot be managed/,
+    /cannot manage the terminal sign-in/,
   );
   assert.match(
     terminalLine({ result: "failed", saved: false, at }, t)!,
-    /could not be changed/,
+    /cannot change the terminal sign-in/,
   );
   assert.match(
     terminalLine({ result: "switched", saved: true, at }, t, "W")!,
-    /Restart terminal sessions/,
+    /Restart open terminal sessions/,
   );
 });

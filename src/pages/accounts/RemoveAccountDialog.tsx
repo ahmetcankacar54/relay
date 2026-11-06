@@ -17,7 +17,7 @@ export function removedNotice(name: string, result: AccountRemoved, t: T): strin
   return result.signedOut === false
     ? t(
         `${name} kaldırıldı. Limit okuma girişinden çıkış yapılamadı; Anahtarlık’taki kaydı kalabilir.`,
-        `Removed ${name}. Could not sign out of the usage sign-in; its Keychain item may remain.`,
+        `Removed ${name}. The sign-out from its usage sign-in failed. Its Keychain item can stay.`,
       )
     : t(`${name} kaldırıldı.`, `Removed ${name}.`);
 }
@@ -44,8 +44,8 @@ export function RemoveAccountDialog({
           <DialogTitle>{t("Hesabı kaldır", "Remove account")}</DialogTitle>
           <DialogDescription className="sr-only">
             {t(
-              "Hesap Relay’den kaldırılmadan önce onay gerekir.",
-              "Confirmation is required before the account is removed from Relay.",
+              "Hesabı Relay’den kaldırmayı onayla.",
+              "Confirm the removal of the account from Relay.",
             )}
           </DialogDescription>
         </DialogHeader>
@@ -83,13 +83,13 @@ export function RemoveAccountBody({
   const goes = [
     t("Kayıtlı Claude uygulaması girişi", "Its saved Claude app sign-in"),
     t(
-      "Claude Code profili: limit okuma girişi (çıkış yapılır) ve bu profilde açılan terminal oturumları",
-      "Its Claude Code profile: the usage sign-in (signed out) and the terminal sessions opened in it",
+      "Limit okuma girişi ve terminal oturumları",
+      "Its usage sign-in and terminal sessions",
     ),
-    t("Tarayıcı eklentisi için saklanan giriş", "The browser extension sign-in kept for it"),
+    t("Tarayıcı eklentisi girişi", "Its browser extension sign-in"),
     t(
       "Planlama, otomatik geçiş ve geçmiş paylaşımındaki yeri",
-      "Its place in planning, automatic switching and history sharing",
+      "Its place in planning, automatic switching and shared history",
     ),
   ];
   const stays = [
@@ -98,20 +98,14 @@ export function RemoveAccountBody({
       "The Claude app’s own data and this account’s Code history",
     ),
     t("Kullanım geçmişi ve token sayıları", "Usage history and token counts"),
-    t(
-      "Claude hesabının kendisi; istediğin zaman yeniden ekleyebilirsin",
-      "The Claude account itself; you can add it again any time",
-    ),
+    t("Claude hesabının kendisi", "The Claude account itself"),
   ];
   return (
     <div className="grid gap-3" data-slot="remove-account">
       {/* The page banners sit under the overlay; a refusal shows here. */}
       <RelayErrorAlert />
       <p className="text-sm">
-        {t(
-          `${account.name} unutulacak: kayıtlı Claude uygulaması girişi ve Claude Code profili (limit okuma girişi) silinir. Claude uygulamasının kendi verisine dokunulmaz.`,
-          `${account.name} will be forgotten: its saved Claude app sign-in and its Claude Code profile (usage sign-in) are deleted. The Claude app’s own data is not touched.`,
-        )}
+        {t(`${account.name} Relay’den kaldırılsın mı?`, `Remove ${account.name} from Relay?`)}
       </p>
       <div className="grid gap-3 rounded-lg border bg-muted/40 px-3 py-2.5 text-sm">
         {[

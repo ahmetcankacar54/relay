@@ -15,7 +15,7 @@ import { localizeError } from "../messages";
 import type { AutoCaptureState } from "../../shared/types";
 
 const cardClass = "gap-3 px-4 py-4";
-const panelClass = `mx-6 mb-3 ${cardClass}`;
+const panelClass = `mx-5 mb-3 ${cardClass}`;
 const titleClass = "flex items-start gap-3";
 const iconClass = "mt-0.5 size-5 shrink-0 text-brand";
 const actionsClass = "flex flex-wrap items-center gap-2";
@@ -39,31 +39,31 @@ export function autoCaptureLine(
             `The Claude app is signed in as ${state.alreadySaved}, which is already saved. Sign in with the new account.`,
           )
         : t(
-            "Claude uygulamasında giriş yap ve Code’u bir kez aç; Relay girişi kendisi kaydeder.",
-            "Sign in in the Claude app and open Code once; Relay saves the sign-in by itself.",
+            "Code’u açınca Relay girişi kaydeder.",
+            "Relay saves the sign-in when you open Code.",
           );
     case "choose-org":
       return t(
         "Bu hesabın birden çok Code çalışma alanı var; kaydedilecek olanı seç.",
-        "This account has several Code workspaces; choose the one to save.",
+        "This account has more than one Code workspace. Select the one to save.",
       );
     case "saving":
       return t(
         "Giriş kaydediliyor; Claude uygulaması yeniden başlıyor…",
-        "Saving the sign-in; the Claude app is restarting…",
+        "Relay saves the sign-in. The Claude app restarts…",
       );
     case "saved":
       return t("Claude uygulaması girişi kaydedildi.", "Claude app sign-in saved.");
     case "failed":
       return state.error === "timeout"
         ? t(
-            "Relay beklemeyi bıraktı; giriş tamamlandıysa “Girişi kaydet”e bas.",
-            "Relay stopped waiting; if the sign-in is complete, press Save sign-in.",
+            "Bekleme süresi doldu. Giriş yaptıysan “Girişi kaydet”e bas.",
+            "The wait timed out. If you signed in, select “Save sign-in”.",
           )
         : state.error === "other-pending"
           ? t(
-              "Başka bir profilin girişi bekliyor; önce onu tamamla veya iptal et.",
-              "Another profile’s sign-in is pending; finish or cancel it first.",
+              "Başka bir hesabın girişi sürüyor; önce onu tamamla veya iptal et.",
+              "Another account’s sign-in is in progress. Finish or cancel it first.",
             )
           : localizeError(state.error ?? "", language);
   }
@@ -131,7 +131,7 @@ export function DesktopPendingActions() {
           onClick={() => void action("open", () => api.openCodeTab())}
         >
           <ArrowUpRight />
-          {t("Claude’u Code’da aç", "Open Claude on Code")}
+          {t("Code’u aç", "Open Code")}
         </Button>
         <Button
           variant="ghost"
@@ -175,12 +175,6 @@ export function DesktopPendingPanel() {
             {pendingDesktop.name} ·{" "}
             {t("Claude uygulaması girişi", "Claude app sign-in")}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "Claude uygulamasında doğru hesaba giriş yap ve Code sekmesini aç; Relay girişi kendisi kaydeder.",
-              "Sign in to the matching account inside the Claude app and open Code; Relay saves the sign-in by itself.",
-            )}
-          </p>
         </div>
       </div>
       <ConnectionProgress
@@ -190,37 +184,19 @@ export function DesktopPendingPanel() {
         }
         label={
           desktop?.busy
-            ? t("Giriş kaydediliyor", "Saving sign-in")
+            ? t("Giriş kaydediliyor", "Save in progress")
             : desktop?.error
               ? t("Giriş kaydedilemedi", "Sign-in not saved")
               : desktopIdentityReady
                 ? targetOrg
                   ? t("Claude uygulaması girişini kaydet", "Save Claude app sign-in")
-                  : t("Code sekmesinin açılması bekleniyor", "Waiting for the Code tab")
-                : t(
-                    "Claude uygulamasında giriş bekleniyor",
-                    "Waiting for sign-in in the Claude app",
-                  )
+                  : t("Code’u aç", "Open Code")
+                : t("Claude uygulamasına giriş yap", "Sign in to the Claude app")
         }
         steps={[
-          {
-            title: t("Claude uygulaması açıldı", "The Claude app opened"),
-            detail: t("Giriş ekranı hazır", "Sign-in is ready"),
-          },
-          {
-            title: t("Hesabına giriş yap", "Sign in"),
-            detail: t(
-              "Bağlayacağın hesabı seç",
-              "Choose the account to connect",
-            ),
-          },
-          {
-            title: t("Code’u aç ve bağla", "Open Code & connect"),
-            detail: t(
-              "Relay girişi kendisi kaydeder",
-              "Relay saves the sign-in itself",
-            ),
-          },
+          { title: t("Claude uygulaması açık", "Claude app open") },
+          { title: t("Giriş yap", "Sign in") },
+          { title: t("Code’u aç", "Open Code") },
         ]}
       />
       <DesktopPendingActions />
@@ -241,6 +217,15 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
   const [code, setCode] = useState("");
   useEffect(() => setCode(""), [flow?.id]);
   if (!flow) return null;
+  const note =
+    flow.status === "failed"
+      ? localizeError(flow.error ?? "", language)
+      : flow.inWindow && (flow.status === "starting" || flow.status === "waiting")
+        ? t(
+            "Açılan Relay penceresinde Claude’a bu hesapla gir ve izin ver. Google ile giriş açılmazsa e-posta ile gir ya da “Tarayıcıda aç”a bas.",
+            "In the Relay window, sign in to Claude with this account. Then allow access. If Google sign-in does not open, use email or select “Open in browser”.",
+          )
+        : undefined;
   return (
     <Card
       id={embedded ? undefined : "cli-connection-panel"}
@@ -260,34 +245,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
           <h3 className="font-semibold">
             {flowAccount?.name} · {t("Limit okuma girişi", "Usage sign-in")}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            {flow.status === "connected"
-              ? t(
-                  "Limit okuma girişi tamamlandı. Bu hesaba ait kullanım limitleri okunabilir.",
-                  "Usage sign-in completed. Usage limits for this account can now be read.",
-                )
-              : flow.status === "verifying"
-                ? t(
-                    "Tarayıcı onayı alındı. Hesabın doğrulanıyor…",
-                    "Browser authorization received. Verifying your account…",
-                  )
-                : flow.status === "failed"
-                  ? localizeError(flow.error ?? "", language)
-                  : flow.status === "cancelled"
-                    ? t(
-                        "Giriş iptal edildi. İstediğinde yeniden bağlanabilirsin.",
-                        "Sign-in cancelled. You can reconnect whenever you like.",
-                      )
-                    : flow.inWindow
-                      ? t(
-                          "Açılan Relay penceresinde Claude’a bu hesapla gir ve izin ver. Google ile giriş açılmazsa e-posta ile gir ya da “Tarayıcıda aç”.",
-                          "In the Relay window that opened, sign in to Claude with this account and allow access. If Google sign-in does not open, use email or Open in browser.",
-                        )
-                      : t(
-                          "Tarayıcıda seçtiğin hesabı onayla. Bu ekran otomatik güncellenecek.",
-                          "Authorize your chosen account in the browser. This screen updates automatically.",
-                        )}
-          </p>
+          {note && <p className="text-sm text-muted-foreground">{note}</p>}
         </div>
       </div>
       {flow.status === "connected" && flowAccount?.auth?.email && (
@@ -304,7 +262,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
           <p className="rounded-md bg-amber-500/10 px-2.5 py-1.5 text-sm text-amber-700 dark:text-amber-400">
             {t(
               "Bu hesap başka bir profile de bağlı. İki profil aynı limitleri paylaşır.",
-              "This account is connected to another profile too. Both profiles share the same limits.",
+              "This account is also connected to another profile. Both profiles share the same limits.",
             )}
           </p>
         )}
@@ -331,38 +289,21 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
               : flow.status === "cancelled"
                 ? t("Giriş iptal edildi", "Sign-in cancelled")
                 : flow.status === "verifying"
-                  ? t("Hesap doğrulanıyor", "Verifying account")
+                  ? t("Hesap doğrulanıyor", "Relay verifies the account")
                   : flow.status === "waiting"
-                    ? t(
-                        "Tarayıcı onayı bekleniyor",
-                        "Waiting for browser approval",
-                      )
-                    : t("Giriş hazırlanıyor", "Preparing sign-in")
+                    ? flow.inWindow
+                      ? t("Pencerede onayla", "Approve in the window")
+                      : t("Tarayıcıda onayla", "Approve in the browser")
+                    : t("Giriş başlıyor", "Sign-in starts")
         }
         steps={[
-          {
-            title: t("Girişi başlat", "Start sign-in"),
-            detail: t(
-              "Giriş sayfası hazırlanır",
-              "The sign-in page is prepared",
-            ),
-          },
+          { title: t("Girişi başlat", "Start sign-in") },
           {
             title: flow.inWindow
               ? t("Pencerede onayla", "Approve in the window")
-              : t("Tarayıcıda onayla", "Approve in browser"),
-            detail: t(
-              "Hesabını seç ve izin ver",
-              "Choose and authorize your account",
-            ),
+              : t("Tarayıcıda onayla", "Approve in the browser"),
           },
-          {
-            title: t("Bağlantıyı doğrula", "Verify connection"),
-            detail: t(
-              "Relay sonucu otomatik kontrol eder",
-              "Relay checks the result automatically",
-            ),
-          },
+          { title: t("Hesabı doğrula", "Verify the account") },
         ]}
       />
       {flow.codeRequested && (

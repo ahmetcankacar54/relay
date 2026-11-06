@@ -1,4 +1,5 @@
-import { KeyRound, RefreshCw } from "lucide-react";
+import { KeyRound } from "lucide-react";
+import { RefreshIcon } from "@/components/icons";
 import type { AccountUsage } from "../../shared/types";
 import { freshUsage, lastKnownUsage, windowHolds } from "../../shared/usage";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ import { formatRelative, formatReset } from "@/lib/time";
 import { planLabel } from "../pages/accounts/accountLabels";
 
 export const panelEyebrow =
-  "mb-1 flex items-center justify-between gap-2 px-1 text-[11.5px] font-medium text-muted-foreground";
+  "mb-1 flex items-center justify-between gap-2 px-1 text-2xs font-medium text-muted-foreground";
 export const panelCard = "rounded-[10px] border bg-card px-3 py-2.5";
 
 /** The pending-Desktop hint links to the accounts page, where it is completed. */
@@ -80,12 +81,12 @@ export function PanelActiveCard({ now }: { now: number }) {
         disabled={relay.usageBusy.has(active.id)}
         onClick={() => void relay.refreshUsage(active)}
       >
-        <RefreshCw />
+        <RefreshIcon />
       </Button>
     ));
   const title = active && (
     <div className="flex min-w-0 items-center gap-1.5">
-      <span className="truncate text-[13.5px] font-bold" title={active.name}>
+      <span className="truncate text-sm font-bold" title={active.name}>
         {active.name}
       </span>
       {plan && <Badge variant="secondary">{plan}</Badge>}
@@ -111,7 +112,7 @@ export function PanelActiveCard({ now }: { now: number }) {
             <Button
               variant="link"
               size="sm"
-              className="h-auto px-0 text-[12.5px]"
+              className="h-auto px-0 text-xs"
               onClick={openRelay}
             >
               {t("Relay’i aç", "Open Relay")}
@@ -182,8 +183,8 @@ export function PanelActiveCard({ now }: { now: number }) {
       ) : relay.pendingDesktop ? (
         <p className="mt-1.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
           {t(
-            "Claude uygulaması girişi tamamlanmayı bekliyor",
-            "Claude app sign-in is waiting to be completed",
+            "Claude uygulaması girişini tamamla",
+            "Finish the Claude app sign-in",
           )}{" "}
           ·
           <Button

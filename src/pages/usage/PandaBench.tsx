@@ -123,7 +123,7 @@ export function PandaBench({
       </div>
       <p
         data-slot="panda-line"
-        className="mt-2 rounded-lg bg-muted px-2.5 py-2 text-[13px] leading-snug"
+        className="mt-2 rounded-lg bg-muted px-2.5 py-2 text-sm leading-snug"
       >
         {t(line.tr, line.en)}
       </p>

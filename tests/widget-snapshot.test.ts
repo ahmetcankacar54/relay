@@ -94,7 +94,7 @@ test("the widget file carries today's numbers and every string, formatted in Tur
     allToday: "Bugün · tüm hesaplar",
     switch: "Geç",
     left: "kaldı",
-    noActive: "Claude’da Relay hesabı açık değil",
+    noActive: "Kayıtlı hesap açık değil",
   });
   // Without Relay's accounts and days the widget has no accounts to show.
   assert.equal(snap.active, undefined);

@@ -54,46 +54,37 @@ export function HistorySummary({
       </div>
       <p className="text-muted-foreground">
         {failed
-          ? t("Geçmiş bilgisi okunamadı.", "Could not read history metadata.")
+          ? t("Geçmiş okunamadı. Yeniden kontrol et.", "Cannot read the history. Check again.")
           : value
             ? t(
                 `${value.indexed} oturum · ${value.projects} yerel proje · ${value.archived} arşivlenmiş`,
                 `${value.indexed} ${value.indexed === 1 ? "session" : "sessions"} · ${value.projects} local ${value.projects === 1 ? "project" : "projects"} · ${value.archived} archived`,
               )
-            : t("Yerel kayıtlar kontrol ediliyor…", "Checking local records…")}
+            : t("Okunuyor…", "Read in progress…")}
       </p>
       {value && (
         <p className="text-muted-foreground">
           {t(
-            `${value.transcriptsFound} konuşma dosyası bulundu; ${value.missingTranscripts} eksik, ${value.unknownTranscripts} dosyanın konumu doğrulanamadı.`,
-            `${value.transcriptsFound} conversation ${value.transcriptsFound === 1 ? "file" : "files"} found; ${value.missingTranscripts} missing, ${value.unknownTranscripts} ${value.unknownTranscripts === 1 ? "location" : "locations"} unverified.`,
+            `${value.transcriptsFound} konuşma dosyası · ${value.missingTranscripts} eksik · ${value.unknownTranscripts} doğrulanamadı`,
+            `${value.transcriptsFound} conversation ${value.transcriptsFound === 1 ? "file" : "files"} · ${value.missingTranscripts} missing · ${value.unknownTranscripts} unverified`,
           )}
         </p>
       )}
       {value && value.duplicates > 0 && (
         <p className="text-muted-foreground">
           {t(
-            `${value.duplicates} yinelenen kart sonraki geçiş veya birleştirmede temizlenecek.`,
-            `${value.duplicates} duplicate ${value.duplicates === 1 ? "card" : "cards"} will be removed on the next switch or merge.`,
+            `Sonraki geçiş veya birleştirmede ${value.duplicates} yinelenen kart kaldırılır.`,
+            `Relay removes ${value.duplicates} duplicate ${value.duplicates === 1 ? "card" : "cards"} at the next switch or merge.`,
           )}
         </p>
       )}
       <small className="text-xs text-muted-foreground">
         {sources.length
           ? t(
-              `Sonraki birleştirmede geçmişi alınacak hesaplar: ${sources.map((a) => a.name).join(", ")}.`,
-              `Sources on next merge: ${sources.map((a) => a.name).join(", ")}.`,
+              `Sonraki birleştirmede geçmiş alınacak hesaplar: ${sources.map((a) => a.name).join(", ")}`,
+              `History sources for the next merge: ${sources.map((a) => a.name).join(", ")}`,
             )
-          : t(
-              "Paylaşılacak başka hesap seçili değil.",
-              "No other account is selected as a sharing source.",
-            )}
-      </small>
-      <small className="text-xs text-muted-foreground">
-        {t(
-          "Dosyanın bulunması, başka hesabın konuşmayı sürdürebileceğini tek başına doğrulamaz.",
-          "Finding a file alone does not verify that another account can resume the conversation.",
-        )}
+          : t("Geçmiş alınacak hesap yok", "No history sources")}
       </small>
     </div>
   );

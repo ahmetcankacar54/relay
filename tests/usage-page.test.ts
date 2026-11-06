@@ -227,7 +227,7 @@ test("the daily chart draws one labelled bar group per day, in full periods, and
   assert.equal(groups.length, 30);
   assert.match(html, /aria-label="14 Eki: 120 dolu dönem, limite takıldı"/);
   assert.match(html, /aria-label="15 Eyl: 0 dolu dönem"/);
-  assert.equal((html.match(/<path d="[^"]+" fill="var\(--crit\)"/g) ?? []).length, 3);
+  assert.equal((html.match(/<path d="[^"]+" fill="var\(--muted-foreground\)"/g) ?? []).length, 3);
   assert.match(html, /fill="var\(--tone-1\)"/);
   assert.match(html, /fill="var\(--tone-4\)"/);
   assert.doesNotMatch(html, /<title>/);
@@ -282,7 +282,7 @@ test("limit hits are a table, newest first, with how long each stayed full", () 
   const en = text(render(createElement(LimitHits, { view, zone: ZONE }), "en"));
   assert.match(en, /Former accountweeklyongoing/);
   const quiet = text(render(createElement(LimitHits, { view: { ...view, hits: [] }, zone: ZONE })));
-  assert.match(quiet, /Bu dönemde limite takılma yok/);
+  assert.match(quiet, /Bu aralıkta limite takılma yok/);
 });
 
 test("the statistics section is limits only, with the explanation behind a disclosure", () => {
@@ -304,19 +304,19 @@ test("the statistics section is limits only, with the explanation behind a discl
 test("the statistics section shows the empty, unavailable, no-identity, loading and error states", () => {
   const section = (state: Parameters<typeof UsageStatisticsSection>[0]["state"], accountId?: string) =>
     text(render(createElement(UsageStatisticsSection, { state, accounts, zone: ZONE, accountId })));
-  assert.match(section({ view: emptyView("empty"), loading: false }), /Veri birikiyor/);
+  assert.match(section({ view: emptyView("empty"), loading: false }), /Henüz veri yok/);
   const unavailable = section({ view: emptyView("unavailable"), loading: false });
   assert.match(unavailable, /Kullanım geçmişi okunamadı/);
   assert.match(unavailable, /Canlı limitler çalışmaya devam eder/);
   assert.match(section({ view: emptyView("empty"), loading: false }, "c"), /Bu hesap için kullanım kaydı yok/);
   // A connected account with no rows yet is still "collecting".
-  assert.match(section({ view: emptyView("empty"), loading: false }, "a"), /Veri birikiyor/);
+  assert.match(section({ view: emptyView("empty"), loading: false }, "a"), /Henüz veri yok/);
   // A signed-out account keeps the history recorded under its identity.
   const signedOut: Account = { ...a, id: "d", name: "Signed out", auth: { ...a.auth!, loggedIn: false } };
   const withSignedOut = text(render(createElement(UsageStatisticsSection, {
     state: { view: emptyView("empty"), loading: false }, accounts: [...accounts, signedOut], zone: ZONE, accountId: "d",
   })));
-  assert.match(withSignedOut, /Veri birikiyor/);
+  assert.match(withSignedOut, /Henüz veri yok/);
   assert.doesNotMatch(withSignedOut, /Bu hesap için kullanım kaydı yok/);
   assert.match(section({ loading: true }), /İstatistikler yükleniyor/);
   assert.match(section({ loading: false, error: "boom" }), /İstatistikler alınamadı/);
@@ -330,8 +330,8 @@ test("the statistics section shows the empty, unavailable, no-identity, loading 
 
   const en = (state: Parameters<typeof UsageStatisticsSection>[0]["state"], accountId?: string) =>
     text(render(createElement(UsageStatisticsSection, { state, accounts, zone: ZONE, accountId }), "en"));
-  assert.match(en({ view: emptyView("empty"), loading: false }), /Collecting data/);
-  assert.match(en({ view: emptyView("unavailable"), loading: false }), /Usage history could not be read/);
+  assert.match(en({ view: emptyView("empty"), loading: false }), /No data yet/);
+  assert.match(en({ view: emptyView("unavailable"), loading: false }), /Cannot read the usage history/);
   assert.match(en({ view: emptyView("empty"), loading: false }, "c"), /No usage record for this account/);
 });
 
@@ -349,28 +349,27 @@ test("the header offers 7/30/90 days and an account filter", () => {
   assert.match(filtered, /7 days/);
 });
 
-test("Usage is three tabs and opens the limits, with the range and account filter, by default", () => {
+test("Usage's limits page has the range and account filter, and no tabs", () => {
   const html = text(render(createElement(Usage)));
-  assert.match(html, /LimitlerToken ve ücretRozetler/);
+  assert.match(html, /Limitler/);
+  assert.doesNotMatch(html, /role="tab"|Token ve ücretRozetler/);
   // The warnings moved to Settings → Notifications.
   assert.doesNotMatch(html, /Uyarılar/);
   assert.match(html, /30 gün/);
   assert.match(html, /Tüm hesaplar/);
   assert.match(html, /İstatistikler yükleniyor/);
-  // Only the open tab is drawn.
+  // Only the page's own section is drawn.
   assert.doesNotMatch(html, /Token kullanımı|Kayıp Eşya Bürosu|Limit uyarıları/);
-  assert.match(text(render(createElement(Usage), "en")), /LimitsTokens and costPins/);
+  assert.match(text(render(createElement(Usage), "en")), /Limits/);
 });
 
-test("Usage reopens the tab last open, and shows the range and account filter only with limits and tokens", async () => {
-  for (const [stored, shows, hides] of [
-    // A tab an older Relay remembered and that is gone opens the limits.
-    ["warnings", /İstatistikler yükleniyor/, /Limit uyarıları/],
+test("each Usage page draws its own section, and the range and account filter only with limits and tokens", async () => {
+  for (const [section, shows, hides] of [
+    ["limits", /İstatistikler yükleniyor/, /Token kullanımı|Rozet koleksiyonu/],
     ["lost", /Rozet koleksiyonu/, /30 gün|Tüm hesaplar/],
     ["tokens", /Token kullanımı.*/, /İstatistikler yükleniyor/],
-    ["nonsense", /İstatistikler yükleniyor/, /Limit uyarıları/],
   ] as const) {
-    const dom = fakeDom({ localStorage: () => ({ getItem: () => stored, setItem() {} }) });
+    const dom = fakeDom({ localStorage: () => ({ getItem: () => null, setItem() {} }) });
     dom.install();
     readableText();
     const relay = {
@@ -390,13 +389,13 @@ test("Usage reopens the tab last open, and shows the range and account filter on
           createElement(
             I18nContext.Provider,
             { value: i18n("tr") },
-            createElement(RelayContext.Provider, { value: relay }, createElement(Usage)),
+            createElement(RelayContext.Provider, { value: relay }, createElement(Usage, { section })),
           ),
         ),
       );
       const shown = textOf(dom.container as unknown as Fake);
-      assert.match(shown, shows, stored);
-      assert.doesNotMatch(shown, hides, stored);
+      assert.match(shown, shows, section);
+      assert.doesNotMatch(shown, hides, section);
       await act(async () => root.unmount());
     } finally {
       dom.uninstall();
@@ -415,7 +414,7 @@ test("the warning threshold is phrased as what is used, for the stored values 80
 
 test("Settings calls the warning threshold's scope usage, not a window, in English", () => {
   const html = text(render(createElement(Settings, { tab: "bildirimler" as const }), "en"));
-  assert.match(html, /When 5-hour or weekly usage reaches this share\./);
+  assert.match(html, /For the 5-hour and weekly periods\./);
   assert.doesNotMatch(html, /usage window/);
 });
 

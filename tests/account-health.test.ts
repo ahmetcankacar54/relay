@@ -42,12 +42,12 @@ const health = (
 test("1. a pending browser approval wins over every other problem and has no fix", () => {
   const h = health(base, ready, { waiting: true });
   assert.equal(h.tone, "warn");
-  assert.equal(h.label, "Tarayıcı onayı bekleniyor");
+  assert.equal(h.label, "Tarayıcıda onayla");
   assert.equal(h.fix, undefined);
-  assert.equal(health(base, ready, { waiting: true }, "en").label, "Waiting for browser approval");
+  assert.equal(health(base, ready, { waiting: true }, "en").label, "Approve in the browser");
   // Even with no Claude app sign-in and an expired usage sign-in.
   const worst = health(noDesktop, issue("expired"), { waiting: true });
-  assert.equal(worst.label, "Tarayıcı onayı bekleniyor");
+  assert.equal(worst.label, "Tarayıcıda onayla");
   assert.equal(worst.fix, undefined);
 });
 
@@ -164,7 +164,7 @@ test("a failed or old usage read is out of date, not ready, wherever the account
 
 test("an account with several problems shows the highest one, and the next once it clears", () => {
   // Claude app sign-in saved, usage sign-in expired, a browser approval pending.
-  assert.equal(health(base, issue("expired"), { waiting: true }).label, "Tarayıcı onayı bekleniyor");
+  assert.equal(health(base, issue("expired"), { waiting: true }).label, "Tarayıcıda onayla");
   assert.equal(health(base, issue("expired")).label, "Limit okuma girişi gerekli");
 });
 
@@ -239,8 +239,8 @@ test("the usage sign-in row's status agrees with the header's tone and the detai
   assert.deepEqual(status(base, ready), { tone: "ok", label: "Bağlı" });
   assert.deepEqual(status(base, undefined, false, "en"), { tone: "ok", label: "Connected" });
   // A pending approval says so, whatever the sign-in's state.
-  assert.deepEqual(status(base, issue("expired"), true), { tone: "warn", label: "Tarayıcı onayı bekleniyor" });
-  assert.equal(status(base, ready, true, "en").label, "Waiting for browser approval");
+  assert.deepEqual(status(base, issue("expired"), true), { tone: "warn", label: "Tarayıcıda onayla" });
+  assert.equal(status(base, ready, true, "en").label, "Approve in the browser");
 });
 
 test("a disclosure is a button that opens its content, and renders nothing while closed", () => {
@@ -355,7 +355,7 @@ test("3. a usage sign-in of another account than the Claude app's is critical, b
     }
   assert.equal(health(mismatched, ready, {}, "en").label, "Usage sign-in needed");
   // A pending approval and a missing Claude app sign-in still come first.
-  assert.equal(health(mismatched, ready, { waiting: true }).label, "Tarayıcı onayı bekleniyor");
+  assert.equal(health(mismatched, ready, { waiting: true }).label, "Tarayıcıda onayla");
   // The same identity is no mismatch.
   const same: Account = { ...base, auth: { ...base.auth!, accountUuid: desktop.accountUuid, orgId: desktop.orgId } };
   assert.equal(health(same, ready).label, "Hazır");

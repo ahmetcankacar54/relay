@@ -35,8 +35,8 @@ export function SetupChecklist() {
       title: t("Claude uygulaması", "Claude app"),
       status: met("desktop") ? t("Bulundu", "Found") : t("Bulunamadı", "Not found"),
       reason: t(
-        "Relay, Claude uygulamasında hesaplar arasında geçiş yapar.",
-        "Relay switches the Claude app between accounts.",
+        "Relay için Claude uygulaması gerekir.",
+        "Relay needs the Claude app.",
       ),
       action: <ClaudeAppActions />,
     },
@@ -44,8 +44,8 @@ export function SetupChecklist() {
       title: "Claude Code CLI",
       status: cliDetail(state.cli, diagnostics?.version, t),
       reason: t(
-        "Limitleri okumak için gerekir. Code açılınca Claude uygulaması indirir; gelmezse resmi CLI’yi kur.",
-        "Needed to read usage limits. The Claude app downloads it with Code; if it does not come, install the official CLI.",
+        "Limitleri okumak için gerekir. Claude uygulamasında Code’u açınca iner; inmezse resmi CLI’yi kur.",
+        "Relay uses it to read the limits. Open Code in the Claude app to get it, or install the official CLI.",
       ),
       action: <CliSetupActions />,
     },
@@ -55,8 +55,8 @@ export function SetupChecklist() {
         ? t("Çalışma alanı bulundu", "Workspace found")
         : t("Henüz açılmadı", "Not opened yet"),
       reason: t(
-        "Claude uygulamasında sol menüden Code’u bir kez aç; Claude Code da böylece iner.",
-        "Open Code once from the Claude app’s sidebar; that also downloads Claude Code.",
+        "Claude uygulamasında sol menüden Code’u bir kez aç.",
+        "Open Code one time from the Claude app sidebar.",
       ),
       // Without the Claude app the first row already names the step.
       action: desktop?.available && (
@@ -74,9 +74,9 @@ export function SetupChecklist() {
     },
   };
   return (
-    <Card className="gap-0 px-4 py-3.5" role="region" aria-label={title}>
+    <Card className="gap-0 px-4 py-3" role="region" aria-label={title}>
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="font-semibold">{title}</span>
+        <span className="text-sm font-semibold">{title}</span>
         <span className="text-xs text-muted-foreground">
           {`${state.items.filter((i) => i.met).length} / ${state.items.length}`}
         </span>
@@ -89,15 +89,15 @@ export function SetupChecklist() {
               key={key}
               data-prerequisite={key}
               data-met={String(met)}
-              className="flex items-start gap-2.5 border-t py-2.5 first:border-0"
+              className="flex items-start gap-2.5 border-t py-2 first:border-0"
             >
               {met ? (
                 <Check
                   aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-ok-foreground"
+                  className="mt-px size-4 shrink-0 text-ok-foreground"
                 />
               ) : (
-                <X aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-crit" />
+                <X aria-hidden="true" className="mt-px size-4 shrink-0 text-crit" />
               )}
               <div className="grid min-w-0 flex-1 gap-1">
                 <div className="flex flex-wrap items-baseline gap-x-2 text-sm">

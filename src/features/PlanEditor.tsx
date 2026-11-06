@@ -27,7 +27,7 @@ export function PlanEditor({
     [current.capacityWeight],
   );
   const plans: { value: AccountPlanning["plan"]; label: string }[] = [
-    { value: "unknown", label: t("Plan seç", "Choose plan") },
+    { value: "unknown", label: t("Plan seç", "Select plan") },
     { value: "pro", label: "Pro · 1×" },
     { value: "max5", label: "Max · 5×" },
     { value: "max20", label: "Max · 20×" },

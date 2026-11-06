@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -10,8 +9,6 @@ import { Usage } from "@/pages/Usage";
 import { Settings } from "@/pages/Settings";
 import { Accounts } from "@/pages/Accounts";
 import { Overview } from "@/pages/Overview";
-// 24 px in the sidebar: the 64 px rendering is sharp at 2×, without the 1 MB icon.png.
-import relayIcon from "../../assets/icons/app-64.png";
 import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
 import { RelayPrankStage } from "@/pranks/RelayPrankStage";
 import { cardState, cardYields, desktopWorking } from "@/mascot/card-panda";
@@ -21,12 +18,27 @@ import { DesktopActionDialog } from "./DesktopActionDialog";
 import { intentHash, shortcutPage } from "./routes";
 import { useHashRoute } from "./useHashRoute";
 import { useMediaQuery } from "./useMediaQuery";
+import { useSidebarSize } from "./useSidebarSize";
 
 export function Shell() {
   const relay = useRelay();
   const { t } = useI18n();
   const [page, go] = useHashRoute();
-  const compact = useMediaQuery("(max-width: 839px)");
+  // A narrow window always shows the icon rail; a wider one shows what the user chose.
+  const narrow = useMediaQuery("(max-width: 899px)");
+  const [sidebar, setSidebar] = useSidebarSize();
+  const compact = narrow || sidebar.collapsed;
+  const sidebarRef = useRef({ sidebar, narrow });
+  useEffect(() => {
+    sidebarRef.current = { sidebar, narrow };
+  });
+  // A narrow window always shows the rail, so the toggle would only flip a hidden, saved state.
+  const toggleSidebar = () => {
+    const { sidebar: current, narrow: forced } = sidebarRef.current;
+    if (!forced) setSidebar({ ...current, collapsed: !current.collapsed });
+  };
+  // The page toolbar shows its bottom edge once content scrolls under it.
+  const [scrolled, setScrolled] = useState(false);
   const relayRef = useRef(relay);
   const mainRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -45,6 +57,10 @@ export function Shell() {
       if (target) {
         e.preventDefault();
         go(target);
+      } else if (e.metaKey && e.ctrlKey && e.key.toLowerCase() === "s") {
+        // ⌃⌘S shows or hides the sidebar, as in the macOS apps.
+        e.preventDefault();
+        if (!e.repeat) toggleSidebar();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         if (e.repeat) return;
@@ -99,13 +115,16 @@ export function Shell() {
     <TooltipProvider delayDuration={300}>
       <RelayPrankStage>
         <MainWindowPranks />
-        <div className="flex h-screen overflow-hidden bg-background text-foreground">
+        <div className="flex h-screen overflow-hidden bg-sidebar text-foreground vibrant:bg-transparent">
           <Sidebar
             page={page}
             go={go}
             t={t}
             compact={compact}
-            icon={relayIcon}
+            width={sidebar.width}
+            collapsed={compact}
+            onResize={narrow ? undefined : setSidebar}
+            onToggle={narrow ? undefined : toggleSidebar}
             panda={<CardPanda view={panda.view} />}
             onPoke={panda.poke}
             status={sidebarStatus(relay.data)}
@@ -118,23 +137,20 @@ export function Shell() {
             }
           />
           <main
-            className="relative flex min-w-0 flex-1 flex-col overflow-y-auto"
+            className="group/main relative flex min-w-0 flex-1 flex-col overflow-y-auto border-l bg-background"
             ref={mainRef}
+            data-scrolled={scrolled || undefined}
+            onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
           >
-            {/* In the 56 px rail the macOS traffic lights overhang into this column; keep it clear. */}
-            <div
-              className={cn(
-                "shrink-0 [-webkit-app-region:drag]",
-                compact ? "h-8" : "h-2",
-              )}
-            />
             <div
               key={page}
               className="flex flex-1 flex-col animate-in fade-in-0 duration-150 motion-reduce:animate-none"
             >
               {page === "genel" && <Overview go={go} />}
               {page === "hesaplar" && <Accounts />}
-              {page === "kullanim" && <Usage />}
+              {page === "kullanim" && <Usage section="limits" />}
+              {page === "tokenlar" && <Usage section="tokens" />}
+              {page === "rozetler" && <Usage section="lost" />}
               {page === "ayarlar" && <Settings />}
             </div>
           </main>

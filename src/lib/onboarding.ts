@@ -24,7 +24,7 @@ export function cliDetail(state: CliState, version: string | undefined, t: T) {
     case "missing":
       return t("Bulunamadı", "Not found");
     case "unreadable":
-      return t("Sürümü okunamadı", "Its version couldn’t be read");
+      return t("Sürümü okunamadı", "Cannot read its version");
     case "outdated":
       return t(
         `${version} · ${USAGE_CLI_VERSION} veya üstü gerekir`,
@@ -108,7 +108,7 @@ export function blockReason(block: Block | undefined, t: T) {
     case "no-desktop":
       return t(
         "Claude uygulaması bulunamadı; önce onu kur.",
-        "The Claude app wasn’t found; install it first.",
+        "Relay cannot find the Claude app. Install it first.",
       );
     case "recovery":
       return t(
@@ -123,7 +123,7 @@ export function blockReason(block: Block | undefined, t: T) {
     case "busy":
       return t(
         "Claude uygulamasında bir işlem sürüyor.",
-        "A Claude app operation is in progress.",
+        "A Claude app action is in progress.",
       );
     case "limit":
       return t("En fazla 50 hesap eklenebilir.", "You can add up to 50 accounts.");
@@ -138,8 +138,8 @@ export function blockReason(block: Block | undefined, t: T) {
 /** The Code-tab step, where a workspace folder is needed and none exists yet. */
 export const codeTabStep = (t: T) =>
   t(
-    "Claude uygulamasında sol menüden Code’u bir kez aç; liste kendiliğinden dolar.",
-    "Open Code once from the sidebar in the Claude app; the list fills in on its own.",
+    "Claude uygulamasında sol menüden Code’u bir kez aç.",
+    "In the Claude app, open Code once from the sidebar.",
   );
 
 /**

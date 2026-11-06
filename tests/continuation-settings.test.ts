@@ -75,8 +75,8 @@ test("read-only readiness does not arm or authorize a continuation, and unavaila
   const ready = render();
   assert.match(consentTag(ready) ?? "", /aria-checked="false"/);
   assert.match(buttonTag(ready, "Watch this conversation") ?? "", /disabled=""/);
-  assert.match(ready, /restart the Claude app/);
-  assert.match(ready, /one continuation message/);
+  assert.match(ready, /restarts the Claude app/);
+  assert.match(ready, /one continue message/);
   const unavailable = render({ executable: false });
   assert.match(unavailable, /Automatic continuation cannot be enabled/);
   assert.match(consentTag(unavailable) ?? "", /disabled=""/);
@@ -88,16 +88,16 @@ test("execution and verified completion remain visible when an older observation
     { status: "executing", reason: "checkpointed-handoff", enabled: true },
     "accessibility-permission-required",
   );
-  assert.match(executing, /Verifying the saved conversation/);
+  assert.match(executing, /Relay verifies the saved conversation/);
   assert.doesNotMatch(executing, /Allow Relay in macOS Accessibility/);
   const completed = render(
     { status: "continued", reason: "new-turn-verified", enabled: false },
     "claude-not-running",
   );
   assert.match(completed, /new response started in the same conversation/);
-  assert.match(completed, /permission mode preserved/);
+  assert.match(completed, /with the same permission mode/);
   assert.match(completed, /one-time watch is complete/);
-  assert.doesNotMatch(completed, /Open the Claude app and choose/);
+  assert.doesNotMatch(completed, /Open the Claude app and select/);
 });
 
 test("ambiguous delivery keeps its non-repeat explanation instead of an unrelated observation error", () => {
@@ -109,18 +109,18 @@ test("ambiguous delivery keeps its non-repeat explanation instead of an unrelate
     },
     "composer-not-empty",
   );
-  assert.match(html, /whether the continuation message arrived/);
-  assert.match(html, /It will not be sent again/);
-  assert.doesNotMatch(html, /message field has a draft/);
+  assert.match(html, /whether the continue message arrived/);
+  assert.match(html, /Relay does not send it again/);
+  assert.doesNotMatch(html, /message field in the Claude app has a draft/);
 });
 
 test("each guarded wait explains the actual work and retains a way to turn watching off", () => {
   const reasons: Record<string, RegExp> = {
-    "awaiting-quota-stop": /percentage alone does not trigger a switch/,
-    "not-quiescent:busyWorkers": /Another response or operation is running/,
-    "not-quiescent:subagents": /A subtask is still running/,
-    "not-quiescent:waiting": /waiting for approval or input/,
-    "not-quiescent:unknownWork": /Could not verify the state of some tasks/,
+    "awaiting-quota-stop": /percentage alone does not start a switch/,
+    "not-quiescent:busyWorkers": /Another response or operation runs/,
+    "not-quiescent:subagents": /A subtask still runs/,
+    "not-quiescent:waiting": /waits for approval or input/,
+    "not-quiescent:unknownWork": /Relay cannot verify the state of some tasks/,
   };
   for (const [reason, expected] of Object.entries(reasons)) {
     const html = render({ status: "waiting", reason, enabled: true });
@@ -137,7 +137,7 @@ test("changing a selected conversation pauses the retained watch and tells the u
     enabled: true,
   });
   assert.match(html, /different conversation is open/);
-  assert.match(html, /Switching is paused/);
+  assert.match(html, /The switch is on hold/);
   assert.match(html, /Turn off watching/);
   assert.doesNotMatch(html, /This watch stopped/);
   const tr = render(
@@ -154,9 +154,9 @@ test("automatic watching presents capacity selection without a fixed target cont
   assert.doesNotMatch(html, /<select/);
   assert.match(html, /Automatic · by remaining capacity/);
   assert.match(html, /1 connected account · checked at handoff/);
-  assert.match(html, /switch to an eligible account and send one continuation/);
-  assert.match(html, /chosen by current quota and plan capacity/);
-  assert.match(html, /enable watching again to include accounts added later/);
+  assert.match(html, /switches to an eligible account and sends one continue message/);
+  assert.match(html, /selects the account by current limit and plan capacity/);
+  assert.match(html, /To include accounts that you add later, turn watching on again/);
 });
 
 test("an automatic watch explains missing live quota and reveals a frozen target only after selection", () => {
@@ -171,7 +171,7 @@ test("an automatic watch explains missing live quota and reveals a frozen target
   assert.match(waiting, /2 connected accounts · checked at handoff/);
   assert.match(
     waiting,
-    /No connected account in the shared history scope has fresh, sufficient quota/,
+    /No connected account in the shared history scope has enough current limit/,
   );
   assert.doesNotMatch(text(waiting), /Target account/);
   const pending = render({
@@ -181,7 +181,7 @@ test("an automatic watch explains missing live quota and reveals a frozen target
   });
   assert.match(text(pending), /Target account/);
   assert.match(pending, /b@example.test/);
-  assert.match(pending, /It will not be sent again/);
+  assert.match(pending, /Relay does not send it again/);
 });
 
 test("a previous fixed-target watch does not imply newly expanded automatic authorization", () => {
@@ -191,9 +191,9 @@ test("a previous fixed-target watch does not imply newly expanded automatic auth
     enabled: true,
   });
   assert.match(text(html), /Target account/);
-  assert.match(html, /This earlier watch retains its saved target account/);
+  assert.match(html, /This watch is from an earlier version and keeps its saved target account/);
   assert.match(
     html,
-    /Turn watching off and on to use automatic account selection/,
+    /To use automatic account selection, turn watching off and on/,
   );
 });

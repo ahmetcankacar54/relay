@@ -372,7 +372,7 @@ export function buildWidgetSnapshot(
       change: today.change === null ? "" : formatChange(today.change, language),
       status:
         state === "scanning"
-          ? t(`Relay tarıyor… ${percent}`, `Relay is scanning… ${percent}`)
+          ? t(`Relay tarıyor… ${percent}`, `Scan: ${percent}`)
           : state === "empty"
             ? t("Bugün henüz token yok", "No tokens yet today")
             : "",
@@ -393,8 +393,8 @@ export function buildWidgetSnapshot(
       switch: t("Geç", "Switch"),
       left: t("kaldı", "left"),
       noActive: t(
-        "Claude’da Relay hesabı açık değil",
-        "No Relay account is open in Claude",
+        "Kayıtlı hesap açık değil",
+        "No saved account is open",
       ),
     },
   };

@@ -56,7 +56,7 @@ test("compact sidebar keeps accessible names", () => {
   assert.match(html, /aria-label="Ayarlar"/);
 });
 
-test("limit meter shows what is used and uses its tone colour", () => {
+test("limit meter shows what is used, with a grey fill below a used-up limit", () => {
   const html = renderToStaticMarkup(
     createElement(LimitMeter, {
       label: "Haftalık",
@@ -66,7 +66,7 @@ test("limit meter shows what is used and uses its tone colour", () => {
   );
   assert.match(html, /%78/);
   assert.match(html, /kullanıldı/);
-  assert.match(html, /bg-warn/);
+  assert.match(html, /bg-meter/);
   assert.match(html, /role="meter"/);
 });
 
@@ -137,19 +137,19 @@ test("sidebar buttons override the legacy centred button style and the summary c
     );
   const html = sidebar(true);
   const buttons = html.match(/<button[\s\S]*?<\/button>/g) ?? [];
-  assert.equal(buttons.length, 5);
+  assert.equal(buttons.length, 7);
   for (const b of buttons) {
     const tag = /^<button[^>]*>/.exec(b)?.[0] ?? "";
     assert.match(tag, /class="[^"]*text-left/);
     assert.doesNotMatch(tag, /justify-center/);
   }
-  // The four pages start their row on the left.
+  // The six pages start their row on the left.
   const pages = buttons.filter((b) => !b.includes("Kişisel · Max"));
-  assert.equal(pages.length, 4);
+  assert.equal(pages.length, 6);
   for (const b of pages) assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
-  // The summary card: a single 30 px ring for the five hours and its percent, inside the card's button.
+  // The summary card: a single 32 px ring for the five hours and its percent, inside the card's button.
   const summary = buttons.find((b) => b.includes("Kişisel · Max")) ?? "";
-  assert.match(summary, /<div role="img" aria-label="5 saatlik dönem %94 kullanıldı"[^>]*style="width:30px;height:30px"/);
+  assert.match(summary, /<div role="img" aria-label="5 saatlik dönem %94 kullanıldı"[^>]*style="width:32px;height:32px"/);
   // Without a relay to read the reset from, the line is the percent alone.
   assert.match(summary, />%94</);
   assert.doesNotMatch(html, /role="meter"/);
@@ -264,17 +264,18 @@ test("the page scroller contains absolutely positioned page content", () => {
 
 // A short fade between pages. The wrapper is keyed by the page so the animation replays on every switch,
 // keeps the page's flex column so nothing shifts, and stands still when the system asks for less motion.
-test("the shell fades the current page in inside a keyed wrapper, below the drag region", () => {
+test("the shell fades the current page in inside a keyed wrapper; the page toolbar and the sidebar strip drag the window", () => {
   const shell = fs.readFileSync(path.join(import.meta.dirname, "../src/app/Shell.tsx"), "utf8");
   const wrapper = /<div\s+key=\{page\}\s+className="([^"]*)"\s*>/.exec(shell);
   assert.ok(wrapper, "pages sit in a <div key={page}> wrapper");
   const classes = wrapper[1].split(/\s+/);
   for (const c of ["flex", "flex-1", "flex-col", "animate-in", "fade-in-0", "duration-150", "motion-reduce:animate-none"])
     assert.ok(classes.includes(c), c);
-  const drag = shell.indexOf("[-webkit-app-region:drag]");
   const open = wrapper.index;
   const close = shell.indexOf("</div>", shell.indexOf("{page === \"ayarlar\""));
-  assert.ok(drag >= 0 && drag < open, "the drag region stays outside the wrapper");
+  const read = (file: string) => fs.readFileSync(path.join(import.meta.dirname, "../src/app", file), "utf8");
+  assert.match(read("PageHeader.tsx"), /data-slot="toolbar"[\s\S]*sticky top-0[\s\S]*\[-webkit-app-region:drag\]/);
+  assert.match(read("Sidebar.tsx"), /h-13 w-full shrink-0 \[-webkit-app-region:drag\]/);
   for (const page of ["genel", "hesaplar", "kullanim", "ayarlar"]) {
     const at = shell.indexOf(`{page === "${page}"`);
     assert.ok(at > open && at < close, `${page} renders inside the wrapper`);
@@ -295,8 +296,8 @@ test("the shell starts each page at the top by resetting the scroller when the p
 test("muted text keeps AA contrast on the page, cards and muted grounds in light and dark", () => {
   const css = fs.readFileSync(path.join(import.meta.dirname, "../src/styles/theme.css"), "utf8");
   const [light, dark] = css.split("@media (prefers-color-scheme: dark)");
-  assert.match(light, /--muted-foreground:\s*#6e6e73;/);
-  assert.match(dark, /--muted-foreground:\s*#a3a19c;/);
+  assert.match(light, /--muted-foreground:\s*#66666d;/);
+  assert.match(dark, /--muted-foreground:\s*#8e8e96;/);
   // The earlier warm greys are gone.
   assert.doesNotMatch(css, /#685d52|#b3a89b|#73685c|#a3988c/);
   const token = (block: string, name: string) => {

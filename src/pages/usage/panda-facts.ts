@@ -102,13 +102,13 @@ export function pickBook(tokens: number, seed: string): Book | undefined {
   return [...BOOKS].reverse().find((book) => tokens >= book.tokens);
 }
 
-/** "≈ 12 Hobbit kadar" / "≈ 12× The Hobbit", or "about one …" between 1 and 2. */
+/** "≈ 12 Hobbit kadar" / "≈ 12× The Hobbit", or "about as much as …" between 1 and 2. */
 function bookAmount(tokens: number, book: Book) {
   const times = tokens / book.tokens;
   return times < 2
     ? {
         tr: `aşağı yukarı bir ${book.tr} kadar`,
-        en: `about one ${book.en}`,
+        en: `about as much as ${book.en}`,
       }
     : {
         tr: `≈ ${formatTimes(times, "tr")} ${book.tr} kadar`,
@@ -307,7 +307,7 @@ export function pandaLines(input: DayInput): PandaLine[] {
     lines.push({
       key: "read",
       tr: `Claude ${isToday ? "bugün" : "bu gün"} ${formatCount(read, "tr")} token okudu; bir insan durmadan okusa ${time.tr} sürerdi.`,
-      en: `Claude read ${formatCount(read, "en")} tokens ${isToday ? "today" : "this day"}; a person reading nonstop would need ${time.en}.`,
+      en: `Claude read ${formatCount(read, "en")} tokens ${isToday ? "today" : "this day"}; a person who reads nonstop needs ${time.en} for that.`,
     });
   }
   // Only an account carries a day, and only when the range has more than one row to choose from.
@@ -330,7 +330,7 @@ export function pandaLines(input: DayInput): PandaLine[] {
     lines.push({
       key: "estimated",
       tr: "Bu günü limit ölçümlerinden tahmin ettim; ≈ işaretleri ondan.",
-      en: "I worked this day out from limit readings; that is what the ≈ marks mean.",
+      en: "I estimated this day from limit samples; ≈ marks the estimates.",
     });
   const rangeWrote = view.totals.output;
   if (rangeWrote >= TOKENS_PER_PAGE) {

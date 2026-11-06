@@ -116,10 +116,10 @@ test("a day says what Claude wrote, in pages and a book, and what it read, in re
   assert.deepEqual(all.map((l) => l.key), ["wrote", "read", "carried"]);
   // 650 000 tokens are 1,000 pages of 500 words.
   assert.match(all[0].tr, /^Claude bugün ≈ 1\.000 sayfa yazdı; (≈ [\d,]+ .+|aşağı yukarı bir .+) kadar\.$/);
-  assert.match(all[0].en, /^Claude wrote ≈ 1,000 pages today, (≈ [\d.]+× .+|about one .+)\.$/);
+  assert.match(all[0].en, /^Claude wrote ≈ 1,000 pages today, (≈ [\d.]+× .+|about as much as .+)\.$/);
   // 2.9 billion tokens at 238 words a minute.
   assert.equal(all[1].tr, "Claude bugün 2,9 milyar token okudu; bir insan durmadan okusa 18 yıl sürerdi.");
-  assert.equal(all[1].en, "Claude read 2.9 billion tokens today; a person reading nonstop would need 18 years.");
+  assert.equal(all[1].en, "Claude read 2.9 billion tokens today; a person who reads nonstop needs 18 years for that.");
   const earlier = viewOf({ "2026-10-12": { a: cell(counts(500_000, 100_000)) } });
   const past = lines(earlier, "2026-10-12");
   assert.match(past[0].tr, /^Claude bu gün ≈ 150 sayfa yazdı/);

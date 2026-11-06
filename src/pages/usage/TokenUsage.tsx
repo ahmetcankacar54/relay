@@ -145,7 +145,7 @@ function Tile({
 }: {
   label: string;
   value: string;
-  exact: string;
+  exact?: string;
 }) {
   return (
     <div data-slot="token-tile" className="min-w-0">
@@ -194,10 +194,6 @@ function Tiles({ view }: { view: TokenUsageView }) {
         <Tile
           label={t("API karşılığı", "API value")}
           value={`${totals.costEstimated ? "≈" : ""}${formatCost(cost, language)}`}
-          exact={t(
-            "Bu token’lar Anthropic API liste fiyatlarıyla ödenseydi tutacak tutar. Aboneliğinin ücreti bundan ayrıdır.",
-            "What these tokens would cost at Anthropic’s API list prices. Your subscription’s price is separate.",
-          )}
         />
       </div>
     </>
@@ -526,10 +522,7 @@ export function DayTable({
   const { t, language } = useI18n();
   const estimatedTip =
     metric === "cost"
-      ? t(
-          "Hesap eşleşmesi limit ölçümlerinden ya da tutar bu sürümden önce sayılan token’lardan tahmin edildi",
-          "The account was estimated from limit samples, or the amount from tokens counted before this version",
-        )
+      ? t("Hesap ya da tutar tahmin edildi", "Account or amount estimated")
       : t("Limit ölçümlerinden tahmin edildi", "Estimated from limit samples");
   /**
    * A cell's text: "—" for none, "≈" before a value estimated from limit
@@ -716,7 +709,7 @@ function Content({
                 type="single"
                 variant="outline"
                 size="sm"
-                aria-label={t("Ölçü", "Metric")}
+                aria-label={t("Ölçü", "Measure")}
                 value={metric}
                 onValueChange={(v) => v && setMetric(v as Metric)}
               >
@@ -758,7 +751,7 @@ function Content({
         <Note className="text-xs">
           {t(
             `${formatTokens(view.totals.unpriced ?? 0, "tr")} token, fiyatı bilinmeyen modellerden geldi; tutara katılmadı (${view.unpricedModels.join(", ")}).`,
-            `${formatTokens(view.totals.unpriced ?? 0, "en")} tokens are from models with no known price and are left out of the amount (${view.unpricedModels.join(", ")}).`,
+            `${formatTokens(view.totals.unpriced ?? 0, "en")} tokens are from models with no known price and are not in the amount (${view.unpricedModels.join(", ")}).`,
           )}
         </Note>
       )}
@@ -773,8 +766,8 @@ function Content({
       {view.exactSince && !empty && (
         <Note className="text-xs">
           {t(
-            `Kesin hesap eşleşmesi ${formatDay(view.exactSince, "tr")} tarihinden beri tutuluyor; öncesi Relay’in limit ölçümlerinden tahmin edildi (en fazla 14 gün).`,
-            `Exact account matching since ${formatDay(view.exactSince, "en")}; earlier days are estimated from Relay’s limit samples (up to 14 days).`,
+            `Hesap eşleşmesi ${formatDay(view.exactSince, "tr")} tarihinden beri kesin. Önceki günler limit ölçümlerinden tahmin edildi.`,
+            `Account matches are exact from ${formatDay(view.exactSince, "en")}. Earlier days are estimated from limit samples.`,
           )}
         </Note>
       )}
@@ -782,15 +775,15 @@ function Content({
         <Note className="text-xs">
           {t(
             `Konuşma kayıtları taranıyor… ${formatPercent(view.progress.percent, "tr")}`,
-            `Scanning conversation logs… ${formatPercent(view.progress.percent, "en")}`,
+            `Relay scans the conversation logs… ${formatPercent(view.progress.percent, "en")}`,
           )}
         </Note>
       )}
       {view.progress.error && (
         <Note className="text-xs">
           {t(
-            "Token kayıtları saklanamıyor; Relay yeniden başlayınca tarama baştan yapılır.",
-            "Token records cannot be saved; the scan restarts after Relay restarts.",
+            "Token kayıtları saklanamıyor.",
+            "Relay cannot save the token records.",
           )}
         </Note>
       )}
@@ -814,18 +807,18 @@ export function TokenUsageCard({
   const title = t("Token kullanımı", "Token usage");
   return (
     <Card
-      className="min-w-0 gap-3 px-5 py-4"
+      className="min-w-0 gap-3 px-4 py-3.5"
       role={error && !view ? "alert" : undefined}
       aria-busy={(loading && view !== undefined) || undefined}
     >
-      <h3 className="font-display text-[15px] font-semibold">{title}</h3>
+      <h3 className="font-display text-sm font-semibold">{title}</h3>
       {error && view && (
         <Banner tone="error" role="alert">
           <span>
             <b>
               {t(
                 "Token kullanımı yenilenemedi.",
-                "Could not refresh token usage.",
+                "Cannot refresh token usage.",
               )}
             </b>{" "}
             {error}
@@ -837,13 +830,13 @@ export function TokenUsageCard({
       ) : error ? (
         <p className="text-sm text-muted-foreground">
           <b>
-            {t("Token kullanımı alınamadı.", "Could not load token usage.")}
+            {t("Token kullanımı alınamadı.", "Cannot load token usage.")}
           </b>{" "}
           {error}
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          {t("Token kaydı yükleniyor", "Loading token usage")}
+          {t("Token kaydı yükleniyor", "Relay loads the token usage…")}
         </p>
       )}
     </Card>
