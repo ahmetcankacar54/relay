@@ -81,7 +81,7 @@ export interface WidgetOther extends WidgetAccount {
   /** `relay://switch?account=<id>` while switchable: opens Relay's switch review, never switches. */
   link?: string;
   text: WidgetAccount["text"] & {
-    /** "Vertex’e geç · %22" */
+    /** "Vertex’a geç · %22" */
     switchTo: string;
   };
 }

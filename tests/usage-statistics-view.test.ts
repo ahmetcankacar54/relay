@@ -222,15 +222,15 @@ test("insight: an idle account beside a full one suggests shifting the order", (
   // today included; Kişisel fills its windows.
   const alto = account("alto", "Alto", "max5");
   const kisisel = account("kisisel", "Kişisel", "pro");
-  const ALTO = usageIdentity(alto)!;
+  const ANKA = usageIdentity(alto)!;
   const KISISEL = usageIdentity(kisisel)!;
   const idleRollups = (idleFrom: number) => {
     const r = emptyRollups();
-    r.hours[ALTO] = { "2026-10-08T08:00:00.000Z": h(2) };
+    r.hours[ANKA] = { "2026-10-08T08:00:00.000Z": h(2) };
     for (let day = idleFrom; day <= 14; day++)
-      r.hours[ALTO][`2026-10-${String(day).padStart(2, "0")}T09:00:00.000Z`] = h(0);
+      r.hours[ANKA][`2026-10-${String(day).padStart(2, "0")}T09:00:00.000Z`] = h(0);
     // The 11th was not observed: it neither counts nor ends the idle days.
-    r.hours[ALTO]["2026-10-11T09:00:00.000Z"] = h(0, 0, 0);
+    r.hours[ANKA]["2026-10-11T09:00:00.000Z"] = h(0, 0, 0);
     r.hours[KISISEL] = { "2026-10-13T08:00:00.000Z": h(1) };
     r.windows[KISISEL] = [
       { resetAt: "2026-10-12T10:00:00.000Z", maxPercent: 95 },

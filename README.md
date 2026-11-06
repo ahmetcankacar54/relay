@@ -7,18 +7,25 @@ Claude is signed in to, keeps your Code conversations available on every account
 you choose, and shows how much of each account's quota is used. Turkish and English.
 Independent tool, not an Anthropic product.
 
+## Download
+
+Get the latest build from [Releases](../../releases): a DMG for Apple silicon Macs
+(M1 and later), a Windows installer and a Linux AppImage. The builds are not
+notarized; `INSTALL.txt` in each release walks through macOS’s
+one-time "Open Anyway" step.
+
 ## Screens
 
-A sidebar (a 56 px icon rail in narrow windows) opens six pages; the keyboard
-shortcuts are ⌘1–⌘5 and ⌘, for Settings.
+A sidebar (a 56 px icon rail in narrow windows) opens four pages; the keyboard
+shortcuts are ⌘1–⌘3 and ⌘, for Settings.
 
-- **Genel** (Overview) — the active account, today's plan and automation status.
-- **Hesaplar** (Accounts) — search, add, link to Desktop and edit accounts.
-- **Kullanım** (Usage) — 7/30-day usage statistics and limit warning settings.
-- **Planlama** (Planning) — work hours, the day timeline and per-account start times.
-- **Geçiş** (Switching) — switch preferences, shared history, continuation and fleet.
-- **Ayarlar** (Settings) — appearance (system, light or dark), language and
-  technical details.
+- **Overview** (Genel) — the active account, setup steps, today's plan and automation status.
+- **Accounts** (Hesaplar) — add accounts with a three-step wizard, see each account's
+  connections (Claude app, usage access, browser extension, terminal) and edit them.
+- **Usage** (Kullanım) — limits (full 5-hour periods, when you work, account balance,
+  limit hits), tokens and API value, and pins.
+- **Settings** (Ayarlar) — every setting in six tabs: Automation, What comes along,
+  Planning, Notifications, Appearance and Advanced.
 
 ## What it does
 
@@ -50,8 +57,9 @@ shortcuts are ⌘1–⌘5 and ⌘, for Settings.
 
 ## Install and run
 
-Requirements: macOS, Node.js 22.12+, Xcode Command Line Tools, Claude Desktop and
-the native Claude Code CLI (2.1.296+) for usage limits.
+Requirements: macOS, Node.js 22.12+, Xcode Command Line Tools and Claude Desktop.
+Usage limits are read with Claude Code: the copy Claude Desktop downloads for its
+Code tab is enough, or a separately installed CLI (2.1.296+).
 
 ```sh
 npm ci
@@ -60,9 +68,9 @@ npm run install:mac      # build, sign with the local certificate, install to /A
 
 Signing every build with the same local certificate keeps macOS permissions
 across updates. One-time setup: [docs/macos-local-signing.md](docs/macos-local-signing.md).
-To give Relay to someone else, `npm run dist:mac:share` makes the Apple silicon
-and Intel DMGs in one run; the same document explains the one-time "Open Anyway"
-step.
+To give Relay to someone else, `node scripts/stable-signing.mjs --dmg --arch arm64 --output release/share`
+makes an Apple silicon DMG (`--arch x64`, `both` or `universal` for Intel Macs);
+the same document explains the one-time "Open Anyway" step.
 
 Runtime packages that Vite or esbuild bundle (React, Radix, zod…) are
 `devDependencies`; only `node-pty`, which loads a native module at run time,
@@ -81,12 +89,16 @@ adapts the menu-bar icon to light and dark appearances.
 
 ## First use
 
-1. Open Claude Desktop, sign in, open the **Code** tab once.
-2. In Relay, **Add account**, then **Connect Desktop** to save the account that is
-   open in Claude. For another account, Relay restarts Claude so you can sign in.
-3. **Connect in browser** on each account to read its usage limits (official CLI
-   sign-in in a hidden, isolated profile).
-4. Settings → Shared Code history → choose the accounts that may share history.
+1. Open Claude Desktop, sign in, open the **Code** tab once (Overview's **Open Code**
+   does it for you).
+2. In Relay, **Add account**. Relay saves the account open in Claude, or restarts
+   Claude on its sign-in screen; once you sign in and open Code it saves the
+   sign-in by itself.
+3. Usage access starts on its own in a Relay window with its own claude.ai session
+   per account (official CLI sign-in in an isolated profile).
+4. The last step suggests the account's name, type and group.
+5. Settings → What comes along → choose how Code history, the browser extension
+   and the terminal follow a switch.
 
 ## How it works
 
@@ -120,4 +132,3 @@ adapts the menu-bar icon to light and dark appearances.
   packages.
 - The `relay` CLI runs on macOS only.
 
-Older design notes and acceptance records are in [docs](docs).
