@@ -79,13 +79,13 @@ export function Overview({
         </>
       }
     >
-      <div className="grid gap-3 px-6 pb-6">
+      <div className="grid gap-4 px-6 pb-6">
         <ActiveAccountCard go={go} now={now} />
         <SetupChecklist />
         {cards.today ? (
-          <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr]">
+          <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
             <AccountsCard go={go} now={now} />
-            <div className="grid content-start gap-3">
+            <div className="grid content-start gap-4">
               <TodayCard go={go} now={now} />
               {cards.automation && <AutomationCard go={go} now={now} />}
             </div>

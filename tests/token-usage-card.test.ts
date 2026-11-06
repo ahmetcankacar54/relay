@@ -261,19 +261,18 @@ test("estimated cells and chart days tell screen readers they are estimated, not
 test("the coverage note says since when accounts match exactly, in both languages", () => {
   assert.match(
     text(shown()),
-    /Kesin hesap eşleşmesi 12 Eki tarihinden beri tutuluyor; öncesi Relay’in limit ölçümlerinden tahmin edildi \(en fazla 14 gün\)\./,
+    /Hesap eşleşmesi 12 Eki tarihinden beri kesin\. Önceki günler limit ölçümlerinden tahmin edildi\./,
   );
   const en = shown("en");
-  assert.ok(en.includes("Relay’s limit samples (up to 14 days)."));
   assert.doesNotMatch(en, /Relay's/);
-  assert.match(text(en), /Exact account matching since 12 Oct; earlier days are estimated/);
-  assert.doesNotMatch(text(card({ view: { ...view, exactSince: undefined }, loading: false })), /Kesin hesap eşleşmesi/);
+  assert.match(text(en), /Account matches are exact from 12 Oct\. Earlier days are estimated from limit samples\./);
+  assert.doesNotMatch(text(card({ view: { ...view, exactSince: undefined }, loading: false })), /Hesap eşleşmesi/);
 });
 
 test("the progress note shows while the scan is incomplete, and only then", () => {
   const scanning = { ...view, progress: { percent: 42, complete: false } };
   assert.match(text(card({ view: scanning, loading: false })), /Konuşma kayıtları taranıyor… %42/);
-  assert.match(text(card({ view: scanning, loading: false }, "en")), /Scanning conversation logs… 42%/);
+  assert.match(text(card({ view: scanning, loading: false }, "en")), /Relay scans the conversation logs… 42%/);
   assert.doesNotMatch(text(shown()), /taranıyor/);
 });
 
@@ -297,9 +296,9 @@ test("while the scan runs, an empty range shows only the scanning note", () => {
   const tr = text(card({ view: empty, loading: false }));
   assert.match(tr, /Konuşma kayıtları taranıyor… %5/);
   assert.doesNotMatch(tr, /Bu aralıkta token kaydı yok/);
-  assert.doesNotMatch(tr, /Kesin hesap eşleşmesi/);
+  assert.doesNotMatch(tr, /Hesap eşleşmesi/);
   const en = text(card({ view: empty, loading: false }, "en"));
-  assert.match(en, /Scanning conversation logs… 5%/);
+  assert.match(en, /Relay scans the conversation logs… 5%/);
   assert.doesNotMatch(en, /No token records/);
 });
 
@@ -307,22 +306,22 @@ test("a ledger that cannot be saved says so, in both languages", () => {
   const unsaved: TokenUsageView = { ...view, progress: { percent: 100, complete: true, error: true } };
   assert.match(
     text(card({ view: unsaved, loading: false })),
-    /Token kayıtları saklanamıyor; Relay yeniden başlayınca tarama baştan yapılır\./,
+    /Token kayıtları saklanamıyor\./,
   );
   assert.match(
     text(card({ view: unsaved, loading: false }, "en")),
-    /Token records cannot be saved; the scan restarts after Relay restarts\./,
+    /Relay cannot save the token records\./,
   );
   assert.doesNotMatch(text(shown()), /kaydedilemiyor/);
 });
 
 test("the card shows loading and failure states, and keeps the last view under a failed refresh", () => {
   assert.match(text(card({ loading: true })), /Token kullanımı[\s\S]*Token kaydı yükleniyor/);
-  assert.match(text(card({ loading: true }, "en")), /Loading token usage/);
+  assert.match(text(card({ loading: true }, "en")), /Relay loads the token usage…/);
   const failed = card({ loading: false, error: "boom" });
   assert.match(failed, /role="alert"/);
   assert.match(text(failed), /Token kullanımı alınamadı[\s\S]*boom/);
-  assert.match(text(card({ loading: false, error: "boom" }, "en")), /Could not load token usage/);
+  assert.match(text(card({ loading: false, error: "boom" }, "en")), /Cannot load token usage/);
   const stale = card({ view, loading: false, error: "boom" });
   assert.match(stale, /role="alert"[^>]*>[\s\S]*Token kullanımı yenilenemedi\.[\s\S]*boom/);
   assert.match(text(stale), /Girdi/);
@@ -330,7 +329,7 @@ test("the card shows loading and failure states, and keeps the last view under a
 });
 
 test("rows that are not accounts take their labels from the shared label table", () => {
-  assert.equal(TOKEN_ROW_LABELS.terminal.en, "Outside-Relay terminal");
+  assert.equal(TOKEN_ROW_LABELS.terminal.en, "Terminal outside Relay");
   const en = text(shown("en"));
   for (const kind of ["former", "terminal", "unknown"] as const) assert.match(en, new RegExp(TOKEN_ROW_LABELS[kind].en));
   assert.doesNotMatch(en, /Eski hesap|Hesabı bilinmeyen|Relay dışı terminal/);
@@ -646,7 +645,11 @@ test("the Bugün card says since when the line is kept, and has no change or das
     view: { ...view, today: { ...view.today, change: null, yesterdayAverage: null, slotsSince: since } },
     loading: false,
   });
-  assert.match(text(html), /Gün içi çizgi \d\d:\d\d itibarıyla tutuluyor\./);
+  assert.match(text(html), /Gün içi çizgi için \d\d:\d\d öncesinde veri yok\./);
+  assert.match(text(card({
+    view: { ...view, today: { ...view.today, change: null, yesterdayAverage: null, slotsSince: since } },
+    loading: false,
+  }, "en")), /No line data before \d\d:\d\d\./);
   assert.doesNotMatch(html, /token-today-change|token-today-yesterday/);
 });
 
@@ -658,6 +661,10 @@ test("the API value metric shows dollars in the legend and table, and the price 
   const plain = text(html);
   assert.match(plain, /Fiyatlar: Anthropic API liste fiyatları, 22 Eki 2026\./);
   assert.match(plain, /1,5 B token, fiyatı bilinmeyen modellerden geldi; tutara katılmadı \(mystery\)\./);
+  assert.match(
+    text(card({ view: { ...view, unpricedModels: ["mystery"], totals: { ...view.totals, unpriced: 1500 } }, loading: false }, "en")),
+    /1\.5K tokens are from models with no known price and are not in the amount \(mystery\)\./i,
+  );
   const table = render(
     createElement(DayTable, {
       view: {
@@ -685,13 +692,15 @@ test("the cost card splits the API value by account and by model, largest first,
     ],
   };
   const plain = text(render(createElement(CostBreakdown, { view: priced, accounts })));
-  assert.match(plain, /^API karşılığıBu token’lar API liste fiyatıyla ödenseydi tutacak tutar\./);
-  assert.match(plain, /Aboneliğinin ücreti ayrıdır/);
+  assert.match(plain, /^API karşılığıBu token’ların API liste fiyatıyla tutarı\./);
+  assert.match(plain, /Aboneliğinin ücreti değildir/);
   assert.match(plain, /Hesaba göre.*Kişisel · Max%90≈\$90,00.*Vertex%10\$10,00/);
   assert.match(plain, /Modele göre.*claude-opus-4%75\$75,00.*claude-sonnet-4%25\$25,00/);
-  assert.match(plain, /son 7 gün · günde \$14,29/);
+  assert.match(plain, /günde \$14,29/);
+  assert.doesNotMatch(plain, /son 7 gün/);
   const english = text(render(createElement(CostBreakdown, { view: priced, accounts }), "en"));
   assert.match(english, /API value.*By account.*By model/);
+  assert.match(english, /It is not your subscription price\..*\$14\.29 per day/);
 });
 
 test("the cost card stays out when nothing in the range was priced", () => {

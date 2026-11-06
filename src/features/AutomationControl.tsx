@@ -86,7 +86,7 @@ export function AutomationStatusLine({
       className={
         compact
           ? "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
-          : "flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-[13px]"
+          : "flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-sm"
       }
     >
       <p className="flex min-w-0 flex-1 basis-48 items-start gap-2">
@@ -169,7 +169,7 @@ export function afterExitChips({
 const CHIP_STATE: Record<AfterExitChipState, [tr: string, en: string]> = {
   open: ["şu an açık", "open now"],
   next: ["sıradaki", "next"],
-  stale: ["limit verisi eski · seçilmez", "usage data is out of date · not picked"],
+  stale: ["limit verisi eski · seçilmez", "usage data is out of date · not used"],
   "sign-in": ["Claude uygulaması girişi gerekli", "Claude app sign-in needed"],
 };
 
@@ -191,7 +191,7 @@ function AfterExitAccounts({ disabled }: { disabled: boolean }) {
     void action("settings", () => api.updateSettings({ autoSwitchAccounts: ids }));
   return (
     <fieldset className="grid gap-2 rounded-lg border border-border p-3 disabled:opacity-60" disabled={disabled}>
-      <legend className="px-1 text-[13px] font-medium">
+      <legend className="px-1 text-sm font-medium">
         {t("Otomatik geçişe dahil hesaplar", "Accounts eligible for automatic switching")}{" "}
         <span className="text-muted-foreground">
           {chips.filter((c) => c.selected).length} / {accounts.length}
@@ -207,7 +207,7 @@ function AfterExitAccounts({ disabled }: { disabled: boolean }) {
               update(on ? selected.filter((id) => id !== account.id) : [...selected, account.id])
             }
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12.5px] outline-none transition-colors",
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs outline-none transition-colors",
               "hover:border-foreground/20 focus-visible:ring-[3px] focus-visible:ring-ring/50",
               on ? "border-primary bg-accent/40 font-medium" : "bg-card text-muted-foreground",
             )}
@@ -217,7 +217,7 @@ function AfterExitAccounts({ disabled }: { disabled: boolean }) {
             {state && (
               <span
                 className={cn(
-                  "text-[11.5px] font-normal",
+                  "text-2xs font-normal",
                   state === "next" ? "text-primary" : state === "open" ? "text-muted-foreground" : "text-warn",
                 )}
               >
@@ -251,7 +251,7 @@ export function AutomationSettings() {
   return (
     <section aria-labelledby="automation-title" className="grid gap-3">
       <h2 id="automation-title" className="flex items-center gap-2 text-sm font-semibold">
-        <span aria-hidden="true" className="grid size-5 place-items-center rounded-full bg-foreground text-[11px] text-background">
+        <span aria-hidden="true" className="grid size-5 place-items-center rounded-full bg-foreground text-2xs text-background">
           1
         </span>
         {t("Ne zaman geçilsin?", "When to switch?")}
@@ -274,16 +274,16 @@ export function AutomationSettings() {
               disabled={off}
               onClick={() => !checked && setMode(m.value)}
               className={cn(
-                "flex flex-col gap-2.5 rounded-xl border bg-card p-4 text-left outline-none transition-colors",
+                "flex flex-col gap-2 rounded-lg border bg-card p-3 text-left outline-none transition-colors",
                 "hover:border-foreground/20 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50",
-                checked && "border-2 border-primary bg-accent/40 p-[15px]",
+                checked && "border-2 border-primary bg-accent/40 p-[11px]",
               )}
             >
               <span className="flex items-center justify-between">
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "grid size-8 place-items-center rounded-lg [&_svg]:size-4",
+                    "grid size-7 place-items-center rounded-md [&_svg]:size-3.5",
                     checked ? "bg-accent text-accent-foreground" : "bg-muted text-foreground/80",
                   )}
                 >
@@ -292,13 +292,13 @@ export function AutomationSettings() {
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "size-[18px] rounded-full border-[1.5px] border-input bg-card",
-                    checked && "border-[5px] border-primary",
+                    "size-4 rounded-full border-[1.5px] border-input bg-card",
+                    checked && "border-[4.5px] border-primary",
                   )}
                 />
               </span>
               <span className="text-sm font-semibold">{t(...MODE_TITLE[m.value])}</span>
-              <span className="text-[12.5px] leading-snug text-muted-foreground">
+              <span className="text-xs leading-snug text-muted-foreground">
                 {t(...m.description)}
               </span>
             </button>
@@ -309,8 +309,8 @@ export function AutomationSettings() {
       {!supported && (
         <Note>
           {t(
-            "Otomatik geçiş bu sürümde macOS’ta kullanılabilir.",
-            "Automatic switching is available on macOS in this release.",
+            "Otomatik geçiş yalnızca macOS’ta kullanılabilir.",
+            "Automatic switching is available only on macOS.",
           )}
         </Note>
       )}
@@ -320,14 +320,14 @@ export function AutomationSettings() {
           <Note>
             {t(
               "Açık ve hedef hesapları seç. Hedefte limitin en fazla %90’ı kullanılmış olmalı.",
-              "Select the current and target accounts. The target must have used no more than 90% of its quota.",
+              "Select the current and target accounts. A target must be at 90% or less of its limit.",
             )}
           </Note>
           {settings.usageRefreshMinutes === 0 && (
             <Note>
               {t(
-                "Otomatik geçiş için düzenli limit yenilemeyi aç.",
-                "Enable regular usage refresh for automatic switching.",
+                "Otomatik geçiş için Bildirimler’de “Limitleri otomatik yenile”yi aç.",
+                "For automatic switching, turn on “Refresh limits automatically” in Notifications.",
               )}
             </Note>
           )}
@@ -354,8 +354,8 @@ export function AutomationSettings() {
           )}
           <Note>
             {t(
-              "Relay açık kalmalı. Çalışan iş bitmeden Claude uygulaması yeniden başlatılmaz; her konuşmaya en fazla bir devam mesajı gider.",
-              "Relay must stay open. The Claude app is not restarted while work is running; each conversation gets at most one continue message.",
+              "Relay açık kalmalı. Çalışan iş bitmeden Claude uygulaması yeniden başlatılmaz. Her konuşmaya en fazla bir devam mesajı gider.",
+              "Relay must stay open. Relay does not restart the Claude app while work runs. Each conversation gets one continue message at most.",
             )}
           </Note>
         </div>

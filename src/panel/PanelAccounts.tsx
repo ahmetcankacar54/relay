@@ -28,9 +28,9 @@ export const PANEL_MAX_ROWS = 6;
 export function blockWords(reason: PanelRowBlock, t: T): string {
   switch (reason) {
     case "not-linked":
-      return t("Relay’de girişi kaydet", "Save its sign-in in Relay");
+      return t("Claude uygulaması girişini kaydet", "Save Claude app sign-in");
     case "window":
-      return t("Ayrı pencerede açık", "Open in its own window");
+      return t("Ayrı pencerede açık", "Open in a separate window");
     case "busy":
       return t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running");
     case "pending":
@@ -109,10 +109,10 @@ export function PanelAccounts({
       <div className={panelEyebrow}>
         {relay.suggestion && relay.active ? (
           <span className="font-semibold text-warn-foreground">
-            {t("Limit dolmak üzere · önerilen üstte", "Near the limit · suggested first")}
+            {t("Limit dolmak üzere", "Near the limit")}
           </span>
         ) : (
-          <span>{t("Geç · en uygunu üstte", "Switch · best first")}</span>
+          <span>{t("Diğer hesaplar", "Other accounts")}</span>
         )}
         {rows.length > 0 && (
           <span className="flex items-center gap-2" aria-hidden="true">
@@ -137,7 +137,7 @@ export function PanelAccounts({
               <Button
                 variant="link"
                 size="sm"
-                className="h-auto px-0 text-[12.5px]"
+                className="h-auto px-0 text-xs"
                 onClick={() => openAddAccount(relay)}
               >
                 {t("Hesap ekle", "Add account")}
@@ -185,7 +185,7 @@ export function PanelAccounts({
           <LoaderCircle className="size-3.5 animate-spin" />
           {t(
             `${relay.accounts.find((a) => a.id === switching)?.name ?? ""} hesabına geçiliyor…`,
-            `Switching to ${relay.accounts.find((a) => a.id === switching)?.name ?? ""}…`,
+            `Relay switches to ${relay.accounts.find((a) => a.id === switching)?.name ?? ""}…`,
           )}
         </div>
       ) : (
@@ -209,7 +209,7 @@ export function PanelAccounts({
               ) : (
                 <>
                   The Claude app quits and reopens with <b>{confirming.account.name}</b>.
-                  Let running replies finish.
+                  Wait for running replies to finish first.
                 </>
               )}
             </span>
@@ -239,7 +239,7 @@ export function PanelAccounts({
         >
           {t(
             `+${hidden} hesap · Relay’de gör`,
-            `+${hidden} ${hidden === 1 ? "account" : "accounts"} · View in Relay`,
+            `+${hidden} ${hidden === 1 ? "account" : "accounts"} · Show in Relay`,
           )}
         </Button>
       )}

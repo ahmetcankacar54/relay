@@ -433,7 +433,7 @@ function buildInsight(
     const fill = sparse.view.averageFill;
     return {
       tr: `${label(sparse)} dönemlerinin ortalama yalnızca ${formatPercent(fill, "tr")} kadarını dolduruyor.`,
-      en: `${label(sparse)} fills only ${formatPercent(fill, "en")} of its periods.`,
+      en: `${label(sparse)} fills only ${formatPercent(fill, "en")} of its periods on average.`,
     };
   }
   const full = candidates
@@ -452,8 +452,8 @@ function buildInsight(
   if (full && spare) {
     const days = idle.get(spare.row)!;
     return {
-      tr: `${spare.view.name} ${days} gündür boşta; ${full.view.name} ise dönemi açıldığında neredeyse hep doluyor. ${spare.view.name} hesabını sırada öne almak 5 saatlik limite takılmayı azaltır.`,
-      en: `${spare.view.name} has sat idle for ${days} days; ${full.view.name} is almost always full when it opens. Moving ${spare.view.name} up the order would cut 5-hour limit stops.`,
+      tr: `${spare.view.name} ${days} gündür boşta; ${full.view.name} ise dönemi açıldığında neredeyse hep doluyor. 5 saatlik limite daha az takılmak için ${spare.view.name} hesabını sırada öne al.`,
+      en: `${spare.view.name} was idle for the last ${days} days; ${full.view.name} is almost always full when it opens. Move ${spare.view.name} up the order to hit the 5-hour limit less often.`,
     };
   }
   if (full)

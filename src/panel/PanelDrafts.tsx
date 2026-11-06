@@ -8,7 +8,7 @@ import { panelCard, panelEyebrow } from "./PanelActiveCard";
 /** A draft Relay tried to type: it may be in its composer already. */
 const MAYBE_TYPED = [
   "Konuşmaya yazılmış olabilir, yapıştırmadan önce bak",
-  "It may already be in the conversation; check before pasting",
+  "Possibly in the conversation already; check before you paste",
 ] as const;
 const BUSY = ["Konuşma meşguldü", "The conversation was busy"] as const;
 const UNSUPPORTED = [
@@ -18,32 +18,32 @@ const UNSUPPORTED = [
 
 const REASONS: Record<string, readonly [string, string]> = {
   accessibility: ["Erişilebilirlik izni yok", "Accessibility permission missing"],
-  "composer-not-empty": ["Mesaj kutusunda yazı vardı, üzerine yazmadım", "The message box already held text, so it was left alone"],
+  "composer-not-empty": ["Mesaj kutusunda zaten yazı vardı", "The message box already had text"],
   "context-changed": ["Ekran değişti", "The screen changed"],
   changed: ["Ekran değişti", "The screen changed"],
   lost: ["Claude uygulaması taslağı sildi", "The Claude app cleared the draft"],
   busy: BUSY,
   "desktop-work-active": BUSY,
   manual: ["Elle yapıştır", "Paste it yourself"],
-  error: ["Geri yazılamadı", "Could not be restored"],
+  error: ["Geri yazılamadı", "Restore failed"],
   "maybe-typed": MAYBE_TYPED,
   unconfirmed: MAYBE_TYPED,
   "delivery-ambiguous": MAYBE_TYPED,
-  "no-composer": ["Konuşma açıldı ama mesaj kutusu yüklenmedi", "The conversation opened, but its message box never loaded"],
-  loading: ["Claude uygulaması hâlâ yükleniyordu", "The Claude app was still loading"],
+  "no-composer": ["Mesaj kutusu yüklenmedi", "The message box did not load"],
+  loading: ["Claude uygulaması henüz yüklenmemişti", "The Claude app was not loaded yet"],
   unsupported: UNSUPPORTED,
   "desktop-ui-unsupported": UNSUPPORTED,
   "exact-session-not-observed": [
     "Konuşma açılamadı",
-    "The conversation could not be opened",
+    "The conversation did not open",
   ],
   "not-ready": ["Claude uygulaması hazır değildi", "The Claude app was not ready"],
   moved: ["Başka bir ekrana geçtin", "You went to another screen"],
   "claude-not-running": ["Claude uygulaması çalışmıyordu", "The Claude app was not running"],
-  budget: ["Süre doldu", "Ran out of time"],
+  budget: ["Süre doldu", "Time ran out"],
   "not-opened": [
     "Konuşmayı 30 dakika içinde açmadın",
-    "You didn’t open the conversation within 30 minutes",
+    "You did not open the conversation in 30 minutes",
   ],
 };
 const UNKNOWN_REASON = REASONS.error;
@@ -51,7 +51,7 @@ const UNKNOWN_REASON = REASONS.error;
 /** A new-session draft goes to Code's new-session screen, not a conversation. */
 const NEW_SESSION_MAYBE_TYPED = [
   "Yeni oturum ekranına yazılmış olabilir, yapıştırmadan önce bak",
-  "It may already be on the new-session screen; check before pasting",
+  "Possibly on the new-session screen already; check before you paste",
 ] as const;
 const NEW_SESSION_BUSY = [
   "Yeni oturum ekranı meşguldü",
@@ -65,11 +65,11 @@ const NEW_SESSION_REASONS: Record<string, readonly [string, string]> = {
   "desktop-work-active": NEW_SESSION_BUSY,
   "exact-session-not-observed": [
     "Yeni oturum ekranı açılamadı",
-    "The new-session screen could not be opened",
+    "The new-session screen did not open",
   ],
   "not-opened": [
     "Yeni oturum ekranını 30 dakika içinde açmadın",
-    "You didn’t open the new-session screen within 30 minutes",
+    "You did not open the new-session screen in 30 minutes",
   ],
 };
 
@@ -133,7 +133,7 @@ function DraftRow({ draft }: { draft: DraftSummary }) {
         </div>
         {draft.attachments && (
           <div className="text-xs text-muted-foreground">
-            {t("Ekleri geri yüklenemedi", "Attachments could not be restored")}
+            {t("Ekler geri yüklenmedi", "Attachments not restored")}
           </div>
         )}
       </div>
@@ -201,15 +201,15 @@ export function PanelDrafts() {
         >
           {t(
             `${waiting} taslak geri yazılmayı bekliyor`,
-            `${waiting} ${waiting === 1 ? "draft" : "drafts"} waiting to be restored`,
+            waiting === 1 ? "1 draft waits to be restored" : `${waiting} drafts wait to be restored`,
           )}
         </p>
       )}
       {rows.length > 0 && (
         <p className="mb-1.5 text-xs text-muted-foreground">
           {t(
-            "Hesap geçişinde konuşmasına geri yazamadığım taslakların. Kopyala ile alıp kendin yapıştırabilirsin.",
-            "Drafts I could not type back into their conversation at a switch. Copy one to paste it yourself.",
+            "Geçişte geri yazılamayan taslaklar.",
+            "Relay did not type these drafts back after the switch.",
           )}
         </p>
       )}

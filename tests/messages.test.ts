@@ -20,7 +20,7 @@ test("saved sign-in errors name the Claude app sign-in in both languages", () =>
   );
   assert.equal(
     localizeError(backend.missing, "en"),
-    "Saved Claude app sign-in is missing. Connect this account again.",
+    "The saved Claude app sign-in is missing. Connect this account again.",
   );
   assert.equal(
     localizeError(backend.invalid, "tr"),
@@ -28,7 +28,7 @@ test("saved sign-in errors name the Claude app sign-in in both languages", () =>
   );
   assert.equal(
     localizeError(backend.invalid, "en"),
-    "Invalid saved Claude app sign-in.",
+    "The saved Claude app sign-in is not valid.",
   );
   assert.equal(
     localizeError(backend.pending, "tr"),
@@ -44,7 +44,7 @@ test("saved sign-in errors name the Claude app sign-in in both languages", () =>
   );
   assert.equal(
     localizeError(backend.encryption, "en"),
-    "System encryption is unavailable. Claude app sign-in was not saved.",
+    "System encryption is not available. Relay did not save the Claude app sign-in.",
   );
 });
 
@@ -58,24 +58,24 @@ test("the errors main's IPC handlers throw read in both languages", () => {
     [
       "Finish the Desktop handoff before signing in.",
       "Giriş yapmadan önce Claude uygulamasındaki işlemin bitmesini bekle.",
-      "Wait for the Claude app operation to finish before signing in.",
+      "Wait for the Claude app action to finish. Then sign in.",
     ],
     [
       "Finish the Desktop handoff before starting another Desktop operation.",
       "Claude uygulamasındaki işlemin bitmesini bekle, sonra yenisini başlat.",
-      "Wait for the Claude app operation to finish before starting another.",
+      "Wait for the Claude app action to finish. Then start the next one.",
     ],
     [
       "Finish the Desktop operation before changing preferences.",
       "Tercihleri değiştirmeden önce Claude uygulamasındaki işlemi tamamla.",
-      "Finish the Claude app operation before changing preferences.",
+      "Finish the Claude app action before you change preferences.",
     ],
     ["Geçersiz IPC kaynağı.", "Geçersiz IPC kaynağı.", "Invalid IPC source."],
     // Thrown in Turkish by the service.
     [
       "Claude uygulamasında doğru hesabın açık olduğunu doğrula.",
       "Claude uygulamasında doğru hesabın açık olduğunu doğrula.",
-      "Check that the right account is open in the Claude app.",
+      "Make sure that the correct account is open in the Claude app.",
     ],
   ];
   for (const [backend, tr, en] of cases) {

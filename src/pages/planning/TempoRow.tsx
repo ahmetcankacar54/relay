@@ -71,7 +71,7 @@ export function TempoRow({
           )
         : t(
             "Veri birikene kadar orta tempo ≈ 50 Pro birimi/sa",
-            "Medium tempo ≈ 50 Pro units/h until data builds up",
+            "Medium tempo ≈ 50 Pro units/h until there is enough data",
           );
   // Each kind of plan once, largest first.
   const kinds = new Map<string, number>();
@@ -113,7 +113,7 @@ export function TempoRow({
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
-        <p className="text-[13px]">{summary}</p>
+        <p className="text-sm">{summary}</p>
         {parts.length > 0 && (
           <p className={noteClass}>
             {t("Bu tempoyla bir dönem: ", "At this tempo one period lasts: ") +

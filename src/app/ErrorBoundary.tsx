@@ -22,10 +22,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
     const turkish = navigator.language.toLowerCase().startsWith("tr");
     return (
       <div role="alert" className="grid gap-3 p-6 text-sm text-foreground">
-        <p className="font-semibold">{turkish ? "Beklenmedik bir hata oluştu." : "This window hit an unexpected error."}</p>
-        <p className="text-muted-foreground">
-          {turkish ? "Hesaplarına dokunulmadı. Yeniden yüklemek yeterli olur." : "Your accounts were not touched. Reloading should be enough."}
-        </p>
+        <p className="font-semibold">{turkish ? "Beklenmedik bir hata oluştu." : "An unexpected error occurred."}</p>
         <div>
           <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
             {turkish ? "Yeniden yükle" : "Reload"}

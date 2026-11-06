@@ -32,8 +32,8 @@ export function AccountBalance({
   const percent = (value: number | undefined) => formatPercent(value, language);
   const head = "text-xs font-normal text-muted-foreground";
   return (
-    <Card className="gap-0 px-5 py-4">
-      <h3 className="mb-2 font-display text-[15px] font-semibold">
+    <Card className="gap-0 px-4 py-3.5">
+      <h3 className="mb-2 font-display text-sm font-semibold">
         {t("Hesap dengesi", "Account balance")}
       </h3>
       {/* Rows share these columns (subgrid), so every share bar ends at the same x. */}
@@ -75,7 +75,7 @@ export function AccountBalance({
         })}
       </div>
       {view.insight && (
-        <p className="mt-1 border-t pt-2 text-[13px] text-muted-foreground">
+        <p className="mt-1 border-t pt-2 text-sm text-muted-foreground">
           {t(view.insight.tr, view.insight.en)}
         </p>
       )}

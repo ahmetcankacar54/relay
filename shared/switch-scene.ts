@@ -118,11 +118,11 @@ const LINES = {
     failed: "İşlem tamamlanamadı · ayrıntılar Relay’de",
   },
   en: {
-    restarting: "Restarting the Claude app…",
-    switching: (name: string) => `Switching to ${name}`,
-    switched: (name: string) => `You’re on ${name}`,
+    restarting: "The Claude app restarts…",
+    switching: (name: string) => `Relay switches to ${name}`,
+    switched: (name: string) => `You are on ${name}`,
     back: "The Claude app reopened",
-    failed: "Couldn’t finish · details in Relay",
+    failed: "Did not finish · details in Relay",
   },
 };
 

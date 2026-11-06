@@ -120,13 +120,13 @@ test("the line names the target and the result, in Turkish and English", () => {
     "Vertex hesabına geçiliyor", "Vertex hesabına geçiliyor", "Vertex hesabındasın",
   ]);
   assert.deepEqual(lines("en", [[0, start], [500, ended(false)], [LEAVING_MS, tick]]), [
-    "Switching to Vertex", "Switching to Vertex", "Couldn’t finish · details in Relay",
+    "Relay switches to Vertex", "Relay switches to Vertex", "Did not finish · details in Relay",
   ]);
   assert.deepEqual(lines("tr", [[0, { phase: "start", kind: "merge" }], [LEAVING_MS, tick], [2_000, merged]]), [
     "Claude uygulaması yeniden başlatılıyor…", "Claude uygulaması yeniden başlatılıyor…", "Claude uygulaması yeniden açıldı",
   ]);
   assert.equal(sceneLine(run([[0, start], [500, ended(false)], [LEAVING_MS, tick]])[2], "tr", name), "İşlem tamamlanamadı · ayrıntılar Relay’de");
-  assert.equal(sceneLine(run([[0, start], [500, ended()], [LEAVING_MS, tick]])[2], "en", name), "You’re on Vertex");
+  assert.equal(sceneLine(run([[0, start], [500, ended()], [LEAVING_MS, tick]])[2], "en", name), "You are on Vertex");
   assert.equal(sceneLine(run([[0, { phase: "start", kind: "merge" }], [500, merged], [LEAVING_MS, tick]])[2], "en", name), "The Claude app reopened");
 });
 

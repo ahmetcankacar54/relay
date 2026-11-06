@@ -82,7 +82,7 @@ export const UNKNOWN_KEY = "unknown";
 /** The labels of the rows that are not a current account. */
 export const TOKEN_ROW_LABELS = {
   former: { tr: FORMER_NAME, en: "Former account" },
-  terminal: { tr: "Relay dışı terminal", en: "Outside-Relay terminal" },
+  terminal: { tr: "Relay dışı terminal", en: "Terminal outside Relay" },
   unknown: { tr: "Hesabı bilinmeyen", en: "Unknown account" },
 } as const;
 

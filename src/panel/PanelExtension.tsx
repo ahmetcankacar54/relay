@@ -23,10 +23,10 @@ export function extensionOfferLine(offer: ExtensionOffer, t: T): string {
       `The extension cannot sign in to ${offer.to}`,
     );
   if (offer.expired)
-    return t("Eklentinin girişi düşmüş", "The extension’s sign-in expired");
+    return t("Eklenti girişinin süresi doldu", "The extension’s sign-in expired");
   return t(
     `Eklenti ${offer.to} hesabına geçmedi`,
-    `The extension did not move to ${offer.to}`,
+    `The extension did not switch to ${offer.to}`,
   );
 }
 
@@ -38,27 +38,27 @@ export function extensionOfferHint(
 ): string {
   if (offer.reconnect)
     return t(
-      `claude.ai’de ${offer.to} ile giriş yapıp eklentide “Log in”e basman gerekiyor; Ayarlar adım adım gösterir.`,
-      `Sign in to claude.ai with ${offer.to} and press “Log in” in the extension; Settings shows each step.`,
+      `claude.ai’de ${offer.to} ile giriş yap, sonra eklentide “Log in”e bas.`,
+      `Sign in to claude.ai with ${offer.to}, then select “Log in” in the extension.`,
     );
   if (offer.expired)
     return confirming
       ? t(
           `${offer.browser} kapanıp sekmeleriyle yeniden açılacak; eklenti ${offer.to} ile yeniden giriş yapacak.`,
-          `${offer.browser} closes and reopens with its tabs, and the extension signs in to ${offer.to} again.`,
+          `${offer.browser} quits and reopens with its tabs; the extension signs in to ${offer.to} again.`,
         )
       : t(
-          `Eklenti ${offer.to} hesabında ama Claude’un tarayıcı araçlarını reddediyor. Düzelt işe yaramazsa eklentinin yan panelinden giriş yap.`,
-          `The extension is on ${offer.to} but refuses Claude’s browser tools. If Fix does not help, sign in from the extension’s side panel.`,
+          "Claude’un tarayıcı araçları çalışmıyor. Düzelt işe yaramazsa eklentinin yan panelinden giriş yap.",
+          "Claude’s browser tools do not work. If Fix does not help, sign in from the extension’s side panel.",
         );
   return confirming
     ? t(
         `${offer.browser} kapanıp sekmeleriyle yeniden açılacak, claude.ai oturumu da ${offer.to} olacak.`,
-        `${offer.browser} closes and reopens with its tabs, and its claude.ai login becomes ${offer.to}.`,
+        `${offer.browser} quits and reopens with its tabs; its claude.ai login changes to ${offer.to}.`,
       )
     : t(
-        `${offer.to} hesabının eklenti girişi kayıtlı; istersen şimdi geçir.`,
-        `${offer.to}’s extension sign-in is saved; bring the extension along now if you like.`,
+        `${offer.to} hesabının eklenti girişi kayıtlı.`,
+        `${offer.to}’s extension sign-in is saved.`,
       );
 }
 
@@ -100,7 +100,7 @@ export function PanelExtension() {
           <div className="min-w-0 font-semibold">
             {offer
               ? extensionOfferLine(offer, t)
-              : t("Eklenti geçirilemedi", "The extension was not switched")}
+              : t("Eklenti geçirilemedi", "The extension did not switch")}
           </div>
           <div
             className="min-w-0 text-xs text-muted-foreground"

@@ -135,7 +135,7 @@ test("invalid or future-dated observation metadata does not present an invented 
     },
   });
   assert.doesNotMatch(en, /Invalid Date|Last known reset|Last verified|2099/);
-  assert.match(en, /Reset time unavailable/);
+  assert.match(en, /No reset time/);
 });
 
 test("the reset line and the used word are set in text-xs, not 11 px", () => {

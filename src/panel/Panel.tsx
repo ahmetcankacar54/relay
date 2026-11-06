@@ -70,7 +70,7 @@ export function Panel({
     <div className="max-h-screen w-[360px] overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div
         ref={root}
-        className="w-full bg-background/90 text-[12.5px] leading-snug text-foreground"
+        className="w-full bg-background/90 text-xs leading-snug text-foreground"
       >
         <header className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
           <span className="flex items-center gap-2 font-bold">
@@ -123,7 +123,7 @@ export function Panel({
           <Button
             variant="link"
             size="sm"
-            className="h-auto px-0 text-[12px] font-semibold text-foreground"
+            className="h-auto px-0 text-xs font-semibold text-foreground"
             onClick={() => void api.openPage("genel")}
           >
             {t("Relay’i aç", "Open Relay")}
@@ -139,7 +139,7 @@ export function Panel({
           <Button
             variant="link"
             size="sm"
-            className="h-auto px-0 text-[12px] text-muted-foreground"
+            className="h-auto px-0 text-xs text-muted-foreground"
             onClick={() => void api.quit()}
           >
             {t("Çık", "Quit")}

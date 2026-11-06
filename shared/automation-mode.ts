@@ -40,23 +40,23 @@ export const AUTOMATION_MODES: {
     label: ["Kapalı", "Off"],
     description: [
       "Relay hesabı kendiliğinden değiştirmez.",
-      "Relay never switches accounts on its own.",
+      "Relay does not switch accounts automatically.",
     ],
   },
   {
     value: "after-exit",
     label: ["Claude uygulaması kapanınca", "When the Claude app quits"],
     description: [
-      "Limit dolunca, sen Claude’u kapatınca sıradaki hesabı hazırlar.",
-      "At the limit, prepares the next account once you quit Claude.",
+      "Limit dolunca, Claude uygulamasını kapattığında sıradaki hesabı hazırlar.",
+      "At the limit, Relay prepares the next account when you quit the Claude app.",
     ],
   },
   {
     value: "quota",
     label: ["Limit dolunca", "When the limit is reached"],
     description: [
-      "Limit dolunca Claude’u sıradaki hesapla açar, duran konuşmaları sürdürür.",
-      "At the limit, reopens Claude on the next account and continues stopped conversations.",
+      "Limit dolunca Claude uygulamasını sıradaki hesapla açar ve duran konuşmaları sürdürür.",
+      "At the limit, Relay opens the Claude app on the next account and continues stopped conversations.",
     ],
   },
 ];

@@ -46,7 +46,7 @@ test("tokens shows the app's ledger for the range, marking estimated rows", asyn
   f.clear();
   assert.equal(await f.run("tokens"), 0);
   assert.match(f.out(), /≈/);
-  assert.match(f.out(), /Outside-Relay terminal/);
+  assert.match(f.out(), /Terminal outside Relay/);
   f.clear();
   assert.equal(await f.run("tokens", "--account", "A", "--json"), 0);
   assert.equal(JSON.parse(f.out()).totals.input, 1000);

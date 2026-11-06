@@ -63,7 +63,7 @@ export default function TerminalPane({
           !queued.some((e) => e.exitCode !== undefined)
         )
           terminal.write(
-            "\r\n\x1b[90m[Bu terminal kapandı. Geçmiş, oturum kataloğunda saklanır.]\x1b[0m\r\n",
+            "\r\n\x1b[90m[Bu terminal kapandı.]\x1b[0m\r\n",
           );
         terminal.focus();
       })

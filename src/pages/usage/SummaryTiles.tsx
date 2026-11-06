@@ -60,7 +60,7 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
   const hits = totals.hits.fiveHour + totals.hits.weekly;
   const window = totals.busiestWindow;
   return (
-    <Card className="gap-3 px-5 py-4">
+    <Card className="gap-3 px-4 py-3.5">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Tile
           label={t("Kullanılan", "Used")}
@@ -103,8 +103,8 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
       </div>
       <p className="text-xs text-muted-foreground">
         {t(
-          `Relay bu süreyi ${formatPercent(view.coveragePercent, "tr")} gözledi; kapalıyken veri yok.`,
-          `Relay observed ${formatPercent(view.coveragePercent, "en")} of this time; no data while it was closed.`,
+          `Relay bu süreyi ${formatPercent(view.coveragePercent, "tr")} gözledi.`,
+          `Relay observed ${formatPercent(view.coveragePercent, "en")} of this time.`,
         )}
       </p>
     </Card>

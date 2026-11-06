@@ -66,14 +66,14 @@ const attention = (copy: Copy, banner = true): Row => ({
   copy,
 });
 
-const CHECKING: Copy = ["Kontrol ediliyor…", "Checking…"];
+const CHECKING: Copy = ["Kontrol ediliyor…", "Check in progress…"];
 const DESKTOP_BUSY: Copy = [
-  "Relay Claude uygulamasında başka bir işlem yapıyor; bitince yeniden bakarım.",
-  "Relay is busy with another Claude app action; I’ll check again after it.",
+  "Relay Claude uygulamasında başka bir işlem yapıyor; bitince yeniden bakar.",
+  "Relay is busy with another Claude app action. Relay checks again after it.",
 ];
 const SEPARATE_WINDOW: Copy = [
-  "Ayrı bir Claude penceresi açık; kapanana kadar kendiliğimden geçmem.",
-  "A separate Claude window is open; I won’t switch by myself until it closes.",
+  "Ayrı bir Claude penceresi açık; kapanana kadar Relay kendiliğinden geçmez.",
+  "A separate Claude window is open. Relay does not switch until it closes.",
 ];
 const DESKTOP_UNAVAILABLE: Copy = [
   "Claude uygulaması bulunamadı.",
@@ -81,12 +81,12 @@ const DESKTOP_UNAVAILABLE: Copy = [
 ];
 const UNKNOWN_ACTIVE: Copy = [
   "Claude uygulamasında açık olan hesap Relay’de kayıtlı değil. Hesaplar’da Claude uygulaması girişini kaydet.",
-  "The account open in the Claude app isn’t saved in Relay. Save its Claude app sign-in on Accounts.",
+  "The account open in the Claude app is not saved in Relay. Save its Claude app sign-in on Accounts.",
 ];
 
 const USAGE_NOT_FRESH: Copy = [
-  "Güncel limit verisi bekliyorum.",
-  "Waiting for fresh usage data.",
+  "Henüz güncel limit verisi yok.",
+  "No current usage data yet.",
 ];
 
 const OFF: Copy = [
@@ -94,12 +94,12 @@ const OFF: Copy = [
   "Off. When the limit is reached, you switch accounts yourself.",
 ];
 const OFF_LEGACY_WATCH: Copy = [
-  "Kapalı, ama Ayarlar → Otomasyon’daki “Limit dolunca geç ve devam et” kartı hâlâ açık; oradan kapat.",
-  "Off, but the “Switch and continue when the limit is reached” card in Settings → Automation is still on; turn it off there.",
+  "Kapalı, ama Ayarlar → Otomasyon’daki “Limit dolunca geç ve devam et” kartı hâlâ açık. Oradan kapat.",
+  "Off, but the “Switch and continue when the limit is reached” card in Settings → Automation is still on. Turn it off there.",
 ];
 const HANDOFF_INTERRUPTED: Copy = [
-  "Yarım kalan bir konuşma devri var; Ayarlar → Otomasyon’daki kartından sürdür veya iptal et.",
-  "A conversation handoff was interrupted; resume or cancel it in Settings → Automation.",
+  "Yarım kalan bir konuşma devri var. Ayarlar → Otomasyon’da sürdür veya iptal et.",
+  "A conversation handoff is incomplete. Continue or cancel it in Settings → Automation.",
 ];
 const SWITCH_NOW_SUFFIX: Copy = [
   " Şimdi geçersen devam mesajını sen yazarsın.",
@@ -112,29 +112,29 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
   "desktop-busy": waiting(DESKTOP_BUSY),
   "separate-window": waiting(SEPARATE_WINDOW),
   "desktop-sign-in": waiting([
-    "Bir hesabın Claude uygulaması girişi sürüyor; Hesaplar’da tamamla veya iptal et.",
-    "An account’s Claude app sign-in is in progress; finish or cancel it on Accounts.",
+    "Bir hesabın Claude uygulaması girişi sürüyor. Hesaplar’da tamamla veya iptal et.",
+    "An account’s Claude app sign-in is in progress. Finish or cancel it on Accounts.",
   ]),
   "browser-sign-in": waiting([
-    "Bir hesabın limit okuma girişi veya yenilemesi sürüyor; bitince yeniden bakarım.",
-    "An account’s usage sign-in or renewal is in progress; I’ll check again after it.",
+    "Bir hesabın limit okuma girişi veya yenilemesi sürüyor; bitince Relay yeniden bakar.",
+    "An account’s usage sign-in or renewal is in progress. Relay checks again after it.",
   ]),
   "usage-not-fresh": waiting(USAGE_NOT_FRESH),
   "exit-settling": waiting([
-    "Claude uygulaması kapandı; tamamen kapanmasını bekliyorum.",
-    "The Claude app quit; waiting for it to close completely.",
+    "Claude uygulaması kapandı; tamamen kapanması bekleniyor.",
+    "The Claude app quit. Relay waits for it to close fully.",
   ]),
-  "quota-exhausted": waiting(["{tgt} hazırlanıyor…", "Preparing {tgt}…"]),
+  "quota-exhausted": waiting(["{tgt} hazırlanıyor…", "Relay prepares {tgt}…"]),
   "claude-running": {
     ...waiting([
-      "Claude uygulaması açık, kapanmasını bekliyorum. Claude uygulamasını kapatınca {tgt} hazırlanır.",
-      "The Claude app is open; waiting for it to quit. Quit the Claude app and {tgt} is prepared.",
+      "Claude uygulaması açık. Kapattığında Relay {tgt} hesabını hazırlar.",
+      "The Claude app is open. When you quit it, Relay prepares {tgt}.",
     ]),
     banner: true,
   },
   "quota-available": ok([
-    "İzliyorum. Limit dolup Claude uygulaması kapanınca sıradaki hesabı hazırlarım.",
-    "Watching. When the limit is reached and the Claude app quits, I prepare the next account.",
+    "Limit dolup Claude uygulaması kapanınca Relay sıradaki hesabı hazırlar.",
+    "When the limit is reached and the Claude app quits, Relay prepares the next account.",
   ]),
   "already-switched": ok([
     "Bu limit dönemi için geçiş zaten yapıldı.",
@@ -142,59 +142,59 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
   ]),
   prepared: ok(
     [
-      "{tgt} hazır. Claude uygulamasını açıp konuşmanı sürdür.",
-      "{tgt} is ready. Open the Claude app and continue your conversation.",
+      "{tgt} hazır. Konuşmanı sürdürmek için Claude uygulamasını aç.",
+      "{tgt} is ready. Open the Claude app to continue your conversation.",
     ],
     true,
   ),
   "unsupported-platform": attention([
     "Otomatik geçiş yalnızca macOS’ta çalışır.",
-    "Automatic switching works on macOS only.",
+    "Automatic switching works only on macOS.",
   ]),
   "desktop-unavailable": attention(DESKTOP_UNAVAILABLE),
   // Desktop recovery has its own banner.
   "desktop-recovery": attention(
     [
-      "Yarım kalan bir Claude uygulaması işlemi var; önce yedeği geri yükle.",
-      "A Claude app action was interrupted; restore the backup first.",
+      "Yarım kalan bir Claude uygulaması işlemi var. Önce yedeği geri yükle.",
+      "A Claude app action is incomplete. Restore the backup first.",
     ],
     false,
   ),
   "continuation-active": attention([
-    "Ayarlar → Otomasyon’daki “Limit dolunca geç ve devam et” kartı açık; o kapanana kadar hesap hazırlamıyorum. Kartı oradan kapat.",
-    "The “Switch and continue when the limit is reached” card in Settings → Automation is on; preparing waits until it is off. Turn it off there.",
+    "Ayarlar → Otomasyon’daki “Limit dolunca geç ve devam et” kartı açık. Kartı oradan kapat.",
+    "The “Switch and continue when the limit is reached” card in Settings → Automation is on. Turn it off there.",
   ]),
   "unknown-active": attention(UNKNOWN_ACTIVE),
   "not-selected": attention([
     "Bu hesap otomatik geçişe dahil değil. Ayarlar → Otomasyon’da hesapları seç.",
-    "This account is not included. Choose accounts in Settings → Automation.",
+    "This account is not in automatic switching. Select accounts in Settings → Automation.",
   ]),
   "source-not-ready": attention([
     "Açık hesabın Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Hesaplar’da kontrol et.",
     "The open account’s Claude app sign-in and usage sign-in belong to different accounts. Check them on Accounts.",
   ]),
   "no-ready-target": attention([
-    "Limit doldu ama hazır hesap yok; bir hesabın limiti yenilenince hazırlarım.",
-    "The limit is reached but no account is ready; I’ll prepare one when a limit resets.",
+    "Limit doldu ama hazır hesap yok. Bir hesabın limiti yenilenince Relay onu hazırlar.",
+    "The limit is reached and no account is ready. Relay prepares one when a limit resets.",
   ]),
   "retry-backoff": attention([
-    "Geçiş başarısız oldu; biraz sonra yeniden denerim. İstersen elle geç.",
-    "The switch failed; I’ll retry shortly. You can switch by hand.",
+    "Geçiş başarısız oldu; Relay biraz sonra yeniden dener. İstersen elle geç.",
+    "The switch failed. Relay tries again soon. You can switch manually.",
   ]),
   "switch-failed": attention([
-    "Geçiş tamamlanamadı. Claude uygulamasının açıldığını ve geri yüklenecek bir yedek olup olmadığını kontrol et.",
-    "The switch couldn’t finish. Check that the Claude app opens and whether a backup needs restoring.",
+    "Geçiş tamamlanamadı. Claude uygulamasının açıldığından emin ol. Geri yüklenecek bir yedek var mı kontrol et.",
+    "The switch did not finish. Make sure that the Claude app opens. Check for a backup to restore.",
   ]),
   "ledger-unavailable": attention([
-    "Hesap hazırlandı ama otomatik geçiş kaydı yazılamadı; Relay yeniden açılırsa aynı geçişi tekrar yapabilir.",
-    "The account was prepared, but the automatic-switch record couldn’t be saved; if Relay restarts it may repeat this switch.",
+    "Hesap hazırlandı ama otomatik geçiş kaydı yazılamadı. Relay yeniden açılırsa aynı geçişi tekrar yapabilir.",
+    "Relay prepared the account but cannot save the switch record. After a Relay restart, it can do this switch again.",
   ]),
 };
 /** `prepared` when the prefix already names the target. */
 const PREPARED_HERE = ok(
   [
-    "Hazır. Claude uygulamasını açıp konuşmanı sürdür.",
-    "Ready. Open the Claude app and continue your conversation.",
+    "Hazır. Konuşmanı sürdürmek için Claude uygulamasını aç.",
+    "Ready. Open the Claude app to continue your conversation.",
   ],
   true,
 );
@@ -205,23 +205,23 @@ const PREPARED_HERE = ok(
  */
 const FLEET: Record<string, Row> = {
   "source-quota-unconfirmed": waiting([
-    "{n} konuşma limit dolduğu için durdu; limit verisi bunu doğrulayınca geçerim.",
-    "{n conversations} stopped at the limit; I switch once usage data confirms it.",
+    "{n} konuşma limit dolduğu için durdu; limit verisi bunu doğrulayınca Relay geçer.",
+    "{n conversations} stopped at the limit. Relay switches when usage data confirms it.",
   ]),
   checking: waiting(CHECKING),
   "desktop-busy": waiting(DESKTOP_BUSY),
   "separate-window": waiting(SEPARATE_WINDOW),
   "context-changed": waiting([
-    "Durum değişti; yeniden kontrol ediyorum.",
-    "Something changed; checking again.",
+    "Durum değişti; Relay yeniden kontrol ediyor.",
+    "The state changed. Relay checks again.",
   ]),
   "delivery-uncertain": attention([
-    "{uncertain} konuşmada devam mesajının ulaştığı doğrulanamadı; Claude uygulamasında kontrol et. Tekrar gönderilmez.",
-    "Could not confirm the continue message reached {uncertain conversations}; check them in the Claude app. Nothing is resent.",
+    "{uncertain} konuşmada devam mesajının ulaştığı doğrulanamadı. Claude uygulamasında kontrol et. Mesaj tekrar gönderilmez.",
+    "Relay cannot confirm that the continue message reached {uncertain conversations}. Check them in the Claude app. Relay does not send it again.",
   ]),
   "no-target": attention([
-    "{n} konuşma durdu ama limitinde yer olan hesap yok; bir hesabın limiti yenilenince geçerim.",
-    "{n conversations} stopped but no account has room; I switch when one resets.",
+    "{n} konuşma durdu ama limitinde yer olan hesap yok. Bir hesabın limiti yenilenince Relay geçer.",
+    "{n conversations} stopped and no account has room. Relay switches when a limit resets.",
   ]),
   "desktop-unavailable": attention(DESKTOP_UNAVAILABLE),
   "source-not-enrolled": attention(UNKNOWN_ACTIVE),
@@ -230,43 +230,43 @@ const FLEET: Record<string, Row> = {
     "Give Relay macOS Accessibility permission to continue conversations.",
   ]),
   "switch-interrupted": attention([
-    "Bir geçiş yarıda kaldı; önce yedeği geri yükle.",
-    "A switch was interrupted; restore the backup first.",
+    "Bir geçiş yarıda kaldı. Önce yedeği geri yükle.",
+    "A switch is incomplete. Restore the backup first.",
   ]),
   "account-changed": attention([
-    "Geçişten sonra açık hesap değişti; devam mesajları gönderilmedi.",
-    "The open account changed after the switch; no continue messages were sent.",
+    "Geçişten sonra açık hesap değişti. Devam mesajları gönderilmedi.",
+    "The open account changed after the switch. Relay did not send continue messages.",
   ]),
   "target-missing": attention([
-    "Hedef hesap bulunamadı; devam mesajları gönderilmedi.",
-    "The target account is missing; no continue messages were sent.",
+    "Hedef hesap bulunamadı. Devam mesajları gönderilmedi.",
+    "The target account is missing. Relay did not send continue messages.",
   ]),
 };
 
 /** Any reason Relay has no sentence for: the UI could not be read. */
 const UNREADABLE: Copy = [
   "Claude uygulamasının arayüzü okunamadı ({reason}). Geçiş bekliyor.",
-  "Could not read the Claude app’s interface ({reason}). The switch is waiting.",
+  "Relay cannot read the Claude app interface ({reason}). The switch waits.",
 ];
 const OTHER_WORK: Copy = [
-  "{n} konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince {tgt’e} geçip devam ettiririm.",
-  "{n conversations} stopped at the limit. Other work is running in the Claude app; when it finishes I switch to {tgt} and continue.",
+  "{n} konuşma limit dolduğu için durdu. Claude uygulamasında başka iş çalışıyor; bitince Relay {tgt’e} geçip devam ettirir.",
+  "{n conversations} stopped at the limit. Other work runs in the Claude app. When it ends, Relay switches to {tgt} and continues.",
 ];
 const BACKGROUND_WORK: Copy = [
-  "{n} konuşma limit dolduğu için durdu. Arka planda bir komut (derleme, test gibi) hâlâ çalışıyor; bitince ya da en geç 15 dakika sonra onu durdurup {tgt’e} geçerim. Açık kalan sunucuları geçişte kapatırım.",
-  "{n conversations} stopped at the limit. A background command (a build or a test) is still running; when it ends, or after 15 minutes at most, I stop it and switch to {tgt}. Servers left running are stopped at the switch.",
+  "{n} konuşma limit dolduğu için durdu. Arka planda bir komut, örneğin derleme ya da test, hâlâ çalışıyor. Bitince ya da en geç 15 dk sonra Relay onu durdurup {tgt’e} geçer. Geçiş açık sunucuları da kapatır.",
+  "{n conversations} stopped at the limit. A background command, such as a build or a test, still runs. When it ends, or after 15 min at most, Relay stops it and switches to {tgt}. The switch also stops open servers.",
 ];
 const WATCHING: Copy = [
-  "İzliyorum. Limit dolunca duran konuşmaları sıradaki hesapta devam ettiririm.",
-  "Watching. When the limit is reached, I continue stopped conversations on the next account.",
+  "Limit dolunca Relay duran konuşmaları sıradaki hesapta devam ettirir.",
+  "When the limit is reached, Relay continues stopped conversations on the next account.",
 ];
 const FULL_NOTHING_STOPPED: Copy = [
-  "Limit doldu ama duran konuşma yok; devam ettirecek bir şey yok. İstersen şimdi {tgt’e} geç.",
-  "The limit is reached but no conversation stopped at it, so there is nothing to continue. You can switch to {tgt} now.",
+  "Limit doldu ama duran konuşma yok. İstersen şimdi {tgt’e} geç.",
+  "The limit is reached, but no conversation stopped. You can switch to {tgt} now.",
 ];
 const FULL_NOTHING_READY: Copy = [
   "Limit doldu; duran konuşma ve hazır hesap yok.",
-  "The limit is reached; no conversation stopped and no account is ready.",
+  "The limit is reached. No conversation stopped and no account is ready.",
 ];
 
 /** Reasons where Relay holds a stop it could switch for, if the user asks. */
@@ -380,14 +380,14 @@ export function automationStatus(
   };
   if (fleet.status === "switching")
     return show(
-      waiting(["{src} hesabından {tgt} hesabına geçiliyor…", "Switching {src} → {tgt}…"]),
+      waiting(["{src} hesabından {tgt} hesabına geçiliyor…", "Switch in progress: {src} → {tgt}…"]),
       vars,
     );
   if (fleet.status === "continuing")
     return show(
       waiting([
         "{tgt} hesabında {n} konuşma sürdürülüyor…",
-        "Continuing {n conversations} on {tgt}…",
+        "Relay continues {n conversations} on {tgt}…",
       ]),
       vars,
     );
@@ -412,8 +412,8 @@ export function automationStatus(
   if (reason === "continued" && last)
     return show(
       ok([
-        "İzliyorum. Son geçiş: {src} → {tgt}, {started}/{conversations} konuşma sürdürüldü.",
-        "Watching. Last handoff: {src} → {tgt}, {started}/{conversations} {conversations word} continued.",
+        "Son geçiş: {src} → {tgt}, {started}/{conversations} konuşma sürdürüldü.",
+        "Last handoff: {src} → {tgt}, {started}/{conversations} {conversations word} continued.",
       ]),
       {
         src: name(last.sourceId),
@@ -447,8 +447,8 @@ export function automationStatus(
   if (reason.startsWith("switch-failed:"))
     return show(
       attention([
-        "Geçiş yapılamadı ({x}). Bu limit için yeniden denemeyeceğim; istersen elle geç.",
-        "The switch failed ({x}). I won’t retry for this limit; you can switch by hand.",
+        "Geçiş yapılamadı ({x}). Relay bu limit için yeniden denemez; istersen elle geç.",
+        "The switch failed ({x}). Relay does not try again for this limit. You can switch manually.",
       ]),
       { x: reason.slice("switch-failed:".length) },
     );

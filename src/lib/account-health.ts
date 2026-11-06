@@ -24,6 +24,8 @@ type Words = readonly [tr: string, en: string];
 
 /** An account with no usage reading yet, in the Accounts page, the Overview and the panel. */
 const NO_USAGE_DATA: Words = ["Limit verisi yok", "No usage data yet"];
+/** A browser approval in progress for the usage sign-in. */
+const APPROVE: Words = ["Tarayıcıda onayla", "Approve in the browser"];
 
 /**
  * What the usage connection waits for the user to do, when only a prompting refresh (`renew`) can clear it:
@@ -71,11 +73,7 @@ export function usageSignInStatus(
   waiting: boolean,
   t: T,
 ): { tone: AccountHealth["tone"]; label: string } {
-  if (waiting)
-    return {
-      tone: "warn",
-      label: t("Tarayıcı onayı bekleniyor", "Waiting for browser approval"),
-    };
+  if (waiting) return { tone: "warn", label: t(...APPROVE) };
   const state = signInState(account, usage);
   const [tr, en] = SIGN_IN_WORDS[state];
   switch (state) {
@@ -129,11 +127,7 @@ export function accountHealth(
     fix?: AccountFix,
   ): AccountHealth => ({ tone, label: t(tr, en), detail, fix });
 
-  if (context.waiting)
-    return result("warn", [
-      "Tarayıcı onayı bekleniyor",
-      "Waiting for browser approval",
-    ]);
+  if (context.waiting) return result("warn", APPROVE);
   // Without a saved Claude app sign-in the row action is "save", never "reconnect".
   if (!account.desktop)
     return result(

@@ -79,7 +79,7 @@ function statusText(
   zone: string,
   t: T,
 ) {
-  if (!status) return t("Durum bekleniyor", "Waiting for status");
+  if (!status) return t("Henüz durum yok", "No status yet");
   switch (status.state) {
     case "off":
       return t("Önceden başlatma kapalı", "Early start is off");
@@ -96,7 +96,7 @@ function statusText(
         `Period open · Resets ${clock(status.resetsAt!, zone)}`,
       );
     case "due":
-      return t("Başlatılıyor…", "Starting…");
+      return t("Başlatılıyor…", "Start in progress…");
     case "waiting":
       if (status.reason === "adapted")
         return t(
@@ -105,8 +105,8 @@ function statusText(
         );
       if (status.reason === "cooldown")
         return t(
-          `Son deneme başarısız (${failureText(lastFailure, t)}); 15 dk sonra yeniden denenecek`,
-          `Last attempt failed (${failureText(lastFailure, t)}); retrying in 15 min`,
+          `Son deneme başarısız: ${failureText(lastFailure, t)}. 15 dk sonra yeniden denenecek`,
+          `Last attempt failed: ${failureText(lastFailure, t)}. Next try in 15 min`,
         );
       if (status.reason === "in-use")
         return t("Relay’de çalışan bir oturum var", "A Relay session is running");
@@ -115,7 +115,7 @@ function statusText(
           "Başka bir Relay işlemi sürüyor",
           "Another Relay operation is running",
         );
-      return t("Limit verisi yenileniyor", "Refreshing usage");
+      return t("Limit verisi yenileniyor", "Usage refresh in progress");
     case "blocked":
       if (stopReason(status))
         return t(
@@ -172,7 +172,7 @@ function span(hours: PlanningHours, t: T) {
   return m ? t(`${h} sa ${m} dk`, `${h} h ${m} min`) : t(`${h} sa`, `${h} h`);
 }
 
-const cardClass = "gap-0 px-5 py-4";
+const cardClass = "gap-0 px-4 py-3.5";
 /** Account row: narrow = switch · name · order, editors below; wide (@xl) = one row. */
 const accountRowClass =
   "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 border-t py-3 first:border-t-0 @xl:grid-cols-[auto_minmax(0,1.3fr)_160px_minmax(0,1.1fr)_28px]";
@@ -364,13 +364,13 @@ export function PlanningPanel({
   const upcoming = nextPlannedWindow(settings, accounts, keeper, now);
   const summary = !settings.autoStart
     ? t(
-        "Kapalı. Açınca dönemler planlanan saatlerde başlar.",
-        "Off. When on, periods start at the planned times.",
+        "Açınca dönemler planlanan saatlerde başlar.",
+        "When on, periods start at the planned times.",
       )
     : !included.length
       ? t(
-          "Plana hesap ekle; başlatma saatleri otomatik dağıtılır.",
-          "Add accounts to the plan; start times are spread automatically.",
+          "Plana hesap ekle. Başlatma saatlerini Relay dağıtır.",
+          "Add accounts to the plan. Relay sets the start times.",
         )
       : t(
           `Bugün ${plannedToday} başlatma planlı`,
@@ -389,7 +389,7 @@ export function PlanningPanel({
         )
       : undefined;
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <PlanTimeline
         settings={planned}
         accounts={accounts}
@@ -419,13 +419,13 @@ export function PlanningPanel({
             <Play className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <strong className="font-display text-[15px] font-semibold">
+            <strong className="font-display text-sm font-semibold">
               {t(
                 "Limit dönemlerini önceden başlat",
                 "Start limit periods early",
               )}
             </strong>
-            <p className="mt-0.5 text-[13px]">{summary}</p>
+            <p className="mt-0.5 text-sm">{summary}</p>
             {settings.autoStart && forecast && (
               <ForecastBadges
                 forecast={forecast}
@@ -441,8 +441,8 @@ export function PlanningPanel({
             )}
             <small className={cn(noteClass, "mt-0.5 block")}>
               {t(
-                "Relay açık, Mac uyanık olmalı; her başlatma küçük bir istek harcar.",
-                "Relay must be open and the Mac awake; each start costs a small request.",
+                "Relay açık, Mac uyanık olmalı. Her başlatma küçük bir istek harcar.",
+                "Relay must be open and the Mac awake. Each start uses a small request.",
               )}
             </small>
           </div>
@@ -459,7 +459,7 @@ export function PlanningPanel({
         {nextStart && (
           <div
             data-slot="next-start"
-            className="flex items-center justify-between gap-3 border-t py-2.5 text-[13px]"
+            className="flex items-center justify-between gap-3 border-t py-2.5 text-sm"
           >
             <span>{t("Sonraki başlatma", "Next start")}</span>
             <span className="min-w-0 truncate text-muted-foreground tabular-nums">
@@ -730,8 +730,8 @@ export function PlanningPanel({
           <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
             <p className={noteClass}>
               {t(
-                "Relay, kapasiteye ve tempoya göre hesapların limit dönemlerini işe başlamadan önce başlatır. Sıra yalnızca eşitlikte öncelik verir.",
-                "Relay starts accounts’ limit periods before work, by capacity and tempo. Order only breaks ties.",
+                "Relay başlatma saatlerini kapasiteye ve tempoya göre belirler. Sıra yalnızca eşitlikte öncelik verir.",
+                "Relay sets the start times from capacity and tempo. The order applies only to ties.",
               )}
             </p>
           </Disclosure>

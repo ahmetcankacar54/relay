@@ -30,7 +30,7 @@ import {
   type UsageStatisticsState,
 } from "./usage/useUsageStatistics";
 
-const cardClass = "gap-0 px-5 py-4";
+const cardClass = "gap-0 px-4 py-3.5";
 
 /** A card with one message instead of the statistics; the panda reflects the state. */
 function StatisticsMessage({
@@ -79,7 +79,7 @@ export function UsageStatisticsSection(props: SectionProps) {
       <StatisticsMessage
         alert
         scene="trouble"
-        title={t("İstatistikler alınamadı", "Could not load statistics")}
+        title={t("İstatistikler alınamadı", "Cannot load the statistics")}
         description={error}
       />
     );
@@ -89,7 +89,7 @@ export function UsageStatisticsSection(props: SectionProps) {
       <Banner tone="error" role="alert">
         <span>
           <b>
-            {t("İstatistikler yenilenemedi.", "Could not refresh statistics.")}
+            {t("İstatistikler yenilenemedi.", "Cannot refresh the statistics.")}
           </b>{" "}
           {error}
         </span>
@@ -119,8 +119,8 @@ function StatisticsContent({
           "No usage record for this account",
         )}
         description={t(
-          "Relay, hesap bağlanıp limitleri okunduğunda kullanımı kaydetmeye başlar.",
-          "Relay starts recording usage once the account is connected and its limits are read.",
+          "Relay, bu hesabın limitlerini okuduktan sonra kullanımı kaydeder.",
+          "Relay records usage after it reads the limits of this account.",
         )}
       />
     );
@@ -131,7 +131,7 @@ function StatisticsContent({
         title={t("İstatistikler", "Statistics")}
         description={
           loading
-            ? t("İstatistikler yükleniyor", "Loading statistics")
+            ? t("İstatistikler yükleniyor", "Relay loads the statistics…")
             : t("İstatistik yok", "No statistics")
         }
       />
@@ -140,10 +140,10 @@ function StatisticsContent({
     return (
       <StatisticsMessage
         scene="trouble"
-        title={t("Kullanım geçmişi okunamadı", "Usage history could not be read")}
+        title={t("Kullanım geçmişi okunamadı", "Cannot read the usage history")}
         description={t(
-          "Kullanım istatistikleri gösterilemiyor. Canlı limitler çalışmaya devam eder.",
-          "Usage statistics are unavailable. Live limits keep working.",
+          "Canlı limitler çalışmaya devam eder.",
+          "Live limits still work.",
         )}
       />
     );
@@ -151,10 +151,10 @@ function StatisticsContent({
     return (
       <StatisticsMessage
         scene="collecting"
-        title={t("Veri birikiyor", "Collecting data")}
+        title={t("Henüz veri yok", "No data yet")}
         description={t(
-          "Relay açıkken limitler yenilendikçe istatistikler oluşur.",
-          "Statistics build up as Relay refreshes limits while it is open.",
+          "Relay açıkken istatistik toplar.",
+          "Relay collects statistics while it is open.",
         )}
       />
     );
@@ -167,12 +167,12 @@ function StatisticsContent({
       <LimitHits view={view} zone={zone} />
       <details className="px-1">
         <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-          {t("Bu sayılar nasıl hesaplanıyor?", "How are these numbers worked out?")}
+          {t("Bu sayılar nasıl hesaplanıyor?", "How Relay calculates these numbers")}
         </summary>
         <Note className="mt-1 text-xs">
           {t(
-            "Hepsi Relay’in gözlediği limit yüzdelerinden gelir; token, mesaj ya da maliyet değildir. Bir dolu dönem, bir hesabın 5 saatlik limitinin tamamıdır. Hesap payları planlara göre ağırlıklıdır (Pro 1, Max 5× 5, Max 20× 20, Team = girilen ağırlık). Token ve API karşılığı “Token ve ücret” sekmesindedir.",
-            "All of it comes from the limit percentages Relay observed; not tokens, messages or cost. A full period is an account’s whole 5-hour limit. Account shares are weighted by plan (Pro 1, Max 5× 5, Max 20× 20, Team = the weight you set). Tokens and API value are on the “Tokens and cost” tab.",
+            "Bu sayılar Relay’in okuduğu limit yüzdelerinden gelir; token, mesaj ya da maliyet saymaz. Dolu dönem, bir hesabın 5 saatlik limitinin tamamıdır. Hesap payları plana göre ağırlıklıdır: Pro 1, Max 5× 5, Max 20× 20, Team için girdiğin ağırlık. Token ve API karşılığı “Token ve ücret” sekmesindedir.",
+            "These numbers come from the limit percentages that Relay reads. They do not count tokens, messages or cost. A full period is all of one 5-hour limit. Account shares use plan weights: Pro 1, Max 5× 5, Max 20× 20, Team as you set it. Tokens and API value are on the “Tokens and cost” tab.",
           )}
         </Note>
       </details>
@@ -282,10 +282,6 @@ export function Usage() {
   return (
     <PageFrame
       title={t("Kullanım", "Usage")}
-      description={t(
-        "Hangi hesapta ne kadar · çalışma alışkanlıkların",
-        "Usage per account · your working habits",
-      )}
       actions={
         filtered ? (
           <StatisticsHeader

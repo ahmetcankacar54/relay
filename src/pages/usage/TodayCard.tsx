@@ -67,7 +67,7 @@ export function TodayCard({ today }: { today: TokenToday }) {
       className="grid gap-x-6 gap-y-3 rounded-lg border px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]"
     >
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
+        <div className="flex items-center gap-1.5 font-display text-sm font-semibold">
           {change !== null && (
             <span aria-hidden className={cn("text-xs", tone)}>
               {change >= 0 ? "▲" : "▼"}
@@ -75,7 +75,7 @@ export function TodayCard({ today }: { today: TokenToday }) {
           )}
           {t("Bugün", "Today")}
         </div>
-        <div className="text-[11px] tracking-wide text-muted-foreground uppercase">
+        <div className="text-2xs tracking-wide text-muted-foreground uppercase">
           {t("Claude Code · token", "Claude Code · tokens")}
         </div>
         <dl className="mt-2 grid grid-cols-[auto_auto] gap-x-6 gap-y-0.5 text-sm">
@@ -168,10 +168,10 @@ export function TodayCard({ today }: { today: TokenToday }) {
           </g>
         </svg>
         {since && (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             {t(
-              `Gün içi çizgi ${since} itibarıyla tutuluyor.`,
-              `The line within the day is kept from ${since}.`,
+              `Gün içi çizgi için ${since} öncesinde veri yok.`,
+              `No line data before ${since}.`,
             )}
           </p>
         )}

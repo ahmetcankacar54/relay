@@ -17,10 +17,6 @@ import { blockReason, desktopBlock } from "@/lib/onboarding";
 import { UsageCard } from "../../features/UsageCard";
 import { planColumn } from "../accounts/accountLabels";
 
-
-const eyebrow =
-  "text-xs font-semibold tracking-wider text-muted-foreground uppercase";
-
 export function ActiveAccountCard({
   go,
   now,
@@ -53,7 +49,7 @@ export function ActiveAccountCard({
         {t("Claude uygulamasında açık", "Open in the Claude app")}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[22px] font-bold tracking-tight">{active.name}</span>
+        <span className="text-xl font-semibold">{active.name}</span>
         {plan && (
           <Badge
             variant="secondary"
@@ -69,7 +65,7 @@ export function ActiveAccountCard({
             {plan.label}
           </Badge>
         )}
-        <span className="inline-flex items-center gap-1.5 text-[12.5px] text-foreground/80">
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <StatusDot tone={running ? "ok" : "off"} hollow={!running} />
           {running ? t("Çalışıyor", "Running") : t("Kapalı", "Closed")}
         </span>
@@ -78,14 +74,14 @@ export function ActiveAccountCard({
     </div>
   );
   return (
-    <Card className="flex-row flex-wrap items-center gap-6 px-6 py-5">
+    <Card className="flex-row flex-wrap items-center gap-5 px-4 py-4">
       {freshUsage(usage, now) ? (
         <LimitRings
           className="min-w-0 flex-1"
           usage={usage}
           now={now}
           zone={relay.settings.planning.timeZone}
-          size={140}
+          size={104}
           state={ringState(usage, now)}
           aside={header}
         />
@@ -110,13 +106,13 @@ export function ActiveAccountCard({
       {suggestion && (
         <div
           data-slot="suggestion"
-          className="flex w-56 shrink-0 flex-col gap-2.5 border-l pl-6"
+          className="flex w-52 shrink-0 flex-col gap-2 border-l pl-5"
         >
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-warn-foreground">
             <TriangleAlert aria-hidden="true" className="size-3.5" />
             {t("Limit dolmak üzere", "Near the limit")}
           </span>
-          <p className="text-[13px] leading-snug text-foreground/85">
+          <p className="text-sm leading-snug">
             {language === "tr" ? (
               <>
                 En uygun hesap <b>{suggestion.name}</b>
@@ -126,7 +122,7 @@ export function ActiveAccountCard({
               </>
             ) : (
               <>
-                <b>{suggestion.name}</b> is the best fit
+                The best account is <b>{suggestion.name}</b>
                 {suggestedUsage?.fiveHour
                   ? `: ${formatUsed(suggestedUsage.fiveHour.usedPercent, language)}.`
                   : "."}
@@ -165,42 +161,28 @@ function Onboarding({ go }: { go: (to: Destination) => void }) {
   const block = desktopBlock(relay);
   const reason = blockReason(block, t);
   return (
-    <Card className="gap-0 px-4 py-3.5">
+    <Card className="gap-0 px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Panda scene={first ? "welcome" : "lookout"} size={first ? 120 : 72} playful />
+          <Panda scene={first ? "welcome" : "lookout"} size={first ? 88 : 56} playful />
           <div className="min-w-0">
-            <div className={eyebrow}>{t("CLAUDE UYGULAMASI", "THE CLAUDE APP")}</div>
-            <div className="mt-0.5 text-lg font-bold">
+            <div className="text-lg font-semibold">
               {first
-                ? t("Merhaba, ben Relay’in kuryesiyim", "Hi, I’m Relay’s courier")
+                ? t("İlk hesabını ekle", "Add your first account")
                 : unlinked
                   ? t("Claude uygulaması hesabı eşleştirilmedi", "Claude app account not linked")
                   : t("İlk hesabını bağla", "Connect your first account")}
             </div>
-            {first && (
-              <p className="mt-0.5 text-sm font-medium">
-                {t(
-                  "Claude hesapların arasında tek tıkla geç; Code konuşmaların seninle gelsin.",
-                  "Switch between your Claude accounts in one click; your Code conversations come with you.",
-                )}
-              </p>
-            )}
             <p className="mt-0.5 text-sm text-muted-foreground">
               {unlinked
                 ? t(
                     "Claude uygulamasında açık hesabı bir Relay profiliyle eşleştir.",
                     "Link the account open in the Claude app to a Relay profile.",
                   )
-                : first
-                  ? t(
-                      "Her hesabı bir kez bağla, sonra buradan geç.",
-                      "Connect each account once, then switch here.",
-                    )
-                  : t(
-                      "Claude uygulamasındaki her hesabı bir kez bağla, sonra buradan geç.",
-                      "Connect each Claude app account once, then switch here.",
-                    )}
+                : t(
+                    "Her hesabı bir kez bağla. Sonra buradan geç.",
+                    "Connect each account one time. Then switch here.",
+                  )}
             </p>
           </div>
         </div>

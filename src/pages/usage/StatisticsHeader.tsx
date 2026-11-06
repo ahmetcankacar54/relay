@@ -27,7 +27,7 @@ export function StatisticsHeader({
       <ToggleGroup
         type="single"
         variant="outline"
-        aria-label={t("Dönem", "Period")}
+        aria-label={t("Aralık", "Range")}
         value={String(range)}
         onValueChange={(v) => v && onRange(Number(v) as StatisticsRange)}
       >

@@ -92,7 +92,7 @@ export function TodayCard({
   return (
     <Card className="gap-0 px-4 py-3.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold">{t("Bugün", "Today")}</span>
+        <span className="text-sm font-semibold">{t("Bugün", "Today")}</span>
         <Button
           variant="link"
           size="sm"
@@ -103,7 +103,7 @@ export function TodayCard({
         </Button>
       </div>
       <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-        {unplanned && <Panda scene="lookout" size={40} playful />}
+        {unplanned && <Panda scene="lookout" size={32} playful />}
         <span>{summary}</span>
       </div>
       <div className="grid gap-1.5 text-xs">
@@ -144,7 +144,7 @@ export function TodayCard({
         ))}
         <div aria-hidden="true" className="grid grid-cols-[84px_1fr] gap-2">
           <span />
-          <div className="relative h-3 text-[10.5px] tabular-nums text-muted-foreground">
+          <div className="relative h-3.5 text-2xs tabular-nums text-muted-foreground">
             {ticks.map(({ hour, at }, index) => (
               <span
                 key={hour}

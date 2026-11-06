@@ -175,7 +175,7 @@ test("relay switch leaves the Claude extension and its browser alone, and says w
   assert.deepEqual(f.extension.opened, []);
   assert.deepEqual(f.extension.stored.get(dir), signInFor(b.desktop!.accountUuid, 2));
   assert.match(f.out(), /Switched to A/);
-  assert.match(f.out(), /This tool cannot change the Claude extension’s sign-in; use Relay\.app: Settings → What comes along/);
+  assert.match(f.out(), /This tool cannot change the Claude extension sign-in\. In Relay\.app, use Settings → What comes along/);
   assert.ok(!(f.out() + f.err()).includes("SECRET"));
   assert.equal(a.desktop!.accountUuid.length, 36);
 });

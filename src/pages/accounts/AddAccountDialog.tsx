@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -13,7 +12,6 @@ import { cn } from "@/lib/utils";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { WorkspaceSelect } from "../../features/DesktopSetup";
-import { KEYCHAIN_HINT } from "../../features/DesktopActionReview";
 import {
   CliFlowPanel,
   DesktopPendingActions,
@@ -53,15 +51,9 @@ export function AddAccountDialog({
   const { t } = useI18n();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{t("Hesap ekle", "Add account")}</DialogTitle>
-          <DialogDescription>
-            {t(
-              "Claude uygulamasında hesaba gir, limit iznini ver; adını Relay önerir.",
-              "Sign in to the account in the Claude app and allow usage reading; Relay suggests its name.",
-            )}
-          </DialogDescription>
         </DialogHeader>
         {/* Radix unmounts the content when closed, so each opening starts at step 1. */}
         <AddAccountSteps close={() => onOpenChange(false)} />
@@ -71,21 +63,18 @@ export function AddAccountDialog({
 }
 
 /**
- * Where the wizard stands: "2 / 3" and three segments, each a bar over its numbered name; done
- * and current bars are filled, the current name is bold.
+ * Where the wizard stands: three segments, each a bar over its numbered name; done and current
+ * bars are filled, the current name is bold.
  */
 function StepIndicator({ step }: { step: Step }) {
   const { t } = useI18n();
   const titles = [
-    t("Claude girişi", "Claude sign-in"),
-    t("Limit izni", "Usage access"),
+    t("Claude uygulaması", "Claude app"),
+    t("Limit okuma girişi", "Usage sign-in"),
     t("Hazır", "Ready"),
   ];
   return (
     <div className="grid gap-2">
-      <span className="text-xs font-semibold text-muted-foreground tabular-nums">
-        {t(`Adım ${step} / 3`, `Step ${step} of 3`)}
-      </span>
       <ol
         className="grid grid-cols-3 gap-1.5 text-xs"
         aria-label={t("Adımlar", "Steps")}
@@ -126,7 +115,7 @@ function StepIndicator({ step }: { step: Step }) {
 
 /** A step's own heading. */
 function StepTitle({ children }: { children: ReactNode }) {
-  return <h3 className="text-[15px] font-semibold leading-snug">{children}</h3>;
+  return <h3 className="text-lg font-semibold leading-snug">{children}</h3>;
 }
 
 /**
@@ -251,7 +240,7 @@ export function AddAccountSteps({
           {account && pendingDesktop?.id === account.id ? (
             <div className="grid gap-3">
               <StatusLine tone="warn" icon={<Monitor />}>
-                {t("Claude uygulamasında giriş bekleniyor", "Waiting for sign-in in the Claude app")}
+                {t("Claude uygulamasına giriş yap", "Sign in to the Claude app")}
               </StatusLine>
               <DesktopPendingActions />
             </div>
@@ -286,17 +275,6 @@ export function AddAccountSteps({
             </div>
           ) : (
             <div className="grid gap-3">
-              <p className="text-sm text-muted-foreground">
-                {current
-                  ? t(
-                      "Claude uygulamasında Relay’e kayıtlı olmayan bir hesap açık. Relay onu kaydeder; bunun için Claude uygulaması bir kez yeniden başlar. Code henüz açılmadıysa Code’u açınca kaydeder.",
-                      "The Claude app is signed in to an account Relay has not saved. Relay saves it, restarting the Claude app once. If Code has not been opened yet, it saves it once Code is open.",
-                    )
-                  : t(
-                      "Claude uygulaması giriş ekranıyla yeniden açılır. Yeni hesapla giriş yapıp Code’u bir kez açınca Relay girişi kendisi kaydeder; bunun için Claude bir kez daha yeniden başlar.",
-                      "The Claude app reopens on its sign-in screen. Once you sign in with the new account and open Code, Relay saves the sign-in by itself, restarting Claude once more.",
-                    )}
-              </p>
               {auto?.status === "failed" && (
                 <p role="status" className="text-sm text-warn-foreground">
                   {autoCaptureLine(auto, auto.accountId, t, language)}
@@ -307,13 +285,12 @@ export function AddAccountSteps({
                   {busy === "create" && <LoaderCircle className="animate-spin" />}
                   {current
                     ? t("Bu hesabı ekle…", "Add this account…")
-                    : t("Claude’u giriş ekranıyla aç…", "Open Claude on sign-in…")}
+                    : t("Claude uygulamasında giriş ekranını aç…", "Open sign-in in the Claude app…")}
                 </Button>
                 {desktopLock && blockReason(desktopLock, t) && (
                   <small className="text-xs text-muted-foreground">{blockReason(desktopLock, t)}</small>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">{t(...KEYCHAIN_HINT)}</p>
             </div>
           )}
           <div className="flex justify-end gap-2">
@@ -326,12 +303,12 @@ export function AddAccountSteps({
       {step === 2 && account && (
         <>
           <StepTitle>
-            {t(`“${account.name}” için limit izni`, `Usage access for “${account.name}”`)}
+            {t(`“${account.name}” için limit okuma girişi`, `Usage sign-in for “${account.name}”`)}
           </StepTitle>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Relay bu hesabın 5 saatlik ve haftalık limitlerini okuyabilsin diye bir kez izin verilir. Giriş sayfası Relay’in kendi penceresinde açılır.",
-              "Allowed once so Relay can read this account’s 5-hour and weekly limits. The sign-in page opens in Relay’s own window.",
+              "Relay’in bu hesabın limitlerini okuyabilmesi için bir kez giriş yap.",
+              "Sign in once so that Relay can read the limits of this account.",
             )}
           </p>
           {/* The page-frame panel sits under the overlay; finish the sign-in here. */}
@@ -349,8 +326,8 @@ export function AddAccountSteps({
               </StatusLine>
               <p className="text-sm text-muted-foreground">
                 {t(
-                  "Limitleri okumak için Claude Code gerekir. Claude uygulaması Code açılınca onu kendisi indirir; birkaç dakika içinde görünmezse resmi CLI’yi kur.",
-                  "Reading limits needs Claude Code. The Claude app downloads it once Code is opened; if it does not show up within a few minutes, install the official CLI.",
+                  "Limitleri okumak için Claude Code gerekir. Claude uygulamasında Code’u aç ya da CLI’yi kur.",
+                  "Relay needs Claude Code to read limits. Open Code in the Claude app, or install the CLI.",
                 )}
               </p>
               <CliSetupActions />
@@ -364,7 +341,7 @@ export function AddAccountSteps({
                 onClick={() => void relay.startCli(account)}
               >
                 <Globe2 />
-                {t("Limit iznini başlat", "Start usage access")}
+                {t("Limit okuma girişi yap", "Sign in to read usage")}
               </Button>
             )}
             <Button variant={connected ? "default" : "ghost"} onClick={() => setStep(3)}>
@@ -381,7 +358,7 @@ export function AddAccountSteps({
             save(close);
           }}
         >
-          <StepTitle>{t("Hesap hazır", "The account is ready")}</StepTitle>
+          <StepTitle>{t("Hesap hazır", "Account ready")}</StepTitle>
           <div className="grid gap-2">
             <StatusLine tone={linked ? "ok" : "warn"} icon={<Monitor />} static>
               {linked
@@ -390,8 +367,8 @@ export function AddAccountSteps({
             </StatusLine>
             <StatusLine tone={connected ? "ok" : "warn"} icon={<Globe2 />} static>
               {connected
-                ? t(`Limit izni verildi${account.auth?.email ? ` · ${account.auth.email}` : ""}`, `Usage access allowed${account.auth?.email ? ` · ${account.auth.email}` : ""}`)
-                : t("Limit izni sonra verilebilir", "Usage access can be allowed later")}
+                ? t(`Limit okuma girişi bağlı${account.auth?.email ? ` · ${account.auth.email}` : ""}`, `Usage sign-in connected${account.auth?.email ? ` · ${account.auth.email}` : ""}`)
+                : t("Limit okuma girişi yok", "No usage sign-in")}
             </StatusLine>
           </div>
           {profile && (
@@ -399,7 +376,7 @@ export function AddAccountSteps({
           )}
           <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="ghost" disabled={!!busy || !profile?.name.trim()} onClick={another}>
-              {t("Başka hesap ekle", "Add another")}
+              {t("Başka hesap ekle", "Add another account")}
             </Button>
             <Button type="submit" disabled={!!busy || !profile?.name.trim()}>
               {busy === "profile" && <LoaderCircle className="animate-spin" />}
@@ -429,7 +406,7 @@ function StatusLine({
 }) {
   return (
     <div
-      className="flex items-center gap-2.5 rounded-xl border bg-card px-3.5 py-2.5 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
+      className="flex items-center gap-2.5 rounded-lg border bg-card px-3.5 py-2.5 text-sm [&>svg]:size-4 [&>svg]:shrink-0"
       aria-live="polite"
     >
       {tone === "ok" ? (

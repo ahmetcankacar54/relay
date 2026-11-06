@@ -99,10 +99,7 @@ export function PlanTimeline({
   /** Who warms up when, by name; nothing is warmed up while auto start is off. */
   const warmUpLine = (ids: string[], times: number[]) => {
     if (!settings.autoStart)
-      return t(
-        "Önceden başlatma kapalı; dönemler erken başlatılmaz",
-        "Early start is off; no period starts early",
-      );
+      return t("Önceden başlatma kapalı", "Early start is off");
     const list = times
       .map((time, i) => `${name(ids[i])} ${clock(time)}`)
       .join(" · ");
@@ -121,7 +118,7 @@ export function PlanTimeline({
       ),
     },
     {
-      label: t("Dolu", "No quota"),
+      label: t("Limit dolu", "No quota"),
       swatch: (
         <i
           aria-hidden="true"
@@ -147,10 +144,10 @@ export function PlanTimeline({
     },
   ];
   return (
-    <Card className="@container gap-0 px-5 py-4">
+    <Card className="@container gap-0 px-4 py-3.5">
       <div className="mb-3 flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-baseline gap-2">
-          <strong className="font-display text-[15px] font-semibold">
+          <strong className="font-display text-sm font-semibold">
             {title}
           </strong>
           {offset >= -1 && offset <= 1 && (
@@ -341,7 +338,7 @@ export function PlanTimeline({
               <span className={noteClass}>{title}</span>
               <strong
                 className={cn(
-                  "block text-[13px] font-semibold",
+                  "block text-sm font-semibold",
                   hasGap(forecast) && "text-crit",
                 )}
               >

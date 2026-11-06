@@ -11,7 +11,7 @@ const ROUTINE_FAILURES: Record<string, Words> = {
   ],
   "routine-policy-check-failed": [
     "yönetici politikası denetlenemedi, yeniden denenecek",
-    "administrator policy could not be checked, will retry",
+    "administrator policy check failed, Relay tries again",
   ],
   "routine-cli-unavailable": ["Claude CLI bulunamadı", "Claude CLI not found"],
   "routine-cli-unsupported": [
@@ -45,6 +45,6 @@ export function routineFailureNotice(
   const words = routineFailure(reason);
   const why = words ? ` (${language === "en" ? words[1] : words[0]})` : "";
   return language === "en"
-    ? `Could not start ${name}’s limit period${why}.`
+    ? `${name}’s limit period did not start${why}.`
     : `${name} hesabının limit dönemi başlatılamadı${why}.`;
 }

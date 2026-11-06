@@ -28,8 +28,8 @@ export function DesktopActionDialog() {
         </DialogTitle>
         <DialogDescription className="sr-only">
           {t(
-            "Claude uygulaması yeniden başlatılmadan önce onay gerekir.",
-            "Confirmation is required before the Claude app restarts.",
+            "Claude uygulaması yeniden başlamadan önce onayla.",
+            "Confirm before the Claude app restarts.",
           )}
         </DialogDescription>
         <DesktopActionBody />

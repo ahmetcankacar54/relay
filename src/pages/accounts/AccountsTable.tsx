@@ -57,9 +57,8 @@ import type { ExtensionStatus } from "../../../shared/types";
 import { avatarClass, planColumn } from "./accountLabels";
 
 /**
- * A connection icon's three states, as the legend under the table names them: green when ready, amber
- * with a dot when it needs a step (a sign-in to renew reads the same; the Durum column says how bad),
- * grey when absent.
+ * A connection icon's three states: green when ready, amber with a dot when it needs a step (a
+ * sign-in to renew reads the same; the Durum column says how bad), grey when absent.
  */
 const toneText = {
   ok: "text-ok",
@@ -117,7 +116,7 @@ function ConnectionIcons({
       key: "usage",
       icon: Globe2,
       tone: signIn.tone,
-      title: t(`Limit okuma: ${signIn.label}`, `Usage limits: ${signIn.label}`),
+      title: t(`Limit okuma girişi: ${signIn.label}`, `Usage sign-in: ${signIn.label}`),
     },
     ...(ext
       ? [
@@ -176,16 +175,13 @@ export function WindowBadge({
   t: (tr: string, en: string) => string;
   compact?: boolean;
 }) {
-  const label = t("ayrı pencere", "own window");
+  const label = t("ayrı pencere", "separate window");
   return (
     <Badge
       variant="outline"
       data-slot="window-badge"
-      className={cn("shrink-0 gap-1 text-[11px]", compact ? "px-1" : "px-1.5")}
-      title={t(
-        "Bu hesap ayrı bir Claude penceresinde açık",
-        "This account is open in a separate Claude window",
-      )}
+      className={cn("shrink-0 gap-1 text-2xs", compact ? "px-1" : "px-1.5")}
+      title={t("Ayrı Claude penceresinde açık", "Open in a separate Claude window")}
     >
       <AppWindow className="size-3" />
       {compact ? <span className="sr-only">{label}</span> : label}
@@ -243,7 +239,7 @@ export function rowActions(
   const windows = relay.data?.windows;
   // Its own window holds its sign-in: the main Claude cannot take it over until it closes.
   const inWindow = windowAccounts(relay.data).has(a.id);
-  const windowNote = t("Ayrı pencerede açık; önce pencereyi kapat", "Open in a separate window; close it first");
+  const windowNote = t("Önce ayrı penceresini kapat", "Close its separate window first");
   const items: RowAction[] = [];
   if (a.desktop && !isActive)
     items.push({
@@ -382,9 +378,9 @@ export function rowActions(
             "Finish or cancel its usage sign-in first",
           )
         : running
-          ? t("Önce çalışan oturumu durdur", "Stop its running session first")
+          ? t("Önce çalışan oturumu durdur", "Stop its active session first")
           : desktopBusy
-            ? t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is running")
+            ? t("Claude uygulamasında bir işlem sürüyor", "A Claude app action is in progress")
             : undefined;
   items.push({
     key: "remove",
@@ -483,7 +479,7 @@ export function AccountsTable({
   const now = Date.now();
   return (
     <>
-    <div className="overflow-hidden rounded-xl border bg-card">
+    <div className="overflow-hidden rounded-lg border bg-card">
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
@@ -559,20 +555,20 @@ export function AccountsTable({
                         <WindowBadge t={t} compact />
                       )}
                       {suggested && (
-                        <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-[11px] font-semibold text-accent-foreground">
+                        <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-2xs font-semibold text-accent-foreground">
                           {t("önerilen", "suggested")}
                         </span>
                       )}
                       {plan && (
                         <Badge
                           variant="secondary"
-                          className="shrink-0 px-1.5 text-[11px]"
+                          className="shrink-0 px-1.5 text-2xs"
                           title={
                             plan.source === "planning"
                               ? undefined
                               : t(
                                   "Abonelik · planlama için plan seçilmedi",
-                                  "Subscription · no plan picked for planning",
+                                  "Subscription · no plan selected for planning",
                                 )
                           }
                         >
@@ -583,7 +579,7 @@ export function AccountsTable({
                     <div className="truncate text-xs text-muted-foreground">
                       {a.desktop?.email ??
                         a.auth?.email ??
-                        t("Henüz hesap bağlanmadı", "No account connected yet")}
+                        t("Henüz giriş yok", "No sign-in yet")}
                     </div>
                   </div>
                 </div>
@@ -600,7 +596,7 @@ export function AccountsTable({
                   {stale && usage?.checkedAt && (
                     <span
                       data-slot="data-age"
-                      className="shrink-0 rounded-full border px-1.5 py-px text-[11px] text-muted-foreground"
+                      className="shrink-0 rounded-full border px-1.5 py-px text-2xs text-muted-foreground"
                     >
                       {t(
                         `${formatRelative(usage.checkedAt, now, language)} okundu`,
@@ -708,23 +704,21 @@ function ConnectionLegend() {
   return (
     <p
       data-slot="connection-legend"
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-xs text-muted-foreground"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-2xs text-muted-foreground"
     >
-      <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden="true" className="size-2 rounded-full bg-ok" />
-        {t("yeşil: hazır", "green: ready")}
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-ok" />
+        {t("hazır", "ready")}
       </span>
-      <span aria-hidden="true">·</span>
-      <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden="true" className="relative size-2 rounded-full bg-warn">
-          <span className="absolute -top-1 -right-1 size-1.5 rounded-full bg-warn ring-2 ring-background" />
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden="true" className="relative size-1.5 rounded-full bg-warn">
+          <span className="absolute -top-1 -right-1 size-1 rounded-full bg-warn ring-1 ring-background" />
         </span>
-        {t("kehribar ve nokta: bir adım gerekiyor", "amber and dot: a step is needed")}
+        {t("adım gerekiyor", "step needed")}
       </span>
-      <span aria-hidden="true">·</span>
-      <span className="inline-flex items-center gap-1.5">
-        <span aria-hidden="true" className="size-2 rounded-full bg-muted-foreground/40" />
-        {t("gri: yok", "grey: none")}
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground/40" />
+        {t("yok", "none")}
       </span>
     </p>
   );

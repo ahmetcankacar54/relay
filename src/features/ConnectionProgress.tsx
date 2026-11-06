@@ -1,7 +1,7 @@
 import { Check, CircleAlert, LoaderCircle, Pause } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Step = { title: string; detail: string };
+type Step = { title: string; detail?: string };
 export function ConnectionProgress({
   steps,
   current,
@@ -81,9 +81,11 @@ export function ConnectionProgress({
                 )}
               </span>
               <strong className="text-sm font-semibold">{step.title}</strong>
-              <span className="text-xs text-muted-foreground">
-                {step.detail}
-              </span>
+              {step.detail && (
+                <span className="text-xs text-muted-foreground">
+                  {step.detail}
+                </span>
+              )}
             </li>
           );
         })}

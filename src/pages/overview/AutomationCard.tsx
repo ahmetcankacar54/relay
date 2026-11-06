@@ -27,13 +27,13 @@ function Row({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full min-w-0 items-center gap-3 border-t px-4 py-3 text-left outline-none first:border-0 hover:bg-muted/60 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50"
+      className="flex w-full min-w-0 items-center gap-3 border-t px-3 py-2 text-left outline-none first:border-0 hover:bg-foreground/3 focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50"
     >
       <span className="min-w-0 flex-1">
-        <span className="block text-[13.5px]">{name}</span>
+        <span className="block text-sm">{name}</span>
         {detail && <span className="block truncate text-xs text-muted-foreground">{detail}</span>}
       </span>
-      <span className="flex shrink-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+      <span className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
         {tone && <StatusDot tone={tone} />}
         {value}
       </span>
@@ -66,10 +66,10 @@ export function AutomationCard({
   const macOS = ["darwin", "preview"].includes(relay.data?.diagnostics?.platform ?? "");
   return (
     <section className="grid content-start gap-2">
-      <h2 className="px-1 text-[13px] font-semibold text-muted-foreground">
+      <h2 className="px-1 text-xs font-semibold text-muted-foreground">
         {t("Otomasyon", "Automation")}
       </h2>
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="overflow-hidden rounded-lg border bg-card">
         <Row
           name={t("Otomatik geçiş", "Automatic switching")}
           value={t(...automationModeCopy(automation.mode).label)}
@@ -79,7 +79,7 @@ export function AutomationCard({
         />
         {/* The page banner is off here (automationInline), so the switch-now offer lives under its row. */}
         {automation.status.switchTo && (
-          <div data-slot="automation-offer" className="flex justify-end border-t bg-muted/40 px-4 py-2">
+          <div data-slot="automation-offer" className="flex justify-end border-t bg-muted/40 px-3 py-1.5">
             <SwitchNowButton status={automation.status} size="xs" />
           </div>
         )}

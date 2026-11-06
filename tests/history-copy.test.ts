@@ -34,16 +34,16 @@ test("same-group keeps today's group field and its two sentences", () => {
 test("the other modes hide the group field and say what the mode shares", () => {
   const notes = {
     all: [
-      "Code geçmişi bağlı tüm hesaplar arasında ortak. Ayarlar → Geçişte taşınanlar’dan değiştirebilirsin.",
-      "Code history is shared across every connected account. You can change this in Settings → What comes along.",
+      "Code geçmişi bağlı tüm hesaplar arasında ortak.",
+      "All connected accounts share Code history.",
     ],
     selected: [
       "Code geçmişi yalnızca Ayarlar → Geçişte taşınanlar’da seçtiğin hesaplar arasında ortak.",
-      "Code history is shared only between the accounts you pick in Settings → What comes along.",
+      "Only the accounts you select in Settings → What comes along share Code history.",
     ],
     off: [
       "Code geçmişi hesaplar arasında paylaşılmıyor.",
-      "Code history is not shared between accounts.",
+      "Accounts do not share Code history.",
     ],
   } as const;
   for (const mode of ["all", "selected", "off"] as const)

@@ -64,10 +64,10 @@ const labels = {
     active: "Active",
     unknownActive: "No saved account active",
     empty: "Add an account in Relay",
-    review: "Quota used · select an account to switch",
-    unavailable: "The Claude app was not found",
+    review: "Select an account to switch",
+    unavailable: "Claude app not found",
     statusUnavailable: "Claude app status unavailable",
-    loading: "Checking the Claude app connection…",
+    loading: "Relay checks the Claude app…",
     busy: "A Claude app action is running",
     pending: "Finish the Claude app sign-in first",
     authBusy: "Finish the usage sign-in first",
@@ -75,8 +75,8 @@ const labels = {
     unlinked: "Save Claude app sign-in",
     mismatch: "Sign-ins belong to different accounts",
     outdated: "usage data is out of date",
-    fiveHour: "5h",
-    week: "wk",
+    fiveHour: "5 h",
+    week: "week",
   },
   tr: {
     show: "Relay’i aç",
@@ -84,10 +84,10 @@ const labels = {
     active: "Aktif",
     unknownActive: "Kayıtlı aktif hesap yok",
     empty: "Relay’de hesap ekle",
-    review: "Kullanılan limit · geçmek için hesap seç",
+    review: "Geçmek için hesap seç",
     unavailable: "Claude uygulaması bulunamadı",
     statusUnavailable: "Claude uygulamasının durumu okunamadı",
-    loading: "Claude uygulaması bağlantısı kontrol ediliyor…",
+    loading: "Claude uygulaması kontrol ediliyor…",
     busy: "Claude uygulamasında bir işlem sürüyor",
     pending: "Önce Claude uygulaması girişini tamamla",
     authBusy: "Önce limit okuma girişini tamamla",
@@ -114,9 +114,9 @@ function quotaUsed(used: number | undefined, language: TrayLanguage) {
 }
 
 /**
- * An account's two windows for its menu row ("5h 22% · wk 92% used"). A reading that is old only
+ * An account's two windows for its menu row ("5 h 22% · week 92% used"). A reading that is old only
  * because the service could not be reached keeps its figures, marked as last known, until each
- * window resets ("5h ~22% · wk ~92% used · usage data is out of date").
+ * window resets ("5 h ~22% · week ~92% used · usage data is out of date").
  */
 export function trayUsageLabel(
   accountId: string,
@@ -469,7 +469,7 @@ export function trayTooltip(
   if (target)
     return language === "tr"
       ? `Relay — ${oneLine(target.name)} hesabına geçiliyor…`
-      : `Relay — Switching to ${oneLine(target.name)}…`;
+      : `Relay switches to ${oneLine(target.name)}…`;
   const tr = language === "tr";
   const active = activeAccount(snapshot);
   const items = snapshot.titleItems ?? DEFAULT_MENU_BAR_ITEMS;

@@ -23,12 +23,12 @@ export function terminalGuide(
   t: T,
   language: "tr" | "en",
 ): TerminalGuide {
-  if (!status) return { tone: "off", label: t("Kontrol ediliyor…", "Checking…") };
+  if (!status) return { tone: "off", label: t("Kontrol ediliyor…", "Check in progress…") };
   if (status.mode === "off")
     return {
       tone: "off",
       label: t("Kapalı", "Off"),
-      detail: t("Relay terminale dokunmaz.", "Relay does not touch the terminal."),
+      detail: t("Relay terminale dokunmaz.", "Relay does not change the terminal."),
       action: "settings",
     };
   const ids = terminalIdentities(account);
@@ -60,7 +60,7 @@ export function terminalGuide(
         : {
             detail: t(
               `Kayıt: ${date}. Bu hesaba geçince terminaldeki “claude” da bu hesaba geçer.`,
-              `Saved ${date}. Switching to this account moves the terminal’s “claude” too.`,
+              `Saved ${date}. “claude” in the terminal follows when you switch to this account.`,
             ),
           }),
     };
@@ -71,13 +71,13 @@ export function terminalGuide(
     label: t("Giriş kayıtlı değil", "No sign-in saved"),
     steps: [
       email
-        ? t(`Terminalde “claude auth login” çalıştır, ${email} ile gir.`, `Run “claude auth login” in a terminal, sign in with ${email}.`)
-        : t("Terminalde “claude auth login” çalıştır, bu hesapla gir.", "Run “claude auth login” in a terminal, sign in with this account."),
-      t("“Kontrol et”e bas.", "Press “Check”."),
+        ? t(`Terminalde “claude auth login” çalıştır, ${email} ile gir.`, `Run “claude auth login” in a terminal and sign in with ${email}.`)
+        : t("Terminalde “claude auth login” çalıştır, bu hesapla gir.", "Run “claude auth login” in a terminal and sign in with this account."),
+      t("“Kontrol et”e bas.", "Select “Check”."),
     ],
     detail: t(
       "Terminalde claude kullanmıyorsan bu adım gerekmez.",
-      "You can skip this if you do not use claude in a terminal.",
+      "Skip this if you do not use claude in a terminal.",
     ),
     action: "check",
   };

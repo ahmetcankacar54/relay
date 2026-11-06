@@ -26,12 +26,12 @@ export function sidebarRecipeHint(gap: SidebarGapSummary, copied: boolean, t: T)
   const from = gap.from.join(", ");
   return copied
     ? t(
-        `Kopyalandı. ${gap.to} hesabında bir Code oturumuna yapıştır; Claude bölümleri kurar ve her taşımayı sorar.`,
-        `Copied. Paste it into a Code session on ${gap.to}; Claude rebuilds the sections and asks before each move.`,
+        `Kopyalandı. ${gap.to} hesabında bir Code oturumuna yapıştır. Claude her taşımadan önce sorar.`,
+        `Copied. Paste it into a Code session on ${gap.to}. Claude asks before each move.`,
       )
     : t(
-        `${from ? `Kaynak: ${from}. ` : ""}Talimatı bir Code oturumuna yapıştırınca Claude bölümleri kurar.`,
-        `${from ? `From ${from}. ` : ""}Paste the recipe into a Code session and Claude rebuilds the sections.`,
+        `${from ? `Kaynak: ${from}. ` : ""}Claude bölümleri bir Code oturumunda talimatla kurar.`,
+        `${from ? `From ${from}. ` : ""}Claude rebuilds the sections from the recipe in a Code session.`,
       );
 }
 

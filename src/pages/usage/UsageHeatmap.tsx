@@ -55,9 +55,9 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
   const relative = (value: number) =>
     max > 0 ? formatPercent(Math.round((value / max) * 100), language) : formatPercent(0, language);
   return (
-    <Card className="gap-3 px-5 py-4">
+    <Card className="gap-3 px-4 py-3.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="font-display text-[15px] font-semibold">
+        <h3 className="font-display text-sm font-semibold">
           {t("Ne zaman çalışıyorum?", "When do I work?")}
         </h3>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground" aria-hidden="true">
@@ -74,11 +74,11 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
           window
             ? t(
                 `Gün ve saate göre kullanım. En yoğun saatler ${hourRange(window.start, window.end)}.`,
-                `Use by day and hour. Busiest hours ${hourRange(window.start, window.end)}.`,
+                `Usage by day and hour. Busiest hours ${hourRange(window.start, window.end)}.`,
               )
-            : t("Gün ve saate göre kullanım. Bu dönemde kullanım yok.", "Use by day and hour. No use in this period.")
+            : t("Gün ve saate göre kullanım. Bu aralıkta kullanım yok.", "Usage by day and hour. No usage in this range.")
         }
-        className="grid grid-cols-[2rem_repeat(24,minmax(0,1fr))_3rem] gap-[3px] text-[11px] leading-none text-muted-foreground"
+        className="grid grid-cols-[2rem_repeat(24,minmax(0,1fr))_3rem] gap-[3px] text-2xs leading-none text-muted-foreground"
       >
         <span />
         {HOURS.map((hour) => (
@@ -86,7 +86,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
             {hour % 3 === 0 ? String(hour).padStart(2, "0") : ""}
           </span>
         ))}
-        <span className="text-[10.5px]">{t("toplam", "total")}</span>
+        <span className="text-2xs">{t("toplam", "total")}</span>
         {cells.map((row, weekday) => [
           <span key={`day-${weekday}`} className="self-center truncate">
             {weekdayName(weekday, language, "short")}
@@ -104,7 +104,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
                         `${cellName(weekday, hour)} · en yoğun saate göre ${relative(value)}`,
                         `${cellName(weekday, hour)} · ${relative(value)} of the busiest hour`,
                       )
-                    : t(`${cellName(weekday, hour)} · kullanım yok`, `${cellName(weekday, hour)} · no use`)
+                    : t(`${cellName(weekday, hour)} · kullanım yok`, `${cellName(weekday, hour)} · no usage`)
                 }
                 className={step ? "h-5 rounded-[3px] bg-brand" : "h-5 rounded-[3px] bg-track"}
                 style={step ? { opacity: STEP_OPACITY[step] } : undefined}
@@ -118,7 +118,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
             />
           </span>,
         ])}
-        <span className="self-end text-[10.5px]">{t("toplam", "total")}</span>
+        <span className="self-end text-2xs">{t("toplam", "total")}</span>
         {HOURS.map((hour) => (
           <span key={`hour-${hour}`} className="flex h-6 items-end" aria-hidden="true">
             <span
@@ -130,7 +130,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
         <span />
       </div>
       {window ? (
-        <dl className="grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
+        <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
           <div className="flex items-baseline gap-2">
             <dt className="text-muted-foreground">{t("En yoğun saatler", "Busiest hours")}</dt>
             <dd className="font-semibold tabular-nums">{hourRange(window.start, window.end)}</dd>
@@ -146,7 +146,7 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
           )}
         </dl>
       ) : (
-        <p className="text-[13px] text-muted-foreground">{t("Bu dönemde kullanım yok.", "No use in this period.")}</p>
+        <p className="text-sm text-muted-foreground">{t("Bu aralıkta kullanım yok.", "No usage in this range.")}</p>
       )}
     </Card>
   );

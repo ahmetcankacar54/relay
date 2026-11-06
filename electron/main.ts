@@ -1187,7 +1187,7 @@ else {
         notify: (account, reason) => {
           if (!Notification.isSupported()) return;
           new Notification({
-            title: "Relay",
+            title: say("Önceden başlatılamadı", "Early start failed"),
             body: routineFailureNotice(account.name, reason, trayLanguage),
           }).show();
         },
@@ -1342,7 +1342,7 @@ else {
         .catch(() => {});
     })
     .catch((error) => {
-      dialog.showErrorBox(say("Relay açılamadı", "Relay could not start"), String(error));
+      dialog.showErrorBox(say("Relay açılamadı", "Relay did not start"), String(error));
       app.exit(1);
     });
 }
@@ -1374,12 +1374,12 @@ async function settleInstallLocation(): Promise<boolean> {
     detail:
       place === "disk-image"
         ? t(
-            "Relay disk görüntüsünün (DMG) içinden çalışıyor. macOS burada verdiğin izni kaydedemez; her açılışta Sistem Ayarları’ndan yeniden izin istemesi bundandır. Relay kendini Uygulamalar klasörüne taşıyıp oradan açılır.",
-            "Relay is running from inside the disk image (DMG). macOS cannot record your approval there, which is why it asks in System Settings at every launch. Relay moves itself to Applications and opens from there.",
+            "Relay disk görüntüsünden çalıştığı sürece macOS her açılışta izin ister. Relay kendini Uygulamalar klasörüne taşır ve oradan açılır.",
+            "While Relay runs from the disk image, macOS asks for approval at every launch. Relay moves itself to Applications and opens from there.",
           )
         : t(
-            "Relay, indirildiği yerden macOS’un salt okunur bir kopyasıyla açıldı. macOS burada verdiğin izni kaydedemez; her açılışta Sistem Ayarları’ndan yeniden izin istemesi bundandır. Relay kendini Uygulamalar klasörüne taşıyıp oradan açılır.",
-            "Relay was opened where it was downloaded, through a read-only copy macOS makes. macOS cannot record your approval there, which is why it asks in System Settings at every launch. Relay moves itself to Applications and opens from there.",
+            "Relay indirildiği yerden çalıştığı sürece macOS her açılışta izin ister. Relay kendini Uygulamalar klasörüne taşır ve oradan açılır.",
+            "While Relay runs from its download location, macOS asks for approval at every launch. Relay moves itself to Applications and opens from there.",
           ),
   });
   if (response !== 0) return false;
@@ -1387,7 +1387,7 @@ async function settleInstallLocation(): Promise<boolean> {
     return app.moveToApplicationsFolder();
   } catch (error) {
     dialog.showErrorBox(
-      t("Relay taşınamadı", "Relay could not be moved"),
+      t("Relay taşınamadı", "Relay was not moved"),
       t(
         "Relay’i Finder’da Uygulamalar klasörüne sürükle, disk görüntüsünü çıkar ve Relay’i Uygulamalar’dan aç.",
         "Drag Relay to Applications in Finder, eject the disk image and open Relay from Applications.",
@@ -1499,8 +1499,8 @@ async function traySwitch(profileId: string) {
       `Switch the Claude app to ${account.name}?`,
     ),
     detail: say(
-      "Claude uygulaması kapanıp bu hesapla yeniden açılır. Çalışan yanıtlar varsa önce bitmelerini bekle; konuşmaların Claude uygulamasında kalır.",
-      "The Claude app quits and reopens with this account. Let running replies finish first; your conversations stay in the Claude app.",
+      "Claude uygulaması kapanır ve bu hesapla yeniden açılır. Önce çalışan yanıtların bitmesini bekle.",
+      "The Claude app quits and reopens with this account. Wait for running replies to finish first.",
     ),
   });
   if (response !== 0) return;
@@ -1550,16 +1550,13 @@ function notifyExtensionLeft(target: Account) {
         )?.name
       : undefined;
   const notice = new Notification({
-    title: "Relay",
-    body: on
-      ? say(
-          `Claude tarayıcı eklentisi ${on} hesabında kaldı; Claude’un tarayıcı araçları ${target.name} ile çalışmaz. Ayarlamak için tıkla.`,
-          `The Claude browser extension stayed on ${on}, so Claude’s browser tools won’t work with ${target.name}. Click to set it up.`,
-        )
-      : say(
-          `Claude tarayıcı eklentisi ${target.name} hesabına geçmedi; Claude’un tarayıcı araçları çalışmaz. Ayarlamak için tıkla.`,
-          `The Claude browser extension did not move to ${target.name}, so Claude’s browser tools won’t work. Click to set it up.`,
-        ),
+    title: on
+      ? say(`Eklenti ${on} hesabında kaldı`, `Extension still on ${on}`)
+      : say("Eklenti geçmedi", "Extension not switched"),
+    body: say(
+      `Claude’un tarayıcı araçları ${target.name} ile çalışmıyor; düzeltmek için tıkla.`,
+      `Claude’s browser tools do not work with ${target.name}; click to fix.`,
+    ),
   });
   notice.on("click", () => openPage("ayarlar/tasinanlar"));
   notice.show();
@@ -1572,10 +1569,10 @@ function notifyExtensionLeft(target: Account) {
 function notifyExtensionBroken(account: Account) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
-    title: "Relay",
+    title: say("Eklenti giriş yapamıyor", "Extension cannot sign in"),
     body: say(
-      `Claude tarayıcı eklentisi ${account.name} hesabına giriş yapamadı: tarayıcıdaki claude.ai oturumu bu hesabın değil ya da süresi dolmuş. Claude’un tarayıcı araçları çalışmaz. Yeniden bağlamak için tıkla.`,
-      `The Claude browser extension could not sign in to ${account.name}: the browser’s claude.ai login is not this account’s, or it ended. Claude’s browser tools won’t work. Click to reconnect.`,
+      `Claude’un tarayıcı araçları ${account.name} ile çalışmıyor; yeniden bağlamak için tıkla.`,
+      `Claude’s browser tools do not work with ${account.name}; click to reconnect.`,
     ),
   });
   notice.on("click", () => openPage("ayarlar/tasinanlar"));
@@ -1585,10 +1582,10 @@ function notifyExtensionBroken(account: Account) {
 function notifyUpdate(version: string) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
-    title: "Relay",
+    title: say("Güncelleme hazır", "Update ready"),
     body: say(
-      `Relay ${version} hazır. Güncellemek için tıkla.`,
-      `Relay ${version} is ready. Click to update.`,
+      `Relay ${version} sürümünü kurmak için tıkla.`,
+      `Click to install Relay ${version}.`,
     ),
   });
   notice.on("click", () => openPage("genel"));
@@ -1669,7 +1666,7 @@ function startAppUpdates() {
 function notifySwitched(name: string) {
   if (!Notification.isSupported()) return;
   new Notification({
-    title: "Relay",
+    title: say("Geçiş tamamlandı", "Switch complete"),
     body: say(
       `Claude uygulaması ${name} hesabına geçti.`,
       `The Claude app switched to ${name}.`,
@@ -1686,7 +1683,7 @@ function notifyFleet(
     service.store.state.accounts.find((a) => a.id === last.targetId)?.name ??
     say("diğer", "another");
   new Notification({
-    title: "Relay",
+    title: say("Otomatik geçiş", "Automatic switch"),
     body: fleetNotice(last, name, trayLanguage, reason),
   }).show();
 }
@@ -1694,7 +1691,7 @@ function notifyFleet(
 function notifyDrafts(summary: { restored: number; left: number }) {
   const body = draftNotice(summary, trayLanguage);
   if (!body || !Notification.isSupported()) return;
-  new Notification({ title: "Relay", body }).show();
+  new Notification({ title: say("Kurtarılan taslaklar", "Rescued drafts"), body }).show();
 }
 /** Today's plan was re-planned at today's pace, or is back to normal. */
 function notifyAdapted(
@@ -1719,15 +1716,15 @@ function notifyAdapted(
     .join(", ");
   const en = trayLanguage === "en";
   new Notification({
-    title: "Relay",
+    title: en ? "Early start" : "Önceden başlatma",
     body:
       notice.kind === "normal"
         ? en
-          ? "Plan is back to normal."
-          : "Plan yeniden normale döndü."
+          ? "The plan is back to normal."
+          : "Plan normale döndü."
         : en
-          ? `Plan updated for today’s pace · period starts: ${list}`
-          : `Plan bugünkü kullanım hızına göre güncellendi · dönem başlangıçları: ${list}`,
+          ? `Plan adapted to today’s pace: ${list}`
+          : `Plan bugünkü hıza uyarlandı: ${list}`,
   }).show();
 }
 /**
@@ -2321,7 +2318,7 @@ function bindIPC() {
     const { range, accountId } = usageStatisticsInput.parse(input);
     if (!tokenLedger)
       throw new Error(
-        say("Token kaydı açılamadı.", "The token ledger could not be opened."),
+        say("Token kaydı açılamadı.", "Relay cannot read the token usage."),
       );
     if (Date.now() - tokenTickedAt > TOKEN_FRESH_MS) {
       // Ticks until the pass is complete or about a second has passed.
@@ -2441,7 +2438,7 @@ function bindIPC() {
   handle("pick-folder", async () => {
     const result = await dialog.showOpenDialog(window!, {
       properties: ["openDirectory"],
-      title: say("Proje klasörünü seç", "Choose the project folder"),
+      title: say("Proje klasörünü seç", "Select the project folder"),
     });
     return result.canceled ? null : result.filePaths[0];
   });
@@ -2457,7 +2454,7 @@ function bindIPC() {
       ...(opensThere ? { defaultPath: installed } : {}),
       title: say(
         "Claude Code CLI dosyasını seç",
-        "Choose the Claude Code CLI file",
+        "Select the Claude Code CLI file",
       ),
     });
     if (!result.canceled) {
@@ -2472,7 +2469,7 @@ function bindIPC() {
     const result = await dialog.showOpenDialog(window!, {
       properties: ["openFile"],
       ...(mac ? { defaultPath: "/Applications" } : {}),
-      title: say("Claude uygulamasını seç", "Choose the Claude app"),
+      title: say("Claude uygulamasını seç", "Select the Claude app"),
     });
     if (result.canceled || !result.filePaths[0]) return;
     // The store's change reaches every window, which reads the Desktop state again.
@@ -2560,11 +2557,11 @@ app.on("before-quit", (event) => {
       type: "info",
       message: say(
         "Limit okuma girişi yenileniyor.",
-        "Renewing the usage sign-in.",
+        "A usage sign-in renewal is in progress.",
       ),
       detail: say(
-        "Yenilemeyi yarıda bırakmamak için Relay açık kaldı. Bitince yeniden çıkabilirsin. Claude uygulaması ve görevleri etkilenmez.",
-        "Relay stayed open so the renewal isn’t cut off. Quit again once it’s done. The Claude app and its tasks are unaffected.",
+        "Relay, yenileme bitene kadar açık kalır. Sonra yeniden çık.",
+        "Relay stays open until the renewal ends. Then quit again.",
       ),
       buttons: [say("Tamam", "OK")],
     });
@@ -2598,7 +2595,7 @@ app.on("before-quit", (event) => {
       type: "question",
       buttons: [
         say("Relay’e dön", "Back to Relay"),
-        say("Oturumları durdur ve çık", "Stop the sessions and quit"),
+        say("Durdur ve çık", "Stop and quit"),
       ],
       defaultId: 0,
       cancelId: 0,
@@ -2607,10 +2604,6 @@ app.on("before-quit", (event) => {
         active.length === 1
           ? "1 terminal is running."
           : `${active.length} terminals are running.`,
-      ),
-      detail: say(
-        "Çıkışta bu işlemler durur. Kaydedilmiş konuşmalar oturum kataloğunda kalır.",
-        "Quitting stops them. Saved conversations stay in the session catalogue.",
       ),
     })
     .then(async (result) => {

@@ -149,7 +149,7 @@ export function hintOf(kind: LostItemKind, t: T): string {
   if (SECRET_LOST_KINDS.includes(kind))
     return t(
       "Gizli rozet. Panda ipucu vermiyor.",
-      "A secret pin. The panda isn’t telling.",
+      "A secret pin. The panda gives no hints.",
     );
   return howToEarn(kind, t);
 }
@@ -160,17 +160,17 @@ export function howToEarn(kind: LostItemKind, t: T): string {
     case "hourglass":
       return t(
         "Bir 5 saatlik dönem, başlamasından en geç 2,5 saat sonra dolsun.",
-        "Fill a five-hour window within 2.5 hours of its start.",
+        "Fill a 5-hour period within 2.5 hours of its start.",
       );
     case "baton":
       return t(
-        "Bir hesap limite takılınca yarım saat içinde başka hesapla devam et.",
-        "When an account hits its limit, carry on with another within half an hour.",
+        "Bir hesap limite takılınca 30 dakika içinde başka hesapla devam et.",
+        "When an account hits its limit, continue on another account within 30 minutes.",
       );
     case "trophy":
       return t(
         `Son ${TROPHY_DAYS} günün açık ara en yoğun gününü yaşa.`,
-        `Have the busiest of the last ${TROPHY_DAYS} days, by a clear margin.`,
+        `Have the busiest day of the last ${TROPHY_DAYS} days by a clear margin.`,
       );
     case "scroll":
       return t(
@@ -179,8 +179,8 @@ export function howToEarn(kind: LostItemKind, t: T): string {
       );
     case "tally":
       return t(
-        "Bir haftanın yedi gününde de çalış.",
-        "Work on all seven days of one week.",
+        "Bir haftanın 7 gününde de çalış.",
+        "Work on all 7 days of one week.",
       );
     case "compass":
       return t(
@@ -190,7 +190,7 @@ export function howToEarn(kind: LostItemKind, t: T): string {
     case "scarf":
       return t(
         "Aynı gün en az 3 hesap kullan.",
-        "Use three or more accounts on the same day.",
+        "Use 3 or more accounts on the same day.",
       );
     case "spare":
       return t(
@@ -212,12 +212,12 @@ export function howToEarn(kind: LostItemKind, t: T): string {
     case "clocks":
       return t(
         "İki hesabın 5 saatlik dönemi en fazla 10 dakika arayla yenilensin.",
-        "Have two accounts’ five-hour windows reset within 10 minutes of each other.",
+        "Have the 5-hour periods of 2 accounts reset within 10 minutes of each other.",
       );
     case "tightrope":
       return t(
         `Bir 5 saatlik dönemi limite takılmadan en az %${TIGHTROPE_MIN_PERCENT} doldur.`,
-        `Fill a five-hour window to ${TIGHTROPE_MIN_PERCENT}% or more without hitting its limit.`,
+        `Fill a 5-hour period to ${TIGHTROPE_MIN_PERCENT}% or more, but do not hit its limit.`,
       );
     case "lantern":
       return t(
@@ -227,7 +227,7 @@ export function howToEarn(kind: LostItemKind, t: T): string {
     case "hammock":
       return t(
         `En az ${HAMMOCK_MIN_DAYS} gün çalıştığın bir haftada, iki iş gününün arasındaki bir günü tamamen boş bırak.`,
-        `In a week of ${HAMMOCK_MIN_DAYS} or more working days, take a weekday fully off between two busy ones.`,
+        `In a week with ${HAMMOCK_MIN_DAYS} or more work days, take 1 weekday fully off between 2 busy days.`,
       );
     case "scales":
       return t(
@@ -300,7 +300,7 @@ function describeMoment(
         ...look,
         story: t(
           `Bir 5 saatlik dönem, başlamasından yalnızca ${took} sonra doldu.`,
-          `A five-hour window ran out just ${took} after it began.`,
+          `A 5-hour period was full only ${took} after it started.`,
         ),
         when: formatWhen(item.at, zone, language),
         accounts: item.accountId ? [item.accountId] : [],
@@ -319,7 +319,7 @@ function describeMoment(
         ),
         when: formatWhen(item.at, zone, language),
         accounts: [item.accountIds[0], item.accountIds[1], item.accountIds[0]],
-        quip: t("Geri geleceğini biliyordum.", "I had a feeling we’d be back."),
+        quip: t("Geri geleceğini biliyordum.", "I knew it. You came back."),
       };
     case "baton": {
       const took =
@@ -346,7 +346,7 @@ function describeMoment(
         accounts: item.accountIds,
         quip: t(
           "Bayrağı düşürmeden koşmaya devam ettik.",
-          "We ran on without dropping the baton.",
+          "We ran on and did not drop the baton.",
         ),
       };
     }
@@ -380,7 +380,7 @@ function describeMoment(
         accounts: [],
         quip: t(
           "Ucunu bulana kadar açtım.",
-          "I kept unrolling until I found the end.",
+          "I unrolled it until I found the end.",
         ),
       };
     }
@@ -388,8 +388,8 @@ function describeMoment(
       return {
         ...look,
         story: t(
-          `Haftanın yedi gününün her birinde çalıştın; toplam ${item.hours} saat.`,
-          `You worked on all seven days of the week, ${item.hours} hours in all.`,
+          `Haftanın 7 gününün her birinde çalıştın; toplam ${item.hours} saat.`,
+          `You worked on all 7 days of the week, ${item.hours} hours in all.`,
         ),
         when: weekLabel(week.start, week.end, language),
         accounts: [],
@@ -408,12 +408,11 @@ function describeMoment(
       };
     case "scarf": {
       const n = item.accountIds.length;
-      const word = COUNT_WORDS[n] ?? [String(n), String(n)];
       return {
         ...look,
         story: t(
           `Aynı gün ${n} hesabın her biri iş başındaydı.`,
-          `${word[1]} accounts all took a turn on the same day.`,
+          `${n} accounts were all in use on the same day.`,
         ),
         when: formatDayLong(item.date, language),
         accounts: item.accountIds,
@@ -425,11 +424,11 @@ function describeMoment(
         item.gapMinutes === 0
           ? t(
               "İki hesabın 5 saatlik dönemi aynı anda yenilendi.",
-              "Two accounts’ five-hour windows reset at the same moment.",
+              "The 5-hour periods of 2 accounts reset at the same moment.",
             )
           : t(
               `İki hesabın 5 saatlik dönemi ${item.gapMinutes} dakika arayla yenilendi.`,
-              `Two accounts’ five-hour windows reset ${minutesEn(item.gapMinutes)} apart.`,
+              `The 5-hour periods of 2 accounts reset ${minutesEn(item.gapMinutes)} apart.`,
             );
       const again =
         item.count > 1
@@ -445,7 +444,7 @@ function describeMoment(
         accounts: item.accountIds,
         quip: t(
           "İkisi birden çaldı; hangisine koşacağımı şaşırdım.",
-          "Both rang at once; I didn’t know which to run to.",
+          "Both rang at once. I did not know which one to run to.",
         ),
       };
     }
@@ -496,7 +495,7 @@ function describeMoment(
         accounts: [],
         quip: t(
           "Çay demlenmeden işe koyulmuşsun.",
-          "You were at it before the tea had brewed.",
+          "You were at work before the tea was ready.",
         ),
       };
     }
@@ -505,7 +504,7 @@ function describeMoment(
         ...look,
         story: t(
           `Bir 5 saatlik dönem limite takılmadan %${item.percent} doluluğa ulaştı.`,
-          `A five-hour window came ${item.percent}% full and never hit its limit.`,
+          `A 5-hour period got to ${item.percent}% full and never hit its limit.`,
         ),
         when: t(
           `Yenilendi: ${formatWhen(item.at, zone, language)}`,
@@ -530,7 +529,7 @@ function describeMoment(
         ...look,
         story: t(
           `Haftanın ${item.activeDays} günü çalıştın; arada bir günü tamamen dinlenerek geçirdin.`,
-          `You worked ${item.activeDays} days that week and took one whole day off in between.`,
+          `You worked ${item.activeDays} days that week and took 1 whole day off in between.`,
         ),
         when: formatDayLong(item.date, language),
         accounts: [],
@@ -538,12 +537,11 @@ function describeMoment(
       };
     case "scales": {
       const n = item.accountIds.length;
-      const word = COUNT_WORDS[n] ?? [String(n), String(n)];
       return {
         ...look,
         story: t(
           `Hafta boyunca ${n} hesap işi neredeyse eşit paylaştı: her biri %${item.low} ile %${item.high} arasında.`,
-          `${word[1]} accounts shared the week almost evenly: each did ${item.low}–${item.high}%.`,
+          `${n} accounts shared the week almost evenly: each did ${item.low}–${item.high}%.`,
         ),
         when: weekLabel(week.start, week.end, language),
         accounts: item.accountIds,
@@ -978,7 +976,7 @@ function ProgressRing({ found, total }: { found: number; total: number }) {
           {found}
           <span className="text-sm text-muted-foreground">/{total}</span>
         </div>
-        <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+        <div className="mt-1 text-2xs text-muted-foreground tabular-nums">
           %{Math.round(share * 100)}
         </div>
       </div>
@@ -1019,7 +1017,7 @@ function Overview({
   const steps = milestones(finishes, t);
   return (
     <Card
-      className="min-w-0 flex-row flex-wrap items-center gap-5 px-5 py-4"
+      className="min-w-0 flex-row flex-wrap items-center gap-5 px-4 py-3.5"
       data-slot="lost-overview"
     >
       <ProgressRing found={found} total={finishes.length} />
@@ -1029,8 +1027,8 @@ function Overview({
         </h3>
         <p className="mt-0.5 text-sm text-muted-foreground">
           {t(
-            "Panda her hafta kullanımından geriye kalan anları topluyor. Her an bir rozet; aynı rozeti tekrar buldukça seviyesi yükseliyor.",
-            "Every week the panda collects the moments your use left behind. Each is a pin, and finding it again raises its finish.",
+            "Panda her hafta kullanımından anları rozet olarak toplar.",
+            "Every week the panda collects moments from your usage as pins.",
           )}
         </p>
         <ul
@@ -1140,10 +1138,10 @@ function RecentStrip({
           {t("Son kazanılanlar", "Recently earned")}
         </h4>
         {recent.some(({ find }) => find.start === latest) && (
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-2xs text-muted-foreground">
             {t(
               "Vurgulananlar geçen haftadan",
-              "Highlighted ones are from last week",
+              "Highlighted pins are from last week",
             )}
           </span>
         )}
@@ -1159,7 +1157,7 @@ function RecentStrip({
                   onClick={() => onSelect(kind)}
                   data-latest={find.start === latest || undefined}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-xl border bg-card p-2.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                    "flex w-full items-center gap-3 rounded-lg border bg-card p-2.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     find.start === latest && "border-primary/40 bg-primary/5",
                   )}
                 >
@@ -1170,13 +1168,13 @@ function RecentStrip({
                     size={52}
                   />
                   <span className="min-w-0">
-                    <span className="block truncate text-[13px] font-semibold">
+                    <span className="block truncate text-sm font-semibold">
                       {kindTitle(kind, t)}
                     </span>
-                    <span className="block text-[11px] text-muted-foreground">
+                    <span className="block text-2xs text-muted-foreground">
                       {stepLabel(count, t)}
                     </span>
-                    <span className="mt-0.5 block text-[11px] whitespace-nowrap text-muted-foreground tabular-nums">
+                    <span className="mt-0.5 block text-2xs whitespace-nowrap text-muted-foreground tabular-nums">
                       {weekLabel(find.start, find.end, language)}
                     </span>
                   </span>
@@ -1186,12 +1184,12 @@ function RecentStrip({
           })}
         </ul>
       ) : (
-        <div className="flex items-center gap-3 rounded-xl border border-dashed p-3">
+        <div className="flex items-center gap-3 rounded-lg border border-dashed p-3">
           <PandaRig pose="curl" expression="closed" props={["z"]} size={44} />
           <p className="text-sm text-muted-foreground">
             {t(
-              "Henüz rozet yok. Panda her pazartesi geçen haftaya bakar; ilk rozetin orada çıkacak.",
-              "No pins yet. The panda looks back every Monday; your first pin will turn up there.",
+              "Henüz rozet yok. Panda her pazartesi geçen haftaya bakar.",
+              "No pins yet. The panda checks the last week every Monday.",
             )}
           </p>
         </div>
@@ -1239,11 +1237,11 @@ function NextGoals({
               <button
                 type="button"
                 onClick={() => onSelect(kind)}
-                className="grid w-full gap-1.5 rounded-xl border p-2.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                className="grid w-full gap-1.5 rounded-lg border p-2.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <span className="flex items-center gap-2">
                   <Medal tier={next.tier} />
-                  <span className="truncate text-[13px] font-semibold">
+                  <span className="truncate text-sm font-semibold">
                     {kindTitle(kind, t)}
                   </span>
                 </span>
@@ -1253,7 +1251,7 @@ function NextGoals({
                   label={nextLabel(finish, t)}
                   className="h-1"
                 />
-                <span className="text-[11px] text-muted-foreground tabular-nums">
+                <span className="text-2xs text-muted-foreground tabular-nums">
                   {nextLabel(finish, t)}
                 </span>
               </button>
@@ -1340,7 +1338,7 @@ function Library({
             className="grid gap-2"
             data-category={category.id}
           >
-            <div className="flex items-baseline justify-between text-[13px]">
+            <div className="flex items-baseline justify-between text-sm">
               <span className="font-semibold">{t(...category.title)}</span>
               <span className="text-xs text-muted-foreground tabular-nums">
                 {done}/{category.kinds.length}
@@ -1358,7 +1356,7 @@ function Library({
                       aria-pressed={on}
                       onClick={() => onSelect(kind)}
                       className={cn(
-                        "flex h-full w-full flex-col items-center rounded-xl border px-2 pt-3 pb-2.5 text-center outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        "flex h-full w-full flex-col items-center rounded-lg border px-2 pt-3 pb-2.5 text-center outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50",
                         !finish.tier && "border-dashed bg-muted/40",
                         on && "border-primary ring-1 ring-primary",
                       )}
@@ -1370,12 +1368,12 @@ function Library({
                         sealed={sealed}
                         size={68}
                       />
-                      <span className="mt-2 block text-[12.5px] leading-tight font-semibold">
+                      <span className="mt-2 block text-xs leading-tight font-semibold">
                         {sealed
                           ? t("Gizli rozet", "Secret pin")
                           : kindTitle(kind, t)}
                       </span>
-                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                      <span className="mt-0.5 block text-2xs text-muted-foreground">
                         {finish.tier
                           ? finishLabel(finish, t)
                           : t("Kilitli", "Locked")}
@@ -1420,10 +1418,10 @@ function TierLadder({ finish }: { finish: Finish }) {
             )}
           >
             <Medal tier={step.tier} dim={!reached} />
-            <span className="text-[11px] font-semibold">
+            <span className="text-2xs font-semibold">
               {tierName(step.tier, t)}
             </span>
-            <span className="text-[10px] text-muted-foreground tabular-nums">
+            <span className="text-2xs text-muted-foreground tabular-nums">
               {reached
                 ? `✓ ${weeksLabel(step.weeks, t)}`
                 : weeksLabel(step.weeks, t)}
@@ -1540,7 +1538,7 @@ function Details({
               <dd className="mt-0.5 font-semibold tabular-nums">
                 {best.record.label}
               </dd>
-              <dd className="text-[10px] text-muted-foreground tabular-nums">
+              <dd className="text-2xs text-muted-foreground tabular-nums">
                 {weekLabel(best.find.start, best.find.end, language)}
               </dd>
             </div>
@@ -1554,7 +1552,7 @@ function Details({
                 {t("Sıklık", "How often")}
               </dt>
               <dd className="mt-0.5 font-semibold">{rarity.label}</dd>
-              <dd className="text-[10px] text-muted-foreground tabular-nums">
+              <dd className="text-2xs text-muted-foreground tabular-nums">
                 {t(
                   `Son ${rarity.weeks} haftada ${rarity.seen} kez`,
                   `${rarity.seen} of the last ${rarity.weeks} weeks`,
@@ -1592,7 +1590,7 @@ function Details({
                   className="rounded-lg border px-3 py-2"
                   data-slot="lost-find"
                 >
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-muted-foreground tabular-nums">
+                  <div className="flex items-center justify-between gap-2 text-2xs font-semibold text-muted-foreground tabular-nums">
                     {weekLabel(find.start, find.end, language)}
                     {best &&
                       finds.length > 1 &&
@@ -1604,8 +1602,8 @@ function Details({
                   </div>
                   {story ? (
                     <>
-                      <p className="mt-0.5 text-[13px]">{story.story}</p>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                      <p className="mt-0.5 text-sm">{story.story}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-muted-foreground">
                         {/* A week-long find's "when" is the row's own week. */}
                         {story.when !==
                           weekLabel(find.start, find.end, language) && (
@@ -1625,7 +1623,7 @@ function Details({
                       </p>
                       {story.spend && (
                         <p
-                          className="mt-1 text-[11px] text-muted-foreground tabular-nums"
+                          className="mt-1 text-2xs text-muted-foreground tabular-nums"
                           data-slot="lost-spend"
                         >
                           {story.spend}
@@ -1633,10 +1631,10 @@ function Details({
                       )}
                     </>
                   ) : (
-                    <p className="mt-0.5 text-[13px] text-muted-foreground">
+                    <p className="mt-0.5 text-sm text-muted-foreground">
                       {t(
-                        "Bu hafta bulundu; ayrıntısı eski bir sürümden kaldığı için yalnızca haftası biliniyor.",
-                        "Found this week; it was kept by an older version, so only the week is known.",
+                        "Bu hafta bulundu. Ayrıntısı yok.",
+                        "Found this week. No details.",
                       )}
                     </p>
                   )}
@@ -1695,7 +1693,7 @@ export function LostFound() {
       <Overview finishes={finishes} />
       <div className="@container min-w-0">
         <div className="grid gap-4 @3xl:grid-cols-[minmax(0,1fr)_20rem] @3xl:items-start">
-          <Card className="order-2 min-w-0 gap-5 px-5 py-4 @3xl:order-1">
+          <Card className="order-2 min-w-0 gap-5 px-4 py-3.5 @3xl:order-1">
             <RecentStrip
               recent={recent}
               latest={collection.reach?.latest}
@@ -1708,21 +1706,21 @@ export function LostFound() {
               selected={selected}
               onSelect={select}
             />
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               {collection.loading
                 ? t(
                     "Panda haftaları tarıyor…",
-                    "The panda is going through the weeks…",
+                    "The panda checks the weeks…",
                   )
                 : t(
-                    `Bir rozet bulunduğu ilk hafta bronz, ${LOST_TIERS[1].weeks} haftada gümüş, ${LOST_TIERS[2].weeks} haftada altın olur. Panda son 12 haftaya bakabilir; bulunan rozetler bu Mac’te kalır.`,
-                    `A pin is bronze the first week it is found, silver after ${LOST_TIERS[1].weeks} weeks and gold after ${LOST_TIERS[2].weeks}. The panda can look back 12 weeks; found pins stay on this Mac.`,
+                    `Bir rozet bulunduğu ilk hafta bronz, ${LOST_TIERS[1].weeks} haftada gümüş, ${LOST_TIERS[2].weeks} haftada altın olur. Panda son 12 haftaya bakar.`,
+                    `A pin is bronze when found, silver after ${LOST_TIERS[1].weeks} weeks and gold after ${LOST_TIERS[2].weeks} weeks. The panda looks back 12 weeks.`,
                   )}
             </p>
           </Card>
           <Card
             ref={details}
-            className="order-1 min-w-0 px-5 py-4 @3xl:sticky @3xl:top-4 @3xl:order-2"
+            className="order-1 min-w-0 px-4 py-3.5 @3xl:sticky @3xl:top-16 @3xl:order-2"
           >
             <Details
               key={selected}

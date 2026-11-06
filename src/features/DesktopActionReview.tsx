@@ -23,8 +23,8 @@ export interface DesktopActionRequest {
  * (most likely the first use after an update).
  */
 export const KEYCHAIN_HINT = [
-  "macOS bir kez Mac parolanı isteyebilir (Relay Safe Storage); “Her Zaman İzin Ver”i seç.",
-  "macOS may ask for your Mac password once (Relay Safe Storage); choose “Always Allow”.",
+  "macOS Mac parolanı isterse (Relay Safe Storage) “Her Zaman İzin Ver”i seç.",
+  "If macOS asks for your Mac password (Relay Safe Storage), select “Always Allow”.",
 ] as const;
 
 export function DesktopActionReview({
@@ -76,16 +76,16 @@ export function DesktopActionReview({
                 );
   const progress =
     kind === "switch"
-      ? t(`${account?.name} hesabına geçiliyor`, `Switching to ${account?.name}`)
+      ? t(`${account?.name} hesabına geçiliyor`, `Relay switches to ${account?.name}`)
       : kind === "history"
-        ? t("Ortak geçmiş birleştiriliyor", "Merging shared history")
+        ? t("Ortak geçmiş birleştiriliyor", "Relay merges the shared history")
         : kind === "cancel" || kind === "recover"
-          ? t("Yedek geri yükleniyor", "Restoring the backup")
+          ? t("Yedek geri yükleniyor", "Relay restores the backup")
           : kind === "capture"
-            ? t("Açık hesap kaydediliyor", "Saving the open account")
+            ? t("Açık hesap kaydediliyor", "Relay saves the open account")
             : t(
                 "Claude uygulamasında giriş ekranı açılıyor",
-                "Opening sign-in in the Claude app",
+                "The Claude app opens its sign-in screen",
               );
   return (
     <section
@@ -108,7 +108,7 @@ export function DesktopActionReview({
       </div>
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
         <span className="text-muted-foreground">
-          {active?.name ?? t("Açık Claude hesabı", "Current Claude account")}
+          {active?.name ?? t("Açık hesap", "Current account")}
         </span>
         <ArrowLeftRight size={15} className="shrink-0 text-muted-foreground" />
         <strong className="font-semibold">
@@ -125,7 +125,7 @@ export function DesktopActionReview({
           <Panda scene="travel" size={110} />
           <p className="text-sm font-semibold">{progress}</p>
           <p className="text-xs text-muted-foreground">
-            {t("Claude uygulaması kapanıp yeniden açılıyor…", "The Claude app is quitting and reopening…")}
+            {t("Claude uygulaması kapanıp yeniden açılıyor…", "The Claude app restarts…")}
           </p>
         </div>
       ) : (
@@ -133,27 +133,27 @@ export function DesktopActionReview({
           <p className="text-sm text-muted-foreground">
             {kind === "history"
               ? t(
-                  "Seçilen hesapların yerel Code oturumları ve proje kayıtları açık hesapla birleştirilir. Claude uygulaması yeniden başlatılır; hesap değişmez.",
-                  "Local Code sessions and project records from the chosen accounts are merged into the current account. The Claude app restarts; the account stays the same.",
+                  "Seçilen hesapların yerel Code oturumları ve projeleri açık hesapla birleştirilir. Claude uygulaması yeniden başlar; hesap değişmez.",
+                  "Relay merges the local Code sessions and projects of the selected accounts into the current account. The Claude app restarts. The account does not change.",
                 )
               : kind === "cancel" || kind === "recover"
                 ? t(
-                    "Önceki Claude uygulaması girişi yedekten geri yüklenir. Claude uygulaması yeniden başlatılır; açık işler durabilir.",
-                    "Your previous Claude app sign-in is restored from the backup. The Claude app restarts; active work may stop.",
+                    "Önceki Claude uygulaması girişi yedekten geri yüklenir. Claude uygulaması yeniden başlar; açık işler durabilir.",
+                    "Relay restores your previous Claude app sign-in from the backup. The Claude app restarts, and active work can stop.",
                   )
                 : kind === "switch"
                   ? t(
-                      "Claude uygulamasına bu hesabın kayıtlı girişi yüklenir. Claude uygulaması yeniden başlar; açık yanıtlar ve alt görevler durabilir.",
-                      "This account’s saved Claude app sign-in is put in place. The Claude app restarts; active responses and background tasks may stop.",
+                      "Claude uygulaması bu hesapla yeniden başlar. Açık yanıtlar ve arka plan görevleri durabilir.",
+                      "The Claude app restarts with this account. Active responses and background tasks can stop.",
                     )
                   : kind === "capture"
                     ? t(
-                        "Claude uygulamasında açık olan hesap bu profile kaydedilir. Kaydetmek için Claude uygulaması yeniden başlatılır.",
-                        "The account currently open in the Claude app is saved to this profile. Saving restarts the Claude app.",
+                        "Claude uygulamasında açık hesap bu profile kaydedilir. Claude uygulaması yeniden başlar.",
+                        "Relay saves the account open in the Claude app to this profile. The Claude app restarts.",
                       )
                     : t(
-                        "Claude uygulaması yeniden başlatılır ve giriş ekranı açılır. Bu profilin hesabıyla giriş yap ve Code’u bir kez aç: Relay girişi kendisi kaydeder, bunun için Claude uygulamasını bir kez daha yeniden başlatır.",
-                        "The Claude app restarts and opens sign-in. Sign in with this profile’s account and open Code once: Relay saves the sign-in by itself, restarting the Claude app once more to do so.",
+                        "Claude uygulaması giriş ekranıyla yeniden başlar. Bu profilin hesabıyla giriş yap, sonra Code’u aç. Relay girişi kaydeder ve Claude uygulamasını bir kez daha yeniden başlatır.",
+                        "The Claude app restarts on its sign-in screen. Sign in with this profile’s account. Then open Code. Relay saves the sign-in and restarts the Claude app again.",
                       )}
           </p>
           {kind === "switch" && fullLimit && (
@@ -190,8 +190,8 @@ export function DesktopActionReview({
               onChange={(e) => setReady(e.target.checked)}
             />
             {t(
-              "Çalışan işlerimi bitirdim; Claude uygulaması yeniden başlatılabilir.",
-              "My running work is finished; the Claude app can restart.",
+              "İşlerimi bitirdim; Claude uygulaması yeniden başlayabilir.",
+              "My work is finished. The Claude app can restart.",
             )}
           </label>
         </>

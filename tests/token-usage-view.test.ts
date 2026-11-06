@@ -202,7 +202,7 @@ test("terminal and unknown rows carry their labels and are never estimated", () 
   assert.equal(unknown.estimated, false);
   assert.deepEqual(TOKEN_ROW_LABELS.terminal, {
     tr: "Relay dışı terminal",
-    en: "Outside-Relay terminal",
+    en: "Terminal outside Relay",
   });
   assert.deepEqual(TOKEN_ROW_LABELS.unknown, {
     tr: "Hesabı bilinmeyen",

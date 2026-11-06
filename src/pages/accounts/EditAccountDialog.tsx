@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -32,15 +31,9 @@ export function EditAccountDialog({
   const { t } = useI18n();
   return (
     <Dialog open={!!account} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{t("Hesabı düzenle", "Edit account")}</DialogTitle>
-          <DialogDescription>
-            {t(
-              "Adı, türü ve şirket hesaplarında paylaşım grubu.",
-              "Its name, type and, for work accounts, sharing group.",
-            )}
-          </DialogDescription>
         </DialogHeader>
         {account && <EditAccountBody key={account.id} account={account} close={() => onOpenChange(false)} />}
       </DialogContent>

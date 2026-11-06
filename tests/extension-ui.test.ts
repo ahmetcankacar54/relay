@@ -54,7 +54,7 @@ test("a saved sign-in reads as linked, matching the uuid in any case", () => {
     { tone: guide(vertex).tone, label: guide(vertex).label },
     { tone: "ok", label: "Bağlı" },
   );
-  assert.equal(guide(vertex, {}, en, "en").detail, "Saved 20 Oct. Switching to this account brings the extension along.");
+  assert.equal(guide(vertex, {}, en, "en").detail, "Saved 20 Oct. The extension follows when you switch to this account.");
   assert.equal(guide(vertex).where, "Brave · Kişisel");
   // The extension on this account now says so.
   assert.equal(guide(vertex, { current: signedIn(ID) }).label, "Bağlı, şu an bu hesapta");
@@ -126,18 +126,18 @@ test("each mode has a label and a sentence in both languages", () => {
     assert.ok(modeSentence(mode, tr).length > 10);
     assert.notEqual(modeSentence(mode, tr), modeSentence(mode, en));
   }
-  assert.match(modeSentence("restart", en), /closed for a moment and opened again with its tabs/);
+  assert.match(modeSentence("restart", en), /closes for a moment and opens again with its tabs/);
   assert.match(modeSentence("closed", en), /only when the browser is closed/);
   // The modes that write to the browser say that claude.ai follows, and how to avoid that.
   for (const mode of ["restart", "closed"] as const) {
-    assert.match(modeSentence(mode, en), /changes that login too, so claude\.ai tabs open on the new account/);
+    assert.match(modeSentence(mode, en), /also changes the claude\.ai login in this browser profile, so claude\.ai tabs open on the new account/);
     assert.match(modeSentence(mode, en), /separate browser profile/);
     assert.match(modeSentence(mode, tr), /claude\.ai oturumunu da değiştirir/);
     assert.match(modeSentence(mode, tr), /ayrı bir tarayıcı profilinde/);
   }
   // Guide writes nothing and quits nothing; off says it never touches.
-  assert.match(modeSentence("guide", en), /changes nothing in the browser or the extension and never quits the browser/);
-  assert.doesNotMatch(modeSentence("guide", en), /changes that login/);
+  assert.match(modeSentence("guide", en), /does not change the browser or the extension at a switch/);
+  assert.doesNotMatch(modeSentence("guide", en), /also changes the claude\.ai login/);
   assert.equal(modeOptions(en).find((o) => o.value === "guide")?.label, "Only tell me");
   assert.equal(modeOptions(tr).find((o) => o.value === "guide")?.label, "Sadece haber ver");
 });
@@ -149,8 +149,8 @@ test("the card names the instance, asks to choose among several, and explains th
     /several browser profiles/,
   );
   assert.match(instanceLine(status({ instances: [], target: undefined }), tr), /bulunamadı/);
-  assert.match(startupLine(status(), en)!, /new tab page by its own setting, so Relay restores the tabs itself/);
-  assert.match(startupLine(status({ restoresTabs: true }), en)!, /reopens the last tabs by its own setting/);
+  assert.match(startupLine(status(), en)!, /opens a new tab page, so Relay restores the tabs/);
+  assert.match(startupLine(status({ restoresTabs: true }), en)!, /opens the last tabs again, and Relay also restores them/);
   assert.equal(startupLine(status({ target: undefined }), en), undefined);
 });
 
@@ -163,7 +163,7 @@ const outcome = (over: Partial<ExtensionOutcome>): ExtensionOutcome => ({
 });
 
 test("each outcome says what happened, or nothing when there is nothing to say", () => {
-  assert.equal(extensionLine(outcome({}), en), "The extension’s sign-in was switched.");
+  assert.equal(extensionLine(outcome({}), en), "The extension sign-in changed.");
   assert.match(extensionLine(outcome({ result: "saved", reason: "no-saved-login" }), tr)!, /Eklentinin önceki girişi kaydedildi/);
   assert.match(extensionLine(outcome({ result: "unchanged", reason: "no-saved-login" }), en)!, /no saved extension sign-in/);
   assert.equal(extensionLine(outcome({ result: "unchanged", reason: "already-there" }), en), undefined);
@@ -171,17 +171,17 @@ test("each outcome says what happened, or nothing when there is nothing to say",
   assert.equal(extensionLine(outcome({ result: "skipped", reason: "not-installed" }), en), undefined);
   assert.match(extensionLine(outcome({ result: "skipped", reason: "browser-running" }), tr)!, /Tarayıcı açık olduğu için/);
   assert.match(extensionLine(outcome({ result: "skipped", reason: "browser-did-not-quit" }), en)!, /did not quit/);
-  assert.match(extensionLine(outcome({ result: "skipped", reason: "unknown-account" }), en)!, /does not have/);
+  assert.match(extensionLine(outcome({ result: "skipped", reason: "unknown-account" }), en)!, /is not in Relay/);
   assert.match(extensionLine(outcome({ result: "skipped", reason: "choose-instance" }), en)!, /several browser profiles/);
-  assert.match(extensionLine(outcome({ result: "skipped", reason: "unavailable" }), en)!, /use Relay\.app: Settings → What comes along → Claude browser extension → Sync now/);
-  assert.match(extensionLine(outcome({ result: "failed", reason: "write-failed" }), en)!, /was put back/);
+  assert.match(extensionLine(outcome({ result: "skipped", reason: "unavailable" }), en)!, /In Relay\.app, use Settings → What comes along → Claude browser extension → Sync now/);
+  assert.match(extensionLine(outcome({ result: "failed", reason: "write-failed" }), en)!, /Relay put back the previous state/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "locked" }), en)!, /open in another process/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "restore-failed" }), en)!, /extension-scratch/);
-  assert.match(extensionLine(outcome({ result: "failed", reason: "unreadable" }), en)!, /Could not read/);
+  assert.match(extensionLine(outcome({ result: "failed", reason: "unreadable" }), en)!, /Relay cannot read the extension sign-in/);
   // A browser Relay quit and could not open again is said even when the step had nothing to say.
   assert.match(
     extensionLine(outcome({ result: "unchanged", reason: "already-there", restarted: true, reopened: false }), en)!,
-    /Could not open the browser again/,
+    /Relay cannot open the browser again/,
   );
   assert.match(
     extensionLine(outcome({ restarted: true, reopened: false }), tr)!,
@@ -275,11 +275,11 @@ test("the settings card shows the mode with its sentence, the instance, the star
   );
   assert.match(closed, /Eklenti de geçsin/);
   assert.match(closed, />Gelişmiş</);
-  assert.doesNotMatch(closed, /Şimdi eşitle|Açık bir tarayıcıyı kısa süreliğine/);
-  assert.match(html, /Açık bir tarayıcıyı kısa süreliğine kapatıp sekmeleriyle yeniden açar/);
+  assert.doesNotMatch(closed, /Şimdi eşitle|Açık tarayıcı kısa süre kapanıp/);
+  assert.match(html, /Açık tarayıcı kısa süre kapanıp sekmeleriyle yeniden açılır/);
   assert.match(html, /claude\.ai oturumunu da değiştirir/);
   assert.match(html, /Brave · Kişisel · eklenti yüklü/);
-  assert.match(html, /Relay onları kendisi geri yükler/);
+  assert.match(html, /Relay sekmeleri kendisi geri yükler/);
   assert.match(html, /Şimdi eşitle/);
   // One instance: no picker for the profile.
   assert.doesNotMatch(html, /Eklentinin tarayıcı profili/);
@@ -293,8 +293,8 @@ test("the settings card shows the mode with its sentence, the instance, the star
     }),
     "en",
   );
-  assert.match(several, /The extension’s browser profile/);
-  assert.match(several, /Choose a profile/);
+  assert.match(several, /Extension browser profile/);
+  assert.match(several, /Select a profile/);
   // Not on this Mac: the card is not drawn at all.
   assert.equal(render(relayFor("darwin", [vertex]), createElement(ExtensionPreference, {})), "");
 });
@@ -307,8 +307,8 @@ test("the new reasons have a sentence in both languages, and none names a token 
     assert.ok(trText && enText, reason);
     assert.doesNotMatch(trText + enText, /sessionKey|token|SECRET/i);
   }
-  assert.match(extensionLine(outcome({ result: "failed", reason: "schema-changed" }), en)!, /cookie layout/);
-  assert.match(extensionLine(outcome({ result: "failed", reason: "journal-pending" }), en)!, /not closed cleanly/);
+  assert.match(extensionLine(outcome({ result: "failed", reason: "schema-changed" }), en)!, /cookie format/);
+  assert.match(extensionLine(outcome({ result: "failed", reason: "journal-pending" }), en)!, /did not close correctly/);
 });
 
 test("a pair is complete only with the extension's hints and the claude.ai login both saved", () => {
@@ -325,8 +325,8 @@ test("a pair is complete only with the extension's hints and the claude.ai login
     "en",
   );
   assert.match(html, /Saved accounts/);
-  assert.match(html, /Extension sign-in and claude\.ai login both saved: Vertex\./);
-  assert.match(html, /Missing one of the two: Kişisel, Alto\./);
+  assert.match(html, /Extension sign-in and claude\.ai login saved: Vertex\./);
+  assert.match(html, /One of the two is missing: Kişisel, Alto\./);
 });
 
 test("the extension check runs again when the setting changes, not for each snapshot's fresh copy of it", async () => {
@@ -501,7 +501,7 @@ test("the reconnect guide names the account, why, and the steps; Sync now only w
   )!;
   assert.equal(broken.account.id, altoLinked.id);
   assert.equal(broken.canSync, false);
-  assert.match(broken.why, /another account’s, or it ended/);
+  assert.match(broken.why, /The login is for another account, or it expired/);
   assert.match(broken.steps[0], /log in with alto@example\.com/);
   // Once the extension is on that account again without a failure, the guide is gone.
   assert.equal(
