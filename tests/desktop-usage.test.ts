@@ -24,7 +24,7 @@ import type { Account } from "../shared/types";
 
 const PASSWORD = "fixture-safe-storage-password";
 const KEY = cookieKey(PASSWORD);
-const ACCOUNT = "7015ba4b-38b0-4c1f-9d39-6f1f4c0a1b2c";
+const ACCOUNT = "0d1e2f3a-38b0-4c1f-9d39-6f1f4c0a1b2c";
 const ORG = "11111111-2222-4333-8444-555555555555";
 
 /** Encrypts like Chromium on macOS, database version 24 and later. */
