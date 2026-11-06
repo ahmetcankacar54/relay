@@ -1802,10 +1802,14 @@ function createWindow(hash?: string) {
     minHeight: 560,
     title: "Relay",
     icon: path.join(__dirname, "icon.png"),
-    // The window grey of src/styles/theme.css (--sidebar), so nothing flashes before the page draws.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f0f11" : "#f4f4f5",
+    // On macOS the sidebar shows the system material (the `vibrant` variant in src/styles/theme.css);
+    // elsewhere the window takes the page colour, so nothing flashes before the page draws.
+    ...(process.platform === "darwin"
+      ? { vibrancy: "sidebar" as const, visualEffectState: "followWindow" as const, backgroundColor: "#00000000" }
+      : { backgroundColor: nativeTheme.shouldUseDarkColors ? "#0f0f11" : "#f4f4f5" }),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    trafficLightPosition: { x: 20, y: 20 },
+    // 16 px from the left: the three buttons end at 68 px, inside the 84 px collapsed rail.
+    trafficLightPosition: { x: 16, y: 19 },
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

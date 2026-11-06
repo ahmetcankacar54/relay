@@ -1,4 +1,5 @@
-import { LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
+import { RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
@@ -65,7 +66,7 @@ export function Overview({
               })
             }
           >
-            {refreshing ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {refreshing ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
           </Button>
           {relay.active && (
             <Button

@@ -11,6 +11,8 @@ import "../styles/theme.css";
 
 // The panel window is transparent so macOS vibrancy shows through.
 document.body.style.background = "transparent";
+// A 360 px column: the compact type ramp (src/styles/theme.css).
+document.documentElement.dataset.density = "compact";
 // The document never scrolls; the panel scrolls inside itself (Panel.tsx), so no scrollbar
 // appears and none can take width from the 360 px column.
 document.documentElement.style.overflow = "hidden";

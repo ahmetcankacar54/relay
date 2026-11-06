@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link2, Plus, Search } from "lucide-react";
+import { Link2, Search } from "lucide-react";
+import { PlusIcon, SearchIcon } from "@/components/icons";
 import { Panda } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -253,17 +254,17 @@ export function Accounts() {
               setAdding(true);
             }}
           >
-            <Plus />
+            <PlusIcon />
             {t("Hesap ekle", "Add account")}
           </Button>
           {addBlock && <Reason>{blockReason(addBlock, t)}</Reason>}
         </>
       }
     >
-      <div className="grid gap-3 px-5 pb-5">
+      <div className="@container grid gap-3 px-5 pb-5">
         <div className="flex flex-wrap gap-2">
           <div className="relative min-w-48 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={search}
               aria-label={t("Hesap ara", "Search accounts")}

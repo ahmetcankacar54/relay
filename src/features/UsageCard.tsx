@@ -1,4 +1,5 @@
-import { LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
+import { RefreshIcon } from "@/components/icons";
 import type {
   AccountUsage,
   RelaySettings,
@@ -304,7 +305,7 @@ export function UsageCard({
             {loading ? (
               <LoaderCircle className="animate-spin" />
             ) : (
-              <RefreshCw />
+              <RefreshIcon />
             )}
           </Button>
         )}

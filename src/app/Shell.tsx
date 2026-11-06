@@ -18,12 +18,22 @@ import { DesktopActionDialog } from "./DesktopActionDialog";
 import { intentHash, shortcutPage } from "./routes";
 import { useHashRoute } from "./useHashRoute";
 import { useMediaQuery } from "./useMediaQuery";
+import { useSidebarSize } from "./useSidebarSize";
 
 export function Shell() {
   const relay = useRelay();
   const { t } = useI18n();
   const [page, go] = useHashRoute();
-  const compact = useMediaQuery("(max-width: 839px)");
+  // A narrow window always shows the icon rail; a wider one shows what the user chose.
+  const narrow = useMediaQuery("(max-width: 899px)");
+  const [sidebar, setSidebar] = useSidebarSize();
+  const compact = narrow || sidebar.collapsed;
+  const sidebarRef = useRef(sidebar);
+  useEffect(() => {
+    sidebarRef.current = sidebar;
+  });
+  const toggleSidebar = () =>
+    setSidebar({ ...sidebarRef.current, collapsed: !sidebarRef.current.collapsed });
   // The page toolbar shows its bottom edge once content scrolls under it.
   const [scrolled, setScrolled] = useState(false);
   const relayRef = useRef(relay);
@@ -44,6 +54,10 @@ export function Shell() {
       if (target) {
         e.preventDefault();
         go(target);
+      } else if (e.metaKey && e.ctrlKey && e.key.toLowerCase() === "s") {
+        // ⌃⌘S shows or hides the sidebar, as in the macOS apps.
+        e.preventDefault();
+        if (!e.repeat) toggleSidebar();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         if (e.repeat) return;
@@ -98,12 +112,16 @@ export function Shell() {
     <TooltipProvider delayDuration={300}>
       <RelayPrankStage>
         <MainWindowPranks />
-        <div className="flex h-screen overflow-hidden bg-sidebar text-foreground">
+        <div className="flex h-screen overflow-hidden bg-sidebar text-foreground vibrant:bg-transparent">
           <Sidebar
             page={page}
             go={go}
             t={t}
             compact={compact}
+            width={sidebar.width}
+            collapsed={compact}
+            onResize={narrow ? undefined : setSidebar}
+            onToggle={narrow ? undefined : toggleSidebar}
             panda={<CardPanda view={panda.view} />}
             onPoke={panda.poke}
             status={sidebarStatus(relay.data)}
@@ -116,7 +134,7 @@ export function Shell() {
             }
           />
           <main
-            className="group/main relative my-2 mr-2 flex min-w-0 flex-1 flex-col overflow-y-auto rounded-lg border bg-background"
+            className="group/main relative flex min-w-0 flex-1 flex-col overflow-y-auto border-l bg-background"
             ref={mainRef}
             data-scrolled={scrolled || undefined}
             onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}

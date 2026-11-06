@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { ArrowDown, ArrowUp, Ellipsis, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Ellipsis, GripVertical, Trash2 } from "lucide-react";
+import { PlusIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -355,7 +356,7 @@ export function MenuBarTitleRows({
                   onClick={() => add(item)}
                   title={missing(item) ? t(...MENU_BAR_ITEM_MISSING[item]) : undefined}
                 >
-                  <Plus />
+                  <PlusIcon />
                   {label(item)}
                   <span
                     data-slot={missing(item) ? "menu-bar-missing" : undefined}

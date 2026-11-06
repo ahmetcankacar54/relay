@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Panda } from "@/components/Panda";
-import { ArrowLeftRight, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { ArrowLeftRight, LoaderCircle, X } from "lucide-react";
+import { RefreshIcon } from "@/components/icons";
 import type { Account } from "../../shared/types";
 
 export type DesktopActionKind =
@@ -201,7 +202,7 @@ export function DesktopActionReview({
           {busy ? (
             <LoaderCircle className="animate-spin" />
           ) : (
-            <RefreshCw />
+            <RefreshIcon />
           )}
           {kind === "history"
             ? t("Birleştir ve yeniden başlat", "Merge and restart")

@@ -1,17 +1,6 @@
 import type { ReactNode } from "react";
-import {
-  AppWindow,
-  ArrowLeft,
-  Check,
-  CircleAlert,
-  Link2,
-  Globe2,
-  LoaderCircle,
-  Monitor,
-  MoreHorizontal,
-  RefreshCw,
-  SquareTerminal,
-} from "lucide-react";
+import { AppWindow, Check, CircleAlert, Link2, Globe2, LoaderCircle, Monitor, MoreHorizontal, SquareTerminal } from "lucide-react";
+import { BackIcon, RefreshIcon } from "@/components/icons";
 import type { Account, ExtensionStatus, RelaySettings } from "../../../shared/types";
 import {
   desktopCliMismatch,
@@ -148,7 +137,7 @@ export function AccountDetail({
       }
       back={
         <Button variant="ghost" size="sm" className="-ml-2 h-7 px-2 text-muted-foreground" onClick={back}>
-          <ArrowLeft />
+          <BackIcon />
           {t("Hesaplar", "Accounts")}
         </Button>
       }
@@ -395,7 +384,7 @@ function ExtensionConnection({
               disabled={checking}
               onClick={() => void check()}
             >
-              <RefreshCw />
+              <RefreshIcon />
             </Button>
           </>
         ) : guide.action === "check" ? (
@@ -405,7 +394,7 @@ function ExtensionConnection({
             disabled={checking}
             onClick={() => void check()}
           >
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
             {t("Kontrol et", "Check")}
           </Button>
         ) : guide.action === "settings" ? (
@@ -421,7 +410,7 @@ function ExtensionConnection({
             disabled={checking}
             onClick={() => void check()}
           >
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
           </Button>
         ) : undefined
       }
@@ -452,7 +441,7 @@ function TerminalConnection({
       actions={
         guide.action === "check" ? (
           <Button size="sm" variant="outline" disabled={checking} onClick={() => void check()}>
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
             {t("Kontrol et", "Check")}
           </Button>
         ) : guide.action === "settings" ? (
@@ -468,7 +457,7 @@ function TerminalConnection({
             disabled={checking}
             onClick={() => void check()}
           >
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
           </Button>
         ) : undefined
       }
@@ -608,7 +597,7 @@ export function AccountDetailBody({
                       disabled={usageBusy.has(a.id)}
                       onClick={() => void relay.refreshUsage(a)}
                     >
-                      <RefreshCw className={usageBusy.has(a.id) ? "animate-spin" : undefined} />
+                      <RefreshIcon className={usageBusy.has(a.id) ? "animate-spin" : undefined} />
                     </Button>
                   </span>
                 ) : undefined
@@ -747,7 +736,7 @@ export function AccountDetailBody({
                         })
                       }
                     >
-                      <RefreshCw />
+                      <RefreshIcon />
                     </Button>
                   )}
                 </>

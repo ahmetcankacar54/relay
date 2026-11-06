@@ -7,6 +7,8 @@ import "../styles/theme.css";
 
 // The window is transparent; the stage draws its own card.
 document.body.style.background = "transparent";
+// A small card: the compact type ramp (src/styles/theme.css).
+document.documentElement.dataset.density = "compact";
 
 function SwitchWindow() {
   const [view, setView] = useState<SwitchSceneView>();
