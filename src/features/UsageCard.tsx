@@ -264,7 +264,11 @@ export function UsageCard({
             : shownIssue
               ? t(...issues[shownIssue])
               : usage?.checkedAt
-                ? `${t("Güncellendi", "Updated")} ${clock(usage.checkedAt)}`
+                ? `${t("Güncellendi", "Updated")} ${clock(usage.checkedAt)}${
+                    usage.source === "desktop"
+                      ? t(" · Claude uygulamasından", " · via the Claude app")
+                      : ""
+                  }`
                 : t("Henüz sorgulanmadı", "Not checked yet")}
           {retry &&
             !reconnect &&
@@ -279,7 +283,9 @@ export function UsageCard({
             disabled={loading || connectBusy}
             onClick={connect}
           >
-            {t("Limit okuma girişini yenile", "Renew usage sign-in")}
+            {usage?.source === "desktop"
+              ? t("Limit okuma girişi yap", "Sign in to read usage")
+              : t("Limit okuma girişini yenile", "Renew usage sign-in")}
           </Button>
         ) : renewal ? (
           <Button

@@ -695,6 +695,11 @@ export interface AccountUsage {
   modelWindows?: ModelWindow[];
   checkedAt?: string;
   stale: boolean;
+  /**
+   * The sign-in the last read went through: the account's Claude Code sign-in, or, without one,
+   * its Claude app sign-in (claude.ai's own usage page).
+   */
+  source?: "cli" | "desktop";
   issue?: UsageIssue;
   retryAt?: string;
   /** Identity-bound history for display only, never fresh quota evidence. */

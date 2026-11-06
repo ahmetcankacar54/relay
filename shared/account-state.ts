@@ -13,9 +13,22 @@ export function displayedIssue(
   );
 }
 
+/**
+ * The account has no Claude Code sign-in and Relay reads its limits through its Claude app
+ * sign-in instead (claude.ai's own usage page). Relay only does that where it can (macOS):
+ * elsewhere the read reports `connect-cli` and names no source.
+ */
+export function readsThroughApp(account: Account, usage?: AccountUsage) {
+  return (
+    !account.auth?.loggedIn &&
+    !!account.desktop &&
+    usage?.source === "desktop"
+  );
+}
+
 export function cliNeedsReconnect(account: Account, usage?: AccountUsage) {
   return (
-    !account.auth?.loggedIn ||
+    (!account.auth?.loggedIn && !readsThroughApp(account, usage)) ||
     ["expired", "credentials-missing", "scope", "identity-mismatch"].includes(
       usage?.issue ?? "",
     )

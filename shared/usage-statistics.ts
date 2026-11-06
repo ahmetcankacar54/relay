@@ -13,9 +13,16 @@ export interface UsageSample {
 }
 // A verified UUID survives an email/name change; the organization remains part
 // of its quota identity. Legacy accounts fall back to normalized email.
-// Samples are recorded only under a signed-in account's identity.
+// Samples are recorded only under a signed-in account's identity: its Claude Code
+// sign-in's, else (read through the Claude app's sign-in) the Claude app's.
 export function usageIdentity(account: Account): string | undefined {
-  return account.auth?.loggedIn ? historyIdentity(account) : undefined;
+  if (account.auth?.loggedIn) return historyIdentity(account);
+  return desktopIdentity(account);
+}
+
+function desktopIdentity(account: Account): string | undefined {
+  if (!account.desktop) return;
+  return JSON.stringify(["uuid", account.desktop.accountUuid, account.desktop.orgId]);
 }
 
 /**
@@ -23,7 +30,7 @@ export function usageIdentity(account: Account): string | undefined {
  * signed out: a sign-out keeps the last verified UUID and organization.
  */
 export function historyIdentity(account: Account): string | undefined {
-  if (!account.auth) return;
+  if (!account.auth) return desktopIdentity(account);
   const uuid = account.auth.accountUuid ?? account.desktop?.accountUuid;
   const email = account.auth.email?.trim().toLowerCase();
   const org = account.auth.orgId ?? account.desktop?.orgId ?? "";

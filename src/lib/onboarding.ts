@@ -59,9 +59,16 @@ export interface Prerequisites {
 }
 
 /**
- * The Overview checklist; undefined until both snapshots have arrived. Opening Code makes the
- * Claude app download its own Claude Code, which Relay reads limits with, so the CLI is a step
- * of its own only when it is still missing or too old after Code was opened.
+ * Whether limits are read through each account's Claude app sign-in when it has no Claude Code
+ * sign-in (macOS): the CLI is then optional.
+ */
+export const appReadsUsage = (diagnostics?: Diagnostics) => diagnostics?.platform === "darwin";
+
+/**
+ * The Overview checklist; undefined until both snapshots have arrived. On macOS Relay reads the
+ * limits through the Claude app's own sign-in, so the CLI is never a step there. Elsewhere,
+ * opening Code makes the Claude app download its own Claude Code, which Relay reads limits with,
+ * so the CLI is a step of its own only when it is still missing or too old after Code was opened.
  */
 export function prerequisites(input: {
   desktop?: DesktopState;
@@ -72,12 +79,17 @@ export function prerequisites(input: {
   if (!desktop || !diagnostics) return;
   const cli = cliState(diagnostics);
   const code = codeTabOpened(desktop, accounts);
+  const optional = appReadsUsage(diagnostics);
   const items: Prerequisites["items"] = [
     { key: "desktop", met: desktop.available },
     { key: "code", met: code },
-    ...(code && cli !== "ok" ? [{ key: "cli" as const, met: false }] : []),
+    ...(!optional && code && cli !== "ok" ? [{ key: "cli" as const, met: false }] : []),
   ];
-  return { items, cli, complete: items.every((i) => i.met) && cli === "ok" };
+  return {
+    items,
+    cli,
+    complete: items.every((i) => i.met) && (optional || cli === "ok"),
+  };
 }
 
 /** Why an onboarding button is disabled; "loading" lasts one snapshot and has no words. */
