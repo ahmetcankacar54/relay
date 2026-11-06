@@ -54,12 +54,8 @@ export function TodayCard({ today }: { today: TokenToday }) {
           hour: "2-digit",
           minute: "2-digit",
         }).format(today.slotsSince);
-  const tone =
-    change === null
-      ? "text-muted-foreground"
-      : change >= 0
-        ? "text-ok-foreground"
-        : "text-crit";
+  // The change is a direction, not good or bad: the arrow says it, in the text colour.
+  const tone = "text-muted-foreground";
   return (
     <section
       data-slot="token-today"
@@ -75,7 +71,7 @@ export function TodayCard({ today }: { today: TokenToday }) {
           )}
           {t("Bugün", "Today")}
         </div>
-        <div className="text-2xs tracking-wide text-muted-foreground uppercase">
+        <div className="text-xs text-muted-foreground">
           {t("Claude Code · token", "Claude Code · tokens")}
         </div>
         <dl className="mt-2 grid grid-cols-[auto_auto] gap-x-6 gap-y-0.5 text-sm">
@@ -100,7 +96,7 @@ export function TodayCard({ today }: { today: TokenToday }) {
           <span className="text-right">
             <span
               data-slot="token-today-cost"
-              className={cn("font-display text-lg font-bold tabular-nums", tone)}
+              className="font-display text-lg font-bold tabular-nums"
             >
               {totals.costEstimated ? "≈" : ""}
               {formatCost(cost, language)}
@@ -142,14 +138,14 @@ export function TodayCard({ today }: { today: TokenToday }) {
               strokeDasharray="3 3"
             />
           )}
-          {area && <path aria-hidden d={area} className="fill-ok/15" />}
+          {area && <path aria-hidden d={area} className="fill-foreground/8" />}
           {line && (
             <path
               data-slot="token-today-line"
               aria-hidden
               d={line}
               fill="none"
-              className="stroke-ok"
+              className="stroke-meter"
               strokeWidth={1.5}
               strokeLinejoin="round"
             />

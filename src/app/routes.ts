@@ -6,13 +6,15 @@ export const PAGES = [
   "genel",
   "hesaplar",
   "kullanim",
+  "tokenlar",
+  "rozetler",
   "planlama",
   "gecis",
   "ayarlar",
 ] as const;
 export type PageId = (typeof PAGES)[number];
-/** The pages in the sidebar, in order. */
-export const NAV_PAGES = ["genel", "hesaplar", "kullanim", "ayarlar"] as const;
+/** The pages in the sidebar, in order. Usage is three pages: limits, tokens and cost, pins. */
+export const NAV_PAGES = ["genel", "hesaplar", "kullanim", "tokenlar", "rozetler", "ayarlar"] as const;
 export type NavPage = (typeof NAV_PAGES)[number];
 /** Settings' tabs, in order: one place for every setting. */
 export const SETTINGS_TABS = [
@@ -48,7 +50,7 @@ export function settingsTab(hash: string): SettingsTab {
 }
 export const routeHash = (page: Destination) => `#/${page}`;
 /**
- * ⌘1–⌘3 open the sidebar's pages in order; ⌘, opens settings. None while a dialog or sheet is
+ * ⌘1–⌘5 open the sidebar's pages in order; ⌘, opens settings. None while a dialog or sheet is
  * open, so a confirmation can’t be navigated away from.
  */
 export function shortcutPage(

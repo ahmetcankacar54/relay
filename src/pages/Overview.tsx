@@ -55,7 +55,7 @@ export function Overview({
       actions={
         <>
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             aria-label={t("Limitleri yenile", "Refresh limits")}
             title={t("Limitleri yenile", "Refresh limits")}

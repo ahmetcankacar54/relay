@@ -137,15 +137,15 @@ test("sidebar buttons override the legacy centred button style and the summary c
     );
   const html = sidebar(true);
   const buttons = html.match(/<button[\s\S]*?<\/button>/g) ?? [];
-  assert.equal(buttons.length, 5);
+  assert.equal(buttons.length, 7);
   for (const b of buttons) {
     const tag = /^<button[^>]*>/.exec(b)?.[0] ?? "";
     assert.match(tag, /class="[^"]*text-left/);
     assert.doesNotMatch(tag, /justify-center/);
   }
-  // The four pages start their row on the left.
+  // The six pages start their row on the left.
   const pages = buttons.filter((b) => !b.includes("Kişisel · Max"));
-  assert.equal(pages.length, 4);
+  assert.equal(pages.length, 6);
   for (const b of pages) assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
   // The summary card: a single 32 px ring for the five hours and its percent, inside the card's button.
   const summary = buttons.find((b) => b.includes("Kişisel · Max")) ?? "";

@@ -346,6 +346,25 @@ test("an account page lives at #/hesaplar/<id>", () => {
   assert.equal(accountFromHash("#/genel"), undefined);
 });
 
+test("each connection keeps its refresh button left of its action, in shared columns, with a plain check", () => {
+  const html = wrap(relayFor(), createElement(AccountDetailBody, { account: a, now: NOW }));
+  // One grid for the list; each row is a subgrid of it, so the columns line up across rows.
+  assert.match(html, /data-slot="connection-list" class="grid grid-cols-\[auto_minmax\(0,1fr\)_auto_auto\]/);
+  const rows = html.split('data-slot="connection"').slice(1);
+  assert.ok(rows.length >= 2);
+  for (const row of rows) {
+    assert.match(row, /grid-cols-subgrid/);
+    assert.ok(row.indexOf('data-slot="connection-refresh"') < row.indexOf('data-slot="connection-action"'));
+  }
+  // The usage sign-in row: the refresh button, then Renew.
+  const usage = rows.find((r) => r.includes("Limit okuma girişi")) ?? "";
+  assert.match(usage, /data-slot="connection-refresh"[^>]*><button[^>]*aria-label="Limit okuma girişini doğrula"[\s\S]*data-slot="connection-action"[^>]*><button[^>]*>Yenile<\/button>/);
+  // The leading check has no ground of its own.
+  const mark = /<span aria-hidden="true" class="([^"]*)"/.exec(rows[0])?.[1] ?? "";
+  assert.match(mark, /size-5/);
+  assert.doesNotMatch(mark, /bg-/);
+});
+
 test("the account page shows identity, usage, the connections and a closed history", () => {
   const html = wrap(relayFor(), createElement(AccountDetailBody, { account: a, now: NOW }));
   assert.match(html, /a@example.com/);

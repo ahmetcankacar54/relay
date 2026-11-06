@@ -8,7 +8,6 @@ import { PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
 import { Panda } from "@/components/Panda";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
@@ -171,8 +170,8 @@ function StatisticsContent({
         </summary>
         <Note className="mt-1 text-xs">
           {t(
-            "Bu sayılar Relay’in okuduğu limit yüzdelerinden gelir; token, mesaj ya da maliyet saymaz. Dolu dönem, bir hesabın 5 saatlik limitinin tamamıdır. Hesap payları plana göre ağırlıklıdır: Pro 1, Max 5× 5, Max 20× 20, Team için girdiğin ağırlık. Token ve API karşılığı “Token ve ücret” sekmesindedir.",
-            "These numbers come from the limit percentages that Relay reads. They do not count tokens, messages or cost. A full period is all of one 5-hour limit. Account shares use plan weights: Pro 1, Max 5× 5, Max 20× 20, Team as you set it. Tokens and API value are on the “Tokens and cost” tab.",
+            "Bu sayılar Relay’in okuduğu limit yüzdelerinden gelir; token, mesaj ya da maliyet saymaz. Dolu dönem, bir hesabın 5 saatlik limitinin tamamıdır. Hesap payları plana göre ağırlıklıdır: Pro 1, Max 5× 5, Max 20× 20, Team için girdiğin ağırlık. Token ve API karşılığı “Token ve ücret” sayfasındadır.",
+            "These numbers come from the limit percentages that Relay reads. They do not count tokens, messages or cost. A full period is all of one 5-hour limit. Account shares use plan weights: Pro 1, Max 5× 5, Max 20× 20, Team as you set it. Tokens and API value are on the “Tokens and cost” page.",
           )}
         </Note>
       </details>
@@ -180,43 +179,31 @@ function StatisticsContent({
   );
 }
 
-/** The Limits tab: the statistics with the token ledger's tokens and API value beside them; mounted only while open. */
-function LimitsTab({
+/** The Limits page: the statistics with the token ledger's tokens and API value beside them. */
+function LimitsPage({
   range,
   ...props
-}: Omit<SectionProps, "cost" | "tokens"> & { range: StatisticsRange }) {
+}: Omit<SectionProps, "cost" | "tokens" | "state"> & { range: StatisticsRange }) {
+  const state = useUsageStatistics(range, props.accountId);
   const tokens = useTokenUsage(range, props.accountId).view;
   return (
     <UsageStatisticsSection
       {...props}
+      state={state}
       cost={costSummary(tokens)}
       tokens={tokens}
     />
   );
 }
 
-/** The page's tabs; only the open one is drawn, so a hidden token scan asks for nothing. */
-const TABS = ["limits", "tokens", "lost"] as const;
-export type UsageTab = (typeof TABS)[number];
-/** Where the open tab is remembered, a convenience for this window only. */
-const TAB_KEY = "relay.usage.tab.v1";
+/** Usage's three pages in the sidebar; each draws only its own section, so a token scan runs only on its page. */
+export type UsageSection = "limits" | "tokens" | "lost";
 
-function storedTab(): UsageTab {
-  try {
-    const value = window.localStorage?.getItem(TAB_KEY);
-    return TABS.includes(value as UsageTab) ? (value as UsageTab) : "limits";
-  } catch {
-    return "limits";
-  }
-}
-
-function storeTab(tab: UsageTab) {
-  try {
-    window.localStorage?.setItem(TAB_KEY, tab);
-  } catch {
-    // The tab is then remembered until the page closes.
-  }
-}
+/**
+ * The range and account filter, shared by the limits and tokens pages and kept while the window is
+ * open, so going from one page to the other keeps the same view.
+ */
+let lastFilter: { range: StatisticsRange; chosen?: string } = { range: 30 };
 
 /**
  * The warning threshold as a segmented control, off while warnings are; Settings → Notifications
@@ -266,22 +253,34 @@ export function WarningThreshold({
 }
 
 /**
- * Usage in three tabs, so nothing needs a long scroll: the limit statistics, the token counts and the panda's
- * pin collection. The range and account filter belong to the first two and show only there.
+ * One of Usage's pages: the limit statistics, the token counts, or the panda's pin collection. The
+ * range and account filter belong to the first two and show only there.
  */
-export function Usage() {
+export function Usage({ section = "limits" }: { section?: UsageSection }) {
   const { accounts, settings } = useRelay();
   const { t } = useI18n();
-  const [range, setRange] = useState<StatisticsRange>(30);
-  const [chosen, setChosen] = useState<string>();
-  const [tab, setTab] = useState<UsageTab>(storedTab);
+  const [range, setRangeState] = useState<StatisticsRange>(lastFilter.range);
+  const [chosen, setChosenState] = useState<string | undefined>(lastFilter.chosen);
+  const setRange = (next: StatisticsRange) => {
+    lastFilter = { ...lastFilter, range: next };
+    setRangeState(next);
+  };
+  const setChosen = (next?: string) => {
+    lastFilter = { ...lastFilter, chosen: next };
+    setChosenState(next);
+  };
   // A deleted account falls back to all accounts.
   const accountId = accounts.some((a) => a.id === chosen) ? chosen : undefined;
-  const statistics = useUsageStatistics(range, accountId);
-  const filtered = tab === "limits" || tab === "tokens";
+  const filtered = section === "limits" || section === "tokens";
+  const title =
+    section === "tokens"
+      ? t("Token ve ücret", "Tokens and cost")
+      : section === "lost"
+        ? t("Rozetler", "Pins")
+        : t("Limitler", "Limits");
   return (
     <PageFrame
-      title={t("Kullanım", "Usage")}
+      title={title}
       actions={
         filtered ? (
           <StatisticsHeader
@@ -294,38 +293,18 @@ export function Usage() {
         ) : undefined
       }
     >
-      <Tabs
-        className="px-5 pb-5"
-        value={tab}
-        onValueChange={(value) => {
-          const next = value as UsageTab;
-          setTab(next);
-          storeTab(next);
-        }}
-      >
-        <TabsList aria-label={t("Kullanım bölümleri", "Usage sections")}>
-          <TabsTrigger value="limits">{t("Limitler", "Limits")}</TabsTrigger>
-          <TabsTrigger value="tokens">{t("Token ve ücret", "Tokens and cost")}</TabsTrigger>
-          <TabsTrigger value="lost">
-            {t("Rozetler", "Pins")}
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="limits">
-          <LimitsTab
-            state={statistics}
+      <div className="grid gap-4 px-5 pb-5">
+        {section === "limits" && (
+          <LimitsPage
             accounts={accounts}
             accountId={accountId}
             range={range}
             zone={settings.planning.timeZone}
           />
-        </TabsContent>
-        <TabsContent value="tokens">
-          <TokenUsage range={range} accountId={accountId} />
-        </TabsContent>
-        <TabsContent value="lost">
-          <LostFound />
-        </TabsContent>
-      </Tabs>
+        )}
+        {section === "tokens" && <TokenUsage range={range} accountId={accountId} />}
+        {section === "lost" && <LostFound />}
+      </div>
     </PageFrame>
   );
 }
