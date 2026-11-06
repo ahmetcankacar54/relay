@@ -6,6 +6,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { Check, ChevronDown, Globe2, LocateFixed, Search } from "lucide-react";
+import { SearchIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -230,7 +231,7 @@ export function TimeZonePicker({
           }}
         >
           <div className="flex items-center gap-2 border-b px-3">
-            <Search
+            <SearchIcon
               className="size-4 shrink-0 text-muted-foreground"
               aria-hidden="true"
             />

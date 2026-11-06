@@ -20,7 +20,7 @@
   /* Secondary sidebar text: 5:1 or better on the sidebar grey. */
   --sidebar-muted: #5f5f66;
   --sidebar-accent: rgb(0 0 0 / 0.06);
-  --background: #fcfcfd;
+  --background: #f4f4f5;
   --foreground: #18181b;
   --card: #ffffff;
   --card-foreground: #18181b;
@@ -64,7 +64,7 @@
     --sidebar-foreground: #d9d9de;
     --sidebar-muted: #8e8e96;
     --sidebar-accent: rgb(255 255 255 / 0.07);
-    --background: #151517;
+    --background: #0f0f11;
     --foreground: #ededef;
     --card: #1a1a1d;
     --card-foreground: #ededef;
@@ -97,11 +97,28 @@
     --tone-4: #4b4b52;
   }
 }
-@theme inline {
-  /* The system font (SF Pro on macOS), so Relay reads like the rest of the Mac. */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
-  /* The macOS type ramp: 13 px body, 12 px secondary text, 11 px for the smallest labels. */
+/*
+ * Type: 16 px body text, 14 px secondary text, 12 px for the smallest labels. A plain @theme (not
+ * inline), so the utilities read these variables and a small surface can swap them below.
+ */
+@theme {
+  --text-2xs: 0.75rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+}
+/* The menu bar panel and the switch window are small surfaces: they keep a compact ramp. */
+:root[data-density="compact"] {
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 0.875rem;
   --text-xs: 0.75rem;
@@ -116,6 +133,11 @@
   --text-xl--line-height: 1.375rem;
   --text-2xl: 1.375rem;
   --text-2xl--line-height: 1.75rem;
+}
+@theme inline {
+  /* The system font (SF Pro on macOS), so Relay reads like the rest of the Mac. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -156,12 +178,21 @@
   --color-tone-3: var(--tone-3);
   --color-tone-4: var(--tone-4);
 }
+/* The Electron main window on macOS shows the system sidebar material (electron/main.ts). */
+@custom-variant vibrant (&:where([data-vibrancy] *));
+/* Icons draw with a 1.5 px line, as in the macOS and Claude apps (lucide's default is 2). */
+svg.lucide {
+  stroke-width: 1.5;
+}
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-sidebar text-sm text-foreground font-sans antialiased;
+  }
+  :root[data-vibrancy] body {
+    @apply bg-transparent;
   }
   h1, h2, h3 {
     @apply font-display;

@@ -10,7 +10,8 @@ import {
   ringState,
 } from "@/lib/account-row";
 import { AccountList } from "../../features/AccountList";
-import { AppWindow, Plus, X } from "lucide-react";
+import { AppWindow, X } from "lucide-react";
+import { PlusIcon } from "@/components/icons";
 import type { OverviewRow } from "@/data/selectors";
 import { intentHash, type Destination } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
@@ -186,7 +187,7 @@ export function AccountsCard({
               )}
             >
               <span className="grid size-8 shrink-0 place-items-center">
-                <Plus aria-hidden="true" className="size-4" />
+                <PlusIcon aria-hidden="true" className="size-4" />
               </span>
               {t("Hesap ekle", "Add account")}
             </button>

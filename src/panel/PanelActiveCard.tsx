@@ -1,4 +1,5 @@
-import { KeyRound, RefreshCw } from "lucide-react";
+import { KeyRound } from "lucide-react";
+import { RefreshIcon } from "@/components/icons";
 import type { AccountUsage } from "../../shared/types";
 import { freshUsage, lastKnownUsage, windowHolds } from "../../shared/usage";
 import { Badge } from "@/components/ui/badge";
@@ -80,7 +81,7 @@ export function PanelActiveCard({ now }: { now: number }) {
         disabled={relay.usageBusy.has(active.id)}
         onClick={() => void relay.refreshUsage(active)}
       >
-        <RefreshCw />
+        <RefreshIcon />
       </Button>
     ));
   const title = active && (

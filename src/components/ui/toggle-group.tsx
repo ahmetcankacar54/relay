@@ -68,7 +68,7 @@ function ToggleGroupItem({
           size: context.size || size,
         }),
         "w-auto min-w-0 shrink-0 px-2.5 focus:z-10 focus-visible:z-10",
-        "data-[variant=outline]:h-6 data-[variant=outline]:bg-transparent data-[variant=outline]:data-[state=on]:bg-control",
+        "data-[variant=outline]:h-7 data-[variant=outline]:bg-transparent data-[variant=outline]:data-[state=on]:bg-control",
         className
       )}
       {...props}

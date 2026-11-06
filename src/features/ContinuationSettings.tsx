@@ -1,13 +1,6 @@
 import { useEffect, useId, useState } from "react";
-import {
-  ArrowRight,
-  Check,
-  LoaderCircle,
-  Pause,
-  Play,
-  RefreshCw,
-  ShieldCheck,
-} from "lucide-react";
+import { ArrowRight, Check, LoaderCircle, Pause, Play, ShieldCheck } from "lucide-react";
+import { RefreshIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -723,7 +716,7 @@ export function ContinuationSettings({
           disabled={busy || executing}
           onClick={onRefresh}
         >
-          <RefreshCw size={15} aria-hidden="true" />
+          <RefreshIcon className="size-4" />
           {t("Yeniden kontrol et", "Check again")}
         </Button>
       </div>

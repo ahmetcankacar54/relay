@@ -487,7 +487,8 @@ export function AccountsTable({
           <TableHead>{t("Hesap", "Account")}</TableHead>
           <TableHead>{t("Durum", "Status")}</TableHead>
           <TableHead>{t("5 saat", "5 hours")}</TableHead>
-          <TableHead>{t("Hafta", "Week")}</TableHead>
+          {/* A narrow page drops the week; the account page and the Overview still show it. */}
+          <TableHead className="@max-3xl:hidden">{t("Hafta", "Week")}</TableHead>
           <TableHead>{t("Bağlantılar", "Connections")}</TableHead>
           <TableHead className="w-10">
             <span className="sr-only">{t("İşlemler", "Actions")}</span>
@@ -653,7 +654,7 @@ export function AccountsTable({
               <TableCell>
                 <CellMeter percent={five} label={t("5 saat", "5 hours")} />
               </TableCell>
-              <TableCell>
+              <TableCell className="@max-3xl:hidden">
                 <CellMeter percent={week} label={t("Hafta", "Week")} />
               </TableCell>
               <TableCell>

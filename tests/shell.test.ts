@@ -147,9 +147,9 @@ test("sidebar buttons override the legacy centred button style and the summary c
   const pages = buttons.filter((b) => !b.includes("Kişisel · Max"));
   assert.equal(pages.length, 4);
   for (const b of pages) assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
-  // The summary card: a single 28 px ring for the five hours and its percent, inside the card's button.
+  // The summary card: a single 32 px ring for the five hours and its percent, inside the card's button.
   const summary = buttons.find((b) => b.includes("Kişisel · Max")) ?? "";
-  assert.match(summary, /<div role="img" aria-label="5 saatlik dönem %94 kullanıldı"[^>]*style="width:28px;height:28px"/);
+  assert.match(summary, /<div role="img" aria-label="5 saatlik dönem %94 kullanıldı"[^>]*style="width:32px;height:32px"/);
   // Without a relay to read the reset from, the line is the percent alone.
   assert.match(summary, />%94</);
   assert.doesNotMatch(html, /role="meter"/);

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { RefreshCw, Settings2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
+import { RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Panda } from "@/components/Panda";
 import { useI18n } from "@/data/i18n";
@@ -92,7 +93,7 @@ export function Panel({
                 })
               }
             >
-              <RefreshCw className={refreshing ? "animate-spin" : undefined} />
+              <RefreshIcon className={refreshing ? "animate-spin" : undefined} />
             </Button>
             <Button
               variant="ghost"

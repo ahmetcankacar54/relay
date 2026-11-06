@@ -1,4 +1,5 @@
-import { Plus, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
+import { PlusIcon } from "@/components/icons";
 import { freshUsage } from "../../../shared/usage";
 import { Badge } from "@/components/ui/badge";
 import { formatUsed } from "@/lib/meter";
@@ -206,7 +207,7 @@ function Onboarding({ go }: { go: (to: Destination) => void }) {
                 : intentHash("hesaplar", "ekle");
             }}
           >
-            <Plus />
+            <PlusIcon />
             {linking
               ? t("Hesabı eşleştir", "Link account")
               : t("Hesap ekle", "Add account")}
