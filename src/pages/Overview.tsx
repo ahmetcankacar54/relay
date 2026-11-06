@@ -82,7 +82,7 @@ export function Overview({
     >
       <div className="grid gap-4 px-5 pb-5">
         <ActiveAccountCard go={go} now={now} />
-        <SetupChecklist />
+        <SetupChecklist go={go} />
         {cards.today ? (
           <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
             <AccountsCard go={go} now={now} />

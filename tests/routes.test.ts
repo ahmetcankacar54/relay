@@ -11,17 +11,22 @@ test("hashes map to the sidebar's pages; the former pages open Settings, unknown
   assert.equal(parseRoute("#/yok"), "genel");
   assert.equal(parseRoute("#/planlama?x=1"), "ayarlar");
   assert.equal(parseRoute("#/gecis"), "ayarlar");
-  assert.equal(parseRoute("#/ayarlar/tasinanlar"), "ayarlar");
+  assert.equal(parseRoute("#/ayarlar/gecis"), "ayarlar");
 });
 
 test("Settings' tab comes from the hash, a former page's own tab, or the first", () => {
-  assert.deepEqual(SETTINGS_TABS, ["otomasyon", "tasinanlar", "planlama", "bildirimler", "gorunum", "gelismis"]);
+  assert.deepEqual(SETTINGS_TABS, ["gecis", "planlama", "genel", "gelismis"]);
   assert.equal(settingsTab("#/ayarlar/gelismis"), "gelismis");
-  assert.equal(settingsTab("#/gecis"), "otomasyon");
+  assert.equal(settingsTab("#/gecis"), "gecis");
   assert.equal(settingsTab("#/planlama"), "planlama");
-  assert.equal(settingsTab("#/ayarlar"), "otomasyon");
-  assert.equal(settingsTab("#/ayarlar/yok"), "otomasyon");
-  assert.equal(routeHash("ayarlar/tasinanlar"), "#/ayarlar/tasinanlar");
+  assert.equal(settingsTab("#/ayarlar"), "gecis");
+  assert.equal(settingsTab("#/ayarlar/yok"), "gecis");
+  // The former tabs, from older builds, notices and links, open the tab that holds them now.
+  assert.equal(settingsTab("#/ayarlar/otomasyon"), "gecis");
+  assert.equal(settingsTab("#/ayarlar/tasinanlar"), "gecis");
+  assert.equal(settingsTab("#/ayarlar/bildirimler"), "gecis");
+  assert.equal(settingsTab("#/ayarlar/gorunum"), "genel");
+  assert.equal(routeHash("ayarlar/gecis"), "#/ayarlar/gecis");
 });
 
 test("command-number shortcuts open pages in sidebar order and command-comma opens settings", () => {

@@ -173,7 +173,7 @@ test("each outcome says what happened, or nothing when there is nothing to say",
   assert.match(extensionLine(outcome({ result: "skipped", reason: "browser-did-not-quit" }), en)!, /did not quit/);
   assert.match(extensionLine(outcome({ result: "skipped", reason: "unknown-account" }), en)!, /is not in Relay/);
   assert.match(extensionLine(outcome({ result: "skipped", reason: "choose-instance" }), en)!, /several browser profiles/);
-  assert.match(extensionLine(outcome({ result: "skipped", reason: "unavailable" }), en)!, /In Relay\.app, use Settings → What comes along → Claude browser extension → Sync now/);
+  assert.match(extensionLine(outcome({ result: "skipped", reason: "unavailable" }), en)!, /In Relay\.app, use Settings → Switching → Claude browser extension → Sync now/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "write-failed" }), en)!, /Relay put back the previous state/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "locked" }), en)!, /open in another process/);
   assert.match(extensionLine(outcome({ result: "failed", reason: "restore-failed" }), en)!, /extension-scratch/);
@@ -268,13 +268,13 @@ test("the settings card shows the mode with its sentence, the instance, the star
   );
   assert.match(html, /Claude tarayıcı eklentisi/);
   assert.match(html, />Tarayıcıyı kapatıp aç</);
-  // Closed, Gelişmiş keeps the profile, Sync now and the long sentences out of sight.
+  // Closed, Ayrıntılar keeps the profile, Sync now and the long sentences out of sight.
   const closed = render(
     relayFor("darwin", [vertex], { mode: "restart" }),
     createElement(ExtensionPreference, { initialStatus: status() }),
   );
-  assert.match(closed, /Eklenti de geçsin/);
-  assert.match(closed, />Gelişmiş</);
+  assert.match(closed, />Geçişte</);
+  assert.match(closed, />Ayrıntılar</);
   assert.doesNotMatch(closed, /Şimdi eşitle|Açık tarayıcı kısa süre kapanıp/);
   assert.match(html, /Açık tarayıcı kısa süre kapanıp sekmeleriyle yeniden açılır/);
   assert.match(html, /claude\.ai oturumunu da değiştirir/);
@@ -524,9 +524,9 @@ test("the settings card shows the reconnect steps and Open claude.ai while the e
   assert.match(broken, /Relay onu sildi/);
   assert.match(broken, /claude\.ai’yi aç</);
   assert.match(broken, /“Log in”e bas/);
-  // Gelişmiş stays closed: without a saved login, Sync now cannot help.
-  assert.doesNotMatch(broken, /Önce Gelişmiş’teki/);
-  // Expired with the login saved: try Sync now first, and Gelişmiş opens for it.
+  // Ayrıntılar stays closed: without a saved login, Sync now cannot help.
+  assert.doesNotMatch(broken, /Önce Ayrıntılar’daki/);
+  // Expired with the login saved: try Sync now first, and Ayrıntılar opens for it.
   const expired = render(
     relayFor("darwin", [vertex], { mode: "restart" }),
     createElement(ExtensionPreference, {
@@ -536,7 +536,7 @@ test("the settings card shows the reconnect steps and Open claude.ai while the e
       }),
     }),
   );
-  assert.match(expired, /Önce Gelişmiş’teki “Şimdi eşitle”yi dene/);
+  assert.match(expired, /Önce Ayrıntılar’daki “Şimdi eşitle”yi dene/);
   assert.match(expired, />Şimdi eşitle</);
   // Signed in fine: no reconnect.
   const fine = render(

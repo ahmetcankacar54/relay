@@ -125,7 +125,10 @@ function ConnectionIcons({
             key: "extension",
             icon: AppWindow,
             tone: ext.tone,
-            title: t(`Tarayıcı eklentisi: ${ext.label}`, `Browser extension: ${ext.label}`),
+            title: t(
+              `Tarayıcı eklentisi (isteğe bağlı): ${ext.label}`,
+              `Browser extension (optional): ${ext.label}`,
+            ),
           },
         ]
       : []),
@@ -135,7 +138,10 @@ function ConnectionIcons({
             key: "terminal",
             icon: SquareTerminal,
             tone: term.tone,
-            title: t(`Terminal: ${term.label}`, `Terminal: ${term.label}`),
+            title: t(
+              `Terminal (isteğe bağlı): ${term.label}`,
+              `Terminal (optional): ${term.label}`,
+            ),
           },
         ]
       : []),
@@ -700,14 +706,29 @@ export function AccountsTable({
   );
 }
 
-/** What the connection icons' colours and dot mean, under the table. */
+/** What each connection icon is, and what its colours and dot mean, under the table. */
 function ConnectionLegend() {
   const { t } = useI18n();
+  const icons: [LucideIcon, string][] = [
+    [Monitor, t("Claude uygulaması", "Claude app")],
+    [Globe2, t("Limit okuma girişi", "Usage sign-in")],
+    [AppWindow, t("Eklenti (isteğe bağlı)", "Extension (optional)")],
+    [SquareTerminal, t("Terminal (isteğe bağlı)", "Terminal (optional)")],
+  ];
   return (
     <p
       data-slot="connection-legend"
       className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-2xs text-muted-foreground"
     >
+      {icons.map(([Icon, name]) => (
+        <span key={name} className="inline-flex items-center gap-1">
+          <Icon aria-hidden="true" className="size-3" />
+          {name}
+        </span>
+      ))}
+      <span aria-hidden="true" className="text-muted-foreground/40">
+        |
+      </span>
       <span className="inline-flex items-center gap-1">
         <span aria-hidden="true" className="size-1.5 rounded-full bg-foreground/75" />
         {t("hazır", "ready")}

@@ -704,7 +704,7 @@ test("no view mixes the old Desktop and connection wording with the two sign-in 
   }
 });
 
-test("on macOS the connections count the browser extension too, unless it is off or in no browser", () => {
+test("the connections count only what a switch needs; the extension and the terminal are optional", () => {
   const brave = { app: "brave", profile: "Default", name: "Kişisel", opened: true } as const;
   const extension = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
     setting: { mode: "restart" },
@@ -722,21 +722,20 @@ test("on macOS the connections count the browser extension too, unless it is off
       createElement(AccountDetailBody, { account: a, now: NOW, extensionStatus, terminalStatus }),
     );
   const count = (html: string) => /<h2[^>]*>Bağlantılar<\/h2><span[^>]*>([^<]*)<\/span>/.exec(html)?.[1];
-  assert.equal(count(mac(extension())), "3 / 3 hazır");
-  assert.equal(count(mac(extension({ saved: [] }))), "2 / 3 hazır");
-  // While it is read it counts, not yet ready.
-  assert.equal(count(mac()), "2 / 3 hazır");
-  // Turned off, or in no browser, it is not a connection to make.
+  // The Claude app sign-in and the usage sign-in: the same count with or without the optional rows.
+  assert.equal(count(mac(extension())), "2 / 2 hazır");
+  assert.equal(count(mac(extension({ saved: [] }))), "2 / 2 hazır");
+  assert.equal(count(mac()), "2 / 2 hazır");
   assert.equal(count(mac(extension({ setting: { mode: "off" } }))), "2 / 2 hazır");
-  assert.equal(count(mac(extension({ instances: [], target: undefined }))), "2 / 2 hazır");
-  // Elsewhere there is no extension row to count.
   assert.equal(count(mac(extension(), "win32")), "2 / 2 hazır");
-  // The terminal counts too while it follows the account: linked once its sign-in is saved.
   const saved = { mode: "follow", saved: [{ accountUuid: desktop.accountUuid, orgId: desktop.orgId, savedAt: iso(NOW), parked: true }] } as TerminalStatus;
-  assert.equal(count(mac(extension(), "darwin", saved)), "4 / 4 hazır");
+  assert.equal(count(mac(extension(), "darwin", saved)), "2 / 2 hazır");
+  // The optional rows say so, and still show their own steps.
   const missing = mac(extension(), "darwin", { mode: "follow", saved: [] });
-  assert.equal(count(missing), "3 / 4 hazır");
+  assert.equal(count(missing), "2 / 2 hazır");
+  assert.equal(missing.match(/>İsteğe bağlı</g)?.length, 2);
   assert.match(missing, /Terminalde “claude auth login” çalıştır/);
+  assert.doesNotMatch(mac(extension(), "win32"), />İsteğe bağlı</);
 });
 
 test("the closed Code history row says whether, and with how many accounts, it is shared", () => {

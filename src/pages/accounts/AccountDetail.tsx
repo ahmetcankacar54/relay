@@ -108,6 +108,7 @@ export function AccountDetail({
   return (
     <PageFrame
       title={a.name}
+      account={a.id}
       description={[email, a.auth?.orgName].filter(Boolean).join(" · ") || undefined}
       cliFlowInline={relay.flow?.accountId === a.id}
       leading={
@@ -276,8 +277,11 @@ function ConnectionRow({
   action,
   steps,
   detail,
+  optional,
   children,
 }: {
+  /** Not needed to switch: marked, and left out of the page's ready count. */
+  optional?: boolean;
   icon: ReactNode;
   title: string;
   purpose: string;
@@ -308,6 +312,11 @@ function ConnectionRow({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="text-sm font-semibold">{title}</span>
+          {optional && (
+            <Badge variant="outline" className="text-muted-foreground">
+              {t("İsteğe bağlı", "Optional")}
+            </Badge>
+          )}
           <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <StatusDot tone={tone} />
             <span className="min-w-0 break-words">{status}</span>
@@ -374,6 +383,7 @@ function ExtensionConnection({
       icon={<AppWindow />}
       title={t("Tarayıcı eklentisi", "Browser extension")}
       purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
+      optional
       tone={guide.tone}
       status={guide.label}
       where={guide.where}
@@ -416,7 +426,7 @@ function ExtensionConnection({
           </Button>
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("ayarlar/tasinanlar")}>{t("Ayarlar", "Settings")}</a>
+            <a href={routeHash("ayarlar/gecis")}>{t("Ayarlar", "Settings")}</a>
           </Button>
         ) : undefined
       }
@@ -440,6 +450,7 @@ function TerminalConnection({
       icon={<SquareTerminal />}
       title={t("Terminal", "Terminal")}
       purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
+      optional
       tone={guide.tone}
       status={guide.label}
       steps={guide.steps}
@@ -466,7 +477,7 @@ function TerminalConnection({
           </Button>
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("ayarlar/tasinanlar")}>{t("Ayarlar", "Settings")}</a>
+            <a href={routeHash("ayarlar/gecis")}>{t("Ayarlar", "Settings")}</a>
           </Button>
         ) : undefined
       }
@@ -527,22 +538,10 @@ export function AccountDetailBody({
   const signIn = usageSignInStatus(a, usage, waiting, t);
   const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
   const extension = useExtensionStatus({ check: macOS, initial: extensionStatus });
-  // The extension counts on macOS unless it is turned off or no browser has it; while it loads, it counts.
-  const ext = extension.status;
-  const extensionCounts =
-    macOS && ext !== null && !(ext && (ext.setting.mode === "off" || !ext.instances.length));
   const terminal = useTerminalStatus({ check: macOS, initial: terminalStatus });
-  // The terminal counts like the extension: on macOS, unless it is turned off.
-  const term = terminal.status;
-  const terminalCounts = macOS && term !== null && term?.mode !== "off";
-  const connections = [
-    !!a.desktop,
-    signIn.tone === "ok",
-    ...(extensionCounts
-      ? [!!ext && extensionGuide(a, ext, accounts, t, language).tone === "ok"]
-      : []),
-    ...(terminalCounts ? [!!term && terminalGuide(a, term, t, language).tone === "ok"] : []),
-  ];
+  // Only what a switch needs counts: the Claude app sign-in and the usage sign-in. The extension
+  // and the terminal are optional and say their own state on their rows.
+  const connections = [!!a.desktop, signIn.tone === "ok"];
   const ready = connections.filter(Boolean).length;
   const history = historySources(a, accounts, settings);
   return (
@@ -632,6 +631,7 @@ export function AccountDetailBody({
               now={now}
               refresh={(allowPrompt) => void relay.refreshUsage(a, allowPrompt)}
               connect={() => void relay.startCli(a)}
+              connectElsewhere
             />
             )}
           </Card>

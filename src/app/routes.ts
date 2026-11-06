@@ -16,21 +16,24 @@ export type PageId = (typeof PAGES)[number];
 /** The pages in the sidebar, in order. Usage is three pages: limits, tokens and cost, pins. */
 export const NAV_PAGES = ["genel", "hesaplar", "kullanim", "tokenlar", "rozetler", "ayarlar"] as const;
 export type NavPage = (typeof NAV_PAGES)[number];
-/** Settings' tabs, in order: one place for every setting. */
-export const SETTINGS_TABS = [
-  "otomasyon",
-  "tasinanlar",
-  "planlama",
-  "bildirimler",
-  "gorunum",
-  "gelismis",
-] as const;
+/**
+ * Settings' tabs, in order: switching (when, what switches along, near the limit), planning,
+ * general, and one Advanced for everything technical or experimental.
+ */
+export const SETTINGS_TABS = ["gecis", "planlama", "genel", "gelismis"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
-/** A page, or one of Settings' tabs: `ayarlar/tasinanlar`. */
+/** Former tabs, so links from older builds, notices and the panel still land on the right one. */
+const FORMER_TAB: Record<string, SettingsTab> = {
+  otomasyon: "gecis",
+  tasinanlar: "gecis",
+  bildirimler: "gecis",
+  gorunum: "genel",
+};
+/** A page, or one of Settings' tabs: `ayarlar/gecis`. */
 export type Destination = PageId | `ayarlar/${SettingsTab}`;
 /** The tab each former page opens. */
 const PAGE_TAB: Partial<Record<PageId, SettingsTab>> = {
-  gecis: "otomasyon",
+  gecis: "gecis",
   planlama: "planlama",
 };
 
@@ -42,10 +45,11 @@ export function parseRoute(hash: string): NavPage {
   if (id === "gecis" || id === "planlama") return "ayarlar";
   return (NAV_PAGES as readonly string[]).includes(id) ? (id as NavPage) : "genel";
 }
-/** The Settings tab a hash opens: `#/ayarlar/<tab>`, a former page's own tab, else the first. */
+/** The Settings tab a hash opens: `#/ayarlar/<tab>`, a former page's or tab's new tab, else the first. */
 export function settingsTab(hash: string): SettingsTab {
   const [id, tab] = parts(hash);
   if (PAGE_TAB[id as PageId]) return PAGE_TAB[id as PageId]!;
+  if (FORMER_TAB[tab]) return FORMER_TAB[tab];
   return (SETTINGS_TABS as readonly string[]).includes(tab) ? (tab as SettingsTab) : SETTINGS_TABS[0];
 }
 export const routeHash = (page: Destination) => `#/${page}`;

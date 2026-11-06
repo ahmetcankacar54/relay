@@ -425,7 +425,7 @@ if (scenario === "first-run" || scenario === "first-run-no-claude") {
     desktopSupported: false,
     dataDir: state.diagnostics.dataDir,
     error:
-      "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+      "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
   };
 }
 if (scenario === "planning") {

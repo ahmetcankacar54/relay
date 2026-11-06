@@ -12,6 +12,7 @@ import {
   desktopBlock,
   overviewCards,
   prerequisites,
+  setupState,
 } from "../src/lib/onboarding";
 import { MIN_CLI_VERSION, USAGE_CLI_VERSION, meetsCliMinimum, readsUsage } from "../shared/cli-version";
 import { EXTERNAL_LINKS, isExternalLink } from "../shared/external-links";
@@ -266,11 +267,11 @@ test("a missing CLI error says where to choose the file, in both languages", asy
   assert.ok(error);
   assert.equal(
     localizeError(error, "tr"),
-    "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+    "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
   );
   assert.equal(
     localizeError(error, "en"),
-    "Relay cannot find Claude Code. Open Code once in the Claude app, or select the file in Settings → Claude Code CLI.",
+    "Relay cannot find Claude Code. Open Code once in the Claude app, or select the file in Settings → Advanced → Claude Code CLI.",
   );
 });
 
@@ -321,4 +322,31 @@ test("a CLI too old to read limits is looked at again, so an update is noticed",
   await writeVersionCli(cli, "2.1.296 (Claude Code)");
   now += Service.REDIAGNOSE_MS;
   assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.296 (Claude Code)");
+});
+
+test("the setup list needs two connected accounts and a choice of when to switch; the extension is optional", () => {
+  const ready = desktop({ organizations: [ORG] });
+  const settings = { autoSwitchMode: "off" as const, claudeExtension: { mode: "guide" as const } };
+  const keys = (s?: ReturnType<typeof setupState>) => s?.steps.map((x) => `${x.key}:${x.met}${x.optional ? "?" : ""}`);
+  assert.equal(setupState({ desktop: ready, accounts: [], settings }), undefined);
+  const none = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: [], settings });
+  assert.deepEqual(keys(none), ["desktop:true", "code:true", "first:false", "second:false", "mode:false", "extension:false?"]);
+  assert.equal(none?.ready, false);
+  // An account without a saved Claude app sign-in does not count.
+  const loose = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: [account("a"), account("b", false)], settings });
+  assert.deepEqual(keys(loose)?.slice(2, 4), ["first:true", "second:false"]);
+  // Two accounts and a mode: ready, though the extension is still open until skipped.
+  const two = [account("a"), account("b")];
+  const chosen = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings: { ...settings, autoSwitchMode: "after-exit" } });
+  assert.equal(chosen?.ready, true);
+  assert.equal(chosen?.complete, false);
+  const skipped = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings, seen: new Set(["mode", "extension"]) });
+  assert.equal(skipped?.complete, true);
+  // Continue at quota counts as a choice; off macOS there is no extension step.
+  const linux = setupState({ desktop: ready, diagnostics: diagnostics({ platform: "linux" }), accounts: two, settings, quota: true });
+  assert.deepEqual(keys(linux)?.at(-1), "mode:true");
+  assert.equal(linux?.complete, true);
+  // The extension that follows the account is met.
+  const follows = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings: { ...settings, claudeExtension: { mode: "restart" } } });
+  assert.deepEqual(keys(follows)?.at(-1), "extension:true?");
 });

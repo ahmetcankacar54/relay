@@ -209,9 +209,9 @@ const pairs: Pair[] = [
   ],
   [
     // Thrown in Turkish by electron/core/service.ts; this text is the key there too.
-    "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
-    "Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Claude Code CLI → Choose file.",
-    "Relay cannot find Claude Code. Open Code once in the Claude app, or select the file in Settings → Claude Code CLI.",
+    "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
+    "Claude Code was not found. Open Code once in the Claude app (it downloads Claude Code itself) or pick it in Settings → Advanced → Claude Code CLI → Choose file.",
+    "Relay cannot find Claude Code. Open Code once in the Claude app, or select the file in Settings → Advanced → Claude Code CLI.",
   ],
   [
     "Bu bir arayüz önizlemesi. Gerçek hesap ve terminal işlemleri için Relay masaüstü uygulamasını aç.",

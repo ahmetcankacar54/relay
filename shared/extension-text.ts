@@ -39,13 +39,13 @@ export function extensionLine(outcome: ExtensionOutcome, t: T): string | undefin
         switch (outcome.reason) {
           case "choose-instance":
             return t(
-              "Claude eklentisi birden çok tarayıcı profilinde var. Ayarlar → Geçişte taşınanlar’dan birini seç.",
-              "The Claude extension is in several browser profiles. Select one in Settings → What comes along.",
+              "Claude eklentisi birden çok tarayıcı profilinde var. Ayarlar → Geçiş’ten birini seç.",
+              "The Claude extension is in several browser profiles. Select one in Settings → Switching.",
             );
           case "unavailable":
             return t(
-              "Bu araç Claude eklentisinin girişini değiştiremez. Relay.app’te Ayarlar → Geçişte taşınanlar → Claude tarayıcı eklentisi → Şimdi eşitle’yi kullan.",
-              "This tool cannot change the Claude extension sign-in. In Relay.app, use Settings → What comes along → Claude browser extension → Sync now.",
+              "Bu araç Claude eklentisinin girişini değiştiremez. Relay.app’te Ayarlar → Geçiş → Claude tarayıcı eklentisi → Şimdi eşitle’yi kullan.",
+              "This tool cannot change the Claude extension sign-in. In Relay.app, use Settings → Switching → Claude browser extension → Sync now.",
             );
           case "browser-running":
             return t(

@@ -38,8 +38,8 @@ test("the other modes hide the group field and say what the mode shares", () => 
       "All connected accounts share Code history.",
     ],
     selected: [
-      "Code geçmişi yalnızca Ayarlar → Geçişte taşınanlar’da seçtiğin hesaplar arasında ortak.",
-      "Only the accounts you select in Settings → What comes along share Code history.",
+      "Code geçmişi yalnızca Ayarlar → Geçiş’te seçtiğin hesaplar arasında ortak.",
+      "Only the accounts you select in Settings → Switching share Code history.",
     ],
     off: [
       "Code geçmişi hesaplar arasında paylaşılmıyor.",

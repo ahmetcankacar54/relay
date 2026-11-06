@@ -340,7 +340,7 @@ export interface RelayAPI {
   syncExtension(): Promise<ExtensionOutcome>;
   /** Opens claude.ai in the browser whose extension Relay manages, for signing in there again. */
   openClaudeWeb(): Promise<void>;
-  /** Opens Settings → What comes along in the main window, where the extension is reconnected. */
+  /** Opens Settings → Switching in the main window, where the extension is reconnected. */
   openExtensionSettings(): Promise<void>;
   /**
    * Reads who the extension is signed in to from a copy of its storage (a running browser is

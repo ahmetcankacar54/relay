@@ -6,7 +6,6 @@ import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Note,
-  OptionSelect,
   SettingGroup,
   SettingRow,
 } from "@/components/SettingRow";
@@ -23,10 +22,9 @@ import { localizeError } from "../../shared/error-text";
 import { updateShown, updateTitle } from "@/lib/update-text";
 import { chooseCliFile } from "../features/CliSetup";
 import { chooseClaudeApp } from "../features/ClaudeAppSetup";
-import { WarningThreshold } from "./Usage";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { routeHash, settingsTab, SETTINGS_TABS, type SettingsTab } from "@/app/routes";
-import { AutomationTab, CarryTab } from "./settings/SwitchingTabs";
+import { ExperimentalSwitchRows, RefreshIntervalRow, SwitchingTab } from "./settings/SwitchingTabs";
 import { PlanningTab } from "./Planning";
 
 /** Shows the diagnosis logs in Finder; main picks the files, the page passes no path. */
@@ -65,11 +63,11 @@ function ClaudeLaunchRow({
   return (
     <>
       <SettingRow
-        label={t("Claude uygulamasını HTTP/3 olmadan aç", "Open the Claude app without HTTP/3")}
+        label={t("Claude uygulaması gri ekranda kalıyorsa", "If the Claude app stays on a grey screen")}
         htmlFor="claude-quic-off"
         description={t(
-          "Claude uygulaması gri ekranda kalırsa aç. Takılan bir geçişten sonra Relay bunu kendisi açar.",
-          "Turn on if the Claude app stays on a grey screen. Relay turns it on after a stuck switch.",
+          "Claude uygulamasını HTTP/3 olmadan açar. Takılan bir geçişten sonra Relay bunu kendisi açar.",
+          "Opens the Claude app without HTTP/3. Relay turns this on by itself after a stuck switch.",
         )}
       >
         <Switch
@@ -100,7 +98,7 @@ export function SeparateWindowsRow({
   return (
     <>
       <SettingRow
-        label={t("Ayrı Claude pencereleri (deneysel)", "Separate Claude windows (experimental)")}
+        label={t("Ayrı Claude pencereleri", "Separate Claude windows")}
         htmlFor="separate-windows"
         description={t(
           "Hesabın ⋯ menüsüne “Ayrı pencerede aç” ekler.",
@@ -214,11 +212,9 @@ function Status({ ok, children }: { ok: boolean; children: string }) {
 /** Settings' tab names, in the tabs' order. */
 export function settingsTabTitle(tab: SettingsTab, t: ReturnType<typeof useI18n>["t"]) {
   return {
-    otomasyon: t("Otomasyon", "Automation"),
-    tasinanlar: t("Geçişte taşınanlar", "What comes along"),
+    gecis: t("Geçiş", "Switching"),
     planlama: t("Planlama", "Planning"),
-    bildirimler: t("Bildirimler", "Notifications"),
-    gorunum: t("Görünüm", "Appearance"),
+    genel: t("Genel", "General"),
     gelismis: t("Gelişmiş", "Advanced"),
   }[tab];
 }
@@ -242,8 +238,9 @@ function useSettingsTab(initial?: SettingsTab): [SettingsTab, (tab: SettingsTab)
 }
 
 /**
- * Every setting in one place, in six tabs: when Relay switches, what comes along, planning,
- * notifications, appearance, and the technical rest. Each setting appears once.
+ * Every setting in one place, in four tabs: Switching (when, what switches along, near the
+ * limit), Planning, General, and Advanced for everything technical or experimental. Each setting
+ * appears once; actions live on the Overview, the account page and the panel.
  */
 export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
   const relay = useRelay();
@@ -266,268 +263,235 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="otomasyon">
-          <AutomationTab />
-        </TabsContent>
-        <TabsContent value="tasinanlar">
-          <CarryTab />
+        <TabsContent value="gecis">
+          <SwitchingTab />
         </TabsContent>
         <TabsContent value="planlama">
           <PlanningTab />
         </TabsContent>
-        <TabsContent value="bildirimler">
+        <TabsContent value="genel">
           <div className="grid max-w-2xl gap-4">
-            <SettingGroup id="settings-notifications" title={t("Limit uyarıları", "Usage warnings")}>
+            <SettingGroup id="settings-general" title={t("Genel", "General")}>
               <SettingRow
-                label={t("Limite yaklaşan hesabı işaretle", "Mark accounts near their limit")}
-                htmlFor="usage-warnings"
-                description={t(
-                  "Hesap önerileri de bu ayarı kullanır.",
-                  "Account suggestions also use this setting.",
-                )}
+                label={
+                  <span id="language-label">
+                    {t("Arayüz dili", "Interface language")}
+                  </span>
+                }
               >
-                <Switch
-                  id="usage-warnings"
-                  checked={settings.usageWarnings}
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  aria-labelledby="language-label"
+                  value={language}
+                  onValueChange={(v) => v && setLanguage(v as Language)}
+                >
+                  <ToggleGroupItem value="tr">Türkçe</ToggleGroupItem>
+                  <ToggleGroupItem value="en">English</ToggleGroupItem>
+                </ToggleGroup>
+              </SettingRow>
+              <SettingRow
+                label={<span id="appearance-label">{t("Tema", "Theme")}</span>}
+              >
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  aria-labelledby="appearance-label"
+                  value={settings.appearance}
                   disabled={disabled}
-                  onCheckedChange={(usageWarnings) => update({ usageWarnings })}
-                />
+                  onValueChange={(v) =>
+                    v && update({ appearance: v as RelaySettings["appearance"] })
+                  }
+                >
+                  <ToggleGroupItem value="system">
+                    {t("Sistem", "System")}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="light">
+                    {t("Açık", "Light")}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="dark">
+                    {t("Koyu", "Dark")}
+                  </ToggleGroupItem>
+                </ToggleGroup>
               </SettingRow>
+              <RefreshIntervalRow />
+            </SettingGroup>
+            {/* The menu bar title and the switch window are macOS-only; other platforms keep the R icon. */}
+            {data?.diagnostics.platform === "darwin" && (
+              <SettingGroup id="settings-menu-bar" title={t("Menü çubuğu", "Menu bar")}>
+                <MenuBarTitleRows
+                  data={data}
+                  api={api}
+                  action={action}
+                  name={active?.name}
+                  t={t}
+                  language={language}
+                />
+              </SettingGroup>
+            )}
+            <SettingGroup id="settings-panda" title="Panda">
               <SettingRow
-                label={<span id="settings-threshold-label">{t("Uyarı eşiği", "Warning threshold")}</span>}
+                label={
+                  <span id="panda-pranks-label">
+                    {t("Panda şakaları", "Panda pranks")}
+                  </span>
+                }
                 description={t(
-                  "5 saatlik ve haftalık dönem için.",
-                  "For the 5-hour and weekly periods.",
+                  "İmleci kısa süre saklayabilir.",
+                  "Can hide the cursor for a short time.",
                 )}
               >
-                <WarningThreshold labelledBy="settings-threshold-label" short />
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  aria-labelledby="panda-pranks-label"
+                  value={settings.pranks ?? "sometimes"}
+                  disabled={disabled}
+                  onValueChange={(v) => v && update({ pranks: v as PrankLevel })}
+                >
+                  <ToggleGroupItem value="sometimes">
+                    {t("Ara sıra", "Sometimes")}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="rarely">
+                    {t("Nadiren", "Rarely")}
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="off">{t("Kapalı", "Off")}</ToggleGroupItem>
+                </ToggleGroup>
               </SettingRow>
-              <SettingRow
-            label={t("Limitleri otomatik yenile", "Refresh limits automatically")}
-            htmlFor="usage-interval"
-          >
-            <OptionSelect
-              id="usage-interval"
-              value={String(settings.usageRefreshMinutes)}
-              disabled={disabled}
-              options={[
-                { value: "0", label: t("Elle", "Manually") },
-                ...[5, 15, 30].map((n) => ({
-                  value: String(n),
-                  label: t(`${n} dakikada bir`, `Every ${n} min`),
-                })),
-              ]}
-              onChange={(v) =>
-                update({
-                  usageRefreshMinutes: Number(
-                    v,
-                  ) as RelaySettings["usageRefreshMinutes"],
-                })
-              }
-            />
-          </SettingRow>
-            </SettingGroup>
-          </div>
-        </TabsContent>
-        <TabsContent value="gorunum">
-          <div className="grid max-w-2xl gap-4">
-        <SettingGroup id="settings-appearance" title={t("Görünüm", "Appearance")}>
-          <SettingRow
-            label={<span id="appearance-label">{t("Tema", "Theme")}</span>}
-          >
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              aria-labelledby="appearance-label"
-              value={settings.appearance}
-              disabled={disabled}
-              onValueChange={(v) =>
-                v && update({ appearance: v as RelaySettings["appearance"] })
-              }
-            >
-              <ToggleGroupItem value="system">
-                {t("Sistem", "System")}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="light">
-                {t("Açık", "Light")}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="dark">
-                {t("Koyu", "Dark")}
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </SettingRow>
-          <SettingRow
-            label={
-              <span id="panda-pranks-label">
-                {t("Panda şakaları", "Panda pranks")}
-              </span>
-            }
-            description={t(
-              "İmleci kısa süre saklayabilir.",
-              "Can hide the cursor for a short time.",
-            )}
-          >
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              aria-labelledby="panda-pranks-label"
-              value={settings.pranks ?? "sometimes"}
-              disabled={disabled}
-              onValueChange={(v) => v && update({ pranks: v as PrankLevel })}
-            >
-              <ToggleGroupItem value="sometimes">
-                {t("Ara sıra", "Sometimes")}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="rarely">
-                {t("Nadiren", "Rarely")}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="off">{t("Kapalı", "Off")}</ToggleGroupItem>
-            </ToggleGroup>
-          </SettingRow>
-          <SettingRow
-            label={
-              <span id="language-label">
-                {t("Arayüz dili", "Interface language")}
-              </span>
-            }
-          >
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              aria-labelledby="language-label"
-              value={language}
-              onValueChange={(v) => v && setLanguage(v as Language)}
-            >
-              <ToggleGroupItem value="tr">Türkçe</ToggleGroupItem>
-              <ToggleGroupItem value="en">English</ToggleGroupItem>
-            </ToggleGroup>
-          </SettingRow>
-        </SettingGroup>
-        {/* The menu bar panda and the switch window are macOS-only; other platforms keep the R icon. */}
-        {data?.diagnostics.platform === "darwin" && (
-          <SettingGroup id="settings-menu-bar" title={t("Menü çubuğu", "Menu bar")}>
-            <MenuBarTitleRows
-              data={data}
-              api={api}
-              action={action}
-              name={active?.name}
-              t={t}
-              language={language}
-            />
-            <SettingRow
-              label={
-                <span id="menu-bar-animation-label">
-                  {t("Panda animasyonları", "Panda animations")}
-                </span>
-              }
-              description={t(
-                "Kapalıyken panda yalnızca ifade değiştirir.",
-                "When off, the panda only changes expression.",
+              {data?.diagnostics.platform === "darwin" && (
+                <>
+                  <SettingRow
+                    label={
+                      <span id="menu-bar-animation-label">
+                        {t("Panda animasyonları", "Panda animations")}
+                      </span>
+                    }
+                    description={t(
+                      "Menü çubuğunda. Kapalıyken panda yalnızca ifade değiştirir.",
+                      "In the menu bar. When off, the panda only changes expression.",
+                    )}
+                  >
+                    <Switch
+                      aria-labelledby="menu-bar-animation-label"
+                      checked={settings.menuBarAnimation !== false}
+                      disabled={disabled}
+                      onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
+                    />
+                  </SettingRow>
+                  <SettingRow
+                    label={
+                      <span id="switch-window-label">
+                        {t("Geçişte panda penceresini göster", "Show the panda window during a switch")}
+                      </span>
+                    }
+                  >
+                    <Switch
+                      aria-labelledby="switch-window-label"
+                      checked={settings.switchWindow !== false}
+                      disabled={disabled}
+                      onCheckedChange={(checked) => update({ switchWindow: checked })}
+                    />
+                  </SettingRow>
+                </>
               )}
-            >
-              <Switch
-                aria-labelledby="menu-bar-animation-label"
-                checked={settings.menuBarAnimation !== false}
-                disabled={disabled}
-                onCheckedChange={(checked) => update({ menuBarAnimation: checked })}
-              />
-            </SettingRow>
-            <SettingRow
-              label={
-                <span id="switch-window-label">
-                  {t("Geçişte panda penceresini göster", "Show the panda window during a switch")}
-                </span>
-              }
-            >
-              <Switch
-                aria-labelledby="switch-window-label"
-                checked={settings.switchWindow !== false}
-                disabled={disabled}
-                onCheckedChange={(checked) => update({ switchWindow: checked })}
-              />
-            </SettingRow>
-          </SettingGroup>
-        )}
+            </SettingGroup>
+            <UpdatesGroup api={api} action={action} data={data} busy={busy} t={t} language={language} />
           </div>
         </TabsContent>
         <TabsContent value="gelismis">
           <div className="grid max-w-2xl gap-4">
-        <SettingGroup id="settings-system" title={t("Sistem", "System")}>
-          {/* An install Relay does not look for (every Linux build) is chosen here: Konumu seç. */}
-          <SettingRow label="Claude Desktop">
-            <span className="flex items-center gap-3">
-              <Status ok={!!desktop?.available}>
-                {desktop?.available
-                  ? t("Bulundu", "Found")
-                  : t("Bulunamadı", "Not found")}
-              </Status>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!!busy}
-                onClick={() => chooseClaudeApp({ api, action })}
+            <p className="px-1 text-sm text-muted-foreground">
+              {t(
+                "Çoğu kullanıcının burada bir şeyi değiştirmesi gerekmez.",
+                "Most people never need to change anything here.",
+              )}
+            </p>
+            <SettingGroup id="settings-system" title={t("Sistem", "System")}>
+              {/* An install Relay does not look for (every Linux build) is chosen here: Konumu seç. */}
+              <SettingRow label="Claude Desktop">
+                <span className="flex items-center gap-3">
+                  <Status ok={!!desktop?.available}>
+                    {desktop?.available
+                      ? t("Bulundu", "Found")
+                      : t("Bulunamadı", "Not found")}
+                  </Status>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!!busy}
+                    onClick={() => chooseClaudeApp({ api, action })}
+                  >
+                    {t("Konumu seç", "Choose location")}
+                  </Button>
+                </span>
+              </SettingRow>
+              {/* The missing-CLI error names this path: Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç. */}
+              <SettingRow
+                label="Claude Code CLI"
+                description={
+                  data?.diagnostics.source === "claude-app"
+                    ? t(
+                        "Claude uygulamasının indirdiği kopya kullanılır.",
+                        "Uses the copy that the Claude app downloaded.",
+                      )
+                    : undefined
+                }
               >
-                {t("Konumu seç", "Choose location")}
-              </Button>
-            </span>
-          </SettingRow>
-          {/* The missing-CLI error names this path: Ayarlar → Claude Code CLI → Dosyayı seç. */}
-          <SettingRow
-            label="Claude Code CLI"
-            description={
-              data?.diagnostics.source === "claude-app"
-                ? t(
-                    "Claude uygulamasının indirdiği kopya kullanılır.",
-                    "Uses the copy that the Claude app downloaded.",
-                  )
-                : undefined
-            }
-          >
-            <span className="flex items-center gap-3">
-              <Status ok={!!data?.diagnostics.version}>
-                {data?.diagnostics.version ?? t("Bulunamadı", "Not found")}
-              </Status>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!!busy}
-                onClick={() => chooseCliFile({ api, action })}
+                <span className="flex items-center gap-3">
+                  <Status ok={!!data?.diagnostics.version}>
+                    {data?.diagnostics.version ?? t("Bulunamadı", "Not found")}
+                  </Status>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!!busy}
+                    onClick={() => chooseCliFile({ api, action })}
+                  >
+                    {t("Dosyayı seç", "Choose file")}
+                  </Button>
+                </span>
+              </SettingRow>
+              <SettingRow
+                label={t("Tanılama dosyaları", "Diagnostics files")}
+                description={t(
+                  "Yalnızca draft-events.json ve usage-issues.json dosyalarını gönder. Diğer dosyalarda kayıtlı girişlerin var.",
+                  "Send only draft-events.json and usage-issues.json. The other files hold your saved sign-ins.",
+                )}
               >
-                {t("Dosyayı seç", "Choose file")}
-              </Button>
-            </span>
-          </SettingRow>
-          <SettingRow
-            label={t("Tanılama dosyaları", "Diagnostics files")}
-            description={t(
-              "Yalnızca draft-events.json ve usage-issues.json dosyalarını gönder. Diğer dosyalarda kayıtlı girişlerin var.",
-              "Send only draft-events.json and usage-issues.json. The other files hold your saved sign-ins.",
-            )}
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void showDiagnostics({ api, action })}
-            >
-              {t("Finder’da göster", "Show in Finder")}
-            </Button>
-          </SettingRow>
-          <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
-          <SeparateWindowsRow api={api} action={action} data={data} t={t} />
-        </SettingGroup>
-        <UpdatesGroup api={api} action={action} data={data} busy={busy} t={t} language={language} />
-        <div id="settings-privacy" className="px-1">
-          <Disclosure title={t("Gizlilik ve güvenlik", "Privacy and security")}>
-            <PrivacyNotes t={t} />
-          </Disclosure>
-        </div>
-        <p className="px-1 text-center text-xs text-muted-foreground">
-          {t("Yerelde saklanır.", "Stored locally.")}{" "}
-          {t("Bağımsız araç", "Independent tool")} · {version}
-        </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void showDiagnostics({ api, action })}
+                >
+                  {t("Finder’da göster", "Show in Finder")}
+                </Button>
+              </SettingRow>
+            </SettingGroup>
+            <SettingGroup id="settings-troubleshooting" title={t("Sorun giderme", "Troubleshooting")}>
+              <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
+            </SettingGroup>
+            <SettingGroup id="settings-experimental" title={t("Deneysel", "Experimental")}>
+              <p className="py-2 text-xs text-muted-foreground">
+                {t(
+                  "Deneysel özellikler Claude uygulamasının bir güncellemesiyle bozulabilir.",
+                  "Experimental features can break with an update of the Claude app.",
+                )}
+              </p>
+              <SeparateWindowsRow api={api} action={action} data={data} t={t} />
+              <ExperimentalSwitchRows />
+            </SettingGroup>
+            <div id="settings-privacy" className="px-1">
+              <Disclosure title={t("Gizlilik ve güvenlik", "Privacy and security")}>
+                <PrivacyNotes t={t} />
+              </Disclosure>
+            </div>
+            <p className="px-1 text-center text-xs text-muted-foreground">
+              {t("Yerelde saklanır.", "Stored locally.")}{" "}
+              {t("Bağımsız araç", "Independent tool")} · {version}
+            </p>
           </div>
         </TabsContent>
       </Tabs>

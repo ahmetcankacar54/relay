@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AutomationTab, CarryTab } from "../src/pages/settings/SwitchingTabs";
+import { ExperimentalSwitchRows, SwitchingTab } from "../src/pages/settings/SwitchingTabs";
 
-/** Settings' Automation tab, then its What comes along tab: what used to be the Switching page. */
-const Switching = () => createElement(Fragment, null, createElement(AutomationTab), createElement(CarryTab));
+/** Settings' Switching tab, then the switch's rows under Advanced → Experimental. */
+const Switching = () => createElement(Fragment, null, createElement(SwitchingTab), createElement(ExperimentalSwitchRows));
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { historyScopeNote } from "../src/features/SwitchPreferences";
 import { I18nContext } from "../src/data/i18n";
@@ -98,27 +98,32 @@ const render = (relay: Relay) =>
     ),
   );
 
-test("Automation is the status, when to switch and the suggestion; What comes along is one card per part", () => {
+test("Switching is when to switch, what switches along and near the limit; preferences only", () => {
   const html = render(relayFor());
   assert.doesNotMatch(html, /kapanınca hazırlama/);
-  assert.match(html, /data-slot="switch-status"/);
+  // Switching itself lives on the Overview and in the panel, not among the preferences.
+  assert.doesNotMatch(html, /data-slot="switch-status"|Şimdi geç/);
   assert.match(html, /Ne zaman geçilsin\?/);
   assert.match(html, /role="radiogroup"/);
+  assert.ok(html.indexOf("Ne zaman geçilsin?") < html.indexOf("Geçişte birlikte değişenler"));
+  assert.ok(html.indexOf("Geçişte birlikte değişenler") < html.indexOf("Limite yaklaşınca"));
   // Each part once: no summary cards repeating the settings below them.
-  assert.doesNotMatch(html, /Geçişte neler gelir\?|>Ayrıntılar</);
+  assert.doesNotMatch(html, /Geçişte neler gelir\?/);
+  // The suggestion sits beside the warnings it depends on.
+  assert.ok(html.indexOf('id="usage-warnings"') < html.indexOf('id="usage-suggestions"'));
   for (const id of ["gecis-gecmis", "gecis-eklenti", "gecis-terminal", "gecis-taslak", "gecis-oneri", "gecis-kenar"])
     assert.match(html, new RegExp(`id="${id}"`), id);
   assert.ok(html.indexOf("Ne zaman geçilsin?") < html.indexOf("Ortak Code geçmişi"));
   assert.match(html, /Ortak Code geçmişi/);
   assert.match(html, /Tüm hesaplar arasında/);
   assert.match(html, /Açık hesapla birleştir/);
-  assert.match(html, /Limit yaklaşınca hesap öner/);
+  assert.match(html, /Geçilecek hesabı öner/);
   assert.doesNotMatch(html, /Menü çubuğundan bir hesap seçip/);
   assert.doesNotMatch(html, /Pencere kapanınca Relay/);
   assert.doesNotMatch(html, /Bu konuşmayı izle/);
 });
 
-test("the history scope and its local-only limit are one note, under Gelişmiş", () => {
+test("the history scope and its local-only limit are one note, under Ayrıntılar", () => {
   const tr = (text: string) => text;
   const local =
     "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.";
@@ -132,9 +137,9 @@ test("the history scope and its local-only limit are one note, under Gelişmiş"
   );
   assert.equal(historyScopeNote("same-group", tr), local);
   assert.equal(historyScopeNote("off", tr), "");
-  // Closed by default: the card shows the select and the merge, the note waits under Gelişmiş.
+  // Closed by default: the card shows the select and the merge, the note waits under Ayrıntılar.
   const html = render(relayFor());
-  assert.match(html.slice(html.indexOf('id="gecis-gecmis"')), /Açık hesapla birleştir[\s\S]*>Gelişmiş</);
+  assert.match(html.slice(html.indexOf('id="gecis-gecmis"')), /Açık hesapla birleştir[\s\S]*>Ayrıntılar</);
   assert.doesNotMatch(html, /Yalnızca yerel Code geçmişi/);
 });
 
@@ -254,7 +259,9 @@ test("the single-conversation watch card appears only while a legacy watch needs
 });
 
 test("with Continue at quota and prepare-on-quit both on, the choice reads Limit dolunca", () => {
-  const html = render(relayFor({}, { autoSwitchMode: "after-exit" }));
+  // The mode cards only: the warning threshold below is a radio group too.
+  const page = render(relayFor({}, { autoSwitchMode: "after-exit" }));
+  const html = page.slice(0, page.indexOf('id="gecis-birlikte"'));
   const checked = [
     ...html.matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g),
   ]

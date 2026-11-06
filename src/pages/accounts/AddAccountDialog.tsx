@@ -98,7 +98,7 @@ function StepIndicator({ step }: { step: Step }) {
               />
               <span
                 className={cn(
-                  "flex min-w-0 items-center gap-1 truncate",
+                  "flex min-w-0 items-start gap-1 leading-tight",
                   active ? "font-semibold" : "text-muted-foreground",
                 )}
               >
@@ -307,8 +307,8 @@ export function AddAccountSteps({
           </StepTitle>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Relay’in bu hesabın limitlerini okuyabilmesi için bir kez giriş yap.",
-              "Sign in once so that Relay can read the limits of this account.",
+              "Relay’in bu hesabın limitlerini okuyabilmesi için bir kez giriş yap. Bu, Claude uygulamasından ayrı ve yalnızca okuyan bir giriştir; resmi Claude Code ile tarayıcıda onaylanır.",
+              "Sign in once so that Relay can read the limits of this account. This is a separate, read-only sign-in, approved in the browser with the official Claude Code.",
             )}
           </p>
           {/* The page-frame panel sits under the overlay; finish the sign-in here. */}

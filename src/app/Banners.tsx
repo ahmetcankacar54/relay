@@ -109,7 +109,10 @@ export function reconnectCause(
 export function Banners({
   automation = true,
   initialExpanded = false,
+  exceptAccount,
 }: {
+  /** An account whose own page shows its sign-in problem next to its row: no banner repeats it. */
+  exceptAccount?: string;
   /** False on pages that show the automation status inline. */
   automation?: boolean;
   /** Whether the grouped sign-in warning starts open. For tests. */
@@ -122,7 +125,9 @@ export function Banners({
   const [expanded, setExpanded] = useState(initialExpanded);
   const listId = useId();
   const usage = relay.data?.usage ?? {};
-  const reconnect = reconnectIssues(accounts, usage, dismissed);
+  const reconnect = reconnectIssues(accounts, usage, dismissed).filter(
+    (issue) => issue.account.id !== exceptAccount,
+  );
   // Every current issue, dismissed or not: a dismissal lives while its issue does.
   const currentKeys = reconnectIssues(accounts, usage, NONE).map(issueKey);
   // Accounts whose usage was not read yet: right after a launch the cache is empty, so

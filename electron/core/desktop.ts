@@ -354,7 +354,7 @@ export class DesktopManager {
   extensionVerified?: Promise<void>;
   /**
    * Told when the extension could not sign in to `account` with the login a step put in place;
-   * Relay forgot that login, and the user has to sign in again (Settings → What comes along).
+   * Relay forgot that login, and the user has to sign in again (Settings → Switching).
    */
   onExtensionBroken?: (account: Account) => void;
   /** Whether Anthropic cannot be reached now; a failed sign-in then proves nothing. */
