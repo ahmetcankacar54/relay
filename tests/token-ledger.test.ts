@@ -347,6 +347,72 @@ test("a shrunk file and a replaced file are never read again, and keep their cou
   });
 });
 
+/** Rewrite the saved state of `file` as a ledger kept before the volume was mounted again would hold it. */
+function remount(dir: string, file: string, patch: Record<string, unknown> = {}) {
+  const saved = path.join(dir, "token-ledger.json");
+  const value = JSON.parse(fs.readFileSync(saved, "utf8"));
+  const state = value.files[keyOf(file)];
+  assert.ok(state);
+  value.files[keyOf(file)] = { ...state, dev: state.dev + 1, ...patch };
+  fs.writeFileSync(saved, JSON.stringify(value));
+}
+
+test("a file whose volume got a new device number, as after a restart, is read on from its offset", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const file = path.join(root, "p", "session.jsonl");
+  write(file, assistant({ id: "msg_A" }));
+  await ledgerFor(dir, [{ dir: root }]).tick();
+
+  remount(dir, file);
+  fs.appendFileSync(file, assistant({ id: "msg_B" }));
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 2);
+  assert.equal(restarted.snapshot().progress.scannedBytes, fs.statSync(file).size);
+
+  // The new device number is kept: a later append is read without a second look at it.
+  fs.appendFileSync(file, assistant({ id: "msg_C" }));
+  const again = ledgerFor(dir, [{ dir: root }]);
+  await again.tick();
+  assert.equal(totals(again).responses, 3);
+});
+
+test("a file an older ledger broke over a new device number alone is read again, once", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const file = path.join(root, "p", "session.jsonl");
+  write(file, assistant({ id: "msg_A" }) + assistant({ id: "msg_B" }));
+  await ledgerFor(dir, [{ dir: root }]).tick();
+
+  remount(dir, file, { broken: true });
+  fs.appendFileSync(file, assistant({ id: "msg_C" }) + assistant({ id: "msg_D" }));
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  await restarted.tick();
+  // The two rows read before it broke are not counted again.
+  assert.equal(totals(restarted).responses, 4);
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 4);
+});
+
+test("a file broken on its own volume stays broken", async () => {
+  const dir = tempDir();
+  const root = path.join(dir, "projects");
+  const file = path.join(root, "p", "session.jsonl");
+  write(file, assistant({ id: "msg_A" }));
+  await ledgerFor(dir, [{ dir: root }]).tick();
+
+  // Broken without a device change (shrunk, then grown again): nothing is read from it.
+  const saved = path.join(dir, "token-ledger.json");
+  const value = JSON.parse(fs.readFileSync(saved, "utf8"));
+  value.files[keyOf(file)].broken = true;
+  fs.writeFileSync(saved, JSON.stringify(value));
+  fs.appendFileSync(file, assistant({ id: "msg_B" }));
+  const restarted = ledgerFor(dir, [{ dir: root }]);
+  await restarted.tick();
+  assert.equal(totals(restarted).responses, 1);
+});
+
 test("a large first scan spreads over budgeted ticks, survives a restart and counts each response once", async () => {
   const dir = tempDir();
   const root = path.join(dir, "projects");

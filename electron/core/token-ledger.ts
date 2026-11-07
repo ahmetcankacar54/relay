@@ -117,7 +117,7 @@ interface FileState {
   lastKey?: string;
   /** Where that response was counted; absent when it was skipped, as a copy. */
   last?: LastResponse;
-  /** Shrunk or replaced: never read again, and its counted tokens stay. */
+  /** Shrunk or replaced by another inode: never read again, and its counted tokens stay. */
   broken?: true;
 }
 
@@ -329,6 +329,22 @@ function hashOf(key: string, bytes = HASH_BYTES): string {
 }
 
 /** The ledger's key for a transcript, so no folder name is ever saved. */
+/**
+ * Whether a file on disk is still the transcript a state was kept for: the same inode, never
+ * shorter than what was read. The device number does not decide it, since macOS numbers a volume
+ * anew when it is mounted again, as after a restart, while its files keep their inodes.
+ */
+function sameTranscript(state: FileState, stat: Stats) {
+  return stat.ino === state.ino && stat.size >= state.offset;
+}
+
+/** Keep the device number the volume has now; whether it changed. */
+function adoptDevice(state: FileState, stat: Stats) {
+  if (stat.dev === state.dev) return false;
+  state.dev = stat.dev;
+  return true;
+}
+
 function fileKey(file: string): string {
   return hashOf(file, FILE_KEY_BYTES);
 }
@@ -853,16 +869,19 @@ export class TokenLedger {
       state.mtimeMs = stat.mtimeMs;
       this.dirty = true;
     }
-    if (state.broken) return false;
-    if (
-      stat.dev !== state.dev ||
-      stat.ino !== state.ino ||
-      stat.size < state.offset
-    ) {
+    if (state.broken) {
+      // A ledger before 0.17.2 broke every file whose device number a remount changed; such a
+      // file is the same transcript, read on from its offset.
+      if (stat.dev === state.dev || !sameTranscript(state, stat)) return false;
+      delete state.broken;
+      this.dirty = true;
+    }
+    if (!sameTranscript(state, stat)) {
       state.broken = true;
       this.dirty = true;
       return false;
     }
+    if (adoptDevice(state, stat)) this.dirty = true;
     if (stat.size !== state.size) {
       state.size = stat.size;
       this.dirty = true;
@@ -898,15 +917,12 @@ export class TokenLedger {
         return true;
       }
       if (!stat.isFile()) return true;
-      if (
-        stat.dev !== state.dev ||
-        stat.ino !== state.ino ||
-        stat.size < state.offset
-      ) {
+      if (!sameTranscript(state, stat)) {
         state.broken = true;
         this.dirty = true;
         return true;
       }
+      if (adoptDevice(state, stat)) this.dirty = true;
       if (stat.size !== state.size) {
         state.size = stat.size;
         this.dirty = true;
