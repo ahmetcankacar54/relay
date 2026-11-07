@@ -12,7 +12,7 @@ const circles = (html: string) => html.match(/<circle[^>]*>/g) ?? [];
 const tracks = (html: string) => circles(html).filter((c) => !c.includes("stroke-linecap"));
 const arcs = (html: string) => circles(html).filter((c) => c.includes("stroke-linecap"));
 
-test("a fresh ring draws solid tracks and grey arcs", () => {
+test("a fresh ring draws solid tracks and orange arcs below 75 %", () => {
   for (const html of [ring(), ring("fresh")]) {
     assert.doesNotMatch(html, /data-state/);
     assert.equal(tracks(html).length, 2);

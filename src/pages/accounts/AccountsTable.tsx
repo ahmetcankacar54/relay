@@ -60,11 +60,10 @@ import { avatarClass, planColumn } from "./accountLabels";
  * A connection icon's three states: green when ready, amber with a dot when it needs a step (a
  * sign-in to renew reads the same; the Durum column says how bad), grey when absent.
  */
-/** Connection icons are grey: present, or faint when absent; a step to take adds the amber dot. */
 const toneText = {
-  ok: "text-foreground/75",
-  warn: "text-foreground/75",
-  crit: "text-foreground/75",
+  ok: "text-ok",
+  warn: "text-warn-foreground",
+  crit: "text-warn-foreground",
   off: "text-muted-foreground/40",
 } as const;
 
@@ -730,11 +729,11 @@ function ConnectionLegend() {
         |
       </span>
       <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-foreground/75" />
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-ok" />
         {t("hazır", "ready")}
       </span>
       <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="relative size-1.5 rounded-full bg-foreground/75">
+        <span aria-hidden="true" className="relative size-1.5 rounded-full bg-warn">
           <span className="absolute -top-1 -right-1 size-1 rounded-full bg-warn ring-1 ring-background" />
         </span>
         {t("adım gerekiyor", "step needed")}

@@ -8,93 +8,96 @@
 @import "./lost-pins.css";
 
 /*
- * A monochrome theme: greys only, as in the macOS system apps and Linear. The window is the sidebar
- * grey; pages sit on a slightly lighter panel. Colour is kept for small status marks (running,
- * attention, a used-up limit) and nothing else.
+ * Relay's colours come from its icon: one orange accent on warm greys. The orange marks what Relay
+ * itself does and what is chosen (the primary button, the selected page, focus, switches, links, the
+ * limit bars). Limits that run low turn amber from 75 % and red from 90 %. Accounts keep a colour of
+ * their own (avatars, timeline rows). Everything else stays grey, so the accent keeps its meaning.
  */
 :root {
   color-scheme: light;
   --radius: 0.625rem;
-  --sidebar: #f4f4f5;
-  --sidebar-foreground: #18181b;
+  --sidebar: #f5f4f2;
+  --sidebar-foreground: #1c1917;
   /* Secondary sidebar text: 5:1 or better on the sidebar grey. */
-  --sidebar-muted: #5f5f66;
-  --sidebar-accent: rgb(0 0 0 / 0.06);
-  --background: #f4f4f5;
-  --foreground: #18181b;
+  --sidebar-muted: #5e5852;
+  --sidebar-accent: rgb(194 65 12 / 0.1);
+  --background: #f5f4f2;
+  --foreground: #1c1917;
   --card: #ffffff;
-  --card-foreground: #18181b;
+  --card-foreground: #1c1917;
   --popover: #ffffff;
-  --popover-foreground: #18181b;
-  --primary: #18181b;
-  --primary-foreground: #fafafa;
-  --secondary: #f1f1f3;
-  --secondary-foreground: #18181b;
-  --muted: #f4f4f5;
+  --popover-foreground: #1c1917;
+  /* Relay orange: 5.2:1 with white text. */
+  --primary: #c2410c;
+  --primary-foreground: #ffffff;
+  --secondary: #f1efec;
+  --secondary-foreground: #1c1917;
+  --muted: #f5f4f2;
   /* 4.5:1 or better on every ground: the panel, boxes, popovers, muted grounds and the sidebar. */
-  --muted-foreground: #66666d;
-  --accent: #f1f1f3;
-  --accent-foreground: #18181b;
+  --muted-foreground: #645e58;
+  --accent: #f1efec;
+  --accent-foreground: #1c1917;
   --destructive: #dc2626;
-  --border: #e7e7ea;
-  --input: #dcdce1;
-  --ring: #a1a1aa;
+  --border: #e8e5e1;
+  --input: #dbd7d2;
+  --ring: #ea580c;
   /* A raised control face: buttons, the selected segment. */
   --control: #ffffff;
-  --brand: #3f3f46;
+  /* The icon's orange, for marks and fills; text in orange uses --primary. */
+  --brand: #ea580c;
   /* What a limit has used: rings and bars. */
-  --meter: #3f3f46;
-  --track: #e8e8eb;
+  --meter: #ea580c;
+  --track: #ebe8e4;
   --ok: #2f9e5b;
   /* Success text on light surfaces; --ok is for dots. */
   --ok-foreground: #166534;
-  --warn: #b7791f;
-  --warn-foreground: #8a5a12;
-  --crit: #d9363e;
-  /* Timeline rows, one grey per planned account (cycled). */
-  --tone-1: #27272a;
-  --tone-2: #71717a;
-  --tone-3: #a1a1aa;
-  --tone-4: #d4d4d8;
+  --warn: #ca8a04;
+  --warn-foreground: #854d0e;
+  --crit: #dc2626;
+  /* Timeline rows, one colour per planned account (cycled). */
+  --tone-1: #ea580c;
+  --tone-2: #2563eb;
+  --tone-3: #0d9488;
+  --tone-4: #a8a29e;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --sidebar: #0f0f11;
-    --sidebar-foreground: #d9d9de;
-    --sidebar-muted: #8e8e96;
-    --sidebar-accent: rgb(255 255 255 / 0.07);
-    --background: #0f0f11;
-    --foreground: #ededef;
-    --card: #1a1a1d;
-    --card-foreground: #ededef;
-    --popover: #1d1d20;
-    --popover-foreground: #ededef;
-    --primary: #e6e6e9;
-    --primary-foreground: #111113;
-    --secondary: #232326;
-    --secondary-foreground: #ededef;
-    --muted: #1f1f22;
-    --muted-foreground: #8e8e96;
-    --accent: #242428;
-    --accent-foreground: #ededef;
-    --destructive: #e5484d;
-    --border: #27272b;
-    --input: #323237;
-    --ring: #6b6b73;
-    --control: #242428;
-    --brand: #d4d4d8;
-    --meter: #d4d4d8;
-    --track: #2a2a2e;
+    --sidebar: #100f0e;
+    --sidebar-foreground: #dcd8d3;
+    --sidebar-muted: #958e87;
+    --sidebar-accent: rgb(255 138 76 / 0.12);
+    --background: #100f0e;
+    --foreground: #eeebe7;
+    --card: #1b1a18;
+    --card-foreground: #eeebe7;
+    --popover: #1e1d1b;
+    --popover-foreground: #eeebe7;
+    --primary: #ff8a4c;
+    --primary-foreground: #1c0d04;
+    --secondary: #252321;
+    --secondary-foreground: #eeebe7;
+    --muted: #201f1d;
+    --muted-foreground: #958e87;
+    --accent: #272523;
+    --accent-foreground: #eeebe7;
+    --destructive: #f0565b;
+    --border: #2a2826;
+    --input: #36332f;
+    --ring: #ff8a4c;
+    --control: #272523;
+    --brand: #ff8a4c;
+    --meter: #ff8a4c;
+    --track: #2d2a27;
     --ok: #4cb782;
     --ok-foreground: #7bcf9f;
-    --warn: #d4a63a;
-    --warn-foreground: #dcb45a;
-    --crit: #e5484d;
-    --tone-1: #e4e4e7;
-    --tone-2: #a1a1aa;
-    --tone-3: #71717a;
-    --tone-4: #4b4b52;
+    --warn: #eab308;
+    --warn-foreground: #f5c84c;
+    --crit: #f0565b;
+    --tone-1: #ff8a4c;
+    --tone-2: #7c9cff;
+    --tone-3: #2dd4bf;
+    --tone-4: #78716c;
   }
 }
 /*

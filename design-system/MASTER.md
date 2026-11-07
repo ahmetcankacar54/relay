@@ -1,29 +1,44 @@
 # Relay interface system
 
-Relay is a small macOS utility. It looks like the macOS system apps and Linear: greys only, a
-translucent sidebar on the system material, pages in the same dark colour beside it (a hairline border
-tells them apart), grouped boxes and 16 px text. Colour is kept for small status marks: a green dot for running or ready, an amber mark for
-a step to take, red for a used-up limit or an error. Tokens live in `src/styles/theme.css`; the
-shadcn primitives in `src/components/ui` read only tokens.
+Relay is a small macOS utility. It looks like the macOS system apps: a sidebar beside pages in the
+same colour (a hairline border tells them apart), grouped boxes and 16 px text. Its colours come from
+its icon, an orange R on cream: one orange accent on warm greys. Tokens live in `src/styles/theme.css`;
+the shadcn primitives in `src/components/ui` read only tokens.
+
+## Colour identity
+
+- **Relay orange is the one accent.** It marks what is chosen and what Relay does: the primary button,
+  the selected page's icon and row tint in the sidebar, focus rings, switches, links, the limit bars
+  and rings, and news banners. Text and buttons use `--primary` (`#c2410c`, 5.2:1 with white);
+  fills and marks use `--brand` / `--meter` (`#ea580c`, the icon's orange). Dark mode uses `#ff8a4c`
+  with near-black text on it. Keep one primary button per view, so the orange keeps its meaning.
+- **Limits say their level in colour and in words.** Bars and rings are orange below 75 %, amber
+  (`--warn`) from 75 % and red (`--crit`) from 90 % or when a limit is used up.
+- **Status keeps its own colours:** green for running or ready, amber for a step to take, red for an
+  error. Banners take a light tint of their tone.
+- **Accounts have a colour of their own:** avatars (terra, olive, blue, plum) and the timeline and
+  token rows (`--tone-1`…`--tone-4`: orange, blue, teal, warm grey).
+- **Everything else is warm grey**, close to the icon's cream: surfaces, text, borders, menus and
+  hover fills. Menus and hover stay grey, never orange.
 
 ## Tokens
 
 | Role                   | Light     | Dark      |
 | ---------------------- | --------- | --------- |
-| Window, sidebar, page  | `#f4f4f5` | `#0f0f11` |
-| Grouped box            | `#ffffff` | `#1a1a1d` |
-| Text                   | `#18181b` | `#ededef` |
-| Secondary text         | `#66666d` | `#8e8e96` |
-| Separator              | `#e7e7ea` | `#27272b` |
-| Control face           | `#ffffff` | `#242428` |
-| Primary button         | `#18181b` | `#e6e6e9` |
-| Meter (rings and bars) | `#3f3f46` | `#d4d4d8` |
+| Window, sidebar, page  | `#f5f4f2` | `#100f0e` |
+| Grouped box            | `#ffffff` | `#1b1a18` |
+| Text                   | `#1c1917` | `#eeebe7` |
+| Secondary text         | `#645e58` | `#958e87` |
+| Separator              | `#e8e5e1` | `#2a2826` |
+| Control face           | `#ffffff` | `#272523` |
+| Primary button, links  | `#c2410c` | `#ff8a4c` |
+| Meter, brand marks     | `#ea580c` | `#ff8a4c` |
+| Warning (75 %+)        | `#ca8a04` | `#eab308` |
+| Critical (90 %+)       | `#dc2626` | `#f0565b` |
 
 In the Electron main window on macOS the sidebar is transparent over the system sidebar material
 (`vibrancy: "sidebar"` in `electron/main.ts`, the `vibrant:` CSS variant); the page stays solid. The
-browser preview and other platforms use the solid grey. Rings and bars are grey at every
-level; the warnings say the level in words, and only a used-up limit turns red. Timeline rows use four
-greys (`--tone-1`…`--tone-4`).
+browser preview and other platforms use the solid grey.
 
 Secondary text keeps 4.5:1 contrast or better on the panel, boxes, popovers, muted grounds and the
 sidebar in both schemes (`tests/shell.test.ts` checks it).
@@ -70,7 +85,7 @@ Section labels above grouped boxes are `text-xs font-semibold text-muted-foregro
 - Tabs and toggle groups are segmented controls: a light track with a raised selected segment.
 - Grouped boxes: 10 px corners, a hairline border, no shadow; rows divided by hairlines.
 - Menus and selects highlight the focused item with a grey fill.
-- Focus is a visible 3 px grey ring. Hover changes colours, never sizes.
+- Focus is a visible 3 px orange ring. Hover changes colours, never sizes.
 - Time uses a custom nonmodal popover: hour/minute grid, every-minute text entry, staged Apply/Cancel.
   Existing `09:17` must not round to a grid increment. Parent state changes only after valid Apply.
 - Time zone uses a searchable nonmodal popover: explicit IANA identity, city and dated UTC offset.

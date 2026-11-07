@@ -4,14 +4,14 @@ import { meterTone, type MeterTone } from "@/lib/meter";
 
 const strokeClass: Record<MeterTone, string> = {
   ok: "stroke-meter",
-  warn: "stroke-meter",
-  crit: "stroke-meter",
+  warn: "stroke-warn",
+  crit: "stroke-crit",
   none: "stroke-transparent",
 };
 const dotClass: Record<MeterTone, string> = {
   ok: "bg-meter",
-  warn: "bg-meter",
-  crit: "bg-meter",
+  warn: "bg-warn",
+  crit: "bg-crit",
   none: "bg-track",
 };
 

@@ -99,14 +99,14 @@ function NavItem({
           : undefined
       }
       className={cn(
-        "relative flex items-center rounded-md text-sm whitespace-nowrap text-sidebar-muted outline-none hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [-webkit-app-region:no-drag]",
+        "relative flex items-center rounded-md text-sm whitespace-nowrap text-sidebar-muted outline-none hover:bg-foreground/5 hover:text-sidebar-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 [-webkit-app-region:no-drag]",
         compact
           ? "size-10 justify-center"
           : "h-8 w-full justify-start gap-2.5 px-2.5 text-left",
         active && "bg-sidebar-accent text-sidebar-foreground hover:bg-sidebar-accent",
       )}
     >
-      <Icon className="size-5 shrink-0" />
+      <Icon className={cn("size-5 shrink-0", active && "text-primary")} />
       {!compact && <span className="truncate">{item.label}</span>}
       {!compact && item.tail !== undefined && (
         <span className="ml-auto text-xs tabular-nums text-sidebar-muted">

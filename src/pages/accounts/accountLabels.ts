@@ -71,8 +71,8 @@ export function filterAccounts(
 
 /** Avatar colours keyed by `Account.color`, with dark-mode variants. */
 export const avatarClass: Record<string, string> = {
-  terra: "bg-secondary text-foreground",
-  olive: "bg-secondary text-foreground",
-  blue: "bg-secondary text-foreground",
-  plum: "bg-secondary text-foreground",
+  terra: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200",
+  olive: "bg-lime-100 text-lime-800 dark:bg-lime-950 dark:text-lime-200",
+  blue: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
+  plum: "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200",
 };

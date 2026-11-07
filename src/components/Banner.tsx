@@ -47,9 +47,13 @@ export function Banner({
       )}
     </>
   );
-  // Neutral boxes: an error keeps a red edge; the icon in the line carries the rest.
-  const box = "rounded-lg border bg-card px-3 py-2 text-sm";
-  const tones = cn(tone === "error" && "border-destructive/40");
+  // A light tint of the tone: red for an error, amber for a step to take, Relay orange for news.
+  const box = "rounded-lg border px-3 py-2 text-sm";
+  const tones = cn(
+    tone === "error" && "border-destructive/30 bg-destructive/8",
+    tone === "warn" && "border-warn/35 bg-warn/8",
+    tone === "info" && "border-brand/25 bg-brand/6",
+  );
   if (detail === undefined)
     return (
       <div
