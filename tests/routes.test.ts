@@ -15,7 +15,7 @@ test("hashes map to the sidebar's pages; the former pages open Settings, unknown
 });
 
 test("Settings' tab comes from the hash, a former page's own tab, or the first", () => {
-  assert.deepEqual(SETTINGS_TABS, ["gecis", "planlama", "genel", "gelismis"]);
+  assert.deepEqual(SETTINGS_TABS, ["gecis", "planlama", "proxy", "genel", "gelismis"]);
   assert.equal(settingsTab("#/ayarlar/gelismis"), "gelismis");
   assert.equal(settingsTab("#/gecis"), "gecis");
   assert.equal(settingsTab("#/planlama"), "planlama");

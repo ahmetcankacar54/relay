@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { routeHash, settingsTab, SETTINGS_TABS, type SettingsTab } from "@/app/routes";
 import { ExperimentalSwitchRows, RefreshIntervalRow, SwitchingTab } from "./settings/SwitchingTabs";
 import { PlanningTab } from "./Planning";
+import { ProxyTab } from "./settings/ProxyTab";
 
 /** Shows the diagnosis logs in Finder; main picks the files, the page passes no path. */
 export const showDiagnostics = ({
@@ -214,6 +215,7 @@ export function settingsTabTitle(tab: SettingsTab, t: ReturnType<typeof useI18n>
   return {
     gecis: t("Geçiş", "Switching"),
     planlama: t("Planlama", "Planning"),
+    proxy: t("Proxy & Gateway", "Proxy & Gateway"),
     genel: t("Genel", "General"),
     gelismis: t("Gelişmiş", "Advanced"),
   }[tab];
@@ -238,8 +240,8 @@ function useSettingsTab(initial?: SettingsTab): [SettingsTab, (tab: SettingsTab)
 }
 
 /**
- * Every setting in one place, in four tabs: Switching (when, what switches along, near the
- * limit), Planning, General, and Advanced for everything technical or experimental. Each setting
+ * Every setting in one place, in five tabs: Switching (when, what switches along, near the
+ * limit), Planning, Proxy & Gateway, General, and Advanced for everything technical or experimental. Each setting
  * appears once; actions live on the Overview, the account page and the panel.
  */
 export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
@@ -268,6 +270,9 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
         </TabsContent>
         <TabsContent value="planlama">
           <PlanningTab />
+        </TabsContent>
+        <TabsContent value="proxy">
+          <ProxyTab />
         </TabsContent>
         <TabsContent value="genel">
           <div className="grid max-w-2xl gap-4">

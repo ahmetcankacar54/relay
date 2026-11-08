@@ -18,9 +18,9 @@ export const NAV_PAGES = ["genel", "hesaplar", "kullanim", "tokenlar", "rozetler
 export type NavPage = (typeof NAV_PAGES)[number];
 /**
  * Settings' tabs, in order: switching (when, what switches along, near the limit), planning,
- * general, and one Advanced for everything technical or experimental.
+ * the Proxy Gateway, general, and one Advanced for everything technical or experimental.
  */
-export const SETTINGS_TABS = ["gecis", "planlama", "genel", "gelismis"] as const;
+export const SETTINGS_TABS = ["gecis", "planlama", "proxy", "genel", "gelismis"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 /** Former tabs, so links from older builds, notices and the panel still land on the right one. */
 const FORMER_TAB: Record<string, SettingsTab> = {

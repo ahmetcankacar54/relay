@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { ProcessLock } from "./process-lock";
 import { TERMINAL_MODES } from "../../shared/terminal-identity";
+import { DEFAULT_PROXY_CONFIG } from "../../shared/proxy-types";
 import {
   DEFAULT_PLANNING,
   DEFAULT_SETTINGS,
@@ -154,9 +155,30 @@ const accountSchema = z.object({
     })
     .optional(),
 });
+/** The Proxy Gateway's saved settings: where it listens, how it routes, and its client key. */
+export const proxyConfigSchema = z
+  .object({
+    enabled: z.boolean(),
+    port: z.number().int().min(1).max(65_535),
+    host: z
+      .string()
+      .trim()
+      .min(1)
+      .max(255)
+      .refine((host) => !/[\s/@?#]/.test(host), "Not a host address"),
+    affinityTtlSeconds: z.number().int().min(10).max(3_600).default(DEFAULT_PROXY_CONFIG.affinityTtlSeconds),
+    routingStrategy: z.enum(["soonest-reset", "balanced", "strict-priority"]).default(DEFAULT_PROXY_CONFIG.routingStrategy),
+    apiKey: z.string().min(1).max(200).optional(),
+    allowCrossProviderFallback: z.boolean().optional(),
+  })
+  .strict();
 export const settingsSchema = z
   .object({
     appearance: z.enum(["system", "light", "dark"]).default("system"),
+    // Missing means off, with the defaults; no .default() so a patch keeps the stored choice.
+    proxy: proxyConfigSchema.optional(),
+    // Missing means on; no .default() so a patch keeps the stored choice.
+    cdpHotSwitch: z.boolean().optional(),
     planning: planningSchema,
     usageRefreshMinutes: z.union([
       z.literal(0),
@@ -193,6 +215,8 @@ export const settingsPatchSchema = settingsSchema
     autoSwitchMode: settingsSchema.shape.autoSwitchMode.removeDefault(),
     autoSwitchAccounts: settingsSchema.shape.autoSwitchAccounts.removeDefault(),
   })
+  // The gateway's settings change through its own calls, which restart it when needed.
+  .omit({ proxy: true })
   .partial();
 // A new install starts with DEFAULT_SETTINGS' "same-group". A saved registry that never
 // wrote the mode shared across all accounts, and keeps doing so.

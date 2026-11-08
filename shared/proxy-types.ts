@@ -33,6 +33,12 @@ export interface ProxyMetrics {
   requestsByAccount: Record<string, number>;
   tokensByAccount: Record<string, AccountTokenMetrics>;
   cacheHitRatio: number;
+  /** Requests being answered right now. */
+  activeRequests?: number;
+  /** Requests whose answer read part of the prompt from the cache. */
+  promptCacheHits?: number;
+  /** The account the latest request went to. */
+  lastAccountId?: string;
   lastError?: string;
   lastErrorAt?: number;
 }

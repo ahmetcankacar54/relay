@@ -132,8 +132,16 @@ import type {
   Account,
   DesktopState,
   FleetContinuationState,
+  ProxyStatus,
   SeparateWindows,
 } from "../shared/types";
+import { DEFAULT_PROXY_CONFIG, type ProxyConfig } from "../shared/proxy-types";
+import { ProxyServer } from "./core/proxy/proxy-server";
+import {
+  buildProxyStatus,
+  generateProxyKey,
+  proxyConfigurePatch,
+} from "./core/proxy/proxy-status";
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
 import {
@@ -1350,6 +1358,9 @@ else {
           // Corroborate legacy profiles before the first quota request. Otherwise
           // updated identity fields can hide that request behind its old cooldown.
           usage.start();
+          // A gateway that cannot start (the port is taken) shows why on its page; Relay opens.
+          if (service.store.state.settings.proxy?.enabled)
+            void serializeProxy(startProxy).catch(() => broadcastChanged());
           autoSwitch.start();
           keeper.start();
           continuation.start();
@@ -1798,6 +1809,115 @@ async function separateWindows(): Promise<SeparateWindows | undefined> {
     others,
   };
 }
+/**
+ * The Proxy Gateway (Settings → Proxy): one local server that routes requests over the accounts
+ * by their limits. Started with the app when turned on, stopped when Relay quits. Every start,
+ * stop and restart runs one after the other, so a quick toggle can never leave two servers.
+ */
+let proxyServer: ProxyServer | undefined;
+/** Why the gateway is not running although it is turned on, shown on its page. */
+let proxyError: string | undefined;
+let proxyQueue: Promise<unknown> = Promise.resolve();
+/** How long a read sign-in is reused before the Keychain is asked again. */
+const PROXY_CREDENTIAL_TTL_MS = 20_000;
+const serializeProxy = <T>(task: () => Promise<T>): Promise<T> => {
+  const run = proxyQueue.then(task);
+  proxyQueue = run.catch(() => {});
+  return run;
+};
+const proxySettings = (): ProxyConfig => ({
+  ...DEFAULT_PROXY_CONFIG,
+  allowCrossProviderFallback: false,
+  ...service.store.state.settings.proxy,
+});
+const saveProxySettings = (config: ProxyConfig) => {
+  service.store.update((s) => {
+    s.settings.proxy = config;
+  });
+};
+function proxyStatus(): ProxyStatus {
+  const config = proxySettings();
+  const state = proxyServer?.getState();
+  const running = state?.status === "running";
+  return buildProxyStatus({
+    running,
+    config: running && state ? { ...config, port: state.port, host: state.host } : config,
+    metrics: proxyServer?.getMetrics(),
+    accounts: service.store.state.accounts,
+    usage: usage?.snapshot() ?? {},
+    now: Date.now(),
+    error: proxyError,
+  });
+}
+/** Starts the gateway on the saved port and host; a first start also creates the client key. */
+async function startProxy(): Promise<void> {
+  if (proxyServer) return;
+  let config = proxySettings();
+  if (!config.apiKey) {
+    config = { ...config, apiKey: generateProxyKey() };
+    saveProxySettings(config);
+  }
+  const credentials = new Map<string, { token: string; until: number }>();
+  const server = new ProxyServer({
+    config,
+    credentialResolver: async (account) => {
+      const cached = credentials.get(account.id);
+      if (cached && cached.until > Date.now()) return cached.token;
+      credentials.delete(account.id);
+      try {
+        const credential = await readCredential(service.store.profile(account.id), false);
+        // An expired token would only earn a 401; leave the account to the others.
+        if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) return undefined;
+        credentials.set(account.id, {
+          token: credential.accessToken,
+          until: Math.min(Date.now() + PROXY_CREDENTIAL_TTL_MS, credential.expiresAt ?? Infinity),
+        });
+        return credential.accessToken;
+      } catch {
+        return undefined;
+      }
+    },
+    // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
+    usageProvider: () => ({
+      accounts: service.store.state.accounts,
+      usageMap: usage?.snapshot() ?? {},
+    }),
+  });
+  try {
+    await server.start();
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    proxyError =
+      code === "EADDRINUSE"
+        ? say(
+            `${config.host}:${config.port} kullanımda. Başka bir port seç.`,
+            `${config.host}:${config.port} is already in use. Choose another port.`,
+          )
+        : (error as Error).message;
+    throw new Error(proxyError);
+  }
+  proxyServer = server;
+  proxyError = undefined;
+}
+async function stopProxy(): Promise<void> {
+  const server = proxyServer;
+  proxyServer = undefined;
+  await server?.stop().catch(() => {});
+}
+/** Saves `next`; a running gateway restarts with it, and the old settings return if it cannot. */
+async function applyProxyConfig(next: ProxyConfig): Promise<void> {
+  const previous = proxySettings();
+  saveProxySettings(next);
+  if (!proxyServer) return;
+  await stopProxy();
+  try {
+    await startProxy();
+  } catch (error) {
+    saveProxySettings(previous);
+    await startProxy().catch(() => {});
+    throw error;
+  }
+}
 function broadcastChanged() {
   if (window && !window.isDestroyed()) window.webContents.send("relay:changed");
   trayPanel?.webContents()?.send("relay:changed");
@@ -2133,8 +2253,47 @@ function bindIPC() {
   handle("terminal-check", () => desktop.checkTerminal());
   handle("terminal-sync", () => desktop.syncTerminal().finally(broadcastChanged));
   // The windows show it; every switch, sign-in or recovery rechecks fresh in main.
+  handle("proxy-status", () => proxyStatus());
+  handle("proxy-toggle", (enabled) =>
+    serializeProxy(async () => {
+      const on = z.boolean().parse(enabled);
+      const config = proxySettings();
+      saveProxySettings({ ...config, enabled: on });
+      if (on) {
+        try {
+          await startProxy();
+        } catch (error) {
+          // Switched back off, so the page does not claim a gateway that is not there.
+          saveProxySettings({ ...proxySettings(), enabled: false });
+          broadcastChanged();
+          throw error;
+        }
+      } else {
+        await stopProxy();
+        proxyError = undefined;
+      }
+      broadcastChanged();
+      return proxyStatus();
+    }),
+  );
+  handle("proxy-configure", (input) =>
+    serializeProxy(async () => {
+      const patch = proxyConfigurePatch.parse(input);
+      await applyProxyConfig({ ...proxySettings(), ...patch });
+      broadcastChanged();
+      return proxyStatus();
+    }),
+  );
+  handle("proxy-regenerate-key", () =>
+    serializeProxy(async () => {
+      await applyProxyConfig({ ...proxySettings(), apiKey: generateProxyKey() });
+      broadcastChanged();
+      return proxyStatus();
+    }),
+  );
   handle("desktop-snapshot", async () => ({
     ...(await desktop.cachedSnapshot()),
+    proxyStatus: proxyStatus(),
     ...(autoCapture?.state() ? { autoCapture: autoCapture.state() } : {}),
     busy:
       desktop.isBusy || desktopLock.busy || usageCredentialRefresher?.anyActive,
@@ -2651,6 +2810,9 @@ app.on("before-quit", (event) => {
 });
 
 app.on("will-quit", () => {
+  // Here, not in "before-quit": that one can still be vetoed (a busy switch, a running
+  // terminal), which would leave Relay open with its gateway down.
+  void proxyServer?.stop();
   appUpdates?.stop();
   keeperAbort.abort();
   if (trayTimer) clearInterval(trayTimer);

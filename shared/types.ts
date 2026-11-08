@@ -26,6 +26,7 @@ import type { DesktopContinuationSnapshot } from "../electron/core/desktop-conti
 import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
+import { DEFAULT_PROXY_CONFIG, type ProxyConfig } from "./proxy-types";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
 export type AccountProvider = "claude" | "codex" | "gemini";
@@ -261,6 +262,37 @@ export interface DesktopState {
    * Automatic switching, the fleet and continuation wait while one does.
    */
   windows?: number;
+  /** The Proxy Gateway's live state; absent where the gateway is not available. */
+  proxyStatus?: ProxyStatus;
+}
+/** One account as the Proxy Gateway sees it, for the routing monitor. */
+export interface ProxyAccountStatus {
+  id: string;
+  name: string;
+  email?: string;
+  /** The account the gateway's last request went to. */
+  active: boolean;
+  /** The fuller of the 5-hour and weekly windows, 0–100; absent until limits are read. */
+  quotaPercent?: number;
+  /** Minutes until the soonest limit window resets. */
+  resetInMinutes?: number;
+}
+/** What Settings → Proxy shows: whether the gateway runs, how it is reached, and what it did. */
+export interface ProxyStatus {
+  running: boolean;
+  port: number;
+  host: string;
+  clientApiKey?: string;
+  stats: {
+    totalRequests: number;
+    activeRequests: number;
+    promptCacheHits: number;
+    cacheHitRate: number;
+  };
+  accounts: ProxyAccountStatus[];
+  allowCrossProviderFallback: boolean;
+  /** Why the gateway is not running although it is turned on (e.g. the port is in use). */
+  error?: string;
 }
 /**
  * The automatic save of a Claude app sign-in: waiting for the sign-in and Code, waiting for the
@@ -413,7 +445,19 @@ export interface RelayAPI {
   /** Menu bar panel only: main reports each time the panel is shown or hidden. */
   onPanelVisibility(callback: (shown: boolean) => void): () => void;
   quit(): Promise<void>;
-  updateSettings(input: Partial<RelaySettings>): Promise<RelaySettings>;
+  updateSettings(input: Partial<Omit<RelaySettings, "proxy">>): Promise<RelaySettings>;
+  /** The Proxy Gateway's live state: whether it runs, its client key, counters and routing. */
+  proxyStatus(): Promise<ProxyStatus>;
+  /** Starts or stops the gateway and saves the choice. Rejects when it cannot start (port in use). */
+  proxyToggle(enabled: boolean): Promise<ProxyStatus>;
+  /** Changes where the gateway listens and whether it may cross providers; a running one restarts. */
+  proxyConfigure(input: {
+    port?: number;
+    host?: string;
+    allowCrossProviderFallback?: boolean;
+  }): Promise<ProxyStatus>;
+  /** Replaces the client key (`relay-sec-…`); a running gateway restarts, so the old key stops working. */
+  proxyRegenerateKey(): Promise<ProxyStatus>;
   updatePlanning(patch: Partial<PlanningSettings>): Promise<PlanningSettings>;
   refreshUsage(
     accountId: string,
@@ -493,6 +537,10 @@ declare global {
 export interface RelaySettings {
   /** Window theme; "system" follows macOS. */
   appearance: "system" | "light" | "dark";
+  /** The local Proxy Gateway; changed through the proxy calls, never through updateSettings. */
+  proxy?: ProxyConfig;
+  /** Switch the browser's claude.ai login through its debugging port, without quitting it. Missing means on. */
+  cdpHotSwitch?: boolean;
   planning: PlanningSettings;
   usageRefreshMinutes: 0 | 5 | 15 | 30;
   usageWarningPercent: 80 | 90 | 95;
@@ -621,6 +669,8 @@ export interface DesktopHistorySummary {
 }
 export const DEFAULT_SETTINGS: RelaySettings = {
   appearance: "system",
+  proxy: { ...DEFAULT_PROXY_CONFIG, allowCrossProviderFallback: false },
+  cdpHotSwitch: true,
   planning: DEFAULT_PLANNING,
   usageRefreshMinutes: 5,
   usageWarningPercent: 90,

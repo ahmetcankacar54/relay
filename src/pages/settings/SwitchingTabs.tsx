@@ -197,6 +197,24 @@ export function SwitchingTab() {
           <>
             <Card id="gecis-eklenti" className={cardClass}>
               <ExtensionPreference />
+              <SettingRow
+                label={t(
+                  "Tarayıcıyı kapatmadan geçiş yap (CDP Canlı Geçiş)",
+                  "Switch without closing the browser (CDP live switch)",
+                )}
+                htmlFor="cdp-hot-switch"
+                description={t(
+                  "Tarayıcı hata ayıklama portuyla açıksa claude.ai oturumu çerezler değiştirilerek, tarayıcı kapanmadan ve sekmeler yenilenerek geçilir. Olmazsa Relay eski yola döner.",
+                  "When the browser is open with its debugging port, the claude.ai login is swapped through its cookies and the tabs reload, with no browser quit. If that is not possible, Relay falls back to the usual way.",
+                )}
+              >
+                <Switch
+                  id="cdp-hot-switch"
+                  checked={settings.cdpHotSwitch !== false}
+                  disabled={disabled}
+                  onCheckedChange={(cdpHotSwitch) => update({ cdpHotSwitch })}
+                />
+              </SettingRow>
             </Card>
             <Card id="gecis-terminal" className={cardClass}>
               <TerminalPreference />

@@ -12,8 +12,21 @@ export class ProxyStats {
   private tokensByAccount = new Map<string, AccountTokenMetrics>();
   private lastError?: string;
   private lastErrorAt?: number;
+  private activeRequests = 0;
+  private promptCacheHits = 0;
+  private lastAccountId?: string;
+
+  /** A request came in; pair with requestEnded(). */
+  requestStarted(): void {
+    this.activeRequests += 1;
+  }
+
+  requestEnded(): void {
+    this.activeRequests = Math.max(0, this.activeRequests - 1);
+  }
 
   recordRequest(accountId: string): void {
+    this.lastAccountId = accountId;
     this.totalRequests += 1;
     this.requestsByAccount.set(
       accountId,
@@ -43,6 +56,7 @@ export class ProxyStats {
     current.input += count(tokens.input);
     current.output += count(tokens.output);
     current.cacheRead += count(tokens.cacheRead);
+    if (count(tokens.cacheRead) > 0) this.promptCacheHits += 1;
     current.cacheWrite += count(tokens.cacheWrite);
     this.tokensByAccount.set(accountId, current);
   }
@@ -83,6 +97,9 @@ export class ProxyStats {
       requestsByAccount: reqs,
       tokensByAccount: toks,
       cacheHitRatio,
+      activeRequests: this.activeRequests,
+      promptCacheHits: this.promptCacheHits,
+      ...(this.lastAccountId ? { lastAccountId: this.lastAccountId } : {}),
       lastError: this.lastError,
       lastErrorAt: this.lastErrorAt,
     };
@@ -92,6 +109,8 @@ export class ProxyStats {
     this.totalRequests = 0;
     this.requestsByAccount.clear();
     this.tokensByAccount.clear();
+    this.promptCacheHits = 0;
+    this.lastAccountId = undefined;
     this.lastError = undefined;
     this.lastErrorAt = undefined;
   }

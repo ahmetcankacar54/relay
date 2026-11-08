@@ -17,6 +17,7 @@ import type {
   UpdateState,
   ExtensionStatus,
   MenuBarItem,
+  ProxyStatus,
   RelayAPI,
   Session,
   Snapshot,
@@ -608,7 +609,48 @@ function previewLostFoundSource() {
   };
 }
 
+/** The Proxy tab in the preview: a gateway that turns on and off in memory, with made-up traffic. */
+const previewProxy = { running: false, port: 8317, host: "127.0.0.1", key: "relay-sec-preview-0000000000000000000000000000", cross: false };
+const previewProxyStatus = (): ProxyStatus => ({
+  running: previewProxy.running,
+  port: previewProxy.port,
+  host: previewProxy.host,
+  clientApiKey: previewProxy.key,
+  stats: previewProxy.running
+    ? { totalRequests: 128, activeRequests: 2, promptCacheHits: 97, cacheHitRate: 84.5 }
+    : { totalRequests: 0, activeRequests: 0, promptCacheHits: 0, cacheHitRate: 0 },
+  accounts: accounts.map((a, i) => {
+    const window = state.usage[a.id]?.fiveHour;
+    return {
+      id: a.id,
+      name: a.name,
+      ...(a.auth?.email ? { email: a.auth.email } : {}),
+      active: previewProxy.running && i === 0,
+      ...(window ? { quotaPercent: Math.round(window.usedPercent) } : {}),
+      ...(window?.resetsAt
+        ? { resetInMinutes: Math.max(0, Math.ceil((Date.parse(window.resetsAt) - Date.now()) / 60_000)) }
+        : {}),
+    };
+  }),
+  allowCrossProviderFallback: previewProxy.cross,
+});
+
 export const previewApi: RelayAPI = {
+  proxyStatus: async () => previewProxyStatus(),
+  proxyToggle: async (enabled) => {
+    previewProxy.running = enabled;
+    return previewProxyStatus();
+  },
+  proxyConfigure: async (input) => {
+    if (input.port !== undefined) previewProxy.port = input.port;
+    if (input.host !== undefined) previewProxy.host = input.host;
+    if (input.allowCrossProviderFallback !== undefined) previewProxy.cross = input.allowCrossProviderFallback;
+    return previewProxyStatus();
+  },
+  proxyRegenerateKey: async () => {
+    previewProxy.key = `relay-sec-preview-${Math.random().toString(36).slice(2).padEnd(28, "0")}`;
+    return previewProxyStatus();
+  },
   inspectContinuation: async () => ({
     status: "off",
     reason: "disabled",

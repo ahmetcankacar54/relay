@@ -111,7 +111,10 @@ export class ProxyServer {
 
     this.statusState = "starting";
     const server = http.createServer((req, res) => {
-      this.handleHttpRequest(req, res).catch((err: any) => this.fail(res, err));
+      this.stats.requestStarted();
+      this.handleHttpRequest(req, res)
+        .catch((err: any) => this.fail(res, err))
+        .finally(() => this.stats.requestEnded());
     });
 
     server.on("connection", (socket) => {

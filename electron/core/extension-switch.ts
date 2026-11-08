@@ -82,6 +82,8 @@ export interface ExtensionRequest {
   setting: ExtensionSetting;
   /** May quit a running browser; false for a switch that keeps Claude closed. */
   mayQuit: boolean;
+  /** Try the live swap through the browser's debugging port first; false skips it. Missing means on. */
+  cdpHotSwitch?: boolean;
   /** The account to put in place: its Desktop uuid and its own, any that exist. */
   target: string[];
   /** Every Relay account's uuids: the only extension sign-ins ever kept or replaced. */
@@ -177,7 +179,10 @@ export class ExtensionSwitcher {
       let restarted = false;
       if (await browserRunning(system, instance.app)) {
         // First try live CDP hot-swap without closing the browser
-        const cdp = await this.tryCdpHotSwap(instance, request);
+        const cdp =
+          request.cdpHotSwitch === false
+            ? { switched: false, saved: false }
+            : await this.tryCdpHotSwap(instance, request);
         if (cdp.switched) {
           return done(
             { result: "switched", reason: undefined, saved: cdp.saved },
