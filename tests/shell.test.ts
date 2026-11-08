@@ -17,7 +17,7 @@ const t = (tr: string) => tr;
 const inShell = (child: ReturnType<typeof createElement>) =>
   createElement(TooltipProvider, null, child);
 
-test("sidebar lists the four pages, marks the current one and puts the automation dot on Settings", () => {
+test("sidebar lists the pages, marks the current one and puts the automation dot on its page", () => {
   const html = renderToStaticMarkup(
     createElement(Sidebar, {
       page: "ayarlar",
@@ -31,12 +31,14 @@ test("sidebar lists the four pages, marks the current one and puts the automatio
   for (const label of [
     "Genel bakış",
     "Hesaplar",
+    "Geçiş",
+    "Planlama",
     "Kullanım",
     "Ayarlar",
   ])
     assert.match(html, new RegExp(label));
-  // Planning and Switching are tabs in Settings now.
-  assert.doesNotMatch(html, />Planlama<|>Geçiş</);
+  // Early start is on: the dot sits on Planning.
+  assert.match(html, />Planlama<\/span><span data-status="on"/);
   assert.match(html, /aria-current="page"[^>]*>[\s\S]*?Ayarlar/);
   assert.match(html, />4</);
   assert.equal(html.match(/data-status="on"/g)?.length, 1);
@@ -137,15 +139,15 @@ test("sidebar buttons override the legacy centred button style and the summary c
     );
   const html = sidebar(true);
   const buttons = html.match(/<button[\s\S]*?<\/button>/g) ?? [];
-  assert.equal(buttons.length, 7);
+  assert.equal(buttons.length, 9);
   for (const b of buttons) {
     const tag = /^<button[^>]*>/.exec(b)?.[0] ?? "";
     assert.match(tag, /class="[^"]*text-left/);
     assert.doesNotMatch(tag, /justify-center/);
   }
-  // The six pages start their row on the left.
+  // The eight pages start their row on the left.
   const pages = buttons.filter((b) => !b.includes("Kişisel · Max"));
-  assert.equal(pages.length, 6);
+  assert.equal(pages.length, 8);
   for (const b of pages) assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
   // The summary card: a single 32 px ring for the five hours and its percent, inside the card's button.
   const summary = buttons.find((b) => b.includes("Kişisel · Max")) ?? "";

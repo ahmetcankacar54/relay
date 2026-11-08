@@ -60,7 +60,8 @@ test("the sidebar's automation dot says what it means to a screen reader", () =>
       status: { accounts: 2, planning: true, switching: true },
     }),
   );
-  assert.match(html, /<span class="sr-only">Otomatik geçiş ve önceden başlatma açık<\/span>/);
+  assert.match(html, /<span class="sr-only">Otomatik geçiş açık<\/span>/);
+  assert.match(html, /<span class="sr-only">Önceden başlatma açık<\/span>/);
 });
 
 test("the panel's gear opens Settings", () => {

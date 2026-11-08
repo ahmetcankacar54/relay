@@ -15,8 +15,10 @@ import {
   AccountsIcon,
   OverviewIcon,
   PinsIcon,
+  PlanningIcon,
   SettingsIcon,
   SidebarIcon,
+  SwitchingIcon,
   TokensIcon,
   UsageIcon,
 } from "@/components/icons";
@@ -302,6 +304,21 @@ export function Sidebar({
       label: t("Hesaplar", "Accounts"),
       tail: status.accounts,
     },
+    // A green dot says the page's automation runs by itself.
+    {
+      id: "gecis",
+      icon: SwitchingIcon,
+      label: t("Geçiş", "Switching"),
+      on: status.switching,
+      onLabel: t("Otomatik geçiş açık", "Automatic switching on"),
+    },
+    {
+      id: "planlama",
+      icon: PlanningIcon,
+      label: t("Planlama", "Planning"),
+      on: status.planning,
+      onLabel: t("Önceden başlatma açık", "Early start on"),
+    },
   ];
   // Usage is three pages, grouped under one heading.
   const usage: Item[] = [
@@ -309,19 +326,12 @@ export function Sidebar({
     { id: "tokenlar", icon: TokensIcon, label: t("Token ve ücret", "Tokens and cost") },
     { id: "rozetler", icon: PinsIcon, label: t("Rozetler", "Pins") },
   ];
-  // Automation and planning live in Settings now; its dot says when either runs by itself.
   const settings: Item = {
     id: "ayarlar",
     icon: SettingsIcon,
     label: t("Ayarlar", "Settings"),
-    on: status.switching || status.planning,
-    onLabel:
-      status.switching && status.planning
-        ? t("Otomatik geçiş ve önceden başlatma açık", "Automatic switching and early start on")
-        : status.switching
-          ? t("Otomatik geçiş açık", "Automatic switching on")
-          : t("Önceden başlatma açık", "Early start on"),
   };
+
   const toggleLabel = compact
     ? t("Kenar çubuğunu göster", "Show the sidebar")
     : t("Kenar çubuğunu gizle", "Hide the sidebar");

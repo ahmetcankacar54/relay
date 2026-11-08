@@ -163,7 +163,7 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
           size="sm"
           onClick={() => {
             settle("mode");
-            open("ayarlar/gecis");
+            open("gecis");
           }}
         >
           {t("Seç", "Choose")}
@@ -183,7 +183,7 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
       ),
       action: (
         <span className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => open("ayarlar/gecis")}>
+          <Button variant="outline" size="sm" onClick={() => open("gecis")}>
             {t("Ayarla", "Set up")}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => settle("extension")}>

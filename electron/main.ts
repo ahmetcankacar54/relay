@@ -1584,7 +1584,7 @@ function notifyExtensionLeft(target: Account) {
       `Claude’s browser tools do not work with ${target.name}; click to fix.`,
     ),
   });
-  notice.on("click", () => openPage("ayarlar/gecis"));
+  notice.on("click", () => openPage("gecis"));
   notice.show();
 }
 /**
@@ -1601,7 +1601,7 @@ function notifyExtensionBroken(account: Account) {
       `Claude’s browser tools do not work with ${account.name}; click to reconnect.`,
     ),
   });
-  notice.on("click", () => openPage("ayarlar/gecis"));
+  notice.on("click", () => openPage("gecis"));
   notice.show();
 }
 /** Says once per version that a downloaded update is ready; a click opens Overview's banner. */
@@ -2124,7 +2124,7 @@ function bindIPC() {
   handle("extension-sync", () => desktop.syncExtension().finally(broadcastChanged));
   handle("extension-web", () => desktop.openClaudeWeb());
   handle("extension-settings", () => {
-    openPage("ayarlar/gecis");
+    openPage("gecis");
     trayPanel?.hide();
   });
   handle("extension-check", () => desktop.checkExtension());

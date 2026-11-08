@@ -426,7 +426,7 @@ function ExtensionConnection({
           </Button>
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("ayarlar/gecis")}>{t("Ayarlar", "Settings")}</a>
+            <a href={routeHash("gecis")}>{t("Ayarlar", "Settings")}</a>
           </Button>
         ) : undefined
       }
@@ -477,7 +477,7 @@ function TerminalConnection({
           </Button>
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
-            <a href={routeHash("ayarlar/gecis")}>{t("Ayarlar", "Settings")}</a>
+            <a href={routeHash("gecis")}>{t("Ayarlar", "Settings")}</a>
           </Button>
         ) : undefined
       }
