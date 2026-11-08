@@ -245,10 +245,12 @@ test("openPage carries the add intent to the main window", () => {
   assert.equal(intentHash("hesaplar", "ekle"), "#/hesaplar?ekle");
   assert.equal(intentHash("genel"), "#/genel");
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
-  const start = main.indexOf('handle("open-page",');
-  const handler = main.slice(start, main.indexOf('handle("quit"', start));
-  assert.match(handler, /z\.enum\(PAGE_INTENTS\)\.optional\(\)\.parse\(intent\)/);
-  assert.match(handler, /send\("relay:navigate", target, want\)/);
+  const ipcStart = main.indexOf('handle("open-page",');
+  const ipcHandler = main.slice(ipcStart, main.indexOf('handle("quit"', ipcStart));
+  assert.match(ipcHandler, /z\.enum\(PAGE_INTENTS\)\.optional\(\)\.parse\(intent\)/);
+  const openPageStart = main.indexOf("function openPage(");
+  const openPageBody = main.slice(openPageStart, main.indexOf("function showWindow(", openPageStart));
+  assert.match(openPageBody, /send\("relay:navigate", target, want\)/);
   const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
   assert.match(preload, /openPage: \(page, intent\) =>\s*ipcRenderer\.invoke\("relay:open-page", page, intent\)/);
   assert.match(preload, /callback\(page as never, intent as never\)/);

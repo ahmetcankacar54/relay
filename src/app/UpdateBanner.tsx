@@ -67,7 +67,17 @@ export function UpdateBanner() {
             </Button>
           </>
         ) : status === "manual" ? (
-          notes
+          <>
+            {notes}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void relay.action("update-check", () => relay.api.checkUpdate())}
+            >
+              {t("Tekrar dene", "Retry")}
+            </Button>
+          </>
         ) : undefined
       }
     >

@@ -14,6 +14,8 @@ export const releasePage = (version: string) =>
 /** The first check after start, and the time between checks. */
 export const FIRST_CHECK_MS = 30_000;
 export const CHECK_EVERY_MS = 6 * 3_600_000;
+/** When a check encounters a transient missing asset or network error, retry much sooner. */
+export const RETRY_CHECK_MS = 2 * 60_000;
 const MAX_FEED_BYTES = 1024 * 1024;
 
 const SEMVER = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
@@ -229,7 +231,14 @@ export class AppUpdates {
     this.stop();
     if (!this.saved.autoCheck) return;
     const timer = this.setTimer(() => {
-      void this.check().finally(() => this.schedule(CHECK_EVERY_MS));
+      void this.check().finally(() => {
+        const nextInterval =
+          (this.current.status === "manual" && this.current.manualReason === "no-asset") ||
+          this.current.status === "error"
+            ? RETRY_CHECK_MS
+            : CHECK_EVERY_MS;
+        this.schedule(nextInterval);
+      });
     }, ms);
     timer.unref?.();
     this.timer = timer;

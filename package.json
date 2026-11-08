@@ -27,6 +27,7 @@
     "install:mac": "node scripts/stable-signing.mjs --install",
     "dist:mac:share": "node scripts/stable-signing.mjs --dmg --arch both --output release/share",
     "dist": "node scripts/dist.mjs",
+    "release": "node scripts/publish-release.mjs",
     "postinstall": "electron-builder install-app-deps",
     "format": "prettier --write src electron shared tests scripts"
   },

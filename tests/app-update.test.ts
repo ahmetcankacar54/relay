@@ -9,6 +9,7 @@ import {
   AppUpdates,
   CHECK_EVERY_MS,
   FIRST_CHECK_MS,
+  RETRY_CHECK_MS,
   UPDATE_BUSY,
   compareVersions,
   parseChecksums,
@@ -187,6 +188,23 @@ test("checks start after a short wait, repeat every six hours, and stop when tur
   const next = updates(t, fakeDriver([]), { folder: f.folder });
   next.app.start();
   assert.deepEqual(next.timers, []);
+});
+
+test("a check finding no-asset or an error retries in two minutes, not six hours", async (t) => {
+  const noAsset = updates(t, fakeDriver([{ status: "manual", manualReason: "no-asset" }]));
+  noAsset.app.start();
+  assert.equal(noAsset.timers.at(0)?.ms, FIRST_CHECK_MS);
+  noAsset.timers[0].fn();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(noAsset.timers.at(-1)?.ms, RETRY_CHECK_MS);
+
+  const errorCheck = updates(t, fakeDriver([], new Error("network down")));
+  errorCheck.app.start();
+  errorCheck.timers[0].fn();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(errorCheck.timers.at(-1)?.ms, RETRY_CHECK_MS);
 });
 
 const REQUIREMENT = `identifier "dev.relay.workspace" and certificate leaf = H"32508c2b9b3423e1f36cb671c5f8285bb33f5e0a"`;

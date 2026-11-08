@@ -115,8 +115,8 @@ test("a page opened from the panel on a freed window loads on that page", () => 
     new URL("../electron/main.ts", import.meta.url),
     "utf8",
   );
-  const start = main.indexOf('handle("open-page",');
-  const handler = main.slice(start, main.indexOf('handle("quit"', start));
+  const start = main.indexOf("function openPage(");
+  const handler = main.slice(start, main.indexOf("function showWindow(", start));
   assert.match(handler, /const fresh = !window;\s*showWindow\(intentHash\(target, want\)\);/);
   assert.match(handler, /if \(contents && !fresh\) \{/);
   assert.match(main, /function showWindow\(hash\?: string\) \{[\s\S]*?createWindow\(hash\);/);
