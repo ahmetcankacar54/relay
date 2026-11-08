@@ -130,6 +130,7 @@ const accountSchema = z.object({
   group: z.string().min(1).max(69),
   color: z.string(),
   createdAt: z.iso.datetime(),
+  provider: z.enum(["claude", "codex", "gemini"]).optional(),
   cooldownUntil: z.iso.datetime().optional(),
   planning: accountPlanningSchema.optional(),
   desktop: z
@@ -245,8 +246,10 @@ export const createAccountSchema = z
     name: z.string().trim().min(1).max(64),
     kind: z.enum(["personal", "work"]),
     group: z.string().trim().min(1).max(64).optional(),
+    provider: z.enum(["claude", "codex", "gemini"]).optional(),
   })
   .strict();
+
 
 /** Why a registry write was refused: the file is newer than this build, or older than 0.12. */
 export class StoreWriteRefused extends Error {
@@ -468,7 +471,9 @@ export class Store {
       group: data.kind === "personal" ? "personal" : `work:${data.group || id}`,
       color: ["terra", "olive", "blue", "plum"][this.state.accounts.length % 4],
       createdAt: new Date().toISOString(),
+      provider: data.provider ?? "claude",
     };
+
     privateDir(path.join(this.root, "profiles", id));
     this.update((state) => {
       state.accounts.push(account);

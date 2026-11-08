@@ -28,6 +28,7 @@ export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
+export type AccountProvider = "claude" | "codex" | "gemini";
 export interface AccountPlanning {
   plan: AccountPlan;
   capacityWeight: number;
@@ -39,8 +40,10 @@ export interface Account {
   group: string;
   color: string;
   createdAt: string;
+  provider?: AccountProvider;
   cooldownUntil?: string;
   planning?: AccountPlanning;
+
   desktop?: {
     accountUuid: string;
     orgId: string;
@@ -193,6 +196,7 @@ export interface CreateAccount {
   name: string;
   kind: AccountKind;
   group?: string;
+  provider?: AccountProvider;
 }
 /** What removing an account did. */
 export interface AccountRemoved {

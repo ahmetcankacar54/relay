@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relay v2 Prototip - Akıllı Onboarding & Hot-Switch</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-[#18181b] text-zinc-100 min-h-screen flex flex-col justify-between p-6">
+  <div class="max-w-5xl mx-auto w-full space-y-8">
+    
+    <!-- Header -->
+    <header class="flex items-center justify-between border-b border-zinc-800 pb-5">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400 font-bold text-xl">
+          R
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">Relay Workspace <span class="text-xs bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded-full border border-orange-500/30 ml-2">v0.18.0 Preview</span></h1>
+          <p class="text-xs text-zinc-400">Akıllı Çoklu Hesap Yönetimi & Token-Maxing Proxy Gateway</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-3">
+        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1.5"></span> Proxy Aktif (127.0.0.1:8317)
+        </span>
+        <button class="bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-700 transition">Ayarlar</button>
+      </div>
+    </header>
+
+    <!-- 1. Karşılaştırma: Eski Onboarding vs Yeni Tek Adım Onboarding -->
+    <section class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-zinc-400">1. Onboarding Eziyetini Çözme (3 Giriş Yerine 1 Giriş)</h2>
+        <span class="text-xs text-orange-400">Öneri: Single Sign-In Cascade</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Eski Akış -->
+        <div class="bg-zinc-900/60 border border-red-500/20 rounded-xl p-5 space-y-3">
+          <div class="flex items-center justify-between text-xs font-medium text-red-400">
+            <span>🔴 Mevcut Durum (3 Farklı Oturum Açma)</span>
+            <span>0/4 Bağlantı Karmaşası</span>
+          </div>
+          <ul class="text-xs space-y-2 text-zinc-400">
+            <li class="flex items-center space-x-2">
+              <span class="w-5 h-5 rounded bg-zinc-800 flex items-center justify-center text-zinc-500 text-[10px]">1</span>
+              <span>Claude Desktop açılır, email/kod ile giriş yapılır.</span>
+            </li>
+            <li class="flex items-center space-x-2">
+              <span class="w-5 h-5 rounded bg-zinc-800 flex items-center justify-center text-zinc-500 text-[10px]">2</span>
+              <span>Tarayıcı açılır, Claude Code CLI için OAuth izni verilir.</span>
+            </li>
+            <li class="flex items-center space-x-2">
+              <span class="w-5 h-5 rounded bg-zinc-800 flex items-center justify-center text-zinc-500 text-[10px]">3</span>
+              <span>Chrome açılır, Extension içinden tekrar giriş yapılır.</span>
+            </li>
+          </ul>
+          <p class="text-[11px] text-zinc-500 italic pt-2 border-t border-zinc-800/80">Kullanıcı aynı hesap için 3 ayrı pencerede kimlik doğrulamak zorunda kalır.</p>
+        </div>
+
+        <!-- Yeni Akış -->
+        <div class="bg-zinc-900/90 border border-emerald-500/30 rounded-xl p-5 space-y-3 relative overflow-hidden">
+          <div class="absolute top-0 right-0 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-bl">YENİ ÇÖZÜM</div>
+          <div class="flex items-center justify-between text-xs font-medium text-emerald-400">
+            <span>🟢 Önerilen Akış: Otomatik Türetme</span>
+            <span>Tek Tıkla Hazır</span>
+          </div>
+          <div class="bg-zinc-950 p-3 rounded-lg border border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-medium text-zinc-200">1. Tek Giriş: Claude Masaüstü veya Token</span>
+              <span class="text-emerald-400 text-[10px]">Tamamlandı</span>
+            </div>
+            <p class="text-[11px] text-zinc-400">Oturum açıldığı an `sessionKey` hafızaya alınır.</p>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div class="bg-zinc-800/50 p-2 rounded border border-zinc-800 text-zinc-300 flex items-center space-x-1.5">
+              <span class="text-emerald-400">✓</span> <span>CLI OAuth Token: Otomatik</span>
+            </div>
+            <div class="bg-zinc-800/50 p-2 rounded border border-zinc-800 text-zinc-300 flex items-center space-x-1.5">
+              <span class="text-emerald-400">✓</span> <span>Extension Cookie: Enjekte Edildi</span>
+            </div>
+          </div>
+          <p class="text-[11px] text-emerald-400/80 font-medium pt-1">Kullanıcı tek bir tıkla hesabı bağlar; tüm kanallar otomatik eşitlenir.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Karşılaştırma: Tarayıcıyı Kapatmadan Hot-Switch -->
+    <section class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-zinc-400">2. Tarayıcıyı Kapatmadan Anlık Geçiş (Hot-Switch)</h2>
+        <span class="text-xs text-orange-400">CDP / Companion Bridge</span>
+      </div>
+
+      <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+        <div class="flex items-start justify-between">
+          <div>
+            <h3 class="text-sm font-medium text-zinc-200">Neden Tarayıcı Kapanıyordu?</h3>
+            <p class="text-xs text-zinc-400 mt-1 max-w-2xl">
+              Mevcut Relay kodu diskteki Chromium `Cookies` SQLite dosyasını doğrudan manipüle etmeye çalışıyor. Tarayıcı açıkken dosya kilitli (`SQLITE_BUSY`) olduğu için Relay `osascript` ile tüm Chrome/Brave pencerelerinizi zorla kapatıyordu.
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+          <div class="bg-zinc-950 p-3.5 rounded-lg border border-zinc-800 space-y-2">
+            <span class="text-xs font-semibold text-orange-400">Seçenek A: CDP Protokolü</span>
+            <p class="text-[11px] text-zinc-400 leading-relaxed">
+              Chrome DevTools Portu üzerinden bağlanıp tarayıcıyı hiç kapatmadan `Network.setCookie` ile arka planda anında çerez değiştirilir. Sekmeleriniz açık kalır.
+            </p>
+            <span class="inline-block text-[10px] bg-orange-500/10 text-orange-400 px-2 py-0.5 rounded border border-orange-500/20">Sıfır Kesinti</span>
+          </div>
+
+          <div class="bg-zinc-950 p-3.5 rounded-lg border border-zinc-800 space-y-2">
+            <span class="text-xs font-semibold text-blue-400">Seçenek B: Hafif Köprü Eklenti</span>
+            <p class="text-[11px] text-zinc-400 leading-relaxed">
+              Relay'in yerel WebSocket'ine bağlı minik bir extension. Hesap değişince eklenti `chrome.cookies` API'siyle çerezi günceller. Tarayıcı kapanmaz.
+            </p>
+            <span class="inline-block text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">En Kolay Kurulum</span>
+          </div>
+
+          <div class="bg-zinc-950 p-3.5 rounded-lg border border-zinc-800 space-y-2">
+            <span class="text-xs font-semibold text-purple-400">Seçenek C: İzole Headless Tarayıcı</span>
+            <p class="text-[11px] text-zinc-400 leading-relaxed">
+              Kişisel tarayıcınıza hiç dokunulmaz. Relay arka planda sadece Claude işlemleri için bağımsız bir profil tutar (Agent-Reach modeli).
+            </p>
+            <span class="inline-block text-[10px] bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded border border-purple-500/20">Tam İzolasyon</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Yeni Arayüz Mockup: Çoklu Hesap & Proxy Paneli -->
+    <section class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-zinc-400">3. Yeni Panel & Hesap Listesi Görünümü (Mockup)</h2>
+        <span class="text-xs text-zinc-500">Claude + Codex + Gemini</span>
+      </div>
+
+      <div class="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+        <div class="bg-zinc-950 px-5 py-3 border-b border-zinc-800 flex items-center justify-between text-xs text-zinc-400">
+          <div class="flex items-center space-x-6">
+            <span class="font-medium text-zinc-200">Hesaplar (3 Aktif)</span>
+            <span>Havuz Önceliği: <strong class="text-orange-400">Soonest-Reset-First</strong></span>
+          </div>
+          <button class="bg-orange-600 hover:bg-orange-500 text-white font-medium px-3 py-1 rounded text-xs transition">+ Hesap Ekle</button>
+        </div>
+
+        <div class="divide-y divide-zinc-800/80">
+          <!-- Hesap 1 -->
+          <div class="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition">
+            <div class="flex items-center space-x-3">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm font-semibold text-zinc-100">Work Pro (Ana)</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono border border-zinc-700">CLAUDE</span>
+                  <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.2 rounded border border-emerald-500/20">Aktif</span>
+                </div>
+                <p class="text-xs text-zinc-400 mt-0.5">ahmet@company.com · 5s Pencere: %35 · Sıfırlanma: 1s 45dk sonra</p>
+              </div>
+            </div>
+            <div class="text-right space-y-1">
+              <span class="text-xs font-mono text-zinc-300">Öncelik: #1 (En Yakın Sıfırlanma)</span>
+              <div class="w-32 bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-orange-500 h-full w-[35%]"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hesap 2 -->
+          <div class="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition">
+            <div class="flex items-center space-x-3">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm font-semibold text-zinc-100">Personal Max</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono border border-zinc-700">CLAUDE</span>
+                </div>
+                <p class="text-xs text-zinc-400 mt-0.5">ahmet.personal@gmail.com · 5s Pencere: %12 · Sıfırlanma: 4 gün sonra</p>
+              </div>
+            </div>
+            <div class="text-right space-y-1">
+              <span class="text-xs font-mono text-zinc-300">Öncelik: #2</span>
+              <div class="w-32 bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-orange-500 h-full w-[12%]"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hesap 3 -->
+          <div class="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition">
+            <div class="flex items-center space-x-3">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              <div>
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm font-semibold text-zinc-100">OpenAI Dev Team</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-mono border border-blue-500/30">CODEX</span>
+                  <span class="text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.2 rounded border border-purple-500/20">Çapraz Yedek</span>
+                </div>
+                <p class="text-xs text-zinc-400 mt-0.5">Responses API + WebSocket Hazır · Claude limitinde devreye girer</p>
+              </div>
+            </div>
+            <div class="text-right space-y-1">
+              <span class="text-xs font-mono text-zinc-300">Öncelik: Yedek</span>
+              <div class="w-32 bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-blue-500 h-full w-[8%]"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

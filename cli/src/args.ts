@@ -27,6 +27,10 @@ const OPTIONS = {
   accounts: { type: "string" },
   days: { type: "string" },
   account: { type: "string" },
+  port: { type: "string" },
+  host: { type: "string" },
+  provider: { type: "string" },
+  token: { type: "string" },
 } as const;
 
 const GLOBAL = ["yes", "lang", "no-color", "help", "version"];
@@ -35,7 +39,8 @@ export const COMMAND_FLAGS: Record<string, string[]> = {
   status: ["json"],
   list: ["json"],
   ls: ["json"],
-  add: ["work", "group", "org", "new", "resume", "cancel", "poll-ms"],
+  add: ["work", "group", "org", "new", "resume", "cancel", "poll-ms", "provider", "token"],
+
   switch: [],
   remove: [],
   rename: [],
@@ -46,6 +51,7 @@ export const COMMAND_FLAGS: Record<string, string[]> = {
   run: [],
   tokens: ["json", "days", "account"],
   doctor: ["json"],
+  proxy: ["json", "port", "host"],
   "reset-vault": [],
   help: [],
   __worker: [],

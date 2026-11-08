@@ -13,6 +13,7 @@ const LINES: [string, string, string][] = [
   ["relay usage [<name>]", "5 saatlik ve haftalık limitlerin ne kadarı kullanıldı", "How much of the 5-hour and weekly limits is used"],
   ["relay run <name> [-- …]", "Claude Code’u <name> hesabıyla çalıştır", "Run Claude Code as <name>"],
   ["relay tokens", "Relay.app’in tuttuğu günlük token kullanımı", "Daily token usage recorded by Relay.app"],
+  ["relay proxy [start|status|env]", "Hesapları sırayla kullanan yerel ağ geçidi (--port, --host)", "Local gateway that spreads requests over the accounts (--port, --host)"],
   ["relay doctor", "Kurulumu denetle", "Check the setup"],
   ["relay reset-vault", "Anahtarlık’taki anahtar kaybolduysa kayıtlı girişlerin kasasını sıfırla", "Start the sign-in vault over when its Keychain key is lost"],
 ];

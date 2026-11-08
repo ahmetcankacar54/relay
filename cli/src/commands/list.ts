@@ -33,14 +33,22 @@ export const list: Command = async ({ io, deps, parsed, t }) => {
   }
   const rows = accounts.map((a) => {
     const active = a.id === state.activeProfileId;
+    const providerName = (a.provider ?? "claude").toUpperCase();
     return [
       active ? "*" : " ",
       active ? paint(ctx.color, "bold", a.name) : a.name,
+      providerName,
       kindText(a, t),
       a.desktop ? (a.desktop.email ?? t("kayıtlı", "saved")) : t("—", "—"),
       limitsText(limitsState(a), t),
     ];
   });
-  io.stdout(table(["", t("Ad", "Name"), t("Tür", "Kind"), t("Claude uygulaması", "Claude app"), t("Limit okuma", "Usage sign-in")], rows));
+  io.stdout(
+    table(
+      ["", t("Ad", "Name"), t("Sağlayıcı", "Provider"), t("Tür", "Kind"), t("Claude uygulaması", "Claude app"), t("Limit okuma", "Usage sign-in")],
+      rows,
+    ),
+  );
   return 0;
 };
+
