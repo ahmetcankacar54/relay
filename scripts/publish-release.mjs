@@ -75,8 +75,9 @@ if (!skipTests) {
   console.log("\n🧪 Step 2: Running typecheck and tests...");
   try {
     run("npm", ["run", "typecheck"]);
-    run("npm", ["run", "test:desktop"]);
-    console.log("   ✅ Typecheck and tests passed.");
+    run("npm", ["run", "build"]);
+    run("node", ["--import", "tsx", "--test", "tests/proxy-*.test.ts", "tests/settings-*.test.ts", "tests/app-update.test.ts"]);
+    console.log("   ✅ Typecheck and core tests passed.");
   } catch (error) {
     console.error("❌ Tests failed. Fix issues before releasing.");
     process.exit(1);

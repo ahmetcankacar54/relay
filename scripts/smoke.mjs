@@ -11,13 +11,15 @@ const packagedMain = process.argv.includes("--packaged")
         "release/mac-arm64/Relay.app/Contents/Resources/app.asar/dist-electron/main.cjs",
     )
   : "";
+const env = {
+  ...process.env,
+  RELAY_SMOKE_ROOT: root,
+  RELAY_SMOKE_MAIN: packagedMain,
+};
+delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(electron, ["scripts/smoke.cjs"], {
   stdio: "inherit",
-  env: {
-    ...process.env,
-    RELAY_SMOKE_ROOT: root,
-    RELAY_SMOKE_MAIN: packagedMain,
-  },
+  env,
 });
 let code = await new Promise((resolve, reject) => {
   child.on("error", reject);
