@@ -19,6 +19,8 @@ const ASSETS: Record<string, { name: string; sha256: string }> = {
 };
 
 const secret = () => randomBytes(32).toString("base64url");
+/** The names CLIProxyAPI gives Antigravity credentials: antigravity-<email>.json. */
+const CREDENTIAL_FILE = /^antigravity-[^/\\]+\.json$/;
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function freePort(): Promise<number> {
@@ -203,40 +205,60 @@ export class AntigravityBridge {
     if (!/^[a-zA-Z0-9_-]{8,128}$/.test(state)) throw new Error("Invalid OAuth state");
     const result = await this.management<{ status: string; error?: string; auth_id?: string }>(`/oauth/status?state=${encodeURIComponent(state)}`);
     if (result.status === "wait") return { status: "wait" };
-    if (result.status !== "ok" || !result.auth_id) return { status: "error", error: result.error ?? "Antigravity sign-in failed" };
-    const file = path.basename(result.auth_id);
-    if (file !== result.auth_id || !/^antigravity-[^/\\]+\.json$/.test(file))
-      return { status: "error", error: "Invalid Antigravity credential file" };
-    const credentialPath = path.join(this.authDir, file);
-    const stat = await fsp.lstat(credentialPath);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 65_536)
-      return { status: "error", error: "Invalid Antigravity credential file" };
-    const raw = JSON.parse(await fsp.readFile(credentialPath, "utf8"));
-    if (raw?.type !== "antigravity" || typeof raw.email !== "string" ||
-      typeof raw.refresh_token !== "string" || typeof raw.project_id !== "string")
-      return { status: "error", error: "Incomplete Antigravity OAuth credential" };
-    return { status: "ok", email: raw.email };
+    if (result.status !== "ok") return { status: "error", error: result.error ?? "Antigravity sign-in failed" };
+    // CLIProxyAPI names the saved file only for some flows: its built-in Google sign-in finishes
+    // the session without an auth_id, after it saved antigravity-<email>.json in the auth folder.
+    if (result.auth_id !== undefined) {
+      const file = path.basename(result.auth_id);
+      if (file !== result.auth_id || !CREDENTIAL_FILE.test(file))
+        return { status: "error", error: "Invalid Antigravity credential file" };
+      const email = await this.credentialEmail(file);
+      return email ? { status: "ok", email } : { status: "error", error: "Incomplete Antigravity OAuth credential" };
+    }
+    const email = await this.savedOAuthEmail();
+    return email
+      ? { status: "ok", email }
+      : { status: "error", error: "Google sign-in finished but no Antigravity credential was saved" };
   }
 
   async hasCredential(): Promise<boolean> {
     return (await this.savedOAuthEmail()) !== undefined;
   }
 
+  /** The e-mail of a usable saved credential in the auth folder, if one is there. */
   async savedOAuthEmail(): Promise<string | undefined> {
+    let names: string[];
     try {
-      const names = await fsp.readdir(this.authDir);
-      for (const name of names) {
-        if (!/^antigravity-[^/\\]+\.json$/.test(name)) continue;
-        const file = path.join(this.authDir, name);
-        const stat = await fsp.lstat(file);
-        if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 65_536) continue;
-        const data = JSON.parse(await fsp.readFile(file, "utf8"));
-        if (data?.type === "antigravity" && typeof data.email === "string" &&
-          typeof data.refresh_token === "string" && typeof data.project_id === "string")
-          return data.email;
-      }
-    } catch {}
+      names = await fsp.readdir(this.authDir);
+    } catch {
+      return undefined;
+    }
+    for (const name of names) {
+      if (!CREDENTIAL_FILE.test(name)) continue;
+      const email = await this.credentialEmail(name);
+      if (email) return email;
+    }
     return undefined;
+  }
+
+  /**
+   * A credential file CLIProxyAPI saved: a regular file of the antigravity type with an e-mail
+   * and a refresh token. The Google Cloud project is optional; CLIProxyAPI saves without it
+   * when it cannot be read and looks it up again when it serves a request.
+   */
+  private async credentialEmail(file: string): Promise<string | undefined> {
+    try {
+      const credentialPath = path.join(this.authDir, file);
+      const stat = await fsp.lstat(credentialPath);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 65_536) return undefined;
+      const data = JSON.parse(await fsp.readFile(credentialPath, "utf8"));
+      if (data?.type !== "antigravity" || typeof data.email !== "string" || !data.email.includes("@") ||
+        typeof data.refresh_token !== "string" || !data.refresh_token)
+        return undefined;
+      return data.email;
+    } catch {
+      return undefined;
+    }
   }
 
   stop(): void {
