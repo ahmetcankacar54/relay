@@ -1,8 +1,8 @@
-Relay 0.18.2 — account switcher for the Claude app (Claude Desktop)
+Relay 0.19.0 — account switcher for the Claude app (Claude Desktop)
 Unofficial personal tool; not an Anthropic product.
 
 INSTALL
-1) Relay-0.18.2-arm64.dmg is for Apple silicon Macs (M1 and later).
+1) Relay-0.19.0-arm64.dmg is for Apple silicon Macs (M1 and later).
    Apple menu → About This Mac should say "Chip: Apple M…". Intel Macs are
    not supported by this build. Requires macOS 13 or later.
 2) Open the DMG and drag Relay into the Applications folder. Do not run it
@@ -19,7 +19,7 @@ INSTALL
 5) Relay lives in the menu bar as a panda icon; the panel opens from there.
    "Open Relay" in the panel opens the main window.
 6) Relay opens in Turkish. For English, go to Ayarlar (Settings) →
-   Görünüm (Appearance) → Arayüz dili (Interface language) → English.
+   Genel (General) → Arayüz dili (Interface language) → English.
 
 START WITH OVERVIEW
 The "Before you start" list on the Overview page shows what is missing:
@@ -29,18 +29,18 @@ The "Before you start" list on the Overview page shows what is missing:
   to install the CLI yourself.
 
 ADD AN ACCOUNT
-Accounts → "Add account". Three steps, one confirmation at the start:
-1) Claude sign-in: if an account is open in Claude, "Add this account…",
-   otherwise "Open Claude on sign-in…". Sign in to Claude with that
-   account and open Code once; Relay saves the sign-in by itself. Claude
-   restarts once or twice meanwhile.
-2) Usage access: starts by itself and opens in Relay's own window. Sign in to
-   Claude with the same account and allow access. If Google sign-in does not
-   open, sign in with email or use "Open in browser". You can also choose
-   "Do it later".
-3) Ready: a name, type and group are suggested; change them and click
-   "Save and finish".
-You can rename the account or change its type later from its "…" menu.
+Accounts → "Add account".
+• Found on this Mac: the dialog first lists the sign-ins it found that are not
+  accounts yet (the account open in the Claude app, the Codex CLI's ChatGPT
+  sign-in), ticked. "Add N accounts" adds them all at once with suggested
+  names; rename them later from an account's "…" menu.
+• Another Claude account: "Sign in with another Claude account" reopens the
+  Claude app at its sign-in. Sign in and open Code once; Relay saves the
+  account by itself. Then the Claude Code sign-in starts in Relay's own window:
+  the gateway, the terminal and limit reading use it. "Do it later" skips it,
+  but the gateway cannot use the account until it is done.
+• OpenAI / Codex and Google Antigravity have their own entries under
+  "Add another account".
 
 PROMPTS YOU MAY SEE
 • Keychain: Relay encrypts its saved sign-ins with a key named
@@ -50,15 +50,13 @@ PROMPTS YOU MAY SEE
 • Automation: on the first switch macOS may ask "Relay wants to control
   Claude". Choose Allow; Relay uses it to quit and reopen Claude.
 • Accessibility: not needed with the default settings. Relay asks for it with
-  a button only if you turn on "When the limit is reached" in
-  Settings → Automation, or experimental draft typing in
-  Settings → What comes along.
+  a button only if you turn on "When the limit is reached" on the Switching
+  page, or experimental draft typing under Switching → What comes along.
 
 SETTINGS
-Every setting is in one place: Settings → Automation, What comes along (Code
-history, browser extension, terminal, drafts), Planning, Notifications,
-Appearance, Advanced. The interface language (English or Turkish) is under
-Appearance.
+Switching (when to switch, what comes along, near the limit) and Planning are
+pages of their own in the sidebar, under Accounts. Settings keeps General
+(appearance, the interface language) and Advanced.
 
 GOOD TO KNOW
 • Switching accounts quits and reopens the Claude app. Do not switch while a
@@ -85,21 +83,38 @@ main Claude stays on its account. Close it from the same place.
 
 LOCAL API GATEWAY (PROXY)
 "Proxy & Gateway" in the sidebar runs a local endpoint that spreads Claude
-Code, Codex and other API clients across your saved accounts.
-• Clients sign in with the client API key shown on that page (Authorization:
-  Bearer, x-api-key or x-relay-key). Copy the snippet for your client.
-• When an account answers that it is full (429), overloaded or no longer signed
-  in, the same request is retried on the next account of the same provider, up
-  to three accounts. A full account waits until its limit resets.
-• Codex accounts: "Add account" → Codex. A ChatGPT sign-in from the Codex CLI
-  on this Mac serves the Responses API; Chat Completions need an OpenAI API
-  key, which Relay checks with OpenAI before saving it.
-• Antigravity accounts: "Add account" → Antigravity → "Connect with Google".
+Code and Codex requests across your saved accounts. The page head has the
+on/off switch, the address and the client key; below it are three tabs.
+• Live: the pool in the order the gateway uses it, with each account's 5-hour
+  and weekly limits, requests and cache use. Arrows reorder it (used by "In
+  order"); the switch takes an account out of the pool without removing it.
+  "N% expiring" marks weekly room that resets within two days unused.
+  Recent requests show which account answered and when a full account (429)
+  handed the request to the next one.
+• Tools: "Connect" points Claude Code (~/.claude/settings.json) or the Codex
+  CLI (~/.codex/config.toml) at the gateway; "Disconnect" puts the previous
+  values back. A connected tool follows a new key or port by itself. A tool
+  can only be connected when the pool has a signed-in account of its
+  provider. Note: connecting Claude Code also routes the Claude app's Code
+  tab sessions through the gateway. Other OpenAI-compatible tools are under
+  "Other tools (manual setup)".
+• Rules: which account a new session starts on ("Expiring first" is the
+  default), how long a session stays on its account (prompt cache), and who
+  may connect: this Mac only, your Tailscale network when one is found, or
+  the whole local network.
+• Using a Claude subscription outside Claude Code, from several machines at
+  once, or signing in from a server or VPN can get an account restricted.
+• Codex accounts: a ChatGPT sign-in from the Codex CLI on this Mac serves the
+  Responses API; Chat Completions need an OpenAI API key, which Relay checks
+  with OpenAI before saving it.
 • The terminal command `relay add` adds Claude accounts only.
 
 GOING BACK TO AN OLDER VERSION
-Relay 0.17 opens a 0.18.2 account list read-only. Relay 0.18.0 and 0.18.1
-cannot open it once an Antigravity account was added: stay on 0.18.2 or later.
+0.19.0 keeps the gateway's pool order and connected tools in proxy-pool.json
+beside the account list, so 0.18.2 still opens the account list as it is;
+disconnect the tools first, since 0.18.2 cannot. Relay 0.17 opens it
+read-only. Relay 0.18.0 and 0.18.1 cannot open it once an Antigravity account
+was added.
 
 TROUBLESHOOTING
 Relay → Settings → Advanced → Diagnostics files → "Show in Finder".
