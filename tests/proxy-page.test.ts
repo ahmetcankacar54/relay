@@ -166,6 +166,28 @@ test("the Tools tab connects Claude Code and Codex in one click; other tools are
   );
 });
 
+test("a tool whose provider has no usable account asks for one first, and a bound one is flagged", () => {
+  // Only Claude accounts: Codex cannot be answered.
+  const claudeOnly = status().accounts.filter((a) => a.provider === "claude");
+  const unbound = [
+    { id: "claude-code" as const, installed: true, bound: false, stale: false, file: "~/.claude/settings.json" },
+    { id: "codex" as const, installed: true, bound: false, stale: false, file: "~/.codex/config.toml" },
+  ];
+  const html = tab(relayFor(status({ accounts: claudeOnly, clients: unbound })), "araclar");
+  assert.match(html, /data-client="claude-code"[\s\S]*?>Bağla</);
+  assert.match(html, /data-client="codex"[\s\S]*?Havuzda Codex hesabı yok[\s\S]*?data-slot="add-first"[\s\S]*?Önce Codex hesabı ekle/);
+  // Out of the pool or signed out counts as no account too.
+  const outOfPool = claudeOnly.map((a) => ({ ...a, inPool: false }));
+  assert.match(tab(relayFor(status({ accounts: outOfPool, clients: unbound })), "araclar"), /Önce Claude hesabı ekle/);
+  // Already bound with nothing to answer it: named above the tabs, with both ways out.
+  const bound = unbound.map((c) => (c.id === "codex" ? { ...c, bound: true } : c));
+  const flagged = tab(relayFor(status({ accounts: claudeOnly, clients: bound })), "araclar");
+  assert.match(flagged, /Codex CLI bu geçide bağlı ama havuzda kullanılabilir Codex hesabı yok/);
+  assert.match(flagged, /Bağlı · kullanılabilir Codex hesabı yok/);
+  // While the gateway is off, the off notice speaks instead.
+  assert.doesNotMatch(tab(relayFor(status({ running: false, accounts: claudeOnly, clients: bound })), "araclar"), /kullanılabilir Codex hesabı yok: istekleri/);
+});
+
 test("the Rules tab holds the strategies, the session time and who may connect, with Tailscale when found", () => {
   const html = tab(relayFor(status({ routingStrategy: "balanced", tailscaleAddress: "100.101.12.34" })), "kurallar");
   assert.match(html, /role="radiogroup"[^>]*aria-label="Yönlendirme stratejisi"/);

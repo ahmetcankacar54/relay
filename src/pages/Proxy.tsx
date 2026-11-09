@@ -64,6 +64,16 @@ const AFFINITY_SECONDS = [300, 900, 3_600] as const;
 const TAB_KEY = "relay.proxy.tab";
 
 const CLIENT_NAMES: Record<ProxyClientId, string> = { "claude-code": "Claude Code", codex: "Codex CLI" };
+/** The provider whose accounts answer a client's requests. */
+const CLIENT_PROVIDER: Record<ProxyClientId, "claude" | "codex"> = { "claude-code": "claude", codex: "codex" };
+const PROVIDER_NAMES: Record<"claude" | "codex", string> = { claude: "Claude", codex: "Codex" };
+
+/**
+ * How many accounts could answer this client now: in the pool, signed in, of its provider.
+ * A client bound with none would only get "no account" errors.
+ */
+export const usableFor = (accounts: readonly ProxyAccountStatus[], id: ProxyClientId) =>
+  accounts.filter((a) => a.inPool && a.signedIn && (a.provider ?? "claude") === CLIENT_PROVIDER[id]).length;
 
 /** The gateway's state, read on mount, after every Relay change, and every few seconds. */
 function useProxyStatus() {
@@ -698,7 +708,14 @@ function ToolsTab({
         />
         <ul className="grid pt-1">
           {(status.clients ?? []).map((client) => {
-            const word = clientWord(client, t);
+            const usable = usableFor(status.accounts, client.id);
+            const provider = PROVIDER_NAMES[CLIENT_PROVIDER[client.id]];
+            const word: ReturnType<typeof clientWord> =
+              usable === 0 && !client.blocked
+                ? client.bound
+                  ? { tone: "warn", text: t(`Bağlı · kullanılabilir ${provider} hesabı yok`, `Connected · no usable ${provider} account`) }
+                  : { tone: "off", text: t(`Havuzda ${provider} hesabı yok`, `No ${provider} account in the pool`) }
+                : clientWord(client, t);
             return (
               <li
                 key={client.id}
@@ -722,7 +739,15 @@ function ToolsTab({
                   <StatusDot tone={word.tone} hollow={word.tone === "off"} />
                   {word.text}
                 </span>
-                {client.bound ? (
+                {!client.bound && usable === 0 ? (
+                  // Bound with no account, every request would fail: the account comes first.
+                  <Button asChild size="sm" variant="outline">
+                    <a href={intentHash("hesaplar", "ekle")} data-slot="add-first">
+                      <Plus />
+                      {t(`Önce ${provider} hesabı ekle`, `Add a ${provider} account first`)}
+                    </a>
+                  </Button>
+                ) : client.bound ? (
                   <Button variant="outline" size="sm" disabled={disabled} onClick={() => onUnbind(client.id)}>
                     <Unlink />
                     {t("Ayır", "Disconnect")}
@@ -1002,6 +1027,10 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
   const bind = (id: ProxyClientId) => void action("proxy-client", async () => setStatus(await api.proxyBindClient(id)));
   const unbind = (id: ProxyClientId) => void action("proxy-client", async () => setStatus(await api.proxyUnbindClient(id)));
   const boundOff = !status?.running ? (status?.clients ?? []).filter((c) => c.bound) : [];
+  // Bound, running, and nothing of its provider can answer: its requests all fail.
+  const boundEmpty = status?.running
+    ? (status.clients ?? []).filter((c) => c.bound && usableFor(status.accounts, c.id) === 0)
+    : [];
   const risky = (status?.accounts ?? []).filter((a) => a.inPool && quotaAtRisk(a));
   const signedOut = (status?.accounts ?? []).filter((a) => a.inPool && !a.signedIn);
   return (
@@ -1029,6 +1058,27 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
           onToggle={toggle}
           onRegenerate={() => void action("proxy-key", async () => setStatus(await api.proxyRegenerateKey()))}
         />
+        {boundEmpty.map((client) => (
+          <Attention
+            key={client.id}
+            tone="crit"
+            action={
+              <span className="flex flex-wrap gap-2">
+                <Button asChild size="sm">
+                  <a href={intentHash("hesaplar", "ekle")}>{t("Hesap ekle", "Add account")}</a>
+                </Button>
+                <Button size="sm" variant="outline" disabled={disabled} onClick={() => unbind(client.id)}>
+                  {t("Ayır", "Disconnect")}
+                </Button>
+              </span>
+            }
+          >
+            {t(
+              `${CLIENT_NAMES[client.id]} bu geçide bağlı ama havuzda kullanılabilir ${PROVIDER_NAMES[CLIENT_PROVIDER[client.id]]} hesabı yok: istekleri başarısız olur.`,
+              `${CLIENT_NAMES[client.id]} is connected to this gateway, but the pool has no usable ${PROVIDER_NAMES[CLIENT_PROVIDER[client.id]]} account: its requests fail.`,
+            )}
+          </Attention>
+        ))}
         {boundOff.length > 0 && (
           <Attention
             tone="crit"
