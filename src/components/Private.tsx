@@ -44,7 +44,7 @@ export function usePrivacyBlur(): [boolean, (on: boolean) => void] {
  * rectangle. A mask, applied after the filter, fades the blurred text out inside its own box
  * instead, so no edge is ever sharp.
  */
-const FADE = "linear-gradient(90deg, transparent, #000 0.5rem, #000 calc(100% - 0.5rem), transparent), linear-gradient(transparent, #000 0.2rem, #000 calc(100% - 0.2rem), transparent)";
+const FADE = "linear-gradient(90deg, transparent, black 0.5rem, black calc(100% - 0.5rem), transparent), linear-gradient(transparent, black 0.2rem, black calc(100% - 0.2rem), transparent)";
 const SOFT_EDGES: CSSProperties = {
   maskImage: FADE,
   maskComposite: "intersect",

@@ -1,4 +1,5 @@
 import http from "node:http";
+import { HUB_PREFIX, hubManagement } from "./hub-management";
 import net from "node:net";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Account, AccountUsage } from "../../../shared/types";
@@ -85,6 +86,7 @@ export class ProxyServer {
   private antigravityResolver?: AntigravityResolver;
   private usageProvider: UsageProvider;
   private onCredentialRejected?: (accountId: string) => void;
+  private hubFetch?: typeof fetch;
 
   constructor(options: {
     config?: Partial<ProxyConfig>;
@@ -94,6 +96,8 @@ export class ProxyServer {
     /** The upstream refused the account's token: a cached copy must be dropped. */
     onCredentialRejected?: (accountId: string) => void;
     now?: () => number;
+    /** Sends the usage dashboards' provider requests (tests replace it). */
+    hubFetch?: typeof fetch;
     /** Where requests go instead of the real services (tests, regional endpoints). */
     upstreams?: {
       anthropicUrl?: string;
@@ -108,6 +112,7 @@ export class ProxyServer {
     this.antigravityResolver = options.antigravityResolver;
     this.usageProvider = options.usageProvider;
     this.onCredentialRejected = options.onCredentialRejected;
+    this.hubFetch = options.hubFetch;
 
     this.sessionCache = new ProxySessionCache({
       ttlSeconds: this.config.affinityTtlSeconds,
@@ -360,6 +365,34 @@ export class ProxyServer {
               metrics: this.getMetrics(),
             }),
       );
+      return;
+    }
+
+    // CLIProxyAPI's management calls, as usage dashboards (T3 Code's hubs) make them.
+    if (pathname.startsWith(HUB_PREFIX)) {
+      let body: unknown;
+      if (req.method === "POST") {
+        const raw = await this.readBody(req, res);
+        if (!raw) return;
+        try {
+          body = raw.length ? JSON.parse(raw.toString("utf8")) : undefined;
+        } catch {
+          sendJsonError(res, 400, "invalid_request_error", "The body is not JSON");
+          return;
+        }
+      }
+      const answer = await hubManagement(req.method ?? "GET", pathname, body, {
+        accounts: () => this.usageProvider().accounts,
+        credential: (account) => this.credentialResolver(account),
+        clearCooldown: (id) => this.router.clearCooldown(id),
+        ...(this.hubFetch ? { fetch: this.hubFetch } : {}),
+      });
+      if (!answer) {
+        sendJsonError(res, 404, "not_found", `Management call '${pathname}' is not supported by Relay`);
+        return;
+      }
+      res.writeHead(answer.status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(answer.body));
       return;
     }
 

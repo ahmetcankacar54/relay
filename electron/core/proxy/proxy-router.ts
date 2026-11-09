@@ -74,6 +74,11 @@ export class ProxyRouter {
     );
   }
 
+  /** Lets the account be picked again at once (a usage dashboard cleared its cooldown). */
+  clearCooldown(accountId: string): void {
+    this.cooldowns.delete(accountId);
+  }
+
   private cooldownEnd(account: Account, now: number): number {
     const local = this.cooldowns.get(account.id);
     if (local !== undefined && local <= now) this.cooldowns.delete(account.id);
