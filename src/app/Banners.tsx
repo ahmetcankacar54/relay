@@ -16,7 +16,7 @@ import {
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
-import { displayedIssue, renewalIssue } from "@/lib/account-health";
+import { displayedIssue, isClaudeAccount, renewalIssue } from "@/lib/account-health";
 import { AutomationBanner } from "../features/AutomationControl";
 import { RelayErrorAlert } from "./RelayErrorAlert";
 import { UpdateBanner } from "./UpdateBanner";
@@ -47,6 +47,8 @@ export function reconnectIssues(
 ): ReconnectIssue[] {
   const result: ReconnectIssue[] = [];
   for (const account of accounts) {
+    // Only a Claude account has a Claude Code sign-in to renew; the others' buttons would open it.
+    if (!isClaudeAccount(account)) continue;
     const u = usage[account.id];
     if (!account.auth?.loggedIn) {
       // Read through the Claude app's sign-in, only the Keychain can need the user here.

@@ -550,6 +550,8 @@ export interface RelayAPI {
   pollAntigravityOAuth(input: AntigravityOAuthStart): Promise<AntigravityOAuthPoll>;
   /** Stops a pending Antigravity sign-in and removes the account it was creating. */
   cancelAntigravityOAuth(input: AntigravityOAuthStart): Promise<void>;
+  /** Finishes a pending Antigravity sign-in from the localhost address the browser ended on. */
+  submitAntigravityCallback(input: AntigravityOAuthStart & { url: string }): Promise<void>;
   updatePlanning(patch: Partial<PlanningSettings>): Promise<PlanningSettings>;
   refreshUsage(
     accountId: string,

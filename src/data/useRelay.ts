@@ -323,6 +323,8 @@ function useRelayState(
   };
   const startCli = (a: Account) =>
     action(`cli:${a.id}`, async () => {
+      // Never a Claude sign-in for a Codex or Antigravity account (main refuses it too).
+      if ((a.provider ?? "claude") !== "claude") return;
       setDismissed(undefined);
       setAuthId(a.id);
       await api.login(a.id);

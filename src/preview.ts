@@ -794,6 +794,7 @@ export const previewApi: RelayAPI = {
     return { accountId: account.id, state: "preview-oauth-state" };
   },
   cancelAntigravityOAuth: async () => {},
+  submitAntigravityCallback: async () => {},
   pollAntigravityOAuth: async ({ accountId }) => {
     const account = accounts.find((a) => a.id === accountId)!;
     account.auth = { loggedIn: true, checkedAt: new Date().toISOString(),

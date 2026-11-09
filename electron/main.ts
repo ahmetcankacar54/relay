@@ -2584,6 +2584,15 @@ function bindIPC() {
       error: say("Antigravity girişi iptal edildi.", "Antigravity sign-in was cancelled."),
     });
   });
+  handle("antigravity-oauth-callback", async (raw) => {
+    const input = z
+      .object({ accountId: z.uuid(), state: z.string().min(8).max(128), url: z.string().min(1).max(4_096) })
+      .strict()
+      .parse(raw);
+    if (pendingAntigravityOAuth.get(input.accountId) !== input.state)
+      throw new Error(say("Antigravity girişi artık beklemede değil.", "Antigravity sign-in is no longer pending."));
+    await antigravityBridge(input.accountId).submitCallback(input.state, input.url);
+  });
   handle("antigravity-oauth-poll", async (raw) => {
     const input = z.object({ accountId: z.uuid(), state: z.string().min(8).max(128) }).strict().parse(raw);
     return pollAntigravityOAuth(input.accountId, input.state);

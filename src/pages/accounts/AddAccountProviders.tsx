@@ -450,6 +450,21 @@ export function AntigravityOAuthForm({
   const { api, action, busy } = useRelay();
   const [pending, setPending] = useState<AntigravityOAuthStart>();
   const [oauthError, setOauthError] = useState<string>();
+  // Where the browser ended up, pasted when it could not reach Relay by itself.
+  const [pasted, setPasted] = useState("");
+  const [finishing, setFinishing] = useState(false);
+  const finish = () => {
+    if (!pending || !pasted.trim()) return;
+    setOauthError(undefined);
+    setFinishing(true);
+    void api
+      .submitAntigravityCallback({ ...pending, url: pasted.trim() })
+      .then(
+        () => setPasted(""),
+        (error) => setOauthError(errorMessage(error)),
+      )
+      .finally(() => setFinishing(false));
+  };
   // Escape, a click outside or another provider card unmounts the form: a sign-in still
   // waiting then is cancelled, so no half-made account blocks the next one. Main ignores a
   // sign-in that already finished.
@@ -508,6 +523,38 @@ export function AntigravityOAuthForm({
         <LoaderCircle className="size-4 animate-spin" />
         {t("Tarayıcıda Google girişini tamamla…", "Finish Google sign-in in your browser…")}
       </p>}
+      {pending && (
+        <form
+          data-slot="antigravity-paste"
+          className="grid gap-1.5 rounded-lg border border-dashed px-3 py-2.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            finish();
+          }}
+        >
+          <Label htmlFor="antigravity-callback" className="text-xs">
+            {t(
+              "Tarayıcı “localhost:51121” ile başlayan bir sayfada kaldıysa adresini buraya yapıştır",
+              "If the browser stopped on a page starting with “localhost:51121”, paste its address here",
+            )}
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="antigravity-callback"
+              className="font-mono text-xs"
+              spellCheck={false}
+              autoComplete="off"
+              placeholder="http://localhost:51121/oauth-callback?state=…"
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+            />
+            <Button type="submit" size="sm" variant="outline" disabled={finishing || !pasted.trim()}>
+              {finishing && <LoaderCircle className="animate-spin" />}
+              {t("Tamamla", "Finish")}
+            </Button>
+          </div>
+        </form>
+      )}
       <div className="flex justify-end gap-2">
         <Button
           type="button"

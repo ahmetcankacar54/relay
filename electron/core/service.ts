@@ -209,7 +209,10 @@ export class Service {
     return this.store.account(id);
   }
   async login(id: string) {
-    this.store.account(id);
+    // The Claude Code sign-in is a Claude account's: a Codex or Antigravity account signs in
+    // with its own provider, never through Claude's.
+    if ((this.store.account(id).provider ?? "claude") !== "claude")
+      throw new Error("Bu hesap bir Claude hesabı değil; kendi sağlayıcısıyla bağlanır.");
     if (
       this.runner
         .list()

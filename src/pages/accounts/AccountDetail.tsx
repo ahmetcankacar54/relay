@@ -635,6 +635,14 @@ export function AccountDetailBody({
                   state={ringState(usage, now ?? Date.now())}
                 />
               </div>
+            ) : !claude ? (
+              // No Claude sign-in to offer: Relay has no limit reader for this provider yet.
+              <p data-slot="no-limit-reader" className="mt-2 text-xs text-muted-foreground">
+                {t(
+                  `Relay ${providerLabel(a.provider)} hesaplarının limitini okuyamıyor; ağ geçidi bu hesabı limit bilgisi olmadan kullanır.`,
+                  `Relay cannot read ${providerLabel(a.provider)} limits; the gateway uses this account without them.`,
+                )}
+              </p>
             ) : (
             <UsageCard
               usage={usage}

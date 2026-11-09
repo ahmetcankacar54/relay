@@ -83,6 +83,7 @@ const api: RelayAPI = {
   startAntigravityOAuth: (input) => ipcRenderer.invoke("relay:antigravity-oauth-start", input),
   pollAntigravityOAuth: (input) => ipcRenderer.invoke("relay:antigravity-oauth-poll", input),
   cancelAntigravityOAuth: (input) => ipcRenderer.invoke("relay:antigravity-oauth-cancel", input),
+  submitAntigravityCallback: (input) => ipcRenderer.invoke("relay:antigravity-oauth-callback", input),
   updatePlanning: (patch: unknown) =>
     ipcRenderer.invoke("relay:update-planning", patch),
   refreshUsage: (id, allowPrompt) =>

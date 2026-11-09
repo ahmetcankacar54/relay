@@ -452,6 +452,14 @@ export class UsageManager {
       (this.generations.get(account.id) ?? 0) === generation;
     try {
       if (!current()) return this.view(this.store.account(account.id));
+      // Before any Claude sign-in is read: a Codex or Antigravity profile has none, and a read
+      // that fails on it would report "signed out" and offer a Claude sign-in for it.
+      if (account.provider && account.provider !== "claude") {
+        // Neither the OpenAI API nor Gemini API supplies Claude-style five-hour
+        // and seven-day quota windows. An invented 0% usage reading misleads
+        // routing and makes the account look verified.
+        throw new UsageError("unsupported", undefined, "provider quota endpoint unavailable");
+      }
       if (this.source(account) === "desktop") {
         const raw = await this.desktopUsage!.read(account, allowPrompt);
         if (!current()) return this.view(this.store.account(account.id));
@@ -467,12 +475,6 @@ export class UsageManager {
         allowPrompt,
       );
       if (!current()) return this.view(this.store.account(account.id));
-      if (account.provider && account.provider !== "claude") {
-        // Neither the OpenAI API nor Gemini API supplies Claude-style five-hour
-        // and seven-day quota windows. An invented 0% usage reading misleads
-        // routing and makes the account look verified.
-        throw new UsageError("unsupported", undefined, "provider quota endpoint unavailable");
-      }
       let refreshed = false;
       let renewalRequired = false;
       const pendingRefresh = this.refreshCredentialPending?.(account) ?? false;

@@ -68,6 +68,24 @@ export type AntigravityOAuthState =
   | { status: "ok"; email: string }
   | { status: "error"; error: string };
 
+/**
+ * The callback address the browser was sent back to, checked before it goes anywhere: a
+ * loopback /oauth-callback carrying this sign-in's state and a code. Anything else is refused.
+ */
+export function antigravityCallbackUrl(address: string, state: string): string {
+  let url: URL;
+  try {
+    url = new URL(address.trim());
+  } catch {
+    throw new Error("Not a sign-in address");
+  }
+  if (url.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(url.hostname) || url.pathname !== "/oauth-callback")
+    throw new Error("Not the Antigravity sign-in address");
+  if (url.searchParams.get("state") !== state) throw new Error("This address belongs to another sign-in");
+  if (!url.searchParams.get("code")) throw new Error("The address has no sign-in code");
+  return url.toString();
+}
+
 /** One isolated CLIProxyAPI process and OAuth store per Relay Antigravity account. */
 export class AntigravityBridge {
   private child?: ChildProcess;
@@ -139,10 +157,16 @@ export class AntigravityBridge {
     throw new Error("CLIProxyAPI could not start on the local port");
   }
 
-  private async management<T>(route: string): Promise<T> {
+  private async management<T>(route: string, body?: unknown): Promise<T> {
     await this.start();
     const response = await fetch(`${this.endpoint!.url}/v8/management${route}`, {
-      headers: { Authorization: `Bearer ${this.managementKey}` },
+      ...(body === undefined
+        ? {}
+        : { method: "POST", body: JSON.stringify(body) }),
+      headers: {
+        Authorization: `Bearer ${this.managementKey}`,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) throw new Error(`Antigravity OAuth service returned ${response.status}`);
@@ -150,11 +174,29 @@ export class AntigravityBridge {
   }
 
   async beginOAuth(): Promise<{ state: string; url: string }> {
-    const result = await this.management<{ status: string; state?: string; url?: string }>("/oauth/auth-url?provider=antigravity");
+    // Google sends the browser back to localhost:51121, the port Antigravity's client is
+    // registered with. CLIProxyAPI only listens there (a forwarder to its own callback route)
+    // when asked with is_webui; without it the sign-in ends on a page nothing answers.
+    const result = await this.management<{ status: string; state?: string; url?: string }>(
+      "/oauth/auth-url?provider=antigravity&is_webui=true",
+    );
     if (result.status !== "ok" || !result.state || !result.url) throw new Error("Antigravity OAuth could not start");
     const url = new URL(result.url);
     if (url.protocol !== "https:" || url.hostname !== "accounts.google.com") throw new Error("Unexpected Antigravity sign-in address");
     return { state: result.state, url: result.url };
+  }
+
+  /**
+   * Finishes a sign-in from the address the browser was sent back to, when it could not reach
+   * the callback port by itself (pasted by the user). Only that sign-in's own address is sent on.
+   */
+  async submitCallback(state: string, address: string): Promise<void> {
+    const url = antigravityCallbackUrl(address, state);
+    const result = await this.management<{ status: string; error?: string }>("/oauth/callback", {
+      provider: "antigravity",
+      redirect_url: url,
+    });
+    if (result.status !== "ok") throw new Error(result.error ?? "Antigravity sign-in could not be finished");
   }
 
   async pollOAuth(state: string): Promise<AntigravityOAuthState> {
