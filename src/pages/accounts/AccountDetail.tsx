@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AppWindow, Check, CircleAlert, Link2, Globe2, LoaderCircle, Monitor, MoreHorizontal, SquareTerminal } from "lucide-react";
+import { AppWindow, Check, CircleAlert, Link2, Globe2, KeyRound, LoaderCircle, Monitor, MoreHorizontal, Network, SquareTerminal } from "lucide-react";
 import { BackIcon, RefreshIcon } from "@/components/icons";
 import type { Account, ExtensionStatus, RelaySettings } from "../../../shared/types";
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Disclosure } from "@/components/Disclosure";
 import { StatusDot } from "@/components/StatusDot";
+import { ProviderBadge } from "@/components/ProviderBadge";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow, windowAccounts } from "@/data/selectors";
@@ -28,7 +29,7 @@ import { CliFlowPanel } from "@/app/ConnectionPanels";
 import { PageFrame } from "@/app/PageFrame";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { routeHash } from "@/app/routes";
-import { accountHealth, usageSignInStatus } from "@/lib/account-health";
+import { accountHealth, isClaudeAccount, usageSignInStatus } from "@/lib/account-health";
 import { accountUuids, extensionGuide } from "@/lib/extension-ui";
 import { cn } from "@/lib/utils";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
@@ -41,7 +42,7 @@ import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
 import { PlanEditor } from "../../features/PlanEditor";
 import { RowActionItems, rowActions, WindowBadge } from "./AccountsTable";
-import { avatarClass, groupName, planLabel } from "./accountLabels";
+import { avatarClass, groupName, planLabel, providerLabel } from "./accountLabels";
 
 /** `#/hesaplar/<id>`: an account's own page, in place of the list. */
 export const accountHash = (id: string) =>
@@ -124,6 +125,7 @@ export function AccountDetail({
       }
       badge={
         <>
+          <ProviderBadge provider={a.provider} full />
           {plan && <Badge variant="secondary">{plan}</Badge>}
           {inWindow && <WindowBadge t={t} />}
           <span
@@ -152,6 +154,14 @@ export function AccountDetail({
             >
               {primary.note}
             </span>
+          )}
+          {!isClaudeAccount(a) && (
+            <Button variant="outline" asChild>
+              <a href={routeHash("proxy")}>
+                <Network />
+                {t("Proxy & Gateway", "Proxy & Gateway")}
+              </a>
+            </Button>
           )}
           {primary && (
             <Button
@@ -541,7 +551,12 @@ export function AccountDetailBody({
   const terminal = useTerminalStatus({ check: macOS, initial: terminalStatus });
   // Only what a switch needs counts: the Claude app sign-in and the usage sign-in. The extension
   // and the terminal are optional and say their own state on their rows.
-  const connections = [!!a.desktop, signIn.tone === "ok"];
+  const claude = isClaudeAccount(a);
+  const gateway = desktop?.proxyStatus;
+  // The gateway lists every account; only one with a sign-in can take requests.
+  const signedIn = a.auth?.loggedIn === true;
+  const inPool = !!gateway?.running && signedIn;
+  const connections = claude ? [!!a.desktop, signIn.tone === "ok"] : [signedIn, inPool];
   const ready = connections.filter(Boolean).length;
   const history = historySources(a, accounts, settings);
   return (
@@ -644,6 +659,47 @@ export function AccountDetailBody({
               )}
             />
             <ConnectionList>
+            {!claude && (
+              <>
+                <ConnectionRow
+                  icon={<KeyRound />}
+                  title={t("Giriş", "Sign-in")}
+                  purpose={t(
+                    `Ağ geçidinin ${providerLabel(a.provider)} isteklerinde kullandığı anahtar ya da oturum.`,
+                    `The key or session the gateway uses for ${providerLabel(a.provider)} requests.`,
+                  )}
+                  tone={signedIn ? "ok" : "warn"}
+                  status={
+                    signedIn
+                      ? t(`Kayıtlı${a.auth?.email ? ` · ${a.auth.email}` : ""}`, `Saved${a.auth?.email ? ` · ${a.auth.email}` : ""}`)
+                      : t("Giriş yok: hesabı yeniden ekle", "Not signed in: add the account again")
+                  }
+                />
+                <ConnectionRow
+                  icon={<Network />}
+                  title={t("Proxy Gateway", "Proxy Gateway")}
+                  purpose={t(
+                    "İstekleri bu hesaba da dağıtan yerel ağ geçidi.",
+                    "The local gateway that spreads requests over this account too.",
+                  )}
+                  tone={inPool ? "ok" : "off"}
+                  status={
+                    gateway?.running
+                      ? inPool
+                        ? t("Havuzda", "In the pool")
+                        : t("Girişi olmadığı için havuzda değil", "Not in the pool: no sign-in")
+                      : t("Proxy kapalı", "Gateway off")
+                  }
+                  action={
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={routeHash("proxy")}>{t("Aç", "Open")}</a>
+                    </Button>
+                  }
+                />
+              </>
+            )}
+            {claude && (
+            <>
             <ConnectionRow
               icon={<Monitor />}
               title={t("Claude uygulaması", "Claude app")}
@@ -757,6 +813,8 @@ export function AccountDetailBody({
             {/* The extension's sign-in is kept only on macOS; the browser preview shows the row too. */}
             {macOS && <ExtensionConnection account={a} extension={extension} />}
             {macOS && <TerminalConnection account={a} terminal={terminal} />}
+            </>
+            )}
             </ConnectionList>
           </Card>
           {a.desktop && (
@@ -781,6 +839,7 @@ export function AccountDetailBody({
             <CardTitle title={t("Hesap", "Account")} />
             <dl className="-mx-1 grid text-sm">
               {[
+                [t("Sağlayıcı", "Provider"), providerLabel(a.provider)],
                 [t("E-posta", "Email"), a.desktop?.email ?? a.auth?.email ?? "—"],
                 [t("Kuruluş", "Organization"), a.auth?.orgName ?? "—"],
                 [
@@ -801,19 +860,21 @@ export function AccountDetailBody({
               ))}
             </dl>
           </Card>
-          <Card className={cardClass}>
-            <CardTitle title={t("Planlama", "Planning")} />
-            <PlanEditor
-              account={a}
-              disabled={!!busy}
-              t={t}
-              update={(input) =>
-                void action(`plan:${a.id}`, () =>
-                  api.updateAccountPlanning(a.id, input),
-                )
-              }
-            />
-          </Card>
+          {claude && (
+            <Card className={cardClass}>
+              <CardTitle title={t("Planlama", "Planning")} />
+              <PlanEditor
+                account={a}
+                disabled={!!busy}
+                t={t}
+                update={(input) =>
+                  void action(`plan:${a.id}`, () =>
+                    api.updateAccountPlanning(a.id, input),
+                  )
+                }
+              />
+            </Card>
+          )}
         </div>
       </div>
     </div>

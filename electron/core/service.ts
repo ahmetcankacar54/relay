@@ -190,6 +190,9 @@ export class Service {
   }
   private async readAuth(id: string): Promise<Account> {
     const account = this.store.account(id);
+    // Only a Claude profile has a Claude Code sign-in to ask about; another provider's
+    // sign-in is set when it is connected, and the Claude CLI would only call it signed out.
+    if ((account.provider ?? "claude") !== "claude") return account;
     let auth: NonNullable<Account["auth"]>;
     try {
       auth = await readProfileAuth(
@@ -224,7 +227,9 @@ export class Service {
     // Official CLI status can prompt for legacy Keychain access and initialize
     // an OAuth rotation. Startup is never an interactive authentication action.
     if (platform === "darwin") return;
-    const ids = this.store.state.accounts.map((a) => a.id);
+    const ids = this.store.state.accounts
+      .filter((a) => (a.provider ?? "claude") === "claude")
+      .map((a) => a.id);
     await Promise.all(
       Array.from({ length: Math.min(3, ids.length) }, async () => {
         for (let id; (id = ids.shift());) {

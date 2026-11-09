@@ -130,6 +130,7 @@ import { runQuotaStarter } from "./core/routine-runner";
 import { readProfileIdentity } from "./core/profile-identity";
 import type {
   Account,
+  AntigravityOAuthPoll,
   DesktopState,
   FleetContinuationState,
   ProxyStatus,
@@ -142,6 +143,12 @@ import {
   generateProxyKey,
   proxyConfigurePatch,
 } from "./core/proxy/proxy-status";
+import {
+  detectProviders,
+  executeOneClickCascade,
+} from "./core/provider-discovery";
+import { AntigravityBridge } from "./core/antigravity-bridge";
+import { readCodexCredential } from "./core/provider-credentials";
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
 import {
@@ -669,6 +676,25 @@ else {
         (url) => shell.openExternal(url),
         (accountId, kind) => acquireProfileLock(profileLocks(), accountId, kind),
       );
+      // A browser login may finish after its dialog closed or Relay restarted.
+      // Recover only credentials that CLIProxyAPI actually saved and validated.
+      for (const account of service.store.state.accounts) {
+        if (account.provider !== "antigravity" || account.auth?.loggedIn) continue;
+        const email = await antigravityBridge(account.id).savedOAuthEmail();
+        // Never signed in and nothing saved: a sign-in Relay quit during; nothing can finish it.
+        if (!email && !account.auth) {
+          await discardPendingAntigravity(account.id);
+          continue;
+        }
+        if (!email) continue;
+        service.store.update((state) => {
+          const saved = state.accounts.find((item) => item.id === account.id);
+          if (saved) saved.auth = {
+            loggedIn: true, checkedAt: new Date().toISOString(), email,
+            subscription: "Antigravity OAuth",
+          };
+        });
+      }
       // The usage sign-in opens in Relay's own window per account; Windows keeps the browser.
       if (process.platform !== "win32")
         service.auth.browser = authWindows(
@@ -1815,6 +1841,92 @@ async function separateWindows(): Promise<SeparateWindows | undefined> {
  * stop and restart runs one after the other, so a quick toggle can never leave two servers.
  */
 let proxyServer: ProxyServer | undefined;
+const antigravityBridges = new Map<string, AntigravityBridge>();
+const pendingAntigravityOAuth = new Map<string, string>();
+const antigravityOAuthOutcomes = new Map<string, AntigravityOAuthPoll>();
+const antigravityOAuthPolls = new Map<string, Promise<AntigravityOAuthPoll>>();
+const antigravityOAuthTimers = new Map<string, ReturnType<typeof setInterval>>();
+let antigravityStarting = false;
+
+function antigravityBridge(accountId: string): AntigravityBridge {
+  const account = service.store.account(accountId);
+  if (account.provider !== "antigravity") throw new Error(say("Antigravity hesabı değil.", "Not an Antigravity account."));
+  let bridge = antigravityBridges.get(accountId);
+  if (!bridge) {
+    bridge = new AntigravityBridge(
+      service.store.profile(accountId),
+      path.join(app.getPath("userData"), "tools"),
+    );
+    antigravityBridges.set(accountId, bridge);
+  }
+  return bridge;
+}
+
+async function discardPendingAntigravity(accountId: string): Promise<void> {
+  pendingAntigravityOAuth.delete(accountId);
+  const timer = antigravityOAuthTimers.get(accountId);
+  if (timer) clearInterval(timer);
+  antigravityOAuthTimers.delete(accountId);
+  antigravityBridges.get(accountId)?.stop();
+  antigravityBridges.delete(accountId);
+  service.store.update((state) => {
+    state.accounts = state.accounts.filter((account) => account.id !== accountId);
+  });
+  await fsp.rm(path.join(service.store.root, "profiles", accountId), { recursive: true, force: true });
+  broadcastChanged();
+}
+
+async function pollAntigravityOAuth(accountId: string, state: string): Promise<AntigravityOAuthPoll> {
+  const completed = antigravityOAuthOutcomes.get(accountId);
+  if (completed) return completed;
+  if (pendingAntigravityOAuth.get(accountId) !== state)
+    throw new Error(say("Antigravity girişi artık beklemede değil.", "Antigravity sign-in is no longer pending."));
+  const inFlight = antigravityOAuthPolls.get(accountId);
+  if (inFlight) return inFlight;
+  const work = (async (): Promise<AntigravityOAuthPoll> => {
+    const status = await antigravityBridge(accountId).pollOAuth(state);
+    if (status.status === "wait") return status;
+    if (status.status === "error") {
+      await discardPendingAntigravity(accountId);
+      const result: AntigravityOAuthPoll = status;
+      antigravityOAuthOutcomes.set(accountId, result);
+      return result;
+    }
+    const duplicate = service.store.state.accounts.find((a) =>
+      a.id !== accountId && a.provider === "antigravity" &&
+      a.auth?.email?.toLowerCase() === status.email.toLowerCase());
+    if (duplicate) {
+      await discardPendingAntigravity(accountId);
+      const result: AntigravityOAuthPoll = { status: "error", error: say("Bu Antigravity hesabı zaten bağlı.", "This Antigravity account is already connected.") };
+      antigravityOAuthOutcomes.set(accountId, result);
+      return result;
+    }
+    service.store.update((savedState) => {
+      const account = savedState.accounts.find((a) => a.id === accountId);
+      if (!account) throw new Error(say("OAuth girişi sırasında hesap kayboldu.", "Account disappeared during OAuth sign-in."));
+      account.auth = {
+        loggedIn: true, checkedAt: new Date().toISOString(), email: status.email,
+        subscription: "Antigravity OAuth",
+      };
+    });
+    pendingAntigravityOAuth.delete(accountId);
+    const timer = antigravityOAuthTimers.get(accountId);
+    if (timer) clearInterval(timer);
+    antigravityOAuthTimers.delete(accountId);
+    broadcastChanged();
+    const result: AntigravityOAuthPoll = {
+      status: "ok",
+      result: {
+        account: service.store.account(accountId),
+        layers: { desktop: "skipped", usage: "skipped", terminal: "skipped", extensionAndProxy: "done" },
+      },
+    };
+    antigravityOAuthOutcomes.set(accountId, result);
+    return result;
+  })();
+  antigravityOAuthPolls.set(accountId, work);
+  try { return await work; } finally { antigravityOAuthPolls.delete(accountId); }
+}
 /** Why the gateway is not running although it is turned on, shown on its page. */
 let proxyError: string | undefined;
 let proxyQueue: Promise<unknown> = Promise.resolve();
@@ -1827,7 +1939,6 @@ const serializeProxy = <T>(task: () => Promise<T>): Promise<T> => {
 };
 const proxySettings = (): ProxyConfig => ({
   ...DEFAULT_PROXY_CONFIG,
-  allowCrossProviderFallback: false,
   ...service.store.state.settings.proxy,
 });
 const saveProxySettings = (config: ProxyConfig) => {
@@ -1860,12 +1971,23 @@ async function startProxy(): Promise<void> {
   const credentials = new Map<string, { token: string; until: number }>();
   const server = new ProxyServer({
     config,
+    antigravityResolver: async (account) => {
+      if (account.provider !== "antigravity" || !account.auth?.loggedIn) return undefined;
+      const bridge = antigravityBridge(account.id);
+      if (!(await bridge.hasCredential())) return undefined;
+      await bridge.start();
+      return bridge.endpoint;
+    },
     credentialResolver: async (account) => {
       const cached = credentials.get(account.id);
       if (cached && cached.until > Date.now()) return cached.token;
       credentials.delete(account.id);
       try {
-        const credential = await readCredential(service.store.profile(account.id), false);
+        const credential =
+          account.provider === "codex"
+            ? await readCodexCredential(service.store.profile(account.id))
+            : await readCredential(service.store.profile(account.id), false);
+        if (!credential) return undefined;
         // An expired token would only earn a 401; leave the account to the others.
         if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) return undefined;
         credentials.set(account.id, {
@@ -1877,6 +1999,7 @@ async function startProxy(): Promise<void> {
         return undefined;
       }
     },
+    onCredentialRejected: (accountId) => credentials.delete(accountId),
     // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
     usageProvider: () => ({
       accounts: service.store.state.accounts,
@@ -1904,11 +2027,23 @@ async function stopProxy(): Promise<void> {
   proxyServer = undefined;
   await server?.stop().catch(() => {});
 }
-/** Saves `next`; a running gateway restarts with it, and the old settings return if it cannot. */
+/**
+ * Saves `next`. A running gateway takes a new routing strategy, session time or client key at
+ * once, keeping its open streams and sessions; only a new host or port restarts it, and the old
+ * settings return if it cannot start there.
+ */
 async function applyProxyConfig(next: ProxyConfig): Promise<void> {
   const previous = proxySettings();
   saveProxySettings(next);
   if (!proxyServer) return;
+  if (next.host === previous.host && next.port === previous.port) {
+    proxyServer.updateConfig({
+      routingStrategy: next.routingStrategy,
+      affinityTtlSeconds: next.affinityTtlSeconds,
+      apiKey: next.apiKey,
+    });
+    return;
+  }
   await stopProxy();
   try {
     await startProxy();
@@ -2291,6 +2426,83 @@ function bindIPC() {
       return proxyStatus();
     }),
   );
+  handle("detect-providers", () =>
+    detectProviders(service.store.state.accounts, {
+      claudeDesktopRoot: desktop.root,
+    }),
+  );
+  handle("one-click-connect", async (input) => {
+    const result = await executeOneClickCascade(input, {
+      store: service.store,
+      desktopRoot: desktop.root,
+      captureDesktop: (profileId, orgId) =>
+        manualDesktopLock(() => desktop.capture(profileId, orgId)),
+      beginDesktopLogin: (profileId) =>
+        manualDesktopLock(() => desktop.beginLogin(profileId)),
+      armAutoCapture: (profileId) => autoCapture?.arm(profileId),
+      checkTerminal: () => desktop.checkTerminal(),
+      checkExtension: (profileId) => desktop.checkExtension(profileId),
+      refreshUsage: (profileId) => usage.refresh(profileId),
+    });
+    void tray?.update();
+    broadcastChanged();
+    return result;
+  });
+  handle("antigravity-oauth-start", async (raw) => {
+    // Checked and claimed before any await: a double click must not start two sign-ins on the
+    // helper's one callback port.
+    if (pendingAntigravityOAuth.size || antigravityStarting)
+      throw new Error(say("Önce açık Antigravity girişini tamamla.", "Finish the pending Antigravity sign-in first."));
+    const input = createAccountSchema.parse({ ...raw, provider: "antigravity" });
+    antigravityStarting = true;
+    const account = (() => {
+      try {
+        return service.store.create(input);
+      } catch (error) {
+        antigravityStarting = false;
+        throw error;
+      }
+    })();
+    try {
+      const bridge = antigravityBridge(account.id);
+      const { state, url } = await bridge.beginOAuth();
+      pendingAntigravityOAuth.set(account.id, state);
+      await shell.openExternal(url);
+      const startedAt = Date.now();
+      const timer = setInterval(() => {
+        if (Date.now() - startedAt > 10 * 60_000) {
+          void discardPendingAntigravity(account.id).then(() => {
+            antigravityOAuthOutcomes.set(account.id, { status: "error", error: say("Antigravity girişi zaman aşımına uğradı.", "Antigravity sign-in timed out.") });
+          });
+          return;
+        }
+        void pollAntigravityOAuth(account.id, state).catch(() => {});
+      }, 1500);
+      timer.unref();
+      antigravityOAuthTimers.set(account.id, timer);
+      broadcastChanged();
+      return { accountId: account.id, state };
+    } catch (error) {
+      await discardPendingAntigravity(account.id);
+      throw error;
+    } finally {
+      antigravityStarting = false;
+    }
+  });
+  handle("antigravity-oauth-cancel", async (raw) => {
+    const input = z.object({ accountId: z.uuid(), state: z.string().min(8).max(128) }).strict().parse(raw);
+    // Only the sign-in that is still pending; a finished one is an account like any other.
+    if (pendingAntigravityOAuth.get(input.accountId) !== input.state) return;
+    await discardPendingAntigravity(input.accountId);
+    antigravityOAuthOutcomes.set(input.accountId, {
+      status: "error",
+      error: say("Antigravity girişi iptal edildi.", "Antigravity sign-in was cancelled."),
+    });
+  });
+  handle("antigravity-oauth-poll", async (raw) => {
+    const input = z.object({ accountId: z.uuid(), state: z.string().min(8).max(128) }).strict().parse(raw);
+    return pollAntigravityOAuth(input.accountId, input.state);
+  });
   handle("desktop-snapshot", async () => ({
     ...(await desktop.cachedSnapshot()),
     proxyStatus: proxyStatus(),
@@ -2563,6 +2775,12 @@ function bindIPC() {
       );
     return manualDesktopLock(() =>
       service.transaction(async () => {
+        antigravityBridges.get(account)?.stop();
+        antigravityBridges.delete(account);
+        pendingAntigravityOAuth.delete(account);
+        const oauthTimer = antigravityOAuthTimers.get(account);
+        if (oauthTimer) clearInterval(oauthTimer);
+        antigravityOAuthTimers.delete(account);
         const removed = await service.remove(account, {
           vault: path.join(app.getPath("userData"), "desktop-vault"),
           locks: profileLocks(),
@@ -2813,6 +3031,7 @@ app.on("will-quit", () => {
   // Here, not in "before-quit": that one can still be vetoed (a busy switch, a running
   // terminal), which would leave Relay open with its gateway down.
   void proxyServer?.stop();
+  for (const bridge of antigravityBridges.values()) bridge.stop();
   appUpdates?.stop();
   keeperAbort.abort();
   if (trayTimer) clearInterval(trayTimer);

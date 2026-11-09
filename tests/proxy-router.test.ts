@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   NoEligibleAccountError,
+  NoProviderAccountError,
   ProxyRouter,
 } from "../electron/core/proxy/proxy-router";
 import { ProxySessionCache } from "../electron/core/proxy/proxy-session-cache";
@@ -214,53 +215,52 @@ test("ProxyRouter strict-priority follows registry order and skips used-up accou
   );
 });
 
-test("ProxyRouter filters by provider and falls back across providers only when opted-in", () => {
+test("ProxyRouter keeps a request on its provider and says when that provider has no account", () => {
   const router = new ProxyRouter();
-  const claudeAcc: Account = {
-    ...makeAccount("claude-1", "Claude 1"),
-    provider: "claude",
-  };
-  const codexAcc: Account = {
-    ...makeAccount("codex-1", "Codex 1"),
-    provider: "codex",
-  };
+  const claudeAcc: Account = { ...makeAccount("claude-1", "Claude 1"), provider: "claude" };
+  const codexAcc: Account = { ...makeAccount("codex-1", "Codex 1"), provider: "codex" };
+  const both = [claudeAcc, codexAcc];
 
-  // 1. Requesting "claude" chooses Claude account
-  const selClaude = router.selectAccount(
-    undefined,
-    [claudeAcc, codexAcc],
-    {},
-    "claude",
-  );
-  assert.equal(selClaude.account.id, "claude-1");
-  assert.equal(selClaude.requiresTranslation, false);
+  assert.equal(router.selectAccount(undefined, both, {}, "claude").account.id, "claude-1");
+  assert.equal(router.selectAccount(undefined, both, {}, "codex").account.id, "codex-1");
 
-  // 2. Requesting "codex" chooses Codex account
-  const selCodex = router.selectAccount(
-    undefined,
-    [claudeAcc, codexAcc],
-    {},
-    "codex",
-  );
-  assert.equal(selCodex.account.id, "codex-1");
-  assert.equal(selCodex.requiresTranslation, false);
-
-  // 3. By default, fallback across providers is disabled to protect client stream compatibility
+  // The only Claude account cooling down: the request waits, it never goes to Codex.
   router.markUnavailable("claude-1", 60_000);
   assert.throws(
-    () => router.selectAccount(undefined, [claudeAcc, codexAcc], {}, "claude"),
-    NoEligibleAccountError,
+    () => router.selectAccount(undefined, both, {}, "claude"),
+    (err: unknown) => err instanceof NoEligibleAccountError && (err.retryAfterSeconds ?? 0) > 0,
   );
+  // Codex is not blocked by Claude's cooldown.
+  assert.equal(router.selectAccount(undefined, both, {}, "codex").account.id, "codex-1");
+  // No Antigravity account at all is a different answer from "cooling down".
+  assert.throws(
+    () => router.selectAccount(undefined, both, {}, "antigravity"),
+    NoProviderAccountError,
+  );
+});
 
-  // 4. When allowCrossProviderFallback is enabled, it falls back
-  const fallbackRouter = new ProxyRouter({ allowCrossProviderFallback: true });
-  fallbackRouter.markUnavailable("claude-1", 60_000);
-  const selFallback = fallbackRouter.selectAccount(
-    undefined,
-    [claudeAcc, codexAcc],
-    {},
-    "claude",
+test("ProxyRouter skips accounts already tried for the request", () => {
+  const router = new ProxyRouter({ strategy: "strict-priority" });
+  const a = makeAccount("a", "A");
+  const b = makeAccount("b", "B");
+  assert.equal(router.selectAccount(undefined, [a, b], {}).account.id, "a");
+  assert.equal(router.selectAccount(undefined, [a, b], {}, undefined, new Set(["a"])).account.id, "b");
+  assert.throws(
+    () => router.selectAccount(undefined, [a, b], {}, undefined, new Set(["a", "b"])),
+    NoProviderAccountError,
   );
-  assert.equal(selFallback.account.id, "codex-1");
-  assert.equal(selFallback.requiresTranslation, true);
+});
+
+test("soonest-reset ranks accounts with unknown limits after accounts with known room", () => {
+  const now = Date.now();
+  const router = new ProxyRouter({ strategy: "soonest-reset", now: () => now });
+  const unknown = makeAccount("unknown", "Never read");
+  const known = makeAccount("known", "Read");
+  const usage: Record<string, AccountUsage> = {
+    known: { accountId: "known", status: "ready", stale: false, sevenDay: { usedPercent: 40, resetsAt: new Date(now + 86_400_000).toISOString() } } as AccountUsage,
+  };
+  assert.equal(router.selectAccount(undefined, [unknown, known], usage).account.id, "known");
+  // With no room left on the known one, the unknown one is tried instead of the full one.
+  usage.known = { accountId: "known", status: "ready", stale: false, sevenDay: { usedPercent: 99, resetsAt: new Date(now + 86_400_000).toISOString() } } as AccountUsage;
+  assert.equal(router.selectAccount(undefined, [unknown, known], usage).account.id, "unknown");
 });

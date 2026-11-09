@@ -76,6 +76,11 @@ const api: RelayAPI = {
   proxyToggle: (enabled) => ipcRenderer.invoke("relay:proxy-toggle", enabled),
   proxyConfigure: (input) => ipcRenderer.invoke("relay:proxy-configure", input),
   proxyRegenerateKey: () => ipcRenderer.invoke("relay:proxy-regenerate-key"),
+  detectProviders: () => ipcRenderer.invoke("relay:detect-providers"),
+  oneClickConnect: (input) => ipcRenderer.invoke("relay:one-click-connect", input),
+  startAntigravityOAuth: (input) => ipcRenderer.invoke("relay:antigravity-oauth-start", input),
+  pollAntigravityOAuth: (input) => ipcRenderer.invoke("relay:antigravity-oauth-poll", input),
+  cancelAntigravityOAuth: (input) => ipcRenderer.invoke("relay:antigravity-oauth-cancel", input),
   updatePlanning: (patch: unknown) =>
     ipcRenderer.invoke("relay:update-planning", patch),
   refreshUsage: (id, allowPrompt) =>

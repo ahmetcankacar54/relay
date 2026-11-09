@@ -6,40 +6,47 @@ import {
 } from "../../../shared/continuation-target-ranking";
 import { ProxySessionCache } from "./proxy-session-cache";
 
+export type ProxyProvider = "claude" | "codex" | "antigravity";
+
 export interface ProxyRouterOptions {
   strategy?: RoutingStrategy;
   sessionCache?: ProxySessionCache;
   now?: () => number;
-  allowCrossProviderFallback?: boolean;
 }
 
 export interface RouterSelection {
   account: Account;
   sessionAffinityHit: boolean;
-  reason: string;
-  requiresTranslation?: boolean;
 }
 
-/** Every account is cooling down (or none exists); `retryAfterSeconds` is when the first is back. */
+/** Every account of the provider is cooling down; `retryAfterSeconds` is when the first is back. */
 export class NoEligibleAccountError extends Error {
   constructor(readonly retryAfterSeconds?: number) {
-    super("No eligible accounts available (all in cooldown or empty)");
+    super("Every account for this provider is cooling down");
   }
 }
 
-const remainingPercent = (usage: AccountUsage | undefined): number =>
-  Math.max(
-    0,
-    100 -
-      Math.max(
-        usage?.fiveHour?.usedPercent ?? 0,
-        usage?.sevenDay?.usedPercent ?? 0,
-      ),
+/** Relay has no account of the requested provider (or every one was already tried). */
+export class NoProviderAccountError extends Error {
+  constructor(readonly provider: ProxyProvider | undefined) {
+    super(
+      provider
+        ? `No ${provider} account is available in Relay`
+        : "No account is available in Relay",
+    );
+  }
+}
+
+/** How much of the fuller window is left, 0–100; undefined while no limit has been read. */
+const remainingPercent = (usage: AccountUsage | undefined): number | undefined => {
+  const used = [usage?.fiveHour?.usedPercent, usage?.sevenDay?.usedPercent].filter(
+    (p): p is number => typeof p === "number" && Number.isFinite(p),
   );
+  return used.length ? Math.max(0, 100 - Math.max(...used)) : undefined;
+};
 
 export class ProxyRouter {
   readonly sessionCache: ProxySessionCache;
-  readonly allowCrossProviderFallback: boolean;
   private strategy: RoutingStrategy;
   private readonly now: () => number;
   /** Cooldowns the gateway itself sets after a 429/401/403, by account id (ms timestamp). */
@@ -49,8 +56,6 @@ export class ProxyRouter {
     this.sessionCache = options.sessionCache ?? new ProxySessionCache();
     this.strategy = options.strategy ?? "soonest-reset";
     this.now = options.now ?? Date.now;
-    this.allowCrossProviderFallback =
-      options.allowCrossProviderFallback ?? false;
   }
 
   setStrategy(strategy: RoutingStrategy): void {
@@ -82,50 +87,37 @@ export class ProxyRouter {
   }
 
   /**
-   * Selects the most appropriate account for this request.
-   * First checks session affinity: if pinned account is still healthy, keeps it (preserving KV cache).
-   * Otherwise selects the best candidate according to strategy (e.g. soonest-reset).
-   * If targetProvider is given and all its accounts are exhausted, falls back to another eligible provider only when allowed.
+   * Selects the account for one request: only the requested provider's accounts are considered
+   * (a request never crosses to another provider's protocol), minus those in `exclude` (already
+   * tried for this request) and those cooling down. A pinned session keeps its account while it
+   * has quota, preserving the upstream prompt cache; otherwise the strategy picks.
    */
   selectAccount(
     sessionKey: string | undefined,
     accounts: readonly Account[],
     usageMap: Record<string, AccountUsage | undefined>,
-    targetProvider?: "claude" | "codex" | "gemini",
+    targetProvider?: ProxyProvider,
+    exclude: ReadonlySet<string> = new Set(),
   ): RouterSelection {
     const now = this.now();
-
-    // Filter accounts not in cooldown
-    const ends = new Map(
-      accounts.map((acc) => [acc.id, this.cooldownEnd(acc, now)]),
+    const ofProvider = accounts.filter(
+      (a) =>
+        !exclude.has(a.id) &&
+        (!targetProvider || (a.provider ?? "claude") === targetProvider),
     );
-    const allEligible = accounts.filter(
+    if (ofProvider.length === 0) throw new NoProviderAccountError(targetProvider);
+
+    const ends = new Map(
+      ofProvider.map((acc) => [acc.id, this.cooldownEnd(acc, now)]),
+    );
+    const eligibleAccounts = ofProvider.filter(
       (acc) => (ends.get(acc.id) ?? 0) <= now,
     );
-
-    if (allEligible.length === 0) {
+    if (eligibleAccounts.length === 0) {
       const soonest = Math.min(...ends.values());
       throw new NoEligibleAccountError(
-        Number.isFinite(soonest)
-          ? Math.max(1, Math.ceil((soonest - now) / 1000))
-          : undefined,
+        Math.max(1, Math.ceil((soonest - now) / 1000)),
       );
-    }
-
-    const providerOf = (a: Account) => a.provider ?? "claude";
-    const matchesProvider = (a: Account) =>
-      !targetProvider || !a.provider || a.provider === targetProvider;
-    let eligibleAccounts = allEligible.filter(matchesProvider);
-
-    let requiresTranslation = false;
-    // Cross-provider fallback: only if explicitly allowed, preventing unexpected stream format mismatches
-    if (eligibleAccounts.length === 0 && targetProvider) {
-      if (this.allowCrossProviderFallback) {
-        eligibleAccounts = allEligible;
-        requiresTranslation = true;
-      } else {
-        throw new NoEligibleAccountError(undefined);
-      }
     }
 
     // 1. Session Affinity Check (KV cache preservation)
@@ -144,14 +136,7 @@ export class ProxyRouter {
               (usage.sevenDay?.usedPercent ?? 0) < 100);
 
           if (hasRemainingQuota) {
-            return {
-              account: candidate,
-              sessionAffinityHit: true,
-              reason: `Preserved session affinity for ${sessionKey}`,
-              requiresTranslation: targetProvider
-                ? providerOf(candidate) !== targetProvider
-                : false,
-            };
+            return { account: candidate, sessionAffinityHit: true };
           } else {
             // Account exhausted its quota, evict affinity
             this.sessionCache.evictAccount(candidate.id);
@@ -169,24 +154,17 @@ export class ProxyRouter {
     );
 
     let selected: Account;
-    let reason: string;
-
     if (this.strategy === "soonest-reset") {
       selected = this.pickSoonestReset(candidates, now);
-      reason = requiresTranslation
-        ? `Fallback across providers to ${providerOf(selected)} account with soonest reset`
-        : "Prioritized account with soonest quota reset (token burn optimization)";
     } else if (this.strategy === "strict-priority") {
+      // An account whose limits were never read counts as usable: it is tried, not skipped.
       selected =
         eligibleAccounts.find(
-          (acc) => remainingPercent(usageMap[acc.id]) > 5,
+          (acc) => (remainingPercent(usageMap[acc.id]) ?? 100) > 5,
         ) ?? eligibleAccounts[0];
-      reason =
-        "Prioritized the first account in registry order with quota left";
     } else {
       const ranked = rankContinuationTargets(candidates, { now });
       selected = ranked[0]?.account ?? eligibleAccounts[0];
-      reason = "Prioritized account with highest available quota capacity";
     }
 
     // Update affinity
@@ -194,14 +172,7 @@ export class ProxyRouter {
       this.sessionCache.set(sessionKey, selected.id);
     }
 
-    return {
-      account: selected,
-      sessionAffinityHit: false,
-      reason,
-      requiresTranslation: targetProvider
-        ? providerOf(selected) !== targetProvider
-        : false,
-    };
+    return { account: selected, sessionAffinityHit: false };
   }
 
   /**
@@ -216,7 +187,8 @@ export class ProxyRouter {
     interface ScoredCandidate {
       candidate: ContinuationTargetCandidate;
       resetTime: number; // ms timestamp
-      remainingPercent: number;
+      /** Undefined when no limit was read: such an account ranks after those with known room. */
+      remainingPercent: number | undefined;
     }
 
     const scored: ScoredCandidate[] = candidates.map((cand) => {
@@ -245,18 +217,17 @@ export class ProxyRouter {
       };
     });
 
-    // Filter to candidates with usable quota (> 5%)
-    const usable = scored.filter((s) => s.remainingPercent > 5);
-    const pool = usable.length > 0 ? usable : scored;
+    // Known room first (> 5% left), then accounts whose limits are unknown, then the rest.
+    const known = scored.filter((s) => (s.remainingPercent ?? 0) > 5);
+    const unknown = scored.filter((s) => s.remainingPercent === undefined);
+    const pool = known.length ? known : unknown.length ? unknown : scored;
 
-    // Sort:
-    // 1. Soonest resetTime (ascending, so earlier expiration comes first)
-    // 2. Higher remaining percent if reset times are close
+    // Soonest reset first: unused quota on an account resetting soon is lost, then more room.
     pool.sort((a, b) => {
       if (a.resetTime !== b.resetTime) {
         return a.resetTime - b.resetTime;
       }
-      return b.remainingPercent - a.remainingPercent;
+      return (b.remainingPercent ?? 0) - (a.remainingPercent ?? 0);
     });
 
     return pool[0].candidate.account;

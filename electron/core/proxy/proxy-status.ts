@@ -10,7 +10,7 @@ export const PROXY_KEY_PREFIX = "relay-sec-";
 export const generateProxyKey = (): string =>
   `${PROXY_KEY_PREFIX}${randomBytes(32).toString("base64url")}`;
 
-/** What Settings → Proxy may change: where the gateway listens and whether it crosses providers. */
+/** What the Proxy Gateway page may change: where the gateway listens, its routing strategy and session time. */
 export const proxyConfigurePatch = z
   .object({
     port: z.number().int().min(1).max(65_535),
@@ -20,7 +20,8 @@ export const proxyConfigurePatch = z
       .min(1)
       .max(255)
       .refine((host) => !/[\s/@?#]/.test(host), "Not a host address"),
-    allowCrossProviderFallback: z.boolean(),
+    routingStrategy: z.enum(["soonest-reset", "balanced", "strict-priority"]),
+    affinityTtlSeconds: z.number().int().min(10).max(3_600),
   })
   .strict()
   .partial();
@@ -46,7 +47,7 @@ export function resetInMinutes(usage: AccountUsage | undefined, now: number): nu
 }
 
 /**
- * What the Proxy settings page shows. `cacheHitRate` is a percentage (0–100) of the prompt tokens
+ * What the Proxy Gateway page shows. `cacheHitRate` is a percentage (0–100) of the prompt tokens
  * the gateway's answers read from the upstream cache. Without a gateway the counters are zero.
  */
 export function buildProxyStatus(input: {
@@ -64,6 +65,8 @@ export function buildProxyStatus(input: {
     port: config.port,
     host: config.host,
     ...(config.apiKey ? { clientApiKey: config.apiKey } : {}),
+    routingStrategy: config.routingStrategy,
+    affinityTtlSeconds: config.affinityTtlSeconds,
     stats: {
       totalRequests: metrics?.totalRequests ?? 0,
       activeRequests: metrics?.activeRequests ?? 0,
@@ -77,13 +80,14 @@ export function buildProxyStatus(input: {
       return {
         id: account.id,
         name: account.name,
+        provider: account.provider ?? "claude",
         ...(account.auth?.email ? { email: account.auth.email } : {}),
         active: input.running && metrics?.lastAccountId === account.id,
+        signedIn: account.auth?.loggedIn === true,
         ...(percent === undefined ? {} : { quotaPercent: percent }),
         ...(reset === undefined ? {} : { resetInMinutes: reset }),
       };
     }),
-    allowCrossProviderFallback: config.allowCrossProviderFallback === true,
     ...(input.error ? { error: input.error } : {}),
   };
 }

@@ -16,6 +16,7 @@ import type { OverviewRow } from "@/data/selectors";
 import { intentHash, type Destination } from "@/app/routes";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { accountHash } from "../accounts/AccountDetail";
+import { isClaudeAccount } from "@/lib/account-health";
 
 export function AccountsCard({
   go,
@@ -153,9 +154,11 @@ export function AccountsCard({
             accountRowSubtitle(row, t, language, zone, now, waitingFor(row))
           }
           // An account in its own window is not switched to: its sign-in is there until it closes.
-          canSwitch={(row) => row.state !== "not-linked" && !inWindows.has(row.account.id)}
+          canSwitch={(row) =>
+            isClaudeAccount(row.account) && row.state !== "not-linked" && !inWindows.has(row.account.id)
+          }
           blocked={(row) =>
-            row.state !== "not-linked" && switchBlocked
+            isClaudeAccount(row.account) && row.state !== "not-linked" && switchBlocked
               ? t("Şu an geçilemez", "Cannot switch right now")
               : undefined
           }

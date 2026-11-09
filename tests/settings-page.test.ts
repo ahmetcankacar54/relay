@@ -74,7 +74,7 @@ test("the system group offers the diagnostics files, and say which ones to send"
   assert.match(preload, /showDiagnostics: \(\) => ipcRenderer\.invoke\("relay:show-diagnostics"\)/);
 });
 
-test("Settings has five tabs: switching, planning, proxy, general, advanced", () => {
+test("Settings has four tabs: switching, planning, general, advanced; the gateway has its own page", () => {
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
@@ -85,7 +85,7 @@ test("Settings has five tabs: switching, planning, proxy, general, advanced", ()
   const tabs = /<div[^>]*role="tablist"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
   assert.deepEqual(
     [...tabs.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]),
-    ["Geçiş", "Planlama", "Proxy &amp; Gateway", "Genel", "Gelişmiş"],
+    ["Geçiş", "Planlama", "Genel", "Gelişmiş"],
   );
   for (const re of [
     /Tema/, /Sistem/, /Açık/, /Koyu/, /Arayüz dili/, /Türkçe/, /English/,

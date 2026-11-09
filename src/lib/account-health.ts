@@ -21,6 +21,8 @@ export interface AccountHealth {
 }
 
 type T = (tr: string, en: string) => string;
+/** Codex, Antigravity and Gemini accounts sign in with their own key or OAuth, never through the Claude app. */
+export const isClaudeAccount = (account: Account) => (account.provider ?? "claude") === "claude";
 type Words = readonly [tr: string, en: string];
 
 /** An account with no usage reading yet, in the Accounts page, the Overview and the panel. */
@@ -82,6 +84,10 @@ export function usageSignInStatus(
   t: T,
 ): { tone: AccountHealth["tone"]; label: string } {
   if (waiting) return { tone: "warn", label: t(...APPROVE) };
+  if (!isClaudeAccount(account))
+    return account.auth?.loggedIn
+      ? { tone: "ok", label: t("Kimlik bilgisi kayıtlı", "Credential saved") }
+      : { tone: "warn", label: t("Yok", "None") };
   const state = signInState(account, usage);
   const [tr, en] = SIGN_IN_WORDS[state];
   switch (state) {
@@ -104,6 +110,36 @@ export function usageSignInStatus(
 }
 
 /**
+ * A Codex, Antigravity or Gemini account: no Claude app or Claude Code sign-in applies, so only its own
+ * sign-in, a cooldown and the freshness of its limits count. A signed-in account is ready for the gateway.
+ */
+function otherProviderHealth(
+  account: Account,
+  usage: AccountUsage | undefined,
+  context: { active: boolean; desktopRunning: boolean; waiting: boolean },
+  t: T,
+): AccountHealth {
+  const signedIn = account.auth?.loggedIn === true;
+  const detail = t(
+    `Kimlik bilgisi: ${signedIn ? "Kayıtlı" : "Yok"} · Sağlayıcı kotası: Kullanılamıyor`,
+    `Credential: ${signedIn ? "Saved" : "None"} · Provider quota: Unavailable`,
+  );
+  const result = (tone: AccountHealth["tone"], [tr, en]: Words): AccountHealth => ({
+    tone,
+    label: t(tr, en),
+    detail,
+  });
+  if (context.waiting) return result("warn", APPROVE);
+  if (!signedIn) return result("off", ["Giriş yok", "Not signed in"]);
+  const cooldown = account.cooldownUntil ? Date.parse(account.cooldownUntil) : NaN;
+  if (Number.isFinite(cooldown) && cooldown > Date.now())
+    return result("warn", ["Bekleme süresinde", "Cooling down"]);
+  if (usage && usage.issue !== "unsupported" && (usage.stale || usage.status === "error"))
+    return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
+  return result("ok", ["Gateway için kayıtlı", "Saved for gateway"]);
+}
+
+/**
  * The one status an account shows, in the table and in the details sheet. The first problem found wins,
  * in this order: a browser approval in progress, no Claude app sign-in, a usage sign-in that must be
  * renewed (or belongs to another account), a locked Keychain, a connection to renew, no usage sign-in,
@@ -116,6 +152,7 @@ export function accountHealth(
   context: { active: boolean; desktopRunning: boolean; waiting: boolean },
   t: T,
 ): AccountHealth {
+  if (!isClaudeAccount(account)) return otherProviderHealth(account, usage, context, t);
   const state = signInState(account, usage);
   const renewal = renewalIssue(usage);
   const running = context.active && context.desktopRunning;

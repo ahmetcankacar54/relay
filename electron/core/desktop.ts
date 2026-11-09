@@ -1041,7 +1041,6 @@ export class DesktopManager {
       const outcome = await switcher.run({
         setting: mode && setting.mode !== "off" ? { ...setting, mode } : setting,
         mayQuit,
-        cdpHotSwitch: this.store.state.settings.cdpHotSwitch !== false,
         target: accountUuids(target),
         known: this.store.state.accounts.flatMap(accountUuids),
         ...this.extensionAccounts(),

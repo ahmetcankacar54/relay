@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { LimitBars } from "@/components/LimitBars";
 import { Panda } from "@/components/Panda";
 import { StatusDot } from "@/components/StatusDot";
+import { ProviderBadge } from "@/components/ProviderBadge";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { pendingFlow } from "@/data/selectors";
@@ -55,6 +56,7 @@ export function ActiveAccountCard({
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="truncate text-sm font-semibold">{active.name}</span>
+          <ProviderBadge provider={active.provider} />
           {plan && (
             <Badge
               variant="secondary"

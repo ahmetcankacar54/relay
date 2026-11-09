@@ -15,6 +15,7 @@ import {
   AccountsIcon,
   OverviewIcon,
   PinsIcon,
+  ProxyIcon,
   SettingsIcon,
   SidebarIcon,
   TokensIcon,
@@ -37,7 +38,8 @@ import { accountFromHash, accountHash } from "@/pages/accounts/AccountDetail";
 import type { PageId } from "./routes";
 import { SIDEBAR, dragSidebar, keySidebar, type SidebarSize } from "./useSidebarSize";
 
-type Status = ReturnType<typeof sidebarStatus>;
+/** `sidebarStatus`, where the gateway's fields may be left out (a window without a gateway, the tests). */
+type Status = Omit<ReturnType<typeof sidebarStatus>, "proxyRunning"> & { proxyRunning?: boolean };
 export interface SidebarSummary {
   name: string;
   running: boolean;
@@ -303,6 +305,16 @@ export function Sidebar({
       tail: status.accounts,
     },
   ];
+  // After the usage pages, so ⌘3–⌘5 still open them as before the gateway had a page.
+  const proxy: Item = {
+    id: "proxy",
+    icon: ProxyIcon,
+    label: t("Proxy & Gateway", "Proxy & Gateway"),
+    on: status.proxyRunning,
+    onLabel: status.proxyAddress
+      ? t(`Proxy çalışıyor · ${status.proxyAddress}`, `Gateway running · ${status.proxyAddress}`)
+      : t("Proxy çalışıyor", "Gateway running"),
+  };
   // Usage is three pages, grouped under one heading.
   const usage: Item[] = [
     { id: "kullanim", icon: UsageIcon, label: t("Limitler", "Limits") },
@@ -396,6 +408,9 @@ export function Sidebar({
               go={goFrom("above")}
             />
           ))}
+        </div>
+        <div className={cn("w-full", compact ? "mt-2 flex justify-center border-t pt-2" : "mt-4")}>
+          <NavItem item={proxy} active={page === "proxy"} compact={compact} go={goFrom("above")} />
         </div>
       </nav>
       <div className="flex-1" />

@@ -199,3 +199,21 @@ test(
     );
   },
 );
+
+test("a Codex or Antigravity account's sign-in is never asked of the Claude CLI", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-provider-auth-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const service = new Service(path.join(root, "Relay"), () => {}, path.join(root, "imported"));
+  service.store.update((s) => {
+    s.executable = path.join(root, "no-such-claude");
+  });
+  for (const provider of ["codex", "antigravity"] as const) {
+    const account = service.store.create({ name: provider, kind: "personal", provider });
+    const auth = { loggedIn: true, checkedAt: new Date().toISOString(), email: `${provider}@example.com` };
+    service.store.update((s) => {
+      s.accounts.find((a) => a.id === account.id)!.auth = auth;
+    });
+    const checked = await service.checkAuth(account.id);
+    assert.deepEqual(checked.auth, auth, provider);
+  }
+});

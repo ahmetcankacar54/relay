@@ -29,7 +29,7 @@ import type { Destination, PageId, PageIntent } from "../src/app/routes";
 import { DEFAULT_PROXY_CONFIG, type ProxyConfig } from "./proxy-types";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
-export type AccountProvider = "claude" | "codex" | "gemini";
+export type AccountProvider = "claude" | "codex" | "antigravity" | "gemini";
 export interface AccountPlanning {
   plan: AccountPlan;
   capacityWeight: number;
@@ -269,20 +269,25 @@ export interface DesktopState {
 export interface ProxyAccountStatus {
   id: string;
   name: string;
+  provider?: AccountProvider;
   email?: string;
   /** The account the gateway's last request went to. */
   active: boolean;
+  /** The account has a saved sign-in the gateway can use. */
+  signedIn: boolean;
   /** The fuller of the 5-hour and weekly windows, 0–100; absent until limits are read. */
   quotaPercent?: number;
   /** Minutes until the soonest limit window resets. */
   resetInMinutes?: number;
 }
-/** What Settings → Proxy shows: whether the gateway runs, how it is reached, and what it did. */
+/** What the Proxy Gateway page shows: whether the gateway runs, how it is reached, and what it did. */
 export interface ProxyStatus {
   running: boolean;
   port: number;
   host: string;
   clientApiKey?: string;
+  routingStrategy?: "soonest-reset" | "balanced" | "strict-priority";
+  affinityTtlSeconds?: number;
   stats: {
     totalRequests: number;
     activeRequests: number;
@@ -290,10 +295,47 @@ export interface ProxyStatus {
     cacheHitRate: number;
   };
   accounts: ProxyAccountStatus[];
-  allowCrossProviderFallback: boolean;
   /** Why the gateway is not running although it is turned on (e.g. the port is in use). */
   error?: string;
 }
+/** Local session discovered on disk for 1-click Zero-Friction onboarding. */
+export interface DetectedProviderSession {
+  provider: AccountProvider;
+  detected: boolean;
+  email?: string;
+  name?: string;
+  accountUuid?: string;
+  orgId?: string;
+  orgName?: string;
+  plan?: string;
+  source?: string;
+  alreadyLinkedAccountId?: string;
+  alreadyLinkedAccountName?: string;
+}
+export type CascadeLayerStatus = "done" | "ready" | "skipped" | "pending";
+export interface OneClickConnectInput {
+  provider: AccountProvider;
+  name: string;
+  kind: AccountKind;
+  group?: string;
+  /** Codex only: an OpenAI API key typed by the user. */
+  apiKey?: string;
+}
+export interface OneClickCascadeResult {
+  account: Account;
+  layers: {
+    desktop: CascadeLayerStatus;
+    usage: CascadeLayerStatus;
+    terminal: CascadeLayerStatus;
+    extensionAndProxy: CascadeLayerStatus;
+  };
+  needsSignIn?: boolean;
+}
+export interface AntigravityOAuthStart { accountId: string; state: string }
+export type AntigravityOAuthPoll =
+  | { status: "wait" }
+  | { status: "ok"; result: OneClickCascadeResult }
+  | { status: "error"; error: string };
 /**
  * The automatic save of a Claude app sign-in: waiting for the sign-in and Code, waiting for the
  * user to pick one of several workspaces, saving (Claude restarts), saved, or failed. `alreadySaved`
@@ -450,14 +492,23 @@ export interface RelayAPI {
   proxyStatus(): Promise<ProxyStatus>;
   /** Starts or stops the gateway and saves the choice. Rejects when it cannot start (port in use). */
   proxyToggle(enabled: boolean): Promise<ProxyStatus>;
-  /** Changes where the gateway listens and whether it may cross providers; a running one restarts. */
+  /** Changes where the gateway listens (a running one restarts) or how it routes (applied live). */
   proxyConfigure(input: {
     port?: number;
     host?: string;
-    allowCrossProviderFallback?: boolean;
+    routingStrategy?: "soonest-reset" | "balanced" | "strict-priority";
+    affinityTtlSeconds?: number;
   }): Promise<ProxyStatus>;
-  /** Replaces the client key (`relay-sec-…`); a running gateway restarts, so the old key stops working. */
+  /** Replaces the client key (`relay-sec-…`); the old key stops working at once. */
   proxyRegenerateKey(): Promise<ProxyStatus>;
+  /** Discovers local sessions for Claude, OpenAI/Codex, and Google Antigravity for 1-click onboarding. */
+  detectProviders(): Promise<DetectedProviderSession[]>;
+  /** Connects and cascades a provider account across Desktop, Usage, CLI, and Proxy Gateway in one click. */
+  oneClickConnect(input: OneClickConnectInput): Promise<OneClickCascadeResult>;
+  startAntigravityOAuth(input: Pick<OneClickConnectInput, "name" | "kind" | "group">): Promise<AntigravityOAuthStart>;
+  pollAntigravityOAuth(input: AntigravityOAuthStart): Promise<AntigravityOAuthPoll>;
+  /** Stops a pending Antigravity sign-in and removes the account it was creating. */
+  cancelAntigravityOAuth(input: AntigravityOAuthStart): Promise<void>;
   updatePlanning(patch: Partial<PlanningSettings>): Promise<PlanningSettings>;
   refreshUsage(
     accountId: string,
@@ -539,8 +590,6 @@ export interface RelaySettings {
   appearance: "system" | "light" | "dark";
   /** The local Proxy Gateway; changed through the proxy calls, never through updateSettings. */
   proxy?: ProxyConfig;
-  /** Switch the browser's claude.ai login through its debugging port, without quitting it. Missing means on. */
-  cdpHotSwitch?: boolean;
   planning: PlanningSettings;
   usageRefreshMinutes: 0 | 5 | 15 | 30;
   usageWarningPercent: 80 | 90 | 95;
@@ -669,8 +718,7 @@ export interface DesktopHistorySummary {
 }
 export const DEFAULT_SETTINGS: RelaySettings = {
   appearance: "system",
-  proxy: { ...DEFAULT_PROXY_CONFIG, allowCrossProviderFallback: false },
-  cdpHotSwitch: true,
+  proxy: { ...DEFAULT_PROXY_CONFIG },
   planning: DEFAULT_PLANNING,
   usageRefreshMinutes: 5,
   usageWarningPercent: 90,

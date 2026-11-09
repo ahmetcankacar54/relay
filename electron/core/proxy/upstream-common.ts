@@ -26,6 +26,13 @@ export interface UpstreamOutcome {
   /** The upstream refused the token (401/403). */
   unauthorized: boolean;
   retryAfterSeconds?: number;
+  /** When the account's exhausted limit resets (ms), from the provider's rate-limit headers. */
+  limitResetsAt?: number;
+  /**
+   * The answer was held back (`holdIf`) and nothing was sent to the client: the caller may try
+   * another account, or must answer the client itself.
+   */
+  held?: boolean;
 }
 
 const LOCAL_ORIGIN = "http://relay.invalid";
@@ -52,6 +59,11 @@ const DROP_REQUEST_HEADERS = new Set([
   // The account's token replaces whatever credential the client holds.
   "authorization",
   "x-api-key",
+  // Relay's own headers: the client key and the provider choice never leave the gateway.
+  "x-relay-key",
+  "x-relay-provider",
+  // Set from the selected account when it is a ChatGPT sign-in, never from the client.
+  "chatgpt-account-id",
 ]);
 
 const DROP_RESPONSE_HEADERS = new Set([
@@ -124,6 +136,35 @@ function sanitizeResponseHeaders(
     out[key] = value;
   }
   return out;
+}
+
+/**
+ * When an exhausted limit resets, in ms: Anthropic's unified rate-limit headers carry epoch
+ * seconds (`anthropic-ratelimit-unified-reset`, or per window). Undefined when none is given.
+ */
+export function parseLimitReset(
+  headers: http.IncomingHttpHeaders,
+  now = Date.now(),
+): number | undefined {
+  const read = (name: string) => {
+    const value = headers[name];
+    const raw = Array.isArray(value) ? value[0] : value;
+    if (!raw) return undefined;
+    const seconds = Number(raw);
+    const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(raw);
+    return Number.isFinite(ms) && ms > now ? ms : undefined;
+  };
+  // The overall reset comes with every answer; it only says when a limit ends once one is hit.
+  const rejected = (name: string) => String(headers[name] ?? "") === "rejected";
+  const overall = rejected("anthropic-ratelimit-unified-status")
+    ? read("anthropic-ratelimit-unified-reset")
+    : undefined;
+  if (overall !== undefined) return overall;
+  const windows = ["5h", "7d", "7d_opus", "7d_sonnet"]
+    .filter((w) => rejected(`anthropic-ratelimit-unified-${w}-status`))
+    .map((w) => read(`anthropic-ratelimit-unified-${w}-reset`))
+    .filter((ms): ms is number => ms !== undefined);
+  return windows.length ? Math.max(...windows) : undefined;
 }
 
 export function parseRetryAfter(
@@ -238,6 +279,11 @@ export interface ForwardSpec {
   usage: UsageExtractor;
   errorLabel: string;
   onResponseHeaders?: (headers: http.IncomingHttpHeaders) => void;
+  /**
+   * An answer with this status is not sent to the client: its body is dropped and the outcome
+   * says `held`, so the caller can try another account. Only asked before anything was sent.
+   */
+  holdIf?: (statusCode: number) => boolean;
   /** Idle time (no bytes either way) after which the upstream call is given up. */
   timeoutMs?: number;
 }
@@ -324,12 +370,21 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
         outcome.retryAfterSeconds = parseRetryAfter(
           Array.isArray(header) ? header[0] : header,
         );
+        outcome.limitResetsAt = parseLimitReset(upstreamRes.headers);
       }
       spec.onResponseHeaders?.(upstreamRes.headers);
 
       if (clientRes.destroyed) {
         upstreamRes.destroy();
         settle(outcome);
+        return;
+      }
+      if (!clientRes.headersSent && spec.holdIf?.(statusCode)) {
+        // An error answer is small; it is read to the end so the connection can be reused.
+        upstreamRes.resume();
+        upstreamRes.once("end", () => settle({ ...outcome, held: true }));
+        upstreamRes.once("error", () => settle({ ...outcome, held: true }));
+        upstreamRes.once("close", () => settle({ ...outcome, held: true }));
         return;
       }
 

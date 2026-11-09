@@ -131,7 +131,8 @@ const accountSchema = z.object({
   group: z.string().min(1).max(69),
   color: z.string(),
   createdAt: z.iso.datetime(),
-  provider: z.enum(["claude", "codex", "gemini"]).optional(),
+  // "gemini" is only read: no build ever made such an account, and nothing creates one.
+  provider: z.enum(["claude", "codex", "antigravity", "gemini"]).optional(),
   cooldownUntil: z.iso.datetime().optional(),
   planning: accountPlanningSchema.optional(),
   desktop: z
@@ -169,7 +170,6 @@ export const proxyConfigSchema = z
     affinityTtlSeconds: z.number().int().min(10).max(3_600).default(DEFAULT_PROXY_CONFIG.affinityTtlSeconds),
     routingStrategy: z.enum(["soonest-reset", "balanced", "strict-priority"]).default(DEFAULT_PROXY_CONFIG.routingStrategy),
     apiKey: z.string().min(1).max(200).optional(),
-    allowCrossProviderFallback: z.boolean().optional(),
   })
   .strict();
 export const settingsSchema = z
@@ -177,8 +177,6 @@ export const settingsSchema = z
     appearance: z.enum(["system", "light", "dark"]).default("system"),
     // Missing means off, with the defaults; no .default() so a patch keeps the stored choice.
     proxy: proxyConfigSchema.optional(),
-    // Missing means on; no .default() so a patch keeps the stored choice.
-    cdpHotSwitch: z.boolean().optional(),
     planning: planningSchema,
     usageRefreshMinutes: z.union([
       z.literal(0),
@@ -229,17 +227,24 @@ const SAVED_WITHOUT_HISTORY_MODE = "all" as const;
  * dropped when it is read. 5 added the extension mode "guide" and made "restart" and "closed"
  * also swap the browser profile's claude.ai login, so a 4 file's "restart" and "closed" (which
  * only swapped the extension's hints) are read as "guide" until the user picks them again.
- * 6 added the terminal's Claude Code setting.
+ * 6 added the terminal's Claude Code setting. 7 added the Proxy Gateway's settings and an
+ * account's provider; 0.18.0 and 0.18.1 wrote them under 6, which 0.17 builds cannot read.
  */
-export const STATE_SCHEMA = 6;
+export const STATE_SCHEMA = 7;
 const stateSchema = z.object({
   version: z.literal(1),
   schema: z.number().int().min(1).optional(),
   settings: z
     .preprocess((value) => {
       if (!value || typeof value !== "object") return value;
-      // Registries before 0.11 kept a workday block; it becomes planning once.
-      const { workday, ...rest } = value as Record<string, unknown>;
+      // Registries before 0.11 kept a workday block; it becomes planning once. 0.18.0 and
+      // 0.18.1 kept a browser live-switch setting that was removed; it is dropped.
+      const { workday, cdpHotSwitch: _cdp, ...rest } = value as Record<string, unknown>;
+      // 0.18.0 and 0.18.1 also saved a cross-provider switch that never did anything.
+      if (rest.proxy && typeof rest.proxy === "object" && "allowCrossProviderFallback" in rest.proxy) {
+        const { allowCrossProviderFallback: _cross, ...proxy } = rest.proxy as Record<string, unknown>;
+        rest.proxy = proxy;
+      }
       const saved =
         rest.desktopHistoryTransfer === undefined
           ? { ...rest, desktopHistoryTransfer: SAVED_WITHOUT_HISTORY_MODE }
@@ -270,7 +275,7 @@ export const createAccountSchema = z
     name: z.string().trim().min(1).max(64),
     kind: z.enum(["personal", "work"]),
     group: z.string().trim().min(1).max(64).optional(),
-    provider: z.enum(["claude", "codex", "gemini"]).optional(),
+    provider: z.enum(["claude", "codex", "antigravity"]).optional(),
   })
   .strict();
 
@@ -504,7 +509,10 @@ export class Store {
     });
     return account;
   }
-  /** Renames an account and sets its type and sharing group, checked as `create` checks them. */
+  /**
+   * Renames an account and sets its type and sharing group, checked as `create` checks them.
+   * The provider is fixed when the account is added: its saved credentials belong to it.
+   */
   edit(id: string, input: CreateAccount): Account {
     const data = createAccountSchema.parse(input);
     this.account(id);

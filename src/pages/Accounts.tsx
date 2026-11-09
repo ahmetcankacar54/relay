@@ -25,8 +25,15 @@ import { AddAccountDialog } from "./accounts/AddAccountDialog";
 import { LinkDesktopDialog } from "./accounts/LinkDesktopDialog";
 import { RemoveAccountDialog } from "./accounts/RemoveAccountDialog";
 import { EditAccountDialog } from "./accounts/EditAccountDialog";
-import { filterAccounts, type AccountFilter } from "./accounts/accountLabels";
+import {
+  filterAccounts,
+  providerCounts,
+  providerLabel,
+  type AccountFilter,
+  type ProviderFilter,
+} from "./accounts/accountLabels";
 import { blockReason, type Block } from "@/lib/onboarding";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 type IntentGuards = {
   busy: boolean;
@@ -102,6 +109,7 @@ export function Accounts() {
   guardsRef.current = guards;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AccountFilter>("all");
+  const [provider, setProvider] = useState<ProviderFilter>("all");
   const [adding, setAdding] = useState(false);
   const [linking, setLinking] = useState(false);
   const [removing, setRemoving] = useState<string>();
@@ -166,8 +174,10 @@ export function Accounts() {
     setSelected(id);
     setQuery("");
     setFilter("all");
+    setProvider("all");
   };
-  const visible = filterAccounts(accounts, query, filter, language);
+  const visible = filterAccounts(accounts, query, filter, language, provider);
+  const counts = providerCounts(accounts);
   const linked = accounts.filter((a) => a.desktop).length;
   const account = accounts.find((a) => a.id === selected);
   const dialogs = (
@@ -302,6 +312,35 @@ export function Accounts() {
             </SelectContent>
           </Select>
         </div>
+        {/* Only once accounts of more than one provider exist: a Claude-only list needs no filter. */}
+        {Object.values(counts).filter(Boolean).length > 1 && (
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            aria-label={t("Sağlayıcıya göre filtrele", "Filter by provider")}
+            data-slot="provider-filter"
+            className="flex-wrap"
+            value={provider}
+            onValueChange={(v) => v && setProvider(v as ProviderFilter)}
+          >
+            {(
+              [
+                ["all", t("Tümü", "All"), accounts.length],
+                ["claude", providerLabel("claude"), counts.claude],
+                ["codex", providerLabel("codex"), counts.codex],
+                ["antigravity", providerLabel("antigravity"), counts.antigravity],
+              ] as const
+            )
+              .filter(([id, , count]) => id === "all" || count > 0)
+              .map(([id, label, count]) => (
+                <ToggleGroupItem key={id} value={id}>
+                  {label}
+                  <span className="tabular-nums text-muted-foreground">({count})</span>
+                </ToggleGroupItem>
+              ))}
+          </ToggleGroup>
+        )}
         {visible.length ? (
           <AccountsTable
             accounts={visible}

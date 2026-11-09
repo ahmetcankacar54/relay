@@ -467,6 +467,12 @@ export class UsageManager {
         allowPrompt,
       );
       if (!current()) return this.view(this.store.account(account.id));
+      if (account.provider && account.provider !== "claude") {
+        // Neither the OpenAI API nor Gemini API supplies Claude-style five-hour
+        // and seven-day quota windows. An invented 0% usage reading misleads
+        // routing and makes the account look verified.
+        throw new UsageError("unsupported", undefined, "provider quota endpoint unavailable");
+      }
       let refreshed = false;
       let renewalRequired = false;
       const pendingRefresh = this.refreshCredentialPending?.(account) ?? false;

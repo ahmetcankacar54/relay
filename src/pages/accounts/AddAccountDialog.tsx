@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Globe2, LoaderCircle, Monitor, Terminal } from "lucide-react";
-import type { Account } from "../../../shared/types";
+import type { Account, AccountProvider, OneClickCascadeResult } from "../../../shared/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +34,16 @@ import {
   desktopBlock,
 } from "@/lib/onboarding";
 import {
+  CascadeBanner,
+  ClaudeOneClick,
+  ConnectionDone,
+  ProviderCards,
+  ProviderForm,
+  AntigravityOAuthForm,
+  useConnectForm,
+  useDetectedProviders,
+} from "./AddAccountProviders";
+import {
   isProvisionalName,
   provisionalName,
   suggestProfile,
@@ -51,14 +61,78 @@ export function AddAccountDialog({
   const { t } = useI18n();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md" aria-describedby={undefined}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{t("Hesap ekle", "Add account")}</DialogTitle>
         </DialogHeader>
-        {/* Radix unmounts the content when closed, so each opening starts at step 1. */}
-        <AddAccountSteps close={() => onOpenChange(false)} />
+        {/* Radix unmounts the content when closed, so each opening starts at the first provider. */}
+        <AddAccountFlow close={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Adding an account for any provider: the provider cards (with the local sessions found), and
+ * then the provider's own way in. Claude keeps its three steps (`AddAccountSteps`) under a
+ * one-click panel and its four layers; Codex connects a detected sign-in or a checked API key;
+ * Antigravity signs in with Google.
+ */
+export function AddAccountFlow({ close }: { close: () => void }) {
+  const { accounts, busy, desktop, pendingDesktop } = useRelay();
+  const [provider, setProvider] = useState<AccountProvider>("claude");
+  const [result, setResult] = useState<OneClickCascadeResult>();
+  const detected = useDetectedProviders();
+  const [form, setForm] = useConnectForm(
+    provider,
+    accounts.map((a) => a.name),
+  );
+  // Claude's three steps are mid-way (a profile exists, or a sign-in waits): the provider cannot change under them.
+  const locked = !!busy || !!pendingDesktop || !!desktop?.autoCapture;
+  const reset = () => {
+    setResult(undefined);
+    setForm((f) => ({ ...f, apiKey: "" }));
+  };
+  return (
+    <div className="grid gap-4">
+      <ProviderCards
+        value={provider}
+        onChange={(next) => {
+          setProvider(next);
+          setResult(undefined);
+        }}
+        detected={detected}
+        disabled={locked}
+      />
+      {/* The four layers are Claude's: Codex and Antigravity only serve the gateway. */}
+      {provider === "claude" && !result && <CascadeBanner />}
+      {result && !(provider === "claude" && result.layers.desktop === "pending") ? (
+        <ConnectionDone result={result} provider={provider} onAnother={reset} close={close} />
+      ) : provider === "claude" ? (
+        <AddAccountSteps
+          // A one-click that still waits for the Claude app (a sign-in, or Code) continues with its profile.
+          key={result?.account.id ?? "new"}
+          close={close}
+          initial={result ? { step: 1, id: result.account.id } : undefined}
+          intro={
+            result ? undefined : (
+              <ClaudeOneClick form={form} onChange={setForm} session={detected.claude} onResult={setResult} />
+            )
+          }
+        />
+      ) : provider === "antigravity" ? (
+        <AntigravityOAuthForm form={form} onChange={setForm} onResult={setResult} close={close} />
+      ) : (
+        <ProviderForm
+          provider="codex"
+          form={form}
+          onChange={setForm}
+          session={detected[provider]}
+          onResult={setResult}
+          close={close}
+        />
+      )}
+    </div>
   );
 }
 
@@ -130,8 +204,11 @@ function StepTitle({ children }: { children: ReactNode }) {
 export function AddAccountSteps({
   close,
   initial,
+  intro,
 }: {
   close: () => void;
+  /** The first step's one-click panel, above its step-by-step button. */
+  intro?: ReactNode;
   /** Tests start at a later step for an existing profile. */
   initial?: { step: Step; id: string };
 }) {
@@ -225,79 +302,117 @@ export function AddAccountSteps({
       setStep(1);
     });
 
+  const showIntroFirst =
+    step === 1 &&
+    !!intro &&
+    !(account && pendingDesktop?.id === account.id) &&
+    !(auto && auto.status !== "failed" && auto.status !== "saved");
+
   return (
     <div className="grid gap-4">
-      <StepIndicator step={step} />
-      {/* The page banners sit under the overlay; failures from these steps show here. */}
-      <RelayErrorAlert />
-      {step === 1 && (
+      {showIntroFirst ? (
         <>
-          <StepTitle>
-            {current
-              ? t("Claude uygulamasında açık hesabı ekle", "Add the account open in the Claude app")
-              : t("Yeni hesapla giriş yap", "Sign in with the new account")}
-          </StepTitle>
-          {account && pendingDesktop?.id === account.id ? (
-            <div className="grid gap-3">
-              <StatusLine tone="warn" icon={<Monitor />}>
-                {t("Claude uygulamasına giriş yap", "Sign in to the Claude app")}
-              </StatusLine>
-              <DesktopPendingActions />
-            </div>
-          ) : auto && auto.status !== "failed" && auto.status !== "saved" ? (
-            <div className="grid gap-3">
-              <StatusLine tone="warn" icon={<Monitor />}>
-                {autoCaptureLine(auto, auto.accountId, t, language)}
-              </StatusLine>
-              {auto.status === "choose-org" && auto.orgs && (
-                <WorkspaceSelect
-                  accounts={accounts}
-                  organizations={auto.orgs}
-                  value=""
-                  onChange={(orgId) =>
-                    void action("auto-capture", () => api.chooseAutoCaptureOrg(auto.accountId, orgId))
-                  }
-                  t={t}
-                />
-              )}
-              {auto.status === "waiting" && (
-                <div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={desktopBusy}
-                    onClick={() => void action("open", () => api.openCodeTab())}
-                  >
-                    {t("Code’u aç", "Open Code")}
-                  </Button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              {auto?.status === "failed" && (
-                <p role="status" className="text-sm text-warn-foreground">
-                  {autoCaptureLine(auto, auto.accountId, t, language)}
-                </p>
-              )}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <Button disabled={!!busy || !!desktopLock} onClick={begin}>
-                  {busy === "create" && <LoaderCircle className="animate-spin" />}
-                  {current
-                    ? t("Bu hesabı ekle…", "Add this account…")
-                    : t("Claude uygulamasında giriş ekranını aç…", "Open sign-in in the Claude app…")}
-                </Button>
-                {desktopLock && blockReason(desktopLock, t) && (
-                  <small className="text-xs text-muted-foreground">{blockReason(desktopLock, t)}</small>
-                )}
-              </div>
-            </div>
+          <RelayErrorAlert />
+          <div className="grid gap-3 rounded-lg border bg-card px-3.5 py-3">
+            {intro}
+          </div>
+          {auto?.status === "failed" && (
+            <p role="status" className="text-sm text-warn-foreground">
+              {autoCaptureLine(auto, auto.accountId, t, language)}
+            </p>
           )}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={close}>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <Button variant="outline" size="sm" disabled={!!busy || !!desktopLock} onClick={begin}>
+                {busy === "create" && <LoaderCircle className="animate-spin" />}
+                {current
+                  ? t("Bu hesabı ekle…", "Add this account…")
+                  : t("Claude uygulamasında giriş ekranını aç…", "Open sign-in in the Claude app…")}
+              </Button>
+              {desktopLock && blockReason(desktopLock, t) && (
+                <small className="text-xs text-muted-foreground">{blockReason(desktopLock, t)}</small>
+              )}
+            </div>
+            <Button type="button" variant="ghost" size="sm" onClick={close}>
               {t("Vazgeç", "Cancel")}
             </Button>
           </div>
+        </>
+      ) : (
+        <>
+          <StepIndicator step={step} />
+          {/* The page banners sit under the overlay; failures from these steps show here. */}
+          <RelayErrorAlert />
+          {step === 1 && (
+            <>
+              <StepTitle>
+                {current
+                  ? t("Claude uygulamasında açık hesabı ekle", "Add the account open in the Claude app")
+                  : t("Yeni hesapla giriş yap", "Sign in with the new account")}
+              </StepTitle>
+              {account && pendingDesktop?.id === account.id ? (
+                <div className="grid gap-3">
+                  <StatusLine tone="warn" icon={<Monitor />}>
+                    {t("Claude uygulamasına giriş yap", "Sign in to the Claude app")}
+                  </StatusLine>
+                  <DesktopPendingActions />
+                </div>
+              ) : auto && auto.status !== "failed" && auto.status !== "saved" ? (
+                <div className="grid gap-3">
+                  <StatusLine tone="warn" icon={<Monitor />}>
+                    {autoCaptureLine(auto, auto.accountId, t, language)}
+                  </StatusLine>
+                  {auto.status === "choose-org" && auto.orgs && (
+                    <WorkspaceSelect
+                      accounts={accounts}
+                      organizations={auto.orgs}
+                      value=""
+                      onChange={(orgId) =>
+                        void action("auto-capture", () => api.chooseAutoCaptureOrg(auto.accountId, orgId))
+                      }
+                      t={t}
+                    />
+                  )}
+                  {auto.status === "waiting" && (
+                    <div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={desktopBusy}
+                        onClick={() => void action("open", () => api.openCodeTab())}
+                      >
+                        {t("Code’u aç", "Open Code")}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  {auto?.status === "failed" && (
+                    <p role="status" className="text-sm text-warn-foreground">
+                      {autoCaptureLine(auto, auto.accountId, t, language)}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <Button disabled={!!busy || !!desktopLock} onClick={begin}>
+                      {busy === "create" && <LoaderCircle className="animate-spin" />}
+                      {current
+                        ? t("Bu hesabı ekle…", "Add this account…")
+                        : t("Claude uygulamasında giriş ekranını aç…", "Open sign-in in the Claude app…")}
+                    </Button>
+                    {desktopLock && blockReason(desktopLock, t) && (
+                      <small className="text-xs text-muted-foreground">{blockReason(desktopLock, t)}</small>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={close}>
+                  {t("Vazgeç", "Cancel")}
+                </Button>
+              </div>
+            </>
+          )}
         </>
       )}
       {step === 2 && account && (

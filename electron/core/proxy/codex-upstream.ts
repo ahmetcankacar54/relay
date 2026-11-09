@@ -13,7 +13,11 @@ export interface CodexForwardOptions {
   upstreamUrl?: string;
   token: string;
   accountId: string;
+  /** The ChatGPT account a Codex sign-in belongs to; its backend expects it with the token. */
+  chatgptAccountId?: string;
   stats?: ProxyStats;
+  /** Statuses whose answer is held back so the gateway can try another account. */
+  holdIf?: (statusCode: number) => boolean;
 }
 
 /**
@@ -69,6 +73,7 @@ export class CodexUpstream {
     );
     const headers = sanitizeRequestHeaders(clientReq.headers);
     headers["authorization"] = `Bearer ${options.token}`;
+    if (options.chatgptAccountId) headers["chatgpt-account-id"] = options.chatgptAccountId;
 
     return forwardUpstream({
       clientRes,
@@ -80,6 +85,7 @@ export class CodexUpstream {
       stats: options.stats,
       usage: createCodexUsageExtractor(),
       errorLabel: "Codex upstream error",
+      holdIf: options.holdIf,
     });
   }
 }

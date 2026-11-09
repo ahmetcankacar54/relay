@@ -7,6 +7,8 @@ import { parseRequestUrl } from "./upstream-common";
 export interface WebSocketBridgeOptions {
   upstreamUrl: string;
   token?: string;
+  /** The ChatGPT account a Codex sign-in belongs to; its backend expects it with the token. */
+  chatgptAccountId?: string;
 }
 
 const CONNECT_TIMEOUT_MS = 15_000;
@@ -76,7 +78,10 @@ export class WebSocketBridge {
       ...clientReq.headers,
       host: targetUrl.host,
     };
-    delete upstreamHeaders["x-api-key"];
+    // The client's credential and Relay's own headers never reach the provider.
+    for (const name of ["x-api-key", "authorization", "x-relay-key", "x-relay-provider", "chatgpt-account-id"])
+      delete upstreamHeaders[name];
+    if (options.chatgptAccountId) upstreamHeaders["chatgpt-account-id"] = options.chatgptAccountId;
     if (options.token) {
       upstreamHeaders["authorization"] = `Bearer ${options.token}`;
     }

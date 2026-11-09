@@ -8,6 +8,7 @@ import { linkedSwitchAccount } from "../../shared/relay-link";
 import { Usage } from "@/pages/Usage";
 import { Settings } from "@/pages/Settings";
 import { Accounts } from "@/pages/Accounts";
+import { ProxyPage } from "@/pages/Proxy";
 import { Overview } from "@/pages/Overview";
 import { MainWindowPranks } from "@/pranks/useMainWindowPranks";
 import { RelayPrankStage } from "@/pranks/RelayPrankStage";
@@ -127,7 +128,7 @@ export function Shell() {
             onToggle={narrow ? undefined : toggleSidebar}
             panda={<CardPanda view={panda.view} />}
             onPoke={panda.poke}
-            status={sidebarStatus(relay.data)}
+            status={sidebarStatus(relay.data, relay.desktop)}
             summary={
               active && {
                 name: active.name,
@@ -148,6 +149,7 @@ export function Shell() {
             >
               {page === "genel" && <Overview go={go} />}
               {page === "hesaplar" && <Accounts />}
+              {page === "proxy" && <ProxyPage />}
               {page === "kullanim" && <Usage section="limits" />}
               {page === "tokenlar" && <Usage section="tokens" />}
               {page === "rozetler" && <Usage section="lost" />}

@@ -48,7 +48,8 @@ test("ProxyServer starts, serves /health and /status, and stops cleanly", async 
   });
 
   assert.equal(healthData.ok, true);
-  assert.equal(healthData.state.status, "running");
+  assert.equal(healthData.status, "running");
+  assert.equal(healthData.state, undefined, "/health says nothing about the accounts");
 
   // Request /status
   const statusData = await new Promise<any>((resolve, reject) => {
@@ -142,12 +143,17 @@ function request(
 async function startProxy(
   upstreams: ConstructorParameters<typeof ProxyServer>[0]["upstreams"],
   credential: () => Promise<string | undefined> = async () => "tok-1",
+  provider?: Account["provider"],
+  antigravityResolver?: ConstructorParameters<typeof ProxyServer>[0]["antigravityResolver"],
 ) {
   const server = new ProxyServer({
     config: { port: 0, host: "127.0.0.1", enabled: true },
     credentialResolver: credential,
+    antigravityResolver,
     usageProvider: () => ({
-      accounts: [makeAccount("acc-1", "One")],
+      accounts: [{ ...makeAccount("acc-1", "One"),
+        ...((provider ?? (upstreams?.codexUrl || upstreams?.codexWebSocketUrl ? "codex" : undefined))
+          ? { provider: provider ?? "codex" } : {}) }],
       usageMap: {},
     }),
     upstreams,
@@ -381,6 +387,67 @@ test("ProxyServer sends Codex requests under the upstream's path and reads Respo
   }
 });
 
+test("OpenAI API keys use the public OpenAI endpoint, not the Codex OAuth endpoint", async () => {
+  const upstream = await fakeUpstream((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ id: "ok", choices: [] }));
+  });
+  const { server, port } = await startProxy(
+    { openaiUrl: `${upstream.url}/v1` },
+    async () => "sk-test-key",
+    "codex",
+  );
+  try {
+    const res = await request(port, { method: "POST", path: "/v1/chat/completions" },
+      JSON.stringify({ model: "gpt-4.1", messages: [] }));
+    assert.equal(res.status, 200);
+    assert.equal(upstream.seen[0]?.url, "/v1/chat/completions");
+    assert.equal(upstream.seen[0]?.headers.authorization, "Bearer sk-test-key");
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});
+
+test("Antigravity requests use the selected account's OAuth sidecar for all supported protocols", async () => {
+  const upstream = await fakeUpstream((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ id: "ok", choices: [] }));
+  });
+  const { server, port } = await startProxy(
+    { codexUrl: `${upstream.url}/wrong` },
+    async () => { throw new Error("Antigravity must not read a pasted API key"); },
+    "antigravity",
+    async () => ({ url: upstream.url, key: "sidecar-client-key" }),
+  );
+  try {
+    const chat = await request(port, { method: "POST", path: "/v1/chat/completions" },
+      JSON.stringify({ model: "gemini-3.8-flash", messages: [] }));
+    assert.equal(chat.status, 200);
+    assert.equal(upstream.seen[0]?.url, "/v1/chat/completions");
+    assert.equal(upstream.seen[0]?.headers.authorization, "Bearer sidecar-client-key");
+    const responses = await request(port, { method: "POST", path: "/v1/responses", headers: { "x-relay-provider": "antigravity" } }, "{}");
+    assert.equal(responses.status, 200);
+    const messages = await request(port, { method: "POST", path: "/v1/messages", headers: { "x-relay-provider": "antigravity" } }, "{}");
+    assert.equal(messages.status, 200);
+    assert.deepEqual(upstream.seen.map((entry) => entry.url), ["/v1/chat/completions", "/v1/responses", "/v1/messages"]);
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});
+
+test("Antigravity cannot be served without an OAuth sidecar credential", async () => {
+  const { server, port } = await startProxy({}, async () => "wrong-token", "antigravity");
+  try {
+    const result = await request(port, { method: "POST", path: "/v1/chat/completions" },
+      JSON.stringify({ model: "gemini-3.8-flash", messages: [] }));
+    assert.equal(result.status, 401);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("ProxyServer bridges a WebSocket upgrade and answers 502 when the upstream is down", async () => {
   const upstream = http.createServer();
   upstream.on("upgrade", (req, socket) => {
@@ -472,4 +539,184 @@ test("ProxyServer.stop() returns while a stream is still open and a second start
   assert.equal(again.status, "running");
   await server.stop();
   await upstream.close();
+});
+
+async function startPool(
+  upstreams: ConstructorParameters<typeof ProxyServer>[0]["upstreams"],
+  accounts: Account[],
+  config: Partial<ConstructorParameters<typeof ProxyServer>[0]["config"]> = {},
+  credential: (account: Account) => Promise<string | undefined> = async (a) => `tok-${a.id}`,
+) {
+  const server = new ProxyServer({
+    config: { port: 0, host: "127.0.0.1", enabled: true, routingStrategy: "strict-priority", ...config },
+    credentialResolver: credential,
+    usageProvider: () => ({ accounts, usageMap: {} }),
+    upstreams,
+  });
+  const state = await server.start();
+  return { server, port: state.port };
+}
+
+test("a limited account's request is retried on the next account before anything reaches the client", async () => {
+  const upstream = await fakeUpstream((req, res) => {
+    if (req.headers.authorization === "Bearer tok-a") {
+      res.writeHead(429, {
+        "content-type": "application/json",
+        // The 5-hour window is exhausted until this reset (epoch seconds).
+        "anthropic-ratelimit-unified-status": "rejected",
+        "anthropic-ratelimit-unified-reset": String(Math.floor(Date.now() / 1000) + 3 * 3600),
+      });
+      res.end('{"type":"error","error":{"type":"rate_limit_error","message":"limit"}}');
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end('{"ok":true}');
+  });
+  const accounts = [makeAccount("a", "A"), makeAccount("b", "B")];
+  const { server, port } = await startPool({ anthropicUrl: upstream.url }, accounts);
+  try {
+    const res = await request(port, { method: "POST", path: "/v1/messages" }, "{}");
+    assert.equal(res.status, 200, "the client sees the second account's answer");
+    assert.deepEqual(upstream.seen.map((s) => s.headers.authorization), ["Bearer tok-a", "Bearer tok-b"]);
+    // A is out until its window resets, not for a minute: the next request goes straight to B.
+    const next = await request(port, { method: "POST", path: "/v1/messages" }, "{}");
+    assert.equal(next.status, 200);
+    assert.equal(upstream.seen.length, 3);
+    assert.equal(upstream.seen[2].headers.authorization, "Bearer tok-b");
+    const cooldown = (server.router as any).cooldowns.get("a") as number;
+    assert.ok(cooldown - Date.now() > 2.9 * 3600_000, "cooldown follows the reset header");
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});
+
+test("an account without a readable sign-in is skipped for the next one", async () => {
+  const upstream = await fakeUpstream((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end("{}");
+  });
+  const accounts = [makeAccount("a", "A"), makeAccount("b", "B")];
+  const { server, port } = await startPool({ anthropicUrl: upstream.url }, accounts, {}, async (a) =>
+    a.id === "a" ? undefined : "tok-b",
+  );
+  try {
+    const res = await request(port, { method: "POST", path: "/v1/messages" }, "{}");
+    assert.equal(res.status, 200);
+    assert.deepEqual(upstream.seen.map((s) => s.headers.authorization), ["Bearer tok-b"]);
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});
+
+test("the client key is accepted in any of its headers, compared exactly, and never forwarded", async () => {
+  const upstream = await fakeUpstream((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end("{}");
+  });
+  const key = "relay-sec-test-key";
+  const { server, port } = await startPool({ anthropicUrl: upstream.url }, [makeAccount("a", "A")], { apiKey: key });
+  try {
+    const post = (headers: http.OutgoingHttpHeaders) =>
+      request(port, { method: "POST", path: "/v1/messages", headers }, "{}");
+    assert.equal((await post({})).status, 401);
+    assert.equal((await post({ "x-api-key": "relay-sec-wrong-key" })).status, 401);
+    assert.equal((await post({ "x-api-key": `${key}x` })).status, 401);
+    assert.equal((await post({ authorization: `Bearer ${key}` })).status, 200);
+    assert.equal((await post({ "x-api-key": key })).status, 200);
+    // A client holding its own OAuth token in Authorization still gets in with the key elsewhere.
+    assert.equal((await post({ authorization: "Bearer sk-ant-oat-own", "x-relay-key": key, "x-relay-provider": "claude" })).status, 200);
+    for (const seen of upstream.seen) {
+      assert.equal(seen.headers["x-relay-key"], undefined);
+      assert.equal(seen.headers["x-relay-provider"], undefined);
+      assert.equal(seen.headers["x-api-key"], undefined);
+      assert.equal(seen.headers.authorization, "Bearer tok-a");
+    }
+    // /status needs the key; /health does not.
+    assert.equal((await request(port, { path: "/status" })).status, 401);
+    assert.equal((await request(port, { path: "/status", headers: { "x-api-key": key } })).status, 200);
+    assert.equal((await request(port, { path: "/health" })).status, 200);
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});
+
+test("a loopback gateway refuses a foreign Host name (DNS rebinding)", async () => {
+  const { server, port } = await startPool({ anthropicUrl: "http://127.0.0.1:9" }, [makeAccount("a", "A")]);
+  try {
+    const foreign = await request(port, { path: "/status", headers: { host: "evil.example:80" } });
+    assert.equal(foreign.status, 403);
+    const local = await request(port, { path: "/status", headers: { host: `localhost:${port}` } });
+    assert.equal(local.status, 200);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("a provider without an account is a 503, not a cooldown", async () => {
+  const { server, port } = await startPool({ anthropicUrl: "http://127.0.0.1:9" }, [makeAccount("a", "A")]);
+  try {
+    const res = await request(port, { method: "POST", path: "/v1/responses" }, '{"model":"gpt-5"}');
+    assert.equal(res.status, 503);
+    assert.match(res.body, /No codex account/);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("a short 429 cools an account for its Retry-After, not until the window's ordinary reset", async () => {
+  const upstream = await fakeUpstream((_req, res) => {
+    res.writeHead(429, {
+      "content-type": "application/json",
+      "retry-after": "10",
+      // Sent with every answer; the window itself is not exhausted.
+      "anthropic-ratelimit-unified-status": "allowed",
+      "anthropic-ratelimit-unified-reset": String(Math.floor(Date.now() / 1000) + 5 * 3600),
+    });
+    res.end("{}");
+  });
+  const { server, port } = await startPool({ anthropicUrl: upstream.url }, [makeAccount("a", "A")]);
+  try {
+    await request(port, { method: "POST", path: "/v1/messages" }, "{}");
+    const cooldown = (server.router as any).cooldowns.get("a") as number;
+    assert.ok(cooldown - Date.now() <= 11_000, "only the Retry-After");
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});
+
+test("chat completions skip a Codex ChatGPT sign-in for an OpenAI API key account", async () => {
+  const openai = await fakeUpstream((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end("{}");
+  });
+  const chatgpt: Account = {
+    ...makeAccount("chatgpt", "ChatGPT"),
+    provider: "codex",
+    auth: { loggedIn: true, checkedAt: new Date().toISOString(), accountUuid: "33333333-3333-4333-8333-333333333333" },
+  };
+  const key: Account = { ...makeAccount("key", "Key"), provider: "codex" };
+  const { server, port } = await startPool({ openaiUrl: openai.url, codexUrl: "http://127.0.0.1:9" }, [chatgpt, key], {}, async (a) =>
+    a.id === "key" ? "sk-test" : "chatgpt-token",
+  );
+  try {
+    const res = await request(port, { method: "POST", path: "/v1/chat/completions" }, '{"model":"gpt-5"}');
+    assert.equal(res.status, 200);
+    assert.deepEqual(openai.seen.map((s) => s.headers.authorization), ["Bearer sk-test"]);
+  } finally {
+    await server.stop();
+    await openai.close();
+  }
+  // With only the ChatGPT sign-in, the answer says what is missing.
+  const only = await startPool({ codexUrl: "http://127.0.0.1:9" }, [chatgpt], {}, async () => "chatgpt-token");
+  try {
+    const res = await request(only.port, { method: "POST", path: "/v1/chat/completions" }, '{"model":"gpt-5"}');
+    assert.equal(res.status, 501);
+    assert.match(res.body, /Responses API only/);
+  } finally {
+    await only.server.stop();
+  }
 });

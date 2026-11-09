@@ -3,17 +3,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ProxyTab } from "../src/pages/settings/ProxyTab";
-import { SwitchingTab } from "../src/pages/settings/SwitchingTabs";
+import { ProxyPage } from "../src/pages/Proxy";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type T } from "../src/data/i18n";
 import {
   claudeCodeSnippet,
   clientHost,
+  codexSnippet,
   gatewayUrl,
   isLoopbackHost,
   maskKey,
-  openAiSnippet,
   parsePort,
   resetLabel,
   validHost,
@@ -29,11 +28,10 @@ const status = (over: Partial<ProxyStatus> = {}): ProxyStatus => ({
   clientApiKey: KEY,
   stats: { totalRequests: 1234, activeRequests: 2, promptCacheHits: 97, cacheHitRate: 84.5 },
   accounts: [
-    { id: "a", name: "Personal", email: "p@example.com", active: true, quotaPercent: 42, resetInMinutes: 130 },
-    { id: "b", name: "Work", active: false, quotaPercent: 93, resetInMinutes: 5 },
-    { id: "c", name: "New", active: false },
+    { id: "a", name: "Personal", email: "p@example.com", active: true, signedIn: true, quotaPercent: 42, resetInMinutes: 130 },
+    { id: "b", name: "Work", active: false, signedIn: true, quotaPercent: 100, resetInMinutes: 5 },
+    { id: "c", name: "New", active: false, signedIn: false },
   ],
-  allowCrossProviderFallback: false,
   ...over,
 });
 const t: T = (tr: string, _en: string = tr) => tr;
@@ -105,11 +103,14 @@ test("the client address is one a client can dial, and the key shows only its ta
 test("the setup snippets carry the address and the key, or a placeholder before there is one", () => {
   assert.equal(
     claudeCodeSnippet("127.0.0.1", 8317, KEY),
-    `export ANTHROPIC_BASE_URL=http://127.0.0.1:8317 && export ANTHROPIC_API_KEY=${KEY}`,
+    `export ANTHROPIC_BASE_URL=http://127.0.0.1:8317 && export ANTHROPIC_AUTH_TOKEN=${KEY}`,
   );
-  assert.match(claudeCodeSnippet("127.0.0.1", 8317, KEY, true), /ANTHROPIC_API_KEY=relay-sec-••••/);
-  assert.match(claudeCodeSnippet("127.0.0.1", 8317, undefined), /ANTHROPIC_API_KEY=<relay-key>$/);
-  assert.equal(openAiSnippet("127.0.0.1", 9000, KEY), `Base URL: http://127.0.0.1:9000/v1\nAPI key:  ${KEY}`);
+  assert.match(claudeCodeSnippet("127.0.0.1", 8317, KEY, true), /ANTHROPIC_AUTH_TOKEN=relay-sec-••••/);
+  assert.match(claudeCodeSnippet("127.0.0.1", 8317, undefined), /ANTHROPIC_AUTH_TOKEN=<relay-key>$/);
+  assert.equal(
+    codexSnippet("127.0.0.1", 9000, KEY),
+    `export OPENAI_BASE_URL=http://127.0.0.1:9000/v1 && export OPENAI_API_KEY=${KEY}`,
+  );
 });
 
 test("port and host fields accept only what the gateway accepts", () => {
@@ -130,10 +131,10 @@ test("a reset reads as time left, in both languages", () => {
   assert.equal(resetLabel(3 * 1440 + 125, en), "3 d 2 h");
 });
 
-test("a running gateway reads Proxy Aktif with its address; the key is hidden and the monitor is filled", () => {
-  const html = render(relayFor(status()), ProxyTab);
-  assert.match(html, /Proxy Aktif: 127\.0\.0\.1:8317/);
-  assert.doesNotMatch(html, /Proxy Devre Dışı/);
+test("a running gateway reads Çalışıyor with its port; the key is hidden and the monitor is filled", () => {
+  const html = render(relayFor(status()), ProxyPage);
+  assert.match(html, /Çalışıyor · :8317/);
+  assert.doesNotMatch(html, /Durduruldu/);
   assert.equal(checked(html, "proxy-enabled"), "true");
   assert.match(html, /value="127\.0\.0\.1"/);
   assert.match(html, /id="proxy-port"[^>]*value="8317"|value="8317"[^>]*id="proxy-port"/);
@@ -142,41 +143,44 @@ test("a running gateway reads Proxy Aktif with its address; the key is hidden an
   assert.match(html, /relay-sec-••••••••••••DEFG/);
   assert.match(html, /Yenile/);
   assert.match(html, /Claude Code CLI/);
-  assert.match(html, /export ANTHROPIC_BASE_URL=http:\/\/127\.0\.0\.1:8317 &amp;&amp; export ANTHROPIC_API_KEY=relay-sec-••••/);
-  assert.match(html, /Cursor \/ VS Code \/ OpenAI/);
-  assert.match(html, /http:\/\/127\.0\.0\.1:8317\/v1/);
-  assert.match(html, /Soonest-Reset-First/);
-  for (const re of [/Toplam istek/, /1\.234/, /Açık bağlantı/, /Önbellek isabeti/, /İsabet oranı/, /%84,5/])
+  assert.match(html, /export ANTHROPIC_BASE_URL=http:\/\/127\.0\.0\.1:8317 &amp;&amp; export ANTHROPIC_AUTH_TOKEN=relay-sec-••••/);
+  assert.match(html, /Codex \/ Cursor \/ OpenAI SDK/);
+  assert.match(html, /export OPENAI_BASE_URL=http:\/\/127\.0\.0\.1:8317\/v1 &amp;&amp; export OPENAI_API_KEY=relay-sec-••••/);
+  assert.match(html, /cURL testi/);
+  assert.match(html, /En yakın sıfırlama \(önerilen\)/);
+  for (const re of [/Toplam istek/, /1\.234/, /Aktif akış/, /Önbellek isabeti/, /Önbellek oranı/, /%84,5/])
     assert.match(html, re);
-  // Accounts with their quota and reset countdown; the latest one marked active.
-  assert.match(html, /Personal[\s\S]*Aktif[\s\S]*p@example\.com/);
+  // Accounts with their quota and reset countdown; the last one used, a full one and one not signed in.
+  assert.match(html, /Personal[\s\S]*Son istek[\s\S]*p@example\.com/);
   assert.match(html, /aria-valuenow="42"[\s\S]*%42[\s\S]*2 sa 10 dk/);
-  assert.match(html, /aria-valuenow="93"[\s\S]*%93[\s\S]*5 dk/);
+  assert.match(html, /Work[\s\S]*Dolu[\s\S]*aria-valuenow="100"/);
+  assert.match(html, /New[\s\S]*Giriş yok/);
   assert.equal([...html.matchAll(/data-active="true"/g)].length, 1);
-  assert.match(html, /Sağlayıcılar arası yedekleme/);
-  assert.equal(checked(html, "proxy-cross-provider"), "false");
+  // Two accounts signed in, one of them full: one can take requests.
+  assert.match(html, /1 hesap istek alabilir/);
+  assert.doesNotMatch(html, /Sağlayıcılar arası yedekleme|proxy-cross-provider/);
 });
 
-test("a stopped gateway reads Proxy Devre Dışı, says why it did not start, and holds the English too", () => {
-  const off = render(relayFor(status({ running: false, error: "127.0.0.1:8317 is already in use." })), ProxyTab);
-  assert.match(off, /Proxy Devre Dışı/);
-  assert.doesNotMatch(off, /Proxy Aktif/);
+test("a stopped gateway reads Durduruldu, says why it did not start, and holds the English too", () => {
+  const off = render(relayFor(status({ running: false, error: "127.0.0.1:8317 is already in use." })), ProxyPage);
+  assert.match(off, /Durduruldu/);
+  assert.doesNotMatch(off, /Çalışıyor ·/);
   assert.equal(checked(off, "proxy-enabled"), "false");
   assert.match(off, /role="alert"[^>]*>127\.0\.0\.1:8317 is already in use\./);
   assert.match(off, /sayaçlar proxy açıkken dolar/);
-  const english = render(relayFor(status({ running: false })), ProxyTab, en);
-  assert.match(english, /Proxy off/);
+  const english = render(relayFor(status({ running: false })), ProxyPage, en);
+  assert.match(english, /Stopped/);
   assert.match(english, /Live routing monitor/);
-  assert.match(english, /Cross-provider fallback/);
-  assert.doesNotMatch(english, /Devre Dışı/);
+  assert.doesNotMatch(english, /Cross-provider fallback/);
+  assert.doesNotMatch(english, /Durduruldu/);
 });
 
 test("a gateway on a network address warns that anyone with the key can spend the accounts", () => {
-  assert.doesNotMatch(render(relayFor(status()), ProxyTab), /yerel değil/);
-  assert.match(render(relayFor(status({ host: "100.64.0.2" })), ProxyTab), /Bu adres yerel değil/);
+  assert.doesNotMatch(render(relayFor(status()), ProxyPage), /yerel değil/);
+  assert.match(render(relayFor(status({ host: "100.64.0.2" })), ProxyPage), /Bu adres yerel değil/);
 });
 
-test("the tab turns the gateway on and off, changes the fallback, and regenerates the key through main", async () => {
+test("the page turns the gateway on, changes the strategy, and regenerates the key only after asking", async () => {
   const dom = fakeDom();
   dom.install();
   readableText();
@@ -205,7 +209,7 @@ test("the tab turns the gateway on and off, changes the fallback, and regenerate
         createElement(
           I18nContext.Provider,
           { value: { language: "tr", setLanguage() {}, t } },
-          createElement(RelayContext.Provider, { value: relayFor(current, api) }, createElement(ProxyTab)),
+          createElement(RelayContext.Provider, { value: relayFor(current, api) }, createElement(ProxyPage)),
         ),
       ),
     );
@@ -214,35 +218,25 @@ test("the tab turns the gateway on and off, changes the fallback, and regenerate
     const byId = (id: string) => find(container, (n) => attr(n, "id") === id);
     const button = (label: string) =>
       find(container, (n) => n.tagName?.toLowerCase() === "button" && textOf(n).includes(label));
-    assert.match(textOf(container), /Proxy Devre Dışı/);
+    assert.match(textOf(container), /Durduruldu/);
 
     await act(async () => dom.dispatch(byId("proxy-enabled")!, "click", { detail: 1 }));
     assert.deepEqual(calls.at(-1), ["toggle", true]);
-    assert.match(textOf(container), /Proxy Aktif: 127\.0\.0\.1:8317/);
+    assert.match(textOf(container), /Çalışıyor · :8317/);
 
-    await act(async () => dom.dispatch(byId("proxy-cross-provider")!, "click", { detail: 1 }));
-    assert.deepEqual(calls.at(-1), ["configure", { allowCrossProviderFallback: true }]);
+    await act(async () => dom.dispatch(button("Dengeli kapasite")!, "click", { detail: 1 }));
+    assert.deepEqual(calls.at(-1), ["configure", { routingStrategy: "balanced" }]);
 
     // Yenile asks first: the old key stops working.
     await act(async () => dom.dispatch(button("Yenile")!, "click", { detail: 1 }));
     assert.equal(calls.some((c) => c[0] === "regenerate"), false);
-    assert.match(textOf(container), /Eski anahtar çalışmaz/);
+    assert.match(textOf(container), /Eski anahtar hemen çalışmaz olur/);
     await act(async () => dom.dispatch(button("Yeni anahtar üret")!, "click", { detail: 1 }));
     assert.deepEqual(calls.at(-1), ["regenerate"]);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
   }
-});
-
-test("Settings → Switching offers the CDP live switch under the extension, on unless turned off", () => {
-  const html = render(relayFor(undefined), SwitchingTab);
-  assert.match(html, /Tarayıcıyı kapatmadan geçiş yap \(CDP Canlı Geçiş\)/);
-  assert.equal(checked(html, "cdp-hot-switch"), "true");
-  assert.match(html, /id="gecis-eklenti"[\s\S]*cdp-hot-switch[\s\S]*id="gecis-terminal"/);
-  const off = relayFor(undefined);
-  off.settings = { ...off.settings, cdpHotSwitch: false };
-  assert.equal(checked(render(off, SwitchingTab), "cdp-hot-switch"), "false");
 });
 
 test("main, the preload and the desktop snapshot carry the gateway; quitting stops it", () => {

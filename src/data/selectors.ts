@@ -1,7 +1,8 @@
-import type { Account, AccountUsage, AuthFlow, RelaySettings, Snapshot } from "../../shared/types";
+import type { Account, AccountUsage, AuthFlow, DesktopState, RelaySettings, Snapshot } from "../../shared/types";
 import { freshUsage, quotaWindows } from "../../shared/usage";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
 import { tempoAt } from "../../shared/tempo";
+import { clientHost } from "../lib/proxy-ui";
 
 export const pendingFlow = (f?: AuthFlow) =>
   !!f && ["starting", "waiting", "verifying"].includes(f.status);
@@ -55,14 +56,20 @@ export function overviewAccounts(
     others.map((account) => ({ account, usage: usage[account.id] })),
     { now, rate },
   );
-  const order = [...ranked.filter((r) => r.account.desktop), ...ranked.filter((r) => !r.account.desktop)];
+  // Only a Claude account is switched to in the Claude app; Codex and Antigravity accounts feed the gateway.
+  const claude = (a: Account) => (a.provider ?? "claude") === "claude";
+  const order = [
+    ...ranked.filter((r) => claude(r.account) && r.account.desktop),
+    ...ranked.filter((r) => !claude(r.account)),
+    ...ranked.filter((r) => claude(r.account) && !r.account.desktop),
+  ];
   let recommended = false;
   return order.map(({ account }) => {
     const u = usage[account.id];
     let state: OverviewState;
     let availableAt: string | undefined;
     const full = limitFull(u, now);
-    if (!account.desktop) state = "not-linked";
+    if (claude(account) && !account.desktop) state = "not-linked";
     else if (!freshUsage(u, now)) state = "unknown";
     else if (full) {
       state = "exhausted";
@@ -70,17 +77,24 @@ export function overviewAccounts(
     } else if (u.fiveHour?.resetsAt && Date.parse(u.fiveHour.resetsAt) > now) state = "window-open";
     else state = "ready";
     const pick =
-      !recommended && !inWindows.has(account.id) && (state === "ready" || state === "window-open");
+      !recommended && claude(account) && !inWindows.has(account.id) && (state === "ready" || state === "window-open");
     if (pick) recommended = true;
     return { account, usage: u, state, availableAt, recommended: pick };
   });
 }
 
-export function sidebarStatus(snapshot: Snapshot | undefined) {
+/**
+ * What the sidebar's dots say. The gateway's state rides on the desktop state (`proxyStatus`), not on
+ * the snapshot, so the shell passes both; `proxyAddress` is set only while the gateway answers.
+ */
+export function sidebarStatus(snapshot: Snapshot | undefined, desktop?: DesktopState) {
+  const proxy = desktop?.proxyStatus;
   return {
     accounts: snapshot?.accounts.length ?? 0,
     planning: !!snapshot?.settings.planning.autoStart,
     switching: !!snapshot?.fleet?.enabled || (snapshot?.settings.autoSwitchMode ?? "off") !== "off",
+    proxyRunning: !!proxy?.running,
+    ...(proxy?.running ? { proxyAddress: `${clientHost(proxy.host)}:${proxy.port}` } : {}),
   };
 }
 

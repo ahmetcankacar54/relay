@@ -164,6 +164,17 @@ function forget(ctx: CliContext, id: string) {
 
 export const add: Command = async ({ io, deps, parsed, t, argv }) => {
   const { flags } = parsed;
+  // The CLI adds Claude accounts only; Codex and Antigravity are connected in Relay.app,
+  // which checks their sign-in. Checked first, so a mistyped provider never quits Claude.
+  const provider = typeof flags.provider === "string" ? flags.provider.toLowerCase() : undefined;
+  if (provider !== undefined && provider !== "claude")
+    throw new CliError(
+      t(
+        "relay add yalnızca Claude hesabı ekler. Codex ve Antigravity hesaplarını Relay uygulamasında Hesaplar → Hesap ekle'den bağla.",
+        "relay add only adds Claude accounts. Connect Codex and Antigravity accounts in Relay.app under Accounts → Add account.",
+      ),
+      EXIT.usage,
+    );
   const ctx = await openContext(io, deps, flags, { write: true, desktop: true });
   const accounts = ctx.store.state.accounts;
   if (flags.cancel || flags.resume) {
@@ -195,30 +206,7 @@ export const add: Command = async ({ io, deps, parsed, t, argv }) => {
   // An account of that name without a Desktop link (made in Relay.app) is linked instead.
   const existing = accounts.find((a) => foldName(a.name) === foldName(name) && !a.desktop);
   if (!existing) assertFreeName(accounts, name, t);
-
-  const provider = typeof flags.provider === "string" ? flags.provider.toLowerCase() : undefined;
-  if (provider === "codex" || provider === "gemini") {
-    const account = ctx.store.create({
-      name,
-      kind: flags.work ? "work" : "personal",
-      group: flags.work ? ((flags.group as string | undefined) ?? undefined) : undefined,
-      provider,
-    });
-    if (typeof flags.token === "string" && flags.token) {
-      const credPath = path.join(ctx.store.profile(account.id), ".credentials.json");
-      await fs.writeFile(credPath, JSON.stringify({ accessToken: flags.token }, null, 2), "utf8");
-    }
-    io.stdout(
-      t(
-        `${name} (${provider.toUpperCase()}) hesabı eklendi.`,
-        `Saved ${name} (${provider.toUpperCase()}) account.`,
-      ),
-    );
-    return EXIT.ok;
-  }
-
   const state = await assertCanQuitClaude(ctx);
-
   const inside = await insideDesktop(ctx);
   const ends = inside ? [sessionEndsLine(ctx)] : [];
   const current = state.currentAccountUuid;

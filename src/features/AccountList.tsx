@@ -1,6 +1,7 @@
 import type { MouseEvent, ReactNode } from "react";
 import { ChevronRight, LoaderCircle } from "lucide-react";
 import { UsageRing } from "@/components/UsageRing";
+import { ProviderBadge } from "@/components/ProviderBadge";
 import { useI18n } from "@/data/i18n";
 import { ringState } from "@/lib/account-row";
 import type { OverviewRow } from "@/data/selectors";
@@ -100,6 +101,9 @@ export function AccountList({
                   <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-2xs font-semibold text-accent-foreground">
                     {t("önerilen", "suggested")}
                   </span>
+                )}
+                {(!panel || account.provider !== undefined && account.provider !== "claude") && (
+                  <ProviderBadge provider={account.provider} className="shrink-0 px-1.5" />
                 )}
               </span>
               <span className={cn("block truncate text-muted-foreground", panel ? "text-2xs" : "text-xs")}>

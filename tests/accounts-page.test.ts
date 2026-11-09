@@ -323,7 +323,8 @@ test("an account without a plan shows its subscription as a badge that says so, 
   const tr = html("tr");
   assert.doesNotMatch(tr, /Plan yok|No plan/);
   // The plan sits beside the name; an account with neither shows none.
-  assert.equal(tr.split("<tr").slice(2)[0].match(/data-slot="badge"/g), null);
+  // (the provider badge is its own outline badge, not a plan)
+  assert.equal(tr.split("<tr").slice(2)[0].match(/data-slot="badge" data-variant="secondary"/g), null);
   assert.match(tr, /data-slot="badge"[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
   assert.doesNotMatch(tr, /Plan seç/);
   assert.match(html("en"), /title="Subscription · no plan selected for planning">Team<\/span>/);

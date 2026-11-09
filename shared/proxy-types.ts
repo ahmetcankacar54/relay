@@ -9,7 +9,6 @@ export interface ProxyConfig {
   affinityTtlSeconds: number;
   routingStrategy: RoutingStrategy;
   apiKey?: string;
-  allowCrossProviderFallback?: boolean;
 }
 
 export interface ProxySessionState {
@@ -48,7 +47,6 @@ export interface ProxyState {
   port: number;
   host: string;
   endpointUrl: string;
-  tailscaleUrl?: string;
   activeSessionsCount: number;
   uptimeSeconds: number;
   error?: string;

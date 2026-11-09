@@ -41,29 +41,26 @@ const usage = (id: string, five?: [number, string?], seven?: [number, string?]):
   ...(seven ? { sevenDay: { usedPercent: seven[0], resetsAt: seven[1] } } : {}),
 });
 
-test("a new install's settings hold a stopped gateway on 8317 and the CDP live switch on", () => {
+test("a new install's settings hold a stopped gateway on 8317", () => {
   assert.deepEqual(
     { ...DEFAULT_SETTINGS.proxy },
-    { ...DEFAULT_PROXY_CONFIG, enabled: false, port: 8317, host: "127.0.0.1", allowCrossProviderFallback: false },
+    { ...DEFAULT_PROXY_CONFIG, enabled: false, port: 8317, host: "127.0.0.1" },
   );
-  assert.equal(DEFAULT_SETTINGS.cdpHotSwitch, true);
   assert.doesNotThrow(() => settingsSchema.parse(DEFAULT_SETTINGS));
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "relay-proxy-store-"));
   try {
     const store = new Store(root);
     assert.equal(store.state.settings.proxy?.enabled, false);
     assert.equal(store.state.settings.proxy?.port, 8317);
-    assert.equal(store.state.settings.cdpHotSwitch, true);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
 test("a registry saved before the gateway still reads, and the gateway settings are validated", () => {
-  const { proxy: _p, cdpHotSwitch: _c, ...saved } = DEFAULT_SETTINGS;
+  const { proxy: _p, ...saved } = DEFAULT_SETTINGS;
   const read = settingsSchema.parse(saved);
   assert.equal(read.proxy, undefined);
-  assert.equal(read.cdpHotSwitch, undefined);
   for (const bad of [
     { ...DEFAULT_SETTINGS.proxy, port: 0 },
     { ...DEFAULT_SETTINGS.proxy, port: 70_000 },
@@ -74,8 +71,7 @@ test("a registry saved before the gateway still reads, and the gateway settings 
     assert.throws(() => settingsSchema.parse({ ...saved, proxy: bad }));
 });
 
-test("updateSettings can set the CDP switch but never the gateway: it has its own calls", () => {
-  assert.deepEqual(settingsPatchSchema.parse({ cdpHotSwitch: false }), { cdpHotSwitch: false });
+test("updateSettings never sets the gateway: it has its own calls", () => {
   assert.deepEqual(settingsPatchSchema.parse({}), {});
   assert.throws(() => settingsPatchSchema.parse({ proxy: { ...DEFAULT_SETTINGS.proxy, host: "0.0.0.0" } }));
 });
@@ -89,14 +85,13 @@ test("a client key is relay-sec- and 256 random bits, never repeated", () => {
   }
 });
 
-test("configuring takes a valid port, a host and the fallback choice, and nothing else", () => {
-  assert.deepEqual(proxyConfigurePatch.parse({ port: 9000, host: " 0.0.0.0 ", allowCrossProviderFallback: true }), {
+test("configuring takes a valid port, a host and the routing choice, and nothing else", () => {
+  assert.deepEqual(proxyConfigurePatch.parse({ port: 9000, host: " 0.0.0.0 ", routingStrategy: "balanced" }), {
     port: 9000,
     host: "0.0.0.0",
-    allowCrossProviderFallback: true,
+    routingStrategy: "balanced",
   });
-  assert.deepEqual(proxyConfigurePatch.parse({ allowCrossProviderFallback: false }), { allowCrossProviderFallback: false });
-  for (const bad of [{ port: 0 }, { port: 1.5 }, { port: "80" }, { host: "" }, { host: "x/y" }, { apiKey: "mine" }, { enabled: true }])
+  for (const bad of [{ allowCrossProviderFallback: true }, { port: 0 }, { port: 1.5 }, { port: "80" }, { host: "" }, { host: "x/y" }, { apiKey: "mine" }, { enabled: true }])
     assert.throws(() => proxyConfigurePatch.parse(bad), JSON.stringify(bad));
 });
 
@@ -119,7 +114,7 @@ test("the status lists every account with its room left, marks the latest one, a
   const b = account("b", "Work");
   const status = buildProxyStatus({
     running: true,
-    config: { ...DEFAULT_PROXY_CONFIG, enabled: true, apiKey: "relay-sec-k", allowCrossProviderFallback: true },
+    config: { ...DEFAULT_PROXY_CONFIG, enabled: true, apiKey: "relay-sec-k" },
     metrics: {
       totalRequests: 12,
       activeSessions: 1,
@@ -138,11 +133,10 @@ test("the status lists every account with its room left, marks the latest one, a
   assert.equal(status.port, 8317);
   assert.equal(status.host, "127.0.0.1");
   assert.equal(status.clientApiKey, "relay-sec-k");
-  assert.equal(status.allowCrossProviderFallback, true);
   assert.deepEqual(status.stats, { totalRequests: 12, activeRequests: 2, promptCacheHits: 9, cacheHitRate: 84.6 });
   assert.deepEqual(status.accounts, [
-    { id: "a", name: "Personal", email: "p@example.com", active: false, quotaPercent: 20, resetInMinutes: 1 },
-    { id: "b", name: "Work", active: true },
+    { id: "a", name: "Personal", provider: "claude", email: "p@example.com", active: false, signedIn: true, quotaPercent: 20, resetInMinutes: 1 },
+    { id: "b", name: "Work", provider: "claude", active: true, signedIn: false },
   ]);
 });
 
@@ -157,7 +151,6 @@ test("a stopped gateway shows zero counters, no active account, and why it did n
   });
   assert.equal(status.running, false);
   assert.equal(status.clientApiKey, undefined);
-  assert.equal(status.allowCrossProviderFallback, false);
   assert.deepEqual(status.stats, { totalRequests: 0, activeRequests: 0, promptCacheHits: 0, cacheHitRate: 0 });
   assert.equal(status.accounts[0].active, false);
   assert.equal(status.error, "port in use");
@@ -197,54 +190,3 @@ test("the gateway's counters: requests in flight, answers that read the cache, t
   assert.equal(stats.getMetrics(0).lastAccountId, undefined);
 });
 
-test("with the CDP live switch off, a running browser is not tried through its debugging port", async (t) => {
-  const run = async (cdpHotSwitch: boolean | undefined) => {
-    const temp = fs.mkdtempSync(path.join(os.tmpdir(), "relay-cdp-off-"));
-    t.after(() => fs.rmSync(temp, { recursive: true, force: true }));
-    const world = extensionWorld(temp);
-    const dir = world.install("brave");
-    const sealer = createSealer(Buffer.alloc(32, 7));
-    const seal = [(x: string) => sealer.seal(x), (d: Buffer) => sealer.unseal(d)] as const;
-    const vault = new ExtensionVault(path.join(temp, "vault"), ...seal);
-    const cookieVault = new CookieVault(path.join(temp, "vault"), ...seal);
-    const [a, b] = [randomUUID(), randomUUID()];
-    world.stored.set(dir, signInFor(a, 1));
-    await vault.save(b, signInFor(b, 5));
-    await cookieVault.save(b, loginFor(b, 5));
-    // Only the live attempt reads the login before the browser is quit; the file swap reads it after.
-    let reads = 0;
-    let readsBeforeQuit = 0;
-    const load = cookieVault.load.bind(cookieVault);
-    cookieVault.load = (async (...args: Parameters<typeof load>) => {
-      reads += 1;
-      if (!world.events.some((e) => e.startsWith("quit:"))) readsBeforeQuit += 1;
-      return load(...args);
-    }) as typeof cookieVault.load;
-    const switcher = new ExtensionSwitcher({
-      system: world.system,
-      storage: world.storage,
-      cookies: world.cookies,
-      vault,
-      cookieVault,
-      scratch: path.join(temp, "scratch"),
-    });
-    world.state.running = true;
-    const outcome = await switcher.run({
-      setting: { mode: "restart" },
-      mayQuit: true,
-      target: [b],
-      known: [a, b],
-      ...(cdpHotSwitch === undefined ? {} : { cdpHotSwitch }),
-    });
-    return { outcome, reads, readsBeforeQuit };
-  };
-  const on = await run(undefined);
-  const off = await run(false);
-  const explicitOn = await run(true);
-  assert.equal(on.outcome.result, "switched");
-  assert.equal(off.outcome.result, "switched");
-  assert.equal(off.outcome.restarted, true, "the usual way still works");
-  assert.equal(on.readsBeforeQuit, 1, "missing means on: the live attempt reads the login first");
-  assert.equal(explicitOn.readsBeforeQuit, 1);
-  assert.equal(off.readsBeforeQuit, 0, "off: the browser is quit without trying the port");
-});

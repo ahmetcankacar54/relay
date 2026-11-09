@@ -8,6 +8,7 @@ import {
   KeyRound,
   Monitor,
   MoreHorizontal,
+  Network,
   Pencil,
   RefreshCw,
   SquareTerminal,
@@ -34,6 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusDot } from "@/components/StatusDot";
+import { ProviderBadge } from "@/components/ProviderBadge";
 import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { limitFull, pendingFlow, windowAccounts } from "@/data/selectors";
@@ -54,7 +56,8 @@ import { useTerminalStatus } from "@/data/useTerminal";
 import { terminalGuide } from "@/lib/terminal-ui";
 import type { TerminalStatus } from "../../../shared/terminal-identity";
 import type { ExtensionStatus } from "../../../shared/types";
-import { avatarClass, planColumn } from "./accountLabels";
+import { avatarClass, planColumn, providerLabel } from "./accountLabels";
+import { isClaudeAccount } from "@/lib/account-health";
 
 /**
  * A connection icon's three states: green when ready, amber with a dot when it needs a step (a
@@ -97,6 +100,27 @@ function ConnectionIcons({
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
+  // Codex and Antigravity have no Claude app, extension or terminal: one badge says they feed the gateway.
+  if (!isClaudeAccount(account)) {
+    const inPool = account.auth?.loggedIn === true;
+    const title = t(
+      `${providerLabel(account.provider)}: ${inPool ? "bağlı · proxy havuzunda" : "giriş yok"}`,
+      `${providerLabel(account.provider)}: ${inPool ? "connected · in the gateway pool" : "not signed in"}`,
+    );
+    return (
+      <div className="flex items-center gap-2" data-slot="connection-icons" data-provider={account.provider}>
+        <span
+          role="img"
+          title={title}
+          aria-label={title}
+          className={cn("inline-flex items-center gap-1 text-xs", toneText[inPool ? "ok" : "off"])}
+        >
+          <Network className="size-4" />
+          {inPool ? t("Bağlı · Gateway", "Connected · Gateway") : t("Giriş yok", "Not signed in")}
+        </span>
+      </div>
+    );
+  }
   const signIn = usageSignInStatus(account, usage, waiting, t);
   const ext =
     extension && extensionGuide(account, extension, relay.accounts, t, language);
@@ -247,7 +271,9 @@ export function rowActions(
   const inWindow = windowAccounts(relay.data).has(a.id);
   const windowNote = t("Önce ayrı penceresini kapat", "Close its separate window first");
   const items: RowAction[] = [];
-  if (a.desktop && !isActive)
+  // Codex and Antigravity accounts feed the gateway: the Claude app, its windows and Claude Code sign-in do not apply.
+  const claude = isClaudeAccount(a);
+  if (claude && a.desktop && !isActive)
     items.push({
       key: "switch",
       label: t("Geç", "Switch"),
@@ -262,7 +288,7 @@ export function rowActions(
           }),
     });
   // An open window can always be brought forward or closed, even once the feature is turned off.
-  if (a.desktop && !isActive && windows?.supported && (windows.enabled || inWindow))
+  if (claude && a.desktop && !isActive && windows?.supported && (windows.enabled || inWindow))
     items.push(
       ...(inWindow
         ? [
@@ -291,7 +317,7 @@ export function rowActions(
             },
           ]),
     );
-  if (a.desktop && isActive)
+  if (claude && a.desktop && isActive)
     items.push({
       key: "open",
       label: t("Claude uygulamasını aç", "Open the Claude app"),
@@ -300,18 +326,19 @@ export function rowActions(
       run: () =>
         void relay.action(`open:${a.id}`, () => relay.api.openDesktop()),
     });
-  items.push({
-    key: "cli",
-    label: a.auth?.email
-      ? t("Limit okuma girişini yenile", "Renew usage sign-in")
-      : t("Limit okuma girişi yap", "Sign in to read usage"),
-    icon: Globe2,
-    disabled: !!relay.busy || pendingFlow(authFlow),
-    run: () => void relay.startCli(a),
-  });
+  if (claude)
+    items.push({
+      key: "cli",
+      label: a.auth?.email
+        ? t("Limit okuma girişini yenile", "Renew usage sign-in")
+        : t("Limit okuma girişi yap", "Sign in to read usage"),
+      icon: Globe2,
+      disabled: !!relay.busy || pendingFlow(authFlow),
+      run: () => void relay.startCli(a),
+    });
   // Only a refresh that may prompt clears these, so it is its own item, apart from "Refresh limits".
   const renewal = renewalIssue(relay.data?.usage[a.id]);
-  if (renewal)
+  if (claude && renewal)
     items.push({
       key: "renew",
       label:
@@ -322,7 +349,8 @@ export function rowActions(
       disabled: relay.usageBusy.has(a.id),
       run: () => void relay.refreshUsage(a, true),
     });
-  items.push(
+  if (claude)
+    items.push(
     a.desktop
       ? {
           key: "desktop-reconnect",
@@ -544,7 +572,7 @@ export function AccountsTable({
                 }
               }}
             >
-              <TableCell className="max-w-0 w-[34%]">
+              <TableCell className="max-w-0 w-[38%]">
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span
                     aria-hidden="true"
@@ -566,6 +594,7 @@ export function AccountsTable({
                           {t("önerilen", "suggested")}
                         </span>
                       )}
+                      <ProviderBadge provider={a.provider} className="shrink-0 px-1.5" />
                       {plan && (
                         <Badge
                           variant="secondary"
@@ -600,6 +629,14 @@ export function AccountsTable({
                     <StatusDot tone={health.tone} />
                     {health.label}
                   </span>
+                  {!isClaudeAccount(a) && a.auth?.loggedIn && (
+                    <Badge variant="outline" data-slot="gateway-pool" className="shrink-0 gap-1">
+                      <Network />
+                      {relay.desktop?.proxyStatus?.accounts.some((p) => p.id === a.id && p.active)
+                        ? t("Proxy'de aktif", "Active in Proxy")
+                        : t("Gateway havuzu", "Gateway pool")}
+                    </Badge>
+                  )}
                   {stale && usage?.checkedAt && (
                     <span
                       data-slot="data-age"

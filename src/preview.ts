@@ -609,13 +609,29 @@ function previewLostFoundSource() {
   };
 }
 
-/** The Proxy tab in the preview: a gateway that turns on and off in memory, with made-up traffic. */
-const previewProxy = { running: false, port: 8317, host: "127.0.0.1", key: "relay-sec-preview-0000000000000000000000000000", cross: false };
+/** The Proxy page in the preview: a gateway that turns on and off in memory, with made-up traffic. */
+const previewProxy: {
+  running: boolean;
+  port: number;
+  host: string;
+  key: string;
+  routingStrategy: "soonest-reset" | "balanced" | "strict-priority";
+  affinityTtlSeconds: number;
+} = {
+  running: false,
+  port: 8317,
+  host: "127.0.0.1",
+  key: "relay-sec-preview-0000000000000000000000000000",
+  routingStrategy: "soonest-reset",
+  affinityTtlSeconds: 300,
+};
 const previewProxyStatus = (): ProxyStatus => ({
   running: previewProxy.running,
   port: previewProxy.port,
   host: previewProxy.host,
   clientApiKey: previewProxy.key,
+  routingStrategy: previewProxy.routingStrategy,
+  affinityTtlSeconds: previewProxy.affinityTtlSeconds,
   stats: previewProxy.running
     ? { totalRequests: 128, activeRequests: 2, promptCacheHits: 97, cacheHitRate: 84.5 }
     : { totalRequests: 0, activeRequests: 0, promptCacheHits: 0, cacheHitRate: 0 },
@@ -624,15 +640,16 @@ const previewProxyStatus = (): ProxyStatus => ({
     return {
       id: a.id,
       name: a.name,
+      provider: a.provider ?? "claude",
       ...(a.auth?.email ? { email: a.auth.email } : {}),
       active: previewProxy.running && i === 0,
+      signedIn: a.auth?.loggedIn === true,
       ...(window ? { quotaPercent: Math.round(window.usedPercent) } : {}),
       ...(window?.resetsAt
         ? { resetInMinutes: Math.max(0, Math.ceil((Date.parse(window.resetsAt) - Date.now()) / 60_000)) }
         : {}),
     };
   }),
-  allowCrossProviderFallback: previewProxy.cross,
 });
 
 export const previewApi: RelayAPI = {
@@ -644,12 +661,86 @@ export const previewApi: RelayAPI = {
   proxyConfigure: async (input) => {
     if (input.port !== undefined) previewProxy.port = input.port;
     if (input.host !== undefined) previewProxy.host = input.host;
-    if (input.allowCrossProviderFallback !== undefined) previewProxy.cross = input.allowCrossProviderFallback;
+    if (input.routingStrategy !== undefined) previewProxy.routingStrategy = input.routingStrategy;
+    if (input.affinityTtlSeconds !== undefined) previewProxy.affinityTtlSeconds = input.affinityTtlSeconds;
     return previewProxyStatus();
   },
   proxyRegenerateKey: async () => {
     previewProxy.key = `relay-sec-preview-${Math.random().toString(36).slice(2).padEnd(28, "0")}`;
     return previewProxyStatus();
+  },
+  detectProviders: async () => [
+    {
+      provider: "claude",
+      detected: true,
+      email: "account1@example.test",
+      accountUuid: ids[0],
+      orgId: ids[2],
+      orgName: "Personal workspace",
+      plan: "Claude Max",
+      source: "Claude Desktop",
+    },
+    {
+      provider: "codex",
+      detected: true,
+      email: "codex@example.test",
+      plan: "pro",
+      source: "~/.codex/auth.json",
+    },
+    {
+      provider: "antigravity",
+      detected: false,
+    },
+  ],
+  // As main answers: Claude waits for the Claude app (the steps continue); Codex is signed in
+  // with what its token says and has no limits Relay can read.
+  oneClickConnect: async (input) => {
+    if (input.provider !== "claude" && input.provider !== "codex") throw new Error("Use Antigravity OAuth");
+    const account: Account = {
+      id: crypto.randomUUID(),
+      name: input.name,
+      kind: input.kind,
+      group: input.kind === "personal" ? "personal" : `work:${input.group || crypto.randomUUID()}`,
+      color: "olive",
+      createdAt: new Date().toISOString(),
+      provider: input.provider,
+      ...(input.provider === "codex"
+        ? {
+            auth: {
+              loggedIn: true,
+              checkedAt: new Date().toISOString(),
+              ...(input.apiKey ? {} : { email: "codex@example.test" }),
+              subscription: input.apiKey ? "API key" : "pro",
+            },
+          }
+        : {}),
+    };
+    accounts.push(account);
+    return {
+      account: structuredClone(account),
+      layers:
+        input.provider === "codex"
+          ? { desktop: "skipped", usage: "skipped", terminal: "skipped", extensionAndProxy: "done" }
+          : { desktop: "pending", usage: "pending", terminal: "pending", extensionAndProxy: "pending" },
+      ...(input.provider === "claude" ? { needsSignIn: true } : {}),
+    };
+  },
+  startAntigravityOAuth: async (input) => {
+    const account: Account = {
+      id: crypto.randomUUID(), name: input.name, kind: input.kind,
+      group: input.kind === "personal" ? "personal" : `work:${input.group || crypto.randomUUID()}`,
+      color: "plum", createdAt: new Date().toISOString(), provider: "antigravity",
+    };
+    accounts.push(account);
+    return { accountId: account.id, state: "preview-oauth-state" };
+  },
+  cancelAntigravityOAuth: async () => {},
+  pollAntigravityOAuth: async ({ accountId }) => {
+    const account = accounts.find((a) => a.id === accountId)!;
+    account.auth = { loggedIn: true, checkedAt: new Date().toISOString(),
+      email: "antigravity@example.test", subscription: "Antigravity OAuth" };
+    return { status: "ok", result: { account: structuredClone(account),
+      layers: { desktop: "skipped", usage: "skipped", terminal: "skipped", extensionAndProxy: "done" } } };
   },
   inspectContinuation: async () => ({
     status: "off",
@@ -793,7 +884,10 @@ export const previewApi: RelayAPI = {
     return structuredClone(state.settings);
   },
   refreshUsage: async (id) => structuredClone(state.usage[id]),
-  desktopSnapshot: async () => structuredClone(desktop),
+  desktopSnapshot: async () => ({
+    ...structuredClone(desktop),
+    proxyStatus: previewProxyStatus(),
+  }),
   dismissDesktopError: async (revision) => {
     if (revision === desktop.errorRevision) desktop.error = undefined;
   },
@@ -875,6 +969,7 @@ export const previewApi: RelayAPI = {
     account.name = input.name.trim();
     account.kind = input.kind;
     account.group = input.kind === "personal" ? "personal" : `work:${input.group?.trim() || id}`;
+    if (input.provider !== undefined) account.provider = input.provider;
     return structuredClone(account);
   },
   // Forgets the sample account in memory, refusing the open one as the app does.

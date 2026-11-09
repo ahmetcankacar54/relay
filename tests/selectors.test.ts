@@ -60,10 +60,19 @@ test("stale usage is never recommended", () => {
 
 test("sidebar status reflects automation switches", () => {
   const base = { settings: DEFAULT_SETTINGS, accounts: [acct("a", "pro")] } as unknown as Snapshot;
-  assert.deepEqual(sidebarStatus(base), { accounts: 1, planning: false, switching: false });
+  assert.deepEqual(sidebarStatus(base), { accounts: 1, planning: false, switching: false, proxyRunning: false });
   const on = { ...base, settings: { ...DEFAULT_SETTINGS, planning: { ...DEFAULT_SETTINGS.planning, autoStart: true } }, fleet: { enabled: true, status: "watching" } } as unknown as Snapshot;
-  assert.deepEqual(sidebarStatus(on), { accounts: 1, planning: true, switching: true });
-  assert.deepEqual(sidebarStatus(undefined), { accounts: 0, planning: false, switching: false });
+  assert.deepEqual(sidebarStatus(on), { accounts: 1, planning: true, switching: true, proxyRunning: false });
+  assert.deepEqual(sidebarStatus(undefined), { accounts: 0, planning: false, switching: false, proxyRunning: false });
+  // The gateway rides on the desktop state: running shows its address, a wildcard host through loopback.
+  const desktop = (running: boolean, host = "127.0.0.1") =>
+    ({ proxyStatus: { running, host, port: 8317, stats: {}, accounts: [] } }) as never;
+  assert.deepEqual(sidebarStatus(base, desktop(true)), {
+    accounts: 1, planning: false, switching: false, proxyRunning: true, proxyAddress: "127.0.0.1:8317",
+  });
+  assert.equal(sidebarStatus(base, desktop(true, "0.0.0.0")).proxyAddress, "127.0.0.1:8317");
+  assert.equal(sidebarStatus(base, desktop(false)).proxyRunning, false);
+  assert.equal("proxyAddress" in sidebarStatus(base, desktop(false)), false);
 });
 
 test("usage rows include model windows after the main ones", () => {

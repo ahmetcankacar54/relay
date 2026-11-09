@@ -143,3 +143,13 @@ test("signing back in with an account that is already saved says so while waitin
   f.signal("SIGINT");
   assert.equal(await done, 1);
 });
+
+test("add refuses a provider other than Claude before touching Claude or the account list", async (t) => {
+  const f = await cliFixture(t);
+  for (const provider of ["codex", "antigravity", "antigravty", "gemini"]) {
+    assert.equal(await f.run("add", "X", "--provider", provider, "--yes"), 2, provider);
+    assert.match(f.err(), /only adds Claude accounts|yalnızca Claude/);
+    f.clear();
+  }
+  assert.equal(f.store().state.accounts.length, 0);
+});

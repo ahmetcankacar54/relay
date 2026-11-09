@@ -16,12 +16,6 @@ import {
   restoreFolder,
   type ExtensionStorage,
 } from "./extension-storage";
-import {
-  discoverDevToolsEndpoint,
-  setCookiesViaCdp,
-  reloadClaudeTabsViaCdp,
-  type CdpCookie,
-} from "./cdp-cookie-switch";
 import type { ExtensionVault } from "./extension-vault";
 import {
   CookieStoreError,
@@ -35,11 +29,7 @@ import {
   type CookieStorage,
 } from "./cookie-store";
 import type { CookieVault } from "./cookie-vault";
-import {
-  FAILURE_KEYS,
-  pickSignIn,
-  sessionExpired,
-} from "../../shared/extension-auth";
+import { FAILURE_KEYS, pickSignIn, sessionExpired } from "../../shared/extension-auth";
 import {
   chooseInstance,
   type ExtensionCurrent,
@@ -82,8 +72,6 @@ export interface ExtensionRequest {
   setting: ExtensionSetting;
   /** May quit a running browser; false for a switch that keeps Claude closed. */
   mayQuit: boolean;
-  /** Try the live swap through the browser's debugging port first; false skips it. Missing means on. */
-  cdpHotSwitch?: boolean;
   /** The account to put in place: its Desktop uuid and its own, any that exist. */
   target: string[];
   /** Every Relay account's uuids: the only extension sign-ins ever kept or replaced. */
@@ -100,10 +88,7 @@ export interface ExtensionRequest {
  */
 export type ForeignWhy = "same-login" | "other-org" | "rejected";
 
-type Core = Pick<
-  ExtensionOutcome,
-  "result" | "reason" | "saved" | "cleared" | "current"
->;
+type Core = Pick<ExtensionOutcome, "result" | "reason" | "saved" | "cleared" | "current">;
 
 const lower = (list: string[]) => list.map((value) => value.toLowerCase());
 
@@ -169,27 +154,13 @@ export class ExtensionSwitcher {
       const instance = chooseInstance(instances, request.setting.browser);
       if (!instance) return skipped("choose-instance");
       // Before any browser is quit: without the library nothing could be read or written.
-      if (!(await this.ports.storage.available()))
-        return skipped("unavailable");
-      if (request.setting.mode === "guide")
-        return done(await this.guide(request));
+      if (!(await this.ports.storage.available())) return skipped("unavailable");
+      if (request.setting.mode === "guide") return done(await this.guide(request));
       // Never opened: no storage to save or write; it gets one once the user opens it.
       if (!instance.opened) return skipped("not-opened");
       if (!(await this.pairReady())) return skipped("unavailable");
       let restarted = false;
       if (await browserRunning(system, instance.app)) {
-        // First try live CDP hot-swap without closing the browser
-        const cdp =
-          request.cdpHotSwitch === false
-            ? { switched: false, saved: false }
-            : await this.tryCdpHotSwap(instance, request);
-        if (cdp.switched) {
-          return done(
-            { result: "switched", reason: undefined, saved: cdp.saved },
-            { restarted: false, reopened: false },
-          );
-        }
-
         if (request.setting.mode !== "restart" || !request.mayQuit)
           return skipped("browser-running");
         if (!(await quitBrowser(system, instance.app)))
@@ -218,67 +189,6 @@ export class ExtensionSwitcher {
     }
   }
 
-  /**
-   * Attempts live session hot-swap via Chrome DevTools Protocol (CDP).
-   * If the browser is running with remote debugging enabled, cookies are swapped
-   * in memory and active Claude tabs reloaded without closing windows.
-   */
-  private async tryCdpHotSwap(
-    instance: ExtensionInstance,
-    request: ExtensionRequest,
-  ): Promise<{ switched: boolean; saved: boolean }> {
-    const cookieVault = this.ports.cookieVault;
-    if (!cookieVault) return { switched: false, saved: false };
-
-    try {
-      const wantedWeb = await cookieVault
-        .load(request.target)
-        .catch(() => undefined);
-      if (!wantedWeb || !hasWebLogin(wantedWeb))
-        return { switched: false, saved: false };
-
-      const { system } = this.ports;
-      const userDataDir = dataDir(system, instance.app);
-      const endpoint = await discoverDevToolsEndpoint(userDataDir);
-      if (!endpoint) return { switched: false, saved: false };
-
-      const cdpCookies: CdpCookie[] = [];
-      for (const row of wantedWeb.rows || []) {
-        const name = typeof row.name === "string" ? row.name : undefined;
-        const val =
-          typeof row.value === "string" && row.value ? row.value : undefined;
-        if (name && val) {
-          cdpCookies.push({
-            name,
-            value: val,
-            domain:
-              typeof row.host_key === "string" ? row.host_key : ".claude.ai",
-            path: typeof row.path === "string" ? row.path : "/",
-            secure: row.is_secure === 1n,
-            httpOnly: row.is_httponly === 1n,
-          });
-        }
-      }
-
-      if (!cdpCookies.length) return { switched: false, saved: false };
-
-      const res = await setCookiesViaCdp(endpoint.browserWsUrl, cdpCookies);
-      if (res.success) {
-        await reloadClaudeTabsViaCdp(endpoint.port).catch(() => {});
-        const listed = await this.ports.vault.list().catch(() => []);
-        const placed = lower(request.target).find((uuid) =>
-          listed.some((x) => x.accountUuid === uuid),
-        );
-        if (placed) await this.ports.vault.setOwner(placed).catch(() => {});
-        return { switched: true, saved: true };
-      }
-    } catch {
-      // CDP failure falls back to standard file-based swap
-    }
-
-    return { switched: false, saved: false };
-  }
-
   /** Whether the cookie database can be used here: SQLite loads and the vault is wired. */
   private async pairReady(): Promise<boolean> {
     const { cookies, cookieVault } = this.ports;
@@ -290,12 +200,8 @@ export class ExtensionSwitcher {
    * in to (a check, which also keeps what it sees) and says when it is not on the target.
    */
   private async guide(request: ExtensionRequest): Promise<Core> {
-    const current = await this.check({
-      setting: request.setting,
-      known: request.known,
-    });
-    if (!current)
-      return { result: "failed", reason: "unreadable", saved: false };
+    const current = await this.check({ setting: request.setting, known: request.known });
+    if (!current) return { result: "failed", reason: "unreadable", saved: false };
     if (current.state === "unreadable")
       return { result: "failed", reason: "unreadable", saved: false, current };
     if (current.state === "signed-out" && current.unopened)
@@ -322,7 +228,9 @@ export class ExtensionSwitcher {
       /** The account the user says the extension is signed in to, for data that names none. */
       claim?: string;
     },
-  ): Promise<ExtensionCurrent | undefined> {
+  ): Promise<
+    ExtensionCurrent | undefined
+  > {
     const { system, storage, vault, scratch } = this.ports;
     const at = new Date((this.ports.now ?? Date.now)()).toISOString();
     const peekScratch = this.ports.peekScratch ?? `${scratch}-peek`;
@@ -363,13 +271,7 @@ export class ExtensionSwitcher {
       await vault.save(account, reading.signIn);
       await vault.setOwner(account);
       await this.keepWebLogin(account, instance, peekScratch, request);
-      return {
-        state: "signed-in",
-        accountUuid: account,
-        known: true,
-        ...expired,
-        at,
-      };
+      return { state: "signed-in", accountUuid: account, known: true, ...expired, at };
     } catch {
       return { state: "unreadable", at };
     } finally {
@@ -391,25 +293,15 @@ export class ExtensionSwitcher {
     const { cookies, cookieVault, system } = this.ports;
     try {
       if (!cookies || !cookieVault || !(await cookies.available())) return;
-      if ((await cookieVault.list()).some((x) => x.accountUuid === account))
-        return;
-      const profile = path.join(
-        dataDir(system, instance.app),
-        instance.profile,
-      );
-      const web = await cookies.read(
-        await backupCookieFiles(profile, peekScratch),
-      );
+      if ((await cookieVault.list()).some((x) => x.accountUuid === account)) return;
+      const profile = path.join(dataDir(system, instance.app), instance.profile);
+      const web = await cookies.read(await backupCookieFiles(profile, peekScratch));
       if (!hasWebLogin(web) || web.unlisted.length) return;
       const hintsAt = system.modifiedAt(
         extensionStorageDir(system, instance.app, instance.profile),
       );
       const created = sessionCreatedMs(web);
-      if (
-        created !== undefined &&
-        hintsAt !== undefined &&
-        created > hintsAt + OWNER_SLACK_MS
-      )
+      if (created !== undefined && hintsAt !== undefined && created > hintsAt + OWNER_SLACK_MS)
         return;
       if (await this.foreignLogin(account, web, request)) return;
       await cookieVault.save(account, web);
@@ -496,10 +388,7 @@ export class ExtensionSwitcher {
       } catch (error) {
         return {
           result: "failed",
-          reason:
-            error instanceof StorageError && error.reason === "locked"
-              ? "locked"
-              : "unreadable",
+          reason: error instanceof StorageError && error.reason === "locked" ? "locked" : "unreadable",
           saved,
         };
       }
@@ -516,18 +405,14 @@ export class ExtensionSwitcher {
       }
       // A login cookie this build does not know: the layout changed, nothing is guessed.
       if (web.unlisted.length) {
-        this.ports.onCookieLayout?.({
-          why: "unlisted",
-          names: web.unlisted.join(" "),
-        });
+        this.ports.onCookieLayout?.({ why: "unlisted", names: web.unlisted.join(" ") });
         return { result: "skipped", reason: "schema-changed", saved };
       }
       const current = pickSignIn(entries, request.known);
       // Data that names no account is the one Relay last knew the extension to be on.
       const account =
         current &&
-        (current.account ??
-          (current.other ? undefined : await this.owner(request.known)));
+        (current.account ?? (current.other ? undefined : await this.owner(request.known)));
       if (current && !account)
         return { result: "skipped", reason: "unknown-account", saved };
       // An earlier swap stopped between its two writes: the hints and the login may be two
@@ -587,8 +472,7 @@ export class ExtensionSwitcher {
           return false;
         }
       };
-      const onTarget =
-        !!account && lower(request.target).includes(account) && !interrupted;
+      const onTarget = !!account && lower(request.target).includes(account) && !interrupted;
       // On the account, but holding a stale record (`FAILURE_KEYS`): the extension would refuse
       // Claude's browser tools without trying again. The record goes and the rest is written back
       // as it is, so it signs in on its own with the profile's claude.ai login. No saved pair is
@@ -601,12 +485,7 @@ export class ExtensionSwitcher {
             ? { result: "failed", reason: writeReason(error), saved }
             : { result: "failed", reason: "restore-failed", saved };
         }
-        return {
-          result: "unchanged",
-          reason: "already-there",
-          saved,
-          cleared: true,
-        };
+        return { result: "unchanged", reason: "already-there", saved, cleared: true };
       }
       const wanted = await vault.load(request.target);
       const wantedWeb = await cookieVault.load(request.target);
@@ -618,8 +497,7 @@ export class ExtensionSwitcher {
           reason: "no-saved-login",
           saved,
         };
-      if (onTarget)
-        return { result: "unchanged", reason: "already-there", saved };
+      if (onTarget) return { result: "unchanged", reason: "already-there", saved };
       try {
         await vault.markSwap();
         await storage.write(dir, wanted);

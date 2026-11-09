@@ -14,12 +14,8 @@ export interface ForwardOptions {
   token: string;
   accountId: string;
   stats?: ProxyStats;
-  onRateLimitHeaders?: (headers: {
-    fiveHourUsed?: number;
-    fiveHourReset?: string;
-    sevenDayUsed?: number;
-    sevenDayReset?: string;
-  }) => void;
+  /** Statuses whose answer is held back so the gateway can try another account. */
+  holdIf?: (statusCode: number) => boolean;
 }
 
 const OAUTH_BETA = "oauth-2025-04-20";
@@ -64,9 +60,6 @@ function mergeBetas(existing: string | string[] | undefined): string {
   return [...betas].join(",");
 }
 
-const finiteOr = (value: number): number | undefined =>
-  Number.isFinite(value) ? value : undefined;
-
 export class AnthropicUpstream {
   private readonly defaultBaseUrl = "https://api.anthropic.com";
 
@@ -100,19 +93,7 @@ export class AnthropicUpstream {
       stats: options.stats,
       usage: createAnthropicUsageExtractor(),
       errorLabel: "Gateway error",
-      onResponseHeaders: (h) => {
-        const read = (name: string) =>
-          typeof h[name] === "string" ? (h[name] as string) : undefined;
-        const r5h = read("anthropic-ratelimit-unified-5h-utilization");
-        const r7d = read("anthropic-ratelimit-unified-7d-utilization");
-        if (!options.onRateLimitHeaders || (!r5h && !r7d)) return;
-        options.onRateLimitHeaders({
-          fiveHourUsed: r5h ? finiteOr(parseFloat(r5h) * 100) : undefined,
-          fiveHourReset: read("anthropic-ratelimit-unified-5h-reset"),
-          sevenDayUsed: r7d ? finiteOr(parseFloat(r7d) * 100) : undefined,
-          sevenDayReset: read("anthropic-ratelimit-unified-7d-reset"),
-        });
-      },
+      holdIf: options.holdIf,
     });
   }
 }

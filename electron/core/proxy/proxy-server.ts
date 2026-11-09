@@ -1,6 +1,6 @@
 import http from "node:http";
 import net from "node:net";
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { Account, AccountUsage } from "../../../shared/types";
 import {
   DEFAULT_PROXY_CONFIG,
@@ -10,7 +10,9 @@ import {
 } from "../../../shared/proxy-types";
 import {
   NoEligibleAccountError,
+  NoProviderAccountError,
   ProxyRouter,
+  type ProxyProvider,
   type RouterSelection,
 } from "./proxy-router";
 import { ProxySessionCache } from "./proxy-session-cache";
@@ -22,26 +24,36 @@ import {
   BadRequestError,
   parseRequestUrl,
   sendJsonError,
+  type UpstreamOutcome,
 } from "./upstream-common";
-import { translateAnthropicToOpenAI } from "./protocol-translator";
 
 export type CredentialResolver = (
   account: Account,
 ) => Promise<string | undefined>;
+export type AntigravityResolver = (account: Account) => Promise<{ url: string; key: string } | undefined>;
 export type UsageProvider = () => {
   accounts: Account[];
   usageMap: Record<string, AccountUsage | undefined>;
 };
 
-/** The largest request body the gateway buffers (Anthropic itself caps requests at 32 MB). */
-const MAX_BODY_BYTES = 64 * 1024 * 1024;
-/** A body is only parsed for a session key up to this size. */
+/** The largest request body the gateway buffers: Anthropic itself caps requests at 32 MB. */
+const MAX_BODY_BYTES = 32 * 1024 * 1024;
+/** A body is only parsed (session key, model) up to this size. */
 const MAX_PARSE_BYTES = 16 * 1024 * 1024;
+/** Requests answered at once; the gateway runs in Relay's main process and buffers each body. */
+const MAX_CONCURRENT_REQUESTS = 64;
+/** Accounts tried for one request: the first and up to two others after a limit or sign-in failure. */
+const MAX_ATTEMPTS = 3;
 const STOP_GRACE_MS = 3_000;
 const DEFAULT_RATE_LIMIT_COOLDOWN_S = 60;
 const MIN_COOLDOWN_S = 5;
-const MAX_COOLDOWN_S = 60 * 60;
+/** A full weekly window: the longest an exhausted account can have to wait. */
+const MAX_COOLDOWN_S = 7 * 24 * 60 * 60;
 const AUTH_FAILURE_COOLDOWN_S = 30;
+const OVERLOADED_COOLDOWN_S = 10;
+/** Answers another account may succeed at: a limit, a refused sign-in, an overloaded upstream. */
+const RETRYABLE = new Set([401, 403, 429, 503, 529]);
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 const CODEX_WS_URL = "wss://chatgpt.com/backend-api/codex/responses";
 
 const urlHost = (host: string) =>
@@ -57,6 +69,7 @@ export class ProxyServer {
   private readonly upstreams: {
     anthropicUrl?: string;
     codexUrl?: string;
+    openaiUrl?: string;
     codexWebSocketUrl?: string;
   };
   private readonly activeSockets = new Set<net.Socket>();
@@ -69,24 +82,32 @@ export class ProxyServer {
   readonly wsBridge: WebSocketBridge;
 
   private credentialResolver: CredentialResolver;
+  private antigravityResolver?: AntigravityResolver;
   private usageProvider: UsageProvider;
+  private onCredentialRejected?: (accountId: string) => void;
 
   constructor(options: {
     config?: Partial<ProxyConfig>;
     credentialResolver: CredentialResolver;
+    antigravityResolver?: AntigravityResolver;
     usageProvider: UsageProvider;
+    /** The upstream refused the account's token: a cached copy must be dropped. */
+    onCredentialRejected?: (accountId: string) => void;
     now?: () => number;
     /** Where requests go instead of the real services (tests, regional endpoints). */
     upstreams?: {
       anthropicUrl?: string;
       codexUrl?: string;
+      openaiUrl?: string;
       codexWebSocketUrl?: string;
     };
   }) {
     this.upstreams = options.upstreams ?? {};
     this.config = { ...DEFAULT_PROXY_CONFIG, ...options.config };
     this.credentialResolver = options.credentialResolver;
+    this.antigravityResolver = options.antigravityResolver;
     this.usageProvider = options.usageProvider;
+    this.onCredentialRejected = options.onCredentialRejected;
 
     this.sessionCache = new ProxySessionCache({
       ttlSeconds: this.config.affinityTtlSeconds,
@@ -96,8 +117,6 @@ export class ProxyServer {
       strategy: this.config.routingStrategy,
       sessionCache: this.sessionCache,
       now: options.now,
-      allowCrossProviderFallback:
-        (this.config as any).allowCrossProviderFallback ?? false,
     });
     this.stats = new ProxyStats();
     this.anthropicUpstream = new AnthropicUpstream();
@@ -210,7 +229,7 @@ export class ProxyServer {
     if (patch.routingStrategy) {
       this.router.setStrategy(patch.routingStrategy);
     }
-    if (patch.affinityTtlSeconds) {
+    if (patch.affinityTtlSeconds !== undefined) {
       this.sessionCache.setTtl(patch.affinityTtlSeconds);
     }
   }
@@ -298,10 +317,38 @@ export class ProxyServer {
       return;
     }
 
-    // Health / Status endpoint (public status check)
+    if (!this.hostAllowed(req.headers.host)) {
+      sendJsonError(res, 403, "forbidden", "Unexpected Host header", {
+        connection: "close",
+      });
+      return;
+    }
+
+    // Liveness only: it says nothing about the accounts, so it needs no key.
     if (
       (req.method === "GET" || req.method === "HEAD") &&
-      (pathname === "/health" || pathname === "/status")
+      pathname === "/health"
+    ) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        req.method === "HEAD"
+          ? undefined
+          : JSON.stringify({ ok: true, status: this.statusState }),
+      );
+      return;
+    }
+
+    const denied = this.authFailure(req.headers);
+    if (denied) {
+      sendJsonError(res, denied.status, denied.type, denied.message, {
+        connection: "close",
+      });
+      return;
+    }
+
+    if (
+      (req.method === "GET" || req.method === "HEAD") &&
+      pathname === "/status"
     ) {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(
@@ -316,46 +363,6 @@ export class ProxyServer {
       return;
     }
 
-    // Client Authentication: Verify API key or require auth on network-exposed hosts
-    if (this.config.apiKey) {
-      const authHeader =
-        req.headers["authorization"] ||
-        req.headers["x-relay-key"] ||
-        req.headers["x-api-key"];
-      const token =
-        typeof authHeader === "string"
-          ? authHeader.replace(/^Bearer\s+/i, "").trim()
-          : "";
-      if (token !== this.config.apiKey) {
-        sendJsonError(
-          res,
-          401,
-          "authentication_error",
-          "Invalid or missing proxy authorization",
-          {
-            connection: "close",
-          },
-        );
-        return;
-      }
-    } else if (
-      this.config.host !== "127.0.0.1" &&
-      this.config.host !== "localhost" &&
-      this.config.host !== "::1"
-    ) {
-      sendJsonError(
-        res,
-        403,
-        "forbidden",
-        "Network-exposed proxy requires apiKey to be configured",
-        {
-          connection: "close",
-        },
-      );
-      return;
-    }
-
-    // Restrict to known AI provider endpoints
     const ALLOWED_PATHS = new Set([
       "/v1/messages",
       "/v1/responses",
@@ -364,134 +371,340 @@ export class ProxyServer {
       "/chat/completions",
       "/v1/models",
     ]);
-
     if (!ALLOWED_PATHS.has(pathname)) {
       sendJsonError(
         res,
         404,
         "not_found",
         `Path '${pathname}' not supported by Relay proxy`,
-        {
-          connection: "close",
-        },
+        { connection: "close" },
       );
       return;
     }
 
+    if (this.inFlight >= MAX_CONCURRENT_REQUESTS) {
+      sendJsonError(res, 503, "overloaded_error", "Relay is answering too many requests at once", {
+        "retry-after": "1",
+      });
+      return;
+    }
+    this.inFlight += 1;
+    try {
+      await this.proxyRequest(req, res, pathname);
+    } finally {
+      this.inFlight -= 1;
+    }
+  }
+
+  private inFlight = 0;
+
+  /**
+   * On a loopback bind, only loopback Host names are answered: a web page that rebinds its own
+   * domain to 127.0.0.1 then cannot reach the gateway. A wider bind needs the client key anyway.
+   */
+  private hostAllowed(hostHeader: string | undefined): boolean {
+    if (!LOOPBACK_HOSTS.has(this.config.host)) return true;
+    if (!hostHeader) return true;
+    let name: string;
+    try {
+      name = new URL(`http://${hostHeader}`).hostname.replace(/^\[|\]$/g, "");
+    } catch {
+      return false;
+    }
+    return LOOPBACK_HOSTS.has(name) || /^127\./.test(name);
+  }
+
+  /**
+   * Why a client may not use the gateway, or undefined when it may. With a client key, any of
+   * `Authorization: Bearer`, `x-relay-key` or `x-api-key` may carry it (compared in constant
+   * time). Without one, only a loopback bind is served.
+   */
+  private authFailure(
+    headers: http.IncomingHttpHeaders,
+  ): { status: number; type: string; message: string } | undefined {
+    const key = this.config.apiKey;
+    if (!key) {
+      return LOOPBACK_HOSTS.has(this.config.host)
+        ? undefined
+        : {
+            status: 403,
+            type: "forbidden",
+            message: "Network-exposed proxy requires apiKey to be configured",
+          };
+    }
+    const expected = Buffer.from(key);
+    const offered = [
+      headers["authorization"],
+      headers["x-relay-key"],
+      headers["x-api-key"],
+    ]
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => Buffer.from(value.replace(/^Bearer\s+/i, "").trim()));
+    const matches = offered.some(
+      (candidate) =>
+        candidate.length === expected.length &&
+        timingSafeEqual(candidate, expected),
+    );
+    return matches
+      ? undefined
+      : {
+          status: 401,
+          type: "authentication_error",
+          message: "Invalid or missing proxy authorization",
+        };
+  }
+
+  private async proxyRequest(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    pathname: string,
+  ): Promise<void> {
     const bodyBuffer = await this.readBody(req, res);
     if (!bodyBuffer) return;
 
-    const isCodex =
+    const isOpenAiRoute =
       pathname.startsWith("/v1/responses") ||
       pathname.startsWith("/responses") ||
       pathname.startsWith("/v1/chat/completions") ||
-      pathname.startsWith("/chat/completions");
+      pathname.startsWith("/chat/completions") ||
+      pathname === "/v1/models";
 
-    // Determine session key for KV cache affinity
-    const sessionKey = this.extractSessionKey(req, bodyBuffer);
+    // Parsed once, for the session key and the model.
+    let parsed: any;
+    if (bodyBuffer.length > 0 && bodyBuffer.length <= MAX_PARSE_BYTES) {
+      try {
+        parsed = JSON.parse(bodyBuffer.toString("utf8"));
+      } catch {
+        // Not JSON: forwarded as it is.
+      }
+    }
+    const sessionKey = this.extractSessionKey(req, parsed);
+    const requestedModel =
+      typeof parsed?.model === "string" ? parsed.model.toLowerCase() : "";
+    const headerProvider = String(
+      req.headers["x-relay-provider"] ?? "",
+    ).toLowerCase();
 
-    const { accounts, usageMap } = this.usageProvider();
-    if (accounts.length === 0) {
-      sendJsonError(res, 503, "api_error", "No accounts configured in Relay");
+    let targetProvider: ProxyProvider = isOpenAiRoute ? "codex" : "claude";
+    if (
+      headerProvider === "antigravity" ||
+      headerProvider === "gemini" ||
+      requestedModel.startsWith("antigravity") ||
+      requestedModel.startsWith("gemini")
+    ) {
+      targetProvider = "antigravity";
+    }
+
+    if (pathname === "/v1/models" && targetProvider !== "antigravity") {
+      sendJsonError(res, 501, "unsupported_endpoint", "Choose the Antigravity provider to list its models");
       return;
     }
 
-    const targetProvider = isCodex ? "codex" : "claude";
-    let selection: RouterSelection;
-    try {
-      selection = this.router.selectAccount(
-        sessionKey,
-        accounts,
-        usageMap,
-        targetProvider,
-      );
-    } catch (err) {
-      if (err instanceof NoEligibleAccountError) {
-        this.stats.recordError(err.message);
-        sendJsonError(
-          res,
-          429,
-          "rate_limit_error",
-          `${err.message}. Every account is cooling down.`,
-          err.retryAfterSeconds
-            ? { "retry-after": String(err.retryAfterSeconds) }
-            : {},
+    const tried = new Set<string>();
+    let lastHeld: number | undefined;
+    // Set when an account was skipped because its sign-in cannot serve this route.
+    let unsupported: string | undefined;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; ) {
+      const { accounts, usageMap } = this.usageProvider();
+      let selection: RouterSelection;
+      try {
+        selection = this.router.selectAccount(
+          sessionKey,
+          accounts,
+          usageMap,
+          targetProvider,
+          tried,
         );
-        return;
+      } catch (err) {
+        if (err instanceof NoProviderAccountError && unsupported && lastHeld === undefined) {
+          sendJsonError(res, 501, "unsupported_endpoint", unsupported);
+          return;
+        }
+        if (err instanceof NoProviderAccountError && tried.size === 0) {
+          sendJsonError(res, 503, "api_error", err.message);
+          return;
+        }
+        if (err instanceof NoEligibleAccountError && tried.size === 0) {
+          this.stats.recordError(err.message);
+          sendJsonError(
+            res,
+            429,
+            "rate_limit_error",
+            err.message,
+            err.retryAfterSeconds
+              ? { "retry-after": String(err.retryAfterSeconds) }
+              : {},
+          );
+          return;
+        }
+        if (
+          err instanceof NoProviderAccountError ||
+          err instanceof NoEligibleAccountError
+        ) {
+          // Every other account was tried or is cooling down: the last answer was already held.
+          sendJsonError(res, lastHeld ?? 429, lastHeld === 401 || lastHeld === 403 ? "authentication_error" : "rate_limit_error", "Every account for this provider is limited or unavailable");
+          return;
+        }
+        throw err;
       }
-      throw err;
+      tried.add(selection.account.id);
+      const isLast = attempt === MAX_ATTEMPTS;
+      if (!this.servesRoute(selection.account, pathname)) {
+        unsupported = "Codex ChatGPT sign-ins support the Responses API only; add an OpenAI API key account for this endpoint";
+        continue;
+      }
+      attempt += 1;
+      const outcome = await this.forwardTo(
+        selection,
+        req,
+        res,
+        bodyBuffer,
+        pathname,
+        isLast
+          ? undefined
+          : (status: number) =>
+              RETRYABLE.has(status) && this.canTryAnother(targetProvider, tried, pathname),
+      );
+      if (!outcome) return;
+      this.applyOutcome(selection.account.id, outcome);
+      if (!outcome.held) return;
+      lastHeld = outcome.statusCode;
+      this.stats.recordError(
+        `${selection.account.name} answered ${outcome.statusCode}; trying another account`,
+      );
     }
+    // Every attempt was held: the last one is never held, so this is not reached.
+    sendJsonError(res, 502, "api_error", "No account could answer the request");
+  }
 
+  /** Whether an account not yet tried for this request could take it. */
+  private canTryAnother(
+    provider: ProxyProvider,
+    tried: ReadonlySet<string>,
+    pathname: string,
+  ): boolean {
+    const { accounts, usageMap } = this.usageProvider();
+    const usable = accounts.filter((a) => this.servesRoute(a, pathname));
+    try {
+      this.router.selectAccount(undefined, usable, usageMap, provider, tried);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * A Codex ChatGPT sign-in (one with a ChatGPT account id) only answers the Responses API;
+   * chat completions need an OpenAI API key account.
+   */
+  private servesRoute(account: Account, pathname: string): boolean {
+    if (account.provider !== "codex" || !account.auth?.accountUuid) return true;
+    return pathname === "/v1/responses" || pathname === "/responses";
+  }
+
+  /**
+   * Sends the request to one account. Undefined when the gateway already answered the client
+   * (no credential, an unsupported route); otherwise the upstream's outcome.
+   */
+  private async forwardTo(
+    selection: RouterSelection,
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    bodyBuffer: Buffer,
+    pathname: string,
+    holdIf: ((status: number) => boolean) | undefined,
+  ): Promise<UpstreamOutcome | undefined> {
+    const provider = selection.account.provider ?? "claude";
+    if (provider === "gemini") {
+      sendJsonError(res, 501, "unsupported_provider", "Gemini API key accounts are not supported by this gateway");
+      return undefined;
+    }
+    let antigravityRoute: { url: string; key: string } | undefined;
     let token: string | undefined;
     try {
-      token = await this.credentialResolver(selection.account);
+      if (provider === "antigravity") {
+        antigravityRoute = await this.antigravityResolver?.(selection.account);
+        token = antigravityRoute?.key;
+      } else {
+        token = await this.credentialResolver(selection.account);
+      }
     } catch (err: any) {
-      this.stats.recordError(
-        `Credential lookup failed: ${err?.message ?? err}`,
-      );
+      this.stats.recordError(`Credential lookup failed: ${err?.message ?? err}`);
     }
     if (!token) {
-      // Don't keep sending requests at an account whose sign-in cannot be read.
-      this.router.markUnavailable(
-        selection.account.id,
-        AUTH_FAILURE_COOLDOWN_S * 1000,
-      );
-      this.sessionCache.evictAccount(selection.account.id);
-      sendJsonError(
-        res,
-        401,
-        "authentication_error",
-        `No active credential found for selected account ${selection.account.name}`,
-      );
-      return;
+      // The account's sign-in cannot be read: it cools down, and another one is tried.
+      this.stats.recordError(`No credential for ${selection.account.name}`);
+      const held = holdIf?.(401) ?? false;
+      if (!held)
+        sendJsonError(
+          res,
+          401,
+          "authentication_error",
+          `No active credential found for selected account ${selection.account.name}`,
+        );
+      return { statusCode: 401, rateLimited: false, unauthorized: true, held };
+    }
+    const apiKey = provider === "codex" && token.startsWith("sk-");
+    if (
+      provider === "codex" &&
+      !apiKey &&
+      pathname !== "/v1/responses" &&
+      pathname !== "/responses"
+    ) {
+      sendJsonError(res, 501, "unsupported_endpoint", "Codex OAuth accounts support the Responses API only");
+      return undefined;
     }
 
     this.stats.recordRequest(selection.account.id);
-
-    const selectedProvider = selection.account.provider ?? targetProvider;
-    const useCodex = selectedProvider === "codex";
-    let effectiveBuffer = bodyBuffer;
-
-    if (!isCodex && useCodex) {
-      // Cross-provider translation: Anthropic request -> Codex/OpenAI Chat Completions
-      try {
-        const parsed = JSON.parse(bodyBuffer.toString("utf8"));
-        const translated = translateAnthropicToOpenAI(parsed);
-        effectiveBuffer = Buffer.from(JSON.stringify(translated), "utf8");
-        req.url = "/v1/chat/completions";
-      } catch (err: any) {
-        this.stats.recordError(`Translation error: ${err.message}`);
-      }
-    }
-
-    const upstream = useCodex ? this.codexUpstream : this.anthropicUpstream;
-    const outcome = await upstream.forwardRequest(req, res, effectiveBuffer, {
-      upstreamUrl: useCodex
-        ? this.upstreams.codexUrl
-        : this.upstreams.anthropicUrl,
+    const options = {
       token,
       accountId: selection.account.id,
       stats: this.stats,
+      holdIf,
+    };
+    if (provider === "claude")
+      return this.anthropicUpstream.forwardRequest(req, res, bodyBuffer, {
+        ...options,
+        upstreamUrl: this.upstreams.anthropicUrl,
+      });
+    return this.codexUpstream.forwardRequest(req, res, bodyBuffer, {
+      ...options,
+      ...(provider === "codex" && !apiKey && selection.account.auth?.accountUuid
+        ? { chatgptAccountId: selection.account.auth.accountUuid }
+        : {}),
+      upstreamUrl:
+        provider === "antigravity"
+          ? antigravityRoute!.url
+          : apiKey
+            ? (this.upstreams.openaiUrl ?? "https://api.openai.com/v1")
+            : this.upstreams.codexUrl,
     });
+  }
 
+  /** Keeps a limited, refused or overloaded account out of selection for a while. */
+  private applyOutcome(accountId: string, outcome: UpstreamOutcome): void {
+    let seconds: number | undefined;
     if (outcome.rateLimited) {
-      // Rate limit hit: evict the account and keep it out of selection so the next call falls over
-      const seconds = Math.min(
-        MAX_COOLDOWN_S,
-        Math.max(
-          MIN_COOLDOWN_S,
-          outcome.retryAfterSeconds ?? DEFAULT_RATE_LIMIT_COOLDOWN_S,
-        ),
+      // A full window's reset time beats a short Retry-After: the account is out until then.
+      const untilReset = outcome.limitResetsAt
+        ? Math.ceil((outcome.limitResetsAt - Date.now()) / 1000)
+        : undefined;
+      seconds = Math.max(
+        untilReset ?? 0,
+        outcome.retryAfterSeconds ?? (untilReset ? 0 : DEFAULT_RATE_LIMIT_COOLDOWN_S),
       );
-      this.router.markUnavailable(selection.account.id, seconds * 1000);
-      this.sessionCache.evictAccount(selection.account.id);
     } else if (outcome.unauthorized) {
-      this.router.markUnavailable(
-        selection.account.id,
-        AUTH_FAILURE_COOLDOWN_S * 1000,
-      );
-      this.sessionCache.evictAccount(selection.account.id);
+      seconds = AUTH_FAILURE_COOLDOWN_S;
+      // A cached token the upstream refused is read again next time, not reused.
+      this.onCredentialRejected?.(accountId);
+    } else if (outcome.statusCode === 529 || outcome.statusCode === 503) {
+      seconds = OVERLOADED_COOLDOWN_S;
     }
+    if (seconds === undefined) return;
+    const clamped = Math.min(MAX_COOLDOWN_S, Math.max(MIN_COOLDOWN_S, seconds));
+    this.router.markUnavailable(accountId, clamped * 1000);
+    this.sessionCache.evictAccount(accountId);
   }
 
   private handleWebSocketUpgrade(
@@ -503,80 +716,72 @@ export class ProxyServer {
     // would be an uncaught exception.
     socket.on("error", () => socket.destroy());
 
-    // Client Authentication for WebSocket upgrades
-    if (this.config.apiKey) {
-      const authHeader =
-        req.headers["authorization"] ||
-        req.headers["x-relay-key"] ||
-        req.headers["x-api-key"];
-      const token =
-        typeof authHeader === "string"
-          ? authHeader.replace(/^Bearer\s+/i, "").trim()
-          : "";
-      if (token !== this.config.apiKey) {
-        rejectUpgrade(socket, 401, "Unauthorized");
-        return;
-      }
-    } else if (
-      this.config.host !== "127.0.0.1" &&
-      this.config.host !== "localhost" &&
-      this.config.host !== "::1"
-    ) {
+    if (!this.hostAllowed(req.headers.host)) {
       rejectUpgrade(socket, 403, "Forbidden");
       return;
     }
+    const denied = this.authFailure(req.headers);
+    if (denied) {
+      rejectUpgrade(socket, denied.status, denied.status === 401 ? "Unauthorized" : "Forbidden");
+      return;
+    }
 
-    let selection: RouterSelection;
     try {
       const { pathname } = parseRequestUrl(req.url);
       if (pathname !== "/responses" && pathname !== "/v1/responses") {
         rejectUpgrade(socket, 404, "Not Found");
         return;
       }
-
-      const { accounts, usageMap } = this.usageProvider();
-      if (accounts.length === 0) {
-        rejectUpgrade(socket, 503, "Service Unavailable");
-        return;
-      }
-      selection = this.router.selectAccount(
-        undefined,
-        accounts,
-        usageMap,
-        "codex",
-      );
-    } catch (err) {
-      if (err instanceof BadRequestError)
-        rejectUpgrade(socket, 400, "Bad Request");
-      else if (err instanceof NoEligibleAccountError)
-        rejectUpgrade(socket, 429, "Too Many Requests");
-      else rejectUpgrade(socket, 500, "Internal Server Error");
+    } catch {
+      rejectUpgrade(socket, 400, "Bad Request");
       return;
     }
+    void this.upgradeToCodex(req, socket, head).catch((err) => {
+      this.stats.recordError(`WebSocket upgrade failed: ${err?.message ?? err}`);
+      rejectUpgrade(socket, 502, "Bad Gateway");
+    });
+  }
 
-    this.credentialResolver(selection.account)
-      .then((token) => {
-        if (!token) {
-          rejectUpgrade(socket, 401, "Unauthorized");
-          return;
-        }
-        this.stats.recordRequest(selection.account.id);
-        this.wsBridge.handleUpgrade(req, socket, head, {
-          upstreamUrl: this.upstreams.codexWebSocketUrl ?? CODEX_WS_URL,
-          token,
-        });
-      })
-      .catch((err) => {
-        this.stats.recordError(
-          `WebSocket upgrade failed: ${err?.message ?? err}`,
-        );
-        rejectUpgrade(socket, 502, "Bad Gateway");
+  /**
+   * The Responses WebSocket is ChatGPT's (Codex sign-ins): an OpenAI API key account cannot
+   * serve it, so such accounts, and any without a readable sign-in, are skipped.
+   */
+  private async upgradeToCodex(
+    req: http.IncomingMessage,
+    socket: net.Socket,
+    head: Buffer,
+  ): Promise<void> {
+    const tried = new Set<string>();
+    for (;;) {
+      const { accounts, usageMap } = this.usageProvider();
+      let selection: RouterSelection;
+      try {
+        selection = this.router.selectAccount(undefined, accounts, usageMap, "codex", tried);
+      } catch (err) {
+        if (err instanceof NoEligibleAccountError) rejectUpgrade(socket, 429, "Too Many Requests");
+        else if (err instanceof NoProviderAccountError) rejectUpgrade(socket, 503, "Service Unavailable");
+        else throw err;
+        return;
+      }
+      tried.add(selection.account.id);
+      const token = await this.credentialResolver(selection.account);
+      if (!token || token.startsWith("sk-")) continue;
+      if (socket.destroyed) return;
+      this.stats.recordRequest(selection.account.id);
+      this.wsBridge.handleUpgrade(req, socket, head, {
+        upstreamUrl: this.upstreams.codexWebSocketUrl ?? CODEX_WS_URL,
+        token,
+        ...(selection.account.auth?.accountUuid
+          ? { chatgptAccountId: selection.account.auth.accountUuid }
+          : {}),
       });
+      return;
+    }
   }
 
   private extractSessionKey(
     req: http.IncomingMessage,
-    bodyBuffer: Buffer,
+    parsed: any,
   ): string | undefined {
     // Check explicit headers
     for (const name of [
@@ -590,9 +795,8 @@ export class ProxyServer {
     }
 
     // Check request body
-    if (bodyBuffer.length > 0 && bodyBuffer.length <= MAX_PARSE_BYTES) {
+    if (parsed && typeof parsed === "object") {
       try {
-        const parsed = JSON.parse(bodyBuffer.toString("utf8"));
         if (parsed.metadata?.user_id) {
           return boundedKey(`user:${parsed.metadata.user_id}`);
         }

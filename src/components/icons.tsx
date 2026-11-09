@@ -47,6 +47,19 @@ export function AccountsIcon(props: IconProps) {
   );
 }
 
+/** Proxy & Gateway: one node that fans out into three routes. */
+export function ProxyIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="5.5" cy="12" r="2" />
+      <circle cx="18.5" cy="5.75" r="2" />
+      <circle cx="18.5" cy="12" r="2" />
+      <circle cx="18.5" cy="18.25" r="2" />
+      <path d="M7.5 12h9M7.2 11l9.3-4.2M7.2 13l9.3 4.2" />
+    </Icon>
+  );
+}
+
 /** Usage: three bars of rising height. */
 export function UsageIcon(props: IconProps) {
   return (

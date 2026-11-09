@@ -5,6 +5,7 @@
 export const PAGES = [
   "genel",
   "hesaplar",
+  "proxy",
   "kullanim",
   "tokenlar",
   "rozetler",
@@ -14,13 +15,21 @@ export const PAGES = [
 ] as const;
 export type PageId = (typeof PAGES)[number];
 /** The pages in the sidebar, in order. Usage is three pages: limits, tokens and cost, pins. */
-export const NAV_PAGES = ["genel", "hesaplar", "kullanim", "tokenlar", "rozetler", "ayarlar"] as const;
+export const NAV_PAGES = [
+  "genel",
+  "hesaplar",
+  "kullanim",
+  "tokenlar",
+  "rozetler",
+  "proxy",
+  "ayarlar",
+] as const;
 export type NavPage = (typeof NAV_PAGES)[number];
 /**
  * Settings' tabs, in order: switching (when, what switches along, near the limit), planning,
- * the Proxy Gateway, general, and one Advanced for everything technical or experimental.
+ * general, and one Advanced for everything technical or experimental. The Proxy Gateway has its own page.
  */
-export const SETTINGS_TABS = ["gecis", "planlama", "proxy", "genel", "gelismis"] as const;
+export const SETTINGS_TABS = ["gecis", "planlama", "genel", "gelismis"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 /** Former tabs, so links from older builds, notices and the panel still land on the right one. */
 const FORMER_TAB: Record<string, SettingsTab> = {
@@ -41,8 +50,10 @@ const parts = (hash: string) => hash.replace(/^#\/?/, "").split("?")[0].split("/
 
 /** The sidebar page a hash shows; the former pages show Settings. */
 export function parseRoute(hash: string): NavPage {
-  const id = parts(hash)[0];
+  const [id, tab] = parts(hash);
   if (id === "gecis" || id === "planlama") return "ayarlar";
+  // The gateway was a Settings tab: `#/ayarlar/proxy` from older builds and notices lands on its page.
+  if (id === "ayarlar" && tab === "proxy") return "proxy";
   return (NAV_PAGES as readonly string[]).includes(id) ? (id as NavPage) : "genel";
 }
 /** The Settings tab a hash opens: `#/ayarlar/<tab>`, a former page's or tab's new tab, else the first. */
@@ -54,7 +65,7 @@ export function settingsTab(hash: string): SettingsTab {
 }
 export const routeHash = (page: Destination) => `#/${page}`;
 /**
- * ⌘1–⌘5 open the sidebar's pages in order; ⌘, opens settings. None while a dialog or sheet is
+ * ⌘1–⌘6 open the sidebar's pages in order; ⌘, opens settings. None while a dialog or sheet is
  * open, so a confirmation can’t be navigated away from.
  */
 export function shortcutPage(

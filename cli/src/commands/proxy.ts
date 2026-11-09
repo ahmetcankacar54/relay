@@ -10,6 +10,8 @@ import { UsageManager } from "../../../electron/core/usage";
 import { UsageError, readCredential } from "../../../electron/core/usage-credentials";
 import { UsageCredentialRefresher, anthropicUnreachable } from "../../../electron/core/usage-refresh";
 import { DEFAULT_PROXY_CONFIG } from "../../../shared/proxy-types";
+import { generateProxyKey } from "../../../electron/core/proxy/proxy-status";
+import { readCodexCredential } from "../../../electron/core/provider-credentials";
 import { readsUsage } from "../../../shared/cli-version";
 import type { AccountUsage } from "../../../shared/types";
 
@@ -46,11 +48,28 @@ function parseHost(raw: string | boolean | undefined, t: (tr: string, en: string
   return raw.trim();
 }
 
+/** The lines that point Claude Code and OpenAI-style clients at the gateway. */
+function envLines(url: string, key: string | undefined): string[] {
+  const shown = key ?? "<relay-key>";
+  return [
+    `export ANTHROPIC_BASE_URL="${url}"`,
+    `export ANTHROPIC_AUTH_TOKEN="${shown}"`,
+    `export OPENAI_BASE_URL="${url}/v1"`,
+    `export OPENAI_API_KEY="${shown}"`,
+  ];
+}
+
 /** Reads the gateway's /status; rejects when nothing answers or the answer is not JSON. */
-function fetchStatus(host: string, port: number): Promise<any> {
+function fetchStatus(host: string, port: number, key: string | undefined): Promise<any> {
   return new Promise((resolve, reject) => {
     const req = http.get(
-      { host: clientHost(host).replace(/^\[|\]$/g, ""), port, path: "/status", timeout: STATUS_TIMEOUT_MS },
+      {
+        host: clientHost(host).replace(/^\[|\]$/g, ""),
+        port,
+        path: "/status",
+        timeout: STATUS_TIMEOUT_MS,
+        headers: key ? { "x-relay-key": key } : {},
+      },
       (res) => {
         res.setEncoding("utf8");
         let body = "";
@@ -125,16 +144,26 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
   const color = colorEnabled(io, parsed.flags);
   const url = `http://${clientHost(host)}:${port}`;
 
+  // The client key Relay.app made for its gateway; `relay proxy start` uses it too.
+  const ctx = await openContext(io, deps, parsed.flags, { write: false, desktop: false });
+  const savedKey = ctx.store.state.settings.proxy?.apiKey;
+
   if (subcommand === "env") {
     // Plain lines: the output is meant for `eval "$(relay proxy env)"`.
-    io.stdout(`export ANTHROPIC_BASE_URL="${url}"`);
-    io.stdout(`export CODEX_BASE_URL="${url}"`);
+    for (const line of envLines(url, savedKey)) io.stdout(line);
+    if (!savedKey)
+      io.stderr(
+        t(
+          "İstemci anahtarı yok: Relay uygulamasında Proxy sayfasını bir kez aç ya da relay proxy start'ın yazdığı anahtarı kullan.",
+          "No client key yet: open the Proxy page in Relay.app once, or use the key relay proxy start prints.",
+        ),
+      );
     return EXIT.ok;
   }
 
   if (subcommand === "status") {
     try {
-      const data = await fetchStatus(host, port);
+      const data = await fetchStatus(host, port, savedKey);
       if (parsed.flags.json) {
         printJson(io, { running: true, ...data });
       } else {
@@ -155,24 +184,24 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
     return EXIT.ok;
   }
 
-  // start
-  const ctx = await openContext(io, deps, parsed.flags, { write: false, desktop: false });
+  // start: always with a client key, so no other local process can spend the accounts.
+  const key = savedKey ?? generateProxyKey();
   const store = ctx.store;
   const usageCache: Record<string, AccountUsage | undefined> = {};
   const credentials = new Map<string, { token: string; until: number }>();
 
   const proxy = new ProxyServer({
-    config: { host, port, enabled: true },
+    config: { host, port, enabled: true, apiKey: key },
     credentialResolver: async (account) => {
       const cached = credentials.get(account.id);
       if (cached && cached.until > io.now()) return cached.token;
       credentials.delete(account.id);
       try {
-        const cred = await readCredential(
-          ctx.store.profile(account.id),
-          false,
-          ctx.deps.securityTool,
-        );
+        const cred =
+          account.provider === "codex"
+            ? await readCodexCredential(ctx.store.profile(account.id))
+            : await readCredential(ctx.store.profile(account.id), false, ctx.deps.securityTool);
+        if (!cred) return undefined;
         // An expired token would only earn a 401; leave the account to the others.
         if (cred.expiresAt !== undefined && cred.expiresAt <= io.now()) return undefined;
         credentials.set(account.id, {
@@ -184,6 +213,7 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
         return undefined;
       }
     },
+    onCredentialRejected: (accountId) => credentials.delete(accountId),
     usageProvider: () => ({
       accounts: store.state.accounts,
       usageMap: usageCache,
@@ -210,14 +240,20 @@ export const proxyCommand: Command = async ({ io, deps, parsed, t }) => {
         color,
         "yellow",
         t(
-          `Uyarı: ${host} yerel olmayan bir adres; ağ geçidinin kimlik doğrulaması yok, erişebilen herkes hesaplarını kullanır. Tailscale gibi kapalı bir ağ kullan.`,
-          `Warning: ${host} is not a loopback address; the gateway has no authentication, so anyone who can reach it spends your accounts. Keep it on a private network such as Tailscale.`,
+          `Uyarı: ${host} yerel olmayan bir adres; anahtarı bilen herkes hesaplarını kullanabilir. Tailscale gibi kapalı bir ağda tut.`,
+          `Warning: ${host} is not a loopback address; anyone with the key can spend your accounts. Keep it on a private network such as Tailscale.`,
         ),
       ),
     );
-  io.stdout(paint(color, "yellow", `Set in your environment or remote box via Tailscale:`));
-  io.stdout(`  export ANTHROPIC_BASE_URL="${url}"`);
-  io.stdout(`  export CODEX_BASE_URL="${url}"`);
+  if (!savedKey)
+    io.stdout(
+      t(
+        "Bu çalıştırma için yeni bir istemci anahtarı üretildi; kalıcı anahtar için Relay uygulamasında Proxy sayfasını aç.",
+        "A client key was made for this run; open the Proxy page in Relay.app for a lasting one.",
+      ),
+    );
+  io.stdout(paint(color, "yellow", t("İstemcide ayarla:", "Set in your client:")));
+  for (const line of envLines(url, key)) io.stdout(`  ${line}`);
 
   // Keep the limits (and the account list) current in the background.
   let reading = false;

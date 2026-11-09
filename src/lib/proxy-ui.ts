@@ -24,10 +24,13 @@ export function maskKey(key: string): string {
   return rest.length <= 4 ? `${prefix}${"•".repeat(rest.length)}` : `${prefix}${"•".repeat(12)}${rest.slice(-4)}`;
 }
 
-/** Claude Code CLI: point the SDK at the gateway. The key stays hidden unless `reveal` is set. */
+/**
+ * Claude Code CLI: point it at the gateway. ANTHROPIC_AUTH_TOKEN is sent as a bearer token, the
+ * way Claude Code talks to an LLM gateway. The key stays hidden when `mask` is set.
+ */
 export function claudeCodeSnippet(host: string, port: number, key: string | undefined, mask = false): string {
   const shown = key ? (mask ? maskKey(key) : key) : "<relay-key>";
-  return `export ANTHROPIC_BASE_URL=${gatewayUrl(host, port)} && export ANTHROPIC_API_KEY=${shown}`;
+  return `export ANTHROPIC_BASE_URL=${gatewayUrl(host, port)} && export ANTHROPIC_AUTH_TOKEN=${shown}`;
 }
 
 /** Cursor, VS Code and other OpenAI-compatible clients: base URL (with /v1) and key. */
@@ -61,4 +64,37 @@ export function resetLabel(minutes: number | undefined, t: T): string {
   return hours
     ? t(`${hours} sa${rest ? ` ${rest} dk` : ""}`, `${hours} h${rest ? ` ${rest} min` : ""}`)
     : t(`${rest} dk`, `${rest} min`);
+}
+
+/** Codex, Cursor and the OpenAI SDK read the base URL (with /v1) and the key from the environment. */
+export function codexSnippet(host: string, port: number, key: string | undefined, mask = false): string {
+  const shown = key ? (mask ? maskKey(key) : key) : "<relay-key>";
+  return `export OPENAI_BASE_URL=${gatewayUrl(host, port)}/v1 && export OPENAI_API_KEY=${shown}`;
+}
+
+/**
+ * Lists the models the Antigravity accounts serve, through the gateway: the names to use in a
+ * request. Antigravity OAuth runs behind Relay; this key only authenticates the local client.
+ */
+export function antigravitySnippet(host: string, port: number, key: string | undefined, mask = false): string {
+  const shown = key ? (mask ? maskKey(key) : key) : "<relay-key>";
+  return `curl ${gatewayUrl(host, port)}/v1/models -H "Authorization: Bearer ${shown}" -H "x-relay-provider: antigravity"`;
+}
+
+/** A one-line request that proves the gateway answers. */
+export function proxyCurlSnippet(host: string, port: number, key: string | undefined, mask = false): string {
+  const shown = key ? (mask ? maskKey(key) : key) : "<relay-key>";
+  return [
+    `curl ${gatewayUrl(host, port)}/v1/messages`,
+    `  -H "x-api-key: ${shown}"`,
+    `  -H "anthropic-version: 2023-06-01"`,
+    `  -H "content-type: application/json"`,
+    `  -d '{"model":"claude-sonnet-4-5","max_tokens":16,"messages":[{"role":"user","content":"ping"}]}'`,
+  ].join(" \\\n");
+}
+
+/** How a quota reads at a glance: room left, running low, nearly full; "none" while unknown. */
+export function quotaTone(percent: number | undefined): "ok" | "warn" | "crit" | "none" {
+  if (percent === undefined || !Number.isFinite(percent)) return "none";
+  return percent >= 90 ? "crit" : percent >= 75 ? "warn" : "ok";
 }
