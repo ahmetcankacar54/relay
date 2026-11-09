@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import type { Account, AccountUsage, ProxyStatus } from "../../../shared/types";
-import type { ProxyConfig, ProxyMetrics } from "../../../shared/proxy-types";
+import type { Account, AccountUsage, ProxyClientStatus, ProxyStatus } from "../../../shared/types";
+import type { ProxyConfig, ProxyMetrics, ProxyRequestLog } from "../../../shared/proxy-types";
 
 /** The prefix every client key starts with, so a key pasted somewhere is recognised as Relay's. */
 export const PROXY_KEY_PREFIX = "relay-sec-";
@@ -22,10 +22,59 @@ export const proxyConfigurePatch = z
       .refine((host) => !/[\s/@?#]/.test(host), "Not a host address"),
     routingStrategy: z.enum(["soonest-reset", "balanced", "strict-priority"]),
     affinityTtlSeconds: z.number().int().min(10).max(3_600),
+    accountOrder: z.array(z.string().min(1).max(128)).max(200),
+    excludedAccountIds: z.array(z.string().min(1).max(128)).max(200),
   })
   .strict()
   .partial();
 export type ProxyConfigurePatch = z.infer<typeof proxyConfigurePatch>;
+
+/** What proxy-pool.json holds: the parts of the gateway's setup the registry does not. */
+export const proxyExtrasSchema = z.object({
+  accountOrder: z.array(z.string()).max(200).optional(),
+  excludedAccountIds: z.array(z.string()).max(200).optional(),
+  clientBindings: z
+    .object({
+      "claude-code": z.record(z.string(), z.string().nullable()).optional(),
+      codex: z.record(z.string(), z.string().nullable()).optional(),
+    })
+    .optional(),
+});
+export type ProxyExtras = z.infer<typeof proxyExtrasSchema>;
+
+/**
+ * Every account in the pool's order: the saved order first, then the rest as the registry lists
+ * them. Ids of removed accounts are ignored.
+ */
+export function orderedAccounts<A extends Pick<Account, "id">>(
+  accounts: readonly A[],
+  config: Pick<ProxyConfig, "accountOrder">,
+): A[] {
+  const rank = new Map((config.accountOrder ?? []).map((id, index) => [id, index]));
+  return accounts
+    .map((account, index) => ({ account, key: rank.get(account.id) ?? rank.size + index }))
+    .sort((a, b) => a.key - b.key)
+    .map((entry) => entry.account);
+}
+
+/** The accounts the gateway may route to, in the pool's order. */
+export function poolAccounts<A extends Pick<Account, "id">>(
+  accounts: readonly A[],
+  config: Pick<ProxyConfig, "accountOrder" | "excludedAccountIds">,
+): A[] {
+  const out = new Set(config.excludedAccountIds ?? []);
+  return orderedAccounts(accounts, config).filter((account) => !out.has(account.id));
+}
+
+const clampPercent = (value: number | undefined) =>
+  typeof value === "number" && Number.isFinite(value)
+    ? Math.round(Math.min(100, Math.max(0, value)))
+    : undefined;
+
+const minutesUntil = (iso: string | null | undefined, now: number) => {
+  const at = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(at) && at > now ? Math.ceil((at - now) / 60_000) : undefined;
+};
 
 const windowsOf = (usage: AccountUsage | undefined) =>
   [usage?.fiveHour, usage?.sevenDay].filter((w): w is NonNullable<typeof w> => !!w);
@@ -58,8 +107,12 @@ export function buildProxyStatus(input: {
   usage: Record<string, AccountUsage | undefined>;
   now: number;
   error?: string;
+  recent?: ProxyRequestLog[];
+  tailscaleAddress?: string;
+  clients?: ProxyClientStatus[];
 }): ProxyStatus {
   const { config, metrics } = input;
+  const excluded = new Set(config.excludedAccountIds ?? []);
   return {
     running: input.running,
     port: config.port,
@@ -73,10 +126,15 @@ export function buildProxyStatus(input: {
       promptCacheHits: metrics?.promptCacheHits ?? 0,
       cacheHitRate: Math.round((metrics?.cacheHitRatio ?? 0) * 1000) / 10,
     },
-    accounts: input.accounts.map((account) => {
+    accounts: orderedAccounts(input.accounts, config).map((account) => {
       const usage = input.usage[account.id];
       const percent = quotaPercent(usage);
       const reset = resetInMinutes(usage, input.now);
+      const five = clampPercent(usage?.fiveHour?.usedPercent);
+      const fiveReset = minutesUntil(usage?.fiveHour?.resetsAt, input.now);
+      const week = clampPercent(usage?.sevenDay?.usedPercent);
+      const weekReset = minutesUntil(usage?.sevenDay?.resetsAt, input.now);
+      const tokens = metrics?.tokensByAccount[account.id];
       return {
         id: account.id,
         name: account.name,
@@ -86,8 +144,18 @@ export function buildProxyStatus(input: {
         signedIn: account.auth?.loggedIn === true,
         ...(percent === undefined ? {} : { quotaPercent: percent }),
         ...(reset === undefined ? {} : { resetInMinutes: reset }),
+        ...(five === undefined ? {} : { fiveHourPercent: five }),
+        ...(fiveReset === undefined ? {} : { fiveHourResetMinutes: fiveReset }),
+        ...(week === undefined ? {} : { weeklyPercent: week }),
+        ...(weekReset === undefined ? {} : { weeklyResetMinutes: weekReset }),
+        inPool: !excluded.has(account.id),
+        requests: metrics?.requestsByAccount[account.id] ?? 0,
+        ...(tokens ? { tokens: { ...tokens } } : {}),
       };
     }),
     ...(input.error ? { error: input.error } : {}),
+    ...(input.recent ? { recent: input.recent } : {}),
+    ...(input.tailscaleAddress ? { tailscaleAddress: input.tailscaleAddress } : {}),
+    ...(input.clients ? { clients: input.clients } : {}),
   };
 }

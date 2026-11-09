@@ -28,9 +28,9 @@ const status = (over: Partial<ProxyStatus> = {}): ProxyStatus => ({
   clientApiKey: KEY,
   stats: { totalRequests: 1234, activeRequests: 2, promptCacheHits: 97, cacheHitRate: 84.5 },
   accounts: [
-    { id: "a", name: "Personal", email: "p@example.com", active: true, signedIn: true, quotaPercent: 42, resetInMinutes: 130 },
-    { id: "b", name: "Work", active: false, signedIn: true, quotaPercent: 100, resetInMinutes: 5 },
-    { id: "c", name: "New", active: false, signedIn: false },
+    { id: "a", name: "Personal", email: "p@example.com", active: true, signedIn: true, quotaPercent: 42, resetInMinutes: 130, inPool: true, requests: 0 },
+    { id: "b", name: "Work", active: false, signedIn: true, quotaPercent: 100, resetInMinutes: 5, inPool: true, requests: 0 },
+    { id: "c", name: "New", active: false, signedIn: false, inPool: true, requests: 0 },
   ],
   ...over,
 });
@@ -131,118 +131,10 @@ test("a reset reads as time left, in both languages", () => {
   assert.equal(resetLabel(3 * 1440 + 125, en), "3 d 2 h");
 });
 
-test("a running gateway reads Çalışıyor with its port; the key is hidden and the monitor is filled", () => {
-  const html = render(relayFor(status()), ProxyPage);
-  assert.match(html, /Çalışıyor · :8317/);
-  assert.doesNotMatch(html, /Durduruldu/);
-  assert.equal(checked(html, "proxy-enabled"), "true");
-  assert.match(html, /value="127\.0\.0\.1"/);
-  assert.match(html, /id="proxy-port"[^>]*value="8317"|value="8317"[^>]*id="proxy-port"/);
-  // The real key never reaches the markup; its tail does.
-  assert.doesNotMatch(html, new RegExp(KEY));
-  assert.match(html, /relay-sec-••••••••••••DEFG/);
-  assert.match(html, /Yenile/);
-  assert.match(html, /Claude Code CLI/);
-  assert.match(html, /export ANTHROPIC_BASE_URL=http:\/\/127\.0\.0\.1:8317 &amp;&amp; export ANTHROPIC_AUTH_TOKEN=relay-sec-••••/);
-  assert.match(html, /Codex \/ Cursor \/ OpenAI SDK/);
-  assert.match(html, /export OPENAI_BASE_URL=http:\/\/127\.0\.0\.1:8317\/v1 &amp;&amp; export OPENAI_API_KEY=relay-sec-••••/);
-  assert.match(html, /cURL testi/);
-  assert.match(html, /En yakın sıfırlama \(önerilen\)/);
-  for (const re of [/Toplam istek/, /1\.234/, /Aktif akış/, /Önbellek isabeti/, /Önbellek oranı/, /%84,5/])
-    assert.match(html, re);
-  // Accounts with their quota and reset countdown; the last one used, a full one and one not signed in.
-  assert.match(html, /Personal[\s\S]*Son istek[\s\S]*p@example\.com/);
-  assert.match(html, /aria-valuenow="42"[\s\S]*%42[\s\S]*2 sa 10 dk/);
-  assert.match(html, /Work[\s\S]*Dolu[\s\S]*aria-valuenow="100"/);
-  assert.match(html, /New[\s\S]*Giriş yok/);
-  assert.equal([...html.matchAll(/data-active="true"/g)].length, 1);
-  // Two accounts signed in, one of them full: one can take requests.
-  assert.match(html, /1 hesap istek alabilir/);
-  assert.doesNotMatch(html, /Sağlayıcılar arası yedekleme|proxy-cross-provider/);
-});
-
-test("a stopped gateway reads Durduruldu, says why it did not start, and holds the English too", () => {
-  const off = render(relayFor(status({ running: false, error: "127.0.0.1:8317 is already in use." })), ProxyPage);
-  assert.match(off, /Durduruldu/);
-  assert.doesNotMatch(off, /Çalışıyor ·/);
-  assert.equal(checked(off, "proxy-enabled"), "false");
-  assert.match(off, /role="alert"[^>]*>127\.0\.0\.1:8317 is already in use\./);
-  assert.match(off, /sayaçlar proxy açıkken dolar/);
-  const english = render(relayFor(status({ running: false })), ProxyPage, en);
-  assert.match(english, /Stopped/);
-  assert.match(english, /Live routing monitor/);
-  assert.doesNotMatch(english, /Cross-provider fallback/);
-  assert.doesNotMatch(english, /Durduruldu/);
-});
-
-test("a gateway on a network address warns that anyone with the key can spend the accounts", () => {
-  assert.doesNotMatch(render(relayFor(status()), ProxyPage), /yerel değil/);
-  assert.match(render(relayFor(status({ host: "100.64.0.2" })), ProxyPage), /Bu adres yerel değil/);
-});
-
-test("the page turns the gateway on, changes the strategy, and regenerates the key only after asking", async () => {
-  const dom = fakeDom();
-  dom.install();
-  readableText();
-  try {
-    const calls: unknown[][] = [];
-    let current = status({ running: false });
-    const api = {
-      proxyStatus: async () => current,
-      proxyToggle: async (enabled: boolean) => {
-        calls.push(["toggle", enabled]);
-        return (current = { ...current, running: enabled });
-      },
-      proxyConfigure: async (patch: object) => {
-        calls.push(["configure", patch]);
-        return (current = { ...current, ...patch });
-      },
-      proxyRegenerateKey: async () => {
-        calls.push(["regenerate"]);
-        return (current = { ...current, clientApiKey: "relay-sec-new" });
-      },
-    };
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () =>
-      root.render(
-        createElement(
-          I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t } },
-          createElement(RelayContext.Provider, { value: relayFor(current, api) }, createElement(ProxyPage)),
-        ),
-      ),
-    );
-    const container = dom.container as unknown as Fake;
-    const attr = (n: Fake | undefined, name: string) => (n?.attributes as Map<string, string> | undefined)?.get(name);
-    const byId = (id: string) => find(container, (n) => attr(n, "id") === id);
-    const button = (label: string) =>
-      find(container, (n) => n.tagName?.toLowerCase() === "button" && textOf(n).includes(label));
-    assert.match(textOf(container), /Durduruldu/);
-
-    await act(async () => dom.dispatch(byId("proxy-enabled")!, "click", { detail: 1 }));
-    assert.deepEqual(calls.at(-1), ["toggle", true]);
-    assert.match(textOf(container), /Çalışıyor · :8317/);
-
-    await act(async () => dom.dispatch(button("Dengeli kapasite")!, "click", { detail: 1 }));
-    assert.deepEqual(calls.at(-1), ["configure", { routingStrategy: "balanced" }]);
-
-    // Yenile asks first: the old key stops working.
-    await act(async () => dom.dispatch(button("Yenile")!, "click", { detail: 1 }));
-    assert.equal(calls.some((c) => c[0] === "regenerate"), false);
-    assert.match(textOf(container), /Eski anahtar hemen çalışmaz olur/);
-    await act(async () => dom.dispatch(button("Yeni anahtar üret")!, "click", { detail: 1 }));
-    assert.deepEqual(calls.at(-1), ["regenerate"]);
-    await act(async () => root.unmount());
-  } finally {
-    dom.uninstall();
-  }
-});
-
 test("main, the preload and the desktop snapshot carry the gateway; quitting stops it", () => {
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
   const preload = readFileSync(new URL("../electron/preload.ts", import.meta.url), "utf8");
-  for (const name of ["proxy-status", "proxy-toggle", "proxy-configure", "proxy-regenerate-key"]) {
+  for (const name of ["proxy-status", "proxy-toggle", "proxy-configure", "proxy-regenerate-key", "proxy-bind-client", "proxy-unbind-client"]) {
     assert.match(main, new RegExp(`handle\\("${name}"`), name);
     assert.match(preload, new RegExp(`ipcRenderer\\.invoke\\("relay:${name}"`), name);
   }

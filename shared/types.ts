@@ -26,7 +26,8 @@ import type { DesktopContinuationSnapshot } from "../electron/core/desktop-conti
 import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
-import { DEFAULT_PROXY_CONFIG, type ProxyConfig } from "./proxy-types";
+import { DEFAULT_PROXY_CONFIG, type ProxyClientId, type ProxyConfig, type ProxyRequestLog } from "./proxy-types";
+export type { ProxyClientId, ProxyRequestLog } from "./proxy-types";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
 export type AccountProvider = "claude" | "codex" | "antigravity" | "gemini";
@@ -279,6 +280,32 @@ export interface ProxyAccountStatus {
   quotaPercent?: number;
   /** Minutes until the soonest limit window resets. */
   resetInMinutes?: number;
+  /** The 5-hour window, 0–100 used, and minutes until it resets. */
+  fiveHourPercent?: number;
+  fiveHourResetMinutes?: number;
+  /** The weekly window, 0–100 used, and minutes until it resets. */
+  weeklyPercent?: number;
+  weeklyResetMinutes?: number;
+  /** The gateway may route to it; false when it was taken out of the pool. */
+  inPool: boolean;
+  /** Requests the gateway sent it since it started. */
+  requests: number;
+  /** Tokens it answered since the gateway started. */
+  tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+}
+/** A client tool Relay can point at the gateway, and whether it is now. */
+export interface ProxyClientStatus {
+  id: ProxyClientId;
+  /** The tool's settings folder exists on this Mac. */
+  installed: boolean;
+  /** Its settings point at this gateway with the current key. */
+  bound: boolean;
+  /** Its settings point at the gateway but with an old address or key. */
+  stale: boolean;
+  /** The settings file Relay writes. */
+  file: string;
+  /** Why Relay will not write it (e.g. another provider is set), when it will not. */
+  blocked?: string;
 }
 /** What the Proxy Gateway page shows: whether the gateway runs, how it is reached, and what it did. */
 export interface ProxyStatus {
@@ -297,6 +324,12 @@ export interface ProxyStatus {
   accounts: ProxyAccountStatus[];
   /** Why the gateway is not running although it is turned on (e.g. the port is in use). */
   error?: string;
+  /** The latest requests, newest first. */
+  recent?: ProxyRequestLog[];
+  /** This Mac's Tailscale address, when it is on a tailnet. */
+  tailscaleAddress?: string;
+  /** The client tools and whether each is pointed at the gateway. */
+  clients?: ProxyClientStatus[];
 }
 /** Local session discovered on disk for 1-click Zero-Friction onboarding. */
 export interface DetectedProviderSession {
@@ -498,9 +531,17 @@ export interface RelayAPI {
     host?: string;
     routingStrategy?: "soonest-reset" | "balanced" | "strict-priority";
     affinityTtlSeconds?: number;
+    /** Account ids in pool order (strict priority uses them in this order). */
+    accountOrder?: string[];
+    /** Accounts the gateway must not route to. */
+    excludedAccountIds?: string[];
   }): Promise<ProxyStatus>;
-  /** Replaces the client key (`relay-sec-…`); the old key stops working at once. */
+  /** Replaces the client key (`relay-sec-…`); the old key stops working at once. Bound clients get the new one. */
   proxyRegenerateKey(): Promise<ProxyStatus>;
+  /** Writes the client's own settings so it talks to the gateway; the replaced values are kept. */
+  proxyBindClient(id: ProxyClientId): Promise<ProxyStatus>;
+  /** Takes the gateway out of the client's settings and restores what was there before. */
+  proxyUnbindClient(id: ProxyClientId): Promise<ProxyStatus>;
   /** Discovers local sessions for Claude, OpenAI/Codex, and Google Antigravity for 1-click onboarding. */
   detectProviders(): Promise<DetectedProviderSession[]>;
   /** Connects and cascades a provider account across Desktop, Usage, CLI, and Proxy Gateway in one click. */

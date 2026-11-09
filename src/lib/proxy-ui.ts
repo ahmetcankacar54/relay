@@ -2,17 +2,9 @@
 
 type T = (tr: string, en: string) => string;
 
-const bracketed = (host: string) => (host.includes(":") && !host.startsWith("[") ? `[${host}]` : host);
+import { clientHost, gatewayUrl } from "../../shared/proxy-url";
 
-/** The address a client dials: a wildcard bind address is reached through loopback. */
-export function clientHost(host: string): string {
-  if (host === "0.0.0.0") return "127.0.0.1";
-  if (host === "::" || host === "[::]") return "[::1]";
-  return bracketed(host);
-}
-
-/** `http://127.0.0.1:8317`: where the gateway answers. */
-export const gatewayUrl = (host: string, port: number) => `http://${clientHost(host)}:${port}`;
+export { clientHost, gatewayUrl };
 
 export const isLoopbackHost = (host: string) =>
   host === "localhost" || host === "::1" || host === "[::1]" || /^127\./.test(host);
@@ -97,4 +89,53 @@ export function proxyCurlSnippet(host: string, port: number, key: string | undef
 export function quotaTone(percent: number | undefined): "ok" | "warn" | "crit" | "none" {
   if (percent === undefined || !Number.isFinite(percent)) return "none";
   return percent >= 90 ? "crit" : percent >= 75 ? "warn" : "ok";
+}
+
+/** "4 sn önce" / "4 s ago": how long ago a request was answered. */
+export function agoLabel(at: number, now: number, t: T): string {
+  const seconds = Math.max(0, Math.round((now - at) / 1000));
+  if (seconds < 60) return t(`${seconds} sn önce`, `${seconds} s ago`);
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return t(`${minutes} dk önce`, `${minutes} min ago`);
+  return t(`${Math.round(minutes / 60)} sa önce`, `${Math.round(minutes / 60)} h ago`);
+}
+
+/**
+ * 1.2K, 3.4M: a token count that fits a narrow column. Always the K/M/B letters: Turkish
+ * compact "412 B" (bin) reads as bytes; only the decimal mark follows the language.
+ */
+export function compactCount(value: number, locale: string): string {
+  const text = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+  return locale.startsWith("tr") ? text.replace(".", ",") : text;
+}
+
+/** Within this many minutes of a weekly reset, room left on the window is about to be lost. */
+export const WASTE_WINDOW_MINUTES = 48 * 60;
+/** Room left (percent) that is worth a warning when the weekly window is about to reset. */
+export const WASTE_MIN_PERCENT = 25;
+
+/**
+ * The weekly room an account will lose at its next reset if nobody uses it: the percent left and
+ * the minutes until the reset; undefined when the reset is far off or little is left. Claude's
+ * resets only refill: what is left at the reset is gone, so this account should go first.
+ */
+export function quotaAtRisk(account: {
+  weeklyPercent?: number;
+  weeklyResetMinutes?: number;
+}): { percent: number; minutes: number } | undefined {
+  const { weeklyPercent, weeklyResetMinutes } = account;
+  if (weeklyPercent === undefined || weeklyResetMinutes === undefined) return undefined;
+  const left = Math.max(0, 100 - weeklyPercent);
+  if (weeklyResetMinutes > WASTE_WINDOW_MINUTES || left < WASTE_MIN_PERCENT) return undefined;
+  return { percent: left, minutes: weeklyResetMinutes };
+}
+
+/** Moves `id` one place up (-1) or down (+1) in `order`; the same order when it cannot move. */
+export function moveInOrder(order: readonly string[], id: string, by: -1 | 1): string[] {
+  const next = [...order];
+  const from = next.indexOf(id);
+  const to = from + by;
+  if (from < 0 || to < 0 || to >= next.length) return next;
+  [next[from], next[to]] = [next[to], next[from]];
+  return next;
 }

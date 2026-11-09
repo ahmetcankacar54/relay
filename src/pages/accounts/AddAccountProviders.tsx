@@ -24,12 +24,6 @@ import { cn } from "@/lib/utils";
 export const ONBOARDING_PROVIDERS = ["claude", "codex", "antigravity"] as const;
 export type OnboardingProvider = (typeof ONBOARDING_PROVIDERS)[number];
 
-/** What each provider card says it connects, in the words of the onboarding cascade. */
-const PROVIDER_CARDS: Record<OnboardingProvider, { title: string; sub: [string, string] }> = {
-  claude: { title: "Anthropic Claude", sub: ["Claude uygulaması, terminal, eklenti ve proxy", "Claude app, terminal, extension and gateway"] },
-  codex: { title: "OpenAI / Codex", sub: ["Codex CLI girişi ya da OpenAI API anahtarı · proxy", "Codex CLI sign-in or an OpenAI API key · gateway"] },
-  antigravity: { title: "Google Antigravity", sub: ["Google ile giriş · proxy", "Google sign-in · gateway"] },
-};
 
 /** The suggested account name: `Kişisel · Claude`, `OpenAI · Codex`, `Google · Antigravity`. */
 export function suggestAccountName(
@@ -69,102 +63,6 @@ export function useDetectedProviders(): Partial<Record<AccountProvider, Detected
     };
   }, [api]);
   return found;
-}
-
-/** Three cards, one per provider, each with a green “Detected” badge when a local session was found. */
-export function ProviderCards({
-  value,
-  onChange,
-  detected,
-  disabled,
-}: {
-  value: AccountProvider;
-  onChange: (provider: OnboardingProvider) => void;
-  detected: Partial<Record<AccountProvider, DetectedProviderSession>>;
-  disabled?: boolean;
-}) {
-  const { t } = useI18n();
-  return (
-    <div
-      role="radiogroup"
-      aria-label={t("Sağlayıcı", "Provider")}
-      data-slot="provider-cards"
-      className="grid gap-2 sm:grid-cols-3"
-    >
-      {ONBOARDING_PROVIDERS.map((provider) => {
-        const session = detected[provider];
-        const card = PROVIDER_CARDS[provider];
-        const selected = value === provider;
-        return (
-          <button
-            key={provider}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            disabled={disabled}
-            data-provider={provider}
-            onClick={() => onChange(provider)}
-            className={cn(
-              "grid content-start gap-1 rounded-lg border bg-card px-3 py-2.5 text-left outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60",
-              selected && "border-primary bg-primary/5",
-            )}
-          >
-            <span className="flex items-center justify-between gap-1.5">
-              <span className="text-sm font-semibold">{card.title}</span>
-              {selected && <Check aria-hidden="true" className="size-3.5 shrink-0 text-primary" />}
-            </span>
-            <span className="text-2xs text-muted-foreground">{t(...card.sub)}</span>
-            {session?.detected ? (
-              <span data-slot="detected" className="mt-0.5 grid gap-0.5">
-                <span className="inline-flex w-fit items-center gap-1 rounded-sm bg-ok/15 px-1.5 py-px text-2xs font-semibold text-ok-foreground">
-                  <StatusDot tone="ok" />
-                  {t("Algılandı", "Detected")}
-                </span>
-                <span className="truncate text-2xs text-muted-foreground">
-                  {session.email ?? session.source}
-                </span>
-              </span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** The four layers one click feeds, with what the click does, as a quiet banner. */
-export function CascadeBanner() {
-  const { t } = useI18n();
-  const layers = [
-    t("Desktop & İstemci", "Desktop & Client"),
-    t("Limit & OAuth", "Usage & OAuth"),
-    t("Terminal & CLI", "Terminal & CLI"),
-    t("Chrome & Proxy", "Chrome & Proxy"),
-  ];
-  return (
-    <div data-slot="cascade-banner" className="grid gap-2 rounded-lg border bg-muted/40 px-3 py-2.5">
-      <ol aria-label={t("Bağlantı katmanları", "Connection layers")} className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        {layers.map((layer, i) => (
-          <li key={layer} className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
-            <span
-              aria-hidden="true"
-              className="grid size-4 shrink-0 place-items-center rounded-full bg-primary/15 text-2xs font-semibold tabular-nums text-primary"
-            >
-              {i + 1}
-            </span>
-            <span className="truncate">{layer}</span>
-          </li>
-        ))}
-      </ol>
-      <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-        <Zap aria-hidden="true" className="mt-0.5 size-3 shrink-0 text-primary" />
-        {t(
-          "Relay kullanılabilir yerel kimlik bilgilerini içe aktarır; her katmanın gerçek durumunu bağlantıdan sonra gösterir.",
-          "Relay imports usable local credentials and shows each layer’s actual state after setup.",
-        )}
-      </p>
-    </div>
-  );
 }
 
 export interface ConnectForm {
@@ -261,25 +159,166 @@ const LAYER_WORDS: Record<CascadeLayerStatus, [string, string]> = {
   pending: ["Bekliyor", "Waiting"],
 };
 
-/** What the click did to each of the four layers. */
+/**
+ * Where an added account works, in plain words: only the places that apply to its provider
+ * (Codex and Antigravity only serve the gateway), each with its state.
+ */
 export function CascadeResult({ result }: { result: OneClickCascadeResult }) {
   const { t } = useI18n();
   const rows: [string, CascadeLayerStatus][] = [
-    [t("Desktop & İstemci", "Desktop & Client"), result.layers.desktop],
-    [t("Limit & OAuth", "Usage & OAuth"), result.layers.usage],
-    [t("Terminal & CLI", "Terminal & CLI"), result.layers.terminal],
-    [t("Chrome & Proxy", "Chrome & Proxy"), result.layers.extensionAndProxy],
+    [t("Claude uygulaması", "Claude app"), result.layers.desktop],
+    [t("Limitler", "Limits"), result.layers.usage],
+    [t("Terminal", "Terminal"), result.layers.terminal],
+    [t("Eklenti ve ağ geçidi", "Extension and gateway"), result.layers.extensionAndProxy],
   ];
+  const shown = rows.filter(([, status]) => status !== "skipped");
   return (
-    <ul data-slot="cascade-result" className="grid gap-1.5">
-      {rows.map(([label, status]) => (
-        <li key={label} className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2 text-sm">
-          <StatusDot tone={status === "done" ? "ok" : status === "pending" ? "warn" : "off"} />
-          <span className="min-w-0 flex-1">{label}</span>
-          <span className="text-xs text-muted-foreground">{t(...LAYER_WORDS[status])}</span>
+    <ul data-slot="cascade-result" className="flex flex-wrap gap-x-4 gap-y-1">
+      {shown.map(([label, status]) => (
+        <li key={label} data-state={status} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <StatusDot tone={status === "done" || status === "ready" ? "ok" : "warn"} />
+          <span>{label}</span>
+          <span className="sr-only">{t(...LAYER_WORDS[status])}</span>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A session found on this Mac that is not an account yet: what the import list offers. */
+export const importable = (detected: Partial<Record<AccountProvider, DetectedProviderSession>>) =>
+  ONBOARDING_PROVIDERS.map((p) => detected[p]).filter(
+    (s): s is DetectedProviderSession => !!s?.detected && !s.alreadyLinkedAccountId,
+  );
+
+/** What happened to one import: the account added, or why it was not. */
+export type ImportOutcome =
+  | { provider: AccountProvider; result: OneClickCascadeResult }
+  | { provider: AccountProvider; error: string };
+
+/**
+ * Adds the chosen sessions one after the other with suggested names; the Claude one goes last
+ * because it may still wait for the Claude app. A failure is kept and the rest go on.
+ */
+export async function importSessions(
+  sessions: readonly DetectedProviderSession[],
+  connect: (input: { provider: AccountProvider; name: string; kind: AccountKind }) => Promise<OneClickCascadeResult>,
+  taken: readonly string[],
+  t: T,
+): Promise<ImportOutcome[]> {
+  const names = [...taken];
+  const ordered = [...sessions].sort((a, b) => Number(a.provider === "claude") - Number(b.provider === "claude"));
+  const out: ImportOutcome[] = [];
+  for (const session of ordered) {
+    const name = suggestAccountName(session.provider, names, t);
+    names.push(name);
+    try {
+      out.push({ provider: session.provider, result: await connect({ provider: session.provider, name, kind: "personal" }) });
+    } catch (error) {
+      out.push({ provider: session.provider, error: errorMessage(error) });
+    }
+  }
+  return out;
+}
+
+/**
+ * "We found N accounts on this Mac": every session not yet added, ticked, and one button that
+ * adds them all. Names are suggested; they can be changed later on the account.
+ */
+export function DetectedImport({
+  sessions,
+  onDone,
+}: {
+  sessions: readonly DetectedProviderSession[];
+  onDone: (outcomes: ImportOutcome[]) => void;
+}) {
+  const { t } = useI18n();
+  const { api, accounts, action, busy } = useRelay();
+  const [skipped, setSkipped] = useState<ReadonlySet<AccountProvider>>(new Set());
+  const chosen = sessions.filter((s) => !skipped.has(s.provider));
+  const toggle = (provider: AccountProvider) =>
+    setSkipped((current) => {
+      const next = new Set(current);
+      if (next.has(provider)) next.delete(provider);
+      else next.add(provider);
+      return next;
+    });
+  const run = () =>
+    void action("import", async () => {
+      onDone(await importSessions(chosen, (input) => api.oneClickConnect(input), accounts.map((a) => a.name), t));
+    });
+  const where: Record<string, [string, string]> = {
+    claude: ["Claude uygulaması", "Claude app"],
+    codex: ["Codex CLI", "Codex CLI"],
+    antigravity: ["Google oturumu", "Google sign-in"],
+  };
+  return (
+    <section data-slot="detected-import" aria-labelledby="detected-import-title" className="grid gap-3 rounded-lg border bg-card px-3.5 py-3">
+      <div className="grid gap-0.5">
+        <h3 id="detected-import-title" className="text-base font-semibold">
+          {sessions.length === 1
+            ? t("Bu Mac’te 1 hesap bulduk", "We found 1 account on this Mac")
+            : t(`Bu Mac’te ${sessions.length} hesap bulduk`, `We found ${sessions.length} accounts on this Mac`)}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "İşaretli olanlar tek seferde eklenir. İsimleri sonra değiştirebilirsin.",
+            "The ticked ones are added in one go. You can rename them later.",
+          )}
+        </p>
+      </div>
+      <ul className="grid">
+        {sessions.map((session) => {
+          const on = !skipped.has(session.provider);
+          return (
+            <li key={session.provider} className="border-t first:border-t-0">
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={on}
+                data-provider={session.provider}
+                disabled={!!busy}
+                onClick={() => toggle(session.provider)}
+                className="flex w-full items-center gap-3 rounded-md px-1 py-2 text-left outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "grid size-4 shrink-0 place-items-center rounded-[4px] border",
+                    on ? "border-primary bg-primary text-primary-foreground" : "border-input",
+                  )}
+                >
+                  {on && <Check className="size-3" />}
+                </span>
+                <ProviderBadge provider={session.provider} />
+                <span className="grid min-w-0 flex-1">
+                  <span className="truncate text-sm">{session.email ?? session.name ?? session.source}</span>
+                  <span className="truncate text-2xs text-muted-foreground">
+                    {[t(...(where[session.provider] ?? [session.source ?? "", session.source ?? ""])), session.plan, session.orgName]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button disabled={!!busy || chosen.length === 0} onClick={run}>
+          {busy === "import" ? <LoaderCircle className="animate-spin" /> : <Zap />}
+          {chosen.length === 1 ? t("Hesabı ekle", "Add account") : t(`${chosen.length} hesabı ekle`, `Add ${chosen.length} accounts`)}
+        </Button>
+        {chosen.some((s) => s.provider === "claude") && (
+          <span className="text-xs text-muted-foreground">
+            {t(
+              "Claude hesabı, Claude uygulamasında Code bir kez açıldığında kaydedilir.",
+              "The Claude account is saved once Code has been opened in the Claude app.",
+            )}
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -298,46 +337,6 @@ export function useOneClickConnect(onResult: (result: OneClickCascadeResult) => 
       onResult(result);
     });
   return { connect, connecting: busy === "one-click", disabled: !!busy };
-}
-
-/** Claude's one-click panel, shown at the first step above the step-by-step button. */
-export function ClaudeOneClick({
-  form,
-  onChange,
-  session,
-  onResult,
-}: {
-  form: ConnectForm;
-  onChange: (form: ConnectForm) => void;
-  session?: DetectedProviderSession;
-  onResult: (result: OneClickCascadeResult) => void;
-}) {
-  const { t } = useI18n();
-  const { connect, connecting, disabled } = useOneClickConnect(onResult);
-  return (
-    <div data-slot="claude-one-click" className="grid gap-3">
-      {session?.detected && (
-        <p
-          data-slot="detected-session"
-          className="rounded-lg border border-ok/40 bg-ok/5 px-3 py-2 text-sm"
-        >
-          {t("Yerel oturum algılandı", "Local session detected")}:{" "}
-          <b className="font-semibold">{session.email ?? session.source}</b>
-          {session.orgName ? ` · ${session.orgName}` : ""}
-        </p>
-      )}
-      <CommonFields form={form} onChange={onChange} idPrefix="add-claude" />
-      <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={disabled || !form.name.trim()} onClick={() => connect("claude", form)}>
-          {connecting ? <LoaderCircle className="animate-spin" /> : <Zap />}
-          {t("Tek tıkla bağla", "Connect in one click")}
-        </Button>
-        <span className="text-xs text-muted-foreground">
-          {t("veya aşağıdan adım adım ekle", "or add it step by step below")}
-        </span>
-      </div>
-    </div>
-  );
 }
 
 /** Codex: the Codex CLI's sign-in, or an OpenAI API key that OpenAI accepts. */

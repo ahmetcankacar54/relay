@@ -17,6 +17,8 @@ import type {
   UpdateState,
   ExtensionStatus,
   MenuBarItem,
+  ProxyClientId,
+  ProxyRequestLog,
   ProxyStatus,
   RelayAPI,
   Session,
@@ -617,6 +619,9 @@ const previewProxy: {
   key: string;
   routingStrategy: "soonest-reset" | "balanced" | "strict-priority";
   affinityTtlSeconds: number;
+  order: string[];
+  excluded: string[];
+  bound: Partial<Record<ProxyClientId, boolean>>;
 } = {
   running: false,
   port: 8317,
@@ -624,6 +629,31 @@ const previewProxy: {
   key: "relay-sec-preview-0000000000000000000000000000",
   routingStrategy: "soonest-reset",
   affinityTtlSeconds: 300,
+  order: [],
+  excluded: [],
+  bound: {},
+};
+const minutesTo = (iso: string | null | undefined) =>
+  iso ? Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 60_000)) : undefined;
+const previewOrdered = () => {
+  const rank = new Map(previewProxy.order.map((id, i) => [id, i]));
+  return accounts
+    .map((a, i) => ({ a, key: rank.get(a.id) ?? rank.size + i }))
+    .sort((x, y) => x.key - y.key)
+    .map((x) => x.a);
+};
+const previewRecent = (): ProxyRequestLog[] => {
+  if (!previewProxy.running || !accounts.length) return [];
+  const now = Date.now();
+  const first = accounts[0]?.id;
+  const second = accounts[1]?.id ?? first;
+  return [
+    { at: now - 4_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, affinity: true },
+    { at: now - 31_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200 },
+    { at: now - 32_000, accountId: first, provider: "claude", model: "claude-sonnet-4-5", status: 429, failover: true },
+    { at: now - 95_000, accountId: first, provider: "claude", model: "claude-haiku-4-5", status: 200, affinity: true },
+    { at: now - 160_000, provider: "codex", model: "gpt-5-codex", status: 503, note: "no-account" },
+  ];
 };
 const previewProxyStatus = (): ProxyStatus => ({
   running: previewProxy.running,
@@ -635,21 +665,40 @@ const previewProxyStatus = (): ProxyStatus => ({
   stats: previewProxy.running
     ? { totalRequests: 128, activeRequests: 2, promptCacheHits: 97, cacheHitRate: 84.5 }
     : { totalRequests: 0, activeRequests: 0, promptCacheHits: 0, cacheHitRate: 0 },
-  accounts: accounts.map((a, i) => {
-    const window = state.usage[a.id]?.fiveHour;
+  accounts: previewOrdered().map((a, i) => {
+    const five = state.usage[a.id]?.fiveHour;
+    const week = state.usage[a.id]?.sevenDay;
+    const used = [five?.usedPercent, week?.usedPercent].filter((p): p is number => typeof p === "number");
+    const resets = [minutesTo(five?.resetsAt), minutesTo(week?.resetsAt)].filter((m): m is number => m !== undefined);
     return {
       id: a.id,
       name: a.name,
       provider: a.provider ?? "claude",
       ...(a.auth?.email ? { email: a.auth.email } : {}),
-      active: previewProxy.running && i === 0,
+      active: previewProxy.running && i === 1,
       signedIn: a.auth?.loggedIn === true,
-      ...(window ? { quotaPercent: Math.round(window.usedPercent) } : {}),
-      ...(window?.resetsAt
-        ? { resetInMinutes: Math.max(0, Math.ceil((Date.parse(window.resetsAt) - Date.now()) / 60_000)) }
+      ...(used.length ? { quotaPercent: Math.round(Math.max(...used)) } : {}),
+      ...(resets.length ? { resetInMinutes: Math.min(...resets) } : {}),
+      ...(five ? { fiveHourPercent: Math.round(five.usedPercent) } : {}),
+      ...(five?.resetsAt ? { fiveHourResetMinutes: minutesTo(five.resetsAt) } : {}),
+      ...(week ? { weeklyPercent: Math.round(week.usedPercent) } : {}),
+      ...(week?.resetsAt ? { weeklyResetMinutes: minutesTo(week.resetsAt) } : {}),
+      inPool: !previewProxy.excluded.includes(a.id),
+      requests: previewProxy.running ? [42, 61, 25][i] ?? 0 : 0,
+      ...(previewProxy.running
+        ? { tokens: { input: 18_400 * (i + 1), output: 9_100 * (i + 1), cacheRead: 412_000 / (i + 1), cacheWrite: 38_000 } }
         : {}),
     };
   }),
+  recent: previewRecent(),
+  tailscaleAddress: "100.101.12.34",
+  clients: (["claude-code", "codex"] as const).map((id) => ({
+    id,
+    installed: true,
+    bound: !!previewProxy.bound[id],
+    stale: false,
+    file: id === "claude-code" ? "~/.claude/settings.json" : "~/.codex/config.toml",
+  })),
 });
 
 export const previewApi: RelayAPI = {
@@ -663,6 +712,16 @@ export const previewApi: RelayAPI = {
     if (input.host !== undefined) previewProxy.host = input.host;
     if (input.routingStrategy !== undefined) previewProxy.routingStrategy = input.routingStrategy;
     if (input.affinityTtlSeconds !== undefined) previewProxy.affinityTtlSeconds = input.affinityTtlSeconds;
+    if (input.accountOrder !== undefined) previewProxy.order = input.accountOrder;
+    if (input.excludedAccountIds !== undefined) previewProxy.excluded = input.excludedAccountIds;
+    return previewProxyStatus();
+  },
+  proxyBindClient: async (id) => {
+    previewProxy.bound[id] = true;
+    return previewProxyStatus();
+  },
+  proxyUnbindClient: async (id) => {
+    previewProxy.bound[id] = false;
     return previewProxyStatus();
   },
   proxyRegenerateKey: async () => {

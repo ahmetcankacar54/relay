@@ -135,8 +135,8 @@ test("the status lists every account with its room left, marks the latest one, a
   assert.equal(status.clientApiKey, "relay-sec-k");
   assert.deepEqual(status.stats, { totalRequests: 12, activeRequests: 2, promptCacheHits: 9, cacheHitRate: 84.6 });
   assert.deepEqual(status.accounts, [
-    { id: "a", name: "Personal", provider: "claude", email: "p@example.com", active: false, signedIn: true, quotaPercent: 20, resetInMinutes: 1 },
-    { id: "b", name: "Work", provider: "claude", active: true, signedIn: false },
+    { id: "a", name: "Personal", provider: "claude", email: "p@example.com", active: false, signedIn: true, quotaPercent: 20, resetInMinutes: 1, fiveHourPercent: 20, fiveHourResetMinutes: 1, inPool: true, requests: 0 },
+    { id: "b", name: "Work", provider: "claude", active: true, signedIn: false, inPool: true, requests: 0 },
   ]);
 });
 

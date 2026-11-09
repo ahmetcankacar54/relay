@@ -522,11 +522,13 @@ export class ProxyServer {
           return;
         }
         if (err instanceof NoProviderAccountError && tried.size === 0) {
+          this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 503, note: "no-account" });
           sendJsonError(res, 503, "api_error", err.message);
           return;
         }
         if (err instanceof NoEligibleAccountError && tried.size === 0) {
           this.stats.recordError(err.message);
+          this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 429, note: "all-limited" });
           sendJsonError(
             res,
             429,
@@ -543,6 +545,7 @@ export class ProxyServer {
           err instanceof NoEligibleAccountError
         ) {
           // Every other account was tried or is cooling down: the last answer was already held.
+          this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: lastHeld ?? 429, note: "all-limited" });
           sendJsonError(res, lastHeld ?? 429, lastHeld === 401 || lastHeld === 403 ? "authentication_error" : "rate_limit_error", "Every account for this provider is limited or unavailable");
           return;
         }
@@ -567,6 +570,15 @@ export class ProxyServer {
               RETRYABLE.has(status) && this.canTryAnother(targetProvider, tried, pathname),
       );
       if (!outcome) return;
+      this.stats.recordLog({
+        at: Date.now(),
+        accountId: selection.account.id,
+        provider: targetProvider,
+        model: requestedModel,
+        status: outcome.statusCode,
+        ...(outcome.held ? { failover: true } : {}),
+        ...(selection.sessionAffinityHit ? { affinity: true } : {}),
+      });
       this.applyOutcome(selection.account.id, outcome);
       if (!outcome.held) return;
       lastHeld = outcome.statusCode;
@@ -768,6 +780,7 @@ export class ProxyServer {
       if (!token || token.startsWith("sk-")) continue;
       if (socket.destroyed) return;
       this.stats.recordRequest(selection.account.id);
+      this.stats.recordLog({ at: Date.now(), accountId: selection.account.id, provider: "codex", model: "websocket", status: 101 });
       this.wsBridge.handleUpgrade(req, socket, head, {
         upstreamUrl: this.upstreams.codexWebSocketUrl ?? CODEX_WS_URL,
         token,

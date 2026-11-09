@@ -9,6 +9,33 @@ export interface ProxyConfig {
   affinityTtlSeconds: number;
   routingStrategy: RoutingStrategy;
   apiKey?: string;
+  /** Account ids in the order the pool uses them (strict priority reads it; the page lists by it). */
+  accountOrder?: string[];
+  /** Accounts left out of the pool: the gateway never routes to them. */
+  excludedAccountIds?: string[];
+  /**
+   * The values a bound client's settings held before Relay pointed it at the gateway, by client,
+   * so unbinding puts them back. `null` means the key was not there.
+   */
+  clientBindings?: Partial<Record<ProxyClientId, Record<string, string | null>>>;
+}
+
+/** The clients Relay can point at the gateway by writing their settings. */
+export type ProxyClientId = "claude-code" | "codex";
+
+/** One request the gateway answered (or passed on), newest first in the status. */
+export interface ProxyRequestLog {
+  at: number;
+  accountId?: string;
+  provider?: string;
+  model?: string;
+  status: number;
+  /** The account answered with a limit or refusal and the request went on to the next one. */
+  failover?: boolean;
+  /** The session stayed on its account (prompt cache kept). */
+  affinity?: boolean;
+  /** Present for answers the gateway gave itself (no account could take it). */
+  note?: string;
 }
 
 export interface ProxySessionState {

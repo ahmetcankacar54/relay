@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, Globe2, LoaderCircle, Monitor, Terminal } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Globe2, LoaderCircle, Monitor, Terminal } from "lucide-react";
 import type { Account, AccountProvider, OneClickCascadeResult } from "../../../shared/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,15 +34,17 @@ import {
   desktopBlock,
 } from "@/lib/onboarding";
 import {
-  CascadeBanner,
-  ClaudeOneClick,
+  CascadeResult,
   ConnectionDone,
-  ProviderCards,
+  DetectedImport,
   ProviderForm,
   AntigravityOAuthForm,
+  importable,
   useConnectForm,
   useDetectedProviders,
+  type ImportOutcome,
 } from "./AddAccountProviders";
+import { ProviderBadge } from "@/components/ProviderBadge";
 import {
   isProvisionalName,
   provisionalName,
@@ -72,66 +74,217 @@ export function AddAccountDialog({
   );
 }
 
+/** Which part of the add dialog is open. */
+type View = "home" | "claude" | "codex" | "antigravity";
+
 /**
- * Adding an account for any provider: the provider cards (with the local sessions found), and
- * then the provider's own way in. Claude keeps its three steps (`AddAccountSteps`) under a
- * one-click panel and its four layers; Codex connects a detected sign-in or a checked API key;
- * Antigravity signs in with Google.
+ * Adding accounts. The first view lists the sessions found on this Mac, ticked, and adds them all
+ * with one button; under it are the other ways in: a new Claude sign-in (the Claude app reopens
+ * at its sign-in and Relay saves the account by itself), Codex (its CLI sign-in or an API key) and
+ * Google Antigravity. A Claude account that still waits for the Claude app continues in the
+ * steps (`AddAccountSteps`).
  */
 export function AddAccountFlow({ close }: { close: () => void }) {
-  const { accounts, busy, desktop, pendingDesktop } = useRelay();
-  const [provider, setProvider] = useState<AccountProvider>("claude");
-  const [result, setResult] = useState<OneClickCascadeResult>();
+  const relay = useRelay();
+  const { t } = useI18n();
+  const { accounts, busy, desktop, desktopBusy, pendingDesktop } = relay;
+  // Reopened while a Claude sign-in or its automatic save runs: back to those steps.
+  const [view, setView] = useState<View>(pendingDesktop || desktop?.autoCapture ? "claude" : "home");
+  const [continueId, setContinueId] = useState<string>();
+  const [outcomes, setOutcomes] = useState<ImportOutcome[]>();
+  const [single, setSingle] = useState<{ result: OneClickCascadeResult; provider: AccountProvider }>();
   const detected = useDetectedProviders();
+  const sessions = importable(detected);
   const [form, setForm] = useConnectForm(
-    provider,
+    view === "antigravity" ? "antigravity" : "codex",
     accounts.map((a) => a.name),
   );
-  // Claude's three steps are mid-way (a profile exists, or a sign-in waits): the provider cannot change under them.
-  const locked = !!busy || !!pendingDesktop || !!desktop?.autoCapture;
-  const reset = () => {
-    setResult(undefined);
+  const desktopLock = desktopBlock({ desktop, desktopBusy, pendingDesktop });
+  const home = () => {
+    setView("home");
+    setSingle(undefined);
+    setOutcomes(undefined);
+    setContinueId(undefined);
     setForm((f) => ({ ...f, apiKey: "" }));
   };
-  return (
-    <div className="grid gap-4">
-      <ProviderCards
-        value={provider}
-        onChange={(next) => {
-          setProvider(next);
-          setResult(undefined);
-        }}
-        detected={detected}
-        disabled={locked}
-      />
-      {/* The four layers are Claude's: Codex and Antigravity only serve the gateway. */}
-      {provider === "claude" && !result && <CascadeBanner />}
-      {result && !(provider === "claude" && result.layers.desktop === "pending") ? (
-        <ConnectionDone result={result} provider={provider} onAnother={reset} close={close} />
-      ) : provider === "claude" ? (
+  const imported = (list: ImportOutcome[]) => {
+    // A Claude account that still waits for the Claude app goes on in the steps.
+    const waiting = list.find(
+      (o): o is Extract<ImportOutcome, { result: OneClickCascadeResult }> =>
+        "result" in o && o.provider === "claude" && o.result.layers.desktop === "pending",
+    );
+    setOutcomes(list);
+    if (waiting) {
+      setContinueId(waiting.result.account.id);
+      setView("claude");
+    }
+  };
+  const back = !busy && !pendingDesktop && (
+    <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={home}>
+      <ArrowLeft />
+      {t("Geri", "Back")}
+    </Button>
+  );
+
+  if (single)
+    return <ConnectionDone result={single.result} provider={single.provider} onAnother={home} close={close} />;
+  if (outcomes && view === "home") return <ImportDone outcomes={outcomes} onAnother={home} close={close} />;
+  if (view === "claude")
+    return (
+      <div className="grid gap-3">
+        {!continueId && back}
+        {outcomes?.some((o) => "result" in o && o.provider !== "claude") && (
+          <p role="status" className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+            <Check aria-hidden="true" className="size-4 text-ok" />
+            {t(
+              `${outcomes.flatMap((o) => ("result" in o && o.provider !== "claude" ? [o.result.account.name] : [])).join(", ")} eklendi. Sırada Claude hesabı var.`,
+              `${outcomes.flatMap((o) => ("result" in o && o.provider !== "claude" ? [o.result.account.name] : [])).join(", ")} added. The Claude account is next.`,
+            )}
+          </p>
+        )}
         <AddAccountSteps
-          // A one-click that still waits for the Claude app (a sign-in, or Code) continues with its profile.
-          key={result?.account.id ?? "new"}
+          key={continueId ?? "new"}
           close={close}
-          initial={result ? { step: 1, id: result.account.id } : undefined}
-          intro={
-            result ? undefined : (
-              <ClaudeOneClick form={form} onChange={setForm} session={detected.claude} onResult={setResult} />
-            )
-          }
+          initial={continueId ? { step: 1, id: continueId } : undefined}
+          autoBegin={!continueId && !pendingDesktop && !desktop?.autoCapture}
+          forceLogin={!continueId}
         />
-      ) : provider === "antigravity" ? (
-        <AntigravityOAuthForm form={form} onChange={setForm} onResult={setResult} close={close} />
-      ) : (
+      </div>
+    );
+  if (view === "antigravity")
+    return (
+      <div className="grid gap-3">
+        {back}
+        <AntigravityOAuthForm
+          form={form}
+          onChange={setForm}
+          onResult={(result) => setSingle({ result, provider: "antigravity" })}
+          close={close}
+        />
+      </div>
+    );
+  if (view === "codex")
+    return (
+      <div className="grid gap-3">
+        {back}
         <ProviderForm
           provider="codex"
           form={form}
           onChange={setForm}
-          session={detected[provider]}
-          onResult={setResult}
+          session={detected.codex}
+          onResult={(result) => setSingle({ result, provider: "codex" })}
           close={close}
         />
-      )}
+      </div>
+    );
+
+  const ways: { view: View; provider: AccountProvider; title: string; hint: string; disabled?: string }[] = [
+    {
+      view: "claude",
+      provider: "claude",
+      title: t("Başka bir Claude hesabıyla giriş yap", "Sign in with another Claude account"),
+      hint: t(
+        "Claude uygulaması giriş ekranıyla yeniden açılır; giriş yapınca Relay hesabı kendisi kaydeder.",
+        "The Claude app reopens at its sign-in; once you sign in, Relay saves the account by itself.",
+      ),
+      ...(desktopLock && blockReason(desktopLock, t) ? { disabled: blockReason(desktopLock, t) } : {}),
+    },
+    {
+      view: "codex",
+      provider: "codex",
+      title: t("OpenAI / Codex", "OpenAI / Codex"),
+      hint: t("Codex CLI girişi ya da bir OpenAI API anahtarı.", "A Codex CLI sign-in, or an OpenAI API key."),
+    },
+    {
+      view: "antigravity",
+      provider: "antigravity",
+      title: t("Google Antigravity", "Google Antigravity"),
+      hint: t("Google ile giriş; API anahtarı gerekmez.", "Sign in with Google; no API key needed."),
+    },
+  ];
+  return (
+    <div className="grid gap-4">
+      <RelayErrorAlert />
+      {sessions.length > 0 && <DetectedImport sessions={sessions} onDone={imported} />}
+      <section aria-labelledby="add-other-title" className="grid gap-1.5">
+        <h3 id="add-other-title" className="text-xs font-semibold text-muted-foreground">
+          {sessions.length ? t("Başka bir hesap ekle", "Add another account") : t("Nasıl eklemek istersin?", "How do you want to add it?")}
+        </h3>
+        <ul className="grid gap-1.5">
+          {ways.map((way) => (
+            <li key={way.view}>
+              <button
+                type="button"
+                data-way={way.view}
+                disabled={!!busy || !!way.disabled}
+                onClick={() => setView(way.view)}
+                className="flex w-full items-center gap-3 rounded-lg border bg-card px-3.5 py-2.5 text-left outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
+              >
+                <ProviderBadge provider={way.provider} />
+                <span className="grid min-w-0 flex-1 gap-0.5">
+                  <span className="text-sm font-medium">{way.title}</span>
+                  <span className="text-xs text-muted-foreground">{way.disabled ?? way.hint}</span>
+                </span>
+                <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <div className="flex justify-end">
+        <Button type="button" variant="ghost" size="sm" onClick={close}>
+          {t("Kapat", "Close")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** What one import added (or why not), then another round or done. */
+function ImportDone({
+  outcomes,
+  onAnother,
+  close,
+}: {
+  outcomes: ImportOutcome[];
+  onAnother: () => void;
+  close: () => void;
+}) {
+  const { t } = useI18n();
+  const added = outcomes.filter((o) => "result" in o).length;
+  return (
+    <div className="grid gap-3" data-slot="import-done">
+      <h3 className="text-lg leading-snug font-semibold">
+        {added === 1 ? t("1 hesap eklendi", "1 account added") : t(`${added} hesap eklendi`, `${added} accounts added`)}
+      </h3>
+      <ul className="grid gap-1.5">
+        {outcomes.map((outcome, index) => (
+          <li key={index} className="grid gap-1 rounded-lg border bg-card px-3.5 py-2.5">
+            <span className="flex items-center gap-2 text-sm">
+              <ProviderBadge provider={outcome.provider} />
+              {"result" in outcome ? (
+                <span className="min-w-0 truncate">
+                  {outcome.result.account.name}
+                  {outcome.result.account.auth?.email ? ` · ${outcome.result.account.auth.email}` : ""}
+                </span>
+              ) : (
+                <span role="alert" className="min-w-0 text-crit">
+                  {outcome.error}
+                </span>
+              )}
+            </span>
+            {"result" in outcome && <CascadeResult result={outcome.result} />}
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button type="button" variant="ghost" onClick={onAnother}>
+          {t("Başka hesap ekle", "Add another account")}
+        </Button>
+        <Button type="button" onClick={close}>
+          {t("Bitti", "Done")}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -144,7 +297,7 @@ function StepIndicator({ step }: { step: Step }) {
   const { t } = useI18n();
   const titles = [
     t("Claude uygulaması", "Claude app"),
-    t("Limit okuma girişi", "Usage sign-in"),
+    t("Claude Code girişi", "Claude Code sign-in"),
     t("Hazır", "Ready"),
   ];
   return (
@@ -205,8 +358,14 @@ export function AddAccountSteps({
   close,
   initial,
   intro,
+  autoBegin = false,
+  forceLogin = false,
 }: {
   close: () => void;
+  /** Start the Claude app sign-in at once: the click that opened these steps asked for it. */
+  autoBegin?: boolean;
+  /** Always a new sign-in, never the account open in the Claude app now (that one is imported). */
+  forceLogin?: boolean;
   /** The first step's one-click panel, above its step-by-step button. */
   intro?: ReactNode;
   /** Tests start at a later step for an existing profile. */
@@ -223,7 +382,7 @@ export function AddAccountSteps({
     accounts.find((a) => a.id === createdId) ??
     (created?.id === createdId ? created : undefined);
   const desktopLock = desktopBlock({ desktop, desktopBusy, pendingDesktop });
-  const current = !!relay.hasUnclaimedDesktop;
+  const current = !forceLogin && !!relay.hasUnclaimedDesktop;
   const cli = cliState(relay.data?.diagnostics);
   const flow = relay.flow?.accountId === account?.id ? relay.flow : undefined;
   const auto = desktop?.autoCapture?.accountId === account?.id ? desktop?.autoCapture : undefined;
@@ -271,6 +430,14 @@ export function AddAccountSteps({
       }
       relay.requestDesktop(next, current ? "capture" : "login");
     });
+
+  // Opened by "Sign in with another Claude account": that click starts the sign-in, once.
+  const begun = useRef(false);
+  useEffect(() => {
+    if (!autoBegin || begun.current || account || busy || desktopLock) return;
+    begun.current = true;
+    begin();
+  });
 
   const [profile, setProfile] = useState<ProfileValue>();
   useEffect(() => {
@@ -418,12 +585,12 @@ export function AddAccountSteps({
       {step === 2 && account && (
         <>
           <StepTitle>
-            {t(`“${account.name}” için limit okuma girişi`, `Usage sign-in for “${account.name}”`)}
+            {t(`“${account.name}” için Claude Code girişi`, `Claude Code sign-in for “${account.name}”`)}
           </StepTitle>
           <p className="text-sm text-muted-foreground">
             {t(
-              "Relay’in bu hesabın limitlerini okuyabilmesi için bir kez giriş yap. Bu, Claude uygulamasından ayrı ve yalnızca okuyan bir giriştir; resmi Claude Code ile tarayıcıda onaylanır.",
-              "Sign in once so that Relay can read the limits of this account. This is a separate, read-only sign-in, approved in the browser with the official Claude Code.",
+              "Ağ geçidi, terminal ve limit okuma bu girişi kullanır. Claude uygulamasından ayrıdır; tarayıcıda resmi Claude Code ile bir kez onaylanır.",
+              "The gateway, the terminal and limit reading use this sign-in. It is separate from the Claude app and approved once in the browser with the official Claude Code.",
             )}
           </p>
           {/* The page-frame panel sits under the overlay; finish the sign-in here. */}
@@ -456,7 +623,7 @@ export function AddAccountSteps({
                 onClick={() => void relay.startCli(account)}
               >
                 <Globe2 />
-                {t("Limit okuma girişi yap", "Sign in to read usage")}
+                {t("Claude Code ile giriş yap", "Sign in with Claude Code")}
               </Button>
             )}
             <Button variant={connected ? "default" : "ghost"} onClick={() => setStep(3)}>
@@ -482,8 +649,8 @@ export function AddAccountSteps({
             </StatusLine>
             <StatusLine tone={connected ? "ok" : "warn"} icon={<Globe2 />} static>
               {connected
-                ? t(`Limit okuma girişi bağlı${account.auth?.email ? ` · ${account.auth.email}` : ""}`, `Usage sign-in connected${account.auth?.email ? ` · ${account.auth.email}` : ""}`)
-                : t("Limit okuma girişi yok", "No usage sign-in")}
+                ? t(`Claude Code girişi bağlı${account.auth?.email ? ` · ${account.auth.email}` : ""}`, `Claude Code sign-in connected${account.auth?.email ? ` · ${account.auth.email}` : ""}`)
+                : t("Claude Code girişi yok: ağ geçidi bu hesabı kullanamaz", "No Claude Code sign-in: the gateway cannot use this account")}
             </StatusLine>
           </div>
           {profile && (

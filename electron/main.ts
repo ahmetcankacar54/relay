@@ -141,8 +141,19 @@ import { ProxyServer } from "./core/proxy/proxy-server";
 import {
   buildProxyStatus,
   generateProxyKey,
+  poolAccounts,
   proxyConfigurePatch,
 } from "./core/proxy/proxy-status";
+import {
+  PROXY_CLIENTS,
+  bindClient,
+  clientStatuses,
+  tailscaleAddress,
+  unbindClient,
+  type ClientTarget,
+} from "./core/proxy/proxy-clients";
+import { gatewayUrl } from "../shared/proxy-url";
+import { proxyExtrasSchema, type ProxyExtras } from "./core/proxy/proxy-status";
 import {
   detectProviders,
   executeOneClickCascade,
@@ -1937,15 +1948,47 @@ const serializeProxy = <T>(task: () => Promise<T>): Promise<T> => {
   proxyQueue = run.catch(() => {});
   return run;
 };
+/**
+ * The pool order, the accounts left out and the bound clients live in their own file beside the
+ * registry: the registry's proxy settings are strict, so 0.18.2 (and older) can still read it.
+ */
+const proxyExtrasFile = () => path.join(service.store.root, "proxy-pool.json");
+let proxyExtrasCache: ProxyExtras | undefined;
+function proxyExtras(): ProxyExtras {
+  if (proxyExtrasCache) return proxyExtrasCache;
+  try {
+    proxyExtrasCache = proxyExtrasSchema.parse(JSON.parse(fs.readFileSync(proxyExtrasFile(), "utf8")));
+  } catch {
+    // Missing or unreadable: an empty pool setup, every account in, no client bound.
+    proxyExtrasCache = {};
+  }
+  return proxyExtrasCache;
+}
 const proxySettings = (): ProxyConfig => ({
   ...DEFAULT_PROXY_CONFIG,
   ...service.store.state.settings.proxy,
+  ...proxyExtras(),
 });
 const saveProxySettings = (config: ProxyConfig) => {
+  const { accountOrder, excludedAccountIds, clientBindings, ...base } = config;
+  const extras: ProxyExtras = {
+    ...(accountOrder ? { accountOrder } : {}),
+    ...(excludedAccountIds ? { excludedAccountIds } : {}),
+    ...(clientBindings ? { clientBindings } : {}),
+  };
+  if (JSON.stringify(extras) !== JSON.stringify(proxyExtras())) {
+    const temp = `${proxyExtrasFile()}.tmp`;
+    fs.writeFileSync(temp, `${JSON.stringify(extras, null, 2)}\n`, { mode: 0o600 });
+    fs.renameSync(temp, proxyExtrasFile());
+    proxyExtrasCache = extras;
+  }
   service.store.update((s) => {
-    s.settings.proxy = config;
+    s.settings.proxy = base;
   });
 };
+/** Where bound clients dial the gateway: the saved address and key (none before the first start). */
+const clientTarget = (config: ProxyConfig): ClientTarget | undefined =>
+  config.apiKey ? { url: gatewayUrl(config.host, config.port), key: config.apiKey } : undefined;
 function proxyStatus(): ProxyStatus {
   const config = proxySettings();
   const state = proxyServer?.getState();
@@ -1958,7 +2001,19 @@ function proxyStatus(): ProxyStatus {
     usage: usage?.snapshot() ?? {},
     now: Date.now(),
     error: proxyError,
+    recent: proxyServer?.stats.recent() ?? [],
+    tailscaleAddress: tailscaleAddress(),
+    clients: clientStatuses(clientTarget(config), config),
   });
+}
+/** Rewrites the clients Relay bound, after the address or key changed, so they keep working. */
+async function rebindClients(config: ProxyConfig): Promise<void> {
+  const target = clientTarget(config);
+  if (!target) return;
+  for (const id of PROXY_CLIENTS) {
+    const previous = config.clientBindings?.[id];
+    if (previous) await bindClient(id, target, previous).catch(() => {});
+  }
 }
 /** Starts the gateway on the saved port and host; a first start also creates the client key. */
 async function startProxy(): Promise<void> {
@@ -2001,8 +2056,9 @@ async function startProxy(): Promise<void> {
     },
     onCredentialRejected: (accountId) => credentials.delete(accountId),
     // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
+    // Only the accounts left in the pool, in its order (strict priority reads the order).
     usageProvider: () => ({
-      accounts: service.store.state.accounts,
+      accounts: poolAccounts(service.store.state.accounts, proxySettings()),
       usageMap: usage?.snapshot() ?? {},
     }),
   });
@@ -2035,6 +2091,8 @@ async function stopProxy(): Promise<void> {
 async function applyProxyConfig(next: ProxyConfig): Promise<void> {
   const previous = proxySettings();
   saveProxySettings(next);
+  if (next.host !== previous.host || next.port !== previous.port || next.apiKey !== previous.apiKey)
+    await rebindClients(next);
   if (!proxyServer) return;
   if (next.host === previous.host && next.port === previous.port) {
     proxyServer.updateConfig({
@@ -2049,6 +2107,7 @@ async function applyProxyConfig(next: ProxyConfig): Promise<void> {
     await startProxy();
   } catch (error) {
     saveProxySettings(previous);
+    await rebindClients(previous);
     await startProxy().catch(() => {});
     throw error;
   }
@@ -2422,6 +2481,32 @@ function bindIPC() {
   handle("proxy-regenerate-key", () =>
     serializeProxy(async () => {
       await applyProxyConfig({ ...proxySettings(), apiKey: generateProxyKey() });
+      broadcastChanged();
+      return proxyStatus();
+    }),
+  );
+  handle("proxy-bind-client", (input) =>
+    serializeProxy(async () => {
+      const clientId = z.enum(["claude-code", "codex"]).parse(input);
+      let config = proxySettings();
+      if (!config.apiKey) {
+        config = { ...config, apiKey: generateProxyKey() };
+        saveProxySettings(config);
+      }
+      const saved = await bindClient(clientId, clientTarget(config)!, config.clientBindings?.[clientId]);
+      saveProxySettings({ ...proxySettings(), clientBindings: { ...config.clientBindings, [clientId]: saved } });
+      broadcastChanged();
+      return proxyStatus();
+    }),
+  );
+  handle("proxy-unbind-client", (input) =>
+    serializeProxy(async () => {
+      const clientId = z.enum(["claude-code", "codex"]).parse(input);
+      const config = proxySettings();
+      await unbindClient(clientId, config.clientBindings?.[clientId]);
+      const bindings = { ...config.clientBindings };
+      delete bindings[clientId];
+      saveProxySettings({ ...config, clientBindings: bindings });
       broadcastChanged();
       return proxyStatus();
     }),

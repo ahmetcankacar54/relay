@@ -17,6 +17,9 @@ import { cn } from "@/lib/utils";
 import { CliSetupActions } from "../../features/CliSetup";
 import { ClaudeAppActions } from "../../features/ClaudeAppSetup";
 
+/** The rows the list shows: the two account steps read as one. */
+type RowKey = Exclude<SetupKey, "first" | "second"> | "accounts";
+
 interface Row {
   title: string;
   status: string;
@@ -84,7 +87,7 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
   const connected = accounts.filter((a) => !!a.desktop).length;
   const mode = automationMode(settings, fleet);
   const title = t("Relay’i kur", "Set up Relay");
-  const rows: Record<SetupKey, Row> = {
+  const rows: Record<RowKey, Row> = {
     desktop: {
       title: t("Claude uygulaması", "Claude app"),
       status: met("desktop") ? t("Bulundu", "Found") : t("Bulunamadı", "Not found"),
@@ -126,25 +129,21 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
         </Button>
       ),
     },
-    first: {
-      title: t("İlk hesabını ekle", "Add your first account"),
-      status: met("first") ? t("Eklendi", "Added") : t("Henüz yok", "Not yet"),
-      // The welcome card above holds the button; one offer is enough.
-      reason: t(
-        "Claude uygulamasında açık hesabı yukarıdaki “Hesap ekle” ile ekle.",
-        "Add the account open in the Claude app with “Add account” above.",
-      ),
-    },
-    second: {
-      title: t("İkinci hesabını ekle", "Add a second account"),
-      status: met("second")
-        ? t(`${connected} hesap`, `${connected} accounts`)
-        : `${connected} / 2`,
-      reason: t(
-        "Relay hesaplar arasında geçer, bu yüzden en az iki hesap gerekir. Claude uygulamasında diğer hesabınla giriş yapıp ekle.",
-        "Relay switches between accounts, so it needs at least two. Sign in to the Claude app with your other account and add it.",
-      ),
-      action: (
+    accounts: {
+      title: t("Hesaplarını ekle", "Add your accounts"),
+      status: `${connected} / 2`,
+      reason:
+        connected === 0
+          ? t(
+              "Relay hesaplar arasında geçer, bu yüzden en az iki hesap gerekir. Yukarıdaki “Hesap ekle” bu Mac’te bulunan hesapları tek seferde ekler.",
+              "Relay switches between accounts, so it needs at least two. “Add account” above adds the ones found on this Mac in one go.",
+            )
+          : t(
+              "Bir hesap daha gerekiyor. Diğer Claude hesabınla giriş yap; Relay girişi kendisi kaydeder.",
+              "One more account is needed. Sign in with your other Claude account; Relay saves it by itself.",
+            ),
+      // With no account yet the welcome card above holds the button; one offer is enough.
+      action: connected > 0 && (
         <Button variant="outline" size="sm" onClick={add}>
           {t("Hesap ekle", "Add account")}
         </Button>
@@ -193,18 +192,24 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
       ),
     },
   };
-  const done = state.steps.filter((s) => s.met || (s.optional && seen.has(s.key))).length;
-  // The later steps open one at a time: the first one whose required steps before it are met.
-  const prerequisite = (key: SetupKey) => key === "desktop" || key === "code" || key === "cli";
-  const current = state.steps.find((s) => !prerequisite(s.key) && !s.met && !seen.has(s.key))?.key;
-  const blocked = (index: number) =>
-    state.steps.slice(0, index).some((s) => !s.optional && !s.met);
+  // The two account steps are one row: met once the second account is there.
+  type Step = { key: RowKey; met: boolean; optional: boolean };
+  const steps: Step[] = state.steps.flatMap((step): Step[] =>
+    step.key === "first" ? [] : [{ ...step, key: step.key === "second" ? "accounts" : step.key }],
+  );
+  const settled = (s: (typeof steps)[number]) => s.met || (s.optional && seen.has(s.key));
+  const finished = steps.filter(settled);
+  const pending = steps.filter((s) => !settled(s));
+  const prerequisite = (key: RowKey) => key === "desktop" || key === "code" || key === "cli";
+  // Prerequisites show their reasons at once; the later steps open one at a time, in order.
+  const current = pending.find((s) => !prerequisite(s.key))?.key;
+  const blocked = pending.some((s) => prerequisite(s.key) && !s.optional);
   return (
     <Card className="gap-0 px-4 py-3" role="region" aria-label={title}>
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">{title}</span>
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
-          {`${done} / ${state.steps.length}`}
+          {`${finished.length} / ${steps.length}`}
           {state.ready && (
             <Button variant="ghost" size="xs" onClick={() => settle("hidden")}>
               {t("Gizle", "Hide")}
@@ -213,23 +218,26 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
         </span>
       </div>
       <ul>
-        {state.steps.map(({ key, met, optional }, index) => {
+        {finished.length > 0 && (
+          <li data-step="done" className="flex items-start gap-2.5 py-2 text-sm text-muted-foreground">
+            <Check aria-hidden="true" className="mt-px size-4 shrink-0 text-ok-foreground" />
+            <span className="min-w-0">
+              <span className="sr-only">{t("Tamam: ", "Done: ")}</span>
+              {finished.map((s) => rows[s.key].title).join(" · ")}
+            </span>
+          </li>
+        )}
+        {pending.map(({ key, optional }) => {
           const row = rows[key];
-          const skipped = optional && seen.has(key);
-          const expanded = !met && !skipped && (prerequisite(key) || (key === current && !blocked(index)));
+          const expanded = prerequisite(key) || (key === current && !blocked);
           return (
             <li
               key={key}
               data-step={key}
-              data-met={String(met)}
+              data-met="false"
               className="flex items-start gap-2.5 border-t py-2 first:border-0"
             >
-              {met ? (
-                <Check
-                  aria-hidden="true"
-                  className="mt-px size-4 shrink-0 text-ok-foreground"
-                />
-              ) : prerequisite(key) ? (
+              {prerequisite(key) ? (
                 <X aria-hidden="true" className="mt-px size-4 shrink-0 text-crit" />
               ) : (
                 <Circle
@@ -239,15 +247,11 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
               )}
               <div className="grid min-w-0 flex-1 gap-1">
                 <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                  <span className={cn("font-semibold", !met && !expanded && "font-normal text-muted-foreground")}>
+                  <span className={cn("font-semibold", !expanded && "font-normal text-muted-foreground")}>
                     {row.title}
                   </span>
-                  <span className="sr-only">
-                    {met ? t("Tamam", "Done") : t("Eksik", "Missing")}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {row.status}
-                  </span>
+                  <span className="sr-only">{optional ? t("İsteğe bağlı", "Optional") : t("Eksik", "Missing")}</span>
+                  <span className="text-xs text-muted-foreground">{row.status}</span>
                 </div>
                 {expanded && (
                   <>

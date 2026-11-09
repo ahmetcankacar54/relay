@@ -1,9 +1,13 @@
 import type {
   AccountTokenMetrics,
   ProxyMetrics,
+  ProxyRequestLog,
 } from "../../../shared/proxy-types";
 
 const MAX_ERROR_LENGTH = 500;
+/** How many requests the live feed keeps. */
+export const REQUEST_LOG_SIZE = 40;
+const MAX_MODEL_LENGTH = 80;
 
 /** Counters per account id; the keys are the registry's accounts, so the maps stay small. */
 export class ProxyStats {
@@ -15,6 +19,20 @@ export class ProxyStats {
   private activeRequests = 0;
   private promptCacheHits = 0;
   private lastAccountId?: string;
+  /** Newest last; trimmed to REQUEST_LOG_SIZE. */
+  private log: ProxyRequestLog[] = [];
+
+  /** One request's outcome for the live feed. */
+  recordLog(entry: ProxyRequestLog): void {
+    const model = entry.model?.slice(0, MAX_MODEL_LENGTH);
+    this.log.push({ ...entry, ...(model ? { model } : {}) });
+    if (this.log.length > REQUEST_LOG_SIZE) this.log.splice(0, this.log.length - REQUEST_LOG_SIZE);
+  }
+
+  /** The feed, newest first. */
+  recent(): ProxyRequestLog[] {
+    return this.log.slice().reverse();
+  }
 
   /** A request came in; pair with requestEnded(). */
   requestStarted(): void {
@@ -111,6 +129,7 @@ export class ProxyStats {
     this.tokensByAccount.clear();
     this.promptCacheHits = 0;
     this.lastAccountId = undefined;
+    this.log = [];
     this.lastError = undefined;
     this.lastErrorAt = undefined;
   }

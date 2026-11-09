@@ -1,7 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
-import { Check, Copy, Eye, EyeOff, Plus, RefreshCw } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  Check,
+  Copy,
+  Eye,
+  EyeOff,
+  Link2,
+  Plus,
+  RefreshCw,
+  Unlink,
+} from "lucide-react";
 import { PageFrame } from "@/app/PageFrame";
-import { routeHash, intentHash } from "@/app/routes";
+import { intentHash } from "@/app/routes";
+import { Disclosure } from "@/components/Disclosure";
 import { ProviderBadge } from "@/components/ProviderBadge";
 import { Note, OptionSelect, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
@@ -10,36 +24,46 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { useI18n } from "@/data/i18n";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useI18n, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { meterFill } from "@/lib/meter";
 import {
+  agoLabel,
   antigravitySnippet,
-  claudeCodeSnippet,
-  codexSnippet,
+  compactCount,
   gatewayUrl,
   isLoopbackHost,
   maskKey,
+  moveInOrder,
+  openAiSnippet,
   parsePort,
   proxyCurlSnippet,
-  quotaTone,
+  quotaAtRisk,
   resetLabel,
   validHost,
 } from "@/lib/proxy-ui";
 import { cn } from "@/lib/utils";
-import type { AccountProvider, ProxyAccountStatus, ProxyStatus } from "../../shared/types";
-import { accountProvider, providerLabel } from "./accounts/accountLabels";
+import type {
+  ProxyAccountStatus,
+  ProxyClientId,
+  ProxyClientStatus,
+  ProxyRequestLog,
+  ProxyStatus,
+} from "../../shared/types";
 
 type Strategy = NonNullable<ProxyStatus["routingStrategy"]>;
 type Patch = Parameters<ReturnType<typeof useRelay>["api"]["proxyConfigure"]>[0];
+export type ProxyTab = "canli" | "araclar" | "kurallar";
 
 const cardClass = "gap-0 px-4 py-3.5";
 /** How often the live counters and quotas are read while the page is open. */
 const POLL_MS = 3_000;
 const COPIED_MS = 1_500;
-/** The providers the gateway pools, in the order the summary cards show them. */
-const POOL_PROVIDERS = ["claude", "codex", "antigravity"] as const satisfies readonly AccountProvider[];
 const AFFINITY_SECONDS = [300, 900, 3_600] as const;
+const TAB_KEY = "relay.proxy.tab";
+
+const CLIENT_NAMES: Record<ProxyClientId, string> = { "claude-code": "Claude Code", codex: "Codex CLI" };
 
 /** The gateway's state, read on mount, after every Relay change, and every few seconds. */
 function useProxyStatus() {
@@ -63,42 +87,553 @@ function useProxyStatus() {
   return { status, setStatus };
 }
 
-/** A command or setting to copy: a monospace block with a Copy button, the key hidden on screen. */
+/** The tab last open, remembered per viewer where storage allows. */
+function useTab(): [ProxyTab, (tab: ProxyTab) => void] {
+  const [tab, setTab] = useState<ProxyTab>(() => {
+    try {
+      const saved = window.localStorage.getItem(TAB_KEY);
+      if (saved === "canli" || saved === "araclar" || saved === "kurallar") return saved;
+    } catch {
+      // No storage (a static render): the live tab.
+    }
+    return "canli";
+  });
+  const choose = (next: ProxyTab) => {
+    setTab(next);
+    try {
+      window.localStorage.setItem(TAB_KEY, next);
+    } catch {
+      // The choice lasts until the window closes.
+    }
+  };
+  return [tab, choose];
+}
+
+/** Copy a value with a short "Copied" acknowledgement. */
+function useCopy() {
+  const [copied, setCopied] = useState<string>();
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(undefined), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const copy = (id: string, text: string) =>
+    void navigator.clipboard?.writeText(text).then(
+      () => setCopied(id),
+      () => {},
+    );
+  return { copied, copy };
+}
+
+type Copy = ReturnType<typeof useCopy>;
+
+/** An address or key as a compact chip; the button copies the real value. */
+function CopyChip({
+  id,
+  label,
+  shown,
+  value,
+  copy,
+  children,
+}: {
+  id: string;
+  label: string;
+  shown: string;
+  value?: string;
+  copy: Copy;
+  children?: ReactNode;
+}) {
+  const { t } = useI18n();
+  return (
+    <span className="flex min-w-0 items-center gap-0.5 rounded-md border bg-muted/40 py-0.5 pr-0.5 pl-2.5">
+      <span className="sr-only">{label}: </span>
+      <span data-slot={`chip-${id}`} className="truncate font-mono text-xs">
+        {shown}
+      </span>
+      {children}
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        disabled={!value}
+        aria-label={t(`${label} kopyala`, `Copy ${label}`)}
+        onClick={() => value && copy.copy(id, value)}
+      >
+        {copy.copied === id ? <Check className="text-ok" /> : <Copy />}
+      </Button>
+    </span>
+  );
+}
+
+/** Who answered the latest request, in a few words. */
+function lastRequestLine(status: ProxyStatus, now: number, t: T): string | undefined {
+  const last = status.recent?.find((r) => r.accountId);
+  if (!last) return undefined;
+  const name = status.accounts.find((a) => a.id === last.accountId)?.name;
+  return t(
+    `son istek ${agoLabel(last.at, now, t)}${name ? ` · ${name}` : ""}`,
+    `last request ${agoLabel(last.at, now, t)}${name ? ` · ${name}` : ""}`,
+  );
+}
+
+/** Accounts the gateway can send a request to now: in the pool, signed in, not full. */
+const readyCount = (accounts: readonly ProxyAccountStatus[]) =>
+  accounts.filter((a) => a.inPool && a.signedIn && (a.quotaPercent ?? 0) < 100).length;
+
+/**
+ * The page's head: the master switch with what the gateway is doing in one line, the address and
+ * key to copy, and the key's regeneration behind a confirmation.
+ */
+function GatewayHeader({
+  status,
+  disabled,
+  copy,
+  onToggle,
+  onRegenerate,
+}: {
+  status?: ProxyStatus;
+  disabled: boolean;
+  copy: Copy;
+  onToggle: (enabled: boolean) => void;
+  onRegenerate: () => void;
+}) {
+  const { t } = useI18n();
+  const [reveal, setReveal] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const running = status?.running === true;
+  const key = status?.clientApiKey;
+  const endpoint = gatewayUrl(status?.host ?? "127.0.0.1", status?.port ?? 8317);
+  const ready = readyCount(status?.accounts ?? []);
+  const last = status && running ? lastRequestLine(status, Date.now(), t) : undefined;
+  const bound = (status?.clients ?? []).filter((c) => c.bound).map((c) => CLIENT_NAMES[c.id]);
+  return (
+    <Card className={cn(cardClass, "gap-3")} data-slot="gateway-card">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <Switch
+          id="proxy-enabled"
+          aria-label={t("Ağ geçidini aç veya kapat", "Turn the gateway on or off")}
+          checked={running}
+          disabled={disabled || !status}
+          onCheckedChange={onToggle}
+        />
+        <div className="grid min-w-[12rem] flex-1 gap-0.5">
+          <span
+            role="status"
+            data-slot="proxy-status"
+            className="flex items-center gap-2 font-display text-base font-semibold"
+          >
+            <StatusDot tone={running ? "ok" : "off"} hollow={!running} />
+            {!status
+              ? t("Okunuyor…", "Loading…")
+              : running
+                ? t("Ağ geçidi çalışıyor", "Gateway running")
+                : t("Ağ geçidi kapalı", "Gateway off")}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {[
+              t(`${ready} hesap hazır`, `${ready} accounts ready`),
+              last,
+              bound.length ? t(`${bound.join(", ")} bağlı`, `${bound.join(", ")} connected`) : undefined,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <CopyChip id="endpoint" label={t("Adres", "Address")} shown={endpoint} value={endpoint} copy={copy} />
+          <CopyChip
+            id="key"
+            label={t("Anahtar", "Key")}
+            shown={key ? (reveal ? key : maskKey(key)) : t("açılınca oluşur", "made on first start")}
+            value={key}
+            copy={copy}
+          >
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={!key}
+              aria-label={reveal ? t("Anahtarı gizle", "Hide key") : t("Anahtarı göster", "Show key")}
+              aria-pressed={reveal}
+              onClick={() => setReveal((r) => !r)}
+            >
+              {reveal ? <EyeOff /> : <Eye />}
+            </Button>
+          </CopyChip>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={disabled || !key}
+            aria-label={t("Anahtarı yenile", "Regenerate key")}
+            onClick={() => setConfirming(true)}
+          >
+            <RefreshCw />
+          </Button>
+        </div>
+      </div>
+      {status?.error && !running && (
+        <p role="alert" className="border-t pt-2 text-xs text-crit">
+          {status.error}
+        </p>
+      )}
+      {confirming && (
+        <div className="flex flex-wrap items-center gap-2 border-t pt-2.5">
+          <Note className="text-foreground">
+            {bound.length
+              ? t(
+                  `Eski anahtar hemen çalışmaz olur. ${bound.join(" ve ")} yeni anahtarı kendiliğinden alır; diğer araçlara elle girmen gerekir.`,
+                  `The old key stops working at once. ${bound.join(" and ")} get the new one by themselves; other tools need it entered by hand.`,
+                )
+              : t(
+                  "Eski anahtar hemen çalışmaz olur. Araçlara yenisini girmen gerekir.",
+                  "The old key stops working at once. You will need to enter the new one in your tools.",
+                )}
+          </Note>
+          <Button
+            size="sm"
+            disabled={disabled}
+            onClick={() => {
+              setConfirming(false);
+              onRegenerate();
+            }}
+          >
+            {t("Yeni anahtar üret", "Generate new key")}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+            {t("Vazgeç", "Cancel")}
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** One thing that needs the user now, above the tabs. */
+function Attention({ tone, children, action }: { tone: "warn" | "crit"; children: ReactNode; action?: ReactNode }) {
+  return (
+    <div
+      role="status"
+      data-slot="proxy-attention"
+      className={cn(
+        "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3.5 py-2.5 text-sm",
+        tone === "crit" ? "border-crit/40 bg-crit/5" : "border-warn/40 bg-warn/5",
+      )}
+    >
+      <AlertTriangle aria-hidden="true" className={cn("size-4 shrink-0", tone === "crit" ? "text-crit" : "text-warn")} />
+      <span className="min-w-0 flex-1">{children}</span>
+      {action}
+    </div>
+  );
+}
+
+/** A limit window as a thin bar with its percent and reset; a dash while unknown. */
+function WindowMeter({ label, percent, minutes }: { label: string; percent?: number; minutes?: number }) {
+  const { t } = useI18n();
+  return (
+    <div className="grid min-w-0 gap-1">
+      <div className="flex items-baseline justify-between gap-2 text-2xs text-muted-foreground">
+        <span>{label}</span>
+        <span className="tabular-nums">
+          {percent === undefined ? "—" : t(`%${percent}`, `${percent}%`)}
+          {minutes !== undefined && ` · ${resetLabel(minutes, t)}`}
+        </span>
+      </div>
+      <div
+        role="meter"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent ?? 0}
+        className="h-1.5 w-full overflow-hidden rounded-full bg-track"
+      >
+        {percent !== undefined && (
+          <div className={cn("h-full rounded-full", meterFill(percent))} style={{ width: `${percent}%` }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** What an account's state needs said: last served, out of the pool, no sign-in, full, about to lose quota. */
+function AccountState({ account }: { account: ProxyAccountStatus }) {
+  const { t } = useI18n();
+  const risk = quotaAtRisk(account);
+  if (!account.inPool) return <Badge variant="secondary">{t("Havuz dışı", "Out of pool")}</Badge>;
+  if (!account.signedIn) return <Badge variant="destructive">{t("Giriş yok", "Not signed in")}</Badge>;
+  if ((account.quotaPercent ?? 0) >= 100) return <Badge variant="secondary">{t("Dolu", "Full")}</Badge>;
+  if (risk)
+    return (
+      <Badge variant="outline" className="border-warn/50 text-warn-foreground" data-slot="at-risk">
+        {t(`%${risk.percent} yanacak`, `${risk.percent}% expiring`)}
+      </Badge>
+    );
+  if (account.active)
+    return (
+      <Badge variant="outline" className="text-ok-foreground">
+        <StatusDot tone="ok" />
+        {t("Son istek", "Last request")}
+      </Badge>
+    );
+  return null;
+}
+
+/**
+ * The pool: every account in the order the gateway uses them, with both limit windows, what it
+ * served, and a switch that takes it out of the pool without removing it from Relay.
+ */
+function PoolCard({
+  status,
+  disabled,
+  onConfigure,
+}: {
+  status: ProxyStatus;
+  disabled: boolean;
+  onConfigure: (patch: Patch) => Promise<boolean>;
+}) {
+  const { t, language } = useI18n();
+  const locale = language === "tr" ? "tr-TR" : "en-US";
+  const accounts = status.accounts;
+  const order = accounts.map((a) => a.id);
+  const excluded = accounts.filter((a) => !a.inPool).map((a) => a.id);
+  const strict = status.routingStrategy === "strict-priority";
+  const move = (id: string, by: -1 | 1) => void onConfigure({ accountOrder: moveInOrder(order, id, by) });
+  const setInPool = (id: string, on: boolean) =>
+    void onConfigure({
+      excludedAccountIds: on ? excluded.filter((x) => x !== id) : [...excluded, id],
+    });
+  return (
+    <Card className={cardClass} data-slot="pool">
+      <SectionHeading
+        title={t("Havuz", "Pool")}
+        description={
+          strict
+            ? t(
+                "Hesaplar bu sırayla kullanılır; biri dolunca sıradaki başlar. Okla sırala, anahtarla havuzdan çıkar.",
+                "Accounts are used in this order; the next starts when one is full. Reorder with the arrows; the switch takes one out.",
+              )
+            : t(
+                "Her istek kendi sağlayıcısının hesaplarından birine gider. Anahtar hesabı silmeden havuzdan çıkarır.",
+                "Each request goes to an account of its own provider. The switch takes an account out without removing it.",
+              )
+        }
+      />
+      {accounts.length ? (
+        <ul aria-label={t("Havuzdaki hesaplar", "Accounts in the pool")} className="grid pt-1">
+          {accounts.map((account, index) => {
+            const provider = account.provider ?? "claude";
+            const quiet = !account.inPool;
+            const cache = account.tokens ? account.tokens.cacheRead : undefined;
+            return (
+              <li
+                key={account.id}
+                data-account={account.id}
+                data-in-pool={String(account.inPool)}
+                data-active={account.active || undefined}
+                className={cn(
+                  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-t py-2.5 first:border-t-0",
+                  quiet && "opacity-60",
+                )}
+              >
+                <span className="row-span-2 flex flex-col self-start">
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    disabled={disabled || index === 0}
+                    aria-label={t(`${account.name} yukarı`, `Move ${account.name} up`)}
+                    onClick={() => move(account.id, -1)}
+                  >
+                    <ArrowUp />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    disabled={disabled || index === accounts.length - 1}
+                    aria-label={t(`${account.name} aşağı`, `Move ${account.name} down`)}
+                    onClick={() => move(account.id, 1)}
+                  >
+                    <ArrowDown />
+                  </Button>
+                </span>
+                <div className="grid min-w-0 gap-0.5">
+                  <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <ProviderBadge provider={provider} />
+                    <span className="min-w-0 truncate text-sm font-medium">{account.name}</span>
+                    <AccountState account={account} />
+                  </span>
+                  <span className="truncate text-2xs text-muted-foreground tabular-nums">
+                    {[
+                      account.email,
+                      account.requests
+                        ? t(`${account.requests} istek`, `${account.requests} requests`)
+                        : undefined,
+                      cache
+                        ? t(`önbellek ${compactCount(cache, locale)}`, `cache ${compactCount(cache, locale)}`)
+                        : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </div>
+                <Switch
+                  className="self-start"
+                  checked={account.inPool}
+                  disabled={disabled}
+                  aria-label={t(`${account.name} havuzda`, `${account.name} in the pool`)}
+                  onCheckedChange={(on) => setInPool(account.id, on)}
+                />
+                <div className="col-span-2 col-start-2 grid grid-cols-2 gap-4">
+                  {account.fiveHourPercent === undefined && account.weeklyPercent === undefined ? (
+                    <span className="col-span-2 text-2xs text-muted-foreground">
+                      {provider === "claude"
+                        ? t("Limitler henüz okunmadı", "Limits not read yet")
+                        : t("Relay bu sağlayıcının limitini okuyamıyor", "Relay cannot read this provider's limits")}
+                    </span>
+                  ) : (
+                    <>
+                      <WindowMeter
+                        label={t("5 saat", "5 hours")}
+                        percent={account.fiveHourPercent}
+                        minutes={account.fiveHourResetMinutes}
+                      />
+                      <WindowMeter
+                        label={t("Hafta", "Week")}
+                        percent={account.weeklyPercent}
+                        minutes={account.weeklyResetMinutes}
+                      />
+                    </>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="grid justify-items-start gap-2 pt-2">
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "Havuz boş. Bir hesap ekle; ağ geçidi istekleri onunla karşılar.",
+              "The pool is empty. Add an account and the gateway answers with it.",
+            )}
+          </p>
+          <Button asChild size="sm">
+            <a href={intentHash("hesaplar", "ekle")}>
+              <Plus />
+              {t("Hesap ekle", "Add account")}
+            </a>
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** A status code as a short word with its tone. */
+function statusTone(entry: ProxyRequestLog): { tone: "ok" | "warn" | "crit"; word: [string, string] } {
+  if (entry.status === 101) return { tone: "ok", word: ["akış", "stream"] };
+  if (entry.failover) return { tone: "warn", word: [`${entry.status} → sıradaki`, `${entry.status} → next`] };
+  if (entry.status < 400) return { tone: "ok", word: [String(entry.status), String(entry.status)] };
+  if (entry.status === 429) return { tone: "warn", word: ["429 limit", "429 limit"] };
+  return { tone: "crit", word: [String(entry.status), String(entry.status)] };
+}
+
+/** The latest requests: which account answered, what the upstream said, and failovers. */
+function RequestFeed({ status }: { status: ProxyStatus }) {
+  const { t, language } = useI18n();
+  const locale = language === "tr" ? "tr-TR" : "en-US";
+  const recent = status.recent ?? [];
+  const name = (id?: string) => status.accounts.find((a) => a.id === id)?.name;
+  const ratio = status.stats.cacheHitRate.toLocaleString(locale, { maximumFractionDigits: 1 });
+  const now = Date.now();
+  return (
+    <Card className={cardClass} data-slot="request-feed">
+      <SectionHeading
+        title={t("Son istekler", "Recent requests")}
+        description={t(
+          "Limit dolarsa aynı istek sıradaki hesapla denenir; aynı oturum, önbellek korunsun diye hesabında kalır.",
+          "When a limit is hit, the same request goes to the next account; a session stays on its account to keep the cache.",
+        )}
+      />
+      <dl className="grid grid-cols-3 gap-2 py-2">
+        {[
+          [t("İstek", "Requests"), status.stats.totalRequests.toLocaleString(locale)],
+          [t("Şu an", "Now"), status.stats.activeRequests.toLocaleString(locale)],
+          [t("Önbellek", "Cache"), t(`%${ratio}`, `${ratio}%`)],
+        ].map(([label, value]) => (
+          <div key={label} className="grid gap-0.5 rounded-md bg-muted/40 px-2.5 py-1.5">
+            <dt className="text-2xs text-muted-foreground">{label}</dt>
+            <dd className="font-display text-sm font-semibold tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {recent.length ? (
+        <ol aria-label={t("Son istekler", "Recent requests")} className="grid">
+          {recent.slice(0, 12).map((entry, index) => {
+            const { tone, word } = statusTone(entry);
+            const to = name(entry.accountId);
+            return (
+              <li
+                key={`${entry.at}-${index}`}
+                data-status={entry.status}
+                className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 border-t py-1.5 text-xs first:border-t-0"
+              >
+                <span className="text-2xs text-muted-foreground tabular-nums">{agoLabel(entry.at, now, t)}</span>
+                <span className="flex min-w-0 items-center gap-1 truncate">
+                  <span className="truncate font-mono text-2xs">{entry.model || entry.provider || "—"}</span>
+                  <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">
+                    {to ??
+                      (entry.note === "no-account"
+                        ? t("hesap yok", "no account")
+                        : entry.note === "all-limited"
+                          ? t("hepsi limitte", "all limited")
+                          : "—")}
+                  </span>
+                  {entry.affinity && (
+                    <span className="sr-only">{t("oturum hesabında kaldı", "session kept its account")}</span>
+                  )}
+                </span>
+                <span className="flex items-center gap-1.5 tabular-nums">
+                  <StatusDot tone={tone} />
+                  {t(...word)}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <Note>
+          {status.running
+            ? t(
+                "Henüz istek yok. Araçlar sekmesinden Claude Code ya da Codex’i bağla.",
+                "No requests yet. Connect Claude Code or Codex on the Tools tab.",
+              )
+            : t("Ağ geçidi kapalı: istekler açıkken burada akar.", "The gateway is off: requests show here while it runs.")}
+        </Note>
+      )}
+    </Card>
+  );
+}
+
+/** A copyable block for the tools Relay cannot set up itself. */
 function CodeBlock({
   id,
   title,
-  hint,
   shown,
   copyText,
-  copied,
-  onCopy,
+  copy,
 }: {
   id: string;
   title: string;
-  hint?: string;
-  /** What the block displays: the key may be masked here. */
   shown: string;
-  /** What Copy puts on the clipboard: always the real text. */
   copyText: string;
-  copied: boolean;
-  onCopy: (id: string, text: string) => void;
+  copy: Copy;
 }) {
   const { t } = useI18n();
   return (
     <div className="grid gap-1.5">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h4 className="text-xs font-semibold">{title}</h4>
-          {hint && <p className="text-2xs text-muted-foreground">{hint}</p>}
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={t(`${title} kopyala`, `Copy ${title}`)}
-          onClick={() => onCopy(id, copyText)}
-        >
-          {copied ? <Check className="text-ok" /> : <Copy />}
-          {copied ? t("Kopyalandı", "Copied") : t("Kopyala", "Copy")}
+        <h4 className="text-xs font-semibold">{title}</h4>
+        <Button variant="ghost" size="sm" aria-label={t(`${title} kopyala`, `Copy ${title}`)} onClick={() => copy.copy(id, copyText)}>
+          {copy.copied === id ? <Check className="text-ok" /> : <Copy />}
+          {copy.copied === id ? t("Kopyalandı", "Copied") : t("Kopyala", "Copy")}
         </Button>
       </div>
       <pre
@@ -111,385 +646,209 @@ function CodeBlock({
   );
 }
 
-/** The master switch, the live state, the endpoint and the client key. */
-function GatewayCard({
-  status,
-  disabled,
-  copied,
-  onCopy,
-  onToggle,
-  onRegenerate,
-}: {
-  status?: ProxyStatus;
-  disabled: boolean;
-  copied?: string;
-  onCopy: (id: string, text: string) => void;
-  onToggle: (enabled: boolean) => void;
-  onRegenerate: () => void;
-}) {
-  const { t } = useI18n();
-  const [reveal, setReveal] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const running = status?.running === true;
-  const key = status?.clientApiKey;
-  const endpoint = gatewayUrl(status?.host ?? "127.0.0.1", status?.port ?? 8317);
-  return (
-    <Card className={cardClass} data-slot="gateway-card">
-      <SettingRow
-        label={
-          <span className="flex items-center gap-2 font-display text-sm font-semibold">
-            <StatusDot tone={running ? "ok" : "off"} hollow={!running} />
-            {t("Yerel API ağ geçidi", "Local API gateway")}
-            <Badge
-              role="status"
-              data-slot="proxy-status"
-              variant="outline"
-              className={cn(running && "border-ok/40 text-ok-foreground")}
-            >
-              {!status
-                ? t("Okunuyor…", "Loading…")
-                : running
-                  ? t(`Çalışıyor · :${status.port}`, `Running · :${status.port}`)
-                  : t("Durduruldu", "Stopped")}
-            </Badge>
-          </span>
-        }
-        htmlFor="proxy-enabled"
-        description={t(
-          "Hesapların arasında istekleri limite göre dağıtan yerel bir ağ geçidi. Claude Code, Codex, Cursor gibi araçlar tek bir adrese bağlanır.",
-          "A local gateway that spreads requests over your accounts by their limits. Tools such as Claude Code, Codex or Cursor connect to one address.",
-        )}
-      >
-        <Switch id="proxy-enabled" checked={running} disabled={disabled || !status} onCheckedChange={onToggle} />
-      </SettingRow>
-      {status?.error && !running && (
-        <p role="alert" className="border-t pt-2 text-xs text-crit">
-          {status.error}
-        </p>
-      )}
-      <div className="grid gap-3 border-t pt-3">
-        <div className="grid gap-1">
-          <label className="text-xs font-medium" htmlFor="proxy-endpoint">
-            {t("Uç nokta adresi", "Endpoint URL")}
-          </label>
-          <div className="flex items-center gap-2">
-            <Input id="proxy-endpoint" readOnly className="font-mono text-xs" spellCheck={false} value={endpoint} />
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label={t("Adresi kopyala", "Copy endpoint")}
-              onClick={() => onCopy("endpoint", endpoint)}
-            >
-              {copied === "endpoint" ? <Check className="text-ok" /> : <Copy />}
-              {copied === "endpoint" ? t("Kopyalandı", "Copied") : t("Kopyala", "Copy")}
-            </Button>
-          </div>
-        </div>
-        <div className="grid gap-1">
-          <label className="text-xs font-medium" htmlFor="proxy-key">
-            {t("İstemci API anahtarı", "Client API key")}
-          </label>
-          <div className="flex items-center gap-2">
-            <Input
-              id="proxy-key"
-              readOnly
-              className="font-mono text-xs"
-              type="text"
-              spellCheck={false}
-              autoComplete="off"
-              value={key ? (reveal ? key : maskKey(key)) : ""}
-              placeholder={t("Proxy ilk açıldığında oluşur", "Created when the gateway first starts")}
-            />
-            <Button
-              variant="outline"
-              size="icon-sm"
-              disabled={!key}
-              aria-label={reveal ? t("Anahtarı gizle", "Hide key") : t("Anahtarı göster", "Show key")}
-              aria-pressed={reveal}
-              onClick={() => setReveal((r) => !r)}
-            >
-              {reveal ? <EyeOff /> : <Eye />}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              disabled={!key}
-              aria-label={t("Anahtarı kopyala", "Copy key")}
-              onClick={() => key && onCopy("key", key)}
-            >
-              {copied === "key" ? <Check className="text-ok" /> : <Copy />}
-            </Button>
-            <Button variant="outline" size="sm" disabled={disabled} onClick={() => setConfirming(true)}>
-              <RefreshCw />
-              {t("Yenile", "Regenerate")}
-            </Button>
-          </div>
-          {confirming && (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Note className="text-foreground">
-                {t(
-                  "Eski anahtar hemen çalışmaz olur. Araçlara yenisini girmen gerekir.",
-                  "The old key stops working at once. You will need to enter the new one in your tools.",
-                )}
-              </Note>
-              <Button
-                size="sm"
-                disabled={disabled}
-                onClick={() => {
-                  setConfirming(false);
-                  onRegenerate();
-                }}
-              >
-                {t("Yeni anahtar üret", "Generate new key")}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-                {t("Vazgeç", "Cancel")}
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
+/** A client's state in a word. */
+function clientWord(client: ProxyClientStatus, t: T): { tone: "ok" | "warn" | "off"; text: string } {
+  if (client.blocked) return { tone: "warn", text: t("Ayar dosyası okunamadı", "Cannot read its settings") };
+  if (client.bound) return { tone: "ok", text: t("Bağlı", "Connected") };
+  if (client.stale) return { tone: "warn", text: t("Eski adres ya da anahtar", "Old address or key") };
+  if (!client.installed) return { tone: "off", text: t("Bu Mac’te bulunamadı", "Not found on this Mac") };
+  return { tone: "off", text: t("Bağlı değil", "Not connected") };
 }
-
-type PoolAccount = Pick<ProxyAccountStatus, "id" | "quotaPercent" | "active" | "signedIn">;
 
 /**
- * One provider's pool: how many accounts it has, how many can take a request now, and how full
- * they are on average. Only limits Relay has read count: an account it cannot read (Codex and
- * Antigravity have no limit reader yet) is never shown as empty.
+ * The Tools tab: Claude Code and Codex are pointed at the gateway with one button (Relay writes
+ * their settings and restores them on disconnect); other tools get copyable settings.
  */
-function PoolCard({
-  provider,
-  accounts,
-  running,
+function ToolsTab({
+  status,
+  disabled,
+  copy,
+  onBind,
+  onUnbind,
 }: {
-  provider: AccountProvider;
-  accounts: PoolAccount[];
-  running: boolean;
+  status: ProxyStatus;
+  disabled: boolean;
+  copy: Copy;
+  onBind: (id: ProxyClientId) => void;
+  onUnbind: (id: ProxyClientId) => void;
 }) {
   const { t } = useI18n();
-  const ready = accounts.filter((a) => a.signedIn && (a.quotaPercent ?? 0) < 100).length;
-  const active = accounts.some((a) => a.active);
-  const known = accounts
-    .map((a) => a.quotaPercent)
-    .filter((p): p is number => typeof p === "number");
-  const avgUsed = known.length
-    ? Math.round(known.reduce((sum, p) => sum + Math.min(100, Math.max(0, p)), 0) / known.length)
-    : undefined;
+  const host = status.host;
+  const port = status.port;
+  const key = status.clientApiKey;
+  const hints: Record<ProxyClientId, string> = {
+    "claude-code": t(
+      "Bağlıyken hangi hesabın kullanılacağını ağ geçidi seçer; terminalde hesap değiştirmen gerekmez.",
+      "While connected, the gateway picks the account; no need to switch accounts in the terminal.",
+    ),
+    codex: t(
+      "Codex’in config.toml dosyasına Relay sağlayıcısı eklenir; varsa önceki sağlayıcı satırı yorum olarak saklanır.",
+      "Relay adds its provider to Codex's config.toml; a provider line already there is kept as a comment.",
+    ),
+  };
   return (
-    <Card className={cn(cardClass, "gap-2")} data-slot="pool-card" data-provider={provider}>
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 font-display text-sm font-semibold">
-          <ProviderBadge provider={provider} />
-          <span className="truncate">{providerLabel(provider)}</span>
-        </h3>
-        {running && active && (
-          <span className="flex items-center gap-1 text-2xs text-ok-foreground">
-            <StatusDot tone="ok" />
-            {t("Aktif", "Active")}
-          </span>
-        )}
-      </div>
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="font-display text-2xl font-semibold tabular-nums">{accounts.length}</p>
-        {accounts.length > 0 && (
-          <span className="font-mono text-2xs text-muted-foreground tabular-nums">
-            {avgUsed === undefined
-              ? t("Kota bilinmiyor", "Quota unknown")
-              : t(`ort. %${avgUsed} dolu`, `avg. ${avgUsed}% used`)}
-          </span>
-        )}
-      </div>
-      {avgUsed !== undefined && (
-        <div
-          role="meter"
-          aria-label={t(`${providerLabel(provider)} ortalama limit kullanımı`, `${providerLabel(provider)} average limit used`)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={avgUsed}
-          className="h-1.5 w-full overflow-hidden rounded-full bg-track"
+    <div className="grid gap-4">
+      <Card className={cardClass} data-slot="clients">
+        <SectionHeading
+          title={t("Araçları bağla", "Connect tools")}
+          description={t(
+            "Relay aracın kendi ayar dosyasına adresi ve anahtarı yazar. Ayır dediğinde dosyadaki eski değerleri geri koyar.",
+            "Relay writes the address and key into the tool's own settings file. Disconnect puts the old values back.",
+          )}
+        />
+        <ul className="grid pt-1">
+          {(status.clients ?? []).map((client) => {
+            const word = clientWord(client, t);
+            return (
+              <li
+                key={client.id}
+                data-client={client.id}
+                data-bound={String(client.bound)}
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t py-3 first:border-t-0"
+              >
+                <div className="grid min-w-[14rem] flex-1 gap-0.5">
+                  <span className="flex items-center gap-2 text-sm font-medium">
+                    {CLIENT_NAMES[client.id]}
+                    {client.id === "claude-code" && (
+                      <Badge variant="outline" className="text-ok-foreground">
+                        {t("Önerilen", "Recommended")}
+                      </Badge>
+                    )}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{hints[client.id]}</span>
+                  <span className="font-mono text-2xs text-muted-foreground">{client.file}</span>
+                </div>
+                <span className="flex items-center gap-1.5 text-xs">
+                  <StatusDot tone={word.tone} hollow={word.tone === "off"} />
+                  {word.text}
+                </span>
+                {client.bound ? (
+                  <Button variant="outline" size="sm" disabled={disabled} onClick={() => onUnbind(client.id)}>
+                    <Unlink />
+                    {t("Ayır", "Disconnect")}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant={client.stale ? "default" : "outline"}
+                    disabled={disabled || !!client.blocked}
+                    onClick={() => onBind(client.id)}
+                  >
+                    <Link2 />
+                    {client.stale ? t("Yeniden bağla", "Reconnect") : t("Bağla", "Connect")}
+                  </Button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
+      <Card className={cardClass}>
+        <Disclosure
+          title={t("Diğer araçlar (elle kurulum)", "Other tools (manual setup)")}
+          summary={t("Cursor, OpenAI SDK, Antigravity, cURL", "Cursor, OpenAI SDK, Antigravity, cURL")}
         >
-          <div className={cn("h-full rounded-full", meterFill(avgUsed))} style={{ width: `${avgUsed}%` }} />
-        </div>
-      )}
-      <p className="text-xs text-muted-foreground">
-        {accounts.length
-          ? t(`${ready} hesap istek alabilir`, `${ready} can take requests`)
-          : t("Havuzda hesap yok", "No accounts in the pool")}
-      </p>
-      <Button asChild variant="outline" size="sm" className="mt-1 w-fit">
-        <a href={accounts.length ? routeHash("hesaplar") : intentHash("hesaplar", "ekle")}>
-          {accounts.length ? null : <Plus />}
-          {accounts.length ? t("Hesaplara git", "Go to accounts") : t("Hesap ekle", "Add account")}
-        </a>
-      </Button>
-    </Card>
-  );
-}
-
-/** One counter in the telemetry grid. */
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-0.5 rounded-md border bg-muted/30 px-3 py-2">
-      <span className="text-2xs text-muted-foreground">{label}</span>
-      <span className="font-display text-base font-semibold tabular-nums">{value}</span>
+          <div className="grid gap-4 pt-2">
+            <Note className="text-warn">
+              {t(
+                "Claude aboneliğini Claude Code dışındaki araçlarda kullanmak hesabını riske atabilir. Abonelik hesaplarını Claude Code ve Codex ile kullan.",
+                "Using a Claude subscription in tools other than Claude Code can put the account at risk. Use subscription accounts with Claude Code and Codex.",
+              )}
+            </Note>
+            <CodeBlock
+              id="openai"
+              title={t("OpenAI uyumlu araçlar (Cursor, SDK)", "OpenAI-compatible tools (Cursor, SDK)")}
+              shown={openAiSnippet(host, port, key, true)}
+              copyText={openAiSnippet(host, port, key)}
+              copy={copy}
+            />
+            <CodeBlock
+              id="antigravity"
+              title={t("Antigravity modelleri · cURL", "Antigravity models · cURL")}
+              shown={antigravitySnippet(host, port, key, true)}
+              copyText={antigravitySnippet(host, port, key)}
+              copy={copy}
+            />
+            <CodeBlock
+              id="curl"
+              title={t("Bağlantı testi · cURL", "Connection test · cURL")}
+              shown={proxyCurlSnippet(host, port, key, true)}
+              copyText={proxyCurlSnippet(host, port, key)}
+              copy={copy}
+            />
+          </div>
+        </Disclosure>
+      </Card>
     </div>
   );
 }
 
-/** An account in the pool: its provider, name, routing state, how full its fuller limit is, and when that renews. */
-function AccountRow({ account, provider }: { account: ProxyAccountStatus; provider: AccountProvider }) {
-  const { t } = useI18n();
-  const percent = account.quotaPercent;
-  return (
-    <li
-      data-active={account.active || undefined}
-      data-provider={provider}
-      className={cn(
-        "grid grid-cols-[minmax(0,1fr)_minmax(6rem,9rem)_5.5rem] items-center gap-3 border-t py-2 first:border-t-0",
-        account.active && "-mx-2 rounded-md bg-primary/5 px-2",
-      )}
-    >
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <ProviderBadge provider={provider} />
-          <span className="truncate text-sm">{account.name}</span>
-          {account.active ? (
-            <Badge variant="outline" className="text-ok-foreground">
-              <StatusDot tone="ok" />
-              {t("Son istek", "Last request")}
-            </Badge>
-          ) : !account.signedIn ? (
-            <Badge variant="secondary">{t("Giriş yok", "Not signed in")}</Badge>
-          ) : (percent ?? 0) >= 100 ? (
-            <Badge variant="secondary">{t("Dolu", "Full")}</Badge>
-          ) : null}
-        </div>
-        {account.email && <p className="truncate text-xs text-muted-foreground">{account.email}</p>}
-      </div>
-      <div className="flex items-center gap-2">
-        <div
-          role="progressbar"
-          aria-label={t(`${account.name} limit kullanımı`, `${account.name} limit used`)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={percent}
-          data-tone={quotaTone(percent)}
-          className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
-        >
-          <div className={cn("h-full rounded-full", meterFill(percent))} style={{ width: `${Math.min(100, percent ?? 0)}%` }} />
-        </div>
-        <span className="w-9 text-right text-xs tabular-nums">{percent === undefined ? "—" : t(`%${percent}`, `${percent}%`)}</span>
-      </div>
-      <span className="text-right text-xs text-muted-foreground tabular-nums">{resetLabel(account.resetInMinutes, t)}</span>
-    </li>
-  );
-}
-
-/** What the gateway is doing: its counters and every account's room left. */
-function MonitorCard({ status }: { status?: ProxyStatus }) {
-  const { t, language } = useI18n();
-  const locale = language === "tr" ? "tr-TR" : "en-US";
-  const number = (n: number) => n.toLocaleString(locale);
-  const stats = status?.stats;
-  const ratio = (stats?.cacheHitRate ?? 0).toLocaleString(locale, { maximumFractionDigits: 1 });
-  const accounts = status?.accounts ?? [];
-  return (
-    <Card className={cardClass}>
-      <SectionHeading
-        title={t("Canlı yönlendirme monitörü", "Live routing monitor")}
-        description={t(
-          "Her istek kendi sağlayıcısının hesaplarından birine gider; limit dolarsa ya da giriş reddedilirse aynı istek sıradaki hesapla denenir. Aynı oturum, istem önbelleği korunsun diye aynı hesapta kalır.",
-          "Each request goes to an account of its own provider; when that account is at its limit or its sign-in is refused, the same request is tried on the next one. A session stays on its account so the prompt cache is kept.",
-        )}
-      />
-      <div className="grid gap-3 pt-2">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Stat label={t("Toplam istek", "Total requests")} value={number(stats?.totalRequests ?? 0)} />
-          <Stat label={t("Aktif akış", "Active streams")} value={number(stats?.activeRequests ?? 0)} />
-          <Stat label={t("Önbellek isabeti", "Prompt cache hits")} value={number(stats?.promptCacheHits ?? 0)} />
-          <Stat
-            label={t("Önbellek oranı", "Cache hit ratio")}
-            value={t(`%${ratio}`, `${ratio}%`)}
-          />
-        </div>
-        {accounts.length ? (
-          <ul aria-label={t("Bağlı hesaplar", "Connected accounts")}>
-            {accounts.map((account) => (
-              <AccountRow key={account.id} account={account} provider={account.provider ?? "claude"} />
-            ))}
-          </ul>
-        ) : (
-          <Note>{t("Henüz bağlı hesap yok.", "No connected accounts yet.")}</Note>
-        )}
-        {!status?.running && (
-          <Note>
-            {t(
-              "Proxy kapalı: sayaçlar proxy açıkken dolar. Limitler Relay’in son okuduğu değerlerdir.",
-              "The gateway is off: counters fill while it runs. Limits are the values Relay last read.",
-            )}
-          </Note>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-/** How the gateway picks an account and where it listens. */
-function ConfigCard({
+/** The Rules tab: how an account is picked, how long a session keeps it, and who may connect. */
+function RulesTab({
   status,
   disabled,
   onConfigure,
 }: {
-  status?: ProxyStatus;
+  status: ProxyStatus;
   disabled: boolean;
   onConfigure: (patch: Patch) => Promise<boolean>;
 }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
+  const locale = language === "tr" ? "tr-TR" : "en-US";
   const [draft, setDraft] = useState<{ port: string; host: string }>();
-  const strategy: Strategy = status?.routingStrategy ?? "soonest-reset";
-  const port = draft?.port ?? String(status?.port ?? 8317);
-  const host = draft?.host ?? status?.host ?? "127.0.0.1";
+  const strategy: Strategy = status.routingStrategy ?? "soonest-reset";
+  const port = draft?.port ?? String(status.port);
+  const host = draft?.host ?? status.host;
   const parsedPort = parsePort(port);
-  const changed = !!status && (parsedPort !== status.port || host.trim() !== status.host);
+  const changed = parsedPort !== status.port || host.trim() !== status.host;
   const valid = parsedPort !== undefined && validHost(host);
+  const ratio = status.stats.cacheHitRate.toLocaleString(locale, { maximumFractionDigits: 1 });
   const strategies: { value: Strategy; label: string; hint: string }[] = [
     {
       value: "soonest-reset",
-      label: t("En yakın sıfırlama (önerilen)", "Soonest reset (recommended)"),
-      hint: t("Limiti en yakında yenilenen hesap önce kullanılır; boşa giden kota azalır.", "The account whose limit renews soonest goes first, so less quota is wasted."),
+      label: t("Önce yanacak olan (önerilen)", "Expiring first (recommended)"),
+      hint: t(
+        "Limiti en yakında sıfırlanan hesap önce kullanılır. Claude sıfırlamada kalanı silindiği için boşa giden kota en aza iner.",
+        "The account whose limit resets soonest goes first. What is left at a reset is gone, so the least quota is wasted.",
+      ),
     },
     {
       value: "balanced",
-      label: t("Dengeli kapasite", "Balanced capacity"),
+      label: t("Dengeli", "Balanced"),
       hint: t("İstekler en çok boş kapasitesi olan hesaba gider.", "Requests go to the account with the most room left."),
     },
     {
       value: "strict-priority",
-      label: t("Sıralı öncelik", "Strict priority"),
-      hint: t("Hesaplar listedeki sırayla kullanılır; biri dolunca sıradaki başlar.", "Accounts are used in list order; the next starts when one is full."),
+      label: t("Sıralı", "In order"),
+      hint: t(
+        "Hesaplar Canlı sekmesindeki sırayla kullanılır; biri dolunca sıradaki başlar.",
+        "Accounts are used in the order on the Live tab; the next starts when one is full.",
+      ),
     },
   ];
+  const presets = [
+    { host: "127.0.0.1", label: t("Yalnızca bu Mac", "This Mac only") },
+    ...(status.tailscaleAddress
+      ? [{ host: status.tailscaleAddress, label: t("Tailscale ağım", "My tailnet") }]
+      : []),
+    { host: "0.0.0.0", label: t("Tüm yerel ağ", "Whole local network") },
+  ];
+  const current = host.trim();
   return (
-    <Card className={cardClass} data-slot="routing-config">
-      <SectionHeading
-        title={t("Yönlendirme stratejisi ve ayarlar", "Routing strategy and settings")}
-        description={t(
-          "İsteklerin hangi hesaba gideceğini ve ağ geçidinin nerede dinleyeceğini seç.",
-          "Choose which account serves a request, and where the gateway listens.",
-        )}
-      />
-      <div className="grid gap-4 pt-2">
-        <div role="radiogroup" aria-label={t("Yönlendirme stratejisi", "Routing strategy")} className="grid gap-2 sm:grid-cols-3">
+    <div className="grid gap-4">
+      <Card className={cardClass} data-slot="routing-config">
+        <SectionHeading
+          title={t("Hesap seçimi", "Choosing an account")}
+          description={t("Yeni bir oturumun hangi hesapla başlayacağı.", "Which account a new session starts on.")}
+        />
+        <div role="radiogroup" aria-label={t("Yönlendirme stratejisi", "Routing strategy")} className="grid gap-2 pt-2 sm:grid-cols-3">
           {strategies.map((s) => (
             <button
               key={s.value}
               type="button"
               role="radio"
               aria-checked={strategy === s.value}
-              disabled={disabled || !status}
+              disabled={disabled}
               onClick={() => strategy !== s.value && void onConfigure({ routingStrategy: s.value })}
               className={cn(
                 "grid content-start gap-1 rounded-md border bg-card px-3 py-2 text-left outline-none hover:bg-foreground/5 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60",
@@ -501,94 +860,19 @@ function ConfigCard({
             </button>
           ))}
         </div>
-        <div className="grid gap-1">
-          <span className="text-xs font-medium">{t("Adres ve port", "Host and port")}</span>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { host: "127.0.0.1", label: t("Yalnızca bu Mac", "This Mac only") },
-              { host: "0.0.0.0", label: t("Ağdaki cihazlar", "Devices on the network") },
-            ].map((p) => (
-              <Button
-                key={p.host}
-                size="sm"
-                variant="outline"
-                aria-pressed={host.trim() === p.host}
-                disabled={disabled}
-                className={cn(host.trim() === p.host && "border-primary bg-primary/5")}
-                onClick={() => setDraft({ port, host: p.host })}
-              >
-                <span className="font-mono">{p.host}</span> · {p.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-        <div className="grid grid-cols-[1fr_7rem] gap-3">
-          <label className="grid gap-1 text-xs font-medium" htmlFor="proxy-host">
-            {t("Adres", "Host")}
-            <Input
-              id="proxy-host"
-              value={host}
-              disabled={disabled}
-              spellCheck={false}
-              autoComplete="off"
-              aria-invalid={!validHost(host)}
-              onChange={(e) => setDraft({ port, host: e.target.value })}
-            />
-          </label>
-          <label className="grid gap-1 text-xs font-medium" htmlFor="proxy-port">
-            {t("Port", "Port")}
-            <Input
-              id="proxy-port"
-              inputMode="numeric"
-              value={port}
-              disabled={disabled}
-              aria-invalid={parsedPort === undefined}
-              onChange={(e) => setDraft({ host, port: e.target.value })}
-            />
-          </label>
-        </div>
-        {draft && changed && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              disabled={disabled || !valid}
-              onClick={() => void onConfigure({ port: parsedPort!, host: host.trim() }).then((saved) => saved && setDraft(undefined))}
-            >
-              {t("Uygula", "Apply")}
-            </Button>
-            <Button size="sm" variant="ghost" disabled={disabled} onClick={() => setDraft(undefined)}>
-              {t("Vazgeç", "Cancel")}
-            </Button>
-            <Note>
-              {valid
-                ? status?.running
-                  ? t("Çalışan proxy yeni adresle yeniden başlar.", "The running gateway restarts on the new address.")
-                  : t("Proxy açıldığında bu adresi kullanır.", "The gateway uses this address when you turn it on.")
-                : t("Geçerli bir adres ve 1–65535 arası bir port gir.", "Enter a valid host and a port from 1 to 65535.")}
-            </Note>
-          </div>
-        )}
-        {!isLoopbackHost(host.trim()) && validHost(host) && (
-          <Note className="text-warn">
-            {t(
-              "Bu adres yerel değil: anahtarı bilen ağdaki herkes hesaplarını kullanabilir. Tailscale gibi kapalı bir ağ kullan.",
-              "This is not a local address: anyone on the network who has the key can spend your accounts. Keep it on a private network such as Tailscale.",
-            )}
-          </Note>
-        )}
-        <div>
+        <div className="pt-3">
           <SettingRow
-            label={t("Oturum eşleşmesi süresi", "Session affinity")}
+            label={t("Oturum aynı hesapta kalsın", "Keep a session on its account")}
             htmlFor="proxy-affinity"
             description={t(
-              "Aynı oturum bu süre boyunca aynı hesapta kalır; istem önbelleği korunur.",
-              "A session stays on its account for this long, so the prompt cache is kept.",
+              `Önbellek hesaba özeldir; hesap değişirse baştan yazılır. Şu anki önbellek isabeti %${ratio}.`,
+              `The prompt cache belongs to the account; a switch rebuilds it. Cache hits now: ${ratio}%.`,
             )}
           >
             <OptionSelect
               id="proxy-affinity"
-              value={String(status?.affinityTtlSeconds ?? 300)}
-              disabled={disabled || !status}
+              value={String(status.affinityTtlSeconds ?? 300)}
+              disabled={disabled}
               options={AFFINITY_SECONDS.map((s) => ({
                 value: String(s),
                 label: s < 3_600 ? t(`${s / 60} dakika`, `${s / 60} minutes`) : t("1 saat", "1 hour"),
@@ -597,101 +881,114 @@ function ConfigCard({
             />
           </SettingRow>
         </div>
-      </div>
-    </Card>
-  );
-}
-
-/** Copyable setup for the tools that talk to the gateway. The key shows hidden unless revealed above. */
-function GuideCard({
-  status,
-  copied,
-  onCopy,
-}: {
-  status?: ProxyStatus;
-  copied?: string;
-  onCopy: (id: string, text: string) => void;
-}) {
-  const { t } = useI18n();
-  const host = status?.host ?? "127.0.0.1";
-  const port = status?.port ?? 8317;
-  const key = status?.clientApiKey;
-  return (
-    <Card className={cardClass}>
-      <SectionHeading
-        title={t("İstemci kurulum rehberi", "Client setup guide")}
-        description={t(
-          "Komutu kopyala, aracı proxy’ye yönlendir. Kopyalanan metin gerçek anahtarı içerir.",
-          "Copy the command to point a tool at the gateway. The copied text holds the real key.",
+      </Card>
+      <Card className={cardClass} data-slot="network">
+        <SectionHeading
+          title={t("Kim bağlanabilir", "Who can connect")}
+          description={t(
+            "Başka bir bilgisayardan kullanacaksan Tailscale gibi kapalı bir ağ seç.",
+            "To use it from another computer, choose a private network such as Tailscale.",
+          )}
+        />
+        <div role="radiogroup" aria-label={t("Dinlenen adres", "Listen address")} className="flex flex-wrap gap-2 pt-2">
+          {presets.map((p) => (
+            <Button
+              key={p.host}
+              role="radio"
+              size="sm"
+              variant="outline"
+              aria-checked={current === p.host}
+              disabled={disabled}
+              className={cn(current === p.host && "border-primary bg-primary/5")}
+              onClick={() => setDraft({ port, host: p.host })}
+            >
+              {p.label} · <span className="font-mono">{p.host}</span>
+            </Button>
+          ))}
+        </div>
+        <div className="pt-3">
+          <Disclosure title={t("Adres ve port", "Address and port")} summary={`${status.host}:${status.port}`} openKey={draft ? "draft" : undefined}>
+            <div className="grid grid-cols-[1fr_7rem] gap-3 pt-1">
+              <label className="grid gap-1 text-xs font-medium" htmlFor="proxy-host">
+                {t("Adres", "Host")}
+                <Input
+                  id="proxy-host"
+                  value={host}
+                  disabled={disabled}
+                  spellCheck={false}
+                  autoComplete="off"
+                  aria-invalid={!validHost(host)}
+                  onChange={(e) => setDraft({ port, host: e.target.value })}
+                />
+              </label>
+              <label className="grid gap-1 text-xs font-medium" htmlFor="proxy-port">
+                {t("Port", "Port")}
+                <Input
+                  id="proxy-port"
+                  inputMode="numeric"
+                  value={port}
+                  disabled={disabled}
+                  aria-invalid={parsedPort === undefined}
+                  onChange={(e) => setDraft({ host, port: e.target.value })}
+                />
+              </label>
+            </div>
+          </Disclosure>
+        </div>
+        {draft && changed && (
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <Button
+              size="sm"
+              disabled={disabled || !valid}
+              onClick={() =>
+                void onConfigure({ port: parsedPort!, host: current }).then((saved) => saved && setDraft(undefined))
+              }
+            >
+              {t("Uygula", "Apply")}
+            </Button>
+            <Button size="sm" variant="ghost" disabled={disabled} onClick={() => setDraft(undefined)}>
+              {t("Vazgeç", "Cancel")}
+            </Button>
+            <Note>
+              {valid
+                ? status.running
+                  ? t("Çalışan geçit yeni adresle yeniden başlar; bağlı araçlar da güncellenir.", "The running gateway restarts on the new address; connected tools are updated too.")
+                  : t("Ağ geçidi açıldığında bu adresi kullanır.", "The gateway uses this address when you turn it on.")
+                : t("Geçerli bir adres ve 1–65535 arası bir port gir.", "Enter a valid host and a port from 1 to 65535.")}
+            </Note>
+          </div>
         )}
-      />
-      <div className="grid gap-4 pt-2">
-        <CodeBlock
-          id="claude-code"
-          title="Claude Code CLI"
-          shown={claudeCodeSnippet(host, port, key, true)}
-          copyText={claudeCodeSnippet(host, port, key)}
-          copied={copied === "claude-code"}
-          onCopy={onCopy}
-        />
-        <CodeBlock
-          id="openai"
-          title="Codex / Cursor / OpenAI SDK"
-          shown={codexSnippet(host, port, key, true)}
-          copyText={codexSnippet(host, port, key)}
-          copied={copied === "openai"}
-          onCopy={onCopy}
-        />
-        <CodeBlock
-          id="antigravity"
-          title={t("Antigravity modelleri · cURL", "Antigravity models · cURL")}
-          shown={antigravitySnippet(host, port, key, true)}
-          copyText={antigravitySnippet(host, port, key)}
-          copied={copied === "antigravity"}
-          onCopy={onCopy}
-        />
-        <CodeBlock
-          id="curl"
-          title={t("cURL testi", "cURL test")}
-          shown={proxyCurlSnippet(host, port, key, true)}
-          copyText={proxyCurlSnippet(host, port, key)}
-          copied={copied === "curl"}
-          onCopy={onCopy}
-        />
-        {!status?.running && (
-          <Note>
+        {!isLoopbackHost(current) && validHost(current) && current !== status.tailscaleAddress && (
+          <Note className="pt-2 text-warn">
             {t(
-              `Proxy kapalıyken ${gatewayUrl(host, port)} yanıt vermez; önce yukarıdan aç.`,
-              `While the gateway is off, ${gatewayUrl(host, port)} does not answer. Turn it on above first.`,
+              "Bu adres yerel değil: anahtarı bilen ağdaki herkes hesaplarını kullanabilir. Tailscale gibi kapalı bir ağ kullan.",
+              "This is not a local address: anyone on the network who has the key can spend your accounts. Keep it on a private network such as Tailscale.",
             )}
           </Note>
         )}
-      </div>
-    </Card>
+      </Card>
+      <Note className="px-1">
+        {t(
+          "Abonelik hesaplarını aynı anda birden çok makineden kullanma; sunucu (VPS) ya da VPN üzerinden giriş yapma. Bunlar hesabın kısıtlanmasına yol açabilir.",
+          "Do not use subscription accounts from several machines at once, and do not sign in from a server (VPS) or a VPN. Either can get the account restricted.",
+        )}
+      </Note>
+    </div>
   );
 }
 
 /**
- * Proxy & Gateway: turn the local gateway on, see how tools connect to it, which providers fill its
- * pool, how it routes, and how it spends every account.
+ * Proxy & Gateway: one head with the switch, address and key; then Live (the pool and the
+ * requests), Tools (connect Claude Code and Codex in one click) and Rules (routing and network).
  */
-export function ProxyPage() {
+export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
   const { t } = useI18n();
-  const { api, busy, desktop, action, accounts } = useRelay();
+  const { api, busy, desktop, action } = useRelay();
   const { status, setStatus } = useProxyStatus();
-  const [copied, setCopied] = useState<string>();
+  const copy = useCopy();
+  const [savedTab, setTab] = useTab();
+  const tab = initialTab ?? savedTab;
   const disabled = !!busy || !!desktop?.busy;
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(undefined), COPIED_MS);
-    return () => clearTimeout(timer);
-  }, [copied]);
-  const copy = (id: string, text: string) => {
-    void navigator.clipboard?.writeText(text).then(
-      () => setCopied(id),
-      () => {},
-    );
-  };
   /** True once the change is saved: `action` shows a failure itself and resolves either way. */
   const configure = async (patch: Patch) => {
     let saved = false;
@@ -701,27 +998,19 @@ export function ProxyPage() {
     });
     return saved;
   };
-  const pools = useMemo(() => {
-    const byProvider: Record<AccountProvider, PoolAccount[]> = {
-      claude: [],
-      codex: [],
-      antigravity: [],
-      gemini: [],
-    };
-    // Before the first status arrives, the snapshot's accounts fill the pools.
-    const rows: (PoolAccount & { provider?: AccountProvider })[] =
-      status?.accounts ??
-      accounts.map((a) => ({ id: a.id, active: false, signedIn: a.auth?.loggedIn === true, provider: accountProvider(a) }));
-    for (const a of rows) byProvider[a.provider ?? "claude"].push(a);
-    return byProvider;
-  }, [status?.accounts, accounts]);
+  const toggle = (enabled: boolean) => void action("proxy-toggle", async () => setStatus(await api.proxyToggle(enabled)));
+  const bind = (id: ProxyClientId) => void action("proxy-client", async () => setStatus(await api.proxyBindClient(id)));
+  const unbind = (id: ProxyClientId) => void action("proxy-client", async () => setStatus(await api.proxyUnbindClient(id)));
+  const boundOff = !status?.running ? (status?.clients ?? []).filter((c) => c.bound) : [];
+  const risky = (status?.accounts ?? []).filter((a) => a.inPool && quotaAtRisk(a));
+  const signedOut = (status?.accounts ?? []).filter((a) => a.inPool && !a.signedIn);
   return (
     <PageFrame
       automationInline
       title={t("Proxy & Gateway", "Proxy & Gateway")}
       description={t(
-        "Claude Code, Codex ve Antigravity OAuth hesapları için yerel ağ geçidi.",
-        "Local gateway for Claude Code, Codex, and Antigravity OAuth accounts.",
+        "Claude Code ve Codex tek bir adrese bağlanır; ağ geçidi isteği limiti en uygun hesaba gönderir.",
+        "Claude Code and Codex connect to one address; the gateway sends each request to the account with the best room.",
       )}
       actions={
         <Button asChild variant="outline" size="sm">
@@ -732,23 +1021,82 @@ export function ProxyPage() {
         </Button>
       }
     >
-      <div className="grid max-w-4xl gap-4 px-5 pb-6">
-        <GatewayCard
+      <div className="grid max-w-5xl gap-4 px-5 pb-6">
+        <GatewayHeader
           status={status}
           disabled={disabled}
-          copied={copied}
-          onCopy={copy}
-          onToggle={(enabled) => void action("proxy-toggle", async () => setStatus(await api.proxyToggle(enabled)))}
+          copy={copy}
+          onToggle={toggle}
           onRegenerate={() => void action("proxy-key", async () => setStatus(await api.proxyRegenerateKey()))}
         />
-        <section aria-label={t("Sağlayıcı havuzları", "Provider pools")} className="grid gap-3 sm:grid-cols-3">
-          {POOL_PROVIDERS.map((provider) => (
-            <PoolCard key={provider} provider={provider} accounts={pools[provider]} running={status?.running === true} />
-          ))}
-        </section>
-        <MonitorCard status={status} />
-        <ConfigCard status={status} disabled={disabled} onConfigure={configure} />
-        <GuideCard status={status} copied={copied} onCopy={copy} />
+        {boundOff.length > 0 && (
+          <Attention
+            tone="crit"
+            action={
+              <Button size="sm" disabled={disabled} onClick={() => toggle(true)}>
+                {t("Geçidi aç", "Turn on")}
+              </Button>
+            }
+          >
+            {t(
+              `${boundOff.map((c) => CLIENT_NAMES[c.id]).join(" ve ")} bu geçide bağlı ama geçit kapalı: istek gönderemez.`,
+              `${boundOff.map((c) => CLIENT_NAMES[c.id]).join(" and ")} ${boundOff.length > 1 ? "are" : "is"} connected to this gateway, but it is off: no requests go through.`,
+            )}
+          </Attention>
+        )}
+        {signedOut.length > 0 && (
+          <Attention
+            tone="warn"
+            action={
+              <Button asChild size="sm" variant="outline">
+                <a href={intentHash("hesaplar", "ekle")}>{t("Hesaplara git", "Go to accounts")}</a>
+              </Button>
+            }
+          >
+            {t(
+              `${signedOut.map((a) => a.name).join(", ")}: giriş yok, ağ geçidi bu hesabı kullanamaz.`,
+              `${signedOut.map((a) => a.name).join(", ")}: not signed in, the gateway cannot use it.`,
+            )}
+          </Attention>
+        )}
+        {risky.length > 0 && status?.routingStrategy !== "soonest-reset" && (
+          <Attention
+            tone="warn"
+            action={
+              <Button size="sm" variant="outline" disabled={disabled} onClick={() => void configure({ routingStrategy: "soonest-reset" })}>
+                {t("Önce yanacak olanı kullan", "Use expiring first")}
+              </Button>
+            }
+          >
+            {t(
+              `${risky.map((a) => a.name).join(", ")}: haftalık limit yakında sıfırlanıyor ve kalan kota boşa gidecek.`,
+              `${risky.map((a) => a.name).join(", ")}: the weekly limit resets soon and the room left will be lost.`,
+            )}
+          </Attention>
+        )}
+        <Tabs value={tab} onValueChange={(v) => setTab(v as ProxyTab)} className="grid gap-4">
+          <TabsList aria-label={t("Ağ geçidi bölümleri", "Gateway sections")}>
+            <TabsTrigger value="canli">{t("Canlı", "Live")}</TabsTrigger>
+            <TabsTrigger value="araclar">{t("Araçlar", "Tools")}</TabsTrigger>
+            <TabsTrigger value="kurallar">{t("Kurallar", "Rules")}</TabsTrigger>
+          </TabsList>
+          {status && (
+            <>
+              <TabsContent value="canli">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+                  <PoolCard status={status} disabled={disabled} onConfigure={configure} />
+                  <RequestFeed status={status} />
+                </div>
+              </TabsContent>
+              <TabsContent value="araclar">
+                <ToolsTab status={status} disabled={disabled} copy={copy} onBind={bind} onUnbind={unbind} />
+              </TabsContent>
+              <TabsContent value="kurallar">
+                <RulesTab status={status} disabled={disabled} onConfigure={configure} />
+              </TabsContent>
+            </>
+          )}
+        </Tabs>
       </div>
     </PageFrame>
   );

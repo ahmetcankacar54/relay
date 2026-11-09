@@ -510,10 +510,12 @@ test("a first run lists the prerequisites, each with a mark, a reason and an act
   assert.match(cli, /<button[^>]*>Dosyayı seç<\/button>/);
 });
 
-test("met prerequisites are ticked, then the list guides to the accounts and hides once Relay can switch", () => {
+test("met steps fold into one done line, then the list guides to the accounts and hides once Relay can switch", () => {
   const partial = checklist(render(firstRun()));
-  assert.match(item(partial, "desktop"), /data-met="true"[\s\S]*Bulundu/);
-  assert.doesNotMatch(item(partial, "desktop"), /İndir/);
+  // The Claude app found: folded into the done line, with no Download link.
+  assert.equal(item(partial, "desktop"), "");
+  assert.match(item(partial, "done"), /Claude uygulaması/);
+  assert.doesNotMatch(partial, /İndir/);
   // With the Claude app there, the Code step opens Claude on Code.
   assert.match(item(partial, "code"), /<button[^>]*>Code’u aç<\/button>/);
   assert.match(item(checklist(render(firstRun({ desktop: { running: true } }))), "code"), /<button[^>]*>Code’u aç<\/button>/);
@@ -521,21 +523,22 @@ test("met prerequisites are ticked, then the list guides to the accounts and hid
     desktop: { currentAccountUuid: "00000000-0000-4000-8000-000000000001", organizations: ["00000000-0000-4000-8000-000000000002"] },
     diagnostics: { executable: "/usr/local/bin/claude", version: "2.1.300 (Claude Code)", error: undefined },
   };
-  // The prerequisites met, the list goes on: a first account, a second, when to switch.
+  // The prerequisites met, the list goes on: the accounts (one step for both), then when to switch.
   const ready = checklist(render(firstRun(codeOpen)));
-  assert.match(item(ready, "code"), /data-met="true"/);
-  assert.match(item(ready, "first"), /data-met="false"[\s\S]*İlk hesabını ekle[\s\S]*yukarıdaki “Hesap ekle” ile ekle/);
-  // One step at a time: the later ones wait, without their buttons.
-  assert.match(item(ready, "second"), /İkinci hesabını ekle/);
-  assert.doesNotMatch(item(ready, "second"), /<button/);
+  assert.match(item(ready, "done"), /Claude uygulaması · Code sekmesi açıldı/);
+  assert.equal(item(ready, "first"), "");
+  assert.equal(item(ready, "second"), "");
+  assert.match(item(ready, "accounts"), /data-met="false"[\s\S]*Hesaplarını ekle[\s\S]*0 \/ 2[\s\S]*bu Mac’te bulunan hesapları tek seferde ekler/);
+  // No account yet: the welcome card above holds the only Add account; the later step waits.
+  assert.doesNotMatch(item(ready, "accounts"), /<button/);
   assert.doesNotMatch(item(ready, "mode"), /<button/);
-  // One account: the second step opens with its own Add account.
+  // One account: the step offers its own Add account.
   const one = checklist(render(firstRun({ ...codeOpen, accounts: [acct("one", "Kişisel", "pro")] })));
-  assert.match(item(one, "first"), /data-met="true"/);
-  assert.match(item(one, "second"), /1 \/ 2[\s\S]*en az iki hesap gerekir[\s\S]*<button[^>]*>Hesap ekle<\/button>/);
+  assert.match(item(one, "accounts"), /1 \/ 2[\s\S]*Bir hesap daha gerekiyor[\s\S]*<button[^>]*>Hesap ekle<\/button>/);
   // Two accounts: when to switch, with Choose; on macOS the extension is optional.
   const two = [acct("one", "Kişisel", "pro"), acct("two", "Vertex", "pro")];
   const pair = checklist(render(firstRun({ ...codeOpen, accounts: two, diagnostics: { ...codeOpen.diagnostics, platform: "darwin" } })));
+  assert.match(item(pair, "done"), /Hesaplarını ekle/);
   assert.match(item(pair, "mode"), /Ne zaman geçileceğini seç[\s\S]*<button[^>]*>Seç<\/button>/);
   assert.match(item(pair, "extension"), /İsteğe bağlı/);
   // A mode chosen and no optional step (not macOS): nothing left to say.

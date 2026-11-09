@@ -265,7 +265,7 @@ const SESSIONS: DetectedProviderSession[] = [
   { provider: "antigravity", detected: false },
 ];
 
-test("the add dialog shows the three providers, Claude's four layers and what was detected", async () => {
+test("the add dialog lists the sessions found, ticked, and adds the chosen ones in one click", async () => {
   const dom = fakeDom();
   dom.install();
   readableText();
@@ -286,38 +286,28 @@ test("the add dialog shows the three providers, Claude's four layers and what wa
     await act(async () => root.render(wrap(relayFor({}, [claude], api), createElement(AddAccountFlow, { close() {} }))));
     const container = dom.container as unknown as Fake;
     const attr = (n: Fake | undefined, name: string) => (n?.attributes as Map<string, string> | undefined)?.get(name);
-    const card = (provider: string) => find(container, (n) => attr(n, "role") === "radio" && attr(n, "data-provider") === provider);
+    const box = (provider: string) => find(container, (n) => attr(n, "role") === "checkbox" && attr(n, "data-provider") === provider);
     const text = textOf(container);
-    for (const re of [/Anthropic Claude/, /OpenAI \/ Codex/, /Google Antigravity/, /Desktop & İstemci/, /Limit & OAuth/, /Terminal & CLI/, /Chrome & Proxy/, /Relay kullanılabilir yerel kimlik bilgilerini içe aktarır/])
-      assert.match(text, re);
-    // Detected sessions are badged on their cards, with the email or the source.
-    assert.match(textOf(card("claude")!), /Algılandı[\s\S]*claude@example\.com/);
-    assert.match(textOf(card("codex")!), /Algılandı[\s\S]*codex@example\.com/);
-    assert.doesNotMatch(textOf(card("antigravity")!), /Algılandı/);
-    // Claude: the one-click button sits above the step-by-step fallback.
-    assert.match(text, /Tek tıkla bağla/);
-    assert.match(text, /Bu hesabı ekle…|Claude uygulamasında giriş ekranını aç…/);
-    assert.equal(attr(card("claude"), "aria-checked"), "true");
-    // Codex: the detected session connects in one click without typing.
-    await act(async () => dom.dispatch(card("codex")!, "click", { detail: 1 }));
-    const codexText = textOf(container);
-    assert.match(codexText, /Yerel oturum algılandı: codex@example\.com/);
-    assert.match(codexText, /OpenAI API anahtarı · isteğe bağlı/);
-    assert.match(codexText, /Boş bırakırsan algılanan giriş kullanılır/);
-    assert.doesNotMatch(codexText, /E-posta \/ Etiket/);
-    // The four layers are Claude's: Codex only serves the gateway.
-    assert.doesNotMatch(codexText, /Desktop & İstemci|Relay kullanılabilir yerel kimlik bilgilerini/);
-    assert.doesNotMatch(codexText, /Bu hesabı ekle…/);
-    const connect = find(container, (n) => n.tagName?.toLowerCase() === "button" && textOf(n) === "Bağla");
-    await act(async () => dom.dispatch(connect!, "click", { detail: 1 }));
-    // The form is a <form>; a button click submits it in a browser. The fake DOM has no submit, so submit directly.
-    const form = find(container, (n) => n.tagName?.toLowerCase() === "form" && attr(n, "data-provider") === "codex");
-    await act(async () => dom.dispatch(form!, "submit", {}));
-    assert.equal(connected.length, 1);
-    assert.deepEqual(connected[0], { provider: "codex", name: "OpenAI · Codex", kind: "personal" });
+    assert.match(text, /Bu Mac’te 2 hesap bulduk/);
+    assert.match(textOf(box("claude")!), /claude@example\.com/);
+    assert.match(textOf(box("codex")!), /codex@example\.com[\s\S]*Codex CLI · pro/);
+    assert.equal(box("antigravity"), undefined);
+    assert.deepEqual([attr(box("claude"), "aria-checked"), attr(box("codex"), "aria-checked")], ["true", "true"]);
+    assert.match(text, /2 hesabı ekle/);
+    // The other ways in, in plain words: no layer jargon.
+    for (const re of [/Başka bir Claude hesabıyla giriş yap/, /OpenAI \/ Codex/, /Google Antigravity/]) assert.match(text, re);
+    assert.doesNotMatch(text, /Desktop & İstemci|Limit & OAuth|Chrome & Proxy/);
+    // Untick Claude: only Codex is added, with its suggested name and no form.
+    await act(async () => dom.dispatch(box("claude")!, "click", { detail: 1 }));
+    assert.equal(attr(box("claude"), "aria-checked"), "false");
+    const add = find(container, (n) => n.tagName?.toLowerCase() === "button" && textOf(n).includes("Hesabı ekle"));
+    await act(async () => dom.dispatch(add!, "click", { detail: 1 }));
+    assert.deepEqual(connected, [{ provider: "codex", name: "OpenAI · Codex", kind: "personal" }]);
     const done = textOf(container);
-    assert.match(done, /Hesap eklendi/);
-    assert.match(done, /Atlandı[\s\S]*Atlandı[\s\S]*Atlandı[\s\S]*Tamam/);
+    assert.match(done, /1 hesap eklendi/);
+    assert.match(done, /OpenAI · Codex/);
+    assert.match(done, /Eklenti ve ağ geçidi/);
+    assert.doesNotMatch(done, /Claude uygulaması/);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
@@ -337,8 +327,9 @@ test("without a detected session, Codex asks for a key and the connect button wa
     );
     const container = dom.container as unknown as Fake;
     const attr = (n: Fake | undefined, name: string) => (n?.attributes as Map<string, string> | undefined)?.get(name);
-    assert.doesNotMatch(textOf(container), /Algılandı/);
-    const card = find(container, (n) => attr(n, "role") === "radio" && attr(n, "data-provider") === "codex");
+    assert.doesNotMatch(textOf(container), /bulduk/);
+    assert.match(textOf(container), /Nasıl eklemek istersin\?/);
+    const card = find(container, (n) => attr(n, "data-way") === "codex");
     await act(async () => dom.dispatch(card!, "click", { detail: 1 }));
     assert.match(textOf(container), /Bu Mac'te Codex CLI girişi bulunamadı/);
     const connect = find(container, (n) => n.tagName?.toLowerCase() === "button" && textOf(n) === "Bağla");
@@ -369,7 +360,7 @@ test("Antigravity onboarding starts Google OAuth without asking for an API key",
     }), createElement(AddAccountFlow, { close: () => void closed++ }))));
     const container = dom.container as unknown as Fake;
     const attr = (n: Fake | undefined, name: string) => (n?.attributes as Map<string, string> | undefined)?.get(name);
-    const card = find(container, (n) => attr(n, "role") === "radio" && attr(n, "data-provider") === "antigravity");
+    const card = find(container, (n) => attr(n, "data-way") === "antigravity");
     await act(async () => dom.dispatch(card!, "click", { detail: 1 }));
     assert.match(textOf(container), /Google ile bağlan/);
     assert.match(textOf(container), /API anahtarı gerekmez/);

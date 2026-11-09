@@ -60,7 +60,7 @@ test("routeQuery reads the intent after the page id", () => {
 test("the add-account dialog starts with the Claude app sign-in: no form, one button", () => {
   const html = wrap(relayFor(), createElement(AddAccountSteps, { close() {} }));
   assert.match(html, /1 · Claude uygulaması/);
-  assert.match(html, /2 · Limit okuma girişi/);
+  assert.match(html, /2 · Claude Code girişi/);
   assert.match(html, /3 · Hazır/);
   assert.match(html, /aria-current="step"/);
   assert.doesNotMatch(html, /Hesap adı/);
@@ -121,9 +121,9 @@ test("the add-account dialog follows the created profile through its sign-ins", 
   assert.match(choose, new RegExp(`<option value="${B}"[^>]*>Çalışma alanı 2</option>`));
   // The usage step: started on its own, with a way to do it later.
   const limit = step(2, relayFor());
-  assert.match(limit, /“Studio” için limit okuma girişi/);
-  assert.match(limit, /Relay’in bu hesabın limitlerini okuyabilmesi için bir kez giriş yap\./);
-  assert.match(limit, /Limit okuma girişi yap<\/button>/);
+  assert.match(limit, /“Studio” için Claude Code girişi/);
+  assert.match(limit, /Ağ geçidi, terminal ve limit okuma bu girişi kullanır\./);
+  assert.match(limit, /Claude Code ile giriş yap<\/button>/);
   assert.match(limit, /Sonra yap/);
 });
 test("the Desktop link dialog lists unlinked profiles", () => {
@@ -202,14 +202,14 @@ test("without a usable CLI, the usage step is not started: the reason, the guide
     { executable: "/usr/local/bin/claude", version: "2.1.200 (Claude Code)" },
   ]) {
     const html = step(2, relayFor({ data: withCli(diagnostics) }));
-    assert.doesNotMatch(html, /Limit okuma girişi yap<\/button>/, JSON.stringify(diagnostics));
+    assert.doesNotMatch(html, /Claude Code ile giriş yap<\/button>/, JSON.stringify(diagnostics));
     assert.match(html, /Limitleri okumak için Claude Code gerekir\./);
     assert.match(html, /<a[^>]*href="https:\/\/docs\.anthropic\.com\/en\/docs\/claude-code\/setup"[^>]*target="_blank"/);
     assert.match(html, /<button[^>]*>Dosyayı seç<\/button>/);
     assert.match(html, /Sonra yap/);
   }
   const ready = step(2, relayFor({ data: withCli({ executable: "/usr/local/bin/claude", version: "2.1.300 (Claude Code)" }) }));
-  assert.match(ready, /Limit okuma girişi yap<\/button>/);
+  assert.match(ready, /Claude Code ile giriş yap<\/button>/);
   assert.doesNotMatch(ready, /Dosyayı seç/);
 });
 
@@ -239,7 +239,7 @@ test("the last step suggests the name, type and group from the sign-in", () => {
   const html = wrap(relayFor({ accounts: [a, named, w] }), createElement(AddAccountSteps, { close() {}, initial: { step: 3, id: "b" } }));
   assert.match(html, /Hesap hazır/);
   assert.match(html, /Claude uygulaması girişi kaydedildi/);
-  assert.match(html, /Limit okuma girişi bağlı · ahmet@vertex\.com/);
+  assert.match(html, /Claude Code girişi bağlı · ahmet@vertex\.com/);
   assert.match(html, /Kaydet ve bitir/);
   assert.match(html, /Başka hesap ekle/);
 });
