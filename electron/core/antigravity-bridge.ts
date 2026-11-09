@@ -175,12 +175,15 @@ export class AntigravityBridge {
     return response.json() as Promise<T>;
   }
 
-  async beginOAuth(): Promise<{ state: string; url: string }> {
-    // Google sends the browser back to localhost:51121, the port Antigravity's client is
-    // registered with. CLIProxyAPI only listens there (a forwarder to its own callback route)
-    // when asked with is_webui; without it the sign-in ends on a page nothing answers.
+  /**
+   * Google sends the browser back to localhost:51121, the port Antigravity's client is
+   * registered with. Relay answers there itself when it can (`forwarder: false`) and passes the
+   * address on with submitCallback; otherwise CLIProxyAPI is asked to listen there (is_webui),
+   * which ends on its own "Authentication successful!" page.
+   */
+  async beginOAuth({ forwarder = true }: { forwarder?: boolean } = {}): Promise<{ state: string; url: string }> {
     const result = await this.management<{ status: string; state?: string; url?: string }>(
-      "/oauth/auth-url?provider=antigravity&is_webui=true",
+      `/oauth/auth-url?provider=antigravity${forwarder ? "&is_webui=true" : ""}`,
     );
     if (result.status !== "ok" || !result.state || !result.url) throw new Error("Antigravity OAuth could not start");
     const url = new URL(result.url);

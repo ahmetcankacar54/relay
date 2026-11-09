@@ -153,6 +153,7 @@ import {
   type ClientTarget,
 } from "./core/proxy/proxy-clients";
 import { gatewayUrl } from "../shared/proxy-url";
+import { listenOAuthCallback, type CallbackServer } from "./core/oauth-callback-server";
 import { proxyExtrasSchema, type ProxyExtras } from "./core/proxy/proxy-status";
 import {
   detectProviders,
@@ -1857,6 +1858,10 @@ const pendingAntigravityOAuth = new Map<string, string>();
 const antigravityOAuthOutcomes = new Map<string, AntigravityOAuthPoll>();
 const antigravityOAuthPolls = new Map<string, Promise<AntigravityOAuthPoll>>();
 const antigravityOAuthTimers = new Map<string, ReturnType<typeof setInterval>>();
+/** Relay's own listener on Google's redirect port while a sign-in waits. */
+const antigravityCallbackServers = new Map<string, CallbackServer>();
+/** The port Antigravity's Google OAuth client sends the browser back to. */
+const ANTIGRAVITY_CALLBACK_PORT = 51121;
 let antigravityStarting = false;
 
 function antigravityBridge(accountId: string): AntigravityBridge {
@@ -1875,6 +1880,8 @@ function antigravityBridge(accountId: string): AntigravityBridge {
 
 async function discardPendingAntigravity(accountId: string): Promise<void> {
   pendingAntigravityOAuth.delete(accountId);
+  antigravityCallbackServers.get(accountId)?.close();
+  antigravityCallbackServers.delete(accountId);
   const timer = antigravityOAuthTimers.get(accountId);
   if (timer) clearInterval(timer);
   antigravityOAuthTimers.delete(accountId);
@@ -1921,6 +1928,8 @@ async function pollAntigravityOAuth(accountId: string, state: string): Promise<A
       };
     });
     pendingAntigravityOAuth.delete(accountId);
+    antigravityCallbackServers.get(accountId)?.close();
+    antigravityCallbackServers.delete(accountId);
     const timer = antigravityOAuthTimers.get(accountId);
     if (timer) clearInterval(timer);
     antigravityOAuthTimers.delete(accountId);
@@ -2550,7 +2559,34 @@ function bindIPC() {
     })();
     try {
       const bridge = antigravityBridge(account.id);
-      const { state, url } = await bridge.beginOAuth();
+      // Relay answers Google's redirect itself: the browser gets a short page and Relay comes
+      // forward. If the port is taken, CLIProxyAPI's own forwarder is the way back.
+      const callback = await listenOAuthCallback({
+        port: ANTIGRAVITY_CALLBACK_PORT,
+        path: "/oauth-callback",
+        timeoutMs: 10 * 60_000,
+        handle: async (address) => {
+          const expected = pendingAntigravityOAuth.get(account.id);
+          try {
+            if (!expected) throw new Error(say("Bekleyen giriş yok.", "No sign-in is pending."));
+            await bridge.submitCallback(expected, address);
+            return {
+              title: say("Giriş alındı", "Signed in"),
+              body: say("Relay’e dönebilirsin; bu sekme kapanabilir.", "You can go back to Relay; this tab can be closed."),
+            };
+          } catch {
+            return {
+              title: say("Giriş tamamlanamadı", "Sign-in not finished"),
+              body: say("Relay’e dönüp yeniden dene.", "Go back to Relay and try again."),
+            };
+          } finally {
+            showWindow();
+            if (process.platform === "darwin") app.focus({ steal: true });
+          }
+        },
+      });
+      if (callback) antigravityCallbackServers.set(account.id, callback);
+      const { state, url } = await bridge.beginOAuth({ forwarder: !callback });
       pendingAntigravityOAuth.set(account.id, state);
       await shell.openExternal(url);
       const startedAt = Date.now();

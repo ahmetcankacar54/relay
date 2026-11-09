@@ -60,7 +60,7 @@ test("the Claude Code sign-in refuses a Codex or Antigravity account, in main an
 
 test("Google sends the browser back to 51121: Relay asks CLIProxyAPI to listen there", () => {
   const bridge = fs.readFileSync(new URL("../electron/core/antigravity-bridge.ts", import.meta.url), "utf8");
-  assert.match(bridge, /"\/oauth\/auth-url\?provider=antigravity&is_webui=true"/);
+  assert.match(bridge, /provider=antigravity\$\{forwarder \? "&is_webui=true" : ""\}/);
 });
 
 test("a pasted callback address goes on only when it is this sign-in's loopback callback", () => {
