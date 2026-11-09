@@ -1,8 +1,8 @@
-Relay 0.16.0 — account switcher for the Claude app (Claude Desktop)
+Relay 0.18.2 — account switcher for the Claude app (Claude Desktop)
 Unofficial personal tool; not an Anthropic product.
 
 INSTALL
-1) Relay-0.16.0-arm64.dmg is for Apple silicon Macs (M1 and later).
+1) Relay-0.18.2-arm64.dmg is for Apple silicon Macs (M1 and later).
    Apple menu → About This Mac should say "Chip: Apple M…". Intel Macs are
    not supported by this build. Requires macOS 13 or later.
 2) Open the DMG and drag Relay into the Applications folder. Do not run it
@@ -82,6 +82,24 @@ main Claude stays on its account. Close it from the same place.
   does not switch by itself.
 • Claude in Chrome works only in the main Claude.
 • Claude does not officially support this; a Claude update may break it.
+
+LOCAL API GATEWAY (PROXY)
+"Proxy & Gateway" in the sidebar runs a local endpoint that spreads Claude
+Code, Codex and other API clients across your saved accounts.
+• Clients sign in with the client API key shown on that page (Authorization:
+  Bearer, x-api-key or x-relay-key). Copy the snippet for your client.
+• When an account answers that it is full (429), overloaded or no longer signed
+  in, the same request is retried on the next account of the same provider, up
+  to three accounts. A full account waits until its limit resets.
+• Codex accounts: "Add account" → Codex. A ChatGPT sign-in from the Codex CLI
+  on this Mac serves the Responses API; Chat Completions need an OpenAI API
+  key, which Relay checks with OpenAI before saving it.
+• Antigravity accounts: "Add account" → Antigravity → "Connect with Google".
+• The terminal command `relay add` adds Claude accounts only.
+
+GOING BACK TO AN OLDER VERSION
+Relay 0.17 opens a 0.18.2 account list read-only. Relay 0.18.0 and 0.18.1
+cannot open it once an Antigravity account was added: stay on 0.18.2 or later.
 
 TROUBLESHOOTING
 Relay → Settings → Advanced → Diagnostics files → "Show in Finder".
