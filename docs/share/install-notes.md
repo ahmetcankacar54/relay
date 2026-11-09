@@ -1,8 +1,8 @@
-Relay 0.19.0 — account switcher for the Claude app (Claude Desktop)
+Relay 0.19.1 — account switcher for the Claude app (Claude Desktop)
 Unofficial personal tool; not an Anthropic product.
 
 INSTALL
-1) Relay-0.19.0-arm64.dmg is for Apple silicon Macs (M1 and later).
+1) Relay-0.19.1-arm64.dmg is for Apple silicon Macs (M1 and later).
    Apple menu → About This Mac should say "Chip: Apple M…". Intel Macs are
    not supported by this build. Requires macOS 13 or later.
 2) Open the DMG and drag Relay into the Applications folder. Do not run it
@@ -57,6 +57,9 @@ SETTINGS
 Switching (when to switch, what comes along, near the limit) and Planning are
 pages of their own in the sidebar, under Accounts. Settings keeps General
 (appearance, the interface language) and Advanced.
+• E-mails and organizations are blurred until clicked, so a screen share does
+  not give them away. Settings → General → "Blur account details" turns it
+  off.
 
 GOOD TO KNOW
 • Switching accounts quits and reopens the Claude app. Do not switch while a
@@ -107,12 +110,19 @@ on/off switch, the address and the client key; below it are three tabs.
 • Codex accounts: a ChatGPT sign-in from the Codex CLI on this Mac serves the
   Responses API; Chat Completions need an OpenAI API key, which Relay checks
   with OpenAI before saving it.
+• Antigravity accounts: "Add account" → Google Antigravity → "Connect with
+  Google". After Google, the browser returns to Relay. If it stops on a page
+  starting with localhost:51121, paste that address into the dialog.
+• Usage dashboards: the gateway also answers as a CLIProxyAPI hub, so T3 Code's
+  Usage providers → CLI Proxy can read your Claude and Codex accounts' limits.
+  Hub URL: the gateway's address; management key: the client key. It only
+  sends an account's token to that provider's own usage requests.
 • The terminal command `relay add` adds Claude accounts only.
 
 GOING BACK TO AN OLDER VERSION
-0.19.0 keeps the gateway's pool order and connected tools in proxy-pool.json
-beside the account list, so 0.18.2 still opens the account list as it is;
-disconnect the tools first, since 0.18.2 cannot. Relay 0.17 opens it
+From 0.19.0 Relay keeps the gateway's pool order and connected tools in
+proxy-pool.json beside the account list, so 0.18.2 still opens the account
+list as it is; disconnect the tools first, since 0.18.2 cannot. Relay 0.17 opens it
 read-only. Relay 0.18.0 and 0.18.1 cannot open it once an Antigravity account
 was added.
 
