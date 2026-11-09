@@ -14,7 +14,9 @@ const wrap = (child: ReturnType<typeof createElement>) =>
 test("an account detail starts blurred, with a hidden-text label and the text kept for search", () => {
   const html = renderToStaticMarkup(wrap(createElement(Private, null, "a@example.com")));
   assert.match(html, /data-private="hidden"/);
-  assert.match(html, /blur-\[5px\]/);
+  assert.match(html, /blur-\[4px\]/);
+  // Faded inside its own box: a row that clips overflow never cuts the blur into a hard edge.
+  assert.match(html, /mask-image:linear-gradient\(90deg, transparent/);
   assert.match(html, /select-none/);
   assert.match(html, /Gizli bilgi, göstermek için tıkla/);
   assert.match(html, /aria-hidden="true">a@example\.com</);
