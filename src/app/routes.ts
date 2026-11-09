@@ -83,3 +83,14 @@ export type PageIntent = (typeof PAGE_INTENTS)[number];
 /** `#/hesaplar?ekle`: the page and, when given, the intent its page acts on. */
 export const intentHash = (page: Destination, intent?: PageIntent) =>
   intent ? `${routeHash(page)}?${intent}` : routeHash(page);
+/** The providers the add dialog can open on directly. */
+export const ADD_PROVIDERS = ["claude", "codex", "antigravity"] as const;
+export type AddProvider = (typeof ADD_PROVIDERS)[number];
+/** `#/hesaplar?ekle=codex`: the add dialog, opened on that provider's own way in. */
+export const addAccountHash = (provider?: AddProvider) =>
+  provider ? `${intentHash("hesaplar", "ekle")}=${provider}` : intentHash("hesaplar", "ekle");
+/** The intent and its value: `ekle=codex` → `["ekle", "codex"]`. */
+export function parseIntent(query: string): [string, AddProvider | undefined] {
+  const [intent, value] = query.split("=");
+  return [intent, (ADD_PROVIDERS as readonly string[]).includes(value) ? (value as AddProvider) : undefined];
+}

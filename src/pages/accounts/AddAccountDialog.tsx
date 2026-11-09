@@ -45,6 +45,7 @@ import {
   type ImportOutcome,
 } from "./AddAccountProviders";
 import { ProviderBadge } from "@/components/ProviderBadge";
+import type { AddProvider } from "@/app/routes";
 import {
   isProvisionalName,
   provisionalName,
@@ -56,9 +57,12 @@ type Step = 1 | 2 | 3;
 export function AddAccountDialog({
   open,
   onOpenChange,
+  provider,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Open on this provider's own way in (e.g. "Add a Codex account first" on the gateway). */
+  provider?: AddProvider;
 }) {
   const { t } = useI18n();
   return (
@@ -68,7 +72,7 @@ export function AddAccountDialog({
           <DialogTitle>{t("Hesap ekle", "Add account")}</DialogTitle>
         </DialogHeader>
         {/* Radix unmounts the content when closed, so each opening starts at the first provider. */}
-        <AddAccountFlow close={() => onOpenChange(false)} />
+        <AddAccountFlow close={() => onOpenChange(false)} start={provider} />
       </DialogContent>
     </Dialog>
   );
@@ -84,13 +88,24 @@ type View = "home" | "claude" | "codex" | "antigravity";
  * Google Antigravity. A Claude account that still waits for the Claude app continues in the
  * steps (`AddAccountSteps`).
  */
-export function AddAccountFlow({ close }: { close: () => void }) {
+export function AddAccountFlow({ close, start }: { close: () => void; start?: AddProvider }) {
   const relay = useRelay();
   const { t } = useI18n();
   const { accounts, busy, desktop, desktopBusy, pendingDesktop } = relay;
-  // Reopened while a Claude sign-in or its automatic save runs: back to those steps.
-  const [view, setView] = useState<View>(pendingDesktop || desktop?.autoCapture ? "claude" : "home");
-  const [continueId, setContinueId] = useState<string>();
+  // A Claude account this dialog left half-made: a profile still waiting for its Claude app
+  // sign-in. Only that one is picked up again; a sign-in or save running for an account that
+  // already has its Claude app sign-in is not this dialog's business.
+  const waiting = [pendingDesktop?.id, desktop?.autoCapture?.accountId].find(
+    (id) => !!id && accounts.some((a) => a.id === id && !a.desktop),
+  );
+  // Asked for a provider: its own way in, whatever else waits. Claude starts at the list of
+  // what was found, where its import and a new sign-in both sit.
+  const [view, setView] = useState<View>(
+    start === "codex" || start === "antigravity" ? start : waiting && !start ? "claude" : "home",
+  );
+  const [continueId, setContinueId] = useState<string | undefined>(
+    start === "codex" || start === "antigravity" ? undefined : waiting,
+  );
   const [outcomes, setOutcomes] = useState<ImportOutcome[]>();
   const [single, setSingle] = useState<{ result: OneClickCascadeResult; provider: AccountProvider }>();
   const detected = useDetectedProviders();
@@ -119,7 +134,7 @@ export function AddAccountFlow({ close }: { close: () => void }) {
       setView("claude");
     }
   };
-  const back = !busy && !pendingDesktop && (
+  const back = !busy && (
     <Button type="button" variant="ghost" size="sm" className="w-fit" onClick={home}>
       <ArrowLeft />
       {t("Geri", "Back")}
@@ -132,7 +147,7 @@ export function AddAccountFlow({ close }: { close: () => void }) {
   if (view === "claude")
     return (
       <div className="grid gap-3">
-        {!continueId && back}
+        {back}
         {outcomes?.some((o) => "result" in o && o.provider !== "claude") && (
           <p role="status" className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
             <Check aria-hidden="true" className="size-4 text-ok" />

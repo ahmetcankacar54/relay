@@ -51,3 +51,13 @@ test("command-number shortcuts open pages in sidebar order and command-comma ope
   assert.equal(shortcutPage(key("1", false)), undefined);
   assert.equal(shortcutPage({ key: "2", metaKey: false, ctrlKey: true }), "hesaplar");
 });
+
+test("the add intent can name a provider; anything else is ignored", async () => {
+  const { addAccountHash, parseIntent } = await import("../src/app/routes");
+  assert.equal(addAccountHash(), "#/hesaplar?ekle");
+  assert.equal(addAccountHash("codex"), "#/hesaplar?ekle=codex");
+  assert.deepEqual(parseIntent("ekle=codex"), ["ekle", "codex"]);
+  assert.deepEqual(parseIntent("ekle"), ["ekle", undefined]);
+  assert.deepEqual(parseIntent("ekle=gemini"), ["ekle", undefined]);
+  assert.equal(parseRoute(addAccountHash("antigravity")), "hesaplar");
+});

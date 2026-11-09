@@ -14,7 +14,7 @@ import {
   Unlink,
 } from "lucide-react";
 import { PageFrame } from "@/app/PageFrame";
-import { intentHash } from "@/app/routes";
+import { addAccountHash, intentHash } from "@/app/routes";
 import { Disclosure } from "@/components/Disclosure";
 import { ProviderBadge } from "@/components/ProviderBadge";
 import { Note, OptionSelect, SectionHeading, SettingRow } from "@/components/SettingRow";
@@ -742,7 +742,7 @@ function ToolsTab({
                 {!client.bound && usable === 0 ? (
                   // Bound with no account, every request would fail: the account comes first.
                   <Button asChild size="sm" variant="outline">
-                    <a href={intentHash("hesaplar", "ekle")} data-slot="add-first">
+                    <a href={addAccountHash(CLIENT_PROVIDER[client.id])} data-slot="add-first">
                       <Plus />
                       {t(`Önce ${provider} hesabı ekle`, `Add a ${provider} account first`)}
                     </a>
@@ -1065,7 +1065,9 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             action={
               <span className="flex flex-wrap gap-2">
                 <Button asChild size="sm">
-                  <a href={intentHash("hesaplar", "ekle")}>{t("Hesap ekle", "Add account")}</a>
+                  <a href={addAccountHash(CLIENT_PROVIDER[client.id])}>
+                    {t(`${PROVIDER_NAMES[CLIENT_PROVIDER[client.id]]} hesabı ekle`, `Add a ${PROVIDER_NAMES[CLIENT_PROVIDER[client.id]]} account`)}
+                  </a>
                 </Button>
                 <Button size="sm" variant="outline" disabled={disabled} onClick={() => unbind(client.id)}>
                   {t("Ayır", "Disconnect")}

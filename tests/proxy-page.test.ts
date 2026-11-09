@@ -176,6 +176,8 @@ test("a tool whose provider has no usable account asks for one first, and a boun
   const html = tab(relayFor(status({ accounts: claudeOnly, clients: unbound })), "araclar");
   assert.match(html, /data-client="claude-code"[\s\S]*?>Bağla</);
   assert.match(html, /data-client="codex"[\s\S]*?Havuzda Codex hesabı yok[\s\S]*?data-slot="add-first"[\s\S]*?Önce Codex hesabı ekle/);
+  // The link names Codex, so the add dialog opens on Codex and not on a Claude sign-in.
+  assert.match(html, /href="#\/hesaplar\?ekle=codex" data-slot="add-first"/);
   // Out of the pool or signed out counts as no account too.
   const outOfPool = claudeOnly.map((a) => ({ ...a, inPool: false }));
   assert.match(tab(relayFor(status({ accounts: outOfPool, clients: unbound })), "araclar"), /Önce Claude hesabı ekle/);

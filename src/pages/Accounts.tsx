@@ -14,7 +14,7 @@ import {
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { PageFrame } from "@/app/PageFrame";
-import { routeHash, routeQuery } from "@/app/routes";
+import { parseIntent, routeHash, routeQuery, type AddProvider } from "@/app/routes";
 import { AccountsTable } from "./accounts/AccountsTable";
 import {
   AccountDetail,
@@ -111,6 +111,7 @@ export function Accounts() {
   const [filter, setFilter] = useState<AccountFilter>("all");
   const [provider, setProvider] = useState<ProviderFilter>("all");
   const [adding, setAdding] = useState(false);
+  const [addProvider, setAddProvider] = useState<AddProvider>();
   const [linking, setLinking] = useState(false);
   const [removing, setRemoving] = useState<string>();
   const [editing, setEditing] = useState<string>();
@@ -153,11 +154,14 @@ export function Accounts() {
   // `#/hesaplar?ekle` and `#/hesaplar?eslestir` (Overview onboarding) open a dialog.
   useEffect(() => {
     const read = () => {
-      const intent = routeQuery(window.location.hash);
+      const [intent, provider] = parseIntent(routeQuery(window.location.hash));
       if (!intent) return;
       if (intentAllowed(intent, guardsRef.current)) {
-        if (intent === "ekle") setAdding(true);
-        else setLinking(true);
+        if (intent === "ekle") {
+          // `?ekle=codex` opens the dialog on Codex, never on another provider's sign-in.
+          setAddProvider(provider);
+          setAdding(true);
+        } else setLinking(true);
       }
       history.replaceState(null, "", routeHash("hesaplar"));
     };
@@ -184,8 +188,10 @@ export function Accounts() {
     <>
       <AddAccountDialog
         open={adding}
+        provider={addProvider}
         onOpenChange={(open) => {
           setAdding(open);
+          if (!open) setAddProvider(undefined);
           // The dialog owns the new profile’s setup; don’t reopen it on the account page.
           if (!open) setSetupId(undefined);
         }}

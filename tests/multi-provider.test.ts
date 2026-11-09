@@ -379,3 +379,37 @@ test("Antigravity onboarding starts Google OAuth without asking for an API key",
     dom.uninstall();
   }
 });
+
+test("asked for Codex, the add dialog opens on Codex even while a Claude sign-in waits", () => {
+  // A half-made Claude profile is waiting for the Claude app: without a provider it is picked up again.
+  const halfMade: Account = { ...base, id: "new", name: "Kişisel · Claude" };
+  const waitingDesktop = {
+    available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0,
+    autoCapture: { accountId: "new", status: "waiting" },
+  } as unknown as Relay["desktop"];
+  const relay = relayFor({ desktop: waitingDesktop }, [claude, halfMade]);
+  const codexFirst = render(relay, createElement(AddAccountFlow, { close() {}, start: "codex" }));
+  assert.match(codexFirst, /OpenAI API anahtarı/);
+  assert.match(codexFirst, /data-provider="codex"/);
+  assert.doesNotMatch(codexFirst, /Claude uygulamasında giriş ekranını aç|Claude Code girişi/);
+  // Antigravity likewise goes to its own sign-in.
+  assert.match(render(relay, createElement(AddAccountFlow, { close() {}, start: "antigravity" })), /Google ile bağlan/);
+  // Asked for Claude: the list of what was found and the ways in, not a sign-in at once.
+  assert.match(render(relay, createElement(AddAccountFlow, { close() {}, start: "claude" })), /Başka bir Claude hesabıyla giriş yap/);
+  // With no provider the half-made profile continues, and Back leads out of it.
+  const resumed = render(relay, createElement(AddAccountFlow, { close() {} }));
+  assert.match(resumed, /2 · Claude Code girişi/);
+  assert.doesNotMatch(resumed, /Nasıl eklemek istersin|Başka bir hesap ekle/);
+  assert.match(resumed, />Geri</);
+});
+
+test("a sign-in waiting for an account that already has its Claude app sign-in does not take over the dialog", () => {
+  const busyDesktop = {
+    available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0,
+    autoCapture: { accountId: "cl", status: "waiting" },
+  } as unknown as Relay["desktop"];
+  const html = render(relayFor({ desktop: busyDesktop }, [claude]), createElement(AddAccountFlow, { close() {} }));
+  assert.match(html, /Nasıl eklemek istersin\?/);
+  assert.match(html, /data-way="codex"/);
+  assert.doesNotMatch(html, /Yeni hesapla giriş yap|Claude uygulamasında giriş ekranını aç/);
+});
