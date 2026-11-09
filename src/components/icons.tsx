@@ -93,6 +93,26 @@ export function PinsIcon(props: IconProps) {
   );
 }
 
+/** Switching: two arrows passing each other. */
+export function SwitchingIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4.75 8.25h13.5M15 4.75l3.25 3.5L15 11.75" />
+      <path d="M19.25 15.75H5.75M9 12.25l-3.25 3.5L9 19.25" />
+    </Icon>
+  );
+}
+
+/** Planning: a calendar page. */
+export function PlanningIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.75" y="5.25" width="16.5" height="15" rx="3.5" />
+      <path d="M3.75 10.25h16.5M8.25 3.5v3.5M15.75 3.5v3.5M8 14.25h2M14 14.25h2M8 17.25h2" />
+    </Icon>
+  );
+}
+
 /** Settings: two sliders. */
 export function SettingsIcon(props: IconProps) {
   return (

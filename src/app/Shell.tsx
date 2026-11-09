@@ -6,7 +6,7 @@ import { api } from "@/data/useRelay";
 import { sidebarStatus } from "@/data/selectors";
 import { linkedSwitchAccount } from "../../shared/relay-link";
 import { Usage } from "@/pages/Usage";
-import { Settings } from "@/pages/Settings";
+import { PlanningPage, Settings, SwitchingPage } from "@/pages/Settings";
 import { Accounts } from "@/pages/Accounts";
 import { ProxyPage } from "@/pages/Proxy";
 import { Overview } from "@/pages/Overview";
@@ -150,6 +150,8 @@ export function Shell() {
               {page === "genel" && <Overview go={go} />}
               {page === "hesaplar" && <Accounts />}
               {page === "proxy" && <ProxyPage />}
+              {page === "gecis" && <SwitchingPage />}
+              {page === "planlama" && <PlanningPage />}
               {page === "kullanim" && <Usage section="limits" />}
               {page === "tokenlar" && <Usage section="tokens" />}
               {page === "rozetler" && <Usage section="lost" />}

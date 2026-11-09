@@ -212,14 +212,12 @@ function Status({ ok, children }: { ok: boolean; children: string }) {
 /** Settings' tab names, in the tabs' order. */
 export function settingsTabTitle(tab: SettingsTab, t: ReturnType<typeof useI18n>["t"]) {
   return {
-    gecis: t("Geçiş", "Switching"),
-    planlama: t("Planlama", "Planning"),
     genel: t("Genel", "General"),
     gelismis: t("Gelişmiş", "Advanced"),
   }[tab];
 }
 
-/** The tab the hash names (`#/ayarlar/<tab>`, or a former page such as `#/gecis`), kept in step. */
+/** The tab the hash names (`#/ayarlar/<tab>`), kept in step. */
 function useSettingsTab(initial?: SettingsTab): [SettingsTab, (tab: SettingsTab) => void] {
   const [tab, setTab] = useState<SettingsTab>(
     () => initial ?? (typeof window === "undefined" ? SETTINGS_TABS[0] : settingsTab(window.location.hash)),
@@ -237,10 +235,33 @@ function useSettingsTab(initial?: SettingsTab): [SettingsTab, (tab: SettingsTab)
   return [tab, choose];
 }
 
+/** Switching (when, what switches along, near the limit) as its own page in the sidebar. */
+export function SwitchingPage() {
+  const { t } = useI18n();
+  return (
+    <PageFrame automationInline title={t("Geçiş", "Switching")}>
+      <div className="grid gap-4 px-5 pb-6">
+        <SwitchingTab />
+      </div>
+    </PageFrame>
+  );
+}
+
+/** Planning as its own page in the sidebar. */
+export function PlanningPage() {
+  const { t } = useI18n();
+  return (
+    <PageFrame title={t("Planlama", "Planning")}>
+      <div className="grid gap-4 px-5 pb-6">
+        <PlanningTab />
+      </div>
+    </PageFrame>
+  );
+}
+
 /**
- * Every setting in one place, in four tabs: Switching (when, what switches along, near the
- * limit), Planning, General, and Advanced for everything technical or experimental. Each setting
- * appears once; actions live on the Overview, the account page and the panel.
+ * The remaining settings in two tabs: General, and Advanced for everything technical or
+ * experimental. Switching and Planning are pages of their own.
  */
 export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
   const relay = useRelay();
@@ -263,12 +284,6 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="gecis">
-          <SwitchingTab />
-        </TabsContent>
-        <TabsContent value="planlama">
-          <PlanningTab />
-        </TabsContent>
         <TabsContent value="genel">
           <div className="grid max-w-2xl gap-4">
             <SettingGroup id="settings-general" title={t("Genel", "General")}>

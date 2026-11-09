@@ -4,12 +4,18 @@ import { act, createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { moveItem, dropIndex } from "../src/pages/settings/MenuBarItems";
-import { PrivacyNotes, Settings } from "../src/pages/Settings";
+import { PlanningPage, PrivacyNotes, Settings, SwitchingPage } from "../src/pages/Settings";
 import { SETTINGS_TABS } from "../src/app/routes";
 
 /** Every Settings tab, one after another: the page shows one at a time. */
 const AllSettings = () =>
-  createElement(Fragment, null, ...SETTINGS_TABS.map((tab) => createElement(Settings, { key: tab, tab })));
+  createElement(
+    Fragment,
+    null,
+    ...SETTINGS_TABS.map((tab) => createElement(Settings, { key: tab, tab })),
+    createElement(SwitchingPage, { key: "gecis" }),
+    createElement(PlanningPage, { key: "planlama" }),
+  );
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type RelaySettings, type Snapshot } from "../shared/types";
@@ -74,7 +80,7 @@ test("the system group offers the diagnostics files, and say which ones to send"
   assert.match(preload, /showDiagnostics: \(\) => ipcRenderer\.invoke\("relay:show-diagnostics"\)/);
 });
 
-test("Settings has four tabs: switching, planning, general, advanced; the gateway has its own page", () => {
+test("Settings has two tabs, general and advanced; switching, planning and the gateway are pages", () => {
   const html = renderToStaticMarkup(
     createElement(
       I18nContext.Provider,
@@ -85,7 +91,7 @@ test("Settings has four tabs: switching, planning, general, advanced; the gatewa
   const tabs = /<div[^>]*role="tablist"[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1] ?? "";
   assert.deepEqual(
     [...tabs.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]),
-    ["Geçiş", "Planlama", "Genel", "Gelişmiş"],
+    ["Genel", "Gelişmiş"],
   );
   for (const re of [
     /Tema/, /Sistem/, /Açık/, /Koyu/, /Arayüz dili/, /Türkçe/, /English/,
@@ -279,7 +285,7 @@ test("Settings → Switching holds the warnings and their threshold; General the
         createElement(
           I18nContext.Provider,
           { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(Settings, { tab: "gecis" })),
+          createElement(RelayContext.Provider, { value: relay }, createElement(SwitchingPage)),
         ),
       ),
     );

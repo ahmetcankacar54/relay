@@ -1,7 +1,4 @@
-/**
- * Every page id another window may name. "gecis" and "planlama" were pages of their own and now
- * open their tabs in Settings, so the menu bar panel, links and old hashes keep working.
- */
+/** Every page id another window may name. */
 export const PAGES = [
   "genel",
   "hesaplar",
@@ -18,6 +15,8 @@ export type PageId = (typeof PAGES)[number];
 export const NAV_PAGES = [
   "genel",
   "hesaplar",
+  "gecis",
+  "planlama",
   "kullanim",
   "tokenlar",
   "rozetler",
@@ -26,46 +25,43 @@ export const NAV_PAGES = [
 ] as const;
 export type NavPage = (typeof NAV_PAGES)[number];
 /**
- * Settings' tabs, in order: switching (when, what switches along, near the limit), planning,
- * general, and one Advanced for everything technical or experimental. The Proxy Gateway has its own page.
+ * Settings' tabs, in order: general, and one Advanced for everything technical or experimental.
+ * Switching, Planning and the Proxy Gateway have their own pages.
  */
-export const SETTINGS_TABS = ["gecis", "planlama", "genel", "gelismis"] as const;
+export const SETTINGS_TABS = ["genel", "gelismis"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
-/** Former tabs, so links from older builds, notices and the panel still land on the right one. */
-const FORMER_TAB: Record<string, SettingsTab> = {
+/** Former Settings tabs that are pages now, so links from older builds and notices still land. */
+const FORMER_TAB_PAGE: Record<string, NavPage> = {
+  gecis: "gecis",
   otomasyon: "gecis",
   tasinanlar: "gecis",
   bildirimler: "gecis",
-  gorunum: "genel",
-};
-/** A page, or one of Settings' tabs: `ayarlar/gecis`. */
-export type Destination = PageId | `ayarlar/${SettingsTab}`;
-/** The tab each former page opens. */
-const PAGE_TAB: Partial<Record<PageId, SettingsTab>> = {
-  gecis: "gecis",
   planlama: "planlama",
 };
+/** Former Settings tabs folded into another tab. */
+const FORMER_TAB: Record<string, SettingsTab> = { gorunum: "genel" };
+/** A page, or one of Settings' tabs: `ayarlar/gelismis`. */
+export type Destination = PageId | `ayarlar/${SettingsTab}`;
 
 const parts = (hash: string) => hash.replace(/^#\/?/, "").split("?")[0].split("/");
 
-/** The sidebar page a hash shows; the former pages show Settings. */
+/** The sidebar page a hash shows; a former Settings tab shows its own page. */
 export function parseRoute(hash: string): NavPage {
   const [id, tab] = parts(hash);
-  if (id === "gecis" || id === "planlama") return "ayarlar";
   // The gateway was a Settings tab: `#/ayarlar/proxy` from older builds and notices lands on its page.
   if (id === "ayarlar" && tab === "proxy") return "proxy";
+  if (id === "ayarlar" && FORMER_TAB_PAGE[tab]) return FORMER_TAB_PAGE[tab];
   return (NAV_PAGES as readonly string[]).includes(id) ? (id as NavPage) : "genel";
 }
-/** The Settings tab a hash opens: `#/ayarlar/<tab>`, a former page's or tab's new tab, else the first. */
+/** The Settings tab a hash opens: `#/ayarlar/<tab>`, a former tab's new tab, else the first. */
 export function settingsTab(hash: string): SettingsTab {
-  const [id, tab] = parts(hash);
-  if (PAGE_TAB[id as PageId]) return PAGE_TAB[id as PageId]!;
+  const tab = parts(hash)[1];
   if (FORMER_TAB[tab]) return FORMER_TAB[tab];
   return (SETTINGS_TABS as readonly string[]).includes(tab) ? (tab as SettingsTab) : SETTINGS_TABS[0];
 }
 export const routeHash = (page: Destination) => `#/${page}`;
 /**
- * ⌘1–⌘6 open the sidebar's pages in order; ⌘, opens settings. None while a dialog or sheet is
+ * ⌘1–⌘8 open the sidebar's pages in order; ⌘, opens settings. None while a dialog or sheet is
  * open, so a confirmation can’t be navigated away from.
  */
 export function shortcutPage(
