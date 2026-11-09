@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Private } from "@/components/Private";
 import { ArrowLeft, Check, ChevronRight, Globe2, LoaderCircle, Monitor, Terminal } from "lucide-react";
 import type { Account, AccountProvider, OneClickCascadeResult } from "../../../shared/types";
 import { Button } from "@/components/ui/button";
@@ -280,7 +281,7 @@ function ImportDone({
               {"result" in outcome ? (
                 <span className="min-w-0 truncate">
                   {outcome.result.account.name}
-                  {outcome.result.account.auth?.email ? ` · ${outcome.result.account.auth.email}` : ""}
+                  {outcome.result.account.auth?.email ? <> · <Private>{outcome.result.account.auth.email}</Private></> : ""}
                 </span>
               ) : (
                 <span role="alert" className="min-w-0 text-crit">

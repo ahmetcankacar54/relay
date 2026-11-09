@@ -2494,6 +2494,9 @@ function bindIPC() {
       return proxyStatus();
     }),
   );
+  handle("copy-text", (text) => {
+    clipboard.writeText(z.string().max(16_384).parse(text));
+  });
   handle("proxy-bind-client", (input) =>
     serializeProxy(async () => {
       const clientId = z.enum(["claude-code", "codex"]).parse(input);

@@ -1,4 +1,5 @@
 import { Fragment, type MouseEvent } from "react";
+import { Private } from "@/components/Private";
 import {
   AppWindow,
   ArrowLeftRight,
@@ -613,9 +614,11 @@ export function AccountsTable({
                       )}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      {a.desktop?.email ??
-                        a.auth?.email ??
-                        t("Henüz giriş yok", "No sign-in yet")}
+                      {a.desktop?.email ?? a.auth?.email ? (
+                        <Private>{a.desktop?.email ?? a.auth?.email}</Private>
+                      ) : (
+                        t("Henüz giriş yok", "No sign-in yet")
+                      )}
                     </div>
                   </div>
                 </div>

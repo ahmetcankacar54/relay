@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Private } from "@/components/Private";
 import { ArrowUpRight, Globe2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -250,7 +251,7 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
       </div>
       {flow.status === "connected" && flowAccount?.auth?.email && (
         <p className="text-sm font-medium">
-          {flowAccount.auth.email}
+          <Private>{flowAccount.auth.email}</Private>
           {flowAccount.auth.subscription
             ? ` · ${flowAccount.auth.subscription}`
             : ""}

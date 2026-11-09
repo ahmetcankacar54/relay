@@ -13,7 +13,7 @@ export function PageHeader({
   badge,
 }: {
   title: string;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
   /** A way back to the page this one was opened from, before the title. */
   back?: ReactNode;

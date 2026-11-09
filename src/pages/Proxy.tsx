@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Private } from "@/components/Private";
 import {
   AlertTriangle,
   ArrowDown,
@@ -119,8 +120,10 @@ function useTab(): [ProxyTab, (tab: ProxyTab) => void] {
   return [tab, choose];
 }
 
-/** Copy a value with a short "Copied" acknowledgement. */
+/** Copy a value with a short "Copied" acknowledgement; main writes the clipboard. */
 function useCopy() {
+  const { api, setNotice } = useRelay();
+  const { t } = useI18n();
   const [copied, setCopied] = useState<string>();
   useEffect(() => {
     if (!copied) return;
@@ -128,9 +131,10 @@ function useCopy() {
     return () => clearTimeout(timer);
   }, [copied]);
   const copy = (id: string, text: string) =>
-    void navigator.clipboard?.writeText(text).then(
+    void api.copyText(text).then(
       () => setCopied(id),
-      () => {},
+      // Said, never swallowed: a Copy that does nothing looks like a broken button.
+      () => setNotice(t("Panoya kopyalanamadı.", "Could not copy to the clipboard.")),
     );
   return { copied, copy };
 }
@@ -469,8 +473,9 @@ function PoolCard({
                     <AccountState account={account} />
                   </span>
                   <span className="truncate text-2xs text-muted-foreground tabular-nums">
+                    {account.email && <Private>{account.email}</Private>}
+                    {account.email && (account.requests || cache) ? " · " : ""}
                     {[
-                      account.email,
                       account.requests
                         ? t(`${account.requests} istek`, `${account.requests} requests`)
                         : undefined,

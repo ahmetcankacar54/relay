@@ -19,7 +19,7 @@ export function PageFrame({
   /** The account this page is about: its sign-in warning stays on the page, not in a banner. */
   account?: string;
   title: string;
-  description?: string;
+  description?: ReactNode;
   actions?: ReactNode;
   /** The page shows the automation status and its offer itself, so the banner would repeat them. */
   automationInline?: boolean;

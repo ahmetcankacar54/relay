@@ -1,4 +1,5 @@
 import type { Account, RelaySettings } from "../../shared/types";
+import { Private } from "@/components/Private";
 import { historySources } from "../../shared/history-policy";
 import { desktopCliMismatch } from "../../shared/account-state";
 import { Button } from "@/components/ui/button";
@@ -86,9 +87,11 @@ export function AccountSelection({
                   {a.name}
                 </strong>
                 <small className="block truncate text-xs text-muted-foreground">
-                  {a.desktop?.email ??
-                    (!desktopCliMismatch(a) ? a.auth?.email : undefined) ??
-                    t("E-posta henüz bağlanmadı", "Email not connected yet")}
+                  {(a.desktop?.email ?? (!desktopCliMismatch(a) ? a.auth?.email : undefined)) ? (
+                    <Private>{a.desktop?.email ?? a.auth?.email}</Private>
+                  ) : (
+                    t("E-posta henüz bağlanmadı", "Email not connected yet")
+                  )}
                 </small>
               </span>
               <Badge variant="outline" className="text-muted-foreground">

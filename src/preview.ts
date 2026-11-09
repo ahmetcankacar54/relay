@@ -720,6 +720,7 @@ export const previewApi: RelayAPI = {
     previewProxy.bound[id] = true;
     return previewProxyStatus();
   },
+  copyText: async (text) => navigator.clipboard.writeText(text),
   proxyUnbindClient: async (id) => {
     previewProxy.bound[id] = false;
     return previewProxyStatus();

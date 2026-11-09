@@ -78,6 +78,7 @@ const api: RelayAPI = {
   proxyRegenerateKey: () => ipcRenderer.invoke("relay:proxy-regenerate-key"),
   proxyBindClient: (id) => ipcRenderer.invoke("relay:proxy-bind-client", id),
   proxyUnbindClient: (id) => ipcRenderer.invoke("relay:proxy-unbind-client", id),
+  copyText: (text) => ipcRenderer.invoke("relay:copy-text", text),
   detectProviders: () => ipcRenderer.invoke("relay:detect-providers"),
   oneClickConnect: (input) => ipcRenderer.invoke("relay:one-click-connect", input),
   startAntigravityOAuth: (input) => ipcRenderer.invoke("relay:antigravity-oauth-start", input),

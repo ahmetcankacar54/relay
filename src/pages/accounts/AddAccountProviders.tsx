@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Private } from "@/components/Private";
 import { Check, LoaderCircle, Zap } from "lucide-react";
 import type {
   AccountKind,
@@ -292,7 +293,9 @@ export function DetectedImport({
                 </span>
                 <ProviderBadge provider={session.provider} />
                 <span className="grid min-w-0 flex-1">
-                  <span className="truncate text-sm">{session.email ?? session.name ?? session.source}</span>
+                  <span className="truncate text-sm">
+                    {session.email || session.name ? <Private>{session.email ?? session.name}</Private> : session.source}
+                  </span>
                   <span className="truncate text-2xs text-muted-foreground">
                     {[t(...(where[session.provider] ?? [session.source ?? "", session.source ?? ""])), session.plan, session.orgName]
                       .filter(Boolean)
@@ -376,7 +379,7 @@ export function ProviderForm({
         <div data-slot="detected-session" className="grid gap-0.5 rounded-lg border border-ok/40 bg-ok/5 px-3 py-2 text-sm">
           <span>
             {t("Yerel oturum algılandı", "Local session detected")}:{" "}
-            <b className="font-semibold">{session?.email ?? session?.source}</b>
+            <b className="font-semibold">{session?.email ? <Private>{session.email}</Private> : session?.source}</b>
           </span>
           <span className="text-xs text-muted-foreground">
             {[session?.plan, session?.source].filter(Boolean).join(" · ")}
@@ -599,7 +602,7 @@ export function ConnectionDone({
       </h3>
       <p className="text-sm text-muted-foreground">
         {result.account.name}
-        {result.account.auth?.email ? ` · ${result.account.auth.email}` : ""}
+        {result.account.auth?.email ? <> · <Private>{result.account.auth.email}</Private></> : ""}
       </p>
       <CascadeResult result={result} />
       {children}

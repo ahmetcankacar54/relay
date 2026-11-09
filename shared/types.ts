@@ -542,6 +542,11 @@ export interface RelayAPI {
   proxyBindClient(id: ProxyClientId): Promise<ProxyStatus>;
   /** Takes the gateway out of the client's settings and restores what was there before. */
   proxyUnbindClient(id: ProxyClientId): Promise<ProxyStatus>;
+  /**
+   * Puts text on the clipboard from main: the window's own clipboard API is refused in Relay's
+   * windows. Write only; nothing is ever read back.
+   */
+  copyText(text: string): Promise<void>;
   /** Discovers local sessions for Claude, OpenAI/Codex, and Google Antigravity for 1-click onboarding. */
   detectProviders(): Promise<DetectedProviderSession[]>;
   /** Connects and cascades a provider account across Desktop, Usage, CLI, and Proxy Gateway in one click. */

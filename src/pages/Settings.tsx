@@ -3,6 +3,7 @@ import { Check, CircleAlert } from "lucide-react";
 import { PageFrame } from "@/app/PageFrame";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { usePrivacyBlur } from "@/components/Private";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Note,
@@ -268,6 +269,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
   const { api, data, desktop, settings, busy, version, action, active } = relay;
   const { t, language, setLanguage } = useI18n();
   const [tab, setTab] = useSettingsTab(initialTab);
+  const [privacyBlur, setPrivacyBlur] = usePrivacyBlur();
   const disabled = !!busy || !!desktop?.busy;
   const update = (patch: Partial<RelaySettings>) =>
     void action("settings", () => api.updateSettings(patch));
@@ -330,6 +332,16 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
                     {t("Koyu", "Dark")}
                   </ToggleGroupItem>
                 </ToggleGroup>
+              </SettingRow>
+              <SettingRow
+                label={t("Hesap bilgilerini bulanıklaştır", "Blur account details")}
+                htmlFor="privacy-blur"
+                description={t(
+                  "E-postalar ve kuruluşlar tıklanana kadar bulanık görünür; ekran paylaşırken işe yarar.",
+                  "E-mails and organizations stay blurred until clicked; useful while sharing your screen.",
+                )}
+              >
+                <Switch id="privacy-blur" checked={privacyBlur} onCheckedChange={setPrivacyBlur} />
               </SettingRow>
               <RefreshIntervalRow />
             </SettingGroup>

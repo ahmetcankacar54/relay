@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { Private } from "@/components/Private";
 import { ArrowRight, Check, LoaderCircle, Pause, Play, ShieldCheck } from "lucide-react";
 import { RefreshIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
@@ -505,8 +506,7 @@ export function ContinuationSettings({
             {source?.name ?? t("Henüz doğrulanmadı", "Not verified yet")}
           </strong>
           <small className={caption}>
-            {source?.desktop?.email ??
-              t(
+            {source?.desktop?.email ? <Private>{source.desktop.email}</Private> : t(
                 "Claude uygulaması girişi gerekli",
                 "Claude app sign-in required",
               )}
@@ -531,7 +531,7 @@ export function ContinuationSettings({
           </strong>
           <small className={caption}>
             {selectedTarget && (operationStatus || legacyWatch)
-              ? selectedTarget.desktop?.email
+              ? selectedTarget.desktop?.email && <Private>{selectedTarget.desktop.email}</Private>
               : t(
                   `${targetCount} bağlı hesap · geçiş anında değerlendirilir`,
                   `${targetCount} connected ${targetCount === 1 ? "account" : "accounts"} · checked at handoff`,

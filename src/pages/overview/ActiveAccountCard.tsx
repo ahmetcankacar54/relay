@@ -1,4 +1,5 @@
 import { TriangleAlert } from "lucide-react";
+import { Private } from "@/components/Private";
 import { PlusIcon } from "@/components/icons";
 import { freshUsage } from "../../../shared/usage";
 import { Badge } from "@/components/ui/badge";
@@ -77,7 +78,11 @@ export function ActiveAccountCard({
             {running ? t("Çalışıyor", "Running") : t("Kapalı", "Closed")}
           </span>
         </div>
-        {identity && <div className="truncate text-xs text-muted-foreground">{identity}</div>}
+        {identity && (
+          <div className="truncate text-xs text-muted-foreground">
+            <Private>{identity}</Private>
+          </div>
+        )}
       </div>
     </div>
   );

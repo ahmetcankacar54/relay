@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Private } from "@/components/Private";
 import { AppWindow, Check, CircleAlert, Link2, Globe2, KeyRound, LoaderCircle, Monitor, MoreHorizontal, Network, SquareTerminal } from "lucide-react";
 import { BackIcon, RefreshIcon } from "@/components/icons";
 import type { Account, ExtensionStatus, RelaySettings } from "../../../shared/types";
@@ -110,7 +111,11 @@ export function AccountDetail({
     <PageFrame
       title={a.name}
       account={a.id}
-      description={[email, a.auth?.orgName].filter(Boolean).join(" · ") || undefined}
+      description={
+        email || a.auth?.orgName ? (
+          <Private>{[email, a.auth?.orgName].filter(Boolean).join(" · ")}</Private>
+        ) : undefined
+      }
       cliFlowInline={relay.flow?.accountId === a.id}
       leading={
         <span
@@ -846,10 +851,10 @@ export function AccountDetailBody({
           <Card className={cardClass}>
             <CardTitle title={t("Hesap", "Account")} />
             <dl className="-mx-1 grid text-sm">
-              {[
+              {([
                 [t("Sağlayıcı", "Provider"), providerLabel(a.provider)],
-                [t("E-posta", "Email"), a.desktop?.email ?? a.auth?.email ?? "—"],
-                [t("Kuruluş", "Organization"), a.auth?.orgName ?? "—"],
+                [t("E-posta", "Email"), (a.desktop?.email ?? a.auth?.email) ? <Private>{a.desktop?.email ?? a.auth?.email}</Private> : "—"],
+                [t("Kuruluş", "Organization"), a.auth?.orgName ? <Private>{a.auth.orgName}</Private> : "—"],
                 [
                   t("Tür · grup", "Type · group"),
                   (a.kind === "personal" ? t("Kişisel", "Personal") : t("Şirket", "Work")) +
@@ -858,10 +863,10 @@ export function AccountDetailBody({
                 ...(a.auth?.subscription
                   ? [[t("Abonelik", "Subscription"), a.auth.subscription.replace(/^\w/, (c) => c.toUpperCase())]]
                   : []),
-              ].map(([label, value]) => (
+              ] as [string, ReactNode][]).map(([label, value]) => (
                 <div key={label} className="flex min-w-0 items-baseline justify-between gap-3 border-t px-1 py-2 first:border-0">
                   <dt className="shrink-0 text-muted-foreground">{label}</dt>
-                  <dd className="min-w-0 truncate text-right" title={value}>
+                  <dd className="min-w-0 truncate text-right" title={typeof value === "string" ? value : undefined}>
                     {value}
                   </dd>
                 </div>
