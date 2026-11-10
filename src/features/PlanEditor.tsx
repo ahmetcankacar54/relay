@@ -34,8 +34,20 @@ export function PlanEditor({
     { value: "team", label: "Team / Enterprise" },
   ];
   const capacityId = `capacity-${account.id}`;
+  // A plan read from the sign-in is not a choice: it is shown, and follows the account.
+  const detected = account.auth?.loggedIn ? account.auth.plan : undefined;
   return (
     <div className="grid min-w-0 gap-1.5">
+      {detected ? (
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="font-medium">
+            {plans.find((p) => p.value === detected)?.label}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {t("Hesaptan okundu", "Read from the account")}
+          </span>
+        </div>
+      ) : (
       <Select
         value={current.plan}
         disabled={disabled}
@@ -60,7 +72,8 @@ export function PlanEditor({
           ))}
         </SelectContent>
       </Select>
-      {(current.plan === "unknown" || current.plan === "team") && (
+      )}
+      {((detected ?? current.plan) === "unknown" || (detected ?? current.plan) === "team") && (
         <div className="flex items-center justify-between gap-2">
           <label
             htmlFor={capacityId}

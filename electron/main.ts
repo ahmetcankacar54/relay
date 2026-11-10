@@ -161,6 +161,7 @@ import {
 } from "./core/provider-discovery";
 import { AntigravityBridge } from "./core/antigravity-bridge";
 import { readCodexCredential } from "./core/provider-credentials";
+import { readAntigravityUsage, readCodexUsage } from "./core/provider-usage";
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
 import {
@@ -892,6 +893,18 @@ else {
           ),
         // Without a Claude Code sign-in, the Claude app's own sign-in reads the limits (macOS).
         process.platform === "darwin" ? desktopUsageSource() : undefined,
+        // Codex through its ChatGPT sign-in, Antigravity through its CLIProxyAPI sidecar.
+        async (account) => {
+          if (account.provider === "codex")
+            return readCodexUsage(await readCodexCredential(service.store.profile(account.id)));
+          if (account.provider === "antigravity") {
+            const bridge = antigravityBridge(account.id);
+            if (!(await bridge.hasCredential()))
+              throw new UsageError("expired", undefined, "antigravity: no saved Google sign-in");
+            return readAntigravityUsage((request) => bridge.googleCall(request), await bridge.projectId());
+          }
+          throw new UsageError("unsupported", undefined, "provider quota endpoint unavailable");
+        },
       );
       // The real file, so spawn can run it too (see unpackedPath).
       const automationHelper = unpackedPath(

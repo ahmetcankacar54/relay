@@ -7,6 +7,7 @@ import type {
 import { Store } from "./store";
 import { UsageError, type UsageCredential } from "./usage-credentials";
 import type { RefreshUsageCredential } from "./usage-refresh";
+import type { ProviderUsageResult } from "./provider-usage";
 
 type Json = Record<string, any>;
 export function parseUsage(
@@ -284,6 +285,11 @@ export class UsageManager {
       usable: (account: Account) => boolean;
       read: (account: Account, allowPrompt: boolean) => Promise<unknown>;
     },
+    /**
+     * A Codex or Antigravity account's limits, read through its own provider's sign-in. Without
+     * it such an account's limits are "unsupported".
+     */
+    private providerUsage?: (account: Account) => Promise<ProviderUsageResult>,
   ) {}
   /** Which sign-in a read of this account goes through; undefined when it has none. */
   private source(account: Account): AccountUsage["source"] {
@@ -455,10 +461,23 @@ export class UsageManager {
       // Before any Claude sign-in is read: a Codex or Antigravity profile has none, and a read
       // that fails on it would report "signed out" and offer a Claude sign-in for it.
       if (account.provider && account.provider !== "claude") {
-        // Neither the OpenAI API nor Gemini API supplies Claude-style five-hour
-        // and seven-day quota windows. An invented 0% usage reading misleads
-        // routing and makes the account look verified.
-        throw new UsageError("unsupported", undefined, "provider quota endpoint unavailable");
+        // An OpenAI API key has no plan limits, and a provider without a reader has none Relay
+        // can see: an invented 0% would mislead routing and make the account look verified.
+        if (!this.providerUsage)
+          throw new UsageError("unsupported", undefined, "provider quota endpoint unavailable");
+        const result = await this.providerUsage(account);
+        if (!current()) return this.view(this.store.account(account.id));
+        const latest = this.store.account(account.id);
+        if (identityKey(latest) !== identityKey(account))
+          throw new UsageError("identity-mismatch");
+        // The plan the provider reports now (Codex: plus, pro, …) replaces the one saved at sign-in.
+        if (result.plan && latest.auth && latest.auth.subscription?.toLowerCase() !== result.plan)
+          this.store.update((state) => {
+            const stored = state.accounts.find((a) => a.id === account.id);
+            if (stored?.auth) stored.auth.subscription = result.plan;
+          });
+        this.succeed(this.store.account(account.id), result.limits, "cli", false);
+        return this.view(this.store.account(account.id));
       }
       if (this.source(account) === "desktop") {
         const raw = await this.desktopUsage!.read(account, allowPrompt);

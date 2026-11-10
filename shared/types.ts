@@ -59,6 +59,8 @@ export interface Account {
     orgId?: string;
     orgName?: string;
     subscription?: string;
+    /** The plan read from the sign-in (Claude Code's rate-limit tier); it fills `planning.plan`. */
+    plan?: Exclude<AccountPlan, "unknown">;
     checkedAt: string;
     error?: string;
   };

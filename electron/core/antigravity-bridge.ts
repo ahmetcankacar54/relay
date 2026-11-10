@@ -159,20 +159,8 @@ export class AntigravityBridge {
     throw new Error("CLIProxyAPI could not start on the local port");
   }
 
-  private async management<T>(route: string, body?: unknown): Promise<T> {
-    await this.start();
-    const response = await fetch(`${this.endpoint!.url}/v8/management${route}`, {
-      ...(body === undefined
-        ? {}
-        : { method: "POST", body: JSON.stringify(body) }),
-      headers: {
-        Authorization: `Bearer ${this.managementKey}`,
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-      },
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!response.ok) throw new Error(`Antigravity OAuth service returned ${response.status}`);
-    return response.json() as Promise<T>;
+  private management<T>(route: string, body?: unknown): Promise<T> {
+    return this.managementAt<T>("/v8/management", route, body);
   }
 
   /**
@@ -262,6 +250,77 @@ export class AntigravityBridge {
     } catch {
       return undefined;
     }
+  }
+
+  /** The Google Cloud project the saved credential names, if it names one (not a secret). */
+  async projectId(): Promise<string | undefined> {
+    let names: string[];
+    try {
+      names = await fsp.readdir(this.authDir);
+    } catch {
+      return undefined;
+    }
+    for (const name of names) {
+      if (!CREDENTIAL_FILE.test(name) || !(await this.credentialEmail(name))) continue;
+      try {
+        const data = JSON.parse(await fsp.readFile(path.join(this.authDir, name), "utf8"));
+        if (typeof data?.project_id === "string" && /^[a-z0-9:._-]{1,128}$/i.test(data.project_id))
+          return data.project_id;
+      } catch {}
+    }
+    return undefined;
+  }
+
+  /**
+   * One POST to Google with the saved sign-in, sent by CLIProxyAPI's management `api-call` so the
+   * token is put in (and renewed) by the sidecar. Only Code Assist's own hosts are asked.
+   */
+  async googleCall(request: { url: string; body: string }): Promise<{ status: number; retryAfter: string | null; body: string }> {
+    const url = new URL(request.url);
+    if (url.protocol !== "https:" || !/^(?:daily-)?cloudcode-pa\.googleapis\.com$/.test(url.hostname))
+      throw new Error("Not a Code Assist address");
+    type Files = { files?: { auth_index?: unknown; provider?: unknown; type?: unknown; disabled?: unknown }[] };
+    const listed = await this.management<Files>("/auth-files").catch(() => this.managementAt<Files>("/v0/management", "/auth-files"));
+    const file = listed.files?.find(
+      (f) => (f.provider === "antigravity" || f.type === "antigravity") && f.disabled !== true && typeof f.auth_index === "string",
+    );
+    if (!file) throw new Error("No Antigravity credential in the sidecar");
+    const body = {
+      auth_index: file.auth_index,
+      method: "POST",
+      url: request.url,
+      header: {
+        Authorization: "Bearer $TOKEN$",
+        "Content-Type": "application/json",
+        "User-Agent": "antigravity/1.11.5 darwin/arm64",
+      },
+      data: request.body,
+    };
+    type Answer = { status_code?: unknown; body?: unknown; header?: Record<string, unknown> };
+    const answer = await this.management<Answer>("/api-call", body).catch(() =>
+      this.managementAt<Answer>("/v0/management", "/api-call", body),
+    );
+    const status = typeof answer.status_code === "number" ? answer.status_code : 502;
+    const retry = answer.header?.["Retry-After"] ?? answer.header?.["retry-after"];
+    return {
+      status,
+      retryAfter: typeof retry === "string" ? retry : Array.isArray(retry) && typeof retry[0] === "string" ? retry[0] : null,
+      body: typeof answer.body === "string" ? answer.body : answer.body && typeof answer.body === "object" ? JSON.stringify(answer.body) : "",
+    };
+  }
+
+  private async managementAt<T>(prefix: string, route: string, body?: unknown): Promise<T> {
+    await this.start();
+    const response = await fetch(`${this.endpoint!.url}${prefix}${route}`, {
+      ...(body === undefined ? {} : { method: "POST", body: JSON.stringify(body) }),
+      headers: {
+        Authorization: `Bearer ${this.managementKey}`,
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+      },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) throw new Error(`Antigravity OAuth service returned ${response.status}`);
+    return response.json() as Promise<T>;
   }
 
   stop(): void {

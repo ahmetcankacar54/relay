@@ -151,6 +151,7 @@ const accountSchema = z.object({
       orgId: z.uuid().optional(),
       orgName: z.string().max(150).optional(),
       subscription: z.string().optional(),
+      plan: z.enum(["pro", "max5", "max20", "team"]).optional(),
       checkedAt: z.string(),
       error: z.string().optional(),
     })

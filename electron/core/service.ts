@@ -8,6 +8,7 @@ import { AuthManager } from "./auth";
 import { Runner } from "./runner";
 import type { ProfileLockKind } from "./profile-lock";
 import { readProfileAuth, signedOut } from "./profile-auth";
+import { readProfileIdentity } from "./profile-identity";
 import { removeAccount, type AccountRemoval } from "./account-removal";
 import { diagnoseCli } from "./cli-diagnostics";
 import { command, profileEnvironment } from "./environment";
@@ -204,7 +205,12 @@ export class Service {
       auth = signedOut(account.auth);
     }
     this.store.update((s) => {
-      s.accounts.find((a) => a.id === id)!.auth = auth;
+      const stored = s.accounts.find((a) => a.id === id)!;
+      stored.auth = auth;
+      // The plan comes from the sign-in, not a choice: a read plan replaces the saved one and
+      // keeps the relative capacity set for a Team seat.
+      if (auth.loggedIn && auth.plan && stored.planning?.plan !== auth.plan)
+        stored.planning = { plan: auth.plan, capacityWeight: stored.planning?.capacityWeight ?? 1 };
     });
     return this.store.account(id);
   }
@@ -226,7 +232,35 @@ export class Service {
       profileEnvironment(this.store.profile(id)),
     );
   }
+  /**
+   * Fills each signed-in Claude account's plan from the sign-in metadata Claude Code saved in its
+   * profile. Only that file is read (no CLI, no Keychain), and only for the sign-in it matches.
+   */
+  async syncDetectedPlans() {
+    for (const account of this.store.state.accounts) {
+      if ((account.provider ?? "claude") !== "claude" || !account.auth?.loggedIn) continue;
+      const metadata = await readProfileIdentity(this.store.profile(account.id));
+      const auth = account.auth;
+      if (
+        !metadata?.plan ||
+        !auth.email ||
+        metadata.email.toLowerCase() !== auth.email.toLowerCase() ||
+        !auth.orgId ||
+        metadata.orgId !== auth.orgId
+      )
+        continue;
+      const plan = metadata.plan;
+      this.store.update((state) => {
+        const stored = state.accounts.find((a) => a.id === account.id);
+        if (!stored?.auth?.loggedIn || stored.auth.email !== auth.email || stored.auth.orgId !== auth.orgId) return;
+        stored.auth.plan = plan;
+        if (stored.planning?.plan !== plan)
+          stored.planning = { plan, capacityWeight: stored.planning?.capacityWeight ?? 1 };
+      });
+    }
+  }
   async reconcileAuth(platform = process.platform) {
+    await this.syncDetectedPlans().catch(() => {});
     // Official CLI status can prompt for legacy Keychain access and initialize
     // an OAuth rotation. Startup is never an interactive authentication action.
     if (platform === "darwin") return;

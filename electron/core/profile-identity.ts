@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import type { Account } from "../../shared/types";
+import type { Account, AccountPlan } from "../../shared/types";
 
 type Auth = NonNullable<Account["auth"]>;
 export interface ProfileIdentity {
@@ -10,6 +10,35 @@ export interface ProfileIdentity {
   orgId: string;
   email: string;
   orgName?: string;
+  /** The plan Claude Code saved with the sign-in; undefined when it names none Relay knows. */
+  plan?: Exclude<AccountPlan, "unknown">;
+}
+
+/**
+ * The plan in the sign-in metadata Claude Code saves (`oauthAccount`): the user's own rate-limit
+ * tier first (a Team seat can carry a Max tier), then the organization's tier and type.
+ */
+export function claudePlan(identity: {
+  userRateLimitTier?: unknown;
+  organizationRateLimitTier?: unknown;
+  organizationType?: unknown;
+}): Exclude<AccountPlan, "unknown"> | undefined {
+  const tiers = [identity.userRateLimitTier, identity.organizationRateLimitTier].filter(
+    (tier): tier is string => typeof tier === "string",
+  );
+  for (const tier of tiers) {
+    if (/max_?20x/i.test(tier)) return "max20";
+    if (/max_?5x/i.test(tier)) return "max5";
+  }
+  switch (identity.organizationType) {
+    case "claude_pro":
+      return "pro";
+    case "claude_team":
+    case "claude_enterprise":
+      return "team";
+    default:
+      return undefined;
+  }
 }
 const uuid = z.uuid();
 const text = (value: unknown, limit: number) =>
@@ -57,11 +86,13 @@ export async function readProfileIdentity(
         const orgId = validUuid(identity?.organizationUuid);
         const email = text(identity?.emailAddress, 254);
         if (!accountUuid || !orgId || !email) return;
+        const plan = claudePlan(identity);
         return {
           accountUuid,
           orgId,
           email,
           orgName: text(identity?.organizationName, 150),
+          ...(plan ? { plan } : {}),
         };
       } finally {
         await file.close();
@@ -114,5 +145,7 @@ export function authStatus(
       validUuid(status.accountUuid) ??
       (corroborated ? metadata.accountUuid : undefined),
     subscription: text(status.subscriptionType, 64),
+    // The plan in the metadata belongs to this sign-in only when its email and organization match.
+    ...(corroborated && metadata.plan ? { plan: metadata.plan } : {}),
   };
 }
