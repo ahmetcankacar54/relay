@@ -872,6 +872,15 @@ export const previewApi: RelayAPI = {
   openExtensionSettings: async () => {},
   terminalStatus: async () => structuredClone(previewTerminal),
   checkTerminal: async () => structuredClone(previewTerminal),
+  linkTerminal: async (id: string) => ({
+    id: crypto.randomUUID(),
+    accountId: id,
+    status: "waiting" as const,
+    browserReady: true,
+    codeRequested: false,
+    startedAt: new Date().toISOString(),
+  }),
+  cancelTerminalLink: async () => undefined,
   syncTerminal: async () => ({
     result: "switched" as const,
     saved: true,

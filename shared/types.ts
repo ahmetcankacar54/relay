@@ -151,6 +151,8 @@ export interface Snapshot {
   update?: UpdateState;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
+  /** Sign-ins being made for the terminal, one per account at most. */
+  terminalFlows?: AuthFlow[];
   accounts: Account[];
   sessions: Session[];
   runs: Run[];
@@ -487,6 +489,9 @@ export interface RelayAPI {
   checkTerminal(): Promise<TerminalStatus | undefined>;
   /** Puts the saved terminal sign-in of the account Desktop is on in place. */
   syncTerminal(): Promise<TerminalOutcome>;
+  /** Starts, or brings back, a sign-in for the terminal with the account. */
+  linkTerminal(accountId: string): Promise<AuthFlow>;
+  cancelTerminalLink(accountId: string, attemptId: string): Promise<void>;
   setTrayLanguage(language: "tr" | "en"): Promise<void>;
   /** Shows draft-events.json, else usage-issues.json, in Finder; else opens the user data folder. Takes no path. */
   showDiagnostics(): Promise<void>;

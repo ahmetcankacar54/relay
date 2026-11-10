@@ -20,7 +20,8 @@ test("the terminal row: linked when saved or on the account now, a guide otherwi
   assert.equal(terminalGuide(account(false), status(), tr, "tr").label, "Önce Claude uygulaması girişini kaydet.");
   const missing = terminalGuide(account(), status(), tr, "tr");
   assert.equal(missing.tone, "warn");
-  assert.match(missing.steps![0], /claude auth login.*me@x\.test/);
+  assert.match(missing.steps![0], /“Bağla”ya bas.*me@x\.test/);
+  assert.equal(missing.action, "link");
   const saved = terminalGuide(account(), status({ saved: [{ accountUuid: U, orgId: O, savedAt: "2026-11-01T10:00:00Z", parked: true }] }), tr, "tr");
   assert.equal(saved.tone, "ok");
   assert.equal(saved.label, "Bağlı");

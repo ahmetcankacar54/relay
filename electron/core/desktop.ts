@@ -77,7 +77,13 @@ import { anthropicUnreachable } from "./usage-refresh";
 import { ExtensionSwitcher } from "./extension-switch";
 import { ExtensionVault } from "./extension-vault";
 import { CookieVault } from "./cookie-vault";
-import { TerminalSwitcher, TerminalVault, type TerminalPorts } from "./terminal-identity";
+import {
+  TerminalSwitcher,
+  TerminalVault,
+  adoptTerminalSignIn,
+  type TerminalAdoption,
+  type TerminalPorts,
+} from "./terminal-identity";
 import {
   DEFAULT_TERMINAL_MODE,
   terminalIdentities,
@@ -1369,6 +1375,24 @@ export class DesktopManager {
     if (!this.terminal) return undefined;
     this.terminalSwitcher ??= new TerminalSwitcher(this.terminal, this.terminalVault, this.now);
     return this.terminalSwitcher;
+  }
+  /**
+   * Keeps a sign-in made for the terminal in a scratch folder as `profileId`'s terminal sign-in,
+   * then lets the terminal follow when that account is the one open now. Answers what became
+   * of it.
+   */
+  async adoptTerminalSignIn(
+    profileId: string,
+    ports: Pick<TerminalPorts, "keychain" | "config" | "owner">,
+  ): Promise<TerminalAdoption> {
+    const result = await adoptTerminalSignIn(
+      ports,
+      terminalIdentities(this.store.account(profileId)),
+      this.terminalVault,
+    );
+    this.diagnose("terminal-link", { result });
+    if (result === "saved") await this.syncTerminal().catch(() => undefined);
+    return result;
   }
   private get terminalMode() {
     return this.store.state.settings.terminalCli ?? DEFAULT_TERMINAL_MODE;

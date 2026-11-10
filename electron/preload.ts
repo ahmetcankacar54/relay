@@ -29,6 +29,9 @@ const api: RelayAPI = {
   terminalStatus: () => ipcRenderer.invoke("relay:terminal-status"),
   checkTerminal: () => ipcRenderer.invoke("relay:terminal-check"),
   syncTerminal: () => ipcRenderer.invoke("relay:terminal-sync"),
+  linkTerminal: (id) => ipcRenderer.invoke("relay:terminal-link", id),
+  cancelTerminalLink: (id, attempt) =>
+    ipcRenderer.invoke("relay:terminal-link-cancel", id, attempt),
   showDiagnostics: () => ipcRenderer.invoke("relay:show-diagnostics"),
   claudeLaunch: () => ipcRenderer.invoke("relay:claude-launch"),
   setClaudeLaunch: (patch) => ipcRenderer.invoke("relay:set-claude-launch", patch),

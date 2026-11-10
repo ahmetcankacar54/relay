@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Private } from "@/components/Private";
 import { AppWindow, Check, CircleAlert, Link2, Globe2, KeyRound, LoaderCircle, Monitor, MoreHorizontal, Network, SquareTerminal } from "lucide-react";
 import { BackIcon, RefreshIcon } from "@/components/icons";
@@ -34,6 +34,7 @@ import { routeHash } from "@/app/routes";
 import { accountHealth, isClaudeAccount, usageSignInStatus } from "@/lib/account-health";
 import { accountUuids, extensionGuide } from "@/lib/extension-ui";
 import { cn } from "@/lib/utils";
+import { localizeError } from "@/messages";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { UsageCard } from "../../features/UsageCard";
 import { LimitBars } from "@/components/LimitBars";
@@ -459,8 +460,18 @@ function TerminalConnection({
   terminal: ReturnType<typeof useTerminalStatus>;
 }) {
   const { t, language } = useI18n();
+  const relay = useRelay();
+  const flow = relay.data?.terminalFlows?.find((f) => f.accountId === a.id);
+  const linking = pendingFlow(flow);
+  // The link saved a sign-in: read the terminal's status again, so the row turns to "Linked".
+  const done = flow?.status === "connected" ? flow.id : undefined;
+  useEffect(() => {
+    if (done) void check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
   if (status === null) return null;
   const guide = terminalGuide(a, status, t, language);
+  const failed = guide.action === "link" && flow?.status === "failed" ? flow.error : undefined;
   return (
     <ConnectionRow
       icon={<SquareTerminal />}
@@ -468,9 +479,13 @@ function TerminalConnection({
       purpose={t("Bu hesaba o da geçer.", "Switches to this account too.")}
       optional
       tone={guide.tone}
-      status={guide.label}
+      status={
+        guide.action === "link" && linking
+          ? t("Tarayıcıda onay bekleniyor…", "Waiting for approval in the browser…")
+          : guide.label
+      }
       steps={guide.steps}
-      detail={guide.detail}
+      detail={failed ? localizeError(failed, language) : guide.detail}
       refresh={
         !guide.action && guide.tone === "ok" ? (
           <Button
@@ -486,11 +501,34 @@ function TerminalConnection({
         ) : undefined
       }
       action={
-        guide.action === "check" ? (
-          <Button size="sm" variant="outline" disabled={checking} onClick={() => void check()}>
-            {checking ? <LoaderCircle className="animate-spin" /> : <RefreshIcon />}
-            {t("Kontrol et", "Check")}
-          </Button>
+        guide.action === "link" ? (
+          linking && flow ? (
+            <span className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void relay.action("terminal-link", () => relay.api.linkTerminal(a.id))}
+              >
+                {t("Sayfayı yeniden aç", "Reopen the page")}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void relay.api.cancelTerminalLink(a.id, flow.id)}
+              >
+                {t("Vazgeç", "Cancel")}
+              </Button>
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              disabled={!!relay.busy}
+              onClick={() => void relay.action("terminal-link", () => relay.api.linkTerminal(a.id))}
+            >
+              <Link2 />
+              {t("Bağla", "Link")}
+            </Button>
+          )
         ) : guide.action === "settings" ? (
           <Button size="sm" variant="outline" asChild>
             <a href={routeHash("gecis")}>{t("Geçiş", "Switching")}</a>

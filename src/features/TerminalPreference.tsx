@@ -107,8 +107,8 @@ export function TerminalPreference({
       : "",
     missing.length
       ? t(
-          `Eksik: ${missing.map((a) => a.name).join(", ")}. Her biri için terminalde “claude auth login” ile o hesaba gir, sonra “Kontrol et”e bas.`,
-          `Missing: ${missing.map((a) => a.name).join(", ")}. For each one, sign in with “claude auth login” in a terminal. Then select “Check”.`,
+          `Eksik: ${missing.map((a) => a.name).join(", ")}. Her birinin hesap sayfasında Terminal satırındaki “Bağla”ya bas.`,
+          `Missing: ${missing.map((a) => a.name).join(", ")}. On each one’s account page, select “Link” in the Terminal row.`,
         )
       : "",
   ]

@@ -82,7 +82,7 @@ import {
 import { accountPlanningSchema } from "./core/store";
 import { macBrowserSystem } from "./core/browser-system";
 import { levelExtensionStorage } from "./core/extension-storage";
-import { macTerminalPorts } from "./core/terminal-identity";
+import { macTerminalPorts, scratchSignInPorts } from "./core/terminal-identity";
 import { sqliteCookieStorage } from "./core/cookie-store";
 import { RelayTray } from "./tray";
 import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
@@ -991,6 +991,23 @@ else {
       // So does the terminal's Claude Code sign-in; macOS only. Checked once at start, which links
       // a terminal already signed in to one of the accounts.
       desktop.terminal = macTerminalPorts();
+      // A sign-in made for the terminal in a scratch folder: kept for the account, and the
+      // Keychain item the CLI made for that folder goes with the folder.
+      service.terminalAuth.browser = service.auth.browser;
+      service.terminalLinkFit = async (accountId, dir) => {
+        if (!desktop?.terminal) return "Terminal sign-ins are kept on macOS only.";
+        const ports = scratchSignInPorts(dir);
+        try {
+          const result = await desktop.adoptTerminalSignIn(accountId, ports);
+          if (result === "saved") return true;
+          return result === "other-account"
+            ? "Tarayıcıda başka bir Claude hesabıyla ya da çalışma alanıyla onaylandı. Bu profilin hesabıyla yeniden dene."
+            : "Terminal girişi tamamlanmadı. Yeniden dene.";
+        } finally {
+          await ports.keychain.remove().catch(() => undefined);
+          broadcastChanged();
+        }
+      };
       void desktop.checkTerminal().catch(() => undefined);
       const evidence = new NativeDesktopContinuationEvidence({
         store: service.store,
@@ -2578,6 +2595,12 @@ function bindIPC() {
   handle("terminal-status", () => desktop.terminalStatus());
   handle("terminal-check", () => desktop.checkTerminal());
   handle("terminal-sync", () => desktop.syncTerminal().finally(broadcastChanged));
+  handle("terminal-link", (accountId) =>
+    service.transaction(() => service.linkTerminal(id.parse(accountId))),
+  );
+  handle("terminal-link-cancel", (accountId, attemptId) =>
+    service.terminalAuth.cancel(id.parse(accountId), id.parse(attemptId)),
+  );
   // The windows show it; every switch, sign-in or recovery rechecks fresh in main.
   handle("proxy-status", () => proxyStatus());
   handle("proxy-toggle", (enabled) =>
