@@ -829,8 +829,10 @@ export class ProxyServer {
     req: http.IncomingMessage,
     parsed: any,
   ): string | undefined {
-    // Check explicit headers
+    // Check explicit headers. Claude Code names its session in x-claude-code-session-id on every
+    // request, subagents' included, so a whole session keeps one account and one cache.
     for (const name of [
+      "x-claude-code-session-id",
       "x-session-id",
       "x-conversation-id",
       "session_id",
