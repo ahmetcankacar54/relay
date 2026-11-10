@@ -343,11 +343,19 @@ app.whenReady().then(async () => {
         "window.relay.setPanelHeight(333)",
       );
       await eventually(() => panel.getContentSize()[1] === 333);
-      await call("setPanelHeight", 300);
+      // The panel then asks again for the height its content needs; wait until that settles.
+      let settled = -1;
+      await eventually(async () => {
+        const before = panel.getContentSize()[1];
+        await delay(300);
+        settled = panel.getContentSize()[1];
+        return settled === before;
+      });
+      await call("setPanelHeight", settled + 41);
       await delay(300);
       assert.equal(
         panel.getContentSize()[1],
-        333,
+        settled,
         "the main window cannot resize the panel",
       );
       const findSwitcher = () =>

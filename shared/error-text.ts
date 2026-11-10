@@ -233,6 +233,14 @@ const pairs: Pair[] = [
     "The usage sign-in did not finish. Try again and approve it in the browser.",
   ],
   [
+    "Tarayıcıda başka bir Claude hesabıyla giriş yapıldı; bu profil Claude uygulamasındaki hesabına ait. claude.ai’da doğru hesaba geç ya da “Relay penceresinde aç”ı kullan, sonra girişi yenile.",
+    "The browser signed in with another Claude account; this profile belongs to its Claude app account. Switch to the right account on claude.ai or use “Open in Relay window”, then renew the sign-in.",
+  ],
+  [
+    "Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.",
+    "This sign-in belongs to a workspace of the account that the Claude app has not opened yet. Open Code in that workspace in the Claude app, then renew the sign-in.",
+  ],
+  [
     "Giriş süresi doldu. Girişi yeniden başlat.",
     "The sign-in timed out. Start it again.",
   ],

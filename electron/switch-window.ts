@@ -70,7 +70,8 @@ export class SwitchWindow {
     });
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     win.webContents.on("will-navigate", (event) => event.preventDefault());
-    win.webContents.on("did-start-loading", () => this.dispatch("start"));
+    // A new document only: did-start-loading also fires for navigations that change nothing.
+    win.webContents.on("did-navigate", () => this.dispatch("start"));
     win.webContents.on("did-fail-load", (_event, _code, _description, _url, mainFrame) => {
       if (mainFrame) this.dispatch("fail");
     });

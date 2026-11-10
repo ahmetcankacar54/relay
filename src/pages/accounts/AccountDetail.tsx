@@ -5,6 +5,7 @@ import { BackIcon, RefreshIcon } from "@/components/icons";
 import type { Account, ExtensionStatus, RelaySettings } from "../../../shared/types";
 import {
   desktopCliMismatch,
+  desktopCliWorkspaceMismatch,
   duplicateCliAccount,
 } from "../../../shared/account-state";
 import { historySources } from "../../../shared/history-policy";
@@ -600,10 +601,15 @@ export function AccountDetailBody({
           role="alert"
           className="rounded-lg border border-crit/40 bg-crit/10 px-4 py-2.5 text-sm"
         >
-          {t(
-            "Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Limit okuma girişini bu profilin hesabıyla yenile.",
-            "The Claude app sign-in and the usage sign-in are for different accounts. Renew the usage sign-in with this profile’s account.",
-          )}
+          {desktopCliWorkspaceMismatch(a)
+            ? t(
+                "Limit okuma girişi bu hesabın başka bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç; Relay profili oraya kendisi taşır.",
+                "The usage sign-in belongs to another workspace of this account. Open Code in that workspace in the Claude app; Relay then moves the profile there.",
+              )
+            : t(
+                "Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait. Limit okuma girişini bu profilin hesabıyla yenile.",
+                "The Claude app sign-in and the usage sign-in are for different accounts. Renew the usage sign-in with this profile’s account.",
+              )}
         </p>
       )}
       <div className="grid items-start gap-3 @3xl:grid-cols-[minmax(0,1fr)_280px]">

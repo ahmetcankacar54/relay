@@ -12,6 +12,8 @@ const APP_WINDOW_PHRASES = [
   // The usage sign-in's own Relay window, in src/app/ConnectionPanels.tsx.
   "Açılan Relay penceresinde",
   "Relay’in kendi penceresinde",
+  // The same sign-in opened in that window instead of the system browser.
+  "Relay penceresinde aç",
   't("Pencerede onayla", "Approve in the window")',
   't("Pencereyi göster", "Show the window")',
   // The macOS Window menu and its Close Window item, in electron/app-menu.ts.

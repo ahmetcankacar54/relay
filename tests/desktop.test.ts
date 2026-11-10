@@ -2803,3 +2803,36 @@ test("recovery waits for Claude's page and restarts a stuck one too", async (t) 
   ]);
   assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
 });
+
+test("a profile saved in the wrong workspace moves to the one its usage sign-in names, without restarting Claude", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const wrong = a.desktop!.orgId;
+  const right = randomUUID();
+  const signIn = (orgId: string, accountUuid = a.desktop!.accountUuid) =>
+    f.store.update((s) => {
+      s.accounts.find((x) => x.id === a.id)!.auth = { loggedIn: true, checkedAt: "", accountUuid, orgId };
+    });
+  const quits = f.quits();
+
+  // The usage sign-in is the same account in another workspace the Claude app has never opened.
+  signIn(right);
+  assert.equal(await f.manager.rebindOrg(a.id, right), false);
+  assert.equal(f.store.account(a.id).desktop!.orgId, wrong);
+
+  // Once the app has that workspace, the profile moves to it; the saved sign-in is untouched.
+  await fs.mkdir(path.join(f.root, "claude-code-sessions", a.desktop!.accountUuid, right), { recursive: true });
+  assert.equal(await f.manager.rebindOrg(a.id, right.toUpperCase()), true);
+  assert.equal(f.store.account(a.id).desktop!.orgId, right);
+  assert.equal(f.store.account(a.id).desktop!.accountUuid, a.desktop!.accountUuid);
+  assert.equal(f.quits(), quits);
+  assert.equal((await f.manager.snapshot()).activeProfileId, a.id);
+  // Already there: nothing to do.
+  assert.equal(await f.manager.rebindOrg(a.id, right), false);
+
+  // Never for a workspace the usage sign-in does not name, or another account's sign-in.
+  assert.equal(await f.manager.rebindOrg(a.id, wrong), false);
+  signIn(wrong, randomUUID());
+  assert.equal(await f.manager.rebindOrg(a.id, wrong), false);
+  assert.equal(f.store.account(a.id).desktop!.orgId, right);
+});

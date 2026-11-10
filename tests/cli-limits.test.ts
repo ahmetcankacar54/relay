@@ -65,6 +65,31 @@ test("a login to another account is signed out again and fails", async (t) => {
   assert.equal(f.store().account(a.id).auth, undefined);
 });
 
+test("a login to the account's other workspace moves the profile there once Claude has that workspace", async (t) => {
+  const f = await cliFixture(t);
+  const a = await f.saved("A");
+  const other = crypto.randomUUID();
+  const claude = fakeClaude(f.temp, {
+    loggedIn: true,
+    authMethod: "claude.ai",
+    email: "a@example.test",
+    accountUuid: a.desktop!.accountUuid,
+    orgId: other,
+  });
+  f.deps.claude = () => claude.file;
+  // The Claude app has never opened that workspace: nothing to move to, the sign-in is undone.
+  assert.equal(await f.run("connect", "A"), 1);
+  assert.match(claude.log(), /auth logout/);
+  assert.equal(f.store().account(a.id).auth, undefined);
+  assert.equal(f.store().account(a.id).desktop!.orgId, a.desktop!.orgId);
+  // With the workspace there, the profile moves and the sign-in stays.
+  fs.mkdirSync(path.join(f.claude, "claude-code-sessions", a.desktop!.accountUuid, other), { recursive: true });
+  assert.equal(await f.run("connect", "A"), 0);
+  const after = f.store().account(a.id);
+  assert.equal(after.desktop!.orgId, other);
+  assert.equal(after.auth!.orgId, other);
+});
+
 async function connected(t: any, opts: { expiresAt?: number; five?: number; seven?: number | null } = {}) {
   const f = await cliFixture(t);
   const a = await f.saved("A");

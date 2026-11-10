@@ -53,3 +53,18 @@ test("the only workspace is chosen without asking", () => {
   assert.equal(targetWorkspace([], A), "");
   assert.equal(targetWorkspace(undefined, A), "");
 });
+
+test("the workspace the Claude app is in comes first and says so, and is the default to save", () => {
+  const options = workspaceOptions([A, B, C], [withOrg("x", B, "Vertex")], tr, C.toUpperCase());
+  assert.deepEqual(options, [
+    { id: C, label: "Çalışma alanı 2 · Claude’da açık olan", short: "c0ffee00" },
+    { id: A, label: "Çalışma alanı 1", short: "6f1c2d3e" },
+    { id: B, label: "Vertex", short: "a1b2c3d4" },
+  ]);
+  assert.equal(workspaceOptions([A, B], [], en, B)[0].label, "Workspace 2 · open in Claude");
+  // The user's own choice wins; the app's workspace is only the default among several.
+  assert.equal(targetWorkspace([A, B, C], "", C), C);
+  assert.equal(targetWorkspace([A, B, C], A, C), A);
+  assert.equal(targetWorkspace([A, B], "", C), "");
+  assert.equal(targetWorkspace([A], "", C), A);
+});

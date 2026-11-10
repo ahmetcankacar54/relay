@@ -231,10 +231,12 @@ export class UsageCredentialRefresher {
     allowInteraction: boolean,
   ) {
     const homeDefault = path.resolve(os.homedir(), ".claude");
+    // Refused before it is looked at: the default profile need not exist (a machine without
+    // Claude Code).
+    if (!path.isAbsolute(profile) || profile === homeDefault)
+      throw new UsageError("credentials-missing");
     const info = fs.lstatSync(profile);
     if (
-      !path.isAbsolute(profile) ||
-      profile === homeDefault ||
       !info.isDirectory() ||
       info.isSymbolicLink() ||
       fs.realpathSync(profile) !== profile

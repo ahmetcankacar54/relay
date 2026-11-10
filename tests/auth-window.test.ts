@@ -52,7 +52,13 @@ test("the sign-in window may visit Anthropic's sites, sign-in providers and the 
   assert.equal(signInPartition("abc"), "persist:relay-auth-abc");
 });
 
-async function fixture(t: any, body: string, handOff: boolean) {
+async function fixture(
+  t: any,
+  body: string,
+  handOff: boolean,
+  open?: (url: string) => Promise<void>,
+  verify: () => Promise<boolean | string> = async () => true,
+) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-auth-window-"));
   const file = path.join(root, "cli");
   await fs.writeFile(file, `#!${process.execPath}\n${body}`, { mode: 0o700 });
@@ -60,7 +66,12 @@ async function fixture(t: any, body: string, handOff: boolean) {
   const shown: [string, string][] = [];
   const closed: string[] = [];
   const opened: string[] = [];
-  const auth = new AuthManager(async () => true, (f) => events.push(f), async (u) => void opened.push(u), 15_000);
+  const auth = new AuthManager(
+    verify,
+    (f) => events.push(f),
+    open ?? (async (u) => void opened.push(u)),
+    15_000,
+  );
   const pages = new Map<string, string>();
   const browser: AuthBrowser = {
     env: (attempt) => ({ RELAY_TEST_PAGE: path.join(root, `${attempt}.url`), RELAY_TEST_HAND: handOff ? "1" : "" }),
@@ -96,24 +107,54 @@ if (process.env.RELAY_TEST_HAND) fs.writeFileSync(process.env.RELAY_TEST_PAGE, "
 setTimeout(() => process.exit(0), 900);
 `;
 
-test("the page the CLI hands to BROWSER opens in Relay's window, which closes when the sign-in ends", async (t) => {
+test("the page the CLI hands to BROWSER opens in the system browser; Relay's window is the other way in", async (t) => {
   const f = await fixture(t, cli, true);
-  await until(() => f.shown.length === 1);
-  assert.deepEqual(f.shown, [[f.id, handed]]);
-  assert.ok(f.events.some((e) => e.status === "waiting" && e.inWindow && e.browserReady));
-  // "Open in browser" still works, with the same page.
-  await f.auth.reopen(f.id, f.flow.id, "browser");
+  await until(() => f.opened.length === 1);
+  // The localhost page, not the paste-a-code one the CLI printed, and no window of Relay's.
   assert.deepEqual(f.opened, [handed]);
+  assert.deepEqual(f.shown, []);
+  const waiting = f.events.find((e) => e.status === "waiting");
+  assert.ok(waiting?.browserReady && waiting.windowAvailable && !waiting.inWindow);
+  // "Reopen browser" opens the same page again.
+  await f.auth.reopen(f.id, f.flow.id, "browser");
+  assert.deepEqual(f.opened, [handed, handed]);
+  // "Open in Relay window": the flow now owns that window and closes it when the sign-in ends.
   await f.auth.reopen(f.id, f.flow.id, "window");
-  assert.equal(f.shown.length, 2);
+  assert.deepEqual(f.shown, [[f.id, handed]]);
+  assert.equal(f.events.at(-1)?.inWindow, true);
   await until(() => f.events.at(-1)?.status === "connected");
   assert.deepEqual(f.closed, [f.id]);
 });
 
-test("a CLI that hands nothing over gets its printed page shown after a few seconds", async (t) => {
+test("a sign-in approved in the system browser never opens or closes Relay's window", async (t) => {
+  const f = await fixture(t, cli, true);
+  await until(() => f.events.at(-1)?.status === "connected");
+  assert.deepEqual(f.opened, [handed]);
+  assert.deepEqual(f.shown, []);
+  assert.deepEqual(f.closed, []);
+});
+
+test("a system browser that cannot be opened leaves Relay's window", async (t) => {
+  const f = await fixture(t, cli, true, async () => {
+    throw new Error("no browser");
+  });
+  await until(() => f.shown.length === 1);
+  assert.deepEqual(f.shown, [[f.id, handed]]);
+  assert.ok(f.events.some((e) => e.status === "waiting" && e.inWindow));
+});
+
+test("a CLI that hands nothing over gets its printed page opened after a few seconds", async (t) => {
   const f = await fixture(t, cli.replace("setTimeout(() => process.exit(0), 900)", "setTimeout(() => process.exit(0), 7000)"), false);
   await wait(1500);
-  assert.equal(f.shown.length, 0);
-  await until(() => f.shown.length === 1);
-  assert.deepEqual(f.shown, [[f.id, printed]]);
+  assert.equal(f.opened.length, 0);
+  await until(() => f.opened.length === 1);
+  assert.deepEqual(f.opened, [printed]);
+  assert.deepEqual(f.shown, []);
+});
+
+test("a sign-in that does not fit the profile fails with the reason verification gives", async (t) => {
+  const reason = "Tarayıcıda başka bir Claude hesabıyla giriş yapıldı.";
+  const f = await fixture(t, cli, true, undefined, async () => reason);
+  await until(() => f.events.at(-1)?.status === "failed");
+  assert.equal(f.events.at(-1)?.error, reason);
 });

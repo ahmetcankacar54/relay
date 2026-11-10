@@ -33,7 +33,13 @@ async function describeOrg(ctx: CliContext, accountUuid: string, org: string) {
 }
 
 /** The workspace (Code organization) to save: --org, the only one, or a numbered pick. */
-async function pickOrg(ctx: CliContext, accountUuid: string, orgs: string[]): Promise<string> {
+async function pickOrg(
+  ctx: CliContext,
+  accountUuid: string,
+  orgs: string[],
+  /** The workspace the Claude app is in, used when --org names none. */
+  preferred?: string,
+): Promise<string> {
   const { t, io } = ctx;
   const flag = ctx.flags.org as string | undefined;
   if (flag) {
@@ -51,6 +57,7 @@ async function pickOrg(ctx: CliContext, accountUuid: string, orgs: string[]): Pr
       EXIT.failed,
     );
   if (orgs.length === 1) return orgs[0];
+  if (preferred && orgs.includes(preferred)) return preferred;
   if (!io.isTTY)
     throw new CliError(
       t(
@@ -79,7 +86,7 @@ const WORKER_SIGNIN_LIMIT_MS = 15 * 60_000;
 async function waitForSignIn(
   ctx: CliContext,
   accountId: string,
-): Promise<{ accountUuid: string; orgs: string[] } | undefined> {
+): Promise<{ accountUuid: string; orgs: string[]; preferred?: string } | undefined> {
   const { t, io } = ctx;
   const limit = Number(io.env.RELAY_SIGNIN_LIMIT_MS);
   const until =
@@ -123,7 +130,8 @@ async function waitForSignIn(
         return undefined;
       }
       const reading = readSignIn(state, ctx.store.state.accounts, accountId);
-      if (reading.kind === "ready") return { accountUuid: reading.accountUuid, orgs: reading.orgs };
+      if (reading.kind === "ready")
+        return { accountUuid: reading.accountUuid, orgs: reading.orgs, preferred: reading.preferred };
       const saved = reading.kind === "saved-elsewhere" ? reading.account : undefined;
       // Signed back in with a saved account: say so once, and keep waiting for the new one.
       if (saved && saved.desktop?.accountUuid !== alreadyToldOf) {
@@ -150,7 +158,7 @@ async function waitForSignIn(
 async function finishSignIn(ctx: CliContext, account: Account): Promise<number> {
   const signed = await waitForSignIn(ctx, account.id);
   if (!signed) return EXIT.failed;
-  const org = await pickOrg(ctx, signed.accountUuid, signed.orgs);
+  const org = await pickOrg(ctx, signed.accountUuid, signed.orgs, signed.preferred);
   await runDesktopOperation(ctx, () => ctx.desktop.capture(account.id, org));
   ctx.io.stdout(ctx.t(`${account.name} kaydedildi.`, `Saved ${account.name}.`));
   return EXIT.ok;

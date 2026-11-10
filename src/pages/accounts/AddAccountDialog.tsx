@@ -553,6 +553,7 @@ export function AddAccountSteps({
                       onChange={(orgId) =>
                         void action("auto-capture", () => api.chooseAutoCaptureOrg(auto.accountId, orgId))
                       }
+                      suggested={auto.suggestedOrg}
                       t={t}
                     />
                   )}
