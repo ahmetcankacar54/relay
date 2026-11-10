@@ -19,7 +19,6 @@ import { pendingFlow } from "@/data/selectors";
 import { displayedIssue, isClaudeAccount, renewalIssue } from "@/lib/account-health";
 import { AutomationBanner } from "../features/AutomationControl";
 import { RelayErrorAlert } from "./RelayErrorAlert";
-import { UpdateBanner } from "./UpdateBanner";
 
 export interface ReconnectIssue {
   account: Account;
@@ -248,7 +247,6 @@ export function Banners({
         </Banner>
       )}
       <RelayErrorAlert />
-      <UpdateBanner />
       {notice && (
         <Banner
           tone="info"

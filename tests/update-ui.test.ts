@@ -4,7 +4,8 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
-import { UpdateBanner } from "../src/app/UpdateBanner";
+import { SidebarUpdate } from "../src/app/SidebarUpdate";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import { PanelUpdate } from "../src/panel/PanelUpdate";
 import { UpdatesGroup } from "../src/pages/Settings";
 import { updateHint, updateShown } from "../src/lib/update-text";
@@ -31,38 +32,41 @@ const render = (relay: Relay, el: ReactElement, language: "tr" | "en" = "tr") =>
     ),
   );
 
-test("the banner offers a ready update with What's new, Update and Later, in both languages", () => {
-  const tr = render(relayFor(base), createElement(UpdateBanner));
-  assert.match(tr, /Relay 0\.16\.0 hazır\./);
-  assert.match(tr, />Sürüm notları</);
-  assert.match(tr, />Güncelle</);
+test("the sidebar card is one Update row with the version in its name, and Later on hover", () => {
+  const tr = render(relayFor(base), createElement(SidebarUpdate));
+  assert.match(tr, /data-slot="update-card"/);
+  assert.match(tr, /<button[^>]*aria-label="Relay 0\.16\.0 hazır\.[^"]*"[^>]*>[\s\S]*?<span class="truncate">Güncelle<\/span>/);
+  assert.doesNotMatch(tr, />v?0\.16\.0</);
   assert.match(tr, /aria-label="Sonra hatırlat"/);
   assert.match(tr, /Güncelle’ye basınca Relay kapanır, yeni sürüm birkaç saniyede açılır\./);
-  assert.doesNotMatch(tr, /Ayarların ve girişlerin kalır/);
-  const en = render(relayFor(base), createElement(UpdateBanner), "en");
+  const en = render(relayFor(base), createElement(SidebarUpdate), "en");
   assert.match(en, /Relay 0\.16\.0 is ready\./);
-  assert.match(en, />Update</);
+  assert.match(en, /<span class="truncate">Update<\/span>/);
   // While the Claude app is busy, Update waits.
   const busy = render(
     relayFor(base, { desktop: { available: true, running: true, organizations: [], busy: true, recoveryRequired: false, errorRevision: 0 } } as Partial<Relay>),
-    createElement(UpdateBanner),
+    createElement(SidebarUpdate),
   );
-  assert.match(busy, /disabled=""[^>]*>Güncelle</);
+  assert.match(busy, /<button[^>]*disabled=""[^>]*>[\s\S]*?Güncelle<\/span>/);
+  // The rail shows the icon alone, with the update as its name.
+  const rail = render(relayFor(base), createElement(TooltipProvider, null, createElement(SidebarUpdate, { compact: true })));
+  assert.match(rail, /<button[^>]*data-slot="update-card"[^>]*aria-label="Relay 0\.16\.0 hazır\./);
+  assert.doesNotMatch(rail, />Güncelle</);
 });
 
 test("downloading, installing and by-hand updates read as such; nothing shows when up to date", () => {
-  assert.match(render(relayFor({ ...base, status: "downloading", progress: 0.42 }), createElement(UpdateBanner)), /Relay 0\.16\.0 indiriliyor… %42/);
-  const installing = render(relayFor({ ...base, status: "installing" }), createElement(UpdateBanner));
+  assert.match(render(relayFor({ ...base, status: "downloading", progress: 0.42 }), createElement(TooltipProvider, null, createElement(SidebarUpdate))), /data-slot="update-progress" role="progressbar"[^>]*aria-valuenow="42"/);
+  const installing = render(relayFor({ ...base, status: "installing" }), createElement(TooltipProvider, null, createElement(SidebarUpdate)));
   assert.match(installing, /birazdan yeniden açılır/);
   assert.doesNotMatch(installing, /Sonra hatırlat/);
-  const manual = render(relayFor({ ...base, status: "manual", manualReason: "location" }), createElement(UpdateBanner));
+  const manual = render(relayFor({ ...base, status: "manual", manualReason: "location" }), createElement(SidebarUpdate));
   assert.match(manual, /Relay 0\.16\.0 çıktı\./);
   assert.match(manual, /Önce Uygulamalar klasörüne taşı/);
-  assert.match(manual, />İndirme sayfası</);
+  assert.match(manual, />Güncellemeyi indir</);
   assert.doesNotMatch(manual, />Güncelle</);
   for (const status of ["up-to-date", "checking", "available", "error", "idle"] as const)
-    assert.equal(render(relayFor({ ...base, status }), createElement(UpdateBanner)), "", status);
-  assert.equal(render(relayFor(undefined), createElement(UpdateBanner)), "");
+    assert.equal(render(relayFor({ ...base, status }), createElement(SidebarUpdate)), "", status);
+  assert.equal(render(relayFor(undefined), createElement(SidebarUpdate)), "");
   assert.equal(updateShown({ ...base, version: undefined }), false);
   for (const reason of ["no-asset", "not-writable", "not-appimage"] as const)
     assert.ok(updateHint({ ...base, status: "manual", manualReason: reason }, (tr) => tr).length > 10, reason);
