@@ -21,6 +21,13 @@ import {
   type JsonObject,
 } from "./desktop-files";
 import { activeOrgHint, type OrgHint } from "./desktop-org";
+import {
+  CLAUDE_SIGNED_OUT,
+  SIGN_IN_WITHOUT_SESSION,
+  SignInNotSettled,
+  sessionPresence,
+  type SessionPresence,
+} from "./desktop-session";
 import type {
   Account,
   DesktopOperationKind,
@@ -79,7 +86,7 @@ import {
   type TerminalStatus,
 } from "../../shared/terminal-identity";
 import type { CookieStorage } from "./cookie-store";
-import type { LaunchWatch, PageOutcome } from "./desktop-launch";
+import type { ClaudeSignOut, LaunchWatch, PageOutcome } from "./desktop-launch";
 import {
   BROWSERS,
   DEFAULT_EXTENSION,
@@ -136,6 +143,13 @@ export interface DesktopHost {
    * be told booted or stuck. Undefined when Claude's log cannot tell.
    */
   watchLaunch?(): Promise<LaunchWatch | undefined>;
+  /**
+   * Whether the Claude that runs signed itself out since it started (its page went to /logout
+   * and no sign-in followed), from Claude's own log. Undefined when that cannot be told.
+   */
+  signedOut?(): Promise<boolean | undefined>;
+  /** The accounts Claude's log shows signing out lately, each with its last time. */
+  signOuts?(): Promise<ClaudeSignOut[]>;
   /**
    * The Claudes that run on their own data folder (`--user-data-dir`), next to the main one: the
    * separate windows. None of their processes count in `running`, `quit` or `launch`. macOS only.
@@ -200,6 +214,8 @@ export class DesktopSwitchRefused extends Error {}
 const SWITCH_CANCELLED = "Automatic Desktop switch was cancelled before restart.";
 /** Keys of the main Claude's config.json a window takes: how it looks, never who is signed in. */
 const WINDOW_CONFIG_KEYS = ["locale", "userThemeMode"] as const;
+export const SIGN_IN_ENDED =
+  "This account’s saved Claude sign-in has ended. Sign in to it again in Relay.";
 export const WINDOW_HOLDS_ACCOUNT =
   "This account is open in a separate Claude window. Close that window first.";
 export const WINDOW_PAUSES_AUTOMATIC =
@@ -360,6 +376,28 @@ export class DesktopManager {
    * Relay forgot that login, and the user has to sign in again (Settings → Switching).
    */
   onExtensionBroken?: (account: Account) => void;
+  /** Whether a copy of Claude's cookie files holds a claude.ai session; tests replace it. */
+  sessionOf: (files: Record<string, Buffer | null>) => Promise<SessionPresence> = sessionPresence;
+  /**
+   * How long Relay waits, before it quits Claude, for a sign-in to reach Claude's cookie file:
+   * Chromium writes it every 30 seconds, and a Claude quit sooner loses the session.
+   */
+  sessionSettleMs = 40_000;
+  sessionPollMs = 2_000;
+  /**
+   * When, after a switch started Claude, Relay looks whether Claude signed the account out
+   * again: claude.ai answers a session it no longer accepts with 403 within a second or two of
+   * the page loading (seen 2026-11-10), and Claude then goes to /logout.
+   */
+  signInVerifyMs: readonly number[] = [8_000, 20_000];
+  private signInVerifyTimer?: ReturnType<typeof setTimeout>;
+  /** The last scheduled look, settled once it ran; for tests. */
+  signInVerified?: Promise<void>;
+  /**
+   * Told when Claude signed `account` out right after a switch put its saved sign-in in place:
+   * that sign-in ended, and the user has to sign in to the account again.
+   */
+  onSignInRejected?: (account: Account) => void;
   /** Whether Anthropic cannot be reached now; a failed sign-in then proves nothing. */
   extensionOffline: () => Promise<boolean> = () => anthropicUnreachable();
   /**
@@ -628,9 +666,11 @@ export class DesktopManager {
         !this.pending
       )
         return;
+      // Before Claude is quit: a quit before the session reaches the cookie file loses it.
+      await this.settleSession(true);
       await this.quitClaude();
       try {
-        const saved = await this.saveCurrent();
+        const saved = await this.saveCurrent(this.root, true);
         if (saved !== state.currentAccountUuid)
           throw new Error("Desktop account changed during setup. Try again.");
         await this.apply(
@@ -756,6 +796,9 @@ export class DesktopManager {
       );
       if ((await this.windows?.openAccounts())?.includes(target.desktop.accountUuid))
         throw new Error(WINDOW_HOLDS_ACCOUNT);
+      // Its saved sign-in ended: an unattended switch would leave Claude signed out.
+      if (target.desktop.rejectedAt && (options.automatic || options.closedOnly))
+        throw new DesktopSwitchRefused(SIGN_IN_ENDED);
       // Its own processes and log lines sit beside the main Claude's: only a person switches.
       if (options.automatic && (await this.windows?.anyOpen()))
         throw new DesktopSwitchRefused(WINDOW_PAUSES_AUTOMATIC);
@@ -848,6 +891,7 @@ export class DesktopManager {
           options.answerQuitGuard,
         );
       switched = target;
+      if (!options.closedOnly) this.verifySignInLater(target);
     }).finally(() => {
       try {
         this.onSwitched?.();
@@ -1775,6 +1819,7 @@ export class DesktopManager {
       current.restarted = true;
       this.report("start", current);
     }
+    await this.settleSession();
     await this.host.quit(answerQuitGuard);
   }
   private report(phase: "start" | "end", operation: Operation, ok = false) {
@@ -1945,22 +1990,165 @@ export class DesktopManager {
       if (this.lastError === undefined) this.lastError = shown;
     }
   }
-  private async saveCurrent(root = this.root) {
+  private async liveCookieFiles(root = this.root) {
+    const files: Record<string, Buffer | null> = {};
+    for (const name of COOKIE_FILES)
+      files[name] = await readBytes(root, name).catch(() => null);
+    return files;
+  }
+  /**
+   * While Claude runs signed in to an account whose session is not in the cookie file yet,
+   * waits for it, up to `sessionSettleMs`. A Claude that signed itself out is not waited for:
+   * its session is gone, not on its way. With `required`, a session still missing throws
+   * before anything is quit or changed.
+   */
+  private async settleSession(required = false) {
+    const absent = async () =>
+      !!identity(await readObject(this.root, "config.json").catch(() => null)) &&
+      (await this.sessionOf(await this.liveCookieFiles())) === "absent";
+    if (!(await this.host.running().catch(() => false)) || !(await absent())) return;
+    if (await this.host.signedOut?.().catch(() => undefined)) {
+      if (required) throw new Error(CLAUDE_SIGNED_OUT);
+      return;
+    }
+    const until = this.now() + this.sessionSettleMs;
+    this.diagnose("sign-in-settle", { required });
+    while (this.now() < until) {
+      await new Promise((resolve) => setTimeout(resolve, this.sessionPollMs));
+      if (!(await absent())) return;
+    }
+    this.diagnose("sign-in-unsettled", { required });
+    if (required) throw new SignInNotSettled();
+  }
+  /**
+   * Saves the sign-in Claude holds into the vault and answers its account. A sign-in without
+   * its session is never saved over one already kept: the kept one may still work, the new
+   * one cannot. With `requireSession` (saving a sign-in the user just made) it throws instead.
+   */
+  private async saveCurrent(root = this.root, requireSession = false) {
     const config = await readObject(root, "config.json");
     const accountUuid = identity(config);
     if (!accountUuid) return;
     const auth: JsonObject = {};
     for (const key of AUTH_KEYS) if (key in config!) auth[key] = config![key];
+    const files = await this.liveCookieFiles(root);
+    const session = await this.sessionOf(files);
+    if (session === "absent") {
+      const kept = await this.readLogin(accountUuid).then(
+        () => true,
+        () => false,
+      );
+      this.diagnose("sign-in-without-session", { account: accountUuid.slice(0, 8), kept });
+      if (requireSession) throw new Error(SIGN_IN_WITHOUT_SESSION);
+      if (kept) return accountUuid;
+    }
     const cookies: SavedLogin["cookies"] = {};
-    for (const name of COOKIE_FILES)
-      cookies[name] =
-        (await readBytes(root, name))?.toString("base64") ?? null;
+    for (const name of COOKIE_FILES) cookies[name] = files[name]?.toString("base64") ?? null;
     await writeBytes(
       this.vault,
       `accounts/${accountUuid}.bin`,
       this.host.seal(JSON.stringify({ accountUuid, auth, cookies })),
     );
+    // Claude drops the cookies of a session claude.ai refuses, so one still here was accepted.
+    if (session === "present") this.clearRejected(accountUuid);
     return accountUuid;
+  }
+  private clearRejected(accountUuid: string) {
+    if (
+      !this.store.state.accounts.some(
+        (a) => a.desktop?.accountUuid === accountUuid && a.desktop.rejectedAt,
+      )
+    )
+      return;
+    this.store.update((s) => {
+      for (const a of s.accounts)
+        if (a.desktop?.accountUuid === accountUuid) delete a.desktop.rejectedAt;
+    });
+  }
+  private markRejected(accountId: string, accountUuid: string, why: string): Account | undefined {
+    const at = new Date(this.now()).toISOString();
+    let marked: Account | undefined;
+    this.store.update((s) => {
+      const a = s.accounts.find((x) => x.id === accountId);
+      if (a?.desktop?.accountUuid !== accountUuid) return;
+      a.desktop.rejectedAt = at;
+      marked = a;
+    });
+    if (!marked) return;
+    this.diagnose("sign-in-rejected", { account: accountUuid.slice(0, 8), why });
+    this.invalidate();
+    try {
+      this.onSignInRejected?.(marked);
+    } catch {
+      // A listener never changes what was found.
+    }
+    return marked;
+  }
+  /**
+   * Signing out inside the Claude app ends that session at claude.ai, and with it the copy
+   * Relay saved earlier: put back at a switch, Claude is refused and signs out again. Each
+   * account Claude's log shows signing out after its copy was saved is marked, unless Claude is
+   * signed in to it again now. Never throws; quiet while an operation runs.
+   */
+  async noteSignOuts(): Promise<void> {
+    try {
+      if (this.busy || this.pending || !this.host.signOuts) return;
+      const outs = await this.host.signOuts();
+      if (!outs.length) return;
+      const live = identity(await readObject(this.root, "config.json").catch(() => null));
+      for (const out of outs) {
+        const account = this.store.state.accounts.find(
+          (a) => a.desktop?.accountUuid.toLowerCase() === out.accountUuid,
+        );
+        if (!account?.desktop || account.desktop.rejectedAt) continue;
+        if (live?.toLowerCase() === out.accountUuid) continue;
+        const saved = await fs
+          .stat(path.join(this.vault, "accounts", `${account.desktop.accountUuid}.bin`))
+          .then(
+            (st) => st.mtimeMs,
+            () => undefined,
+          );
+        if (saved === undefined || saved >= out.at) continue;
+        this.markRejected(account.id, account.desktop.accountUuid, "signed-out-in-claude");
+      }
+    } catch {
+      // A log that cannot be read marks nothing.
+    }
+  }
+  private verifySignInLater(target: Account) {
+    if (this.signInVerifyTimer) clearTimeout(this.signInVerifyTimer);
+    this.signInVerified = (async () => {
+      let waited = 0;
+      for (const at of this.signInVerifyMs) {
+        await new Promise<void>((resolve) => {
+          this.signInVerifyTimer = setTimeout(resolve, Math.max(0, at - waited));
+          this.signInVerifyTimer.unref?.();
+        });
+        waited = at;
+        if (await this.verifySignIn(target)) return;
+      }
+    })().catch(() => undefined);
+  }
+  /**
+   * One look after a switch started Claude as `target`: when Claude signed itself out while it
+   * still names the account, claude.ai refused the saved session. The account is marked, so no
+   * unattended switch goes to it and the user is asked to sign in again. Answers whether the
+   * look is final. Never throws.
+   */
+  private async verifySignIn(target: Account): Promise<boolean> {
+    try {
+      // Another operation since: what Claude holds is no longer this switch's.
+      if (this.busy || this.pending || !target.desktop) return true;
+      const out = await this.host.signedOut?.();
+      if (out === undefined) return true;
+      if (!out) return false;
+      const live = identity(await readObject(this.root, "config.json").catch(() => null));
+      if (live && live !== target.desktop.accountUuid) return true;
+      this.markRejected(target.id, target.desktop.accountUuid, "refused-after-switch");
+      return true;
+    } catch {
+      return true;
+    }
   }
   /**
    * The cookie files of `accountUuid`'s Claude app sign-in, for a usage read: Claude's own while

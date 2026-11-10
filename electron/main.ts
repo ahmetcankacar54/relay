@@ -979,6 +979,10 @@ else {
           storage: levelExtensionStorage,
           cookies: sqliteCookieStorage,
         };
+        desktop.onSignInRejected = (account) => {
+          notifySignInEnded(account);
+          broadcastChanged();
+        };
         desktop.onExtensionBroken = (account) => {
           notifyExtensionBroken(account);
           broadcastChanged();
@@ -1695,6 +1699,19 @@ function notifyExtensionBroken(account: Account) {
   notice.on("click", () => openPage("gecis"));
   notice.show();
 }
+/** Says that an account's saved Claude sign-in ended; a click opens the account. */
+function notifySignInEnded(account: Account) {
+  if (!Notification.isSupported()) return;
+  const notice = new Notification({
+    title: say("Claude girişi sona ermiş", "Claude sign-in ended"),
+    body: say(
+      `${account.name} hesabının kayıtlı girişi artık geçerli değil; yeniden giriş yapmak için tıkla.`,
+      `The saved sign-in of ${account.name} no longer works; click to sign in again.`,
+    ),
+  });
+  notice.on("click", () => openPage("hesaplar"));
+  notice.show();
+}
 /** Says once per version that a downloaded update is ready; a click opens Overview's banner. */
 function notifyUpdate(version: string) {
   if (!Notification.isSupported()) return;
@@ -2222,6 +2239,7 @@ function alignWorkspacesLater() {
   const now = Date.now();
   if (now - workspacesAlignedAt < 30_000 || !desktop || desktop.isBusy) return;
   workspacesAlignedAt = now;
+  void desktop.noteSignOuts();
   for (const account of service.store.state.accounts)
     if (desktopCliWorkspaceMismatch(account) && !service.auth.active(account.id))
       void alignDesktopWorkspace(account).catch(() => {});

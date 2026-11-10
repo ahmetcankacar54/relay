@@ -140,3 +140,14 @@ test("the workspace the Claude app is in is saved without asking; a mere suggest
   assert.deepEqual(unsure.captures, [["p", ORG2]]);
   assert.deepEqual(unsure.auto.state(), { accountId: "p", status: "saved" });
 });
+
+test("a sign-in Claude has not written to its cookie file yet is saved at a later tick, not failed", async () => {
+  const { SignInNotSettled } = await import("../electron/core/desktop-session");
+  const ready = state({ pendingProfileId: "p", currentAccountUuid: NEW, organizations: [ORG] });
+  const h = harness([ready], [account("p")], new SignInNotSettled());
+  h.auto.arm("p");
+  await h.auto.tick();
+  assert.equal(h.auto.state()?.status, "waiting");
+  await h.auto.tick();
+  assert.equal(h.captures.length, 2);
+});

@@ -1,4 +1,5 @@
 import type { Account, AutoCaptureState, DesktopState } from "../../shared/types";
+import { SignInNotSettled } from "./desktop-session";
 import { readSignIn } from "./sign-in-wait";
 
 export interface AutoCaptureDeps {
@@ -107,6 +108,11 @@ export class AutoCapture {
       if (this.current?.accountId === accountId)
         this.set({ status: "saved", orgs: undefined, suggestedOrg: undefined });
     } catch (error) {
+      // The sign-in is not in Claude's cookie file yet; nothing was quit. The next tick saves it.
+      if (error instanceof SignInNotSettled) {
+        if (this.current?.accountId === accountId) this.set({ status: "waiting" });
+        return;
+      }
       if (this.current?.accountId === accountId)
         this.set({ status: "failed", error: error instanceof Error ? error.message : String(error) });
     }

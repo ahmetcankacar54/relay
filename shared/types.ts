@@ -51,6 +51,12 @@ export interface Account {
     orgId: string;
     savedAt: string;
     email?: string;
+    /**
+     * Set when the saved Claude app sign-in ended: Claude signed the account out right after a
+     * switch put it in place, or the user signed out of it inside Claude. Until the account is
+     * signed in again no unattended switch goes to it.
+     */
+    rejectedAt?: string;
   };
   auth?: {
     loggedIn: boolean;

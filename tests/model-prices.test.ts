@@ -30,6 +30,8 @@ test("each kind of token at its own rate", () => {
   near(responseCost("claude-opus-5-5", { ...zero, cacheRead: M }), 0.2);
   near(responseCost("claude-sonnet-5-5", { ...zero, cacheRead: M }), 0.1);
   near(responseCost("claude-fable-5-1", { ...zero, cacheRead: M }), 0.25);
+  near(responseCost("claude-fable-5-2", { ...zero, cacheRead: M }), 0.2);
+  near(responseCost("claude-fable-5-2", { ...zero, output: M }), 40);
   near(responseCost("claude-fable-5", { ...zero, cacheRead: M }), 1);
 });
 

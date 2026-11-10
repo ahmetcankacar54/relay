@@ -42,6 +42,7 @@ interface Dependencies {
 function identityReady(account: Account) {
   return (
     !!account.desktop &&
+    !account.desktop.rejectedAt &&
     !!account.auth?.loggedIn &&
     !!account.auth.accountUuid &&
     !!account.auth.orgId &&
