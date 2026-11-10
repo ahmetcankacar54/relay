@@ -1712,7 +1712,7 @@ function notifySignInEnded(account: Account) {
   notice.on("click", () => openPage("hesaplar"));
   notice.show();
 }
-/** Says once per version that a downloaded update is ready; a click opens Overview's banner. */
+/** Says once per version that a downloaded update is ready; a click opens Overview, where the sidebar row offers it. */
 function notifyUpdate(version: string) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
