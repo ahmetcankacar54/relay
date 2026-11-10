@@ -18,7 +18,8 @@ export const AUTO_CAPTURE_LIMIT_MS = 30 * 60_000;
  * Saves a Claude app sign-in by itself once it is complete, so adding an account needs one
  * confirmation at the start instead of a second "Save sign-in": the user signs in to the Claude
  * app and opens Code, and the next tick captures it (Claude restarts once more, as the first
- * confirmation said). With several Code workspaces it waits for the user to pick one. Armed for
+ * confirmation said). With several Code workspaces it saves the one the Claude app is in, and
+ * waits for the user to pick one only when nothing says which that is. Armed for
  * one profile at a time, in memory: after a Relay restart the pending sign-in is saved by hand.
  */
 export class AutoCapture {
@@ -78,12 +79,19 @@ export class AutoCapture {
           if (armed.alreadySaved) this.set({ status: "waiting", alreadySaved: undefined });
           return;
         case "ready":
-          if (reading.orgs.length > 1) {
-            if (armed.status !== "choose-org")
-              this.set({ status: "choose-org", orgs: reading.orgs, alreadySaved: undefined });
+          // Several workspaces: the one the Claude app is in is saved without asking; a blind
+          // choice binds the profile to a workspace its usage sign-in can never match.
+          if (reading.orgs.length > 1 && !reading.preferred) {
+            if (armed.status !== "choose-org" || armed.suggestedOrg !== reading.suggested)
+              this.set({
+                status: "choose-org",
+                orgs: reading.orgs,
+                suggestedOrg: reading.suggested,
+                alreadySaved: undefined,
+              });
             return;
           }
-          await this.save(armed.accountId, reading.orgs[0]);
+          await this.save(armed.accountId, reading.preferred ?? reading.orgs[0]);
       }
     } catch {
       // A reading that failed is tried again at the next tick.
@@ -96,7 +104,8 @@ export class AutoCapture {
     this.set({ status: "saving", alreadySaved: undefined });
     try {
       await this.deps.capture(accountId, orgId);
-      if (this.current?.accountId === accountId) this.set({ status: "saved", orgs: undefined });
+      if (this.current?.accountId === accountId)
+        this.set({ status: "saved", orgs: undefined, suggestedOrg: undefined });
     } catch (error) {
       if (this.current?.accountId === accountId)
         this.set({ status: "failed", error: error instanceof Error ? error.message : String(error) });

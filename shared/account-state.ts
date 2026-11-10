@@ -57,6 +57,19 @@ export function desktopCliMismatch(account: Account) {
   );
 }
 
+/**
+ * The mismatch is only the workspace: the usage sign-in is the Claude app sign-in's own account
+ * in another of its organizations. Relay moves the profile there once the Claude app has opened
+ * Code in that workspace; signing in again with "the right account" changes nothing.
+ */
+export function desktopCliWorkspaceMismatch(account: Account) {
+  return (
+    desktopCliMismatch(account) &&
+    !!account.auth?.accountUuid &&
+    account.auth.accountUuid.toLowerCase() === account.desktop!.accountUuid.toLowerCase()
+  );
+}
+
 export function pendingAuth(flow?: AuthFlow) {
   return !!flow && ["starting", "waiting", "verifying"].includes(flow.status);
 }

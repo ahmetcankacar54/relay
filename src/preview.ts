@@ -368,6 +368,7 @@ if (scenario?.startsWith("login-")) {
         status,
         browserReady: status !== "starting",
         codeRequested: status === "waiting",
+        windowAvailable: true,
         startedAt: new Date().toISOString(),
         error:
           status === "failed"

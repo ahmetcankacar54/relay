@@ -65,6 +65,11 @@ export class Service {
   readonly store: Store;
   readonly runner: Runner;
   readonly auth: AuthManager;
+  /**
+   * Set by the app: whether a usage sign-in that just finished belongs to the profile's Claude
+   * app sign-in. Answers the reason it does not (the sign-in flow fails with it), or nothing.
+   */
+  signInFit?: (account: Account) => Promise<string | undefined>;
   private index = new Map<string, IndexedSession>();
   private diagnostics?: Diagnostics;
   private diagnosedAt = 0;
@@ -91,7 +96,9 @@ export class Service {
       async (id) => {
         // A startup/status request started before login must not decide its result.
         await this.authChecks.get(id);
-        return !!(await this.checkAuth(id)).auth?.loggedIn;
+        const account = await this.checkAuth(id);
+        if (!account.auth?.loggedIn) return false;
+        return (await this.signInFit?.(account)) ?? true;
       },
       emitAuth,
       openBrowser,
@@ -225,6 +232,17 @@ export class Service {
         .some((r) => r.accountId === id && r.status === "running")
     )
       throw new Error("Bu hesapta çalışan oturumu önce durdur.");
+    // Asked again while its page waits for approval: the page comes back, where the user
+    // last had it. Starting returns the same attempt, which alone shows nothing new.
+    const waiting = this.auth
+      .list()
+      .find((f) => f.accountId === id && f.status === "waiting" && f.browserReady);
+    if (waiting) {
+      await this.auth
+        .reopen(id, waiting.id, waiting.inWindow ? "window" : "browser")
+        .catch(() => {});
+      return waiting;
+    }
     return this.auth.start(
       id,
       await this.executable(),

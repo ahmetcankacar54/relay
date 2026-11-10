@@ -40,10 +40,12 @@ export function authorizationURL(text: string): string | undefined {
   }
 }
 /**
- * Where the sign-in page opens instead of the system browser: Relay's own window for the
- * account. The CLI runs the program in `BROWSER` with the page's address, so `env` points it at a
- * small script that writes the address where `take` reads it. That page sends the approval back
- * to the CLI on localhost, so nothing has to be pasted.
+ * How Relay gets the sign-in page from the CLI, and its own window for the page. The CLI runs
+ * the program in `BROWSER` with the page's address, so `env` points it at a small script that
+ * writes the address where `take` reads it. That page sends the approval back to the CLI on
+ * localhost, so nothing has to be pasted. Relay then opens it in the system browser, where the
+ * user's sign-ins and password manager are; `show` opens it in Relay's own window for the
+ * account instead, when the browser is signed in to another Claude account.
  */
 export interface AuthBrowser {
   env(attemptId: string): Record<string, string>;
@@ -73,7 +75,11 @@ export class AuthManager {
   /** Set by the app where it can show the sign-in page in its own window. */
   browser?: AuthBrowser;
   constructor(
-    private verify: (id: string) => Promise<boolean>,
+    /**
+     * Whether the finished sign-in is the account's: true, false (not signed in), or the reason
+     * it does not fit the profile, shown as the flow's error.
+     */
+    private verify: (id: string) => Promise<boolean | string>,
     private emit: (flow: AuthFlow) => void,
     private open: (url: string) => Promise<void>,
     private timeoutMs = 10 * 60_000,
@@ -124,6 +130,7 @@ export class AuthManager {
         status: "starting",
         browserReady: false,
         codeRequested: false,
+        ...(browser ? { windowAvailable: true } : {}),
         startedAt: new Date().toISOString(),
       },
       child,
@@ -144,7 +151,7 @@ export class AuthManager {
         Math.max(e.output.lastIndexOf("\n"), e.output.lastIndexOf("\r")) + 1,
       );
       const url = authorizationURL(complete);
-      // With a window, the page the CLI hands to BROWSER wins; the printed one is the fallback.
+      // With a handoff, the page the CLI hands to BROWSER wins; the printed one is the fallback.
       if (url && !e.url && !browser) {
         e.url = url;
         this.update(e, { status: "waiting", browserReady: true });
@@ -215,8 +222,16 @@ export class AuthManager {
           if (!url || e.url || e.stopping || !authPending(e.flow)) return;
           e.url = url;
           clearInterval(e.handoff);
-          this.update(e, { status: "waiting", browserReady: true, inWindow: true });
-          browser.show(accountId, url);
+          this.update(e, { status: "waiting", browserReady: true });
+          // The system browser first: Google and passkey sign-ins work there. A browser that
+          // cannot be opened leaves Relay's own window.
+          try {
+            await this.open(url);
+          } catch {
+            if (e.url !== url || e.stopping || !authPending(e.flow)) return;
+            this.update(e, { inWindow: true });
+            browser.show(accountId, url);
+          }
         })();
       }, 250);
     }
@@ -230,8 +245,11 @@ export class AuthManager {
       throw new Error(
         "Giriş sayfası henüz hazır değil ya da süresi doldu. Girişi yeniden başlat.",
       );
-    if (where === "window" && this.browser) this.browser.show(accountId, e.url);
-    else await this.open(e.url);
+    if (where === "window" && this.browser) {
+      // From now on the flow owns that window: it closes when the sign-in ends.
+      if (!e.flow.inWindow) this.update(e, { inWindow: true });
+      this.browser.show(accountId, e.url);
+    } else await this.open(e.url);
   }
   submitCode(accountId: string, attemptId: string, code: string) {
     const e = this.get(accountId, attemptId);
@@ -270,19 +288,22 @@ export class AuthManager {
   }
   private async complete(e: Entry) {
     try {
-      const connected = await this.verify(e.flow.accountId);
+      const verdict = await this.verify(e.flow.accountId);
       if (
         e.stopping ||
         !authPending(e.flow) ||
         this.entries.get(e.flow.accountId) !== e
       )
         return;
+      const connected = verdict === true;
       this.finish(
         e,
         connected ? "connected" : "failed",
         connected
           ? undefined
-          : "Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
+          : typeof verdict === "string"
+            ? verdict
+            : "Tarayıcı onayı alındı ama hesap doğrulanamadı. Limitleri yenile; sorun sürerse limit okuma girişini yenile.",
       );
     } catch {
       if (!e.stopping && authPending(e.flow))

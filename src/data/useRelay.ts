@@ -197,7 +197,7 @@ function useRelayState(
   );
   const hasUnclaimedDesktop =
     !!desktop?.currentAccountUuid && !desktop.activeProfileId;
-  const targetOrg = targetWorkspace(desktop?.organizations, org);
+  const targetOrg = targetWorkspace(desktop?.organizations, org, desktop?.orgHint?.orgId);
   const desktopBusy =
     !!busy || !!desktop?.busy || data?.continuation?.status === "executing";
   const dismissError = async () => {

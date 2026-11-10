@@ -107,6 +107,7 @@ export function DesktopPendingActions() {
           onChange={(orgId) =>
             void action("auto-capture", () => api.chooseAutoCaptureOrg(pendingDesktop.id, orgId))
           }
+          suggested={auto.suggestedOrg}
           t={t}
         />
       ) : (
@@ -117,6 +118,7 @@ export function DesktopPendingActions() {
             organizations={desktop!.organizations}
             value={targetOrg}
             onChange={setOrg}
+            suggested={desktop!.orgHint?.orgId}
             t={t}
           />
         )
@@ -218,15 +220,41 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
   const [code, setCode] = useState("");
   useEffect(() => setCode(""), [flow?.id]);
   if (!flow) return null;
+  // The account the approval must come from: the browser may be signed in to another one.
+  const expected = flowAccount?.desktop?.email ?? flowAccount?.auth?.email;
+  const waiting = flow.status === "starting" || flow.status === "waiting";
   const note =
-    flow.status === "failed"
-      ? localizeError(flow.error ?? "", language)
-      : flow.inWindow && (flow.status === "starting" || flow.status === "waiting")
-        ? t(
-            "Açılan Relay penceresinde Claude’a bu hesapla gir ve izin ver. Google ile giriş açılmazsa e-posta ile gir ya da “Tarayıcıda aç”a bas.",
-            "In the Relay window, sign in to Claude with this account. Then allow access. If Google sign-in does not open, use email or select “Open in browser”.",
-          )
-        : undefined;
+    flow.status === "failed" ? (
+      localizeError(flow.error ?? "", language)
+    ) : waiting && flow.inWindow ? (
+      t(
+        "Açılan Relay penceresinde Claude’a bu hesapla gir ve izin ver. Google ile giriş açılmazsa e-posta ile gir ya da “Tarayıcıda aç”a bas.",
+        "In the Relay window, sign in to Claude with this account. Then allow access. If Google sign-in does not open, use email or select “Open in browser”.",
+      )
+    ) : waiting ? (
+      <>
+        {t(
+          "Tarayıcında açılan sayfada izin ver.",
+          "Allow access on the page that opened in your browser.",
+        )}{" "}
+        {expected ? (
+          <>
+            {t("Sayfa şu hesapla açık olmalı:", "The page must be signed in as")}{" "}
+            <Private>{expected}</Private>
+            {". "}
+          </>
+        ) : null}
+        {flow.windowAvailable
+          ? t(
+              "Tarayıcı başka bir Claude hesabıyla açıksa “Relay penceresinde aç”ı kullan.",
+              "If the browser is signed in to another Claude account, select “Open in Relay window”.",
+            )
+          : t(
+              "Tarayıcı başka bir Claude hesabıyla açıksa önce claude.ai’da hesabı değiştir.",
+              "If the browser is signed in to another Claude account, switch accounts on claude.ai first.",
+            )}
+      </>
+    ) : undefined;
   return (
     <Card
       id={embedded ? undefined : "cli-connection-panel"}
@@ -338,22 +366,8 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
       <div className={actionsClass}>
         {pending(flow) ? (
           <>
-            {flow.inWindow && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!!busy || !flow.browserReady}
-                onClick={() =>
-                  void action("reopen", () =>
-                    api.reopenLogin(flow.accountId, flow.id, "window"),
-                  )
-                }
-              >
-                {t("Pencereyi göster", "Show the window")}
-              </Button>
-            )}
             <Button
-              variant={flow.inWindow ? "ghost" : "outline"}
+              variant="outline"
               size="sm"
               disabled={!!busy || !flow.browserReady}
               onClick={() =>
@@ -367,6 +381,22 @@ export function CliFlowPanel({ embedded = false }: { embedded?: boolean }) {
                 ? t("Tarayıcıda aç", "Open in browser")
                 : t("Tarayıcıyı yeniden aç", "Reopen browser")}
             </Button>
+            {(flow.inWindow || flow.windowAvailable) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!!busy || !flow.browserReady}
+                onClick={() =>
+                  void action("reopen", () =>
+                    api.reopenLogin(flow.accountId, flow.id, "window"),
+                  )
+                }
+              >
+                {flow.inWindow
+                  ? t("Pencereyi göster", "Show the window")
+                  : t("Relay penceresinde aç", "Open in Relay window")}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"

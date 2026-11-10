@@ -33,6 +33,7 @@ import { ElectronUpdateDriver } from "./core/win-linux-update";
 import { openCodeTab } from "./core/code-tab";
 import { AutoCapture } from "./core/auto-capture";
 import { authWindows, forgetSignInSession } from "./auth-window";
+import { desktopCliWorkspaceMismatch } from "../shared/account-state";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
@@ -755,6 +756,17 @@ else {
       };
       // The captures and the vault's reads go to the same log as the restore.
       desktop.onDraftEvent = logDraftEvent;
+      // A finished usage sign-in must be the profile's Claude app account; the flow says why not.
+      service.signInFit = async (account) => {
+        switch (await alignDesktopWorkspace(account)) {
+          case "other-account":
+            return "Tarayıcıda başka bir Claude hesabıyla giriş yapıldı; bu profil Claude uygulamasındaki hesabına ait. claude.ai’da doğru hesaba geç ya da “Relay penceresinde aç”ı kullan, sonra girişi yenile.";
+          case "no-workspace":
+            return "Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.";
+          default:
+            return undefined;
+        }
+      };
       // How Relay starts Claude: HTTP/3 kept off once learned.
       const diagnostics = new SwitchDiagnostics(
         path.join(app.getPath("userData"), "switch-diagnostics"),
@@ -1325,6 +1337,7 @@ else {
             operations: () => desktopLock.operations + desktop.operations,
           });
           observedDesktop = read.state;
+          alignWorkspacesLater();
           // The widgets show the account open in Claude: a switch reaches them now.
           if (read.state.activeProfileId !== widgetActiveId) writeWidget();
           return (lastTraySnapshot = {
@@ -1406,6 +1419,11 @@ else {
       trayTimer.unref();
       void service
         .reconcileAuth()
+        // A profile saved in the wrong workspace of its own account, before Relay could tell.
+        .then(async () => {
+          for (const account of service.store.state.accounts)
+            await alignDesktopWorkspace(account).catch(() => {});
+        })
         .finally(() => {
           // Corroborate legacy profiles before the first quota request. Otherwise
           // updated identity fields can hide that request behind its old cooldown.
@@ -2134,6 +2152,42 @@ async function applyProxyConfig(next: ProxyConfig): Promise<void> {
     await startProxy().catch(() => {});
     throw error;
   }
+}
+/**
+ * Whether a profile's usage sign-in is its Claude app sign-in's account and workspace. One
+ * Claude account can have several workspaces (organizations); a profile saved in another one
+ * than its usage sign-in names can never be read or switched to, however often the user signs
+ * in again. Where the Claude app has that workspace, the profile moves to it ("moved").
+ */
+async function alignDesktopWorkspace(
+  account: Account,
+): Promise<"fits" | "moved" | "other-account" | "no-workspace"> {
+  const bound = account.desktop;
+  const auth = account.auth;
+  if ((account.provider ?? "claude") !== "claude" || !bound || !auth?.loggedIn) return "fits";
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  if (auth.accountUuid && !same(auth.accountUuid, bound.accountUuid)) return "other-account";
+  if (!auth.accountUuid || !auth.orgId || same(auth.orgId, bound.orgId)) return "fits";
+  if (!(await desktop.rebindOrg(account.id, auth.orgId))) return "no-workspace";
+  usage?.invalidate(account.id);
+  usage?.tick();
+  void tray?.update();
+  broadcastChanged();
+  return "moved";
+}
+/**
+ * A profile left in another workspace than its usage sign-in (the Claude app had not opened
+ * that workspace yet) moves once the app has: looked at with the tray's reading, at most twice
+ * a minute, and only for profiles that are out of step.
+ */
+let workspacesAlignedAt = 0;
+function alignWorkspacesLater() {
+  const now = Date.now();
+  if (now - workspacesAlignedAt < 30_000 || !desktop || desktop.isBusy) return;
+  workspacesAlignedAt = now;
+  for (const account of service.store.state.accounts)
+    if (desktopCliWorkspaceMismatch(account) && !service.auth.active(account.id))
+      void alignDesktopWorkspace(account).catch(() => {});
 }
 function broadcastChanged() {
   if (window && !window.isDestroyed()) window.webContents.send("relay:changed");
@@ -2950,7 +3004,10 @@ function bindIPC() {
       const account = id.parse(accountId);
       if (usageCredentialRefresher.isRefreshing(account))
         throw new Error("Wait for the account connection refresh to finish.");
-      return service.checkAuth(account);
+      return service.checkAuth(account).then(async (checked) => {
+        await alignDesktopWorkspace(checked).catch(() => {});
+        return service.store.account(account);
+      });
     }),
   );
   handle("login", (accountId) => {

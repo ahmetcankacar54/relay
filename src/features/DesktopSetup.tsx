@@ -115,6 +115,7 @@ export function DesktopSetup({
             value={org}
             onChange={selectOrg}
             disabled={busy}
+            suggested={desktop?.orgHint?.orgId}
             t={t}
           />
         )}
@@ -147,6 +148,7 @@ export function WorkspaceSelect({
   value,
   onChange,
   disabled,
+  suggested,
   t,
 }: {
   accounts: readonly Account[];
@@ -154,9 +156,11 @@ export function WorkspaceSelect({
   value: string;
   onChange: (id: string) => void;
   disabled?: boolean;
+  /** The workspace the Claude app is in: listed first and marked. */
+  suggested?: string;
   t: (tr: string, en: string) => string;
 }) {
-  const options = workspaceOptions(organizations, accounts, t);
+  const options = workspaceOptions(organizations, accounts, t, suggested);
   const chosen = options.find((o) => o.id === value);
   return (
     <label className="grid gap-1.5 text-sm font-medium">

@@ -105,8 +105,10 @@ export interface AuthFlow {
     "starting" | "waiting" | "verifying" | "connected" | "failed" | "cancelled";
   browserReady: boolean;
   codeRequested: boolean;
-  /** The sign-in page is open in Relay's own window for the account, not the system browser. */
+  /** The sign-in page was opened in Relay's own window for the account. */
   inWindow?: boolean;
+  /** Relay can show the page in its own window, beside the system browser it opens by default. */
+  windowAvailable?: boolean;
   startedAt: string;
   error?: string;
 }
@@ -251,6 +253,11 @@ export interface DesktopState {
   running: boolean;
   currentAccountUuid?: string;
   organizations: string[];
+  /**
+   * Which of several Code workspaces the Claude app is in now, when its own files say so.
+   * `certain` when they name it outright; otherwise it is only the most recently used.
+   */
+  orgHint?: { orgId: string; certain: boolean };
   activeProfileId?: string;
   pendingProfileId?: string;
   busy: boolean;
@@ -380,6 +387,8 @@ export interface AutoCaptureState {
   accountId: string;
   status: "waiting" | "choose-org" | "saving" | "saved" | "failed";
   orgs?: string[];
+  /** The workspace the Claude app used last, offered first when the user has to choose. */
+  suggestedOrg?: string;
   alreadySaved?: string;
   /** "timeout", "other-pending", or the save's own error. */
   error?: string;

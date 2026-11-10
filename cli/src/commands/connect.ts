@@ -42,8 +42,38 @@ export const connect: Command = async ({ io, deps, parsed, t }) => {
         EXIT.failed,
       );
     const desktop = account.desktop;
+    // The profile's own account in another of its workspaces: the profile moves there when the
+    // Claude app has that workspace. Signing in again could never make the two agree.
+    let moved = false;
     if (
       desktop &&
+      auth.orgId &&
+      auth.accountUuid?.toLowerCase() === desktop.accountUuid.toLowerCase() &&
+      auth.orgId.toLowerCase() !== desktop.orgId.toLowerCase()
+    ) {
+      ctx.store.update((s) => {
+        s.accounts.find((a) => a.id === account.id)!.auth = auth;
+      });
+      moved = await ctx.desktop.rebindOrg(account.id, auth.orgId).catch(() => false);
+      if (!moved) {
+        ctx.store.update((s) => {
+          const stored = s.accounts.find((a) => a.id === account.id)!;
+          if (account.auth) stored.auth = account.auth;
+          else delete stored.auth;
+        });
+        await runClaude(ctx.deps, claude, ["auth", "logout"], profile, { timeoutMs: 30_000, env: io.env }).catch(() => 1);
+        throw new CliError(
+          localizeError(
+            "Bu giriş, hesabın Claude uygulamasında henüz açılmamış bir çalışma alanına ait. Claude uygulamasında o çalışma alanında Code’u aç, sonra girişi yenile.",
+            ctx.lang,
+          ),
+          EXIT.failed,
+        );
+      }
+    }
+    if (
+      desktop &&
+      !moved &&
       (auth.accountUuid?.toLowerCase() !== desktop.accountUuid.toLowerCase() ||
         auth.orgId?.toLowerCase() !== desktop.orgId.toLowerCase())
     ) {

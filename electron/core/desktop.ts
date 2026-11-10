@@ -20,6 +20,7 @@ import {
   type CarriedConversation,
   type JsonObject,
 } from "./desktop-files";
+import { activeOrgHint, type OrgHint } from "./desktop-org";
 import type {
   Account,
   DesktopOperationKind,
@@ -229,6 +230,8 @@ interface DesktopReading {
   windows: number;
   currentAccountUuid?: string;
   organizations: string[];
+  /** Which of several workspaces the Claude app is in, when its own files say (desktop-org.ts). */
+  orgHint?: OrgHint;
   recoveryRequired: boolean;
 }
 /**
@@ -522,13 +525,23 @@ export class DesktopManager {
   private async read(running: () => Promise<boolean>): Promise<DesktopReading> {
     let currentAccountUuid: string | undefined;
     let organizations: string[] = [];
+    let orgHint: OrgHint | undefined;
     try {
-      currentAccountUuid = identity(await readObject(this.root, "config.json"));
-      if (currentAccountUuid)
+      const config = await readObject(this.root, "config.json");
+      currentAccountUuid = identity(config);
+      if (currentAccountUuid) {
         organizations = await directories(
           this.root,
           `claude-code-sessions/${currentAccountUuid}`,
         );
+        const since = this.pending ? Date.parse(this.pending.startedAt) : NaN;
+        orgHint = activeOrgHint(
+          config,
+          currentAccountUuid,
+          organizations,
+          Number.isFinite(since) ? since : undefined,
+        );
+      }
       if (
         this.lastError ===
         "Claude Desktop data could not be read. No files were changed."
@@ -548,6 +561,7 @@ export class DesktopManager {
       windows: this.host.windowsSeen?.() ?? 0,
       currentAccountUuid,
       organizations,
+      ...(orgHint ? { orgHint } : {}),
       recoveryRequired: recovery,
     };
   }
@@ -559,6 +573,7 @@ export class DesktopManager {
       ...(reading.windows ? { windows: reading.windows } : {}),
       currentAccountUuid,
       organizations: [...organizations],
+      ...(reading.orgHint ? { orgHint: { ...reading.orgHint } } : {}),
       activeProfileId: this.store.state.accounts.find(
         (a) =>
           !!a.desktop &&
@@ -649,6 +664,36 @@ export class DesktopManager {
           await this.host.launch();
       }
     });
+  }
+  /**
+   * Points a saved Claude app sign-in at another of the same account's Code workspaces, the one
+   * its usage sign-in belongs to. Only the binding changes: the saved sign-in is the account's
+   * and covers every workspace, so Claude is not restarted; the next switch or history sync
+   * carries conversations into the new workspace. Answers whether anything changed.
+   */
+  async rebindOrg(profileId: string, orgId: string): Promise<boolean> {
+    if (this.busy || this.pending) return false;
+    const target = uuid.parse(orgId).toLowerCase();
+    const account = this.store.account(profileId);
+    const desktop = account.desktop;
+    if (!desktop || desktop.orgId.toLowerCase() === target) return false;
+    if (
+      account.auth?.accountUuid?.toLowerCase() !== desktop.accountUuid.toLowerCase() ||
+      account.auth.orgId?.toLowerCase() !== target
+    )
+      return false;
+    const workspaces = await directories(
+      this.root,
+      `claude-code-sessions/${uuid.parse(desktop.accountUuid)}`,
+    );
+    const workspace = workspaces.find((org) => org.toLowerCase() === target);
+    if (!workspace || this.busy || this.pending) return false;
+    this.store.update((s) => {
+      const stored = s.accounts.find((a) => a.id === profileId)?.desktop;
+      if (stored && stored.accountUuid === desktop.accountUuid) stored.orgId = workspace;
+    });
+    this.invalidate();
+    return true;
   }
   async beginLogin(profileId: string) {
     return this.exclusive({ kind: "link", profileId }, async () => {
