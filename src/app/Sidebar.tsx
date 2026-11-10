@@ -38,6 +38,7 @@ import { RelayContext, type Relay } from "@/data/relay-context";
 import { pendingFlow, type sidebarStatus } from "@/data/selectors";
 import { accountFromHash, accountHash } from "@/pages/accounts/AccountDetail";
 import type { PageId } from "./routes";
+import { SidebarUpdate } from "./SidebarUpdate";
 import { SIDEBAR, dragSidebar, keySidebar, type SidebarSize } from "./useSidebarSize";
 
 /** `sidebarStatus`, where the gateway's fields may be left out (a window without a gateway, the tests). */
@@ -463,6 +464,7 @@ export function Sidebar({
           </button>
         </div>
       )}
+      <SidebarUpdate compact={compact} t={t} />
       <div className={cn("w-full", compact && "flex justify-center")}>
         <NavItem
           item={settings}

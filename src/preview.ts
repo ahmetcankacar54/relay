@@ -579,6 +579,11 @@ if (scenario === "update")
     version: "0.16.0",
     notesUrl: "https://github.com/ahmetcankacar54/relay/releases/tag/v0.16.0",
   };
+// The same update on its way, or installing after Update: the sidebar row shows its progress.
+if (scenario === "update-download")
+  state.update = { ...previewUpdate(), status: "downloading", version: "0.16.0", progress: 0.42 };
+if (scenario === "update-install")
+  state.update = { ...previewUpdate(), status: "installing", version: "0.16.0" };
 /** The lost and found's sources in the preview. */
 function previewLostFoundSource() {
   // Two accounts' Claude app sign-ins, with a short visit to the second one last Wednesday.
