@@ -190,3 +190,13 @@ test("the gateway's counters: requests in flight, answers that read the cache, t
   assert.equal(stats.getMetrics(0).lastAccountId, undefined);
 });
 
+
+test("the cache hit rate counts what was written to the cache as a miss", () => {
+  const stats = new ProxyStats();
+  stats.recordTokens("a", { input: 100, cacheRead: 800, cacheWrite: 100 });
+  assert.equal(stats.getMetrics(0).cacheHitRatio, 0.8);
+  // A cold start (a session moved to another account, or back after the cache expired) writes
+  // its whole history again: that has to pull the rate down.
+  stats.recordTokens("b", { input: 10, cacheWrite: 990 });
+  assert.equal(stats.getMetrics(0).cacheHitRatio, 0.4);
+});

@@ -720,3 +720,48 @@ test("chat completions skip a Codex ChatGPT sign-in for an OpenAI API key accoun
     await only.server.stop();
   }
 });
+
+test("a Claude Code session keeps its account by its session header, whatever its body says", async () => {
+  const upstream = await fakeUpstream((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end('{"ok":true}');
+  });
+  const accounts = [makeAccount("a", "A"), makeAccount("b", "B")];
+  const usageMap: Record<string, AccountUsage> = {};
+  const server = new ProxyServer({
+    config: { port: 0, host: "127.0.0.1", enabled: true, routingStrategy: "strict-priority" },
+    credentialResolver: async (a) => `tok-${a.id}`,
+    usageProvider: () => ({ accounts, usageMap }),
+    upstreams: { anthropicUrl: upstream.url },
+  });
+  const { port } = await server.start();
+  const send = (session: string, body: unknown) =>
+    request(
+      port,
+      { method: "POST", path: "/v1/messages", headers: { "x-claude-code-session-id": session } },
+      JSON.stringify(body),
+    );
+  try {
+    await send("s-1", { messages: [{ role: "user", content: "The first prompt of this conversation." }] });
+    // A is nearly full: new sessions go to B, a session already on A stays for its cache.
+    const soon = new Date(Date.now() + 3_600_000).toISOString();
+    usageMap.a = {
+      accountId: "a",
+      status: "ready",
+      stale: false,
+      checkedAt: new Date().toISOString(),
+      fiveHour: { usedPercent: 97, resetsAt: soon },
+      sevenDay: { usedPercent: 10, resetsAt: soon },
+    };
+    // The same session after a compaction: another first message, and a subagent's own metadata.
+    await send("s-1", { messages: [{ role: "user", content: "A summary that replaced the history." }], metadata: { user_id: "another" } });
+    await send("s-2", { messages: [{ role: "user", content: "The first prompt of this conversation." }] });
+    assert.deepEqual(
+      upstream.seen.map((s) => s.headers.authorization),
+      ["Bearer tok-a", "Bearer tok-a", "Bearer tok-b"],
+    );
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});

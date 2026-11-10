@@ -52,6 +52,7 @@ import type {
   ProxyRequestLog,
   ProxyStatus,
 } from "../../shared/types";
+import { DEFAULT_PROXY_CONFIG } from "../../shared/proxy-types";
 
 type Strategy = NonNullable<ProxyStatus["routingStrategy"]>;
 type Patch = Parameters<ReturnType<typeof useRelay>["api"]["proxyConfigure"]>[0];
@@ -895,13 +896,13 @@ function RulesTab({
             label={t("Oturum aynı hesapta kalsın", "Keep a session on its account")}
             htmlFor="proxy-affinity"
             description={t(
-              `Önbellek hesaba özeldir; hesap değişirse baştan yazılır. Şu anki önbellek isabeti %${ratio}.`,
-              `The prompt cache belongs to the account; a switch rebuilds it. Cache hits now: ${ratio}%.`,
+              `Önbellek hesaba özeldir; hesap değişirse baştan yazılır. Claude Code abonelikte önbelleği son istekten sonra 1 saat tutar; daha kısa süre, ara verilen oturumu başka hesaba kaydırabilir. Şu anki önbellek isabeti %${ratio}.`,
+              `The prompt cache belongs to the account; a switch rebuilds it. On a subscription Claude Code keeps the cache for 1 hour after the last request; a shorter time can move a paused session to another account. Cache hits now: ${ratio}%.`,
             )}
           >
             <OptionSelect
               id="proxy-affinity"
-              value={String(status.affinityTtlSeconds ?? 300)}
+              value={String(status.affinityTtlSeconds ?? DEFAULT_PROXY_CONFIG.affinityTtlSeconds)}
               disabled={disabled}
               options={AFFINITY_SECONDS.map((s) => ({
                 value: String(s),

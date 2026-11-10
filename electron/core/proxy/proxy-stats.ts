@@ -100,7 +100,9 @@ export class ProxyStats {
 
     for (const [k, v] of this.tokensByAccount.entries()) {
       toks[k] = { ...v };
-      totalPrompt += v.input + v.cacheRead;
+      // Everything the model was sent: read from the cache, written to it, or neither. A cold
+      // start shows up as writes, so leaving them out would hide the misses the ratio is for.
+      totalPrompt += v.input + v.cacheRead + v.cacheWrite;
       totalCacheRead += v.cacheRead;
     }
 

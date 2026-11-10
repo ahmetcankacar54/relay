@@ -6,6 +6,15 @@ import {
   ProxyRouter,
 } from "../electron/core/proxy/proxy-router";
 import { ProxySessionCache } from "../electron/core/proxy/proxy-session-cache";
+import { proxyExtrasSchema } from "../electron/core/proxy/proxy-status";
+import { proxyConfigSchema } from "../electron/core/store";
+import { readFileSync } from "node:fs";
+import {
+  AFFINITY_REVISION,
+  currentAffinityTtl,
+  DEFAULT_PROXY_CONFIG,
+  LEGACY_AFFINITY_TTL_SECONDS,
+} from "../shared/proxy-types";
 import type { Account, AccountUsage } from "../shared/types";
 
 const makeAccount = (id: string, name: string): Account => ({
@@ -263,4 +272,43 @@ test("soonest-reset ranks accounts with unknown limits after accounts with known
   // With no room left on the known one, the unknown one is tried instead of the full one.
   usage.known = { accountId: "known", status: "ready", stale: false, sevenDay: { usedPercent: 99, resetsAt: new Date(now + 86_400_000).toISOString() } } as AccountUsage;
   assert.equal(router.selectAccount(undefined, [unknown, known], usage).account.id, "unknown");
+});
+
+test("a paused session keeps its account for the hour Claude Code's cache lives", () => {
+  // The cache is the account's: a session that moves writes its whole history again.
+  assert.equal(DEFAULT_PROXY_CONFIG.affinityTtlSeconds, 3_600);
+  let now = 0;
+  const cache = new ProxySessionCache({ now: () => now });
+  cache.set("s", "a");
+  now += 59 * 60_000;
+  assert.equal(cache.get("s"), "a");
+  // Each request starts the hour again, as a cache hit does.
+  now += 59 * 60_000;
+  assert.equal(cache.get("s"), "a");
+  now += 61 * 60_000;
+  assert.equal(cache.get("s"), undefined);
+});
+
+test("a saved lifetime that is the old five-minute default moves to the hour, once", () => {
+  // Saved before the default changed: never a choice.
+  assert.equal(currentAffinityTtl(LEGACY_AFFINITY_TTL_SECONDS, undefined), 3_600);
+  assert.equal(currentAffinityTtl(LEGACY_AFFINITY_TTL_SECONDS, 0), 3_600);
+  // Any other saved value was chosen, and stays.
+  assert.equal(currentAffinityTtl(900, undefined), 900);
+  assert.equal(currentAffinityTtl(3_600, undefined), 3_600);
+  // Five minutes chosen after the move stays five minutes.
+  assert.equal(currentAffinityTtl(LEGACY_AFFINITY_TTL_SECONDS, AFFINITY_REVISION), LEGACY_AFFINITY_TTL_SECONDS);
+  assert.equal(currentAffinityTtl(undefined, undefined), undefined);
+});
+
+test("the move is recorded beside the registry, which stays readable by older versions", () => {
+  // The registry's proxy settings are strict: the revision may only live in proxy-pool.json.
+  assert.equal(proxyExtrasSchema.parse({ affinityRevision: 1 }).affinityRevision, 1);
+  assert.throws(() =>
+    proxyConfigSchema.parse({ enabled: true, port: 8317, host: "127.0.0.1", affinityRevision: 1 }),
+  );
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  // Saving the settings keeps the revision, or the next start would move a chosen lifetime again.
+  assert.match(main, /const \{ accountOrder, excludedAccountIds, clientBindings, affinityRevision, \.\.\.base \} = config;/);
+  assert.match(main, /affinityRevision !== undefined \? \{ affinityRevision \} : \{\}/);
 });
