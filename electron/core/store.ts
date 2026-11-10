@@ -141,6 +141,7 @@ const accountSchema = z.object({
       orgId: z.uuid(),
       savedAt: z.iso.datetime(),
       email: z.string().max(254).optional(),
+      rejectedAt: z.iso.datetime().optional(),
     })
     .optional(),
   auth: z

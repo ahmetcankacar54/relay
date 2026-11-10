@@ -10,6 +10,22 @@
 type Pair = [tr: string, en: string, enDisplay?: string];
 const pairs: Pair[] = [
   [
+    "Claude bu girişi henüz kaydetmedi. Relay birazdan yeniden dener.",
+    "Claude has not finished saving this sign-in yet. Relay tries again in a moment.",
+  ],
+  [
+    "Bu Claude girişinde oturum yok, bu yüzden kaydedilmedi. Claude uygulamasında yeniden giriş yap, yarım dakika bekle, sonra kaydet.",
+    "This Claude sign-in holds no session, so it was not saved. Sign in to the Claude app again, wait half a minute, then save.",
+  ],
+  [
+    "Claude uygulamasında oturum kapalı. Önce giriş yap, sonra kaydet.",
+    "The Claude app is signed out. Sign in to it first, then save.",
+  ],
+  [
+    "Bu hesabın kayıtlı Claude girişi sona ermiş. Relay’de hesaba yeniden giriş yap.",
+    "This account’s saved Claude sign-in has ended. Sign in to it again in Relay.",
+  ],
+  [
     "Relay.app şu an Claude uygulamasında bir işlem yapıyor. Bitince yeniden dene.",
     "Relay.app is using Claude Desktop. Try again when it ends.",
     "A Relay action is running in the Claude app. Try again when it ends.",

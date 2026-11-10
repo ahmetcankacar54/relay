@@ -177,6 +177,70 @@ export async function pageBooted(files: ClaudeLogFiles): Promise<boolean | undef
 /** How much of the log's end `pageBooted` reads: a start logs far less before its page loads. */
 const TAIL_BYTES = 2 * 1024 * 1024;
 
+/** Claude's line when its claude.ai page goes to /logout, by the user's click or a refused session. */
+const LOGGED_OUT = "] [account] Navigated to /logout";
+/** Claude's line when a sign-in completes in the Claude that runs. */
+const LOGGED_IN = "] [account] Login-state transition (loggedOut: true";
+
+/**
+ * Whether the last start in `text` ended signed out: its page went to /logout and no sign-in
+ * followed. Undefined when `text` holds no start.
+ */
+export function signedOutSinceStart(text: string): boolean | undefined {
+  const start = text.lastIndexOf(STARTED);
+  if (start < 0) return undefined;
+  const run = text.slice(start);
+  const out = run.lastIndexOf(LOGGED_OUT);
+  return out >= 0 && out > run.lastIndexOf(LOGGED_IN);
+}
+
+/** Claude's line when an account signs out: `uuid: <account> → <none>`, with the local time. */
+const SIGN_OUT =
+  /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) \[info\] \[account\] Login-state transition \(loggedOut: false → true, uuid: ([0-9a-f-]{36}) → /gim;
+
+export interface ClaudeSignOut {
+  accountUuid: string;
+  /** When Claude logged it, ms. */
+  at: number;
+}
+
+/** Each account's last sign-out in `text`. */
+export function signOutsIn(text: string): ClaudeSignOut[] {
+  const last = new Map<string, number>();
+  for (const m of text.matchAll(SIGN_OUT)) {
+    const at = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+    if (Number.isFinite(at)) last.set(m[7].toLowerCase(), at);
+  }
+  return [...last].map(([accountUuid, at]) => ({ accountUuid, at }));
+}
+
+/** The sign-outs in the end of Claude's log; none when it cannot be read. */
+export async function claudeSignOuts(files: ClaudeLogFiles): Promise<ClaudeSignOut[]> {
+  try {
+    const end = await sizeOf(files.current);
+    if (end === undefined) return [];
+    return signOutsIn(await readRange(files.current, Math.max(0, end - TAIL_BYTES), end));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Whether the Claude that runs now signed itself out since it started, from the end of its log;
+ * undefined when the log cannot tell.
+ */
+export async function claudeSignedOut(files: ClaudeLogFiles): Promise<boolean | undefined> {
+  try {
+    const end = await sizeOf(files.current);
+    if (end === undefined) return undefined;
+    return signedOutSinceStart(
+      await readRange(files.current, Math.max(0, end - TAIL_BYTES), end),
+    );
+  } catch {
+    return undefined;
+  }
+}
+
 /** A launch being watched: `wait` tells how the page of the Claude started since did. */
 export interface LaunchWatch {
   wait(timeoutMs: number): Promise<PageOutcome>;

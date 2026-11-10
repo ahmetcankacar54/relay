@@ -596,6 +596,27 @@ export function AccountDetailBody({
           )}
         </p>
       )}
+      {a.desktop?.rejectedAt && (
+        <div
+          role="alert"
+          data-slot="sign-in-ended"
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-crit/40 bg-crit/10 px-4 py-2.5 text-sm"
+        >
+          <p className="min-w-0 flex-1">
+            {t(
+              "Bu hesabın kayıtlı Claude girişi sona ermiş: Claude hesabı açınca oturumu kapattı. Yeniden giriş yapana kadar Relay bu hesaba kendiliğinden geçmez. Hesap eklerken Claude’un içinden çıkış yapma; çıkış, kayıtlı girişi de bitirir.",
+              "This account’s saved Claude sign-in has ended: Claude signed out when it opened the account. Relay does not switch to it by itself until you sign in again. Do not sign out inside Claude to add an account; signing out also ends the saved sign-in.",
+            )}
+          </p>
+          <Button
+            size="sm"
+            disabled={desktopBusy || !!pendingDesktop}
+            onClick={() => relay.requestDesktop(a, "reconnect")}
+          >
+            {t("Yeniden giriş yap", "Sign in again")}
+          </Button>
+        </div>
+      )}
       {mismatch && (
         <p
           role="alert"
@@ -723,10 +744,12 @@ export function AccountDetailBody({
               icon={<Monitor />}
               title={t("Claude uygulaması", "Claude app")}
               purpose={t("Claude uygulamasını bu hesapla açar.", "Opens the Claude app with this account.")}
-              tone={a.desktop ? "ok" : "off"}
+              tone={a.desktop ? (a.desktop.rejectedAt ? "crit" : "ok") : "off"}
               status={
                 a.desktop
-                  ? t("Kayıtlı", "Saved")
+                  ? a.desktop.rejectedAt
+                    ? t("Sona ermiş", "Ended")
+                    : t("Kayıtlı", "Saved")
                   : t("Kayıtlı değil", "Not saved")
               }
               action={

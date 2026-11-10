@@ -3,7 +3,7 @@
  * API. Hand-maintained: a new model needs a row and a release; until then its
  * tokens are reported as unpriced. Nothing is fetched at runtime.
  */
-export const PRICES_CHECKED = "2026-10-22";
+export const PRICES_CHECKED = "2026-11-11";
 export const PRICES_SOURCE =
   "https://platform.claude.com/docs/en/about-claude/pricing";
 
@@ -33,6 +33,11 @@ const rates = (
   output: number,
 ): Rates => ({ input, write5m, write1h, read, output });
 
+const FABLE_5_2: ModelPrice = {
+  ...rates(8, 10, 16, 0.2, 40),
+  fast: { input: 16, output: 80 },
+  usGeo: true,
+};
 const FABLE_5_1: ModelPrice = { ...rates(10, 12.5, 20, 0.25, 50), usGeo: true };
 const FABLE_5: ModelPrice = { ...rates(10, 12.5, 20, 1, 50), usGeo: true };
 const OPUS_5_5: ModelPrice = {
@@ -61,6 +66,8 @@ const HAIKU_4_5: ModelPrice = { ...rates(1, 1.25, 2, 0.1, 5), usGeo: false };
 const HAIKU_3_5: ModelPrice = { ...rates(0.8, 1, 1.6, 0.08, 4), usGeo: false };
 
 const PRICES: Record<string, ModelPrice> = {
+  "claude-fable-5-2": FABLE_5_2,
+  "claude-mythos-5-2": FABLE_5_2,
   "claude-fable-5-1": FABLE_5_1,
   "claude-mythos-5-1": FABLE_5_1,
   "claude-fable-5": FABLE_5,

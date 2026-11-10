@@ -429,7 +429,7 @@ test("costs and unpriced tokens add up across rows, days and models, and estimat
   assert.equal(view.days.at(-2)?.byRow.ann.costEstimated, true);
   assert.equal(view.days.at(-1)?.byRow.ann.costEstimated, undefined);
   assert.deepEqual(view.unpricedModels, ["mystery"]);
-  assert.equal(view.pricesChecked, "2026-10-22");
+  assert.equal(view.pricesChecked, "2026-11-11");
 });
 
 test("today's line runs to the current quarter hour and compares with yesterday up to the same one", () => {

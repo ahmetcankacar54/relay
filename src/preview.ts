@@ -401,6 +401,9 @@ if (scenario === "identity-mismatch") {
   accounts[1].auth!.orgId = ids[3];
 }
 if (scenario === "recovery") desktop.recoveryRequired = true;
+// A saved Claude sign-in that claude.ai refused at a switch.
+if (scenario === "sign-in-ended" && accounts[1].desktop)
+  accounts[1].desktop.rejectedAt = new Date().toISOString();
 // Danışmanlık gets its Claude app sign-in: an account whose limit is full, with its tinted switch.
 if (scenario === "limit-full")
   accounts[3].desktop = {

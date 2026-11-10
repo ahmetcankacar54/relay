@@ -19,7 +19,7 @@ import {
   type ClaudeInstances,
 } from "./desktop-instances";
 import type { Sealer } from "./vault-crypto";
-import { macClaudeLog, watchClaudeLaunch } from "./desktop-launch";
+import { claudeSignOuts, claudeSignedOut, macClaudeLog, watchClaudeLaunch } from "./desktop-launch";
 const execFileAsync = promisify(execFile);
 /** On macOS every command runs out of the terminal's process group; see runDetached. */
 const exec = (
@@ -344,6 +344,10 @@ export function nodeDesktopHost(options: {
       process.platform === "darwin"
         ? watchClaudeLaunch(macClaudeLog(os.homedir()), () => liveness.running())
         : undefined,
+    signedOut: async () =>
+      process.platform === "darwin" ? claudeSignedOut(macClaudeLog(os.homedir())) : undefined,
+    signOuts: async () =>
+      process.platform === "darwin" ? claudeSignOuts(macClaudeLog(os.homedir())) : [],
     seal: (text) => options.sealer.seal(text),
     unseal: (data) => options.sealer.unseal(data),
     claudeElectron: async () =>
