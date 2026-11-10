@@ -5,6 +5,7 @@ import {
   PANEL_WIDTH,
   panelLoadState,
   panelPosition,
+  panelRevival,
   pointerOnTray,
   ToggleGuard,
   type PanelLoadEvent,
@@ -17,6 +18,8 @@ export interface TrayPanelOptions {
   load(win: BrowserWindow): void;
   /** The panel was shown or hidden. */
   onVisibilityChange?(): void;
+  /** Something that keeps the panel from opening, for the private diagnosis log. */
+  onEvent?(event: string, fields: Record<string, unknown>): void;
   now?: () => number;
 }
 
@@ -29,10 +32,21 @@ export class TrayPanel {
   private readonly guard = new ToggleGuard();
   private readonly now: () => number;
   private readonly onVisibilityChange?: () => void;
+  /** When the panel last stopped being ready (or was made); a ready panel does not use it. */
+  private unreadySince: number;
+  private revivedAt = -Infinity;
 
-  constructor(options: TrayPanelOptions) {
+  constructor(private readonly options: TrayPanelOptions) {
     this.now = options.now ?? Date.now;
     this.onVisibilityChange = options.onVisibilityChange;
+    this.unreadySince = this.now();
+    this.create();
+  }
+
+  private create() {
+    const options = this.options;
+    this.load = INITIAL_PANEL_LOAD;
+    this.unreadySince = this.now();
     const win = new BrowserWindow({
       width: PANEL_WIDTH,
       height: 520,
@@ -67,7 +81,8 @@ export class TrayPanel {
     });
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     win.webContents.on("will-navigate", (event) => event.preventDefault());
-    win.webContents.on("did-start-loading", () => this.dispatch("start"));
+    // A new document only: did-start-loading also fires for navigations that change nothing.
+    win.webContents.on("did-navigate", () => this.dispatch("start"));
     win.webContents.on("did-finish-load", () => this.dispatch("finish"));
     win.webContents.on(
       "did-fail-load",
@@ -82,7 +97,7 @@ export class TrayPanel {
       this.hide(pointerOnTray(this.anchor, screen.getCursorScreenPoint())),
     );
     win.on("closed", () => {
-      this.win = undefined;
+      if (this.win === win) this.win = undefined;
     });
     options.load(win);
   }
@@ -90,6 +105,38 @@ export class TrayPanel {
   /** Whether a tray click may open the panel; otherwise the native menu is used. */
   usable() {
     return this.load.phase === "ready" && !!this.live();
+  }
+
+  /**
+   * A tray click found the panel unusable and showed the native menu instead. Brings the panel
+   * back for the next click: its window again when that is gone, its page again when it failed,
+   * crashed out or never painted.
+   */
+  revive() {
+    const now = this.now();
+    const win = this.live();
+    const fields = {
+      phase: this.load.phase,
+      crashes: this.load.crashes,
+      alive: !!win,
+      pageLoading: !!win && !win.webContents.isDestroyed() && win.webContents.isLoading(),
+      unreadyFor: now - this.unreadySince,
+    };
+    const action = panelRevival({ ...fields, sinceRevival: now - this.revivedAt });
+    this.options.onEvent?.("tray-panel-unusable", { ...fields, action: action ?? "wait" });
+    if (!action) return;
+    this.revivedAt = now;
+    try {
+      if (action === "recreate" || !win) return this.create();
+      this.load = INITIAL_PANEL_LOAD;
+      this.unreadySince = now;
+      win.webContents.reload();
+    } catch (error) {
+      this.options.onEvent?.("tray-panel-revive-failed", {
+        action,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   toggle(trayBounds: Rect) {
@@ -150,6 +197,10 @@ export class TrayPanel {
     const before = this.load;
     this.load = panelLoadState(before, event);
     if (this.load.phase === "ready") return;
+    if (before.phase === "ready") {
+      this.unreadySince = this.now();
+      this.options.onEvent?.("tray-panel-left-ready", { by: event, phase: this.load.phase });
+    }
     this.hide();
     if (this.load.phase === "reloading" && before.phase !== "reloading")
       this.live()?.webContents.reload();

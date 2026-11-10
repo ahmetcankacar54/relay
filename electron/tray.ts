@@ -30,7 +30,12 @@ export interface RelayTrayOptions {
   quit(): void;
   language?(): TrayLanguage;
   /** macOS menu bar popover; when present, left click toggles it instead of the menu. */
-  panel?: { toggle(bounds: Rectangle): void; usable(): boolean };
+  panel?: {
+    toggle(bounds: Rectangle): void;
+    usable(): boolean;
+    /** The panel could not open for this click: bring it back for the next one. */
+    revive?(): void;
+  };
   /** Whether the menu bar panda may animate (setting and Reduce motion); poses change regardless. */
   motionAllowed?(): boolean;
 }
@@ -119,11 +124,17 @@ export class RelayTray {
     const panel = options.panel;
     this.panelMode = process.platform === "darwin" && !!panel;
     if (panel && this.panelMode) {
+      // Every click toggles the panel. Left alone, AppKit counts a second click within the
+      // double-click time as a double click and Electron sends no "click" for it, so closing
+      // the panel and opening it again at once, or clicking twice in doubt, did nothing.
+      this.tray.setIgnoreDoubleClickEvents(true);
       this.tray.on("click", () => {
         if (this.destroyed) return;
         if (trayClickAction(panel.usable()) === "toggle")
-          panel.toggle(this.tray.getBounds());
-        else if (this.menu) this.tray.popUpContextMenu(this.menu);
+          return panel.toggle(this.tray.getBounds());
+        // The menu for this click, and the panel back for the next.
+        panel.revive?.();
+        if (this.menu) this.tray.popUpContextMenu(this.menu);
         else this.popUpShortMenu();
       });
       this.tray.on("right-click", () => this.popUpShortMenu());

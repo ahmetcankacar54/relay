@@ -6,6 +6,9 @@ import {
   pointerOnTray,
   ToggleGuard,
   panelLoadState,
+  panelRevival,
+  PANEL_REVIVE_GAP_MS,
+  PANEL_STUCK_MS,
   trayClickAction,
   type PanelLoadEvent,
   type PanelLoadState,
@@ -82,4 +85,35 @@ test("the panel window never activates Relay", () => {
   assert.doesNotMatch(source, /^\s*app\.hide\(/m);
   assert.match(source, /visibleOnFullScreen: true/);
   assert.match(source, /skipTransformProcessType: true/);
+});
+
+test("a tray click brings an unusable panel back for the next click", () => {
+  const base = { alive: true, pageLoading: false, unreadyFor: 60_000, sinceRevival: Infinity };
+  // Nothing to do for a panel that works, or one that is still loading its page.
+  assert.equal(panelRevival({ ...base, phase: "ready" }), undefined);
+  assert.equal(panelRevival({ ...base, phase: "loading", pageLoading: true }), undefined);
+  assert.equal(panelRevival({ ...base, phase: "loading", unreadyFor: PANEL_STUCK_MS - 1 }), undefined);
+  // A page that never painted, failed to load or crashed out is loaded again.
+  assert.equal(panelRevival({ ...base, phase: "loading", unreadyFor: PANEL_STUCK_MS }), "reload");
+  assert.equal(panelRevival({ ...base, phase: "reloading" }), "reload");
+  assert.equal(panelRevival({ ...base, phase: "failed", unreadyFor: 0 }), "reload");
+  // A window that is gone is made again.
+  assert.equal(panelRevival({ ...base, phase: "ready", alive: false }), "recreate");
+  // Never on every click.
+  assert.equal(panelRevival({ ...base, phase: "failed", sinceRevival: PANEL_REVIVE_GAP_MS - 1 }), undefined);
+  assert.equal(panelRevival({ ...base, phase: "failed", alive: false, sinceRevival: 0 }), undefined);
+});
+
+test("only a new document makes the panel wait for a paint, and every tray click counts", () => {
+  // did-start-loading also fires for an address change inside the page and for a navigation
+  // Relay refuses; the page then never reports a size again and the panel stayed unusable.
+  for (const file of ["../electron/tray-panel.ts", "../electron/switch-window.ts"]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /on\(\s*"did-start-loading"/, file);
+    assert.match(source, /on\("did-navigate", \(\) => this\.dispatch\("start"\)\)/, file);
+  }
+  const tray = readFileSync(new URL("../electron/tray.ts", import.meta.url), "utf8");
+  // A second click within the double-click time is still a click.
+  assert.match(tray, /setIgnoreDoubleClickEvents\(true\)/);
+  assert.match(tray, /panel\.revive\?\.\(\)/);
 });

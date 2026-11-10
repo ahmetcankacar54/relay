@@ -1296,6 +1296,7 @@ else {
         trayPanel = new TrayPanel({
           preload: path.join(__dirname, "preload.cjs"),
           load: (win) => loadPage(win, "panel.html"),
+          onEvent: logDraftEvent,
           onVisibilityChange: () => {
             try {
               switchWindow?.sync();
