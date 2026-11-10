@@ -8,6 +8,8 @@ import {
   TerminalError,
   TerminalSwitcher,
   TerminalVault,
+  adoptTerminalSignIn,
+  scratchSignInPorts,
   jsonConfig,
   peekTerminal,
   SECURITY_STDIN_LIMIT,
@@ -708,4 +710,50 @@ test("a step that cannot run here, or fails for no named reason, says so", () =>
     terminalLine({ result: "switched", saved: true, at }, t, "W")!,
     /Restart open terminal sessions/,
   );
+});
+
+test("a sign-in made for the terminal in a scratch folder is kept for its account only, as the one good copy", async (t) => {
+  const w = world(t);
+  // Nothing signed in there: nothing kept.
+  assert.equal(await adoptTerminalSignIn(w.ports, [w.a], w.vault), "signed-out");
+  // Approved with another account, or in another workspace of the same account.
+  w.signIn(w.b, 2, "b@x");
+  assert.equal(await adoptTerminalSignIn(w.ports, [w.a], w.vault), "other-account");
+  w.signIn({ accountUuid: w.a.accountUuid, orgId: w.b.orgId }, 3, "a@x");
+  assert.equal(await adoptTerminalSignIn(w.ports, [w.a], w.vault), "other-account");
+  // The file names the account, the token is someone else's.
+  w.signIn(w.a, 4, "a@x");
+  w.state.owners.set(oauth(4).accessToken, w.b);
+  assert.equal(await adoptTerminalSignIn(w.ports, [w.a], w.vault), "other-account");
+  assert.equal(await w.vault.load([w.a]), undefined);
+  // The account's own: saved as taken away, so the next switch puts it in the terminal.
+  w.signIn(w.a, 5, "a@x");
+  assert.equal(await adoptTerminalSignIn(w.ports, [w.a], w.vault), "saved");
+  const saved = await w.vault.load([w.a]);
+  assert.equal(saved?.parked, true);
+  assert.equal(saved?.oauth.accessToken, oauth(5).accessToken);
+  // The terminal, on B, follows to A with that sign-in, and its MCP sign-ins stay.
+  w.signIn(w.b, 6, "b@x");
+  const outcome = await w.switcher.run({ mode: "follow", target: [w.a], known: [w.a, w.b] });
+  assert.equal(outcome.result, "switched");
+  assert.equal(outcome.unconfirmed, undefined);
+  assert.equal(JSON.parse(w.state.item!).claudeAiOauth.accessToken, oauth(5).accessToken);
+  assert.equal(JSON.parse(w.state.item!).mcpOAuth.server.token, "mcp");
+  assert.equal(w.state.config.oauthAccount.accountUuid, w.a.accountUuid);
+});
+
+test("a scratch folder's sign-in is read from its own files, never from the terminal's", async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-terminal-link-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const id = { accountUuid: randomUUID(), orgId: randomUUID() };
+  // Off macOS there is no Keychain item: the CLI's private file is the sign-in.
+  const ports = scratchSignInPorts(dir, "linux");
+  assert.equal(await ports.keychain.read(), undefined);
+  fs.writeFileSync(path.join(dir, ".credentials.json"), JSON.stringify({ claudeAiOauth: oauth(7) }));
+  fs.writeFileSync(path.join(dir, ".claude.json"), JSON.stringify({ oauthAccount: person(id.accountUuid, id.orgId, "a@x") }));
+  assert.equal(JSON.parse((await ports.keychain.read())!).claudeAiOauth.accessToken, oauth(7).accessToken);
+  assert.equal((await ports.config.read())?.oauthAccount.accountUuid, id.accountUuid);
+  await assert.rejects(ports.keychain.write("{}"));
+  await ports.keychain.remove();
+  assert.equal(await ports.keychain.read(), undefined);
 });

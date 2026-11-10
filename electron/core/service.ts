@@ -70,6 +70,44 @@ export class Service {
    * app sign-in. Answers the reason it does not (the sign-in flow fails with it), or nothing.
    */
   signInFit?: (account: Account) => Promise<string | undefined>;
+  /**
+   * Sign-ins made for the terminal: `claude auth login` in a scratch folder per account, so the
+   * sign-in the terminal holds is not touched. Relay keeps the result for the next switch.
+   */
+  readonly terminalAuth: AuthManager;
+  /**
+   * Set by the app: keeps the sign-in a finished terminal link left in `dir` for the account.
+   * Answers true, or why it was not kept (the flow fails with it).
+   */
+  terminalLinkFit?: (accountId: string, dir: string) => Promise<true | string>;
+  /** The scratch folder of an account's terminal link. */
+  terminalLinkDir(id: string) {
+    return path.join(this.store.root, "terminal-link", id);
+  }
+  /**
+   * Starts a sign-in for the terminal with the account: the page opens in the browser, and the
+   * approval there is all it needs. Asked again while its page waits, the page comes back.
+   */
+  async linkTerminal(id: string) {
+    const account = this.store.account(id);
+    if ((account.provider ?? "claude") !== "claude")
+      throw new Error("Bu hesap bir Claude hesabı değil; kendi sağlayıcısıyla bağlanır.");
+    if (!account.desktop && !(account.auth?.accountUuid && account.auth.orgId))
+      throw new Error("Save the Claude app sign-in first.");
+    const waiting = this.terminalAuth
+      .list()
+      .find((f) => f.accountId === id && f.status === "waiting" && f.browserReady);
+    if (waiting) {
+      await this.terminalAuth.reopen(id, waiting.id, "browser").catch(() => {});
+      return waiting;
+    }
+    if (this.terminalAuth.active(id))
+      return this.terminalAuth.list().find((f) => f.accountId === id)!;
+    const dir = this.terminalLinkDir(id);
+    await fs.rm(dir, { recursive: true, force: true });
+    await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+    return this.terminalAuth.start(id, await this.executable(), dir, profileEnvironment(dir));
+  }
   private index = new Map<string, IndexedSession>();
   private diagnostics?: Diagnostics;
   private diagnosedAt = 0;
@@ -104,6 +142,21 @@ export class Service {
       openBrowser,
       undefined,
       profileLock && ((id) => profileLock(id, "exclusive")),
+    );
+    this.terminalAuth = new AuthManager(
+      async (id) => {
+        const dir = this.terminalLinkDir(id);
+        try {
+          return (
+            (await this.terminalLinkFit?.(id, dir)) ??
+            "Terminal sign-ins cannot be kept on this system."
+          );
+        } finally {
+          await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+        }
+      },
+      emitAuth,
+      openBrowser,
     );
   }
   // Serialize operations whose checks and writes must be a single transaction.
@@ -140,6 +193,7 @@ export class Service {
       usage: {},
       accounts: structuredClone(this.store.state.accounts),
       authFlows: this.auth.list(),
+      terminalFlows: this.terminalAuth.list(),
       runs: this.runner.list(),
       sessions: [],
       diagnostics: await this.currentDiagnostics(),
@@ -181,6 +235,7 @@ export class Service {
       usage: {},
       accounts,
       authFlows: this.auth.list(),
+      terminalFlows: this.terminalAuth.list(),
       sessions,
       runs: this.runner.list(),
       diagnostics,

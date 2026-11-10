@@ -10,7 +10,7 @@ import {
   writeBytes,
   type JsonObject,
 } from "./desktop-files";
-import { decodeSecret } from "./usage-credentials";
+import { credentialService, decodeSecret } from "./usage-credentials";
 import { requestUsageJson } from "./usage";
 import { LockBusyError, withCliRefreshLock } from "./cli-refresh-lock";
 import {
@@ -277,6 +277,81 @@ export function macTerminalPorts(
     },
     owner: profileOwner,
   };
+}
+
+/**
+ * Where a `claude auth login` run with `CLAUDE_CONFIG_DIR=dir` leaves its sign-in: the Keychain
+ * item named after the folder (a private file in it when the Keychain refused the write) and
+ * the folder's `.claude.json`. Relay signs in there to get an account's terminal sign-in
+ * without touching the one the terminal holds.
+ */
+export function scratchSignInPorts(
+  dir: string,
+  platform = process.platform,
+): Pick<TerminalPorts, "keychain" | "config" | "owner"> {
+  const item =
+    platform === "darwin"
+      ? securityKeychain(
+          (() => {
+            try {
+              return os.userInfo().username;
+            } catch {
+              return "";
+            }
+          })(),
+          "/usr/bin/security",
+          credentialService(dir),
+        )
+      : undefined;
+  const file = path.join(dir, ".credentials.json");
+  return {
+    keychain: {
+      async read() {
+        const stored = await item?.read();
+        if (stored !== undefined) return stored;
+        try {
+          const stat = await fsp.lstat(file);
+          if (!stat.isFile() || stat.size > 65_536) return undefined;
+          return await fsp.readFile(file, "utf8");
+        } catch {
+          return undefined;
+        }
+      },
+      async write() {
+        throw new TerminalError("unsupported");
+      },
+      async remove() {
+        await item?.remove().catch(() => undefined);
+        await fsp.rm(file, { force: true });
+      },
+    },
+    config: jsonConfig(path.join(dir, ".claude.json")),
+    owner: profileOwner,
+  };
+}
+
+/** What became of a sign-in made for the terminal in a scratch folder. */
+export type TerminalAdoption = "saved" | "signed-out" | "other-account";
+
+/**
+ * Keeps the sign-in `ports` hold as the terminal sign-in of the account with `expected`
+ * identities: it must name one of them, and its token must be that account's when Anthropic can
+ * be asked. Saved as taken away (`parked`): nothing else holds it, so it stays good until a
+ * switch puts it in the terminal.
+ */
+export async function adoptTerminalSignIn(
+  ports: Pick<TerminalPorts, "keychain" | "config" | "owner">,
+  expected: TerminalIdentity[],
+  vault: TerminalVault,
+): Promise<TerminalAdoption> {
+  const reading = await readTerminal(ports as TerminalPorts);
+  if (!reading.oauth || !reading.account) return "signed-out";
+  const { identity } = reading;
+  if (!identity || !expected.some((x) => sameIdentity(x, identity))) return "other-account";
+  const owner = await ports.owner?.(String(reading.oauth.accessToken)).catch(() => undefined);
+  if (owner && !sameIdentity(owner, identity)) return "other-account";
+  await vault.save(identity, reading.oauth, reading.account, true);
+  return "saved";
 }
 
 // --- The vault -------------------------------------------------------------------------------

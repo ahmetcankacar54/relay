@@ -735,7 +735,8 @@ test("the connections count only what a switch needs; the extension and the term
   const missing = mac(extension(), "darwin", { mode: "follow", saved: [] });
   assert.equal(count(missing), "2 / 2 hazır");
   assert.equal(missing.match(/>İsteğe bağlı</g)?.length, 2);
-  assert.match(missing, /Terminalde “claude auth login” çalıştır/);
+  assert.match(missing, /“Bağla”ya bas; tarayıcıda açılan sayfada/);
+  assert.match(missing, />Bağla</);
   assert.doesNotMatch(mac(extension(), "win32"), />İsteğe bağlı</);
 });
 

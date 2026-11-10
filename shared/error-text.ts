@@ -10,6 +10,22 @@
 type Pair = [tr: string, en: string, enDisplay?: string];
 const pairs: Pair[] = [
   [
+    "Tarayıcıda başka bir Claude hesabıyla ya da çalışma alanıyla onaylandı. Bu profilin hesabıyla yeniden dene.",
+    "The approval in the browser came from another Claude account or workspace. Try again with this profile’s account.",
+  ],
+  [
+    "Terminal girişi tamamlanmadı. Yeniden dene.",
+    "The terminal sign-in did not complete. Try again.",
+  ],
+  [
+    "Terminal girişleri yalnızca macOS’ta saklanır.",
+    "Terminal sign-ins are kept on macOS only.",
+  ],
+  [
+    "Önce Claude uygulaması girişini kaydet.",
+    "Save the Claude app sign-in first.",
+  ],
+  [
     "Claude bu girişi henüz kaydetmedi. Relay birazdan yeniden dener.",
     "Claude has not finished saving this sign-in yet. Relay tries again in a moment.",
   ],

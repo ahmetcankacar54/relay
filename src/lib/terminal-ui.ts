@@ -13,8 +13,8 @@ export interface TerminalGuide {
   label: string;
   detail?: string;
   steps?: string[];
-  /** "check": Relay should look again after the sign-in; "settings": the fix is the step's setting. */
-  action?: "check" | "settings";
+  /** "link": Relay signs the terminal in to the account; "settings": the fix is the step's setting. */
+  action?: "link" | "settings";
 }
 
 export function terminalGuide(
@@ -71,14 +71,13 @@ export function terminalGuide(
     label: t("Giriş kayıtlı değil", "No sign-in saved"),
     steps: [
       email
-        ? t(`Terminalde “claude auth login” çalıştır, ${email} ile gir.`, `Run “claude auth login” in a terminal and sign in with ${email}.`)
-        : t("Terminalde “claude auth login” çalıştır, bu hesapla gir.", "Run “claude auth login” in a terminal and sign in with this account."),
-      t("“Kontrol et”e bas.", "Select “Check”."),
+        ? t(`“Bağla”ya bas; tarayıcıda açılan sayfada ${email} ile onayla.`, `Select “Link” and approve with ${email} on the page that opens in your browser.`)
+        : t("“Bağla”ya bas; tarayıcıda açılan sayfada bu hesapla onayla.", "Select “Link” and approve with this account on the page that opens in your browser."),
     ],
     detail: t(
-      "Terminalde claude kullanmıyorsan bu adım gerekmez.",
-      "Skip this if you do not use claude in a terminal.",
+      "Terminaldeki şimdiki giriş değişmez; bu hesaba geçince terminaldeki “claude” da geçer. Terminalde claude kullanmıyorsan bu adım gerekmez.",
+      "The terminal keeps its current sign-in; “claude” in the terminal follows when you switch to this account. Skip this if you do not use claude in a terminal.",
     ),
-    action: "check",
+    action: "link",
   };
 }
