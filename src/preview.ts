@@ -629,7 +629,7 @@ const previewProxy: {
   host: "127.0.0.1",
   key: "relay-sec-preview-0000000000000000000000000000",
   routingStrategy: "soonest-reset",
-  affinityTtlSeconds: 300,
+  affinityTtlSeconds: 3_600,
   order: [],
   excluded: [],
   bound: {},

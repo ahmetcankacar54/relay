@@ -6,7 +6,14 @@ export interface ProxyConfig {
   enabled: boolean;
   port: number;
   host: string;
+  /**
+   * How long an idle session stays on its account. The prompt cache belongs to the account, and
+   * Claude Code on a subscription keeps a conversation's cache for an hour after its last
+   * request: a session that moves earlier pays to write its whole history again.
+   */
   affinityTtlSeconds: number;
+  /** Which default the saved lifetime was written under; kept beside the registry (proxy-pool.json). */
+  affinityRevision?: number;
   routingStrategy: RoutingStrategy;
   apiKey?: string;
   /** Account ids in the order the pool uses them (strict priority reads it; the page lists by it). */
@@ -83,6 +90,20 @@ export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
   enabled: false,
   port: 8317,
   host: "127.0.0.1",
-  affinityTtlSeconds: 300, // 5 minutes matching prompt caching window
+  // The lifetime of Claude Code's cache on a subscription; OpenAI's default is 30 minutes.
+  affinityTtlSeconds: 3_600,
   routingStrategy: "soonest-reset",
 };
+
+/** The lifetime Relay saved by default up to 0.20.0: the API's five-minute cache, not Claude Code's hour. */
+export const LEGACY_AFFINITY_TTL_SECONDS = 300;
+/** The revision of the default: a saved lifetime written under an older one may be the old default. */
+export const AFFINITY_REVISION = 1;
+/**
+ * A saved lifetime that equals the old default was never chosen: it moves to the new one, once.
+ * A lifetime saved under the current revision is the user's and stays, five minutes included.
+ */
+export function currentAffinityTtl(saved: number | undefined, revision: number | undefined): number | undefined {
+  if (saved === undefined || (revision ?? 0) >= AFFINITY_REVISION) return saved;
+  return saved === LEGACY_AFFINITY_TTL_SECONDS ? DEFAULT_PROXY_CONFIG.affinityTtlSeconds : saved;
+}

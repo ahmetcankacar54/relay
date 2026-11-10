@@ -33,6 +33,8 @@ export type ProxyConfigurePatch = z.infer<typeof proxyConfigurePatch>;
 export const proxyExtrasSchema = z.object({
   accountOrder: z.array(z.string()).max(200).optional(),
   excludedAccountIds: z.array(z.string()).max(200).optional(),
+  /** Which default the registry's affinity lifetime was written under (shared/proxy-types.ts). */
+  affinityRevision: z.number().int().min(0).max(1_000).optional(),
   clientBindings: z
     .object({
       "claude-code": z.record(z.string(), z.string().nullable()).optional(),

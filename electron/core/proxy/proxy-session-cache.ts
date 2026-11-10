@@ -1,4 +1,4 @@
-import type { ProxySessionState } from "../../../shared/proxy-types";
+import { DEFAULT_PROXY_CONFIG, type ProxySessionState } from "../../../shared/proxy-types";
 
 export interface SessionCacheOptions {
   ttlSeconds?: number;
@@ -17,7 +17,7 @@ export class ProxySessionCache {
   private readonly now: () => number;
 
   constructor(options: SessionCacheOptions = {}) {
-    this.ttlMs = (options.ttlSeconds ?? 300) * 1000;
+    this.ttlMs = (options.ttlSeconds ?? DEFAULT_PROXY_CONFIG.affinityTtlSeconds) * 1000;
     this.maxEntries = Math.max(1, options.maxEntries ?? DEFAULT_MAX_SESSIONS);
     this.now = options.now ?? Date.now;
   }

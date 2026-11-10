@@ -137,7 +137,12 @@ import type {
   ProxyStatus,
   SeparateWindows,
 } from "../shared/types";
-import { DEFAULT_PROXY_CONFIG, type ProxyConfig } from "../shared/proxy-types";
+import {
+  AFFINITY_REVISION,
+  currentAffinityTtl,
+  DEFAULT_PROXY_CONFIG,
+  type ProxyConfig,
+} from "../shared/proxy-types";
 import { ProxyServer } from "./core/proxy/proxy-server";
 import {
   buildProxyStatus,
@@ -1428,6 +1433,11 @@ else {
           // Corroborate legacy profiles before the first quota request. Otherwise
           // updated identity fields can hide that request behind its old cooldown.
           usage.start();
+          try {
+            settleProxyAffinity();
+          } catch {
+            // The lifetime stays as saved; the gateway starts all the same.
+          }
           // A gateway that cannot start (the port is taken) shows why on its page; Relay opens.
           if (service.store.state.settings.proxy?.enabled)
             void serializeProxy(startProxy).catch(() => broadcastChanged());
@@ -2011,10 +2021,11 @@ const proxySettings = (): ProxyConfig => ({
   ...proxyExtras(),
 });
 const saveProxySettings = (config: ProxyConfig) => {
-  const { accountOrder, excludedAccountIds, clientBindings, ...base } = config;
+  const { accountOrder, excludedAccountIds, clientBindings, affinityRevision, ...base } = config;
   const extras: ProxyExtras = {
     ...(accountOrder ? { accountOrder } : {}),
     ...(excludedAccountIds ? { excludedAccountIds } : {}),
+    ...(affinityRevision !== undefined ? { affinityRevision } : {}),
     ...(clientBindings ? { clientBindings } : {}),
   };
   if (JSON.stringify(extras) !== JSON.stringify(proxyExtras())) {
@@ -2027,6 +2038,32 @@ const saveProxySettings = (config: ProxyConfig) => {
     s.settings.proxy = base;
   });
 };
+/**
+ * Moves a saved affinity lifetime that is the old five-minute default to the hour Claude Code's
+ * cache lives, once: the revision beside the registry says it was done, so a lifetime chosen
+ * afterwards stays. Before the gateway starts.
+ */
+function settleProxyAffinity() {
+  const extras = proxyExtras();
+  if ((extras.affinityRevision ?? 0) >= AFFINITY_REVISION) return;
+  const saved = service.store.state.settings.proxy;
+  // Never used: nothing is saved, and the gateway takes the default when it is first turned on.
+  if (!saved) {
+    const next: ProxyExtras = { ...extras, affinityRevision: AFFINITY_REVISION };
+    const temp = `${proxyExtrasFile()}.tmp`;
+    fs.writeFileSync(temp, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+    fs.renameSync(temp, proxyExtrasFile());
+    proxyExtrasCache = next;
+    return;
+  }
+  saveProxySettings({
+    ...proxySettings(),
+    affinityRevision: AFFINITY_REVISION,
+    affinityTtlSeconds:
+      currentAffinityTtl(saved.affinityTtlSeconds, extras.affinityRevision) ??
+      DEFAULT_PROXY_CONFIG.affinityTtlSeconds,
+  });
+}
 /** Where bound clients dial the gateway: the saved address and key (none before the first start). */
 const clientTarget = (config: ProxyConfig): ClientTarget | undefined =>
   config.apiKey ? { url: gatewayUrl(config.host, config.port), key: config.apiKey } : undefined;
