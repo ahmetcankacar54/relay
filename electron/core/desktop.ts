@@ -68,7 +68,7 @@ import {
 } from "./draft-vault";
 import {
   browserRunning,
-  dataDir,
+  dataDir, deniedBrowsers,
   readJson,
   type BrowserSystem,
 } from "./browser-system";
@@ -1278,11 +1278,13 @@ export class DesktopManager {
     const target = pick?.instance;
     const { system } = this.extension;
     const broken = await this.cookieVault.waiting().catch(() => undefined);
+    const denied = deniedBrowsers(system);
     return {
       setting,
       instances,
       target,
       picked: pick?.picked,
+      ...(denied.length ? { denied } : {}),
       restoresTabs: target
         ? startupRestores(
             readJson(

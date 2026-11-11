@@ -1,3 +1,5 @@
+import { ExternalLink } from "@/components/ExternalLink";
+import { EXTERNAL_LINKS } from "../../shared/external-links";
 import { useEffect, useState } from "react";
 import { BROWSERS, DEFAULT_EXTENSION } from "../../shared/browser-extension";
 import type { ExtensionMode, ExtensionStatus } from "../../shared/types";
@@ -132,7 +134,18 @@ export function ExtensionPreference({
       <SettingRow
         label={t("Geçişte", "At a switch")}
         htmlFor="extension-mode"
-        description={statusLine}
+        description={
+          !status.instances.length && status.denied?.length ? (
+            <>
+              {statusLine}{" "}
+              <ExternalLink href={EXTERNAL_LINKS.fullDiskAccess}>
+                {t("Tam Disk Erişimi’ni aç", "Open Full Disk Access")}
+              </ExternalLink>
+            </>
+          ) : (
+            statusLine
+          )
+        }
       >
         <span className="flex gap-1">
           <OptionSelect<ExtensionMode>

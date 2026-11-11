@@ -22,6 +22,8 @@ export interface BrowserSystem {
   support: string;
   readText(file: string): string | undefined;
   exists(file: string): boolean;
+  /** macOS refuses to let Relay read the file (privacy protection), as opposed to it missing. */
+  denied?(file: string): boolean;
   /** The newest modification time (ms) of a folder's files; undefined when it cannot be read. */
   modifiedAt(dir: string): number | undefined;
   readLink(file: string): string | undefined;
@@ -59,6 +61,15 @@ export function macBrowserSystem(home = os.homedir()): BrowserSystem {
       }
     },
     exists: (file) => fs.existsSync(file),
+    denied: (file) => {
+      try {
+        fs.accessSync(file, fs.constants.R_OK);
+        fs.closeSync(fs.openSync(file, "r"));
+        return false;
+      } catch (error: any) {
+        return error?.code === "EPERM" || error?.code === "EACCES";
+      }
+    },
     modifiedAt: (dir) => {
       try {
         let newest = fs.statSync(dir).mtimeMs;
@@ -185,6 +196,18 @@ export function extensionInstances(system: BrowserSystem): ExtensionInstance[] {
       ];
     });
   });
+}
+
+/**
+ * Browsers whose data folder is there but macOS does not let Relay read: their extension cannot be
+ * found until Relay has Full Disk Access.
+ */
+export function deniedBrowsers(system: BrowserSystem): BrowserApp[] {
+  return BROWSER_APPS.filter(
+    (app) =>
+      system.exists(dataDir(system, app)) &&
+      !!system.denied?.(path.join(dataDir(system, app), "Local State")),
+  );
 }
 
 /**
