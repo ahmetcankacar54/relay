@@ -232,7 +232,7 @@ test("Panda reaches the prank context without the stage, so no import cycle runs
     const code = stripBlockComments(readFileSync(file, "utf8"));
     const found: string[] = [];
     for (const [, from] of code.matchAll(/^(?:import\s+(?!type\s)|export\s+(?=[*{]))[^;]*?\sfrom\s+"([^"]+)"/gm)) {
-      const base = from.startsWith("@/") ? `src/${from.slice(2)}` : from.startsWith(".") ? join(dirname(file), from) : undefined;
+      const base = from.startsWith("@/") ? join("src", from.slice(2)) : from.startsWith(".") ? join(dirname(file), from) : undefined;
       const resolved = base && [`${base}.ts`, `${base}.tsx`, `${base}/index.ts`].find((candidate) => existsSync(candidate));
       if (resolved) found.push(resolved);
     }
