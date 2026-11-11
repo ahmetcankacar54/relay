@@ -172,6 +172,23 @@ export async function buildNativeHelpers() {
         "dynamic_lookup",
       ],
     },
+    {
+      name: "window-space",
+      source: path.resolve("electron/native/window-space.swift"),
+      header: path.resolve("electron/native/node_api_subset.h"),
+      output: path.join(outDir, "window-space.node"),
+      targets,
+      // A Node-API addon, built like widget-center.
+      args: [
+        "-emit-library",
+        "-import-objc-header",
+        path.resolve("electron/native/node_api_subset.h"),
+        "-Xlinker",
+        "-undefined",
+        "-Xlinker",
+        "dynamic_lookup",
+      ],
+    },
   ];
   const results = [];
   for (const product of products) {

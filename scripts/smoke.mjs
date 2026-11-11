@@ -57,7 +57,12 @@ function checkWidget(bundle) {
     "Contents/Resources/app.asar.unpacked/dist-electron/widget-center.node",
   );
   execFileSync("/usr/bin/codesign", ["--verify", "--strict", addon]);
-  console.log("Widget extension and reload addon: signed and in place.");
+  execFileSync("/usr/bin/codesign", [
+    "--verify",
+    "--strict",
+    path.join(bundle, "Contents/Resources/app.asar.unpacked/dist-electron/window-space.node"),
+  ]);
+  console.log("Widget extension, reload addon and window space addon: signed and in place.");
 }
 if (code === 0 && packagedMain && process.platform === "darwin") {
   const bundle = packagedMain.slice(0, packagedMain.indexOf(".app/") + 4);

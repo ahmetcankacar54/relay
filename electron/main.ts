@@ -87,6 +87,7 @@ import { sqliteCookieStorage } from "./core/cookie-store";
 import { RelayTray } from "./tray";
 import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
 import { TrayPanel } from "./tray-panel";
+import { loadWindowSpace } from "./core/window-space";
 import { SwitchWindow } from "./switch-window";
 import {
   SwitchStory,
@@ -1335,6 +1336,7 @@ else {
           preload: path.join(__dirname, "preload.cjs"),
           load: (win) => loadPage(win, "panel.html"),
           onEvent: logDraftEvent,
+          onActiveSpace: loadWindowSpace(__dirname),
           onVisibilityChange: () => {
             try {
               switchWindow?.sync();

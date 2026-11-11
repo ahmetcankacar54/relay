@@ -5,9 +5,10 @@ import {
   PANEL_WIDTH,
   panelBlurAction,
   panelLoadState,
+  panelOffSpaceAction,
   panelPosition,
   panelRevival,
-  pointerOnTray,
+  pendingOpenDue,
   ToggleGuard,
   type PanelLoadEvent,
   type Rect,
@@ -21,6 +22,8 @@ export interface TrayPanelOptions {
   onVisibilityChange?(): void;
   /** Something that keeps the panel from opening, for the private diagnosis log. */
   onEvent?(event: string, fields: Record<string, unknown>): void;
+  /** Whether a shown window is on the Space the user is looking at (window-space.node). */
+  onActiveSpace?(handle: Buffer): boolean | undefined;
   now?: () => number;
 }
 
@@ -37,6 +40,9 @@ export class TrayPanel {
   private unreadySince: number;
   private revivedAt = -Infinity;
   private openedAt = -Infinity;
+  private rebuiltAt = -Infinity;
+  /** The click that found the panel off the Space, to open the new window for once it paints. */
+  private pendingOpen?: { bounds: Rect; at: number };
 
   constructor(private readonly options: TrayPanelOptions) {
     this.now = options.now ?? Date.now;
@@ -164,6 +170,7 @@ export class TrayPanel {
     // forward).
     win.showInactive();
     win.focus();
+    if (this.offSpace(win)) return this.rebuild(win, trayBounds);
     this.reportVisibility(win, true);
     this.onVisibilityChange?.();
   }
@@ -195,6 +202,11 @@ export class TrayPanel {
     );
     win.setContentSize(PANEL_WIDTH, clampPanelHeight(height, workArea.height));
     if (this.anchor) this.place(win);
+    // The rebuilt panel's first paint opens it for the click that found the old one off the Space.
+    const pending = this.pendingOpen;
+    if (!pending || this.load.phase !== "ready") return;
+    this.pendingOpen = undefined;
+    if (pendingOpenDue(pending, this.now()) && !win.isVisible()) this.toggle(pending.bounds);
   }
 
   webContents(): Electron.WebContents | undefined {
@@ -205,6 +217,44 @@ export class TrayPanel {
     const win = this.live();
     this.win = undefined;
     if (win) win.destroy();
+  }
+
+  /** A shown panel that macOS put on no Space the user can see. */
+  private offSpace(win: BrowserWindow) {
+    try {
+      return this.options.onActiveSpace?.(win.getNativeWindowHandle()) === false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * The panel was ordered in on no Space: hide it and make its window again, to open for this
+   * click once it has painted. Within PANEL_REBUILD_GAP_MS of the last rebuild it is only hidden.
+   */
+  private rebuild(win: BrowserWindow, trayBounds: Rect) {
+    const now = this.now();
+    const action = panelOffSpaceAction(now - this.rebuiltAt);
+    this.options.onEvent?.("tray-panel-off-space", { action });
+    win.hide();
+    this.openedAt = -Infinity;
+    this.guard.hidden(now, false);
+    if (action === "rebuild") {
+      this.rebuiltAt = now;
+      this.pendingOpen = { bounds: trayBounds, at: now };
+      try {
+        this.win = undefined;
+        win.destroy();
+        this.create();
+      } catch (error) {
+        this.pendingOpen = undefined;
+        this.options.onEvent?.("tray-panel-revive-failed", {
+          action: "rebuild",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else this.reportVisibility(win, false);
+    this.onVisibilityChange?.();
   }
 
   private dispatch(event: PanelLoadEvent) {

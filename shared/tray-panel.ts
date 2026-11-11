@@ -72,6 +72,24 @@ export function panelBlurAction(params: {
   }
   return "hide";
 }
+/**
+ * macOS can order the panel in on no Space at all: it counts as shown, nothing draws it, and
+ * every later show of the same window does the same until Relay restarts. A new window lands on
+ * the Space as it should, so the panel's window is made again and opens once it has painted.
+ * At most one rebuild per this long, so a Mac that keeps every new window off the Space does not
+ * reload the panel on every click.
+ */
+export const PANEL_REBUILD_GAP_MS = 10_000;
+/** How long after the click a rebuilt panel may still open by itself. */
+export const PANEL_PENDING_OPEN_MS = 5_000;
+/** A shown panel that is not on the active Space: make its window again, or only hide it. */
+export function panelOffSpaceAction(sinceRebuild: number): "rebuild" | "hide" {
+  return sinceRebuild < PANEL_REBUILD_GAP_MS ? "hide" : "rebuild";
+}
+/** Whether a rebuilt panel that has just painted should still open for the click that rebuilt it. */
+export function pendingOpenDue(pending: { at: number } | undefined, now: number) {
+  return !!pending && now - pending.at <= PANEL_PENDING_OPEN_MS;
+}
 /** Left tray click: the popover once it has loaded, else today's native menu. */
 export function trayClickAction(panelUsable: boolean): "toggle" | "menu" {
   return panelUsable ? "toggle" : "menu";
