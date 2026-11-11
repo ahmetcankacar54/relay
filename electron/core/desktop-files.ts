@@ -123,8 +123,26 @@ interface SessionRecord {
   scope: Scope;
   isTarget: boolean;
 }
-const sessionKey = (cliSessionId: string, cwd: string) =>
-  `${cliSessionId.toLowerCase()}|${path.resolve(cwd).normalize("NFC")}`;
+/**
+ * A conversation Claude runs over SSH: its folder is on the remote machine, so it may be neither
+ * absolute nor resolvable on this Mac.
+ */
+const sshHost = (obj: JsonObject): string | undefined => {
+  const config = obj.sshConfig;
+  return config && typeof config === "object" && typeof config.sshHost === "string" && config.sshHost
+    ? `${config.sshHost}:${Number.isFinite(config.sshPort) ? config.sshPort : 22}`
+    : undefined;
+};
+/** A record's folder is usable: absolute here, or absolute on the remote machine for SSH. */
+const usableCwd = (obj: JsonObject) =>
+  typeof obj.cwd === "string" &&
+  (path.isAbsolute(obj.cwd) ||
+    (!!sshHost(obj) && (path.win32.isAbsolute(obj.cwd) || path.posix.isAbsolute(obj.cwd))));
+const sessionKey = (cliSessionId: string, obj: JsonObject) => {
+  const host = sshHost(obj);
+  const folder = host ? `ssh:${host}:${obj.cwd}` : path.resolve(obj.cwd);
+  return `${cliSessionId.toLowerCase()}|${folder.normalize("NFC")}`;
+};
 /**
  * Desktop gives every account its own `local_<uuid>` alias for a conversation, and
  * it adopts transcripts started under another account as `local_<cliSessionId>`.
@@ -149,10 +167,10 @@ function groupSessions(records: SessionRecord[]) {
   };
   for (const record of records) {
     const file = `file:${record.alias}`;
-    union(file, `cli:${sessionKey(record.obj.cliSessionId, record.obj.cwd)}`);
+    union(file, `cli:${sessionKey(record.obj.cliSessionId, record.obj)}`);
     for (const prior of record.obj.priorCliSessionIds ?? [])
       if (uuid.safeParse(prior).success)
-        union(file, `cli:${sessionKey(prior, record.obj.cwd)}`);
+        union(file, `cli:${sessionKey(prior, record.obj)}`);
   }
   const groups = new Map<string, SessionRecord[]>();
   for (const record of records) {
@@ -208,8 +226,7 @@ async function readSessions(root: string, scope: Scope, isTarget: boolean) {
     if (
       !obj ||
       !uuid.safeParse(obj.cliSessionId).success ||
-      typeof obj.cwd !== "string" ||
-      !path.isAbsolute(obj.cwd) ||
+      !usableCwd(obj) ||
       !Number.isFinite(obj.lastActivityAt)
     )
       continue;
@@ -291,7 +308,8 @@ export interface CarriedConversation {
   members: { alias: string; accountUuid: string }[];
 }
 
-// Only local Code records travel. Remote connectors, permission grants, browser access,
+// Only Code records travel: local ones and those Claude runs over SSH (their transcript is on
+// the remote machine, so only the card moves). Remote connectors, permission grants, browser access,
 // and server-owned project bindings must be established by the destination account.
 export async function planHistory(
   root: string,
