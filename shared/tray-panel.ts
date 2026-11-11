@@ -35,13 +35,42 @@ export class ToggleGuard {
 }
 /** Whether the pointer is over the tray icon, with a little slack around it. */
 export function pointerOnTray(tray: Rect | undefined, point: { x: number; y: number }, slack = 4) {
-  if (!tray) return true;
+  if (!tray) return false;
   return (
     point.x >= tray.x - slack &&
     point.x <= tray.x + tray.width + slack &&
     point.y >= tray.y - slack &&
     point.y <= tray.y + tray.height + slack
   );
+}
+
+/**
+ * How long after opening the panel a blur under the tray icon is treated as part
+ * of the opening click (AppKit status item tracking ending, focus settling), not a
+ * click to close. A human cannot see the panel and click to close it within this window.
+ */
+export const PANEL_OPEN_GUARD_MS = 300;
+
+/**
+ * What a blur event on the panel window should do:
+ * - If the pointer is over the tray icon right after opening (< PANEL_OPEN_GUARD_MS),
+ *   the blur is a transient artifact of the opening click; ignore it so the panel stays open.
+ * - If the pointer is over the tray icon after the panel has been open for a while, the user
+ *   clicked the tray icon to close the panel: hide it and arm the toggle guard.
+ * - Otherwise (clicked into another app, Esc, etc.), hide the panel without arming the toggle guard.
+ */
+export function panelBlurAction(params: {
+  openedAt: number;
+  now: number;
+  tray: Rect | undefined;
+  cursor: { x: number; y: number };
+}): "ignore" | "hide-by-tray" | "hide" {
+  if (pointerOnTray(params.tray, params.cursor)) {
+    return params.now - params.openedAt < PANEL_OPEN_GUARD_MS
+      ? "ignore"
+      : "hide-by-tray";
+  }
+  return "hide";
 }
 /** Left tray click: the popover once it has loaded, else today's native menu. */
 export function trayClickAction(panelUsable: boolean): "toggle" | "menu" {

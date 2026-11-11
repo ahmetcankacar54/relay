@@ -3,6 +3,7 @@ import {
   clampPanelHeight,
   INITIAL_PANEL_LOAD,
   PANEL_WIDTH,
+  panelBlurAction,
   panelLoadState,
   panelPosition,
   panelRevival,
@@ -35,6 +36,7 @@ export class TrayPanel {
   /** When the panel last stopped being ready (or was made); a ready panel does not use it. */
   private unreadySince: number;
   private revivedAt = -Infinity;
+  private openedAt = -Infinity;
 
   constructor(private readonly options: TrayPanelOptions) {
     this.now = options.now ?? Date.now;
@@ -91,11 +93,21 @@ export class TrayPanel {
       },
     );
     win.webContents.on("render-process-gone", () => this.dispatch("gone"));
-    // A blur from a click on the tray icon is followed by that click, which must not reopen the
-    // panel; a blur from a click anywhere else must not swallow the next tray click.
-    win.on("blur", () =>
-      this.hide(pointerOnTray(this.anchor, screen.getCursorScreenPoint())),
-    );
+    // A blur right after opening (AppKit status item tracking ending, focus transition) must not
+    // close the panel; a blur from a later tray click closes it and arms the reopen guard;
+    // a blur from anywhere else closes it without arming the guard.
+    win.on("blur", () => {
+      const live = this.live();
+      if (!live || !live.isVisible()) return;
+      const action = panelBlurAction({
+        openedAt: this.openedAt,
+        now: this.now(),
+        tray: this.anchor,
+        cursor: screen.getCursorScreenPoint(),
+      });
+      if (action === "ignore") return;
+      this.hide(action === "hide-by-tray");
+    });
     win.on("closed", () => {
       if (this.win === win) this.win = undefined;
     });
@@ -142,10 +154,11 @@ export class TrayPanel {
   toggle(trayBounds: Rect) {
     const win = this.live();
     if (!win) return;
-    if (win.isVisible()) return this.hide();
+    if (win.isVisible()) return this.hide(true);
     if (!this.guard.shouldOpen(this.now())) return;
     this.anchor = trayBounds;
     this.place(win);
+    this.openedAt = this.now();
     // showInactive + focus on a non-activating panel makes it key without
     // activating the app (plain show() would bring Relay and its main window
     // forward).
@@ -161,6 +174,7 @@ export class TrayPanel {
     // Only the panel hides; never app.hide(), which would also hide the main
     // window. Focus returns to the previous app because Relay never activated.
     win.hide();
+    this.openedAt = -Infinity;
     this.guard.hidden(this.now(), byTrayClick);
     this.reportVisibility(win, false);
     this.onVisibilityChange?.();

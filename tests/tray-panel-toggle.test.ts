@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   INITIAL_PANEL_LOAD,
+  panelBlurAction,
+  PANEL_OPEN_GUARD_MS,
   pointerOnTray,
   ToggleGuard,
   panelLoadState,
@@ -38,7 +40,63 @@ test("the pointer counts as on the tray icon only inside its bounds", () => {
   assert.equal(pointerOnTray(tray, { x: 1420, y: 12 }), true);
   assert.equal(pointerOnTray(tray, { x: 1442, y: 26 }), true);
   assert.equal(pointerOnTray(tray, { x: 900, y: 400 }), false);
-  assert.equal(pointerOnTray(undefined, { x: 900, y: 400 }), true);
+  assert.equal(pointerOnTray(undefined, { x: 900, y: 400 }), false);
+});
+
+test("a blur right after opening ignores tray pointer so the panel stays open", () => {
+  const tray = { x: 1400, y: 0, width: 40, height: 24 };
+  const cursorOnTray = { x: 1420, y: 12 };
+  const cursorElsewhere = { x: 500, y: 500 };
+
+  // Blur on tray immediately after opening (< 300 ms) is ignored
+  assert.equal(
+    panelBlurAction({ openedAt: 1000, now: 1000, tray, cursor: cursorOnTray }),
+    "ignore",
+  );
+  assert.equal(
+    panelBlurAction({ openedAt: 1000, now: 1250, tray, cursor: cursorOnTray }),
+    "ignore",
+  );
+  assert.equal(
+    panelBlurAction({
+      openedAt: 1000,
+      now: 1000 + PANEL_OPEN_GUARD_MS - 1,
+      tray,
+      cursor: cursorOnTray,
+    }),
+    "ignore",
+  );
+
+  // Blur on tray after the panel has been open (>= 300 ms) hides and arms the guard
+  assert.equal(
+    panelBlurAction({
+      openedAt: 1000,
+      now: 1000 + PANEL_OPEN_GUARD_MS,
+      tray,
+      cursor: cursorOnTray,
+    }),
+    "hide-by-tray",
+  );
+  assert.equal(
+    panelBlurAction({ openedAt: 1000, now: 2000, tray, cursor: cursorOnTray }),
+    "hide-by-tray",
+  );
+
+  // Blur elsewhere always hides without arming the guard
+  assert.equal(
+    panelBlurAction({ openedAt: 1000, now: 1050, tray, cursor: cursorElsewhere }),
+    "hide",
+  );
+  assert.equal(
+    panelBlurAction({ openedAt: 1000, now: 2000, tray, cursor: cursorElsewhere }),
+    "hide",
+  );
+
+  // When tray is unknown, it cannot count as on-tray
+  assert.equal(
+    panelBlurAction({ openedAt: 1000, now: 1050, tray: undefined, cursor: cursorOnTray }),
+    "hide",
+  );
 });
 
 test("a tray click falls back to the native menu until the panel has loaded", () => {
