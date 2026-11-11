@@ -2836,3 +2836,32 @@ test("a profile saved in the wrong workspace moves to the one its usage sign-in 
   assert.equal(await f.manager.rebindOrg(a.id, wrong), false);
   assert.equal(f.store.account(a.id).desktop!.orgId, right);
 });
+
+test("conversations Claude runs over SSH travel like local ones, by their remote folder", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A"),
+    b = await f.account("B");
+  const ssh = { sshHost: "user@remote.example", sshPort: 22, sshIdentityFile: "/home/user/.ssh/id" };
+  // A Windows folder on the remote machine: not absolute on this Mac.
+  const remote = await session(f.root, a, randomUUID(), { cwd: "D:\\projects\\app", originCwd: "D:\\projects\\app", sshConfig: ssh });
+  // The same conversation already on B under another alias, older: B keeps one card, the newest.
+  await session(f.root, b, randomUUID(), {
+    cliSessionId: remote.id,
+    cwd: "D:\\projects\\app",
+    sshConfig: ssh,
+    lastActivityAt: 1,
+  });
+  // A relative folder without SSH is still not a conversation Relay understands.
+  await session(f.root, a, randomUUID(), { cwd: "relative\\folder" });
+  const plan = await planHistory(f.root, b.desktop!, [a.desktop!]);
+  const target = `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}`;
+  const written = [...plan].filter(([file, bytes]) => file.startsWith(target) && bytes);
+  assert.equal(written.length, 1);
+  const [file, bytes] = written[0];
+  assert.equal(file, `${target}/local_${remote.id}.json`);
+  const carried = JSON.parse(bytes!.toString());
+  assert.equal(carried.cwd, "D:\\projects\\app");
+  assert.deepEqual(carried.sshConfig, ssh);
+  // The older card of the same conversation on B goes, so it shows once.
+  assert.equal([...plan].filter(([, bytes]) => bytes === null).length, 1);
+});
