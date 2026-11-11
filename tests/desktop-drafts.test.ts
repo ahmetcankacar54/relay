@@ -574,14 +574,14 @@ test("a copy of leveldb is byte-exact and private, and Claude's stays as it was"
   assert.equal((await fs.stat(path.join(copy, "nested/empty"))).size, 0);
   for (const [name, bytes] of Object.entries(files))
     assert.deepEqual(await fs.readFile(path.join(copy, name)), bytes, name);
-  assert.equal((await fs.stat(storage)).mode & 0o777, 0o700);
+  if (process.platform !== "win32") assert.equal((await fs.stat(storage)).mode & 0o777, 0o700);
   // Nothing was made or changed beside Claude's leveldb.
   assert.deepEqual(await snapshot(path.join(root, LOCAL_STORAGE)), before);
   // A directory that already exists is never copied into.
   await assert.rejects(copyLocalStorage(root, storage), { code: "EEXIST" });
 });
 
-test("a link anywhere in leveldb fails the copy", async (t) => {
+test("a link anywhere in leveldb fails the copy", { skip: process.platform === "win32" && "needs symbolic links without Windows developer mode" }, async (t) => {
   // Chromium's leveldb holds none. Followed from the copy, a link could reach Claude's own files,
   // so not even one that stays inside is copied.
   const cases: [string, string, string][] = [
@@ -654,9 +654,11 @@ test("a linked or misshapen Local Storage or leveldb is refused", async (t) => {
   await assertGone(target);
 });
 
-// A root user ignores file modes, so the chmod-based tests prove nothing there.
+// A root user ignores file modes, and Windows has none, so the chmod-based tests prove nothing there.
 const needsPermissions = {
-  skip: process.getuid?.() === 0 && "root can read a mode 0 file",
+  skip:
+    (process.getuid?.() === 0 && "root can read a mode 0 file") ||
+    (process.platform === "win32" && "Windows has no POSIX file modes"),
 };
 
 test(
@@ -1377,11 +1379,12 @@ test("last.json holds no text", async (t) => {
     count: 2,
   });
   // Private to Relay, like the directory made for it.
-  assert.equal((await fs.stat(drafts)).mode & 0o777, 0o700);
-  assert.equal(
-    (await fs.stat(path.join(drafts, "last.json"))).mode & 0o777,
-    0o600,
-  );
+  if (process.platform !== "win32") assert.equal((await fs.stat(drafts)).mode & 0o777, 0o700);
+  if (process.platform !== "win32")
+    assert.equal(
+      (await fs.stat(path.join(drafts, "last.json"))).mode & 0o777,
+      0o600,
+    );
 });
 
 test("stale scratch is swept, relay-old is never touched", async (t) => {
@@ -1679,7 +1682,7 @@ test("the vault gives back what it was given, sealed in between", async (t) => {
   assert.equal(summarize(records[1]).newSession, true);
   assert.ok(!JSON.stringify(records.map(summarize)).includes(UNSENT));
   // The file is private to Relay.
-  assert.equal((await fs.stat(v.file)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal((await fs.stat(v.file)).mode & 0o777, 0o600);
 });
 
 test("the vault's file does not hold the text", async (t) => {
@@ -2276,7 +2279,7 @@ test("the job file is written new and private before the helper starts", async (
   assert.deepEqual(h.writes, [
     [h.jobFile, JSON.stringify(h.job), { mode: 0o600, flag: "wx" }],
   ]);
-  assert.equal((await fs.stat(h.jobFile)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal((await fs.stat(h.jobFile)).mode & 0o777, 0o600);
   assert.deepEqual(JSON.parse(await fs.readFile(h.jobFile, "utf8")), h.job);
   h.children[0].emitter.emit("exit", 1, null);
   await h.outcome;

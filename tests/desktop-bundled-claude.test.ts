@@ -30,14 +30,14 @@ test("the Claude app's own Claude Code: newest verified version, macOS only", as
   assert.equal(desktopBundledClaude(home, "darwin", () => false), undefined);
 });
 
-test("where a CLI came from: the user's choice, the Claude app, or the usual places", () => {
+test("where a CLI came from: the user's choice, the Claude app, or the usual places", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, () => {
   const app = "/Users/me/Library/Application Support/Claude/claude-code/2.1.309/b/claude.app/Contents/MacOS/claude";
   assert.equal(executableSource(app, undefined), "claude-app");
   assert.equal(executableSource(app, app), "chosen");
   assert.equal(executableSource("/Users/me/.local/bin/claude", undefined), "path");
 });
 
-test("the diagnosis reports the source and still reads the version", async (t) => {
+test("the diagnosis reports the source and still reads the version", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "relay-bundled-diag-"));
   t.after(() => fs.rm(home, { recursive: true, force: true }));
   const executable = await bundle(home, "2.1.309", "bbb");

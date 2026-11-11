@@ -5,7 +5,7 @@ import type net from "node:net";
 import { cliFixture } from "./cli-fixture";
 import { parseCommand } from "../cli/src/args";
 
-test("relay proxy takes --port and --host, and rejects bad values", async (t) => {
+test("relay proxy takes --port and --host, and rejects bad values", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   assert.equal(
     parseCommand(["proxy", "env", "--port", "9000", "--host", "::1"]).flags
       .port,
@@ -41,7 +41,7 @@ test("relay proxy takes --port and --host, and rejects bad values", async (t) =>
   assert.equal(await f.run("proxy", "frobnicate"), 2);
 });
 
-test("relay proxy status reports a running and a stopped gateway", async (t) => {
+test("relay proxy status reports a running and a stopped gateway", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const server = http.createServer((_req, res) => {
     res.writeHead(200, { "content-type": "application/json" });
     res.end(
@@ -82,7 +82,7 @@ test("relay proxy status reports a running and a stopped gateway", async (t) => 
   assert.equal(JSON.parse(f.out()).running, false);
 });
 
-test("relay proxy env and status use the client key Relay.app saved", async (t) => {
+test("relay proxy env and status use the client key Relay.app saved", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const key = "relay-sec-cli-test-key";
   let seenKey: string | undefined;
   const server = http.createServer((req, res) => {

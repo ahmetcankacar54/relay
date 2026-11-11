@@ -349,7 +349,7 @@ test("the outcome lines name the account and what to do", () => {
   );
 });
 
-test("the Keychain item is read through security, hex decoded, and written with the secret on stdin only", async (t) => {
+test("the Keychain item is read through security, hex decoded, and written with the secret on stdin only", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const dir = fs.mkdtempSync(
     path.join(os.tmpdir(), "relay-terminal-security-"),
   );
@@ -394,7 +394,7 @@ exit 9
   );
 });
 
-test("an item too long for one interactive line is written through the arguments, whole", async (t) => {
+test("an item too long for one interactive line is written through the arguments, whole", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "relay-terminal-security-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const tool = path.join(dir, "security");
@@ -448,7 +448,7 @@ test("the config keeps every other key and its mode when the account changes", a
     theme: "dark",
     oauthAccount: { accountUuid: "new" },
   });
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   await config.writeAccount(undefined);
   assert.deepEqual(await config.read(), { theme: "dark" });
   assert.deepEqual(fs.readdirSync(dir), [".claude.json"]);

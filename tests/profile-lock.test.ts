@@ -38,7 +38,7 @@ test("shared holders coexist; exclusive excludes everyone", async (t) => {
       e.holders.every((h: any) => h.kind === "shared"),
   );
   assert.equal(profileLockHolders(locks, A).length, 2);
-  assert.equal(fs.statSync(path.join(locks, A)).mode & 0o777, 0o700);
+  if (process.platform !== "win32") assert.equal(fs.statSync(path.join(locks, A)).mode & 0o777, 0o700);
 });
 
 test("an exclusive holder blocks shared, and other accounts are free", async (t) => {

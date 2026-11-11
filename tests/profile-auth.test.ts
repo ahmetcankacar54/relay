@@ -18,7 +18,7 @@ function script(t: any, body: string) {
 const ACCOUNT = "0b7b2d6e-3c1f-4f8e-9a51-2a8d1c4b5e6f";
 const ORG = "1c8c3e7f-4d20-4a9f-8b62-3b9e2d5c6f70";
 
-test("readProfileAuth reads `auth status --json` in the profile and reports the account", async (t) => {
+test("readProfileAuth reads `auth status --json` in the profile and reports the account", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
   const s = script(
     t,
     `[ "$1 $2 $3" = "auth status --json" ] || exit 9
@@ -40,7 +40,7 @@ test("readProfileAuth reports a failed status as signed out with the error text"
   assert.equal(auth.error, "Limit okuma girişi doğrulanamadı. Limit okuma girişini yenile.");
 });
 
-test("diagnoseCli reports the version and whether it supports Desktop", async (t) => {
+test("diagnoseCli reports the version and whether it supports Desktop", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
   const s = script(t, `echo "2.1.300 (Claude Code)"`);
   const d = await diagnoseCli(s.file, s.dir);
   assert.equal(d.executable, s.file);

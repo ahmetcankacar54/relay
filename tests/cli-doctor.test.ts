@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { cliFixture } from "./cli-fixture";
 
-test("doctor reports each check, with an old Claude Code CLI as a warning", async (t) => {
+test("doctor reports each check, with an old Claude Code CLI as a warning", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const claude = path.join(f.temp, "fake-claude");
@@ -23,7 +23,7 @@ test("doctor reports each check, with an old Claude Code CLI as a warning", asyn
   assert.match(f.out(), /Automation/);
 });
 
-test("a locked key fails the check and exits 5", async (t) => {
+test("a locked key fails the check and exits 5", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   fs.writeFileSync(path.join(f.security.dir, "force-exit"), "51");

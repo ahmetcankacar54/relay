@@ -15,7 +15,7 @@ async function until(check: () => boolean, ms = 30_000) {
   }
 }
 
-test("add saves the unsaved account signed in to Claude Desktop", async (t) => {
+test("add saves the unsaved account signed in to Claude Desktop", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const signed = await f.accountInDesktop();
   assert.equal(await f.run("add", "Kişisel", "--yes"), 0);
@@ -28,7 +28,7 @@ test("add saves the unsaved account signed in to Claude Desktop", async (t) => {
   assert.ok(!(f.out() + f.err()).includes("FIXTURE-SECRET"));
 });
 
-test("add --work --group makes a work account in that group", async (t) => {
+test("add --work --group makes a work account in that group", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.accountInDesktop();
   assert.equal(await f.run("add", "Work", "--work", "--group", "Vertex", "--yes"), 0);
@@ -37,7 +37,7 @@ test("add --work --group makes a work account in that group", async (t) => {
   assert.equal(account.group, "work:Vertex");
 });
 
-test("add --new signs a new account in and waits for it", async (t) => {
+test("add --new signs a new account in and waits for it", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const done = f.run("add", "B", "--new", "--yes", "--poll-ms", "10");
@@ -52,7 +52,7 @@ test("add --new signs a new account in and waits for it", async (t) => {
   void a;
 });
 
-test("several workspaces: no terminal exits 2; --org or a numbered answer picks one", async (t) => {
+test("several workspaces: no terminal exits 2; --org or a numbered answer picks one", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const signed = await f.accountInDesktop(2);
   assert.equal(await f.run("add", "W", "--yes"), 2);
@@ -67,7 +67,7 @@ test("several workspaces: no terminal exits 2; --org or a numbered answer picks 
   assert.equal(g.store().state.accounts[0].desktop?.orgId, second);
 });
 
-test("Ctrl+C while waiting keeps the sign-in pending; --cancel restores the previous one", async (t) => {
+test("Ctrl+C while waiting keeps the sign-in pending; --cancel restores the previous one", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const done = f.run("add", "C", "--new", "--yes", "--poll-ms", "20");
@@ -86,7 +86,7 @@ test("Ctrl+C while waiting keeps the sign-in pending; --cancel restores the prev
   assert.deepEqual(f.store().state.accounts.map((x) => x.name), ["A"]);
 });
 
-test("--resume finishes a pending sign-in", async (t) => {
+test("--resume finishes a pending sign-in", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const first = f.run("add", "C", "--new", "--yes", "--poll-ms", "20");
@@ -99,7 +99,7 @@ test("--resume finishes a pending sign-in", async (t) => {
   assert.equal(f.store().state.accounts.find((x) => x.name === "C")?.desktop?.accountUuid, signed.accountUuid);
 });
 
-test("a duplicate name exits 2, and an unlinked account of that name is linked instead", async (t) => {
+test("a duplicate name exits 2, and an unlinked account of that name is linked instead", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   assert.equal(await f.run("add", "a", "--new", "--yes"), 2);
@@ -112,7 +112,7 @@ test("a duplicate name exits 2, and an unlinked account of that name is linked i
   assert.equal(f.store().state.accounts.length, 2);
 });
 
-test("add --new stops waiting when the sign-in is finished or cancelled elsewhere", async (t) => {
+test("add --new stops waiting when the sign-in is finished or cancelled elsewhere", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const done = f.run("add", "C", "--new", "--yes", "--poll-ms", "10");
@@ -123,7 +123,7 @@ test("add --new stops waiting when the sign-in is finished or cancelled elsewher
   assert.match(f.out() + f.err(), /no longer pending/);
 });
 
-test("a worker gives up waiting for a sign-in after its time limit", async (t) => {
+test("a worker gives up waiting for a sign-in after its time limit", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { env: { RELAY_WORKER: "1", RELAY_SIGNIN_LIMIT_MS: "60" } });
   await f.saved("A");
   assert.equal(await f.run("add", "C", "--new", "--yes", "--poll-ms", "10"), 1);
@@ -131,7 +131,7 @@ test("a worker gives up waiting for a sign-in after its time limit", async (t) =
   assert.ok(fs.existsSync(pendingFile(f.home)));
 });
 
-test("signing back in with an account that is already saved says so while waiting", async (t) => {
+test("signing back in with an account that is already saved says so while waiting", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const done = f.run("add", "C", "--new", "--yes", "--poll-ms", "10");

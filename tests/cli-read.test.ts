@@ -7,7 +7,7 @@ import { cliFixture } from "./cli-fixture";
 import { holdInChild } from "./lock-child";
 import { jsonBytes, writeBytes } from "../electron/core/desktop-files";
 
-test("list marks the account Claude Desktop is signed in to, in a table and as JSON", async (t) => {
+test("list marks the account Claude Desktop is signed in to, in a table and as JSON", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const b = await f.saved("Work", "Vertex"); // Desktop is now signed in to Work
@@ -29,13 +29,13 @@ test("list marks the account Claude Desktop is signed in to, in a table and as J
   assert.ok(!f.out().includes("FIXTURE-SECRET"));
 });
 
-test("list with no accounts says how to add one", async (t) => {
+test("list with no accounts says how to add one", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   assert.equal(await f.run("ls"), 0);
   assert.match(f.out(), /relay add/);
 });
 
-test("status names the active account, and an unknown one as unsaved", async (t) => {
+test("status names the active account, and an unknown one as unsaved", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   f.state.running = true;
@@ -61,7 +61,7 @@ test("status names the active account, and an unknown one as unsaved", async (t)
   assert.ok(!f.out().includes("FIXTURE-SECRET"));
 });
 
-test("status shows a pending sign-in and a lock held by another process", async (t) => {
+test("status shows a pending sign-in and a lock held by another process", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   await writeBytes(
@@ -82,7 +82,7 @@ test("status shows a pending sign-in and a lock held by another process", async 
   assert.match(f.out(), /Başka bir relay komutu/);
 });
 
-test("Relay.app shows as running from the process list", async (t) => {
+test("Relay.app shows as running from the process list", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { appVersion: "0.12.0" });
   f.deps.processList = async () => "  501     1 /Applications/Relay.app/Contents/MacOS/Relay\n";
   await f.run("status", "--json");
@@ -91,7 +91,7 @@ test("Relay.app shows as running from the process list", async (t) => {
   assert.equal(s.relay.appVersion, "0.12.0");
 });
 
-test("status and list never write the registry", async (t) => {
+test("status and list never write the registry", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const file = path.join(f.home, "state.json");
@@ -101,7 +101,7 @@ test("status and list never write the registry", async (t) => {
   assert.equal(fs.statSync(file).mtimeMs, before);
 });
 
-test("a lock held for an app task is described in words, not as a raw kind", async (t) => {
+test("a lock held for an app task is described in words, not as a raw kind", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   await f.saved("B"); // B is open in Claude, so switching to A needs the lock

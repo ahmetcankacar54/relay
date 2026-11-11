@@ -593,7 +593,8 @@ after(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
-test("the native watch runs the helper with its times, passes its states on, and ends once", async () => {
+// The helper is a macOS accessibility tool; its stand-in here is a shell script.
+test("the native watch runs the helper with its times, passes its states on, and ends once", { skip: process.platform === "win32" }, async () => {
   scratch = await mkdtemp(path.join(tmpdir(), "relay-watch-"));
   const helper = path.join(scratch, "helper");
   const argsFile = path.join(scratch, "args");

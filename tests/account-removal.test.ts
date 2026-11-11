@@ -151,7 +151,7 @@ test("a usage sign-in that cannot be signed out is said, and the account still g
   assert.deepEqual(g.signedOut, []);
 });
 
-test("the app's removal refuses a running terminal and a usage sign-in in progress, and signs out with the CLI", async (t) => {
+test("the app's removal refuses a running terminal and a usage sign-in in progress, and signs out with the CLI", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
   const f = fixture(t);
   const service = new Service(f.root, () => {}, path.join(f.root, "unused-imported"));
   const log = path.join(f.root, "cli.log");

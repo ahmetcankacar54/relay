@@ -251,7 +251,7 @@ test("a failed write is undone by the backup of the cookie files", async (t) => 
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
   const before = everyRow(a.dir);
   const backup = await backupCookieFiles(a.dir, scratch);
-  assert.equal((fs.statSync(backup).mode & 0o777), 0o700);
+  if (process.platform !== "win32") assert.equal((fs.statSync(backup).mode & 0o777), 0o700);
   await sqliteCookieStorage.write(a.dir, await sqliteCookieStorage.read(profile(t, "B").dir));
   assert.notDeepEqual(everyRow(a.dir), before);
   fs.writeFileSync(path.join(a.folder, "Cookies-journal"), "left behind");

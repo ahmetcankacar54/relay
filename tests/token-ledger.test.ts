@@ -597,18 +597,18 @@ test("the ledger file holds no transcript text and is private", async () => {
   assert.ok(text.includes(MODEL));
   assert.ok(!text.includes(PHRASE));
   assert.ok(!text.includes("fixture-project"));
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o600);
 
   // The seen files hold only 8-byte hashes of the response ids.
   const seen = path.join(dir, "token-ledger-seen");
-  assert.equal(fs.statSync(seen).mode & 0o777, 0o700);
+  if (process.platform !== "win32") assert.equal(fs.statSync(seen).mode & 0o777, 0o700);
   assert.deepEqual(fs.readdirSync(seen), ["2026-10-18.bin"]);
   const bin = path.join(seen, "2026-10-18.bin");
   const bytes = fs.readFileSync(bin);
   assert.equal(bytes.length, 2 * 8);
   for (const needle of [PHRASE, "msg_A", "req_msg_A", MODEL])
     assert.equal(bytes.indexOf(needle), -1, needle);
-  assert.equal(fs.statSync(bin).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(bin).mode & 0o777, 0o600);
 });
 
 test("a response copied into other transcripts counts once; another request id for the same message counts", async () => {
@@ -916,7 +916,7 @@ test("ids and models out of shape: no id skips the row, odd ids skip dedupe, a l
   assert.equal(totals(ledger).responses, 4);
 });
 
-test("a transcript that cannot be read is skipped for the pass and read on a later one", async (t) => {
+test("a transcript that cannot be read is skipped for the pass and read on a later one", { skip: process.platform === "win32" && "Windows has no POSIX file modes to make a file unreadable" }, async (t) => {
   if (process.getuid?.() === 0) return t.skip("root reads any file");
   const dir = tempDir();
   const root = path.join(dir, "projects");
@@ -935,7 +935,7 @@ test("a transcript that cannot be read is skipped for the pass and read on a lat
   assert.equal(totals(ledger).responses, 2);
 });
 
-test("a seen day that cannot be read fails the tick, and a later tick counts once", async () => {
+test("a seen day that cannot be read fails the tick, and a later tick counts once", { skip: process.platform === "win32" && "Windows has no POSIX file modes to make a file unreadable" }, async () => {
   const dir = tempDir();
   const root = path.join(dir, "projects");
   write(path.join(root, "p", "s.jsonl"), assistant({ id: "msg_A" }));
@@ -1035,7 +1035,7 @@ test("seen files are made private again on load", async () => {
   const bin = path.join(dir, "token-ledger-seen", "2026-10-18.bin");
   fs.chmodSync(bin, 0o644);
   ledgerFor(dir, [{ dir: root }]);
-  assert.equal(fs.statSync(bin).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(bin).mode & 0o777, 0o600);
 });
 
 /** The key a transcript has in the ledger: the first 16 bytes of the SHA-256 of its path. */

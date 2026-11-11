@@ -95,7 +95,7 @@ async function fixture(t: any) {
     },
   };
 }
-test("starter fake process uses isolated temporary cwd, token environment only and removes cwd", async (t) => {
+test("starter fake process uses isolated temporary cwd, token environment only and removes cwd", { skip: process.platform === "win32" && "routines run on macOS and Linux only" }, async (t) => {
   const f = await fixture(t);
   await runQuotaStarter(f.store, f.account, f.credentials, f.options);
   const model = f.commands.find((c) => c.args[0] === "--print")!;
@@ -112,7 +112,7 @@ test("starter fake process uses isolated temporary cwd, token environment only a
   assert.equal(f.credentialCalls(), 1);
   await assert.rejects(fs.stat(model.options.cwd));
 });
-test("unsupported CLI refuses before credentials and never attempts a model fallback", async (t) => {
+test("unsupported CLI refuses before credentials and never attempts a model fallback", { skip: process.platform === "win32" && "routines run on macOS and Linux only" }, async (t) => {
   const f = await fixture(t);
   f.setHelp("--tools");
   await assert.rejects(
@@ -125,7 +125,7 @@ test("unsupported CLI refuses before credentials and never attempts a model fall
     false,
   );
 });
-test("company and unknown subscriptions may start a window; local administrator policy still refuses", async (t) => {
+test("company and unknown subscriptions may start a window; local administrator policy still refuses", { skip: process.platform === "win32" && "routines run on macOS and Linux only" }, async (t) => {
   for (const subscription of ["team", "unknown"]) {
     const f = await fixture(t);
     f.account.auth!.subscription = subscription;
@@ -146,7 +146,7 @@ test("company and unknown subscriptions may start a window; local administrator 
   assert.equal(f.commands.length, 0);
   assert.equal(f.credentialCalls(), 0);
 });
-test("revoked settings before or during credential acquisition never send a prompt", async (t) => {
+test("revoked settings before or during credential acquisition never send a prompt", { skip: process.platform === "win32" && "routines run on macOS and Linux only" }, async (t) => {
   for (const phase of ["before", "during"] as const) {
     const f = await fixture(t);
     if (phase === "before") f.setGuard(false);
@@ -165,7 +165,7 @@ test("revoked settings before or during credential acquisition never send a prom
     );
   }
 });
-test("child process failures never expose credential or CLI output strings", async (t) => {
+test("child process failures never expose credential or CLI output strings", { skip: process.platform === "win32" && "routines run on macOS and Linux only" }, async (t) => {
   const f = await fixture(t);
   f.setError(
     new Error("fake credential fixture-only-token and private output"),
@@ -230,7 +230,7 @@ test("isolated starter disables every tool, MCP, customization and persistence w
   assert.equal(windowStartEligible(a), false);
 });
 
-test("Claude Code's empty server-settings cache is no policy; any setting in it is", async (t) => {
+test("Claude Code's empty server-settings cache is no policy; any setting in it is", { skip: process.platform === "win32" && "routines run on macOS and Linux only" }, async (t) => {
   const f = await fixture(t);
   const file = path.join(f.profile, "remote-settings.json");
   f.options.policyPaths = [file];

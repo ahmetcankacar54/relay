@@ -32,7 +32,7 @@ exit 7
   return { f, a, log: () => fs.readFileSync(log, "utf8"), locks };
 }
 
-test("run starts Claude Code with the account's profile and passes its exit code through", async (t) => {
+test("run starts Claude Code with the account's profile and passes its exit code through", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f, a, log, locks } = await setup(t);
   assert.equal(await f.run("run", "A", "--", "--resume", "x"), 7);
   const out = log();
@@ -45,7 +45,7 @@ test("run starts Claude Code with the account's profile and passes its exit code
   assert.deepEqual(profileLockHolders(locks, a.id), []);
 });
 
-test("an exclusive holder exits 3 and a disconnected account exits 1", async (t) => {
+test("an exclusive holder exits 3 and a disconnected account exits 1", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f, a, locks } = await setup(t);
   const child = await childReady("profile-lock-child.ts", [locks, a.id, "exclusive"]);
   t.after(() => child.kill());
@@ -55,7 +55,7 @@ test("an exclusive holder exits 3 and a disconnected account exits 1", async (t)
   assert.match(g.f.err(), /relay connect/);
 });
 
-test("SIGTERM and SIGHUP reach the child while it runs; SIGINT is left to the terminal", async (t) => {
+test("SIGTERM and SIGHUP reach the child while it runs; SIGINT is left to the terminal", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   f.store().update((s) => {

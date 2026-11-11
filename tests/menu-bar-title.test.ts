@@ -20,7 +20,7 @@ test("the menu bar title starts as the five-hour percent, keeps a change, and ou
   assert.deepEqual(first.set({ items: ["tokens", "five-hour", "cost"] }), { items: ["tokens", "five-hour", "cost"] });
   // Read again as Relay reads it at its next start; only the owner may read it.
   assert.deepEqual(new MenuBarTitle(at).current, { items: ["tokens", "five-hour", "cost"] });
-  assert.equal(fs.statSync(at).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(at).mode & 0o777, 0o600);
   // The panda alone is a choice too.
   first.set({ items: [] });
   assert.deepEqual(new MenuBarTitle(at).current, { items: [] });

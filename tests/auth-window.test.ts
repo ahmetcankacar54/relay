@@ -98,6 +98,7 @@ async function fixture(
   return { auth, events, shown, closed, opened, id, flow };
 }
 
+// The CLI stand-in is a shebang script, which Windows cannot run, as in auth.test.ts.
 // A CLI that prints the paste-code page, hands the localhost page to BROWSER, then waits for "approval".
 const cli = `
 const fs = require("fs");
@@ -107,7 +108,7 @@ if (process.env.RELAY_TEST_HAND) fs.writeFileSync(process.env.RELAY_TEST_PAGE, "
 setTimeout(() => process.exit(0), 900);
 `;
 
-test("the page the CLI hands to BROWSER opens in the system browser; Relay's window is the other way in", async (t) => {
+test("the page the CLI hands to BROWSER opens in the system browser; Relay's window is the other way in", { skip: process.platform === "win32" }, async (t) => {
   const f = await fixture(t, cli, true);
   await until(() => f.opened.length === 1);
   // The localhost page, not the paste-a-code one the CLI printed, and no window of Relay's.
@@ -126,7 +127,7 @@ test("the page the CLI hands to BROWSER opens in the system browser; Relay's win
   assert.deepEqual(f.closed, [f.id]);
 });
 
-test("a sign-in approved in the system browser never opens or closes Relay's window", async (t) => {
+test("a sign-in approved in the system browser never opens or closes Relay's window", { skip: process.platform === "win32" }, async (t) => {
   const f = await fixture(t, cli, true);
   await until(() => f.events.at(-1)?.status === "connected");
   assert.deepEqual(f.opened, [handed]);
@@ -134,7 +135,7 @@ test("a sign-in approved in the system browser never opens or closes Relay's win
   assert.deepEqual(f.closed, []);
 });
 
-test("a system browser that cannot be opened leaves Relay's window", async (t) => {
+test("a system browser that cannot be opened leaves Relay's window", { skip: process.platform === "win32" }, async (t) => {
   const f = await fixture(t, cli, true, async () => {
     throw new Error("no browser");
   });
@@ -143,7 +144,7 @@ test("a system browser that cannot be opened leaves Relay's window", async (t) =
   assert.ok(f.events.some((e) => e.status === "waiting" && e.inWindow));
 });
 
-test("a CLI that hands nothing over gets its printed page opened after a few seconds", async (t) => {
+test("a CLI that hands nothing over gets its printed page opened after a few seconds", { skip: process.platform === "win32" }, async (t) => {
   const f = await fixture(t, cli.replace("setTimeout(() => process.exit(0), 900)", "setTimeout(() => process.exit(0), 7000)"), false);
   await wait(1500);
   assert.equal(f.opened.length, 0);
@@ -152,7 +153,7 @@ test("a CLI that hands nothing over gets its printed page opened after a few sec
   assert.deepEqual(f.shown, []);
 });
 
-test("a sign-in that does not fit the profile fails with the reason verification gives", async (t) => {
+test("a sign-in that does not fit the profile fails with the reason verification gives", { skip: process.platform === "win32" }, async (t) => {
   const reason = "Tarayıcıda başka bir Claude hesabıyla giriş yapıldı.";
   const f = await fixture(t, cli, true, undefined, async () => reason);
   await until(() => f.events.at(-1)?.status === "failed");

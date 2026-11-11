@@ -166,7 +166,7 @@ test("a signed-out Claude app sign-in, a missing one and a refused Keychain each
   assert.equal(await issue(locked), "keychain-locked");
 });
 
-test("the Safe Storage password is read only once allowed, then kept for the run", async (t) => {
+test("the Safe Storage password is read only once allowed, then kept for the run", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const tool = path.join(dir, "security");

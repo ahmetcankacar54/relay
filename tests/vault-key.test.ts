@@ -7,14 +7,14 @@ import {
 } from "../electron/core/vault-key";
 import { fakeSecurity } from "./fake-security";
 
-test("reads an existing key with find-generic-password and the exact item names", async (t) => {
+test("reads an existing key with find-generic-password and the exact item names", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const f = fakeSecurity({ stored: Buffer.alloc(32, 7).toString("base64") });
   t.after(f.remove);
   assert.deepEqual(await readVaultKey(f.tool), Buffer.alloc(32, 7));
   assert.match(f.argvLog(), /find-generic-password -s Relay Vault Key -a relay-vault -w/);
 });
 
-test("a missing key is created through stdin, never argv, and read back", async (t) => {
+test("a missing key is created through stdin, never argv, and read back", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const f = fakeSecurity({});
   t.after(f.remove);
   const key = await loadVaultKey({ tool: f.tool, mayCreate: true });
@@ -25,7 +25,7 @@ test("a missing key is created through stdin, never argv, and read back", async 
   assert.equal(f.stored(), key.toString("base64"));
 });
 
-test("a race keeps the key that is stored, not the one generated", async (t) => {
+test("a race keeps the key that is stored, not the one generated", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const winner = Buffer.alloc(32, 1).toString("base64");
   const f = fakeSecurity({ storeOnFirstFind: winner });
   t.after(f.remove);
@@ -33,7 +33,7 @@ test("a race keeps the key that is stored, not the one generated", async (t) => 
   assert.equal(key.toString("base64"), winner);
 });
 
-test("missing without mayCreate, locked and malformed are distinct errors", async (t) => {
+test("missing without mayCreate, locked and malformed are distinct errors", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const missing = fakeSecurity({});
   const locked = fakeSecurity({ exit: 51 });
   const short = fakeSecurity({ stored: "c2hvcnQ=" });

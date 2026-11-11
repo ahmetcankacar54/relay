@@ -52,7 +52,7 @@ test("Codex is read from ~/.codex/auth.json, with the email and plan its tokens 
   assert.equal(found.codex.detected, true);
   assert.equal(found.codex.email, "dev@example.com");
   assert.equal(found.codex.plan, "pro");
-  assert.equal(found.codex.source, "~/.codex/auth.json");
+  assert.equal(found.codex.source, path.join("~", ".codex", "auth.json"));
   assert.equal(found.antigravity.detected, false);
 });
 

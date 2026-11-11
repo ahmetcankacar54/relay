@@ -19,7 +19,7 @@ test("a terminal that hangs up mid-operation cannot crash the CLI through a fail
   assert.ok(true);
 });
 
-test("Desktop commands run in their own process group, out of reach of the terminal's Ctrl+C and hang-up", async () => {
+test("Desktop commands run in their own process group, out of reach of the terminal's Ctrl+C and hang-up", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async () => {
   const own = execFileSync("/bin/ps", ["-o", "pgid=", "-p", String(process.pid)], { encoding: "utf8" }).trim();
   const { stdout } = await runDetached("/bin/sh", ["-c", "ps -o pgid= -p $$"], { timeout: 5000 });
   assert.notEqual(stdout.trim(), own);
@@ -27,12 +27,12 @@ test("Desktop commands run in their own process group, out of reach of the termi
   await assert.rejects(runDetached("/bin/sh", ["-c", "sleep 5"], { timeout: 100 }), (e: any) => e.killed === true);
 });
 
-test("a character split across two output chunks comes back whole", async () => {
+test("a character split across two output chunks comes back whole", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async () => {
   const { stdout } = await runDetached("/bin/sh", ["-c", "printf '\\305'; sleep 0.1; printf '\\237'"], { timeout: 5000 });
   assert.equal(stdout, "ş");
 });
 
-test("a command given an environment gets only that one, and Relay's own otherwise", async () => {
+test("a command given an environment gets only that one, and Relay's own otherwise", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async () => {
   process.env.RELAY_LEAK_PROBE = "from-relay";
   try {
     const inherited = await runDetached("/usr/bin/env", [], { timeout: 5000 });
