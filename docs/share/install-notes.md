@@ -1,8 +1,8 @@
-Relay 0.21.2 — account switcher for the Claude app (Claude Desktop)
+Relay 0.21.3 — account switcher for the Claude app (Claude Desktop)
 Unofficial personal tool; not an Anthropic product.
 
 INSTALL
-1) Relay-0.21.2-arm64.dmg is for Apple silicon Macs (M1 and later).
+1) Relay-0.21.3-arm64.dmg is for Apple silicon Macs (M1 and later).
    Apple menu → About This Mac should say "Chip: Apple M…". Intel Macs are
    not supported by this build. Requires macOS 13 or later.
 2) Open the DMG and drag Relay into the Applications folder. Do not run it
