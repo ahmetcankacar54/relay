@@ -350,6 +350,8 @@ function fileKey(file: string): string {
 }
 
 function syncDirectory(directory: string) {
+  // Windows refuses fsync on a directory handle (EPERM).
+  if (process.platform === "win32") return;
   const fd = fsSync.openSync(directory, "r");
   try {
     fsSync.fsyncSync(fd);
