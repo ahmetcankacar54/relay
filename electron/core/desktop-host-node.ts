@@ -83,22 +83,24 @@ export function claudeCandidates(
 ): string[] {
   const home = options.home ?? os.homedir();
   const env = options.env ?? process.env;
+  // The paths of the platform asked about, also when another one asks (as tests do).
+  const p = platform === "win32" ? path.win32 : path.posix;
   if (platform === "darwin")
     return (options.apps ?? CLAUDE_APPS).map((app) =>
-      path.join(app, "Contents", "MacOS", "Claude"),
+      p.join(app, "Contents", "MacOS", "Claude"),
     );
   if (platform === "win32")
     return [
-      path.join(env.LOCALAPPDATA ?? "", "AnthropicClaude/claude.exe"),
-      path.join(env.LOCALAPPDATA ?? "", "Programs/Claude/Claude.exe"),
+      p.join(env.LOCALAPPDATA ?? "", "AnthropicClaude/claude.exe"),
+      p.join(env.LOCALAPPDATA ?? "", "Programs/Claude/Claude.exe"),
     ];
   if (platform !== "linux") return [];
   const appImages = (() => {
     try {
       return fs
-        .readdirSync(path.join(home, "Applications"))
+        .readdirSync(p.join(home, "Applications"))
         .filter((f) => /claude.*\.appimage$/i.test(f))
-        .map((f) => path.join(home, "Applications", f));
+        .map((f) => p.join(home, "Applications", f));
     } catch {
       return [];
     }
@@ -106,7 +108,7 @@ export function claudeCandidates(
   return [
     "/usr/bin/claude-desktop",
     "/usr/local/bin/claude-desktop",
-    path.join(home, ".local", "bin", "claude-desktop"),
+    p.join(home, ".local", "bin", "claude-desktop"),
     "/opt/Claude/claude-desktop",
     "/opt/Claude/claude",
     "/usr/lib/claude-desktop/claude-desktop",
@@ -124,8 +126,9 @@ export function resolveClaudeExecutable(
   exists: (p: string) => boolean = fs.existsSync,
 ): string | undefined {
   if (chosen && path.isAbsolute(chosen)) {
+    // An .app bundle exists only on macOS, so its executable is joined the macOS way.
     const file = chosen.endsWith(".app")
-      ? path.join(chosen, "Contents", "MacOS", "Claude")
+      ? path.posix.join(chosen, "Contents", "MacOS", "Claude")
       : chosen;
     if (exists(file)) return file;
   }
