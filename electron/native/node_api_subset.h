@@ -1,6 +1,8 @@
-// The few Node-API functions widget-center.swift calls, declared as in
-// node_api.h. They resolve at load time from the Electron main process
-// (linked with -undefined dynamic_lookup); Node-API's ABI is stable.
+// The few Node-API functions Relay's addons (widget-center.swift,
+// window-space.swift) call, declared as in node_api.h. They resolve at load
+// time from the Electron main process (linked with -undefined dynamic_lookup);
+// Node-API's ABI is stable.
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -23,3 +25,6 @@ napi_status napi_get_cb_info(napi_env env, napi_callback_info cbinfo,
 napi_status napi_get_value_string_utf8(napi_env env, napi_value value,
                                        char *buf, size_t bufsize,
                                        size_t *result);
+napi_status napi_get_buffer_info(napi_env env, napi_value value, void **data,
+                                 size_t *length);
+napi_status napi_get_boolean(napi_env env, bool value, napi_value *result);

@@ -11,10 +11,15 @@ import {
   panelRevival,
   PANEL_REVIVE_GAP_MS,
   PANEL_STUCK_MS,
+  PANEL_PENDING_OPEN_MS,
+  PANEL_REBUILD_GAP_MS,
+  panelOffSpaceAction,
+  pendingOpenDue,
   trayClickAction,
   type PanelLoadEvent,
   type PanelLoadState,
 } from "../shared/tray-panel";
+import { loadWindowSpace } from "../electron/core/window-space";
 
 test("a tray click right after a blur-hide does not reopen the panel", () => {
   const guard = new ToggleGuard();
@@ -174,4 +179,48 @@ test("only a new document makes the panel wait for a paint, and every tray click
   // A second click within the double-click time is still a click.
   assert.match(tray, /setIgnoreDoubleClickEvents\(true\)/);
   assert.match(tray, /panel\.revive\?\.\(\)/);
+});
+
+test("a panel macOS put on no Space gets a new window that opens for the same click", () => {
+  // macOS can order the panel in on no Space: it counts as shown and nothing draws it.
+  assert.equal(panelOffSpaceAction(Infinity), "rebuild");
+  assert.equal(panelOffSpaceAction(PANEL_REBUILD_GAP_MS), "rebuild");
+  // A new window off the Space again is only hidden, never rebuilt on every click.
+  assert.equal(panelOffSpaceAction(PANEL_REBUILD_GAP_MS - 1), "hide");
+  assert.equal(pendingOpenDue(undefined, 1000), false);
+  assert.equal(pendingOpenDue({ at: 1000 }, 1000 + PANEL_PENDING_OPEN_MS), true);
+  // A panel that took too long to paint does not pop open out of nowhere.
+  assert.equal(pendingOpenDue({ at: 1000 }, 1001 + PANEL_PENDING_OPEN_MS), false);
+
+  const source = readFileSync(new URL("../electron/tray-panel.ts", import.meta.url), "utf8");
+  assert.match(source, /win\.showInactive\(\);\s*win\.focus\(\);\s*if \(this\.offSpace\(win\)\) return this\.rebuild\(win, trayBounds\);/);
+  const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
+  assert.match(main, /onActiveSpace: loadWindowSpace\(__dirname\)/);
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.ok(pkg.build.asarUnpack.includes("dist-electron/window-space.node"));
+  const native = readFileSync(new URL("../scripts/build-native.mjs", import.meta.url), "utf8");
+  assert.match(native, /name: "window-space"/);
+});
+
+test("the window space addon answers only with a boolean, and its absence turns the check off", () => {
+  if (process.platform !== "darwin") {
+    assert.equal(loadWindowSpace("/addon", () => ({ onActiveSpace: () => true })), undefined);
+    return;
+  }
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    assert.equal(loadWindowSpace("/nowhere"), undefined);
+    assert.equal(loadWindowSpace("/addon", () => ({})), undefined);
+  } finally {
+    console.warn = warn;
+  }
+  const answers: unknown[] = [false, true, undefined, "yes"];
+  const check = loadWindowSpace("/addon", () => ({ onActiveSpace: () => answers.shift() }));
+  assert.ok(check);
+  const handle = Buffer.alloc(8);
+  assert.equal(check(handle), false);
+  assert.equal(check(handle), true);
+  assert.equal(check(handle), undefined);
+  assert.equal(check(handle), undefined);
 });

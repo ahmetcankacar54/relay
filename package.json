@@ -97,7 +97,8 @@
       "node_modules/node-pty/**/*",
       "node_modules/classic-level/**/*",
       "dist-electron/desktop-automation",
-      "dist-electron/widget-center.node"
+      "dist-electron/widget-center.node",
+      "dist-electron/window-space.node"
     ],
     "electronFuses": {
       "runAsNode": false,
