@@ -19,16 +19,16 @@ test("the bundle has no Electron, node-pty, renderer or app-entry input", () => 
   assert.deepEqual(bad, []);
 });
 
-test("the launcher has the shebang and only plain syntax", () => {
+test("the launcher has the shebang and only plain syntax", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, () => {
   const text = fs.readFileSync(path.join(cli, "dist", "relay.js"), "utf8");
   const lines = text.split("\n");
   assert.equal(lines[0], "#!/usr/bin/env node");
   const body = lines.filter((line) => !line.includes('import("./relay-cli.js")')).join("\n");
   assert.ok(!/=>|\bconst\b|\blet\b|\?\.|`/.test(body), body);
-  assert.ok(fs.statSync(path.join(cli, "dist", "relay.js")).mode & 0o100);
+  if (process.platform !== "win32") assert.ok(fs.statSync(path.join(cli, "dist", "relay.js")).mode & 0o100);
 });
 
-test("relay --version runs from the built launcher", () => {
+test("relay --version runs from the built launcher", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "relay-bundle-"));
   const r = spawnSync(process.execPath, [path.join(cli, "dist", "relay.js"), "--version"], {
     env: { ...process.env, RELAY_HOME: home },
@@ -39,7 +39,7 @@ test("relay --version runs from the built launcher", () => {
   assert.equal(r.stdout.trim(), CLI_VERSION);
 });
 
-test("npm pack --dry-run lists exactly the published files", () => {
+test("npm pack --dry-run lists exactly the published files", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, () => {
   const out = execFileSync("npm", ["pack", "--dry-run", "--json", "--ignore-scripts"], { cwd: cli, encoding: "utf8", env: { ...process.env, npm_config_loglevel: "silent" } });
   const files = JSON.parse(out)[0].files.map((f: { path: string }) => f.path).sort();
   assert.deepEqual(files, ["LICENSE", "README.md", "README.tr.md", "dist/relay-cli.js", "dist/relay.js", "package.json"]);

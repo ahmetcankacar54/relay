@@ -304,10 +304,10 @@ test("the timeline file is private to the user", (t) => {
   const f = fixture(t);
   const timeline = f.open();
   timeline.observe({ running: true, currentAccountUuid: A, organizations: [ORG_A] });
-  assert.equal(fs.statSync(f.file).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(f.file).mode & 0o777, 0o600);
   f.clock.now = T0 + MINUTE;
   timeline.observe({ running: false, organizations: [] });
-  assert.equal(fs.statSync(f.file).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(f.file).mode & 0o777, 0o600);
   assert.deepEqual(
     fs.readdirSync(f.dir).filter((name) => name.endsWith(".tmp")),
     [],

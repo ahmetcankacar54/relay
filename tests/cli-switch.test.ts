@@ -8,7 +8,7 @@ import { signInFor } from "./extension-world";
 
 const identity = async (claude: string) => (await readObject(claude, "config.json"))?.lastKnownAccountUuid;
 
-test("switch --yes quits Claude once, swaps the sign-in and reopens it", async (t) => {
+test("switch --yes quits Claude once, swaps the sign-in and reopens it", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   await f.saved("B");
@@ -20,7 +20,7 @@ test("switch --yes quits Claude once, swaps the sign-in and reopens it", async (
   assert.ok(!(f.out() + f.err()).includes("FIXTURE-SECRET"));
 });
 
-test("without a terminal and without --yes it exits 4 and quits nothing", async (t) => {
+test("without a terminal and without --yes it exits 4 and quits nothing", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   await f.saved("B");
@@ -29,7 +29,7 @@ test("without a terminal and without --yes it exits 4 and quits nothing", async 
   assert.match(f.err(), /--yes/);
 });
 
-test("in a terminal the prompt says what happens; declining quits nothing", async (t) => {
+test("in a terminal the prompt says what happens; declining quits nothing", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { tty: true, answers: ["n"] });
   await f.saved("A");
   await f.saved("B");
@@ -46,7 +46,7 @@ test("in a terminal the prompt says what happens; declining quits nothing", asyn
   assert.equal(g.state.quits, 1);
 });
 
-test("the prompt and the result say that the terminal's claude follows the account", async (t) => {
+test("the prompt and the result say that the terminal's claude follows the account", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { tty: true, answers: ["n"] });
   await f.saved("A");
   await f.saved("B");
@@ -72,7 +72,7 @@ test("the prompt and the result say that the terminal's claude follows the accou
   assert.doesNotMatch(h.out(), /terminal claude/);
 });
 
-test("switching to the active account changes nothing", async (t) => {
+test("switching to the active account changes nothing", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   assert.equal(await f.run("switch", "A", "--yes"), 0);
@@ -80,7 +80,7 @@ test("switching to the active account changes nothing", async (t) => {
   assert.match(f.out(), /already/);
 });
 
-test("a pending sign-in or an interrupted switch exits 3 before anything", async (t) => {
+test("a pending sign-in or an interrupted switch exits 3 before anything", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   await f.saved("B");
@@ -96,7 +96,7 @@ test("a pending sign-in or an interrupted switch exits 3 before anything", async
   assert.equal(f.state.quits, 0);
 });
 
-test("Claude opened during the switch leaves the journal and points to relay recover, which restores it", async (t) => {
+test("Claude opened during the switch leaves the journal and points to relay recover, which restores it", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const b = await f.saved("B");
@@ -122,7 +122,7 @@ test("Claude opened during the switch leaves the journal and points to relay rec
   assert.match(f.out(), /No backup to restore/);
 });
 
-test("without a desktop session it exits 5 before quitting", async (t) => {
+test("without a desktop session it exits 5 before quitting", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { gui: false });
   await f.saved("A");
   await f.saved("B");
@@ -130,7 +130,7 @@ test("without a desktop session it exits 5 before quitting", async (t) => {
   assert.equal(f.state.quits, 0);
 });
 
-test("signals during the switch do not stop it; one wait line is printed", async (t) => {
+test("signals during the switch do not stop it; one wait line is printed", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   await f.saved("B");
@@ -144,7 +144,7 @@ test("signals during the switch do not stop it; one wait line is printed", async
   assert.equal(f.hasSignalHandler(), false);
 });
 
-test("a refused Automation permission explains where to grant it", async (t) => {
+test("a refused Automation permission explains where to grant it", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   await f.saved("B");
@@ -155,14 +155,14 @@ test("a refused Automation permission explains where to grant it", async (t) => 
   assert.match(f.err(), /Automation/);
 });
 
-test("an unknown account name is a usage error", async (t) => {
+test("an unknown account name is a usage error", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   assert.equal(await f.run("switch", "Zed", "--yes"), 2);
   assert.equal(await f.run("switch", "--yes"), 2);
 });
 
-test("relay switch leaves the Claude extension and its browser alone, and says where to sync it", async (t) => {
+test("relay switch leaves the Claude extension and its browser alone, and says where to sync it", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const b = await f.saved("B");
@@ -180,7 +180,7 @@ test("relay switch leaves the Claude extension and its browser alone, and says w
   assert.equal(a.desktop!.accountUuid.length, 36);
 });
 
-test("relay switch says nothing about the extension when none is installed", async (t) => {
+test("relay switch says nothing about the extension when none is installed", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   await f.saved("B");
@@ -188,7 +188,7 @@ test("relay switch says nothing about the extension when none is installed", asy
   assert.doesNotMatch(f.out(), /extension/i);
 });
 
-test("the prompt never announces a browser quit, since the CLI never quits one", async (t) => {
+test("the prompt never announces a browser quit, since the CLI never quits one", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { tty: true, answers: ["n"] });
   await f.saved("A");
   await f.saved("B");

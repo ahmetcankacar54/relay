@@ -281,7 +281,7 @@ test("a missing CLI error says where to choose the file, in both languages", asy
 const writeVersionCli = (file: string, version: string) =>
   fs.writeFile(file, `#!${process.execPath}\nconsole.log(${JSON.stringify(version)});\n`, { mode: 0o700 });
 
-test("a CLI installed after Relay started is noticed by a later snapshot, at most once per throttle", async (t) => {
+test("a CLI installed after Relay started is noticed by a later snapshot, at most once per throttle", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-cli-late-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const service = new Service(path.join(root, "Relay"), () => {}, path.join(root, "unused"));
@@ -310,7 +310,7 @@ test("a CLI installed after Relay started is noticed by a later snapshot, at mos
   assert.equal((await service.panelSnapshot()).diagnostics.version, "2.1.296 (Claude Code)");
 });
 
-test("a CLI too old to read limits is looked at again, so an update is noticed", async (t) => {
+test("a CLI too old to read limits is looked at again, so an update is noticed", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-cli-old-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const service = new Service(path.join(root, "Relay"), () => {}, path.join(root, "unused"));

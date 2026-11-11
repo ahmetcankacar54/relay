@@ -28,7 +28,7 @@ exit 0
   return { file, log: () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "") };
 }
 
-test("connect signs the account's profile in with the official CLI and stores who it is", async (t) => {
+test("connect signs the account's profile in with the official CLI and stores who it is", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const claude = fakeClaude(f.temp, {
@@ -48,7 +48,7 @@ test("connect signs the account's profile in with the official CLI and stores wh
   assert.match(f.out(), /a@example\.test/);
 });
 
-test("a login to another account is signed out again and fails", async (t) => {
+test("a login to another account is signed out again and fails", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const claude = fakeClaude(f.temp, {
@@ -65,7 +65,7 @@ test("a login to another account is signed out again and fails", async (t) => {
   assert.equal(f.store().account(a.id).auth, undefined);
 });
 
-test("a login to the account's other workspace moves the profile there once Claude has that workspace", async (t) => {
+test("a login to the account's other workspace moves the profile there once Claude has that workspace", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const other = crypto.randomUUID();
@@ -127,7 +127,7 @@ async function connected(t: any, opts: { expiresAt?: number; five?: number; seve
   return { f, a, claude };
 }
 
-test("usage --json shows how much of each window is used, as Claude's usage page does", async (t) => {
+test("usage --json shows how much of each window is used, as Claude's usage page does", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f, a } = await connected(t);
   assert.equal(await f.run("usage", "--json"), 0);
   const [row] = JSON.parse(f.out());
@@ -144,13 +144,13 @@ test("usage --json shows how much of each window is used, as Claude's usage page
   assert.ok(!(f.out() + f.err()).includes(TOKEN) && !(f.out() + f.err()).includes("FIXTURE-SECRET"));
 });
 
-test("a seat that reports no weekly limit says so", async (t) => {
+test("a seat that reports no weekly limit says so", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f } = await connected(t, { seven: null });
   await f.run("usage", "--json");
   assert.equal(JSON.parse(f.out())[0].sevenDay, "not-reported");
 });
 
-test("an expiring credential is not renewed while another process holds the profile lock", async (t) => {
+test("an expiring credential is not renewed while another process holds the profile lock", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f, a, claude } = await connected(t, { expiresAt: Date.now() + 60_000 });
   const child = await childReady("profile-lock-child.ts", [path.join(f.home, "profiles", ".locks"), a.id, "exclusive"]);
   t.after(() => child.kill());
@@ -160,7 +160,7 @@ test("an expiring credential is not renewed while another process holds the prof
   assert.ok(!(f.out() + f.err()).includes(TOKEN));
 });
 
-test("an account without a connection gets the connect hint", async (t) => {
+test("an account without a connection gets the connect hint", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   assert.equal(await f.run("usage"), 0);

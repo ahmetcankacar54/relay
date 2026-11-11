@@ -103,7 +103,7 @@ test("piped output has no ANSI codes", () => {
   assert.equal(text.split("\n")[1].indexOf("work"), text.split("\n")[0].indexOf("Kind"));
 });
 
-test("a format-1 vault, a newer marker and an old Relay.app refuse writes with exit 5; reads still work", async (t) => {
+test("a format-1 vault, a newer marker and an old Relay.app refuse writes with exit 5; reads still work", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await writeBytes(path.join(f.home, "desktop-vault"), "accounts/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.bin", Buffer.from("v10old"));
   const flags = { lang: "en" } as any;
@@ -118,7 +118,7 @@ test("a format-1 vault, a newer marker and an old Relay.app refuse writes with e
   await openContext(h.io, h.deps as any, flags, { write: false, desktop: false });
 });
 
-test("a schema-less registry next to an installed Relay.app refuses writes; without an app it is adopted", async (t) => {
+test("a schema-less registry next to an installed Relay.app refuses writes; without an app it is adopted", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { appVersion: "0.12.0" });
   await f.saved("A");
   const file = path.join(f.home, "state.json");
@@ -136,7 +136,7 @@ test("a schema-less registry next to an installed Relay.app refuses writes; with
   assert.equal(JSON.parse(fs.readFileSync(path.join(g.home, "state.json"), "utf8")).schema, STATE_SCHEMA);
 });
 
-test("a missing key with format-2 files exits 5 and never creates a key", async (t) => {
+test("a missing key with format-2 files exits 5 and never creates a key", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   f.security.removeItem("Relay Vault Key");
@@ -148,7 +148,7 @@ test("a missing key with format-2 files exits 5 and never creates a key", async 
   assert.equal(f.security.stdinLog(), stdinBefore);
 });
 
-test("an empty vault gets a key and the marker on the first writing command", async (t) => {
+test("an empty vault gets a key and the marker on the first writing command", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await openContext(f.io, f.deps as any, { lang: "en" } as any, { write: true, desktop: true });
   assert.notEqual(f.security.stored(), "");
@@ -167,7 +167,7 @@ test("shielded ignores signals during the operation and prints one wait line", a
   assert.equal(f.hasSignalHandler(), false);
 });
 
-test("a registry this relay cannot read names state.json instead of printing raw schema errors", async (t) => {
+test("a registry this relay cannot read names state.json instead of printing raw schema errors", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const file = path.join(f.home, "state.json");
@@ -179,7 +179,7 @@ test("a registry this relay cannot read names state.json instead of printing raw
   assert.doesNotMatch(f.err(), /relay: \[/);
 });
 
-test("a legacy vault next to Relay.app 0.12 points to the app's Keychain prompt, not to an update", async (t) => {
+test("a legacy vault next to Relay.app 0.12 points to the app's Keychain prompt, not to an update", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t, { appVersion: "0.12.0" });
   await writeBytes(path.join(f.home, "desktop-vault"), "accounts/aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.bin", Buffer.from("v10old"));
   await assert.rejects(

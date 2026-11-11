@@ -19,7 +19,7 @@ test("the launch choice starts off, keeps what a change names, and outlives Rela
   assert.deepEqual(first.set({ quicOff: true }), { quicOff: true });
   // Read again as Relay reads it at its next start; only the owner may read it.
   assert.deepEqual(new SwitchDiagnostics(dir).current, { quicOff: true });
-  assert.equal(fs.statSync(path.join(dir, "settings.json")).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(path.join(dir, "settings.json")).mode & 0o777, 0o600);
   // An unreadable file is the default, never a failure.
   fs.writeFileSync(path.join(dir, "settings.json"), "{not json");
   assert.deepEqual(new SwitchDiagnostics(dir).current, { quicOff: false });

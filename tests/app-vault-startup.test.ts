@@ -23,7 +23,7 @@ async function vaultDir(t: any) {
   return vault;
 }
 
-test("prepareVault migrates a format-1 vault and returns a sealer that opens both formats", async (t) => {
+test("prepareVault migrates a format-1 vault and returns a sealer that opens both formats", { skip: process.platform === "win32" && "macOS only: the vault key lives in the Keychain" }, async (t) => {
   const vault = await vaultDir(t);
   const security = fakeSecurity({});
   t.after(security.remove);
@@ -52,7 +52,7 @@ test("prepareVault never creates a key for a ready vault whose key is missing", 
   assert.throws(() => r.sealer.seal("x"), /Relay Vault Key/);
 });
 
-test("prepareVault gives an empty vault a key and the marker", async (t) => {
+test("prepareVault gives an empty vault a key and the marker", { skip: process.platform === "win32" && "macOS only: the vault key lives in the Keychain" }, async (t) => {
   const vault = await vaultDir(t);
   const security = fakeSecurity({});
   t.after(security.remove);
@@ -84,7 +84,7 @@ test("prepareVault keeps old files readable when the Keychain is locked", async 
   assert.equal((await vaultState(vault)).kind, "legacy");
 });
 
-test("prepareVault leaves an old vault alone while safeStorage cannot be used", async (t) => {
+test("prepareVault leaves an old vault alone while safeStorage cannot be used", { skip: process.platform === "win32" && "macOS only: the vault key lives in the Keychain" }, async (t) => {
   const vault = await vaultDir(t);
   const security = fakeSecurity({});
   t.after(security.remove);
@@ -96,7 +96,7 @@ test("prepareVault leaves an old vault alone while safeStorage cannot be used", 
   assert.equal((await readBytes(vault, `accounts/${ACCOUNT}.bin`))!.toString(), legacySeal("account").toString());
 });
 
-test("prepareVault reports files it set aside", async (t) => {
+test("prepareVault reports files it set aside", { skip: process.platform === "win32" && "macOS only: the vault key lives in the Keychain" }, async (t) => {
   const vault = await vaultDir(t);
   const security = fakeSecurity({});
   t.after(security.remove);

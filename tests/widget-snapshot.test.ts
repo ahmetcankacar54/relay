@@ -152,8 +152,8 @@ test("the widget file is private, and reloads come at most every 5 minutes unles
   file.write(snap);
   const written = path.join(dir, "today.json");
   assert.deepEqual(JSON.parse(fs.readFileSync(written, "utf8")), snap);
-  assert.equal(fs.statSync(written).mode & 0o777, 0o600);
-  assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
+  if (process.platform !== "win32") assert.equal(fs.statSync(written).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
   assert.deepEqual(reloads, ["all"]);
   // The same picture: written again, no reload.
   now += WIDGET_RELOAD_MS * 2;

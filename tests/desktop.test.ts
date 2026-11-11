@@ -814,7 +814,7 @@ test("explicitly selected accounts share Code history across organizations while
   const o = await session(f.root, otherWork, undefined, { cwd });
   const x = await session(f.root, excluded, undefined, { cwd });
   const sourceBefore = await fs.readFile(path.join(f.root, p.relative));
-  const slug = cwd.replace(/[/_.]/g, "-");
+  const slug = cwd.replace(/[^a-zA-Z0-9]/g, "-");
   const transcript = `projects/${slug}/${p.id}.jsonl`;
   const agentTranscript = `projects/${slug}/${p.id}/subagents/agent-fixture.jsonl`;
   const transcriptBytes = Buffer.from(
@@ -1035,7 +1035,7 @@ test("history summary checks shared transcript presence without treating an inde
     `${dir}/deleted_${deleted.id.toUpperCase()}`,
     Buffer.from(""),
   );
-  const transcript = `projects/${cwd.replace(/[/_.]/g, "-")}/${found.id}.jsonl`;
+  const transcript = `projects/${cwd.replace(/[^a-zA-Z0-9]/g, "-")}/${found.id}.jsonl`;
   const bytes = Buffer.from('{"type":"user","message":"fixture"}\n');
   await writeBytes(f.transcriptRoot, transcript, bytes);
   const spaces = `local-agent-mode-sessions/${a.desktop!.accountUuid}/${a.desktop!.orgId}/spaces.json`;
@@ -1076,7 +1076,7 @@ test("transcript symlinks are unknown and history sync refuses an inactive accou
     b = await f.account("B");
   const cwd = path.join(f.temp, "project");
   const s = await session(f.root, b, undefined, { cwd });
-  const slug = cwd.replace(/[/_.]/g, "-");
+  const slug = cwd.replace(/[^a-zA-Z0-9]/g, "-");
   await fs.mkdir(path.join(f.transcriptRoot, "projects", slug), {
     recursive: true,
   });

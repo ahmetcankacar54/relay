@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { relayPaths } from "../electron/core/relay-paths";
 
-test("paths default under Application Support and honour overrides", () => {
+test("paths default under Application Support and honour overrides", { skip: process.platform === "win32" && "macOS only: the folders the relay CLI uses" }, () => {
   const p = relayPaths({}, "/Users/x");
   assert.equal(p.data, "/Users/x/Library/Application Support/Relay");
   assert.equal(p.claude, "/Users/x/Library/Application Support/Claude");
@@ -30,7 +30,7 @@ test("paths default under Application Support and honour overrides", () => {
   );
 });
 
-test("relative overrides are ignored", () => {
+test("relative overrides are ignored", { skip: process.platform === "win32" && "macOS only: the folders the relay CLI uses" }, () => {
   const p = relayPaths({ RELAY_HOME: "relative/dir" }, "/Users/x");
   assert.equal(p.data, "/Users/x/Library/Application Support/Relay");
 });

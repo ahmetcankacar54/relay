@@ -7,7 +7,7 @@ import { localDate } from "../shared/planning";
 
 const counts = (input: number, output = 0) => ({ input, output, cacheWrite: 0, cacheRead: 0, responses: 1 });
 
-test("tokens shows the app's ledger for the range, marking estimated rows", async (t) => {
+test("tokens shows the app's ledger for the range, marking estimated rows", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const b = await f.saved("B");
@@ -53,13 +53,13 @@ test("tokens shows the app's ledger for the range, marking estimated rows", asyn
   assert.equal(await f.run("tokens", "--days", "5"), 2);
 });
 
-test("without a ledger it says Relay.app keeps one", async (t) => {
+test("without a ledger it says Relay.app keeps one", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   assert.equal(await f.run("tokens"), 0);
   assert.match(f.out(), /Relay\.app/);
 });
 
-test("reading a small ledger does not allocate a buffer the size of the cap", async (t) => {
+test("reading a small ledger does not allocate a buffer the size of the cap", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   fs.mkdirSync(f.home, { recursive: true });
   fs.writeFileSync(path.join(f.home, "token-ledger.json"), JSON.stringify({ version: 2, files: {}, days: {}, seen: {} }), { mode: 0o600 });
@@ -77,7 +77,7 @@ test("reading a small ledger does not allocate a buffer the size of the cap", as
   assert.ok(largest < 4 * 1024 * 1024, `allocated ${largest}`);
 });
 
-test("tokens reads the version 3 ledger Relay.app writes and shows its API value", async (t) => {
+test("tokens reads the version 3 ledger Relay.app writes and shows its API value", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const zone = f.store().state.settings.planning.timeZone;

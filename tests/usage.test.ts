@@ -105,7 +105,7 @@ test("usage credentials are profile-scoped, read-only and never use a global fal
     /credentials-missing/,
   );
 });
-test("macOS reads the CLI credential through the security tool, falls back to the CLI file and bounds a consent wait", async (t) => {
+test("macOS reads the CLI credential through the security tool, falls back to the CLI file and bounds a consent wait", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const f = await fixture(t);
   const profileDir = f.store.profile(f.a.id);
   const tool = path.join(f.root, "fake-security");

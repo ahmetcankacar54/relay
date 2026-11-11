@@ -152,7 +152,9 @@ async function fixture() {
   const transcript = path.join(
     transcriptRoot,
     "projects",
-    project.replace(/[/_.]/g, "-"),
+    // Every character but a letter or digit becomes "-", as Claude Code names the folder on
+    // every system (a Windows path has a drive colon and backslashes).
+    project.replace(/[^a-zA-Z0-9]/g, "-"),
     `${sessionId}.jsonl`,
   );
   const journal = new LabJournal(path.join(temporary, "continuation-journal"));
@@ -974,10 +976,13 @@ async function main(args: string[]) {
         ? JSON.stringify(report, null, 2) + "\n"
         : `Isolated continuation lab passed: A → B → A, two new turns, five blocked cases, committed-receipt recovery, three uncertain-delivery cases.\nSynthetic accounts and deterministic receiver only; real Claude untouched.\n`,
     );
-  } catch {
+  } catch (error) {
     process.stderr.write(
       "The isolated continuation lab failed; no real Claude action was attempted.\n",
     );
+    // Opt-in, for the test: where the synthetic lab failed. It holds no real account data.
+    if (process.env.RELAY_LAB_DEBUG === "1")
+      process.stderr.write(`${(error as Error)?.stack ?? String(error)}\n`);
     process.exitCode = 1;
   }
 }

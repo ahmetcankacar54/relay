@@ -25,7 +25,7 @@ function fakeClaude(dir: string) {
   return { file, log: () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "") };
 }
 
-test("remove forgets an account, its sealed sign-in and its profile, and leaves Claude's data alone", async (t) => {
+test("remove forgets an account, its sealed sign-in and its profile, and leaves Claude's data alone", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const b = await f.saved("B");
@@ -57,7 +57,7 @@ test("remove forgets an account, its sealed sign-in and its profile, and leaves 
   assert.equal(digest(f.claude), before);
 });
 
-test("remove refuses the active account and asks first without a terminal", async (t) => {
+test("remove refuses the active account and asks first without a terminal", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   await f.saved("B");
@@ -66,7 +66,7 @@ test("remove refuses the active account and asks first without a terminal", asyn
   assert.equal(f.store().state.accounts.length, 2);
 });
 
-test("a connected account is signed out with the official CLI in its own profile", async (t) => {
+test("a connected account is signed out with the official CLI in its own profile", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   await f.saved("B");
@@ -79,7 +79,7 @@ test("a connected account is signed out with the official CLI in its own profile
   assert.equal(claude.log().trim(), `auth logout|${path.join(f.home, "profiles", a.id)}`);
 });
 
-test("a held profile lock exits 3", async (t) => {
+test("a held profile lock exits 3", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   await f.saved("B");
@@ -89,7 +89,7 @@ test("a held profile lock exits 3", async (t) => {
   assert.equal(f.store().state.accounts.length, 2);
 });
 
-test("rename renames, and refuses a name another account has", async (t) => {
+test("rename renames, and refuses a name another account has", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   await f.saved("B");
@@ -99,7 +99,7 @@ test("rename renames, and refuses a name another account has", async (t) => {
   assert.equal(await f.run("rename", "Ana"), 2);
 });
 
-test("history mode persists; selected needs two accounts", async (t) => {
+test("history mode persists; selected needs two accounts", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const b = await f.saved("B");
@@ -113,7 +113,7 @@ test("history mode persists; selected needs two accounts", async (t) => {
   assert.equal(await f.run("history", "mode", "sometimes"), 2);
 });
 
-test("history --json reports the mode and the active account's summary", async (t) => {
+test("history --json reports the mode and the active account's summary", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const b = await f.saved("B");
@@ -125,7 +125,7 @@ test("history --json reports the mode and the active account's summary", async (
   assert.equal(typeof h.summary.indexed, "number");
 });
 
-test("history sync --yes restarts Claude once", async (t) => {
+test("history sync --yes restarts Claude once", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   await f.saved("B");

@@ -38,7 +38,7 @@ async function insideFixture(t: any, options = {}) {
   return { f, spawned };
 }
 
-test("inside Claude Desktop, switch hands the work to a detached worker and quits nothing itself", async (t) => {
+test("inside Claude Desktop, switch hands the work to a detached worker and quits nothing itself", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f, spawned } = await insideFixture(t, { tty: true, answers: ["y"] });
   await f.saved("A");
   await f.saved("B");
@@ -59,7 +59,7 @@ test("inside Claude Desktop, switch hands the work to a detached worker and quit
   assert.deepEqual(record.argv, ["switch", "A"]);
 });
 
-test("the worker runs the switch, records it, and status shows the result once", async (t) => {
+test("the worker runs the switch, records it, and status shows the result once", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f } = await insideFixture(t);
   const a = await f.saved("A");
   await f.saved("B");
@@ -79,7 +79,7 @@ test("the worker runs the switch, records it, and status shows the result once",
   assert.doesNotMatch(f.out(), /switch A: done/);
 });
 
-test("a failing worker records the failure without secrets", async (t) => {
+test("a failing worker records the failure without secrets", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f } = await insideFixture(t);
   await f.saved("A");
   await f.saved("B");
@@ -95,7 +95,7 @@ test("a failing worker records the failure without secrets", async (t) => {
   assert.match(record.error, /boom/);
 });
 
-test("an unwritable operations folder means a sandbox: exit 5 before any quit", async (t) => {
+test("an unwritable operations folder means a sandbox: exit 5 before any quit", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const { f, spawned } = await insideFixture(t);
   await f.saved("A");
   await f.saved("B");

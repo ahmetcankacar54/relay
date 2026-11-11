@@ -45,7 +45,7 @@ test("a dead holder's lock is swept and taken", (t) => {
   assert.equal(lock.holder(), undefined);
   lock.tryAcquire("merge");
   assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).pid, process.pid);
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   lock.release();
   assert.equal(fs.existsSync(file), false);
 });
@@ -105,7 +105,8 @@ test("release never removes a lock whose token is not ours", (t) => {
   assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).token, "someone-else");
 });
 
-test("processStartedAt reads this process's start, before now", () => {
+// It asks /bin/ps; on Windows the start time is unknown and a running pid counts as the holder.
+test("processStartedAt reads this process's start, before now", { skip: process.platform === "win32" }, () => {
   const started = processStartedAt(process.pid);
   assert.ok(started !== undefined && started <= Date.now());
   assert.equal(processStartedAt(DEAD_PID), undefined);
@@ -160,7 +161,7 @@ test("a lock that vanishes while it is being read is retried, not reported busy"
   }
 });
 
-test("a lock this pid wrote before this process started is stale", () => {
+test("a lock this pid wrote before this process started is stale", { skip: process.platform === "win32" && "reads process start times through /bin/ps" }, () => {
   assert.equal(holderAlive(process.pid, "2000-01-01T00:00:00.000Z"), false);
   assert.equal(holderAlive(process.pid, new Date().toISOString()), true);
 });

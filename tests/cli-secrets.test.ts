@@ -8,7 +8,7 @@ import { writeBytes } from "../electron/core/desktop-files";
 
 const TOKEN = "sk-ant-oat01-SCANTOKENSCANTOKENSCANTOKENSCANTOKEN0000";
 
-test("no command prints a token, a cookie or a fixture secret, on success or failure", async (t) => {
+test("no command prints a token, a cookie or a fixture secret, on success or failure", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const a = await f.saved("A");
   const b = await f.saved("B");

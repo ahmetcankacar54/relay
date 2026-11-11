@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { cliFixture } from "./cli-fixture";
 
-test("a lost vault key points to reset-vault, which sets the old files aside and lets accounts be saved again", async (t) => {
+test("a lost vault key points to reset-vault, which sets the old files aside and lets accounts be saved again", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   const b = await f.saved("B"); // Desktop is signed in to B
@@ -30,7 +30,7 @@ test("a lost vault key points to reset-vault, which sets the old files aside and
   assert.equal(f.store().account(b.id).desktop?.accountUuid, b.desktop!.accountUuid);
 });
 
-test("reset-vault refuses while the key is readable", async (t) => {
+test("reset-vault refuses while the key is readable", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   assert.equal(await f.run("reset-vault", "--yes"), 1);
@@ -38,7 +38,7 @@ test("reset-vault refuses while the key is readable", async (t) => {
   assert.ok(f.store().state.accounts[0].desktop);
 });
 
-test("reset-vault refuses a vault still in the old format: there was never a key to lose", async (t) => {
+test("reset-vault refuses a vault still in the old format: there was never a key to lose", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   const vault = path.join(f.home, "desktop-vault");
   fs.mkdirSync(path.join(vault, "accounts"), { recursive: true });
@@ -49,7 +49,7 @@ test("reset-vault refuses a vault still in the old format: there was never a key
   assert.equal(fs.readdirSync(vault).some((name) => name.startsWith("lost-key-")), false);
 });
 
-test("reset-vault refuses while Relay.app runs, since it keeps its own key in memory", async (t) => {
+test("reset-vault refuses while Relay.app runs, since it keeps its own key in memory", { skip: process.platform === "win32" && "macOS only: the relay CLI refuses other systems" }, async (t) => {
   const f = await cliFixture(t);
   await f.saved("A");
   f.security.removeItem("Relay Vault Key");

@@ -7,8 +7,9 @@ import { randomUUID } from "node:crypto";
 import { AuthManager, authorizationURL } from "../electron/core/auth";
 import type { AuthFlow } from "../shared/types";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Generous: a spawned CLI can take seconds to start while the whole suite runs in parallel.
 async function until(fn: () => boolean) {
-  for (let n = 0; n < 150; n++) {
+  for (let n = 0; n < 500; n++) {
     if (fn()) return;
     await wait(20);
   }
@@ -18,7 +19,7 @@ async function fixture(
   t: any,
   body: string,
   verify = async () => true,
-  timeout = 3000,
+  timeout = 15_000,
 ) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "relay-auth-"));
   const file = path.join(root, "cli");

@@ -488,7 +488,7 @@ test("send passes on how the text went in, the screen after Send and the step a 
       error instanceof DesktopAutomationError && error.step === undefined,
   );
 });
-test("a helper that times out, exits or prints no JSON says which", async () => {
+test("a helper that times out, exits or prints no JSON says which", { skip: process.platform === "win32" && "needs a POSIX shell: the stand-in is a shell script" }, async () => {
   const fs = await import("node:fs");
   const os = await import("node:os");
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "relay-helper-"));

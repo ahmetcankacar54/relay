@@ -277,7 +277,8 @@ export async function copyTranscript(
       flag: "wx",
       mode: 0o600,
     });
-    const handle = await fsp.open(temp, "r");
+    // Writable: Windows refuses to flush a file opened for reading only (EPERM).
+    const handle = await fsp.open(temp, "r+");
     try {
       await handle.sync();
     } finally {

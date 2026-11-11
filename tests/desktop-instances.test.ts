@@ -19,7 +19,7 @@ function census(rows: [pid: number, ppid: number, executable: string, args: stri
   return processRows(["     1      0 /sbin/launchd", ...commands].join("\n"), ["     1 /sbin/launchd", ...args].join("\n"));
 }
 
-test("the data folder comes from the switch, up to the next one, with spaces kept", () => {
+test("the data folder comes from the switch, up to the next one, with spaces kept", { skip: process.platform === "win32" && "macOS only: separate Claude windows" }, () => {
   assert.equal(userDataDir(`${EXE} --disable-quic`), undefined);
   assert.equal(userDataDir(EXE), undefined);
   assert.equal(userDataDir(`${EXE} --user-data-dir=${WINDOW_DIR}`), WINDOW_DIR);
@@ -28,7 +28,7 @@ test("the data folder comes from the switch, up to the next one, with spaces kep
   assert.equal(userDataDir(`${EXE} --user-data-dir=`), undefined);
 });
 
-test("a window and its helpers are apart from the main Claude, whose helpers name the default folder", () => {
+test("a window and its helpers are apart from the main Claude, whose helpers name the default folder", { skip: process.platform === "win32" && "macOS only: separate Claude windows" }, () => {
   const rows = census([
     [100, 1, EXE, `${EXE} --disable-quic`],
     [101, 100, HELPER, `${HELPER} --type=gpu-process --user-data-dir=${DEFAULT_DIR}`],
@@ -46,7 +46,7 @@ test("a window and its helpers are apart from the main Claude, whose helpers nam
   assert.deepEqual(claude.windows, [{ dir: WINDOW_DIR, pid: 200, pids: [200, 201, 202] }]);
 });
 
-test("a helper left without its app goes by its own switch, else to the main Claude", () => {
+test("a helper left without its app goes by its own switch, else to the main Claude", { skip: process.platform === "win32" && "macOS only: separate Claude windows" }, () => {
   const rows = census([
     [200, 1, EXE, `${EXE} --user-data-dir=${WINDOW_DIR}`],
     // Reparented to launchd: one still names the window's folder, one names none.

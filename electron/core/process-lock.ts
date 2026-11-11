@@ -72,6 +72,9 @@ export function holderAlive(
 }
 
 function syncDirectory(directory: string) {
+  // Windows refuses fsync on a directory handle (EPERM); the lock file itself was
+  // flushed before it was linked or renamed into place.
+  if (process.platform === "win32") return;
   const fd = fs.openSync(directory, "r");
   try {
     fs.fsyncSync(fd);

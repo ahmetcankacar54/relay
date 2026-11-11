@@ -84,6 +84,8 @@ test(
         PATH: bin,
         HOME: root,
         RELAY_SENTINEL_FILE: sentinelFile,
+        // A failure then says where, in the assertion message below.
+        RELAY_LAB_DEBUG: "1",
         ANTHROPIC_API_KEY: "DO_NOT_USE_LAB_SENTINEL_SECRET",
         CLAUDE_CODE_OAUTH_TOKEN: "DO_NOT_USE_OAUTH_SENTINEL_SECRET",
       },
