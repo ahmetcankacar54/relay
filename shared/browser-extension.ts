@@ -247,6 +247,8 @@ export interface ExtensionStatus {
   target?: ExtensionInstance;
   /** How `target` was picked; "recent" means several have the extension and none was chosen. */
   picked?: "chosen" | "only" | "recent";
+  /** Browsers macOS does not let Relay read; set only when there are some. */
+  denied?: BrowserApp[];
   /** The browser's own startup setting brings tabs back; Relay restores them either way. */
   restoresTabs?: boolean;
   /** Sealed sign-ins, by the extension's account uuid (lower case). */

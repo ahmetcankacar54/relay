@@ -218,10 +218,11 @@ test("the Today card waits for one connected account, automation for two", () =>
   assert.deepEqual(overviewCards([account("a"), account("b")]), { today: true, automation: true });
 });
 
-test("only the two first-run pages may open in the browser", () => {
+test("only the two first-run pages and the Full Disk Access pane may open outside Relay", () => {
   assert.deepEqual(EXTERNAL_LINKS, {
     claudeDownload: "https://claude.ai/download",
     cliSetup: "https://docs.anthropic.com/en/docs/claude-code/setup",
+    fullDiskAccess: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
   });
   assert.equal(isExternalLink("https://claude.ai/download"), true);
   assert.equal(isExternalLink("https://docs.anthropic.com/en/docs/claude-code/setup"), true);

@@ -1,6 +1,7 @@
 import {
   BROWSERS,
   browserNames,
+  type BrowserApp,
   type ExtensionInstance,
   type ExtensionMode,
   type ExtensionStatus,
@@ -57,8 +58,19 @@ export function modeSentence(mode: ExtensionMode, t: T): string {
   }
 }
 
+/** Why the extension cannot be found: macOS keeps these browsers' data from Relay. */
+export function deniedLine(denied: BrowserApp[], t: T): string {
+  const names = denied.map((app) => BROWSERS[app].name).join(", ");
+  return t(
+    `macOS, Relay’in ${names} verilerini okumasına izin vermiyor. Sistem Ayarları › Gizlilik ve Güvenlik › Tam Disk Erişimi’nde Relay’i aç, sonra Relay’i yeniden başlat.`,
+    `macOS does not let Relay read the data of ${names}. Turn on Relay in System Settings › Privacy & Security › Full Disk Access, then restart Relay.`,
+  );
+}
+
 /** What the card says about the instance Relay manages, or why it manages none. */
 export function instanceLine(status: ExtensionStatus, t: T): string {
+  if (!status.instances.length && status.denied?.length)
+    return deniedLine(status.denied, t);
   if (!status.instances.length)
     return t(
       `Bu bilgisayarda Claude eklentisi bulunamadı (${browserNames("ve")}).`,
@@ -234,6 +246,13 @@ export function extensionGuide(
       tone: "off",
       label: t("Kapalı", "Off"),
       detail: t("Relay eklentiye dokunmaz.", "Relay does not change the extension."),
+      action: "settings",
+    };
+  if (!status.instances.length && status.denied?.length)
+    return {
+      tone: "warn",
+      label: t("macOS erişime izin vermiyor", "macOS blocks access"),
+      detail: deniedLine(status.denied, t),
       action: "settings",
     };
   if (!status.instances.length)

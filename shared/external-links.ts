@@ -5,6 +5,8 @@
 export const EXTERNAL_LINKS = {
   claudeDownload: "https://claude.ai/download",
   cliSetup: "https://docs.anthropic.com/en/docs/claude-code/setup",
+  /** System Settings › Privacy & Security › Full Disk Access, on macOS. */
+  fullDiskAccess: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
 } as const;
 
 const allowed: readonly string[] = Object.values(EXTERNAL_LINKS);
