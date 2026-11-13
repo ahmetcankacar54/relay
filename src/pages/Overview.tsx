@@ -82,7 +82,8 @@ export function Overview({
     >
       <div className="grid gap-4 px-5 pb-5">
         <ActiveAccountCard go={go} now={now} />
-        <SetupChecklist go={go} />
+        {/* Before the first account the checklist is the next step; after, the accounts come first. */}
+        {accounts.length === 0 && <SetupChecklist go={go} />}
         {cards.today ? (
           <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
             <AccountsCard go={go} now={now} />
@@ -95,6 +96,7 @@ export function Overview({
           // With no account yet, the card above already offers the first one.
           accounts.length > 0 && <AccountsCard go={go} now={now} />
         )}
+        {accounts.length > 0 && <SetupChecklist go={go} />}
       </div>
     </PageFrame>
   );
