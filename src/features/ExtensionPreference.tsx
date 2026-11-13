@@ -75,7 +75,7 @@ export function ExtensionPreference({
   const [result, setResult] = useState<string>();
   // Sync now quits the browser in every mode, so it asks once before it does.
   const [confirming, setConfirming] = useState(false);
-  const reconnect = status ? reconnectGuide(status, accounts, t) : undefined;
+  const reconnect = status ? reconnectGuide(status, accounts, t, desktop?.currentAccountUuid) : undefined;
   // The user signs in in the browser; the line goes as soon as a check sees it worked.
   const waiting = !!reconnect;
   useEffect(() => {

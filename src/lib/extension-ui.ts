@@ -160,6 +160,8 @@ export function reconnectGuide(
   status: ExtensionStatus | undefined,
   accounts: Account[],
   t: T,
+  /** The account the Claude app is on (its uuid): the extension should end up there. */
+  desktopUuid?: string,
 ): ReconnectGuide | undefined {
   if (!status?.target || status.setting.mode === "off") return undefined;
   const current = status.current;
@@ -169,7 +171,16 @@ export function reconnectGuide(
       ? byUuid(current.accountUuid)
       : undefined;
   const brokenOn = status.broken ? byUuid(status.broken.accountUuid) : undefined;
-  const account = expiredOn ?? brokenOn;
+  const onDesktop = desktopUuid ? byUuid(desktopUuid.toLowerCase()) : undefined;
+  // The Claude app's account comes first: the next switch puts the extension there anyway, so
+  // reconnecting it to an account the app has left only sets up another expiry (seen
+  // 2026-11-13, when the guide named the extension's account while the app was on another).
+  const account =
+    brokenOn && onDesktop && brokenOn.id === onDesktop.id
+      ? brokenOn
+      : expiredOn && onDesktop && expiredOn.id !== onDesktop.id && (brokenOn?.id === onDesktop.id || !brokenOn)
+        ? onDesktop
+        : (expiredOn ?? brokenOn);
   if (!account) return undefined;
   // Once the extension is on this account again without a failure, nothing is left to do.
   if (
@@ -200,9 +211,11 @@ export function reconnectGuide(
           `The extension is on ${account.name}, but its sign-in expired. Claude’s browser tools do not work.`,
         ),
     steps: [
+      // Never "log out": claude.ai's log out ends that login on the server, and Relay keeps a
+      // copy of it for the other account; deleting the site's data only forgets it here.
       t(
-        `${browser}’da claude.ai’yi aç. Açılan hesap ${account.name} değilse sol alttaki menüden çıkış yap, ${as} ile giriş yap.`,
-        `Open claude.ai in ${browser}. If it is not on ${account.name}, log out from the menu at the bottom left. Then log in with ${as}.`,
+        `${browser}’da claude.ai’yi aç. Açılan hesap ${account.name} değilse çıkış yapma (çıkış, Relay’in diğer hesap için sakladığı girişi de bitirir): adres çubuğundaki site simgesinden claude.ai’nin site verilerini sil, sayfayı yenile, ${as} ile giriş yap.`,
+        `Open claude.ai in ${browser}. If it is not on ${account.name}, do not log out (that also ends the login Relay keeps for the other account): delete claude.ai’s site data from the site icon in the address bar, reload, and log in with ${as}.`,
       ),
       t(
         `${browser}’ın araç çubuğundaki Claude simgesine tıkla, “Log in”e bas.`,
@@ -239,6 +252,8 @@ export function extensionGuide(
   accounts: Account[],
   t: T,
   language: "tr" | "en",
+  /** The account the Claude app is on (its uuid), for the reconnect guide. */
+  desktopUuid?: string,
 ): ExtensionGuide {
   if (!status) return { tone: "off", label: t("Kontrol ediliyor…", "Check in progress…") };
   if (status.setting.mode === "off")
@@ -278,7 +293,7 @@ export function extensionGuide(
   const current = status.current;
   const here =
     current?.state === "signed-in" && !!current.accountUuid && uuids.includes(current.accountUuid);
-  const reconnect = reconnectGuide(status, accounts, t);
+  const reconnect = reconnectGuide(status, accounts, t, desktopUuid);
   if (reconnect && reconnect.account.id === account.id)
     return {
       tone: "crit",
@@ -287,6 +302,20 @@ export function extensionGuide(
       steps: reconnect.steps,
       where,
       action: "settings",
+    };
+  // A switch puts back both halves, the extension's sign-in and the claude.ai login: with only
+  // the first saved it would change nothing, so the account is not linked yet.
+  const loginSaved = !!status.cookiesSaved?.some((s) => uuids.includes(s.accountUuid));
+  if (saved && !loginSaved && !here)
+    return {
+      tone: "warn",
+      label: t("Yarım bağlı: claude.ai girişi kayıtlı değil", "Half linked: no claude.ai login saved"),
+      detail: t(
+        "Relay eklentinin girişini sakladı ama bu hesabın claude.ai girişini saklamadı; bu hesaba geçişte eklenti yerinde kalır. Tarayıcıda claude.ai’ye ve eklentiye bu hesapla giriş yapıp “Kontrol et”e bas.",
+        "Relay saved the extension’s sign-in but not this account’s claude.ai login, so a switch to this account leaves the extension where it is. Sign in to claude.ai and the extension with this account in the browser, then select “Check”.",
+      ),
+      action: "check",
+      where,
     };
   if (saved || here) {
     const date = saved

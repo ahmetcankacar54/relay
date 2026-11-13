@@ -835,7 +835,8 @@ test("a failed sign-in's record is never saved with an account and never put bac
   const outcome = await s.switcher.run(s.request());
   assert.equal(outcome.result, "switched");
   assert.deepEqual(s.world.stored.get(s.dir), signInFor(s.b, 5), "B's record goes without its failure");
-  assert.deepEqual(await s.vault.load([s.a]), signInFor(s.a, 1), "A is kept without its failure");
+  // A's pair failed to sign in: it is dead, and saving it would put it back at the next switch to A.
+  assert.equal(await s.vault.load([s.a]), undefined, "a pair the extension failed with is not saved");
   assert.deepEqual(await s.vault.load([s.b]), signInFor(s.b, 5));
 });
 
@@ -848,11 +849,13 @@ test("already on the target with a failed sign-in's record: the record goes, not
   const outcome = await s.switcher.run(s.request());
   assert.deepEqual(
     { result: outcome.result, reason: outcome.reason, cleared: outcome.cleared, saved: outcome.saved },
-    { result: "unchanged", reason: "already-there", cleared: true, saved: true },
+    { result: "unchanged", reason: "already-there", cleared: true, saved: false },
   );
   assert.deepEqual(s.world.stored.get(s.dir), signInFor(s.b, 3));
   assert.deepEqual(s.world.web.get(s.profile), loginFor(s.b, 2), "the claude.ai login is left as it is");
-  assert.deepEqual(await s.vault.load([s.b]), signInFor(s.b, 3));
+  // The pair failed: the vault keeps B's older one; once the extension signs in again, the next
+  // switch away saves what works.
+  assert.deepEqual(await s.vault.load([s.b]), signInFor(s.b, 1));
   // Without a record there is nothing to write.
   const opened = s.world.opened.length;
   const again = await s.switcher.run(s.request());
