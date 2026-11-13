@@ -217,7 +217,8 @@ test("the request log keeps 35 days across restarts, answers which account serve
     log.record({ at: clock.now + i, status: 200, accountId: "a", requestId: id, model: "m".repeat(200), client: "claude-code" });
   assert.deepEqual(log.recent().map((e) => e.requestId), ["req_2", "req_3"]);
   assert.equal(log.recent()[0].model?.length, 80);
-  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  // Windows keeps no POSIX mode bits: it reports 0o666 whatever was asked.
+  if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o600);
 
   const again = new GatewayRequestLog(file, { now: () => clock.now + day, feedSize: 2 });
   assert.deepEqual(again.load().map((e) => e.requestId), ["req_2", "req_3"]);
