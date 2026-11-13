@@ -9,8 +9,20 @@ const MAX_ERROR_LENGTH = 500;
 export const REQUEST_LOG_SIZE = 40;
 const MAX_MODEL_LENGTH = 80;
 
+/** Where the feed's entries are also kept, across restarts (`GatewayRequestLog`). */
+export interface RequestLogSink {
+  /** The newest entries kept, newest last. */
+  recent(): ProxyRequestLog[];
+  record(entry: ProxyRequestLog): void;
+}
+
 /** Counters per account id; the keys are the registry's accounts, so the maps stay small. */
 export class ProxyStats {
+  constructor(private readonly sink?: RequestLogSink) {
+    // The feed shows the requests before a restart, too.
+    if (sink) this.log = sink.recent().slice(-REQUEST_LOG_SIZE);
+  }
+
   private totalRequests = 0;
   private requestsByAccount = new Map<string, number>();
   private tokensByAccount = new Map<string, AccountTokenMetrics>();
@@ -35,8 +47,10 @@ export class ProxyStats {
   /** One request's outcome for the live feed. */
   recordLog(entry: ProxyRequestLog): void {
     const model = entry.model?.slice(0, MAX_MODEL_LENGTH);
-    this.log.push({ ...entry, ...(model ? { model } : {}) });
+    const kept = { ...entry, ...(model ? { model } : {}) };
+    this.log.push(kept);
     if (this.log.length > REQUEST_LOG_SIZE) this.log.splice(0, this.log.length - REQUEST_LOG_SIZE);
+    this.sink?.record(kept);
   }
 
   /** The feed, newest first. */

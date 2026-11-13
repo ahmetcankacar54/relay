@@ -77,6 +77,8 @@ export interface TokenLedgerOptions {
     profileAccountId?: string;
     /** The Claude Code session the row is in. */
     sessionId?: string;
+    /** The provider's id for the response (Anthropic's `request-id`). */
+    requestId?: string;
   }) => Attribution;
   /** The planning time zone that days are calendar dates in. */
   zone: () => string;
@@ -1074,6 +1076,7 @@ export class TokenLedger {
           typeof row.entrypoint === "string" ? row.entrypoint : undefined,
         profileAccountId,
         sessionId: typeof row.sessionId === "string" ? row.sessionId : undefined,
+        requestId: isId(row.requestId) ? row.requestId : undefined,
       }),
     );
     const model =

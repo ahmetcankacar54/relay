@@ -18,6 +18,7 @@ import { intentHash, type Destination } from "@/app/routes";
 import { ringState } from "@/lib/account-row";
 import { blockReason, desktopBlock } from "@/lib/onboarding";
 import { UsageCard } from "../../features/UsageCard";
+import { gatewayLine } from "@/lib/proxy-ui";
 import { planColumn } from "../accounts/accountLabels";
 
 export function ActiveAccountCard({
@@ -46,6 +47,8 @@ export function ActiveAccountCard({
   const switchBlocked = desktopBusy || !!relay.pendingDesktop || !!desktop?.recoveryRequired;
   // Why the switch is disabled, in the words of the add-account wizard's lock.
   const switchReason = switchBlocked ? blockReason(desktopBlock(relay), t) : undefined;
+  // Terminal tools bound to the gateway do not follow this account: say where they go.
+  const gateway = gatewayLine(desktop?.proxyStatus, t, now);
   const header = (
     <div className="flex min-w-0 items-center gap-3">
       <span
@@ -159,6 +162,15 @@ export function ActiveAccountCard({
                 {switchReason}
               </p>
             )}
+          </div>
+        )}
+        {gateway && (
+          <div data-slot="gateway-line" className="flex items-center gap-2 border-t px-3 py-2 text-xs">
+            <StatusDot tone={gateway.tone} />
+            <span className="min-w-0 flex-1 text-muted-foreground">{gateway.text}</span>
+            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => go("proxy")}>
+              {t("Ağ geçidi", "Gateway")}
+            </Button>
           </div>
         )}
       </div>

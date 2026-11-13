@@ -258,6 +258,10 @@ export class UsageManager {
   private nextAttempt = new Map<string, number>();
   private serverRetryUntil = new Map<string, number>();
   private failures = new Map<string, number>();
+  /** When each account's last read through its own sign-in finished: the poll's schedule. */
+  private polledAt = new Map<string, number>();
+  /** The last sample the gateway's windows gave history, per account. */
+  private liveSamples = new Map<string, { at: number; key: string }>();
   private active = 0;
   private waiting: (() => void)[] = [];
   private timer?: ReturnType<typeof setInterval>;
@@ -332,8 +336,46 @@ export class UsageManager {
       this.nextAttempt,
       this.serverRetryUntil,
       this.failures,
+      this.polledAt,
+      this.liveSamples,
     ])
       map.delete(id);
+  }
+  /**
+   * An account's windows as an answer through the gateway reported them. They are newer than
+   * any read, so they replace the read's percent and reset, and the account reads as fresh to
+   * the router, automatic switching and the menu bar alike. What only a read knows (the weekly
+   * per-model windows) stays as read, and the reads keep their own schedule. History gets a
+   * sample when a whole percent moved, at most once a minute.
+   */
+  observe(id: string, live: { fiveHour?: UsageWindow; sevenDay?: UsageWindow }): void {
+    const account = this.store.state.accounts.find((a) => a.id === id);
+    if (!account || (account.provider ?? "claude") !== "claude" || !this.source(account)) return;
+    if (!live.fiveHour && !live.sevenDay) return;
+    if (this.identities.has(id) && this.identities.get(id) !== identityKey(account)) return;
+    const at = new Date(this.now()).toISOString();
+    const next: AccountUsage = {
+      ...(this.cache.get(id) ?? { accountId: id, stale: false, status: "ready" }),
+      accountId: id,
+      status: "ready",
+      stale: false,
+      checkedAt: at,
+      liveAt: at,
+      ...(live.fiveHour ? { fiveHour: { ...live.fiveHour } } : {}),
+      ...(live.sevenDay ? { sevenDay: { ...live.sevenDay } } : {}),
+    };
+    // Fresh windows answer what a failed read could not.
+    delete next.issue;
+    delete next.retryAt;
+    this.identities.set(id, identityKey(account));
+    this.cache.set(id, next);
+    const key = [next.fiveHour, next.sevenDay].map((w) => Math.floor(w?.usedPercent ?? -1)).join(":");
+    const last = this.liveSamples.get(id);
+    if (last && (last.key === key || this.now() - last.at < 60_000)) return;
+    this.liveSamples.set(id, { at: this.now(), key });
+    try {
+      this.onSample(account, structuredClone(next));
+    } catch {}
   }
   snapshot(): Record<string, AccountUsage> {
     return Object.fromEntries(
@@ -388,13 +430,15 @@ export class UsageManager {
     if (!minutes) return;
     for (const a of this.store.state.accounts) {
       const cached = this.view(a);
+      // The gateway's windows keep `checkedAt` fresh; reads go on at their own pace, for what
+      // only a read knows.
+      const readAt = this.polledAt.get(a.id) ?? (cached?.checkedAt ? Date.parse(cached.checkedAt) : undefined);
       if (
         this.source(a) &&
-        (!cached?.checkedAt ||
+        (readAt === undefined ||
           // Poll a little early: automation accepts data up to five minutes old
           // and this timer only ticks every 30 seconds.
-          this.now() - Date.parse(cached.checkedAt) >=
-            minutes * 60_000 - 45_000 ||
+          this.now() - readAt >= minutes * 60_000 - 45_000 ||
           this.view(a).stale) &&
         this.now() >= (this.nextAttempt.get(a.id) ?? 0)
       )
@@ -643,6 +687,7 @@ export class UsageManager {
   ) {
     this.failures.delete(account.id);
     this.serverRetryUntil.delete(account.id);
+    this.polledAt.set(account.id, this.now());
     this.cache.set(account.id, {
       accountId: account.id,
       status: "ready",

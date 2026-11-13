@@ -233,7 +233,7 @@ function indexFor(
  * `samples` is indexed once per array and must not change after.
  */
 export function attribute(
-  row: { time: number; entrypoint?: string; profileAccountId?: string; sessionId?: string },
+  row: { time: number; entrypoint?: string; profileAccountId?: string; sessionId?: string; requestId?: string },
   deps: {
     timeline: {
       accountAt(t: number): { accountUuid: string; orgId?: string } | undefined;
@@ -245,6 +245,8 @@ export function attribute(
      * session id.
      */
     windowOwner?(sessionId: string, t: number): string | undefined;
+    /** The Relay account Relay's gateway sent a request id to, while its request log keeps it. */
+    gatewayAccount?(requestId: string): string | undefined;
   },
 ): Attribution {
   if (row.profileAccountId)
@@ -253,6 +255,10 @@ export function attribute(
       accountId: row.profileAccountId,
       estimated: false,
     };
+  // A response that came through the gateway: the gateway knows which account served it.
+  const served = row.requestId ? deps.gatewayAccount?.(row.requestId) : undefined;
+  if (served && deps.accounts.some((account) => account.id === served))
+    return { kind: "account", accountId: served, estimated: false };
   if (row.entrypoint && row.entrypoint !== "claude-desktop")
     return { kind: "terminal" };
   // A separate window's conversation runs on its own account, whatever the main Claude has open.

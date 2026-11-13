@@ -640,7 +640,8 @@ const previewProxy: {
   affinityTtlSeconds: 3_600,
   order: [],
   excluded: [],
-  bound: {},
+  // `?scenario=proxy-waiting` also shows Claude Code bound, as the Overview's gateway line needs.
+  bound: scenario === "proxy-waiting" ? { "claude-code": true } : {},
 };
 const minutesTo = (iso: string | null | undefined) =>
   iso ? Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 60_000)) : undefined;
@@ -656,12 +657,14 @@ const previewRecent = (): ProxyRequestLog[] => {
   const now = Date.now();
   const first = accounts[0]?.id;
   const second = accounts[1]?.id ?? first;
+  const cc = { client: "claude-code" };
   return [
-    { at: now - 4_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, affinity: true },
-    { at: now - 31_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200 },
-    { at: now - 32_000, accountId: first, provider: "claude", model: "claude-sonnet-4-5", status: 429, failover: true },
-    { at: now - 95_000, accountId: first, provider: "claude", model: "claude-haiku-4-5", status: 200, affinity: true },
-    { at: now - 160_000, provider: "codex", model: "gpt-5-codex", status: 503, note: "no-account" },
+    { at: now - 4_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, affinity: true, ...cc, requestClass: "main", ms: 6_210, tokens: { input: 4, cacheRead: 182_400, cacheWrite: 1_210, output: 860 } },
+    { at: now - 31_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "subagent", ms: 3_480, tokens: { input: 12, cacheWrite: 24_900, output: 412 } },
+    { at: now - 32_000, accountId: first, provider: "claude", model: "claude-sonnet-4-5", status: 429, failover: true, ...cc, requestClass: "subagent", ms: 610, note: "limit" },
+    { at: now - 70_000, accountId: first, provider: "claude", model: "claude-opus-4-5", status: 429, client: "curl", ms: 220, note: "refused", error: "Error" },
+    { at: now - 95_000, accountId: first, provider: "claude", model: "claude-haiku-4-5", status: 200, affinity: true, client: "agent-sdk", requestClass: "auxiliary", ms: 940, tokens: { input: 1_800, output: 24 } },
+    { at: now - 160_000, provider: "codex", model: "gpt-5-codex", status: 503, note: "no-account", client: "codex" },
   ];
 };
 const previewProxyStatus = (): ProxyStatus => ({
@@ -704,6 +707,7 @@ const previewProxyStatus = (): ProxyStatus => ({
       ...(previewProxy.running && scenario === "proxy-waiting" && i === 2
         ? { extraUsage: { kind: "billed" as const, minutesAgo: 3 } }
         : {}),
+      ...(previewProxy.running && i === 1 ? { live: true } : {}),
     };
   }),
   recent: previewRecent(),

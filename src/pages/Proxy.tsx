@@ -33,6 +33,7 @@ import {
   agoLabel,
   antigravitySnippet,
   compactCount,
+  requestDetail,
   gatewayUrl,
   isLoopbackHost,
   maskKey,
@@ -368,6 +369,14 @@ function WindowMeter({ label, percent, minutes }: { label: string; percent?: num
 }
 
 /** Why the gateway is leaving an account out, for the badge's tooltip. */
+/** The wall-clock time a wait of `minutes` ends at. */
+function untilClock(minutes: number, language: string): string {
+  return new Date(Date.now() + minutes * 60_000).toLocaleTimeString(language === "tr" ? "tr-TR" : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function waitingTitle(reason: "limit" | "auth" | "transient", t: (tr: string, en: string) => string): string {
   if (reason === "auth")
     return t(
@@ -387,7 +396,7 @@ function waitingTitle(reason: "limit" | "auth" | "transient", t: (tr: string, en
 
 /** What an account's state needs said: last served, out of the pool, no sign-in, full, about to lose quota. */
 function AccountState({ account }: { account: ProxyAccountStatus }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const risk = quotaAtRisk(account);
   if (!account.inPool) return <Badge variant="secondary">{t("Havuz dışı", "Out of pool")}</Badge>;
   if (!account.signedIn) return <Badge variant="destructive">{t("Giriş yok", "Not signed in")}</Badge>;
@@ -402,7 +411,14 @@ function AccountState({ account }: { account: ProxyAccountStatus }) {
           ? t(`Kısa ara · ${when}`, `Short pause · ${when}`)
           : t(`Limitte · ${when}`, `At its limit · ${when}`);
     return (
-      <Badge variant="secondary" data-slot="waiting" title={waitingTitle(account.waiting.reason, t)}>
+      <Badge
+        variant="secondary"
+        data-slot="waiting"
+        title={`${waitingTitle(account.waiting.reason, t)} ${t(
+          `Bitiş: ${untilClock(account.waiting.minutes, language)}.`,
+          `Until ${untilClock(account.waiting.minutes, language)}.`,
+        )}`}
+      >
         {label}
       </Badge>
     );
@@ -515,9 +531,19 @@ function PoolCard({
                     <span className="min-w-0 truncate text-sm font-medium">{account.name}</span>
                     <AccountState account={account} />
                   </span>
-                  <span className="truncate text-2xs text-muted-foreground tabular-nums">
+                  <span
+                    className="truncate text-2xs text-muted-foreground tabular-nums"
+                    title={
+                      account.live
+                        ? t(
+                            "Yüzdeler bu hesabın son yanıtındaki limit başlıklarından okundu.",
+                            "The percents are from the limit headers of this account's last answer.",
+                          )
+                        : undefined
+                    }
+                  >
                     {account.email && <Private>{account.email}</Private>}
-                    {account.email && (account.requests || cache) ? " · " : ""}
+                    {account.email && (account.requests || cache || account.live) ? " · " : ""}
                     {[
                       account.requests
                         ? t(`${account.requests} istek`, `${account.requests} requests`)
@@ -525,6 +551,7 @@ function PoolCard({
                       cache
                         ? t(`önbellek ${compactCount(cache, locale)}`, `cache ${compactCount(cache, locale)}`)
                         : undefined,
+                      account.live ? t("canlı", "live") : undefined,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -588,6 +615,7 @@ function statusTone(entry: ProxyRequestLog): { tone: "ok" | "warn" | "crit"; wor
   if (entry.status === 101) return { tone: "ok", word: ["akış", "stream"] };
   // Answered, but billed beyond the plan: it cost money.
   if (entry.note === "extra-usage") return { tone: "crit", word: ["ekstra kullanım", "extra usage"] };
+  if (entry.note === "refused") return { tone: "warn", word: ["429 geri çevrildi", "429 turned down"] };
   if (entry.failover) return { tone: "warn", word: [`${entry.status} → sıradaki`, `${entry.status} → next`] };
   if (entry.status < 400) return { tone: "ok", word: [String(entry.status), String(entry.status)] };
   if (entry.status === 429) return { tone: "warn", word: ["429 limit", "429 limit"] };
@@ -629,11 +657,13 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
           {recent.slice(0, 12).map((entry, index) => {
             const { tone, word } = statusTone(entry);
             const to = name(entry.accountId);
+            const detail = requestDetail(entry, t, locale);
             return (
               <li
                 key={`${entry.at}-${index}`}
                 data-status={entry.status}
-                className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-2 border-t py-1.5 text-xs first:border-t-0"
+                title={entry.error ? t(`Yanıt: ${entry.error}`, `Answer: ${entry.error}`) : undefined}
+                className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 border-t py-1.5 text-xs first:border-t-0"
               >
                 <span className="text-2xs text-muted-foreground tabular-nums">{agoLabel(entry.at, now, t)}</span>
                 <span className="flex min-w-0 items-center gap-1 truncate">
@@ -657,6 +687,11 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
                   <StatusDot tone={tone} />
                   {t(...word)}
                 </span>
+                {detail && (
+                  <span data-slot="request-detail" className="col-span-2 col-start-2 truncate text-2xs text-muted-foreground tabular-nums">
+                    {detail}
+                  </span>
+                )}
               </li>
             );
           })}

@@ -140,3 +140,109 @@ export function moveInOrder(order: readonly string[], id: string, by: -1 | 1): s
   [next[from], next[to]] = [next[to], next[from]];
   return next;
 }
+
+const CLIENT_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  "agent-sdk": "Agent SDK",
+  codex: "Codex",
+};
+const CLASS_LABELS: Record<string, [string, string]> = {
+  main: ["ana konuşma", "main"],
+  subagent: ["alt ajan", "subagent"],
+  compaction: ["sıkıştırma", "compaction"],
+  auxiliary: ["arka plan", "background"],
+  workflow: ["iş akışı", "workflow"],
+};
+
+/**
+ * One request's details for the feed: who sent it, Claude Code's label for it, how long it took
+ * and its tokens (with the share read from the cache), or why it was turned down.
+ */
+export function requestDetail(
+  entry: {
+    client?: string;
+    requestClass?: string;
+    ms?: number;
+    note?: string;
+    tokens?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+  },
+  t: T,
+  locale: string,
+): string {
+  const parts: string[] = [];
+  if (entry.client) parts.push(CLIENT_LABELS[entry.client] ?? entry.client);
+  if (entry.requestClass) {
+    const label = CLASS_LABELS[entry.requestClass];
+    parts.push(label ? t(...label) : entry.requestClass);
+  }
+  if (entry.ms !== undefined) {
+    const seconds = (entry.ms / 1000).toLocaleString(locale, { maximumFractionDigits: 1 });
+    parts.push(entry.ms < 1000 ? `${entry.ms} ms` : t(`${seconds} sn`, `${seconds} s`));
+  }
+  const tokens = entry.tokens;
+  if (tokens) {
+    const sent = (tokens.input ?? 0) + (tokens.cacheRead ?? 0) + (tokens.cacheWrite ?? 0);
+    if (sent) {
+      const cached = Math.round(((tokens.cacheRead ?? 0) / sent) * 100);
+      const amount = compactCount(sent, locale);
+      parts.push(
+        cached
+          ? t(`${amount} girdi, %${cached} önbellekten`, `${amount} in, ${cached}% cached`)
+          : t(`${amount} girdi`, `${amount} in`),
+      );
+    }
+    if (tokens.output) {
+      const amount = compactCount(tokens.output, locale);
+      parts.push(t(`${amount} çıktı`, `${amount} out`));
+    }
+  }
+  if (entry.note === "refused")
+    parts.push(t("limit değil: Anthropic isteği geri çevirdi", "not a limit: Anthropic turned the request down"));
+  return parts.join(" · ");
+}
+
+const BOUND_NAMES: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex CLI" };
+
+/**
+ * The Overview's line about the gateway: which tools go through it and where its last request
+ * went, since they do not follow the account open in the Claude app; or that a tool is bound
+ * while the gateway is off. Nothing when there is nothing to say.
+ */
+export function gatewayLine(
+  status:
+    | {
+        running: boolean;
+        clients?: { id: string; bound: boolean }[];
+        recent?: { at: number; accountId?: string }[];
+        accounts: { id: string; name: string }[];
+      }
+    | undefined,
+  t: T,
+  now: number,
+): { tone: "ok" | "crit"; text: string } | undefined {
+  if (!status) return undefined;
+  const bound = (status.clients ?? []).filter((c) => c.bound).map((c) => BOUND_NAMES[c.id] ?? c.id);
+  const names = (and: string) => bound.join(and);
+  if (!status.running)
+    return bound.length
+      ? {
+          tone: "crit",
+          text: t(
+            `${names(" ve ")} ağ geçidine bağlı ama geçit kapalı: istekleri gitmez.`,
+            `${names(" and ")} ${bound.length > 1 ? "are" : "is"} bound to the gateway, but it is off: requests fail.`,
+          ),
+        }
+      : undefined;
+  const last = status.recent?.find((entry) => entry.accountId);
+  const lastName = last && status.accounts.find((a) => a.id === last.accountId)?.name;
+  const lastText = last && lastName
+    ? t(`son istek ${lastName}, ${agoLabel(last.at, now, t)}`, `last request ${lastName}, ${agoLabel(last.at, now, t)}`)
+    : undefined;
+  if (!bound.length)
+    return lastText ? { tone: "ok", text: t(`Ağ geçidi açık · ${lastText}`, `Gateway on · ${lastText}`) } : undefined;
+  const head = t(
+    `${names(" ve ")} ağ geçidinden geçer, Claude uygulamasının hesabından değil`,
+    `${names(" and ")} ${bound.length > 1 ? "go" : "goes"} through the gateway, not the Claude app's account`,
+  );
+  return { tone: "ok", text: lastText ? `${head} · ${lastText}` : head };
+}

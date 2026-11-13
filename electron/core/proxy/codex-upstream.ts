@@ -4,6 +4,7 @@ import {
   buildTargetUrl,
   forwardUpstream,
   sanitizeRequestHeaders,
+  type ForwardSpec,
   type TokenTally,
   type UpstreamOutcome,
   type UsageExtractor,
@@ -18,6 +19,8 @@ export interface CodexForwardOptions {
   stats?: ProxyStats;
   /** Statuses whose answer is held back so the gateway can try another account. */
   holdIf?: (statusCode: number) => boolean;
+  /** Told when the answer's headers arrive (see `ForwardSpec.onAnswer`). */
+  onAnswer?: ForwardSpec["onAnswer"];
 }
 
 /**
@@ -86,6 +89,7 @@ export class CodexUpstream {
       usage: createCodexUsageExtractor(),
       errorLabel: "Codex upstream error",
       holdIf: options.holdIf,
+      onAnswer: options.onAnswer,
     });
   }
 }

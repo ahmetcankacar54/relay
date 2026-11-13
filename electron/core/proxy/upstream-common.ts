@@ -31,8 +31,18 @@ export interface UsageExtractor {
  *   model or a feature); its other requests are fine.
  * - `transient`: an overload or an answer from something in front of the API (an HTML 403
  *   challenge, 503, 529); nothing is wrong with the account itself.
+ * - `refused`: a 429 that no rate-limit header calls a spent window, with no Retry-After and a
+ *   message not about a limit (Anthropic's bare "Error" for a request that does not come from
+ *   Claude Code).
+ *   The account is fine, and every other account would answer the same.
  */
-export type FailureKind = "limit" | "extra-usage" | "auth" | "permission" | "transient";
+export type FailureKind = "limit" | "extra-usage" | "auth" | "permission" | "transient" | "refused";
+
+/** An account's windows as the provider reported them on an answer. */
+export interface LiveLimits {
+  fiveHour?: { usedPercent: number; resetsAt?: string };
+  sevenDay?: { usedPercent: number; resetsAt?: string };
+}
 
 export interface UpstreamOutcome {
   statusCode: number;
@@ -41,6 +51,8 @@ export interface UpstreamOutcome {
   unauthorized: boolean;
   /** For an error answer: what it says about the account (see FailureKind). */
   failure?: FailureKind;
+  /** An error answer's own message, shortened. */
+  errorMessage?: string;
   /** The upstream reported that this answer was billed as extra usage, beyond the plan. */
   extraUsage?: boolean;
   retryAfterSeconds?: number;
@@ -51,11 +63,21 @@ export interface UpstreamOutcome {
    * another account, or must answer the client itself.
    */
   held?: boolean;
+  /** The provider's id for this request (Anthropic's `request-id`); Claude Code saves it too. */
+  requestId?: string;
+  /** The tokens the answer reported. */
+  tokens?: TokenTally;
+  /** The account's windows as this answer reported them. */
+  live?: LiveLimits;
 }
 
 const LOCAL_ORIGIN = "http://relay.invalid";
 /** An error answer's body is kept up to this size to tell what kind of failure it is. */
 const MAX_ERROR_BODY = 64 * 1024;
+/** An error message kept for the request log. */
+const MAX_ERROR_MESSAGE = 160;
+/** What a provider's request id looks like (Anthropic: `req_011C…`). */
+const REQUEST_ID = /^[A-Za-z0-9_-]{1,128}$/;
 /** A 403 about the sign-in itself, not about what was asked. */
 const AUTH_403 =
   /oauth|token|credential|revoked|organization (?:has been )?disabled|account (?:has been )?(?:disabled|suspended)|only authorized for use with claude code/i;
@@ -244,14 +266,65 @@ function errorMessage(body: string | undefined): { type?: string; message?: stri
 }
 
 /** What an error answer says about the account; undefined for answers that say nothing about it. */
+/**
+ * A window's percent and reset as an answer reports them: `-5h-utilization` is a fraction
+ * (0.28 is 28 %), `-5h-reset` epoch seconds. Undefined when the answer carries neither window.
+ */
+export function parseLiveLimits(headers: http.IncomingHttpHeaders): LiveLimits | undefined {
+  const value = (name: string) => {
+    const raw = headers[name];
+    return Array.isArray(raw) ? raw[0] : raw;
+  };
+  const window = (key: "5h" | "7d") => {
+    const raw = value(`${UNIFIED}${key}-utilization`);
+    const fraction = raw === undefined || raw.trim() === "" ? NaN : Number(raw);
+    if (!Number.isFinite(fraction) || fraction < 0) return undefined;
+    const reset = Number(value(`${UNIFIED}${key}-reset`));
+    return {
+      usedPercent: Math.min(100, Math.round(fraction * 1000) / 10),
+      ...(Number.isFinite(reset) && reset > 0 ? { resetsAt: new Date(reset * 1000).toISOString() } : {}),
+    };
+  };
+  const fiveHour = window("5h");
+  const sevenDay = window("7d");
+  if (!fiveHour && !sevenDay) return undefined;
+  return { ...(fiveHour ? { fiveHour } : {}), ...(sevenDay ? { sevenDay } : {}) };
+}
+
+/**
+ * Whether no rate-limit header of a 429 says a window is spent: neither the overall status nor
+ * any window's reads "rejected". A spent plan window always says so; the 429 Anthropic gives a
+ * request that does not come from Claude Code carries no rate-limit header at all (seen
+ * 2026-11-13). Overage (extra usage) is not a window; it reads "rejected" on ordinary answers of
+ * an account without extra usage.
+ */
+function noWindowSpent(headers: http.IncomingHttpHeaders): boolean {
+  if (String(headers[`${UNIFIED}status`] ?? "") === "rejected") return false;
+  return !Object.keys(headers).some((name) => {
+    const window = /^anthropic-ratelimit-unified-(.+)-status$/.exec(name)?.[1];
+    return !!window && window !== "overage" && String(headers[name]) === "rejected";
+  });
+}
+
 export function classifyFailure(
   statusCode: number,
   headers: http.IncomingHttpHeaders,
   body: string | undefined,
 ): FailureKind | undefined {
   const error = errorMessage(body);
-  if (statusCode === 429)
-    return /extra usage/i.test(error?.message ?? "") ? "extra-usage" : "limit";
+  if (statusCode === 429) {
+    const message = error?.message ?? "";
+    if (/extra usage/i.test(message)) return "extra-usage";
+    // A burst or concurrency limit names itself or asks for a wait (Retry-After), and a bare
+    // 429 may be one: another account may well take the request. Only an answer that does
+    // neither, and says something, is a refusal.
+    return noWindowSpent(headers) &&
+      headers["retry-after"] === undefined &&
+      message.trim() !== "" &&
+      !/limit|exceed|too many|quota|concurren/i.test(message)
+      ? "refused"
+      : "limit";
+  }
   if (statusCode === 401) return "auth";
   if (statusCode === 403) {
     const json = String(headers["content-type"] ?? "").includes("json") || !!error;
@@ -376,6 +449,8 @@ export interface ForwardSpec {
   usage: UsageExtractor;
   errorLabel: string;
   onResponseHeaders?: (headers: http.IncomingHttpHeaders) => void;
+  /** Told when the answer's headers arrive, before its body: its status, request id and windows. */
+  onAnswer?: (early: Pick<UpstreamOutcome, "statusCode" | "requestId" | "live">) => void;
   /**
    * An answer with this status is not sent to the client: its body is dropped and the outcome
    * says `held`, so the caller can try another account. Only asked before anything was sent.
@@ -513,7 +588,17 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
         );
         outcome.limitResetsAt = parseLimitReset(upstreamRes.headers);
       }
+      const requestId = upstreamRes.headers["request-id"];
+      if (typeof requestId === "string" && REQUEST_ID.test(requestId)) outcome.requestId = requestId;
+      const live = parseLiveLimits(upstreamRes.headers);
+      if (live) outcome.live = live;
       spec.onResponseHeaders?.(upstreamRes.headers);
+      // Before the answer streams: Claude Code saves the request id as soon as text arrives.
+      spec.onAnswer?.({
+        statusCode,
+        ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
+        ...(live ? { live } : {}),
+      });
 
       // An error answer is small: its start is kept to tell what kind of failure it is.
       const errorChunks: Buffer[] = [];
@@ -526,14 +611,13 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
         });
       const classified = (extra: Partial<UpstreamOutcome> = {}): UpstreamOutcome => {
         if (statusCode < 400) return { ...outcome, ...extra };
-        const failure = classifyFailure(
-          statusCode,
-          upstreamRes.headers,
-          errorChunks.length ? Buffer.concat(errorChunks).toString("utf8") : undefined,
-        );
+        const body = errorChunks.length ? Buffer.concat(errorChunks).toString("utf8") : undefined;
+        const failure = classifyFailure(statusCode, upstreamRes.headers, body);
+        const message = errorMessage(body)?.message?.trim().slice(0, MAX_ERROR_MESSAGE);
         return {
           ...outcome,
           ...(failure ? { failure } : {}),
+          ...(message ? { errorMessage: message } : {}),
           rateLimited: failure === "limit",
           unauthorized: failure === "auth",
           ...extra,
@@ -568,10 +652,11 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
       if (tap) upstreamRes.on("data", (chunk: Buffer) => tap.push(chunk));
 
       pipeline(upstreamRes, clientRes, (err) => {
+        let tokens: TokenTally | undefined;
         if (tap && spec.stats) {
           tap.end();
-          const tally = spec.usage.result();
-          if (tally) spec.stats.recordTokens(spec.accountId, tally);
+          tokens = spec.usage.result();
+          if (tokens) spec.stats.recordTokens(spec.accountId, tokens);
         }
         if (
           err &&
@@ -579,7 +664,7 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
         ) {
           spec.stats?.recordError(`${spec.errorLabel}: ${err.message}`);
         }
-        settle(classified());
+        settle(classified(tokens ? { tokens } : {}));
       });
     });
 
