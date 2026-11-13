@@ -43,23 +43,31 @@ test("an answer's windows are read as percents with their resets", () => {
   assert.deepEqual(parseLiveLimits({ "anthropic-ratelimit-unified-7d-utilization": "0.973" }), { sevenDay: { usedPercent: 97.3 } });
 });
 
-test("a 429 is a limit only when a window says so; one that says none is spent is a refusal", () => {
+test("a 429 is a limit when a window says so or its message names a limit; Anthropic's bare refusal is not", () => {
   const json = { "content-type": "application/json" };
+  // What Anthropic answers a request that does not come from Claude Code (2026-11-13): no
+  // rate-limit header at all, no Retry-After, the message "Error".
+  const bare = { ...json, "x-should-retry": "true" };
+  assert.equal(classifyFailure(429, bare, errorBody("rate_limit_error", "Error")), "refused");
   assert.equal(classifyFailure(429, { ...json, ...ALLOWED }, errorBody("rate_limit_error", "Error")), "refused");
-  // A spent window, or no rate-limit headers at all: a limit, as before.
+  // A spent window says so: a limit, whatever the message.
   assert.equal(
     classifyFailure(429, { ...json, ...ALLOWED, "anthropic-ratelimit-unified-5h-status": "rejected" }, errorBody("rate_limit_error", "Error")),
     "limit",
   );
   assert.equal(classifyFailure(429, { ...json, ...ALLOWED, "anthropic-ratelimit-unified-status": "rejected" }, errorBody("rate_limit_error", "Error")), "limit");
-  assert.equal(classifyFailure(429, json, errorBody("rate_limit_error", "Error")), "limit");
   // Without a message it may be a short limit: wait out its Retry-After, as before.
   assert.equal(classifyFailure(429, { ...json, ...ALLOWED }, "{}"), "limit");
-  // A burst limit names itself: another account may take the request.
-  assert.equal(
-    classifyFailure(429, { ...json, ...ALLOWED }, errorBody("rate_limit_error", "Number of requests has exceeded your rate limit")),
-    "limit",
-  );
+  assert.equal(classifyFailure(429, bare, undefined), "limit");
+  // A Retry-After asks for a wait: honoured as a limit.
+  assert.equal(classifyFailure(429, { ...bare, "retry-after": "42" }, errorBody("rate_limit_error", "slow down")), "limit");
+  // A message about a limit: another account may take the request.
+  for (const message of [
+    "Number of requests has exceeded your rate limit",
+    "This request would exceed your account's rate limit. Please try again later.",
+    "You've hit your weekly limit",
+  ])
+    assert.equal(classifyFailure(429, bare, errorBody("rate_limit_error", message)), "limit", message);
   assert.equal(classifyFailure(429, { ...json, ...ALLOWED }, errorBody("rate_limit_error", "Extra usage is required for long context requests.")), "extra-usage");
 });
 
@@ -156,9 +164,10 @@ test("each answer reports its windows and request id as its headers arrive, and 
   }
 });
 
-test("a 429 that says no window is spent goes back to the client at once: no account is paused, none other is tried", async () => {
+test("Anthropic's bare 429 goes back to the client at once: no account is paused, none other is tried", async () => {
   const upstream = await upstreamServer((_req, res) => {
-    res.writeHead(429, { "content-type": "application/json", "retry-after": "40", ...ALLOWED });
+    // As Anthropic answers it: no rate-limit header, no Retry-After.
+    res.writeHead(429, { "content-type": "application/json", "x-should-retry": "true" });
     res.end(errorBody("rate_limit_error", "Error"));
   });
   const server = new ProxyServer({
@@ -177,6 +186,7 @@ test("a 429 that says no window is spent goes back to the client at once: no acc
     assert.equal(server.router.cooldownOf("a"), undefined);
     const [entry] = server.stats.recent();
     assert.equal(entry.note, "refused");
+    assert.equal(entry.failover, undefined, "it did not go on to the next account");
     assert.equal(entry.error, "Error");
     assert.equal(entry.client, "curl");
     // The next request goes out as usual.

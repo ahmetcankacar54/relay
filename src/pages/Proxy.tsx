@@ -615,9 +615,9 @@ function statusTone(entry: ProxyRequestLog): { tone: "ok" | "warn" | "crit"; wor
   if (entry.status === 101) return { tone: "ok", word: ["akış", "stream"] };
   // Answered, but billed beyond the plan: it cost money.
   if (entry.note === "extra-usage") return { tone: "crit", word: ["ekstra kullanım", "extra usage"] };
+  if (entry.note === "refused") return { tone: "warn", word: ["429 geri çevrildi", "429 turned down"] };
   if (entry.failover) return { tone: "warn", word: [`${entry.status} → sıradaki`, `${entry.status} → next`] };
   if (entry.status < 400) return { tone: "ok", word: [String(entry.status), String(entry.status)] };
-  if (entry.note === "refused") return { tone: "warn", word: ["429 geri çevrildi", "429 turned down"] };
   if (entry.status === 429) return { tone: "warn", word: ["429 limit", "429 limit"] };
   if (entry.note === "sign-in") return { tone: "crit", word: ["401 giriş", "401 sign-in"] };
   return { tone: "crit", word: [String(entry.status), String(entry.status)] };

@@ -31,9 +31,10 @@ export interface UsageExtractor {
  *   model or a feature); its other requests are fine.
  * - `transient`: an overload or an answer from something in front of the API (an HTML 403
  *   challenge, 503, 529); nothing is wrong with the account itself.
- * - `refused`: a 429 whose rate-limit headers say no window is spent. Anthropic turned this
- *   request down for another reason (one that does not come from Claude Code, for one); the
- *   account is fine, and every other account would answer the same.
+ * - `refused`: a 429 that no rate-limit header calls a spent window, with no Retry-After and a
+ *   message not about a limit (Anthropic's bare "Error" for a request that does not come from
+ *   Claude Code).
+ *   The account is fine, and every other account would answer the same.
  */
 export type FailureKind = "limit" | "extra-usage" | "auth" | "permission" | "transient" | "refused";
 
@@ -291,13 +292,14 @@ export function parseLiveLimits(headers: http.IncomingHttpHeaders): LiveLimits |
 }
 
 /**
- * Whether a 429's rate-limit headers say none of the account's windows is spent: they are
- * there, the overall status is not "rejected", and no window's is. Overage (extra usage) is not
- * a window; it reads "rejected" on ordinary answers of an account without extra usage.
+ * Whether no rate-limit header of a 429 says a window is spent: neither the overall status nor
+ * any window's reads "rejected". A spent plan window always says so; the 429 Anthropic gives a
+ * request that does not come from Claude Code carries no rate-limit header at all (seen
+ * 2026-11-13). Overage (extra usage) is not a window; it reads "rejected" on ordinary answers of
+ * an account without extra usage.
  */
 function noWindowSpent(headers: http.IncomingHttpHeaders): boolean {
-  const overall = headers[`${UNIFIED}status`];
-  if (overall === undefined || String(overall) === "rejected") return false;
+  if (String(headers[`${UNIFIED}status`] ?? "") === "rejected") return false;
   return !Object.keys(headers).some((name) => {
     const window = /^anthropic-ratelimit-unified-(.+)-status$/.exec(name)?.[1];
     return !!window && window !== "overage" && String(headers[name]) === "rejected";
@@ -313,10 +315,13 @@ export function classifyFailure(
   if (statusCode === 429) {
     const message = error?.message ?? "";
     if (/extra usage/i.test(message)) return "extra-usage";
-    // A burst or concurrency limit names itself, and a bare 429 with a Retry-After may be one:
-    // another account may well take the request. Only an answer that says something else is a
-    // refusal.
-    return noWindowSpent(headers) && message.trim() !== "" && !/rate.?limit|exceed|too many|quota|concurren/i.test(message)
+    // A burst or concurrency limit names itself or asks for a wait (Retry-After), and a bare
+    // 429 may be one: another account may well take the request. Only an answer that does
+    // neither, and says something, is a refusal.
+    return noWindowSpent(headers) &&
+      headers["retry-after"] === undefined &&
+      message.trim() !== "" &&
+      !/limit|exceed|too many|quota|concurren/i.test(message)
       ? "refused"
       : "limit";
   }

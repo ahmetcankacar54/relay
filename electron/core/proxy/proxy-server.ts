@@ -685,7 +685,8 @@ export class ProxyServer {
         ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
         ...(outcome.tokens ? { tokens: outcome.tokens } : {}),
         ...(outcome.errorMessage ? { error: outcome.errorMessage } : {}),
-        ...(outcome.held ? { failover: true } : {}),
+        // A refusal is answered here; it does not go on to another account.
+        ...(outcome.held && outcome.failure !== "refused" ? { failover: true } : {}),
         ...(selection.sessionAffinityHit ? { affinity: true } : {}),
         ...(outcome.extraUsage ? { note: "extra-usage" } : outcome.failure ? { note: outcome.failure } : {}),
       });
