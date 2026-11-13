@@ -9,6 +9,8 @@ import type {
   ProxyRequestLog,
   ProxySessionView,
 } from "../../../shared/proxy-types";
+import type { LimitCalibration } from "../../../shared/limit-calibration";
+import { responseCost } from "../../../shared/model-prices";
 
 /** The prefix every client key starts with, so a key pasted somewhere is recognised as Relay's. */
 export const PROXY_KEY_PREFIX = "relay-sec-";
@@ -106,6 +108,42 @@ export function resetInMinutes(usage: AccountUsage | undefined, now: number): nu
   return Math.ceil((Math.min(...times) - now) / 60_000);
 }
 
+/**
+ * What writing a session's cache again would cost: its prompt at the model's write price (an
+ * hour's or five minutes', as it was written), and that as a share of a 5-hour window on the
+ * accounts it could move to (the median of their calibrations; its own when no other has one).
+ */
+export function withMoveCost(
+  session: ProxySessionView,
+  calibrations: Record<string, LimitCalibration>,
+  excluded: ReadonlySet<string> = new Set(),
+): ProxySessionView {
+  if (!session.model || session.prefixTokens <= 0) return session;
+  const hour = session.ttlMs >= 3_600_000;
+  const dollars = responseCost(session.model, {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: session.prefixTokens,
+    ...(hour ? { cacheWrite1h: session.prefixTokens } : {}),
+  });
+  if (dollars === undefined) return session;
+  const others = Object.values(calibrations)
+    .filter((c) => c.accountId !== session.accountId && !excluded.has(c.accountId))
+    .map((c) => c.dollarsPerPercent)
+    .sort((a, b) => a - b);
+  const own = calibrations[session.accountId]?.dollarsPerPercent;
+  const rate = others.length ? others[Math.floor((others.length - 1) / 2)] : own;
+  const rounded = Math.round(dollars * 1000) / 1000;
+  return {
+    ...session,
+    moveCost: {
+      dollars: rounded,
+      ...(rate && rate > 0 ? { percent: Math.round((dollars / rate) * 100) / 100 } : {}),
+    },
+  };
+}
+
 /** Percents an answer reported this recently count as live. */
 const LIVE_MS = 10 * 60_000;
 
@@ -133,6 +171,8 @@ export function buildProxyStatus(input: {
     fullAt(accountId: string): number | undefined;
   };
   classShare?: ProxyClassShare[];
+  /** Each account's dollars per percent of its 5-hour window, where Relay could tell. */
+  calibrations?: Record<string, LimitCalibration>;
 }): ProxyStatus {
   const { config, metrics } = input;
   const excluded = new Set(config.excludedAccountIds ?? []);
@@ -187,6 +227,14 @@ export function buildProxyStatus(input: {
           const at = input.running ? input.insights?.fullAt(account.id) : undefined;
           return at && at > input.now ? { fullAt: at } : {};
         })(),
+        ...(input.calibrations?.[account.id]
+          ? {
+              percentCost: {
+                dollars: input.calibrations[account.id].dollarsPerPercent,
+                windows: input.calibrations[account.id].windows,
+              },
+            }
+          : {}),
       };
     }),
     ...(input.error ? { error: input.error } : {}),
@@ -196,7 +244,9 @@ export function buildProxyStatus(input: {
     ...(config.subagentOverflow ? { subagentOverflow: true } : {}),
     ...(input.running && input.insights
       ? (() => {
-          const sessions = input.insights.sessionViews();
+          const sessions = input.insights
+            .sessionViews()
+            .map((session) => withMoveCost(session, input.calibrations ?? {}, excluded));
           const alarms = input.insights.alarms();
           return { ...(sessions.length ? { sessions } : {}), ...(alarms.length ? { alarms } : {}) };
         })()

@@ -169,13 +169,15 @@ export class GatewayInsights {
       prompt >= session.prefixTokens * 0.9 &&
       lost > Math.max(MISS_TOKENS, session.prefixTokens * MISS_SHARE)
     ) {
+      // An expired cache is written again wherever the session goes: neither a new account nor
+      // a new model caused that write.
       const reason: CacheMissReason =
-        session.accountId !== facts.accountId
-          ? "account"
-          : session.model && facts.model && session.model !== facts.model
-            ? "model"
-            : facts.at - session.lastAt > session.ttlMs
-              ? "expired"
+        facts.at - session.lastAt > session.ttlMs
+          ? "expired"
+          : session.accountId !== facts.accountId
+            ? "account"
+            : session.model && facts.model && session.model !== facts.model
+              ? "model"
               : "unknown";
       miss = { reason, tokens: Math.min(lost, write) };
       session.misses += 1;
@@ -189,6 +191,12 @@ export class GatewayInsights {
     if ((facts.tokens.cacheWrite1h ?? 0) > 0) session.ttlMs = HOUR_MS;
     else if (write > 0) session.ttlMs = FIVE_MINUTES_MS;
     return miss;
+  }
+
+  /** Whether a session's cache has lived out its time since its last request. */
+  isCold(sessionKey: string): boolean {
+    const session = this.sessions.get(sessionKey);
+    return !!session && session.prefixTokens > 0 && this.now() - session.lastAt > session.ttlMs;
   }
 
   /** The sessions heard from most recently, newest first. */

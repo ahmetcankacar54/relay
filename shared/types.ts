@@ -327,6 +327,8 @@ export interface ProxyAccountStatus {
   live?: boolean;
   /** When its 5-hour window fills at the last half hour's pace, if before it resets (ms). */
   fullAt?: number;
+  /** What one percent of its 5-hour window took lately, in API-price dollars (Claude Code use). */
+  percentCost?: { dollars: number; windows: number };
   /** Its latest answer was billed as extra usage (`billed`), or a request needed it (`required`). */
   extraUsage?: { kind: "billed" | "required"; minutesAgo: number };
 }

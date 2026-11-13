@@ -170,6 +170,8 @@ export function requestDetail(
   },
   t: T,
   locale: string,
+  /** The serving account's dollars per percent of its 5-hour window, when known. */
+  dollarsPerPercent?: number,
 ): string {
   const parts: string[] = [];
   if (entry.client) parts.push(CLIENT_LABELS[entry.client] ?? entry.client);
@@ -202,10 +204,16 @@ export function requestDetail(
   if (entry.miss) {
     const amount = compactCount(entry.miss.tokens, locale);
     const why = t(...(MISS_LABELS[entry.miss.reason] ?? MISS_LABELS.unknown));
-    parts.push(t(`önbellek ıskası (${why}), ~${amount} yeniden yazıldı`, `cache miss (${why}), ~${amount} written again`));
+    const share =
+      dollarsPerPercent && entry.cost
+        ? t(`, 5 saatlik limitte ${windowShare(entry.cost / dollarsPerPercent, t, locale)}`, `, ${windowShare(entry.cost / dollarsPerPercent, t, locale)} of a 5-hour window`)
+        : "";
+    parts.push(t(`önbellek ıskası (${why}), ~${amount} yeniden yazıldı${share}`, `cache miss (${why}), ~${amount} written again${share}`));
   }
   if (entry.note === "refused")
     parts.push(t("limit değil: Anthropic isteği geri çevirdi", "not a limit: Anthropic turned the request down"));
+  if (entry.note === "cold-move")
+    parts.push(t("önbelleği soğuktu, dolmak üzere olan hesaptan taşındı", "its cache was cold: moved off an account near its limit"));
   return parts.join(" · ");
 }
 
@@ -217,8 +225,15 @@ const MISS_LABELS: Record<string, [string, string]> = {
   unknown: ["istem değişti", "the prompt changed"],
 };
 
+/** A share of a 5-hour window, without a suffix: "~%0,4", "<%0,1". */
+export function windowShare(percent: number, t: T, locale: string): string {
+  if (percent < 0.1) return t("<%0,1", "<0.1%");
+  const text = percent.toLocaleString(locale, { maximumFractionDigits: percent < 10 ? 1 : 0 });
+  return t(`~%${text}`, `~${text}%`);
+}
+
 /** An API-price amount, with the locale's decimal mark: three decimals under ten cents. */
-function usd(amount: number, locale: string): string {
+export function usd(amount: number, locale: string): string {
   const digits = amount < 0.095 ? 3 : 2;
   return `$${amount.toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
@@ -259,6 +274,7 @@ export function sessionCacheLine(
     subagents: number;
     misses: number;
     lastMiss?: { reason: string };
+    moveCost?: { dollars: number; percent?: number };
   },
   now: number,
   t: T,
@@ -269,12 +285,20 @@ export function sessionCacheLine(
   const size = compactCount(session.prefixTokens, locale);
   const minutes = Math.max(1, Math.ceil(left / 60_000));
   const lifetime = session.ttlMs >= 3_600_000 ? t("1 saatlik", "1-hour") : t("5 dakikalık", "5-minute");
+  const cost = session.moveCost
+    ? `≈ ${usd(session.moveCost.dollars, locale)}${
+        session.moveCost.percent !== undefined
+          ? t(`, 5 saatlik limitte ${windowShare(session.moveCost.percent, t, locale)}`, `, ${windowShare(session.moveCost.percent, t, locale)} of a 5-hour window`)
+          : ""
+      }`
+    : "";
   const parts = [
     agoLabel(session.lastAt, now, t),
     warm
       ? t(`${size} token önbellekte (${lifetime})`, `${size} tokens cached (${lifetime})`)
-      : t(`dönünce ~${size} token yeniden yazılır`, `coming back writes ~${size} tokens again`),
+      : t(`dönünce ~${size} token yeniden yazılır${cost ? ` (${cost})` : ""}`, `coming back writes ~${size} tokens again${cost ? ` (${cost})` : ""}`),
   ];
+  if (warm && cost) parts.push(t(`başka hesaba taşınırsa ${cost}`, `moving it to another account: ${cost}`));
   if (session.subagents) parts.push(t(`${session.subagents} alt ajan`, `${session.subagents} subagents`));
   if (session.misses) {
     const why = t(...(MISS_LABELS[session.lastMiss?.reason ?? "unknown"] ?? MISS_LABELS.unknown));

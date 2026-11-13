@@ -85,6 +85,11 @@ export interface ProxySessionView {
   subagents: number;
   misses: number;
   lastMiss?: { at: number; reason: CacheMissReason; tokens: number };
+  /**
+   * What writing its cache again would cost, in API-price dollars, and as a share of a 5-hour
+   * window on the other accounts, when Relay has calibrated them.
+   */
+  moveCost?: { dollars: number; percent?: number };
 }
 
 /** One prompt that made far more requests or subagents than a prompt usually does. */
