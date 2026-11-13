@@ -3,6 +3,7 @@
 type T = (tr: string, en: string) => string;
 
 import { clientHost, gatewayUrl } from "../../shared/proxy-url";
+import type { ProxyPick, ProxyPickReason } from "../../shared/proxy-types";
 
 export { clientHost, gatewayUrl };
 
@@ -214,6 +215,55 @@ export function requestDetail(
     parts.push(t("limit değil: Anthropic isteği geri çevirdi", "not a limit: Anthropic turned the request down"));
   if (entry.note === "cold-move")
     parts.push(t("önbelleği soğuktu, dolmak üzere olan hesaptan taşındı", "its cache was cold: moved off an account near its limit"));
+  return parts.join(" · ");
+}
+
+/** How the gateway chose an account that was not the session's own, in words. */
+const PICK_LABELS: Record<Exclude<ProxyPickReason, "bound">, [string, string]> = {
+  "soonest-reset": ["sıfırlanması en yakın hesap seçildi", "picked: resets soonest"],
+  balanced: ["en çok yeri olan hesap seçildi", "picked: most room left"],
+  priority: ["sıradaki hesap seçildi", "picked: next in order"],
+  only: ["uygun tek hesap buydu", "the only account available"],
+};
+
+/** A routing reason alone, for the pool's next-session line: what the strategy looks for. */
+const REASON_LABELS: Record<ProxyPickReason, [string, string]> = {
+  bound: ["oturumun hesabı", "the session's account"],
+  "soonest-reset": ["sıfırlanması en yakın", "resets soonest"],
+  balanced: ["en çok yeri olan", "most room left"],
+  priority: ["sırada ilk", "first in order"],
+  only: ["uygun tek hesap", "the only one available"],
+};
+export function pickReasonLabel(reason: ProxyPickReason, t: T): string {
+  return t(...REASON_LABELS[reason]);
+}
+
+/**
+ * Why the gateway gave a request its account, in a few words: how it was picked, which accounts
+ * it passed over and why. Nothing for a session that simply stayed on its account.
+ */
+export function pickLine(
+  pick: ProxyPick | undefined,
+  nameOf: (accountId: string) => string | undefined,
+  t: T,
+): string {
+  if (!pick) return "";
+  const names = (list: readonly string[]) => list.map((id) => nameOf(id) ?? "?").join(", ");
+  const parts: string[] = [];
+  if (pick.reason !== "bound") parts.push(t(...PICK_LABELS[pick.reason]));
+  if (pick.overflow) parts.push(t("alt ajan, oturumdan ayrı hesapta", "subagent kept off its session's account"));
+  if (pick.after) parts.push(t(`önce ${names([pick.after])} denendi`, `tried ${names([pick.after])} first`));
+  if (pick.boundWaiting)
+    parts.push(
+      t(
+        `oturumun hesabı ${names([pick.boundWaiting])} bekliyor, sonra ona döner`,
+        `its session's account ${names([pick.boundWaiting])} is waiting; it goes back after`,
+      ),
+    );
+  if (pick.nearlyFull?.length)
+    parts.push(t(`${names(pick.nearlyFull)} limite yakın, atlandı`, `${names(pick.nearlyFull)} near the limit, passed over`));
+  if (pick.noSignIn?.length)
+    parts.push(t(`${names(pick.noSignIn)}: giriş okunamadı`, `${names(pick.noSignIn)}: sign-in unreadable`));
   return parts.join(" · ");
 }
 

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ProxyClassShare, ProxyRequestLog } from "../../../shared/proxy-types";
+import type { ProxyClassShare, ProxyPick, ProxyPickReason, ProxyRequestLog } from "../../../shared/proxy-types";
 
 /** How long the gateway's requests are kept: past the token table's own rescans of recent days. */
 export const REQUEST_LOG_KEEP_DAYS = 35;
@@ -16,6 +16,31 @@ const text = (value: unknown, max: number) =>
   typeof value === "string" && value.length > 0 ? value.slice(0, max) : undefined;
 const count = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined;
+const PICK_REASONS: readonly ProxyPickReason[] = ["bound", "soonest-reset", "balanced", "priority", "only"];
+/** Account ids, at most ten. */
+const ids = (value: unknown) =>
+  Array.isArray(value)
+    ? value.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 64).slice(0, 10)
+    : [];
+
+/** A request's pick read back, or nothing when its reason is unknown. */
+function cleanPick(raw: unknown): ProxyPick | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const row = raw as Record<string, unknown>;
+  if (!PICK_REASONS.includes(row.reason as ProxyPickReason)) return undefined;
+  const nearlyFull = ids(row.nearlyFull);
+  const noSignIn = ids(row.noSignIn);
+  const after = text(row.after, 64);
+  const boundWaiting = text(row.boundWaiting, 64);
+  return {
+    reason: row.reason as ProxyPickReason,
+    ...(nearlyFull.length ? { nearlyFull } : {}),
+    ...(noSignIn.length ? { noSignIn } : {}),
+    ...(after ? { after } : {}),
+    ...(row.overflow === true ? { overflow: true } : {}),
+    ...(boundWaiting ? { boundWaiting } : {}),
+  };
+}
 
 /** One line read back: only the known fields, each in shape and capped, or nothing. */
 export function cleanEntry(raw: unknown): ProxyRequestLog | undefined {
@@ -46,6 +71,8 @@ export function cleanEntry(raw: unknown): ProxyRequestLog | undefined {
   if (miss && typeof miss === "object" && ["account", "model", "expired", "unknown"].includes(String(miss.reason)))
     entry.miss = { reason: miss.reason as NonNullable<ProxyRequestLog["miss"]>["reason"], tokens: count(miss.tokens) ?? 0 };
   if (row.affinity === true) entry.affinity = true;
+  const pick = cleanPick(row.pick);
+  if (pick) entry.pick = pick;
   const ms = count(row.ms);
   if (ms !== undefined) entry.ms = ms;
   if (row.tokens && typeof row.tokens === "object") {

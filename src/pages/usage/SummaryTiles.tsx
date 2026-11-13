@@ -102,8 +102,8 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
       </div>
       <p className="text-xs text-muted-foreground">
         {t(
-          `Relay bu süreyi ${formatPercent(view.coveragePercent, "tr")} gözledi.`,
-          `Relay observed ${formatPercent(view.coveragePercent, "en")} of this time.`,
+          `Bu aralığın ${formatPercent(view.coveragePercent, "tr")} kadarında Relay limitleri okuyabildi; kapalı olduğu ya da okuyamadığı süre sayılara girmedi.`,
+          `Relay could read the limits for ${formatPercent(view.coveragePercent, "en")} of this range; time it was closed or could not read is not in these numbers.`,
         )}
       </p>
     </Card>

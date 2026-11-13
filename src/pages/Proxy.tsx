@@ -42,6 +42,8 @@ import {
   maskKey,
   moveInOrder,
   openAiSnippet,
+  pickLine,
+  pickReasonLabel,
   parsePort,
   proxyCurlSnippet,
   quotaAtRisk,
@@ -429,6 +431,21 @@ function AccountState({ account }: { account: ProxyAccountStatus }) {
   const risk = quotaAtRisk(account);
   if (!account.inPool) return <Badge variant="secondary">{t("Havuz dışı", "Out of pool")}</Badge>;
   if (!account.signedIn) return <Badge variant="destructive">{t("Giriş yok", "Not signed in")}</Badge>;
+  // Saved, but the gateway could not read it: the page must not call the account ready.
+  if (account.gatewaySignIn === "missing")
+    return (
+      <a href={`#/hesaplar/${account.id}`} data-slot="gateway-sign-in">
+        <Badge
+          variant="destructive"
+          title={t(
+            "Ağ geçidi bu hesabın girişini okuyamadı (Keychain'de yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
+            "The gateway could not read this account's sign-in (not in the Keychain); requests go to other accounts. Renew its usage sign-in on the account's page.",
+          )}
+        >
+          {t("Ağ geçidi girişi okuyamıyor", "Gateway can't read sign-in")}
+        </Badge>
+      </a>
+    );
   if (account.extraUsage?.kind === "billed")
     return <Badge variant="destructive">{t("Ekstra kullanım", "Extra usage")}</Badge>;
   if (account.waiting) {
@@ -465,6 +482,19 @@ function AccountState({ account }: { account: ProxyAccountStatus }) {
         )}
       >
         {t(`%${risk.percent} yanacak`, `${risk.percent}% expiring`)}
+      </Badge>
+    );
+  if (account.gatewaySignIn === "expired")
+    return (
+      <Badge
+        variant="secondary"
+        data-slot="gateway-sign-in"
+        title={t(
+          "Girişinin süresi doldu; Relay limit okurken yeniliyor. O zamana kadar istekler başka hesaplara gider.",
+          "Its sign-in expired; Relay renews it when it reads the limits. Until then requests go to other accounts.",
+        )}
+      >
+        {t("Giriş yenileniyor", "Renewing sign-in")}
       </Badge>
     );
   if (account.active)
@@ -517,6 +547,28 @@ function PoolCard({
               )
         }
       />
+      {status.nextPick && (
+        <p data-slot="next-pick" className="pt-1 text-2xs text-muted-foreground">
+          {Object.entries(status.nextPick).map(([provider, pick], index, all) => {
+            const nameOf = (id: string) => accounts.find((a) => a.id === id)?.name ?? "?";
+            const skipped = pick.nearlyFull?.length
+              ? t(
+                  `; ${pick.nearlyFull.map(nameOf).join(", ")} limite yakın, atlanıyor`,
+                  `; ${pick.nearlyFull.map(nameOf).join(", ")} near the limit, passed over`,
+                )
+              : "";
+            const who = all.length > 1 ? `${provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : "Antigravity"}: ` : "";
+            return (
+              <span key={provider} className="block">
+                {who}
+                {t("Yeni oturum şimdi → ", "A new session now → ")}
+                <span className="font-medium text-foreground">{nameOf(pick.accountId)}</span>
+                {` (${pickReasonLabel(pick.reason, t)})${skipped}`}
+              </span>
+            );
+          })}
+        </p>
+      )}
       {accounts.length ? (
         <ul aria-label={t("Havuzdaki hesaplar", "Accounts in the pool")} className="grid pt-1">
           {accounts.map((account, index) => {
@@ -747,6 +799,7 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
           {recent.slice(0, 12).map((entry, index) => {
             const { tone, word } = statusTone(entry);
             const to = name(entry.accountId);
+            const why = pickLine(entry.pick, name, t);
             const detail = requestDetail(
               entry,
               t,
@@ -757,7 +810,11 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
               <li
                 key={`${entry.at}-${index}`}
                 data-status={entry.status}
-                title={entry.error ? t(`Yanıt: ${entry.error}`, `Answer: ${entry.error}`) : undefined}
+                title={
+                  [entry.error ? t(`Yanıt: ${entry.error}`, `Answer: ${entry.error}`) : "", why]
+                    .filter(Boolean)
+                    .join("\n") || undefined
+                }
                 className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 border-t py-1.5 text-xs first:border-t-0"
               >
                 <span className="text-2xs text-muted-foreground tabular-nums">{agoLabel(entry.at, now, t)}</span>
@@ -785,6 +842,12 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
                 {detail && (
                   <span data-slot="request-detail" className="col-span-2 col-start-2 truncate text-2xs text-muted-foreground tabular-nums">
                     {detail}
+                  </span>
+                )}
+                {why && (
+                  <span data-slot="request-pick" className="col-span-2 col-start-2 truncate text-2xs text-muted-foreground">
+                    {t("Neden bu hesap: ", "Why this account: ")}
+                    {why}
                   </span>
                 )}
               </li>
@@ -1192,6 +1255,14 @@ function RulesTab({
             {t(
               "Bu adres yerel değil: anahtarı bilen ağdaki herkes hesaplarını kullanabilir. Tailscale gibi kapalı bir ağ kullan.",
               "This is not a local address: anyone on the network who has the key can spend your accounts. Keep it on a private network such as Tailscale.",
+            )}
+          </Note>
+        )}
+        {!isLoopbackHost(current) && validHost(current) && (
+          <Note className="pt-2">
+            {t(
+              "Yalnızca kendi bilgisayarların bağlansın. Abonelik girişleri kişisel kullanım içindir: gateway'i başkalarıyla paylaşmak ya da bir sunucuya koymak hesapların kısıtlanmasına yol açabilir.",
+              "Connect only your own computers. Subscription sign-ins are for personal use: sharing the gateway with others or running it on a server can get the accounts restricted.",
             )}
           </Note>
         )}

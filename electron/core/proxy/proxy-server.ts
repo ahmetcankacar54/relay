@@ -8,6 +8,8 @@ import {
   type ProxyConfig,
   type ProxyLoopAlarm,
   type ProxyMetrics,
+  type ProxyPick,
+  type ProxyPickReason,
   type ProxyState,
 } from "../../../shared/proxy-types";
 import {
@@ -277,6 +279,27 @@ export class ProxyServer {
 
   getMetrics(): ProxyMetrics {
     return this.stats.getMetrics(this.sessionCache.count());
+  }
+
+  /**
+   * The account a new session would get now, for each provider the pool has, and why: what
+   * the gateway would decide, shown before it does.
+   */
+  nextPicks(): Partial<Record<ProxyProvider, { accountId: string; reason: ProxyPickReason; nearlyFull?: string[] }>> {
+    const { accounts, usageMap } = this.usageProvider();
+    const out: Partial<Record<ProxyProvider, { accountId: string; reason: ProxyPickReason; nearlyFull?: string[] }>> = {};
+    const providers = new Set(accounts.map((account) => account.provider ?? "claude"));
+    for (const provider of ["claude", "codex", "antigravity"] as const) {
+      if (!providers.has(provider)) continue;
+      const pick = this.router.preview(accounts, usageMap, provider);
+      if (pick)
+        out[provider] = {
+          accountId: pick.account.id,
+          reason: pick.reason,
+          ...(pick.nearlyFull ? { nearlyFull: pick.nearlyFull } : {}),
+        };
+    }
+    return out;
   }
 
   updateConfig(patch: Partial<ProxyConfig>): void {
@@ -632,6 +655,9 @@ export class ProxyServer {
     let unsupported: string | undefined;
     // Accounts whose sign-in could not be read: skipped without spending one of the tries.
     const unreadable: string[] = [];
+    const unreadableIds: string[] = [];
+    // The account the previous try was held on, for the next try's reason.
+    let heldOn: string | undefined;
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; ) {
       const { accounts, usageMap } = this.usageProvider();
       let selection: RouterSelection;
@@ -691,6 +717,7 @@ export class ProxyServer {
       const route = await this.resolveRoute(selection.account);
       if (!route) {
         unreadable.push(selection.account.name);
+        unreadableIds.push(selection.account.id);
         this.stats.recordError(`No usable sign-in for ${selection.account.name}`);
         // Its sessions wait for it: a renewed sign-in brings them back to their cache.
         this.router.markUnavailable(selection.account.id, AUTH_FAILURE_COOLDOWN_S * 1000, "auth");
@@ -722,6 +749,14 @@ export class ProxyServer {
         },
       );
       if (!outcome) return;
+      const pick: ProxyPick = {
+        reason: selection.reason,
+        ...(selection.nearlyFull ? { nearlyFull: selection.nearlyFull } : {}),
+        ...(unreadableIds.length ? { noSignIn: [...unreadableIds] } : {}),
+        ...(heldOn ? { after: heldOn } : {}),
+        ...(overflow ? { overflow: true } : {}),
+        ...(selection.boundWaiting ? { boundWaiting: selection.boundWaiting } : {}),
+      };
       const tokens = outcome.tokens;
       const cost = tokens
         ? responseCost(requestedModel, {
@@ -753,6 +788,7 @@ export class ProxyServer {
         // A refusal is answered here; it does not go on to another account.
         ...(outcome.held && outcome.failure !== "refused" ? { failover: true } : {}),
         ...(selection.sessionAffinityHit ? { affinity: true } : {}),
+        pick,
         ...(outcome.extraUsage
           ? { note: "extra-usage" }
           : outcome.failure
@@ -774,6 +810,7 @@ export class ProxyServer {
       }
       if (!outcome.held) return;
       lastHeld = outcome.statusCode;
+      heldOn = accountId;
       this.stats.recordError(
         `${selection.account.name} answered ${outcome.statusCode}; trying another account`,
       );

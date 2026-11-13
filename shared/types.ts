@@ -32,10 +32,19 @@ import {
   type ProxyClientId,
   type ProxyConfig,
   type ProxyLoopAlarm,
+  type ProxyPickReason,
   type ProxyRequestLog,
   type ProxySessionView,
 } from "./proxy-types";
-export type { ProxyClassShare, ProxyClientId, ProxyLoopAlarm, ProxyRequestLog, ProxySessionView } from "./proxy-types";
+export type {
+  ProxyClassShare,
+  ProxyClientId,
+  ProxyLoopAlarm,
+  ProxyPick,
+  ProxyPickReason,
+  ProxyRequestLog,
+  ProxySessionView,
+} from "./proxy-types";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
 export type AccountProvider = "claude" | "codex" | "antigravity" | "gemini";
@@ -331,6 +340,11 @@ export interface ProxyAccountStatus {
   percentCost?: { dollars: number; windows: number };
   /** Its latest answer was billed as extra usage (`billed`), or a request needed it (`required`). */
   extraUsage?: { kind: "billed" | "required"; minutesAgo: number };
+  /**
+   * The sign-in the gateway sends with its requests, when it cannot use it: not found (`missing`)
+   * or past its expiry (`expired`, renewed by the limit reader). Absent while it works or is unchecked.
+   */
+  gatewaySignIn?: "missing" | "expired";
 }
 /** A client tool Relay can point at the gateway, and whether it is now. */
 export interface ProxyClientStatus {
@@ -377,6 +391,8 @@ export interface ProxyStatus {
   alarms?: ProxyLoopAlarm[];
   /** Today's gateway traffic by Claude Code's request class. */
   classShare?: ProxyClassShare[];
+  /** The account a new session would get now, by provider, and why. */
+  nextPick?: Partial<Record<AccountProvider, { accountId: string; reason: ProxyPickReason; nearlyFull?: string[] }>>;
 }
 /** Local session discovered on disk for 1-click Zero-Friction onboarding. */
 export interface DetectedProviderSession {
