@@ -173,7 +173,9 @@ import {
 } from "./core/provider-discovery";
 import { AntigravityBridge } from "./core/antigravity-bridge";
 import { readCodexCredential } from "./core/provider-credentials";
-import { readAntigravityUsage, readCodexUsage } from "./core/provider-usage";
+import { readAntigravityTier, readAntigravityUsage, readCodexUsage } from "./core/provider-usage";
+/** When each Antigravity account's Google plan was last read. */
+const antigravityTierReads = new Map<string, number>();
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
 import {
@@ -957,7 +959,18 @@ else {
             const bridge = antigravityBridge(account.id);
             if (!(await bridge.hasCredential()))
               throw new UsageError("expired", undefined, "antigravity: no saved Google sign-in");
-            return readAntigravityUsage((request) => bridge.googleCall(request), await bridge.projectId());
+            const call = (request: { url: string; body: string }) => bridge.googleCall(request);
+            const project = await bridge.projectId();
+            const result = await readAntigravityUsage(call, project);
+            // The Google plan (AI Pro, Ultra, free) changes rarely: read with the limits at most
+            // every six hours, and kept when a read fails.
+            const tierAt = antigravityTierReads.get(account.id) ?? 0;
+            if (Date.now() - tierAt > 6 * 3_600_000 || !account.auth?.subscription || /oauth/i.test(account.auth.subscription)) {
+              antigravityTierReads.set(account.id, Date.now());
+              const plan = await readAntigravityTier(call, project);
+              if (plan) return { ...result, plan };
+            }
+            return result;
           }
           throw new UsageError("unsupported", undefined, "provider quota endpoint unavailable");
         },
@@ -2052,10 +2065,8 @@ async function pollAntigravityOAuth(accountId: string, state: string): Promise<A
     service.store.update((savedState) => {
       const account = savedState.accounts.find((a) => a.id === accountId);
       if (!account) throw new Error(say("OAuth girişi sırasında hesap kayboldu.", "Account disappeared during OAuth sign-in."));
-      account.auth = {
-        loggedIn: true, checkedAt: new Date().toISOString(), email: status.email,
-        subscription: "Antigravity OAuth",
-      };
+      // The plan (Google AI Pro, Ultra, free) is read with the account's first limits.
+      account.auth = { loggedIn: true, checkedAt: new Date().toISOString(), email: status.email };
     });
     pendingAntigravityOAuth.delete(accountId);
     antigravityCallbackServers.get(accountId)?.close();
