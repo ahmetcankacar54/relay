@@ -52,12 +52,19 @@ test("a new session goes to the account whose week ends first, not to the one wh
 test("a model whose own weekly limit is spent goes elsewhere, while the account keeps serving other models", () => {
   const router = new ProxyRouter({ strategy: "soonest-reset", now: () => NOW });
   const fable = router.selectAccount("s-fable", accounts, pool(), "claude", new Set(), undefined, { model: "claude-fable-5-2" });
-  assert.equal(fable.account.id, "alto", "Vertex's Fable week is spent; Alto's week ends before Nova's");
+  assert.equal(fable.account.id, "nova", "Vertex's Fable week is spent and Alto's 5-hour window is 81 % used");
+  // With room in Alto's 5-hour window, Alto's week (ending before Nova's) goes first.
+  const cooler = pool();
+  cooler.alto.fiveHour = { usedPercent: 40, resetsAt: at(2.2) };
+  assert.equal(
+    router.selectAccount("s-fable-2", accounts, cooler, "claude", new Set(), undefined, { model: "claude-fable-5-2" }).account.id,
+    "alto",
+  );
   const opus = router.selectAccount("s-opus", accounts, pool(), "claude", new Set(), undefined, { model: "claude-opus-5-5" });
   assert.equal(opus.account.id, "vertex");
   // A Fable request in a session bound to Vertex moves: its model is out there.
   router.sessionCache.set("s-mixed", "vertex");
-  const moved = router.selectAccount("s-mixed", accounts, pool(), "claude", new Set(), undefined, { model: "claude-fable-5-2" });
+  const moved = router.selectAccount("s-mixed", accounts, cooler, "claude", new Set(), undefined, { model: "claude-fable-5-2" });
   assert.equal(moved.account.id, "alto");
   assert.equal(moved.moved, "limit");
   assert.equal(moved.from, "vertex");
@@ -67,6 +74,7 @@ test("a 429 that spent only one model's limit keeps that model off the account, 
   const router = new ProxyRouter({ strategy: "soonest-reset", now: () => NOW });
   const usageMap = pool();
   usageMap.vertex.modelWindows = [];
+  usageMap.alto.fiveHour = { usedPercent: 40, resetsAt: at(2.2) };
   router.markModelUnavailable("vertex", "fable", 30 * HOUR);
   assert.equal(router.selectAccount(undefined, accounts, usageMap, "claude", new Set(), undefined, { model: "claude-fable-5-2" }).account.id, "alto");
   assert.equal(router.selectAccount(undefined, accounts, usageMap, "claude", new Set(), undefined, { model: "claude-opus-5-5" }).account.id, "vertex");
@@ -97,17 +105,21 @@ test("a busy session moves to the expiring week at the start of a prompt, never 
   const again = router.selectAccount("s", accounts, pool(), "claude", new Set(), undefined, { ...opus, turnStart: true });
   assert.equal(again.reason, "bound");
 
-  // Vertex's 5-hour window fills: at the next prompt the session drains to the next account.
+  // Vertex's 5-hour window passes the soft stop: warm sessions still use its last percents.
   const hot = pool();
   hot.vertex.fiveHour = { usedPercent: 93, resetsAt: at(1) };
   now += MIN_STAY_MS / 2;
+  assert.equal(router.selectAccount("s", accounts, hot, "claude", new Set(), undefined, { ...opus, turnStart: true }).account.id, "vertex");
+  // Past the eject threshold the session leaves at its next prompt, for the account with 5-hour
+  // room (Alto's window is 81 % used, Nova's untouched).
+  hot.vertex.fiveHour = { usedPercent: 96, resetsAt: at(1) };
   const drained = router.selectAccount("s", accounts, hot, "claude", new Set(), undefined, { ...opus, turnStart: true });
-  assert.equal(drained.account.id, "alto");
+  assert.equal(drained.account.id, "nova");
   assert.equal(drained.moved, "drain");
   // The window resets a moment later; the session just moved, so it stays a while first.
   now += 60_000;
   const settled = router.selectAccount("s", accounts, pool(), "claude", new Set(), undefined, { ...opus, turnStart: true });
-  assert.equal(settled.account.id, "alto");
+  assert.equal(settled.account.id, "nova");
   now += MIN_STAY_MS;
   const back = router.selectAccount("s", accounts, pool(), "claude", new Set(), undefined, { ...opus, turnStart: true });
   assert.equal(back.account.id, "vertex");
@@ -223,4 +235,27 @@ test("an answer's own window of one model is read as that model's limit", async 
   assert.deepEqual(live?.models, [{ model: "fable", weekly: true, usedPercent: 99.5, resetsAt: new Date(reset * 1000).toISOString() }]);
   assert.equal(parseLiveLimits({ "anthropic-ratelimit-unified-7d_opus-utilization": "0.4" })?.models?.[0]?.model, "opus");
   assert.equal(parseLiveLimits({}), undefined);
+});
+
+test("busy sessions move to an expiring week one at a time, and ranking keeps Fable room where Fable still works", () => {
+  let now = NOW;
+  const router = new ProxyRouter({ strategy: "soonest-reset", now: () => now });
+  const turn = { model: "claude-opus-5-5", turnStart: true };
+  router.sessionCache.set("s1", "nova");
+  router.sessionCache.set("s2", "nova");
+  assert.equal(router.selectAccount("s1", accounts, pool(), "claude", new Set(), undefined, turn).moved, "rebalance");
+  assert.equal(router.selectAccount("s2", accounts, pool(), "claude", new Set(), undefined, turn).account.id, "nova", "the next waits");
+  now += 5 * 60_000;
+  assert.equal(router.selectAccount("s2", accounts, pool(), "claude", new Set(), undefined, turn).moved, "rebalance");
+
+  // Two accounts whose weeks end together: Opus work goes to the one whose Fable week is spent,
+  // so the other keeps its room for Fable.
+  const twins = {
+    a: usage("a", { used: 10, resetIn: 3 }, { used: 30, resetIn: 50 }, { used: 20, resetIn: 50 }),
+    b: usage("b", { used: 10, resetIn: 3 }, { used: 30, resetIn: 51 }, { used: 100, resetIn: 51 }),
+  };
+  const pair = [account("a"), account("b")];
+  assert.equal(router.selectAccount(undefined, pair, twins, "claude", new Set(), undefined, { model: "claude-opus-5-5" }).account.id, "b");
+  assert.equal(router.selectAccount(undefined, pair, twins, "claude", new Set(), undefined, { model: "claude-fable-5-2" }).account.id, "a");
+  assert.equal(limitScopeOf({ "anthropic-ratelimit-unified-7d_oi-status": "rejected" }), "model", "a scoped window of any name");
 });

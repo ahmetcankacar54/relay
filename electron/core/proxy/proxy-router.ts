@@ -146,6 +146,17 @@ export const REBALANCE_GAP_MS = 24 * HOUR_MS;
 export const MIN_STAY_MS = 20 * 60_000;
 /** Only an account with at least this much of its week left is worth moving a session to. */
 export const REBALANCE_MIN_ROOM = 5;
+/**
+ * A running session leaves its account only past these, higher than the soft stops for new
+ * sessions: the account's last few percent go to the sessions already warm on it, and a move
+ * still comes before the limit cuts a turn (claudemanager's eject threshold).
+ */
+export const EJECT_FIVE_HOUR = 95;
+export const EJECT_WEEK = 99;
+/** An account with this much of its 5-hour window used ranks after accounts with more room. */
+export const FIVE_HOUR_LOW_ROOM = 80;
+/** Across the pool, at most one session moves for a better order in this long. */
+export const REBALANCE_SPACING_MS = 5 * 60_000;
 
 /** One account as the router weighs it for one request. */
 interface Standing {
@@ -159,6 +170,15 @@ interface Standing {
   room: number | undefined;
   /** Past a soft stop: takes no new session while another account has room. */
   draining: boolean;
+  /** Past the eject threshold: a running session leaves it at the start of its next prompt. */
+  ejecting: boolean;
+  /** Most of its 5-hour window is used: a new session would soon have to move. */
+  fiveLow: boolean;
+  /**
+   * Another model's own limit is spent here: the account cannot serve that model, so it is the
+   * better home for this request, and accounts that still can keep their room for that model.
+   */
+  specialised: boolean;
 }
 
 export class ProxyRouter {
@@ -169,6 +189,8 @@ export class ProxyRouter {
   private readonly cooldowns = new Map<string, { until: number; reason: CooldownReason }>();
   /** Cooldowns of one model on one account (`<account>:<family>`): its weekly limit is spent. */
   private readonly modelCooldowns = new Map<string, number>();
+  /** When a session last moved for a better order, across the pool. */
+  private lastRebalanceAt = -Infinity;
 
   constructor(options: ProxyRouterOptions = {}) {
     // One clock for both: the cache times moves and lifetimes the router weighs.
@@ -262,6 +284,7 @@ export class ProxyRouter {
     const spent = [usage?.fiveHour, usage?.sevenDay, scopedWindow(usage, family)].some(
       (window) => !!window && window.usedPercent >= 100,
     );
+    const scoped = scopedWindow(usage, family)?.usedPercent ?? 0;
     return {
       account,
       usage,
@@ -269,6 +292,18 @@ export class ProxyRouter {
       fiveEnds: (ready ? at(usage?.fiveHour) : undefined) ?? Infinity,
       room: ready ? remainingPercent(usage, family) : undefined,
       draining: nearlyFull(usage, family) || (ready && spent),
+      ejecting:
+        ready &&
+        (spent ||
+          (usage?.fiveHour?.usedPercent ?? 0) >= EJECT_FIVE_HOUR ||
+          (usage?.sevenDay?.usedPercent ?? 0) >= EJECT_WEEK ||
+          scoped >= EJECT_WEEK),
+      fiveLow: ready && (usage?.fiveHour?.usedPercent ?? 0) >= FIVE_HOUR_LOW_ROOM,
+      specialised:
+        ready &&
+        (usage?.modelWindows ?? []).some(
+          (w) => !!w.model && w.model !== family && w.usedPercent >= 100 && (!w.resetsAt || Date.parse(w.resetsAt) > now),
+        ),
     };
   }
 
@@ -280,11 +315,15 @@ export class ProxyRouter {
    * accounts with almost nothing left after both.
    */
   private bySoonestReset(now: number) {
-    const tier = (s: Standing) => (s.room === undefined ? 1 : s.room > 5 ? 0 : 2);
+    // Known room first; an account whose 5-hour window is mostly used after those (a session
+    // started there soon has to move and write its cache again); then never read; then nearly
+    // empty ones.
+    const tier = (s: Standing) => (s.room === undefined ? 2 : s.room <= 5 ? 3 : s.fiveLow ? 1 : 0);
     const band = (s: Standing) => Math.floor((s.weekEnds - now) / DEADLINE_BAND_MS);
     return (a: Standing, b: Standing) =>
       tier(a) - tier(b) ||
       band(a) - band(b) ||
+      Number(b.specialised) - Number(a.specialised) ||
       (a.fiveEnds === b.fiveEnds ? 0 : a.fiveEnds < b.fiveEnds ? -1 : 1) ||
       (b.room ?? 0) - (a.room ?? 0);
   }
@@ -341,13 +380,17 @@ export class ProxyRouter {
     if (best.account.id === bound.account.id) return undefined;
     if (context.cold) return "cold";
     if (!context.turnStart) return undefined;
-    if (bound.draining && !best.draining) return "drain";
+    if (bound.ejecting && !best.draining) return "drain";
     if (
       this.strategy === "soonest-reset" &&
       !best.draining &&
+      !best.fiveLow &&
       (best.room ?? 0) >= REBALANCE_MIN_ROOM &&
       best.weekEnds + REBALANCE_GAP_MS <= bound.weekEnds &&
-      (movedAt === undefined || now - movedAt >= MIN_STAY_MS)
+      (movedAt === undefined || now - movedAt >= MIN_STAY_MS) &&
+      // One at a time across the pool: a herd of sessions moving together would fill the
+      // target's 5-hour window at once and move straight back.
+      now - this.lastRebalanceAt >= REBALANCE_SPACING_MS
     )
       return "rebalance";
     return undefined;
@@ -419,6 +462,7 @@ export class ProxyRouter {
       }
     }
 
+    if (moved === "rebalance") this.lastRebalanceAt = now;
     // Update affinity
     if (sessionKey && !boundWaits) this.sessionCache.set(sessionKey, best.account.id);
 

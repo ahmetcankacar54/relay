@@ -274,7 +274,12 @@ export function rejectedWindows(headers: http.IncomingHttpHeaders): string[] {
  */
 export function limitScopeOf(headers: http.IncomingHttpHeaders): "model" | "account" {
   const windows = rejectedWindows(headers);
-  if (windows.length) return windows.every((w) => MODEL_NAMED.test(w)) ? "model" : "account";
+  // The account's own windows, and windows of a kind of client or a product (Claude Code's
+  // OAuth apps, Cowork, Design), stop every request through it.
+  const general = (w: string) => /^(?:5h|7d|five_hour|seven_day)$/i.test(w) || /oauth|cowork|omelette|design/i.test(w);
+  // Any other spent window is scoped to one model, whatever its name (`7d_opus`, and per other
+  // tools `7d_oi` for the Fable family).
+  if (windows.length) return windows.some(general) ? "account" : "model";
   const claim = String(headers[`${UNIFIED}representative-claim`] ?? "");
   return MODEL_NAMED.test(claim) ? "model" : "account";
 }
