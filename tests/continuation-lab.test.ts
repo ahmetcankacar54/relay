@@ -13,6 +13,10 @@ const receiver = fileURLToPath(
   new URL("../scripts/fixtures/continuation-host.mjs", import.meta.url),
 );
 const repository = fileURLToPath(new URL("..", import.meta.url));
+// How long one lab command may run before it counts as hung. The A→B→A run takes about 10 s on
+// macOS, but 25–30 s on Windows CI runners under the full suite, so a 30 s limit failed about
+// half of those runs. Windows gets three times as long; elsewhere a hang still shows at 30 s.
+const LAB_LIMIT_MS = process.platform === "win32" ? 90_000 : 30_000;
 
 async function command(
   file: string,
@@ -36,7 +40,7 @@ async function command(
       const timer = setTimeout(() => {
         child.kill();
         reject(new Error("Isolated lab command timed out."));
-      }, 30_000);
+      }, LAB_LIMIT_MS);
       child.stdout.on("data", (chunk) => {
         stdout += chunk;
         if (Buffer.byteLength(stdout) > 128 * 1024) child.kill();
@@ -60,7 +64,7 @@ async function command(
 
 test(
   "executable isolated lab switches real Relay adapters A→B→A and verifies persistent exact-conversation new turns",
-  { timeout: 35_000 },
+  { timeout: LAB_LIMIT_MS + 5_000 },
   async (t) => {
     const root = await fs.mkdtemp(
       path.join(os.tmpdir(), "relay-lab-sentinel-test-"),
