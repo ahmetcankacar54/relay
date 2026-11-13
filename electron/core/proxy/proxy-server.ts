@@ -718,10 +718,14 @@ export class ProxyServer {
       if (!route) {
         unreadable.push(selection.account.name);
         unreadableIds.push(selection.account.id);
-        this.stats.recordError(`No usable sign-in for ${selection.account.name}`);
+        // Requests that shared the read find it out together: the first one reports it.
+        const reported = this.router.cooldownOf(selection.account.id)?.reason === "auth";
         // Its sessions wait for it: a renewed sign-in brings them back to their cache.
         this.router.markUnavailable(selection.account.id, AUTH_FAILURE_COOLDOWN_S * 1000, "auth");
-        this.onCredentialMissing?.(selection.account.id);
+        if (!reported) {
+          this.stats.recordError(`No usable sign-in for ${selection.account.name}`);
+          this.onCredentialMissing?.(selection.account.id);
+        }
         continue;
       }
       const isLast = attempt === MAX_ATTEMPTS;
@@ -842,7 +846,26 @@ export class ProxyServer {
   }
 
   /** The token (and for Antigravity the sidecar) one account is used with; undefined when none can be read. */
-  private async resolveRoute(
+  /** Sign-in reads under way, by account: requests arriving together share one. */
+  private readonly resolving = new Map<string, Promise<{ token: string; antigravity?: { url: string; key: string } } | undefined>>();
+
+  /**
+   * The route to an account. Requests that arrive together for one account share a single read
+   * of its sign-in, so a burst reads the Keychain once, not once per request.
+   */
+  private resolveRoute(
+    account: Account,
+  ): Promise<{ token: string; antigravity?: { url: string; key: string } } | undefined> {
+    const running = this.resolving.get(account.id);
+    if (running) return running;
+    const read = this.readRoute(account).finally(() => {
+      if (this.resolving.get(account.id) === read) this.resolving.delete(account.id);
+    });
+    this.resolving.set(account.id, read);
+    return read;
+  }
+
+  private async readRoute(
     account: Account,
   ): Promise<{ token: string; antigravity?: { url: string; key: string } } | undefined> {
     const provider = account.provider ?? "claude";

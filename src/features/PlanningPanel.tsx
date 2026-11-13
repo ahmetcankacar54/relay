@@ -441,8 +441,8 @@ export function PlanningPanel({
             )}
             <small className={cn(noteClass, "mt-0.5 block")}>
               {t(
-                "Relay açık, Mac uyanık olmalı. Her başlatma küçük bir istek harcar.",
-                "Relay must be open and the Mac awake. Each start uses a small request.",
+                "Relay açık, Mac uyanık olmalı. Her başlatma küçük bir istek harcar; limitleri okumak dönem başlatmaz.",
+                "Relay must be open and the Mac awake. Each start uses a small request; reading the limits never starts a period.",
               )}
             </small>
           </div>

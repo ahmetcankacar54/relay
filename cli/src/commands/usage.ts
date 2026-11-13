@@ -3,6 +3,8 @@ import { profileLockHolders } from "../../../electron/core/profile-lock";
 import { UsageManager } from "../../../electron/core/usage";
 import { UsageError, readCredential } from "../../../electron/core/usage-credentials";
 import { UsageCredentialRefresher, anthropicUnreachable } from "../../../electron/core/usage-refresh";
+import { readCodexCredential } from "../../../electron/core/provider-credentials";
+import { readCodexUsage } from "../../../electron/core/provider-usage";
 import { acquireProfileLock } from "../../../electron/core/profile-lock";
 import { readsUsage } from "../../../shared/cli-version";
 import { formatUsed, percentUsed } from "../../../shared/percent";
@@ -14,8 +16,21 @@ import { EXIT } from "../io";
 import { printJson, table } from "../output";
 import { untilText } from "../time";
 
+/** Where a Codex or Antigravity account is signed in again: the app; `relay connect` is Claude's. */
+const inApp = (t: CliContext["t"]) => t("Relay uygulamasından yeniden giriş yap", "sign in again in the Relay app");
+
 function issueText(ctx: CliContext, account: Account, issue: UsageIssue | undefined): string {
   const { t } = ctx;
+  const provider = account.provider ?? "claude";
+  if (provider === "antigravity" && (issue === "unsupported" || issue === undefined))
+    return t(
+      "Antigravity limitleri yalnızca Relay uygulamasında okunur",
+      "Antigravity limits are read in the Relay app only",
+    );
+  if (provider === "codex" && issue === "unsupported")
+    return t("Codex bu giriş için plan limiti bildirmiyor (API anahtarı)", "Codex reports no plan limits for this sign-in (an API key)");
+  if (provider !== "claude" && ["credentials-missing", "connect-cli", "expired", "renewal-required", "scope", "identity-mismatch"].includes(issue ?? ""))
+    return t(`giriş kullanılamıyor: ${inApp(t)}`, `the sign-in cannot be used: ${inApp(t)}`);
   const reconnect = `relay connect "${account.name}"`;
   switch (issue) {
     case "unavailable":
@@ -69,6 +84,17 @@ export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
     (account, credential, force, interaction) =>
       refresher.refresh(account, ctx.store.profile(account.id), credential, force, interaction),
     (account) => refresher.hasPending(ctx.store.profile(account.id)),
+    undefined,
+    undefined,
+    // Codex as the app reads it, through its ChatGPT sign-in. The plan it reports is left for
+    // the app to save. Antigravity needs the app's CLIProxyAPI sidecar, which relay never starts.
+    async (account) => {
+      if (account.provider === "codex") {
+        const { plan: _plan, ...limits } = await readCodexUsage(await readCodexCredential(ctx.store.profile(account.id)));
+        return limits;
+      }
+      throw new UsageError("unsupported", undefined, `${account.provider}: read in the app`);
+    },
   );
   const results: { account: Account; usage?: AccountUsage }[] = [];
   for (const account of accounts)
@@ -106,7 +132,14 @@ export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
           w.resetsAt ? ` · ${t(`${untilText(w.resetsAt, io.now(), t)} sonra yenilenir`, `resets in ${untilText(w.resetsAt, io.now(), t)}`)}` : ""
         }`;
   const rows = results.map(({ account, usage }) => {
-    if (!usage) return [account.name, t(`limit okuma girişi yok: relay connect "${account.name}"`, `no usage sign-in: relay connect "${account.name}"`), ""];
+    if (!usage)
+      return [
+        account.name,
+        (account.provider ?? "claude") === "claude"
+          ? t(`limit okuma girişi yok: relay connect "${account.name}"`, `no usage sign-in: relay connect "${account.name}"`)
+          : t(`giriş yok: ${inApp(t)}`, `not signed in: ${inApp(t)}`),
+        "",
+      ];
     if (usage.status !== "ready") return [account.name, issueText(ctx, account, usage.issue), ""];
     return [
       account.name,
