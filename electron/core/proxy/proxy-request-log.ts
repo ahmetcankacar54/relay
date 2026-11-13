@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ProxyClassShare, ProxyPick, ProxyPickReason, ProxyRequestLog } from "../../../shared/proxy-types";
+import type { ProxyClassShare, ProxyMoveReason, ProxyPick, ProxyPickReason, ProxyRequestLog } from "../../../shared/proxy-types";
 
 /** How long the gateway's requests are kept: past the token table's own rescans of recent days. */
 export const REQUEST_LOG_KEEP_DAYS = 35;
@@ -17,6 +17,7 @@ const text = (value: unknown, max: number) =>
 const count = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined;
 const PICK_REASONS: readonly ProxyPickReason[] = ["bound", "soonest-reset", "balanced", "priority", "only"];
+const MOVE_REASONS: readonly ProxyMoveReason[] = ["limit", "cold", "drain", "rebalance"];
 /** Account ids, at most ten. */
 const ids = (value: unknown) =>
   Array.isArray(value)
@@ -32,6 +33,8 @@ function cleanPick(raw: unknown): ProxyPick | undefined {
   const noSignIn = ids(row.noSignIn);
   const after = text(row.after, 64);
   const boundWaiting = text(row.boundWaiting, 64);
+  const moved = MOVE_REASONS.includes(row.moved as ProxyMoveReason) ? (row.moved as ProxyMoveReason) : undefined;
+  const from = text(row.from, 64);
   return {
     reason: row.reason as ProxyPickReason,
     ...(nearlyFull.length ? { nearlyFull } : {}),
@@ -39,6 +42,8 @@ function cleanPick(raw: unknown): ProxyPick | undefined {
     ...(after ? { after } : {}),
     ...(row.overflow === true ? { overflow: true } : {}),
     ...(boundWaiting ? { boundWaiting } : {}),
+    ...(moved ? { moved } : {}),
+    ...(moved && from ? { from } : {}),
   };
 }
 
@@ -58,6 +63,7 @@ export function cleanEntry(raw: unknown): ProxyRequestLog | undefined {
     ["requestId", 128],
     ["client", 40],
     ["requestClass", 40],
+    ["agentType", 40],
     ["error", 160],
   ];
   for (const [key, max] of strings) {

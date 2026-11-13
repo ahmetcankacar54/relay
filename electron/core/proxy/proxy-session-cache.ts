@@ -52,6 +52,11 @@ export class ProxySessionCache {
     return existing.accountId;
   }
 
+  /** When a live session last changed account, if it ever did. */
+  movedAt(sessionKey: string): number | undefined {
+    return this.sessions.get(sessionKey)?.movedAt;
+  }
+
   /**
    * Binds a sessionKey to a specific accountId.
    */
@@ -67,6 +72,7 @@ export class ProxySessionCache {
             accountId,
             lastActiveAt: now,
             requestCount: existing.requestCount + 1,
+            ...(existing.accountId !== accountId ? { movedAt: now } : {}),
           }
         : {
             sessionKey,

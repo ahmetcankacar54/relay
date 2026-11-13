@@ -57,6 +57,11 @@ export interface ProxyRequestLog {
   client?: string;
   /** Claude Code's own label for the request: main, subagent, compaction, auxiliary, … */
   requestClass?: string;
+  /**
+   * A subagent's kind as Claude Code names it (general-purpose, Explore, custom, fork, …), or
+   * "unnamed" for a subagent request without an agent id: subagent overflow needs the id.
+   */
+  agentType?: string;
   /** The tokens the answer reported; `cacheWrite1h` is the 1-hour part of `cacheWrite`. */
   tokens?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cacheWrite1h?: number };
   /** What the answer would cost on the API, in USD, when its model has a price. */
@@ -74,6 +79,14 @@ export interface ProxyRequestLog {
  * strategy's choice, or the one account left (`only`).
  */
 export type ProxyPickReason = "bound" | "soonest-reset" | "balanced" | "priority" | "only";
+/**
+ * Why a session left its account on purpose:
+ * - `limit`: its account (or the model it asks for) is out for a spent limit;
+ * - `cold`: its cache had expired, so it went where it is best now at no cost;
+ * - `drain`: at the start of a prompt its account was past a soft stop;
+ * - `rebalance`: at the start of a prompt another account's week ended a day or more sooner.
+ */
+export type ProxyMoveReason = "limit" | "cold" | "drain" | "rebalance";
 
 /** Why a request went to its account. */
 export interface ProxyPick {
@@ -88,6 +101,10 @@ export interface ProxyPick {
   overflow?: boolean;
   /** The session's own account, waiting on its sign-in or an outage: the session stays bound to it. */
   boundWaiting?: string;
+  /** The session left its account on purpose, and why. */
+  moved?: ProxyMoveReason;
+  /** The account the session left. */
+  from?: string;
 }
 
 /** Why a session's cached prompt was written again instead of read. */
@@ -142,6 +159,8 @@ export interface ProxySessionState {
   assignedAt: number;
   lastActiveAt: number;
   requestCount: number;
+  /** When the session last changed account (a move), for the router's stay-a-while rule. */
+  movedAt?: number;
 }
 
 export interface AccountTokenMetrics {

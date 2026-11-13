@@ -171,7 +171,7 @@ test("the page words why a request went to its account", () => {
   assert.equal(pickLine({ reason: "bound" }, nameOf, tr), "");
   assert.equal(
     pickLine({ reason: "soonest-reset", nearlyFull: ["a"] }, nameOf, tr),
-    "sıfırlanması en yakın hesap seçildi · Alto limite yakın, atlandı",
+    "haftası ilk biten hesap seçildi · Alto limite yakın, atlandı",
   );
   assert.equal(
     pickLine({ reason: "only", after: "a", boundWaiting: "a", noSignIn: ["b"] }, nameOf, en),
@@ -227,10 +227,10 @@ test("the pool shows a new session's account now, and an account whose sign-in t
     "canli",
   );
   assert.match(html, /data-slot="next-pick"/);
-  assert.match(html, /Yeni oturum şimdi → <span[^>]*>Alto<\/span> \(sıfırlanması en yakın\); Vertex limite yakın, atlanıyor/);
+  assert.match(html, /Yeni oturum şimdi → <span[^>]*>Alto<\/span> \(haftası ilk biten\); Vertex limite yakın, atlanıyor/);
   assert.match(html, /href="#\/hesaplar\/b"[^>]*data-slot="gateway-sign-in"/);
   assert.match(html, /Ağ geçidi girişi okuyamıyor/);
-  assert.match(html, /data-slot="request-pick"[^>]*>Neden bu hesap: sıfırlanması en yakın hesap seçildi · Vertex limite yakın, atlandı/);
+  assert.match(html, /data-slot="request-pick"[^>]*>Neden bu hesap: haftası ilk biten hesap seçildi · Vertex limite yakın, atlandı/);
 });
 
 test("a gateway open to other machines says to connect only your own", () => {

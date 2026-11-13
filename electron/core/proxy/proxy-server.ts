@@ -2,7 +2,7 @@ import http from "node:http";
 import { HUB_PREFIX, hubManagement } from "./hub-management";
 import net from "node:net";
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { Account, AccountUsage } from "../../../shared/types";
+import type { Account, AccountUsage, ProxyStatus } from "../../../shared/types";
 import {
   DEFAULT_PROXY_CONFIG,
   type ProxyConfig,
@@ -16,8 +16,9 @@ import {
   NoEligibleAccountError,
   NoProviderAccountError,
   ProxyRouter,
-  nearlyFull,
+  modelFamily,
   type CooldownReason,
+  type PickContext,
   type ProxyProvider,
   type RouterSelection,
 } from "./proxy-router";
@@ -285,19 +286,31 @@ export class ProxyServer {
    * The account a new session would get now, for each provider the pool has, and why: what
    * the gateway would decide, shown before it does.
    */
-  nextPicks(): Partial<Record<ProxyProvider, { accountId: string; reason: ProxyPickReason; nearlyFull?: string[] }>> {
+  nextPicks(): NonNullable<ProxyStatus["nextPick"]> {
     const { accounts, usageMap } = this.usageProvider();
-    const out: Partial<Record<ProxyProvider, { accountId: string; reason: ProxyPickReason; nearlyFull?: string[] }>> = {};
+    const out: NonNullable<ProxyStatus["nextPick"]> = {};
     const providers = new Set(accounts.map((account) => account.provider ?? "claude"));
     for (const provider of ["claude", "codex", "antigravity"] as const) {
       if (!providers.has(provider)) continue;
       const pick = this.router.preview(accounts, usageMap, provider);
-      if (pick)
-        out[provider] = {
-          accountId: pick.account.id,
-          reason: pick.reason,
-          ...(pick.nearlyFull ? { nearlyFull: pick.nearlyFull } : {}),
-        };
+      if (!pick) continue;
+      // Models with a limit of their own on some account (Fable): their new sessions may go
+      // elsewhere than the rest.
+      const families = new Map<string, string>();
+      for (const account of accounts)
+        if ((account.provider ?? "claude") === provider)
+          for (const window of usageMap[account.id]?.modelWindows ?? [])
+            if (window.model && !families.has(window.model)) families.set(window.model, window.label);
+      const byModel = [...families].flatMap(([model, label]) => {
+        const scoped = this.router.preview(accounts, usageMap, provider, model);
+        return scoped?.account.id === pick.account.id ? [] : [{ model, label, ...(scoped ? { accountId: scoped.account.id } : {}) }];
+      });
+      out[provider] = {
+        accountId: pick.account.id,
+        reason: pick.reason,
+        ...(pick.nearlyFull ? { nearlyFull: pick.nearlyFull } : {}),
+        ...(byModel.length ? { byModel } : {}),
+      };
     }
     return out;
   }
@@ -599,7 +612,10 @@ export class ProxyServer {
     // Who asked, and Claude Code's label for the request, for the request log.
     const client = clientOf(req.headers);
     const requestClass = requestClassOf(req.headers);
-    const about = { ...(client ? { client } : {}), ...(requestClass ? { requestClass } : {}) };
+    const about: { client?: string; requestClass?: string; agentType?: string } = {
+      ...(client ? { client } : {}),
+      ...(requestClass ? { requestClass } : {}),
+    };
     // Claude Code's hints (CLAUDE_CODE_GATEWAY_HINT_HEADERS): which subagent, which prompt.
     const hint = (name: string) => {
       const value = req.headers[name];
@@ -608,9 +624,16 @@ export class ProxyServer {
     };
     const agentId = hint("x-claude-code-agent-id");
     const agentType = hint("x-claude-code-agent-type")?.toLowerCase();
+    // What kind of subagent sent it, for the log: an "unnamed" one carries no agent id, and
+    // subagent overflow cannot place it.
+    const agentLabel = requestClass === "subagent" ? (agentId ? (agentType ?? "agent") : "unnamed") : undefined;
+    if (agentLabel) about.agentType = agentLabel;
     const promptId = hint("x-claude-code-prompt-id");
     const compacted =
       requestClass === "compaction" || /^(1|true)$/i.test(String(req.headers["x-claude-code-context-compacted"] ?? ""));
+    // The first request Relay sees of a prompt in the main conversation starts a turn.
+    const turnStart =
+      !!promptId && !agentId && (requestClass === undefined || requestClass === "main") && !this.insights.hasPrompt(promptId);
     const alarm = this.insights.countPrompt(promptId, { sessionKey, agentId });
     if (alarm) this.onLoopAlarm?.(alarm);
     // A fresh subagent starts a prompt of its own, so another account costs it no cache: with
@@ -620,16 +643,14 @@ export class ProxyServer {
       this.config.subagentOverflow === true && !!sessionKey && !!agentId && requestClass === "subagent" && agentType !== "fork";
     const routeKey = overflow ? `${sessionKey}:sub` : sessionKey;
     const avoid = overflow ? this.sessionCache.peek(sessionKey!) : undefined;
-    // A session whose cache went cold on an account close to its limit moves now: its prompt is
-    // written again wherever it goes, and staying would cost a second write when the limit comes.
-    let coldMove = false;
-    if (sessionKey && !agentId) {
-      const bound = this.sessionCache.peek(sessionKey);
-      if (bound && this.insights.isCold(sessionKey) && nearlyFull(this.usageProvider().usageMap[bound])) {
-        this.sessionCache.evictSession(sessionKey);
-        coldMove = true;
-      }
-    }
+    // What the router weighs besides the session: the model (a limit may be scoped to it), and
+    // whether moving the session costs nothing (its cache went cold) or least (a new prompt
+    // begins, so no turn is cut in two). Subagents and background requests never start a turn.
+    const pickContext: PickContext = {
+      ...(requestedModel ? { model: requestedModel } : {}),
+      ...(sessionKey && !agentId && this.insights.isCold(sessionKey) ? { cold: true } : {}),
+      ...(turnStart ? { turnStart: true } : {}),
+    };
     const headerProvider = String(
       req.headers["x-relay-provider"] ?? "",
     ).toLowerCase();
@@ -669,6 +690,8 @@ export class ProxyServer {
           targetProvider,
           tried,
           avoid,
+          // A retry is not a move: the turn already began on the first try.
+          tried.size ? { ...(requestedModel ? { model: requestedModel } : {}) } : pickContext,
         );
       } catch (err) {
         if (!(err instanceof NoProviderAccountError || err instanceof NoEligibleAccountError)) throw err;
@@ -742,7 +765,7 @@ export class ProxyServer {
         isLast
           ? undefined
           : (status: number) =>
-              RETRYABLE.has(status) && this.canTryAnother(targetProvider, tried, pathname),
+              RETRYABLE.has(status) && this.canTryAnother(targetProvider, tried, pathname, requestedModel),
         // Known with the headers: the token table may meet this request id before it is done.
         (early) => {
           if (early.requestId) this.requestLog?.bind(early.requestId, accountId);
@@ -760,6 +783,7 @@ export class ProxyServer {
         ...(heldOn ? { after: heldOn } : {}),
         ...(overflow ? { overflow: true } : {}),
         ...(selection.boundWaiting ? { boundWaiting: selection.boundWaiting } : {}),
+        ...(selection.moved && selection.from ? { moved: selection.moved, from: selection.from } : {}),
       };
       const tokens = outcome.tokens;
       const cost = tokens
@@ -797,11 +821,11 @@ export class ProxyServer {
           ? { note: "extra-usage" }
           : outcome.failure
             ? { note: outcome.failure }
-            : coldMove
-              ? { note: "cold-move" }
+            : selection.moved && selection.moved !== "limit"
+              ? { note: `${selection.moved}-move` }
               : {}),
       });
-      this.applyOutcome(accountId, routeKey, outcome);
+      this.applyOutcome(accountId, routeKey, outcome, modelFamily(requestedModel));
       if (outcome.held && outcome.failure === "refused") {
         // Every account would answer the same: tell the client, and keep the accounts in.
         sendJsonError(
@@ -889,11 +913,12 @@ export class ProxyServer {
     provider: ProxyProvider,
     tried: ReadonlySet<string>,
     pathname: string,
+    model?: string,
   ): boolean {
     const { accounts, usageMap } = this.usageProvider();
     const usable = accounts.filter((a) => this.servesRoute(a, pathname));
     try {
-      this.router.selectAccount(undefined, usable, usageMap, provider, tried);
+      this.router.selectAccount(undefined, usable, usageMap, provider, tried, undefined, model ? { model } : {});
       return true;
     } catch {
       return false;
@@ -978,7 +1003,13 @@ export class ProxyServer {
    * - a permission refusal moves only this session (the account lacks what it asked for);
    * - an overload keeps the account out for seconds, and its sessions stay bound.
    */
-  private applyOutcome(accountId: string, sessionKey: string | undefined, outcome: UpstreamOutcome): void {
+  private applyOutcome(
+    accountId: string,
+    sessionKey: string | undefined,
+    outcome: UpstreamOutcome,
+    /** The request's model family: a limit scoped to it keeps only that model off the account. */
+    family?: string,
+  ): void {
     const cool = (seconds: number, reason: CooldownReason) =>
       this.router.markUnavailable(
         accountId,
@@ -991,13 +1022,22 @@ export class ProxyServer {
         const untilReset = outcome.limitResetsAt
           ? Math.ceil((outcome.limitResetsAt - Date.now()) / 1000)
           : undefined;
-        cool(
-          Math.max(
-            untilReset ?? 0,
-            outcome.retryAfterSeconds ?? (untilReset ? 0 : DEFAULT_RATE_LIMIT_COOLDOWN_S),
-          ),
-          "limit",
+        const seconds = Math.max(
+          untilReset ?? 0,
+          outcome.retryAfterSeconds ?? (untilReset ? 0 : DEFAULT_RATE_LIMIT_COOLDOWN_S),
         );
+        if (outcome.limitScope === "model" && family) {
+          // Only this model's own limit (weekly Fable, Opus) is spent: the account's other
+          // models keep serving, and only this session, which asks for the model, moves.
+          this.router.markModelUnavailable(
+            accountId,
+            family,
+            Math.min(MAX_COOLDOWN_S, Math.max(MIN_COOLDOWN_S, seconds)) * 1000,
+          );
+          if (sessionKey) this.sessionCache.evictSession(sessionKey);
+          break;
+        }
+        cool(seconds, "limit");
         this.sessionCache.evictAccount(accountId);
         break;
       }

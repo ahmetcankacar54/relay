@@ -1,6 +1,7 @@
 import type {
   Account,
   AccountUsage,
+  ModelWindow,
   UsageIssue,
   UsageWindow,
 } from "../../shared/types";
@@ -10,6 +11,8 @@ import type { RefreshUsageCredential } from "./usage-refresh";
 import type { ProviderUsageResult } from "./provider-usage";
 
 type Json = Record<string, any>;
+/** Model families a limit can be scoped to, as they appear in usage keys and model ids. */
+const MODEL_FAMILIES = ["fable", "opus", "sonnet", "haiku"];
 export function parseUsage(
   value: unknown,
 ): Pick<
@@ -62,27 +65,75 @@ export function parseUsage(
         return []; // A malformed model window must not fail the whole read.
       }
       if (!window) return [];
-      const label = key
-        .replace(/^(?:five_hour|seven_day)_/, "")
+      const suffix = key.replace(/^(?:five_hour|seven_day)_/, "");
+      const label = suffix
         .split("_")
         .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
         .join(" ");
+      // `seven_day_opus` and the like name a model; `seven_day_oauth_apps` a kind of client.
+      const model = MODEL_FAMILIES.includes(suffix) ? suffix : undefined;
       return [
         {
           key,
           label,
+          ...(model ? { model } : {}),
           usedPercent: window.usedPercent,
           ...(window.resetsAt ? { resetsAt: window.resetsAt } : {}),
         },
       ];
     })
     .sort((a, b) => a.key.localeCompare(b.key));
+  // Newer answers also list the limits in `limits`. A weekly limit scoped to one model (Fable,
+  // seen 2026-11-14) comes only there: `kind: "weekly_scoped"` with the model's display name,
+  // and its share of the week in `weekly_scoped_shares`.
+  for (const scoped of scopedLimits(root)) {
+    const known = modelWindows.find((window) => window.key === scoped.key);
+    if (known) known.model ??= scoped.model;
+    else modelWindows.push(scoped);
+  }
+  modelWindows.sort((a, b) => a.key.localeCompare(b.key));
+  const scopedFull = modelWindows.some((window) => window.model && window.usedPercent >= 100);
   return {
     fiveHour,
     sevenDay,
     ...(modelWindows.length ? { modelWindows } : {}),
-    ...(otherLimitReached ? { otherLimitReached } : {}),
+    ...(otherLimitReached || scopedFull ? { otherLimitReached: true } : {}),
   };
+}
+
+/**
+ * The model-scoped limits of a usage answer's `limits` list, as model windows keyed like the
+ * older fields (`seven_day_fable`). A malformed entry is skipped, never fatal.
+ */
+function scopedLimits(root: Json): ModelWindow[] {
+  if (!Array.isArray(root.limits)) return [];
+  const shares = Array.isArray(root.weekly_scoped_shares) ? root.weekly_scoped_shares : [];
+  return root.limits.flatMap((entry: unknown, index: number): ModelWindow[] => {
+    if (!entry || typeof entry !== "object") return [];
+    const limit = entry as Json;
+    const name = limit.scope?.model?.display_name;
+    if (typeof name !== "string" || !name.trim()) return [];
+    const percent = limit.percent;
+    if (typeof percent !== "number" || !Number.isFinite(percent) || percent < 0 || percent > 100) return [];
+    const model = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40);
+    if (!model) return [];
+    const weekly = limit.group === "weekly" || /weekly/.test(String(limit.kind ?? ""));
+    const reset =
+      typeof limit.resets_at === "string" && Number.isFinite(Date.parse(limit.resets_at))
+        ? new Date(limit.resets_at).toISOString()
+        : undefined;
+    const share = shares.find((s: Json) => s && s.limit_index === index)?.allowance_percent_of_weekly;
+    return [
+      {
+        key: `${weekly ? "seven_day" : "five_hour"}_${model}`,
+        label: name.trim().slice(0, 40),
+        model,
+        usedPercent: percent,
+        ...(reset ? { resetsAt: reset } : {}),
+        ...(typeof share === "number" && share > 0 && share <= 100 ? { weeklyShare: share } : {}),
+      },
+    ];
+  });
 }
 export function retryTime(header: string | null, now: number) {
   const seconds = header && /^\d+(\.\d+)?$/.test(header) ? Number(header) : NaN;
@@ -348,10 +399,17 @@ export class UsageManager {
    * per-model windows) stays as read, and the reads keep their own schedule. History gets a
    * sample when a whole percent moved, at most once a minute.
    */
-  observe(id: string, live: { fiveHour?: UsageWindow; sevenDay?: UsageWindow }): void {
+  observe(
+    id: string,
+    live: {
+      fiveHour?: UsageWindow;
+      sevenDay?: UsageWindow;
+      models?: { model: string; weekly: boolean; usedPercent: number; resetsAt?: string }[];
+    },
+  ): void {
     const account = this.store.state.accounts.find((a) => a.id === id);
     if (!account || (account.provider ?? "claude") !== "claude" || !this.source(account)) return;
-    if (!live.fiveHour && !live.sevenDay) return;
+    if (!live.fiveHour && !live.sevenDay && !live.models?.length) return;
     if (this.identities.has(id) && this.identities.get(id) !== identityKey(account)) return;
     const at = new Date(this.now()).toISOString();
     const next: AccountUsage = {
@@ -364,6 +422,20 @@ export class UsageManager {
       ...(live.fiveHour ? { fiveHour: { ...live.fiveHour } } : {}),
       ...(live.sevenDay ? { sevenDay: { ...live.sevenDay } } : {}),
     };
+    // A model's own window as the answer reported it replaces the read one of that model.
+    if (live.models?.length) {
+      const windows = [...(next.modelWindows ?? [])].map((w) => ({ ...w }));
+      for (const reported of live.models) {
+        const key = `${reported.weekly ? "seven_day" : "five_hour"}_${reported.model}`;
+        const known = windows.find((w) => w.key === key) ?? windows.find((w) => w.model === reported.model && w.key.startsWith(reported.weekly ? "seven_day" : "five_hour"));
+        const patch = { usedPercent: reported.usedPercent, ...(reported.resetsAt ? { resetsAt: reported.resetsAt } : {}) };
+        if (known) Object.assign(known, patch);
+        else windows.push({ key, label: reported.model.charAt(0).toUpperCase() + reported.model.slice(1), model: reported.model, ...patch });
+      }
+      next.modelWindows = windows.sort((a, b) => a.key.localeCompare(b.key));
+      if (windows.some((w) => w.usedPercent >= 100)) next.otherLimitReached = true;
+      else delete next.otherLimitReached;
+    }
     // Fresh windows answer what a failed read could not.
     delete next.issue;
     delete next.retryAt;
