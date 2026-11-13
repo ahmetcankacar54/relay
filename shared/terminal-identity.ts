@@ -72,6 +72,11 @@ export interface TerminalStatus {
   current?: TerminalCurrent;
   saved: TerminalSaved[];
   last?: TerminalOutcome;
+  /**
+   * Claude Code is connected to Relay's gateway: its requests use the account the gateway picks
+   * for each one, and the sign-in above is used only while Relay is not running.
+   */
+  viaGateway?: boolean;
 }
 
 /** An account's identities that a terminal sign-in can belong to: its Desktop one and its own. */

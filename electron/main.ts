@@ -1043,6 +1043,8 @@ else {
       // So does the terminal's Claude Code sign-in; macOS only. Checked once at start, which links
       // a terminal already signed in to one of the accounts.
       desktop.terminal = macTerminalPorts();
+      // Bound to the running gateway, Claude Code's requests do not use the terminal sign-in.
+      desktop.gatewayBound = () => !!proxyServer && !!proxySettings().clientBindings?.["claude-code"];
       // A sign-in made for the terminal in a scratch folder: kept for the account, and the
       // Keychain item the CLI made for that folder goes with the folder.
       service.terminalAuth.browser = service.auth.browser;
@@ -1722,10 +1724,18 @@ const extensionNoticeShown = new Set<string>();
  */
 function notifyExtensionLeft(target: Account) {
   const outcome = desktop.extensionOutcome;
+  // Every outcome that leaves the extension elsewhere, not only a running browser: the target
+  // has no pair saved ("saved", "no-saved-login"), its owner is unclear, or the step failed.
+  // Before 2026-11-14 a switch to an account without a pair left it behind without a word.
+  const quiet = new Set(["off", "not-installed", "already-there", "not-opened", "choose-instance"]);
+  const left =
+    !!outcome &&
+    (outcome.result === "saved" ||
+      ((outcome.result === "skipped" || outcome.result === "failed") && !quiet.has(outcome.reason ?? "")));
   if (
     !Notification.isSupported() ||
-    outcome?.result !== "skipped" ||
-    (outcome.reason !== "guide-mismatch" && outcome.reason !== "browser-running") ||
+    !outcome ||
+    !left ||
     Date.now() - Date.parse(outcome.at) > 5 * 60_000 ||
     extensionNoticeShown.has(target.id)
   )
