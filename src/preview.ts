@@ -631,6 +631,7 @@ const previewProxy: {
   order: string[];
   excluded: string[];
   bound: Partial<Record<ProxyClientId, boolean>>;
+  subagentOverflow: boolean;
 } = {
   running: scenario === "proxy-waiting",
   port: 8317,
@@ -642,6 +643,7 @@ const previewProxy: {
   excluded: [],
   // `?scenario=proxy-waiting` also shows Claude Code bound, as the Overview's gateway line needs.
   bound: scenario === "proxy-waiting" ? { "claude-code": true } : {},
+  subagentOverflow: false,
 };
 const minutesTo = (iso: string | null | undefined) =>
   iso ? Math.max(0, Math.ceil((Date.parse(iso) - Date.now()) / 60_000)) : undefined;
@@ -660,7 +662,8 @@ const previewRecent = (): ProxyRequestLog[] => {
   const cc = { client: "claude-code" };
   return [
     { at: now - 4_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, affinity: true, ...cc, requestClass: "main", ms: 6_210, tokens: { input: 4, cacheRead: 182_400, cacheWrite: 1_210, output: 860 } },
-    { at: now - 31_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "subagent", ms: 3_480, tokens: { input: 12, cacheWrite: 24_900, output: 412 } },
+    { at: now - 31_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "subagent", ms: 3_480, tokens: { input: 12, cacheWrite: 24_900, output: 412 }, cost: 0.0998 },
+    { at: now - 31_500, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "main", ms: 7_900, tokens: { input: 4, cacheWrite: 96_400, output: 300 }, cost: 0.583, miss: { reason: "account" as const, tokens: 94_000 } },
     { at: now - 32_000, accountId: first, provider: "claude", model: "claude-sonnet-4-5", status: 429, failover: true, ...cc, requestClass: "subagent", ms: 610, note: "limit" },
     { at: now - 70_000, accountId: first, provider: "claude", model: "claude-opus-4-5", status: 429, client: "curl", ms: 220, note: "refused", error: "Error" },
     { at: now - 95_000, accountId: first, provider: "claude", model: "claude-haiku-4-5", status: 200, affinity: true, client: "agent-sdk", requestClass: "auxiliary", ms: 940, tokens: { input: 1_800, output: 24 } },
@@ -707,10 +710,29 @@ const previewProxyStatus = (): ProxyStatus => ({
       ...(previewProxy.running && scenario === "proxy-waiting" && i === 2
         ? { extraUsage: { kind: "billed" as const, minutesAgo: 3 } }
         : {}),
-      ...(previewProxy.running && i === 1 ? { live: true } : {}),
+      ...(previewProxy.running && i === 1 ? { live: true, fullAt: Date.now() + 95 * 60_000 } : {}),
     };
   }),
   recent: previewRecent(),
+  ...(previewProxy.subagentOverflow ? { subagentOverflow: true } : {}),
+  ...(previewProxy.running && accounts.length
+    ? {
+        sessions: [
+          { id: "6cf63d7f", accountId: accounts[1]?.id ?? accounts[0].id, model: "claude-sonnet-4-5", lastAt: Date.now() - 4_000, prefixTokens: 183_600, ttlMs: 3_600_000, requests: 48, subagents: 3, misses: 0 },
+          { id: "a010e568", accountId: accounts[0].id, model: "claude-sonnet-4-5", lastAt: Date.now() - 18 * 60_000, prefixTokens: 96_200, ttlMs: 3_600_000, requests: 12, subagents: 0, misses: 1, lastMiss: { at: Date.now() - 40 * 60_000, reason: "account" as const, tokens: 94_000 } },
+          { id: "1d3cf2c3", accountId: accounts[0].id, model: "claude-haiku-4-5", lastAt: Date.now() - 75 * 60_000, prefixTokens: 41_000, ttlMs: 300_000, requests: 3, subagents: 0, misses: 0 },
+        ],
+        classShare: [
+          { requestClass: "main", requests: 61, tokens: 4_200_000, cost: 6.12 },
+          { requestClass: "subagent", requests: 44, tokens: 1_900_000, cost: 3.4 },
+          { requestClass: "auxiliary", requests: 22, tokens: 80_000, cost: 0.09 },
+          { requestClass: "compaction", requests: 1, tokens: 160_000, cost: 0.31 },
+        ],
+        ...(scenario === "proxy-waiting"
+          ? { alarms: [{ id: "f5601bf9", sessionId: "6cf63d7f", accountId: accounts[1]?.id ?? accounts[0].id, since: Date.now() - 22 * 60_000, lastAt: Date.now() - 30_000, requests: 312, subagents: 34 }] }
+          : {}),
+      }
+    : {}),
   tailscaleAddress: "100.101.12.34",
   clients: (["claude-code", "codex"] as const).map((id) => ({
     id,
@@ -734,6 +756,7 @@ export const previewApi: RelayAPI = {
     if (input.affinityTtlSeconds !== undefined) previewProxy.affinityTtlSeconds = input.affinityTtlSeconds;
     if (input.accountOrder !== undefined) previewProxy.order = input.accountOrder;
     if (input.excludedAccountIds !== undefined) previewProxy.excluded = input.excludedAccountIds;
+    if (input.subagentOverflow !== undefined) previewProxy.subagentOverflow = input.subagentOverflow;
     return previewProxyStatus();
   },
   proxyBindClient: async (id) => {

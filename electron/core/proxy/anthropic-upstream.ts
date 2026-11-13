@@ -46,6 +46,7 @@ export function createAnthropicUsageExtractor(): UsageExtractor {
       take("output", usage.output_tokens);
       take("cacheRead", usage.cache_read_input_tokens);
       take("cacheWrite", usage.cache_creation_input_tokens);
+      take("cacheWrite1h", usage.cache_creation?.ephemeral_1h_input_tokens);
     },
     result: () => (seen ? tally : undefined),
   };

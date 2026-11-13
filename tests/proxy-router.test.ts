@@ -309,6 +309,6 @@ test("the move is recorded beside the registry, which stays readable by older ve
   );
   const main = readFileSync(new URL("../electron/main.ts", import.meta.url), "utf8");
   // Saving the settings keeps the revision, or the next start would move a chosen lifetime again.
-  assert.match(main, /const \{ accountOrder, excludedAccountIds, clientBindings, affinityRevision, \.\.\.base \} = config;/);
+  assert.match(main, /const \{ accountOrder, excludedAccountIds, clientBindings, affinityRevision, subagentOverflow, \.\.\.base \} = config;/);
   assert.match(main, /affinityRevision !== undefined \? \{ affinityRevision \} : \{\}/);
 });

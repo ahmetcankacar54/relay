@@ -12,6 +12,8 @@ export interface TokenTally {
   output?: number;
   cacheRead?: number;
   cacheWrite?: number;
+  /** The 1-hour part of `cacheWrite`; the rest was written for 5 minutes. */
+  cacheWrite1h?: number;
 }
 
 /** Collects token usage out of the parsed events (or the whole JSON body) of one response. */

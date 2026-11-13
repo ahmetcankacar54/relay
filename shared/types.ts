@@ -26,8 +26,16 @@ import type { DesktopContinuationSnapshot } from "../electron/core/desktop-conti
 import type { DraftSummary } from "../electron/core/draft-vault";
 export type { DraftSummary } from "../electron/core/draft-vault";
 import type { Destination, PageId, PageIntent } from "../src/app/routes";
-import { DEFAULT_PROXY_CONFIG, type ProxyClientId, type ProxyConfig, type ProxyRequestLog } from "./proxy-types";
-export type { ProxyClientId, ProxyRequestLog } from "./proxy-types";
+import {
+  DEFAULT_PROXY_CONFIG,
+  type ProxyClassShare,
+  type ProxyClientId,
+  type ProxyConfig,
+  type ProxyLoopAlarm,
+  type ProxyRequestLog,
+  type ProxySessionView,
+} from "./proxy-types";
+export type { ProxyClassShare, ProxyClientId, ProxyLoopAlarm, ProxyRequestLog, ProxySessionView } from "./proxy-types";
 export type AccountKind = "personal" | "work";
 export type AccountPlan = "unknown" | "pro" | "max5" | "max20" | "team";
 export type AccountProvider = "claude" | "codex" | "antigravity" | "gemini";
@@ -317,6 +325,8 @@ export interface ProxyAccountStatus {
   waiting?: { reason: "limit" | "auth" | "transient"; minutes: number };
   /** Its percents come from an answer through the gateway within the last ten minutes. */
   live?: boolean;
+  /** When its 5-hour window fills at the last half hour's pace, if before it resets (ms). */
+  fullAt?: number;
   /** Its latest answer was billed as extra usage (`billed`), or a request needed it (`required`). */
   extraUsage?: { kind: "billed" | "required"; minutesAgo: number };
 }
@@ -357,6 +367,14 @@ export interface ProxyStatus {
   tailscaleAddress?: string;
   /** The client tools and whether each is pointed at the gateway. */
   clients?: ProxyClientStatus[];
+  /** Fresh subagents go to another account than their session's. */
+  subagentOverflow?: boolean;
+  /** The sessions heard from most recently, with their prompt caches. */
+  sessions?: ProxySessionView[];
+  /** Prompts that made far more requests or subagents than usual, lately. */
+  alarms?: ProxyLoopAlarm[];
+  /** Today's gateway traffic by Claude Code's request class. */
+  classShare?: ProxyClassShare[];
 }
 /** Local session discovered on disk for 1-click Zero-Friction onboarding. */
 export interface DetectedProviderSession {
@@ -567,6 +585,8 @@ export interface RelayAPI {
     accountOrder?: string[];
     /** Accounts the gateway must not route to. */
     excludedAccountIds?: string[];
+    /** Fresh subagents go to another account than their session's. */
+    subagentOverflow?: boolean;
   }): Promise<ProxyStatus>;
   /** Replaces the client key (`relay-sec-…`); the old key stops working at once. Bound clients get the new one. */
   proxyRegenerateKey(): Promise<ProxyStatus>;

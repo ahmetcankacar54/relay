@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ProxyRequestLog } from "../../../shared/proxy-types";
+import type { ProxyClassShare, ProxyRequestLog } from "../../../shared/proxy-types";
 
 /** How long the gateway's requests are kept: past the token table's own rescans of recent days. */
 export const REQUEST_LOG_KEEP_DAYS = 35;
@@ -40,12 +40,17 @@ export function cleanEntry(raw: unknown): ProxyRequestLog | undefined {
     if (value !== undefined) (entry as unknown as Record<string, unknown>)[key] = value;
   }
   if (row.failover === true) entry.failover = true;
+  if (typeof row.cost === "number" && Number.isFinite(row.cost) && row.cost >= 0)
+    entry.cost = Math.round(row.cost * 1e6) / 1e6;
+  const miss = row.miss as { reason?: unknown; tokens?: unknown } | undefined;
+  if (miss && typeof miss === "object" && ["account", "model", "expired", "unknown"].includes(String(miss.reason)))
+    entry.miss = { reason: miss.reason as NonNullable<ProxyRequestLog["miss"]>["reason"], tokens: count(miss.tokens) ?? 0 };
   if (row.affinity === true) entry.affinity = true;
   const ms = count(row.ms);
   if (ms !== undefined) entry.ms = ms;
   if (row.tokens && typeof row.tokens === "object") {
     const tokens: NonNullable<ProxyRequestLog["tokens"]> = {};
-    for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) {
+    for (const key of ["input", "output", "cacheRead", "cacheWrite", "cacheWrite1h"] as const) {
       const value = count((row.tokens as Record<string, unknown>)[key]);
       if (value) tokens[key] = value;
     }
@@ -63,6 +68,8 @@ export function cleanEntry(raw: unknown): ProxyRequestLog | undefined {
 export class GatewayRequestLog {
   private byRequestId = new Map<string, string>();
   private latest: ProxyRequestLog[] = [];
+  /** Today's answered requests by class, for the local day in `day`. */
+  private today: { day: string; byClass: Map<string, ProxyClassShare> } = { day: "", byClass: new Map() };
 
   constructor(
     private readonly file: string,
@@ -83,7 +90,38 @@ export class GatewayRequestLog {
     for (const entry of entries)
       if (entry.requestId && entry.accountId) this.byRequestId.set(entry.requestId, entry.accountId);
     this.latest = entries.slice(-(this.options.feedSize ?? 40));
+    this.today = { day: this.dayOf(this.now()), byClass: new Map() };
+    for (const entry of entries) this.count(entry);
     return this.latest.slice();
+  }
+
+  /** Today's answered requests by Claude Code's request class, the costliest first. */
+  todayByClass(): ProxyClassShare[] {
+    if (this.today.day !== this.dayOf(this.now())) this.today = { day: this.dayOf(this.now()), byClass: new Map() };
+    return [...this.today.byClass.values()].map((share) => ({ ...share })).sort((a, b) => b.cost - a.cost || b.tokens - a.tokens);
+  }
+
+  /** The local calendar day a time falls on. */
+  private dayOf(at: number): string {
+    const date = new Date(at);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  /** Adds an answered request to today's shares, when it is today's. */
+  private count(entry: ProxyRequestLog): void {
+    if (entry.status >= 400 || !entry.tokens) return;
+    const day = this.dayOf(entry.at);
+    if (day !== this.today.day) {
+      if (day < this.today.day) return;
+      this.today = { day, byClass: new Map() };
+    }
+    const key = entry.requestClass ?? "other";
+    const share = this.today.byClass.get(key) ?? { requestClass: key, requests: 0, tokens: 0, cost: 0 };
+    const t = entry.tokens;
+    share.requests += 1;
+    share.tokens += (t.input ?? 0) + (t.output ?? 0) + (t.cacheRead ?? 0) + (t.cacheWrite ?? 0);
+    share.cost = Math.round((share.cost + (entry.cost ?? 0)) * 1e6) / 1e6;
+    this.today.byClass.set(key, share);
   }
 
   /** The newest entries, newest last. */
@@ -106,6 +144,7 @@ export class GatewayRequestLog {
     const clean = cleanEntry(entry);
     if (!clean) return;
     if (clean.requestId && clean.accountId) this.byRequestId.set(clean.requestId, clean.accountId);
+    this.count(clean);
     this.latest.push(clean);
     const size = this.options.feedSize ?? 40;
     if (this.latest.length > size) this.latest.splice(0, this.latest.length - size);

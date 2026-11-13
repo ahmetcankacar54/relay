@@ -21,6 +21,12 @@ export interface ProxyConfig {
   /** Accounts left out of the pool: the gateway never routes to them. */
   excludedAccountIds?: string[];
   /**
+   * A session's fresh subagents go to one account other than the session's: they start a prompt
+   * of their own, so the move costs no cache, and the session's account lasts longer. Off unless
+   * chosen.
+   */
+  subagentOverflow?: boolean;
+  /**
    * The values a bound client's settings held before Relay pointed it at the gateway, by client,
    * so unbinding puts them back. `null` means the key was not there.
    */
@@ -51,10 +57,55 @@ export interface ProxyRequestLog {
   client?: string;
   /** Claude Code's own label for the request: main, subagent, compaction, auxiliary, … */
   requestClass?: string;
-  /** The tokens the answer reported. */
-  tokens?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+  /** The tokens the answer reported; `cacheWrite1h` is the 1-hour part of `cacheWrite`. */
+  tokens?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cacheWrite1h?: number };
+  /** What the answer would cost on the API, in USD, when its model has a price. */
+  cost?: number;
   /** An error answer's own message, shortened. */
   error?: string;
+  /** The session's prompt cache was written again: why, and about how many tokens. */
+  miss?: { reason: CacheMissReason; tokens: number };
+}
+
+/** Why a session's cached prompt was written again instead of read. */
+export type CacheMissReason = "account" | "model" | "expired" | "unknown";
+
+/** A session through the gateway, as its prompt cache stands. */
+export interface ProxySessionView {
+  /** The first characters of Claude Code's session id. */
+  id: string;
+  accountId: string;
+  model?: string;
+  lastAt: number;
+  /** The cached prompt's size at the last request, in tokens. */
+  prefixTokens: number;
+  /** How long the cache lives after the last request: an hour or five minutes. */
+  ttlMs: number;
+  requests: number;
+  subagents: number;
+  misses: number;
+  lastMiss?: { at: number; reason: CacheMissReason; tokens: number };
+}
+
+/** One prompt that made far more requests or subagents than a prompt usually does. */
+export interface ProxyLoopAlarm {
+  /** The first characters of Claude Code's prompt id. */
+  id: string;
+  sessionId?: string;
+  accountId?: string;
+  since: number;
+  lastAt: number;
+  requests: number;
+  subagents: number;
+}
+
+/** One request class's share of today's gateway traffic. */
+export interface ProxyClassShare {
+  requestClass: string;
+  requests: number;
+  tokens: number;
+  /** API-price cost in USD, for the classes whose models have a price. */
+  cost: number;
 }
 
 export interface ProxySessionState {

@@ -165,6 +165,8 @@ export function requestDetail(
     ms?: number;
     note?: string;
     tokens?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+    cost?: number;
+    miss?: { reason: string; tokens: number };
   },
   t: T,
   locale: string,
@@ -196,9 +198,93 @@ export function requestDetail(
       parts.push(t(`${amount} çıktı`, `${amount} out`));
     }
   }
+  if (entry.cost !== undefined && entry.cost > 0) parts.push(`≈ ${usd(entry.cost, locale)}`);
+  if (entry.miss) {
+    const amount = compactCount(entry.miss.tokens, locale);
+    const why = t(...(MISS_LABELS[entry.miss.reason] ?? MISS_LABELS.unknown));
+    parts.push(t(`önbellek ıskası (${why}), ~${amount} yeniden yazıldı`, `cache miss (${why}), ~${amount} written again`));
+  }
   if (entry.note === "refused")
     parts.push(t("limit değil: Anthropic isteği geri çevirdi", "not a limit: Anthropic turned the request down"));
   return parts.join(" · ");
+}
+
+/** Why a session's cache was written again, in words. */
+const MISS_LABELS: Record<string, [string, string]> = {
+  account: ["hesap değişti", "account changed"],
+  model: ["model değişti", "model changed"],
+  expired: ["süresi doldu", "it expired"],
+  unknown: ["istem değişti", "the prompt changed"],
+};
+
+/** An API-price amount, with the locale's decimal mark: three decimals under ten cents. */
+function usd(amount: number, locale: string): string {
+  const digits = amount < 0.095 ? 3 : 2;
+  return `$${amount.toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+/**
+ * Today's gateway traffic by request class, as shares: of the API-price cost when the answers
+ * have one, else of the tokens.
+ */
+export function classShareLine(
+  shares: { requestClass: string; tokens: number; cost: number }[],
+  t: T,
+): string {
+  const byCost = shares.some((share) => share.cost > 0);
+  const total = shares.reduce((sum, share) => sum + (byCost ? share.cost : share.tokens), 0);
+  if (!total) return "";
+  const parts = shares
+    .map((share) => ({ share, part: Math.round(((byCost ? share.cost : share.tokens) / total) * 100) }))
+    .filter(({ part }) => part > 0)
+    .map(({ share, part }) => {
+      const label = CLASS_LABELS[share.requestClass];
+      const name = label ? t(...label) : share.requestClass === "other" ? t("diğer", "other") : share.requestClass;
+      return t(`${name} %${part}`, `${name} ${part}%`);
+    });
+  return byCost
+    ? t(`Bugün, API fiyatıyla: ${parts.join(" · ")}`, `Today, at API prices: ${parts.join(" · ")}`)
+    : t(`Bugün, token olarak: ${parts.join(" · ")}`, `Today, in tokens: ${parts.join(" · ")}`);
+}
+
+/**
+ * A session's prompt cache in words: warm with the minutes it has left, or cold with what
+ * coming back would write again; plus its size, subagents and misses.
+ */
+export function sessionCacheLine(
+  session: {
+    lastAt: number;
+    ttlMs: number;
+    prefixTokens: number;
+    subagents: number;
+    misses: number;
+    lastMiss?: { reason: string };
+  },
+  now: number,
+  t: T,
+  locale: string,
+): { warm: boolean; state: string; detail: string } {
+  const left = session.lastAt + session.ttlMs - now;
+  const warm = left > 0;
+  const size = compactCount(session.prefixTokens, locale);
+  const minutes = Math.max(1, Math.ceil(left / 60_000));
+  const lifetime = session.ttlMs >= 3_600_000 ? t("1 saatlik", "1-hour") : t("5 dakikalık", "5-minute");
+  const parts = [
+    agoLabel(session.lastAt, now, t),
+    warm
+      ? t(`${size} token önbellekte (${lifetime})`, `${size} tokens cached (${lifetime})`)
+      : t(`dönünce ~${size} token yeniden yazılır`, `coming back writes ~${size} tokens again`),
+  ];
+  if (session.subagents) parts.push(t(`${session.subagents} alt ajan`, `${session.subagents} subagents`));
+  if (session.misses) {
+    const why = t(...(MISS_LABELS[session.lastMiss?.reason ?? "unknown"] ?? MISS_LABELS.unknown));
+    parts.push(t(`${session.misses} ıska, son: ${why}`, `${session.misses} misses, last: ${why}`));
+  }
+  return {
+    warm,
+    state: warm ? t(`sıcak · ${minutes} dk`, `warm · ${minutes} min`) : t("soğuk", "cold"),
+    detail: parts.join(" · "),
+  };
 }
 
 const BOUND_NAMES: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex CLI" };

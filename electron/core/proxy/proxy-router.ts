@@ -75,6 +75,16 @@ export function fullUntil(usage: AccountUsage | undefined, now: number): number 
   return until;
 }
 
+/** Past these, an account takes no new session while another has room (better-ccflare's idea). */
+export const SOFT_STOP_FIVE_HOUR = 90;
+export const SOFT_STOP_WEEK = 98;
+
+/** Whether an account read as ready is close enough to a limit to take no new session. */
+export function nearlyFull(usage: AccountUsage | undefined): boolean {
+  if (!usage || usage.status !== "ready") return false;
+  return (usage.fiveHour?.usedPercent ?? 0) >= SOFT_STOP_FIVE_HOUR || (usage.sevenDay?.usedPercent ?? 0) >= SOFT_STOP_WEEK;
+}
+
 export class ProxyRouter {
   readonly sessionCache: ProxySessionCache;
   private strategy: RoutingStrategy;
@@ -147,6 +157,8 @@ export class ProxyRouter {
     usageMap: Record<string, AccountUsage | undefined>,
     targetProvider?: ProxyProvider,
     exclude: ReadonlySet<string> = new Set(),
+    /** An account to leave out of a new pick while another can take it (subagent overflow). */
+    avoid?: string,
   ): RouterSelection {
     const now = this.now();
     const ofProvider = accounts.filter(
@@ -201,8 +213,19 @@ export class ProxyRouter {
       }
     }
 
-    // 2. Select best candidate based on strategy
-    const candidates: ContinuationTargetCandidate[] = eligibleAccounts.map(
+    // 2. Select best candidate based on strategy. A new session starts on an account still well
+    // short of its limits when one is: one started near the limit soon has to move, and moving
+    // writes its whole cache again elsewhere. Strict priority keeps its own order.
+    let pool = eligibleAccounts;
+    if (this.strategy !== "strict-priority") {
+      const roomy = pool.filter((acc) => !nearlyFull(usageMap[acc.id]));
+      if (roomy.length) pool = roomy;
+    }
+    if (avoid) {
+      const others = pool.filter((acc) => acc.id !== avoid);
+      if (others.length) pool = others;
+    }
+    const candidates: ContinuationTargetCandidate[] = pool.map(
       (account) => ({
         account,
         usage: usageMap[account.id],
@@ -215,12 +238,12 @@ export class ProxyRouter {
     } else if (this.strategy === "strict-priority") {
       // An account whose limits were never read counts as usable: it is tried, not skipped.
       selected =
-        eligibleAccounts.find(
+        pool.find(
           (acc) => (remainingPercent(usageMap[acc.id]) ?? 100) > 5,
-        ) ?? eligibleAccounts[0];
+        ) ?? pool[0];
     } else {
       const ranked = rankContinuationTargets(candidates, { now });
-      selected = ranked[0]?.account ?? eligibleAccounts[0];
+      selected = ranked[0]?.account ?? pool[0];
     }
 
     // Update affinity

@@ -143,6 +143,7 @@ import {
   currentAffinityTtl,
   DEFAULT_PROXY_CONFIG,
   type ProxyConfig,
+  type ProxyLoopAlarm,
 } from "../shared/proxy-types";
 import { ProxyServer } from "./core/proxy/proxy-server";
 import { GatewayRequestLog } from "./core/proxy/proxy-request-log";
@@ -1721,6 +1722,20 @@ function notifyExtensionLeft(target: Account) {
  * with it: Relay forgot that login, and Claude's browser tools stay off until the user signs in
  * again. A click opens Settings → Switching, where the reconnect steps are.
  */
+/** A prompt through the gateway went past a loop bound: said once per prompt; a click opens the gateway page. */
+function notifyLoopAlarm(alarm: ProxyLoopAlarm) {
+  if (!Notification.isSupported()) return;
+  const account = service.store.state.accounts.find((a) => a.id === alarm.accountId)?.name;
+  const notice = new Notification({
+    title: say("Bir istem durmadan istek gönderiyor", "A prompt keeps sending requests"),
+    body: say(
+      `${alarm.requests} istek, ${alarm.subagents} alt ajan${account ? ` · ${account}` : ""}. Döngüde olabilir; Claude Code'da Esc ile durdurabilirsin.`,
+      `${alarm.requests} requests, ${alarm.subagents} subagents${account ? ` · ${account}` : ""}. It may be in a loop; Esc in Claude Code stops it.`,
+    ),
+  });
+  notice.on("click", () => openPage("proxy"));
+  notice.show();
+}
 function notifyExtensionBroken(account: Account) {
   if (!Notification.isSupported()) return;
   const notice = new Notification({
@@ -2072,10 +2087,11 @@ const proxySettings = (): ProxyConfig => ({
   ...proxyExtras(),
 });
 const saveProxySettings = (config: ProxyConfig) => {
-  const { accountOrder, excludedAccountIds, clientBindings, affinityRevision, ...base } = config;
+  const { accountOrder, excludedAccountIds, clientBindings, affinityRevision, subagentOverflow, ...base } = config;
   const extras: ProxyExtras = {
     ...(accountOrder ? { accountOrder } : {}),
     ...(excludedAccountIds ? { excludedAccountIds } : {}),
+    ...(subagentOverflow ? { subagentOverflow } : {}),
     ...(affinityRevision !== undefined ? { affinityRevision } : {}),
     ...(clientBindings ? { clientBindings } : {}),
   };
@@ -2131,6 +2147,8 @@ function proxyStatus(): ProxyStatus {
     now: Date.now(),
     error: proxyError,
     recent: proxyServer?.stats.recent() ?? [],
+    ...(proxyServer ? { insights: proxyServer.insights } : {}),
+    classShare: gatewayRequests().todayByClass(),
     tailscaleAddress: tailscaleAddress(),
     clients: clientStatuses(clientTarget(config), config),
     cooldownOf: (id) => proxyServer?.router.cooldownOf(id),
@@ -2220,6 +2238,7 @@ async function startProxy(): Promise<void> {
     onCredentialMissing: (accountId) => renewForGateway(accountId),
     // Every answer says how full the account's windows are: newer than the last read.
     onLiveLimits: (accountId, live) => usage?.observe(accountId, live),
+    onLoopAlarm: (alarm) => notifyLoopAlarm(alarm),
     requestLog: gatewayRequests(),
     // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
     // Only the accounts left in the pool, in its order (strict priority reads the order).
@@ -2267,6 +2286,7 @@ async function applyProxyConfig(next: ProxyConfig): Promise<void> {
       routingStrategy: next.routingStrategy,
       affinityTtlSeconds: next.affinityTtlSeconds,
       apiKey: next.apiKey,
+      subagentOverflow: next.subagentOverflow === true,
     });
     return;
   }
