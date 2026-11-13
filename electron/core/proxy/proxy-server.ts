@@ -18,7 +18,7 @@ import {
   type RouterSelection,
 } from "./proxy-router";
 import { ProxySessionCache } from "./proxy-session-cache";
-import { ProxyStats } from "./proxy-stats";
+import { ProxyStats, type RequestLogSink } from "./proxy-stats";
 import { AnthropicUpstream } from "./anthropic-upstream";
 import { CodexUpstream } from "./codex-upstream";
 import { WebSocketBridge, rejectUpgrade } from "./websocket-bridge";
@@ -26,6 +26,8 @@ import {
   BadRequestError,
   parseRequestUrl,
   sendJsonError,
+  type ForwardSpec,
+  type LiveLimits,
   type UpstreamOutcome,
 } from "./upstream-common";
 
@@ -37,6 +39,25 @@ export type UsageProvider = () => {
   accounts: Account[];
   usageMap: Record<string, AccountUsage | undefined>;
 };
+
+/**
+ * Who sent a request, from its user agent: "claude-code" for Claude Code itself, "agent-sdk" for
+ * an app built on the Claude Agent SDK (T3 Code, for one), "codex", or the product it names.
+ */
+export function clientOf(headers: http.IncomingHttpHeaders): string | undefined {
+  const agent = String(headers["user-agent"] ?? "");
+  const claude = /^claude-cli\/\S+(?:\s+\(([^)]*)\))?/i.exec(agent);
+  if (claude) return /\bsdk-(?:ts|py)\b/i.test(claude[1] ?? "") ? "agent-sdk" : "claude-code";
+  if (/codex/i.test(agent)) return "codex";
+  return /^([A-Za-z][\w.-]{0,39})\//.exec(agent)?.[1]?.toLowerCase();
+}
+
+/** Claude Code's label for a request (`CLAUDE_CODE_GATEWAY_HINT_HEADERS`): main, subagent, … */
+function requestClassOf(headers: http.IncomingHttpHeaders): string | undefined {
+  const value = headers["x-claude-code-request-class"];
+  const text = Array.isArray(value) ? value[0] : value;
+  return text && /^[a-z][a-z_-]{0,29}$/i.test(text) ? text.toLowerCase() : undefined;
+}
 
 /** The largest request body the gateway buffers: Anthropic itself caps requests at 32 MB. */
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
@@ -90,6 +111,8 @@ export class ProxyServer {
   private usageProvider: UsageProvider;
   private onCredentialRejected?: (accountId: string) => void;
   private onCredentialMissing?: (accountId: string) => void;
+  private onLiveLimits?: (accountId: string, live: LiveLimits) => void;
+  private requestLog?: RequestLogSink & { bind(requestId: string, accountId: string): void };
   private hubFetch?: typeof fetch;
 
   constructor(options: {
@@ -101,6 +124,10 @@ export class ProxyServer {
     onCredentialRejected?: (accountId: string) => void;
     /** No usable token could be read (none saved, or expired): the host may renew it. */
     onCredentialMissing?: (accountId: string) => void;
+    /** An answer reported the account's windows (Anthropic's rate-limit headers). */
+    onLiveLimits?: (accountId: string, live: LiveLimits) => void;
+    /** Keeps the request feed across restarts and knows which account served a request id. */
+    requestLog?: RequestLogSink & { bind(requestId: string, accountId: string): void };
     now?: () => number;
     /** Sends the usage dashboards' provider requests (tests replace it). */
     hubFetch?: typeof fetch;
@@ -119,6 +146,8 @@ export class ProxyServer {
     this.usageProvider = options.usageProvider;
     this.onCredentialRejected = options.onCredentialRejected;
     this.onCredentialMissing = options.onCredentialMissing;
+    this.onLiveLimits = options.onLiveLimits;
+    this.requestLog = options.requestLog;
     this.hubFetch = options.hubFetch;
 
     this.sessionCache = new ProxySessionCache({
@@ -130,7 +159,7 @@ export class ProxyServer {
       sessionCache: this.sessionCache,
       now: options.now,
     });
-    this.stats = new ProxyStats();
+    this.stats = new ProxyStats(options.requestLog);
     this.anthropicUpstream = new AnthropicUpstream();
     this.codexUpstream = new CodexUpstream();
     this.wsBridge = new WebSocketBridge();
@@ -336,6 +365,14 @@ export class ProxyServer {
       return;
     }
 
+    // Claude Code checks it can reach its API here before it starts; Anthropic answers it
+    // without a key, and so does the gateway.
+    if ((req.method === "GET" || req.method === "HEAD") && pathname === "/api/hello") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(req.method === "HEAD" ? undefined : JSON.stringify({ message: "hello" }));
+      return;
+    }
+
     // Liveness only: it says nothing about the accounts, so it needs no key.
     if (
       (req.method === "GET" || req.method === "HEAD") &&
@@ -522,6 +559,10 @@ export class ProxyServer {
     const sessionKey = this.extractSessionKey(req, parsed);
     const requestedModel =
       typeof parsed?.model === "string" ? parsed.model.toLowerCase() : "";
+    // Who asked, and Claude Code's label for the request, for the request log.
+    const client = clientOf(req.headers);
+    const requestClass = requestClassOf(req.headers);
+    const about = { ...(client ? { client } : {}), ...(requestClass ? { requestClass } : {}) };
     const headerProvider = String(
       req.headers["x-relay-provider"] ?? "",
     ).toLowerCase();
@@ -566,21 +607,21 @@ export class ProxyServer {
         }
         // Nothing was forwarded and the only accounts left could not be signed in with.
         if (lastHeld === undefined && unreadable.length) {
-          this.signInNeeded(res, targetProvider, requestedModel, unreadable);
+          this.signInNeeded(res, targetProvider, requestedModel, unreadable, about);
           return;
         }
         if (err instanceof NoProviderAccountError && tried.size === 0) {
-          this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 503, note: "no-account" });
+          this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 503, note: "no-account", ...about });
           sendJsonError(res, 503, "api_error", err.message);
           return;
         }
         if (err instanceof NoEligibleAccountError && tried.size === 0) {
           if (err.signInOnly) {
-            this.signInNeeded(res, targetProvider, requestedModel, []);
+            this.signInNeeded(res, targetProvider, requestedModel, [], about);
             return;
           }
           this.stats.recordError(err.message);
-          this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 429, note: "all-limited" });
+          this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 429, note: "all-limited", ...about });
           sendJsonError(
             res,
             429,
@@ -593,7 +634,7 @@ export class ProxyServer {
           return;
         }
         // Every other account was tried or is cooling down: the last answer was already held.
-        this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: lastHeld ?? 429, note: "all-limited" });
+        this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: lastHeld ?? 429, note: "all-limited", ...about });
         sendJsonError(res, lastHeld ?? 429, lastHeld === 401 || lastHeld === 403 ? "authentication_error" : "rate_limit_error", "Every account for this provider is limited or unavailable");
         return;
       }
@@ -613,6 +654,8 @@ export class ProxyServer {
       }
       const isLast = attempt === MAX_ATTEMPTS;
       attempt += 1;
+      const accountId = selection.account.id;
+      const started = Date.now();
       const outcome = await this.forwardTo(
         selection,
         route,
@@ -624,19 +667,39 @@ export class ProxyServer {
           ? undefined
           : (status: number) =>
               RETRYABLE.has(status) && this.canTryAnother(targetProvider, tried, pathname),
+        // Known with the headers: the token table may meet this request id before it is done.
+        (early) => {
+          if (early.requestId) this.requestLog?.bind(early.requestId, accountId);
+          if (early.live) this.onLiveLimits?.(accountId, early.live);
+        },
       );
       if (!outcome) return;
       this.stats.recordLog({
-        at: Date.now(),
-        accountId: selection.account.id,
+        at: started,
+        accountId,
         provider: targetProvider,
         model: requestedModel,
         status: outcome.statusCode,
+        ms: Date.now() - started,
+        ...about,
+        ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
+        ...(outcome.tokens ? { tokens: outcome.tokens } : {}),
+        ...(outcome.errorMessage ? { error: outcome.errorMessage } : {}),
         ...(outcome.held ? { failover: true } : {}),
         ...(selection.sessionAffinityHit ? { affinity: true } : {}),
         ...(outcome.extraUsage ? { note: "extra-usage" } : outcome.failure ? { note: outcome.failure } : {}),
       });
-      this.applyOutcome(selection.account.id, sessionKey, outcome);
+      this.applyOutcome(accountId, sessionKey, outcome);
+      if (outcome.held && outcome.failure === "refused") {
+        // Every account would answer the same: tell the client, and keep the accounts in.
+        sendJsonError(
+          res,
+          429,
+          "rate_limit_error",
+          `Anthropic refused this request${outcome.errorMessage ? ` ("${outcome.errorMessage}")` : ""} although none of the account's limits is spent. Requests that do not come from Claude Code are refused this way. Relay did not pause the account.`,
+        );
+        return;
+      }
       if (!outcome.held) return;
       lastHeld = outcome.statusCode;
       this.stats.recordError(
@@ -656,8 +719,9 @@ export class ProxyServer {
     provider: ProxyProvider,
     model: string,
     names: string[],
+    about: { client?: string; requestClass?: string } = {},
   ): void {
-    this.stats.recordLog({ at: Date.now(), provider, model, status: 401, note: "sign-in" });
+    this.stats.recordLog({ at: Date.now(), provider, model, status: 401, note: "sign-in", ...about });
     sendJsonError(
       res,
       401,
@@ -725,6 +789,7 @@ export class ProxyServer {
     bodyBuffer: Buffer,
     pathname: string,
     holdIf: ((status: number) => boolean) | undefined,
+    onAnswer?: ForwardSpec["onAnswer"],
   ): Promise<UpstreamOutcome | undefined> {
     const provider = selection.account.provider ?? "claude";
     if (provider === "gemini") {
@@ -750,6 +815,7 @@ export class ProxyServer {
       accountId: selection.account.id,
       stats: this.stats,
       holdIf,
+      onAnswer,
     };
     if (provider === "claude")
       return this.anthropicUpstream.forwardRequest(req, res, bodyBuffer, {

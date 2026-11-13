@@ -4,6 +4,7 @@ import {
   buildTargetUrl,
   forwardUpstream,
   sanitizeRequestHeaders,
+  type ForwardSpec,
   type TokenTally,
   type UpstreamOutcome,
   type UsageExtractor,
@@ -16,6 +17,8 @@ export interface ForwardOptions {
   stats?: ProxyStats;
   /** Statuses whose answer is held back so the gateway can try another account. */
   holdIf?: (statusCode: number) => boolean;
+  /** Told when the answer's headers arrive (see `ForwardSpec.onAnswer`). */
+  onAnswer?: ForwardSpec["onAnswer"];
 }
 
 const OAUTH_BETA = "oauth-2025-04-20";
@@ -94,6 +97,7 @@ export class AnthropicUpstream {
       usage: createAnthropicUsageExtractor(),
       errorLabel: "Gateway error",
       holdIf: options.holdIf,
+      onAnswer: options.onAnswer,
     });
   }
 }

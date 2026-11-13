@@ -97,6 +97,9 @@ export function resetInMinutes(usage: AccountUsage | undefined, now: number): nu
   return Math.ceil((Math.min(...times) - now) / 60_000);
 }
 
+/** Percents an answer reported this recently count as live. */
+const LIVE_MS = 10 * 60_000;
+
 /**
  * What the Proxy Gateway page shows. `cacheHitRate` is a percentage (0–100) of the prompt tokens
  * the gateway's answers read from the upstream cache. Without a gateway the counters are zero.
@@ -163,6 +166,7 @@ export function buildProxyStatus(input: {
         ...(extra
           ? { extraUsage: { kind: extra.kind, minutesAgo: Math.max(0, Math.floor((input.now - extra.at) / 60_000)) } }
           : {}),
+        ...(usage?.liveAt && input.now - Date.parse(usage.liveAt) <= LIVE_MS ? { live: true } : {}),
       };
     }),
     ...(input.error ? { error: input.error } : {}),

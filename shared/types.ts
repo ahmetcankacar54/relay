@@ -315,6 +315,8 @@ export interface ProxyAccountStatus {
    * until it is tried again.
    */
   waiting?: { reason: "limit" | "auth" | "transient"; minutes: number };
+  /** Its percents come from an answer through the gateway within the last ten minutes. */
+  live?: boolean;
   /** Its latest answer was billed as extra usage (`billed`), or a request needed it (`required`). */
   extraUsage?: { kind: "billed" | "required"; minutesAgo: number };
 }
@@ -874,6 +876,8 @@ export interface AccountUsage {
   /** Model-specific windows such as weekly Opus. */
   modelWindows?: ModelWindow[];
   checkedAt?: string;
+  /** When an answer through the gateway last reported these windows (newer than a read). */
+  liveAt?: string;
   stale: boolean;
   /**
    * The sign-in the last read went through: the account's Claude Code sign-in, or, without one,

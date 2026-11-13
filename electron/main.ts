@@ -145,6 +145,8 @@ import {
   type ProxyConfig,
 } from "../shared/proxy-types";
 import { ProxyServer } from "./core/proxy/proxy-server";
+import { GatewayRequestLog } from "./core/proxy/proxy-request-log";
+import { REQUEST_LOG_SIZE } from "./core/proxy/proxy-stats";
 import {
   buildProxyStatus,
   generateProxyKey,
@@ -305,6 +307,17 @@ const TOKEN_ATTRIBUTION_WINDOW_MS = 14 * 86_400_000;
 /** The limit samples are copied for attribution at most this often. */
 const TOKEN_SAMPLES_REFRESH_MS = 60_000;
 let tokenLedger: TokenLedger | undefined;
+/** The gateway's requests across restarts: the feed, and which account served a request id. */
+let gatewayRequestLog: GatewayRequestLog | undefined;
+function gatewayRequests(): GatewayRequestLog {
+  if (!gatewayRequestLog) {
+    gatewayRequestLog = new GatewayRequestLog(path.join(app.getPath("userData"), "gateway-requests.jsonl"), {
+      feedSize: REQUEST_LOG_SIZE,
+    });
+    gatewayRequestLog.load();
+  }
+  return gatewayRequestLog;
+}
 /** `~/.claude/projects`, then the profile of each account that has written transcripts. */
 const tokenRoots: { dir: string; profileAccountId?: string }[] = [];
 let tokenTimer: ReturnType<typeof setTimeout> | undefined;
@@ -633,6 +646,7 @@ function startTokenScan() {
             const owner = windowSessionOwners.get(sessionId.toLowerCase());
             return owner && time <= owner.until ? owner.accountUuid : undefined;
           },
+          gatewayAccount: (requestId) => gatewayRequests().accountFor(requestId),
         }),
       zone: () => service.store.state.settings.planning.timeZone,
     });
@@ -2204,6 +2218,9 @@ async function startProxy(): Promise<void> {
     },
     // An expired or unreadable token: the usage reader renews it when it can (never prompts).
     onCredentialMissing: (accountId) => renewForGateway(accountId),
+    // Every answer says how full the account's windows are: newer than the last read.
+    onLiveLimits: (accountId, live) => usage?.observe(accountId, live),
+    requestLog: gatewayRequests(),
     // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
     // Only the accounts left in the pool, in its order (strict priority reads the order).
     usageProvider: () => ({

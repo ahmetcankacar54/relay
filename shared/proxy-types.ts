@@ -43,6 +43,18 @@ export interface ProxyRequestLog {
   affinity?: boolean;
   /** Present for answers the gateway gave itself (no account could take it). */
   note?: string;
+  /** How long this try took, in milliseconds. */
+  ms?: number;
+  /** The provider's id for the request (Anthropic's `request-id`); Claude Code saves it too. */
+  requestId?: string;
+  /** Who sent it: "claude-code", "codex", or the product its user agent names. */
+  client?: string;
+  /** Claude Code's own label for the request: main, subagent, compaction, auxiliary, … */
+  requestClass?: string;
+  /** The tokens the answer reported. */
+  tokens?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+  /** An error answer's own message, shortened. */
+  error?: string;
 }
 
 export interface ProxySessionState {
