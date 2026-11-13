@@ -23,7 +23,23 @@ jobs:
       - name: Desktop IPC and PTY integration
         if: runner.os == 'macOS'
         run: npm run test:desktop
+      # electron-builder never signs anything under Contents/PlugIns, so the
+      # widget extension keeps the signature it has in dist-electron. The build
+      # signs only its executable, which leaves the bundle without a resource
+      # seal and fails the app's codesign --verify --deep --strict. Sign the
+      # whole extension ad hoc with its own entitlements first. Release builds
+      # sign it with the local certificate instead (scripts/stable-signing.mjs).
+      - name: Sign the widget extension ad hoc
+        if: runner.os == 'macOS'
+        run: >-
+          codesign --force --sign - --options runtime
+          --entitlements electron/native/widget/widget.entitlements
+          dist-electron/RelayWidget.appex
       - name: Package unsigned application
-        run: npx electron-builder --dir
+        run: npx electron-builder --dir --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          # electron-builder skips signing on pull requests unless this is set,
+          # so pull requests would not see what pushes see. The identity is
+          # ad hoc ("-") and the workflow holds no certificate or secret.
+          CSC_FOR_PULL_REQUEST: "true"
