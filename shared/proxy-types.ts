@@ -72,6 +72,8 @@ export interface ProxyMetrics {
   promptCacheHits?: number;
   /** The account the latest request went to. */
   lastAccountId?: string;
+  /** Per account: the latest answer billed as extra usage, or a request that needed it. */
+  extraUsage?: Record<string, { at: number; kind: "billed" | "required" }>;
   lastError?: string;
   lastErrorAt?: number;
 }

@@ -367,16 +367,58 @@ function WindowMeter({ label, percent, minutes }: { label: string; percent?: num
   );
 }
 
+/** Why the gateway is leaving an account out, for the badge's tooltip. */
+function waitingTitle(reason: "limit" | "auth" | "transient", t: (tr: string, en: string) => string): string {
+  if (reason === "auth")
+    return t(
+      "Giriş reddedildi ya da okunamadı; Relay yeniliyor. Bu hesaptaki oturumlar giriş dönünce aynı hesaba döner.",
+      "Its sign-in was refused or could not be read; Relay is renewing it. Sessions on this account come back to it once it works.",
+    );
+  if (reason === "transient")
+    return t(
+      "Anthropic yoğun ya da araya bir engel girdi; birkaç saniye beklenir. Oturumlar hesabında kalır.",
+      "Anthropic is busy or something in front of it refused; a few seconds' wait. Sessions stay on the account.",
+    );
+  return t(
+    "Bir limit dönemi doldu; sıfırlanınca yeniden kullanılır. Oturumları başka hesaba geçti.",
+    "A limit window is spent; it is used again when it resets. Its sessions moved to another account.",
+  );
+}
+
 /** What an account's state needs said: last served, out of the pool, no sign-in, full, about to lose quota. */
 function AccountState({ account }: { account: ProxyAccountStatus }) {
   const { t } = useI18n();
   const risk = quotaAtRisk(account);
   if (!account.inPool) return <Badge variant="secondary">{t("Havuz dışı", "Out of pool")}</Badge>;
   if (!account.signedIn) return <Badge variant="destructive">{t("Giriş yok", "Not signed in")}</Badge>;
+  if (account.extraUsage?.kind === "billed")
+    return <Badge variant="destructive">{t("Ekstra kullanım", "Extra usage")}</Badge>;
+  if (account.waiting) {
+    const when = resetLabel(account.waiting.minutes, t);
+    const label =
+      account.waiting.reason === "auth"
+        ? t(`Giriş yenileniyor · ${when}`, `Renewing sign-in · ${when}`)
+        : account.waiting.reason === "transient"
+          ? t(`Kısa ara · ${when}`, `Short pause · ${when}`)
+          : t(`Limitte · ${when}`, `At its limit · ${when}`);
+    return (
+      <Badge variant="secondary" data-slot="waiting" title={waitingTitle(account.waiting.reason, t)}>
+        {label}
+      </Badge>
+    );
+  }
   if ((account.quotaPercent ?? 0) >= 100) return <Badge variant="secondary">{t("Dolu", "Full")}</Badge>;
   if (risk)
     return (
-      <Badge variant="outline" className="border-warn/50 text-warn-foreground" data-slot="at-risk">
+      <Badge
+        variant="outline"
+        className="border-warn/50 text-warn-foreground"
+        data-slot="at-risk"
+        title={t(
+          `Haftalık limit ${resetLabel(risk.minutes, t)} içinde sıfırlanıyor; kalan %${risk.percent} o zamana kadar kullanılmazsa boşa gider.`,
+          `The weekly limit resets in ${resetLabel(risk.minutes, t)}; the ${risk.percent}% left is lost unless it is used by then.`,
+        )}
+      >
         {t(`%${risk.percent} yanacak`, `${risk.percent}% expiring`)}
       </Badge>
     );
@@ -544,9 +586,12 @@ function PoolCard({
 /** A status code as a short word with its tone. */
 function statusTone(entry: ProxyRequestLog): { tone: "ok" | "warn" | "crit"; word: [string, string] } {
   if (entry.status === 101) return { tone: "ok", word: ["akış", "stream"] };
+  // Answered, but billed beyond the plan: it cost money.
+  if (entry.note === "extra-usage") return { tone: "crit", word: ["ekstra kullanım", "extra usage"] };
   if (entry.failover) return { tone: "warn", word: [`${entry.status} → sıradaki`, `${entry.status} → next`] };
   if (entry.status < 400) return { tone: "ok", word: [String(entry.status), String(entry.status)] };
   if (entry.status === 429) return { tone: "warn", word: ["429 limit", "429 limit"] };
+  if (entry.note === "sign-in") return { tone: "crit", word: ["401 giriş", "401 sign-in"] };
   return { tone: "crit", word: [String(entry.status), String(entry.status)] };
 }
 
@@ -600,7 +645,9 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
                         ? t("hesap yok", "no account")
                         : entry.note === "all-limited"
                           ? t("hepsi limitte", "all limited")
-                          : "—")}
+                          : entry.note === "sign-in"
+                            ? t("giriş kullanılamıyor", "no usable sign-in")
+                            : "—")}
                   </span>
                   {entry.affinity && (
                     <span className="sr-only">{t("oturum hesabında kaldı", "session kept its account")}</span>
@@ -694,8 +741,8 @@ function ToolsTab({
   const key = status.clientApiKey;
   const hints: Record<ProxyClientId, string> = {
     "claude-code": t(
-      "Bağlıyken hangi hesabın kullanılacağını ağ geçidi seçer; terminalde hesap değiştirmen gerekmez.",
-      "While connected, the gateway picks the account; no need to switch accounts in the terminal.",
+      "Bağlıyken hangi hesabın kullanılacağını ağ geçidi seçer; terminalde hesap değiştirmen gerekmez. Bağlıyken terminaldeki Claude Code, claude.ai bağlayıcılarını (Gmail, Drive gibi) yüklemez; Claude uygulaması etkilenmez. Relay kapanınca ayar dosyası eski haline döner, açılınca yeniden bağlanır.",
+      "While connected, the gateway picks the account; no need to switch accounts in the terminal. While connected, Claude Code in the terminal does not load your claude.ai connectors (Gmail, Drive and the like); the Claude app is not affected. When Relay quits the settings file goes back as it was, and it is connected again when Relay starts.",
     ),
     codex: t(
       "Codex’in config.toml dosyasına Relay sağlayıcısı eklenir; varsa önceki sağlayıcı satırı yorum olarak saklanır.",
@@ -896,8 +943,8 @@ function RulesTab({
             label={t("Oturum aynı hesapta kalsın", "Keep a session on its account")}
             htmlFor="proxy-affinity"
             description={t(
-              `Önbellek hesaba özeldir; hesap değişirse baştan yazılır. Claude Code abonelikte önbelleği son istekten sonra 1 saat tutar; daha kısa süre, ara verilen oturumu başka hesaba kaydırabilir. Şu anki önbellek isabeti %${ratio}.`,
-              `The prompt cache belongs to the account; a switch rebuilds it. On a subscription Claude Code keeps the cache for 1 hour after the last request; a shorter time can move a paused session to another account. Cache hits now: ${ratio}%.`,
+              `Önbellek hesaba özeldir; hesap değişirse baştan yazılır. Ağ geçidine bağlı Claude Code önbelleği kendiliğinden 5 dakika tutar; Relay bağlarken 1 saate çıkarır (elle bağladıysan CLAUDE_CODE_PROMPT_CACHE_TTL=1h ekle). Daha kısa süre, ara verilen oturumu başka hesaba kaydırabilir. Şu anki önbellek isabeti %${ratio}.`,
+              `The prompt cache belongs to the account; a switch rebuilds it. Behind a gateway Claude Code keeps its cache for 5 minutes by itself; Relay raises it to 1 hour when it connects Claude Code (connected by hand? add CLAUDE_CODE_PROMPT_CACHE_TTL=1h). A shorter time can move a paused session to another account. Cache hits now: ${ratio}%.`,
             )}
           >
             <OptionSelect
@@ -1039,6 +1086,7 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
     : [];
   const risky = (status?.accounts ?? []).filter((a) => a.inPool && quotaAtRisk(a));
   const signedOut = (status?.accounts ?? []).filter((a) => a.inPool && !a.signedIn);
+  const billed = (status?.accounts ?? []).filter((a) => a.extraUsage?.kind === "billed");
   return (
     <PageFrame
       automationInline
@@ -1114,6 +1162,14 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             {t(
               `${signedOut.map((a) => a.name).join(", ")}: giriş yok, ağ geçidi bu hesabı kullanamaz.`,
               `${signedOut.map((a) => a.name).join(", ")}: not signed in, the gateway cannot use it.`,
+            )}
+          </Attention>
+        )}
+        {billed.length > 0 && (
+          <Attention tone="crit">
+            {t(
+              `${billed.map((a) => a.name).join(", ")}: son yanıt plan yerine ekstra kullanımdan (ücretli) karşılandı. Ağ geçidi bu hesabı limiti sıfırlanana kadar kullanmıyor.`,
+              `${billed.map((a) => a.name).join(", ")}: the latest answer was billed as extra usage (paid), not to the plan. The gateway leaves this account out until its limit resets.`,
             )}
           </Attention>
         )}

@@ -13,6 +13,7 @@ import {
   NoEligibleAccountError,
   NoProviderAccountError,
   ProxyRouter,
+  type CooldownReason,
   type ProxyProvider,
   type RouterSelection,
 } from "./proxy-router";
@@ -52,6 +53,8 @@ const MIN_COOLDOWN_S = 5;
 const MAX_COOLDOWN_S = 7 * 24 * 60 * 60;
 const AUTH_FAILURE_COOLDOWN_S = 30;
 const OVERLOADED_COOLDOWN_S = 10;
+/** An account that billed extra usage, when no read limit says when its window resets. */
+const EXTRA_USAGE_COOLDOWN_S = 30 * 60;
 /** Answers another account may succeed at: a limit, a refused sign-in, an overloaded upstream. */
 const RETRYABLE = new Set([401, 403, 429, 503, 529]);
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -86,6 +89,7 @@ export class ProxyServer {
   private antigravityResolver?: AntigravityResolver;
   private usageProvider: UsageProvider;
   private onCredentialRejected?: (accountId: string) => void;
+  private onCredentialMissing?: (accountId: string) => void;
   private hubFetch?: typeof fetch;
 
   constructor(options: {
@@ -95,6 +99,8 @@ export class ProxyServer {
     usageProvider: UsageProvider;
     /** The upstream refused the account's token: a cached copy must be dropped. */
     onCredentialRejected?: (accountId: string) => void;
+    /** No usable token could be read (none saved, or expired): the host may renew it. */
+    onCredentialMissing?: (accountId: string) => void;
     now?: () => number;
     /** Sends the usage dashboards' provider requests (tests replace it). */
     hubFetch?: typeof fetch;
@@ -112,6 +118,7 @@ export class ProxyServer {
     this.antigravityResolver = options.antigravityResolver;
     this.usageProvider = options.usageProvider;
     this.onCredentialRejected = options.onCredentialRejected;
+    this.onCredentialMissing = options.onCredentialMissing;
     this.hubFetch = options.hubFetch;
 
     this.sessionCache = new ProxySessionCache({
@@ -538,6 +545,8 @@ export class ProxyServer {
     let lastHeld: number | undefined;
     // Set when an account was skipped because its sign-in cannot serve this route.
     let unsupported: string | undefined;
+    // Accounts whose sign-in could not be read: skipped without spending one of the tries.
+    const unreadable: string[] = [];
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; ) {
       const { accounts, usageMap } = this.usageProvider();
       let selection: RouterSelection;
@@ -550,8 +559,14 @@ export class ProxyServer {
           tried,
         );
       } catch (err) {
+        if (!(err instanceof NoProviderAccountError || err instanceof NoEligibleAccountError)) throw err;
         if (err instanceof NoProviderAccountError && unsupported && lastHeld === undefined) {
           sendJsonError(res, 501, "unsupported_endpoint", unsupported);
+          return;
+        }
+        // Nothing was forwarded and the only accounts left could not be signed in with.
+        if (lastHeld === undefined && unreadable.length) {
+          this.signInNeeded(res, targetProvider, requestedModel, unreadable);
           return;
         }
         if (err instanceof NoProviderAccountError && tried.size === 0) {
@@ -560,6 +575,10 @@ export class ProxyServer {
           return;
         }
         if (err instanceof NoEligibleAccountError && tried.size === 0) {
+          if (err.signInOnly) {
+            this.signInNeeded(res, targetProvider, requestedModel, []);
+            return;
+          }
           this.stats.recordError(err.message);
           this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: 429, note: "all-limited" });
           sendJsonError(
@@ -573,26 +592,30 @@ export class ProxyServer {
           );
           return;
         }
-        if (
-          err instanceof NoProviderAccountError ||
-          err instanceof NoEligibleAccountError
-        ) {
-          // Every other account was tried or is cooling down: the last answer was already held.
-          this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: lastHeld ?? 429, note: "all-limited" });
-          sendJsonError(res, lastHeld ?? 429, lastHeld === 401 || lastHeld === 403 ? "authentication_error" : "rate_limit_error", "Every account for this provider is limited or unavailable");
-          return;
-        }
-        throw err;
+        // Every other account was tried or is cooling down: the last answer was already held.
+        this.stats.recordLog({ at: Date.now(), provider: targetProvider, model: requestedModel, status: lastHeld ?? 429, note: "all-limited" });
+        sendJsonError(res, lastHeld ?? 429, lastHeld === 401 || lastHeld === 403 ? "authentication_error" : "rate_limit_error", "Every account for this provider is limited or unavailable");
+        return;
       }
       tried.add(selection.account.id);
-      const isLast = attempt === MAX_ATTEMPTS;
       if (!this.servesRoute(selection.account, pathname)) {
         unsupported = "Codex ChatGPT sign-ins support the Responses API only; add an OpenAI API key account for this endpoint";
         continue;
       }
+      const route = await this.resolveRoute(selection.account);
+      if (!route) {
+        unreadable.push(selection.account.name);
+        this.stats.recordError(`No usable sign-in for ${selection.account.name}`);
+        // Its sessions wait for it: a renewed sign-in brings them back to their cache.
+        this.router.markUnavailable(selection.account.id, AUTH_FAILURE_COOLDOWN_S * 1000, "auth");
+        this.onCredentialMissing?.(selection.account.id);
+        continue;
+      }
+      const isLast = attempt === MAX_ATTEMPTS;
       attempt += 1;
       const outcome = await this.forwardTo(
         selection,
+        route,
         req,
         res,
         bodyBuffer,
@@ -611,8 +634,9 @@ export class ProxyServer {
         status: outcome.statusCode,
         ...(outcome.held ? { failover: true } : {}),
         ...(selection.sessionAffinityHit ? { affinity: true } : {}),
+        ...(outcome.extraUsage ? { note: "extra-usage" } : outcome.failure ? { note: outcome.failure } : {}),
       });
-      this.applyOutcome(selection.account.id, outcome);
+      this.applyOutcome(selection.account.id, sessionKey, outcome);
       if (!outcome.held) return;
       lastHeld = outcome.statusCode;
       this.stats.recordError(
@@ -621,6 +645,47 @@ export class ProxyServer {
     }
     // Every attempt was held: the last one is never held, so this is not reached.
     sendJsonError(res, 502, "api_error", "No account could answer the request");
+  }
+
+  /**
+   * No account's sign-in could be used: a 401 that says so, not a 429 a client would wait out.
+   * The message names Relay, since the client's own /login would not help.
+   */
+  private signInNeeded(
+    res: http.ServerResponse,
+    provider: ProxyProvider,
+    model: string,
+    names: string[],
+  ): void {
+    this.stats.recordLog({ at: Date.now(), provider, model, status: 401, note: "sign-in" });
+    sendJsonError(
+      res,
+      401,
+      "authentication_error",
+      names.length
+        ? `Relay cannot use the sign-in of ${names.join(", ")} (expired or signed out). Renew it in Relay > Accounts.`
+        : "Relay cannot use the sign-in of any account in its pool right now (expired or signed out). Renew it in Relay > Accounts.",
+    );
+  }
+
+  /** The token (and for Antigravity the sidecar) one account is used with; undefined when none can be read. */
+  private async resolveRoute(
+    account: Account,
+  ): Promise<{ token: string; antigravity?: { url: string; key: string } } | undefined> {
+    const provider = account.provider ?? "claude";
+    try {
+      if (provider === "antigravity") {
+        const route = await this.antigravityResolver?.(account);
+        return route?.key ? { token: route.key, antigravity: route } : undefined;
+      }
+      // Gemini API key accounts are refused when forwarded, with a reason.
+      if (provider === "gemini") return { token: "" };
+      const token = await this.credentialResolver(account);
+      return token ? { token } : undefined;
+    } catch (err: any) {
+      this.stats.recordError(`Credential lookup failed: ${err?.message ?? err}`);
+      return undefined;
+    }
   }
 
   /** Whether an account not yet tried for this request could take it. */
@@ -650,10 +715,11 @@ export class ProxyServer {
 
   /**
    * Sends the request to one account. Undefined when the gateway already answered the client
-   * (no credential, an unsupported route); otherwise the upstream's outcome.
+   * (an unsupported route); otherwise the upstream's outcome.
    */
   private async forwardTo(
     selection: RouterSelection,
+    route: { token: string; antigravity?: { url: string; key: string } },
     req: http.IncomingMessage,
     res: http.ServerResponse,
     bodyBuffer: Buffer,
@@ -665,31 +731,8 @@ export class ProxyServer {
       sendJsonError(res, 501, "unsupported_provider", "Gemini API key accounts are not supported by this gateway");
       return undefined;
     }
-    let antigravityRoute: { url: string; key: string } | undefined;
-    let token: string | undefined;
-    try {
-      if (provider === "antigravity") {
-        antigravityRoute = await this.antigravityResolver?.(selection.account);
-        token = antigravityRoute?.key;
-      } else {
-        token = await this.credentialResolver(selection.account);
-      }
-    } catch (err: any) {
-      this.stats.recordError(`Credential lookup failed: ${err?.message ?? err}`);
-    }
-    if (!token) {
-      // The account's sign-in cannot be read: it cools down, and another one is tried.
-      this.stats.recordError(`No credential for ${selection.account.name}`);
-      const held = holdIf?.(401) ?? false;
-      if (!held)
-        sendJsonError(
-          res,
-          401,
-          "authentication_error",
-          `No active credential found for selected account ${selection.account.name}`,
-        );
-      return { statusCode: 401, rateLimited: false, unauthorized: true, held };
-    }
+    const token = route.token;
+    const antigravityRoute = route.antigravity;
     const apiKey = provider === "codex" && token.startsWith("sk-");
     if (
       provider === "codex" &&
@@ -727,29 +770,73 @@ export class ProxyServer {
     });
   }
 
-  /** Keeps a limited, refused or overloaded account out of selection for a while. */
-  private applyOutcome(accountId: string, outcome: UpstreamOutcome): void {
-    let seconds: number | undefined;
-    if (outcome.rateLimited) {
-      // A full window's reset time beats a short Retry-After: the account is out until then.
-      const untilReset = outcome.limitResetsAt
-        ? Math.ceil((outcome.limitResetsAt - Date.now()) / 1000)
-        : undefined;
-      seconds = Math.max(
-        untilReset ?? 0,
-        outcome.retryAfterSeconds ?? (untilReset ? 0 : DEFAULT_RATE_LIMIT_COOLDOWN_S),
+  /**
+   * What an answer means for its account and the session that sent it:
+   * - a spent window keeps the account out until that window resets, and its sessions move on;
+   * - extra usage billed moves the account's sessions and keeps it out; extra usage needed for
+   *   this one request moves only this session;
+   * - a refused sign-in keeps the account out briefly, drops the cached token and asks for a
+   *   renewal, but its sessions stay bound and come back to their cache;
+   * - a permission refusal moves only this session (the account lacks what it asked for);
+   * - an overload keeps the account out for seconds, and its sessions stay bound.
+   */
+  private applyOutcome(accountId: string, sessionKey: string | undefined, outcome: UpstreamOutcome): void {
+    const cool = (seconds: number, reason: CooldownReason) =>
+      this.router.markUnavailable(
+        accountId,
+        Math.min(MAX_COOLDOWN_S, Math.max(MIN_COOLDOWN_S, seconds)) * 1000,
+        reason,
       );
-    } else if (outcome.unauthorized) {
-      seconds = AUTH_FAILURE_COOLDOWN_S;
-      // A cached token the upstream refused is read again next time, not reused.
-      this.onCredentialRejected?.(accountId);
-    } else if (outcome.statusCode === 529 || outcome.statusCode === 503) {
-      seconds = OVERLOADED_COOLDOWN_S;
+    switch (outcome.failure) {
+      case "limit": {
+        // A full window's reset time beats a short Retry-After: the account is out until then.
+        const untilReset = outcome.limitResetsAt
+          ? Math.ceil((outcome.limitResetsAt - Date.now()) / 1000)
+          : undefined;
+        cool(
+          Math.max(
+            untilReset ?? 0,
+            outcome.retryAfterSeconds ?? (untilReset ? 0 : DEFAULT_RATE_LIMIT_COOLDOWN_S),
+          ),
+          "limit",
+        );
+        this.sessionCache.evictAccount(accountId);
+        break;
+      }
+      case "auth":
+        cool(AUTH_FAILURE_COOLDOWN_S, "auth");
+        // A cached token the upstream refused is read again next time, not reused.
+        this.onCredentialRejected?.(accountId);
+        break;
+      case "transient":
+        if (outcome.held || outcome.statusCode === 529 || outcome.statusCode === 503)
+          cool(OVERLOADED_COOLDOWN_S, "transient");
+        break;
+      case "extra-usage":
+        this.stats.recordExtraUsage(accountId, "required");
+        if (sessionKey) this.sessionCache.evictSession(sessionKey);
+        break;
+      case "permission":
+        if (sessionKey) this.sessionCache.evictSession(sessionKey);
+        break;
     }
-    if (seconds === undefined) return;
-    const clamped = Math.min(MAX_COOLDOWN_S, Math.max(MIN_COOLDOWN_S, seconds));
-    this.router.markUnavailable(accountId, clamped * 1000);
-    this.sessionCache.evictAccount(accountId);
+    if (outcome.extraUsage) {
+      // The plan no longer covers this account's requests: each one now costs money.
+      this.stats.recordExtraUsage(accountId, "billed");
+      cool(this.untilWindowReset(accountId) ?? EXTRA_USAGE_COOLDOWN_S, "limit");
+      this.sessionCache.evictAccount(accountId);
+    }
+  }
+
+  /** Seconds until the account's fullest read window resets, when Relay knows. */
+  private untilWindowReset(accountId: string): number | undefined {
+    const usage = this.usageProvider().usageMap[accountId];
+    const now = Date.now();
+    const resets = [usage?.fiveHour, usage?.sevenDay]
+      .filter((w) => w && w.usedPercent >= 90 && w.resetsAt)
+      .map((w) => Date.parse(w!.resetsAt!))
+      .filter((at) => Number.isFinite(at) && at > now);
+    return resets.length ? Math.ceil((Math.min(...resets) - now) / 1000) : undefined;
   }
 
   private handleWebSocketUpgrade(

@@ -112,6 +112,8 @@ export function buildProxyStatus(input: {
   recent?: ProxyRequestLog[];
   tailscaleAddress?: string;
   clients?: ProxyClientStatus[];
+  /** The gateway's own cooldown of an account, when one is running. */
+  cooldownOf?: (accountId: string) => { until: number; reason: "limit" | "auth" | "transient" } | undefined;
 }): ProxyStatus {
   const { config, metrics } = input;
   const excluded = new Set(config.excludedAccountIds ?? []);
@@ -137,6 +139,8 @@ export function buildProxyStatus(input: {
       const week = clampPercent(usage?.sevenDay?.usedPercent);
       const weekReset = minutesUntil(usage?.sevenDay?.resetsAt, input.now);
       const tokens = metrics?.tokensByAccount[account.id];
+      const cooldown = input.running ? input.cooldownOf?.(account.id) : undefined;
+      const extra = metrics?.extraUsage?.[account.id];
       return {
         id: account.id,
         name: account.name,
@@ -153,6 +157,12 @@ export function buildProxyStatus(input: {
         inPool: !excluded.has(account.id),
         requests: metrics?.requestsByAccount[account.id] ?? 0,
         ...(tokens ? { tokens: { ...tokens } } : {}),
+        ...(cooldown && cooldown.until > input.now
+          ? { waiting: { reason: cooldown.reason, minutes: Math.ceil((cooldown.until - input.now) / 60_000) } }
+          : {}),
+        ...(extra
+          ? { extraUsage: { kind: extra.kind, minutesAgo: Math.max(0, Math.floor((input.now - extra.at) / 60_000)) } }
+          : {}),
       };
     }),
     ...(input.error ? { error: input.error } : {}),

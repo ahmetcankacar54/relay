@@ -8,7 +8,8 @@ import { isTailscaleIPv4 } from "../../../shared/proxy-url";
 /**
  * Points Claude Code and Codex at the gateway by writing their own settings, and takes it back.
  * Claude Code: `env.ANTHROPIC_BASE_URL` and `env.ANTHROPIC_AUTH_TOKEN` in ~/.claude/settings.json;
- * the values there before are kept in Relay's settings and put back on unbind. Codex: a provider
+ * the values there before are kept in Relay's settings and put back on unbind. Two more env
+ * values are added only when the user has not set them (CLAUDE_EXTRAS). Codex: a provider
  * table and a top-level `model_provider` in ~/.codex/config.toml, each between Relay's marker
  * lines; an existing top-level `model_provider` is commented out with Relay's prefix and
  * restored on unbind.
@@ -17,6 +18,16 @@ import { isTailscaleIPv4 } from "../../../shared/proxy-url";
 export const PROXY_CLIENTS: readonly ProxyClientId[] = ["claude-code", "codex"];
 
 const CLAUDE_KEYS = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"] as const;
+/**
+ * Behind a gateway key Claude Code counts itself an API-key session and caches the conversation
+ * for 5 minutes, not the subscription's hour; a pause longer than that writes the whole context
+ * again. The hint headers name each request's class (main, subagent, compaction, …) for the
+ * gateway. A value the user set is theirs and stays; one Relay added is removed on unbind.
+ */
+export const CLAUDE_EXTRAS: Readonly<Record<string, string>> = {
+  CLAUDE_CODE_PROMPT_CACHE_TTL: "1h",
+  CLAUDE_CODE_GATEWAY_HINT_HEADERS: "1",
+};
 const TOP_START = "# >>> relay gateway (written by Relay; remove it from Relay's Proxy page)";
 const TOP_END = "# <<< relay gateway";
 const TABLE_START = "# >>> relay gateway provider";
@@ -130,7 +141,9 @@ export function clientStatuses(
         const env = envOf(readClaudeSettings(home));
         const url = typeof env.ANTHROPIC_BASE_URL === "string" ? env.ANTHROPIC_BASE_URL : undefined;
         const key = typeof env.ANTHROPIC_AUTH_TOKEN === "string" ? env.ANTHROPIC_AUTH_TOKEN : undefined;
-        const bound = !!target && url === target.url && key === target.key;
+        // A binding written before Relay added the extras is out of date until written again.
+        const current = Object.keys(CLAUDE_EXTRAS).every((name) => typeof env[name] === "string");
+        const bound = !!target && url === target.url && key === target.key && current;
         return { id, installed, file, bound, stale: relayBound && !bound };
       }
       const text = readText(file) ?? "";
@@ -162,14 +175,31 @@ export async function bindClient(
   home = os.homedir(),
 ): Promise<Record<string, string | null>> {
   if (id === "claude-code") {
+    const text = readText(claudeFile(home));
     const settings = readClaudeSettings(home);
     const env = { ...envOf(settings) };
-    const saved: Record<string, string | null> = previous ?? {};
-    if (!previous)
-      for (const name of CLAUDE_KEYS) saved[name] = typeof env[name] === "string" ? (env[name] as string) : null;
-    env.ANTHROPIC_BASE_URL = target.url;
-    env.ANTHROPIC_AUTH_TOKEN = target.key;
-    await writeAtomic(claudeFile(home), `${JSON.stringify({ ...settings, env }, null, 2)}\n`);
+    const saved: Record<string, string | null> = { ...previous };
+    const written: Record<string, string> = {
+      ANTHROPIC_BASE_URL: target.url,
+      ANTHROPIC_AUTH_TOKEN: target.key,
+    };
+    for (const name of CLAUDE_KEYS) {
+      if (name in saved) continue;
+      const value = typeof env[name] === "string" ? (env[name] as string) : null;
+      // A file Relay left bound (it quit without restoring) holds Relay's own value: not the user's.
+      saved[name] = value !== null && isRelayValue(name, value, target) ? null : value;
+    }
+    // Written only where there is no value: one the user set, before or since, stays.
+    for (const [name, value] of Object.entries(CLAUDE_EXTRAS)) {
+      if (typeof env[name] === "string") continue;
+      if (!(name in saved) || saved[name] === null) {
+        saved[name] = null;
+        written[name] = value;
+      }
+    }
+    Object.assign(env, written);
+    const next = `${JSON.stringify({ ...settings, env }, null, 2)}\n`;
+    if (next !== text) await writeAtomic(claudeFile(home), next);
     return saved;
   }
   const lines = withoutRelayBlocks(readText(codexFile(home)) ?? "");
@@ -202,25 +232,79 @@ export async function unbindClient(
 ): Promise<void> {
   if (id === "claude-code") {
     if (!exists(claudeFile(home))) return;
-    const settings = readClaudeSettings(home);
-    const env = { ...envOf(settings) };
-    for (const name of CLAUDE_KEYS) {
-      const value = previous?.[name];
-      if (typeof value === "string") env[name] = value;
-      else delete env[name];
-    }
-    const next: Json = { ...settings, env };
-    if (!Object.keys(env).length) delete next.env;
-    await writeAtomic(claudeFile(home), `${JSON.stringify(next, null, 2)}\n`);
+    await writeAtomic(claudeFile(home), claudeUnbound(home, previous));
     return;
   }
   const text = readText(codexFile(home));
   if (text === undefined) return;
+  await writeAtomic(codexFile(home), codexUnbound(text));
+}
+
+/** config.toml without Relay's blocks, with a provider line Relay parked put back. */
+function codexUnbound(text: string): string {
   const lines = withoutRelayBlocks(text).map((line) =>
     line.startsWith(DISABLED_PREFIX) ? line.slice(DISABLED_PREFIX.length) : line,
   );
   while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
-  await writeAtomic(codexFile(home), lines.length ? `${lines.join("\n")}\n` : "");
+  return lines.length ? `${lines.join("\n")}\n` : "";
+}
+
+/** A value only Relay writes: the gateway's own address or a Relay client key. */
+function isRelayValue(name: string, value: string, target: ClientTarget): boolean {
+  if (name === "ANTHROPIC_AUTH_TOKEN") return value === target.key || value.startsWith("relay-sec-");
+  if (name === "ANTHROPIC_BASE_URL") return value === target.url;
+  return false;
+}
+
+/** settings.json with the gateway taken out and what was there before put back. */
+function claudeUnbound(home: string, previous: Record<string, string | null> | undefined): string {
+  const settings = readClaudeSettings(home);
+  const env = { ...envOf(settings) };
+  for (const name of CLAUDE_KEYS) {
+    const value = previous?.[name];
+    if (typeof value === "string") env[name] = value;
+    else delete env[name];
+  }
+  // An extra Relay added goes, unless the user has changed it since.
+  for (const [name, value] of Object.entries(CLAUDE_EXTRAS))
+    if (previous?.[name] === null && env[name] === value) delete env[name];
+  const next: Json = { ...settings, env };
+  if (!Object.keys(env).length) delete next.env;
+  return `${JSON.stringify(next, null, 2)}\n`;
+}
+
+/**
+ * Puts a bound client's settings back while Relay quits, synchronously (no await is possible
+ * there): with the gateway gone, a client still pointed at it could not answer at all. The
+ * binding stays saved, so the next start points the client at the gateway again.
+ */
+export function releaseClientSync(
+  id: ProxyClientId,
+  previous: Record<string, string | null> | undefined,
+  home = os.homedir(),
+): void {
+  try {
+    if (id === "claude-code") {
+      if (!exists(claudeFile(home))) return;
+      writeAtomicSync(claudeFile(home), claudeUnbound(home, previous));
+      return;
+    }
+    const text = readText(codexFile(home));
+    if (text === undefined) return;
+    writeAtomicSync(codexFile(home), codexUnbound(text));
+  } catch {
+    // Quitting goes on; the page says the client is not connected at the next start.
+  }
+}
+
+function writeAtomicSync(file: string, text: string): void {
+  let mode: number | undefined;
+  try {
+    mode = fs.statSync(file).mode & 0o777;
+  } catch {}
+  const temp = `${file}.relay-${process.pid}-${Date.now()}.tmp`;
+  fs.writeFileSync(temp, text, { mode: mode ?? 0o600 });
+  fs.renameSync(temp, file);
 }
 
 /** This Mac's Tailscale IPv4 address, when one of its interfaces is on a tailnet. */

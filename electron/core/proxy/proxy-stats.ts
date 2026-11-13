@@ -21,6 +21,16 @@ export class ProxyStats {
   private lastAccountId?: string;
   /** Newest last; trimmed to REQUEST_LOG_SIZE. */
   private log: ProxyRequestLog[] = [];
+  /** The latest extra-usage answer per account: billed beyond the plan, or needing it. */
+  private extraUsage = new Map<string, { at: number; kind: "billed" | "required" }>();
+
+  /** An account's answer was billed as extra usage, or a request needed extra usage it lacks. */
+  recordExtraUsage(accountId: string, kind: "billed" | "required"): void {
+    const current = this.extraUsage.get(accountId);
+    // A billed answer is the one to tell about: it cost money.
+    if (current?.kind === "billed" && kind === "required") return;
+    this.extraUsage.set(accountId, { at: Date.now(), kind });
+  }
 
   /** One request's outcome for the live feed. */
   recordLog(entry: ProxyRequestLog): void {
@@ -120,6 +130,7 @@ export class ProxyStats {
       activeRequests: this.activeRequests,
       promptCacheHits: this.promptCacheHits,
       ...(this.lastAccountId ? { lastAccountId: this.lastAccountId } : {}),
+      ...(this.extraUsage.size ? { extraUsage: Object.fromEntries(this.extraUsage) } : {}),
       lastError: this.lastError,
       lastErrorAt: this.lastErrorAt,
     };
@@ -132,6 +143,7 @@ export class ProxyStats {
     this.promptCacheHits = 0;
     this.lastAccountId = undefined;
     this.log = [];
+    this.extraUsage.clear();
     this.lastError = undefined;
     this.lastErrorAt = undefined;
   }

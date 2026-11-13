@@ -18,11 +18,12 @@ export function maskKey(key: string): string {
 
 /**
  * Claude Code CLI: point it at the gateway. ANTHROPIC_AUTH_TOKEN is sent as a bearer token, the
- * way Claude Code talks to an LLM gateway. The key stays hidden when `mask` is set.
+ * way Claude Code talks to an LLM gateway; behind one it caches for 5 minutes unless told 1 hour.
+ * The key stays hidden when `mask` is set.
  */
 export function claudeCodeSnippet(host: string, port: number, key: string | undefined, mask = false): string {
   const shown = key ? (mask ? maskKey(key) : key) : "<relay-key>";
-  return `export ANTHROPIC_BASE_URL=${gatewayUrl(host, port)} && export ANTHROPIC_AUTH_TOKEN=${shown}`;
+  return `export ANTHROPIC_BASE_URL=${gatewayUrl(host, port)} && export ANTHROPIC_AUTH_TOKEN=${shown} && export CLAUDE_CODE_PROMPT_CACHE_TTL=1h`;
 }
 
 /** Cursor, VS Code and other OpenAI-compatible clients: base URL (with /v1) and key. */

@@ -19,10 +19,26 @@ export interface RouterSelection {
   sessionAffinityHit: boolean;
 }
 
+/**
+ * Why the gateway is keeping an account out for a while:
+ * - `limit`: a window is used up (or the account bills extra usage); its sessions move on.
+ * - `auth`: its sign-in was refused or cannot be read; its sessions wait for it.
+ * - `transient`: an overload or a blocked answer; its sessions wait for it.
+ */
+export type CooldownReason = "limit" | "auth" | "transient";
+
 /** Every account of the provider is cooling down; `retryAfterSeconds` is when the first is back. */
 export class NoEligibleAccountError extends Error {
-  constructor(readonly retryAfterSeconds?: number) {
-    super("Every account for this provider is cooling down");
+  constructor(
+    readonly retryAfterSeconds?: number,
+    /** Every account is out for its sign-in, none for a limit: a renewed sign-in brings it back. */
+    readonly signInOnly = false,
+  ) {
+    super(
+      signInOnly
+        ? "Relay cannot use the sign-in of any account in its pool for this provider; renew it in Relay"
+        : "Every account in Relay's pool for this provider is at its limit or cooling down",
+    );
   }
 }
 
@@ -45,12 +61,26 @@ const remainingPercent = (usage: AccountUsage | undefined): number | undefined =
   return used.length ? Math.max(0, 100 - Math.max(...used)) : undefined;
 };
 
+/**
+ * Until when a read limit keeps the account out: a window at 100 % whose reset is still ahead.
+ * Sending it a request would only earn another 429 and spend one of the request's tries.
+ */
+export function fullUntil(usage: AccountUsage | undefined, now: number): number {
+  let until = 0;
+  for (const window of [usage?.fiveHour, usage?.sevenDay]) {
+    if (!window || !(window.usedPercent >= 100) || !window.resetsAt) continue;
+    const reset = Date.parse(window.resetsAt);
+    if (Number.isFinite(reset) && reset > now) until = Math.max(until, reset);
+  }
+  return until;
+}
+
 export class ProxyRouter {
   readonly sessionCache: ProxySessionCache;
   private strategy: RoutingStrategy;
   private readonly now: () => number;
-  /** Cooldowns the gateway itself sets after a 429/401/403, by account id (ms timestamp). */
-  private readonly cooldowns = new Map<string, number>();
+  /** Cooldowns the gateway itself sets after a 429/401/403, by account id. */
+  private readonly cooldowns = new Map<string, { until: number; reason: CooldownReason }>();
 
   constructor(options: ProxyRouterOptions = {}) {
     this.sessionCache = options.sessionCache ?? new ProxySessionCache();
@@ -66,12 +96,23 @@ export class ProxyRouter {
    * Keeps an account out of selection for `ms`, e.g. after the upstream answered 429.
    * Evicting its sessions alone is not enough: the strategy would pick it again at once.
    */
-  markUnavailable(accountId: string, ms: number): void {
+  markUnavailable(accountId: string, ms: number, reason: CooldownReason = "limit"): void {
     const until = this.now() + Math.max(0, ms);
-    this.cooldowns.set(
-      accountId,
-      Math.max(this.cooldowns.get(accountId) ?? 0, until),
-    );
+    const current = this.cooldowns.get(accountId);
+    // The later end wins, with its reason; a limit is never shortened by a brief outage.
+    if (!current || current.until <= this.now() || until >= current.until)
+      this.cooldowns.set(accountId, { until, reason });
+  }
+
+  /** The gateway's own cooldown of an account still running, with its reason. */
+  cooldownOf(accountId: string): { until: number; reason: CooldownReason } | undefined {
+    const entry = this.cooldowns.get(accountId);
+    if (!entry) return undefined;
+    if (entry.until <= this.now()) {
+      this.cooldowns.delete(accountId);
+      return undefined;
+    }
+    return { ...entry };
   }
 
   /** Lets the account be picked again at once (a usage dashboard cleared its cooldown). */
@@ -79,16 +120,19 @@ export class ProxyRouter {
     this.cooldowns.delete(accountId);
   }
 
-  private cooldownEnd(account: Account, now: number): number {
-    const local = this.cooldowns.get(account.id);
-    if (local !== undefined && local <= now) this.cooldowns.delete(account.id);
-    const stored = account.cooldownUntil
-      ? Date.parse(account.cooldownUntil)
-      : NaN;
-    return Math.max(
-      Number.isFinite(stored) ? stored : 0,
-      this.cooldowns.get(account.id) ?? 0,
-    );
+  /** Until when an account is out, and why: its own cooldown, a saved one, or a used-up window. */
+  private blockOf(
+    account: Account,
+    usage: AccountUsage | undefined,
+    now: number,
+  ): { until: number; reason: CooldownReason } {
+    const local = this.cooldownOf(account.id);
+    const stored = account.cooldownUntil ? Date.parse(account.cooldownUntil) : NaN;
+    let block = { until: Number.isFinite(stored) ? stored : 0, reason: "limit" as CooldownReason };
+    if (local && local.until > block.until) block = local;
+    const full = fullUntil(usage, now);
+    if (full > block.until) block = { until: full, reason: "limit" };
+    return block;
   }
 
   /**
@@ -112,18 +156,25 @@ export class ProxyRouter {
     );
     if (ofProvider.length === 0) throw new NoProviderAccountError(targetProvider);
 
-    const ends = new Map(
-      ofProvider.map((acc) => [acc.id, this.cooldownEnd(acc, now)]),
+    const blocks = new Map(
+      ofProvider.map((acc) => [acc.id, this.blockOf(acc, usageMap[acc.id], now)]),
     );
     const eligibleAccounts = ofProvider.filter(
-      (acc) => (ends.get(acc.id) ?? 0) <= now,
+      (acc) => (blocks.get(acc.id)?.until ?? 0) <= now,
     );
     if (eligibleAccounts.length === 0) {
-      const soonest = Math.min(...ends.values());
+      const all = [...blocks.values()];
+      const soonest = Math.min(...all.map((b) => b.until));
       throw new NoEligibleAccountError(
         Math.max(1, Math.ceil((soonest - now) / 1000)),
+        all.every((b) => b.reason === "auth"),
       );
     }
+
+    // The account the session is on, while a sign-in problem or an outage keeps it out: the
+    // request is served elsewhere, but the session stays bound and returns to its warm cache.
+    const boundId = sessionKey ? this.sessionCache.peek(sessionKey) : undefined;
+    const boundWaits = !!boundId && (this.cooldownOf(boundId)?.reason ?? "limit") !== "limit";
 
     // 1. Session Affinity Check (KV cache preservation)
     if (sessionKey) {
@@ -173,7 +224,7 @@ export class ProxyRouter {
     }
 
     // Update affinity
-    if (sessionKey) {
+    if (sessionKey && !boundWaits) {
       this.sessionCache.set(sessionKey, selected.id);
     }
 

@@ -296,7 +296,7 @@ test("ProxyServer passes a 401 through, answers 401 for an unreadable credential
       "{}",
     );
     assert.equal(res.status, 401);
-    assert.match(res.body, /No active credential/);
+    assert.match(res.body, /Relay cannot use the sign-in of/, "names Relay, since the client's /login would not help");
   } finally {
     await noToken.server.stop();
   }
@@ -583,7 +583,7 @@ test("a limited account's request is retried on the next account before anything
     assert.equal(next.status, 200);
     assert.equal(upstream.seen.length, 3);
     assert.equal(upstream.seen[2].headers.authorization, "Bearer tok-b");
-    const cooldown = (server.router as any).cooldowns.get("a") as number;
+    const cooldown = server.router.cooldownOf("a")!.until;
     assert.ok(cooldown - Date.now() > 2.9 * 3600_000, "cooldown follows the reset header");
   } finally {
     await server.stop();
@@ -680,7 +680,7 @@ test("a short 429 cools an account for its Retry-After, not until the window's o
   const { server, port } = await startPool({ anthropicUrl: upstream.url }, [makeAccount("a", "A")]);
   try {
     await request(port, { method: "POST", path: "/v1/messages" }, "{}");
-    const cooldown = (server.router as any).cooldowns.get("a") as number;
+    const cooldown = server.router.cooldownOf("a")!.until;
     assert.ok(cooldown - Date.now() <= 11_000, "only the Retry-After");
   } finally {
     await server.stop();
@@ -763,5 +763,298 @@ test("a Claude Code session keeps its account by its session header, whatever it
   } finally {
     await server.stop();
     await upstream.close();
+  }
+});
+
+/** A pool of accounts with tokens `tok-<id>`, a clock the test moves, and a hook per upstream token. */
+async function startClocked(
+  reply: (token: string, req: http.IncomingMessage, res: http.ServerResponse) => void,
+  ids: string[],
+  extra: Partial<ConstructorParameters<typeof ProxyServer>[0]> = {},
+  usageMap: Record<string, AccountUsage> = {},
+) {
+  const upstream = await fakeUpstream((req, res) =>
+    reply(String(req.headers.authorization).replace("Bearer ", ""), req, res),
+  );
+  const clock = { now: Date.now() };
+  const server = new ProxyServer({
+    config: { port: 0, host: "127.0.0.1", enabled: true, routingStrategy: "strict-priority" },
+    credentialResolver: async (a) => `tok-${a.id}`,
+    usageProvider: () => ({ accounts: ids.map((id) => makeAccount(id, id.toUpperCase())), usageMap }),
+    upstreams: { anthropicUrl: upstream.url },
+    now: () => clock.now,
+    ...extra,
+  });
+  const { port } = await server.start();
+  const send = (session = "s-1") =>
+    request(port, { method: "POST", path: "/v1/messages", headers: { "x-claude-code-session-id": session } }, "{}");
+  return {
+    server,
+    upstream,
+    clock,
+    send,
+    tokens: () => upstream.seen.map((s) => String(s.headers.authorization).replace("Bearer ", "")),
+    close: async () => {
+      await server.stop();
+      await upstream.close();
+    },
+  };
+}
+
+const ok = (res: http.ServerResponse) => {
+  res.writeHead(200, { "content-type": "application/json" });
+  res.end('{"type":"message"}');
+};
+const json = (res: http.ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
+  res.writeHead(status, { "content-type": "application/json", ...headers });
+  res.end(JSON.stringify(body));
+};
+
+test("an overload on a session's account is served elsewhere once, and the session comes back to its cache", async () => {
+  let overloaded = false;
+  const pool = await startClocked((token, _req, res) => {
+    if (token === "tok-a" && overloaded) {
+      overloaded = false;
+      return json(res, 529, { type: "error", error: { type: "overloaded_error", message: "Overloaded" } });
+    }
+    ok(res);
+  }, ["a", "b"]);
+  try {
+    await pool.send();
+    overloaded = true;
+    assert.equal((await pool.send()).status, 200, "B answered in its place");
+    assert.equal(pool.server.sessionCache.peek("hdr:s-1"), "a", "the session is still A's");
+    assert.equal(pool.server.router.cooldownOf("a")?.reason, "transient");
+    pool.clock.now += 11_000;
+    await pool.send();
+    assert.deepEqual(pool.tokens(), ["tok-a", "tok-a", "tok-b", "tok-a"]);
+  } finally {
+    await pool.close();
+  }
+});
+
+test("a refused sign-in drops the token and asks for a renewal, but the session waits for its account", async () => {
+  const rejected: string[] = [];
+  const renew: string[] = [];
+  let refuse = false;
+  const pool = await startClocked(
+    (token, _req, res) =>
+      token === "tok-a" && refuse
+        ? json(res, 401, { type: "error", error: { type: "authentication_error", message: "OAuth token has expired" } })
+        : ok(res),
+    ["a", "b"],
+    { onCredentialRejected: (id) => rejected.push(id), onCredentialMissing: (id) => renew.push(id) },
+  );
+  try {
+    await pool.send("x");
+    await pool.send("y");
+    refuse = true;
+    await pool.send("x");
+    refuse = false;
+    assert.deepEqual(rejected, ["a"]);
+    assert.equal(pool.server.sessionCache.peek("hdr:x"), "a");
+    assert.equal(pool.server.sessionCache.peek("hdr:y"), "a", "the account's other sessions stay too");
+    pool.clock.now += 31_000;
+    await pool.send("y");
+    assert.equal(pool.tokens().at(-1), "tok-a");
+  } finally {
+    await pool.close();
+  }
+});
+
+test("a 403 about a model moves only that session and leaves the account and its token alone", async () => {
+  const rejected: string[] = [];
+  const pool = await startClocked(
+    (token, req, res) =>
+      token === "tok-a" && req.headers["x-claude-code-session-id"] === "opus"
+        ? json(res, 403, { type: "error", error: { type: "permission_error", message: "This model is not available on your plan" } })
+        : ok(res),
+    ["a", "b"],
+    { onCredentialRejected: (id) => rejected.push(id) },
+  );
+  try {
+    await pool.send("other");
+    assert.equal((await pool.send("opus")).status, 200);
+    assert.deepEqual(rejected, []);
+    assert.equal(pool.server.router.cooldownOf("a"), undefined);
+    assert.equal(pool.server.sessionCache.peek("hdr:opus"), "b");
+    assert.equal(pool.server.sessionCache.peek("hdr:other"), "a");
+  } finally {
+    await pool.close();
+  }
+});
+
+test("a challenge page in front of the API is not a refused sign-in", async () => {
+  const rejected: string[] = [];
+  let challenge = true;
+  const pool = await startClocked(
+    (token, _req, res) => {
+      if (token === "tok-a" && challenge) {
+        challenge = false;
+        res.writeHead(403, { "content-type": "text/html" });
+        res.end("<html>Just a moment...</html>");
+        return;
+      }
+      ok(res);
+    },
+    ["a", "b"],
+    { onCredentialRejected: (id) => rejected.push(id) },
+  );
+  try {
+    assert.equal((await pool.send()).status, 200);
+    assert.deepEqual(rejected, []);
+    assert.equal(pool.server.router.cooldownOf("a")?.reason, "transient");
+    assert.equal(pool.server.sessionCache.peek("hdr:s-1"), "a");
+  } finally {
+    await pool.close();
+  }
+});
+
+test("a 5-hour limit keeps the account out until the 5-hour reset, not the weekly one the overall header names", async () => {
+  const fiveHours = Math.floor(Date.now() / 1000) + 3600;
+  const week = Math.floor(Date.now() / 1000) + 3 * 86_400;
+  const pool = await startClocked(
+    (token, _req, res) =>
+      token === "tok-a"
+        ? json(res, 429, { type: "error", error: { type: "rate_limit_error", message: "limit" } }, {
+            "anthropic-ratelimit-unified-status": "rejected",
+            "anthropic-ratelimit-unified-reset": String(week),
+            "anthropic-ratelimit-unified-5h-status": "rejected",
+            "anthropic-ratelimit-unified-5h-reset": String(fiveHours),
+            "anthropic-ratelimit-unified-7d-status": "allowed",
+            "anthropic-ratelimit-unified-7d-reset": String(week),
+          })
+        : ok(res),
+    ["a", "b"],
+  );
+  try {
+    await pool.send();
+    const until = pool.server.router.cooldownOf("a")!.until;
+    assert.ok(Math.abs(until - fiveHours * 1000) < 2_000, "the 5-hour window's own reset");
+  } finally {
+    await pool.close();
+  }
+});
+
+test("an account Relay read as full is not tried, and a pool with no room answers at once with the first reset", async () => {
+  const reset = new Date(Date.now() + 2 * 3600_000).toISOString();
+  const usageMap: Record<string, AccountUsage> = {
+    b: { accountId: "b", status: "ready", stale: false, fiveHour: { usedPercent: 0 }, sevenDay: { usedPercent: 100, resetsAt: reset } },
+  };
+  const pool = await startClocked(
+    (token, _req, res) =>
+      token === "tok-a"
+        ? json(res, 429, { type: "error", error: { type: "rate_limit_error", message: "limit" } }, { "retry-after": "600" })
+        : ok(res),
+    ["a", "b"],
+    {},
+    usageMap,
+  );
+  try {
+    const first = await pool.send();
+    assert.equal(first.status, 429);
+    assert.deepEqual(pool.tokens(), ["tok-a"], "B is full until its weekly reset: no request is spent on it");
+    const second = await pool.send("s-2");
+    assert.equal(second.status, 429);
+    assert.equal(pool.tokens().length, 1, "answered by the gateway itself");
+    assert.ok(Number(second.headers["retry-after"]) >= 590);
+  } finally {
+    await pool.close();
+  }
+});
+
+test("accounts whose sign-in cannot be read do not use up the tries, and are sent for renewal", async () => {
+  const renew: string[] = [];
+  const upstream = await fakeUpstream((_req, res) => ok(res));
+  const ids = ["a", "b", "c", "good"];
+  const server = new ProxyServer({
+    config: { port: 0, host: "127.0.0.1", enabled: true, routingStrategy: "strict-priority" },
+    credentialResolver: async (a) => (a.id === "good" ? "tok-good" : undefined),
+    onCredentialMissing: (id) => renew.push(id),
+    usageProvider: () => ({ accounts: ids.map((id) => makeAccount(id, id.toUpperCase())), usageMap: {} }),
+    upstreams: { anthropicUrl: upstream.url },
+  });
+  const { port } = await server.start();
+  try {
+    const res = await request(port, { method: "POST", path: "/v1/messages" }, "{}");
+    assert.equal(res.status, 200);
+    assert.deepEqual(renew, ["a", "b", "c"]);
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});
+
+test("when no sign-in can be used the client hears so, not a rate limit it would wait out", async () => {
+  const upstream = await fakeUpstream((_req, res) => ok(res));
+  const server = new ProxyServer({
+    config: { port: 0, host: "127.0.0.1", enabled: true },
+    credentialResolver: async () => undefined,
+    usageProvider: () => ({ accounts: [makeAccount("a", "Alto")], usageMap: {} }),
+    upstreams: { anthropicUrl: upstream.url },
+  });
+  const { port } = await server.start();
+  try {
+    const first = await request(port, { method: "POST", path: "/v1/messages" }, "{}");
+    assert.equal(first.status, 401);
+    assert.match(first.body, /sign-in of Alto/);
+    const second = await request(port, { method: "POST", path: "/v1/messages" }, "{}");
+    assert.equal(second.status, 401, "still a sign-in problem while the account waits");
+    assert.match(second.body, /Renew it in Relay/);
+  } finally {
+    await server.stop();
+    await upstream.close();
+  }
+});
+
+test("an answer billed as extra usage moves the account's sessions and keeps it out until its window resets", async () => {
+  const reset = new Date(Date.now() + 90 * 60_000).toISOString();
+  const usageMap: Record<string, AccountUsage> = {
+    a: { accountId: "a", status: "ready", stale: false, fiveHour: { usedPercent: 92, resetsAt: reset } },
+  };
+  const pool = await startClocked(
+    (token, _req, res) => {
+      if (token === "tok-a") {
+        res.writeHead(200, { "content-type": "application/json", "anthropic-ratelimit-unified-overage-in-use": "true" });
+        res.end('{"type":"message"}');
+        return;
+      }
+      ok(res);
+    },
+    ["a", "b"],
+    {},
+    usageMap,
+  );
+  try {
+    await pool.send();
+    // The answer reached the client; the gateway settles its outcome right after.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const cooldown = pool.server.router.cooldownOf("a")!;
+    assert.equal(cooldown.reason, "limit");
+    assert.ok(Math.abs(cooldown.until - Date.parse(reset)) < 2_000);
+    assert.equal(pool.server.sessionCache.peek("hdr:s-1"), undefined);
+    assert.equal(pool.server.getMetrics().extraUsage?.a.kind, "billed");
+    await pool.send();
+    assert.deepEqual(pool.tokens(), ["tok-a", "tok-b"]);
+  } finally {
+    await pool.close();
+  }
+});
+
+test("a request that needs extra usage moves to another account without benching this one", async () => {
+  const pool = await startClocked(
+    (token, _req, res) =>
+      token === "tok-a"
+        ? json(res, 429, { type: "error", error: { type: "rate_limit_error", message: "Extra usage is required for long context requests." } })
+        : ok(res),
+    ["a", "b"],
+  );
+  try {
+    assert.equal((await pool.send()).status, 200);
+    assert.equal(pool.server.router.cooldownOf("a"), undefined);
+    assert.equal(pool.server.sessionCache.peek("hdr:s-1"), "b");
+    assert.equal(pool.server.getMetrics().extraUsage?.a.kind, "required");
+  } finally {
+    await pool.close();
   }
 });
