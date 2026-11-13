@@ -69,6 +69,28 @@ const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 10 * 60 * 1000;
  * quiet minutes itself, so a longer wait only holds a dead stream open.
  */
 const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+/**
+ * Opening the connection (TCP and TLS): a healthy one takes well under a second, and the client
+ * retries a 504 sooner than it would notice a hung connection.
+ */
+const DEFAULT_CONNECT_TIMEOUT_MS = 10 * 1000;
+
+/**
+ * The upstream connections' own pool. Node's shared agent tries each address of a host for only
+ * 250 ms before it drops the attempt and moves to the next one: on a network where IPv4 answers
+ * slowly and IPv6 has no route (a VPN), the IPv4 attempt is dropped and the IPv6 one hangs.
+ * Two seconds per address keeps the slow IPv4 connection. Idle pooled sockets close after 5 s,
+ * as with Node's shared agent.
+ */
+export const UPSTREAM_AGENT_OPTIONS = {
+  keepAlive: true,
+  timeout: 5000,
+  autoSelectFamilyAttemptTimeout: 2000,
+} as const;
+const upstreamAgents = {
+  http: new http.Agent(UPSTREAM_AGENT_OPTIONS),
+  https: new https.Agent(UPSTREAM_AGENT_OPTIONS),
+};
 
 const DROP_REQUEST_HEADERS = new Set([
   "connection",
@@ -363,6 +385,10 @@ export interface ForwardSpec {
   firstByteTimeoutMs?: number;
   /** Silence after the answer began, after which the upstream call is given up. */
   idleTimeoutMs?: number;
+  /** How long opening a new connection may take. */
+  connectTimeoutMs?: number;
+  /** The connection pool; the upstream pool when not given (tests pass their own). */
+  agent?: http.Agent;
 }
 
 /**
@@ -379,8 +405,17 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
       return;
     }
 
+    // The gateway's own deadlines. A socket's 'timeout' event is not one: the pool sets a short
+    // socket timeout of its own, which also runs while a connection is being opened.
+    const timers = new Map<"connect" | "answer", NodeJS.Timeout>();
+    const clearDeadline = (name: "connect" | "answer") => {
+      clearTimeout(timers.get(name));
+      timers.delete(name);
+    };
     let settled = false;
     const settle = (outcome: UpstreamOutcome) => {
+      clearDeadline("connect");
+      clearDeadline("answer");
       if (settled) return;
       settled = true;
       resolve(outcome);
@@ -399,6 +434,7 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
       path: target.pathname + target.search,
       method: spec.method,
       headers,
+      agent: spec.agent ?? (isTls ? upstreamAgents.https : upstreamAgents.http),
     });
 
     let clientGone = false;
@@ -410,22 +446,36 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
       settle({ statusCode: 499, ...none });
     });
 
-    let answered = false;
-    upstreamReq.setTimeout(spec.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS, () => {
-      timedOut = true;
-      const minutes = Math.round(
-        (answered
-          ? (spec.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS)
-          : (spec.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS)) / 60_000,
+    const deadline = (name: "connect" | "answer", ms: number, message: string) => {
+      clearDeadline(name);
+      if (settled) return;
+      timers.set(
+        name,
+        setTimeout(() => {
+          timedOut = true;
+          upstreamReq.destroy(new Error(message));
+        }, ms),
       );
-      upstreamReq.destroy(
-        new Error(
-          answered
-            ? `the upstream sent nothing for ${minutes} min in the middle of its answer`
-            : `the upstream did not answer within ${minutes} min`,
-        ),
-      );
+    };
+    const firstByteMs = spec.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS;
+    const idleMs = spec.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+    const connectMs = spec.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
+    const duration = (ms: number) =>
+      ms >= 60_000 ? `${Math.round(ms / 60_000)} min` : ms >= 1000 ? `${Math.round(ms / 1000)} s` : `${ms} ms`;
+    deadline("answer", firstByteMs, `the upstream did not answer within ${duration(firstByteMs)}`);
+    upstreamReq.once("socket", (socket) => {
+      // A pooled socket is open already; a new one has to connect (and for TLS, shake hands) first.
+      if (!socket.connecting) return;
+      deadline("connect", connectMs, `could not connect to the upstream within ${duration(connectMs)}`);
+      socket.once(isTls ? "secureConnect" : "connect", () => clearDeadline("connect"));
     });
+    // Each chunk of the answer restarts the wait for the next one.
+    const stillTalking = () =>
+      deadline(
+        "answer",
+        idleMs,
+        `the upstream sent nothing for ${duration(idleMs)} in the middle of its answer`,
+      );
 
     upstreamReq.on("error", (err) => {
       if (!clientGone)
@@ -445,8 +495,9 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
     });
 
     upstreamReq.on("response", (upstreamRes) => {
-      answered = true;
-      upstreamReq.setTimeout(spec.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS);
+      clearDeadline("connect");
+      stillTalking();
+      upstreamRes.on("data", stillTalking);
       const statusCode = upstreamRes.statusCode ?? 502;
       const outcome: UpstreamOutcome = {
         statusCode,

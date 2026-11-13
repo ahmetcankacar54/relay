@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import type net from "node:net";
 import {
+  UPSTREAM_AGENT_OPTIONS,
   classifyFailure,
   forwardUpstream,
   parseLimitReset,
+  type ForwardSpec,
 } from "../electron/core/proxy/upstream-common";
 import { createAnthropicUsageExtractor } from "../electron/core/proxy/anthropic-upstream";
 import { ProxyRouter, fullUntil } from "../electron/core/proxy/proxy-router";
@@ -81,7 +83,10 @@ test("an error answer is read for what it says about the account", () => {
 });
 
 /** A gateway-side server whose one route forwards to `upstream` with the given timeouts. */
-async function forwarder(upstream: string, timeouts: { firstByteTimeoutMs?: number; idleTimeoutMs?: number }) {
+async function forwarder(
+  upstream: string,
+  timeouts: Pick<ForwardSpec, "firstByteTimeoutMs" | "idleTimeoutMs" | "connectTimeoutMs" | "agent">,
+) {
   const outcomes: Awaited<ReturnType<typeof forwardUpstream>>[] = [];
   const server = http.createServer((req, res) => {
     req.resume();
@@ -168,6 +173,75 @@ test("a stream that goes quiet mid-answer is cut after the idle time, while a sl
     await patient.close();
     await stalled.close();
     await slow.close();
+  }
+});
+
+/** Sends one request to a forwarder; resolves with the status and body the client got. */
+const ask = (port: number) =>
+  new Promise<{ status: number; body: string }>((resolve, reject) =>
+    http
+      .request({ host: "127.0.0.1", port, method: "POST", path: "/" }, (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => (body += chunk));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
+      })
+      .on("error", reject)
+      .end("{}"),
+  );
+
+test("the pool's own short socket timeout does not end a request that is within the gateway's wait", async () => {
+  // Found live: Node's pool times sockets out after 5 s, also while a slow connection is being
+  // opened (an IPv6 attempt hanging after a dropped IPv4 one), and that event was taken for the
+  // 10-minute first-byte wait. Here opening the connection outlasts the pool's socket timeout.
+  const upstream = await fakeServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end("{}");
+  });
+  const slowLookup = ((_host: string, options: { all?: boolean }, callback: (...args: unknown[]) => void) =>
+    setTimeout(
+      () =>
+        options.all
+          ? callback(null, [{ address: "127.0.0.1", family: 4 }])
+          : callback(null, "127.0.0.1", 4),
+      200,
+    )) as unknown as net.LookupFunction;
+  const agent = new http.Agent({ keepAlive: true, timeout: 50, lookup: slowLookup });
+  const gateway = await forwarder(`http://upstream.test:${new URL(upstream.url).port}`, {
+    firstByteTimeoutMs: 5_000,
+    agent,
+  });
+  try {
+    assert.equal((await ask(gateway.port)).status, 200);
+    assert.equal(gateway.outcomes[0]?.statusCode, 200);
+  } finally {
+    agent.destroy();
+    await gateway.close();
+    await upstream.close();
+  }
+  // Each address of a host gets long enough for a slow IPv4 handshake before IPv6 is tried.
+  assert.equal(UPSTREAM_AGENT_OPTIONS.keepAlive, true);
+  assert.ok(UPSTREAM_AGENT_OPTIONS.autoSelectFamilyAttemptTimeout >= 1000);
+});
+
+test("a connection that never opens is given up after the connect time, with a message that says so", async () => {
+  // A lookup that never answers keeps the socket connecting forever.
+  const agent = new http.Agent({ lookup: () => {} });
+  const gateway = await forwarder("http://upstream.invalid", {
+    firstByteTimeoutMs: 5_000,
+    connectTimeoutMs: 150,
+    agent,
+  });
+  try {
+    const started = Date.now();
+    const answer = await ask(gateway.port);
+    assert.equal(answer.status, 504);
+    assert.match(answer.body, /could not connect to the upstream within 150 ms/);
+    assert.ok(Date.now() - started < 3_000, "the connect time, not the first-byte wait");
+    assert.equal(gateway.outcomes[0]?.statusCode, 504);
+  } finally {
+    agent.destroy();
+    await gateway.close();
   }
 });
 
