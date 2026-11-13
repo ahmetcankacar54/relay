@@ -115,6 +115,9 @@ export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
                 status: "ready",
                 ...(usage.fiveHour ? { fiveHour: window(usage.fiveHour) } : {}),
                 sevenDay: window(usage.sevenDay) ?? "not-reported",
+                ...(usage.modelWindows?.length
+                  ? { models: usage.modelWindows.map((w) => ({ key: w.key, label: w.label, ...window(w) })) }
+                  : {}),
               }
             : { id: account.id, name: account.name, status: "error", ...(usage.issue ? { issue: usage.issue } : {}) },
       ),
@@ -140,13 +143,15 @@ export const usage: Command = async ({ io, deps, parsed, t, lang }) => {
           : t(`giriş yok: ${inApp(t)}`, `not signed in: ${inApp(t)}`),
         "",
       ];
-    if (usage.status !== "ready") return [account.name, issueText(ctx, account, usage.issue), ""];
+    if (usage.status !== "ready") return [account.name, issueText(ctx, account, usage.issue), "", ""];
     return [
       account.name,
       cell(usage.fiveHour, "—"),
       cell(usage.sevenDay, t("limit bildirilmedi", "no limit reported")),
+      // A model's own weekly limit (Fable, Opus): spent, it stops that model on the account.
+      (usage.modelWindows ?? []).map((w) => `${w.label} ${formatUsed(w.usedPercent, lang)}`).join(", ") || "—",
     ];
   });
-  io.stdout(table([t("Hesap", "Account"), t("5 saat", "5 hours"), t("Haftalık", "Weekly")], rows));
+  io.stdout(table([t("Hesap", "Account"), t("5 saat", "5 hours"), t("Haftalık", "Weekly"), t("Model limitleri", "Model limits")], rows));
   return EXIT.ok;
 };
