@@ -662,9 +662,9 @@ const previewRecent = (): ProxyRequestLog[] => {
   const cc = { client: "claude-code" };
   return [
     { at: now - 4_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, affinity: true, ...cc, requestClass: "main", ms: 6_210, tokens: { input: 4, cacheRead: 182_400, cacheWrite: 1_210, output: 860 } },
-    { at: now - 31_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "subagent", ms: 3_480, tokens: { input: 12, cacheWrite: 24_900, output: 412 }, cost: 0.0998 },
-    { at: now - 31_500, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "main", ms: 7_900, tokens: { input: 4, cacheWrite: 96_400, output: 300 }, cost: 0.583, miss: { reason: "account" as const, tokens: 94_000 } },
-    { at: now - 32_000, accountId: first, provider: "claude", model: "claude-sonnet-4-5", status: 429, failover: true, ...cc, requestClass: "subagent", ms: 610, note: "limit" },
+    { at: now - 31_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "subagent", ms: 3_480, tokens: { input: 12, cacheWrite: 24_900, output: 412 }, cost: 0.0998, pick: { reason: "soonest-reset" as const, after: first } },
+    { at: now - 31_500, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "main", ms: 7_900, tokens: { input: 4, cacheWrite: 96_400, output: 300 }, cost: 0.583, miss: { reason: "account" as const, tokens: 94_000 }, pick: { reason: "soonest-reset" as const, nearlyFull: [first] } },
+    { at: now - 32_000, accountId: first, provider: "claude", model: "claude-sonnet-4-5", status: 429, failover: true, ...cc, requestClass: "subagent", ms: 610, note: "limit", pick: { reason: "bound" as const } },
     { at: now - 70_000, accountId: first, provider: "claude", model: "claude-opus-4-5", status: 429, client: "curl", ms: 220, note: "refused", error: "Error" },
     { at: now - 80_000, accountId: second, provider: "claude", model: "claude-sonnet-4-5", status: 200, ...cc, requestClass: "main", ms: 5_100, tokens: { input: 3, cacheWrite: 41_000, output: 120 }, cost: 0.156, note: "cold-move", miss: { reason: "expired" as const, tokens: 40_800 } },
     { at: now - 95_000, accountId: first, provider: "claude", model: "claude-haiku-4-5", status: 200, affinity: true, client: "agent-sdk", requestClass: "auxiliary", ms: 940, tokens: { input: 1_800, output: 24 } },
@@ -711,12 +711,26 @@ const previewProxyStatus = (): ProxyStatus => ({
       ...(previewProxy.running && scenario === "proxy-waiting" && i === 2
         ? { extraUsage: { kind: "billed" as const, minutesAgo: 3 } }
         : {}),
+      // `?scenario=proxy-signin`: one saved sign-in the gateway cannot read, one expired.
+      ...(previewProxy.running && scenario === "proxy-signin" && i === 0 ? { gatewaySignIn: "missing" as const } : {}),
+      ...(previewProxy.running && scenario === "proxy-signin" && i === 2 ? { gatewaySignIn: "expired" as const } : {}),
       ...(previewProxy.running && i === 1 ? { live: true, fullAt: Date.now() + 95 * 60_000 } : {}),
       ...(previewProxy.running ? { percentCost: { dollars: [2.84, 1.51, 1.81][i] ?? 2, windows: [6, 5, 2][i] ?? 3 } } : {}),
     };
   }),
   recent: previewRecent(),
   ...(previewProxy.subagentOverflow ? { subagentOverflow: true } : {}),
+  ...(previewProxy.running && accounts.length
+    ? {
+        nextPick: {
+          claude: {
+            accountId: accounts[1]?.id ?? accounts[0].id,
+            reason: previewProxy.routingStrategy === "strict-priority" ? ("priority" as const) : previewProxy.routingStrategy === "balanced" ? ("balanced" as const) : ("soonest-reset" as const),
+            ...(accounts.length > 1 ? { nearlyFull: [accounts[0].id] } : {}),
+          },
+        },
+      }
+    : {}),
   ...(previewProxy.running && accounts.length
     ? {
         sessions: [

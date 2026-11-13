@@ -1,5 +1,5 @@
 import type { Account, AccountUsage } from "../../../shared/types";
-import type { RoutingStrategy } from "../../../shared/proxy-types";
+import type { ProxyPickReason, RoutingStrategy } from "../../../shared/proxy-types";
 import {
   rankContinuationTargets,
   type ContinuationTargetCandidate,
@@ -17,6 +17,12 @@ export interface ProxyRouterOptions {
 export interface RouterSelection {
   account: Account;
   sessionAffinityHit: boolean;
+  /** Why this account: the session's own, the strategy's pick, or the only one left. */
+  reason: ProxyPickReason;
+  /** Accounts a new pick left out for being close to a limit. */
+  nearlyFull?: string[];
+  /** The session's own account, kept out by its sign-in or an outage; the session stays bound. */
+  boundWaiting?: string;
 }
 
 /**
@@ -204,7 +210,7 @@ export class ProxyRouter {
               (usage.sevenDay?.usedPercent ?? 0) < 100);
 
           if (hasRemainingQuota) {
-            return { account: candidate, sessionAffinityHit: true };
+            return { account: candidate, sessionAffinityHit: true, reason: "bound" };
           } else {
             // Account exhausted its quota, evict affinity
             this.sessionCache.evictAccount(candidate.id);
@@ -217,9 +223,13 @@ export class ProxyRouter {
     // short of its limits when one is: one started near the limit soon has to move, and moving
     // writes its whole cache again elsewhere. Strict priority keeps its own order.
     let pool = eligibleAccounts;
+    let leftOut: string[] = [];
     if (this.strategy !== "strict-priority") {
       const roomy = pool.filter((acc) => !nearlyFull(usageMap[acc.id]));
-      if (roomy.length) pool = roomy;
+      if (roomy.length) {
+        leftOut = pool.filter((acc) => !roomy.includes(acc)).map((acc) => acc.id);
+        pool = roomy;
+      }
     }
     if (avoid) {
       const others = pool.filter((acc) => acc.id !== avoid);
@@ -251,7 +261,34 @@ export class ProxyRouter {
       this.sessionCache.set(sessionKey, selected.id);
     }
 
-    return { account: selected, sessionAffinityHit: false };
+    const reason: ProxyPickReason =
+      pool.length === 1
+        ? "only"
+        : this.strategy === "strict-priority"
+          ? "priority"
+          : this.strategy === "soonest-reset"
+            ? "soonest-reset"
+            : "balanced";
+    return {
+      account: selected,
+      sessionAffinityHit: false,
+      reason,
+      ...(leftOut.length ? { nearlyFull: leftOut } : {}),
+      ...(boundWaits && boundId ? { boundWaiting: boundId } : {}),
+    };
+  }
+
+  /** The account a new session of `provider` would get now, and why; nothing is bound. */
+  preview(
+    accounts: readonly Account[],
+    usageMap: Record<string, AccountUsage | undefined>,
+    provider: ProxyProvider,
+  ): RouterSelection | undefined {
+    try {
+      return this.selectAccount(undefined, accounts, usageMap, provider);
+    } catch {
+      return undefined;
+    }
   }
 
   /**

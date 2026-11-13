@@ -173,6 +173,10 @@ export function buildProxyStatus(input: {
   classShare?: ProxyClassShare[];
   /** Each account's dollars per percent of its 5-hour window, where Relay could tell. */
   calibrations?: Record<string, LimitCalibration>;
+  /** The account a new session would get now, by provider (from the running gateway). */
+  nextPick?: ProxyStatus["nextPick"];
+  /** Whether the gateway could use an account's sign-in when it last looked. */
+  gatewaySignIn?: (accountId: string) => "missing" | "expired" | undefined;
 }): ProxyStatus {
   const { config, metrics } = input;
   const excluded = new Set(config.excludedAccountIds ?? []);
@@ -235,6 +239,10 @@ export function buildProxyStatus(input: {
               },
             }
           : {}),
+        ...(() => {
+          const state = input.running && !excluded.has(account.id) ? input.gatewaySignIn?.(account.id) : undefined;
+          return state ? { gatewaySignIn: state } : {};
+        })(),
       };
     }),
     ...(input.error ? { error: input.error } : {}),
@@ -252,5 +260,6 @@ export function buildProxyStatus(input: {
         })()
       : {}),
     ...(input.classShare?.length ? { classShare: input.classShare } : {}),
+    ...(input.running && input.nextPick && Object.keys(input.nextPick).length ? { nextPick: input.nextPick } : {}),
   };
 }

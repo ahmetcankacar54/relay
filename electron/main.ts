@@ -2082,6 +2082,60 @@ let proxyError: string | undefined;
 let proxyQueue: Promise<unknown> = Promise.resolve();
 /** How long a read sign-in is reused before the Keychain is asked again. */
 const PROXY_CREDENTIAL_TTL_MS = 20_000;
+/** Whether the gateway could use each account's sign-in when it last read it, and when. */
+const gatewaySignIns = new Map<string, { state: "ok" | "missing" | "expired"; at: number }>();
+/** Accounts whose sign-in is being read for the gateway page now. */
+const signInChecks = new Set<string>();
+/** How long a sign-in the gateway has not read stays as it was last seen on its page. */
+const SIGN_IN_CHECK_MS = 10 * 60_000;
+/**
+ * The sign-in the gateway sends for an account, when it can be used; notes how it stood, so the
+ * gateway page can tell a saved sign-in from one the gateway can actually read. Never prompts.
+ */
+async function gatewayCredential(account: Account): Promise<{ accessToken: string; expiresAt?: number } | undefined> {
+  const note = (state: "ok" | "missing" | "expired") => gatewaySignIns.set(account.id, { state, at: Date.now() });
+  try {
+    const credential =
+      account.provider === "codex"
+        ? await readCodexCredential(service.store.profile(account.id))
+        : await readCredential(service.store.profile(account.id), false);
+    if (!credential) {
+      note("missing");
+      return undefined;
+    }
+    // An expired token would only earn a 401; leave the account to the others.
+    if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) {
+      note("expired");
+      return undefined;
+    }
+    note("ok");
+    return credential;
+  } catch (error) {
+    // A locked Keychain says nothing about the sign-in itself.
+    if (error instanceof UsageError && error.issue === "credentials-missing") note("missing");
+    return undefined;
+  }
+}
+/**
+ * Reads again, in the background, the pool's sign-ins the gateway has not read for a while, so
+ * its page shows an account it could not use before a request finds out.
+ */
+function checkGatewaySignIns(): void {
+  if (!proxyServer) return;
+  const now = Date.now();
+  for (const account of poolAccounts(service.store.state.accounts, proxySettings())) {
+    const provider = account.provider ?? "claude";
+    if ((provider !== "claude" && provider !== "codex") || !account.auth?.loggedIn) continue;
+    const seen = gatewaySignIns.get(account.id);
+    if ((seen && now - seen.at < SIGN_IN_CHECK_MS) || signInChecks.has(account.id)) continue;
+    signInChecks.add(account.id);
+    void gatewayCredential(account)
+      .then((credential) => {
+        if (!credential && gatewaySignIns.get(account.id)?.state === "expired") renewForGateway(account.id);
+      })
+      .finally(() => signInChecks.delete(account.id));
+  }
+}
 const serializeProxy = <T>(task: () => Promise<T>): Promise<T> => {
   const run = proxyQueue.then(task);
   proxyQueue = run.catch(() => {});
@@ -2160,6 +2214,7 @@ function proxyStatus(): ProxyStatus {
   const config = proxySettings();
   const state = proxyServer?.getState();
   const running = state?.status === "running";
+  if (running) checkGatewaySignIns();
   return buildProxyStatus({
     running,
     config: running && state ? { ...config, port: state.port, host: state.host } : config,
@@ -2172,6 +2227,11 @@ function proxyStatus(): ProxyStatus {
     ...(proxyServer ? { insights: proxyServer.insights } : {}),
     classShare: gatewayRequests().todayByClass(),
     calibrations: limitCalibrations(),
+    ...(running && proxyServer ? { nextPick: proxyServer.nextPicks() } : {}),
+    gatewaySignIn: (id) => {
+      const seen = gatewaySignIns.get(id);
+      return seen && seen.state !== "ok" ? seen.state : undefined;
+    },
     tailscaleAddress: tailscaleAddress(),
     clients: clientStatuses(clientTarget(config), config),
     cooldownOf: (id) => proxyServer?.router.cooldownOf(id),
@@ -2236,25 +2296,18 @@ async function startProxy(): Promise<void> {
       const cached = credentials.get(account.id);
       if (cached && cached.until > Date.now()) return cached.token;
       credentials.delete(account.id);
-      try {
-        const credential =
-          account.provider === "codex"
-            ? await readCodexCredential(service.store.profile(account.id))
-            : await readCredential(service.store.profile(account.id), false);
-        if (!credential) return undefined;
-        // An expired token would only earn a 401; leave the account to the others.
-        if (credential.expiresAt !== undefined && credential.expiresAt <= Date.now()) return undefined;
-        credentials.set(account.id, {
-          token: credential.accessToken,
-          until: Math.min(Date.now() + PROXY_CREDENTIAL_TTL_MS, credential.expiresAt ?? Infinity),
-        });
-        return credential.accessToken;
-      } catch {
-        return undefined;
-      }
+      const credential = await gatewayCredential(account);
+      if (!credential) return undefined;
+      credentials.set(account.id, {
+        token: credential.accessToken,
+        until: Math.min(Date.now() + PROXY_CREDENTIAL_TTL_MS, credential.expiresAt ?? Infinity),
+      });
+      return credential.accessToken;
     },
     onCredentialRejected: (accountId) => {
       credentials.delete(accountId);
+      // Refused although it read: the page shows it as renewing, not as working.
+      gatewaySignIns.delete(accountId);
       renewForGateway(accountId);
     },
     // An expired or unreadable token: the usage reader renews it when it can (never prompts).

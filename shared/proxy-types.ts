@@ -65,6 +65,29 @@ export interface ProxyRequestLog {
   error?: string;
   /** The session's prompt cache was written again: why, and about how many tokens. */
   miss?: { reason: CacheMissReason; tokens: number };
+  /** Why the gateway gave the request this account. */
+  pick?: ProxyPick;
+}
+
+/**
+ * How the gateway chose an account: the session's own (`bound`), or for a new pick the routing
+ * strategy's choice, or the one account left (`only`).
+ */
+export type ProxyPickReason = "bound" | "soonest-reset" | "balanced" | "priority" | "only";
+
+/** Why a request went to its account. */
+export interface ProxyPick {
+  reason: ProxyPickReason;
+  /** Accounts left out of a new pick for being close to a limit. */
+  nearlyFull?: string[];
+  /** Accounts skipped because their sign-in could not be read. */
+  noSignIn?: string[];
+  /** The account the previous try was held on (a limit or an outage). */
+  after?: string;
+  /** A fresh subagent kept off its session's account (subagent overflow). */
+  overflow?: boolean;
+  /** The session's own account, waiting on its sign-in or an outage: the session stays bound to it. */
+  boundWaiting?: string;
 }
 
 /** Why a session's cached prompt was written again instead of read. */

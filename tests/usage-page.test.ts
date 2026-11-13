@@ -154,7 +154,7 @@ test("summary tiles speak only of limits: full periods, periods started, hits an
   assert.match(html, /Başlayan dönem96günde ortalama 3,2/);
   assert.match(html, /Limite takılma76 beş saatlik, 1 haftalık/);
   assert.match(html, /En yoğun saatler13:00–16:00çalışma saatlerinde %71/);
-  assert.match(html, /Relay bu süreyi %83 gözledi/);
+  assert.match(html, /Bu aralığın %83 kadarında Relay limitleri okuyabildi/);
   assert.doesNotMatch(html, /Pro birimi|API karşılığı|token/);
   // The unit stays on one line in smaller type beside the large number.
   assert.match(render(createElement(SummaryTiles, { view })), /18 <span class="[^"]*whitespace-nowrap[^"]*">dolu dönem<\/span>/);
