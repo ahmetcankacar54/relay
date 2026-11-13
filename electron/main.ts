@@ -147,6 +147,7 @@ import {
 } from "../shared/proxy-types";
 import { ProxyServer } from "./core/proxy/proxy-server";
 import { GatewayRequestLog } from "./core/proxy/proxy-request-log";
+import { calibrateLimits, type LimitCalibration } from "../shared/limit-calibration";
 import { REQUEST_LOG_SIZE } from "./core/proxy/proxy-stats";
 import {
   buildProxyStatus,
@@ -308,6 +309,27 @@ const TOKEN_ATTRIBUTION_WINDOW_MS = 14 * 86_400_000;
 /** The limit samples are copied for attribution at most this often. */
 const TOKEN_SAMPLES_REFRESH_MS = 60_000;
 let tokenLedger: TokenLedger | undefined;
+/** Each account's dollars per percent of its 5-hour window, worked out again every ten minutes. */
+let calibrationCache: { at: number; value: Record<string, LimitCalibration> } | undefined;
+function limitCalibrations(): Record<string, LimitCalibration> {
+  const now = Date.now();
+  if (calibrationCache && now - calibrationCache.at < 10 * 60_000) return calibrationCache.value;
+  let value: Record<string, LimitCalibration> = {};
+  try {
+    const slots = tokenLedger?.snapshot().slots;
+    if (usageHistory && slots)
+      value = calibrateLimits({
+        samples: usageHistory.recentSamples(now - 7 * 86_400_000),
+        slots,
+        zone: service.store.state.settings.planning.timeZone,
+        now,
+      });
+  } catch {
+    // Not now: the next status asks again in ten minutes.
+  }
+  calibrationCache = { at: now, value };
+  return value;
+}
 /** The gateway's requests across restarts: the feed, and which account served a request id. */
 let gatewayRequestLog: GatewayRequestLog | undefined;
 function gatewayRequests(): GatewayRequestLog {
@@ -2149,6 +2171,7 @@ function proxyStatus(): ProxyStatus {
     recent: proxyServer?.stats.recent() ?? [],
     ...(proxyServer ? { insights: proxyServer.insights } : {}),
     classShare: gatewayRequests().todayByClass(),
+    calibrations: limitCalibrations(),
     tailscaleAddress: tailscaleAddress(),
     clients: clientStatuses(clientTarget(config), config),
     cooldownOf: (id) => proxyServer?.router.cooldownOf(id),

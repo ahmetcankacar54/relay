@@ -14,6 +14,7 @@ import {
   NoEligibleAccountError,
   NoProviderAccountError,
   ProxyRouter,
+  nearlyFull,
   type CooldownReason,
   type ProxyProvider,
   type RouterSelection,
@@ -118,6 +119,8 @@ export class ProxyServer {
   private onCredentialMissing?: (accountId: string) => void;
   private onLiveLimits?: (accountId: string, live: LiveLimits) => void;
   private onLoopAlarm?: (alarm: ProxyLoopAlarm) => void;
+  /** The clock for sessions, cooldowns and the traffic's times (tests pass their own). */
+  private readonly now: () => number;
   private requestLog?: RequestLogSink & { bind(requestId: string, accountId: string): void };
   private hubFetch?: typeof fetch;
 
@@ -168,6 +171,7 @@ export class ProxyServer {
       sessionCache: this.sessionCache,
       now: options.now,
     });
+    this.now = options.now ?? Date.now;
     this.stats = new ProxyStats(options.requestLog);
     this.insights = new GatewayInsights(options.now);
     this.anthropicUpstream = new AnthropicUpstream();
@@ -593,6 +597,16 @@ export class ProxyServer {
       this.config.subagentOverflow === true && !!sessionKey && !!agentId && requestClass === "subagent" && agentType !== "fork";
     const routeKey = overflow ? `${sessionKey}:sub` : sessionKey;
     const avoid = overflow ? this.sessionCache.peek(sessionKey!) : undefined;
+    // A session whose cache went cold on an account close to its limit moves now: its prompt is
+    // written again wherever it goes, and staying would cost a second write when the limit comes.
+    let coldMove = false;
+    if (sessionKey && !agentId) {
+      const bound = this.sessionCache.peek(sessionKey);
+      if (bound && this.insights.isCold(sessionKey) && nearlyFull(this.usageProvider().usageMap[bound])) {
+        this.sessionCache.evictSession(sessionKey);
+        coldMove = true;
+      }
+    }
     const headerProvider = String(
       req.headers["x-relay-provider"] ?? "",
     ).toLowerCase();
@@ -686,7 +700,7 @@ export class ProxyServer {
       const isLast = attempt === MAX_ATTEMPTS;
       attempt += 1;
       const accountId = selection.account.id;
-      const started = Date.now();
+      const started = this.now();
       const outcome = await this.forwardTo(
         selection,
         route,
@@ -729,7 +743,7 @@ export class ProxyServer {
         provider: targetProvider,
         model: requestedModel,
         status: outcome.statusCode,
-        ms: Date.now() - started,
+        ms: this.now() - started,
         ...about,
         ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
         ...(tokens ? { tokens } : {}),
@@ -739,7 +753,13 @@ export class ProxyServer {
         // A refusal is answered here; it does not go on to another account.
         ...(outcome.held && outcome.failure !== "refused" ? { failover: true } : {}),
         ...(selection.sessionAffinityHit ? { affinity: true } : {}),
-        ...(outcome.extraUsage ? { note: "extra-usage" } : outcome.failure ? { note: outcome.failure } : {}),
+        ...(outcome.extraUsage
+          ? { note: "extra-usage" }
+          : outcome.failure
+            ? { note: outcome.failure }
+            : coldMove
+              ? { note: "cold-move" }
+              : {}),
       });
       this.applyOutcome(accountId, routeKey, outcome);
       if (outcome.held && outcome.failure === "refused") {

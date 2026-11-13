@@ -36,6 +36,7 @@ import {
   compactCount,
   requestDetail,
   sessionCacheLine,
+  usd,
   gatewayUrl,
   isLoopbackHost,
   maskKey,
@@ -562,16 +563,26 @@ function PoolCard({
                   <span
                     className="truncate text-2xs text-muted-foreground tabular-nums"
                     title={
-                      account.live
-                        ? t(
-                            "Yüzdeler bu hesabın son yanıtındaki limit başlıklarından okundu.",
-                            "The percents are from the limit headers of this account's last answer.",
-                          )
-                        : undefined
+                      [
+                        account.live
+                          ? t(
+                              "Yüzdeler bu hesabın son yanıtındaki limit başlıklarından okundu.",
+                              "The percents are from the limit headers of this account's last answer.",
+                            )
+                          : undefined,
+                        account.percentCost
+                          ? t(
+                              `5 saatlik limitin %1'i son 7 günde ${account.percentCost.windows} dönemde ortalama ${usd(account.percentCost.dollars, locale)} tuttu (Claude Code kullanımı, API fiyatıyla). claude.ai sohbetleri bu hesapta yoksa oran daha güvenilirdir.`,
+                              `1% of the 5-hour limit took ${usd(account.percentCost.dollars, locale)} on average over ${account.percentCost.windows} windows in the last 7 days (Claude Code use, at API prices). It is more reliable when the account is not also used for claude.ai chats.`,
+                            )
+                          : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(" ") || undefined
                     }
                   >
                     {account.email && <Private>{account.email}</Private>}
-                    {account.email && (account.requests || cache || account.live) ? " · " : ""}
+                    {account.email && (account.requests || cache || account.live || account.percentCost) ? " · " : ""}
                     {[
                       account.requests
                         ? t(`${account.requests} istek`, `${account.requests} requests`)
@@ -580,6 +591,9 @@ function PoolCard({
                         ? t(`önbellek ${compactCount(cache, locale)}`, `cache ${compactCount(cache, locale)}`)
                         : undefined,
                       account.live ? t("canlı", "live") : undefined,
+                      account.percentCost
+                        ? t(`%1 ≈ ${usd(account.percentCost.dollars, locale)}`, `1% ≈ ${usd(account.percentCost.dollars, locale)}`)
+                        : undefined,
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -733,7 +747,12 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
           {recent.slice(0, 12).map((entry, index) => {
             const { tone, word } = statusTone(entry);
             const to = name(entry.accountId);
-            const detail = requestDetail(entry, t, locale);
+            const detail = requestDetail(
+              entry,
+              t,
+              locale,
+              status.accounts.find((a) => a.id === entry.accountId)?.percentCost?.dollars,
+            );
             return (
               <li
                 key={`${entry.at}-${index}`}
