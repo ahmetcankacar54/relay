@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   bindClient,
   clientStatuses,
+  releaseClientSync,
   tailscaleAddress,
   unbindClient,
 } from "../electron/core/proxy/proxy-clients";
@@ -27,10 +28,21 @@ test("binding Claude Code writes the gateway into settings.json and unbinding re
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify({ model: "opus", env: { ANTHROPIC_BASE_URL: "https://old.example", OTHER: "1" } }));
   const saved = await bindClient("claude-code", target, undefined, dir);
-  assert.deepEqual(saved, { ANTHROPIC_BASE_URL: "https://old.example", ANTHROPIC_AUTH_TOKEN: null });
+  assert.deepEqual(saved, {
+    ANTHROPIC_BASE_URL: "https://old.example",
+    ANTHROPIC_AUTH_TOKEN: null,
+    CLAUDE_CODE_PROMPT_CACHE_TTL: null,
+    CLAUDE_CODE_GATEWAY_HINT_HEADERS: null,
+  });
   const bound = JSON.parse(fs.readFileSync(file, "utf8"));
   assert.equal(bound.model, "opus");
-  assert.deepEqual(bound.env, { ANTHROPIC_BASE_URL: target.url, OTHER: "1", ANTHROPIC_AUTH_TOKEN: target.key });
+  assert.deepEqual(bound.env, {
+    ANTHROPIC_BASE_URL: target.url,
+    OTHER: "1",
+    ANTHROPIC_AUTH_TOKEN: target.key,
+    CLAUDE_CODE_PROMPT_CACHE_TTL: "1h",
+    CLAUDE_CODE_GATEWAY_HINT_HEADERS: "1",
+  });
   const [claude] = clientStatuses(target, { clientBindings: { "claude-code": saved } }, dir);
   assert.equal(claude.installed, true);
   assert.equal(claude.bound, true);
@@ -49,9 +61,77 @@ test("binding Claude Code writes the gateway into settings.json and unbinding re
 
 test("unbinding Claude Code drops an env block Relay emptied", async () => {
   const dir = home();
-  await bindClient("claude-code", target, undefined, dir);
-  await unbindClient("claude-code", { ANTHROPIC_BASE_URL: null, ANTHROPIC_AUTH_TOKEN: null }, dir);
+  const saved = await bindClient("claude-code", target, undefined, dir);
+  await unbindClient("claude-code", saved, dir);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, ".claude", "settings.json"), "utf8")), {});
+});
+
+test("the cache lifetime and hint headers are added only where the user set none, and only Relay's go on unbind", async () => {
+  const dir = home();
+  const file = path.join(dir, ".claude", "settings.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ env: { CLAUDE_CODE_PROMPT_CACHE_TTL: "5m" } }));
+  const saved = await bindClient("claude-code", target, undefined, dir);
+  assert.equal("CLAUDE_CODE_PROMPT_CACHE_TTL" in saved, false, "the user's own lifetime is not Relay's to restore");
+  const env = JSON.parse(fs.readFileSync(file, "utf8")).env;
+  assert.equal(env.CLAUDE_CODE_PROMPT_CACHE_TTL, "5m");
+  assert.equal(env.CLAUDE_CODE_GATEWAY_HINT_HEADERS, "1");
+  // Changed by the user while bound: a rebind and the unbind both leave it.
+  fs.writeFileSync(file, JSON.stringify({ env: { ...env, CLAUDE_CODE_GATEWAY_HINT_HEADERS: "0" } }));
+  await bindClient("claude-code", target, saved, dir);
+  assert.equal(JSON.parse(fs.readFileSync(file, "utf8")).env.CLAUDE_CODE_GATEWAY_HINT_HEADERS, "0");
+  await unbindClient("claude-code", saved, dir);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")).env, {
+    CLAUDE_CODE_PROMPT_CACHE_TTL: "5m",
+    CLAUDE_CODE_GATEWAY_HINT_HEADERS: "0",
+  });
+});
+
+test("a binding from before the extras reads as out of date, and writing it again adds them", async () => {
+  const dir = home();
+  const file = path.join(dir, ".claude", "settings.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ env: { ANTHROPIC_BASE_URL: target.url, ANTHROPIC_AUTH_TOKEN: target.key } }));
+  const old = { ANTHROPIC_BASE_URL: null, ANTHROPIC_AUTH_TOKEN: null };
+  const before = clientStatuses(target, { clientBindings: { "claude-code": old } }, dir)[0];
+  assert.deepEqual([before.bound, before.stale], [false, true]);
+  const saved = await bindClient("claude-code", target, old, dir);
+  assert.deepEqual(saved, { ...old, CLAUDE_CODE_PROMPT_CACHE_TTL: null, CLAUDE_CODE_GATEWAY_HINT_HEADERS: null });
+  assert.equal(clientStatuses(target, { clientBindings: { "claude-code": saved } }, dir)[0].bound, true);
+});
+
+test("a file Relay left bound is not taken for the user's values, and a binding with nothing to change is not rewritten", async () => {
+  const dir = home();
+  const file = path.join(dir, ".claude", "settings.json");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // Relay crashed while bound: the file holds the gateway and an older Relay key.
+  fs.writeFileSync(file, JSON.stringify({ env: { ANTHROPIC_BASE_URL: target.url, ANTHROPIC_AUTH_TOKEN: "relay-sec-older" } }));
+  const saved = await bindClient("claude-code", target, undefined, dir);
+  assert.equal(saved.ANTHROPIC_BASE_URL, null);
+  assert.equal(saved.ANTHROPIC_AUTH_TOKEN, null);
+  const mtime = fs.statSync(file).mtimeMs;
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  await bindClient("claude-code", target, saved, dir);
+  assert.equal(fs.statSync(file).mtimeMs, mtime);
+});
+
+test("quitting puts both clients' files back synchronously and keeps nothing of Relay's in them", async () => {
+  const dir = home();
+  const claude = path.join(dir, ".claude", "settings.json");
+  fs.mkdirSync(path.dirname(claude), { recursive: true });
+  fs.writeFileSync(claude, JSON.stringify({ env: { ANTHROPIC_BASE_URL: "https://mine.example" } }));
+  const codexFile = path.join(dir, ".codex", "config.toml");
+  fs.mkdirSync(path.dirname(codexFile), { recursive: true });
+  fs.writeFileSync(codexFile, 'model_provider = "openai"\n');
+  const savedClaude = await bindClient("claude-code", target, undefined, dir);
+  const savedCodex = await bindClient("codex", target, undefined, dir);
+  releaseClientSync("claude-code", savedClaude, dir);
+  releaseClientSync("codex", savedCodex, dir);
+  assert.deepEqual(JSON.parse(fs.readFileSync(claude, "utf8")), { env: { ANTHROPIC_BASE_URL: "https://mine.example" } });
+  assert.equal(fs.readFileSync(codexFile, "utf8"), 'model_provider = "openai"\n');
+  // The next start binds again from the saved values.
+  await bindClient("claude-code", target, savedClaude, dir);
+  assert.equal(JSON.parse(fs.readFileSync(claude, "utf8")).env.ANTHROPIC_BASE_URL, target.url);
 });
 
 test("an unreadable settings.json is reported, never overwritten", async () => {

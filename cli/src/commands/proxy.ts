@@ -54,6 +54,8 @@ function envLines(url: string, key: string | undefined): string[] {
   return [
     `export ANTHROPIC_BASE_URL="${url}"`,
     `export ANTHROPIC_AUTH_TOKEN="${shown}"`,
+    // Behind a gateway Claude Code caches for 5 minutes unless told the subscription's hour.
+    `export CLAUDE_CODE_PROMPT_CACHE_TTL="1h"`,
     `export OPENAI_BASE_URL="${url}/v1"`,
     `export OPENAI_API_KEY="${shown}"`,
   ];

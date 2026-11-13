@@ -309,6 +309,14 @@ export interface ProxyAccountStatus {
   requests: number;
   /** Tokens it answered since the gateway started. */
   tokens?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  /**
+   * The gateway is keeping it out: `limit` (a window is spent, or it billed extra usage),
+   * `auth` (its sign-in was refused or cannot be read), `transient` (an overload). Minutes
+   * until it is tried again.
+   */
+  waiting?: { reason: "limit" | "auth" | "transient"; minutes: number };
+  /** Its latest answer was billed as extra usage (`billed`), or a request needed it (`required`). */
+  extraUsage?: { kind: "billed" | "required"; minutesAgo: number };
 }
 /** A client tool Relay can point at the gateway, and whether it is now. */
 export interface ProxyClientStatus {

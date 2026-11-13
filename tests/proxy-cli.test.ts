@@ -24,6 +24,7 @@ test("relay proxy takes --port and --host, and rejects bad values", { skip: proc
     [
       'export ANTHROPIC_BASE_URL="http://127.0.0.1:9000"',
       'export ANTHROPIC_AUTH_TOKEN="<relay-key>"',
+      'export CLAUDE_CODE_PROMPT_CACHE_TTL="1h"',
       'export OPENAI_BASE_URL="http://127.0.0.1:9000/v1"',
       'export OPENAI_API_KEY="<relay-key>"',
     ].join("\n"),

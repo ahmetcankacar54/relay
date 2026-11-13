@@ -20,11 +20,29 @@ export interface UsageExtractor {
   result(): TokenTally | undefined;
 }
 
+/**
+ * What a failed answer says about the account that gave it:
+ * - `limit`: a usage window is spent (429).
+ * - `extra-usage`: this request needs extra usage the account's plan does not cover (a 429
+ *   naming extra usage, e.g. long context); the account still serves other requests.
+ * - `auth`: the sign-in was refused (401, or a 403 about the token, the organization or the
+ *   account).
+ * - `permission`: the account may not use what was asked (a 403 permission error about a
+ *   model or a feature); its other requests are fine.
+ * - `transient`: an overload or an answer from something in front of the API (an HTML 403
+ *   challenge, 503, 529); nothing is wrong with the account itself.
+ */
+export type FailureKind = "limit" | "extra-usage" | "auth" | "permission" | "transient";
+
 export interface UpstreamOutcome {
   statusCode: number;
   rateLimited: boolean;
   /** The upstream refused the token (401/403). */
   unauthorized: boolean;
+  /** For an error answer: what it says about the account (see FailureKind). */
+  failure?: FailureKind;
+  /** The upstream reported that this answer was billed as extra usage, beyond the plan. */
+  extraUsage?: boolean;
   retryAfterSeconds?: number;
   /** When the account's exhausted limit resets (ms), from the provider's rate-limit headers. */
   limitResetsAt?: number;
@@ -36,10 +54,21 @@ export interface UpstreamOutcome {
 }
 
 const LOCAL_ORIGIN = "http://relay.invalid";
+/** An error answer's body is kept up to this size to tell what kind of failure it is. */
+const MAX_ERROR_BODY = 64 * 1024;
+/** A 403 about the sign-in itself, not about what was asked. */
+const AUTH_403 =
+  /oauth|token|credential|revoked|organization (?:has been )?disabled|account (?:has been )?(?:disabled|suspended)|only authorized for use with claude code/i;
 /** A response body is only parsed for usage up to this size; SSE is parsed incrementally. */
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
 const MAX_SSE_LINE = 1024 * 1024;
-const DEFAULT_UPSTREAM_TIMEOUT_MS = 10 * 60 * 1000;
+/** Until the upstream answers at all: a long prompt can take minutes before its first byte. */
+const DEFAULT_FIRST_BYTE_TIMEOUT_MS = 10 * 60 * 1000;
+/**
+ * Silence once the answer began. Anthropic streams ping events and Codex gives up after five
+ * quiet minutes itself, so a longer wait only holds a dead stream open.
+ */
+const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 const DROP_REQUEST_HEADERS = new Set([
   "connection",
@@ -142,6 +171,10 @@ function sanitizeResponseHeaders(
  * When an exhausted limit resets, in ms: Anthropic's unified rate-limit headers carry epoch
  * seconds (`anthropic-ratelimit-unified-reset`, or per window). Undefined when none is given.
  */
+const UNIFIED = "anthropic-ratelimit-unified-";
+/** The longest a reset read from the overall header alone is trusted for when it names a 5-hour window. */
+const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
+
 export function parseLimitReset(
   headers: http.IncomingHttpHeaders,
   now = Date.now(),
@@ -154,17 +187,59 @@ export function parseLimitReset(
     const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(raw);
     return Number.isFinite(ms) && ms > now ? ms : undefined;
   };
-  // The overall reset comes with every answer; it only says when a limit ends once one is hit.
   const rejected = (name: string) => String(headers[name] ?? "") === "rejected";
-  const overall = rejected("anthropic-ratelimit-unified-status")
-    ? read("anthropic-ratelimit-unified-reset")
-    : undefined;
-  if (overall !== undefined) return overall;
-  const windows = ["5h", "7d", "7d_opus", "7d_sonnet"]
-    .filter((w) => rejected(`anthropic-ratelimit-unified-${w}-status`))
-    .map((w) => read(`anthropic-ratelimit-unified-${w}-reset`))
+  // The windows that refused this request, each with its own reset (5h, 7d, 7d_opus, …). The
+  // overall reset is the "representative" window's and drifts: after a 5-hour limit it can
+  // name the weekly reset and keep the account out for days.
+  const windows = Object.keys(headers)
+    .map((name) => /^anthropic-ratelimit-unified-(.+)-status$/.exec(name)?.[1])
+    .filter((w): w is string => !!w && w !== "overage" && rejected(`${UNIFIED}${w}-status`))
+    .map((w) => read(`${UNIFIED}${w}-reset`))
     .filter((ms): ms is number => ms !== undefined);
-  return windows.length ? Math.max(...windows) : undefined;
+  if (windows.length) return Math.max(...windows);
+  // No window says which: the overall reset, capped at five hours when it names that window.
+  if (!rejected(`${UNIFIED}status`)) return undefined;
+  const overall = read(`${UNIFIED}reset`);
+  if (overall === undefined) return undefined;
+  const claim = String(headers[`${UNIFIED}representative-claim`] ?? "");
+  return claim === "five_hour" ? Math.min(overall, now + FIVE_HOURS_MS) : overall;
+}
+
+/** The `error.message` of a JSON error body, or undefined. */
+function errorMessage(body: string | undefined): { type?: string; message?: string } | undefined {
+  if (!body) return undefined;
+  try {
+    const parsed = JSON.parse(body);
+    const error = parsed?.error;
+    if (!error || typeof error !== "object") return undefined;
+    return {
+      ...(typeof error.type === "string" ? { type: error.type } : {}),
+      ...(typeof error.message === "string" ? { message: error.message } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** What an error answer says about the account; undefined for answers that say nothing about it. */
+export function classifyFailure(
+  statusCode: number,
+  headers: http.IncomingHttpHeaders,
+  body: string | undefined,
+): FailureKind | undefined {
+  const error = errorMessage(body);
+  if (statusCode === 429)
+    return /extra usage/i.test(error?.message ?? "") ? "extra-usage" : "limit";
+  if (statusCode === 401) return "auth";
+  if (statusCode === 403) {
+    const json = String(headers["content-type"] ?? "").includes("json") || !!error;
+    // Not the API's own answer (a challenge page from a proxy or CDN in front of it).
+    if (!json || !error) return "transient";
+    if (AUTH_403.test(error.message ?? "") || error.type === "authentication_error") return "auth";
+    return error.type === "permission_error" ? "permission" : "auth";
+  }
+  if (statusCode === 503 || statusCode === 529) return "transient";
+  return undefined;
 }
 
 export function parseRetryAfter(
@@ -284,8 +359,10 @@ export interface ForwardSpec {
    * says `held`, so the caller can try another account. Only asked before anything was sent.
    */
   holdIf?: (statusCode: number) => boolean;
-  /** Idle time (no bytes either way) after which the upstream call is given up. */
-  timeoutMs?: number;
+  /** How long to wait for the upstream to answer at all. */
+  firstByteTimeoutMs?: number;
+  /** Silence after the answer began, after which the upstream call is given up. */
+  idleTimeoutMs?: number;
 }
 
 /**
@@ -333,13 +410,22 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
       settle({ statusCode: 499, ...none });
     });
 
-    upstreamReq.setTimeout(
-      spec.timeoutMs ?? DEFAULT_UPSTREAM_TIMEOUT_MS,
-      () => {
-        timedOut = true;
-        upstreamReq.destroy(new Error("upstream timed out"));
-      },
-    );
+    let answered = false;
+    upstreamReq.setTimeout(spec.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS, () => {
+      timedOut = true;
+      const minutes = Math.round(
+        (answered
+          ? (spec.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS)
+          : (spec.firstByteTimeoutMs ?? DEFAULT_FIRST_BYTE_TIMEOUT_MS)) / 60_000,
+      );
+      upstreamReq.destroy(
+        new Error(
+          answered
+            ? `the upstream sent nothing for ${minutes} min in the middle of its answer`
+            : `the upstream did not answer within ${minutes} min`,
+        ),
+      );
+    });
 
     upstreamReq.on("error", (err) => {
       if (!clientGone)
@@ -359,12 +445,16 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
     });
 
     upstreamReq.on("response", (upstreamRes) => {
+      answered = true;
+      upstreamReq.setTimeout(spec.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS);
       const statusCode = upstreamRes.statusCode ?? 502;
       const outcome: UpstreamOutcome = {
         statusCode,
         rateLimited: statusCode === 429,
         unauthorized: statusCode === 401 || statusCode === 403,
       };
+      if (String(upstreamRes.headers[`${UNIFIED}overage-in-use`] ?? "") === "true")
+        outcome.extraUsage = true;
       if (statusCode === 429) {
         const header = upstreamRes.headers["retry-after"];
         outcome.retryAfterSeconds = parseRetryAfter(
@@ -374,17 +464,42 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
       }
       spec.onResponseHeaders?.(upstreamRes.headers);
 
+      // An error answer is small: its start is kept to tell what kind of failure it is.
+      const errorChunks: Buffer[] = [];
+      let errorBytes = 0;
+      if (statusCode >= 400)
+        upstreamRes.on("data", (chunk: Buffer) => {
+          if (errorBytes >= MAX_ERROR_BODY) return;
+          errorChunks.push(chunk.subarray(0, MAX_ERROR_BODY - errorBytes));
+          errorBytes += chunk.length;
+        });
+      const classified = (extra: Partial<UpstreamOutcome> = {}): UpstreamOutcome => {
+        if (statusCode < 400) return { ...outcome, ...extra };
+        const failure = classifyFailure(
+          statusCode,
+          upstreamRes.headers,
+          errorChunks.length ? Buffer.concat(errorChunks).toString("utf8") : undefined,
+        );
+        return {
+          ...outcome,
+          ...(failure ? { failure } : {}),
+          rateLimited: failure === "limit",
+          unauthorized: failure === "auth",
+          ...extra,
+        };
+      };
+
       if (clientRes.destroyed) {
         upstreamRes.destroy();
-        settle(outcome);
+        settle(classified());
         return;
       }
       if (!clientRes.headersSent && spec.holdIf?.(statusCode)) {
-        // An error answer is small; it is read to the end so the connection can be reused.
+        // Read to the end, so the connection can be reused and the body classified.
         upstreamRes.resume();
-        upstreamRes.once("end", () => settle({ ...outcome, held: true }));
-        upstreamRes.once("error", () => settle({ ...outcome, held: true }));
-        upstreamRes.once("close", () => settle({ ...outcome, held: true }));
+        upstreamRes.once("end", () => settle(classified({ held: true })));
+        upstreamRes.once("error", () => settle(classified({ held: true })));
+        upstreamRes.once("close", () => settle(classified({ held: true })));
         return;
       }
 
@@ -413,7 +528,7 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
         ) {
           spec.stats?.recordError(`${spec.errorLabel}: ${err.message}`);
         }
-        settle(outcome);
+        settle(classified());
       });
     });
 

@@ -45,6 +45,13 @@ export class ProxySessionCache {
     return existing.accountId;
   }
 
+  /** The account a live session is bound to, without counting it as a use. */
+  peek(sessionKey: string): string | undefined {
+    const existing = this.sessions.get(sessionKey);
+    if (!existing || this.now() - existing.lastActiveAt > this.ttlMs) return undefined;
+    return existing.accountId;
+  }
+
   /**
    * Binds a sessionKey to a specific accountId.
    */

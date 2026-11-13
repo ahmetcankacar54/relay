@@ -103,10 +103,10 @@ test("the client address is one a client can dial, and the key shows only its ta
 test("the setup snippets carry the address and the key, or a placeholder before there is one", () => {
   assert.equal(
     claudeCodeSnippet("127.0.0.1", 8317, KEY),
-    `export ANTHROPIC_BASE_URL=http://127.0.0.1:8317 && export ANTHROPIC_AUTH_TOKEN=${KEY}`,
+    `export ANTHROPIC_BASE_URL=http://127.0.0.1:8317 && export ANTHROPIC_AUTH_TOKEN=${KEY} && export CLAUDE_CODE_PROMPT_CACHE_TTL=1h`,
   );
   assert.match(claudeCodeSnippet("127.0.0.1", 8317, KEY, true), /ANTHROPIC_AUTH_TOKEN=relay-sec-••••/);
-  assert.match(claudeCodeSnippet("127.0.0.1", 8317, undefined), /ANTHROPIC_AUTH_TOKEN=<relay-key>$/);
+  assert.match(claudeCodeSnippet("127.0.0.1", 8317, undefined), /ANTHROPIC_AUTH_TOKEN=<relay-key> /);
   assert.equal(
     codexSnippet("127.0.0.1", 9000, KEY),
     `export OPENAI_BASE_URL=http://127.0.0.1:9000/v1 && export OPENAI_API_KEY=${KEY}`,

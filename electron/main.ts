@@ -156,6 +156,7 @@ import {
   bindClient,
   clientStatuses,
   tailscaleAddress,
+  releaseClientSync,
   unbindClient,
   type ClientTarget,
 } from "./core/proxy/proxy-clients";
@@ -2118,16 +2119,45 @@ function proxyStatus(): ProxyStatus {
     recent: proxyServer?.stats.recent() ?? [],
     tailscaleAddress: tailscaleAddress(),
     clients: clientStatuses(clientTarget(config), config),
+    cooldownOf: (id) => proxyServer?.router.cooldownOf(id),
   });
 }
-/** Rewrites the clients Relay bound, after the address or key changed, so they keep working. */
+/**
+ * Rewrites the clients Relay bound: after the address or key changed, after a start (quitting
+ * put their files back), and when Relay writes more than it used to. A file already right is
+ * left alone. The values saved for unbinding grow with what was added.
+ */
 async function rebindClients(config: ProxyConfig): Promise<void> {
   const target = clientTarget(config);
   if (!target) return;
+  const bindings = { ...config.clientBindings };
+  let changed = false;
   for (const id of PROXY_CLIENTS) {
-    const previous = config.clientBindings?.[id];
-    if (previous) await bindClient(id, target, previous).catch(() => {});
+    const previous = bindings[id];
+    if (!previous) continue;
+    const saved = await bindClient(id, target, previous).catch(() => undefined);
+    if (saved && JSON.stringify(saved) !== JSON.stringify(previous)) {
+      bindings[id] = saved;
+      changed = true;
+    }
   }
+  if (changed) saveProxySettings({ ...proxySettings(), clientBindings: bindings });
+}
+/** While Relay quits: bound clients get their own settings back, since the gateway goes with it. */
+function releaseClients(): void {
+  const bindings = proxySettings().clientBindings ?? {};
+  for (const id of PROXY_CLIENTS) {
+    const saved = bindings[id];
+    if (saved) releaseClientSync(id, saved);
+  }
+}
+/** Asks the usage reader to renew a Claude sign-in the gateway could not use; it backs off on its own. */
+function renewForGateway(accountId: string): void {
+  const account = service.store.state.accounts.find((a) => a.id === accountId);
+  if (!account || (account.provider ?? "claude") !== "claude") return;
+  try {
+    void usage?.refresh(accountId).catch(() => {});
+  } catch {}
 }
 /** Starts the gateway on the saved port and host; a first start also creates the client key. */
 async function startProxy(): Promise<void> {
@@ -2168,7 +2198,12 @@ async function startProxy(): Promise<void> {
         return undefined;
       }
     },
-    onCredentialRejected: (accountId) => credentials.delete(accountId),
+    onCredentialRejected: (accountId) => {
+      credentials.delete(accountId);
+      renewForGateway(accountId);
+    },
+    // An expired or unreadable token: the usage reader renews it when it can (never prompts).
+    onCredentialMissing: (accountId) => renewForGateway(accountId),
     // The accounts as saved now and the limits as Relay last read them: quota-aware routing.
     // Only the accounts left in the pool, in its order (strict priority reads the order).
     usageProvider: () => ({
@@ -2191,6 +2226,8 @@ async function startProxy(): Promise<void> {
   }
   proxyServer = server;
   proxyError = undefined;
+  // Quitting put the bound clients' own settings back: they point at the gateway again.
+  await rebindClients(proxySettings()).catch(() => {});
 }
 async function stopProxy(): Promise<void> {
   const server = proxyServer;
@@ -3315,6 +3352,11 @@ app.on("will-quit", () => {
   // Here, not in "before-quit": that one can still be vetoed (a busy switch, a running
   // terminal), which would leave Relay open with its gateway down.
   void proxyServer?.stop();
+  // Without the gateway a client still pointed at it cannot answer at all; the next start
+  // points it back.
+  try {
+    releaseClients();
+  } catch {}
   for (const bridge of antigravityBridges.values()) bridge.stop();
   appUpdates?.stop();
   keeperAbort.abort();

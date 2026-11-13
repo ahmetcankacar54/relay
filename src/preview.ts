@@ -632,7 +632,7 @@ const previewProxy: {
   excluded: string[];
   bound: Partial<Record<ProxyClientId, boolean>>;
 } = {
-  running: false,
+  running: scenario === "proxy-waiting",
   port: 8317,
   host: "127.0.0.1",
   key: "relay-sec-preview-0000000000000000000000000000",
@@ -696,6 +696,13 @@ const previewProxyStatus = (): ProxyStatus => ({
       requests: previewProxy.running ? [42, 61, 25][i] ?? 0 : 0,
       ...(previewProxy.running
         ? { tokens: { input: 18_400 * (i + 1), output: 9_100 * (i + 1), cacheRead: 412_000 / (i + 1), cacheWrite: 38_000 } }
+        : {}),
+      // `?scenario=proxy-waiting`: one account renewing its sign-in, one billed as extra usage.
+      ...(previewProxy.running && scenario === "proxy-waiting" && i === 0
+        ? { waiting: { reason: "auth" as const, minutes: 1 } }
+        : {}),
+      ...(previewProxy.running && scenario === "proxy-waiting" && i === 2
+        ? { extraUsage: { kind: "billed" as const, minutesAgo: 3 } }
         : {}),
     };
   }),
