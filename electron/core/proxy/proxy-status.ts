@@ -1,7 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { Account, AccountUsage, ProxyClientStatus, ProxyStatus } from "../../../shared/types";
-import type { ProxyConfig, ProxyMetrics, ProxyRequestLog } from "../../../shared/proxy-types";
+import type {
+  ProxyClassShare,
+  ProxyConfig,
+  ProxyLoopAlarm,
+  ProxyMetrics,
+  ProxyRequestLog,
+  ProxySessionView,
+} from "../../../shared/proxy-types";
 
 /** The prefix every client key starts with, so a key pasted somewhere is recognised as Relay's. */
 export const PROXY_KEY_PREFIX = "relay-sec-";
@@ -24,6 +31,7 @@ export const proxyConfigurePatch = z
     affinityTtlSeconds: z.number().int().min(10).max(3_600),
     accountOrder: z.array(z.string().min(1).max(128)).max(200),
     excludedAccountIds: z.array(z.string().min(1).max(128)).max(200),
+    subagentOverflow: z.boolean(),
   })
   .strict()
   .partial();
@@ -35,6 +43,7 @@ export const proxyExtrasSchema = z.object({
   excludedAccountIds: z.array(z.string()).max(200).optional(),
   /** Which default the registry's affinity lifetime was written under (shared/proxy-types.ts). */
   affinityRevision: z.number().int().min(0).max(1_000).optional(),
+  subagentOverflow: z.boolean().optional(),
   clientBindings: z
     .object({
       "claude-code": z.record(z.string(), z.string().nullable()).optional(),
@@ -117,6 +126,13 @@ export function buildProxyStatus(input: {
   clients?: ProxyClientStatus[];
   /** The gateway's own cooldown of an account, when one is running. */
   cooldownOf?: (accountId: string) => { until: number; reason: "limit" | "auth" | "transient" } | undefined;
+  /** What the running gateway learned from its traffic. */
+  insights?: {
+    sessionViews(): ProxySessionView[];
+    alarms(): ProxyLoopAlarm[];
+    fullAt(accountId: string): number | undefined;
+  };
+  classShare?: ProxyClassShare[];
 }): ProxyStatus {
   const { config, metrics } = input;
   const excluded = new Set(config.excludedAccountIds ?? []);
@@ -167,11 +183,24 @@ export function buildProxyStatus(input: {
           ? { extraUsage: { kind: extra.kind, minutesAgo: Math.max(0, Math.floor((input.now - extra.at) / 60_000)) } }
           : {}),
         ...(usage?.liveAt && input.now - Date.parse(usage.liveAt) <= LIVE_MS ? { live: true } : {}),
+        ...(() => {
+          const at = input.running ? input.insights?.fullAt(account.id) : undefined;
+          return at && at > input.now ? { fullAt: at } : {};
+        })(),
       };
     }),
     ...(input.error ? { error: input.error } : {}),
     ...(input.recent ? { recent: input.recent } : {}),
     ...(input.tailscaleAddress ? { tailscaleAddress: input.tailscaleAddress } : {}),
     ...(input.clients ? { clients: input.clients } : {}),
+    ...(config.subagentOverflow ? { subagentOverflow: true } : {}),
+    ...(input.running && input.insights
+      ? (() => {
+          const sessions = input.insights.sessionViews();
+          const alarms = input.insights.alarms();
+          return { ...(sessions.length ? { sessions } : {}), ...(alarms.length ? { alarms } : {}) };
+        })()
+      : {}),
+    ...(input.classShare?.length ? { classShare: input.classShare } : {}),
   };
 }

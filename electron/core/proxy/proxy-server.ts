@@ -6,6 +6,7 @@ import type { Account, AccountUsage } from "../../../shared/types";
 import {
   DEFAULT_PROXY_CONFIG,
   type ProxyConfig,
+  type ProxyLoopAlarm,
   type ProxyMetrics,
   type ProxyState,
 } from "../../../shared/proxy-types";
@@ -19,6 +20,8 @@ import {
 } from "./proxy-router";
 import { ProxySessionCache } from "./proxy-session-cache";
 import { ProxyStats, type RequestLogSink } from "./proxy-stats";
+import { GatewayInsights } from "./proxy-insights";
+import { responseCost } from "../../../shared/model-prices";
 import { AnthropicUpstream } from "./anthropic-upstream";
 import { CodexUpstream } from "./codex-upstream";
 import { WebSocketBridge, rejectUpgrade } from "./websocket-bridge";
@@ -102,6 +105,8 @@ export class ProxyServer {
   readonly sessionCache: ProxySessionCache;
   readonly router: ProxyRouter;
   readonly stats: ProxyStats;
+  /** Sessions' caches, prompts' counts and accounts' pace, from the traffic. */
+  readonly insights: GatewayInsights;
   readonly anthropicUpstream: AnthropicUpstream;
   readonly codexUpstream: CodexUpstream;
   readonly wsBridge: WebSocketBridge;
@@ -112,6 +117,7 @@ export class ProxyServer {
   private onCredentialRejected?: (accountId: string) => void;
   private onCredentialMissing?: (accountId: string) => void;
   private onLiveLimits?: (accountId: string, live: LiveLimits) => void;
+  private onLoopAlarm?: (alarm: ProxyLoopAlarm) => void;
   private requestLog?: RequestLogSink & { bind(requestId: string, accountId: string): void };
   private hubFetch?: typeof fetch;
 
@@ -128,6 +134,8 @@ export class ProxyServer {
     onLiveLimits?: (accountId: string, live: LiveLimits) => void;
     /** Keeps the request feed across restarts and knows which account served a request id. */
     requestLog?: RequestLogSink & { bind(requestId: string, accountId: string): void };
+    /** A prompt went past a loop bound (requests or subagents); told once per prompt. */
+    onLoopAlarm?: (alarm: ProxyLoopAlarm) => void;
     now?: () => number;
     /** Sends the usage dashboards' provider requests (tests replace it). */
     hubFetch?: typeof fetch;
@@ -147,6 +155,7 @@ export class ProxyServer {
     this.onCredentialRejected = options.onCredentialRejected;
     this.onCredentialMissing = options.onCredentialMissing;
     this.onLiveLimits = options.onLiveLimits;
+    this.onLoopAlarm = options.onLoopAlarm;
     this.requestLog = options.requestLog;
     this.hubFetch = options.hubFetch;
 
@@ -160,6 +169,7 @@ export class ProxyServer {
       now: options.now,
     });
     this.stats = new ProxyStats(options.requestLog);
+    this.insights = new GatewayInsights(options.now);
     this.anthropicUpstream = new AnthropicUpstream();
     this.codexUpstream = new CodexUpstream();
     this.wsBridge = new WebSocketBridge();
@@ -563,6 +573,26 @@ export class ProxyServer {
     const client = clientOf(req.headers);
     const requestClass = requestClassOf(req.headers);
     const about = { ...(client ? { client } : {}), ...(requestClass ? { requestClass } : {}) };
+    // Claude Code's hints (CLAUDE_CODE_GATEWAY_HINT_HEADERS): which subagent, which prompt.
+    const hint = (name: string) => {
+      const value = req.headers[name];
+      const text = Array.isArray(value) ? value[0] : value;
+      return text && /^[\w.:-]{1,80}$/.test(text) ? text : undefined;
+    };
+    const agentId = hint("x-claude-code-agent-id");
+    const agentType = hint("x-claude-code-agent-type")?.toLowerCase();
+    const promptId = hint("x-claude-code-prompt-id");
+    const compacted =
+      requestClass === "compaction" || /^(1|true)$/i.test(String(req.headers["x-claude-code-context-compacted"] ?? ""));
+    const alarm = this.insights.countPrompt(promptId, { sessionKey, agentId });
+    if (alarm) this.onLoopAlarm?.(alarm);
+    // A fresh subagent starts a prompt of its own, so another account costs it no cache: with
+    // overflow on, a session's fresh subagents go to one account other than the session's, and
+    // stay there. A fork shares the conversation's prompt and stays with it.
+    const overflow =
+      this.config.subagentOverflow === true && !!sessionKey && !!agentId && requestClass === "subagent" && agentType !== "fork";
+    const routeKey = overflow ? `${sessionKey}:sub` : sessionKey;
+    const avoid = overflow ? this.sessionCache.peek(sessionKey!) : undefined;
     const headerProvider = String(
       req.headers["x-relay-provider"] ?? "",
     ).toLowerCase();
@@ -593,11 +623,12 @@ export class ProxyServer {
       let selection: RouterSelection;
       try {
         selection = this.router.selectAccount(
-          sessionKey,
+          routeKey,
           accounts,
           usageMap,
           targetProvider,
           tried,
+          avoid,
         );
       } catch (err) {
         if (!(err instanceof NoProviderAccountError || err instanceof NoEligibleAccountError)) throw err;
@@ -670,10 +701,28 @@ export class ProxyServer {
         // Known with the headers: the token table may meet this request id before it is done.
         (early) => {
           if (early.requestId) this.requestLog?.bind(early.requestId, accountId);
-          if (early.live) this.onLiveLimits?.(accountId, early.live);
+          if (early.live) {
+            this.onLiveLimits?.(accountId, early.live);
+            this.insights.observeLimits(accountId, early.live.fiveHour);
+          }
         },
       );
       if (!outcome) return;
+      const tokens = outcome.tokens;
+      const cost = tokens
+        ? responseCost(requestedModel, {
+            input: tokens.input ?? 0,
+            output: tokens.output ?? 0,
+            cacheWrite: tokens.cacheWrite ?? 0,
+            cacheRead: tokens.cacheRead ?? 0,
+            ...(tokens.cacheWrite1h !== undefined ? { cacheWrite1h: tokens.cacheWrite1h } : {}),
+          })
+        : undefined;
+      const miss =
+        tokens && !outcome.held && outcome.statusCode < 400
+          ? this.insights.observeAnswer({ at: started, sessionKey, accountId, model: requestedModel, requestClass, agentId, compacted, tokens })
+          : undefined;
+      this.insights.promptServedBy(promptId, accountId);
       this.stats.recordLog({
         at: started,
         accountId,
@@ -683,14 +732,16 @@ export class ProxyServer {
         ms: Date.now() - started,
         ...about,
         ...(outcome.requestId ? { requestId: outcome.requestId } : {}),
-        ...(outcome.tokens ? { tokens: outcome.tokens } : {}),
+        ...(tokens ? { tokens } : {}),
+        ...(cost !== undefined ? { cost } : {}),
+        ...(miss ? { miss } : {}),
         ...(outcome.errorMessage ? { error: outcome.errorMessage } : {}),
         // A refusal is answered here; it does not go on to another account.
         ...(outcome.held && outcome.failure !== "refused" ? { failover: true } : {}),
         ...(selection.sessionAffinityHit ? { affinity: true } : {}),
         ...(outcome.extraUsage ? { note: "extra-usage" } : outcome.failure ? { note: outcome.failure } : {}),
       });
-      this.applyOutcome(accountId, sessionKey, outcome);
+      this.applyOutcome(accountId, routeKey, outcome);
       if (outcome.held && outcome.failure === "refused") {
         // Every account would answer the same: tell the client, and keep the accounts in.
         sendJsonError(

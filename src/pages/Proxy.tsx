@@ -32,8 +32,10 @@ import { meterFill } from "@/lib/meter";
 import {
   agoLabel,
   antigravitySnippet,
+  classShareLine,
   compactCount,
   requestDetail,
+  sessionCacheLine,
   gatewayUrl,
   isLoopbackHost,
   maskKey,
@@ -341,8 +343,22 @@ function Attention({ tone, children, action }: { tone: "warn" | "crit"; children
 }
 
 /** A limit window as a thin bar with its percent and reset; a dash while unknown. */
-function WindowMeter({ label, percent, minutes }: { label: string; percent?: number; minutes?: number }) {
-  const { t } = useI18n();
+function WindowMeter({
+  label,
+  percent,
+  minutes,
+  fullAt,
+}: {
+  label: string;
+  percent?: number;
+  minutes?: number;
+  /** When the window fills at the recent pace, if before it resets. */
+  fullAt?: number;
+}) {
+  const { t, language } = useI18n();
+  const clock = fullAt
+    ? new Date(fullAt).toLocaleTimeString(language === "tr" ? "tr-TR" : "en-US", { hour: "2-digit", minute: "2-digit" })
+    : undefined;
   return (
     <div className="grid min-w-0 gap-1">
       <div className="flex items-baseline justify-between gap-2 text-2xs text-muted-foreground">
@@ -350,6 +366,18 @@ function WindowMeter({ label, percent, minutes }: { label: string; percent?: num
         <span className="tabular-nums">
           {percent === undefined ? "—" : t(`%${percent}`, `${percent}%`)}
           {minutes !== undefined && ` · ${resetLabel(minutes, t)}`}
+          {clock && (
+            <span
+              data-slot="full-at"
+              className="text-warn-foreground"
+              title={t(
+                "Son yarım saatin hızıyla bu dönem sıfırlanmadan dolar.",
+                "At the last half hour's pace this window fills before it resets.",
+              )}
+            >
+              {t(` · ${clock} gibi dolar`, ` · full by ${clock}`)}
+            </span>
+          )}
         </span>
       </div>
       <div
@@ -368,7 +396,6 @@ function WindowMeter({ label, percent, minutes }: { label: string; percent?: num
   );
 }
 
-/** Why the gateway is leaving an account out, for the badge's tooltip. */
 /** The wall-clock time a wait of `minutes` ends at. */
 function untilClock(minutes: number, language: string): string {
   return new Date(Date.now() + minutes * 60_000).toLocaleTimeString(language === "tr" ? "tr-TR" : "en-US", {
@@ -377,6 +404,7 @@ function untilClock(minutes: number, language: string): string {
   });
 }
 
+/** Why the gateway is leaving an account out, for the badge's tooltip. */
 function waitingTitle(reason: "limit" | "auth" | "transient", t: (tr: string, en: string) => string): string {
   if (reason === "auth")
     return t(
@@ -577,6 +605,7 @@ function PoolCard({
                         label={t("5 saat", "5 hours")}
                         percent={account.fiveHourPercent}
                         minutes={account.fiveHourResetMinutes}
+                        fullAt={account.fullAt}
                       />
                       <WindowMeter
                         label={t("Hafta", "Week")}
@@ -623,6 +652,48 @@ function statusTone(entry: ProxyRequestLog): { tone: "ok" | "warn" | "crit"; wor
   return { tone: "crit", word: [String(entry.status), String(entry.status)] };
 }
 
+/** The sessions heard from lately: whose account holds their cache, and whether it is still warm. */
+function SessionsCard({ status }: { status: ProxyStatus }) {
+  const { t, language } = useI18n();
+  const locale = language === "tr" ? "tr-TR" : "en-US";
+  const now = Date.now();
+  const name = (id: string) => status.accounts.find((a) => a.id === id)?.name ?? "—";
+  return (
+    <Card className={cardClass} data-slot="sessions">
+      <SectionHeading
+        title={t("Oturumlar", "Sessions")}
+        description={t(
+          "Oturumun önbelleği hesabındadır. Sıcakken dönmek ucuzdur; soğuyunca ya da hesap değişince bütün istem yeniden yazılır.",
+          "A session's cache lives on its account. Coming back while it is warm is cheap; once cold, or on another account, the whole prompt is written again.",
+        )}
+      />
+      <ol aria-label={t("Oturumlar", "Sessions")} className="grid pt-1">
+        {(status.sessions ?? []).map((session) => {
+          const line = sessionCacheLine(session, now, t, locale);
+          return (
+            <li
+              key={session.id}
+              data-warm={line.warm}
+              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 border-t py-1.5 text-xs first:border-t-0"
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="font-mono text-2xs text-muted-foreground">{session.id}</span>
+                <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+                <span className="truncate">{name(session.accountId)}</span>
+              </span>
+              <span className="flex items-center gap-1.5 tabular-nums">
+                <StatusDot tone={line.warm ? "ok" : "off"} hollow={!line.warm} />
+                {line.state}
+              </span>
+              <span className="col-span-2 truncate text-2xs text-muted-foreground tabular-nums">{line.detail}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </Card>
+  );
+}
+
 /** The latest requests: which account answered, what the upstream said, and failovers. */
 function RequestFeed({ status }: { status: ProxyStatus }) {
   const { t, language } = useI18n();
@@ -652,6 +723,11 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
           </div>
         ))}
       </dl>
+      {status.classShare?.length ? (
+        <p data-slot="class-share" className="pb-2 text-2xs text-muted-foreground tabular-nums">
+          {classShareLine(status.classShare, t)}
+        </p>
+      ) : null}
       {recent.length ? (
         <ol aria-label={t("Son istekler", "Recent requests")} className="grid">
           {recent.slice(0, 12).map((entry, index) => {
@@ -993,6 +1069,27 @@ function RulesTab({
               onChange={(value) => void onConfigure({ affinityTtlSeconds: Number(value) })}
             />
           </SettingRow>
+          <SettingRow
+            label={t("Alt ajanları başka hesaba gönder", "Send subagents to another account")}
+            htmlFor="proxy-subagent-overflow"
+            description={t(
+              "Yeni bir alt ajan kendi önbelleğini sıfırdan yazar; başka hesaba gitmesi önbellek kaybettirmez, oturumun hesabını rahatlatır. Açıkken bir oturumun alt ajanları oturumun hesabı dışındaki tek bir hesaba gider ve orada kalır. Ana konuşmayı paylaşan fork alt ajanlar oturumla kalır.",
+              "A fresh subagent writes its own cache from scratch, so another account costs it no cache and spares the session's account. When on, a session's subagents go to one account other than the session's and stay there. Forks, which share the conversation, stay with the session.",
+            )}
+          >
+            <Switch
+              id="proxy-subagent-overflow"
+              checked={status.subagentOverflow === true}
+              disabled={disabled}
+              onCheckedChange={(on) => void onConfigure({ subagentOverflow: on })}
+            />
+          </SettingRow>
+          <p className="pt-2 text-2xs text-muted-foreground">
+            {t(
+              "5 saatlik limitinin %90'ını ya da haftalığın %98'ini geçmiş hesap, başka hesapta yer varken yeni oturum almaz; süren oturumlar önbellekleri için hesaplarında kalır.",
+              "An account past 90% of its 5-hour limit or 98% of its week takes no new session while another has room; running sessions stay on their accounts for their caches.",
+            )}
+          </p>
         </div>
       </Card>
       <Card className={cardClass} data-slot="network">
@@ -1200,6 +1297,17 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             )}
           </Attention>
         )}
+        {(status?.alarms ?? []).slice(0, 1).map((alarm) => {
+          const on = status?.accounts.find((a) => a.id === alarm.accountId)?.name;
+          return (
+            <Attention key={alarm.id} tone="warn">
+              {t(
+                `Bir istem durmadan istek gönderiyor: ${alarm.requests} istek, ${alarm.subagents} alt ajan${on ? ` · ${on}` : ""}${alarm.sessionId ? ` · oturum ${alarm.sessionId}` : ""}. Döngüde olabilir; Claude Code'da Esc ile durdurabilirsin.`,
+                `A prompt keeps sending requests: ${alarm.requests} requests, ${alarm.subagents} subagents${on ? ` · ${on}` : ""}${alarm.sessionId ? ` · session ${alarm.sessionId}` : ""}. It may be in a loop; Esc in Claude Code stops it.`,
+              )}
+            </Attention>
+          );
+        })}
         {billed.length > 0 && (
           <Attention tone="crit">
             {t(
@@ -1234,7 +1342,10 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
               <TabsContent value="canli">
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
                   <PoolCard status={status} disabled={disabled} onConfigure={configure} />
-                  <RequestFeed status={status} />
+                  <div className="grid content-start gap-4">
+                    <RequestFeed status={status} />
+                    {status.sessions?.length ? <SessionsCard status={status} /> : null}
+                  </div>
                 </div>
               </TabsContent>
               <TabsContent value="araclar">
