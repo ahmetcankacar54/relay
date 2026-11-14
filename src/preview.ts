@@ -271,8 +271,24 @@ const state: Snapshot = {
             },
             sevenDay: {
               usedPercent: [68, 35, 82, 57][i % 4],
-              resetsAt: new Date(Date.now() + 2 * 86400_000).toISOString(),
+              // Weeks that end on different days, as real accounts' do.
+              resetsAt: new Date(Date.now() + [2, 1.2, 4, 6][i % 4] * 86400_000).toISOString(),
             },
+            // Fable's own weekly limit (half of the week): near on the first, spent on the second.
+            ...(i < 2
+              ? {
+                  modelWindows: [
+                    {
+                      key: "seven_day_fable",
+                      label: "Fable",
+                      model: "fable",
+                      usedPercent: [88, 100][i],
+                      resetsAt: new Date(Date.now() + [2, 1.2][i] * 86400_000).toISOString(),
+                      weeklyShare: 50,
+                    },
+                  ],
+                }
+              : {}),
             ...(i === 2
               ? {
                   issue: "unavailable",

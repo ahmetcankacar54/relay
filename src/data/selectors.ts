@@ -1,5 +1,6 @@
-import type { Account, AccountUsage, AuthFlow, DesktopState, RelaySettings, Snapshot } from "../../shared/types";
+import type { Account, AccountUsage, AuthFlow, DesktopState, ModelWindow, RelaySettings, Snapshot } from "../../shared/types";
 import { freshUsage, quotaWindows } from "../../shared/usage";
+import { spentModelWindows } from "../../shared/quota-windows";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
 import { tempoAt } from "../../shared/tempo";
 import { clientHost } from "../lib/proxy-ui";
@@ -22,7 +23,8 @@ export function tempoRateNow(data: Snapshot | undefined, settings: RelaySettings
 
 /**
  * A fresh reading with a window used up: when the account opens again (the latest of those
- * windows' resets, undefined when none is known). Undefined while no window is full.
+ * windows' resets, undefined when none is known). Undefined while no window is full. A model's own
+ * window (`modelLimitFull`) does not count: the other models still answer.
  */
 export function limitFull(
   u: AccountUsage | undefined,
@@ -33,6 +35,14 @@ export function limitFull(
   if (!full.length) return undefined;
   const availableAt = full.map((w) => w.resetsAt).filter((r): r is string => !!r).sort().at(-1);
   return availableAt ? { availableAt } : {};
+}
+
+/**
+ * The model windows of a fresh reading that are used up (Fable's own week, an Antigravity model):
+ * only that model stops, so the account is not full, but its status names them. Empty otherwise.
+ */
+export function modelLimitFull(u: AccountUsage | undefined, now: number): ModelWindow[] {
+  return freshUsage(u, now) ? spentModelWindows(u, now) : [];
 }
 
 /** The ids of the accounts open in a separate Claude window. */
@@ -63,8 +73,7 @@ export function overviewAccounts(
     ...ranked.filter((r) => !claude(r.account)),
     ...ranked.filter((r) => claude(r.account) && !r.account.desktop),
   ];
-  let recommended = false;
-  return order.map(({ account }) => {
+  const rows = order.map(({ account }): OverviewRow => {
     const u = usage[account.id];
     let state: OverviewState;
     let availableAt: string | undefined;
@@ -76,11 +85,15 @@ export function overviewAccounts(
       availableAt = full.availableAt;
     } else if (u.fiveHour?.resetsAt && Date.parse(u.fiveHour.resetsAt) > now) state = "window-open";
     else state = "ready";
-    const pick =
-      !recommended && claude(account) && !inWindows.has(account.id) && (state === "ready" || state === "window-open");
-    if (pick) recommended = true;
-    return { account, usage: u, state, availableAt, recommended: pick };
+    return { account, usage: u, state, availableAt, recommended: false };
   });
+  const pickable = rows.filter(
+    (r) => claude(r.account) && !inWindows.has(r.account.id) && (r.state === "ready" || r.state === "window-open"),
+  );
+  // A spent model limit (Fable's week) leaves the account usable: it is recommended only when no other is clear.
+  const pick = pickable.find((r) => !modelLimitFull(r.usage, now).length) ?? pickable[0];
+  if (pick) pick.recommended = true;
+  return rows;
 }
 
 /**
@@ -98,19 +111,69 @@ export function sidebarStatus(snapshot: Snapshot | undefined, desktop?: DesktopS
   };
 }
 
-export function usageWindowRows(usage?: AccountUsage) {
+/** The length of a window kind, for how much of it has passed (`windowElapsed`). */
+const PERIOD_MS = { five_hour: 5 * 3_600_000, seven_day: 7 * 86_400_000 } as const;
+export type WindowPeriod = keyof typeof PERIOD_MS;
+
+export interface UsageWindowRow {
+  key: string;
+  label: { tr: string; en: string };
+  usedPercent: number;
+  resetsAt?: string;
+  /** A five-hour or weekly window; undefined for one of unknown length (an Antigravity model). */
+  period?: WindowPeriod;
+  /** A model's own limit (Fable, Opus, an Antigravity model), listed after the account's two. */
+  model?: boolean;
+}
+
+/** The kind of window a key names: `seven_day_fable` is weekly, `antigravity_*` has no fixed length. */
+const periodOf = (key: string): WindowPeriod | undefined =>
+  key.startsWith("seven_day") ? "seven_day" : key.startsWith("five_hour") ? "five_hour" : undefined;
+
+/**
+ * A model window's name: the model first, then its period ("Fable · haftalık", "Opus · 5 saat"). An
+ * Antigravity model's window is not a five-hour or weekly one, so it is the model's name alone.
+ */
+function modelRowLabel(w: ModelWindow): { tr: string; en: string } {
+  const period = periodOf(w.key);
+  if (!period) return { tr: w.label, en: w.label };
+  return period === "seven_day"
+    ? { tr: `${w.label} · haftalık`, en: `${w.label} · weekly` }
+    : { tr: `${w.label} · 5 saat`, en: `${w.label} · 5-hour` };
+}
+
+/**
+ * An account's limits as rows: the five-hour and weekly windows, then each model's own limit,
+ * fullest first, so the one that binds next reads first.
+ */
+export function usageWindowRows(usage?: AccountUsage): UsageWindowRow[] {
   if (!usage) return [];
-  const rows: { key: string; label: { tr: string; en: string }; usedPercent: number; resetsAt?: string }[] = [];
-  if (usage.fiveHour) rows.push({ key: "five_hour", label: { tr: "5 saatlik dönem", en: "5-hour period" }, ...usage.fiveHour });
-  if (usage.sevenDay) rows.push({ key: "seven_day", label: { tr: "Haftalık · tüm modeller", en: "Weekly · all models" }, ...usage.sevenDay });
-  for (const w of usage.modelWindows ?? [])
+  const rows: UsageWindowRow[] = [];
+  if (usage.fiveHour)
+    rows.push({ key: "five_hour", label: { tr: "5 saatlik dönem", en: "5-hour period" }, period: "five_hour", ...usage.fiveHour });
+  if (usage.sevenDay)
+    rows.push({ key: "seven_day", label: { tr: "Haftalık · tüm modeller", en: "Weekly · all models" }, period: "seven_day", ...usage.sevenDay });
+  const models = [...(usage.modelWindows ?? [])].sort(
+    (a, b) => b.usedPercent - a.usedPercent || a.key.localeCompare(b.key),
+  );
+  for (const w of models)
     rows.push({
       key: w.key,
-      label: w.key.startsWith("seven_day")
-        ? { tr: `Haftalık · ${w.label}`, en: `Weekly · ${w.label}` }
-        : { tr: `5 saat · ${w.label}`, en: `5-hour · ${w.label}` },
+      label: modelRowLabel(w),
       usedPercent: w.usedPercent,
       resetsAt: w.resetsAt,
+      period: periodOf(w.key),
+      model: true,
     });
   return rows;
+}
+
+/**
+ * How much of a five-hour or weekly window has passed at `now`, 0 to 1: where even use would have
+ * the bar by now. Undefined without a reset time or a known length.
+ */
+export function windowElapsed(row: Pick<UsageWindowRow, "period" | "resetsAt">, now: number): number | undefined {
+  const reset = Date.parse(row.resetsAt ?? "");
+  if (!row.period || !Number.isFinite(reset)) return undefined;
+  return Math.max(0, Math.min(1, 1 - (reset - now) / PERIOD_MS[row.period]));
 }

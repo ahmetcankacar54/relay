@@ -1,10 +1,13 @@
-import type { Account, AccountUsage } from "../../shared/types";
+import type { Account, AccountUsage, ModelWindow } from "../../shared/types";
 import {
   cliNeedsReconnect,
   desktopCliMismatch,
   displayedIssue,
   readsThroughApp,
 } from "../../shared/account-state";
+import { clockLocative } from "../../shared/tr-dative";
+import { modelLimitFull } from "@/data/selectors";
+import { formatClock } from "@/lib/time";
 
 // The helper lives in shared/ so the tray and the keeper read it too; the app keeps importing it from here.
 export { displayedIssue };
@@ -29,6 +32,41 @@ type Words = readonly [tr: string, en: string];
 const NO_USAGE_DATA: Words = ["Limit verisi yok", "No usage data yet"];
 /** A browser approval in progress for the usage sign-in. */
 const APPROVE: Words = ["Tarayıcıda onayla", "Approve in the browser"];
+
+/** Where the status is read: `now` and the planning time zone default to the clock and the system zone. */
+type HealthContext = { active: boolean; desktopRunning: boolean; waiting: boolean; now?: number; zone?: string };
+
+/** "Pzt 05:00" / "Mon 05:00" beyond a day, the clock alone within one. */
+function opensAt(at: number, now: number, language: "tr" | "en", zone?: string) {
+  const clock = formatClock(at, language, zone);
+  if (at - now < 86_400_000) return { day: "", clock };
+  const day = new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-GB", { weekday: "short", timeZone: zone }).format(at);
+  return { day: `${day} `, clock };
+}
+
+/**
+ * A model's own limit used up on an account that still works (Fable's week, an Antigravity model):
+ * "Fable limiti dolu · Pzt 05:00’te açılır". The other models still answer, so it is a warning,
+ * never "full"; with several spent the first to open sets the time.
+ */
+export function modelLimitWords(spent: ModelWindow[], now: number, zone?: string): Words | undefined {
+  if (!spent.length) return undefined;
+  const names = spent.map((w) => w.label);
+  const [tr, en] =
+    names.length === 1
+      ? [`${names[0]} limiti dolu`, `${names[0]} limit is full`]
+      : names.length === 2
+        ? [`${names.join(", ")} limitleri dolu`, `${names.join(", ")} limits are full`]
+        : [`${names.length} model limiti dolu`, `${names.length} model limits are full`];
+  const first = Math.min(...spent.map((w) => Date.parse(w.resetsAt ?? "")).filter(Number.isFinite));
+  if (!Number.isFinite(first)) return [tr, en];
+  const trAt = opensAt(first, now, "tr", zone);
+  const enAt = opensAt(first, now, "en", zone);
+  return [
+    `${tr} · ${trAt.day}${clockLocative(trAt.clock)} açılır`,
+    `${en} · opens ${enAt.day}${enAt.clock}`,
+  ];
+}
 
 /**
  * What the usage connection waits for the user to do, when only a prompting refresh (`renew`) can clear it:
@@ -116,7 +154,7 @@ export function usageSignInStatus(
 function otherProviderHealth(
   account: Account,
   usage: AccountUsage | undefined,
-  context: { active: boolean; desktopRunning: boolean; waiting: boolean },
+  context: HealthContext,
   t: T,
 ): AccountHealth {
   const signedIn = account.auth?.loggedIn === true;
@@ -131,11 +169,14 @@ function otherProviderHealth(
   });
   if (context.waiting) return result("warn", APPROVE);
   if (!signedIn) return result("off", ["Giriş yok", "Not signed in"]);
+  const now = context.now ?? Date.now();
   const cooldown = account.cooldownUntil ? Date.parse(account.cooldownUntil) : NaN;
-  if (Number.isFinite(cooldown) && cooldown > Date.now())
+  if (Number.isFinite(cooldown) && cooldown > now)
     return result("warn", ["Bekleme süresinde", "Cooling down"]);
   if (usage && usage.issue !== "unsupported" && (usage.stale || usage.status === "error"))
     return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
+  const spent = modelLimitWords(modelLimitFull(usage, now), now, context.zone);
+  if (spent) return result("warn", spent);
   return result("ok", ["Gateway için kayıtlı", "Saved for gateway"]);
 }
 
@@ -143,13 +184,14 @@ function otherProviderHealth(
  * The one status an account shows, in the table and in the details sheet. The first problem found wins,
  * in this order: a browser approval in progress, no Claude app sign-in, a usage sign-in that must be
  * renewed (or belongs to another account), a locked Keychain, a connection to renew, no usage sign-in,
- * a usage read that failed or is out of date. Otherwise the account is running in Claude, or ready.
- * The Overview and the panel rows (`accountRowSubtitle`) read this same status.
+ * a usage read that failed or is out of date, a model's own limit used up (`modelLimitWords`).
+ * Otherwise the account is running in Claude, or ready. The Overview and the panel rows
+ * (`accountRowSubtitle`) read this same status.
  */
 export function accountHealth(
   account: Account,
   usage: AccountUsage | undefined,
-  context: { active: boolean; desktopRunning: boolean; waiting: boolean },
+  context: HealthContext,
   t: T,
 ): AccountHealth {
   if (!isClaudeAccount(account)) return otherProviderHealth(account, usage, context, t);
@@ -212,5 +254,9 @@ export function accountHealth(
     return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
   // Never read (idle, or the first read still loading): neither "Ready" nor "out of date".
   if (!usage?.checkedAt) return result("off", NO_USAGE_DATA);
+  // Fable's week spent is not "Ready": the account answers other models only, so the status says so.
+  const now = context.now ?? Date.now();
+  const spent = modelLimitWords(modelLimitFull(usage, now), now, context.zone);
+  if (spent) return result("warn", spent);
   return result("ok", running ? ["Çalışıyor", "Running"] : ["Hazır", "Ready"]);
 }

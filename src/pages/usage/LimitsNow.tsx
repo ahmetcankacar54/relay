@@ -117,8 +117,8 @@ export function LimitsNow({ now = Date.now() }: { now?: number }) {
       <SectionHeading
         title={t("Şu an", "Right now")}
         description={t(
-          "Her hesabın limitleri tek yerde. Çizgideki ince işaret pencerenin ne kadarının geçtiğini gösterir; dolu kısım onu geçtiyse hesap hızlı harcanıyor.",
-          "Every account's limits in one place. The thin mark on a bar shows how much of the window has passed; a fill past it means the account is being spent fast.",
+          "Her hesabın limitleri tek yerde. Çizgideki ince işaret dönemin ne kadarının geçtiğini gösterir; dolu kısım onu geçtiyse hesap hızlı harcanıyor.",
+          "Every account's limits in one place. The thin mark on a bar shows how much of the period has passed; a fill past it means the account is being spent fast.",
         )}
       />
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm" data-slot="limits-summary">

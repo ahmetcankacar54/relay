@@ -4,7 +4,11 @@ export function meterTone(percent: number | undefined): MeterTone {
   if (percent === undefined || !Number.isFinite(percent)) return "none";
   return percent >= 90 ? "crit" : percent >= 75 ? "warn" : "ok";
 }
-/** Bars and rings: Relay orange, amber from 75 %, red from 90 %; the warnings also say the level in words. */
+/**
+ * Bars and rings: a calm neutral (`--meter`, graphite) below 75 %, amber from 75 %, red from 90 %, so
+ * only a limit running low draws the eye; Relay orange stays for actions. The warnings also say the
+ * level in words.
+ */
 export const meterClass: Record<MeterTone, string> = {
   ok: "bg-meter",
   warn: "bg-warn",
