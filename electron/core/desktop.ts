@@ -336,7 +336,7 @@ export class DesktopManager {
    * The separate Claude windows Relay keeps for accounts, asked by a switch: the accounts open in
    * one now (the main Claude cannot take them over while their window holds their sign-in), and
    * the data folder of an account's window, whose Code conversations the main Claude takes over
-   * when it switches to that account.
+   * when it switches to that account, or to any account history transfer carries them to.
    */
   windows?: {
     openAccounts(): Promise<string[]>;
@@ -1539,14 +1539,31 @@ export class DesktopManager {
     const sources = off
       ? []
       : historySources(target, this.store.state.accounts, this.store.state.settings);
+    // The conversations the account had in its own window, which it no longer has open.
+    const outside = window ? [{ root: window, scope: target.desktop }] : [];
+    // And those the source accounts had in theirs: a conversation started in another account's
+    // window follows like one the main Claude had. Only from closed windows (one that runs could
+    // carry on the same conversation in both Claudes) and only when Relay can tell which are.
+    const sourceWindows = sources.flatMap((source) => {
+      const folder = this.windows?.folder(source.desktop!.accountUuid);
+      return folder ? [{ root: folder, scope: source.desktop! }] : [];
+    });
+    if (sourceWindows.length) {
+      const open = await this.windows!.openAccounts().then(
+        (ids) => new Set(ids.map((id) => id.toLowerCase())),
+        () => undefined,
+      );
+      if (open)
+        for (const source of sourceWindows)
+          if (!open.has(source.scope.accountUuid.toLowerCase())) outside.push(source);
+    }
     const { writes: plan, conversations } = await planHistoryDetailed(
       this.root,
       target.desktop,
       sources.map((a) => a.desktop!),
       {
         seenSpaceIds: previous[key],
-        // The conversations the account had in its own window, which it no longer has open.
-        ...(window ? { outside: [{ root: window, scope: target.desktop }] } : {}),
+        ...(outside.length ? { outside } : {}),
       },
     );
     const spacesPath = `${scopePath("local-agent-mode-sessions", target.desktop)}/spaces.json`;
