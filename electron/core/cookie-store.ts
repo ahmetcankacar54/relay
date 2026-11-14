@@ -127,15 +127,39 @@ export function sameOrganization(a: CookieSnapshot, b: CookieSnapshot): boolean 
   return !!x && !!y && x.length > 0 && x.equals(y);
 }
 
+/**
+ * The organization a web login is on, as bytes that only compare (see `sameOrganization`):
+ * its `lastActiveOrg` cookie's encrypted value, base64. Undefined without one.
+ */
+export function orgFingerprint(snapshot: CookieSnapshot): string | undefined {
+  const value = bytes(unpartitioned(snapshot, "lastActiveOrg")?.encrypted_value);
+  return value && value.length ? value.toString("base64") : undefined;
+}
+
+/** Chromium time (microseconds from 1601-01-01) as ms since the epoch. */
+const chromiumMs = (micros: CookieValue | undefined) =>
+  typeof micros === "bigint" && micros > 0n
+    ? Number(micros / 1000n) - 11_644_473_600_000
+    : undefined;
+
+/**
+ * When the web login's `sessionKey` cookie ends (ms since the epoch): claude.ai renews it each
+ * time the login is used, so a login left unused this long is dropped by the browser as soon as
+ * it is put back, and the account asks to log in again. Undefined without one, or for a cookie
+ * that lasts only as long as the browser runs.
+ */
+export function sessionExpiresMs(snapshot: CookieSnapshot): number | undefined {
+  const row = snapshot.rows.find((r) => r.name === SESSION_NAME && r.host_key === ".claude.ai");
+  if (!row || row.has_expires === 0n) return undefined;
+  return chromiumMs(row.expires_utc);
+}
+
 /** When the web session was created (ms since the epoch), from `creation_utc`; undefined without one. */
 export function sessionCreatedMs(snapshot: CookieSnapshot): number | undefined {
   const row = snapshot.rows.find(
     (r) => r.name === SESSION_NAME && r.host_key === ".claude.ai",
   );
-  const micros = row?.creation_utc;
-  if (typeof micros !== "bigint") return undefined;
-  // Chromium counts microseconds from 1601-01-01.
-  return Number(micros / 1000n) - 11_644_473_600_000;
+  return chromiumMs(row?.creation_utc);
 }
 
 /**

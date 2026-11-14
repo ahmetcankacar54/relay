@@ -171,7 +171,12 @@ export type ExtensionReason =
   /** The browser's cookie database or its login cookies are not laid out as Relay expects. */
   | "schema-changed"
   /** The browser's cookie database was not closed cleanly. */
-  | "journal-pending";
+  | "journal-pending"
+  /**
+   * The target's saved claude.ai login was unused until its cookie ended: it was not put in place
+   * and the account waits for a reconnect.
+   */
+  | "login-expired";
 /**
  * What the last extension step did. "switched": the target's sign-in was put in place.
  * "saved": the extension's was kept and the target has none saved. "unchanged": nothing to

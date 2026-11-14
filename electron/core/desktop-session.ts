@@ -34,6 +34,26 @@ export async function sessionPresence(
   }
 }
 
+/**
+ * When a copy of the Claude app's cookie files stops holding a session (ms since the epoch): the
+ * latest end of its `sessionKey` cookies. claude.ai renews them each time the login is used, so
+ * a sign-in saved and left unused that long opens signed out when it is put back. Undefined when
+ * that cannot be told (no session, cookies that last the app's run, an unreadable database).
+ */
+export async function sessionEndsMs(
+  files: Record<string, Buffer | null>,
+): Promise<number | undefined> {
+  if (!files["Network/Cookies"] && !files.Cookies) return undefined;
+  try {
+    const { rows } = await readCookieRows(files);
+    const sessions = rows.filter((row) => SESSION.test(row.name));
+    if (!sessions.length || sessions.some((row) => row.expiresMs === undefined)) return undefined;
+    return Math.max(...sessions.map((row) => row.expiresMs!));
+  } catch {
+    return undefined;
+  }
+}
+
 /** Thrown before Claude is quit: its sign-in is not in the cookie file yet, so nothing was touched. */
 export class SignInNotSettled extends Error {
   constructor() {

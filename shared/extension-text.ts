@@ -87,6 +87,11 @@ export function extensionLine(outcome: ExtensionOutcome, t: T): string | undefin
               "Tarayıcının çerez dosyası temiz kapanmamış; dokunulmadı. Tarayıcıyı bir kez açıp kapat.",
               "The browser cookie file did not close correctly, so Relay did not change it. Open and quit the browser once.",
             );
+          case "login-expired":
+            return t(
+              "Bu hesabın kayıtlı claude.ai girişi uzun süre kullanılmadığı için sona ermiş; eklentiye dokunulmadı. Tarayıcıda claude.ai’ye ve eklentiye bu hesapla bir kez giriş yap, Relay yeni girişi saklar.",
+              "This account’s saved claude.ai login ended because it was not used for a long time, so Relay did not change the extension. Sign in to claude.ai and to the extension with this account once in the browser. Relay saves the new login.",
+            );
           default:
             return undefined;
         }

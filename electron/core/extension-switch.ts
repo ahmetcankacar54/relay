@@ -21,10 +21,11 @@ import {
   CookieStoreError,
   backupCookieFiles,
   hasWebLogin,
+  orgFingerprint,
   restoreCookieFiles,
   sameLogin,
-  sameOrganization,
   sessionCreatedMs,
+  sessionExpiresMs,
   type CookieSnapshot,
   type CookieStorage,
 } from "./cookie-store";
@@ -65,6 +66,12 @@ export interface ExtensionPorts {
   onCookieLayout?: (detail: Record<string, string>) => void;
   /** Told when the profile's claude.ai login was not kept for `account` (see `foreignLogin`). */
   onForeignLogin?: (account: string, other: string, why: ForeignWhy) => void;
+  /**
+   * Told when a newer claude.ai login was kept for `account`: found in the profile while the
+   * extension was on `from` (the user signed in to claude.ai with `account` there), or one the
+   * extension works with replacing an older one.
+   */
+  onFreshLogin?: (account: string, from: string) => void;
   now?: () => number;
 }
 
@@ -88,9 +95,25 @@ export interface ExtensionRequest {
  */
 export type ForeignWhy = "same-login" | "other-org" | "rejected";
 
+/** A login that is not `account`'s: why, whose, and the one account it can be kept for. */
+interface Foreign {
+  why: ForeignWhy;
+  other: string;
+  /** "other-org" on the organization of exactly one other account: that account's login. */
+  owner?: string;
+}
+
 type Core = Pick<ExtensionOutcome, "result" | "reason" | "saved" | "cleared" | "current">;
 
 const lower = (list: string[]) => list.map((value) => value.toLowerCase());
+
+/** Whether `a` is a later web login than `b`: another login, created after it. */
+const newer = (a: CookieSnapshot, b: CookieSnapshot) => {
+  if (sameLogin(a, b)) return false;
+  const x = sessionCreatedMs(a);
+  const y = sessionCreatedMs(b);
+  return x !== undefined && (y === undefined || x > y);
+};
 
 /**
  * The web login may be created this long after the extension's hints were last written and still
@@ -270,7 +293,7 @@ export class ExtensionSwitcher {
         };
       await vault.save(account, reading.signIn);
       await vault.setOwner(account);
-      await this.keepWebLogin(account, instance, peekScratch, request);
+      await this.keepWebLogin(account, instance, peekScratch, request, !expired.expired);
       return { state: "signed-in", accountUuid: account, known: true, ...expired, at };
     } catch {
       return { state: "unreadable", at };
@@ -280,33 +303,67 @@ export class ExtensionSwitcher {
   }
 
   /**
-   * Keeps the profile's claude.ai login for `account` from a copy of the cookie files, only when
-   * none is saved yet: a copy of a running browser's database can lag its memory, so a login
-   * already saved is replaced only by the swap's read of a closed browser. Never throws.
+   * Keeps the profile's claude.ai login for `account` from a copy of the cookie files. A copy of
+   * a running browser's database can lag its memory, so a saved login is replaced only by a newer
+   * one the extension works with (`healthy`): a login left as it was saved ages until claude.ai
+   * refuses it, and the account then asks to log in again at the next switch to it. A login of
+   * another account's organization is kept for that account instead (see `adopt`). Never throws.
    */
   private async keepWebLogin(
     account: string,
     instance: ExtensionInstance,
     peekScratch: string,
     request: Pick<ExtensionRequest, "orgs" | "groups">,
+    healthy: boolean,
   ): Promise<void> {
     const { cookies, cookieVault, system } = this.ports;
     try {
       if (!cookies || !cookieVault || !(await cookies.available())) return;
-      if ((await cookieVault.list()).some((x) => x.accountUuid === account)) return;
+      const kept = await cookieVault.load([account]).catch(() => undefined);
+      const listed = (await cookieVault.list()).some((x) => x.accountUuid === account);
       const profile = path.join(dataDir(system, instance.app), instance.profile);
       const web = await cookies.read(await backupCookieFiles(profile, peekScratch));
       if (!hasWebLogin(web) || web.unlisted.length) return;
+      const found = await this.foreignLogin(account, web, request);
+      if (found) {
+        await this.adopt(account, found, web);
+        return;
+      }
+      if (listed && (!healthy || !kept || !newer(web, kept))) return;
       const hintsAt = system.modifiedAt(
         extensionStorageDir(system, instance.app, instance.profile),
       );
       const created = sessionCreatedMs(web);
       if (created !== undefined && hintsAt !== undefined && created > hintsAt + OWNER_SLACK_MS)
         return;
-      if (await this.foreignLogin(account, web, request)) return;
       await cookieVault.save(account, web);
+      if (listed) this.ports.onFreshLogin?.(account, account);
     } catch {
       // The hints are saved; the login is kept at the next check or switch.
+    }
+  }
+
+  /**
+   * Keeps a login found while the extension was on `account` for the account it belongs to: on
+   * the organization of exactly one other account (`Foreign.owner`), newer than the login saved
+   * for it, and never one the extension already failed with there. The user signed in to claude.ai
+   * with that account in this profile (to reconnect it, or to use it on the web); without this,
+   * the next switch put the account's older login back and the extension signed out (seen
+   * 2026-11-12 and 11-13). Wrong for once, the extension fails with it at the next switch to that
+   * account and Relay forgets it again (`verifyExtension`). Never throws.
+   */
+  private async adopt(account: string, found: Foreign, web: CookieSnapshot): Promise<void> {
+    const cookieVault = this.ports.cookieVault;
+    const owner = found.owner;
+    if (!cookieVault || found.why !== "other-org" || !owner) return;
+    try {
+      if (await cookieVault.isRejected(owner, web)) return;
+      const theirs = await cookieVault.load([owner]).catch(() => undefined);
+      if (theirs && !newer(web, theirs)) return;
+      await cookieVault.save(owner, web);
+      this.ports.onFreshLogin?.(owner, account);
+    } catch {
+      // Kept at the next check or switch.
     }
   }
 
@@ -318,36 +375,46 @@ export class ExtensionSwitcher {
    * account while the extension keeps its tokens, and a login kept under the wrong account signs
    * the extension out at every switch to it (seen 2026-11-04). A login the extension already
    * failed to sign in to `account` with is never kept again either. Told to `onForeignLogin`.
+   * The organization of an account whose login was forgotten still counts (`CookieVault.orgs`).
    */
   private async foreignLogin(
     account: string,
     web: CookieSnapshot,
     { orgs, groups }: Pick<ExtensionRequest, "orgs" | "groups">,
-  ): Promise<boolean> {
+  ): Promise<Foreign | undefined> {
     const cookieVault = this.ports.cookieVault;
-    if (!cookieVault) return false;
-    if (await cookieVault.isRejected(account, web)) {
-      this.ports.onForeignLogin?.(account, account, "rejected");
-      return true;
-    }
-    const mine = orgs?.[account];
+    if (!cookieVault) return undefined;
+    const found = (why: ForeignWhy, other: string, owner?: string): Foreign => {
+      this.ports.onForeignLogin?.(account, other, why);
+      return { why, other, ...(owner ? { owner } : {}) };
+    };
+    if (await cookieVault.isRejected(account, web)) return found("rejected", account);
     const self = groups?.find((uuids) => uuids.includes(account)) ?? [account];
+    // Saved logins' organizations, over those remembered (logins saved before Relay kept them).
+    const known = await cookieVault.orgs();
     for (const { accountUuid: other } of await cookieVault.list()) {
       if (self.includes(other)) continue;
       const theirs = await cookieVault.load([other]).catch(() => undefined);
       if (!theirs) continue;
-      const theirOrg = orgs?.[other];
-      const why: ForeignWhy | undefined = sameLogin(web, theirs)
-        ? "same-login"
-        : mine && theirOrg && mine !== theirOrg && sameOrganization(web, theirs)
-          ? "other-org"
-          : undefined;
-      if (why) {
-        this.ports.onForeignLogin?.(account, other, why);
-        return true;
-      }
+      if (sameLogin(web, theirs)) return found("same-login", other);
+      const org = orgFingerprint(theirs);
+      if (org) known[other] = org;
     }
-    return false;
+    const mine = orgs?.[account];
+    const fingerprint = orgFingerprint(web);
+    if (!mine || !fingerprint) return undefined;
+    const matches = Object.entries(known)
+      .filter(([other, org]) => {
+        const theirOrg = orgs?.[other];
+        return org === fingerprint && !self.includes(other) && !!theirOrg && theirOrg !== mine;
+      })
+      .map(([other]) => other);
+    if (!matches.length) return undefined;
+    // One account (any of its uuids) on that organization: the login is that account's.
+    const owners = new Set(
+      matches.map((uuid) => (groups?.find((g) => g.includes(uuid)) ?? [uuid]).join(" ")),
+    );
+    return found("other-org", matches[0], owners.size === 1 ? matches[0] : undefined);
   }
 
   /** The owner Relay remembers, when it is still one of its accounts. */
@@ -429,23 +496,33 @@ export class ExtensionSwitcher {
       // back that expires again at the next switch to its account (seen 2026-11-12). The vault
       // keeps the account's older pair instead.
       const failed = sessionExpired(entries);
-      if (current && account && !interrupted && !failed) {
-        // The web login belongs to the hints' account unless it is newer than the hints: the user
-        // signed in to claude.ai again without the extension following.
-        const created = sessionCreatedMs(web);
-        if (
-          webLogin &&
-          created !== undefined &&
-          hintsAt !== undefined &&
-          created > hintsAt + OWNER_SLACK_MS
-        )
-          return { result: "skipped", reason: "ambiguous-owner", saved };
-        await vault.save(account, current.signIn);
-        await vault.setOwner(account);
-        // The hints are the account's; the login is kept only when it is not another account's.
-        if (webLogin && !(await this.foreignLogin(account, web, request)))
-          await cookieVault.save(account, web);
-        saved = true;
+      if (current && account && !interrupted) {
+        // Another account's login is kept for that account, even when the extension failed with
+        // it here: failing is what a login of another account does.
+        const foreign = webLogin ? await this.foreignLogin(account, web, request) : undefined;
+        if (foreign) await this.adopt(account, foreign, web);
+        if (!failed) {
+          // The web login belongs to the hints' account unless it is newer than the hints: the
+          // user signed in to claude.ai again without the extension following.
+          const created = sessionCreatedMs(web);
+          // A login named as another account's is not lost by the swap: it is saved for it, or it
+          // is one that account already has or the extension already failed with. One on an
+          // organization two accounts share is nobody's for certain, so it still holds the swap.
+          const named = !!foreign && (foreign.why !== "other-org" || !!foreign.owner);
+          if (
+            webLogin &&
+            !named &&
+            created !== undefined &&
+            hintsAt !== undefined &&
+            created > hintsAt + OWNER_SLACK_MS
+          )
+            return { result: "skipped", reason: "ambiguous-owner", saved };
+          await vault.save(account, current.signIn);
+          await vault.setOwner(account);
+          // The hints are the account's; the login is kept only when it is not another account's.
+          if (webLogin && !foreign) await cookieVault.save(account, web);
+          saved = true;
+        }
       }
       /** Why a write failed. */
       const writeReason = (error: unknown): ExtensionReason => {
@@ -504,6 +581,17 @@ export class ExtensionSwitcher {
           saved,
         };
       if (onTarget) return { result: "unchanged", reason: "already-there", saved };
+      // A login left unused until its cookie ended: the browser would drop it on start and the
+      // extension sign out. It is forgotten and the account waits for a reconnect instead.
+      const ends = sessionExpiresMs(wantedWeb);
+      if (ends !== undefined && ends <= (this.ports.now ?? Date.now)()) {
+        for (const uuid of lower(request.target))
+          if ((await cookieVault.list()).some((x) => x.accountUuid === uuid)) {
+            await cookieVault.reject(uuid);
+            break;
+          }
+        return { result: "skipped", reason: "login-expired", saved };
+      }
       try {
         await vault.markSwap();
         await storage.write(dir, wanted);

@@ -648,8 +648,8 @@ export function AccountDetailBody({
         >
           <p className="min-w-0 flex-1">
             {t(
-              "Bu hesabın kayıtlı Claude girişi sona ermiş: Claude hesabı açınca oturumu kapattı. Yeniden giriş yapana kadar Relay bu hesaba kendiliğinden geçmez. Hesap eklerken Claude’un içinden çıkış yapma; çıkış, kayıtlı girişi de bitirir.",
-              "This account’s saved Claude sign-in has ended: Claude signed out when it opened the account. Relay does not switch to it by itself until you sign in again. Do not sign out inside Claude to add an account; signing out also ends the saved sign-in.",
+              "Bu hesabın kayıtlı Claude girişi sona ermiş: Claude hesabı açınca oturumu kapattı ya da hesap uzun süre kullanılmadığı için girişin süresi doldu. Yeniden giriş yapana kadar Relay bu hesaba kendiliğinden geçmez. Hesap eklerken Claude’un içinden çıkış yapma; çıkış, kayıtlı girişi de bitirir.",
+              "This account’s saved Claude sign-in has ended: Claude signed out when it opened the account, or the sign-in expired because the account was not used for a long time. Relay does not switch to it by itself until you sign in again. Do not sign out inside Claude to add an account; signing out also ends the saved sign-in.",
             )}
           </p>
           <Button

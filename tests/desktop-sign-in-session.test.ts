@@ -10,6 +10,7 @@ import { DesktopManager, DesktopSwitchRefused, type DesktopHost } from "../elect
 import { jsonBytes, readBytes, writeBytes } from "../electron/core/desktop-files";
 import {
   SignInNotSettled,
+  sessionEndsMs,
   sessionPresence,
   type SessionPresence,
 } from "../electron/core/desktop-session";
@@ -33,6 +34,31 @@ async function cookieDb(names: string[]) {
     await fs.rm(dir, { recursive: true, force: true });
   }
 }
+
+test("a saved session ends when its sessionKey cookies do; one that cannot be told says nothing", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-cookie-ends-"));
+  try {
+    const file = path.join(dir, "Cookies");
+    const db = new DatabaseSync(file);
+    db.exec(
+      "create table meta(key text primary key, value text); insert into meta values('version','24');" +
+        "create table cookies(host_key text, name text, value text, encrypted_value blob, expires_utc integer, has_expires integer)",
+    );
+    const add = db.prepare("insert into cookies values(?,?,?,?,?,?)");
+    const chromium = (ms: number) => BigInt(ms + 11_644_473_600_000) * 1000n;
+    add.run(".claude.ai", "sessionKey", "", Buffer.from("v10-sealed"), chromium(1_800_000_000_000), 1);
+    add.run(".claude.ai", "sessionKeyV3", "", Buffer.from("v10-sealed"), chromium(1_800_000_500_000), 1);
+    add.run(".claude.ai", "routingHint", "", Buffer.from("v10-sealed"), chromium(1_900_000_000_000), 1);
+    db.close();
+    assert.equal(await sessionEndsMs({ Cookies: await fs.readFile(file) }), 1_800_000_500_000);
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+  // No expiry columns, no session, no database: nothing to tell.
+  assert.equal(await sessionEndsMs({ Cookies: await cookieDb(["sessionKey"]) }), undefined);
+  assert.equal(await sessionEndsMs({ Cookies: await cookieDb(["routingHint"]) }), undefined);
+  assert.equal(await sessionEndsMs({ Cookies: null }), undefined);
+});
 
 test("a cookie database holds a session only while it has a sessionKey row", async () => {
   assert.equal(await sessionPresence({ Cookies: await cookieDb(["sessionKey", "routingHint"]) }), "present");
@@ -208,4 +234,29 @@ test("signing out inside Claude ends the saved sign-in: the account is marked un
   await f.manager.noteSignOuts();
   assert.ok(f.store.account(a.id).desktop!.rejectedAt);
   assert.equal(f.store.account(b.id).desktop!.rejectedAt, undefined);
+});
+
+test("a saved sign-in left unused until its session cookies ended is marked before a switch puts it back", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B"); // The Claude app is on B.
+  const rejected: string[] = [];
+  f.manager.onSignInRejected = (account) => rejected.push(account.name);
+  const now = Date.now();
+  const ends: Record<string, number> = {};
+  f.manager.sessionEnds = async (files) => {
+    const cookie = files.Cookies?.toString() ?? "";
+    for (const [name, at] of Object.entries(ends)) if (cookie.includes(name)) return at;
+    return undefined;
+  };
+  ends["cookie-A"] = now - 60_000;
+  ends["cookie-B"] = now - 60_000;
+  await f.manager.noteEndedSignIns();
+  assert.ok(f.store.account(a.id).desktop!.rejectedAt, "A's saved sign-in ended");
+  assert.equal(f.store.account(b.id).desktop!.rejectedAt, undefined, "the app is on B: its live sign-in counts");
+  assert.deepEqual(rejected, ["A"]);
+  // Looked at most every half hour.
+  delete f.store.state.accounts.find((x) => x.id === a.id)!.desktop!.rejectedAt;
+  await f.manager.noteEndedSignIns();
+  assert.deepEqual(rejected, ["A"]);
 });
