@@ -25,6 +25,12 @@ export interface PickContext {
   turnStart?: boolean;
   /** The session's cache has outlived its time: it is written again wherever it goes. */
   cold?: boolean;
+  /**
+   * The main conversation's own request (not a subagent's or a background one): only such a
+   * request moves a session whose account cannot serve its model; others are served elsewhere
+   * and leave the session where it is.
+   */
+  main?: boolean;
 }
 
 export interface RouterSelection {
@@ -84,22 +90,45 @@ export function modelFamily(model: string | undefined): string | undefined {
   return /(fable|opus|sonnet|haiku)/.exec(model?.toLowerCase() ?? "")?.[1];
 }
 
-/** The account's limit scoped to a model family (weekly Fable, weekly Opus), when it has one. */
+/**
+ * How much of a window is used now: a window whose reset has passed is empty again, whatever an
+ * old reading says (it would otherwise keep the account out until the next read).
+ */
+export function usedNow(window: UsageWindow | undefined, now: number): number | undefined {
+  if (!window || !Number.isFinite(window.usedPercent)) return undefined;
+  const reset = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
+  return Number.isFinite(reset) && reset <= now ? 0 : window.usedPercent;
+}
+
+/** Every limit of the account scoped to a model family: a weekly and a 5-hour one can both exist. */
+export function scopedWindows(usage: AccountUsage | undefined, family: string | undefined): UsageWindow[] {
+  if (!family) return [];
+  return (usage?.modelWindows ?? []).filter((window) => window.model === family);
+}
+
+/** The account's fullest limit scoped to a model family (weekly Fable, weekly Opus), now. */
 export function scopedWindow(
   usage: AccountUsage | undefined,
   family: string | undefined,
+  now = Date.now(),
 ): UsageWindow | undefined {
-  if (!family) return undefined;
-  const windows = (usage?.modelWindows ?? []).filter((window) => window.model === family);
-  // The fuller one decides; a weekly and a 5-hour window of one model can both exist.
-  return windows.sort((a, b) => b.usedPercent - a.usedPercent)[0];
+  return scopedWindows(usage, family).sort((a, b) => (usedNow(b, now) ?? 0) - (usedNow(a, now) ?? 0))[0];
+}
+
+/** The used percents that bind a request of `family` now: 5-hour, week, and the model's own. */
+function usedFor(usage: AccountUsage | undefined, family: string | undefined, now: number) {
+  const scoped = scopedWindows(usage, family).map((w) => usedNow(w, now) ?? 0);
+  return {
+    five: usedNow(usage?.fiveHour, now),
+    week: usedNow(usage?.sevenDay, now),
+    model: scoped.length ? Math.max(...scoped) : undefined,
+  };
 }
 
 /** How much of the fuller window is left, 0–100; undefined while no limit has been read. */
-const remainingPercent = (usage: AccountUsage | undefined, family?: string): number | undefined => {
-  const used = [usage?.fiveHour?.usedPercent, usage?.sevenDay?.usedPercent, scopedWindow(usage, family)?.usedPercent].filter(
-    (p): p is number => typeof p === "number" && Number.isFinite(p),
-  );
+const remainingPercent = (usage: AccountUsage | undefined, family: string | undefined, now: number): number | undefined => {
+  const { five, week, model } = usedFor(usage, family, now);
+  const used = [five, week, model].filter((p): p is number => typeof p === "number" && Number.isFinite(p));
   return used.length ? Math.max(0, 100 - Math.max(...used)) : undefined;
 };
 
@@ -110,7 +139,8 @@ const remainingPercent = (usage: AccountUsage | undefined, family?: string): num
  */
 export function fullUntil(usage: AccountUsage | undefined, now: number, family?: string): number {
   let until = 0;
-  for (const window of [usage?.fiveHour, usage?.sevenDay, scopedWindow(usage, family)]) {
+  // Every window of the model: a spent 5-hour one must not hide a spent week that ends later.
+  for (const window of [usage?.fiveHour, usage?.sevenDay, ...scopedWindows(usage, family)]) {
     if (!window || !(window.usedPercent >= 100) || !window.resetsAt) continue;
     const reset = Date.parse(window.resetsAt);
     if (Number.isFinite(reset) && reset > now) until = Math.max(until, reset);
@@ -126,13 +156,10 @@ export const SOFT_STOP_WEEK = 98;
  * Whether an account read as ready is close enough to a limit to take no new session. With a
  * model family, that model's own weekly limit counts like the week's.
  */
-export function nearlyFull(usage: AccountUsage | undefined, family?: string): boolean {
+export function nearlyFull(usage: AccountUsage | undefined, family?: string, now = Date.now()): boolean {
   if (!usage || usage.status !== "ready") return false;
-  return (
-    (usage.fiveHour?.usedPercent ?? 0) >= SOFT_STOP_FIVE_HOUR ||
-    (usage.sevenDay?.usedPercent ?? 0) >= SOFT_STOP_WEEK ||
-    (scopedWindow(usage, family)?.usedPercent ?? 0) >= SOFT_STOP_WEEK
-  );
+  const { five, week, model } = usedFor(usage, family, now);
+  return (five ?? 0) >= SOFT_STOP_FIVE_HOUR || (week ?? 0) >= SOFT_STOP_WEEK || (model ?? 0) >= SOFT_STOP_WEEK;
 }
 
 /**
@@ -172,6 +199,8 @@ interface Standing {
   draining: boolean;
   /** Past the eject threshold: a running session leaves it at the start of its next prompt. */
   ejecting: boolean;
+  /** A window that binds this request is at 100 % (a reading without a reset time still says so). */
+  spent: boolean;
   /** Most of its 5-hour window is used: a new session would soon have to move. */
   fiveLow: boolean;
   /**
@@ -281,24 +310,18 @@ export class ProxyRouter {
       return Number.isFinite(ms) && ms > now ? ms : undefined;
     };
     const ready = usage?.status === "ready";
-    const spent = [usage?.fiveHour, usage?.sevenDay, scopedWindow(usage, family)].some(
-      (window) => !!window && window.usedPercent >= 100,
-    );
-    const scoped = scopedWindow(usage, family)?.usedPercent ?? 0;
+    const { five = 0, week = 0, model = 0 } = usedFor(usage, family, now);
+    const spent = five >= 100 || week >= 100 || model >= 100;
     return {
       account,
       usage,
       weekEnds: (ready ? at(usage?.sevenDay) : undefined) ?? now + WEEK_MS,
       fiveEnds: (ready ? at(usage?.fiveHour) : undefined) ?? Infinity,
-      room: ready ? remainingPercent(usage, family) : undefined,
-      draining: nearlyFull(usage, family) || (ready && spent),
-      ejecting:
-        ready &&
-        (spent ||
-          (usage?.fiveHour?.usedPercent ?? 0) >= EJECT_FIVE_HOUR ||
-          (usage?.sevenDay?.usedPercent ?? 0) >= EJECT_WEEK ||
-          scoped >= EJECT_WEEK),
-      fiveLow: ready && (usage?.fiveHour?.usedPercent ?? 0) >= FIVE_HOUR_LOW_ROOM,
+      room: ready ? remainingPercent(usage, family, now) : undefined,
+      draining: nearlyFull(usage, family, now) || (ready && spent),
+      ejecting: ready && (spent || five >= EJECT_FIVE_HOUR || week >= EJECT_WEEK || model >= EJECT_WEEK),
+      spent: ready && spent,
+      fiveLow: ready && five >= FIVE_HOUR_LOW_ROOM,
       specialised:
         ready &&
         (usage?.modelWindows ?? []).some(
@@ -314,12 +337,14 @@ export class ProxyRouter {
    * goes first, for the same reason. Accounts never read rank after those with known room, and
    * accounts with almost nothing left after both.
    */
-  private bySoonestReset(now: number) {
+  private bySoonestReset(earliest: number) {
     // Known room first; an account whose 5-hour window is mostly used after those (a session
     // started there soon has to move and write its cache again); then never read; then nearly
     // empty ones.
     const tier = (s: Standing) => (s.room === undefined ? 2 : s.room <= 5 ? 3 : s.fiveLow ? 1 : 0);
-    const band = (s: Standing) => Math.floor((s.weekEnds - now) / DEADLINE_BAND_MS);
+    // Weeks ending within the band of the pool's earliest week tie (measured from that week, so
+    // two weeks minutes apart never fall on either side of a fixed edge).
+    const band = (s: Standing) => Math.floor((s.weekEnds - earliest) / DEADLINE_BAND_MS);
     return (a: Standing, b: Standing) =>
       tier(a) - tier(b) ||
       band(a) - band(b) ||
@@ -340,7 +365,8 @@ export class ProxyRouter {
       return pool.find((s) => s.account.id === id) ?? pool[0];
     }
     // Stable: equal accounts keep the pool's order.
-    return [...pool].sort(this.bySoonestReset(now))[0];
+    const earliest = Math.min(...pool.map((s) => s.weekEnds));
+    return [...pool].sort(this.bySoonestReset(earliest))[0];
   }
 
   /** The pool a new pick chooses from: accounts with room first, then everything eligible. */
@@ -444,27 +470,39 @@ export class ProxyRouter {
     const { pool, leftOut } = this.newPickPool(eligible, avoid);
     const best = this.pick(pool, now);
 
+    // Whether the session's account is out only for this request's model (its Fable week is
+    // spent) while it still serves the session's other models.
+    const onlyThisModel = (id: string) => {
+      const acc = ofProvider.find((a) => a.id === id);
+      if (!acc || !family) return false;
+      const usage = usageMap[id];
+      const general = this.standing(acc, usage, now, undefined);
+      return this.blockOf(acc, usage, now, undefined).until <= now && !general.spent;
+    };
     let moved: ProxyMoveReason | undefined;
+    // A subagent's or background request for a model the session's account cannot serve goes
+    // elsewhere, and the session stays: moving it would take the main conversation along, and
+    // the next ranking would bring it straight back (mid-turn, every cycle).
+    let keepBinding = false;
     if (sessionKey && boundId) {
       const bound = eligible.find((s) => s.account.id === boundId);
-      if (bound) {
-        const spent = [bound.usage?.fiveHour, bound.usage?.sevenDay, scopedWindow(bound.usage, family)].some(
-          (window) => bound.usage?.status === "ready" && !!window && window.usedPercent >= 100,
-        );
-        moved = spent && best.account.id !== bound.account.id ? "limit" : this.moveReason(bound, best, context, this.sessionCache.movedAt(sessionKey), now);
+      if (bound && !(bound.spent && best.account.id !== bound.account.id)) {
+        moved = this.moveReason(bound, best, context, this.sessionCache.movedAt(sessionKey), now);
         if (!moved) {
           this.sessionCache.get(sessionKey);
           return { account: bound.account, sessionAffinityHit: true, reason: "bound" };
         }
       } else if (!boundWaits) {
-        // Its account is out for a limit (the account's, or this model's): it moves on.
-        moved = "limit";
+        // Its account is out for a limit (the account's, or this model's): it moves on, unless
+        // only this model is out and the request is not the main conversation's.
+        if (context.main === false && onlyThisModel(boundId)) keepBinding = true;
+        else moved = "limit";
       }
     }
 
     if (moved === "rebalance") this.lastRebalanceAt = now;
     // Update affinity
-    if (sessionKey && !boundWaits) this.sessionCache.set(sessionKey, best.account.id);
+    if (sessionKey && !boundWaits && !keepBinding) this.sessionCache.set(sessionKey, best.account.id);
 
     const reason: ProxyPickReason =
       pool.length === 1

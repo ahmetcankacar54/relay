@@ -279,7 +279,10 @@ export function limitScopeOf(headers: http.IncomingHttpHeaders): "model" | "acco
   const general = (w: string) => /^(?:5h|7d|five_hour|seven_day)$/i.test(w) || /oauth|cowork|omelette|design/i.test(w);
   // Any other spent window is scoped to one model, whatever its name (`7d_opus`, and per other
   // tools `7d_oi` for the Fable family).
-  if (windows.length) return windows.some(general) ? "account" : "model";
+  // Only a window named after a model (or a known alias of one: `oi`, reported for Fable) is
+  // that model's; a name Relay does not know is the account's, as before.
+  const modelNamed = (w: string) => MODEL_NAMED.test(w) || /(?:^|_)oi$/i.test(w);
+  if (windows.length) return !windows.some(general) && windows.every(modelNamed) ? "model" : "account";
   const claim = String(headers[`${UNIFIED}representative-claim`] ?? "");
   return MODEL_NAMED.test(claim) ? "model" : "account";
 }

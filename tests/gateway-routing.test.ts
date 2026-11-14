@@ -259,3 +259,112 @@ test("busy sessions move to an expiring week one at a time, and ranking keeps Fa
   assert.equal(router.selectAccount(undefined, pair, twins, "claude", new Set(), undefined, { model: "claude-fable-5-2" }).account.id, "a");
   assert.equal(limitScopeOf({ "anthropic-ratelimit-unified-7d_oi-status": "rejected" }), "model", "a scoped window of any name");
 });
+
+test("review: a subagent's Fable request goes elsewhere without taking the Opus conversation along", () => {
+  let now = NOW;
+  const router = new ProxyRouter({ strategy: "soonest-reset", now: () => now });
+  const opus = { model: "claude-opus-5-5", main: true };
+  // The conversation lands on Vertex (week ends first); its Fable week is spent.
+  assert.equal(router.selectAccount("s", accounts, pool(), "claude", new Set(), undefined, { ...opus, turnStart: true }).account.id, "vertex");
+  // A Fable subagent of the same session is served elsewhere, and the session stays bound.
+  const sub = router.selectAccount("s", accounts, pool(), "claude", new Set(), undefined, { model: "claude-fable-5-2", main: false });
+  assert.notEqual(sub.account.id, "vertex");
+  assert.equal(sub.moved, undefined);
+  now += 60_000;
+  const next = router.selectAccount("s", accounts, pool(), "claude", new Set(), undefined, opus);
+  assert.equal(next.account.id, "vertex", "the main conversation never moved");
+  assert.equal(next.reason, "bound");
+  // The main conversation itself asking for Fable does move: its model is out there.
+  const mainFable = router.selectAccount("s", accounts, pool(), "claude", new Set(), undefined, { model: "claude-fable-5-2", main: true });
+  assert.equal(mainFable.moved, "limit");
+});
+
+test("review: every window of a model counts, an expired window is empty, and an unknown window is the account's", () => {
+  const router = new ProxyRouter({ strategy: "soonest-reset", now: () => NOW });
+  const both = pool();
+  both.vertex.modelWindows = [
+    { key: "five_hour_fable", label: "Fable", model: "fable", usedPercent: 100, resetsAt: at(1) },
+    { key: "seven_day_fable", label: "Fable", model: "fable", usedPercent: 100, resetsAt: at(100) },
+  ];
+  const later = new ProxyRouter({ strategy: "soonest-reset", now: () => NOW + 2 * HOUR });
+  assert.notEqual(
+    later.selectAccount(undefined, accounts, both, "claude", new Set(), undefined, { model: "claude-fable-5-2" }).account.id,
+    "vertex",
+    "the spent week still keeps Fable off after the 5-hour window resets",
+  );
+  // A stale reading whose Fable reset has passed: the account serves Fable again.
+  const stale = pool();
+  stale.vertex.modelWindows = [{ key: "seven_day_fable", label: "Fable", model: "fable", usedPercent: 100, resetsAt: at(-0.2) }];
+  stale.alto.fiveHour = { usedPercent: 40, resetsAt: at(2.2) };
+  assert.equal(
+    router.selectAccount(undefined, accounts, stale, "claude", new Set(), undefined, { model: "claude-fable-5-2" }).account.id,
+    "vertex",
+  );
+  assert.equal(limitScopeOf({ "anthropic-ratelimit-unified-7d_claude_code-status": "rejected" }), "account");
+  assert.equal(limitScopeOf({ "anthropic-ratelimit-unified-7d_opus-status": "rejected" }), "model");
+});
+
+test("review: weeks minutes apart tie however they fall, so the running 5-hour window decides", () => {
+  const router = new ProxyRouter({ strategy: "soonest-reset", now: () => NOW });
+  const edge = {
+    a: usage("a", { used: 10, resetIn: 4 }, { used: 30, resetIn: 5.9 }),
+    b: usage("b", { used: 10, resetIn: 1 }, { used: 30, resetIn: 6.1 }),
+  };
+  assert.equal(router.selectAccount(undefined, [account("a"), account("b")], edge, "claude").account.id, "b");
+});
+
+test("review: a background request of a new prompt does not hide the turn's start", async () => {
+  const http = await import("node:http");
+  const { ProxyServer } = await import("../electron/core/proxy/proxy-server");
+  const clock = { now: NOW };
+  const usageMap: Record<string, AccountUsage> = {
+    soon: usage("soon", { used: 95, resetIn: 0.5 }, { used: 40, resetIn: 24 }),
+    late: usage("late", { used: 10, resetIn: 3 }, { used: 20, resetIn: 120 }),
+  };
+  const tokens: string[] = [];
+  const upstream = http.createServer((req, res) => {
+    req.resume();
+    req.on("end", () => {
+      tokens.push(String(req.headers.authorization).replace("Bearer ", ""));
+      res.writeHead(200, { "content-type": "text/event-stream" });
+      res.end('event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":2,"cache_read_input_tokens":30000,"cache_creation_input_tokens":0,"output_tokens":3}}}\n\n');
+    });
+  });
+  await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+  const server = new ProxyServer({
+    config: { port: 0, host: "127.0.0.1", enabled: true, routingStrategy: "soonest-reset" },
+    credentialResolver: async (a) => `tok-${a.id}`,
+    usageProvider: () => ({ accounts: [account("soon"), account("late")], usageMap }),
+    upstreams: { anthropicUrl: `http://127.0.0.1:${(upstream.address() as import("node:net").AddressInfo).port}` },
+    now: () => clock.now,
+  });
+  const { port } = await server.start();
+  const send = (prompt: string, requestClass: string) =>
+    new Promise<void>((resolve, reject) =>
+      http
+        .request(
+          { host: "127.0.0.1", port, method: "POST", path: "/v1/messages", headers: { "x-claude-code-session-id": "s-1", "x-claude-code-request-class": requestClass, "x-claude-code-prompt-id": prompt } },
+          (res) => {
+            res.resume();
+            res.on("end", () => resolve());
+          },
+        )
+        .on("error", reject)
+        .end(JSON.stringify({ model: "claude-opus-5-5" })),
+    );
+  try {
+    await send("p1", "main");
+    usageMap.soon = usage("soon", { used: 5, resetIn: 5 }, { used: 40, resetIn: 24 });
+    clock.now += 3 * 60_000;
+    // The new prompt's title request arrives first; the main request still starts the turn.
+    await send("p2", "auxiliary");
+    await send("p2", "main");
+    assert.equal(tokens.at(-1), "tok-soon");
+  } finally {
+    await server.stop();
+    await new Promise<void>((resolve) => {
+      upstream.closeAllConnections();
+      upstream.close(() => resolve());
+    });
+  }
+});

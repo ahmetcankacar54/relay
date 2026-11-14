@@ -118,13 +118,14 @@ test("ProxyRouter evicts exhausted account from session affinity", () => {
       accountId: "acc-1",
       status: "ready",
       stale: false,
-      fiveHour: { usedPercent: 100, resetsAt: new Date().toISOString() },
+      // Spent until its reset an hour from now (a reset already past would make it empty again).
+      fiveHour: { usedPercent: 100, resetsAt: new Date(Date.now() + 3_600_000).toISOString() },
     },
     "acc-2": {
       accountId: "acc-2",
       status: "ready",
       stale: false,
-      fiveHour: { usedPercent: 10, resetsAt: new Date().toISOString() },
+      fiveHour: { usedPercent: 10, resetsAt: new Date(Date.now() + 3_600_000).toISOString() },
     },
   };
 

@@ -113,11 +113,6 @@ export class GatewayInsights {
     return this.alarmOf(prompt);
   }
 
-  /** Whether a request of this prompt was already seen (its turn has begun). */
-  hasPrompt(promptId: string): boolean {
-    return this.prompts.has(promptId);
-  }
-
   /** The account that served a prompt's latest request, for its alarm. */
   promptServedBy(promptId: string | undefined, accountId: string): void {
     const prompt = promptId ? this.prompts.get(promptId) : undefined;

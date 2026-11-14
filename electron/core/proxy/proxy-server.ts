@@ -524,6 +524,8 @@ export class ProxyServer {
   }
 
   private inFlight = 0;
+  /** Each session's last main-conversation prompt id, to tell a new turn (oldest dropped first). */
+  private readonly lastMainPrompt = new Map<string, string>();
 
   /**
    * On a loopback bind, only loopback Host names are answered: a web page that rebinds its own
@@ -631,9 +633,18 @@ export class ProxyServer {
     const promptId = hint("x-claude-code-prompt-id");
     const compacted =
       requestClass === "compaction" || /^(1|true)$/i.test(String(req.headers["x-claude-code-context-compacted"] ?? ""));
-    // The first request Relay sees of a prompt in the main conversation starts a turn.
-    const turnStart =
-      !!promptId && !agentId && (requestClass === undefined || requestClass === "main") && !this.insights.hasPrompt(promptId);
+    // The main conversation's own request: not a subagent's, nor a title or classifier call.
+    const main = !agentId && (requestClass === undefined || requestClass === "main" || requestClass === "compaction");
+    // A turn starts at the main conversation's first request with a new prompt id. Kept per
+    // session and only by main requests: a background request of the prompt read first, or a
+    // long tool call that let the prompt drop out of the loop counter, must not hide or fake it.
+    let turnStart = false;
+    if (sessionKey && promptId && main && requestClass !== "compaction") {
+      turnStart = this.lastMainPrompt.get(sessionKey) !== promptId;
+      this.lastMainPrompt.delete(sessionKey);
+      this.lastMainPrompt.set(sessionKey, promptId);
+      if (this.lastMainPrompt.size > 2_000) this.lastMainPrompt.delete(this.lastMainPrompt.keys().next().value!);
+    }
     const alarm = this.insights.countPrompt(promptId, { sessionKey, agentId });
     if (alarm) this.onLoopAlarm?.(alarm);
     // A fresh subagent starts a prompt of its own, so another account costs it no cache: with
@@ -647,6 +658,7 @@ export class ProxyServer {
     // whether moving the session costs nothing (its cache went cold) or least (a new prompt
     // begins, so no turn is cut in two). Subagents and background requests never start a turn.
     const pickContext: PickContext = {
+      main,
       ...(requestedModel ? { model: requestedModel } : {}),
       ...(sessionKey && !agentId && this.insights.isCold(sessionKey) ? { cold: true } : {}),
       ...(turnStart ? { turnStart: true } : {}),
@@ -691,7 +703,7 @@ export class ProxyServer {
           tried,
           avoid,
           // A retry is not a move: the turn already began on the first try.
-          tried.size ? { ...(requestedModel ? { model: requestedModel } : {}) } : pickContext,
+          tried.size ? { main, ...(requestedModel ? { model: requestedModel } : {}) } : pickContext,
         );
       } catch (err) {
         if (!(err instanceof NoProviderAccountError || err instanceof NoEligibleAccountError)) throw err;
@@ -1034,7 +1046,8 @@ export class ProxyServer {
             family,
             Math.min(MAX_COOLDOWN_S, Math.max(MIN_COOLDOWN_S, seconds)) * 1000,
           );
-          if (sessionKey) this.sessionCache.evictSession(sessionKey);
+          // The session is not evicted: its next request decides (the main conversation moves,
+          // a subagent's request of this model goes elsewhere), and its stay-a-while time holds.
           break;
         }
         cool(seconds, "limit");
