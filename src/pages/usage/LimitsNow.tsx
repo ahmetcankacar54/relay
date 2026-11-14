@@ -27,7 +27,8 @@ const valid = (iso: string | undefined, now: number) => !!iso && Date.parse(iso)
 
 /** The board's reading of one account (exported for tests). */
 export function limitStanding(usage: AccountUsage | undefined, now: number): LimitStanding {
-  if (!usage || usage.status !== "ready") return { kind: "unread" };
+  // An old reading still says how the account stood; the row says it is old.
+  if (!usage || (!usage.fiveHour && !usage.sevenDay)) return { kind: "unread" };
   const full = [usage.fiveHour, usage.sevenDay].filter((w) => !!w && w.usedPercent >= 100);
   if (full.length)
     return {
@@ -145,6 +146,7 @@ export function LimitsNow({ now = Date.now() }: { now?: number }) {
           const main = rows.filter((r) => !r.model);
           const models = rows.filter((r) => r.model);
           const plan = accountPlan(account);
+          const old = !!u && standing.kind !== "unread" && (u.status !== "ready" || u.stale);
           return (
             <li
               key={account.id}
@@ -187,9 +189,10 @@ export function LimitsNow({ now = Date.now() }: { now?: number }) {
                           ? t(`Açık · hafta ${reset(standing.endsAt)} yenilenir`, `Open · week renews ${reset(standing.endsAt)}`)
                           : t("Açık", "Open")
                         : t("Limitler okunmadı", "Limits not read")}
+                  {old && <span className="text-muted-foreground">{t(" · eski okuma", " · old reading")}</span>}
                 </span>
               </div>
-              <div className="grid min-w-0 gap-2">
+              <div className={cn("grid min-w-0 gap-2", old && "opacity-60")}>
                 {main.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
                     {main.map((row) => (
