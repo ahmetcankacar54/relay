@@ -10,6 +10,7 @@ import {
   modeSentence,
   pairedAccounts,
   extensionGuide,
+  reconnectGuide,
   startupLine,
 } from "../src/lib/extension-ui";
 import { extensionLine } from "../shared/extension-text";
@@ -39,7 +40,7 @@ const status = (over: Partial<ExtensionStatus> = {}): ExtensionStatus => ({
   target: brave,
   restoresTabs: false,
   saved: [{ accountUuid: ID, savedAt: "2026-10-20T08:00:00.000Z" }],
-  cookiesSaved: [],
+  cookiesSaved: [{ accountUuid: ID, savedAt: "2026-10-20T08:00:00.000Z" }],
   ...over,
 });
 
@@ -67,6 +68,21 @@ test("a saved sign-in reads as linked, matching the uuid in any case", () => {
   assert.equal(expired.steps?.length, 3);
   assert.match(expired.steps![0], /Brave’da claude\.ai’yi aç/);
   assert.equal(extensionGuide(alto, undefined, [], tr, "tr").label, "Kontrol ediliyor…");
+  // Only the extension's half saved: a switch would change nothing, so it is not "linked".
+  const half = guide(vertex, { cookiesSaved: [] });
+  assert.deepEqual({ tone: half.tone, action: half.action }, { tone: "warn", action: "check" });
+  assert.match(half.label, /Yarım bağlı/);
+});
+
+test("the reconnect guide names the Claude app's account and never says to log out", () => {
+  const accounts = [vertex, altoLinked];
+  // The extension expired on Vertex while the Claude app is on Alto: Alto is the one to reconnect.
+  const st = status({ current: { ...signedIn(ID), expired: true } });
+  assert.equal(reconnectGuide(st, accounts, tr, ALTO)?.account.id, altoLinked.id);
+  assert.equal(reconnectGuide(st, accounts, tr)?.account.id, vertex.id, "without the app's account, the extension's");
+  const steps = reconnectGuide(st, accounts, en, ALTO)!.steps.join(" ");
+  assert.match(steps, /do not log out/);
+  assert.doesNotMatch(steps, /log out from the menu/);
 });
 
 test("an unlinked account gets the steps to link it, for each thing the extension is on", () => {

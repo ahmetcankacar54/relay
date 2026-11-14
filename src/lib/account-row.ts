@@ -9,7 +9,7 @@ import { formatClock, formatRelative, formatReset } from "@/lib/time";
 import { quotaWindows } from "../../shared/quota-windows";
 import { clockLocative } from "../../shared/tr-dative";
 import { freshUsage } from "../../shared/usage";
-import { planColumn } from "../pages/accounts/accountLabels";
+import { accountPlan } from "../pages/accounts/accountLabels";
 
 /**
  * Status line under an account name (Overview and the menu bar panel). When something is wrong it is
@@ -152,7 +152,8 @@ export function ringState(usage: AccountUsage | undefined, now: number): RingSta
 
 /** A status after a lead (the plan, the percents) reads on in lower case; Claude and Keychain keep their capitals. */
 const onward = (text: string, language: Language) =>
-  /^(Claude|Keychain)\b/.test(text)
+  // Names keep their capital: Claude, Keychain, and a model whose own limit is spent (Fable).
+  /^(Claude|Keychain|Fable|Opus|Sonnet|Haiku)\b/.test(text)
     ? text
     : text.charAt(0).toLocaleLowerCase(language) + text.slice(1);
 
@@ -230,7 +231,7 @@ function rowStatus(
 
 /**
  * The Overview row's line under the name: the plan, as the Accounts table names it, then the status
- * ("Team · dönem açık · 3 sa 10 dk", "Max · limit verisi 2 sa önce"). The full status is its title.
+ * ("Team · dönem açık · 3 sa 10 dk", "ChatGPT Plus · limit verisi 2 sa önce"). The full status is its title.
  */
 export function accountTileLine(
   row: OverviewRow,
@@ -241,7 +242,7 @@ export function accountTileLine(
   waiting = false,
 ): string {
   const status = rowStatus(row, t, language, zone, now, waiting, false);
-  const plan = planColumn(row.account)?.label;
+  const plan = accountPlan(row.account)?.label;
   return plan ? `${plan} · ${onward(status, language)}` : status;
 }
 

@@ -62,12 +62,20 @@ const isFailureKey = (key: string) => FAILURE_KEYS.includes(key);
 export const withoutFailure = (signIn: SignIn): SignIn =>
   Object.fromEntries(Object.entries(signIn).filter(([key]) => !isFailureKey(key)));
 
-/** Whether the extension recorded a failed sign-in: it then refuses browser tools until one works. */
+/** Reasons the extension records for a sign-in that failed for a passing cause: it tries again. */
+const PASSING_FAILURE = /network|timeout|offline|unavailable/i;
+
+/**
+ * Whether the extension recorded a failed sign-in: it then refuses browser tools until one works.
+ * "session_expired" is the reason seen so far; any other reason but a passing one (no network)
+ * counts too, so an unknown record never reads as healthy.
+ */
 export function sessionExpired(entries: Iterable<readonly [string, string | undefined]>): boolean {
   for (const [key, value] of entries)
     if (key === "lastAuthFailureReason" && typeof value === "string")
       try {
-        return JSON.parse(value) === "session_expired";
+        const reason = JSON.parse(value);
+        return typeof reason === "string" && reason.trim() !== "" && !PASSING_FAILURE.test(reason);
       } catch {
         return false;
       }

@@ -77,7 +77,8 @@ function Arc({
 /**
  * Two limits at a glance, as concentric rings: the outer one the five-hour window, thick, the
  * inner one the week, thin, so the two read apart by weight rather than by colour. Each fills with
- * what is used, in grey, and in red once a limit is used up. `children` sits
+ * what is used in the meter tone (`meterTone`: warm grey, amber from 75 %, red from 90 % and once a
+ * limit is used up). `children` sits
  * in the middle, usually the five-hour percent, inside a clear zone the rings never touch.
  * Without `inner` it is a single ring. `state` says how far the reading can be trusted (`RingState`).
  */
@@ -132,8 +133,8 @@ export function UsageRing({
 
 const ringClass: Record<MeterTone, string> = {
   ok: "border-meter",
-  warn: "border-meter",
-  crit: "border-meter",
+  warn: "border-warn",
+  crit: "border-crit",
   none: "border-track",
 };
 

@@ -20,6 +20,7 @@ import { useRelay } from "@/data/relay-context";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { errorMessage } from "@/data/error-message";
 import { cn } from "@/lib/utils";
+import { providerPlan } from "./accountLabels";
 
 /** The providers an account can be added for, in the order the cards show them. */
 export const ONBOARDING_PROVIDERS = ["claude", "codex", "antigravity"] as const;
@@ -297,7 +298,7 @@ export function DetectedImport({
                     {session.email || session.name ? <Private>{session.email ?? session.name}</Private> : session.source}
                   </span>
                   <span className="truncate text-2xs text-muted-foreground">
-                    {[t(...(where[session.provider] ?? [session.source ?? "", session.source ?? ""])), session.plan, session.orgName]
+                    {[t(...(where[session.provider] ?? [session.source ?? "", session.source ?? ""])), providerPlan(session.provider, session.plan)?.label, session.orgName]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
@@ -382,7 +383,7 @@ export function ProviderForm({
             <b className="font-semibold">{session?.email ? <Private>{session.email}</Private> : session?.source}</b>
           </span>
           <span className="text-xs text-muted-foreground">
-            {[session?.plan, session?.source].filter(Boolean).join(" · ")}
+            {[providerPlan(provider, session?.plan)?.label, session?.source].filter(Boolean).join(" · ")}
           </span>
           {session?.alreadyLinkedAccountName && (
             <span className="text-xs text-warn-foreground">

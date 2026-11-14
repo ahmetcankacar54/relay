@@ -236,7 +236,7 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(html, />Max 5×<\/span><span[^>]*title="Claude uygulamasında açık hesap"><span[^>]*bg-ok[^>]*><\/span>Claude açık</);
   assert.doesNotMatch(html, /Çalışıyor/);
   assert.match(html, /5 saatlik dönem/);
-  assert.match(html, /Haftalık · Opus/);
+  assert.match(html, /Opus · haftalık/);
   // No suggestion strip: the accounts heading says the limit is near and the suggestion leads.
   assert.match(html, />Limit dolmak üzere</);
   assert.doesNotMatch(html, /Önerilen:/);

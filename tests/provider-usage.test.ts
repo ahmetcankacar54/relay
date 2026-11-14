@@ -201,3 +201,22 @@ test("on macOS the plan is read at startup from the profile file, without the Cl
   assert.equal(service.store.account(other.id).auth?.plan, undefined);
   assert.equal(service.store.account(other.id).planning, undefined);
 });
+
+test("an Antigravity sign-in's Google plan comes from loadCodeAssist: the paid tier first", async () => {
+  const { parseAntigravityTier, readAntigravityTier } = await import("../electron/core/provider-usage");
+  assert.equal(parseAntigravityTier({ currentTier: { id: "free-tier" }, paidTier: { id: "g1-pro-tier", name: "Google AI Pro" } }), "pro");
+  assert.equal(parseAntigravityTier({ currentTier: { id: "g1-ultra-tier" } }), "ultra");
+  assert.equal(parseAntigravityTier({ currentTier: { id: "free-tier" } }), "free");
+  assert.equal(parseAntigravityTier({ currentTier: { id: "standard-tier" } }), "standard");
+  assert.equal(parseAntigravityTier({}), undefined);
+  const asked: string[] = [];
+  const tier = await readAntigravityTier(async (request) => {
+    asked.push(request.url);
+    return asked.length === 1
+      ? { status: 503, retryAfter: null, body: "" }
+      : { status: 200, retryAfter: null, body: JSON.stringify({ paidTier: { id: "g1-ultra-tier" } }) };
+  }, "proj-1");
+  assert.equal(tier, "ultra");
+  assert.equal(asked.length, 2, "the second host after an outage");
+  assert.equal(await readAntigravityTier(async () => { throw new Error("down"); }, undefined), undefined);
+});

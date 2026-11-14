@@ -220,7 +220,7 @@ export function requestDetail(
 
 /** How the gateway chose an account that was not the session's own, in words. */
 const PICK_LABELS: Record<Exclude<ProxyPickReason, "bound">, [string, string]> = {
-  "soonest-reset": ["sıfırlanması en yakın hesap seçildi", "picked: resets soonest"],
+  "soonest-reset": ["haftası ilk biten hesap seçildi", "picked: its week ends first"],
   balanced: ["en çok yeri olan hesap seçildi", "picked: most room left"],
   priority: ["sıradaki hesap seçildi", "picked: next in order"],
   only: ["uygun tek hesap buydu", "the only account available"],
@@ -229,7 +229,7 @@ const PICK_LABELS: Record<Exclude<ProxyPickReason, "bound">, [string, string]> =
 /** A routing reason alone, for the pool's next-session line: what the strategy looks for. */
 const REASON_LABELS: Record<ProxyPickReason, [string, string]> = {
   bound: ["oturumun hesabı", "the session's account"],
-  "soonest-reset": ["sıfırlanması en yakın", "resets soonest"],
+  "soonest-reset": ["haftası ilk biten", "week ends first"],
   balanced: ["en çok yeri olan", "most room left"],
   priority: ["sırada ilk", "first in order"],
   only: ["uygun tek hesap", "the only one available"],
@@ -251,6 +251,20 @@ export function pickLine(
   const names = (list: readonly string[]) => list.map((id) => nameOf(id) ?? "?").join(", ");
   const parts: string[] = [];
   if (pick.reason !== "bound") parts.push(t(...PICK_LABELS[pick.reason]));
+  if (pick.moved && pick.from) {
+    const from = names([pick.from]);
+    parts.push(
+      {
+        limit: t(`${from} limitte, oturum taşındı`, `${from} at its limit, session moved`),
+        cold: t(`önbellek soğumuştu, ${from} hesabından ücretsiz taşındı`, `cache had expired, moved off ${from} at no cost`),
+        drain: t(`${from} limite yaklaştı, yeni istemde taşındı`, `${from} near its limit, moved at a new prompt`),
+        rebalance: t(
+          `haftası daha erken biten hesaba, ${from} hesabından yeni istemde taşındı`,
+          `moved off ${from} at a new prompt, to a week that ends sooner`,
+        ),
+      }[pick.moved],
+    );
+  }
   if (pick.overflow) parts.push(t("alt ajan, oturumdan ayrı hesapta", "subagent kept off its session's account"));
   if (pick.after) parts.push(t(`önce ${names([pick.after])} denendi`, `tried ${names([pick.after])} first`));
   if (pick.boundWaiting)

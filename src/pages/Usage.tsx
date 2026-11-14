@@ -24,6 +24,7 @@ import { useTokenUsage } from "./usage/useTokenUsage";
 import { TokenUsage } from "./usage/TokenUsage";
 import { LostFound } from "./usage/LostFound";
 import { UsageHeatmap } from "./usage/UsageHeatmap";
+import { LimitsNow } from "./usage/LimitsNow";
 import {
   useUsageStatistics,
   type UsageStatisticsState,
@@ -294,6 +295,8 @@ export function Usage({ section = "limits" }: { section?: UsageSection }) {
       }
     >
       <div className="grid gap-4 px-5 pb-5">
+        {/* Today's limits of every account first; the statistics below are history. */}
+        {section === "limits" && <LimitsNow />}
         {section === "limits" && (
           <LimitsPage
             accounts={accounts}

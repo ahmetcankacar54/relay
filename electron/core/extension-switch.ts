@@ -376,6 +376,9 @@ export class ExtensionSwitcher {
     await clearScratch(cookieScratch);
     let keepBackup = false;
     const own: string[] = [];
+    // When the extension last wrote its hints: read before anything here opens its database,
+    // which touches the folder and would make it "now" (the owner check below never fired).
+    const hintsAt = system.modifiedAt(dir);
     try {
       const backup = await backupFolder(dir, scratch);
       own.push(backup);
@@ -422,10 +425,13 @@ export class ExtensionSwitcher {
       const webLogin = hasWebLogin(web);
       if (webLogin && !account)
         return { result: "skipped", reason: "unknown-account", saved };
-      if (current && account && !interrupted) {
+      // A pair the extension already failed to sign in with is dead: saving it would put a login
+      // back that expires again at the next switch to its account (seen 2026-11-12). The vault
+      // keeps the account's older pair instead.
+      const failed = sessionExpired(entries);
+      if (current && account && !interrupted && !failed) {
         // The web login belongs to the hints' account unless it is newer than the hints: the user
         // signed in to claude.ai again without the extension following.
-        const hintsAt = system.modifiedAt(dir);
         const created = sessionCreatedMs(web);
         if (
           webLogin &&

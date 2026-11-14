@@ -1447,8 +1447,11 @@ export class DesktopManager {
       current: this.lastTerminalCheck,
       saved: await this.terminalVault.list(),
       last: this.lastTerminal,
+      ...(this.gatewayBound?.() ? { viaGateway: true } : {}),
     };
   }
+  /** Whether Claude Code is connected to Relay's running gateway (set by the host). */
+  gatewayBound?: () => boolean;
   /**
    * Reads who the terminal's Claude Code is signed in to, and saves that sign-in when it is one of
    * Relay's accounts: how an account is linked. Writes nothing to Claude Code.

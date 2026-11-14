@@ -80,7 +80,7 @@ test("usage rows include model windows after the main ones", () => {
   assert.deepEqual(rows.map((r) => [r.key, r.label.tr, r.usedPercent]), [
     ["five_hour", "5 saatlik dönem", 38],
     ["seven_day", "Haftalık · tüm modeller", 78],
-    ["seven_day_opus", "Haftalık · Opus", 7],
+    ["seven_day_opus", "Opus · haftalık", 7],
   ]);
   assert.deepEqual(usageWindowRows(undefined), []);
 });

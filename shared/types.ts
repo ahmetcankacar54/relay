@@ -392,7 +392,18 @@ export interface ProxyStatus {
   /** Today's gateway traffic by Claude Code's request class. */
   classShare?: ProxyClassShare[];
   /** The account a new session would get now, by provider, and why. */
-  nextPick?: Partial<Record<AccountProvider, { accountId: string; reason: ProxyPickReason; nearlyFull?: string[] }>>;
+  nextPick?: Partial<
+    Record<
+      AccountProvider,
+      {
+        accountId: string;
+        reason: ProxyPickReason;
+        nearlyFull?: string[];
+        /** Where a new session of a model with its own limit (Fable) goes, when that differs. */
+        byModel?: { model: string; label: string; accountId?: string }[];
+      }
+    >
+  >;
 }
 /** Local session discovered on disk for 1-click Zero-Friction onboarding. */
 export interface DetectedProviderSession {
@@ -902,6 +913,13 @@ export interface ModelWindow {
   label: string;
   usedPercent: number;
   resetsAt?: string;
+  /**
+   * The model family the limit applies to ("fable", "opus"), lowercase, when the answer names
+   * one: only requests for that model are stopped when it is spent.
+   */
+  model?: string;
+  /** The most of the weekly limit this model may take, in percent (Fable: 50). */
+  weeklyShare?: number;
 }
 export interface AccountUsage {
   accountId: string;

@@ -129,6 +129,14 @@ export function TerminalPreference({
   return (
     <div className="grid gap-1">
       <SectionHeading title={t("Terminaldeki Claude Code", "Claude Code in the terminal")} />
+      {status.viaGateway && (
+        <Note>
+          {t(
+            "Claude Code ağ geçidine bağlı: istekleri, ağ geçidinin her istek için seçtiği hesaptan gider (Proxy sayfası). Buradaki giriş yalnızca Relay kapalıyken kullanılır; geçişte yine hesabı izler.",
+            "Claude Code is connected to the gateway: its requests use the account the gateway picks for each one (Proxy page). The sign-in here is used only while Relay is not running; it still follows the account at a switch.",
+          )}
+        </Note>
+      )}
       <SettingRow
         label={t("Geçişte", "At a switch")}
         htmlFor="terminal-mode"

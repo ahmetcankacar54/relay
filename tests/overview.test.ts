@@ -75,7 +75,7 @@ test("overview shows the active account, limits, accounts, today and automation"
   assert.match(html, /role="meter" aria-label="5 saatlik dönem"[^>]*aria-valuenow="38"/);
   assert.match(html, /role="meter" aria-label="Haftalık · tüm modeller"[^>]*aria-valuenow="78"/);
   assert.match(html, /Haftalık · tüm modeller/);
-  assert.match(html, /Haftalık · Opus/);
+  assert.match(html, /Opus · haftalık/);
   // No suggestion band: the hero says the limit is near and offers the suggested account, and the
   // suggestion leads the accounts list.
   assert.doesNotMatch(html, /uyarı eşiğini geçti|Önerilen:/);

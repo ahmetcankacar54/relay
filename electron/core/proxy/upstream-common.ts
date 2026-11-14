@@ -44,6 +44,8 @@ export type FailureKind = "limit" | "extra-usage" | "auth" | "permission" | "tra
 export interface LiveLimits {
   fiveHour?: { usedPercent: number; resetsAt?: string };
   sevenDay?: { usedPercent: number; resetsAt?: string };
+  /** Windows scoped to one model family ("fable", "opus"), when the answer carries them. */
+  models?: { model: string; weekly: boolean; usedPercent: number; resetsAt?: string }[];
 }
 
 export interface UpstreamOutcome {
@@ -60,6 +62,11 @@ export interface UpstreamOutcome {
   retryAfterSeconds?: number;
   /** When the account's exhausted limit resets (ms), from the provider's rate-limit headers. */
   limitResetsAt?: number;
+  /**
+   * Whose limit a 429 spent: one model's (every spent window is scoped to a model, such as
+   * weekly Opus or Fable) or the account's. Unknown answers count as the account's.
+   */
+  limitScope?: "model" | "account";
   /**
    * The answer was held back (`holdIf`) and nothing was sent to the client: the caller may try
    * another account, or must answer the client itself.
@@ -218,6 +225,8 @@ function sanitizeResponseHeaders(
  * seconds (`anthropic-ratelimit-unified-reset`, or per window). Undefined when none is given.
  */
 const UNIFIED = "anthropic-ratelimit-unified-";
+/** A rate-limit window named after a model family is that model's own limit. */
+const MODEL_NAMED = /(fable|opus|sonnet|haiku)/i;
 /** The longest a reset read from the overall header alone is trusted for when it names a 5-hour window. */
 const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
 
@@ -249,6 +258,33 @@ export function parseLimitReset(
   if (overall === undefined) return undefined;
   const claim = String(headers[`${UNIFIED}representative-claim`] ?? "");
   return claim === "five_hour" ? Math.min(overall, now + FIVE_HOURS_MS) : overall;
+}
+
+/** The rate-limit windows an answer says are spent ("5h", "7d", "7d_opus", …), overage aside. */
+export function rejectedWindows(headers: http.IncomingHttpHeaders): string[] {
+  return Object.keys(headers)
+    .map((name) => /^anthropic-ratelimit-unified-(.+)-status$/.exec(name)?.[1])
+    .filter((w): w is string => !!w && w !== "overage" && String(headers[`${UNIFIED}${w}-status`] ?? "") === "rejected");
+}
+
+/**
+ * Whether a 429 spent one model's limit or the whole account's: "model" only when every spent
+ * window (or, without any, the representative claim) names a model family. A window scoped to a
+ * kind of client (`7d_oauth_apps`) stops every request, so it is the account's.
+ */
+export function limitScopeOf(headers: http.IncomingHttpHeaders): "model" | "account" {
+  const windows = rejectedWindows(headers);
+  // The account's own windows, and windows of a kind of client or a product (Claude Code's
+  // OAuth apps, Cowork, Design), stop every request through it.
+  const general = (w: string) => /^(?:5h|7d|five_hour|seven_day)$/i.test(w) || /oauth|cowork|omelette|design/i.test(w);
+  // Any other spent window is scoped to one model, whatever its name (`7d_opus`, and per other
+  // tools `7d_oi` for the Fable family).
+  // Only a window named after a model (or a known alias of one: `oi`, reported for Fable) is
+  // that model's; a name Relay does not know is the account's, as before.
+  const modelNamed = (w: string) => MODEL_NAMED.test(w) || /(?:^|_)oi$/i.test(w);
+  if (windows.length) return !windows.some(general) && windows.every(modelNamed) ? "model" : "account";
+  const claim = String(headers[`${UNIFIED}representative-claim`] ?? "");
+  return MODEL_NAMED.test(claim) ? "model" : "account";
 }
 
 /** The `error.message` of a JSON error body, or undefined. */
@@ -289,8 +325,30 @@ export function parseLiveLimits(headers: http.IncomingHttpHeaders): LiveLimits |
   };
   const fiveHour = window("5h");
   const sevenDay = window("7d");
-  if (!fiveHour && !sevenDay) return undefined;
-  return { ...(fiveHour ? { fiveHour } : {}), ...(sevenDay ? { sevenDay } : {}) };
+  // Windows of one model (`7d_opus`, a Fable one): named by family, whatever else the name says.
+  const models = Object.keys(headers).flatMap((name) => {
+    const key = /^anthropic-ratelimit-unified-(.+)-utilization$/.exec(name)?.[1];
+    const model = key && key !== "5h" && key !== "7d" ? MODEL_NAMED.exec(key)?.[1]?.toLowerCase() : undefined;
+    if (!key || !model) return [];
+    const raw = value(name);
+    const fraction = raw === undefined || raw.trim() === "" ? NaN : Number(raw);
+    if (!Number.isFinite(fraction) || fraction < 0) return [];
+    const reset = Number(value(`${UNIFIED}${key}-reset`));
+    return [
+      {
+        model,
+        weekly: !/^5h|five/.test(key),
+        usedPercent: Math.min(100, Math.round(fraction * 1000) / 10),
+        ...(Number.isFinite(reset) && reset > 0 ? { resetsAt: new Date(reset * 1000).toISOString() } : {}),
+      },
+    ];
+  });
+  if (!fiveHour && !sevenDay && !models.length) return undefined;
+  return {
+    ...(fiveHour ? { fiveHour } : {}),
+    ...(sevenDay ? { sevenDay } : {}),
+    ...(models.length ? { models } : {}),
+  };
 }
 
 /**
@@ -589,6 +647,7 @@ export function forwardUpstream(spec: ForwardSpec): Promise<UpstreamOutcome> {
           Array.isArray(header) ? header[0] : header,
         );
         outcome.limitResetsAt = parseLimitReset(upstreamRes.headers);
+        outcome.limitScope = limitScopeOf(upstreamRes.headers);
       }
       const requestId = upstreamRes.headers["request-id"];
       if (typeof requestId === "string" && REQUEST_ID.test(requestId)) outcome.requestId = requestId;

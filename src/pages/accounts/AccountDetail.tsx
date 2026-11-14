@@ -45,7 +45,7 @@ import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
 import { PlanEditor } from "../../features/PlanEditor";
 import { RowActionItems, rowActions, WindowBadge } from "./AccountsTable";
-import { avatarClass, groupName, planLabel, providerLabel } from "./accountLabels";
+import { accountPlan, avatarClass, groupName, planTitle, providerLabel } from "./accountLabels";
 
 /** `#/hesaplar/<id>`: an account's own page, in place of the list. */
 export const accountHash = (id: string) =>
@@ -77,7 +77,7 @@ export function AccountDetail({
   const relay = useRelay();
   const prank = usePrank();
   const { t, language } = useI18n();
-  const plan = planLabel(a);
+  const plan = accountPlan(a);
   const email = a.desktop?.email ?? a.auth?.email;
   const actions = rowActions(
     a,
@@ -133,7 +133,11 @@ export function AccountDetail({
       badge={
         <>
           <ProviderBadge provider={a.provider} full />
-          {plan && <Badge variant="secondary">{plan}</Badge>}
+          {plan && (
+            <Badge variant="secondary" title={planTitle(a, plan, t)}>
+              {plan.label}
+            </Badge>
+          )}
           {inWindow && <WindowBadge t={t} />}
           <span
             data-slot="account-health"
@@ -590,6 +594,8 @@ export function AccountDetailBody({
     t,
   );
   const signIn = usageSignInStatus(a, usage, waiting, t);
+  // The header badge's name, never the raw word ("plus", "Antigravity OAuth").
+  const plan = accountPlan(a);
   const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
   const extension = useExtensionStatus({ check: macOS, initial: extensionStatus });
   const terminal = useTerminalStatus({ check: macOS, initial: terminalStatus });
@@ -927,9 +933,7 @@ export function AccountDetailBody({
                   (a.kind === "personal" ? t("Kişisel", "Personal") : t("Şirket", "Work")) +
                     (a.kind === "work" ? ` · ${groupName(a, t)}` : ""),
                 ],
-                ...(a.auth?.subscription
-                  ? [[t("Abonelik", "Subscription"), a.auth.subscription.replace(/^\w/, (c) => c.toUpperCase())]]
-                  : []),
+                ...(plan ? [[t("Abonelik", "Subscription"), plan.label]] : []),
               ] as [string, ReactNode][]).map(([label, value]) => (
                 <div key={label} className="flex min-w-0 items-baseline justify-between gap-3 border-t px-1 py-2 first:border-0">
                   <dt className="shrink-0 text-muted-foreground">{label}</dt>

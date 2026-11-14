@@ -564,6 +564,14 @@ function PoolCard({
                 {t("Yeni oturum şimdi → ", "A new session now → ")}
                 <span className="font-medium text-foreground">{nameOf(pick.accountId)}</span>
                 {` (${pickReasonLabel(pick.reason, t)})${skipped}`}
+                {pick.byModel?.map((scoped) => (
+                  <span key={scoped.model} className="block">
+                    {t(`${scoped.label} oturumu → `, `A ${scoped.label} session → `)}
+                    <span className="font-medium text-foreground">
+                      {scoped.accountId ? nameOf(scoped.accountId) : t("hiçbiri (her hesapta limit dolu)", "none (its limit is spent everywhere)")}
+                    </span>
+                  </span>
+                ))}
               </span>
             );
           })}
@@ -1079,8 +1087,8 @@ function RulesTab({
       value: "soonest-reset",
       label: t("Önce yanacak olan (önerilen)", "Expiring first (recommended)"),
       hint: t(
-        "Limiti en yakında sıfırlanan hesap önce kullanılır. Claude sıfırlamada kalanı silindiği için boşa giden kota en aza iner.",
-        "The account whose limit resets soonest goes first. What is left at a reset is gone, so the least quota is wasted.",
+        "Haftası ilk biten hesap önce kullanılır: sıfırlamada kalan kota silinir, sonra bitecek hafta bekleyebilir. Model limitleri (Fable) ayrıca sayılır. Açık oturumlar da yeni bir isteme geçerken haftası bir gün ya da daha erken biten hesaba taşınır; tur ortasında hiç taşınmaz.",
+        "The account whose week ends first goes first: what is left at a reset is gone, while a later week can wait. Model limits (Fable) count on their own. Open sessions also move, at the start of a new prompt, to an account whose week ends a day or more sooner; never mid-turn.",
       ),
     },
     {

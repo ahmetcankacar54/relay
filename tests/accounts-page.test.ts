@@ -8,7 +8,7 @@ import { AccountDetail, AccountDetailBody, accountFromHash, accountHash, history
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { AccountsTable, rowActions } from "../src/pages/accounts/AccountsTable";
 import { RemoveAccountBody, removedNotice } from "../src/pages/accounts/RemoveAccountDialog";
-import { filterAccounts, groupName, planColumn, planLabel } from "../src/pages/accounts/accountLabels";
+import { accountPlan, filterAccounts, groupName, planLabel } from "../src/pages/accounts/accountLabels";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { fakeDom } from "./fake-dom";
@@ -287,22 +287,28 @@ test("the inline fix button runs its action and does not also open the sheet", a
   }
 });
 
-test("planColumn shows the planning plan, else the subscription, else nothing", () => {
-  // The plan picked for planning wins.
-  assert.deepEqual(planColumn({ ...a, auth: { ...a.auth!, subscription: "team" } }), { label: "Max 5×", source: "planning" });
+test("accountPlan names a Claude account's tier, else its subscription, else nothing", () => {
+  const plan = (account: Account) => {
+    const found = accountPlan(account);
+    return found && { label: found.label, source: found.source };
+  };
+  // The plan picked for planning wins over the subscription word.
+  assert.deepEqual(plan({ ...a, auth: { ...a.auth!, subscription: "team" } }), { label: "Max 5×", source: "chosen" });
+  // The tier read from the sign-in is detected.
+  assert.deepEqual(plan({ ...a, auth: { ...a.auth!, plan: "max5" } }), { label: "Max 5×", source: "detected" });
   // Without one, the subscription the usage sign-in reported.
   const unplanned = (subscription?: string): Account => ({ ...a, planning: undefined, auth: { ...a.auth!, subscription } });
-  assert.deepEqual(planColumn(unplanned("max")), { label: "Max", source: "subscription" });
-  assert.deepEqual(planColumn(unplanned("pro")), { label: "Pro", source: "subscription" });
-  assert.deepEqual(planColumn(unplanned("team")), { label: "Team", source: "subscription" });
-  assert.deepEqual(planColumn(unplanned("enterprise")), { label: "Enterprise", source: "subscription" });
-  assert.deepEqual(planColumn(unplanned("custom")), { label: "Custom", source: "subscription" });
+  assert.deepEqual(plan(unplanned("max")), { label: "Max", source: "detected" });
+  assert.deepEqual(plan(unplanned("pro")), { label: "Pro", source: "detected" });
+  assert.deepEqual(plan(unplanned("team")), { label: "Team", source: "detected" });
+  assert.deepEqual(plan(unplanned("enterprise")), { label: "Enterprise", source: "detected" });
+  assert.deepEqual(plan(unplanned("custom")), { label: "Custom", source: "detected" });
   // An "unknown" plan is not a plan.
-  assert.deepEqual(planColumn({ ...unplanned("max"), planning: { plan: "unknown", capacityWeight: 1 } }), { label: "Max", source: "subscription" });
+  assert.deepEqual(plan({ ...unplanned("max"), planning: { plan: "unknown", capacityWeight: 1 } }), { label: "Max", source: "detected" });
   // Neither known.
-  assert.equal(planColumn(unplanned(undefined)), undefined);
-  assert.equal(planColumn(unplanned("unknown")), undefined);
-  assert.equal(planColumn({ ...a, planning: undefined, auth: undefined }), undefined);
+  assert.equal(accountPlan(unplanned(undefined)), undefined);
+  assert.equal(accountPlan(unplanned("unknown")), undefined);
+  assert.equal(accountPlan({ ...a, planning: undefined, auth: undefined }), undefined);
 });
 
 test("an account without a plan shows its subscription as a badge that says so, or nothing", () => {

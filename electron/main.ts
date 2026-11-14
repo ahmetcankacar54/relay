@@ -173,7 +173,9 @@ import {
 } from "./core/provider-discovery";
 import { AntigravityBridge } from "./core/antigravity-bridge";
 import { readCodexCredential } from "./core/provider-credentials";
-import { readAntigravityUsage, readCodexUsage } from "./core/provider-usage";
+import { readAntigravityTier, readAntigravityUsage, readCodexUsage } from "./core/provider-usage";
+/** When each Antigravity account's Google plan was last read. */
+const antigravityTierReads = new Map<string, number>();
 import { ContinuationEngine } from "./core/continuation";
 import { FileContinuationJournal } from "./core/continuation-journal";
 import {
@@ -957,7 +959,18 @@ else {
             const bridge = antigravityBridge(account.id);
             if (!(await bridge.hasCredential()))
               throw new UsageError("expired", undefined, "antigravity: no saved Google sign-in");
-            return readAntigravityUsage((request) => bridge.googleCall(request), await bridge.projectId());
+            const call = (request: { url: string; body: string }) => bridge.googleCall(request);
+            const project = await bridge.projectId();
+            const result = await readAntigravityUsage(call, project);
+            // The Google plan (AI Pro, Ultra, free) changes rarely: read with the limits at most
+            // every six hours, and kept when a read fails.
+            const tierAt = antigravityTierReads.get(account.id) ?? 0;
+            if (Date.now() - tierAt > 6 * 3_600_000 || !account.auth?.subscription || /oauth/i.test(account.auth.subscription)) {
+              antigravityTierReads.set(account.id, Date.now());
+              const plan = await readAntigravityTier(call, project);
+              if (plan) return { ...result, plan };
+            }
+            return result;
           }
           throw new UsageError("unsupported", undefined, "provider quota endpoint unavailable");
         },
@@ -1030,6 +1043,8 @@ else {
       // So does the terminal's Claude Code sign-in; macOS only. Checked once at start, which links
       // a terminal already signed in to one of the accounts.
       desktop.terminal = macTerminalPorts();
+      // Bound to the running gateway, Claude Code's requests do not use the terminal sign-in.
+      desktop.gatewayBound = () => !!proxyServer && !!proxySettings().clientBindings?.["claude-code"];
       // A sign-in made for the terminal in a scratch folder: kept for the account, and the
       // Keychain item the CLI made for that folder goes with the folder.
       service.terminalAuth.browser = service.auth.browser;
@@ -1709,10 +1724,18 @@ const extensionNoticeShown = new Set<string>();
  */
 function notifyExtensionLeft(target: Account) {
   const outcome = desktop.extensionOutcome;
+  // Every outcome that leaves the extension elsewhere, not only a running browser: the target
+  // has no pair saved ("saved", "no-saved-login"), its owner is unclear, or the step failed.
+  // Before 2026-11-14 a switch to an account without a pair left it behind without a word.
+  const quiet = new Set(["off", "not-installed", "already-there", "not-opened", "choose-instance"]);
+  const left =
+    !!outcome &&
+    (outcome.result === "saved" ||
+      ((outcome.result === "skipped" || outcome.result === "failed") && !quiet.has(outcome.reason ?? "")));
   if (
     !Notification.isSupported() ||
-    outcome?.result !== "skipped" ||
-    (outcome.reason !== "guide-mismatch" && outcome.reason !== "browser-running") ||
+    !outcome ||
+    !left ||
     Date.now() - Date.parse(outcome.at) > 5 * 60_000 ||
     extensionNoticeShown.has(target.id)
   )
@@ -2052,10 +2075,8 @@ async function pollAntigravityOAuth(accountId: string, state: string): Promise<A
     service.store.update((savedState) => {
       const account = savedState.accounts.find((a) => a.id === accountId);
       if (!account) throw new Error(say("OAuth girişi sırasında hesap kayboldu.", "Account disappeared during OAuth sign-in."));
-      account.auth = {
-        loggedIn: true, checkedAt: new Date().toISOString(), email: status.email,
-        subscription: "Antigravity OAuth",
-      };
+      // The plan (Google AI Pro, Ultra, free) is read with the account's first limits.
+      account.auth = { loggedIn: true, checkedAt: new Date().toISOString(), email: status.email };
     });
     pendingAntigravityOAuth.delete(accountId);
     antigravityCallbackServers.get(accountId)?.close();

@@ -220,6 +220,57 @@ export const ANTIGRAVITY_QUOTA_URLS = [
   "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
 ];
 
+/** Code Assist's account setup call: it names the Google plan (tier) the sign-in is on. */
+export const ANTIGRAVITY_TIER_URLS = [
+  "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+  "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist",
+];
+
+/** Google's tier ids, as the short plan Relay stores: Google AI Pro and Ultra, the free tier, … */
+const GOOGLE_TIERS: Record<string, string> = {
+  "g1-ultra-tier": "ultra",
+  "g1-pro-tier": "pro",
+  "standard-tier": "standard",
+  "free-tier": "free",
+  "legacy-tier": "legacy",
+};
+
+/**
+ * The plan a `loadCodeAssist` answer names: the paid tier when there is one (a Google AI Pro or
+ * Ultra subscription), else the current tier. Undefined when it names none Relay can read.
+ */
+export function parseAntigravityTier(value: unknown): string | undefined {
+  const root = value && typeof value === "object" ? (value as Json) : undefined;
+  for (const tier of [root?.paidTier, root?.currentTier]) {
+    const id = typeof tier?.id === "string" ? tier.id.toLowerCase() : "";
+    if (GOOGLE_TIERS[id]) return GOOGLE_TIERS[id];
+    if (/^[a-z0-9-]{1,40}$/.test(id)) return id.replace(/-tier$/, "");
+  }
+  return undefined;
+}
+
+/** The Google plan of an Antigravity sign-in, or undefined when it cannot be read now. */
+export async function readAntigravityTier(
+  call: (request: { url: string; body: string }) => Promise<FetchedResponse>,
+  projectId: string | undefined,
+): Promise<string | undefined> {
+  const body = JSON.stringify({
+    ...(projectId ? { cloudaicompanionProject: projectId } : {}),
+    metadata: { ideType: "ANTIGRAVITY", platform: "PLATFORM_UNSPECIFIED", pluginType: "GEMINI", ...(projectId ? { duetProject: projectId } : {}) },
+  });
+  for (const url of ANTIGRAVITY_TIER_URLS) {
+    try {
+      const response = await call({ url, body });
+      if (response.status !== 200 || response.body.length > MAX_BODY) continue;
+      const tier = parseAntigravityTier(JSON.parse(response.body));
+      if (tier) return tier;
+    } catch {
+      // The plan is a label: a failed read leaves the saved one.
+    }
+  }
+  return undefined;
+}
+
 /**
  * Reads an Antigravity account's model quotas through its CLIProxyAPI sidecar, which holds the
  * Google sign-in and renews it: Relay never handles the token itself.

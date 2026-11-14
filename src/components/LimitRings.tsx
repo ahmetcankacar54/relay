@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import type { AccountUsage } from "../../shared/types";
 import { useI18n } from "@/data/i18n";
-import { usageWindowRows } from "@/data/selectors";
-import { formatPercent, percentUsed } from "@/lib/meter";
+import { usageWindowRows, type UsageWindowRow } from "@/data/selectors";
+import { formatPercent, meterFill, percentUsed } from "@/lib/meter";
 import { formatReset } from "@/lib/time";
 import { timeLeft } from "@/lib/account-row";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,8 @@ import { RingKey, UsageRing, type RingState } from "./UsageRing";
 /**
  * An account's limits as one gauge: two rings (the five-hour window outside, the week inside)
  * with the five-hour percent in the middle, and beside them a key line per limit with its
- * percent and when it renews. Limits past the first two (per model) are listed under them.
+ * percent and when it renews. A model's own limit (Fable's week) is listed under them as a line with
+ * a short bar in its tone, its percent and when it renews.
  */
 export function LimitRings({
   usage,
@@ -34,10 +35,21 @@ export function LimitRings({
 }) {
   const { t, language } = useI18n();
   const rows = usageWindowRows(usage);
+  // A five-hour window says the time left, a longer one the day and clock it renews.
+  const renews = (row: UsageWindowRow) =>
+    !row.resetsAt
+      ? undefined
+      : row.period === "five_hour"
+        ? t(
+            `${timeLeft(row.resetsAt, now, t) ?? "0 dk"} kaldı`,
+            `${timeLeft(row.resetsAt, now, t) ?? "0 min"} left`,
+          )
+        : formatReset(row.resetsAt, now, language, zone);
   const five = usage?.fiveHour?.usedPercent;
   const week = usage?.sevenDay?.usedPercent;
+  // The rings draw the five hours and the week only; the model lines read for themselves.
   const label = rows
-    .slice(0, 2)
+    .filter((r) => !r.model)
     .map((r) => `${t(r.label.tr, r.label.en)} ${formatPercent(percentUsed(r.usedPercent), language)}`)
     .join(" · ");
   return (
@@ -58,28 +70,33 @@ export function LimitRings({
             className="min-w-0 text-xs text-muted-foreground"
             title={`${t(row.label.tr, row.label.en)} · ${formatPercent(percentUsed(row.usedPercent), language)}${row.resetsAt ? ` · ${formatReset(row.resetsAt, now, language, zone)}` : ""}`}
           >
-            {row.key === "five_hour" || row.key === "seven_day" ? (
+            {!row.model ? (
               <RingKey percent={row.usedPercent} thin={row.key === "seven_day"}>
                 <span>{row.key === "five_hour" ? t("5 saat", "5 hours") : t("Hafta", "Week")}</span>{" "}
                 <b className="text-foreground tabular-nums">
                   {formatPercent(percentUsed(row.usedPercent), language)}
                 </b>
-                {row.resetsAt &&
-                  ` · ${
-                    row.key === "five_hour"
-                      ? t(
-                          `${timeLeft(row.resetsAt, now, t) ?? "0 dk"} kaldı`,
-                          `${timeLeft(row.resetsAt, now, t) ?? "0 min"} left`,
-                        )
-                      : formatReset(row.resetsAt, now, language, zone)
-                  }`}
+                {row.resetsAt && ` · ${renews(row)}`}
               </RingKey>
             ) : (
-              <span className="block truncate pl-3.5">
-                {t(row.label.tr, row.label.en)} ·{" "}
-                <b className="text-foreground tabular-nums">
-                  {formatPercent(percentUsed(row.usedPercent), language)}
-                </b>
+              <span data-slot="model-limit" className="flex min-w-0 items-center gap-1.5">
+                <span aria-hidden="true" className="h-1 w-6 shrink-0 overflow-hidden rounded-full bg-track">
+                  <span
+                    className={cn(
+                      "block h-full rounded-full",
+                      meterFill(row.usedPercent),
+                      state === "stale" && "opacity-45",
+                    )}
+                    style={{ width: `${Math.max(0, Math.min(100, row.usedPercent))}%` }}
+                  />
+                </span>
+                <span className="min-w-0 truncate">
+                  {t(row.label.tr, row.label.en)}{" "}
+                  <b className="text-foreground tabular-nums">
+                    {formatPercent(percentUsed(row.usedPercent), language)}
+                  </b>
+                  {row.resetsAt && ` · ${renews(row)}`}
+                </span>
               </span>
             )}
           </div>

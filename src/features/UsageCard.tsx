@@ -8,6 +8,7 @@ import type {
 } from "../../shared/types";
 import { Button } from "@/components/ui/button";
 import { displayedIssue, renewalIssue } from "@/lib/account-health";
+import { usageWindowRows } from "@/data/selectors";
 import {
   formatPercent,
   formatUsed,
@@ -101,10 +102,11 @@ export function UsageCard({
       hour: "2-digit",
       minute: "2-digit",
     });
+  /** One limit: the account's five hours or week (`key`), or a model's own limit (`"model"`). */
   const meter = (
     window: UsageWindow | undefined,
     title: string,
-    key: "fiveHour" | "sevenDay",
+    key: "fiveHour" | "sevenDay" | "model",
   ) => {
     const used = window
       ? Math.max(0, Math.min(100, window.usedPercent))
@@ -143,7 +145,7 @@ export function UsageCard({
       !usage.stale &&
       !usage.issue &&
       Date.parse(currentReset) > now;
-    const lastKnown = usage?.lastKnownResets?.[key];
+    const lastKnown = key === "model" ? undefined : usage?.lastKnownResets?.[key];
     const validLastKnown =
       lastKnown &&
       Number.isFinite(Date.parse(lastKnown.resetsAt)) &&
@@ -161,7 +163,7 @@ export function UsageCard({
           ? { resetsAt: currentReset, checkedAt: usage.checkedAt }
           : undefined));
     return (
-      <div className="min-w-0">
+      <div key={title} className="min-w-0">
         <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
           <span>{title}</span>
           <strong
@@ -260,6 +262,10 @@ export function UsageCard({
       <div className="grid grid-cols-2 gap-3">
         {meter(usage?.fiveHour, t("5 saatlik", "5-hour"), "fiveHour")}
         {meter(usage?.sevenDay, t("Haftalık", "Weekly"), "sevenDay")}
+        {/* A model's own limit (Fable's week) stays in an old reading too, faded like the others. */}
+        {usageWindowRows(usage)
+          .filter((row) => row.model)
+          .map((row) => meter(row, t(row.label.tr, row.label.en), "model"))}
       </div>
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span className="min-w-0">

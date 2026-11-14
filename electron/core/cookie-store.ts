@@ -59,6 +59,11 @@ const DBSC_KEY = "https://claude.ai";
 const SESSION_NAME = "sessionKey";
 /** claude.ai cookies that look like a login but are not listed: the layout changed. */
 const LOGIN_LIKE = /session|auth|token|login|credential/i;
+/**
+ * Cookies that match LOGIN_LIKE but are not the login: a connector's OAuth round trip leaves
+ * `mcp_oauth_state_<id>` (seen 2026-11-10, when it stopped every switch).
+ */
+const NOT_LOGIN = /^mcp_oauth_state_/i;
 const WEB_HOSTS = new Set(["claude.ai", ".claude.ai"]);
 
 export type CookieValue = string | bigint | Uint8Array | null;
@@ -293,7 +298,8 @@ function readDatabase(db: DatabaseSync): Read {
       WEB_HOSTS.has(String(row.host_key)) &&
       Number(row.is_httponly) === 1 &&
       Number(row.is_secure) === 1 &&
-      LOGIN_LIKE.test(String(row.name))
+      LOGIN_LIKE.test(String(row.name)) &&
+      !NOT_LOGIN.test(String(row.name))
     )
       unlisted.push(String(row.name));
     hash.update(rowKey(row));
