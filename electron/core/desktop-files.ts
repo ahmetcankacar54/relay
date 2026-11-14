@@ -329,7 +329,8 @@ export async function planHistoryDetailed(
     seenSpaceIds?: string[];
     /**
      * Sessions in another Claude data folder (a separate window's), read as sources even under
-     * the target's own scope: the window's conversations of the target account.
+     * the target's own scope: the window's conversations of the target account, or of a source
+     * account whose window is closed.
      */
     outside?: { root: string; scope: Scope }[];
   } = {},

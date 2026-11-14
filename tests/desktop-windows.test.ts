@@ -308,6 +308,55 @@ test("with history transfer off, the main Claude still takes over its own accoun
   assert.equal((await readObject(f.root, record))?.title, "Own");
 });
 
+test("a closed window's conversations follow when the main Claude switches between other accounts", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  await f.account("C"); // The main Claude is on C.
+  f.desktopWindows.setEnabled(true);
+  await f.desktopWindows.open(a.desktop!.accountUuid);
+  const cliSessionId = randomUUID();
+  await writeBytes(
+    f.desktopWindows.dataDir(a.desktop!.accountUuid),
+    `claude-code-sessions/${a.desktop!.accountUuid}/${a.desktop!.orgId}/local_${cliSessionId}.json`,
+    jsonBytes({ sessionId: `local_${cliSessionId}`, cliSessionId, cwd: f.temp, title: "In A's window", lastActivityAt: 42 }),
+  );
+  const carried = `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}/local_${cliSessionId}.json`;
+  // While A's window runs, the conversation stays there: it could go on in both Claudes.
+  await f.manager.switchTo(b.id);
+  assert.equal(await readObject(f.root, carried), null);
+  await f.desktopWindows.close(a.desktop!.accountUuid);
+  await f.manager.switchTo(b.id);
+  assert.equal((await readObject(f.root, carried))?.title, "In A's window");
+});
+
+test("with history transfer off, another account's window conversations stay there", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  await f.account("C");
+  f.store.update((s) => {
+    s.settings.desktopHistoryTransfer = "off";
+  });
+  f.desktopWindows.setEnabled(true);
+  await f.desktopWindows.open(a.desktop!.accountUuid);
+  const cliSessionId = randomUUID();
+  await writeBytes(
+    f.desktopWindows.dataDir(a.desktop!.accountUuid),
+    `claude-code-sessions/${a.desktop!.accountUuid}/${a.desktop!.orgId}/local_${cliSessionId}.json`,
+    jsonBytes({ sessionId: `local_${cliSessionId}`, cliSessionId, cwd: f.temp, title: "A only", lastActivityAt: 42 }),
+  );
+  await f.desktopWindows.close(a.desktop!.accountUuid);
+  await f.manager.switchTo(b.id);
+  assert.equal(
+    await readObject(
+      f.root,
+      `claude-code-sessions/${b.desktop!.accountUuid}/${b.desktop!.orgId}/local_${cliSessionId}.json`,
+    ),
+    null,
+  );
+});
+
 test("a look while a window is still starting does not take it for closed", async (t) => {
   const f = await fixture(t);
   const a = await f.account("A");
