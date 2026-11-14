@@ -77,7 +77,15 @@ export interface EncryptedCookie {
   /** Set only by databases that keep a value unencrypted. */
   value: string;
   encrypted: Uint8Array;
+  /** When the cookie ends (ms since the epoch); undefined for one that lasts the browser's run. */
+  expiresMs?: number;
 }
+
+/** Chromium time (microseconds from 1601-01-01) as ms since the epoch; undefined for none. */
+const chromiumMs = (micros: unknown): number | undefined => {
+  const n = typeof micros === "bigint" ? Number(micros / 1000n) : typeof micros === "number" ? micros / 1000 : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) - 11_644_473_600_000 : undefined;
+};
 
 /**
  * claude.ai's login rows from a copy of a Cookies database (its files by name: `Cookies`,
@@ -104,11 +112,18 @@ export async function readCookieRows(
         | { value?: unknown }
         | undefined;
       const version = Number(meta?.value);
-      const rows = db
-        .prepare(
-          `select host_key, name, value, encrypted_value from cookies where host_key in (${HOSTS.map(() => "?").join(",")})`,
-        )
-        .all(...HOSTS) as Record<string, unknown>[];
+      // Older or trimmed databases may lack the expiry columns: then no cookie says when it ends.
+      const columns = new Set(
+        (db.prepare("pragma table_info(cookies)").all() as { name?: unknown }[]).map((c) => c.name),
+      );
+      const expiry =
+        columns.has("expires_utc") && columns.has("has_expires") ? ", expires_utc, has_expires" : "";
+      const statement = db.prepare(
+        `select host_key, name, value, encrypted_value${expiry} from cookies where host_key in (${HOSTS.map(() => "?").join(",")})`,
+      );
+      // Chromium's times pass 2^53 microseconds: read as numbers they would throw.
+      statement.setReadBigInts(true);
+      const rows = statement.all(...HOSTS) as Record<string, unknown>[];
       return {
         version: Number.isFinite(version) ? version : 0,
         rows: rows.map((r) => ({
@@ -116,6 +131,9 @@ export async function readCookieRows(
           name: String(r.name),
           value: typeof r.value === "string" ? r.value : "",
           encrypted: r.encrypted_value instanceof Uint8Array ? r.encrypted_value : new Uint8Array(),
+          ...(Number(r.has_expires) === 1 && chromiumMs(r.expires_utc) !== undefined
+            ? { expiresMs: chromiumMs(r.expires_utc) }
+            : {}),
         })),
       };
     } finally {

@@ -722,17 +722,26 @@ test("mode 'guide' writes nothing and quits nothing; it says when the extension 
   assert.equal((await s.switcher.run(s.request({ setting: mode("guide") }))).reason, "guide-mismatch");
 });
 
-test("a check keeps the profile's login only when none is saved, never over a saved one", async (t) => {
+test("a check keeps the profile's login, and replaces a saved one only with a newer one the extension works with", async (t) => {
   const s = setup(t);
   s.world.state.running = true;
   s.world.stored.set(s.dir, signInFor(s.a, 1));
-  s.world.web.set(s.profile, loginFor(s.a, 1));
-  assert.equal((await s.switcher.check({ setting: mode("restart"), known: [s.a, s.b] }))?.state, "signed-in");
-  assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 1));
-  // The running browser's database changed (a rotated cookie); a check does not replace the saved one.
   s.world.web.set(s.profile, loginFor(s.a, 2));
+  assert.equal((await s.switcher.check({ setting: mode("restart"), known: [s.a, s.b] }))?.state, "signed-in");
+  assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 2));
+  // A copy that lags the running browser (an older login) never replaces the saved one.
+  s.world.web.set(s.profile, loginFor(s.a, 1));
   await s.switcher.check({ setting: mode("restart"), known: [s.a, s.b] });
-  assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 1));
+  assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 2));
+  // Nor does a newer one while the extension records a failed sign-in with it.
+  s.world.stored.set(s.dir, { ...signInFor(s.a, 1), lastAuthFailureReason: JSON.stringify("session_expired") });
+  s.world.web.set(s.profile, loginFor(s.a, 3));
+  await s.switcher.check({ setting: mode("restart"), known: [s.a, s.b] });
+  assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 2));
+  // Working again, the newer login is kept: a saved login no longer ages until claude.ai refuses it.
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  await s.switcher.check({ setting: mode("restart"), known: [s.a, s.b] });
+  assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 3));
   assert.deepEqual(s.world.events, []);
   assert.equal(fs.existsSync(`${s.scratch}-peek`), false);
 });
@@ -1009,4 +1018,77 @@ test("a login saved under the same account's other uuid is not another account's
   await s.cookieVault.save(s.b, loginFor(s.b, 5));
   await s.switcher.run(s.request({ known: [s.a, s.b, alias], groups: [[s.a, alias], [s.b]] }));
   assert.deepEqual(await s.cookieVault.load([s.a]), loginFor(s.a, 2));
+});
+
+/** `login` with its `sessionKey` ending at `endsMs` (ms since the epoch). */
+const endingAt = (login: ReturnType<typeof loginFor>, endsMs: number) => ({
+  ...login,
+  columns: [...login.columns, "expires_utc", "has_expires"],
+  rows: login.rows.map((row) => ({
+    ...row,
+    expires_utc: BigInt(endsMs + 11_644_473_600_000) * 1000n,
+    has_expires: 1n,
+  })),
+});
+
+test("a fresh login of another account's organization is kept for that account, even after its old one was forgotten", async (t) => {
+  const fresh: string[] = [];
+  const s = setup(t, { onFreshLogin: (account, from) => fresh.push(`${account}<${from}`) });
+  const orgs = { orgs: { [s.a]: "org-a", [s.b]: "org-b" } };
+  // B's old login, on B's organization, was put in place once and failed: Relay forgot it.
+  await s.cookieVault.save(s.b, onOrg(loginFor(s.b, 1, 1_700_000_000_000), "org-b"));
+  await s.cookieVault.reject(s.b);
+  assert.equal(await s.cookieVault.load([s.b]), undefined);
+  // The extension is on A; the user signed in to claude.ai with B in that profile.
+  s.world.state.running = true;
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  const login = onOrg(loginFor(s.b, 2, 1_700_000_500_000), "org-b");
+  s.world.web.set(s.profile, login);
+  await s.switcher.check({ setting: mode("restart"), known: [s.a, s.b], ...orgs });
+  assert.deepEqual(await s.cookieVault.load([s.b]), login, "kept for B");
+  assert.equal(await s.cookieVault.load([s.a]), undefined, "never for A");
+  assert.deepEqual(fresh, [`${s.b.toLowerCase()}<${s.a.toLowerCase()}`]);
+  // An older login of B's organization never replaces it.
+  s.world.web.set(s.profile, onOrg(loginFor(s.b, 3, 1_700_000_100_000), "org-b"));
+  await s.switcher.check({ setting: mode("restart"), known: [s.a, s.b], ...orgs });
+  assert.deepEqual(await s.cookieVault.load([s.b]), login);
+});
+
+test("a switch keeps a fresh login of the target's organization for it, even while the extension failed with it", async (t) => {
+  const s = setup(t);
+  const orgs = { orgs: { [s.a]: "org-a", [s.b]: "org-b" } };
+  await s.vault.save(s.b, signInFor(s.b, 1));
+  await s.cookieVault.save(s.b, onOrg(loginFor(s.b, 1, 1_700_000_000_000), "org-b"));
+  // On A, failing: the profile's login is B's (the user signed in with B on claude.ai).
+  s.world.stored.set(s.dir, { ...signInFor(s.a, 1), lastAuthFailureReason: JSON.stringify("session_expired") });
+  const login = onOrg(loginFor(s.b, 2, 1_700_000_900_000), "org-b");
+  s.world.web.set(s.profile, login);
+  const outcome = await s.switcher.run(s.request(orgs));
+  assert.equal(outcome.result, "switched");
+  // The fresh login is the one put in place for B, not B's older one.
+  assert.deepEqual(s.world.web.get(s.profile), login);
+  assert.deepEqual(await s.cookieVault.load([s.b]), login);
+});
+
+test("a saved login left unused until its cookie ended is not put back; the account waits for a reconnect", async (t) => {
+  const s = setup(t, { now: () => 1_800_000_000_000 });
+  await s.vault.save(s.b, signInFor(s.b, 1));
+  await s.cookieVault.save(s.b, endingAt(loginFor(s.b, 1), 1_799_000_000_000));
+  s.world.stored.set(s.dir, signInFor(s.a, 1));
+  s.world.web.set(s.profile, loginFor(s.a, 1));
+  const outcome = await s.switcher.run(s.request());
+  assert.equal(outcome.result, "skipped");
+  assert.equal(outcome.reason, "login-expired");
+  assert.equal(outcome.saved, true, "A's pair is still saved on the way out");
+  assert.deepEqual(s.world.stored.get(s.dir), signInFor(s.a, 1), "the extension stays as it was");
+  assert.deepEqual(s.world.web.get(s.profile), loginFor(s.a, 1));
+  assert.equal(await s.cookieVault.load([s.b]), undefined);
+  assert.equal(await s.cookieVault.isWaiting(s.b), true);
+  // One that has not ended yet is put in place.
+  const s2 = setup(t, { now: () => 1_800_000_000_000 });
+  await s2.vault.save(s2.b, signInFor(s2.b, 1));
+  await s2.cookieVault.save(s2.b, endingAt(loginFor(s2.b, 1), 1_801_000_000_000));
+  s2.world.stored.set(s2.dir, signInFor(s2.a, 1));
+  s2.world.web.set(s2.profile, loginFor(s2.a, 1));
+  assert.equal((await s2.switcher.run(s2.request())).result, "switched");
 });

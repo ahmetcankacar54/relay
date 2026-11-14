@@ -468,3 +468,63 @@ test("Open claude.ai opens it in the managed browser", async (t) => {
   await f.manager.openClaudeWeb();
   assert.deepEqual(f.events, ["open:brave:Default:https://claude.ai/"]);
 });
+
+const until = async (ok: () => boolean, ms = 5_000) => {
+  for (const end = Date.now() + ms; !ok() && Date.now() < end; )
+    await new Promise((resolve) => setTimeout(resolve, 10));
+};
+
+test("a login claude.ai refuses minutes after the switch is caught by a later look", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const b = await f.account("B");
+  const ua = a.desktop!.accountUuid;
+  f.manager.extensionVerifyMs = 0;
+  f.manager.extensionRecheckMs = [40];
+  f.manager.extensionOffline = async () => false;
+  const broken: string[] = [];
+  f.manager.onExtensionBroken = (account) => broken.push(account.name);
+  f.setRunning(true);
+  f.world.state.running = true;
+  await f.vault.save(ua, signInFor(ua, 1));
+  await f.cookieVault.save(ua, loginFor(ua, 1));
+  f.world.stored.set(f.dir, signInFor(b.desktop!.accountUuid, 2));
+  f.world.web.set(f.profile, loginFor(b.desktop!.accountUuid, 2));
+  await f.manager.switchTo(a.id);
+  await f.manager.extensionVerified;
+  assert.deepEqual(broken, [], "fine at the first look");
+  // claude.ai refuses the login later: the extension records it.
+  f.world.stored.set(f.dir, { ...f.world.stored.get(f.dir)!, lastAuthFailureReason: '"session_expired"' });
+  await until(() => broken.length > 0);
+  assert.deepEqual(broken, ["A"]);
+  assert.equal(await f.cookieVault.load([ua]), undefined);
+  assert.equal((await f.manager.extensionStatus())!.broken?.accountUuid, ua.toLowerCase());
+});
+
+test("the background look tells a sign-in that dropped long after a switch, once while it waits", async (t) => {
+  const f = await fixture(t);
+  const a = await f.account("A");
+  const ua = a.desktop!.accountUuid;
+  f.manager.extensionOffline = async () => false;
+  const broken: string[] = [];
+  f.manager.onExtensionBroken = (account) => broken.push(account.name);
+  f.world.state.running = true;
+  await f.cookieVault.save(ua, loginFor(ua, 1));
+  f.world.stored.set(f.dir, signInFor(ua, 1));
+  f.world.web.set(f.profile, loginFor(ua, 1));
+  await f.manager.extensionHealth();
+  assert.deepEqual(broken, [], "working: nothing to say");
+  f.world.stored.set(f.dir, { ...signInFor(ua, 1), lastAuthFailureReason: '"session_expired"' });
+  await f.manager.extensionHealth();
+  await f.manager.extensionHealth();
+  assert.deepEqual(broken, ["A"]);
+  assert.equal(await f.cookieVault.load([ua]), undefined);
+  // Signed in again: it waits no more, and a later drop is told again.
+  f.world.stored.set(f.dir, signInFor(ua, 2));
+  f.world.web.set(f.profile, loginFor(ua, 2));
+  await f.manager.extensionHealth();
+  assert.equal((await f.manager.extensionStatus())!.broken, undefined);
+  f.world.stored.set(f.dir, { ...signInFor(ua, 2), lastAuthFailureReason: '"session_expired"' });
+  await f.manager.extensionHealth();
+  assert.deepEqual(broken, ["A", "A"]);
+});

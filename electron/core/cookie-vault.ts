@@ -1,13 +1,24 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { readBytes, safeFile, writeBytes } from "./desktop-files";
-import { decodeSnapshot, encodeSnapshot, loginId, type CookieSnapshot } from "./cookie-store";
+import {
+  decodeSnapshot,
+  encodeSnapshot,
+  loginId,
+  orgFingerprint,
+  type CookieSnapshot,
+} from "./cookie-store";
 import { isAccountUuid } from "../../shared/extension-auth";
 
 /** Inside the vault, one sealed file per account: `extension-cookies/<account uuid>.bin`. */
 const DIR = "extension-cookies";
 /** The logins the extension could not sign in with, per account; not an account's file. */
 const REJECTED = `${DIR}/rejected.bin`;
+/**
+ * The organization each account's saved login was on (`orgFingerprint`), kept after the login
+ * itself is forgotten, so a fresh login on that organization can still be told to be its.
+ */
+const ORGS = `${DIR}/orgs.bin`;
 
 /** One account's rejected logins (`loginId`s), when the last was rejected, and whether it still waits. */
 interface Rejection {
@@ -47,6 +58,30 @@ export class CookieVault {
     // Refuses rows that are not part of a login before anything is sealed.
     decodeSnapshot(record.snapshot);
     await writeBytes(this.vault, file(accountUuid), this.seal(JSON.stringify(record)));
+    const org = orgFingerprint(snapshot);
+    if (org) {
+      const orgs = await this.orgs();
+      if (orgs[record.accountUuid] !== org) {
+        orgs[record.accountUuid] = org;
+        await writeBytes(this.vault, ORGS, this.seal(JSON.stringify({ accounts: orgs })));
+      }
+    }
+  }
+
+  /** The organization fingerprint of each account's last saved login, by account uuid. */
+  async orgs(): Promise<Record<string, string>> {
+    const data = await readBytes(this.vault, ORGS).catch(() => null);
+    if (!data) return {};
+    try {
+      const value = JSON.parse(this.unseal(data))?.accounts;
+      const out: Record<string, string> = {};
+      if (value && typeof value === "object")
+        for (const [uuid, org] of Object.entries(value))
+          if (isAccountUuid(uuid) && typeof org === "string" && org) out[uuid.toLowerCase()] = org;
+      return out;
+    } catch {
+      return {};
+    }
   }
 
   /**
@@ -104,6 +139,11 @@ export class CookieVault {
       .filter(([, r]) => r.open)
       .sort(([, a], [, b]) => Date.parse(b.at) - Date.parse(a.at));
     return open.length ? { accountUuid: open[0][0], at: open[0][1].at } : undefined;
+  }
+
+  /** Whether the account still waits for a reconnect. */
+  async isWaiting(accountUuid: string): Promise<boolean> {
+    return !!(await this.rejections())[accountUuid.toLowerCase()]?.open;
   }
 
   /** The account signed in fine again: it waits no more; its rejected logins stay rejected. */

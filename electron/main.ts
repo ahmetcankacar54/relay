@@ -1039,6 +1039,12 @@ else {
           notifyExtensionBroken(account);
           broadcastChanged();
         };
+        // A login put back can be refused minutes after the switch: looked at again over half an
+        // hour, and every quarter hour after that, so a dropped extension sign-in is told.
+        desktop.extensionRecheckMs = [3 * 60_000, 12 * 60_000, 25 * 60_000];
+        setInterval(() => {
+          void desktop.extensionHealth().then(broadcastChanged, () => {});
+        }, 15 * 60_000).unref();
       }
       // So does the terminal's Claude Code sign-in; macOS only. Checked once at start, which links
       // a terminal already signed in to one of the accounts.
@@ -2430,6 +2436,7 @@ function alignWorkspacesLater() {
   if (now - workspacesAlignedAt < 30_000 || !desktop || desktop.isBusy) return;
   workspacesAlignedAt = now;
   void desktop.noteSignOuts();
+  void desktop.noteEndedSignIns();
   for (const account of service.store.state.accounts)
     if (desktopCliWorkspaceMismatch(account) && !service.auth.active(account.id))
       void alignDesktopWorkspace(account).catch(() => {});
