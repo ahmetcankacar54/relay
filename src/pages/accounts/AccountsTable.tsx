@@ -57,7 +57,7 @@ import { useTerminalStatus } from "@/data/useTerminal";
 import { terminalGuide } from "@/lib/terminal-ui";
 import type { TerminalStatus } from "../../../shared/terminal-identity";
 import type { ExtensionStatus } from "../../../shared/types";
-import { avatarClass, planColumn, providerLabel } from "./accountLabels";
+import { accountPlan, avatarClass, planTitle, providerLabel } from "./accountLabels";
 import { isClaudeAccount } from "@/lib/account-health";
 
 /**
@@ -536,7 +536,7 @@ export function AccountsTable({
           const usage = data?.usage[a.id];
           const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
           const waiting = pendingFlow(authFlow);
-          const plan = planColumn(a);
+          const plan = accountPlan(a);
           const health = accountHealth(
             a,
             usage,
@@ -600,14 +600,7 @@ export function AccountsTable({
                         <Badge
                           variant="secondary"
                           className="shrink-0 px-1.5 text-2xs"
-                          title={
-                            plan.source === "planning"
-                              ? undefined
-                              : t(
-                                  "Abonelik · planlama için plan seçilmedi",
-                                  "Subscription · no plan selected for planning",
-                                )
-                          }
+                          title={planTitle(a, plan, t)}
                         >
                           {plan.label}
                         </Badge>

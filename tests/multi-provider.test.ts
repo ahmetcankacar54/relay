@@ -290,7 +290,7 @@ test("the add dialog lists the sessions found, ticked, and adds the chosen ones 
     const text = textOf(container);
     assert.match(text, /Bu Mac’te 2 hesap bulduk/);
     assert.match(textOf(box("claude")!), /claude@example\.com/);
-    assert.match(textOf(box("codex")!), /codex@example\.com[\s\S]*Codex CLI · pro/);
+    assert.match(textOf(box("codex")!), /codex@example\.com[\s\S]*Codex CLI · ChatGPT Pro/);
     assert.equal(box("antigravity"), undefined);
     assert.deepEqual([attr(box("claude"), "aria-checked"), attr(box("codex"), "aria-checked")], ["true", "true"]);
     assert.match(text, /2 hesabı ekle/);

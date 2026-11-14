@@ -11,7 +11,7 @@ import { useRelay, type Relay } from "@/data/relay-context";
 import { pendingFlow, usageWindowRows } from "@/data/selectors";
 import { accountHealth, renewalIssue } from "@/lib/account-health";
 import { formatRelative, formatReset } from "@/lib/time";
-import { planLabel } from "../pages/accounts/accountLabels";
+import { accountPlan } from "../pages/accounts/accountLabels";
 
 export const panelEyebrow =
   "mb-1 flex items-center justify-between gap-2 px-1 text-2xs font-medium text-muted-foreground";
@@ -36,7 +36,8 @@ export function PanelActiveCard({ now }: { now: number }) {
   const { active, desktop } = relay;
   const running = !!desktop?.running;
   const usage = active ? relay.data?.usage[active.id] : undefined;
-  const plan = active && planLabel(active);
+  // The same plan name as everywhere else, the detected one included.
+  const plan = active ? accountPlan(active)?.short : undefined;
   const waiting =
     !!active &&
     pendingFlow(relay.data?.authFlows.find((f) => f.accountId === active.id));

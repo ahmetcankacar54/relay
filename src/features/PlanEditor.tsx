@@ -8,7 +8,34 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Account, AccountPlanning } from "../../shared/types";
+import {
+  accountPlan,
+  accountProvider,
+  detectedClaudePlan,
+  type AccountPlanInfo,
+} from "../pages/accounts/accountLabels";
 type T = (tr: string, en: string) => string;
+
+/** A plan Relay read from the account: shown, never asked. */
+function ReadPlan({ plan, t }: { plan?: AccountPlanInfo; t: T }) {
+  if (!plan)
+    return (
+      <p data-slot="plan" className="text-sm text-muted-foreground">
+        {t("Plan henüz okunmadı", "Plan not read yet")}
+      </p>
+    );
+  return (
+    <div data-slot="plan" className="flex items-center justify-between gap-2 text-sm">
+      <span className="min-w-0 truncate">
+        Plan: <span className="font-medium">{plan.label}</span>
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {t("algılandı", "detected")}
+      </span>
+    </div>
+  );
+}
+
 export function PlanEditor({
   account,
   disabled,
@@ -26,6 +53,10 @@ export function PlanEditor({
     () => setWeight(String(current.capacityWeight)),
     [current.capacityWeight],
   );
+  // Codex and Antigravity name their own plan (ChatGPT Plus, Google AI Pro); Claude's plans and
+  // its relative capacity do not apply to them.
+  if (accountProvider(account) !== "claude")
+    return <ReadPlan plan={accountPlan(account)} t={t} />;
   const plans: { value: AccountPlanning["plan"]; label: string }[] = [
     { value: "unknown", label: t("Plan seç", "Select plan") },
     { value: "pro", label: "Pro · 1×" },
@@ -35,18 +66,11 @@ export function PlanEditor({
   ];
   const capacityId = `capacity-${account.id}`;
   // A plan read from the sign-in is not a choice: it is shown, and follows the account.
-  const detected = account.auth?.loggedIn ? account.auth.plan : undefined;
+  const detected = detectedClaudePlan(account);
   return (
     <div className="grid min-w-0 gap-1.5">
       {detected ? (
-        <div className="flex items-center justify-between gap-2 text-sm">
-          <span className="font-medium">
-            {plans.find((p) => p.value === detected)?.label}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {t("Hesaptan okundu", "Read from the account")}
-          </span>
-        </div>
+        <ReadPlan plan={accountPlan(account)} t={t} />
       ) : (
       <Select
         value={current.plan}

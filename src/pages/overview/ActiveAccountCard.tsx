@@ -19,7 +19,7 @@ import { ringState } from "@/lib/account-row";
 import { blockReason, desktopBlock } from "@/lib/onboarding";
 import { UsageCard } from "../../features/UsageCard";
 import { gatewayLine } from "@/lib/proxy-ui";
-import { planColumn } from "../accounts/accountLabels";
+import { accountPlan, planTitle } from "../accounts/accountLabels";
 
 export function ActiveAccountCard({
   go,
@@ -35,8 +35,8 @@ export function ActiveAccountCard({
   if (!active) return <Onboarding go={go} />;
   const usage = relay.data?.usage[active.id];
   const running = !!desktop?.running;
-  // As in the Accounts table: the plan picked for planning, else the subscription the sign-in reported.
-  const plan = planColumn(active);
+  // Named as in the Accounts table and the account's page.
+  const plan = accountPlan(active);
   const email = active.desktop?.email ?? active.auth?.email;
   const identity = [email, active.auth?.orgName].filter(Boolean).join(" · ");
   const authFlow = relay.data?.authFlows?.find(
@@ -62,17 +62,7 @@ export function ActiveAccountCard({
           <span className="truncate text-sm font-semibold">{active.name}</span>
           <ProviderBadge provider={active.provider} />
           {plan && (
-            <Badge
-              variant="secondary"
-              title={
-                plan.source === "planning"
-                  ? undefined
-                  : t(
-                      "Abonelik · planlama için plan seçilmedi",
-                      "Subscription · no plan picked for planning",
-                    )
-              }
-            >
+            <Badge variant="secondary" title={planTitle(active, plan, t)}>
               {plan.label}
             </Badge>
           )}
