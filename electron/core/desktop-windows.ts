@@ -21,7 +21,7 @@ interface Saved {
 }
 
 export const WINDOWS_OFF = "Separate Claude windows are turned off in Settings.";
-export const WINDOWS_UNSUPPORTED = "Separate Claude windows need macOS.";
+export const WINDOWS_UNSUPPORTED = "Separate Claude windows need macOS or Linux.";
 export const WINDOW_IS_MAIN =
   "This account is already open in the Claude app. Switch the Claude app to another account first.";
 export const WINDOW_DID_NOT_OPEN = "Claude did not open the separate window. Try again.";

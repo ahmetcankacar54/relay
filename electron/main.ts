@@ -42,7 +42,12 @@ import os from "node:os";
 import { z } from "zod";
 import { ActiveAccountTimeline } from "./core/active-account-timeline";
 import { DesktopManager } from "./core/desktop";
-import { DesktopUsageReader, safeStoragePassword } from "./core/desktop-usage";
+import {
+  DESKTOP_USAGE_MARKER,
+  DesktopUsageReader,
+  safeStoragePassword,
+} from "./core/desktop-usage";
+import { linuxKeyringReachable, linuxSafeStoragePassword } from "./core/linux-safe-storage";
 import { claudeWebRequest } from "./desktop-usage-request";
 import {
   desktopHost,
@@ -55,17 +60,19 @@ import {
   WINDOWS_UNSUPPORTED,
   type SessionOwner,
 } from "./core/desktop-windows";
+import { isClaudeDesktopExecutable } from "./core/environment";
 import { desktopAccountFor } from "../shared/desktop-account";
 import { DesktopLock } from "./core/desktop-lock";
 import { lastDraftWipeAt } from "./core/desktop-wipe";
 import { nativeDesktopWatch, unpackedPath } from "./core/desktop-watch";
 import { waitForConversation } from "./core/fleet-show";
-import { macClaudeLog, pageBooted } from "./core/desktop-launch";
+import { claudeLog, pageBooted } from "./core/desktop-launch";
 import { IDLE_MS, QUIET_MS } from "./core/draft-restorer";
 import {
   DraftScheduler,
   draftActions,
   draftNotice,
+  draftRetypeEnabled,
   draftSummaries,
 } from "./core/draft-main";
 import { sidebarActions, sidebarSummary } from "./core/sidebar-main";
@@ -80,9 +87,13 @@ import {
   settingsPatchSchema,
 } from "./core/store";
 import { accountPlanningSchema } from "./core/store";
-import { macBrowserSystem } from "./core/browser-system";
+import { platformBrowserSystem } from "./core/browser-system";
 import { levelExtensionStorage } from "./core/extension-storage";
-import { macTerminalPorts, scratchSignInPorts } from "./core/terminal-identity";
+import {
+  linuxTerminalPorts,
+  macTerminalPorts,
+  scratchSignInPorts,
+} from "./core/terminal-identity";
 import { sqliteCookieStorage } from "./core/cookie-store";
 import { RelayTray } from "./tray";
 import { motionAllowed, readDesktopForTray } from "./core/tray-mascot";
@@ -264,13 +275,14 @@ let windowSessionOwners = new Map<string, SessionOwner>();
 let usage: UsageManager;
 /**
  * Usage read through each account's Claude app sign-in. Whether the user allowed the Keychain
- * read of "Claude Safe Storage" is remembered in a small file, never the password itself.
+ * (Linux: keyring) read of "Claude Safe Storage" is remembered in a small file, never the
+ * password itself.
  */
 function desktopUsageSource() {
-  const marker = path.join(app.getPath("userData"), "desktop-usage-keychain.json");
+  const marker = path.join(app.getPath("userData"), DESKTOP_USAGE_MARKER);
   const reader = new DesktopUsageReader({
     cookieFiles: (accountUuid) => desktop.loginCookieFiles(accountUuid),
-    password: safeStoragePassword({
+    password: (process.platform === "linux" ? linuxSafeStoragePassword : safeStoragePassword)({
       allowed: async () => JSON.parse(await fsp.readFile(marker, "utf8"))?.allowed === true,
       remember: async (allowed) =>
         allowed
@@ -369,8 +381,8 @@ let continuation: DesktopContinuationManager;
 let fleet: FleetContinuation;
 let automation: ReturnType<typeof nativeDesktopAutomation>;
 let draftRestore: DraftScheduler;
-/** Drafts are re-typed into Claude only once the user turns it on; missing means off. */
-const draftRetype = () => service.store.state.settings.draftRetype === true;
+/** Whether rescued drafts are re-typed into Claude; elsewhere than macOS, never: left for Copy. */
+const draftRetype = () => draftRetypeEnabled(service.store.state.settings);
 /**
  * A feature that needs Accessibility is on: re-typing drafts, or continuing conversations at
  * the limit. Only then does Relay ask for it.
@@ -415,10 +427,10 @@ function logFleetEvent(event: string, fields?: Record<string, unknown>) {
   }
 }
 /** Whether the running Claude's page has booted, from its own log; undefined when it cannot tell. */
-const claudePageBooted = () =>
-  process.platform === "darwin"
-    ? pageBooted(macClaudeLog(os.homedir()))
-    : Promise.resolve(undefined);
+const claudePageBooted = () => {
+  const log = claudeLog(os.homedir());
+  return log ? pageBooted(log) : Promise.resolve(undefined);
+};
 /**
  * Claude's controls, as roles and labels, written once to `file` for a developer whose Claude
  * no longer matches what the helper looks for (Relay started with RELAY_UI_OUTLINE=1). It waits
@@ -825,7 +837,7 @@ else {
           broadcastChanged();
         },
       };
-      if (process.platform === "darwin") {
+      if (process.platform === "darwin" || process.platform === "linux") {
         const windows = new DesktopWindows({
           folder: path.join(app.getPath("userData"), "claude-windows"),
           host,
@@ -949,8 +961,11 @@ else {
             { accountId: account.id, issue, detail },
             Date.now(),
           ),
-        // Without a Claude Code sign-in, the Claude app's own sign-in reads the limits (macOS).
-        process.platform === "darwin" ? desktopUsageSource() : undefined,
+        // Without a Claude Code sign-in, the Claude app's own sign-in reads the limits (macOS, and
+        // Linux where the desktop's keyring can be read).
+        process.platform === "darwin" || (process.platform === "linux" && linuxKeyringReachable())
+          ? desktopUsageSource()
+          : undefined,
         // Codex through its ChatGPT sign-in, Antigravity through its CLIProxyAPI sidecar.
         async (account) => {
           if (account.provider === "codex")
@@ -1024,10 +1039,11 @@ else {
       });
       // One hook for every switch: tray, panel, automatic, continuation and fleet.
       desktop.onSwitched = () => void draftRestore.afterSwitch();
-      // The Claude extension's sign-in follows the account at each switch; macOS only.
-      if (process.platform === "darwin") {
+      // The Claude extension's sign-in follows the account at each switch; macOS and Linux.
+      const browserSystem = platformBrowserSystem();
+      if (browserSystem) {
         desktop.extension = {
-          system: macBrowserSystem(),
+          system: browserSystem,
           storage: levelExtensionStorage,
           cookies: sqliteCookieStorage,
         };
@@ -1046,16 +1062,16 @@ else {
           void desktop.extensionHealth().then(broadcastChanged, () => {});
         }, 15 * 60_000).unref();
       }
-      // So does the terminal's Claude Code sign-in; macOS only. Checked once at start, which links
-      // a terminal already signed in to one of the accounts.
-      desktop.terminal = macTerminalPorts();
+      // So does the terminal's Claude Code sign-in; macOS and Linux. Checked once at start, which
+      // links a terminal already signed in to one of the accounts.
+      desktop.terminal = macTerminalPorts() ?? linuxTerminalPorts();
       // Bound to the running gateway, Claude Code's requests do not use the terminal sign-in.
       desktop.gatewayBound = () => !!proxyServer && !!proxySettings().clientBindings?.["claude-code"];
       // A sign-in made for the terminal in a scratch folder: kept for the account, and the
       // Keychain item the CLI made for that folder goes with the folder.
       service.terminalAuth.browser = service.auth.browser;
       service.terminalLinkFit = async (accountId, dir) => {
-        if (!desktop?.terminal) return "Terminal sign-ins are kept on macOS only.";
+        if (!desktop?.terminal) return "Terminal sign-ins are kept on macOS and Linux only.";
         const ports = scratchSignInPorts(dir);
         try {
           const result = await desktop.adoptTerminalSignIn(accountId, ports);
@@ -1987,7 +2003,7 @@ function watchRegistry() {
   }
 }
 /** Tell every Relay renderer (main window and menu bar panel) that state changed. */
-/** The accounts open in a separate Claude window, for the windows; undefined off macOS. */
+/** The accounts open in a separate Claude window, for the windows; undefined off macOS and Linux. */
 async function separateWindows(): Promise<SeparateWindows | undefined> {
   if (!desktopWindows) return undefined;
   const { windows, others } = await desktopWindows
@@ -3051,10 +3067,11 @@ function bindIPC() {
     desktop.historySummary(id.parse(profileId)),
   );
   handle("open-desktop", () => manualDesktopLock(() => desktop.open()));
-  // Setup's "Open Code": the fixed claude:// link to Code's new-session screen, macOS only.
+  // Setup's "Open Code": the fixed claude:// link to Code's new-session screen, macOS and Linux
+  // (where Claude's package registers the link and hands it to the running Claude).
   handle("open-code-tab", () =>
     manualDesktopLock(async () => {
-      if (process.platform !== "darwin") return desktop.open();
+      if (process.platform !== "darwin" && process.platform !== "linux") return desktop.open();
       await openCodeTab({
         open: () => desktop.open(),
         booted: claudePageBooted,
@@ -3325,6 +3342,14 @@ function bindIPC() {
       ),
     });
     if (!result.canceled) {
+      // Claude Desktop is not the CLI: running it for `auth status` or `--version` only opens it.
+      if (isClaudeDesktopExecutable(result.filePaths[0]))
+        throw new Error(
+          say(
+            "Bu dosya Claude masaüstü uygulaması, Claude Code CLI değil. `claude` dosyasını seç (genellikle ~/.local/bin/claude).",
+            "This file is the Claude desktop app, not the Claude Code CLI. Select the `claude` file (usually ~/.local/bin/claude).",
+          ),
+        );
       service.store.update((s) => {
         s.executable = result.filePaths[0];
       });

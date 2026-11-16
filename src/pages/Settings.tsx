@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { routeHash, settingsTab, SETTINGS_TABS, type SettingsTab } from "@/app/routes";
 import { ExperimentalSwitchRows, RefreshIntervalRow, SwitchingTab } from "./settings/SwitchingTabs";
 import { PlanningTab } from "./Planning";
+import { macWording, usePlatform } from "@/data/platform";
 
 /** Shows the diagnosis logs in Finder; main picks the files, the page passes no path. */
 export const showDiagnostics = ({
@@ -84,7 +85,7 @@ function ClaudeLaunchRow({
 
 /**
  * Separate Claude windows: each account's ⋯ menu can open it in its own Claude, beside the main
- * one. macOS only; off until turned on here. Read from the snapshot, which says which are open.
+ * one. macOS and Linux; off until turned on here. Read from the snapshot, which says which are open.
  */
 export function SeparateWindowsRow({
   api,
@@ -528,6 +529,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
 
 /** How Relay keeps sign-ins, the Keychain prompt, and what a switch merges: the privacy section. */
 export function PrivacyNotes({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
+  const mac = macWording(usePlatform());
   return (
     <>
       <Note>
@@ -537,10 +539,15 @@ export function PrivacyNotes({ t }: { t: ReturnType<typeof useI18n>["t"] }) {
         )}
       </Note>
       <Note>
-        {t(
-          "Relay şifreleme anahtarını macOS Anahtarlık’ta tutar. Relay güncellendikten sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
-          "Relay keeps the encryption key in the macOS Keychain. After a Relay update, macOS can ask for your password once. Select “Always Allow”.",
-        )}
+        {mac
+          ? t(
+              "Relay şifreleme anahtarını macOS Anahtarlık’ta tutar. Relay güncellendikten sonra macOS parolanı bir kez sorabilir; “Her Zaman İzin Ver”i seç.",
+              "Relay keeps the encryption key in the macOS Keychain. After a Relay update, macOS can ask for your password once. Select “Always Allow”.",
+            )
+          : t(
+              "Relay şifreleme anahtarını masaüstünün anahtar deposunda (KWallet ya da Secret Service) tutar. Depo kilitliyse açılırken bir kez parolanı sorabilir.",
+              "Relay keeps the encryption key in your desktop’s keyring (KWallet or Secret Service). A locked keyring can ask for your password once when it opens.",
+            )}
       </Note>
       <Note>
         {t(

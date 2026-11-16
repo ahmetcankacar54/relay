@@ -1,10 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { linuxDesktopPids } from "../electron/core/desktop-processes";
 import { claudeCandidates, resolveClaudeExecutable } from "../electron/core/desktop-host-node";
 
-test("Linux looks in the community packages' places and a Claude AppImage", () => {
+test("Linux looks in the official and community packages' places and a Claude AppImage", () => {
   const candidates = claudeCandidates("linux", { home: "/home/me" });
   assert.ok(candidates.includes("/usr/bin/claude-desktop"));
   assert.ok(candidates.includes("/home/me/.local/bin/claude-desktop"));
@@ -25,29 +24,6 @@ test("a chosen location wins when it exists; a chosen Claude.app opens to its ex
   assert.equal(resolveClaudeExecutable("/gone/claude", ["/usr/bin/claude-desktop"], exists), "/usr/bin/claude-desktop");
   assert.equal(resolveClaudeExecutable("claude-desktop", ["/usr/bin/claude-desktop"], exists), "/usr/bin/claude-desktop");
   assert.equal(resolveClaudeExecutable(undefined, [], exists), undefined);
-});
-
-test("Linux finds Claude's processes through its launcher, install folder or AppImage, never the Code CLI or Relay", () => {
-  const listing = [
-    "  101 /bin/bash /usr/bin/claude-desktop",
-    "  102 /usr/lib/claude-desktop/node_modules/electron/dist/electron /usr/lib/claude-desktop/app.asar",
-    "  103 /tmp/.mount_ClaudeAbc/claude --type=renderer",
-    "  104 /home/me/.local/bin/claude --resume",
-    "  105 node /home/me/.local/bin/claude",
-    "  106 /opt/Relay/relay /usr/bin/claude-desktop",
-    "  107 /usr/bin/vim notes.txt",
-  ].join("\n");
-  assert.deepEqual(linuxDesktopPids(listing, "/usr/bin/claude-desktop", 106), [101, 102, 103]);
-  // A chosen binary is matched by its own name too, unless that name is the CLI's.
-  assert.deepEqual(linuxDesktopPids("  201 /opt/x/Claude-Desktop\n  202 /usr/bin/Claude-Desktop --x", "/opt/x/Claude-Desktop", 1), [201, 202]);
-  assert.deepEqual(linuxDesktopPids("  301 /usr/local/bin/claude", "/opt/odd/claude", 1), []);
-  // A process that only names a file in the install folder or the launcher is not Claude.
-  const unrelated = [
-    "  401 /usr/bin/vim /usr/lib/claude-desktop/resources/notes.txt",
-    "  402 grep -r token /opt/claude-desktop/",
-    "  404 tail -f /usr/lib/claude-desktop/app.log",
-  ].join("\n");
-  assert.deepEqual(linuxDesktopPids(unrelated, "/usr/bin/claude-desktop", 1), []);
 });
 
 test("Settings and the setup checklist offer Choose location, and main keeps the choice", () => {

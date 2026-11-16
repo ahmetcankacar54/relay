@@ -38,7 +38,7 @@ export function desktopHost(
     draftsBlocked: async () =>
       draftsBlockedReason(
         process.platform,
-        process.platform === "darwin" ? await base.claudeElectron?.() : undefined,
+        process.platform === "win32" ? undefined : await base.claudeElectron?.(),
         process.versions.electron,
       ),
     readDrafts: (job) =>

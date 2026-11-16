@@ -100,6 +100,7 @@ export function AccountDetail({
       active: a.id === relay.active?.id,
       desktopRunning: !!relay.desktop?.running,
       waiting,
+      platform: relay.data?.diagnostics?.platform,
     },
     t,
   );
@@ -395,10 +396,10 @@ function ExtensionConnection({
   account: Account;
   extension: ReturnType<typeof useExtensionStatus>;
 }) {
-  const { accounts } = useRelay();
+  const { accounts, data } = useRelay();
   const { t, language } = useI18n();
   if (status === null) return null;
-  const guide = extensionGuide(a, status, accounts, t, language);
+  const guide = extensionGuide(a, status, accounts, t, language, undefined, data?.diagnostics?.platform);
   return (
     <ConnectionRow
       icon={<AppWindow />}
@@ -455,7 +456,7 @@ function ExtensionConnection({
   );
 }
 
-/** The terminal's Claude Code sign-in for this account: linked, or how to link it. macOS only. */
+/** The terminal's Claude Code sign-in for this account: linked, or how to link it. macOS and Linux. */
 function TerminalConnection({
   account: a,
   terminal: { status, checking, check },
@@ -590,15 +591,16 @@ export function AccountDetailBody({
       active: a.id === relay.active?.id,
       desktopRunning: !!desktop?.running,
       waiting,
+      platform: data?.diagnostics?.platform,
     },
     t,
   );
-  const signIn = usageSignInStatus(a, usage, waiting, t);
+  const signIn = usageSignInStatus(a, usage, waiting, t, data?.diagnostics?.platform);
   // The header badge's name, never the raw word ("plus", "Antigravity OAuth").
   const plan = accountPlan(a);
-  const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
-  const extension = useExtensionStatus({ check: macOS, initial: extensionStatus });
-  const terminal = useTerminalStatus({ check: macOS, initial: terminalStatus });
+  const browserSteps = ["darwin", "preview", "linux"].includes(data?.diagnostics?.platform ?? "");
+  const extension = useExtensionStatus({ check: browserSteps, initial: extensionStatus });
+  const terminal = useTerminalStatus({ check: browserSteps, initial: terminalStatus });
   // Only what a switch needs counts: the Claude app sign-in and the usage sign-in. The extension
   // and the terminal are optional and say their own state on their rows.
   const claude = isClaudeAccount(a);
@@ -896,9 +898,9 @@ export function AccountDetailBody({
             >
               {relay.flow?.accountId === a.id && <CliFlowPanel embedded />}
             </ConnectionRow>
-            {/* The extension's sign-in is kept only on macOS; the browser preview shows the row too. */}
-            {macOS && <ExtensionConnection account={a} extension={extension} />}
-            {macOS && <TerminalConnection account={a} terminal={terminal} />}
+            {/* The extension's and terminal's sign-ins are kept on macOS and Linux; the browser preview shows the rows too. */}
+            {browserSteps && <ExtensionConnection account={a} extension={extension} />}
+            {browserSteps && <TerminalConnection account={a} terminal={terminal} />}
             </>
             )}
             </ConnectionList>

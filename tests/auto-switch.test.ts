@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import {
   AutoSwitchManager,
   autoSwitchDecision,
+  autoSwitchSupported,
 } from "../electron/core/auto-switch";
 import { DesktopManager, type DesktopHost } from "../electron/core/desktop";
 import { Store } from "../electron/core/store";
@@ -93,6 +94,20 @@ test("automatic preparation is disabled by default and rejects unsupported platf
   assert.equal(f.decide().state.reason, "disabled");
   f.settings.autoSwitchMode = "after-exit";
   assert.equal(f.decide(false, false).state.reason, "unsupported-platform");
+});
+test("preparing on quit runs on macOS and Linux, not Windows", () => {
+  assert.equal(autoSwitchSupported("darwin"), true);
+  assert.equal(autoSwitchSupported("linux"), true);
+  assert.equal(autoSwitchSupported("win32"), false);
+  const f = scenario();
+  f.settings.autoSwitchMode = "after-exit";
+  const on = (platform: NodeJS.Platform) =>
+    autoSwitchDecision(f.settings, [f.a, f.b], f.desktop, f.usage, NOW, false, autoSwitchSupported(platform))
+      .state;
+  // Linux decides exactly as macOS: the same target, waiting for Claude to quit.
+  assert.deepEqual(on("linux"), on("darwin"));
+  assert.equal(on("linux").reason, "quota-exhausted");
+  assert.equal(on("win32").reason, "unsupported-platform");
 });
 test("a real exhausted window selects a verified target and waits while Claude runs", () => {
   const f = scenario();

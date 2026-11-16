@@ -63,12 +63,9 @@ export function processRows(commands: string, arguments_: string): ProcessRow[] 
 }
 
 /**
- * Claude Desktop's processes on macOS, split by app. Every process inside the bundle belongs to
- * the app whose main process (the bundle's executable) it runs under. The app started without
- * `--user-data-dir` is the main Claude; each one started with it is a window, whoever started it.
- * A process under no app goes to the window whose folder its own switch names, else to the main
- * Claude, so a leftover helper still holds a switch off as it did before windows existed. Chrome's
- * native messaging host can outlive Claude and is never counted.
+ * Claude Desktop's processes on macOS, split by app (see splitInstances): every process inside
+ * the bundle, the app's main process being the bundle's executable. Chrome's native messaging
+ * host can outlive Claude and is never counted.
  */
 export function macInstances(rows: ProcessRow[], executable: string): ClaudeInstances {
   const marker = executable.indexOf(".app/");
@@ -80,11 +77,101 @@ export function macInstances(rows: ProcessRow[], executable: string): ClaudeInst
       row.executable !== browserHost &&
       (row.executable === executable || row.executable.startsWith(bundle)),
   );
+  return splitInstances(rows, ours, (row) => row.executable === executable);
+}
+
+/**
+ * `ps -eo pid=,ppid=,args=` (Linux) as rows, the command line's first word as the executable;
+ * lines that are not a process are skipped.
+ */
+export function linuxProcessRows(stdout: string): ProcessRow[] {
+  return stdout.split("\n").flatMap((line) => {
+    const match = /^\s*(\d+)\s+(\d+)\s+(\S.*)$/.exec(line);
+    if (!match) return [];
+    const args = match[3].trimEnd();
+    return [{ pid: Number(match[1]), ppid: Number(match[2]), executable: args.split(/\s+/)[0], args }];
+  });
+}
+
+/**
+ * Helpers in a Linux install that are never part of a Claude: Chrome owns the native messaging
+ * host, and Chromium's crash handler leaves its parent and ends by itself once Claude has.
+ */
+const LINUX_OUTSIDERS = ["chrome-native-host", "chrome_crashpad_handler"];
+
+/** A path inside a claude-desktop install or a mounted Claude AppImage. */
+const inLinuxInstall = (arg: string) => arg.includes("/claude-desktop/") || arg.includes("/.mount_Claude");
+
+/**
+ * Whether a Linux command line is Claude Desktop's. Linux builds start through a launcher, a
+ * script or an AppImage, so a process counts when its command is the chosen executable, lies
+ * inside a claude-desktop install or a mounted Claude AppImage, or shares the executable's name;
+ * or when it runs the launcher script or the install's `.asar` as its first argument. Only the
+ * command and its first argument are looked at: an editor or `grep` that merely names a file in
+ * the install folder is not Claude, and quitting could end it. The Claude Code CLI is also called
+ * "claude", so that bare name never matches by itself.
+ */
+export function linuxClaudeCommand(args: string, executable: string): boolean {
+  const name = path.posix.basename(executable);
+  const [command = "", first = ""] = args.split(/\s+/);
+  return (
+    command === executable ||
+    inLinuxInstall(command) ||
+    (name !== "" && name !== "claude" && path.posix.basename(command) === name) ||
+    first === executable ||
+    (inLinuxInstall(first) && first.endsWith(".asar"))
+  );
+}
+
+/**
+ * Claude Desktop's processes on Linux, split by app (see splitInstances). A process is Claude's
+ * when linuxClaudeCommand says so. An app's main process runs Claude's executable (by path or
+ * name), the launcher script or the `.asar`, with no Chromium `--type=` switch, and does not run
+ * under another Claude process: zygotes, renderers, the GPU process, the install's own helpers
+ * (the VM's virtiofsd, the cowork helper) and Claude's executable run as Node for a server all
+ * belong to the app they run under. `self` (Relay) is never Claude.
+ */
+export function linuxInstances(
+  rows: ProcessRow[],
+  executable: string,
+  self = process.pid,
+): ClaudeInstances {
+  const name = path.posix.basename(executable);
+  const ours = rows.filter(
+    (row) =>
+      row.pid !== self &&
+      !LINUX_OUTSIDERS.includes(path.posix.basename(row.executable)) &&
+      linuxClaudeCommand(row.args, executable),
+  );
+  const claude = new Set(ours.map((row) => row.pid));
+  return splitInstances(rows, ours, (row) => {
+    if (claude.has(row.ppid) || /(^|\s)--type=/.test(row.args)) return false;
+    const first = row.args.split(/\s+/)[1] ?? "";
+    return (
+      row.executable === executable ||
+      (name !== "claude" && path.posix.basename(row.executable) === name) ||
+      first === executable ||
+      (inLinuxInstall(first) && first.endsWith(".asar"))
+    );
+  });
+}
+
+/**
+ * `ours` (a Claude's processes among `rows`) split by app. Every process belongs to the app whose
+ * main process (`isApp`) it runs under. The app started without `--user-data-dir` is the main
+ * Claude; each one started with it is a window, whoever started it. A process under no app goes
+ * to the window whose folder its own switch names, else to the main Claude, so a leftover helper
+ * still holds a switch off as it did before windows existed.
+ */
+function splitInstances(
+  rows: ProcessRow[],
+  ours: ProcessRow[],
+  isApp: (row: ProcessRow) => boolean,
+): ClaudeInstances {
   const parent = new Map(rows.map((row) => [row.pid, row.ppid]));
   /** Each app's main process and its data folder; undefined for the main Claude. */
   const apps = new Map<number, string | undefined>();
-  for (const row of ours)
-    if (row.executable === executable) apps.set(row.pid, userDataDir(row.args));
+  for (const row of ours) if (isApp(row)) apps.set(row.pid, userDataDir(row.args));
   const appOf = (pid: number): number | undefined => {
     for (let at = pid, hops = 0; at > 1 && hops < 64; hops++) {
       if (apps.has(at)) return at;

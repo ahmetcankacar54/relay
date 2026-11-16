@@ -144,6 +144,9 @@ export class RelayTray {
       this.tray.on("double-click", () => this.options.showWindow());
       if (process.platform === "win32")
         this.tray.on("click", () => this.tray.popUpContextMenu());
+      // StatusNotifierItem sends no double-click: a left click (Activate) opens Relay, and the
+      // menu stays on the right click, where the desktop shows it.
+      else if (process.platform === "linux") this.tray.on("click", () => this.options.showWindow());
     }
     void this.update();
   }

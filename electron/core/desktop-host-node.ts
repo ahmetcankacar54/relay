@@ -8,18 +8,19 @@ import type { DesktopHost, LaunchOptions } from "./desktop";
 import {
   assertProcessListing,
   ClaudeLiveness,
-  linuxDesktopPids,
   parseEtime,
   pidAlive,
   retryOnce,
 } from "./desktop-processes";
 import {
+  linuxInstances,
+  linuxProcessRows,
   macInstances,
   processRows,
   type ClaudeInstances,
 } from "./desktop-instances";
 import type { Sealer } from "./vault-crypto";
-import { claudeSignOuts, claudeSignedOut, macClaudeLog, watchClaudeLaunch } from "./desktop-launch";
+import { claudeLog, claudeSignOuts, claudeSignedOut, watchClaudeLaunch } from "./desktop-launch";
 const execFileAsync = promisify(execFile);
 /** On macOS every command runs out of the terminal's process group; see runDetached. */
 const exec = (
@@ -41,6 +42,27 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Claude the user's standard one (HOME, PATH, TMPDIR…) and nothing of Relay's own.
  */
 export const CLEAN_LAUNCH_ENV: NodeJS.ProcessEnv = Object.freeze({});
+/**
+ * The environment Claude gets when Relay starts it on Linux: the session's own (display,
+ * D-Bus, XDG folders, locale, PATH…) without what is Relay's or a Claude Code session's that
+ * started Relay (CLAUDECODE, its session id and account, ELECTRON_RUN_AS_NODE…), as a start
+ * from the desktop gives it. Electron moves the desktop's name aside for Relay's tray icon
+ * (ORIGINAL_XDG_CURRENT_DESKTOP); Claude gets the real one back.
+ */
+export function linuxLaunchEnv(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(source))
+    if (
+      value !== undefined &&
+      !/^(ANTHROPIC_|CLAUDE_|CLAUDECODE$|ELECTRON_|RELAY_|NODE_OPTIONS$|NODE_PATH$|CHROME_DESKTOP$|ORIGINAL_XDG_CURRENT_DESKTOP$|APPIMAGE$|APPDIR$|ARGV0$|OWD$)/.test(
+        key,
+      )
+    )
+      env[key] = value;
+  if (source.ORIGINAL_XDG_CURRENT_DESKTOP)
+    env.XDG_CURRENT_DESKTOP = source.ORIGINAL_XDG_CURRENT_DESKTOP;
+  return env;
+}
 /** Claude's command-line switches for a launch, Chromium's own: no HTTP/3. */
 export function launchArgs(options?: LaunchOptions): string[] {
   // Never a debugging or network-override switch such as --log-net-log: Claude (3.6556 and
@@ -74,8 +96,9 @@ export function claudeExecutable(apps: string[]): string | undefined {
     .find((p) => fs.existsSync(p));
 }
 /**
- * Where Claude Desktop is usually installed, in the order tried. Linux has no official build;
- * these are the community packages' launchers and a Claude AppImage in ~/Applications.
+ * Where Claude Desktop is usually installed, in the order tried. On Linux: the official package's
+ * launcher (/usr/bin/claude-desktop, linked into /usr/lib/claude-desktop), the community
+ * packages' places and a Claude AppImage in ~/Applications.
  */
 export function claudeCandidates(
   platform: NodeJS.Platform = process.platform,
@@ -136,6 +159,37 @@ export function resolveClaudeExecutable(
 }
 
 /**
+ * The Electron version of a Linux Claude: the `version` file Electron ships beside its
+ * executable, found through the launcher's link (/usr/bin/claude-desktop leads into
+ * /usr/lib/claude-desktop), else in the official package's folder. Undefined when none reads
+ * as a version.
+ */
+export function linuxElectronVersion(
+  executable: string,
+  files: { realpath(p: string): string; read(p: string): string } = {
+    realpath: (p) => fs.realpathSync(p),
+    read: (p) => fs.readFileSync(p, "utf8"),
+  },
+): string | undefined {
+  const dirs = new Set<string>();
+  try {
+    dirs.add(path.posix.dirname(files.realpath(executable)));
+  } catch {
+    // A launcher that is gone: the other places may still tell.
+  }
+  dirs.add(path.posix.dirname(executable));
+  dirs.add("/usr/lib/claude-desktop");
+  for (const dir of dirs)
+    try {
+      const version = files.read(path.posix.join(dir, "version")).trim();
+      if (/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version)) return version;
+    } catch {
+      // No version file here.
+    }
+  return undefined;
+}
+
+/**
  * Claude Desktop as a plain Node process sees it: its processes, quitting and launching it,
  * and the vault's seal. Draft capture needs Relay's own Electron and is not here.
  */
@@ -160,12 +214,23 @@ export function nodeDesktopHost(options: {
       assertProcessListing(arguments_.stdout);
       return processRows(commands.stdout, arguments_.stdout);
     }, 250);
-  /** The main Claude and its windows, from one full listing. macOS only. */
-  const macClaude = async (): Promise<ClaudeInstances> => {
+  /** Every process's pid, parent and command line. Linux only. */
+  const linuxListing = () =>
+    retryOnce(async () => {
+      const { stdout } = await exec("/bin/ps", ["-eo", "pid=,ppid=,args="], {
+        timeout: 5000,
+        maxBuffer: 8 * 1024 * 1024,
+      });
+      assertProcessListing(stdout);
+      return linuxProcessRows(stdout);
+    }, 250);
+  /** The main Claude and its windows, from one full listing. macOS and Linux only. */
+  const instances = async (): Promise<ClaudeInstances> => {
     const executable = exe();
-    return executable
-      ? macInstances(await macListing(), executable)
-      : { main: [], mainApps: [], windows: [] };
+    if (!executable) return { main: [], mainApps: [], windows: [] };
+    return process.platform === "linux"
+      ? linuxInstances(await linuxListing(), executable)
+      : macInstances(await macListing(), executable);
   };
   const bundleOf = (executable: string) => executable.slice(0, executable.indexOf(".app/") + 4);
   const app = (action: "terminate" | "activate", pid: number) =>
@@ -181,11 +246,9 @@ export function nodeDesktopHost(options: {
     const executable = exe();
     if (!executable) return { pids: [] };
     if (process.platform === "linux") {
-      const { stdout } = await exec("/bin/ps", ["-eo", "pid=,args="], {
-        timeout: 5000,
-        maxBuffer: 8 * 1024 * 1024,
-      });
-      return { pids: linuxDesktopPids(stdout, executable) };
+      const claude = linuxInstances(await linuxListing(), executable);
+      seenWindows = claude.windows.length;
+      return { pids: claude.main, main: claude.mainPid };
     }
     if (process.platform === "darwin") {
       const claude = macInstances(await macListing(), executable);
@@ -222,6 +285,26 @@ export function nodeDesktopHost(options: {
     now: Date.now,
   });
   const pids = () => liveness.pids();
+  /**
+   * Starts `executable` on its own, outside Relay's process group. On Linux it gets the
+   * session's environment (linuxLaunchEnv) and the home folder, as a start from the desktop does.
+   */
+  const spawnDetached = (executable: string, args: string[]) =>
+    new Promise<void>((resolve, reject) => {
+      const child = spawn(executable, args, {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        ...(process.platform === "linux"
+          ? { env: linuxLaunchEnv(process.env), cwd: os.homedir() }
+          : {}),
+      });
+      child.once("error", reject);
+      child.once("spawn", () => {
+        child.unref();
+        resolve();
+      });
+    });
   /** The Electron version inside Claude.app, or undefined when it cannot be read. macOS only. */
   const readClaudeElectron = async (): Promise<string | undefined> => {
     const executable = exe();
@@ -256,7 +339,7 @@ export function nodeDesktopHost(options: {
       if (process.platform === "darwin")
         try {
           // By bundle id, AppleScript could reach a window instead; then each main app by pid.
-          const { windows, mainApps } = await macClaude();
+          const { windows, mainApps } = await instances();
           if (windows.length) for (const pid of mainApps) await app("terminate", pid);
           else
             await exec(
@@ -273,16 +356,18 @@ export function nodeDesktopHost(options: {
           if (!(await pids()).length) return;
           if (!answerGuard) throw error;
         }
-      else if (process.platform === "linux")
-        // No app-level quit on Linux: ask each process to end, as closing its window would.
-        for (const pid of active) {
+      else if (process.platform === "linux") {
+        // Electron quits on SIGTERM as from its menu, its helpers with it: only the main Claude's
+        // own process is asked, never a window's. Leftovers without one are asked themselves.
+        const { mainApps } = await instances();
+        for (const pid of mainApps.length ? mainApps : active) {
           try {
             process.kill(pid, "SIGTERM");
           } catch {
             // Already gone.
           }
         }
-      else {
+      } else {
         try {
           await exec(
             "taskkill.exe",
@@ -315,7 +400,7 @@ export function nodeDesktopHost(options: {
       if (process.platform === "darwin") {
         // While a window runs, `open -a` could only bring that one forward: the main Claude
         // comes forward by pid when it runs, and otherwise starts as a new app.
-        const { windows, mainPid } = await macClaude();
+        const { windows, mainPid } = await instances();
         if (windows.length && mainPid !== undefined) {
           await app("activate", mainPid);
           return;
@@ -328,61 +413,83 @@ export function nodeDesktopHost(options: {
           // id, socket and account); with none, Claude gets what a Dock launch gives it.
           { timeout: 10_000, env: CLEAN_LAUNCH_ENV },
         );
-      } else
-        await new Promise<void>((resolve, reject) => {
-          const child = spawn(executable, args, {
-            detached: true,
-            stdio: "ignore",
-            windowsHide: true,
-          });
-          child.once("error", reject);
-          child.once("spawn", () => {
-            child.unref();
-            resolve();
-          });
-        });
+      } else await spawnDetached(executable, args);
     },
-    // Claude's log is only known on macOS.
-    watchLaunch: async () =>
-      process.platform === "darwin"
-        ? watchClaudeLaunch(macClaudeLog(os.homedir()), () => liveness.running())
-        : undefined,
-    signedOut: async () =>
-      process.platform === "darwin" ? claudeSignedOut(macClaudeLog(os.homedir())) : undefined,
-    signOuts: async () =>
-      process.platform === "darwin" ? claudeSignOuts(macClaudeLog(os.homedir())) : [],
+    // Claude's log is only known on macOS and Linux.
+    watchLaunch: async () => {
+      const log = claudeLog(os.homedir());
+      return log ? watchClaudeLaunch(log, () => liveness.running()) : undefined;
+    },
+    signedOut: async () => {
+      const log = claudeLog(os.homedir());
+      return log ? claudeSignedOut(log) : undefined;
+    },
+    signOuts: async () => {
+      const log = claudeLog(os.homedir());
+      return log ? claudeSignOuts(log) : [];
+    },
     seal: (text) => options.sealer.seal(text),
     unseal: (data) => options.sealer.unseal(data),
-    claudeElectron: async () =>
-      process.platform === "darwin" ? readClaudeElectron() : undefined,
-    windows: async () => (process.platform === "darwin" ? (await macClaude()).windows : []),
+    claudeElectron: async () => {
+      if (process.platform === "darwin") return readClaudeElectron();
+      const executable = exe();
+      return process.platform === "linux" && executable
+        ? linuxElectronVersion(executable)
+        : undefined;
+    },
+    windows: async () =>
+      process.platform === "darwin" || process.platform === "linux"
+        ? (await instances()).windows
+        : [],
     launchWindow: async (dir, launchOptions) => {
       const executable = exe();
-      if (process.platform !== "darwin") throw new Error("Separate Claude windows need macOS.");
+      if (process.platform !== "darwin" && process.platform !== "linux")
+        throw new Error("Separate Claude windows need macOS or Linux.");
       if (!executable) throw new Error("Claude Desktop is not installed.");
-      await exec(
-        "/usr/bin/open",
-        openArgs(bundleOf(executable), [`--user-data-dir=${dir}`, ...launchArgs(launchOptions)], true),
-        { timeout: 10_000, env: CLEAN_LAUNCH_ENV },
-      );
+      const args = [`--user-data-dir=${dir}`, ...launchArgs(launchOptions)];
+      if (process.platform === "linux") await spawnDetached(executable, args);
+      else
+        await exec("/usr/bin/open", openArgs(bundleOf(executable), args, true), {
+          timeout: 10_000,
+          env: CLEAN_LAUNCH_ENV,
+        });
     },
     quitWindow: async (pid) => {
-      await app("terminate", pid);
+      if (process.platform !== "linux") {
+        await app("terminate", pid);
+        return;
+      }
+      // Only a window's own main process, seen in a fresh listing: never a reused pid.
+      if (!(await instances()).windows.some((window) => window.pid === pid)) return;
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {
+        // Already gone.
+      }
     },
     activateWindow: async (pid) => {
-      await app("activate", pid);
+      if (process.platform !== "linux") {
+        await app("activate", pid);
+        return;
+      }
+      // Started again on its folder, Claude hands over to the one running there, which brings
+      // its window forward.
+      const executable = exe();
+      const window = (await instances()).windows.find((w) => w.pid === pid);
+      if (executable && window) await spawnDetached(executable, [`--user-data-dir=${window.dir}`]);
     },
     windowsSeen: () => seenWindows,
     automationTarget: async () => {
       if (process.platform !== "darwin") return undefined;
-      const { windows, mainPid } = await macClaude();
+      const { windows, mainPid } = await instances();
       return windows.length ? (mainPid ?? null) : undefined;
     },
     claudeUptimeMs: async () => {
       const executable = exe();
-      if (process.platform !== "darwin" || !executable) return undefined;
+      if ((process.platform !== "darwin" && process.platform !== "linux") || !executable)
+        return undefined;
       try {
-        const main = macInstances(await macListing(), executable).mainPid;
+        const main = (await instances()).mainPid;
         if (main === undefined) return undefined;
         const { stdout } = await exec(
           "/bin/ps",

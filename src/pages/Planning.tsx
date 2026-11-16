@@ -16,6 +16,7 @@ export function PlanningTab() {
           activeId={active?.id}
           disabled={!!busy || !!desktop?.busy}
           t={t}
+          platform={data?.diagnostics?.platform}
           update={(patch) =>
             void action("planning", () => api.updatePlanning(patch))
           }

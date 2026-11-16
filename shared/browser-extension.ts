@@ -1,6 +1,6 @@
 /** The Claude browser extension ("Claude in Chrome"). */
 export const CLAUDE_EXTENSION_ID = "fcoeoabgfenejglbffodgkkbkcdhcgfn";
-/** The Chromium browsers Relay can keep the extension's sign-in for, on macOS. */
+/** The Chromium browsers Relay can keep the extension's sign-in for, on macOS (and Linux, see `linux`). */
 export const BROWSER_APPS = [
   "chrome",
   "brave",
@@ -24,6 +24,15 @@ export const BROWSERS: Record<
     dataDir: string;
     /** The main process's file name in Contents/MacOS. */
     executable: string;
+    /** Linux builds only; browsers without one (Arc, Dia, Comet, Canary) are not looked for there. */
+    linux?: {
+      /** The user data folder, under $XDG_CONFIG_HOME (~/.config). */
+      dataDir: string;
+      /** Launchers looked for on PATH, in order. */
+      commands: string[];
+      /** The main executable as /proc/<pid>/exe names it, where the distributions install it. */
+      executables: string[];
+    };
   }
 > = {
   chrome: {
@@ -31,30 +40,59 @@ export const BROWSERS: Record<
     bundleId: "com.google.Chrome",
     dataDir: "Google/Chrome",
     executable: "Google Chrome",
+    linux: {
+      dataDir: "google-chrome",
+      commands: ["google-chrome-stable", "google-chrome"],
+      executables: ["/opt/google/chrome/chrome"],
+    },
   },
   brave: {
     name: "Brave",
     bundleId: "com.brave.Browser",
     dataDir: "BraveSoftware/Brave-Browser",
     executable: "Brave Browser",
+    linux: {
+      dataDir: "BraveSoftware/Brave-Browser",
+      commands: ["brave-browser", "brave-browser-stable", "brave"],
+      executables: ["/opt/brave.com/brave/brave", "/opt/brave-bin/brave"],
+    },
   },
   edge: {
     name: "Edge",
     bundleId: "com.microsoft.edgemac",
     dataDir: "Microsoft Edge",
     executable: "Microsoft Edge",
+    linux: {
+      dataDir: "microsoft-edge",
+      commands: ["microsoft-edge-stable", "microsoft-edge"],
+      executables: ["/opt/microsoft/msedge/msedge"],
+    },
   },
   chromium: {
     name: "Chromium",
     bundleId: "org.chromium.Chromium",
     dataDir: "Chromium",
     executable: "Chromium",
+    linux: {
+      dataDir: "chromium",
+      commands: ["chromium", "chromium-browser"],
+      executables: [
+        "/usr/lib/chromium/chromium",
+        "/usr/lib/chromium-browser/chromium-browser",
+        "/usr/lib64/chromium-browser/chromium-browser",
+      ],
+    },
   },
   vivaldi: {
     name: "Vivaldi",
     bundleId: "com.vivaldi.Vivaldi",
     dataDir: "Vivaldi",
     executable: "Vivaldi",
+    linux: {
+      dataDir: "vivaldi",
+      commands: ["vivaldi-stable", "vivaldi"],
+      executables: ["/opt/vivaldi/vivaldi-bin"],
+    },
   },
   arc: {
     name: "Arc",
@@ -67,12 +105,22 @@ export const BROWSERS: Record<
     bundleId: "com.google.Chrome.beta",
     dataDir: "Google/Chrome Beta",
     executable: "Google Chrome Beta",
+    linux: {
+      dataDir: "google-chrome-beta",
+      commands: ["google-chrome-beta"],
+      executables: ["/opt/google/chrome-beta/chrome"],
+    },
   },
   "chrome-dev": {
     name: "Chrome Dev",
     bundleId: "com.google.Chrome.dev",
     dataDir: "Google/Chrome Dev",
     executable: "Google Chrome Dev",
+    linux: {
+      dataDir: "google-chrome-unstable",
+      commands: ["google-chrome-unstable"],
+      executables: ["/opt/google/chrome-unstable/chrome"],
+    },
   },
   "chrome-canary": {
     name: "Chrome Canary",
@@ -94,9 +142,13 @@ export const BROWSERS: Record<
     executable: "Comet",
   },
 };
+/** The browsers Relay looks in on `platform`: on Linux only those with a Linux build. */
+export function browserApps(platform?: string): readonly BrowserApp[] {
+  return platform === "linux" ? BROWSER_APPS.filter((app) => !!BROWSERS[app].linux) : BROWSER_APPS;
+}
 /** The browsers Relay looks in, by name: "Chrome, Brave, … and Comet". */
-export function browserNames(and: string): string {
-  const names = BROWSER_APPS.map((app) => BROWSERS[app].name);
+export function browserNames(and: string, apps: readonly BrowserApp[] = BROWSER_APPS): string {
+  const names = apps.map((app) => BROWSERS[app].name);
   return `${names.slice(0, -1).join(", ")} ${and} ${names[names.length - 1]}`;
 }
 /** A profile folder: "Default", "Profile 1" and the like. */

@@ -119,6 +119,10 @@ export function loginId(snapshot: CookieSnapshot): string | undefined {
  * Whether two snapshots' web logins are on the same organization: their `lastActiveOrg` cookies
  * hold the same encrypted bytes. On macOS the browser encrypts a cookie the same way every time
  * (one key, a fixed IV), so the same organization id gives the same bytes; nothing is decrypted.
+ * Linux Chromium's "v10"/"v11" values are AES-CBC with a fixed IV too, under one key per browser
+ * (its keyring password, or the built-in one without a keyring), so the same holds within a
+ * browser, which is all Relay compares. Since cookie database version 24 the encrypted text starts
+ * with a hash of the host, so rows of `claude.ai` and `.claude.ai` never match each other.
  * Where a browser encrypts with a random IV this never matches, which only makes it say less.
  */
 export function sameOrganization(a: CookieSnapshot, b: CookieSnapshot): boolean {

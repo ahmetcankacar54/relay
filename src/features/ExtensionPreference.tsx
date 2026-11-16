@@ -65,9 +65,10 @@ export function ExtensionPreference({
   /** For static rendering: Ayrıntılar drawn open. */
   openDetails?: boolean;
 }) {
-  const { api, settings, busy, desktop, action, accounts } = useRelay();
+  const { api, data, settings, busy, desktop, action, accounts } = useRelay();
   const { t } = useI18n();
-  // undefined: not read yet. null: this Mac does not run the step.
+  const platform = data?.diagnostics?.platform;
+  // undefined: not read yet. null: this computer does not run the step.
   const { status, checking, check, reload } = useExtensionStatus({
     check: true,
     initial: initialStatus,
@@ -126,7 +127,7 @@ export function ExtensionPreference({
     setting.mode === "off"
       ? modeSentence("off", t)
       : !status.target
-        ? instanceLine(status, t)
+        ? instanceLine(status, t, platform)
         : (currentLine ?? t("Eklenti kontrol ediliyor…", "Extension check in progress…"));
   return (
     <div className="grid gap-1">
@@ -221,7 +222,7 @@ export function ExtensionPreference({
         defaultOpen={openDetails || choose || !!reconnect?.canSync}
         openKey={choose ? "choose-profile" : reconnect?.canSync ? "extension-expired" : undefined}
       >
-        {setting.mode !== "off" && <Note>{modeSentence(setting.mode, t)}</Note>}
+        {setting.mode !== "off" && <Note>{modeSentence(setting.mode, t, platform)}</Note>}
         {status.instances.length > 1 && (
           <SettingRow
             label={t("Eklentinin tarayıcı profili", "Extension browser profile")}
@@ -259,12 +260,12 @@ export function ExtensionPreference({
           </SettingRow>
         )}
         <SettingRow
-          label={instanceLine(status, t)}
+          label={instanceLine(status, t, platform)}
           description={
             confirming && status.target
               ? t(
-                  `${BROWSERS[status.target.app].name} açıksa kapanıp sekmeleriyle yeniden açılır. Eklenti ve claude.ai oturumu Claude uygulamasının hesabına geçer.`,
-                  `If ${BROWSERS[status.target.app].name} is open, it closes and opens again with its tabs. The extension and the claude.ai login move to the account of the Claude app.`,
+                  `${BROWSERS[status.target.app].name} açıksa kapanıp sekmeleriyle yeniden açılır. Eklenti ve claude.ai oturumu Claude uygulamasının hesabına geçer.${platform === "linux" ? " Linux’ta “sayfadan ayrıl” ya da indirme uyarısı gösterilmeyebilir." : ""}`,
+                  `If ${BROWSERS[status.target.app].name} is open, it closes and opens again with its tabs. The extension and the claude.ai login move to the account of the Claude app.${platform === "linux" ? " On Linux a “leave this page” or downloads prompt may not be shown." : ""}`,
                 )
               : startup
           }

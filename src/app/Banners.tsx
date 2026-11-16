@@ -15,6 +15,7 @@ import {
 } from "@/data/dismissals";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { keychainWords } from "@/data/platform";
 import { pendingFlow } from "@/data/selectors";
 import { displayedIssue, isClaudeAccount, renewalIssue } from "@/lib/account-health";
 import { AutomationBanner } from "../features/AutomationControl";
@@ -121,6 +122,7 @@ export function Banners({
 }) {
   const relay = useRelay();
   const { t } = useI18n();
+  const keychain = keychainWords(relay.data?.diagnostics?.platform, t);
   const { desktop, notice, accounts, active } = relay;
   const { dismissed, dismiss, dismissMany } = useDismissals();
   const [expanded, setExpanded] = useState(initialExpanded);
@@ -171,7 +173,7 @@ export function Banners({
       action === "login"
         ? t("Limit okuma girişini yenile", "Renew usage sign-in")
         : issue === "keychain-locked"
-          ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+          ? keychain.allow
           : t("Yenilemeye izin ver", "Allow renewal");
     return action === "login" ? (
       <Button
@@ -222,10 +224,7 @@ export function Banners({
     return (
       <span>
         {issue === "keychain-locked"
-          ? t(
-              `${a.name} · limitleri okumak için Anahtarlık erişimi gerekiyor.`,
-              `${a.name} · Relay needs Keychain access to read the limits.`,
-            )
+          ? keychain.neededFor(a.name)
           : t(
               `${a.name} · limit okuma girişinin yenilenmesi gerekiyor.`,
               `${a.name} · the usage sign-in needs renewal.`,

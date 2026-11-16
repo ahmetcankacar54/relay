@@ -152,8 +152,8 @@ export function PanelAccounts({
           now={now}
           selected={confirmId}
           switching={switching}
-          line={(row) => panelRowLine(row, t, language, zone, now, waiting(row))}
-          title={(row) => accountRowSubtitle(row, t, language, zone, now, waiting(row))}
+          line={(row) => panelRowLine(row, t, language, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
+          title={(row) => accountRowSubtitle(row, t, language, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
           blocked={(row) => {
             const { reason } = panelRowState(row, relay);
             return reason && blockWords(reason, t);

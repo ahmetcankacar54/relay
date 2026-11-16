@@ -113,6 +113,14 @@ function usableTarget(
   );
 }
 
+/**
+ * Where preparing on quit can run. It reads usage and Desktop's lifecycle and switches while
+ * Claude is closed: no UI automation, so Linux has it too. Windows has no lifecycle adapter.
+ */
+export function autoSwitchSupported(platform: NodeJS.Platform = process.platform) {
+  return platform === "darwin" || platform === "linux";
+}
+
 // Decisions never read credentials, infer task completion or send a message.
 // The Desktop adapter remains responsible for enforcing absence before writes.
 export function autoSwitchDecision(
@@ -122,7 +130,7 @@ export function autoSwitchDecision(
   usage: Record<string, AccountUsage>,
   now: number,
   pendingAuth = false,
-  platformSupported = process.platform === "darwin",
+  platformSupported = autoSwitchSupported(),
   /** Pro units per hour now (the tempo), for the switch rule's threshold. */
   rate?: number,
   /** A continuation or the fleet owns quota-stopped conversations. */
@@ -234,7 +242,7 @@ export class AutoSwitchManager {
   ) {
     this.now = dependencies.now ?? Date.now;
     this.platformSupported =
-      dependencies.platformSupported ?? process.platform === "darwin";
+      dependencies.platformSupported ?? autoSwitchSupported();
     this.completed = new Map(
       Object.entries(store.state.autoSwitchCompleted ?? {}),
     );

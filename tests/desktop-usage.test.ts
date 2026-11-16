@@ -68,15 +68,15 @@ const account = (extra: Partial<Account> = {}): Account =>
   }) as Account;
 
 test("Chromium's macOS cookie values decrypt with the Safe Storage key, and only with it", () => {
-  assert.equal(decryptCookie(encrypt("sk-ant-sid01-abc", ".claude.ai"), KEY, ".claude.ai", 24), "sk-ant-sid01-abc");
+  assert.equal(decryptCookie(encrypt("sk-ant-sid01-abc", ".claude.ai"), { v10: KEY }, ".claude.ai", 24), "sk-ant-sid01-abc");
   // The host digest guards against a value moved to another host.
-  assert.equal(decryptCookie(encrypt("x", "claude.ai"), KEY, ".claude.ai", 24), undefined);
-  assert.equal(decryptCookie(encrypt("x", ".claude.ai"), cookieKey("other"), ".claude.ai", 24), undefined);
-  assert.equal(decryptCookie(Buffer.from("v11abcdefghijklmnopqrs"), KEY, ".claude.ai", 24), undefined);
+  assert.equal(decryptCookie(encrypt("x", "claude.ai"), { v10: KEY }, ".claude.ai", 24), undefined);
+  assert.equal(decryptCookie(encrypt("x", ".claude.ai"), { v10: cookieKey("other") }, ".claude.ai", 24), undefined);
+  assert.equal(decryptCookie(Buffer.from("v11abcdefghijklmnopqrs"), { v10: KEY }, ".claude.ai", 24), undefined);
   // Before version 24 there is no digest.
   const cipher = crypto.createCipheriv("aes-128-cbc", KEY, Buffer.alloc(16, 0x20));
   const old = Buffer.concat([Buffer.from("v10"), cipher.update("plain-old"), cipher.final()]);
-  assert.equal(decryptCookie(old, KEY, ".claude.ai", 23), "plain-old");
+  assert.equal(decryptCookie(old, { v10: KEY }, ".claude.ai", 23), "plain-old");
 });
 
 test("the Cookie header carries the session and its routing hints, nothing else", async (t) => {
@@ -90,9 +90,9 @@ test("the Cookie header carries the session and its routing hints, nothing else"
   const { version, rows } = await readCookieRows(files);
   assert.equal(version, 24);
   assert.deepEqual(rows.map((r) => r.name).sort(), ["anthropic-device-id", "cf_clearance", "lastActiveOrg", "sessionKey"]);
-  assert.equal(cookieHeader(rows, KEY, version), `sessionKey=sk-ant-sid01-abc; lastActiveOrg=${ORG}`);
+  assert.equal(cookieHeader(rows, { v10: KEY }, version), `sessionKey=sk-ant-sid01-abc; lastActiveOrg=${ORG}`);
   // Without a session there is nothing to send.
-  assert.equal(cookieHeader(rows.filter((r) => r.name !== "sessionKey"), KEY, version), undefined);
+  assert.equal(cookieHeader(rows.filter((r) => r.name !== "sessionKey"), { v10: KEY }, version), undefined);
   await assert.rejects(readCookieRows({}), (e: unknown) => e instanceof UsageError && e.issue === "credentials-missing");
 });
 
@@ -115,6 +115,7 @@ test("a Claude app sign-in reads claude.ai's usage for the account's organizatio
       return answer;
     },
     now: () => 0,
+    platform: "darwin",
   });
   assert.deepEqual(await reader.read(account(), false), {
     five_hour: { utilization: 12, resets_at: "2026-11-07T15:00:00Z" },
@@ -145,6 +146,7 @@ test("a signed-out Claude app sign-in, a missing one and a refused Keychain each
   const base = {
     password: async () => PASSWORD,
     request: async () => json(200, {}),
+    platform: "darwin" as const,
   };
   const issue = (reader: DesktopUsageReader) =>
     reader.read(account(), false).then(
@@ -234,7 +236,7 @@ test("an account without a Claude Code sign-in reads its limits through the Clau
   assert.deepEqual(reads, [true]);
   assert.deepEqual(samples, ["desktop"]);
 
-  // Without the second source (Windows, Linux) the account still asks for a usage sign-in.
+  // Without the second source (Windows) the account still asks for a usage sign-in.
   const plain = new UsageManager(store, credentials);
   assert.equal(plain.snapshot()[created.id].issue, "connect-cli");
   // An account without any Claude app sign-in has no source either.

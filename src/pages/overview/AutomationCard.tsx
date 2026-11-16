@@ -63,7 +63,7 @@ export function AutomationCard({
     ? nextPlannedWindow(planning, accounts, relay.data?.planning, now)
     : undefined;
   const extension = useExtensionStatus().status;
-  const macOS = ["darwin", "preview"].includes(relay.data?.diagnostics?.platform ?? "");
+  const browserSteps = ["darwin", "preview", "linux"].includes(relay.data?.diagnostics?.platform ?? "");
   return (
     <section className="grid content-start gap-2">
       <h2 className="px-1 text-xs font-semibold text-muted-foreground">
@@ -95,7 +95,7 @@ export function AutomationCard({
           }
           onClick={() => go("planlama")}
         />
-        {macOS && extension && (
+        {browserSteps && extension && (
           <Row
             name={t("Tarayıcı eklentisi", "Browser extension")}
             value={

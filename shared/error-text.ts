@@ -18,8 +18,8 @@ const pairs: Pair[] = [
     "The terminal sign-in did not complete. Try again.",
   ],
   [
-    "Terminal girişleri yalnızca macOS’ta saklanır.",
-    "Terminal sign-ins are kept on macOS only.",
+    "Terminal girişleri yalnızca macOS ve Linux’ta saklanır.",
+    "Terminal sign-ins are kept on macOS and Linux only.",
   ],
   [
     "Önce Claude uygulaması girişini kaydet.",
@@ -104,7 +104,7 @@ const pairs: Pair[] = [
     "Ayrı Claude pencereleri Ayarlar’da kapalı.",
     "Separate Claude windows are turned off in Settings.",
   ],
-  ["Ayrı Claude pencereleri macOS gerektirir.", "Separate Claude windows need macOS."],
+  ["Ayrı Claude pencereleri macOS veya Linux gerektirir.", "Separate Claude windows need macOS or Linux."],
   [
     "Bu hesap zaten Claude uygulamasında açık. Önce Claude uygulamasını başka bir hesaba geçir.",
     "This account is already open in the Claude app. Switch the Claude app to another account first.",

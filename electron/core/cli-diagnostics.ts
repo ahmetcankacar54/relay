@@ -7,6 +7,7 @@ import {
   resolveExecutable,
   supportsDesktop,
 } from "./environment";
+import { desktopUsageReadable } from "./desktop-usage";
 
 /**
  * Finds the official Claude Code CLI (`explicit` first, then the usual places, then the one the
@@ -24,6 +25,7 @@ export async function diagnoseCli(
     platform: process.platform,
     dataDir,
     desktopSupported: false,
+    desktopUsage: await desktopUsageReadable(dataDir),
   };
   if (!executable)
     return {

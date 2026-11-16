@@ -8,6 +8,7 @@ import {
 import { clockLocative } from "../../shared/tr-dative";
 import { modelLimitFull } from "@/data/selectors";
 import { formatClock } from "@/lib/time";
+import { macWording } from "@/data/platform";
 
 // The helper lives in shared/ so the tray and the keeper read it too; the app keeps importing it from here.
 export { displayedIssue };
@@ -34,7 +35,21 @@ const NO_USAGE_DATA: Words = ["Limit verisi yok", "No usage data yet"];
 const APPROVE: Words = ["Tarayıcıda onayla", "Approve in the browser"];
 
 /** Where the status is read: `now` and the planning time zone default to the clock and the system zone. */
-type HealthContext = { active: boolean; desktopRunning: boolean; waiting: boolean; now?: number; zone?: string };
+type HealthContext = {
+  active: boolean;
+  desktopRunning: boolean;
+  waiting: boolean;
+  now?: number;
+  zone?: string;
+  /** Relay's platform (`diagnostics.platform`): the Keychain on macOS, the keyring elsewhere. */
+  platform?: string;
+};
+
+/** A locked Keychain (Linux: keyring) as a status. */
+const keychainNeeded = (platform?: string): Words =>
+  macWording(platform)
+    ? ["Anahtarlık izni gerekli", "Keychain access needed"]
+    : ["Anahtar deposu izni gerekli", "Keyring access needed"];
 
 /** "Pzt 05:00" / "Mon 05:00" beyond a day, the clock alone within one. */
 function opensAt(at: number, now: number, language: "tr" | "en", zone?: string) {
@@ -120,6 +135,7 @@ export function usageSignInStatus(
   usage: AccountUsage | undefined,
   waiting: boolean,
   t: T,
+  platform?: string,
 ): { tone: AccountHealth["tone"]; label: string } {
   if (waiting) return { tone: "warn", label: t(...APPROVE) };
   if (!isClaudeAccount(account))
@@ -134,14 +150,10 @@ export function usageSignInStatus(
       return { tone: "ok", label: t(tr, en) };
     case "needed":
       return { tone: "crit", label: t(tr, en) };
-    case "keychain":
-      return {
-        tone: "warn",
-        label: t(
-          `${tr} · Anahtarlık izni gerekli`,
-          `${en} · Keychain access needed`,
-        ),
-      };
+    case "keychain": {
+      const [needTr, needEn] = keychainNeeded(platform);
+      return { tone: "warn", label: t(`${tr} · ${needTr}`, `${en} · ${needEn}`) };
+    }
     default:
       return { tone: "warn", label: t(tr, en) };
   }
@@ -233,7 +245,7 @@ export function accountHealth(
   if (renewal === "keychain-locked")
     return result(
       "warn",
-      ["Anahtarlık izni gerekli", "Keychain access needed"],
+      keychainNeeded(context.platform),
       "renew",
     );
   if (renewal === "renewal-required")

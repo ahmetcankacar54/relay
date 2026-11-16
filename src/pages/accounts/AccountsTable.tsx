@@ -39,6 +39,7 @@ import { StatusDot } from "@/components/StatusDot";
 import { ProviderBadge } from "@/components/ProviderBadge";
 import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { keychainWords } from "@/data/platform";
 import { limitFull, pendingFlow, windowAccounts } from "@/data/selectors";
 import { offerAfter, usePrank, type PrankApi } from "@/pranks/PrankStage";
 import { cn } from "@/lib/utils";
@@ -122,9 +123,10 @@ function ConnectionIcons({
       </div>
     );
   }
-  const signIn = usageSignInStatus(account, usage, waiting, t);
+  const signIn = usageSignInStatus(account, usage, waiting, t, relay.data?.diagnostics?.platform);
   const ext =
-    extension && extensionGuide(account, extension, relay.accounts, t, language);
+    extension &&
+    extensionGuide(account, extension, relay.accounts, t, language, undefined, relay.data?.diagnostics?.platform);
   const term =
     terminal && terminal.mode !== "off" ? terminalGuide(account, terminal, t, language) : undefined;
   const items: { key: string; icon: LucideIcon; tone: keyof typeof toneText; title: string }[] = [
@@ -344,7 +346,7 @@ export function rowActions(
       key: "renew",
       label:
         renewal === "keychain-locked"
-          ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+          ? keychainWords(relay.data?.diagnostics?.platform, t).allow
           : t("Yenilemeye izin ver", "Allow renewal"),
       icon: KeyRound,
       disabled: relay.usageBusy.has(a.id),
@@ -510,7 +512,7 @@ export function AccountsTable({
   // Opening the list also checks the extension, so an account signed in to it gets linked.
   const extension = useExtensionStatus({ check: true }).status;
   const terminal = useTerminalStatus({ check: true }).status;
-  const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
+  const browserSteps = ["darwin", "preview", "linux"].includes(data?.diagnostics?.platform ?? "");
   const now = Date.now();
   return (
     <>
@@ -540,7 +542,7 @@ export function AccountsTable({
           const health = accountHealth(
             a,
             usage,
-            { active: isActive, desktopRunning: !!desktop?.running, waiting },
+            { active: isActive, desktopRunning: !!desktop?.running, waiting, platform: data?.diagnostics?.platform },
             t,
           );
           const actions = rowActions(a, relay, t, link, { remove, edit, language, now });
@@ -700,8 +702,8 @@ export function AccountsTable({
                   account={a}
                   usage={usage}
                   waiting={waiting}
-                  extension={macOS ? extension : null}
-                  terminal={macOS ? terminal : null}
+                  extension={browserSteps ? extension : null}
+                  terminal={browserSteps ? terminal : null}
                 />
               </TableCell>
               <TableCell className="text-right">

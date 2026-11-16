@@ -288,7 +288,8 @@ test("the add dialog lists the sessions found, ticked, and adds the chosen ones 
     const attr = (n: Fake | undefined, name: string) => (n?.attributes as Map<string, string> | undefined)?.get(name);
     const box = (provider: string) => find(container, (n) => attr(n, "role") === "checkbox" && attr(n, "data-provider") === provider);
     const text = textOf(container);
-    assert.match(text, /Bu Mac’te 2 hesap bulduk/);
+    // The fixture is Linux: "this computer", not "this Mac".
+    assert.match(text, /Bu bilgisayarda 2 hesap bulduk/);
     assert.match(textOf(box("claude")!), /claude@example\.com/);
     assert.match(textOf(box("codex")!), /codex@example\.com[\s\S]*Codex CLI · ChatGPT Pro/);
     assert.equal(box("antigravity"), undefined);
@@ -331,7 +332,7 @@ test("without a detected session, Codex asks for a key and the connect button wa
     assert.match(textOf(container), /Nasıl eklemek istersin\?/);
     const card = find(container, (n) => attr(n, "data-way") === "codex");
     await act(async () => dom.dispatch(card!, "click", { detail: 1 }));
-    assert.match(textOf(container), /Bu Mac'te Codex CLI girişi bulunamadı/);
+    assert.match(textOf(container), /Bu bilgisayarda Codex CLI girişi bulunamadı/);
     const connect = find(container, (n) => n.tagName?.toLowerCase() === "button" && textOf(n) === "Bağla");
     assert.equal(attr(connect, "disabled") !== undefined, true);
     await act(async () => root.unmount());

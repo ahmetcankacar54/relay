@@ -183,6 +183,7 @@ function AccountLinks({
             waiting: pendingFlow(
               relay.data?.authFlows.find((f) => f.accountId === a.id),
             ),
+            platform: relay.data?.diagnostics?.platform,
           },
           t,
         );

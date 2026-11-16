@@ -4,6 +4,8 @@ import fs from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { meetsCliMinimum } from "../../shared/cli-version";
+import { appDataRoot } from "./relay-paths";
+import { claudeCandidates } from "./desktop-host-node";
 const execFileAsync = promisify(execFile);
 
 // Launch the real CLI directly. Never run a login shell or interpolate shell commands.
@@ -52,18 +54,20 @@ function newestVersionFirst(a: string, b: string) {
   return 0;
 }
 /**
- * The Claude Code that Claude Desktop downloads for its Code tab, so a Mac with only the Claude
- * app can still read limits: `Claude/claude-code/<version>/<hash>/claude.app/Contents/MacOS/claude`,
- * newest version first, only where Desktop wrote `.verified` beside it once the download checked
- * out. Desktop removes old versions as it updates, so the path is looked up at every use.
+ * The Claude Code that Claude Desktop downloads for its Code tab, so a computer with only the
+ * Claude app can still read limits: `Claude/claude-code/<version>/<hash>/` in the app's data
+ * folder, holding `claude.app/Contents/MacOS/claude` on macOS and `claude` on Linux, newest
+ * version first, only where Desktop wrote `.verified` beside it once the download checked out.
+ * Desktop removes old versions as it updates, so the path is looked up at every use.
  */
 export function desktopBundledClaude(
   home = os.homedir(),
   platform = process.platform,
   usable: (p: string) => boolean = usableFile,
+  env: NodeJS.ProcessEnv = process.env,
 ): string | undefined {
-  if (platform !== "darwin") return undefined;
-  const root = path.join(home, "Library", "Application Support", "Claude", "claude-code");
+  if (platform !== "darwin" && platform !== "linux") return undefined;
+  const root = path.join(appDataRoot(platform, home, env), "Claude", "claude-code");
   const list = (dir: string) => {
     try {
       return fs.readdirSync(dir);
@@ -74,22 +78,69 @@ export function desktopBundledClaude(
   for (const version of list(root).sort(newestVersionFirst))
     for (const hash of list(path.join(root, version))) {
       const dir = path.join(root, version, hash);
-      const executable = path.join(dir, "claude.app", "Contents", "MacOS", "claude");
+      const executable =
+        platform === "darwin"
+          ? path.join(dir, "claude.app", "Contents", "MacOS", "claude")
+          : path.join(dir, "claude");
       if (fs.existsSync(path.join(dir, ".verified")) && usable(executable)) return executable;
     }
   return undefined;
+}
+/** The file a path leads to, or the path itself when it cannot be resolved. */
+function realFile(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+/**
+ * Whether `file` is Claude Desktop rather than the Claude Code CLI: named as Desktop's executable
+ * (`claude-desktop`, `Claude`, `Claude.exe`), inside a Claude.app or a claude-desktop install, or
+ * the same file as one of Desktop's usual locations (`desktop`). Running Desktop for `auth status`
+ * or `--version` would only open the app, so such a choice is refused and never run.
+ */
+export function isClaudeDesktopExecutable(
+  file: string,
+  options: {
+    platform?: NodeJS.Platform;
+    desktop?: string[];
+    realpath?: (p: string) => string;
+  } = {},
+): boolean {
+  const platform = options.platform ?? process.platform;
+  const p = platform === "win32" ? path.win32 : path.posix;
+  const real = options.realpath ?? realFile;
+  const desktopNames = ["claude-desktop", "Claude", "Claude.exe"];
+  const resolved = real(file);
+  const named = [file, resolved].some(
+    (candidate) =>
+      desktopNames.includes(p.basename(candidate)) ||
+      /\.app\/Contents\/MacOS\/Claude$/.test(candidate) ||
+      candidate.includes("/claude-desktop/"),
+  );
+  return (
+    named ||
+    (options.desktop ?? claudeCandidates(platform)).some(
+      (desktop) => p.isAbsolute(desktop) && real(desktop) === resolved,
+    )
+  );
 }
 /** Where a resolved CLI came from: the user's choice, the usual places, or the Claude app's own. */
 export function executableSource(
   executable: string,
   explicit: string | undefined,
 ): "chosen" | "path" | "claude-app" {
-  if (explicit) return "chosen";
+  // A choice that was set aside (Claude Desktop picked as the CLI) is not where it came from.
+  if (explicit && executable === explicit) return "chosen";
   return executable.includes(`${path.sep}Claude${path.sep}claude-code${path.sep}`)
     ? "claude-app"
     : "path";
 }
-export function resolveExecutable(explicit?: string): string | undefined {
+export function resolveExecutable(chosen?: string): string | undefined {
+  // Claude Desktop chosen as the CLI (an earlier Relay accepted it) is ignored, so the usual
+  // places are searched as if nothing were chosen.
+  const explicit = chosen && !isClaudeDesktopExecutable(chosen) ? chosen : undefined;
   const name = process.platform === "win32" ? "claude.exe" : "claude";
   const candidates = explicit
     ? [explicit]

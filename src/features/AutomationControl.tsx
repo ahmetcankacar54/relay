@@ -244,7 +244,7 @@ export const MODE_TITLE: Record<AutomationMode, [tr: string, en: string]> = {
 export function AutomationSettings() {
   const relay = useRelay();
   const { t } = useI18n();
-  const { mode, status, locked, supported, setMode } = useAutomation();
+  const { mode, status, locked, supports, setMode } = useAutomation();
   const { api, settings, action } = relay;
   const disabled = !!relay.busy || !!relay.desktop?.busy;
   const fleet = relay.data?.fleet;
@@ -261,7 +261,7 @@ export function AutomationSettings() {
         {AUTOMATION_MODES.map((m) => {
           const Icon = MODE_ICON[m.value];
           const checked = mode === m.value;
-          const off = locked || (m.value !== "off" && !supported);
+          const off = locked || !supports(m.value);
           return (
             <button
               key={m.value}
@@ -303,13 +303,22 @@ export function AutomationSettings() {
         })}
       </div>
       <AutomationStatusLine status={status} />
-      {!supported && (
+      {!supports("after-exit") ? (
         <Note>
           {t(
-            "Otomatik geçiş yalnızca macOS’ta kullanılabilir.",
-            "Automatic switching is available only on macOS.",
+            "Otomatik geçiş yalnızca macOS’ta ve Linux’ta kullanılabilir.",
+            "Automatic switching is available only on macOS and Linux.",
           )}
         </Note>
+      ) : (
+        !supports("quota") && (
+          <Note>
+            {t(
+              "Limit dolunca geçip konuşmaları sürdürmek Claude uygulamasına yazar; bu yalnızca macOS’ta var. Burada Relay, Claude uygulamasını kapattığında sıradaki hesabı hazırlar.",
+              "Switching and continuing conversations at the limit types into the Claude app, which needs macOS. Here, Relay prepares the next account when you quit the Claude app.",
+            )}
+          </Note>
+        )
       )}
       {mode === "after-exit" && (
         <div className="grid gap-1">

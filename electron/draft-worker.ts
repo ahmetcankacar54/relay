@@ -116,6 +116,9 @@ function main(): void {
   app.setPath("userData", path.join(job.scratch, "userData"));
   app.disableHardwareAcceleration();
   app.dock?.hide();
+  // Linux: the scratch profile stores no secret, so the helper never asks KWallet or the
+  // Secret Service for one; a locked wallet would prompt while Claude's copy is open.
+  if (process.platform === "linux") app.commandLine.appendSwitch("password-store", "basic");
   // Destroying the hidden window must not quit the app before the result is written.
   app.on("window-all-closed", () => {});
 

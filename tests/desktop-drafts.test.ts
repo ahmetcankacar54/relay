@@ -2524,15 +2524,22 @@ test("drafts move only between the same Electron major version", () => {
   );
 });
 
-test("drafts move only on macOS", () => {
-  for (const platform of ["linux", "win32"])
-    assert.equal(
-      draftsBlockedReason(platform, "44.7.2", "44.7.0"),
-      "drafts move only on macOS",
-    );
-  assert.equal(draftsBlockedReason("darwin", "44.7.2", "44.7.0"), undefined);
+test("drafts move on macOS and Linux, under the same Electron major", () => {
   assert.equal(
-    draftsBlockedReason("darwin", undefined, "44.7.0"),
-    "Claude Desktop's Electron version is unknown",
+    draftsBlockedReason("win32", "44.7.2", "44.7.0"),
+    "drafts move only on macOS and Linux",
+  );
+  for (const platform of ["darwin", "linux"]) {
+    assert.equal(draftsBlockedReason(platform, "44.7.2", "44.7.0"), undefined, platform);
+    assert.equal(
+      draftsBlockedReason(platform, undefined, "44.7.0"),
+      "Claude Desktop's Electron version is unknown",
+      platform,
+    );
+  }
+  // The official Linux Claude 5.11492 runs Electron 45, a Relay on 44 does not open its storage.
+  assert.equal(
+    draftsBlockedReason("linux", "45.2.1", "44.7.0"),
+    "Claude Desktop runs Electron 45.2.1, Relay 44.7.0",
   );
 });

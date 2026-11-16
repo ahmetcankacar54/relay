@@ -102,7 +102,8 @@ adapts the menu-bar icon to light and dark appearances.
 
 ## How it works
 
-- Relay's data lives in `~/Library/Application Support/Relay`. Saved Desktop
+- Relay's data lives in `~/Library/Application Support/Relay` on macOS and
+  `~/.config/Relay` on Linux (`$XDG_CONFIG_HOME/Relay` when set). Saved Desktop
   sign-ins are encrypted with the operating system (`safeStorage`). Claude's files
   are only changed while Claude is closed, after an encrypted backup and a write
   journal; an interrupted switch can be restored from the app.
@@ -112,9 +113,13 @@ adapts the menu-bar icon to light and dark appearances.
   all accounts and are never copied or rewritten. Deleted conversations stay
   deleted.
 - Usage: each account has an isolated CLI profile. Relay reads its credential with
-  `/usr/bin/security` (no Keychain dialog), renews it near expiry with the official
+  `/usr/bin/security` on macOS (no Keychain dialog) and from the profile's
+  `.credentials.json` on Linux, renews it near expiry with the official
   `CLAUDE_CODE_OAUTH_REFRESH_TOKEN` login, and calls the OAuth profile/usage
   endpoints. Credentials never reach the UI.
+- Settings → Advanced → Claude Code CLI wants the `claude` CLI (usually
+  `~/.local/bin/claude`), not the Claude app: Relay refuses the app there and
+  ignores it when an older version saved it.
 
 ## Limits
 
@@ -123,12 +128,37 @@ adapts the menu-bar icon to light and dark appearances.
   reused; the conversation text still continues.
 - Relay depends on Claude Desktop's private local file formats and, for automatic
   continuation, on its accessibility tree. A Claude update can break either.
-- macOS is the main platform. The Windows installer (`.exe`) and the Linux
-  AppImage switch Claude Desktop by hand, read usage limits and manage accounts,
-  but have no automatic switch, continuation, draft re-typing, Claude extension
-  or terminal `claude` carry-over, menu bar panel or widget. Planned limit
-  periods run on Linux, not Windows. The Windows build is untested on a real
-  machine; Linux has no official Claude Desktop, so Relay looks for the community
-  packages.
+- macOS is the main platform. The Windows installer (`.exe`) switches Claude
+  Desktop by hand, reads usage limits and manages accounts, but has no automatic
+  switch, continuation, draft re-typing, Claude extension or terminal `claude`
+  carry-over, menu bar panel or widget; it is untested on a real machine.
 - The `relay` CLI runs on macOS only.
+
+## Linux
+
+Relay works with the official Claude Desktop for Linux (`/usr/bin/claude-desktop`,
+data in `~/.config/Claude`) and still finds the community packages and a Claude
+AppImage in `~/Applications`; Settings → Advanced can point it at another one.
+Saved sign-ins are sealed through the Secret Service or KWallet, so one of them
+must be running and unlocked.
+
+Works on Linux:
+
+- Switching by hand, from the window or the tray, with Claude's own log telling
+  when its page has loaded and when an account was signed out.
+- Separate Claude windows (Settings → Advanced), each on its own data folder.
+- Overview's **Open Code** (the `claude://code/new` link the package registers).
+- The Claude extension in Chrome and the terminal's `claude` follow a switch.
+- Automatic switching "when I quit the Claude app", and usage read from the
+  Claude app's own session (KWallet or Secret Service; allowed once in Relay).
+- Draft capture: drafts left in Claude at a switch are saved for you to copy back.
+  Capture needs Claude and Relay on the same Electron major; it is skipped
+  otherwise.
+
+macOS only:
+
+- Switch and continue at quota, and re-typing drafts into Claude: both need
+  macOS Accessibility.
+- The menu bar panel, the panda and usage in the menu bar title, and the widget.
+- The `relay` CLI.
 

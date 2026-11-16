@@ -345,10 +345,13 @@ test("the setup list needs two connected accounts and a choice of when to switch
   assert.equal(chosen?.complete, false);
   const skipped = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings, seen: new Set(["mode", "extension"]) });
   assert.equal(skipped?.complete, true);
-  // Continue at quota counts as a choice; off macOS there is no extension step.
+  // Continue at quota counts as a choice; Linux has the extension step too, Windows does not.
   const linux = setupState({ desktop: ready, diagnostics: diagnostics({ platform: "linux" }), accounts: two, settings, quota: true });
-  assert.deepEqual(keys(linux)?.at(-1), "mode:true");
-  assert.equal(linux?.complete, true);
+  assert.deepEqual(keys(linux)?.at(-1), "extension:false?");
+  assert.equal(linux?.ready, true);
+  const windows = setupState({ desktop: ready, diagnostics: diagnostics({ platform: "win32" }), accounts: two, settings, quota: true });
+  assert.deepEqual(keys(windows)?.at(-1), "mode:true");
+  assert.equal(windows?.complete, true);
   // The extension that follows the account is met.
   const follows = setupState({ desktop: ready, diagnostics: diagnostics(), accounts: two, settings: { ...settings, claudeExtension: { mode: "restart" } } });
   assert.deepEqual(keys(follows)?.at(-1), "extension:true?");

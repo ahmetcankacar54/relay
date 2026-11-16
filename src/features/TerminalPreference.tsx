@@ -21,7 +21,7 @@ import { useTerminalStatus } from "@/data/useTerminal";
 
 /**
  * What Relay does with the terminal's Claude Code sign-in at a switch: on top the mode, who the
- * terminal is on and Check; under Ayrıntılar the saved accounts and Sync now. Hidden outside macOS.
+ * terminal is on and Check; under Ayrıntılar the saved accounts and Sync now. Hidden outside macOS and Linux.
  */
 export function TerminalPreference({
   initialStatus,

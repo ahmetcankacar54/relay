@@ -51,6 +51,7 @@ import {
   validHost,
 } from "@/lib/proxy-ui";
 import { cn } from "@/lib/utils";
+import { macWording, usePlatform } from "@/data/platform";
 import type {
   ProxyAccountStatus,
   ProxyClientId,
@@ -428,6 +429,7 @@ function waitingTitle(reason: "limit" | "auth" | "transient", t: (tr: string, en
 /** What an account's state needs said: last served, out of the pool, no sign-in, full, about to lose quota. */
 function AccountState({ account }: { account: ProxyAccountStatus }) {
   const { t, language } = useI18n();
+  const mac = macWording(usePlatform());
   const risk = quotaAtRisk(account);
   if (!account.inPool) return <Badge variant="secondary">{t("Havuz dışı", "Out of pool")}</Badge>;
   if (!account.signedIn) return <Badge variant="destructive">{t("Giriş yok", "Not signed in")}</Badge>;
@@ -437,10 +439,17 @@ function AccountState({ account }: { account: ProxyAccountStatus }) {
       <a href={`#/hesaplar/${account.id}`} data-slot="gateway-sign-in">
         <Badge
           variant="destructive"
-          title={t(
-            "Ağ geçidi bu hesabın girişini okuyamadı (Keychain'de yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
-            "The gateway could not read this account's sign-in (not in the Keychain); requests go to other accounts. Renew its usage sign-in on the account's page.",
-          )}
+          title={
+            mac
+              ? t(
+                  "Ağ geçidi bu hesabın girişini okuyamadı (Keychain'de yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
+                  "The gateway could not read this account's sign-in (not in the Keychain); requests go to other accounts. Renew its usage sign-in on the account's page.",
+                )
+              : t(
+                  "Ağ geçidi bu hesabın girişini okuyamadı (kayıtlı giriş yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
+                  "The gateway could not read this account's sign-in (no saved sign-in); requests go to other accounts. Renew its usage sign-in on the account's page.",
+                )
+          }
         >
           {t("Ağ geçidi girişi okuyamıyor", "Gateway can't read sign-in")}
         </Badge>
@@ -911,11 +920,15 @@ function CodeBlock({
 }
 
 /** A client's state in a word. */
-function clientWord(client: ProxyClientStatus, t: T): { tone: "ok" | "warn" | "off"; text: string } {
+function clientWord(client: ProxyClientStatus, t: T, mac: boolean): { tone: "ok" | "warn" | "off"; text: string } {
   if (client.blocked) return { tone: "warn", text: t("Ayar dosyası okunamadı", "Cannot read its settings") };
   if (client.bound) return { tone: "ok", text: t("Bağlı", "Connected") };
   if (client.stale) return { tone: "warn", text: t("Eski adres ya da anahtar", "Old address or key") };
-  if (!client.installed) return { tone: "off", text: t("Bu Mac’te bulunamadı", "Not found on this Mac") };
+  if (!client.installed)
+    return {
+      tone: "off",
+      text: mac ? t("Bu Mac’te bulunamadı", "Not found on this Mac") : t("Bu bilgisayarda bulunamadı", "Not found on this computer"),
+    };
   return { tone: "off", text: t("Bağlı değil", "Not connected") };
 }
 
@@ -937,6 +950,7 @@ function ToolsTab({
   onUnbind: (id: ProxyClientId) => void;
 }) {
   const { t } = useI18n();
+  const mac = macWording(usePlatform());
   const host = status.host;
   const port = status.port;
   const key = status.clientApiKey;
@@ -969,7 +983,7 @@ function ToolsTab({
                 ? client.bound
                   ? { tone: "warn", text: t(`Bağlı · kullanılabilir ${provider} hesabı yok`, `Connected · no usable ${provider} account`) }
                   : { tone: "off", text: t(`Havuzda ${provider} hesabı yok`, `No ${provider} account in the pool`) }
-                : clientWord(client, t);
+                : clientWord(client, t, mac);
             return (
               <li
                 key={client.id}
@@ -1073,6 +1087,7 @@ function RulesTab({
   onConfigure: (patch: Patch) => Promise<boolean>;
 }) {
   const { t, language } = useI18n();
+  const mac = macWording(usePlatform());
   const locale = language === "tr" ? "tr-TR" : "en-US";
   const [draft, setDraft] = useState<{ port: string; host: string }>();
   const strategy: Strategy = status.routingStrategy ?? "soonest-reset";
@@ -1106,7 +1121,7 @@ function RulesTab({
     },
   ];
   const presets = [
-    { host: "127.0.0.1", label: t("Yalnızca bu Mac", "This Mac only") },
+    { host: "127.0.0.1", label: mac ? t("Yalnızca bu Mac", "This Mac only") : t("Yalnızca bu bilgisayar", "This computer only") },
     ...(status.tailscaleAddress
       ? [{ host: status.tailscaleAddress, label: t("Tailscale ağım", "My tailnet") }]
       : []),

@@ -407,12 +407,17 @@ export function electronMismatch(
   return undefined;
 }
 
-/** Why drafts cannot be captured on this machine, or undefined when they can. */
+/**
+ * Why drafts cannot be captured on this machine, or undefined when they can. Reading needs
+ * only Claude closed and Relay's own Electron, so Linux reads them too; only re-typing them
+ * into Claude is macOS's.
+ */
 export function draftsBlockedReason(
   platform: string,
   claudeVersion: string | undefined,
   relayVersion: string | undefined,
 ): string | undefined {
-  if (platform !== "darwin") return "drafts move only on macOS";
+  if (platform !== "darwin" && platform !== "linux")
+    return "drafts move only on macOS and Linux";
   return electronMismatch(claudeVersion, relayVersion);
 }

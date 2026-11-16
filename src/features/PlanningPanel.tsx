@@ -32,6 +32,7 @@ import { Switch } from "@/components/ui/switch";
 import { SettingGroup } from "@/components/SettingRow";
 import { Disclosure } from "@/components/Disclosure";
 import { cn } from "@/lib/utils";
+import { macWording } from "@/data/platform";
 import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { PlanEditor } from "./PlanEditor";
@@ -262,6 +263,7 @@ export function PlanningPanel({
   now = Date.now(),
   update,
   updateAccount,
+  platform,
 }: {
   settings: PlanningSettings;
   keeper?: KeeperSnapshot;
@@ -274,8 +276,11 @@ export function PlanningPanel({
   now?: number;
   update: (patch: Partial<PlanningSettings>) => void;
   updateAccount: (id: string, planning: AccountPlanning) => void;
+  /** Relay's platform (`diagnostics.platform`): "Mac" or "computer" in the notes. */
+  platform?: string;
 }) {
   const zone = settings.timeZone;
+  const mac = macWording(platform);
   const today = localDate(now, zone);
   const included = settings.accounts.filter(({ id }) =>
     accounts.some((a) => a.id === id),
@@ -440,10 +445,15 @@ export function PlanningPanel({
               />
             )}
             <small className={cn(noteClass, "mt-0.5 block")}>
-              {t(
-                "Relay açık, Mac uyanık olmalı. Her başlatma küçük bir istek harcar; limitleri okumak dönem başlatmaz.",
-                "Relay must be open and the Mac awake. Each start uses a small request; reading the limits never starts a period.",
-              )}
+              {mac
+                ? t(
+                    "Relay açık, Mac uyanık olmalı. Her başlatma küçük bir istek harcar; limitleri okumak dönem başlatmaz.",
+                    "Relay must be open and the Mac awake. Each start uses a small request; reading the limits never starts a period.",
+                  )
+                : t(
+                    "Relay açık, bilgisayar uyanık olmalı. Her başlatma küçük bir istek harcar; limitleri okumak dönem başlatmaz.",
+                    "Relay must be open and the computer awake. Each start uses a small request; reading the limits never starts a period.",
+                  )}
             </small>
           </div>
           <Switch
