@@ -528,7 +528,8 @@ test("met steps fold into one done line, then the list guides to the accounts an
   assert.match(item(ready, "done"), /Claude uygulaması · Code sekmesi açıldı/);
   assert.equal(item(ready, "first"), "");
   assert.equal(item(ready, "second"), "");
-  assert.match(item(ready, "accounts"), /data-met="false"[\s\S]*Hesaplarını ekle[\s\S]*0 \/ 2[\s\S]*bu Mac’te bulunan hesapları tek seferde ekler/);
+  // The fixture is Linux: "this computer", not "this Mac".
+  assert.match(item(ready, "accounts"), /data-met="false"[\s\S]*Hesaplarını ekle[\s\S]*0 \/ 2[\s\S]*bu bilgisayarda bulunan hesapları tek seferde ekler/);
   // No account yet: the welcome card above holds the only Add account; the later step waits.
   assert.doesNotMatch(item(ready, "accounts"), /<button/);
   assert.doesNotMatch(item(ready, "mode"), /<button/);
@@ -541,10 +542,14 @@ test("met steps fold into one done line, then the list guides to the accounts an
   assert.match(item(pair, "done"), /Hesaplarını ekle/);
   assert.match(item(pair, "mode"), /Ne zaman geçileceğini seç[\s\S]*<button[^>]*>Seç<\/button>/);
   assert.match(item(pair, "extension"), /İsteğe bağlı/);
-  // A mode chosen and no optional step (not macOS): nothing left to say.
-  const done = firstRun({ ...codeOpen, accounts: two, diagnostics: { ...codeOpen.diagnostics, platform: "linux" } });
+  // A mode chosen and no optional step (Windows): nothing left to say.
+  const done = firstRun({ ...codeOpen, accounts: two, diagnostics: { ...codeOpen.diagnostics, platform: "win32" } });
   done.settings = { ...done.settings, autoSwitchMode: "after-exit" };
   assert.equal(checklist(render(done)), "");
+  // Linux offers the optional extension step as macOS does.
+  const linux = firstRun({ ...codeOpen, accounts: two, diagnostics: { ...codeOpen.diagnostics, platform: "linux" } });
+  linux.settings = { ...linux.settings, autoSwitchMode: "after-exit" };
+  assert.match(item(checklist(render(linux)), "extension"), /İsteğe bağlı/);
   // Until both snapshots arrive, nothing is ticked or crossed.
   const loading = relayFor(undefined, [], {});
   assert.equal(checklist(render(loading)), "");

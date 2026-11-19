@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  automationModeSupported,
   automationStatus,
   staleManualSwitch,
   switchNowLabel,
@@ -845,4 +846,37 @@ test("the switch-now label uses the dative", () => {
     "Şimdi Kişisel · İkinci’ye geç",
     "Switch to Kişisel · İkinci now",
   ]);
+});
+
+test("Linux has preparing on quit; continuing at quota reads as macOS only there", () => {
+  assert.equal(automationModeSupported("off", "linux"), true);
+  assert.equal(automationModeSupported("after-exit", "linux"), true);
+  assert.equal(automationModeSupported("quota", "linux"), false);
+  for (const platform of ["darwin", "preview"])
+    assert.equal(automationModeSupported("quota", platform), true, platform);
+  assert.equal(automationModeSupported("after-exit", "win32"), false);
+  assert.equal(automationModeSupported("after-exit", undefined), false);
+  // A fleet saved on, as from a Mac's store: never shown as watching on Linux.
+  const linuxFleet = automationStatus(
+    input({ fleet: fleet("awaiting-quota-stop"), platform: "linux" }),
+  );
+  assert.equal(linuxFleet.tone, "attention");
+  assert.match(linuxFleet.text[1], /Continuing at the limit works only on macOS/);
+  // The same reading on macOS goes on as before.
+  const mac = automationStatus(input({ fleet: fleet("awaiting-quota-stop"), platform: "darwin" }));
+  assert.deepEqual(mac, automationStatus(input({ fleet: fleet("awaiting-quota-stop") })));
+  // Preparing on quit on Linux reads the manager's own reason.
+  const after = automationStatus(
+    input({
+      settings: settings("after-exit"),
+      autoSwitch: autoSwitch("claude-running"),
+      platform: "linux",
+    }),
+  );
+  assert.deepEqual(
+    after,
+    automationStatus(
+      input({ settings: settings("after-exit"), autoSwitch: autoSwitch("claude-running") }),
+    ),
+  );
 });

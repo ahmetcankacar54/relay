@@ -22,11 +22,12 @@ export function accountRowSubtitle(
   zone: string,
   now: number,
   waiting = false,
+  platform?: string,
 ): string {
   const health = accountHealth(
     row.account,
     row.usage,
-    { active: false, desktopRunning: false, waiting },
+    { active: false, desktopRunning: false, waiting, platform },
     t,
   );
   if (health.tone !== "ok") return health.label;
@@ -184,12 +185,13 @@ function rowStatus(
   now: number,
   waiting: boolean,
   short: boolean,
+  platform?: string,
 ): string {
   if (row.state === "not-linked") return t("Giriş kaydedilmedi", "Sign-in not saved");
   const health = accountHealth(
     row.account,
     row.usage,
-    { active: false, desktopRunning: false, waiting },
+    { active: false, desktopRunning: false, waiting, platform },
     t,
   );
   // Besides a browser approval, the one warning without a fix is a failed or old read; with a
@@ -240,8 +242,9 @@ export function accountTileLine(
   zone: string,
   now: number,
   waiting = false,
+  platform?: string,
 ): string {
-  const status = rowStatus(row, t, language, zone, now, waiting, false);
+  const status = rowStatus(row, t, language, zone, now, waiting, false, platform);
   const plan = accountPlan(row.account)?.label;
   return plan ? `${plan} · ${onward(status, language)}` : status;
 }
@@ -258,8 +261,9 @@ export function panelRowLine(
   zone: string,
   now: number,
   waiting = false,
+  platform?: string,
 ): string {
-  const status = rowStatus(row, t, language, zone, now, waiting, true);
+  const status = rowStatus(row, t, language, zone, now, waiting, true, platform);
   const percents =
     ringState(row.usage, now) === "unknown"
       ? []

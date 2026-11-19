@@ -20,6 +20,7 @@ import { useRelay } from "@/data/relay-context";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 import { errorMessage } from "@/data/error-message";
 import { cn } from "@/lib/utils";
+import { macWording, usePlatform } from "@/data/platform";
 import { providerPlan } from "./accountLabels";
 
 /** The providers an account can be added for, in the order the cards show them. */
@@ -236,6 +237,7 @@ export function DetectedImport({
 }) {
   const { t } = useI18n();
   const { api, accounts, action, busy } = useRelay();
+  const mac = macWording(usePlatform());
   const [skipped, setSkipped] = useState<ReadonlySet<AccountProvider>>(new Set());
   const chosen = sessions.filter((s) => !skipped.has(s.provider));
   const toggle = (provider: AccountProvider) =>
@@ -258,9 +260,13 @@ export function DetectedImport({
     <section data-slot="detected-import" aria-labelledby="detected-import-title" className="grid gap-3 rounded-lg border bg-card px-3.5 py-3">
       <div className="grid gap-0.5">
         <h3 id="detected-import-title" className="text-base font-semibold">
-          {sessions.length === 1
-            ? t("Bu Mac’te 1 hesap bulduk", "We found 1 account on this Mac")
-            : t(`Bu Mac’te ${sessions.length} hesap bulduk`, `We found ${sessions.length} accounts on this Mac`)}
+          {mac
+            ? sessions.length === 1
+              ? t("Bu Mac’te 1 hesap bulduk", "We found 1 account on this Mac")
+              : t(`Bu Mac’te ${sessions.length} hesap bulduk`, `We found ${sessions.length} accounts on this Mac`)
+            : sessions.length === 1
+              ? t("Bu bilgisayarda 1 hesap bulduk", "We found 1 account on this computer")
+              : t(`Bu bilgisayarda ${sessions.length} hesap bulduk`, `We found ${sessions.length} accounts on this computer`)}
         </h3>
         <p className="text-xs text-muted-foreground">
           {t(
@@ -360,6 +366,7 @@ export function ProviderForm({
   close: () => void;
 }) {
   const { t } = useI18n();
+  const mac = macWording(usePlatform());
   const { connect, connecting, disabled } = useOneClickConnect(onResult);
   const detected = !!session?.detected;
   const typed = !!form.apiKey.trim();
@@ -396,10 +403,15 @@ export function ProviderForm({
         </div>
       ) : (
         <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
-          {t(
-            "Bu Mac'te Codex CLI girişi bulunamadı. `codex login` ile giriş yap ya da bir OpenAI API anahtarı gir.",
-            "No Codex CLI sign-in on this Mac. Sign in with `codex login`, or enter an OpenAI API key.",
-          )}
+          {mac
+            ? t(
+                "Bu Mac'te Codex CLI girişi bulunamadı. `codex login` ile giriş yap ya da bir OpenAI API anahtarı gir.",
+                "No Codex CLI sign-in on this Mac. Sign in with `codex login`, or enter an OpenAI API key.",
+              )
+            : t(
+                "Bu bilgisayarda Codex CLI girişi bulunamadı. `codex login` ile giriş yap ya da bir OpenAI API anahtarı gir.",
+                "No Codex CLI sign-in on this computer. Sign in with `codex login`, or enter an OpenAI API key.",
+              )}
         </p>
       )}
       <CommonFields form={form} onChange={onChange} idPrefix={`add-${provider}`} />

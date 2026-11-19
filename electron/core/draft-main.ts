@@ -51,13 +51,30 @@ export const BACKSTOP_MS = 60_000;
 /** Why a draft is left for Copy once the watch window ran out. */
 export const NOT_OPENED = "not-opened";
 
-/** The notification after a restore: counts only, never a draft's text or title. */
+/**
+ * Whether rescued drafts are re-typed into Claude: only once the user turns it on, missing
+ * means off, and only on macOS, as typing needs its Accessibility. Off, every draft is left
+ * for Copy.
+ */
+export function draftRetypeEnabled(
+  settings: { draftRetype?: boolean },
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  return platform === "darwin" && settings.draftRetype === true;
+}
+
+/**
+ * The notification after a restore: counts only, never a draft's text or title. Drafts left
+ * wait in the menu bar panel on macOS; elsewhere, with no panel, in Settings' Experimental group.
+ */
 export function draftNotice(
   summary: { restored: number; left: number },
   language: "tr" | "en",
+  platform: NodeJS.Platform = process.platform,
 ): string | undefined {
   const en = language === "en";
   const drafts = (n: number) => `${n} ${n === 1 ? "draft" : "drafts"}`;
+  const panel = platform === "darwin";
   const parts: string[] = [];
   if (summary.restored > 0)
     parts.push(
@@ -68,8 +85,8 @@ export function draftNotice(
   if (summary.left > 0)
     parts.push(
       en
-        ? `${drafts(summary.left)} waiting in the panel`
-        : `${summary.left} taslak panelde bekliyor`,
+        ? `${drafts(summary.left)} waiting ${panel ? "in the panel" : "to copy in Settings → Advanced → Experimental"}`
+        : `${summary.left} taslak ${panel ? "panelde bekliyor" : "Ayarlar → Gelişmiş → Deneysel’de kopyalanmayı bekliyor"}`,
     );
   return parts.length ? parts.join(" · ") : undefined;
 }

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { appDataRoot } from "./relay-paths";
 
 /**
  * Whether the claude.ai page of a Claude that Relay started has booted, read from Claude's own
@@ -49,9 +50,22 @@ export interface ClaudeLogFiles {
   rotated: string;
 }
 
-/** Where Claude Desktop logs on macOS. */
-export function macClaudeLog(home: string): ClaudeLogFiles {
-  const dir = path.join(home, "Library", "Logs", "Claude");
+/**
+ * Where Claude Desktop logs: ~/Library/Logs/Claude on macOS, `logs` in its data folder on Linux
+ * (~/.config/Claude, or under $XDG_CONFIG_HOME). Undefined where the log is not known (Windows).
+ */
+export function claudeLog(
+  home: string,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): ClaudeLogFiles | undefined {
+  const dir =
+    platform === "darwin"
+      ? path.join(home, "Library", "Logs", "Claude")
+      : platform === "linux"
+        ? path.join(appDataRoot(platform, home, env), "Claude", "logs")
+        : undefined;
+  if (!dir) return undefined;
   return {
     current: path.join(dir, "main.log"),
     rotated: path.join(dir, "main1.log"),

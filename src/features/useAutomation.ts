@@ -5,6 +5,7 @@ import {
   type AutomationMode,
 } from "../../shared/automation-mode";
 import {
+  automationModeSupported,
   automationStatus,
   type AutomationStatus,
   type AutomationTone,
@@ -33,8 +34,8 @@ export function useAutomation(now?: number): {
   status: AutomationStatus;
   /** The choice cannot change right now. */
   locked: boolean;
-  /** This platform can switch on its own. */
-  supported: boolean;
+  /** This platform can run `mode`: on Linux, preparing on quit but not continuing at quota. */
+  supports(mode: AutomationMode): boolean;
   setMode(mode: AutomationMode): void;
 } {
   const relay = useRelay();
@@ -42,6 +43,7 @@ export function useAutomation(now?: number): {
   const fleet = data?.fleet;
   const continuation = data?.continuation;
   const mode = automationMode(settings, fleet);
+  const platform = data?.diagnostics?.platform;
   const status = automationStatus({
     settings,
     fleet,
@@ -51,16 +53,16 @@ export function useAutomation(now?: number): {
     usage: data?.usage ?? {},
     desktop,
     now: now ?? Date.now(),
+    platform,
   });
   // A handoff in progress cannot be changed midway.
   const working =
     fleet?.status === "switching" || fleet?.status === "continuing";
-  const platform = data?.diagnostics?.platform;
   return {
     mode,
     status,
     locked: !!relay.busy || !!desktop?.busy || working,
-    supported: platform === "darwin" || platform === "preview",
+    supports: (m) => automationModeSupported(m, platform),
     setMode(next) {
       void relay.action("automation", () =>
         applyAutomationMode(api, next, {

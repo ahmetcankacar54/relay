@@ -17,6 +17,7 @@ import type { PageOutcome } from "../electron/core/desktop-launch";
 import type { DesktopRestartEvent } from "../shared/types";
 import { localizeError } from "../src/messages";
 import type { DraftJob, DraftResult } from "../electron/draft-job";
+import { draftsBlockedReason } from "../electron/core/draft-transfer";
 import {
   CONVERSATION_DRAFT_PREFIX,
   NEW_SESSION_DRAFT,
@@ -1903,6 +1904,22 @@ test("the closedOnly switch captures drafts too", async (t) => {
   assert.equal((await f.manager.pendingDraftRecords()).length, 2);
   // Claude stays closed.
   assert.deepEqual(d.events, ["readDrafts:start", "readDrafts:end"]);
+});
+
+test("a Linux host captures drafts at an automatic switch, as macOS does", async (t) => {
+  const { f, a, b, d } = await sharedConversation(t);
+  f.setRunning(false);
+  // The app host's gate, asked as on Linux with the same Electron major on both sides.
+  f.host.draftsBlocked = async () => draftsBlockedReason("linux", "44.7.2", "44.7.0");
+  await f.manager.switchTo(b.id, {
+    automatic: true,
+    closedOnly: true,
+    expectedActiveProfileId: a.id,
+  });
+  assert.equal((await f.manager.snapshot()).activeProfileId, b.id);
+  assert.equal(d.jobs.length, 1);
+  assert.equal((await d.last())!.status, "captured");
+  assert.equal((await f.manager.pendingDraftRecords()).length, 2);
 });
 
 test("a host that cannot read drafts records why and captures nothing", async (t) => {

@@ -10,16 +10,21 @@ import {
 } from "@/components/ui/dialog";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { macWording } from "@/data/platform";
 import { RelayErrorAlert } from "@/app/RelayErrorAlert";
 
 /** What the removal did, for the notice after it; a usage sign-in left signed in is said. */
-export function removedNotice(name: string, result: AccountRemoved, t: T): string {
-  return result.signedOut === false
+export function removedNotice(name: string, result: AccountRemoved, t: T, platform?: string): string {
+  if (result.signedOut !== false) return t(`${name} kaldırıldı.`, `Removed ${name}.`);
+  return macWording(platform)
     ? t(
         `${name} kaldırıldı. Limit okuma girişinden çıkış yapılamadı; Anahtarlık’taki kaydı kalabilir.`,
         `Removed ${name}. The sign-out from its usage sign-in failed. Its Keychain item can stay.`,
       )
-    : t(`${name} kaldırıldı.`, `Removed ${name}.`);
+    : t(
+        `${name} kaldırıldı. Limit okuma girişinden çıkış yapılamadı; kayıtlı girişi kalabilir.`,
+        `Removed ${name}. The sign-out from its usage sign-in failed. Its saved sign-in can stay.`,
+      );
 }
 
 /** Asks before an account is removed, saying what goes and what stays, as `relay remove` does. */
@@ -76,7 +81,7 @@ export function RemoveAccountBody({
       .action(`remove:${account.id}`, async () => {
         const result = await relay.api.removeAccount(account.id);
         done = true;
-        relay.setNotice(removedNotice(account.name, result, t));
+        relay.setNotice(removedNotice(account.name, result, t, relay.data?.diagnostics?.platform));
       })
       .then(() => done && removed(account.id));
   };

@@ -521,15 +521,55 @@ test("Switching shows the extension, terminal and draft steps on macOS only", ()
   assert.match(mac, /id="gecis-terminal"/);
   assert.match(mac, /id="gecis-taslak"/);
   assert.match(mac, /Kurtarılan taslaklar/);
-  for (const platform of ["win32", "linux"]) {
-    const html = render(
-      relayFor({ fleet: otherWork, usage: fullUsage, diagnostics: { platform } } as never),
-    );
-    assert.match(html, /Code geçmişin de gelebilir/, platform);
-    assert.doesNotMatch(html, /Eklenti ve terminal/, platform);
-    assert.doesNotMatch(html, /Tarayıcı eklentisi/, platform);
-    assert.doesNotMatch(html, /Kurtarılan taslaklar/, platform);
-    for (const id of ["gecis-eklenti", "gecis-terminal", "gecis-taslak"])
-      assert.doesNotMatch(html, new RegExp(`id="${id}"`), `${platform}: ${id}`);
-  }
+  assert.match(mac, /id="draft-retype"/);
+  const windows = render(
+    relayFor({ fleet: otherWork, usage: fullUsage, diagnostics: { platform: "win32" } } as never),
+  );
+  assert.match(windows, /Code geçmişin de gelebilir/);
+  assert.doesNotMatch(windows, /Eklenti ve terminal/);
+  assert.doesNotMatch(windows, /Tarayıcı eklentisi/);
+  assert.doesNotMatch(windows, /Kurtarılan taslaklar/);
+  for (const id of ["gecis-eklenti", "gecis-terminal", "gecis-taslak", "draft-retype"])
+    assert.doesNotMatch(windows, new RegExp(`id="${id}"`), id);
+  // Linux captures drafts too, but re-typing them stays macOS's.
+  const linux = render(
+    relayFor({ fleet: otherWork, usage: fullUsage, diagnostics: { platform: "linux" } } as never),
+  );
+  assert.doesNotMatch(linux, /id="draft-retype"/);
+  // The extension and the terminal come along on Linux as on macOS.
+  assert.match(linux, /Eklenti ve terminal isteğe bağlıdır/);
+  assert.match(linux, /id="gecis-eklenti"/);
+  assert.match(linux, /id="gecis-terminal"/);
+});
+
+test("Linux lists rescued drafts for Copy and says re-typing is macOS only", () => {
+  const drafts = [
+    { id: "d1", state: "needs-copy", reason: "manual", title: "Plan", newSession: false },
+    { id: "d2", state: "pending", title: "", newSession: true },
+  ];
+  const html = render(
+    relayFor({ fleet: otherWork, usage: fullUsage, diagnostics: { platform: "linux" }, drafts } as never),
+  );
+  assert.match(html, /id="gecis-taslak"/);
+  assert.match(html, /Kurtarılan taslaklar/);
+  assert.match(html, /yeniden yazmak yalnızca macOS’ta/);
+  assert.match(html, /Plan/);
+  assert.match(html, /Elle yapıştır/);
+  assert.match(html, /Yeni oturum/);
+  // Both can be copied; only the one left for Copy can be dismissed.
+  assert.equal(html.match(/>Kopyala</g)?.length, 2);
+  assert.equal(html.match(/>Kapat</g)?.length, 1);
+});
+
+test("Linux offers preparing on quit and keeps continuing at quota off, saying why", () => {
+  const html = render(relayFor({ diagnostics: { platform: "linux" } } as never));
+  const cards = [
+    ...html.matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g),
+  ].slice(0, 3);
+  const enabled = cards.map(([tag]) => !/\sdisabled=""/.test(tag));
+  assert.deepEqual(enabled, [true, true, false]);
+  assert.match(html, /Limit dolunca geçip konuşmaları sürdürmek Claude uygulamasına yazar/);
+  assert.doesNotMatch(html, /yalnızca macOS’ta ve Linux’ta kullanılabilir/);
+  const windows = render(relayFor({ diagnostics: { platform: "win32" } } as never));
+  assert.match(windows, /yalnızca macOS’ta ve Linux’ta kullanılabilir/);
 });

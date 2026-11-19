@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import type { Account } from "../../shared/types";
 import { UsageError } from "./usage-credentials";
 import { retryTime } from "./usage";
+import { LINUX_V10_KEY, linuxCookieKey } from "./linux-safe-storage";
 
 /**
  * Usage read through the Claude app's own sign-in, for an account with no Claude Code sign-in.
@@ -14,7 +15,8 @@ import { retryTime } from "./usage";
  * each account's in the Desktop vault). Their values are encrypted with "Claude Safe Storage",
  * a Keychain item Claude created. Relay reads that item through `/usr/bin/security` (the user
  * allows it once), decrypts the session cookies in memory and asks claude.ai for the same usage
- * the app's Settings → Usage page shows. Nothing decrypted is ever written or logged.
+ * the app's Settings → Usage page shows. Nothing decrypted is ever written or logged. On Linux the
+ * same secret lives in the desktop's keyring instead (linux-safe-storage.ts).
  */
 
 export const SAFE_STORAGE_SERVICE = "Claude Safe Storage";
@@ -35,6 +37,25 @@ const SENT = new Set([
   "routingHint",
   "lastActiveOrg",
 ]);
+/** In Relay's data folder: the user allowed the Safe Storage read. Never the password itself. */
+export const DESKTOP_USAGE_MARKER = "desktop-usage-keychain.json";
+
+/**
+ * Whether limits can be read through the Claude app's sign-in. macOS asks the Keychain when
+ * needed, so always; Linux only once a keyring read has succeeded (a failure removes the mark).
+ */
+export async function desktopUsageReadable(
+  dataDir: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<boolean> {
+  if (platform === "darwin") return true;
+  if (platform !== "linux") return false;
+  try {
+    return JSON.parse(await fs.readFile(path.join(dataDir, DESKTOP_USAGE_MARKER), "utf8"))?.allowed === true;
+  } catch {
+    return false;
+  }
+}
 const MAX_BODY = 262_144;
 
 /** Chromium's macOS cookie key: PBKDF2-SHA1 of the Safe Storage password. */
@@ -42,19 +63,27 @@ export function cookieKey(password: string): Buffer {
   return crypto.pbkdf2Sync(password, "saltysalt", 1003, 16, "sha1");
 }
 
+/** The AES key for each value prefix: macOS has only `v10`; Linux `v10` and `v11`. */
+export type CookieKeys = Partial<Record<"v10" | "v11", Buffer>>;
+
+/** A stored value's scheme prefix (`v10`, `v11`, …). */
+const prefixOf = (encrypted: Uint8Array) => Buffer.from(encrypted.subarray(0, 3)).toString("latin1");
+
 /**
- * One cookie value as Chromium stores it on macOS: `v10`, then AES-128-CBC with a blank IV.
- * From database version 24 the plain text starts with the SHA-256 of the cookie's host.
+ * One cookie value as Chromium stores it: a prefix naming the key, then AES-128-CBC with a blank
+ * IV. From database version 24 the plain text starts with the SHA-256 of the cookie's host.
  * Undefined when the value is not one Relay can read (another scheme, another key).
  */
 export function decryptCookie(
   encrypted: Uint8Array,
-  key: Buffer,
+  keys: CookieKeys,
   host: string,
   dbVersion: number,
 ): string | undefined {
   const data = Buffer.from(encrypted);
-  if (data.length < 3 + 16 || data.subarray(0, 3).toString("latin1") !== "v10") return;
+  const prefix = prefixOf(data);
+  const key = prefix === "v10" || prefix === "v11" ? keys[prefix] : undefined;
+  if (data.length < 3 + 16 || !key) return;
   try {
     const decipher = crypto.createDecipheriv("aes-128-cbc", key, Buffer.alloc(16, 0x20));
     let plain = Buffer.concat([decipher.update(data.subarray(3)), decipher.final()]);
@@ -150,13 +179,13 @@ export async function readCookieRows(
 /** The `Cookie` header for claude.ai, from the login rows; undefined without a session. */
 export function cookieHeader(
   rows: EncryptedCookie[],
-  key: Buffer,
+  keys: CookieKeys,
   dbVersion: number,
 ): string | undefined {
   const values = new Map<string, string>();
   for (const row of rows) {
     if (!SENT.has(row.name) || values.has(row.name)) continue;
-    const value = row.value || decryptCookie(row.encrypted, key, row.host, dbVersion);
+    const value = row.value || decryptCookie(row.encrypted, keys, row.host, dbVersion);
     if (value && /^[\x21-\x7e]+$/.test(value) && !/[;,]/.test(value)) values.set(row.name, value);
   }
   if (!values.has("sessionKey")) return;
@@ -230,6 +259,8 @@ export class DesktopUsageReader {
       request: (url: string, cookie: string) => Promise<WebResponse>;
       readRows?: typeof readCookieRows;
       now?: () => number;
+      /** Whose cookie scheme the rows use; this machine's by default. */
+      platform?: NodeJS.Platform;
     },
   ) {}
 
@@ -249,8 +280,8 @@ export class DesktopUsageReader {
       throw new UsageError("credentials-missing", undefined, "desktop: no saved Claude app sign-in");
     }
     const { version, rows } = await (this.deps.readRows ?? readCookieRows)(files);
-    const key = cookieKey(await this.deps.password(allowPrompt));
-    const cookie = cookieHeader(rows, key, version);
+    const keys = await this.keys(rows, allowPrompt);
+    const cookie = cookieHeader(rows, keys, version);
     if (!cookie) {
       // Rows that cannot be decrypted mean another key, not a signed-out app.
       const session = rows.some((r) => r.name === "sessionKey");
@@ -284,5 +315,19 @@ export class DesktopUsageReader {
     } catch {
       throw new UsageError("unsupported", undefined, `${detail} not JSON`);
     }
+  }
+
+  /**
+   * macOS: the Keychain password's key for `v10`. Linux: `v10` has Chromium's fixed key, so the
+   * keyring is only asked when a login cookie is `v11`.
+   */
+  private async keys(rows: EncryptedCookie[], allowPrompt: boolean): Promise<CookieKeys> {
+    if ((this.deps.platform ?? process.platform) !== "linux")
+      return { v10: cookieKey(await this.deps.password(allowPrompt)) };
+    const keyring = rows.some((r) => SENT.has(r.name) && !r.value && prefixOf(r.encrypted) === "v11");
+    return {
+      v10: LINUX_V10_KEY,
+      ...(keyring ? { v11: linuxCookieKey(await this.deps.password(allowPrompt)) } : {}),
+    };
   }
 }

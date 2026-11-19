@@ -1,5 +1,6 @@
 import {
   BROWSERS,
+  browserApps,
   browserNames,
   type BrowserApp,
   type ExtensionInstance,
@@ -31,8 +32,11 @@ export function modeOptions(t: T): { value: ExtensionMode; label: string }[] {
   }));
 }
 
-/** The sentence under the mode picker: what Relay does at a switch in that mode. */
-export function modeSentence(mode: ExtensionMode, t: T): string {
+/**
+ * The sentence under the mode picker: what Relay does at a switch in that mode. On Linux a quit
+ * cannot be held up by the browser's own prompts, which "restart" says.
+ */
+export function modeSentence(mode: ExtensionMode, t: T, platform?: string): string {
   const web = t(
     "Relay bu profildeki claude.ai oturumunu da değiştirir; claude.ai sekmeleri yeni hesapta açılır. Gündelik claude.ai hesabını korumak için eklentiyi ayrı bir tarayıcı profilinde kullan.",
     "Relay also changes the claude.ai login in this browser profile, so claude.ai tabs open on the new account. To keep your everyday claude.ai account, use the extension in a separate browser profile.",
@@ -42,7 +46,14 @@ export function modeSentence(mode: ExtensionMode, t: T): string {
       return `${t(
         "Relay her geçişte eklenti girişini ve claude.ai oturumunu yeni hesabınkiyle değiştirir. Açık tarayıcı kısa süre kapanıp sekmeleriyle yeniden açılır.",
         "At each switch, Relay puts in the extension sign-in and claude.ai login of the new account. An open browser closes for a moment and opens again with its tabs.",
-      )} ${web}`;
+      )}${
+        platform === "linux"
+          ? ` ${t(
+              "Linux’ta tarayıcı oturum kapanışındaki gibi kapatılır: “sayfadan ayrıl” ya da indirme uyarısı gösterilmeyebilir ve tarayıcı yine de kapanabilir.",
+              "On Linux the browser is closed as at logout: a “leave this page” or downloads prompt may not be shown, and the browser may close anyway.",
+            )}`
+          : ""
+      } ${web}`;
     case "closed":
       return `${t(
         "Relay bunları yalnızca tarayıcı kapalıyken değiştirir. Eklentinin de aynı hesaba geçmesini istiyorsan geçişten önce tarayıcıyı kapat.",
@@ -68,14 +79,18 @@ export function deniedLine(denied: BrowserApp[], t: T): string {
 }
 
 /** What the card says about the instance Relay manages, or why it manages none. */
-export function instanceLine(status: ExtensionStatus, t: T): string {
+export function instanceLine(status: ExtensionStatus, t: T, platform?: string): string {
   if (!status.instances.length && status.denied?.length)
     return deniedLine(status.denied, t);
-  if (!status.instances.length)
+  if (!status.instances.length) {
+    const apps = browserApps(platform);
     return t(
-      `Bu bilgisayarda Claude eklentisi bulunamadı (${browserNames("ve")}).`,
-      `No Claude extension found on this Mac (${browserNames("and")}).`,
+      `Bu bilgisayarda Claude eklentisi bulunamadı (${browserNames("ve", apps)}).`,
+      platform === "linux"
+        ? `No Claude extension found on this computer (${browserNames("and", apps)}).`
+        : `No Claude extension found on this Mac (${browserNames("and", apps)}).`,
     );
+  }
   if (!status.target)
     return t(
       "Claude eklentisi birden çok tarayıcı profilinde var. Birini seç.",
@@ -254,6 +269,8 @@ export function extensionGuide(
   language: "tr" | "en",
   /** The account the Claude app is on (its uuid), for the reconnect guide. */
   desktopUuid?: string,
+  /** Relay's platform (`diagnostics.platform`): which browsers were looked in, and "Mac" or not. */
+  platform?: string,
 ): ExtensionGuide {
   if (!status) return { tone: "off", label: t("Kontrol ediliyor…", "Check in progress…") };
   if (status.setting.mode === "off")
@@ -270,15 +287,26 @@ export function extensionGuide(
       detail: deniedLine(status.denied, t),
       action: "settings",
     };
-  if (!status.instances.length)
+  if (!status.instances.length) {
+    const apps = browserApps(platform);
     return {
       tone: "off",
-      label: t(
-        "Bu Mac’te Claude eklentisi bulunamadı.",
-        "No Claude extension found on this Mac.",
+      label:
+        platform === "linux"
+          ? t(
+              "Bu bilgisayarda Claude eklentisi bulunamadı.",
+              "No Claude extension found on this computer.",
+            )
+          : t(
+              "Bu Mac’te Claude eklentisi bulunamadı.",
+              "No Claude extension found on this Mac.",
+            ),
+      detail: t(
+        `Bakılan tarayıcılar: ${browserNames("ve", apps)}.`,
+        `Looked in ${browserNames("and", apps)}.`,
       ),
-      detail: t(`Bakılan tarayıcılar: ${browserNames("ve")}.`, `Looked in ${browserNames("and")}.`),
     };
+  }
   if (!status.target)
     return {
       tone: "warn",

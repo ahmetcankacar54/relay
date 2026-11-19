@@ -248,6 +248,19 @@ export async function profileOwner(
   }
 }
 
+/** Claude Code's own refresh lock on `configDir`, as the ports' `lock`. */
+const cliLock =
+  (configDir: string): TerminalPorts["lock"] =>
+  async (action) => {
+    try {
+      return await withCliRefreshLock(configDir, action, { waitMs: 10_000 });
+    } catch (error) {
+      throw error instanceof LockBusyError
+        ? new TerminalError("busy")
+        : error;
+    }
+  };
+
 /** The ports for the plain `claude` of this Mac user; undefined elsewhere. */
 export function macTerminalPorts(
   home = os.homedir(),
@@ -266,15 +279,87 @@ export function macTerminalPorts(
       })(),
     ),
     config: jsonConfig(claudeConfigFile(home, configDir)),
-    lock: async (action) => {
+    lock: cliLock(configDir),
+    owner: profileOwner,
+  };
+}
+
+// --- Linux -----------------------------------------------------------------------------------
+
+/** A credentials file is a few kilobytes; anything far larger is not one. */
+const MAX_CREDENTIALS = 1024 * 1024;
+
+/**
+ * Claude Code's sign-in where it has no Keychain: the private JSON file `<config dir>/.credentials.json`.
+ * Written whole to a temporary file beside it (mode 0600) and renamed over it, so Claude Code
+ * never reads half a file; the text is the caller's, so other keys (`mcpOAuth`) stay as they were.
+ * A link or anything but a plain file is refused, never followed or replaced.
+ */
+export function credentialsFile(file: string): TerminalKeychain {
+  return {
+    async read() {
       try {
-        return await withCliRefreshLock(configDir, action, { waitMs: 10_000 });
+        const stat = await fsp.lstat(file);
+        if (!stat.isFile() || stat.size > MAX_CREDENTIALS)
+          throw new TerminalError("unreadable");
+        return await fsp.readFile(file, "utf8");
       } catch (error) {
-        throw error instanceof LockBusyError
-          ? new TerminalError("busy")
-          : error;
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+        throw error instanceof TerminalError ? error : new TerminalError("unreadable");
       }
     },
+    async write(text) {
+      const dir = path.dirname(file);
+      const tmp = path.join(dir, `.credentials.json.relay-${randomUUID()}`);
+      try {
+        const stat = await fsp.lstat(file).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return undefined;
+          throw error;
+        });
+        if (stat && !stat.isFile()) throw new TerminalError("write-failed");
+        await fsp.mkdir(dir, { recursive: true, mode: 0o700 });
+        const handle = await fsp.open(tmp, "wx", 0o600);
+        try {
+          await handle.writeFile(text, "utf8");
+          await handle.sync();
+        } finally {
+          await handle.close();
+        }
+        await fsp.rename(tmp, file);
+      } catch {
+        throw new TerminalError("write-failed");
+      } finally {
+        await fsp.rm(tmp, { force: true }).catch(() => undefined);
+      }
+    },
+    async remove() {
+      try {
+        const stat = await fsp.lstat(file);
+        if (!stat.isFile()) throw new TerminalError("write-failed");
+        await fsp.rm(file);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+        throw new TerminalError("write-failed");
+      }
+    },
+  };
+}
+
+/**
+ * The ports for the plain `claude` of this Linux user: `~/.claude/.credentials.json`, the file
+ * Claude Code keeps its sign-in in there. Like the macOS ports, the default sign-in, the one a
+ * `claude` without CLAUDE_CONFIG_DIR uses, whatever Relay's own environment says.
+ */
+export function linuxTerminalPorts(
+  home = os.homedir(),
+  platform = process.platform,
+): TerminalPorts | undefined {
+  if (platform !== "linux") return undefined;
+  const configDir = path.join(home, ".claude");
+  return {
+    keychain: credentialsFile(path.join(configDir, ".credentials.json")),
+    config: jsonConfig(claudeConfigFile(home, configDir)),
+    lock: cliLock(configDir),
     owner: profileOwner,
   };
 }

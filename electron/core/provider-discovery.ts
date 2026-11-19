@@ -9,6 +9,7 @@ import type {
 } from "../../shared/types";
 import type { Store } from "./store";
 import { directories, identity, readObject, uuid } from "./desktop-files";
+import { appDataRoot } from "./relay-paths";
 import {
   codexAuthFiles,
   readCodexCliSession,
@@ -32,6 +33,8 @@ export const oneClickConnectSchema = z
 export interface ProviderDiscoveryPaths {
   homeDir?: string;
   claudeDesktopRoot?: string;
+  /** The platform whose default Claude folder is used when claudeDesktopRoot is not given. */
+  platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -118,7 +121,7 @@ export async function detectProviders(
   const homeDir = paths.homeDir ?? os.homedir();
   const desktopRoot =
     paths.claudeDesktopRoot ??
-    path.join(homeDir, "Library", "Application Support", "Claude");
+    path.join(appDataRoot(paths.platform, homeDir, paths.env), "Claude");
   const env = paths.env ?? process.env;
   const [claude, codex] = await Promise.all([
     inspectClaude(accounts, desktopRoot),

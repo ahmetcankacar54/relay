@@ -4,6 +4,7 @@ import { Panda } from "@/components/Panda";
 import { ArrowLeftRight, LoaderCircle, X } from "lucide-react";
 import { RefreshIcon } from "@/components/icons";
 import type { Account } from "../../shared/types";
+import { macWording, usePlatform } from "@/data/platform";
 
 export type DesktopActionKind =
   | "switch"
@@ -21,12 +22,18 @@ export interface DesktopActionRequest {
 /**
  * Saving a Claude app sign-in is when Relay first uses its Keychain key, and a new Relay build
  * asks again: said wherever a sign-in is saved, and on a switch, which unseals the saved one
- * (most likely the first use after an update).
+ * (most likely the first use after an update). On Linux the desktop's keyring asks instead.
  */
-export const KEYCHAIN_HINT = [
-  "macOS Mac parolanı isterse (Relay Safe Storage) “Her Zaman İzin Ver”i seç.",
-  "If macOS asks for your Mac password (Relay Safe Storage), select “Always Allow”.",
-] as const;
+export const keychainHint = (platform?: string): readonly [string, string] =>
+  macWording(platform)
+    ? [
+        "macOS Mac parolanı isterse (Relay Safe Storage) “Her Zaman İzin Ver”i seç.",
+        "If macOS asks for your Mac password (Relay Safe Storage), select “Always Allow”.",
+      ]
+    : [
+        "Anahtar deposu (KWallet ya da Secret Service) Relay için izin ya da parola isterse izin ver.",
+        "If your keyring (KWallet or Secret Service) asks to let Relay in or for its password, allow it.",
+      ];
 
 export function DesktopActionReview({
   account,
@@ -54,6 +61,7 @@ export function DesktopActionReview({
   fullLimit?: string;
 }) {
   const [ready, setReady] = useState(false);
+  const hint = keychainHint(usePlatform());
   const title =
     kind === "history"
       ? t("Ortak Code geçmişini birleştir", "Merge shared Code history")
@@ -170,7 +178,7 @@ export function DesktopActionReview({
             kind === "reconnect" ||
             kind === "switch") && (
             <p className="text-xs text-muted-foreground">
-              {t(...KEYCHAIN_HINT)}
+              {t(...hint)}
             </p>
           )}
           {(kind === "history" || kind === "switch") &&

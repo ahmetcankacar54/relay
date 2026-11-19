@@ -9,6 +9,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { displayedIssue, renewalIssue } from "@/lib/account-health";
 import { usageWindowRows } from "@/data/selectors";
+import { keychainWords, usePlatform } from "@/data/platform";
 import {
   formatPercent,
   formatUsed,
@@ -18,7 +19,8 @@ import {
 } from "@/lib/meter";
 import { cn } from "@/lib/utils";
 type T = (tr: string, en: string) => string;
-const issues: Record<UsageIssue, [string, string]> = {
+/** The Keychain's (Linux: keyring's) sentence comes from keychainWords. */
+const issues: Record<Exclude<UsageIssue, "keychain-locked">, [string, string]> = {
   "connect-cli": [
     "Henüz limit okuma girişi yok.",
     "No usage sign-in yet.",
@@ -26,10 +28,6 @@ const issues: Record<UsageIssue, [string, string]> = {
   "credentials-missing": [
     "Bu profilin giriş bilgisi okunamadı.",
     "Relay cannot read this profile’s sign-in.",
-  ],
-  "keychain-locked": [
-    "Limitleri okumak için Anahtarlık erişimi gerekiyor.",
-    "Relay needs Keychain access to read limits.",
   ],
   "renewal-required": [
     "Limit okuma girişinin yenilenmesi gerekiyor.",
@@ -88,6 +86,7 @@ export function UsageCard({
   // The same reading as the account's status and the banners.
   const shownIssue = displayedIssue(usage);
   const renewal = renewalIssue(usage);
+  const keychain = keychainWords(usePlatform(), t);
   const reconnect = [
     "expired",
     "credentials-missing",
@@ -273,7 +272,9 @@ export function UsageCard({
           {loading
             ? t("Limitler okunuyor…", "Relay reads the limits…")
             : shownIssue
-              ? t(...issues[shownIssue])
+              ? shownIssue === "keychain-locked"
+                ? keychain.needed
+                : t(...issues[shownIssue])
               : usage?.checkedAt
                 ? `${t("Güncellendi", "Updated")} ${clock(usage.checkedAt)}${
                     usage.source === "desktop"
@@ -310,7 +311,7 @@ export function UsageCard({
           >
             {renewal === "renewal-required"
               ? t("Yenilemeye izin ver", "Allow renewal")
-              : t("Anahtarlık erişimine izin ver", "Allow Keychain access")}
+              : keychain.allow}
           </Button>
         ) : (
           <Button

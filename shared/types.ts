@@ -117,6 +117,11 @@ export interface Diagnostics {
   source?: "chosen" | "path" | "claude-app";
   version?: string;
   desktopSupported: boolean;
+  /**
+   * Limits can be read through the Claude app's own sign-in: always on macOS, on Linux once a
+   * keyring read of Claude's cookie key has succeeded.
+   */
+  desktopUsage?: boolean;
   platform: string;
   dataDir: string;
   error?: string;

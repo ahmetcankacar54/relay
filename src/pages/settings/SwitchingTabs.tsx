@@ -18,6 +18,7 @@ import {
 } from "../../features/SwitchPreferences";
 import { ExtensionPreference } from "../../features/ExtensionPreference";
 import { TerminalPreference } from "../../features/TerminalPreference";
+import { copyDraftAction, dismissDraftAction, draftReason } from "../../panel/PanelDrafts";
 import { ContinuationSettings } from "../../features/ContinuationSettings";
 import { AutomationSettings } from "../../features/AutomationControl";
 import { WarningThreshold } from "../Usage";
@@ -35,9 +36,11 @@ function useSwitching() {
   const disabled = !!busy || !!desktop?.busy;
   // The extension, terminal and drafts come along on macOS only; Windows and Linux bring Code history.
   const macOS = ["darwin", "preview"].includes(data?.diagnostics?.platform ?? "");
+  // The extension and the terminal come along on Linux too.
+  const browserSteps = macOS || data?.diagnostics?.platform === "linux";
   const update = (patch: Partial<typeof relay.settings>) =>
     void action("settings", () => api.updateSettings(patch));
-  return { relay, disabled, macOS, update };
+  return { relay, disabled, macOS, browserSteps, update };
 }
 
 /** A section's title on the Switching tab: a plain heading with one line under it. */
@@ -57,7 +60,7 @@ function TabSection({ id, title, description }: { id: string; title: string; des
  * happens near the limit. Preferences only: switching itself is on the Overview and in the panel.
  */
 export function SwitchingTab() {
-  const { relay, disabled, macOS, update } = useSwitching();
+  const { relay, disabled, browserSteps, update } = useSwitching();
   const { t } = useI18n();
   const { api, data, accounts, active, settings, desktop, desktopBusy, pendingDesktop, action, setData } = relay;
   const continuation = data?.continuation;
@@ -167,7 +170,7 @@ export function SwitchingTab() {
           id="gecis-birlikte"
           title={t("Geçişte birlikte değişenler", "What switches along")}
           description={
-            macOS
+            browserSteps
               ? t(
                   "Claude uygulaması hesap değiştirince bunlar da değişebilir. Eklenti ve terminal isteğe bağlıdır.",
                   "When the Claude app changes account, these can change too. The extension and the terminal are optional.",
@@ -192,8 +195,8 @@ export function SwitchingTab() {
             t={t}
           />
         </Card>
-        {/* macOS only: elsewhere these steps do not run, and their cards would stand empty. */}
-        {macOS && (
+        {/* macOS and Linux: elsewhere these steps do not run, and their cards would stand empty. */}
+        {browserSteps && (
           <>
             <Card id="gecis-eklenti" className={cardClass}>
               <ExtensionPreference />
@@ -296,9 +299,73 @@ function SidebarSections() {
 }
 
 /**
+ * Linux's rescued drafts, as there is no menu bar panel: captured at a switch while the Claude
+ * app is closed, then left for Copy, since re-typing them into Claude needs macOS.
+ */
+function RescuedDrafts() {
+  const relay = useRelay();
+  const { t } = useI18n();
+  const drafts = (relay.data?.drafts ?? []).filter(
+    (d) => d.state === "pending" || d.state === "needs-copy",
+  );
+  return (
+    <div id="gecis-taslak" className={rowClass}>
+      <SectionHeading
+        title={t("Kurtarılan taslaklar", "Rescued drafts")}
+        description={t(
+          "Geçişte, Claude uygulaması kapalıyken gönderilmemiş taslaklar kurtarılır. Buradan kopyalayıp yapıştır; Claude uygulamasına yeniden yazmak yalnızca macOS’ta.",
+          "At a switch, while the Claude app is closed, Relay rescues unsent drafts. Copy them here and paste; re-typing them into the Claude app is macOS only.",
+        )}
+      />
+      {drafts.map((draft) => {
+        const running = [`draft-copy:${draft.id}`, `draft-dismiss:${draft.id}`].includes(
+          relay.busy,
+        );
+        return (
+          <SettingRow
+            key={draft.id}
+            label={
+              draft.newSession
+                ? t("Yeni oturum", "New session")
+                : draft.title.trim() || t("Adsız konuşma", "Untitled conversation")
+            }
+            description={
+              draft.state === "pending"
+                ? t("Bekliyor", "Waiting")
+                : draftReason(draft.reason, t, draft.newSession)
+            }
+          >
+            <span className="flex shrink-0 gap-1">
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={running}
+                onClick={() => void copyDraftAction(relay, draft.id)}
+              >
+                {t("Kopyala", "Copy")}
+              </Button>
+              {draft.state === "needs-copy" && (
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  disabled={running}
+                  onClick={() => void dismissDraftAction(relay, draft.id)}
+                >
+                  {t("Kapat", "Dismiss")}
+                </Button>
+              )}
+            </span>
+          </SettingRow>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
  * Settings → Advanced → Experimental, the switch's part: re-typing rescued drafts and the Code
- * sidebar sections recipe, drawn inside that group. macOS only for the drafts, as the step runs
- * there only.
+ * sidebar sections recipe, drawn inside that group. Re-typing is macOS only; Linux captures the
+ * drafts too and offers them for Copy here.
  */
 export function ExperimentalSwitchRows() {
   const { relay, disabled, macOS, update } = useSwitching();
@@ -315,6 +382,7 @@ export function ExperimentalSwitchRows() {
           />
         </div>
       )}
+      {relay.data?.diagnostics?.platform === "linux" && <RescuedDrafts />}
       <SidebarSections />
     </>
   );

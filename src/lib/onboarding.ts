@@ -60,9 +60,10 @@ export interface Prerequisites {
 
 /**
  * Whether limits are read through each account's Claude app sign-in when it has no Claude Code
- * sign-in (macOS): the CLI is then optional.
+ * sign-in (macOS, and Linux once Claude's keyring secret has been read): the CLI is then optional.
  */
-export const appReadsUsage = (diagnostics?: Diagnostics) => diagnostics?.platform === "darwin";
+export const appReadsUsage = (diagnostics?: Diagnostics) =>
+  diagnostics?.platform === "darwin" || diagnostics?.desktopUsage === true;
 
 /**
  * The Overview checklist; undefined until both snapshots have arrived. On macOS Relay reads the
@@ -184,7 +185,7 @@ export interface SetupState {
 /**
  * The guided first run: the Claude app and Code (and the CLI when it is still missing), a first
  * and a second account with a saved Claude app sign-in (Relay switches between two), the choice
- * of when to switch, and on macOS the optional browser extension. `seen` holds the steps the user
+ * of when to switch, and on macOS and Linux the optional browser extension. `seen` holds the steps the user
  * settled by hand: "mode" once the choice was opened (I switch myself is a choice too),
  * "extension" once skipped. Undefined until both snapshots have arrived.
  */
@@ -201,7 +202,7 @@ export function setupState(input: {
   if (!base) return;
   const seen = input.seen ?? new Set<string>();
   const connected = input.accounts.filter((a) => !!a.desktop).length;
-  const macOS = input.diagnostics?.platform === "darwin";
+  const browserSteps = ["darwin", "linux"].includes(input.diagnostics?.platform ?? "");
   const extensionMode = input.settings.claudeExtension?.mode;
   const steps: SetupStep[] = [
     ...base.items.map((i) => ({ ...i, optional: false })),
@@ -212,7 +213,7 @@ export function setupState(input: {
       met: input.settings.autoSwitchMode !== "off" || !!input.quota || seen.has("mode"),
       optional: false,
     },
-    ...(macOS
+    ...(browserSteps
       ? [
           {
             key: "extension" as const,

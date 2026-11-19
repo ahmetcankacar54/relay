@@ -13,6 +13,7 @@ import {
   DraftScheduler,
   draftActions,
   draftNotice,
+  draftRetypeEnabled,
   draftSummaries,
   tallyStalls,
 } from "../electron/core/draft-main";
@@ -1343,7 +1344,7 @@ test("main gives the scheduler the re-typing setting, off unless turned on, and 
   const main = source("../electron/main.ts");
   assert.match(
     main,
-    /const draftRetype = \(\) =>\s*service\.store\.state\.settings\.draftRetype === true;/,
+    /const draftRetype = \(\) => draftRetypeEnabled\(service\.store\.state\.settings\);/,
   );
   const deps = main.slice(
     main.indexOf("draftRestore = new DraftScheduler("),
@@ -1359,6 +1360,14 @@ test("main gives the scheduler the re-typing setting, off unless turned on, and 
   ];
   assert.ok(order.every((at) => at >= 0), String(order));
   assert.deepEqual([...order].sort((a, b) => a - b), order);
+});
+
+test("re-typing runs only on macOS once turned on; Linux leaves every draft for Copy", () => {
+  assert.equal(draftRetypeEnabled({ draftRetype: true }, "darwin"), true);
+  assert.equal(draftRetypeEnabled({}, "darwin"), false);
+  assert.equal(draftRetypeEnabled({ draftRetype: false }, "darwin"), false);
+  for (const platform of ["linux", "win32"] as const)
+    assert.equal(draftRetypeEnabled({ draftRetype: true }, platform), false, platform);
 });
 
 test("the accessibility request asks only while a feature that needs it is on", () => {
@@ -1404,16 +1413,25 @@ test("the restore notification counts drafts and never names them", () => {
   assert.equal(draftNotice({ restored: 2, left: 0 }, "tr"), "2 taslak yeniden yazıldı");
   assert.equal(draftNotice({ restored: 1, left: 0 }, "en"), "1 draft restored");
   assert.equal(draftNotice({ restored: 2, left: 0 }, "en"), "2 drafts restored");
-  assert.equal(draftNotice({ restored: 0, left: 1 }, "tr"), "1 taslak panelde bekliyor");
-  assert.equal(draftNotice({ restored: 0, left: 1 }, "en"), "1 draft waiting in the panel");
-  assert.equal(draftNotice({ restored: 0, left: 3 }, "en"), "3 drafts waiting in the panel");
+  assert.equal(draftNotice({ restored: 0, left: 1 }, "tr", "darwin"), "1 taslak panelde bekliyor");
+  assert.equal(draftNotice({ restored: 0, left: 1 }, "en", "darwin"), "1 draft waiting in the panel");
+  assert.equal(draftNotice({ restored: 0, left: 3 }, "en", "darwin"), "3 drafts waiting in the panel");
   assert.equal(
-    draftNotice({ restored: 2, left: 1 }, "tr"),
+    draftNotice({ restored: 2, left: 1 }, "tr", "darwin"),
     "2 taslak yeniden yazıldı · 1 taslak panelde bekliyor",
   );
   assert.equal(
-    draftNotice({ restored: 1, left: 2 }, "en"),
+    draftNotice({ restored: 1, left: 2 }, "en", "darwin"),
     "1 draft restored · 2 drafts waiting in the panel",
+  );
+  // Linux has no menu bar panel: the drafts wait for Copy in Settings.
+  assert.equal(
+    draftNotice({ restored: 0, left: 2 }, "en", "linux"),
+    "2 drafts waiting to copy in Settings → Advanced → Experimental",
+  );
+  assert.equal(
+    draftNotice({ restored: 0, left: 1 }, "tr", "linux"),
+    "1 taslak Ayarlar → Gelişmiş → Deneysel’de kopyalanmayı bekliyor",
   );
   assert.equal(draftNotice({ restored: 0, left: 0 }, "tr"), undefined);
   // Main shows only that text, in the tray's language.

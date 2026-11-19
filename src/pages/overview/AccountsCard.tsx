@@ -144,14 +144,14 @@ export function AccountsCard({
           now={now}
           href={(row) => accountHash(row.account.id)}
           line={(row) => {
-            const tile = accountTileLine(row, t, language, zone, now, waitingFor(row));
+            const tile = accountTileLine(row, t, language, zone, now, waitingFor(row), relay.data?.diagnostics?.platform);
             return inWindows.has(row.account.id)
               ? `${t("Ayrı pencerede açık", "Open in its own window")} · ${tile}`
               : tile;
           }}
           actions={windowActions}
           title={(row) =>
-            accountRowSubtitle(row, t, language, zone, now, waitingFor(row))
+            accountRowSubtitle(row, t, language, zone, now, waitingFor(row), relay.data?.diagnostics?.platform)
           }
           // An account in its own window is not switched to: its sign-in is there until it closes.
           canSwitch={(row) =>

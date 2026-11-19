@@ -8,6 +8,7 @@ import { LimitRings } from "@/components/LimitRings";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
+import { keychainWords } from "@/data/platform";
 import { pendingFlow, usageWindowRows } from "@/data/selectors";
 import { accountHealth, renewalIssue } from "@/lib/account-health";
 import { formatRelative, formatReset } from "@/lib/time";
@@ -47,7 +48,7 @@ export function PanelActiveCard({ now }: { now: number }) {
     accountHealth(
       active,
       usage,
-      { active: true, desktopRunning: running, waiting },
+      { active: true, desktopRunning: running, waiting, platform: relay.data?.diagnostics?.platform },
       t,
     );
   // A plain refresh cannot clear a locked Keychain or a connection to renew: it has to prompt.
@@ -66,7 +67,7 @@ export function PanelActiveCard({ now }: { now: number }) {
         size="icon-xs"
         aria-label={
           renewalIssue(usage) === "keychain-locked"
-            ? t("Anahtarlık erişimine izin ver", "Allow Keychain access")
+            ? keychainWords(relay.data?.diagnostics?.platform, t).allow
             : t("Yenilemeye izin ver", "Allow renewal")
         }
         disabled={relay.usageBusy.has(active.id)}

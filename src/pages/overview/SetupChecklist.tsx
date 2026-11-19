@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
+import { macWording } from "@/data/platform";
 import {
   cliDetail,
   cliState,
@@ -134,10 +135,15 @@ export function SetupChecklist({ go }: { go?: (to: Destination) => void }) {
       status: `${connected} / 2`,
       reason:
         connected === 0
-          ? t(
-              "Relay hesaplar arasında geçer, bu yüzden en az iki hesap gerekir. Yukarıdaki “Hesap ekle” bu Mac’te bulunan hesapları tek seferde ekler.",
-              "Relay switches between accounts, so it needs at least two. “Add account” above adds the ones found on this Mac in one go.",
-            )
+          ? macWording(diagnostics?.platform)
+            ? t(
+                "Relay hesaplar arasında geçer, bu yüzden en az iki hesap gerekir. Yukarıdaki “Hesap ekle” bu Mac’te bulunan hesapları tek seferde ekler.",
+                "Relay switches between accounts, so it needs at least two. “Add account” above adds the ones found on this Mac in one go.",
+              )
+            : t(
+                "Relay hesaplar arasında geçer, bu yüzden en az iki hesap gerekir. Yukarıdaki “Hesap ekle” bu bilgisayarda bulunan hesapları tek seferde ekler.",
+                "Relay switches between accounts, so it needs at least two. “Add account” above adds the ones found on this computer in one go.",
+              )
           : t(
               "Bir hesap daha gerekiyor. Diğer Claude hesabınla giriş yap; Relay girişi kendisi kaydeder.",
               "One more account is needed. Sign in with your other Claude account; Relay saves it by itself.",

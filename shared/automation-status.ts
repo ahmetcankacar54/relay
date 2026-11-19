@@ -15,6 +15,20 @@ import { maxUsedPercent, sourceExhausted } from "./usage";
 
 export type AutomationTone = "off" | "ok" | "waiting" | "attention";
 
+/**
+ * Whether `platform` (diagnostics' platform; "preview" is the browser preview) can run `mode`.
+ * Preparing on quit needs no UI automation, so Linux has it; continuing at quota types into
+ * Claude through macOS's Accessibility.
+ */
+export function automationModeSupported(
+  mode: AutomationMode,
+  platform: string | undefined,
+): boolean {
+  if (mode === "off") return true;
+  if (platform === "darwin" || platform === "preview") return true;
+  return mode === "after-exit" && platform === "linux";
+}
+
 export interface AutomationStatus {
   mode: AutomationMode;
   tone: AutomationTone;
@@ -45,6 +59,8 @@ export interface AutomationStatusInput {
   usage: Record<string, AccountUsage>;
   desktop?: DesktopState;
   now: number;
+  /** Diagnostics' platform: a saved mode it cannot run reads as unavailable. Unset, not checked. */
+  platform?: string;
 }
 
 type Copy = [tr: string, en: string];
@@ -148,8 +164,8 @@ const AFTER_EXIT: Record<AutoSwitchReason, Row> = {
     true,
   ),
   "unsupported-platform": attention([
-    "Otomatik geçiş yalnızca macOS’ta çalışır.",
-    "Automatic switching works only on macOS.",
+    "Otomatik geçiş yalnızca macOS’ta ve Linux’ta çalışır.",
+    "Automatic switching works only on macOS and Linux.",
   ]),
   "desktop-unavailable": attention(DESKTOP_UNAVAILABLE),
   // Desktop recovery has its own banner.
@@ -351,6 +367,16 @@ export function automationStatus(
       continuation?.enabled
         ? attention(OFF_LEGACY_WATCH)
         : { tone: "off", banner: false, copy: OFF },
+    );
+  // A choice saved where it cannot run, as a store brought from a Mac: said, never shown as watching.
+  if (input.platform !== undefined && !automationModeSupported(mode, input.platform))
+    return show(
+      mode === "quota"
+        ? attention([
+            "Limit dolunca sürdürmek yalnızca macOS’ta çalışır. “Claude uygulamasını kapatınca”yı ya da “Kendim geçerim”i seç.",
+            "Continuing at the limit works only on macOS. Choose “When I quit the Claude app” or “I switch myself”.",
+          ])
+        : AFTER_EXIT["unsupported-platform"],
     );
 
   if (mode === "after-exit") {
