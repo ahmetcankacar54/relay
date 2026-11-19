@@ -53,7 +53,10 @@ function alternativeFor(
     .map((a) => {
       const u = usage[a.id];
       const same = head?.model ? u?.modelWindows?.find((w) => w.key === head.key) : undefined;
-      const binding = same ? { key: same.key, label: same.label, usedPercent: same.usedPercent, resetsAt: same.resetsAt, model: true } : limitHeadline(u, now);
+      // A model whose reset has passed is empty again, whatever the reading says.
+      const reset = Date.parse(same?.resetsAt ?? "");
+      const used = same && Number.isFinite(reset) && reset <= now ? 0 : same?.usedPercent;
+      const binding = same ? { key: same.key, label: same.label, usedPercent: used!, resetsAt: same.resetsAt, model: true } : limitHeadline(u, now);
       return { accountId: a.id, headline: binding };
     })
     .filter((x) => x.headline && x.headline.usedPercent < NEAR)
@@ -61,9 +64,19 @@ function alternativeFor(
   return ranked[0];
 }
 
-/** The latest request the gateway sent for a provider: the account that tool runs on now. */
-const lastRequestAccount = (status: ProxyStatus | undefined, kind: "claude" | "codex") =>
-  status?.recent?.find((r) => r.accountId && (r.provider ?? "claude") === kind)?.accountId;
+/** How long a request keeps telling which account a tool runs on; past it, the gateway's next pick does. */
+const RECENT_MS = 30 * 60_000;
+
+/**
+ * The account a gateway tool runs on now: the one its latest request went to, while that request is
+ * recent, else the one the gateway would pick next. The request log outlives restarts, so an old
+ * entry must not name an account the gateway has left.
+ */
+function gatewayAccount(status: ProxyStatus, kind: "claude" | "codex", now: number): string | undefined {
+  const last = status.recent?.find((r) => r.accountId && (r.provider ?? "claude") === kind);
+  if (last && now - last.at <= RECENT_MS) return last.accountId;
+  return status.nextPick?.[kind]?.accountId ?? last?.accountId;
+}
 
 /**
  * The Overview's and the panel's tool rows: each tool, the account it runs on, the limit that stops it
@@ -89,15 +102,30 @@ export function toolRows(input: {
   const { accounts, usage, active, suggestion, proxy, antigravity, now } = input;
   const rows: ToolRow[] = [];
   const of = (kind: string) => accounts.filter((a) => provider(a) === kind);
-  const row = (id: ToolId, via: ToolRow["via"], accountId: string | undefined, alternatives: Account[], extra: Partial<ToolRow> = {}) => {
+  const row = (
+    id: ToolId,
+    via: ToolRow["via"],
+    accountId: string | undefined,
+    alternatives: Account[],
+    extra: Partial<ToolRow> = {},
+    /** For a gateway tool: the account the gateway picks next, which is where it goes by itself. */
+    next?: string,
+  ) => {
     const u = accountId ? usage[accountId] : undefined;
     const headline = accountId ? limitHeadline(u, now) : undefined;
     const state = extra.state ?? (accountId ? stateOf(u, headline, now) : "unknown");
-    const alternative =
-      state === "blocked" || state === "near" ? alternativeFor(accountId, headline, alternatives, usage, now) : undefined;
+    const stuck = state === "blocked" || state === "near";
+    const alternative = !stuck
+      ? undefined
+      : next !== undefined
+        ? next !== accountId
+          ? { accountId: next, headline: limitHeadline(usage[next], now) }
+          : undefined
+        : alternativeFor(accountId, headline, alternatives, usage, now);
     rows.push({ id, via, ...(accountId ? { accountId } : {}), ...(headline ? { headline } : {}), state, ...(alternative ? { alternative } : {}), ...extra });
   };
-  const bound = (client: string) => proxy?.clients?.find((c) => c.id === client)?.bound === true;
+  const client = (id: string) => proxy?.clients?.find((c) => c.id === id);
+  const bound = (id: string) => client(id)?.bound === true;
 
   if (active) {
     const u = usage[active.id];
@@ -115,13 +143,14 @@ export function toolRows(input: {
   }
   if (bound("claude-code")) {
     if (!proxy?.running) row("claude-code", "gateway", undefined, [], { state: "off" });
-    else row("claude-code", "gateway", lastRequestAccount(proxy, "claude") ?? proxy.nextPick?.claude?.accountId, []);
+    else row("claude-code", "gateway", gatewayAccount(proxy, "claude", now), [], {}, proxy.nextPick?.claude?.accountId);
   }
   const codex = of("codex");
-  if (codex.length) {
+  // A Codex CLI the gateway saw is not installed has no row.
+  if (codex.length && client("codex")?.installed !== false) {
     if (bound("codex")) {
       if (!proxy?.running) row("codex", "gateway", undefined, [], { state: "off" });
-      else row("codex", "gateway", lastRequestAccount(proxy, "codex") ?? proxy.nextPick?.codex?.accountId, []);
+      else row("codex", "gateway", gatewayAccount(proxy, "codex", now), [], {}, proxy.nextPick?.codex?.accountId);
     } else row("codex", "own", codex.length === 1 ? codex[0].id : undefined, codex);
   }
   const google = of("antigravity");

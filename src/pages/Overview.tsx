@@ -109,7 +109,7 @@ export function Overview({
           </Banner>
         )}
         <ActiveAccountCard go={go} now={now} />
-        <section aria-labelledby="tools-title" className="grid content-start gap-1.5 empty:hidden">
+        <section className="grid content-start gap-1.5 empty:hidden">
           <ToolList
             now={now}
             open={openTool}

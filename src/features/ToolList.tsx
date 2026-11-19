@@ -44,9 +44,9 @@ function rowLine(row: ToolRow, account: Account | undefined, t: T, language: Lan
     return t("Ağ geçidine bağlı ama geçit kapalı: istekleri gitmez", "Bound to the gateway, but it is off: requests fail");
   if (row.foreign) return t("Relay'de olmayan bir Google hesabıyla açık", "Signed in with a Google account Relay does not have");
   if (!account)
-    return row.id === "antigravity"
-      ? t("Hangi hesapla açık olduğu okunamadı", "Relay cannot tell which account it is signed in with")
-      : t("Henüz istek yok", "No request yet");
+    return row.via === "gateway"
+      ? t("Henüz istek yok", "No request yet")
+      : t("Hangi hesapla açık olduğu okunamadı", "Relay cannot tell which account it is signed in with");
   if (!row.headline) return t("Limit verisi yok", "No usage data");
   const words = headlineWords(row.headline, t, language, now);
   return row.state === "unknown" ? t(`${words} · eski okuma`, `${words} · old reading`) : words;

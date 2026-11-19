@@ -90,3 +90,28 @@ test("a Codex CLI on its own sign-in runs on the one Codex account, and Claude C
   const rows = toolRows({ accounts: [claude1, codex], usage, proxy: proxy({ clients: [] }), now: NOW });
   assert.deepEqual(rows.map((r) => [r.id, r.via, r.accountId]), [["codex", "own", "x1"]]);
 });
+
+test("a gateway tool on a spent account shows where the gateway goes next, and an old request gives way to the next pick", () => {
+  const bound = [{ id: "claude-code" as const, installed: true, bound: true, stale: false, file: "" }];
+  const full = { ...usage, c1: read("c1", { fiveHour: { usedPercent: 100, resetsAt: at(40) }, sevenDay: { usedPercent: 70, resetsAt: at(3000) } }) };
+  const nextPick = { claude: { accountId: "c2", reason: "most-room" as never } };
+  const recent = [{ at: NOW - 60_000, accountId: "c1", provider: "claude", status: 429 }];
+  const [fresh] = toolRows({ accounts: [claude1, claude2], usage: full, proxy: proxy({ clients: bound, recent, nextPick }), now: NOW });
+  assert.deepEqual([fresh.accountId, fresh.state, fresh.alternative?.accountId], ["c1", "blocked", "c2"]);
+  // A request from two hours ago no longer says where Claude Code runs: the next pick does.
+  const old = [{ ...recent[0], at: NOW - 2 * 3_600_000 }];
+  const [later] = toolRows({ accounts: [claude1, claude2], usage: full, proxy: proxy({ clients: bound, recent: old, nextPick }), now: NOW });
+  assert.deepEqual([later.accountId, later.state], ["c2", "ok"]);
+});
+
+test("an Antigravity account whose spent model has reset since its reading counts as room", () => {
+  const reset = { ...usage, g2: read("g2", models(100, 0)) };
+  reset.g2.modelWindows![0].resetsAt = at(-1);
+  const google = toolRows({ accounts: [g1, g2], usage: reset, antigravity: { installed: true, canOpen: true, accountId: "g1" }, now: NOW })[0];
+  assert.deepEqual([google.alternative?.accountId, google.alternative?.headline?.usedPercent], ["g2", 0]);
+});
+
+test("a Codex CLI the gateway found not installed has no row", () => {
+  const rows = toolRows({ accounts: [codex], usage, proxy: proxy({ clients: [{ id: "codex", installed: false, bound: false, stale: false, file: "" }] }), now: NOW });
+  assert.deepEqual(rows, []);
+});

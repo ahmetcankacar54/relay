@@ -1,4 +1,5 @@
 import type { Account, AccountUsage } from "../../../shared/types";
+import { modelOnlyUsage } from "../../../shared/quota-windows";
 import { Card } from "@/components/ui/card";
 import { SectionHeading } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
@@ -37,7 +38,8 @@ export function limitStanding(usage: AccountUsage | undefined, now: number): Lim
         ? { opensAt: full.map((w) => w!.resetsAt!).filter((r) => valid(r, now)).sort().at(-1) }
         : {}),
     };
-  const week = usage.sevenDay;
+  // Antigravity's week, when it has one, is only its roomiest model: no week of its own ends.
+  const week = modelOnlyUsage(usage) ? undefined : usage.sevenDay;
   if (week?.resetsAt && valid(week.resetsAt, now)) {
     const left = Math.max(0, 100 - week.usedPercent);
     if (Date.parse(week.resetsAt) - now <= EXPIRING_MS && left >= EXPIRING_ROOM)

@@ -12,6 +12,7 @@ import type {
 } from "./token-usage-view";
 import type { Account, AccountUsage, RelaySettings } from "./types";
 import { freshUsage, suggestedAccount } from "./usage";
+import { limitHeadline, modelOnlyUsage } from "./quota-windows";
 import { desktopCliMismatch } from "./account-state";
 import { clockLocative, withDative } from "./tr-dative";
 import { relaySwitchLink } from "./relay-link";
@@ -309,6 +310,16 @@ function limitsOf(
 } {
   if (!usage || usage.accountId !== account.id || !freshUsage(usage, now))
     return {};
+  // An Antigravity account's limits are per model: its figure is the fullest model, never the
+  // roomiest one its five-hour window holds for the gateway.
+  if (modelOnlyUsage(usage)) {
+    const head = limitHeadline(usage, now);
+    const at = Date.parse(head?.resetsAt ?? "");
+    return {
+      fiveHour: percentUsed(head?.usedPercent),
+      ...(Number.isFinite(at) && at > now ? { fiveHourResetsAt: at } : {}),
+    };
+  }
   const reset = Date.parse(usage.fiveHour?.resetsAt ?? "");
   const weekReset = Date.parse(usage.sevenDay?.resetsAt ?? "");
   return {
