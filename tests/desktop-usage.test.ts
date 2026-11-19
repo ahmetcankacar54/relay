@@ -326,7 +326,7 @@ test("claude.ai's usage answer, as seen live on 2026-11-07, parses like the CLI 
   );
 });
 
-test("reads asked together share one Keychain read, so macOS asks once", async (t) => {
+test("reads asked together share one Keychain read, so macOS asks once", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const tool = path.join(dir, "security");
@@ -377,7 +377,7 @@ test("the renewal window gets every live claude.ai cookie of the account with it
   );
 });
 
-test("a password read once is kept in the vault, and later runs never ask the Keychain again", async (t) => {
+test("a password read once is kept in the vault, and later runs never ask the Keychain again", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const tool = path.join(dir, "security");
@@ -414,7 +414,7 @@ test("a kept password that no longer opens the cookies is forgotten, so the next
   assert.equal(forgotten, 2);
 });
 
-test("forget drops the password in memory and in the vault", async (t) => {
+test("forget drops the password in memory and in the vault", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const tool = path.join(dir, "security");
@@ -434,7 +434,7 @@ test("forget drops the password in memory and in the vault", async (t) => {
   assert.equal(vault, PASSWORD);
 });
 
-test("a vault that cannot keep the password never fails the read that got it", async (t) => {
+test("a vault that cannot keep the password never fails the read that got it", { skip: process.platform === "win32" && "macOS only: the Keychain, through a shell stand-in for security" }, async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const tool = path.join(dir, "security");
