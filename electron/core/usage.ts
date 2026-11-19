@@ -7,7 +7,8 @@ import type {
 } from "../../shared/types";
 import { Store } from "./store";
 import { UsageError, type UsageCredential } from "./usage-credentials";
-import type { RefreshUsageCredential } from "./usage-refresh";
+import { SIGN_IN_ENDED, type RefreshUsageCredential } from "./usage-refresh";
+import { desktopCliMismatch } from "../../shared/account-state";
 import type { ProviderUsageResult } from "./provider-usage";
 
 type Json = Record<string, any>;
@@ -290,14 +291,6 @@ export function missingIdentity(account: Account, value: unknown) {
   )
     repair.desktopEmail = email.trim();
   return Object.keys(repair).length ? repair : undefined;
-}
-/** The Claude Code sign-in belongs to another account or workspace than the Claude app's. */
-function desktopMismatch(a: Account) {
-  return (
-    !!a.desktop &&
-    ((!!a.auth?.accountUuid && a.auth.accountUuid !== a.desktop.accountUuid) ||
-      (!!a.auth?.orgId && a.auth.orgId !== a.desktop.orgId))
-  );
 }
 function identityKey(a: Account) {
   return JSON.stringify([
@@ -728,9 +721,11 @@ export class UsageManager {
         e instanceof UsageError ? e : new UsageError("unavailable", undefined, networkDetail(e));
       // The Claude Code sign-in ended (each lasts about 30 days, whatever its renewals). The
       // Claude app's own sign-in for the same account still reads the limits; the account keeps
-      // asking for a new Claude Code sign-in beside them.
+      // asking for a new Claude Code sign-in beside them. Only that end counts: any other
+      // "expired" (a missing scope, a refused token) is the sign-in's own problem.
+      const ended = error.issue === "expired" && error.detail === SIGN_IN_ENDED;
       if (
-        error.issue === "expired" &&
+        ended &&
         this.source(account) === "cli" &&
         (account.provider ?? "claude") === "claude" &&
         (await this.readThroughApp(account, previous, allowPrompt, current, error))
@@ -758,6 +753,9 @@ export class UsageManager {
         stale: !!("checkedAt" in retained && retained.checkedAt),
         issue: error.issue,
         retryAt: new Date(retryAt).toISOString(),
+        // Said even when the Claude app could not read the limits either: renewal and notice
+        // follow the end, not the read.
+        ...(ended ? { cliSignInEnded: true } : {}),
         ...(this.source(account) ? { source: this.source(account) } : {}),
       });
       // Only a change is worth a log line: a failing poll repeats every few minutes.
@@ -786,7 +784,7 @@ export class UsageManager {
     current: () => boolean,
     ended: UsageError,
   ): Promise<boolean> {
-    if (!this.desktopUsage?.usable(account) || desktopMismatch(account)) return false;
+    if (!this.desktopUsage?.usable(account) || desktopCliMismatch(account)) return false;
     try {
       const raw = await this.desktopUsage.read(account, allowPrompt);
       if (!current()) return true;

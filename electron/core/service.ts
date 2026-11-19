@@ -4,7 +4,7 @@ import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Store } from "./store";
-import { AuthManager, authPending, type BackgroundSignIn } from "./auth";
+import { AuthManager, SignInBusyError, authPending, type BackgroundSignIn } from "./auth";
 import { Runner } from "./runner";
 import type { ProfileLockKind } from "./profile-lock";
 import { readProfileAuth, signedOut } from "./profile-auth";
@@ -287,9 +287,10 @@ export class Service {
         .some((r) => r.accountId === id && r.status === "running")
     )
       throw new Error("Bu hesapta çalışan oturumu önce durdur.");
+    // Resolved before anything is looked at: nothing may change between the checks and the start.
+    const executable = await this.executable();
     // A renewal Relay runs by itself in the background gives way to the user's own sign-in.
-    const quiet = this.auth.list().find((f) => f.accountId === id && f.background && authPending(f));
-    if (quiet) await this.auth.cancel(id, quiet.id).catch(() => {});
+    await this.cancelBackgroundSignIn(id);
     // Asked again while its page waits for approval: the page comes back, where the user
     // last had it. Starting returns the same attempt, which alone shows nothing new.
     const waiting = this.auth
@@ -303,10 +304,15 @@ export class Service {
     }
     return this.auth.start(
       id,
-      await this.executable(),
+      executable,
       this.store.profile(id),
       profileEnvironment(this.store.profile(id)),
     );
+  }
+  /** Stops a renewal Relay runs by itself on this account, if one runs: the user's action wins. */
+  private async cancelBackgroundSignIn(id: string) {
+    const quiet = this.auth.list().find((f) => f.accountId === id && f.background && authPending(f));
+    if (quiet) await this.auth.cancel(id, quiet.id).catch(() => {});
   }
   /**
    * Starts a Claude Code sign-in Relay runs by itself: the CLI's page goes to `background`, a
@@ -317,12 +323,15 @@ export class Service {
     const account = this.store.account(id);
     if ((account.provider ?? "claude") !== "claude" || !account.auth?.loggedIn)
       throw new Error("not a signed-in Claude account");
-    if (this.auth.active(id)) throw new Error("a sign-in is already running");
+    // Resolved first: the checks below and the start run with no wait between them, so a sign-in
+    // the user starts meanwhile is seen (and `start` refuses to hand back another's flow).
+    const executable = await this.executable();
+    if (this.auth.active(id)) throw new SignInBusyError("a sign-in is already running");
     if (this.runner.list().some((r) => r.accountId === id && r.status === "running"))
-      throw new Error("a session runs on this account");
+      throw new SignInBusyError("a session runs on this account");
     return this.auth.start(
       id,
-      await this.executable(),
+      executable,
       this.store.profile(id),
       profileEnvironment(this.store.profile(id)),
       background,
@@ -382,6 +391,8 @@ export class Service {
   async launch(raw: LaunchRequest) {
     const input = launchSchema.parse(raw);
     const account = this.store.account(input.accountId);
+    // A renewal the user cannot see never blocks what they do.
+    await this.cancelBackgroundSignIn(account.id);
     if (this.auth.active(account.id))
       throw new Error("Önce bu hesabın limit okuma girişini tamamla ya da iptal et.");
     if (account.cooldownUntil && Date.parse(account.cooldownUntil) > Date.now())
@@ -513,6 +524,7 @@ export class Service {
         .some((r) => r.accountId === id && r.status === "running")
     )
       throw new Error("Bu hesapta çalışan oturumu önce durdur.");
+    await this.cancelBackgroundSignIn(id);
     if (this.auth.active(id))
       throw new Error("Önce bu hesabın limit okuma girişini tamamla ya da iptal et.");
     const executable = await this.executable().catch(() => undefined);

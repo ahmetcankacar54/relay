@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { BrowserWindow, session } from "electron";
-import { localCallback, signInNavigationAllowed } from "./core/auth-page-policy";
-import { approvalStep, clickButton, READ_PAGE, type ApprovalPage } from "./core/quiet-approval";
+import {
+  localCallback,
+  signInNavigationAllowed,
+} from "./core/auth-page-policy";
+import {
+  approvalStep,
+  clickButton,
+  READ_PAGE,
+  type ApprovalPage,
+} from "./core/quiet-approval";
 import type { PlainCookie } from "./core/desktop-usage";
 
 export type QuietOutcome = (
@@ -16,6 +24,9 @@ export type QuietOutcome = (
   /** What the page's own requests to Anthropic got: status and path (ids masked). */
   requests?: string[];
 };
+/** A click is tried again when the page still shows the button this long after, at most this often. */
+const RECLICK_MS = 5_000;
+const MAX_CLICKS = 3;
 /** How long a sign-in form must stay before the window gives up: the page passes /login on its way. */
 const SIGNED_OUT_MS = 6_000;
 const place = (url: string) => {
@@ -39,7 +50,11 @@ export function approveQuietly(
   timeoutMs = 60_000,
 ): Promise<QuietOutcome> {
   const callback = localCallback(url);
-  if (!callback) return Promise.resolve({ result: "failed", detail: "page has no local callback" });
+  if (!callback)
+    return Promise.resolve({
+      result: "failed",
+      detail: "page has no local callback",
+    });
   const partition = `relay-renew-${randomUUID()}`;
   const space = session.fromPartition(partition);
   let win: BrowserWindow | undefined;
@@ -57,32 +72,65 @@ export function approveQuietly(
     const finish = (result: QuietOutcome) => {
       if (finished) return;
       finished = true;
-      const outcome: QuietOutcome = { ...result, trail, refused, requests, ...(last ? { last } : {}) };
+      const outcome: QuietOutcome = {
+        ...result,
+        trail,
+        refused,
+        requests,
+        ...(last ? { last } : {}),
+      };
       clearTimeout(deadline);
       clearInterval(poll);
       // A moment for the CLI's page to answer before the window goes.
-      setTimeout(() => {
-        if (win && !win.isDestroyed()) win.destroy();
-        void space.clearStorageData().catch(() => {});
-      }, outcome.result === "approved" ? 1_500 : 0);
+      setTimeout(
+        () => {
+          if (win && !win.isDestroyed()) win.destroy();
+          void space.clearStorageData().catch(() => {});
+        },
+        outcome.result === "approved" ? 1_500 : 0,
+      );
       resolve(outcome);
     };
     const deadline = setTimeout(
-      () => finish({ result: "no-approval", detail: clicked ? "approved, no callback" : "no approve button" }),
+      () =>
+        finish({
+          result: "no-approval",
+          detail: clicks
+            ? `approved ${clicks}x, no callback`
+            : "no approve button",
+        }),
       timeoutMs,
     );
-    let clicked = false;
+    // Clicks so far and when the last one was: a click that changed nothing (the page not yet
+    // ready, or a second step) is tried again after a pause, a few times at most.
+    let clicks = 0;
+    let clickedAt = 0;
+    let checking = false;
     let poll: ReturnType<typeof setInterval> | undefined;
     void (async () => {
       try {
         space.setPermissionRequestHandler((_c, _p, decide) => decide(false));
         // A browser's user agent, without the Relay and Electron tokens, as the limit reads send.
-        space.setUserAgent(space.getUserAgent().replace(/\s(?:Relay|relay-workspace|Electron)\/\S+/g, ""));
+        space.setUserAgent(
+          space
+            .getUserAgent()
+            .replace(/\s(?:Relay|relay-workspace|Electron)\/\S+/g, ""),
+        );
         space.webRequest.onCompleted(
-          { urls: ["https://claude.ai/api/*", "https://claude.ai/v1/*", "https://claude.com/*", "https://*.claude.com/*"] },
+          {
+            urls: [
+              "https://claude.ai/api/*",
+              "https://claude.ai/v1/*",
+              "https://claude.com/*",
+              "https://*.claude.com/*",
+            ],
+          },
           (details) => {
             if (requests.length >= 40) return;
-            const where = place(details.url).replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, "<id>");
+            const where = place(details.url).replace(
+              /[0-9a-f]{8}-[0-9a-f-]{27}/gi,
+              "<id>",
+            );
             requests.push(`${details.statusCode} ${details.method} ${where}`);
           },
         );
@@ -99,58 +147,100 @@ export function approveQuietly(
               httpOnly: cookie.httpOnly,
               sameSite: cookie.sameSite,
               // The window lives a minute; the session goes with it.
-              expirationDate: Math.min(cookie.expires ?? Infinity, Date.now() / 1000 + 3_600),
+              expirationDate: Math.min(
+                cookie.expires ?? Infinity,
+                Date.now() / 1000 + 3_600,
+              ),
             })
             .catch(() => refused.push(cookie.name));
         win = new BrowserWindow({
           show: false,
           width: 520,
           height: 720,
-          webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false },
+          webPreferences: {
+            partition,
+            sandbox: true,
+            contextIsolation: true,
+            nodeIntegration: false,
+          },
         });
         win.webContents.setAudioMuted(true);
         const guard = (event: { preventDefault(): void }, target: string) => {
-          if (!signInNavigationAllowed(target, callback)) event.preventDefault();
+          if (!signInNavigationAllowed(target, callback))
+            event.preventDefault();
         };
-        win.webContents.on("will-navigate", (event, target) => guard(event, target));
-        win.webContents.on("will-redirect", (event, target) => guard(event, target));
+        win.webContents.on("will-navigate", (event, target) =>
+          guard(event, target),
+        );
+        win.webContents.on("will-redirect", (event, target) =>
+          guard(event, target),
+        );
         win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
         win.webContents.on("did-navigate", (_event, target) => {
           visit(target);
-          if (target.startsWith("http:") && signInNavigationAllowed(target, callback))
+          if (
+            target.startsWith("http:") &&
+            signInNavigationAllowed(target, callback)
+          )
             finish({ result: "approved" });
         });
-        win.webContents.on("did-navigate-in-page", (_event, target) => visit(target));
+        win.webContents.on("did-navigate-in-page", (_event, target) =>
+          visit(target),
+        );
         win.webContents.on("will-redirect", (_event, target) => visit(target));
         void win.loadURL(url).catch(() => {});
         poll = setInterval(() => {
           void (async () => {
-            if (finished || clicked || !win || win.isDestroyed()) return;
-            const page = (await win.webContents
-              .executeJavaScript(READ_PAGE, true)
-              .catch(() => undefined)) as ApprovalPage | undefined;
-            if (!page || finished || clicked) return;
-            last = {
-              at: `${page.host}${page.path}`.slice(0, 120),
-              loginForm: page.loginForm,
-              buttons: page.buttons.map((b) => b.text).filter(Boolean).slice(0, 12),
-            };
-            const step = approvalStep(page);
-            if (step.step !== "signed-out") signedOutSince = undefined;
-            if (step.step === "signed-out") {
-              signedOutSince ??= Date.now();
-              if (Date.now() - signedOutSince >= SIGNED_OUT_MS)
-                finish({ result: "signed-out", detail: `claude.ai asked to sign in at ${last.at}` });
-            } else if (step.step === "click") {
-              const done = await win.webContents
-                .executeJavaScript(clickButton(step.index, page.buttons[step.index]!.text), true)
-                .catch(() => false);
-              if (done) clicked = true;
+            if (finished || checking || !win || win.isDestroyed()) return;
+            checking = true;
+            try {
+              const page = (await win.webContents
+                .executeJavaScript(READ_PAGE, true)
+                .catch(() => undefined)) as ApprovalPage | undefined;
+              if (!page || finished) return;
+              last = {
+                at: `${page.host}${page.path}`.slice(0, 120),
+                loginForm: page.loginForm,
+                buttons: page.buttons
+                  .map((b) => b.text)
+                  .filter(Boolean)
+                  .slice(0, 12),
+              };
+              const step = approvalStep(page);
+              if (step.step !== "signed-out") signedOutSince = undefined;
+              if (step.step === "signed-out") {
+                signedOutSince ??= Date.now();
+                if (Date.now() - signedOutSince >= SIGNED_OUT_MS)
+                  finish({
+                    result: "signed-out",
+                    detail: `claude.ai asked to sign in at ${last.at}`,
+                  });
+              } else if (
+                step.step === "click" &&
+                clicks < MAX_CLICKS &&
+                Date.now() - clickedAt >= RECLICK_MS
+              ) {
+                const done = await win.webContents
+                  .executeJavaScript(
+                    clickButton(step.index, page.buttons[step.index]!.text),
+                    true,
+                  )
+                  .catch(() => false);
+                if (done) {
+                  clicks++;
+                  clickedAt = Date.now();
+                }
+              }
+            } finally {
+              checking = false;
             }
           })();
         }, 1_000);
       } catch (error) {
-        finish({ result: "failed", detail: String((error as Error)?.message ?? error).slice(0, 160) });
+        finish({
+          result: "failed",
+          detail: String((error as Error)?.message ?? error).slice(0, 160),
+        });
       }
     })();
   });

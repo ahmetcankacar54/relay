@@ -661,7 +661,7 @@ export interface RelayAPI {
   /** Renews the account's Claude Code sign-in now, in the background, from its claude.ai session. */
   renewSignInNow(
     accountId: string,
-  ): Promise<{ result: "connected" | "waiting" | "unavailable" | "failed"; detail?: string }>;
+  ): Promise<{ result: "connected" | "waiting" | "busy" | "unavailable" | "failed"; detail?: string }>;
   desktopSnapshot(): Promise<DesktopState>;
   dismissDesktopError(revision: number): Promise<void>;
   captureDesktop(profileId: string, orgId: string): Promise<void>;
@@ -965,8 +965,9 @@ export interface AccountUsage {
    */
   cliSignInEndsAt?: string;
   /**
-   * The Claude Code sign-in has ended (its renewal is no longer accepted), and the limits were
-   * read through the Claude app's sign-in instead. The account still needs a new sign-in.
+   * The Claude Code sign-in has reached its end date (its renewal is no longer accepted). When
+   * the read succeeded, the limits came through the Claude app's sign-in instead. The account
+   * still needs a new sign-in either way.
    */
   cliSignInEnded?: boolean;
   issue?: UsageIssue;

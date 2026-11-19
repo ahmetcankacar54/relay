@@ -384,7 +384,11 @@ test("a password read once is kept in the vault, and later runs never ask the Ke
   const log = path.join(dir, "calls");
   await fs.writeFile(tool, `#!/bin/sh\necho x >> "${log}"\necho "${PASSWORD}"\n`, { mode: 0o755 });
   let vault: string | undefined;
-  const saved = { load: async () => vault, store: async (p: string) => void (vault = p) };
+  const saved = {
+    load: async () => vault,
+    store: async (p: string) => void (vault = p),
+    clear: async () => void (vault = undefined),
+  };
   const first = safeStoragePassword({ allowed: async () => false, remember: async () => {}, tool, saved });
   assert.equal(await first(true), PASSWORD);
   assert.equal(vault, PASSWORD);
@@ -392,4 +396,60 @@ test("a password read once is kept in the vault, and later runs never ask the Ke
   const next = safeStoragePassword({ allowed: async () => false, remember: async () => {}, tool, saved });
   assert.equal(await next(false), PASSWORD);
   assert.equal((await fs.readFile(log, "utf8")).trim().split("\n").length, 1);
+});
+
+test("a kept password that no longer opens the cookies is forgotten, so the next read asks the Keychain", async (t) => {
+  const files = await cookieDatabase(t, [[".claude.ai", "sessionKey", "sk-ant-sid01-abc"]]);
+  let forgotten = 0;
+  const password = Object.assign(async () => "a-password-that-changed", {
+    forget: async () => void forgotten++,
+  });
+  const reader = new DesktopUsageReader({
+    cookieFiles: async () => files,
+    password,
+    request: async () => json(200, {}),
+  });
+  await assert.rejects(reader.read(account(), false), (e: unknown) => e instanceof UsageError && e.issue === "unsupported");
+  assert.equal(await reader.cookies(account()), undefined);
+  assert.equal(forgotten, 2);
+});
+
+test("forget drops the password in memory and in the vault", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const tool = path.join(dir, "security");
+  const log = path.join(dir, "calls");
+  await fs.writeFile(tool, `#!/bin/sh\necho x >> "${log}"\necho "${PASSWORD}"\n`, { mode: 0o755 });
+  let vault: string | undefined = "an-old-password";
+  const read = safeStoragePassword({
+    allowed: async () => true,
+    remember: async () => {},
+    tool,
+    saved: { load: async () => vault, store: async (p) => void (vault = p), clear: async () => void (vault = undefined) },
+  });
+  assert.equal(await read(false), "an-old-password");
+  await read.forget!();
+  assert.equal(vault, undefined);
+  assert.equal(await read(false), PASSWORD);
+  assert.equal(vault, PASSWORD);
+});
+
+test("a vault that cannot keep the password never fails the read that got it", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const tool = path.join(dir, "security");
+  await fs.writeFile(tool, `#!/bin/sh\necho "${PASSWORD}"\n`, { mode: 0o755 });
+  const read = safeStoragePassword({
+    allowed: async () => true,
+    remember: async () => {},
+    tool,
+    saved: {
+      load: async () => undefined,
+      store: (() => {
+        throw new Error("vault refuses");
+      }) as unknown as (p: string) => Promise<void>,
+      clear: async () => {},
+    },
+  });
+  assert.equal(await read(true), PASSWORD);
 });

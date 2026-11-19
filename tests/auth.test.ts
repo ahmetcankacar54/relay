@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { AuthManager, authorizationURL } from "../electron/core/auth";
+import { AuthManager, SignInBusyError, authorizationURL } from "../electron/core/auth";
 import type { AuthFlow } from "../shared/types";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // Generous: a spawned CLI can take seconds to start while the whole suite runs in parallel.
@@ -180,5 +180,24 @@ test(
     await f.auth.cancel(id, flow.id);
     assert.equal((await settled).status, "cancelled");
     assert.equal(f.auth.settled(id, "another"), undefined);
+  },
+);
+
+test(
+  "a background renewal never takes over the user's sign-in, nor the user's request a hidden renewal",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    const f = await fixture(t, `console.log(${JSON.stringify(url)}); setTimeout(() => {}, 20000);`);
+    const id = randomUUID();
+    const cli = path.join(f.root, "cli");
+    const env = { ...process.env } as Record<string, string>;
+    const user = f.auth.start(id, cli, f.root, env);
+    assert.throws(() => f.auth.start(id, cli, f.root, env, { present: () => {} }), SignInBusyError);
+    // The same kind asked again still gets the running attempt.
+    assert.equal(f.auth.start(id, cli, f.root, env).id, user.id);
+    await f.auth.cancel(id, user.id);
+    const quiet = f.auth.start(id, cli, f.root, env, { present: () => {} });
+    assert.throws(() => f.auth.start(id, cli, f.root, env), SignInBusyError);
+    await f.auth.cancel(id, quiet.id);
   },
 );

@@ -241,7 +241,13 @@ export interface WebResponse {
 }
 
 /** Reads the Safe Storage password; never opens a dialog unless `allowPrompt`. */
-export type SafeStoragePassword = (allowPrompt: boolean) => Promise<string>;
+export type SafeStoragePassword = ((allowPrompt: boolean) => Promise<string>) & {
+  /**
+   * Drops the password kept in memory and between runs: it no longer opens the cookies (the
+   * Claude app was reinstalled or its Keychain item changed), so the next read asks the Keychain.
+   */
+  forget?: () => Promise<void>;
+};
 
 /**
  * Reads "Claude Safe Storage" through `security`. A background read is only tried once the user
@@ -257,12 +263,16 @@ export function safeStoragePassword(options: {
    * `security` read Claude's item for good: the item is limited to Anthropic's team, which
    * "Always Allow" does not change, so without this every run asks again.
    */
-  saved?: { load: () => Promise<string | undefined>; store: (password: string) => Promise<void> };
+  saved?: {
+    load: () => Promise<string | undefined>;
+    store: (password: string) => Promise<void>;
+    clear: () => Promise<void>;
+  };
 }): SafeStoragePassword {
   let cached: string | undefined;
   // One read at a time: reads asked together share it, so macOS asks once, not once per read.
   let reading: { promise: Promise<string>; prompts: boolean } | undefined;
-  return async (allowPrompt) => {
+  const password: SafeStoragePassword = async (allowPrompt) => {
     if (cached) return cached;
     // A read under way answers this one too; only one that may not prompt is followed, when it
     // fails, by this one's prompting read.
@@ -285,6 +295,11 @@ export function safeStoragePassword(options: {
     reading = current;
     return current.promise;
   };
+  password.forget = async () => {
+    cached = undefined;
+    await options.saved?.clear().catch(() => {});
+  };
+  return password;
   async function readPassword(allowPrompt: boolean): Promise<string> {
     if (cached) return cached;
     const kept = await options.saved?.load().catch(() => undefined);
@@ -315,7 +330,10 @@ export function safeStoragePassword(options: {
     }
     cached = password;
     await options.remember(true).catch(() => {});
-    await options.saved?.store(password).catch(() => {});
+    // A vault that cannot keep it costs only the next run's prompt, never this read.
+    await Promise.resolve()
+      .then(() => options.saved?.store(password))
+      .catch(() => {});
     return password;
   }
 }
@@ -360,8 +378,10 @@ export class DesktopUsageReader {
     const sameSite = ["no_restriction", "lax", "strict"] as const;
     const cookies: PlainCookie[] = [];
     const seen = new Set<string>();
+    let undecryptable = false;
     for (const row of rows) {
       const value = row.value || decryptCookie(row.encrypted, keys, row.host, version);
+      if (!value && row.name === "sessionKey") undecryptable = true;
       if (!value || !/^[\x21-\x7e]+$/.test(value) || /[;,]/.test(value)) continue;
       if (row.expires !== undefined && row.expires <= now) continue;
       const id = `${row.host}|${row.path ?? "/"}|${row.name}`;
@@ -380,7 +400,12 @@ export class DesktopUsageReader {
         ...(row.created !== undefined ? { created: row.created } : {}),
       });
     }
-    return cookies.some((c) => c.name === "sessionKey") ? cookies : undefined;
+    if (!cookies.some((c) => c.name === "sessionKey")) {
+      // A session that cannot be decrypted means another key (see `read`).
+      if (undecryptable) await this.deps.password.forget?.();
+      return;
+    }
+    return cookies;
   }
 
   /** Asks macOS once to let Relay read the Claude app's sign-in ("Claude Safe Storage"). */
@@ -402,8 +427,10 @@ export class DesktopUsageReader {
     const keys = await this.keys(rows, allowPrompt);
     const cookie = cookieHeader(rows, keys, version);
     if (!cookie) {
-      // Rows that cannot be decrypted mean another key, not a signed-out app.
+      // Rows that cannot be decrypted mean another key, not a signed-out app: the kept password
+      // is dropped, so the next read asks the Keychain for the current one.
       const session = rows.some((r) => r.name === "sessionKey");
+      if (session) await this.deps.password.forget?.();
       throw new UsageError(
         session ? "unsupported" : "expired",
         undefined,

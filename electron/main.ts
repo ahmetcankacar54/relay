@@ -33,7 +33,8 @@ import { ElectronUpdateDriver } from "./core/win-linux-update";
 import { openCodeTab } from "./core/code-tab";
 import { AutoCapture } from "./core/auto-capture";
 import { authWindows, forgetSignInSession } from "./auth-window";
-import { desktopCliWorkspaceMismatch } from "../shared/account-state";
+import { desktopCliMismatch, desktopCliWorkspaceMismatch } from "../shared/account-state";
+import { SignInBusyError } from "./core/auth";
 import path from "node:path";
 import fsp from "node:fs/promises";
 import fs from "node:fs";
@@ -58,7 +59,7 @@ import {
   safeStorageAvailable,
   safeStorageSealer,
 } from "./core/desktop-host";
-import { identity, readObject } from "./core/desktop-files";
+import { identity, readBytes, readObject, writeBytes } from "./core/desktop-files";
 import {
   DesktopWindows,
   WINDOWS_UNSUPPORTED,
@@ -284,15 +285,26 @@ let usage: UsageManager;
  */
 /** Reads through each account's Claude app sign-in; also lends the renewal its claude.ai session. */
 let desktopUsageReader: DesktopUsageReader | undefined;
+/** Whether the user allowed Relay to read the Claude app's sign-in (the marker, never the password). */
+async function desktopUsageAllowed() {
+  try {
+    const marker = path.join(app.getPath("userData"), DESKTOP_USAGE_MARKER);
+    return JSON.parse(await fsp.readFile(marker, "utf8"))?.allowed === true;
+  } catch {
+    return false;
+  }
+}
+/** The vault file that keeps the Claude Safe Storage password, sealed (macOS). */
+const SAFE_STORAGE_KEPT = "claude-safe-storage.bin";
 function desktopUsageSource(sealer: Sealer) {
   const marker = path.join(app.getPath("userData"), DESKTOP_USAGE_MARKER);
-  const kept = path.join(app.getPath("userData"), "desktop-vault", "claude-safe-storage.bin");
+  const vaultDir = path.join(app.getPath("userData"), "desktop-vault");
   const consent = {
-    allowed: async () => JSON.parse(await fsp.readFile(marker, "utf8"))?.allowed === true,
+    allowed: desktopUsageAllowed,
     remember: async (allowed: boolean) =>
       allowed
         ? fsp.writeFile(marker, JSON.stringify({ allowed: true }), { mode: 0o600 })
-        : Promise.all([fsp.rm(marker, { force: true }), fsp.rm(kept, { force: true })]).then(() => {}),
+        : Promise.all([fsp.rm(marker, { force: true }), writeBytes(vaultDir, SAFE_STORAGE_KEPT, null)]).then(() => {}),
   };
   const reader = (desktopUsageReader = new DesktopUsageReader({
     cookieFiles: (accountUuid) => desktop.loginCookieFiles(accountUuid),
@@ -303,8 +315,13 @@ function desktopUsageSource(sealer: Sealer) {
             ...consent,
             // macOS: kept sealed after one read, since "Always Allow" never sticks for security.
             saved: {
-              load: async () => sealer.unseal(await fsp.readFile(kept)) || undefined,
-              store: (password) => fsp.writeFile(kept, sealer.seal(password), { mode: 0o600 }),
+              load: async () => {
+                const data = await readBytes(vaultDir, SAFE_STORAGE_KEPT);
+                return data ? sealer.unseal(data) || undefined : undefined;
+              },
+              // Written whole or not at all, so a crash never leaves a file that cannot be unsealed.
+              store: async (password) => writeBytes(vaultDir, SAFE_STORAGE_KEPT, sealer.seal(password)),
+              clear: async () => writeBytes(vaultDir, SAFE_STORAGE_KEPT, null),
             },
           }),
     request: claudeWebRequest,
@@ -1854,8 +1871,10 @@ function notifyExtensionBroken(account: Account) {
 async function renewSignInQuietly(account: Account): Promise<RenewalResult> {
   if (process.platform !== "darwin" || !desktopUsageReader)
     return { result: "unavailable", detail: "no Claude app sign-in reader" };
-  if (desktopLock.active || desktop.isBusy)
-    return { result: "unavailable", detail: "Claude app busy" };
+  if (desktopLock.active || desktop.isBusy) return { result: "busy", detail: "Claude app busy" };
+  // Renewing from the Claude app's session would give this profile the app's identity.
+  if (desktopCliMismatch(account))
+    return { result: "unavailable", detail: "Claude Code sign-in is for another account or workspace than the Claude app's" };
   let cookies: PlainCookie[] | undefined;
   try {
     cookies = await desktopUsageReader.cookies(account);
@@ -1881,7 +1900,8 @@ async function renewSignInQuietly(account: Account): Promise<RenewalResult> {
       },
     });
   } catch (error) {
-    return { result: "unavailable", detail: String((error as Error)?.message ?? error).slice(0, 160) };
+    const detail = String((error as Error)?.message ?? error).slice(0, 160);
+    return error instanceof SignInBusyError ? { result: "busy", detail } : { result: "unavailable", detail };
   }
   const ended = service.auth.settled(account.id, flow.id);
   if (!ended) return { result: "failed", detail: "sign-in attempt lost" };
@@ -3278,10 +3298,7 @@ function bindIPC() {
   handle("claude-app-access", async (raw) => {
     const ask = z.boolean().optional().parse(raw) ?? false;
     if (process.platform !== "darwin" || !desktopUsageReader) return { supported: false, allowed: false };
-    const allowed = async () =>
-      JSON.parse(
-        await fsp.readFile(path.join(app.getPath("userData"), "desktop-usage-keychain.json"), "utf8").catch(() => "{}"),
-      )?.allowed === true;
+    const allowed = desktopUsageAllowed;
     if (ask) {
       // A refusal comes back as the state below; it is not an error to show.
       await desktopUsageReader.allowKeychain().catch(() => {});

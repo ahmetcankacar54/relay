@@ -82,6 +82,8 @@ export const USAGE_REFRESH_MAX_ATTEMPTS = 3;
  * 2026-10-22 to 10-24 did) must not wait half an hour or ask for a new sign-in.
  */
 export const USAGE_REFRESH_OFFLINE_RETRY_MS = 2 * 60_000;
+/** The detail of the one "expired" that means the sign-in reached its ~30-day end. */
+export const SIGN_IN_ENDED = "refresh: sign-in reached its end date";
 interface Owner {
   pid: number;
   token: string;
@@ -351,7 +353,7 @@ export class UsageCredentialRefresher {
         current.refreshTokenExpiresAt !== undefined &&
         current.refreshTokenExpiresAt <= this.now()
       )
-        throw new UsageError("expired", undefined, "refresh: sign-in reached its end date");
+        throw new UsageError("expired", undefined, SIGN_IN_ENDED);
       if (
         !current.refreshToken ||
         !current.scopes.includes("user:profile") ||

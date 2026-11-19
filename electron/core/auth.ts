@@ -75,6 +75,8 @@ interface Entry {
   ended: Promise<AuthFlow>;
   end?: (flow: AuthFlow) => void;
 }
+/** A sign-in cannot start now for a passing reason: another runs, or the account is in use. */
+export class SignInBusyError extends Error {}
 /** A sign-in Relay starts by itself: its page goes to `present`, never to the user's browser. */
 export interface BackgroundSignIn {
   present: (url: string) => void;
@@ -110,7 +112,12 @@ export class AuthManager {
     background?: BackgroundSignIn,
   ): AuthFlow {
     const previous = this.entries.get(accountId);
-    if (previous && this.active(accountId)) return { ...previous.flow };
+    if (previous && this.active(accountId)) {
+      // The same kind asked again gets the running attempt; a background renewal never takes
+      // over the user's sign-in, nor the user's request a hidden renewal.
+      if (!!previous.flow.background === !!background) return { ...previous.flow };
+      throw new SignInBusyError("another sign-in runs on this account");
+    }
     if (this.list().filter(authPending).length >= 4)
       throw new Error("Önce yarım kalan limit okuma girişlerinden birini tamamla.");
     let releaseProfile: (() => void) | undefined;

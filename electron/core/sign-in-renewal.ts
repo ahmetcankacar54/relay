@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Account, AccountUsage } from "../../shared/types";
+import { desktopCliMismatch } from "../../shared/account-state";
 
 /**
  * Renews Claude Code sign-ins before they end.
@@ -27,6 +28,8 @@ export const FRESH_SIGN_IN_MS = 18 * 3_600_000;
 
 export type RenewalResult =
   | { result: "connected" }
+  /** Not tried for a passing reason (the Claude app busy, another sign-in running): no notice, no wait. */
+  | { result: "busy"; detail: string }
   /**
    * Not tried: the account's claude.ai sign-in is too old for claude.ai to approve a new one.
    * Tried again on every pass, so a fresh sign-in in the Claude app is used within minutes.
@@ -56,9 +59,10 @@ export function renewalDue(
 ): { endsAt?: string } | undefined {
   if ((account.provider ?? "claude") !== "claude" || !account.auth?.loggedIn || !account.desktop)
     return;
-  // Ended: the limits came through the Claude app, or the read said the sign-in expired.
-  if (usage?.cliSignInEnded || usage?.issue === "expired")
-    return usage.cliSignInEndsAt ? { endsAt: usage.cliSignInEndsAt } : {};
+  // A Claude Code sign-in of another account or workspace than the Claude app's: renewing it
+  // from the app's session would replace it with the app's identity.
+  if (desktopCliMismatch(account)) return;
+  if (usage?.cliSignInEnded) return usage.cliSignInEndsAt ? { endsAt: usage.cliSignInEndsAt } : {};
   const endsAt = usage?.cliSignInEndsAt ? Date.parse(usage.cliSignInEndsAt) : NaN;
   if (Number.isFinite(endsAt) && endsAt - now <= RENEW_BEFORE_MS)
     return { endsAt: usage!.cliSignInEndsAt };
@@ -111,13 +115,15 @@ export class SignInRenewal {
   }
   /** Renews one account now, asked by the user: due or not, and told nobody but the caller. */
   async renewNow(account: Account): Promise<RenewalResult> {
-    if (this.running) return { result: "unavailable", detail: "another renewal is running" };
+    if (this.running) return { result: "busy", detail: "another renewal is running" };
     this.running = true;
     try {
       const saved = await this.load();
+      const outcome = await this.attempt(account);
+      // Nothing was tried: the automatic passes keep their own schedule.
+      if (outcome.result === "busy" || outcome.result === "waiting") return outcome;
       const entry = (saved.accounts[account.id] ??= {});
       entry.attemptAt = new Date(this.now()).toISOString();
-      const outcome = await this.attempt(account);
       entry.result = outcome.result;
       if (outcome.result === "connected") {
         delete entry.detail;
@@ -163,9 +169,13 @@ export class SignInRenewal {
         await this.save().catch(() => {});
         const outcome = await this.attempt(account);
         // Nothing was tried: the next pass looks again.
-        if (outcome.result === "waiting") {
+        if (outcome.result === "waiting" || outcome.result === "busy") {
           if (before) entry.attemptAt = before;
           else delete entry.attemptAt;
+        }
+        if (outcome.result === "busy") {
+          await this.save().catch(() => {});
+          continue;
         }
         entry.result = outcome.result;
         if (outcome.result === "connected") {

@@ -14,6 +14,7 @@ import {
   type RenewalResult,
 } from "../electron/core/sign-in-renewal";
 import { approvalStep } from "../electron/core/quiet-approval";
+import { SIGN_IN_ENDED } from "../electron/core/usage-refresh";
 import { cliNeedsReconnect } from "../shared/account-state";
 import type { Account, AccountUsage, UsageIssue } from "../shared/types";
 
@@ -85,7 +86,7 @@ test("an ended Claude Code sign-in reads the limits through the Claude app and s
   const f = usageFixture(
     t,
     async () => {
-      throw new UsageError("expired", undefined, "refresh: sign-in reached its end date");
+      throw new UsageError("expired", undefined, SIGN_IN_ENDED);
     },
     async () => ({ five_hour: { utilization: 17, resets_at: new Date(START + 3_600_000).toISOString() } }),
   );
@@ -101,11 +102,11 @@ test("an ended Claude Code sign-in reads the limits through the Claude app and s
   assert.equal(cliNeedsReconnect(f.store.account(f.id), usage), true);
 });
 
-test("when the Claude app cannot answer either, the ended sign-in is what the read reports", async (t) => {
+test("when the Claude app cannot answer either, the ended sign-in is what the read reports, and it says the end came", async (t) => {
   const f = usageFixture(
     t,
     async () => {
-      throw new UsageError("expired");
+      throw new UsageError("expired", undefined, SIGN_IN_ENDED);
     },
     async () => {
       throw new UsageError("keychain-locked");
@@ -114,7 +115,26 @@ test("when the Claude app cannot answer either, the ended sign-in is what the re
   const usage = await f.manager.refresh(f.id);
   assert.equal(usage.status, "error");
   assert.equal(usage.issue, "expired");
+  assert.equal(usage.cliSignInEnded, true);
+});
+
+test("an expired sign-in for any other reason is not taken for the 30-day end: no read through the app, no end said", async (t) => {
+  let appReads = 0;
+  const f = usageFixture(
+    t,
+    async () => {
+      throw new UsageError("expired", undefined, "refresh: saved sign-in cannot be renewed");
+    },
+    async () => {
+      appReads++;
+      return {};
+    },
+  );
+  const usage = await f.manager.refresh(f.id);
+  assert.equal(usage.issue, "expired");
   assert.equal(usage.cliSignInEnded, undefined);
+  assert.equal(appReads, 0);
+  assert.equal(renewalDue(f.store.account(f.id), usage, START), undefined);
 });
 
 test("a read failing for another reason never falls back to the Claude app", async (t) => {
@@ -143,7 +163,13 @@ test("renewal is due three days before the end, at the end, and never for an acc
   assert.equal(renewalDue(account(), ends(RENEW_BEFORE_MS + DAY), START), undefined);
   assert.deepEqual(renewalDue(account(), ends(RENEW_BEFORE_MS - 1), START), { endsAt: new Date(START + RENEW_BEFORE_MS - 1).toISOString() });
   assert.deepEqual(renewalDue(account(), { accountId: "acc-1", status: "ready", stale: false, cliSignInEnded: true }, START), {});
-  assert.deepEqual(renewalDue(account(), { accountId: "acc-1", status: "error", stale: false, issue: "expired" }, START), {});
+  // An "expired" read alone is not the end: only the end said by the read is.
+  assert.equal(renewalDue(account(), { accountId: "acc-1", status: "error", stale: false, issue: "expired" }, START), undefined);
+  // A Claude Code sign-in of another workspace than the Claude app's is never renewed from it.
+  assert.equal(
+    renewalDue(account({ desktop: { accountUuid: UUID, orgId: "cccccccc-3333-4333-8333-333333333333", savedAt: new Date(START).toISOString() } }), ends(DAY), START),
+    undefined,
+  );
   assert.equal(renewalDue(account({ desktop: undefined }), ends(DAY), START), undefined);
   assert.equal(renewalDue(account({ provider: "codex" } as Partial<Account>), ends(DAY), START), undefined);
   assert.equal(renewalDue(account({ auth: undefined }), ends(DAY), START), undefined);
@@ -233,7 +259,7 @@ test("asked by the user, an ended sign-in reads through the Claude app inside th
   const f = usageFixture(
     t,
     async () => {
-      throw new UsageError("expired");
+      throw new UsageError("expired", undefined, SIGN_IN_ENDED);
     },
     async (_a: unknown, allowPrompt: boolean) => {
       prompts.push(allowPrompt);
@@ -304,4 +330,22 @@ test("an account waiting for a fresh claude.ai sign-in is said once, looked at a
   await renewal.tick();
   assert.deepEqual(tried, ["first", "second", "first"]);
   assert.deepEqual(told, ["first"]);
+});
+
+test("a renewal that could not start for a passing reason tells no one and leaves the schedule alone", async (t) => {
+  const f = renewalFixture(t, [{ result: "busy", detail: "Claude app busy" }, { result: "connected" }], {
+    accountId: "acc-1",
+    status: "ready",
+    stale: false,
+    cliSignInEndsAt: new Date(START + DAY).toISOString(),
+  });
+  await f.renewal.tick();
+  assert.deepEqual(f.told, []);
+  // The next pass, minutes later, tries for real.
+  f.advance(15 * 60_000);
+  await f.renewal.tick();
+  assert.equal(f.renewed.length, 2);
+  assert.deepEqual(f.told, []);
+  const saved = JSON.parse(fs.readFileSync(f.file, "utf8"));
+  assert.equal(saved.accounts["acc-1"].result, "connected");
 });
