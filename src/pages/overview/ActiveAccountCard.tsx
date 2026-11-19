@@ -107,6 +107,7 @@ export function ActiveAccountCard({
                 void relay.refreshUsage(active, allowPrompt)
               }
               connect={() => void relay.startCli(active)}
+              appSignIn={!!active.desktop}
             />
           )}
         </div>

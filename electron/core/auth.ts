@@ -69,6 +69,15 @@ interface Entry {
   closed: Promise<void>;
   stopping: boolean;
   continued: boolean;
+  /** Shows the page instead of the system browser: a background renewal's hidden window. */
+  present?: (url: string) => void;
+  /** Resolves with the flow once it ends (connected, failed or cancelled). */
+  ended: Promise<AuthFlow>;
+  end?: (flow: AuthFlow) => void;
+}
+/** A sign-in Relay starts by itself: its page goes to `present`, never to the user's browser. */
+export interface BackgroundSignIn {
+  present: (url: string) => void;
 }
 export class AuthManager {
   private entries = new Map<string, Entry>();
@@ -98,6 +107,7 @@ export class AuthManager {
     executable: string,
     cwd: string,
     env: Record<string, string>,
+    background?: BackgroundSignIn,
   ): AuthFlow {
     const previous = this.entries.get(accountId);
     if (previous && this.active(accountId)) return { ...previous.flow };
@@ -130,7 +140,8 @@ export class AuthManager {
         status: "starting",
         browserReady: false,
         codeRequested: false,
-        ...(browser ? { windowAvailable: true } : {}),
+        ...(browser && !background ? { windowAvailable: true } : {}),
+        ...(background ? { background: true } : {}),
         startedAt: new Date().toISOString(),
       },
       child,
@@ -140,7 +151,12 @@ export class AuthManager {
       closed: new Promise((resolve) => {
         resolveClose = resolve;
       }),
+      ...(background ? { present: background.present } : {}),
+      ended: undefined as unknown as Promise<AuthFlow>,
     };
+    e.ended = new Promise((resolve) => {
+      e.end = resolve;
+    });
     this.entries.set(accountId, e);
     const receive = (chunk: string) => {
       if (e.stopping || !authPending(e.flow)) return;
@@ -155,6 +171,7 @@ export class AuthManager {
       if (url && !e.url && !browser) {
         e.url = url;
         this.update(e, { status: "waiting", browserReady: true });
+        if (e.present) e.present(url);
       } else if (url && !e.printed) e.printed = url;
       if (
         /paste (?:the )?(?:authorization )?code|enter (?:the )?(?:authorization )?code/i.test(
@@ -223,6 +240,10 @@ export class AuthManager {
           e.url = url;
           clearInterval(e.handoff);
           this.update(e, { status: "waiting", browserReady: true });
+          if (e.present) {
+            e.present(url);
+            return;
+          }
           // The system browser first: Google and passkey sign-ins work there. A browser that
           // cannot be opened leaves Relay's own window.
           try {
@@ -237,6 +258,11 @@ export class AuthManager {
     }
     this.emit({ ...e.flow });
     return { ...e.flow };
+  }
+  /** The flow of this attempt once it ends; undefined for an attempt no longer kept. */
+  settled(accountId: string, attemptId: string): Promise<AuthFlow> | undefined {
+    const e = this.entries.get(accountId);
+    return e && e.flow.id === attemptId ? e.ended : undefined;
   }
   /** Opens the sign-in page again: in Relay's window, or in the system browser when asked. */
   async reopen(accountId: string, attemptId: string, where: "window" | "browser" = "browser") {
@@ -337,5 +363,6 @@ export class AuthManager {
       browserReady: false,
       codeRequested: false,
     });
+    e.end?.({ ...e.flow });
   }
 }

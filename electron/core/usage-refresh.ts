@@ -344,15 +344,21 @@ export class UsageCredentialRefresher {
           throw new UsageError("scope");
         return this.verified(account, current);
       }
+      // Each browser sign-in lasts about 30 days; renewals keep that end, so past it only a new
+      // sign-in helps. Said by name, so the log tells it from a refused or offline renewal.
+      if (
+        current.refreshToken &&
+        current.refreshTokenExpiresAt !== undefined &&
+        current.refreshTokenExpiresAt <= this.now()
+      )
+        throw new UsageError("expired", undefined, "refresh: sign-in reached its end date");
       if (
         !current.refreshToken ||
-        (current.refreshTokenExpiresAt !== undefined &&
-          current.refreshTokenExpiresAt <= this.now()) ||
         !current.scopes.includes("user:profile") ||
         !current.scopes.includes("user:inference") ||
         current.scopes.some((scope) => !/^[A-Za-z0-9:._/-]{1,150}$/.test(scope))
       )
-        throw new UsageError("expired");
+        throw new UsageError("expired", undefined, "refresh: saved sign-in cannot be renewed");
       // The vendor CLI updates its own Keychain item through `/usr/bin/security`,
       // the item's trusted application, exactly as it does during normal use, so
       // a background renewal does not need a consent dialog.

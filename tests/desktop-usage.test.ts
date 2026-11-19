@@ -325,3 +325,71 @@ test("claude.ai's usage answer, as seen live on 2026-11-07, parses like the CLI 
     },
   );
 });
+
+test("reads asked together share one Keychain read, so macOS asks once", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const tool = path.join(dir, "security");
+  const log = path.join(dir, "calls");
+  await fs.writeFile(tool, `#!/bin/sh\necho x >> "${log}"\nsleep 0.3\necho "${PASSWORD}"\n`, { mode: 0o755 });
+  const read = safeStoragePassword({ allowed: async () => true, remember: async () => {}, tool });
+  const answers = await Promise.all([read(true), read(false), read(true), read(false)]);
+  assert.deepEqual(answers, [PASSWORD, PASSWORD, PASSWORD, PASSWORD]);
+  assert.equal((await fs.readFile(log, "utf8")).trim().split("\n").length, 1);
+});
+
+test("the renewal window gets every live claude.ai cookie of the account with its attributes, its workspace as the last one", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-renewal-cookies-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "Cookies");
+  const db = new DatabaseSync(file);
+  db.exec("create table meta (key text primary key, value text)");
+  db.exec("insert into meta values ('version', '24')");
+  db.exec(
+    "create table cookies (host_key text, name text, value text, encrypted_value blob, path text, is_secure integer, is_httponly integer, samesite integer, expires_utc integer)",
+  );
+  // Chromium's time: microseconds since 1601.
+  const chromium = (unixSeconds: number) => BigInt(unixSeconds + 11_644_473_600) * 1_000_000n;
+  const later = Math.floor(Date.now() / 1000) + 86_400;
+  const insert = db.prepare("insert into cookies values (?, ?, '', ?, '/', 1, ?, ?, ?)");
+  insert.run(".claude.ai", "sessionKey", encrypt("sk-ant-sid01-abc", ".claude.ai"), 1, 1, chromium(later));
+  insert.run("claude.ai", "__Host-ant_trusted_device", encrypt("trusted", "claude.ai"), 1, 1, chromium(later));
+  insert.run(".claude.ai", "lastActiveOrg", encrypt("another-org", ".claude.ai"), 0, 1, chromium(later));
+  insert.run(".claude.ai", "__cf_bm", encrypt("old", ".claude.ai"), 1, 0, chromium(later - 2 * 86_400));
+  db.close();
+  const files = { Cookies: await fs.readFile(file) } as Record<string, Buffer | null>;
+  const reader = new DesktopUsageReader({
+    cookieFiles: async () => files,
+    password: async (allowPrompt) => {
+      assert.equal(allowPrompt, false);
+      return PASSWORD;
+    },
+    request: async () => json(200, {}),
+  });
+  const cookies = await reader.cookies(account());
+  assert.deepEqual(
+    cookies?.map((c) => [c.host, c.name, c.value, c.httpOnly, c.sameSite, c.expires === later]),
+    [
+      [".claude.ai", "sessionKey", "sk-ant-sid01-abc", true, "lax", true],
+      ["claude.ai", "__Host-ant_trusted_device", "trusted", true, "lax", true],
+      [".claude.ai", "lastActiveOrg", ORG.toLowerCase(), false, "lax", true],
+    ],
+  );
+});
+
+test("a password read once is kept in the vault, and later runs never ask the Keychain again", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relay-safe-storage-"));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const tool = path.join(dir, "security");
+  const log = path.join(dir, "calls");
+  await fs.writeFile(tool, `#!/bin/sh\necho x >> "${log}"\necho "${PASSWORD}"\n`, { mode: 0o755 });
+  let vault: string | undefined;
+  const saved = { load: async () => vault, store: async (p: string) => void (vault = p) };
+  const first = safeStoragePassword({ allowed: async () => false, remember: async () => {}, tool, saved });
+  assert.equal(await first(true), PASSWORD);
+  assert.equal(vault, PASSWORD);
+  // A new run (a restarted Relay): read from the vault, in the background too.
+  const next = safeStoragePassword({ allowed: async () => false, remember: async () => {}, tool, saved });
+  assert.equal(await next(false), PASSWORD);
+  assert.equal((await fs.readFile(log, "utf8")).trim().split("\n").length, 1);
+});

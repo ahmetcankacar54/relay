@@ -732,6 +732,7 @@ export function AccountDetailBody({
               now={now}
               refresh={(allowPrompt) => void relay.refreshUsage(a, allowPrompt)}
               connect={() => void relay.startCli(a)}
+              appSignIn={!!a.desktop}
               connectElsewhere
             />
             )}
@@ -897,6 +898,39 @@ export function AccountDetailBody({
               }
             >
               {relay.flow?.accountId === a.id && <CliFlowPanel embedded />}
+              {/* The renewal Relay runs by itself near a sign-in's end, started now. */}
+              {data?.diagnostics?.platform === "darwin" && a.desktop && a.auth?.loggedIn && (
+                <Button
+                  size="sm"
+                  variant="link"
+                  className="h-auto justify-self-start px-0 text-xs"
+                  disabled={!!busy || waiting}
+                  onClick={() =>
+                    void action(`renew-quiet:${a.id}`, async () => {
+                      const outcome = await api.renewSignInNow(a.id);
+                      setNotice(
+                        outcome.result === "connected"
+                          ? t(
+                              `${a.name} · Claude Code girişi arka planda yenilendi.`,
+                              `${a.name} · the Claude Code sign-in was renewed in the background.`,
+                            )
+                          : outcome.result === "waiting"
+                            ? t(
+                                `${a.name} · claude.ai yeni bir giriş istiyor (${outcome.detail ?? ""}). Claude uygulamasında bu hesaba yeniden gir ya da “Yenile” ile tarayıcıdan gir.`,
+                                `${a.name} · claude.ai asks for a recent sign-in (${outcome.detail ?? ""}). Sign in to this account again in the Claude app, or use “Renew” to sign in through the browser.`,
+                              )
+                            : t(
+                              `${a.name} · arka planda yenilenemedi (${outcome.detail ?? outcome.result}). “Yenile” ile tarayıcıdan giriş yap.`,
+                              `${a.name} · could not be renewed in the background (${outcome.detail ?? outcome.result}). Use “Renew” to sign in through the browser.`,
+                            ),
+                      );
+                      await relay.refreshUsage(a);
+                    })
+                  }
+                >
+                  {t("Girişi şimdi arka planda yenile", "Renew the sign-in in the background now")}
+                </Button>
+              )}
             </ConnectionRow>
             {/* The extension's and terminal's sign-ins are kept on macOS and Linux; the browser preview shows the rows too. */}
             {browserSteps && <ExtensionConnection account={a} extension={extension} />}

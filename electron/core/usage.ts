@@ -291,6 +291,14 @@ export function missingIdentity(account: Account, value: unknown) {
     repair.desktopEmail = email.trim();
   return Object.keys(repair).length ? repair : undefined;
 }
+/** The Claude Code sign-in belongs to another account or workspace than the Claude app's. */
+function desktopMismatch(a: Account) {
+  return (
+    !!a.desktop &&
+    ((!!a.auth?.accountUuid && a.auth.accountUuid !== a.desktop.accountUuid) ||
+      (!!a.auth?.orgId && a.auth.orgId !== a.desktop.orgId))
+  );
+}
 function identityKey(a: Account) {
   return JSON.stringify([
     a.auth?.loggedIn,
@@ -542,7 +550,8 @@ export class UsageManager {
         allowPrompt &&
         this.now() >= (this.serverRetryUntil.get(id) ?? 0) &&
         (previous.connectionRenewalRequired === true ||
-          ["keychain-locked", "renewal-required"].includes(
+          // "expired": the user asks to read through the Claude app, which may ask the Keychain.
+          ["keychain-locked", "renewal-required", "expired"].includes(
             previous.issue ?? "",
           ))
       )
@@ -691,7 +700,12 @@ export class UsageManager {
       const latest = this.store.account(account.id);
       if (identityKey(latest) !== identityKey(account))
         throw new UsageError("identity-mismatch");
-      this.succeed(latest, limits, "cli", renewalRequired);
+      this.succeed(latest, limits, "cli", renewalRequired, {
+        ...(credential.refreshTokenExpiresAt !== undefined &&
+        Number.isFinite(credential.refreshTokenExpiresAt)
+          ? { cliSignInEndsAt: new Date(credential.refreshTokenExpiresAt).toISOString() }
+          : {}),
+      });
       const repair = missingIdentity(latest, profile);
       if (repair) {
         this.store.update((state) => {
@@ -712,6 +726,16 @@ export class UsageManager {
       if (!current()) return this.view(this.store.account(account.id));
       const error =
         e instanceof UsageError ? e : new UsageError("unavailable", undefined, networkDetail(e));
+      // The Claude Code sign-in ended (each lasts about 30 days, whatever its renewals). The
+      // Claude app's own sign-in for the same account still reads the limits; the account keeps
+      // asking for a new Claude Code sign-in beside them.
+      if (
+        error.issue === "expired" &&
+        this.source(account) === "cli" &&
+        (account.provider ?? "claude") === "claude" &&
+        (await this.readThroughApp(account, previous, allowPrompt, current, error))
+      )
+        return this.view(this.store.account(account.id));
       const failures = (this.failures.get(account.id) ?? 0) + 1;
       this.failures.set(account.id, failures);
       const retryAt =
@@ -751,11 +775,40 @@ export class UsageManager {
     }
     return this.view(this.store.account(account.id));
   }
+  /**
+   * After the Claude Code sign-in of `account` ended: reads its limits through its Claude app
+   * sign-in. True when that answered; any failure of its own leaves the ended sign-in to report.
+   */
+  private async readThroughApp(
+    account: Account,
+    previous: AccountUsage,
+    allowPrompt: boolean,
+    current: () => boolean,
+    ended: UsageError,
+  ): Promise<boolean> {
+    if (!this.desktopUsage?.usable(account) || desktopMismatch(account)) return false;
+    try {
+      const raw = await this.desktopUsage.read(account, allowPrompt);
+      if (!current()) return true;
+      const limits = parseUsage(raw);
+      const latest = this.store.account(account.id);
+      if (identityKey(latest) !== identityKey(account)) return false;
+      this.succeed(latest, limits, "desktop", false, { cliSignInEnded: true });
+      if (!previous.cliSignInEnded)
+        try {
+          this.onIssue?.(account, "expired", `${ended.detail ?? "sign-in ended"}; limits read through the Claude app`);
+        } catch {}
+      return true;
+    } catch {
+      return false;
+    }
+  }
   private succeed(
     account: Account,
     limits: ReturnType<typeof parseUsage>,
     source: NonNullable<AccountUsage["source"]>,
     renewalRequired: boolean,
+    signIn: Pick<AccountUsage, "cliSignInEndsAt" | "cliSignInEnded"> = {},
   ) {
     this.failures.delete(account.id);
     this.serverRetryUntil.delete(account.id);
@@ -767,6 +820,7 @@ export class UsageManager {
       checkedAt: new Date(this.now()).toISOString(),
       source,
       ...(renewalRequired ? { connectionRenewalRequired: true } : {}),
+      ...signIn,
       ...limits,
     });
     // History is optional: failed local persistence must not turn a verified

@@ -108,6 +108,29 @@ export interface EncryptedCookie {
   encrypted: Uint8Array;
   /** When the cookie ends (ms since the epoch); undefined for one that lasts the browser's run. */
   expiresMs?: number;
+  /** The cookie's own attributes, where the database keeps them (Chromium's does). */
+  path?: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  /** Chromium's value: -1 unspecified, 0 none, 1 lax, 2 strict. */
+  sameSite?: number;
+  /** Seconds since 1970; undefined for a session cookie. */
+  expires?: number;
+  /** When the cookie was first set, seconds since 1970: for the session, when it signed in. */
+  created?: number;
+}
+
+/** A claude.ai cookie as the hidden renewal window sets it: its value and attributes. */
+export interface PlainCookie {
+  host: string;
+  name: string;
+  value: string;
+  path: string;
+  secure: boolean;
+  httpOnly: boolean;
+  sameSite: "unspecified" | "no_restriction" | "lax" | "strict";
+  expires?: number;
+  created?: number;
 }
 
 /** Chromium time (microseconds from 1601-01-01) as ms since the epoch; undefined for none. */
@@ -141,29 +164,37 @@ export async function readCookieRows(
         | { value?: unknown }
         | undefined;
       const version = Number(meta?.value);
-      // Older or trimmed databases may lack the expiry columns: then no cookie says when it ends.
-      const columns = new Set(
-        (db.prepare("pragma table_info(cookies)").all() as { name?: unknown }[]).map((c) => c.name),
-      );
-      const expiry =
-        columns.has("expires_utc") && columns.has("has_expires") ? ", expires_utc, has_expires" : "";
+      // Every column the database has (older or trimmed ones lack some); Chromium's times pass
+      // 2^53 microseconds, so integers are read as bigint.
       const statement = db.prepare(
-        `select host_key, name, value, encrypted_value${expiry} from cookies where host_key in (${HOSTS.map(() => "?").join(",")})`,
+        `select * from cookies where host_key in (${HOSTS.map(() => "?").join(",")})`,
       );
-      // Chromium's times pass 2^53 microseconds: read as numbers they would throw.
-      statement.setReadBigInts(true);
+      statement.setReadBigInts?.(true);
       const rows = statement.all(...HOSTS) as Record<string, unknown>[];
+      const int = (v: unknown) => (typeof v === "bigint" ? Number(v) : typeof v === "number" ? v : undefined);
       return {
         version: Number.isFinite(version) ? version : 0,
-        rows: rows.map((r) => ({
-          host: String(r.host_key),
-          name: String(r.name),
-          value: typeof r.value === "string" ? r.value : "",
-          encrypted: r.encrypted_value instanceof Uint8Array ? r.encrypted_value : new Uint8Array(),
-          ...(Number(r.has_expires) === 1 && chromiumMs(r.expires_utc) !== undefined
-            ? { expiresMs: chromiumMs(r.expires_utc) }
-            : {}),
-        })),
+        rows: rows.map((r) => {
+          const expires = typeof r.expires_utc === "bigint" ? r.expires_utc : undefined;
+          const seconds = expires && expires > 0n ? Number(expires / 1_000_000n) - 11_644_473_600 : undefined;
+          const creation = typeof r.creation_utc === "bigint" ? r.creation_utc : undefined;
+          const created = creation && creation > 0n ? Number(creation / 1_000_000n) - 11_644_473_600 : undefined;
+          return {
+            host: String(r.host_key),
+            name: String(r.name),
+            value: typeof r.value === "string" ? r.value : "",
+            encrypted: r.encrypted_value instanceof Uint8Array ? r.encrypted_value : new Uint8Array(),
+            ...(typeof r.path === "string" ? { path: r.path } : {}),
+            ...(int(r.is_secure) !== undefined ? { secure: int(r.is_secure) === 1 } : {}),
+            ...(int(r.is_httponly) !== undefined ? { httpOnly: int(r.is_httponly) === 1 } : {}),
+            ...(int(r.samesite) !== undefined ? { sameSite: int(r.samesite) } : {}),
+            ...(Number(r.has_expires) === 1 && chromiumMs(r.expires_utc) !== undefined
+              ? { expiresMs: chromiumMs(r.expires_utc) }
+              : {}),
+            ...(seconds !== undefined && seconds > 0 ? { expires: seconds } : {}),
+            ...(created !== undefined && created > 0 ? { created } : {}),
+          };
+        }),
       };
     } finally {
       db.close();
@@ -176,19 +207,29 @@ export async function readCookieRows(
   }
 }
 
-/** The `Cookie` header for claude.ai, from the login rows; undefined without a session. */
-export function cookieHeader(
+/** The login cookies by name, from the login rows; undefined without a session. */
+export function sessionCookies(
   rows: EncryptedCookie[],
   keys: CookieKeys,
   dbVersion: number,
-): string | undefined {
+): Map<string, string> | undefined {
   const values = new Map<string, string>();
   for (const row of rows) {
     if (!SENT.has(row.name) || values.has(row.name)) continue;
     const value = row.value || decryptCookie(row.encrypted, keys, row.host, dbVersion);
     if (value && /^[\x21-\x7e]+$/.test(value) && !/[;,]/.test(value)) values.set(row.name, value);
   }
-  if (!values.has("sessionKey")) return;
+  return values.has("sessionKey") ? values : undefined;
+}
+
+/** The `Cookie` header for claude.ai, from the login rows; undefined without a session. */
+export function cookieHeader(
+  rows: EncryptedCookie[],
+  keys: CookieKeys,
+  dbVersion: number,
+): string | undefined {
+  const values = sessionCookies(rows, keys, dbVersion);
+  if (!values) return;
   return [...values].map(([name, value]) => `${name}=${value}`).join("; ");
 }
 
@@ -211,10 +252,43 @@ export function safeStoragePassword(options: {
   allowed: () => Promise<boolean>;
   remember: (allowed: boolean) => Promise<void>;
   tool?: string;
+  /**
+   * Where a password read once is kept between runs (Relay's sealed vault). macOS cannot let
+   * `security` read Claude's item for good: the item is limited to Anthropic's team, which
+   * "Always Allow" does not change, so without this every run asks again.
+   */
+  saved?: { load: () => Promise<string | undefined>; store: (password: string) => Promise<void> };
 }): SafeStoragePassword {
   let cached: string | undefined;
+  // One read at a time: reads asked together share it, so macOS asks once, not once per read.
+  let reading: { promise: Promise<string>; prompts: boolean } | undefined;
   return async (allowPrompt) => {
     if (cached) return cached;
+    // A read under way answers this one too; only one that may not prompt is followed, when it
+    // fails, by this one's prompting read.
+    while (reading) {
+      const running = reading;
+      try {
+        return await running.promise;
+      } catch (error) {
+        if (!allowPrompt || running.prompts) throw error;
+      }
+      if (reading === running) break;
+    }
+    if (cached) return cached;
+    const current = {
+      prompts: allowPrompt,
+      promise: readPassword(allowPrompt).finally(() => {
+        if (reading === current) reading = undefined;
+      }),
+    };
+    reading = current;
+    return current.promise;
+  };
+  async function readPassword(allowPrompt: boolean): Promise<string> {
+    if (cached) return cached;
+    const kept = await options.saved?.load().catch(() => undefined);
+    if (kept) return (cached = kept);
     if (!allowPrompt && !(await options.allowed().catch(() => false)))
       throw new UsageError("keychain-locked", undefined, "desktop: Keychain not allowed yet");
     const result = await new Promise<{ code?: number | string | null; stdout: string }>(
@@ -241,8 +315,9 @@ export function safeStoragePassword(options: {
     }
     cached = password;
     await options.remember(true).catch(() => {});
+    await options.saved?.store(password).catch(() => {});
     return password;
-  };
+  }
 }
 
 /**
@@ -267,6 +342,50 @@ export class DesktopUsageReader {
   /** Whether this account has a Claude app sign-in to read through. */
   static usable(account: Account): boolean {
     return !!account.desktop?.accountUuid && !!account.desktop.orgId;
+  }
+
+  /**
+   * All of the account's claude.ai cookies with their attributes, in memory only: for the hidden
+   * window that renews its Claude Code sign-in. The session alone is not enough there: claude.ai
+   * also asks for the device's own cookies (a trusted-device mark that organizations can require,
+   * the device id). Never asks for the Keychain; undefined when there is no session.
+   */
+  async cookies(account: Account): Promise<PlainCookie[] | undefined> {
+    const desktop = account.desktop;
+    if (!desktop || !/^[0-9a-f-]{36}$/i.test(desktop.orgId)) return;
+    const files = await this.deps.cookieFiles(desktop.accountUuid);
+    const { version, rows } = await (this.deps.readRows ?? readCookieRows)(files);
+    const keys = await this.keys(rows, false);
+    const now = (this.deps.now ?? Date.now)() / 1000;
+    const sameSite = ["no_restriction", "lax", "strict"] as const;
+    const cookies: PlainCookie[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const value = row.value || decryptCookie(row.encrypted, keys, row.host, version);
+      if (!value || !/^[\x21-\x7e]+$/.test(value) || /[;,]/.test(value)) continue;
+      if (row.expires !== undefined && row.expires <= now) continue;
+      const id = `${row.host}|${row.path ?? "/"}|${row.name}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      cookies.push({
+        host: row.host,
+        name: row.name,
+        // The workspace the sign-in is for, whatever the Claude app last opened.
+        value: row.name === "lastActiveOrg" ? desktop.orgId.toLowerCase() : value,
+        path: row.path ?? "/",
+        secure: row.secure ?? true,
+        httpOnly: row.httpOnly ?? row.name.startsWith("sessionKey"),
+        sameSite: sameSite[row.sameSite ?? -1] ?? "unspecified",
+        ...(row.expires !== undefined ? { expires: row.expires } : {}),
+        ...(row.created !== undefined ? { created: row.created } : {}),
+      });
+    }
+    return cookies.some((c) => c.name === "sessionKey") ? cookies : undefined;
+  }
+
+  /** Asks macOS once to let Relay read the Claude app's sign-in ("Claude Safe Storage"). */
+  async allowKeychain(): Promise<void> {
+    await this.deps.password(true);
   }
 
   async read(account: Account, allowPrompt: boolean): Promise<unknown> {

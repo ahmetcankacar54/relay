@@ -158,3 +158,27 @@ test(
     assert.equal(f.auth.list()[0].status, "cancelled");
   },
 );
+test(
+  "a background sign-in hands its page to the hidden window, never the browser, and settles with its end",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    const f = await fixture(
+      t,
+      `console.log(${JSON.stringify(url)}); process.stdin.once('data',()=>{console.log('Login successful'); process.exit(0)});`,
+    );
+    const presented: string[] = [];
+    const id = randomUUID();
+    const flow = f.auth.start(id, path.join(f.root, "cli"), f.root, { ...process.env } as Record<string, string>, {
+      present: (page) => presented.push(page),
+    });
+    assert.equal(flow.background, true);
+    const settled = f.auth.settled(id, flow.id);
+    assert(settled);
+    await until(() => presented.length === 1);
+    assert.deepEqual(presented, [url]);
+    assert.deepEqual(f.opened, []);
+    await f.auth.cancel(id, flow.id);
+    assert.equal((await settled).status, "cancelled");
+    assert.equal(f.auth.settled(id, "another"), undefined);
+  },
+);

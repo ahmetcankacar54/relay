@@ -19,6 +19,8 @@ import {
 } from "@/lib/meter";
 import { cn } from "@/lib/utils";
 type T = (tr: string, en: string) => string;
+/** How long before a Claude Code sign-in's end the card says so (Claude Code itself warns 3 days ahead). */
+const SIGN_IN_END_WARNING_MS = 3 * 86_400_000;
 /** The Keychain's (Linux: keyring's) sentence comes from keychainWords. */
 const issues: Record<Exclude<UsageIssue, "keychain-locked">, [string, string]> = {
   "connect-cli": [
@@ -68,8 +70,14 @@ export function UsageCard({
   busy = false,
   connectBusy = false,
   connectElsewhere = false,
+  appSignIn = false,
   now = Date.now(),
 }: {
+  /**
+   * The account has a Claude app sign-in: when its Claude Code sign-in ended, the limits can be
+   * read through it once the user allows the Keychain.
+   */
+  appSignIn?: boolean;
   /** The sign-in has its own button nearby (the account page's connection row): name the problem, offer no second button. */
   connectElsewhere?: boolean;
   usage?: AccountUsage;
@@ -87,12 +95,21 @@ export function UsageCard({
   const shownIssue = displayedIssue(usage);
   const renewal = renewalIssue(usage);
   const keychain = keychainWords(usePlatform(), t);
-  const reconnect = [
-    "expired",
-    "credentials-missing",
-    "scope",
-    "identity-mismatch",
-  ].includes(usage?.issue ?? "");
+  // A Claude Code sign-in ends about 30 days after it was made, whatever its renewals.
+  const endsAt = usage?.cliSignInEndsAt ? Date.parse(usage.cliSignInEndsAt) : NaN;
+  const endsInDays =
+    !usage?.cliSignInEnded && endsAt > now && endsAt - now <= SIGN_IN_END_WARNING_MS
+      ? Math.max(1, Math.ceil((endsAt - now) / 86_400_000))
+      : undefined;
+  const reconnect =
+    [
+      "expired",
+      "credentials-missing",
+      "scope",
+      "identity-mismatch",
+    ].includes(usage?.issue ?? "") ||
+    !!usage?.cliSignInEnded ||
+    endsInDays !== undefined;
   const retry = usage?.retryAt && Date.parse(usage.retryAt) > now;
   const clock = (date: string) =>
     new Date(date).toLocaleString(language, {
@@ -280,6 +297,15 @@ export function UsageCard({
                     usage.source === "desktop"
                       ? t(" · Claude uygulamasından", " · via the Claude app")
                       : ""
+                  }${
+                    usage.cliSignInEnded
+                      ? t(" · Claude Code girişinin süresi doldu", " · the Claude Code sign-in ended")
+                      : endsInDays !== undefined
+                        ? t(
+                            ` · Claude Code girişi ${endsInDays} gün içinde bitiyor`,
+                            ` · the Claude Code sign-in ends in ${endsInDays} ${endsInDays === 1 ? "day" : "days"}`,
+                          )
+                        : ""
                   }`
                 : t("Henüz sorgulanmadı", "Not checked yet")}
           {retry &&
@@ -287,6 +313,17 @@ export function UsageCard({
             !renewal &&
             ` ${t("Tekrar", "Next try")} ${clock(usage!.retryAt!)}`}
         </span>
+        {appSignIn && usage?.issue === "expired" && (
+          <Button
+            size="sm"
+            variant="link"
+            className="h-auto shrink-0 px-0"
+            disabled={loading}
+            onClick={() => refresh(true)}
+          >
+            {t("Claude uygulamasından oku", "Read via the Claude app")}
+          </Button>
+        )}
         {reconnect && connectElsewhere ? (
           <span className="shrink-0">{t("Bağlantılar’dan yenile", "Renew it under Connections")}</span>
         ) : reconnect ? (
@@ -297,7 +334,7 @@ export function UsageCard({
             disabled={loading || connectBusy}
             onClick={connect}
           >
-            {usage?.source === "desktop"
+            {usage?.source === "desktop" && !usage.cliSignInEnded
               ? t("Limit okuma girişi yap", "Sign in to read usage")
               : t("Limit okuma girişini yenile", "Renew usage sign-in")}
           </Button>

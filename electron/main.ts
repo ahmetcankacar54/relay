@@ -46,8 +46,12 @@ import {
   DESKTOP_USAGE_MARKER,
   DesktopUsageReader,
   safeStoragePassword,
+  type PlainCookie,
 } from "./core/desktop-usage";
 import { linuxKeyringReachable, linuxSafeStoragePassword } from "./core/linux-safe-storage";
+import type { Sealer } from "./core/vault-crypto";
+import { FRESH_SIGN_IN_MS, SignInRenewal, type RenewalResult } from "./core/sign-in-renewal";
+import { approveQuietly } from "./quiet-sign-in";
 import { claudeWebRequest } from "./desktop-usage-request";
 import {
   desktopHost,
@@ -278,19 +282,33 @@ let usage: UsageManager;
  * (Linux: keyring) read of "Claude Safe Storage" is remembered in a small file, never the
  * password itself.
  */
-function desktopUsageSource() {
+/** Reads through each account's Claude app sign-in; also lends the renewal its claude.ai session. */
+let desktopUsageReader: DesktopUsageReader | undefined;
+function desktopUsageSource(sealer: Sealer) {
   const marker = path.join(app.getPath("userData"), DESKTOP_USAGE_MARKER);
-  const reader = new DesktopUsageReader({
+  const kept = path.join(app.getPath("userData"), "desktop-vault", "claude-safe-storage.bin");
+  const consent = {
+    allowed: async () => JSON.parse(await fsp.readFile(marker, "utf8"))?.allowed === true,
+    remember: async (allowed: boolean) =>
+      allowed
+        ? fsp.writeFile(marker, JSON.stringify({ allowed: true }), { mode: 0o600 })
+        : Promise.all([fsp.rm(marker, { force: true }), fsp.rm(kept, { force: true })]).then(() => {}),
+  };
+  const reader = (desktopUsageReader = new DesktopUsageReader({
     cookieFiles: (accountUuid) => desktop.loginCookieFiles(accountUuid),
-    password: (process.platform === "linux" ? linuxSafeStoragePassword : safeStoragePassword)({
-      allowed: async () => JSON.parse(await fsp.readFile(marker, "utf8"))?.allowed === true,
-      remember: async (allowed) =>
-        allowed
-          ? fsp.writeFile(marker, JSON.stringify({ allowed: true }), { mode: 0o600 })
-          : fsp.rm(marker, { force: true }),
-    }),
+    password:
+      process.platform === "linux"
+        ? linuxSafeStoragePassword(consent)
+        : safeStoragePassword({
+            ...consent,
+            // macOS: kept sealed after one read, since "Always Allow" never sticks for security.
+            saved: {
+              load: async () => sealer.unseal(await fsp.readFile(kept)) || undefined,
+              store: (password) => fsp.writeFile(kept, sealer.seal(password), { mode: 0o600 }),
+            },
+          }),
     request: claudeWebRequest,
-  });
+  }));
   return {
     usable: (account: Account) => DesktopUsageReader.usable(account),
     read: (account: Account, allowPrompt: boolean) => reader.read(account, allowPrompt),
@@ -742,7 +760,8 @@ else {
             usage?.invalidate(flow.accountId);
             usage?.tick();
           }
-          if (window && !window.isDestroyed())
+          // A renewal Relay runs by itself stays off the screens.
+          if (!flow.background && window && !window.isDestroyed())
             window.webContents.send("relay:auth", flow);
         },
         (url) => shell.openExternal(url),
@@ -964,7 +983,7 @@ else {
         // Without a Claude Code sign-in, the Claude app's own sign-in reads the limits (macOS, and
         // Linux where the desktop's keyring can be read).
         process.platform === "darwin" || (process.platform === "linux" && linuxKeyringReachable())
-          ? desktopUsageSource()
+          ? desktopUsageSource(vault.sealer)
           : undefined,
         // Codex through its ChatGPT sign-in, Antigravity through its CLIProxyAPI sidecar.
         async (account) => {
@@ -1531,6 +1550,19 @@ else {
           // Corroborate legacy profiles before the first quota request. Otherwise
           // updated identity fields can hide that request behind its old cooldown.
           usage.start();
+          // Claude Code sign-ins end about 30 days after they were made: renew them before.
+          if (process.platform === "darwin") {
+            signInRenewal = new SignInRenewal({
+              file: path.join(app.getPath("userData"), "sign-in-renewal.json"),
+              accounts: () => service.store.state.accounts,
+              usage: (id) => usage.snapshot()[id],
+              renew: renewSignInQuietly,
+              notify: notifySignInEnding,
+            });
+            // After the first reads have said when each sign-in ends.
+            setTimeout(() => void signInRenewal?.tick().catch(() => {}), 3 * 60_000).unref();
+            setInterval(() => void signInRenewal?.tick().catch(() => {}), 15 * 60_000).unref();
+          }
           try {
             settleProxyAffinity();
           } catch {
@@ -1815,6 +1847,104 @@ function notifyExtensionBroken(account: Account) {
   notice.on("click", () => openPage("gecis"));
   notice.show();
 }
+/**
+ * Renews an account's Claude Code sign-in with no one at the screen: the CLI's own sign-in, its
+ * page approved in a hidden window holding the account's claude.ai session from the Claude app.
+ */
+async function renewSignInQuietly(account: Account): Promise<RenewalResult> {
+  if (process.platform !== "darwin" || !desktopUsageReader)
+    return { result: "unavailable", detail: "no Claude app sign-in reader" };
+  if (desktopLock.active || desktop.isBusy)
+    return { result: "unavailable", detail: "Claude app busy" };
+  let cookies: PlainCookie[] | undefined;
+  try {
+    cookies = await desktopUsageReader.cookies(account);
+  } catch (error) {
+    const issue = (error as { issue?: string })?.issue;
+    return { result: "unavailable", detail: `claude.ai session not readable${issue ? `: ${issue}` : ""}` };
+  }
+  if (!cookies) return { result: "unavailable", detail: "no claude.ai session" };
+  // claude.ai approves a new Claude Code sign-in only from a recent claude.ai sign-in
+  // (`session_stale_relogin` otherwise): an older one is not tried, and the next pass looks again.
+  const created = cookies.find((c) => c.name === "sessionKey")?.created;
+  if (created !== undefined && Date.now() - created * 1000 > FRESH_SIGN_IN_MS)
+    return {
+      result: "waiting",
+      detail: `claude.ai sign-in is ${Math.round((Date.now() - created * 1000) / 3_600_000)} h old`,
+    };
+  let quiet: Promise<Awaited<ReturnType<typeof approveQuietly>>> | undefined;
+  let flow;
+  try {
+    flow = await service.loginInBackground(account.id, {
+      present: (url) => {
+        quiet ??= approveQuietly(url, cookies!);
+      },
+    });
+  } catch (error) {
+    return { result: "unavailable", detail: String((error as Error)?.message ?? error).slice(0, 160) };
+  }
+  const ended = service.auth.settled(account.id, flow.id);
+  if (!ended) return { result: "failed", detail: "sign-in attempt lost" };
+  // The page must be approved within the window's own time; otherwise the attempt is stopped.
+  const watch = (async () => {
+    for (let i = 0; i < 60 && !quiet; i++) await new Promise((r) => setTimeout(r, 500));
+    const outcome = quiet ? await quiet : { result: "failed" as const, detail: "no sign-in page" };
+    if (outcome.result !== "approved")
+      await service.auth.cancel(account.id, flow.id).catch(() => {});
+    // Approved: the CLI saves the sign-in within seconds; one that does not is stopped.
+    else
+      setTimeout(() => void service.auth.cancel(account.id, flow.id).catch(() => {}), 2 * 60_000).unref();
+    return outcome;
+  })();
+  const [end, outcome] = await Promise.all([ended, watch]);
+  // Where the hidden window went and what it last saw (hosts, paths, button labels only).
+  void (async () => {
+    const file = path.join(app.getPath("userData"), "diagnostics", "quiet-sign-in.json");
+    let entries: unknown[] = [];
+    try {
+      entries = JSON.parse(await fsp.readFile(file, "utf8"));
+    } catch {}
+    entries = [
+      ...(Array.isArray(entries) ? entries : []).slice(-9),
+      {
+        at: new Date().toISOString(),
+        accountId: account.id.slice(0, 8),
+        flow: end.status,
+        window: outcome.result,
+        // Names only: which of the Claude app's cookies the window carried.
+        cookies: cookies!.map((c) => c.name).sort(),
+        ...("detail" in outcome ? { detail: outcome.detail } : {}),
+        ...("trail" in outcome
+          ? { trail: outcome.trail, last: outcome.last, refused: outcome.refused, requests: outcome.requests }
+          : {}),
+      },
+    ];
+    await fsp.mkdir(path.dirname(file), { recursive: true });
+    await fsp.writeFile(file, JSON.stringify(entries, null, 2), { mode: 0o600 });
+  })().catch(() => {});
+  if (end.status === "connected") return { result: "connected" };
+  const detail =
+    outcome.result === "approved" ? (end.error ?? end.status) : `${outcome.result}: ${"detail" in outcome ? outcome.detail : ""}`;
+  return { result: "failed", detail: detail.slice(0, 200) };
+}
+/** Says that an account's Claude Code sign-in ends soon (or ended) and Relay could not renew it. */
+function notifySignInEnding(account: Account, endsAt?: string) {
+  if (!Notification.isSupported()) return;
+  const end = endsAt ? Date.parse(endsAt) : NaN;
+  const days = Number.isFinite(end) && end > Date.now() ? Math.max(1, Math.ceil((end - Date.now()) / 86_400_000)) : 0;
+  const notice = new Notification({
+    title: days
+      ? say(`${account.name}: Claude Code girişi ${days} gün içinde bitiyor`, `${account.name}: Claude Code sign-in ends in ${days} ${days === 1 ? "day" : "days"}`)
+      : say(`${account.name}: Claude Code girişinin süresi doldu`, `${account.name}: Claude Code sign-in ended`),
+    body: say(
+      "Claude uygulamasında bu hesaba yeniden girersen Relay kendisi yeniler; ya da tıkla ve tarayıcıdan yenile.",
+      "Sign in to this account again in the Claude app and Relay renews it by itself, or click to renew it in the browser.",
+    ),
+  });
+  notice.on("click", () => openPage("hesaplar"));
+  notice.show();
+}
+let signInRenewal: SignInRenewal | undefined;
 /** Says that an account's saved Claude sign-in ended; a click opens the account. */
 function notifySignInEnded(account: Account) {
   if (!Notification.isSupported()) return;
@@ -3145,6 +3275,32 @@ function bindIPC() {
       z.boolean().optional().parse(allowPrompt),
     ),
   );
+  handle("claude-app-access", async (raw) => {
+    const ask = z.boolean().optional().parse(raw) ?? false;
+    if (process.platform !== "darwin" || !desktopUsageReader) return { supported: false, allowed: false };
+    const allowed = async () =>
+      JSON.parse(
+        await fsp.readFile(path.join(app.getPath("userData"), "desktop-usage-keychain.json"), "utf8").catch(() => "{}"),
+      )?.allowed === true;
+    if (ask) {
+      // A refusal comes back as the state below; it is not an error to show.
+      await desktopUsageReader.allowKeychain().catch(() => {});
+      if (await allowed()) {
+        // Reads and renewals that waited for it run now, not at their next turn.
+        for (const account of service.store.state.accounts)
+          if (usage.snapshot()[account.id]?.issue === "expired") void usage.refresh(account.id, true).catch(() => {});
+        void signInRenewal?.retryUnavailable().catch(() => {});
+      }
+    }
+    return { supported: true, allowed: await allowed() };
+  });
+  handle("renew-sign-in-now", async (accountId) => {
+    const account = service.store.account(id.parse(accountId));
+    if (!signInRenewal) return { result: "unavailable", detail: "only on macOS" };
+    const outcome = await signInRenewal.renewNow(account);
+    broadcastChanged();
+    return outcome;
+  });
   handle("panel-snapshot", async () => ({
     ...(await service.panelSnapshot()),
     windows: await separateWindows(),

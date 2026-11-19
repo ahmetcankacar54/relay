@@ -139,6 +139,11 @@ export interface AuthFlow {
   windowAvailable?: boolean;
   startedAt: string;
   error?: string;
+  /**
+   * Relay renews this sign-in by itself in a hidden window, from the account's claude.ai session;
+   * the screens do not show it, and a sign-in the user starts replaces it.
+   */
+  background?: boolean;
 }
 /**
  * The Code sidebar sections the account switched to lacks, as counts and account names: the
@@ -648,6 +653,15 @@ export interface RelayAPI {
     accountId: string,
     allowKeychainPrompt?: boolean,
   ): Promise<AccountUsage>;
+  /**
+   * Whether Relay may read the Claude app's sign-in ("Claude Safe Storage" in the Keychain),
+   * which reads limits through the app and renews Claude Code sign-ins; `ask` asks macOS now.
+   */
+  claudeAppAccess(ask?: boolean): Promise<{ supported: boolean; allowed: boolean }>;
+  /** Renews the account's Claude Code sign-in now, in the background, from its claude.ai session. */
+  renewSignInNow(
+    accountId: string,
+  ): Promise<{ result: "connected" | "waiting" | "unavailable" | "failed"; detail?: string }>;
   desktopSnapshot(): Promise<DesktopState>;
   dismissDesktopError(revision: number): Promise<void>;
   captureDesktop(profileId: string, orgId: string): Promise<void>;
@@ -945,6 +959,16 @@ export interface AccountUsage {
    * its Claude app sign-in (claude.ai's own usage page).
    */
   source?: "cli" | "desktop";
+  /**
+   * When the account's Claude Code sign-in ends for good: Anthropic gives each browser sign-in
+   * about 30 days, and renewing it does not move that date. Only a new sign-in does.
+   */
+  cliSignInEndsAt?: string;
+  /**
+   * The Claude Code sign-in has ended (its renewal is no longer accepted), and the limits were
+   * read through the Claude app's sign-in instead. The account still needs a new sign-in.
+   */
+  cliSignInEnded?: boolean;
   issue?: UsageIssue;
   retryAt?: string;
   /** Identity-bound history for display only, never fresh quota evidence. */

@@ -4,7 +4,7 @@ import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Store } from "./store";
-import { AuthManager } from "./auth";
+import { AuthManager, authPending, type BackgroundSignIn } from "./auth";
 import { Runner } from "./runner";
 import type { ProfileLockKind } from "./profile-lock";
 import { readProfileAuth, signedOut } from "./profile-auth";
@@ -192,7 +192,7 @@ export class Service {
       settings: structuredClone(this.store.state.settings),
       usage: {},
       accounts: structuredClone(this.store.state.accounts),
-      authFlows: this.auth.list(),
+      authFlows: this.auth.list().filter((f) => !f.background),
       terminalFlows: this.terminalAuth.list(),
       runs: this.runner.list(),
       sessions: [],
@@ -234,7 +234,7 @@ export class Service {
       settings: structuredClone(this.store.state.settings),
       usage: {},
       accounts,
-      authFlows: this.auth.list(),
+      authFlows: this.auth.list().filter((f) => !f.background),
       terminalFlows: this.terminalAuth.list(),
       sessions,
       runs: this.runner.list(),
@@ -287,6 +287,9 @@ export class Service {
         .some((r) => r.accountId === id && r.status === "running")
     )
       throw new Error("Bu hesapta çalışan oturumu önce durdur.");
+    // A renewal Relay runs by itself in the background gives way to the user's own sign-in.
+    const quiet = this.auth.list().find((f) => f.accountId === id && f.background && authPending(f));
+    if (quiet) await this.auth.cancel(id, quiet.id).catch(() => {});
     // Asked again while its page waits for approval: the page comes back, where the user
     // last had it. Starting returns the same attempt, which alone shows nothing new.
     const waiting = this.auth
@@ -303,6 +306,26 @@ export class Service {
       await this.executable(),
       this.store.profile(id),
       profileEnvironment(this.store.profile(id)),
+    );
+  }
+  /**
+   * Starts a Claude Code sign-in Relay runs by itself: the CLI's page goes to `background`, a
+   * hidden window holding the account's claude.ai session, never to the user's browser. Refused
+   * while the account is in use or already signing in.
+   */
+  async loginInBackground(id: string, background: BackgroundSignIn) {
+    const account = this.store.account(id);
+    if ((account.provider ?? "claude") !== "claude" || !account.auth?.loggedIn)
+      throw new Error("not a signed-in Claude account");
+    if (this.auth.active(id)) throw new Error("a sign-in is already running");
+    if (this.runner.list().some((r) => r.accountId === id && r.status === "running"))
+      throw new Error("a session runs on this account");
+    return this.auth.start(
+      id,
+      await this.executable(),
+      this.store.profile(id),
+      profileEnvironment(this.store.profile(id)),
+      background,
     );
   }
   /**

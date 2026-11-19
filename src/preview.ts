@@ -1029,6 +1029,8 @@ export const previewApi: RelayAPI = {
     return structuredClone(state.settings);
   },
   refreshUsage: async (id) => structuredClone(state.usage[id]),
+  claudeAppAccess: async () => ({ supported: true, allowed: false }),
+  renewSignInNow: async () => ({ result: "unavailable" as const, detail: "preview" }),
   desktopSnapshot: async () => ({
     ...structuredClone(desktop),
     proxyStatus: previewProxyStatus(),
