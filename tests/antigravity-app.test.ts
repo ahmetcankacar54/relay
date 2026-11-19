@@ -51,5 +51,6 @@ test("the app's data folder follows each platform's convention", () => {
   assert.equal(antigravityDataDir("darwin", "/Users/u", {}), "/Users/u/Library/Application Support/Antigravity");
   assert.equal(antigravityDataDir("linux", "/home/u", {}), "/home/u/.config/Antigravity");
   assert.equal(antigravityDataDir("linux", "/home/u", { XDG_CONFIG_HOME: "/x" }), "/x/Antigravity");
-  assert.equal(antigravityDataDir("win32", "C:\\Users\\u", { APPDATA: "C:\\Users\\u\\AppData\\Roaming" }).endsWith("Antigravity"), true);
+  assert.equal(antigravityDataDir("win32", "C:\\Users\\u", { APPDATA: "C:\\Users\\u\\AppData\\Roaming" }), "C:\\Users\\u\\AppData\\Roaming\\Antigravity");
+  assert.equal(antigravityDataDir("win32", "C:\\Users\\u", {}), "C:\\Users\\u\\AppData\\Roaming\\Antigravity");
 });

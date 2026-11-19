@@ -15,9 +15,14 @@ export function antigravityDataDir(
   home = os.homedir(),
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  if (platform === "darwin") return path.join(home, "Library", "Application Support", "Antigravity");
-  if (platform === "win32") return path.join(env.APPDATA ?? path.join(home, "AppData", "Roaming"), "Antigravity");
-  return path.join(env.XDG_CONFIG_HOME ?? path.join(home, ".config"), "Antigravity");
+  // The platform's own separators, so the answer is right for the platform asked about.
+  if (platform === "win32") {
+    const win = path.win32;
+    return win.join(env.APPDATA ?? win.join(home, "AppData", "Roaming"), "Antigravity");
+  }
+  const posix = path.posix;
+  if (platform === "darwin") return posix.join(home, "Library", "Application Support", "Antigravity");
+  return posix.join(env.XDG_CONFIG_HOME ?? posix.join(home, ".config"), "Antigravity");
 }
 
 /** The e-mail the app last signed in with, from its settings file; undefined when there is none. */
