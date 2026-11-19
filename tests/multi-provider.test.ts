@@ -121,7 +121,7 @@ test("a Codex or Antigravity account is healthy while signed in, never missing a
   for (const a of [codex, antigravity]) {
     const health = accountHealth(a, usage[a.id], ctx, t);
     assert.equal(health.tone, "ok", a.id);
-    assert.equal(health.label, "Gateway için kayıtlı");
+    assert.equal(health.label, "Hazır");
     assert.doesNotMatch(health.detail, /Claude uygulaması/);
     assert.equal(health.fix, undefined);
     assert.equal(usageSignInStatus(a, usage[a.id], false, t).tone, "ok");
@@ -140,7 +140,7 @@ test("a Codex or Antigravity account is healthy while signed in, never missing a
   const stale = { ...usage.cx, stale: true };
   assert.equal(accountHealth(codex, stale, ctx, t).label, "Limit verisi eski");
   assert.equal(accountHealth(codex, undefined, { ...ctx, waiting: true }, t).tone, "warn");
-  assert.equal(accountHealth(codex, usage.cx, ctx, en).label, "Saved for gateway");
+  assert.equal(accountHealth(codex, usage.cx, ctx, en).label, "Ready");
 });
 
 test("only Claude accounts are switched to in the Claude app; the others have no Claude app actions", () => {
@@ -165,9 +165,9 @@ test("the table badges every account's provider and shows Codex and Antigravity 
     assert.match(html, new RegExp(`>${name}</span></div><div[^>]*><span[^>]*data-provider="${provider}"[^>]*>${label}</span>`));
   // The legacy account has no provider field and reads as Claude.
   assert.match(html, />Eski hesap<\/span><\/div><div[^>]*><span[^>]*data-provider="claude"/);
-  // Their connection cell is one gateway badge; Claude's keeps its icons.
-  assert.equal([...html.matchAll(/Bağlı · Gateway/g)].length, 2);
-  assert.equal([...html.matchAll(/data-slot="gateway-pool"/g)].length, 2);
+  // Their connection cell is the gateway's icon (and Antigravity's app, where Relay can move it); Claude's keeps its icons.
+  assert.equal([...html.matchAll(/data-icon="gateway"[^>]*/g)].length, 2);
+  assert.equal([...html.matchAll(/title="Ağ geçidi: havuzda"/g)].length, 2);
   assert.equal([...html.matchAll(/data-provider="codex"[^>]*>\s*<span[^>]*title="OpenAI \/ Codex/g)].length >= 0, true);
   assert.doesNotMatch(html, /OpenAI \/ Codex: giriş yok/);
   assert.equal([...html.matchAll(/data-slot="connection-icons"/g)].length, 4);
@@ -177,10 +177,10 @@ test("the table badges every account's provider and shows Codex and Antigravity 
     assert.doesNotMatch(row, /Claude uygulaması girişi yok|Claude uygulaması: kayıtlı değil/);
   const signed = render(relayFor({}, [signedOut]), createElement(AccountsTable, { accounts: [signedOut], open() {}, link() {} }));
   assert.match(signed, /Giriş yok/);
-  assert.doesNotMatch(signed, /data-slot="gateway-pool"/);
+  assert.match(signed, /title="Ağ geçidi: giriş yok"/);
 });
 
-test("an account the gateway is serving reads Active in Proxy", () => {
+test("an account the gateway is serving says so on its gateway icon", () => {
   const relay = relayFor({
     desktop: {
       available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0,
@@ -188,8 +188,8 @@ test("an account the gateway is serving reads Active in Proxy", () => {
     } as never,
   });
   const html = render(relay, createElement(AccountsTable, { accounts: [codex, antigravity], open() {}, link() {} }), en);
-  assert.match(html, /Active in Proxy/);
-  assert.equal([...html.matchAll(/<\/svg>Gateway pool<\/span>/g)].length, 1);
+  assert.equal([...html.matchAll(/title="Gateway: using this account now"/g)].length, 1);
+  assert.equal([...html.matchAll(/title="Gateway: in the pool"/g)].length, 1);
 });
 
 test("the Accounts page offers a provider filter with counts once more than one provider is used", () => {
@@ -217,10 +217,12 @@ test("the Accounts page offers a provider filter with counts once more than one 
 test("a Codex account's page shows its provider, its sign-in and the gateway, not the Claude app", () => {
   const html = render(relayFor(), createElement(AccountDetailBody, { account: codex, now: NOW }));
   assert.match(html, /Sağlayıcı<\/dt><dd[^>]*>OpenAI \/ Codex</);
-  assert.match(html, /Ağ geçidinin OpenAI \/ Codex isteklerinde kullandığı/);
+  assert.match(html, /Ağ geçidi girişi[\s\S]*Ağ geçidi bu girişle istek gönderir/);
   assert.doesNotMatch(html, /Girişi doğrula/, "the Claude CLI cannot check a Codex sign-in");
-  assert.match(html, /Proxy Gateway/);
+  assert.match(html, />Ağ geçidi</);
   assert.match(html, /Proxy kapalı/);
+  // A Codex account has no Antigravity app row.
+  assert.doesNotMatch(html, /Antigravity uygulaması/);
   assert.match(html, /1 \/ 2 hazır|0 \/ 2 hazır/);
   assert.doesNotMatch(html, /Claude uygulaması girişi/);
   assert.doesNotMatch(html, /Limit okuma girişi/);

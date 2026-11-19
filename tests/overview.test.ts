@@ -88,16 +88,15 @@ test("overview shows the active account, limits, accounts, today and automation"
   const row = rowFor(html, "Vertex");
   assert.match(row, /<a href="#\/hesaplar\/vertex"/);
   assert.match(row, />Vertex<\/span><span[^>]*>önerilen<\/span>/);
-  // Its figures are the row's own ring and percents, used percent per window.
-  assert.match(row, /role="img" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
-  assert.match(row, /<b[^>]*>%12<\/b><span[^>]*> \/ %31<\/span>/);
+  // One bar and one figure: the limit that stops it first (its week, %31).
+  assert.match(row, /role="meter" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
+  assert.match(row, />önerilen<\/span><span[^>]*>%31<\/span>/);
   assert.doesNotMatch(html, /Geçişi incele/);
   // The suggested row's "Geç" is the filled one.
   assert.match(row, /<button[^>]*aria-label="Vertex hesabına geç"[^>]*class="[^"]*bg-primary[^"]*"[^>]*>Geç<\/button>/);
-  // The list ends in "Hesap ekle"; the heading above it holds the rings' key.
+  // The list ends in "Hesap ekle"; with bars instead of rings there is no key to read.
   assert.match(listOf(html), /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle(?:(?!<\/button>)[\s\S])*?<\/button>/);
-  assert.match(html, /bg-muted-foreground"><\/span>5 saat</);
-  assert.match(html, /border border-muted-foreground"><\/span>hafta</);
+  assert.doesNotMatch(html, /border border-muted-foreground"><\/span>hafta</);
   assert.match(html, /Bugün/);
   assert.match(html, /(?:Çalışma 09:00–18:00|Bugün çalışma yok) · önceden başlatma kapalı/);
   assert.doesNotMatch(html, /Otomatik başlatma/);
@@ -741,7 +740,7 @@ test("a full account keeps its switch on the Overview, tinted, and the review sa
   assert.doesNotMatch(plain, /switch-full-limit/);
 });
 
-test("Overview rings say how far each reading can be trusted, and the key explains the faded ones", () => {
+test("Overview rows show the limit that stops each account first, and fade an old reading", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const fresh = acct("fresh", "Fresh", "pro");
   const old = acct("old", "Old", "pro");
@@ -754,19 +753,16 @@ test("Overview rings say how far each reading can be trusted, and the key explai
     full: use("full", 100, 30, NOW + 3_600_000),
   };
   const html = render(relayFor(active, [active, fresh, old, none, full], usage));
-  const ring = (name: string) => /<div role="img"[^>]*>/.exec(rowFor(html, name))?.[0] ?? "";
-  assert.doesNotMatch(ring("Fresh"), /data-state/);
-  assert.match(ring("Old"), /data-state="stale"/);
-  assert.match(ring("Old"), /aria-label="Old · 5 saat %20 kullanıldı · hafta %30 kullanıldı · limit verisi eski"/);
-  assert.match(ring("None"), /data-state="unknown"/);
-  assert.match(ring("Full"), /data-state="full"/);
-  // The stale row's line says how old its reading is; the key above the list says what faded rings mean.
+  assert.match(rowFor(html, "Fresh"), />%30<\/span>/);
+  assert.doesNotMatch(rowFor(html, "Fresh"), /opacity-60/);
+  // An old reading keeps its figure and bar, faded, and its line says how old it is.
+  assert.match(rowFor(html, "Old"), /class="[^"]*opacity-60[^"]*">%30<\/span>/);
+  assert.match(rowFor(html, "Old"), /aria-label="Old · 5 saat %20 kullanıldı · hafta %30 kullanıldı · limit verisi eski"/);
   assert.match(rowFor(html, "Old"), />Pro · limit verisi 2 sa önce okundu</);
-  assert.match(html, /border-dashed border-muted-foreground"><\/span>limit verisi eski</);
-  // Without a stale row the key keeps its two entries.
-  const current = render(relayFor(active, [active, fresh], { active: use("active", 10, 10), fresh: use("fresh", 20, 30) }));
-  assert.match(current, /border border-muted-foreground"><\/span>hafta</);
-  assert.doesNotMatch(current, /border-dashed border-muted-foreground"><\/span>/);
+  // Never read: an empty bar and a dash.
+  assert.match(rowFor(html, "None"), />—<\/span>/);
+  // A full limit says so in red, with when it opens.
+  assert.match(rowFor(html, "Full"), /text-crit[^"]*">Dolu · 1 sa<\/span>/);
 });
 
 test("the hero shows the plan, else the subscription, and a hollow dot while Claude is closed", () => {
@@ -871,40 +867,7 @@ test("an overview row opens its account in a separate window, then brings it for
   }
 });
 
-test("an Antigravity app on a spent model leads the overview with a banner, and its row walks through the sign-in", () => {
-  const active = acct("active", "Kişisel · Max", "max5");
-  const google = (id: string, name: string): Account => ({
-    id, name, kind: "personal", group: "personal", color: "blue", createdAt: iso(NOW), provider: "antigravity",
-    auth: { loggedIn: true, email: `${id}@example.com`, checkedAt: iso(NOW) },
-  });
-  const g1 = google("g1", "Google · Antigravity");
-  const g2 = google("g2", "Google · Antigravity 2");
-  const models = (carbon: number): AccountUsage => ({
-    accountId: "", status: "ready", stale: false, checkedAt: iso(NOW - 60_000),
-    fiveHour: { usedPercent: 0, resetsAt: iso(NOW + 5 * 3_600_000) },
-    modelWindows: [
-      { key: "antigravity_gemini_4_carbon_high", label: "Gemini 4 Carbon (High)", usedPercent: carbon, resetsAt: iso(NOW + 25 * 60_000) },
-      { key: "antigravity_gemini_4_argon", label: "Gemini 4 Argon", usedPercent: 0, resetsAt: iso(NOW + 5 * 3_600_000) },
-    ],
-  });
-  const relay = relayFor(active, [active, g1, g2], { active: use("active", 10, 10), g1: models(100), g2: models(6) });
-  relay.data = { ...relay.data!, antigravity: { installed: true, canOpen: true, accountId: "g1" } };
-  const html = render(relay);
-  const banner = html.slice(html.indexOf('data-slot="tool-banner"'), html.indexOf("</span>", html.indexOf('data-slot="tool-banner"')));
-  assert.match(banner, /Antigravity limitte\./);
-  assert.match(banner, /Gemini 4 Carbon \(High\) dolu · 25 dk sonra açılır · Google · Antigravity 2 hazır\./);
-  const row = /<div data-slot="tool-row" data-tool="antigravity"[\s\S]*?(?=<div data-slot="tool-row"|$)/.exec(html)?.[0] ?? "";
-  assert.match(row, />Google · Antigravity</);
-  assert.match(row, /Google · Antigravity 2 hazır: bu model %94 boş/);
-  assert.match(row, /<button[^>]*aria-expanded="false"[^>]*>Nasıl geçilir<\/button>/);
-  // The ring is the spent model, never the roomiest one the gateway keeps as the five hours.
-  assert.match(row, /role="img" aria-label="Antigravity · Google · Antigravity · Gemini 4 Carbon \(High\) %100 kullanıldı"/);
-  // Without other tools, no tool list and no banner.
-  const plain = render(relayFor(active, [active], { active: use("active", 10, 10) }));
-  assert.doesNotMatch(plain, /data-slot="tool-(list|banner)"/);
-});
-
-test("on macOS the Antigravity row switches to a saved account, offers to save one that is not, and says how a switch ended", async () => {
+test("the Overview shows Antigravity as its own card: the account the app uses, its models, and the move to another", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const google = (id: string, name: string): Account => ({
     id, name, kind: "personal", group: "personal", color: "blue", createdAt: iso(NOW), provider: "antigravity",
@@ -914,7 +877,11 @@ test("on macOS the Antigravity row switches to a saved account, offers to save o
   const g2 = google("g2", "AG 2");
   const models = (carbon: number): AccountUsage => ({
     accountId: "", status: "ready", stale: false, checkedAt: iso(NOW - 60_000),
-    modelWindows: [{ key: "antigravity_gemini_4_carbon_high", label: "Gemini 4 Carbon (High)", usedPercent: carbon, resetsAt: iso(NOW + 25 * 60_000) }],
+    fiveHour: { usedPercent: 0, resetsAt: iso(NOW + 5 * 3_600_000) },
+    modelWindows: [
+      { key: "antigravity_gemini_4_carbon_high", label: "Gemini 4 Carbon (High)", usedPercent: carbon, resetsAt: iso(NOW + 25 * 60_000) },
+      { key: "antigravity_gemini_4_argon", label: "Gemini 4 Argon", usedPercent: 0, resetsAt: iso(NOW + 5 * 3_600_000) },
+    ],
   });
   const usage = { active: use("active", 10, 10), g1: models(100), g2: models(6) };
   const withApp = (antigravity: Snapshot["antigravity"]) => {
@@ -922,44 +889,72 @@ test("on macOS the Antigravity row switches to a saved account, offers to save o
     relay.data = { ...relay.data!, antigravity };
     return relay;
   };
-  const row = (html: string) => /<div data-slot="tool-row" data-tool="antigravity"[\s\S]*?(?=<div data-slot="tool-row"|$)/.exec(html)?.[0] ?? "";
-  const saved = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"] }));
-  assert.match(saved, /<button[^>]*>Geç: AG 2<\/button>/);
-  assert.match(row(saved), /<button[^>]*aria-expanded="false"[^>]*>Geç: AG 2<\/button>/);
-  const unsaved = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1"] }));
-  assert.match(row(unsaved), />Girişi kaydet<\/button>/);
-  const done = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g2", saved: ["g1", "g2"], result: { kind: "switched", accountId: "g2", agyRunning: 1, at: NOW - 1000 } }));
-  assert.match(row(done), /data-slot="antigravity-result"[^>]*>Antigravity AG 2 hesabında\. 1 açık agy oturumu eski hesapla sürüyor; yeniden başlat\./);
-  const failed = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"], result: { kind: "failed", accountId: "g2", reason: "still-running", at: NOW - 1000 } }));
-  assert.match(row(failed), /Antigravity kapanmadı/);
-  const waiting = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: undefined, saved: ["g1"], busy: "signing-in", signInFor: "g2" }));
-  assert.match(waiting, /data-slot="antigravity-sign-in"[\s\S]*Şu hesapla gir: <b>AG 2<\/b>/);
+  // The pane's markup, with the apostrophes renderToStaticMarkup escapes put back.
+  const card = (html: string) =>
+    (/data-slot="provider-pane" data-provider="antigravity"[\s\S]*?(?=data-slot="provider-pane"|<\/section>)/.exec(html)?.[0] ?? "").replaceAll("&#x27;", "'");
+  // Not on macOS: the card says where the app is and walks through the sign-in by hand.
+  const plain = card(render(withApp({ installed: true, canOpen: false, accountId: "g1" })));
+  assert.match(plain, />AG 1<[\s\S]*Uygulamada açık/);
+  // Its models are lines, the spent one first and red with when it opens; never the roomiest one as "%0".
+  assert.match(plain, /Gemini 4 Carbon \(High\)[\s\S]*?Dolu · 25 dk/);
+  assert.match(plain, /data-account="g2"[\s\S]*?>%6</);
+  assert.match(plain, /Antigravity'de hesap menüsünden çıkış yap/);
+  // The Antigravity accounts are not in the Claude list.
+  assert.doesNotMatch(rowFor(render(withApp({ installed: true, canOpen: false, accountId: "g1" })), "AG 2"), /account-row/);
+  // On macOS with both sign-ins kept: the roomy account's one button moves the app there.
+  const saved = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"] })));
+  assert.match(saved, /<button[^>]*aria-label="Antigravity'yi AG 2 hesabına geçir"[^>]*>Geç<\/button>/);
+  assert.doesNotMatch(saved, /hesap menüsünden çıkış yap/);
+  const unsaved = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1"] })));
+  assert.match(unsaved, />Girişi kaydet<\/button>/);
+  const done = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g2", saved: ["g1", "g2"], result: { kind: "switched", accountId: "g2", agyRunning: 1, at: NOW - 1000 } })));
+  assert.match(done, /data-slot="antigravity-result"[^>]*>AG 2 hesabına geçildi · açık 1 agy eski hesapta, yeniden başlat/);
+  const failed = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"], result: { kind: "failed", accountId: "g2", reason: "still-running", at: NOW - 1000 } })));
+  assert.match(failed, /Antigravity kapanmadı/);
+  const waiting = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, saved: ["g1"], busy: "signing-in", signInFor: "g2" })));
+  assert.match(waiting, /data-slot="antigravity-sign-in"[\s\S]*Antigravity'de <b>AG 2<\/b>/);
+  // Without Antigravity accounts there is no card.
+  assert.doesNotMatch(render(relayFor(active, [active], { active: use("active", 10, 10) })), /data-slot="provider-cards"/);
+});
 
-  // The row's button opens the confirmation, and confirming switches.
+test("on macOS an Antigravity account's button asks first, and the confirmation switches", async () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const google = (id: string, name: string): Account => ({
+    id, name, kind: "personal", group: "personal", color: "blue", createdAt: iso(NOW), provider: "antigravity",
+    auth: { loggedIn: true, email: `${id}@example.com`, checkedAt: iso(NOW) },
+  });
+  const models = (carbon: number): AccountUsage => ({
+    accountId: "", status: "ready", stale: false, checkedAt: iso(NOW - 60_000),
+    modelWindows: [{ key: "antigravity_gemini_4_carbon_high", label: "Gemini 4 Carbon (High)", usedPercent: carbon, resetsAt: iso(NOW + 25 * 60_000) }],
+  });
+  const relay = relayFor(active, [active, google("g1", "AG 1"), google("g2", "AG 2")], { active: use("active", 10, 10), g1: models(100), g2: models(6) });
+  relay.data = { ...relay.data!, antigravity: { installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"] } };
   const calls: string[] = [];
+  (relay as any).action = async (_key: string, fn: () => Promise<unknown>) => fn();
+  (relay as any).api = { switchAntigravity: async (id: string) => void calls.push(`switch:${id}`) };
   const dom = fakeDom();
   dom.install();
   readableText();
   try {
-    const relay = withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"] });
-    (relay as any).action = async (_key: string, fn: () => Promise<unknown>) => fn();
-    (relay as any).api = { switchAntigravity: async (id: string) => void calls.push(`switch:${id}`) };
     const { createRoot } = await import("react-dom/client");
-    const { ToolList } = await import("../src/features/ToolList");
+    const { ProviderCards } = await import("../src/features/Providers");
     const root = createRoot(dom.container as unknown as Element);
     await act(async () =>
       root.render(
         createElement(
           I18nContext.Provider,
           { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(ToolList, { now: NOW, onGateway() {}, onAdd() {} })),
+          createElement(RelayContext.Provider, { value: relay }, createElement(ProviderCards, { now: NOW })),
         ),
       ),
     );
-    const button = (text: string) => find(dom.container as unknown as Fake, (n) => n.tagName === "button" && textOf(n).trim() === text);
-    await act(async () => dom.dispatch(button("Geç: AG 2") as never, "click", { detail: 1 }));
-    assert.match(textOf(dom.container as unknown as Fake), /Antigravity kapanır ve AG 2 ile yeniden açılır/);
-    await act(async () => dom.dispatch(button("AG 2 hesabına geç") as never, "click", { detail: 1 }));
+    const label = (n: Fake) => (n as { attributes?: Map<string, string> }).attributes?.get("aria-label") ?? "";
+    const ask = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && label(n) === "Antigravity'yi AG 2 hesabına geçir");
+    await act(async () => dom.dispatch(ask as never, "click", { detail: 1 }));
+    assert.match(textOf(dom.container as unknown as Fake), /Antigravity kapanıp AG 2 ile açılır\. Çalışan işler durur\./);
+    assert.deepEqual(calls, [], "asking does not switch");
+    const confirm = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && textOf(n).trim() === "Geç" && !label(n));
+    await act(async () => dom.dispatch(confirm as never, "click", { detail: 1 }));
     assert.deepEqual(calls, ["switch:g2"]);
     await act(async () => root.unmount());
   } finally {

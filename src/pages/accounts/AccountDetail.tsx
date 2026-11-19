@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { AntigravityAction, AntigravityPrompt, antigravityAccountState, type AntigravityAsk } from "@/features/AntigravityAccount";
 import { Private } from "@/components/Private";
 import { AppWindow, Check, CircleAlert, Link2, Globe2, KeyRound, LoaderCircle, Monitor, MoreHorizontal, Network, SquareTerminal } from "lucide-react";
 import { BackIcon, RefreshIcon } from "@/components/icons";
@@ -608,7 +609,13 @@ export function AccountDetailBody({
   // The gateway lists every account; only one with a sign-in can take requests.
   const signedIn = a.auth?.loggedIn === true;
   const inPool = !!gateway?.running && signedIn;
-  const connections = claude ? [!!a.desktop, signIn.tone === "ok"] : [signedIn, inPool];
+  // Antigravity's own app is a connection too: the app and agy run on the account Relay moves them to.
+  const [antigravityAsk, setAntigravityAsk] = useState<AntigravityAsk>();
+  const appState = a.provider === "antigravity" ? antigravityAccountState(data?.antigravity, a.id) : undefined;
+  const appRow = appState !== undefined && appState !== "unavailable";
+  const connections = claude
+    ? [!!a.desktop, signIn.tone === "ok"]
+    : [...(appRow ? [appState === "current" || appState === "saved"] : []), signedIn, inPool];
   const ready = connections.filter(Boolean).length;
   const history = historySources(a, accounts, settings);
   return (
@@ -748,13 +755,32 @@ export function AccountDetailBody({
             <ConnectionList>
             {!claude && (
               <>
+                {appRow && (
+                  <ConnectionRow
+                    icon={<Monitor />}
+                    title={t("Antigravity uygulaması", "Antigravity app")}
+                    purpose={t("Uygulama ve agy bu hesapla çalışır.", "The app and agy run on this account.")}
+                    tone={appState === "current" || appState === "saved" ? "ok" : "warn"}
+                    status={
+                      appState === "current"
+                        ? t("Şu an açık", "Open now")
+                        : appState === "saved"
+                          ? t("Giriş kayıtlı", "Sign-in saved")
+                          : appState === "waiting"
+                            ? t("Giriş bekleniyor", "Waiting for sign-in")
+                            : t("Giriş kayıtlı değil", "Sign-in not saved")
+                    }
+                    action={<AntigravityAction account={a} onAsk={setAntigravityAsk} primary />}
+                  >
+                    <div className="mt-2 empty:hidden">
+                      <AntigravityPrompt ask={antigravityAsk} onClose={() => setAntigravityAsk(undefined)} now={now ?? Date.now()} />
+                    </div>
+                  </ConnectionRow>
+                )}
                 <ConnectionRow
                   icon={<KeyRound />}
-                  title={t("Giriş", "Sign-in")}
-                  purpose={t(
-                    `Ağ geçidinin ${providerLabel(a.provider)} isteklerinde kullandığı anahtar ya da oturum.`,
-                    `The key or session the gateway uses for ${providerLabel(a.provider)} requests.`,
-                  )}
+                  title={t("Ağ geçidi girişi", "Gateway sign-in")}
+                  purpose={t("Ağ geçidi bu girişle istek gönderir.", "The gateway sends requests with it.")}
                   tone={signedIn ? "ok" : "warn"}
                   status={
                     signedIn
@@ -764,11 +790,8 @@ export function AccountDetailBody({
                 />
                 <ConnectionRow
                   icon={<Network />}
-                  title={t("Proxy Gateway", "Proxy Gateway")}
-                  purpose={t(
-                    "İstekleri bu hesaba da dağıtan yerel ağ geçidi.",
-                    "The local gateway that spreads requests over this account too.",
-                  )}
+                  title={t("Ağ geçidi", "Gateway")}
+                  purpose={t("İstekleri hesaplara dağıtır.", "Spreads requests over the accounts.")}
                   tone={inPool ? "ok" : "off"}
                   status={
                     gateway?.running

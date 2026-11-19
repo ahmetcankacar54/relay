@@ -1,4 +1,5 @@
-import { Fragment, type MouseEvent } from "react";
+import { Fragment, useState, type MouseEvent } from "react";
+import { AntigravityAction, AntigravityPrompt, antigravityAccountState, type AntigravityAsk } from "@/features/AntigravityAccount";
 import { Private } from "@/components/Private";
 import {
   AppWindow,
@@ -52,7 +53,7 @@ import { fullLimitNote } from "@/lib/account-row";
 import { extensionGuide } from "@/lib/extension-ui";
 import { formatPercent, percentUsed } from "@/lib/meter";
 import { formatRelative } from "@/lib/time";
-import { UsageRing } from "@/components/UsageRing";
+import { MiniMeter } from "@/components/LimitLine";
 import { useExtensionStatus } from "@/data/useExtension";
 import { useTerminalStatus } from "@/data/useTerminal";
 import { terminalGuide } from "@/lib/terminal-ui";
@@ -79,14 +80,13 @@ function CellMeter({ percent, label, note }: { percent?: number; label: string; 
   if (percent === undefined) return <span className="text-muted-foreground">—</span>;
   const value = Math.max(0, Math.min(100, percent));
   const text = formatPercent(percentUsed(value), language);
+  // The same bar as everywhere else (variant A): the figure on top, the bar under it.
   return (
-    <div className="flex items-center gap-2" title={note}>
-      <UsageRing outer={value} size={22} label={`${label} ${text}`} />
-      <span className="grid min-w-0 leading-tight">
-        <span className="text-xs font-semibold tabular-nums">{text}</span>
-        {/* A model's own limit (Antigravity) says which model it is. */}
-        {note && <span className="max-w-24 truncate text-2xs text-muted-foreground">{note}</span>}
-      </span>
+    <div className="grid w-20 min-w-0 gap-1" title={note}>
+      <span className={cn("text-xs leading-tight font-semibold tabular-nums", value >= 100 && "text-crit")}>{text}</span>
+      <MiniMeter usedPercent={value} label={`${label} ${text}`} />
+      {/* A model's own limit (Antigravity) says which model it is, under its bar. */}
+      {note && <span className="block truncate text-2xs text-muted-foreground">{note}</span>}
     </div>
   );
 }
@@ -107,24 +107,51 @@ function ConnectionIcons({
 }) {
   const relay = useRelay();
   const { t, language } = useI18n();
-  // Codex and Antigravity have no Claude app, extension or terminal: one badge says they feed the gateway.
+  // Codex and Antigravity have no Claude app, extension or terminal. Antigravity's own app is one
+  // icon (in use, sign-in saved, or not saved); the gateway pool is the other.
   if (!isClaudeAccount(account)) {
     const inPool = account.auth?.loggedIn === true;
-    const title = t(
-      `${providerLabel(account.provider)}: ${inPool ? "bağlı · proxy havuzunda" : "giriş yok"}`,
-      `${providerLabel(account.provider)}: ${inPool ? "connected · in the gateway pool" : "not signed in"}`,
-    );
+    const app = relay.data?.antigravity;
+    const appState = account.provider === "antigravity" ? antigravityAccountState(app, account.id) : undefined;
+    const items: { key: string; icon: LucideIcon; tone: keyof typeof toneText; title: string }[] = [
+      ...(appState && appState !== "unavailable"
+        ? [
+            {
+              key: "antigravity-app",
+              icon: Monitor,
+              tone: (appState === "current" || appState === "saved" ? "ok" : "warn") as keyof typeof toneText,
+              title:
+                appState === "current"
+                  ? t("Antigravity uygulaması: bu hesapta açık", "Antigravity app: open on this account")
+                  : appState === "saved"
+                    ? t("Antigravity uygulaması: giriş kayıtlı", "Antigravity app: sign-in saved")
+                    : appState === "waiting"
+                      ? t("Antigravity uygulaması: giriş bekleniyor", "Antigravity app: waiting for the sign-in")
+                      : t("Antigravity uygulaması: giriş kayıtlı değil", "Antigravity app: sign-in not saved"),
+            },
+          ]
+        : []),
+      {
+        key: "gateway",
+        icon: Network,
+        tone: inPool ? "ok" : "off",
+        title: !inPool
+          ? t("Ağ geçidi: giriş yok", "Gateway: not signed in")
+          : relay.desktop?.proxyStatus?.accounts.some((p) => p.id === account.id && p.active)
+            ? t("Ağ geçidi: şu an bu hesabı kullanıyor", "Gateway: using this account now")
+            : t("Ağ geçidi: havuzda", "Gateway: in the pool"),
+      },
+    ];
     return (
       <div className="flex items-center gap-2" data-slot="connection-icons" data-provider={account.provider}>
-        <span
-          role="img"
-          title={title}
-          aria-label={title}
-          className={cn("inline-flex items-center gap-1 text-xs", toneText[inPool ? "ok" : "off"])}
-        >
-          <Network className="size-4" />
-          {inPool ? t("Bağlı · Gateway", "Connected · Gateway") : t("Giriş yok", "Not signed in")}
-        </span>
+        {items.map(({ key, icon: Icon, tone, title }) => (
+          <span key={key} role="img" title={title} aria-label={title} data-icon={key} className={cn("relative", toneText[tone])}>
+            <Icon className="size-4" />
+            {(tone === "warn" || tone === "crit") && (
+              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-warn ring-2 ring-card" />
+            )}
+          </span>
+        ))}
       </div>
     );
   }
@@ -517,6 +544,15 @@ export function AccountsTable({
   // Opening the list also checks the extension, so an account signed in to it gets linked.
   const extension = useExtensionStatus({ check: true }).status;
   const terminal = useTerminalStatus({ check: true }).status;
+  // An Antigravity row's switch or sign-in, confirmed under that row.
+  const [antigravityAsk, setAntigravityAsk] = useState<AntigravityAsk>();
+  const antigravityApp = data?.antigravity;
+  const promptOn = (id: string) =>
+    antigravityAsk
+      ? antigravityAsk.accountId === id
+      : antigravityApp?.busy
+        ? antigravityApp.signInFor === id || (antigravityApp.busy === "switching" && antigravityApp.result?.accountId === id)
+        : antigravityApp?.result?.accountId === id;
   const browserSteps = ["darwin", "preview", "linux"].includes(data?.diagnostics?.platform ?? "");
   const now = Date.now();
   return (
@@ -638,13 +674,16 @@ export function AccountsTable({
                     <StatusDot tone={health.tone} />
                     {health.label}
                   </span>
-                  {!isClaudeAccount(a) && a.auth?.loggedIn && (
-                    <Badge variant="outline" data-slot="gateway-pool" className="shrink-0 gap-1">
-                      <Network />
-                      {relay.desktop?.proxyStatus?.accounts.some((p) => p.id === a.id && p.active)
-                        ? t("Proxy'de aktif", "Active in Proxy")
-                        : t("Gateway havuzu", "Gateway pool")}
-                    </Badge>
+                  {a.provider === "antigravity" && (
+                    // The row opens the account; its button only asks.
+                    <span className="contents" onClick={(e) => e.stopPropagation()}>
+                      <AntigravityAction account={a} onAsk={setAntigravityAsk} />
+                    </span>
+                  )}
+                  {a.provider === "antigravity" && promptOn(a.id) && (
+                    <div className="basis-full" onClick={(e) => e.stopPropagation()}>
+                      <AntigravityPrompt ask={antigravityAsk} onClose={() => setAntigravityAsk(undefined)} now={now} size="sm" />
+                    </div>
                   )}
                   {stale && usage?.checkedAt && (
                     <span
@@ -755,10 +794,12 @@ export function AccountsTable({
 function ConnectionLegend() {
   const { t } = useI18n();
   const icons: [LucideIcon, string][] = [
-    [Monitor, t("Claude uygulaması", "Claude app")],
+    // The Claude app for a Claude account, the Antigravity app for an Antigravity one.
+    [Monitor, t("Uygulama", "App")],
     [Globe2, t("Limit okuma girişi", "Usage sign-in")],
     [AppWindow, t("Eklenti (isteğe bağlı)", "Extension (optional)")],
     [SquareTerminal, t("Terminal (isteğe bağlı)", "Terminal (optional)")],
+    [Network, t("Ağ geçidi", "Gateway")],
   ];
   return (
     <p

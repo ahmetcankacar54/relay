@@ -32,7 +32,8 @@ export function AccountsCard({
   // The badge names the same account as the suggestion banner when there is one.
   const rows = overviewAccounts(
     relay.active,
-    relay.accounts,
+    // Codex and Antigravity accounts are in their own cards above.
+    relay.accounts.filter((a) => (a.provider ?? "claude") === "claude"),
     relay.data?.usage ?? {},
     now,
     tempoRateNow(relay.data, relay.settings, now),
@@ -109,25 +110,6 @@ export function AccountsCard({
         <h2 className="text-xs font-semibold text-muted-foreground">
           {t("Diğer hesaplar", "Other accounts")}
         </h2>
-        {/* What the two rings and the two figures in each row are. */}
-        {rows.length > 0 && (
-          <p className="flex flex-wrap items-center gap-x-2.5 text-2xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground" />
-              {t("5 saat", "5 hours")}
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span aria-hidden="true" className="size-1.5 rounded-full border border-muted-foreground" />
-              {t("hafta", "week")}
-            </span>
-            {rows.some((row) => ringState(row.usage, now) === "stale") && (
-              <span className="inline-flex items-center gap-1">
-                <span aria-hidden="true" className="size-1.5 rounded-full border border-dashed border-muted-foreground" />
-                {t("limit verisi eski", "out of date")}
-              </span>
-            )}
-          </p>
-        )}
       </div>
       {rows.length === 0 ? (
         <div className="flex items-center gap-1 rounded-lg border bg-card px-3 py-2.5 text-sm text-muted-foreground">

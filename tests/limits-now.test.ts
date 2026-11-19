@@ -71,6 +71,8 @@ test("the board shows each account's plan, its windows and Fable's own limit", (
   assert.match(html, /Max 20×/);
   assert.match(html, /Plus/);
   assert.match(html, /Fable · haftalık %100/);
-  assert.match(html, /kullanılmazsa silinir/);
+  // A week ending with room says so in a few words; a full limit says when it opens.
+  assert.match(html, /Hafta bitiyor · %\d+ boş/);
+  assert.match(html, /Dolu · /);
   assert.ok(html.indexOf("Vertex") < html.indexOf("Codex"), "the expiring week first");
 });

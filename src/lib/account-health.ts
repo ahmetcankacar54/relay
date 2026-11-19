@@ -140,7 +140,7 @@ export function usageSignInStatus(
   if (waiting) return { tone: "warn", label: t(...APPROVE) };
   if (!isClaudeAccount(account))
     return account.auth?.loggedIn
-      ? { tone: "ok", label: t("Kimlik bilgisi kayıtlı", "Credential saved") }
+      ? { tone: "ok", label: t("Giriş kayıtlı", "Sign-in saved") }
       : { tone: "warn", label: t("Yok", "None") };
   const state = signInState(account, usage);
   const [tr, en] = SIGN_IN_WORDS[state];
@@ -170,10 +170,10 @@ function otherProviderHealth(
   t: T,
 ): AccountHealth {
   const signedIn = account.auth?.loggedIn === true;
-  const detail = t(
-    `Kimlik bilgisi: ${signedIn ? "Kayıtlı" : "Yok"} · Sağlayıcı kotası: Kullanılamıyor`,
-    `Credential: ${signedIn ? "Saved" : "None"} · Provider quota: Unavailable`,
-  );
+  // The detail stays short: what the gateway can do with this account.
+  const detail = signedIn
+    ? t("Ağ geçidi bu hesabı kullanabilir", "The gateway can use this account")
+    : t("Ağ geçidi bu hesabı kullanamaz: giriş yok", "The gateway cannot use this account: no sign-in");
   const result = (tone: AccountHealth["tone"], [tr, en]: Words): AccountHealth => ({
     tone,
     label: t(tr, en),
@@ -189,7 +189,7 @@ function otherProviderHealth(
     return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
   const spent = modelLimitWords(modelLimitFull(usage, now), now, context.zone);
   if (spent) return result("warn", spent);
-  return result("ok", ["Gateway için kayıtlı", "Saved for gateway"]);
+  return result("ok", ["Hazır", "Ready"]);
 }
 
 /**

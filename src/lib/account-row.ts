@@ -11,6 +11,19 @@ import { clockLocative } from "../../shared/tr-dative";
 import { freshUsage } from "../../shared/usage";
 import { accountPlan } from "../pages/accounts/accountLabels";
 
+/** What is wrong with an account, in its status's words; undefined when nothing is (the panel row's line). */
+export function rowProblem(
+  row: OverviewRow,
+  t: T,
+  zone: string,
+  now: number,
+  waiting = false,
+  platform?: string,
+): string | undefined {
+  const health = accountHealth(row.account, row.usage, { active: false, desktopRunning: false, waiting, platform, now, zone }, t);
+  return health.tone !== "ok" ? health.label : undefined;
+}
+
 /**
  * Status line under an account name (Overview and the menu bar panel). When something is wrong it is
  * the account's status, the one the Accounts page shows; `waiting` is a browser approval in progress.
