@@ -903,3 +903,66 @@ test("an Antigravity app on a spent model leads the overview with a banner, and 
   const plain = render(relayFor(active, [active], { active: use("active", 10, 10) }));
   assert.doesNotMatch(plain, /data-slot="tool-(list|banner)"/);
 });
+
+test("on macOS the Antigravity row switches to a saved account, offers to save one that is not, and says how a switch ended", async () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const google = (id: string, name: string): Account => ({
+    id, name, kind: "personal", group: "personal", color: "blue", createdAt: iso(NOW), provider: "antigravity",
+    auth: { loggedIn: true, email: `${id}@example.com`, checkedAt: iso(NOW) },
+  });
+  const g1 = google("g1", "AG 1");
+  const g2 = google("g2", "AG 2");
+  const models = (carbon: number): AccountUsage => ({
+    accountId: "", status: "ready", stale: false, checkedAt: iso(NOW - 60_000),
+    modelWindows: [{ key: "antigravity_gemini_4_carbon_high", label: "Gemini 4 Carbon (High)", usedPercent: carbon, resetsAt: iso(NOW + 25 * 60_000) }],
+  });
+  const usage = { active: use("active", 10, 10), g1: models(100), g2: models(6) };
+  const withApp = (antigravity: Snapshot["antigravity"]) => {
+    const relay = relayFor(active, [active, g1, g2], usage);
+    relay.data = { ...relay.data!, antigravity };
+    return relay;
+  };
+  const row = (html: string) => /<div data-slot="tool-row" data-tool="antigravity"[\s\S]*?(?=<div data-slot="tool-row"|$)/.exec(html)?.[0] ?? "";
+  const saved = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"] }));
+  assert.match(saved, /<button[^>]*>Geç: AG 2<\/button>/);
+  assert.match(row(saved), /<button[^>]*aria-expanded="false"[^>]*>Geç: AG 2<\/button>/);
+  const unsaved = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1"] }));
+  assert.match(row(unsaved), />Girişi kaydet<\/button>/);
+  const done = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g2", saved: ["g1", "g2"], result: { kind: "switched", accountId: "g2", agyRunning: 1, at: NOW - 1000 } }));
+  assert.match(row(done), /data-slot="antigravity-result"[^>]*>Antigravity AG 2 hesabında\. 1 açık agy oturumu eski hesapla sürüyor; yeniden başlat\./);
+  const failed = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"], result: { kind: "failed", accountId: "g2", reason: "still-running", at: NOW - 1000 } }));
+  assert.match(row(failed), /Antigravity kapanmadı/);
+  const waiting = render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: undefined, saved: ["g1"], busy: "signing-in", signInFor: "g2" }));
+  assert.match(waiting, /data-slot="antigravity-sign-in"[\s\S]*Şu hesapla gir: <b>AG 2<\/b>/);
+
+  // The row's button opens the confirmation, and confirming switches.
+  const calls: string[] = [];
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const relay = withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"] });
+    (relay as any).action = async (_key: string, fn: () => Promise<unknown>) => fn();
+    (relay as any).api = { switchAntigravity: async (id: string) => void calls.push(`switch:${id}`) };
+    const { createRoot } = await import("react-dom/client");
+    const { ToolList } = await import("../src/features/ToolList");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, createElement(ToolList, { now: NOW, onGateway() {}, onAdd() {} })),
+        ),
+      ),
+    );
+    const button = (text: string) => find(dom.container as unknown as Fake, (n) => n.tagName === "button" && textOf(n).trim() === text);
+    await act(async () => dom.dispatch(button("Geç: AG 2") as never, "click", { detail: 1 }));
+    assert.match(textOf(dom.container as unknown as Fake), /Antigravity kapanır ve AG 2 ile yeniden açılır/);
+    await act(async () => dom.dispatch(button("AG 2 hesabına geç") as never, "click", { detail: 1 }));
+    assert.deepEqual(calls, ["switch:g2"]);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
+});

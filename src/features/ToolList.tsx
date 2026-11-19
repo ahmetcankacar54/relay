@@ -7,9 +7,10 @@ import { useRelay, type Relay } from "@/data/relay-context";
 import { timeLeft } from "@/lib/account-row";
 import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
 import { toolRows, type ToolId, type ToolRow } from "@/lib/tools";
+import { AntigravitySwitch, antigravityResultText } from "./AntigravitySwitch";
 import { cn } from "@/lib/utils";
 import type { LimitHeadline } from "../../shared/quota-windows";
-import type { Account } from "../../shared/types";
+import type { Account, Snapshot } from "../../shared/types";
 
 const TOOL_NAMES: Record<ToolId, [string, string]> = {
   "claude-app": ["Claude uygulaması", "Claude app"],
@@ -67,6 +68,15 @@ function nextLine(row: ToolRow, alternative: Account | undefined, t: T, language
   if (row.via === "gateway")
     return t(`Ağ geçidi sıradaki isteği ${alternative.name} hesabına gönderir${space}`, `The gateway sends the next request to ${alternative.name}${space}`);
   return t(`${alternative.name} hazır${space}`, `${alternative.name} is ready${space}`);
+}
+
+/** The Antigravity row's button: the suggested account to move to, or the accounts to pick from. */
+export function antigravityButton(row: ToolRow, alternative: Account | undefined, app: Snapshot["antigravity"], t: T): string {
+  if (app?.busy === "switching") return t("Geçiliyor…", "Switching…");
+  if (app?.busy === "signing-in") return t("Giriş bekleniyor", "Waiting for sign-in");
+  const stuck = row.state === "blocked" || row.state === "near";
+  if (!stuck || !alternative) return t("Hesap değiştir", "Switch account");
+  return app?.saved?.includes(alternative.id) ? t(`Geç: ${alternative.name}`, `Switch: ${alternative.name}`) : t("Girişi kaydet", "Save sign-in");
 }
 
 const ringOf = (row: ToolRow): RingState =>
@@ -161,6 +171,10 @@ export function ToolList({
   const rows = otherToolRows(relay, now);
   if (!rows.length) return null;
   const byId = (id?: string) => (id ? relay.accounts.find((a) => a.id === id) : undefined);
+  // Relay moves the app itself (macOS): the row offers the switch instead of the steps.
+  const switcher = !!relay.data?.antigravity?.canSwitch;
+  const google = relay.accounts.filter((a) => a.provider === "antigravity").length;
+  const result = antigravityResultText(relay.data?.antigravity, relay.accounts, t, now);
   return (
     <div data-slot="tool-list" className="overflow-hidden rounded-lg border bg-card">
       {rows.map((row, i) => {
@@ -175,6 +189,16 @@ export function ToolList({
           row.state === "off" ? (
             <Button size="xs" variant="outline" onClick={onGateway}>
               {t("Ağ geçidi", "Gateway")}
+            </Button>
+          ) : row.id === "antigravity" && switcher && (stuck ? alternative : google > 1) ? (
+            <Button
+              size="xs"
+              variant={row.state === "blocked" ? "default" : "outline"}
+              aria-expanded={open === row.id}
+              disabled={!!relay.data?.antigravity?.busy && relay.data.antigravity.busy !== "signing-in"}
+              onClick={() => setOpen(open === row.id ? undefined : row.id)}
+            >
+              {antigravityButton(row, alternative, relay.data?.antigravity, t)}
             </Button>
           ) : row.id === "antigravity" && stuck && alternative ? (
             <Button
@@ -218,11 +242,26 @@ export function ToolList({
               </div>
               {action && <div className={cn(compact && "col-start-2 justify-self-start")}>{action}</div>}
             </div>
-            {open === row.id && alternative && (
+            {row.id === "antigravity" && result && (
+              <p data-slot="antigravity-result" role="status" className={cn("mt-1", compact ? "text-2xs" : "ml-11 text-xs", result.bad ? "text-crit" : "text-muted-foreground")}>
+                {result.text}
+              </p>
+            )}
+            {row.id === "antigravity" && (open === row.id || relay.data?.antigravity?.busy === "signing-in") && switcher ? (
+              <div className={cn("mt-2", compact ? "" : "ml-11")}>
+                <AntigravitySwitch
+                  key={`${row.alternative?.accountId}`}
+                  preselect={stuck ? row.alternative?.accountId : undefined}
+                  compact={compact}
+                  now={now}
+                  onDone={() => setOpen(undefined)}
+                />
+              </div>
+            ) : open === row.id && alternative ? (
               <div className={cn("mt-2", compact ? "" : "ml-11")}>
                 <AntigravitySteps target={alternative} canOpen={!!relay.data?.antigravity?.canOpen} compact={compact} />
               </div>
-            )}
+            ) : null}
           </div>
         );
       })}

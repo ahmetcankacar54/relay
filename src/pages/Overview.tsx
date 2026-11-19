@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Banner } from "@/components/Banner";
-import { ToolList, blockedToolText, otherToolRows } from "../features/ToolList";
+import { ToolList, antigravityButton, blockedToolText, otherToolRows } from "../features/ToolList";
 import { blockedTool, type ToolId } from "@/lib/tools";
 import { RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
@@ -98,7 +98,9 @@ export function Overview({
             action={
               stopped.id === "antigravity" ? (
                 <Button size="sm" onClick={() => setOpenTool("antigravity")}>
-                  {t("Nasıl geçilir", "How to move")}
+                  {relay.data?.antigravity?.canSwitch
+                    ? antigravityButton(stopped, accounts.find((a) => a.id === stopped.alternative?.accountId), relay.data.antigravity, t)
+                    : t("Nasıl geçilir", "How to move")}
                 </Button>
               ) : undefined
             }

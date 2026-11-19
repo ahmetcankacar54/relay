@@ -357,7 +357,8 @@ const state: Snapshot = {
     ]),
   ),
   // The Antigravity app is signed in with the first Antigravity account, the one with a spent model.
-  antigravity: { installed: true, canOpen: false, accountId: otherIds.ag1 },
+  // Both app sign-ins are kept, so the preview can show a switch.
+  antigravity: { installed: true, canOpen: false, accountId: otherIds.ag1, canSwitch: true, saved: [otherIds.ag1, otherIds.ag2] },
   accounts,
   authFlows: [],
   sessions,
@@ -396,6 +397,8 @@ const scenario = import.meta.env.DEV
   : null;
 // The macOS-only parts of Settings, such as the menu bar's items.
 if (scenario === "macos") state.diagnostics.platform = "darwin";
+// The second Antigravity account's app sign-in is not kept yet: the row offers to save it.
+if (scenario === "antigravity-unsaved") state.antigravity = { ...state.antigravity!, saved: [otherIds.ag1] };
 // Drafts rescued at a switch: two still waiting to be typed back, one left for Copy.
 if (scenario === "drafts")
   state.drafts = [
@@ -1118,6 +1121,19 @@ export const previewApi: RelayAPI = {
   openDesktop: desktopOnly,
   openCodeTab: desktopOnly,
   openAntigravity: desktopOnly,
+  // The preview moves its Antigravity app at once; the real one closes and opens the app.
+  switchAntigravity: async (accountId) => {
+    const at = Date.now();
+    state.antigravity = { ...state.antigravity!, accountId, result: { kind: "switched", accountId, agyRunning: 1, at } };
+    return state.antigravity.result!;
+  },
+  saveAntigravitySignIn: async (accountId) => {
+    state.antigravity = { ...state.antigravity!, busy: "signing-in", signInFor: accountId };
+  },
+  cancelAntigravitySignIn: async () => {
+    const { busy: _busy, signInFor, ...rest } = state.antigravity!;
+    state.antigravity = { ...rest, result: { kind: "cancelled", accountId: signInFor ?? "", at: Date.now() } };
+  },
   armAutoCapture: desktopOnly,
   disarmAutoCapture: async () => {},
   chooseAutoCaptureOrg: desktopOnly,

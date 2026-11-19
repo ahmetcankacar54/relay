@@ -189,6 +189,7 @@ import {
 } from "./core/provider-discovery";
 import { AntigravityBridge } from "./core/antigravity-bridge";
 import { antigravityDataDir, antigravityLastLogin, matchAntigravityApp, openAntigravityApp } from "./core/antigravity-app";
+import { AntigravitySwitcher, AntigravityVault, macAntigravityPorts } from "./core/antigravity-switch";
 import { readCodexCredential } from "./core/provider-credentials";
 import { readAntigravityTier, readAntigravityUsage, readCodexUsage } from "./core/provider-usage";
 /** When each Antigravity account's Google plan was last read. */
@@ -836,6 +837,13 @@ else {
                   ? "No system keyring was found (Secret Service or KWallet), so Claude app sign-ins cannot be saved. Install and unlock gnome-keyring or KWallet, then restart Relay."
                   : "System encryption is unavailable, so Claude app sign-ins cannot be saved.",
             };
+      if (process.platform === "darwin")
+        antigravitySwitcher = new AntigravitySwitcher(
+          macAntigravityPorts(antigravityDataDir()),
+          new AntigravityVault(vaultDir, (text) => vault.sealer.seal(text), (data) => vault.sealer.unseal(data)),
+          () => service.store.state.accounts,
+          () => broadcastChanged(),
+        );
       const host = desktopHost(vault.sealer, () => service.store.state.claudeApp);
       desktop = new DesktopManager(
         path.join(app.getPath("appData"), "Claude"),
@@ -2186,8 +2194,23 @@ let proxyServer: ProxyServer | undefined;
 async function antigravityApp() {
   const accounts = service.store.state.accounts;
   if (!accounts.some((a) => a.provider === "antigravity")) return undefined;
-  return matchAntigravityApp(await antigravityLastLogin(antigravityDataDir()), accounts, process.platform === "darwin");
+  const app = matchAntigravityApp(await antigravityLastLogin(antigravityDataDir()), accounts, process.platform === "darwin");
+  if (!antigravitySwitcher || !app.installed) return app;
+  // On macOS the Keychain item itself says which account the app and agy use; the settings file
+  // only says who signed in last.
+  const [state, current] = await Promise.all([antigravitySwitcher.state(), antigravitySwitcher.current()]);
+  const { accountId: _last, otherSignIn: _other, ...rest } = app;
+  const who = current.accountId
+    ? { accountId: current.accountId }
+    : current.other
+      ? { otherSignIn: true }
+      : current.signedOut
+        ? {}
+        : { ...(app.accountId ? { accountId: app.accountId } : {}), ...(app.otherSignIn ? { otherSignIn: true } : {}) };
+  return { ...rest, ...who, canSwitch: true, ...state };
 }
+/** Moves the Antigravity app and agy between saved accounts; macOS only. */
+let antigravitySwitcher: AntigravitySwitcher | undefined;
 const antigravityBridges = new Map<string, AntigravityBridge>();
 const pendingAntigravityOAuth = new Map<string, string>();
 const antigravityOAuthOutcomes = new Map<string, AntigravityOAuthPoll>();
@@ -3228,6 +3251,18 @@ function bindIPC() {
   );
   handle("open-desktop", () => manualDesktopLock(() => desktop.open()));
   handle("open-antigravity", () => openAntigravityApp());
+  const antigravityOnly = () => {
+    if (!antigravitySwitcher) throw new Error(say("Antigravity hesap geçişi yalnızca macOS'ta çalışır.", "Antigravity account switching works on macOS only."));
+    return antigravitySwitcher;
+  };
+  const antigravityAccount = (accountId: unknown) => {
+    const account = service.store.account(id.parse(accountId));
+    if (account.provider !== "antigravity") throw new Error(say("Antigravity hesabı değil.", "Not an Antigravity account."));
+    return account.id;
+  };
+  handle("switch-antigravity", (accountId) => antigravityOnly().switchTo(antigravityAccount(accountId)));
+  handle("save-antigravity-sign-in", (accountId) => antigravityOnly().beginSignIn(antigravityAccount(accountId)));
+  handle("cancel-antigravity-sign-in", () => antigravityOnly().cancelSignIn());
   // Setup's "Open Code": the fixed claude:// link to Code's new-session screen, macOS and Linux
   // (where Claude's package registers the link and hands it to the running Claude).
   handle("open-code-tab", () =>
