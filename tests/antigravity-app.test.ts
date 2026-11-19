@@ -6,9 +6,9 @@ import path from "node:path";
 import { antigravityDataDir, antigravityLastLogin, matchAntigravityApp } from "../electron/core/antigravity-app";
 
 const accounts = [
-  { id: "c", provider: "claude" as const, auth: { loggedIn: true, email: "same@example.test" } },
-  { id: "g1", provider: "antigravity" as const, auth: { loggedIn: true, email: "One@Example.test" } },
-  { id: "g2", provider: "antigravity" as const, auth: { loggedIn: true, email: "two@example.test" } },
+  { id: "c", provider: "claude" as const, auth: { loggedIn: true, email: "same@example.test", checkedAt: "2026-11-19T00:00:00Z" } },
+  { id: "g1", provider: "antigravity" as const, auth: { loggedIn: true, email: "One@Example.test", checkedAt: "2026-11-19T00:00:00Z" } },
+  { id: "g2", provider: "antigravity" as const, auth: { loggedIn: true, email: "two@example.test", checkedAt: "2026-11-19T00:00:00Z" } },
 ];
 
 test("the Antigravity app's last sign-in is read from its settings file, and only a valid e-mail counts", async () => {

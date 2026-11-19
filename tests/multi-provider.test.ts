@@ -161,9 +161,10 @@ test("the table badges every account's provider and shows Codex and Antigravity 
     ["OpenAI · Codex", "codex", "Codex"],
     ["Google · Antigravity", "antigravity", "Antigravity"],
   ] as const)
-    assert.match(html, new RegExp(`${name}</span><span[^>]*data-provider="${provider}"[^>]*>${label}</span>`));
+    // The name has its own line; the provider badge leads the line under it.
+    assert.match(html, new RegExp(`>${name}</span></div><div[^>]*><span[^>]*data-provider="${provider}"[^>]*>${label}</span>`));
   // The legacy account has no provider field and reads as Claude.
-  assert.match(html, /Eski hesap<\/span><span[^>]*data-provider="claude"/);
+  assert.match(html, />Eski hesap<\/span><\/div><div[^>]*><span[^>]*data-provider="claude"/);
   // Their connection cell is one gateway badge; Claude's keeps its icons.
   assert.equal([...html.matchAll(/Bağlı · Gateway/g)].length, 2);
   assert.equal([...html.matchAll(/data-slot="gateway-pool"/g)].length, 2);

@@ -59,7 +59,7 @@ test("Antigravity's limits list its models only, and it has no five-hour period 
     ["antigravity_gemini_4_carbon_high", "antigravity_claude_opus_5_5", "antigravity_gemini_4_argon"],
   );
   assert.deepEqual(usageWindowRows(claude).map((r) => r.key), ["five_hour", "seven_day", "seven_day_fable"]);
-  const account: Account = { id: "g1", name: "Google · Antigravity", kind: "personal", createdAt: at(-9999), provider: "antigravity", auth: { loggedIn: true } };
+  const account: Account = { id: "g1", name: "Google · Antigravity", kind: "personal", group: "personal", color: "olive", createdAt: at(-9999), provider: "antigravity", auth: { loggedIn: true, checkedAt: "2026-11-19T00:00:00Z" } };
   const [row] = overviewAccounts(undefined, [account], { g1: antigravity }, NOW);
   assert.equal(row.state, "ready");
   assert.equal(ringState(antigravity, NOW), "full");
@@ -72,7 +72,7 @@ test("Antigravity's limits list its models only, and it has no five-hour period 
 test("the panel never offers the Claude app switch on a Codex or Antigravity row", () => {
   const relay = { desktopBusy: false, pendingDesktop: undefined, desktop: undefined, data: undefined } as never;
   for (const provider of ["codex", "antigravity"] as const) {
-    const account: Account = { id: "x", name: provider, kind: "personal", createdAt: at(0), provider, auth: { loggedIn: true } };
+    const account: Account = { id: "x", name: provider, kind: "personal", group: "personal", color: "olive", createdAt: at(0), provider, auth: { loggedIn: true, checkedAt: "2026-11-19T00:00:00Z" } };
     const state = panelRowState({ account, state: "ready", recommended: false }, relay);
     assert.deepEqual(state, { canSwitch: false });
   }
