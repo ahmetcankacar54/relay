@@ -237,11 +237,14 @@ test("Antigravity's processes are told apart in a ps listing: the app bundle's, 
     "  201 /Applications/Antigravity.app/Contents/Resources/bin/language_server",
     "  300 /Users/u/.local/bin/agy",
     "  301 agy",
+    "  302 /Users/u/.gemini/antigravity/bin/agentapi",
     "  400 /usr/bin/agyx",
   ].join("\n");
   assert.deepEqual(antigravityProcesses(ps), { app: true, agy: 2 });
   assert.deepEqual(antigravityProcesses("    1 /sbin/launchd\n  201 /Applications/Antigravity.app/Contents/Resources/bin/language_server"), { app: true, agy: 0 });
   assert.deepEqual(antigravityProcesses("    1 /sbin/launchd"), { app: false, agy: 0 });
+  // The app's helper started from its own folder keeps it counted as running; agy's own helpers do not.
+  assert.deepEqual(antigravityProcesses("  302 /Users/u/.gemini/antigravity/bin/agentapi\n  303 /Users/u/.gemini/antigravity-cli/bin/agentapi"), { app: true, agy: 0 });
 });
 
 test("the app's settings file keeps every other key, and only terms keys are written", async () => {
@@ -253,5 +256,120 @@ test("the app's settings file keeps every other key, and only terms keys are wri
     assert.equal(fs.statSync(file).mode & 0o777, 0o600);
     fs.symlinkSync(file, path.join(dir, "link.json"));
     await assert.rejects(writeAntigravitySettings(path.join(dir, "link.json"), {}));
+  });
+});
+
+test("nothing is overwritten or removed when the sign-in in use cannot be kept first", async () => {
+  await withDir(async (dir) => {
+    const { world, ports, log } = fakes({ item: signIn("one@example.test") });
+    const vault = vaultIn(dir);
+    await vault.save(G2, { email: "two@example.test", raw: signIn("two@example.test") });
+    const broken = Object.assign(Object.create(Object.getPrototypeOf(vault)), vault, {
+      save: async () => {
+        throw new Error("disk full");
+      },
+      savePending: async () => {
+        throw new Error("disk full");
+      },
+    }) as AntigravityVault;
+    const switcher = new AntigravitySwitcher(ports, broken, () => accounts);
+    const result = await switcher.switchTo(G2);
+    assert.deepEqual([result.kind, result.reason], ["failed", "save"]);
+    assert.equal(world.item, signIn("one@example.test"));
+    assert.ok(!log.includes("write") && !log.includes("quit"));
+    // A new account's sign-in does not start either.
+    world.item = signIn("one@example.test", "fresh");
+    await switcher.beginSignIn(G2);
+    assert.equal((await switcher.state()).result?.reason, "save");
+    assert.equal(world.item, signIn("one@example.test", "fresh"));
+    assert.ok(!log.includes("remove"));
+  });
+});
+
+test("a switch that moved the sign-in but could not open the app again says so", async () => {
+  await withDir(async (dir) => {
+    const { world, ports } = fakes({ item: signIn("one@example.test") });
+    ports.launch = async () => {
+      throw new Error("open failed");
+    };
+    const vault = vaultIn(dir);
+    await vault.save(G2, { email: "two@example.test", raw: signIn("two@example.test") });
+    const result = await new AntigravitySwitcher(ports, vault, () => accounts).switchTo(G2);
+    assert.deepEqual([result.kind, result.reason], ["failed", "launch"]);
+    assert.equal(world.item, signIn("two@example.test"));
+  });
+});
+
+test("a cancel while the app is still closing stops before the sign-in is taken off this Mac", async () => {
+  await withDir(async (dir) => {
+    const { world, ports, log } = fakes({ item: signIn("one@example.test") });
+    const switcher = new AntigravitySwitcher(ports, vaultIn(dir), () => accounts);
+    const quit = ports.quit;
+    ports.quit = async () => {
+      switcher.cancelSignIn();
+      await quit();
+    };
+    await switcher.beginSignIn(G2);
+    const state = await switcher.state();
+    assert.equal(state.busy, undefined);
+    assert.equal(state.result?.kind, "cancelled");
+    assert.equal(world.item, signIn("one@example.test"));
+    assert.ok(!log.includes("remove"));
+    assert.equal(world.open, true);
+  });
+});
+
+test("a cancel puts the earlier sign-in back even when the app will not close, and a Relay that quit mid-way puts it back at start", async () => {
+  await withDir(async (dir) => {
+    const { world, ports } = fakes({ item: signIn("one@example.test") });
+    const vault = vaultIn(dir);
+    const switcher = new AntigravitySwitcher(ports, vault, () => accounts);
+    await switcher.beginSignIn(G2);
+    world.stuck = true;
+    switcher.cancelSignIn();
+    for (let i = 0; i < 500 && (await switcher.state()).busy; i++) await new Promise((r) => setImmediate(r));
+    assert.equal((await switcher.state()).result?.kind, "cancelled");
+    assert.equal(world.item, signIn("one@example.test"));
+    assert.equal(await vault.loadPending(), undefined);
+
+    // Relay quit during a wait: the item is gone and the pending copy is on disk.
+    await vault.savePending(signIn("one@example.test"));
+    world.item = undefined;
+    await new AntigravitySwitcher(ports, vault, () => accounts).recover();
+    assert.equal(world.item, signIn("one@example.test"));
+    assert.equal(await vault.loadPending(), undefined);
+    // A sign-in made since is left alone.
+    await vault.savePending(signIn("one@example.test"));
+    world.item = signIn("two@example.test");
+    await new AntigravitySwitcher(ports, vault, () => accounts).recover();
+    assert.equal(world.item, signIn("two@example.test"));
+  });
+});
+
+test("a background reading that began before a switch does not save over what the switch kept", async () => {
+  await withDir(async (dir) => {
+    const { world, ports } = fakes({ item: signIn("one@example.test", "r1", "old") });
+    const vault = vaultIn(dir);
+    await vault.save(G2, { email: "two@example.test", raw: signIn("two@example.test") });
+    let release!: () => void;
+    const read = ports.keychain.read;
+    let hold = true;
+    ports.keychain.read = async () => {
+      const value = await read();
+      if (hold) {
+        hold = false;
+        await new Promise<void>((r) => (release = r));
+      }
+      return value;
+    };
+    const switcher = new AntigravitySwitcher(ports, vault, () => accounts);
+    const peek = switcher.current();
+    await new Promise((r) => setImmediate(r));
+    world.onQuit = signIn("one@example.test", "r1", "new");
+    world.item = signIn("one@example.test", "r1", "new");
+    assert.equal((await switcher.switchTo(G2)).kind, "switched");
+    release();
+    await peek;
+    assert.equal((await vault.load(G1))?.raw, signIn("one@example.test", "r1", "new"));
   });
 });

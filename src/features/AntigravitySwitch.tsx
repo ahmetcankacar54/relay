@@ -53,6 +53,9 @@ export function antigravityResultText(
         "verify-failed": ["Giriş yazıldı ama geri okunamadı; geçiş doğrulanamadı.", "The sign-in was written but did not read back; the switch is unconfirmed."],
         busy: ["Başka bir Antigravity işlemi sürüyor.", "Another Antigravity step is under way."],
         timeout: ["10 dakikada giriş yapılmadı; önceki giriş geri kondu.", "No sign-in within 10 minutes; the earlier one is back."],
+        save: ["Mevcut giriş Relay'e kaydedilemedi; hiçbir şeye dokunulmadı.", "The current sign-in could not be saved in Relay; nothing was touched."],
+        launch: ["Giriş değişti ama Antigravity yeniden açılamadı; kendin aç.", "The sign-in moved, but Antigravity did not open again; open it yourself."],
+        cancelled: ["Vazgeçildi.", "Cancelled."],
       };
       return { text: t(...why[result.reason ?? "keychain"]), bad: true };
     }

@@ -844,6 +844,8 @@ else {
           () => service.store.state.accounts,
           () => broadcastChanged(),
         );
+      // A sign-in Relay took off this Mac for a new account's sign-in goes back if Relay quit mid-way.
+      void antigravitySwitcher?.recover();
       const host = desktopHost(vault.sealer, () => service.store.state.claudeApp);
       desktop = new DesktopManager(
         path.join(app.getPath("appData"), "Claude"),
