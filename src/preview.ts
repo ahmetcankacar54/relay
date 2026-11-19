@@ -115,6 +115,63 @@ accounts[2].desktop = {
   orgId: ids[3],
   savedAt: new Date().toISOString(),
 };
+// A Codex account and two Antigravity accounts: they serve the gateway and their own tools, never
+// the Claude app. The first Antigravity account has spent one model; the second has room everywhere.
+const otherIds = {
+  codex: "0c0de000-4a1b-4c2d-8e3f-000000000001",
+  ag1: "a9a9a9a9-4a1b-4c2d-8e3f-000000000002",
+  ag2: "a9a9a9a9-4a1b-4c2d-8e3f-000000000003",
+};
+const signedIn = (email: string, subscription: string) => ({
+  loggedIn: true,
+  checkedAt: new Date().toISOString(),
+  email,
+  subscription,
+});
+accounts.push(
+  { id: otherIds.codex, name: "OpenAI · Codex", kind: "personal", group: "personal", color: "olive", provider: "codex", createdAt: new Date().toISOString(), auth: signedIn("codex@example.test", "plus") },
+  { id: otherIds.ag1, name: "Google · Antigravity", kind: "personal", group: "personal", color: "blue", provider: "antigravity", createdAt: new Date().toISOString(), auth: signedIn("google1@example.test", "pro") },
+  { id: otherIds.ag2, name: "Google · Antigravity 2", kind: "personal", group: "personal", color: "plum", provider: "antigravity", createdAt: new Date().toISOString(), auth: signedIn("google2@example.test", "ultra") },
+);
+const minutes = (n: number) => new Date(Date.now() + n * 60_000).toISOString();
+/** Antigravity's limits are per model; its five-hour window is the roomiest model, as the reader keeps it. */
+const antigravityUsage = (id: string, models: [string, string, number, number][]) => {
+  const modelWindows = models.map(([key, label, usedPercent, resetIn]) => ({
+    key: `antigravity_${key}`,
+    label,
+    usedPercent,
+    resetsAt: minutes(resetIn),
+  }));
+  const roomiest = [...modelWindows].sort((a, b) => a.usedPercent - b.usedPercent)[0];
+  return {
+    accountId: id,
+    status: "ready" as const,
+    stale: false,
+    checkedAt: minutes(-1),
+    fiveHour: { usedPercent: roomiest.usedPercent, resetsAt: roomiest.resetsAt },
+    modelWindows,
+  };
+};
+const previewProviderUsage: Record<string, Snapshot["usage"][string]> = {
+  [otherIds.codex]: {
+    accountId: otherIds.codex,
+    status: "ready",
+    stale: false,
+    checkedAt: minutes(-2),
+    fiveHour: { usedPercent: 0, resetsAt: minutes(300) },
+    sevenDay: { usedPercent: 100, resetsAt: minutes(4 * 24 * 60 + 5) },
+  },
+  [otherIds.ag1]: antigravityUsage(otherIds.ag1, [
+    ["gemini_4_carbon_high", "Gemini 4 Carbon (High)", 100, 25],
+    ["claude_opus_5_5", "Claude Opus 5.5", 62, 190],
+    ["gemini_4_argon", "Gemini 4 Argon", 18, 299],
+  ]),
+  [otherIds.ag2]: antigravityUsage(otherIds.ag2, [
+    ["gemini_4_carbon_high", "Gemini 4 Carbon (High)", 6, 299],
+    ["claude_opus_5_5", "Claude Opus 5.5", 0, 300],
+    ["gemini_4_argon", "Gemini 4 Argon", 0, 300],
+  ]),
+};
 if (new URLSearchParams(location.search).get("demo") === "50") {
   for (let i = 4; i < 50; i++)
     accounts.push({
@@ -251,7 +308,8 @@ const state: Snapshot = {
   usage: Object.fromEntries(
     accounts.map((a, i) => [
       a.id,
-      !a.auth?.loggedIn
+      previewProviderUsage[a.id] ??
+      (!a.auth?.loggedIn
         ? {
             accountId: a.id,
             status: "idle",
@@ -295,9 +353,11 @@ const state: Snapshot = {
                   retryAt: new Date(Date.now() + 5 * 60_000).toISOString(),
                 }
               : {}),
-          },
+          }),
     ]),
   ),
+  // The Antigravity app is signed in with the first Antigravity account, the one with a spent model.
+  antigravity: { installed: true, canOpen: false, accountId: otherIds.ag1 },
   accounts,
   authFlows: [],
   sessions,
@@ -1055,6 +1115,7 @@ export const previewApi: RelayAPI = {
   }),
   openDesktop: desktopOnly,
   openCodeTab: desktopOnly,
+  openAntigravity: desktopOnly,
   armAutoCapture: desktopOnly,
   disarmAutoCapture: async () => {},
   chooseAutoCaptureOrg: desktopOnly,

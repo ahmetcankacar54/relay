@@ -183,6 +183,7 @@ import {
   executeOneClickCascade,
 } from "./core/provider-discovery";
 import { AntigravityBridge } from "./core/antigravity-bridge";
+import { antigravityDataDir, antigravityLastLogin, matchAntigravityApp, openAntigravityApp } from "./core/antigravity-app";
 import { readCodexCredential } from "./core/provider-credentials";
 import { readAntigravityTier, readAntigravityUsage, readCodexUsage } from "./core/provider-usage";
 /** When each Antigravity account's Google plan was last read. */
@@ -2028,6 +2029,15 @@ async function separateWindows(): Promise<SeparateWindows | undefined> {
  * stop and restart runs one after the other, so a quick toggle can never leave two servers.
  */
 let proxyServer: ProxyServer | undefined;
+/**
+ * The Antigravity app and the Relay account it is signed in with. Read from its settings file only
+ * when some account is an Antigravity one; cheap (a few KB) and read on each snapshot.
+ */
+async function antigravityApp() {
+  const accounts = service.store.state.accounts;
+  if (!accounts.some((a) => a.provider === "antigravity")) return undefined;
+  return matchAntigravityApp(await antigravityLastLogin(antigravityDataDir()), accounts, process.platform === "darwin");
+}
 const antigravityBridges = new Map<string, AntigravityBridge>();
 const pendingAntigravityOAuth = new Map<string, string>();
 const antigravityOAuthOutcomes = new Map<string, AntigravityOAuthPoll>();
@@ -3067,6 +3077,7 @@ function bindIPC() {
     desktop.historySummary(id.parse(profileId)),
   );
   handle("open-desktop", () => manualDesktopLock(() => desktop.open()));
+  handle("open-antigravity", () => openAntigravityApp());
   // Setup's "Open Code": the fixed claude:// link to Code's new-session screen, macOS and Linux
   // (where Claude's package registers the link and hands it to the running Claude).
   handle("open-code-tab", () =>
@@ -3149,6 +3160,7 @@ function bindIPC() {
     ...(await service.panelSnapshot()),
     windows: await separateWindows(),
     update: appUpdates?.state(),
+    antigravity: await antigravityApp(),
     usage: displayUsage(),
     continuation: continuation.snapshot(),
     fleet: fleet.snapshot(),
@@ -3163,6 +3175,7 @@ function bindIPC() {
       ...(await service.snapshot()),
       windows: await separateWindows(),
       update: appUpdates?.state(),
+      antigravity: await antigravityApp(),
       usage: displayUsage(),
       continuation: continuation.snapshot(),
       fleet: fleet.snapshot(),

@@ -7,6 +7,7 @@ import { ringState } from "@/lib/account-row";
 import type { OverviewRow } from "@/data/selectors";
 import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
 import { cn } from "@/lib/utils";
+import { limitHeadline, modelOnlyUsage } from "../../shared/quota-windows";
 
 /**
  * Other accounts as a grouped list (direction A): each row a small two-ring gauge (five hours
@@ -69,15 +70,18 @@ export function AccountList({
     >
       {rows.map((row, i) => {
         const { account, usage } = row;
-        const five = usage?.fiveHour?.usedPercent;
-        const week = usage?.sevenDay?.usedPercent;
+        // An Antigravity account has a limit per model and none of its own: its ring is its fullest model.
+        const head = modelOnlyUsage(usage) ? limitHeadline(usage, now) : undefined;
+        const five = head ? head.usedPercent : usage?.fiveHour?.usedPercent;
+        const week = head ? undefined : usage?.sevenDay?.usedPercent;
         const why = blocked?.(row);
         const busy = switching === account.id;
         const caution = why ? undefined : warn?.(row);
         const ring = ringState(usage, now);
         const said = [
           account.name,
-          five === undefined ? undefined : t(`5 saat ${formatUsed(five, language)}`, `5 hours ${formatUsed(five, language)}`),
+          head ? `${head.label} ${formatUsed(head.usedPercent, language)}` : undefined,
+          head || five === undefined ? undefined : t(`5 saat ${formatUsed(five, language)}`, `5 hours ${formatUsed(five, language)}`),
           week === undefined ? undefined : t(`hafta ${formatUsed(week, language)}`, `week ${formatUsed(week, language)}`),
           ring === "stale" ? t("limit verisi eski", "usage data is out of date") : undefined,
         ]
@@ -110,7 +114,13 @@ export function AccountList({
                 {busy ? t("Geçiliyor…", "Switch in progress…") : line(row)}
               </span>
             </span>
-            {!panel && (
+            {!panel && head && (
+              <span className="flex min-w-0 max-w-40 shrink-0 items-baseline gap-1 text-xs tabular-nums" title={head.label}>
+                <b className="font-semibold">{formatPercent(percentUsed(head.usedPercent), language)}</b>
+                <span className="truncate text-muted-foreground">{head.label}</span>
+              </span>
+            )}
+            {!panel && !head && (
               <span className="shrink-0 text-xs tabular-nums">
                 <b className="font-semibold">{five === undefined ? "—" : formatPercent(percentUsed(five), language)}</b>
                 <span className="text-muted-foreground">

@@ -6,7 +6,7 @@ import { windowAccounts, type OverviewRow } from "@/data/selectors";
 import { accountHealth } from "@/lib/account-health";
 import { formatPercent, percentUsed } from "@/lib/meter";
 import { formatClock, formatRelative, formatReset } from "@/lib/time";
-import { quotaWindows } from "../../shared/quota-windows";
+import { limitHeadline, modelOnlyUsage, quotaWindows } from "../../shared/quota-windows";
 import { clockLocative } from "../../shared/tr-dative";
 import { freshUsage } from "../../shared/usage";
 import { accountPlan } from "../pages/accounts/accountLabels";
@@ -27,7 +27,7 @@ export function accountRowSubtitle(
   const health = accountHealth(
     row.account,
     row.usage,
-    { active: false, desktopRunning: false, waiting, platform },
+    { active: false, desktopRunning: false, waiting, platform, now, zone },
     t,
   );
   if (health.tone !== "ok") return health.label;
@@ -68,6 +68,8 @@ export function panelRowState(
   relay: Pick<Relay, "desktopBusy" | "pendingDesktop" | "desktop" | "data">,
 ): { canSwitch: boolean; reason?: PanelRowBlock; full?: boolean } {
   const blocked = (reason: PanelRowBlock) => ({ canSwitch: false, reason });
+  // Codex and Antigravity accounts serve their own tools; the Claude app never switches to them.
+  if ((row.account.provider ?? "claude") !== "claude") return { canSwitch: false };
   if (row.state === "not-linked") return blocked("not-linked");
   // Its own window holds its sign-in until it closes.
   if (windowAccounts(relay.data).has(row.account.id))
@@ -148,6 +150,8 @@ export function timeLeft(at: string | undefined, now: number, t: T): string | un
 export function ringState(usage: AccountUsage | undefined, now: number): RingState {
   if (!usage?.checkedAt || (!usage.fiveHour && !usage.sevenDay)) return "unknown";
   if (!freshUsage(usage, now)) return "stale";
+  // Usage made only of model limits shows its fullest model, so a spent model is a full ring.
+  if (modelOnlyUsage(usage)) return (limitHeadline(usage, now)?.usedPercent ?? 0) >= 100 ? "full" : "fresh";
   return (quotaWindows(usage) ?? []).some((w) => w.usedPercent >= 100) ? "full" : "fresh";
 }
 
@@ -164,7 +168,8 @@ const onward = (text: string, language: Language) =>
  * reset time stays true however old the reading is.
  */
 function nextReset(row: OverviewRow, t: T, now: number): string | undefined {
-  const five = row.usage?.fiveHour;
+  // An Antigravity account has no five-hour period: its fullest model is the one that changes.
+  const five = modelOnlyUsage(row.usage) ? limitHeadline(row.usage, now) : row.usage?.fiveHour;
   const full = row.state === "exhausted" || (five?.usedPercent ?? 0) >= 100;
   const at = Date.parse((row.state === "exhausted" ? row.availableAt : five?.resetsAt) ?? "");
   const left = Number.isFinite(at) ? leftUntil(at, now, t) : undefined;
@@ -191,7 +196,7 @@ function rowStatus(
   const health = accountHealth(
     row.account,
     row.usage,
-    { active: false, desktopRunning: false, waiting, platform },
+    { active: false, desktopRunning: false, waiting, platform, now, zone },
     t,
   );
   // Besides a browser approval, the one warning without a fix is a failed or old read; with a
@@ -267,7 +272,7 @@ export function panelRowLine(
   const percents =
     ringState(row.usage, now) === "unknown"
       ? []
-      : [row.usage?.fiveHour, row.usage?.sevenDay].flatMap((w) =>
+      : (modelOnlyUsage(row.usage) ? [limitHeadline(row.usage, now)] : [row.usage?.fiveHour, row.usage?.sevenDay]).flatMap((w) =>
           w ? [formatPercent(percentUsed(w.usedPercent), language)] : [],
         );
   return [status, ...percents].join(" · ");

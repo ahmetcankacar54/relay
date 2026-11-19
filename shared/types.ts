@@ -171,6 +171,8 @@ export interface Snapshot {
   windows?: SeparateWindows;
   /** Relay's own updates: a newer release found, downloaded and ready to install. */
   update?: UpdateState;
+  /** Google's Antigravity app on this computer and which Relay account it is signed in with. */
+  antigravity?: AntigravityAppState;
   usage: Record<string, AccountUsage>;
   authFlows: AuthFlow[];
   /** Sign-ins being made for the terminal, one per account at most. */
@@ -181,6 +183,19 @@ export interface Snapshot {
   diagnostics: Diagnostics;
   importEnabled: boolean;
   warnings: string[];
+}
+/**
+ * The Antigravity app, as Relay sees it. It talks to Google itself, never through the gateway, so it
+ * stays on the account it signed in with until the user signs in with another one and it restarts.
+ */
+export interface AntigravityAppState {
+  installed: boolean;
+  /** Relay can bring it forward (macOS). */
+  canOpen: boolean;
+  /** The Relay Antigravity account it is signed in with, when one matches its last sign-in. */
+  accountId?: string;
+  /** Signed in with a Google account that is not one of Relay's. */
+  otherSignIn?: boolean;
 }
 /**
  * Separate Claude windows: an account opened in its own Claude, on a data folder of its own,
@@ -657,6 +672,8 @@ export interface RelayAPI {
   syncDesktopHistory(profileId: string): Promise<void>;
   desktopHistorySummary(profileId: string): Promise<DesktopHistorySummary>;
   openDesktop(): Promise<void>;
+  /** Brings the Antigravity app forward, or starts it (macOS). */
+  openAntigravity(): Promise<void>;
   /** Opens Claude on Code's new-session screen, which creates the account's Code workspace. */
   openCodeTab(): Promise<void>;
   /** Saves this profile's Claude app sign-in by itself once it is complete (see AutoCaptureState). */

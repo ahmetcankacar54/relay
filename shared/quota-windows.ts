@@ -29,3 +29,54 @@ export function spentModelWindows(
     (w) => w.usedPercent >= 100 && (!w.resetsAt || Date.parse(w.resetsAt) > now),
   );
 }
+
+/**
+ * Usage made only of model limits (Antigravity): Google states a quota per model and none for the
+ * account. Its five-hour or weekly window is then the roomiest model, kept so the gateway can tell the
+ * account still answers; it is never shown as the account's own limit.
+ */
+export function modelOnlyUsage(u: Pick<AccountUsage, "modelWindows"> | undefined): boolean {
+  const models = u?.modelWindows ?? [];
+  return models.length > 0 && models.every((w) => w.key.startsWith("antigravity_"));
+}
+
+/** How full a window is now: one whose reset has passed is empty again, whatever an old reading says. */
+function usedAt(window: UsageWindow, now: number): number {
+  const reset = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
+  return Number.isFinite(reset) && reset <= now ? 0 : window.usedPercent;
+}
+
+/** The limit an account's figure shows: the one that stops it first. */
+export interface LimitHeadline {
+  /** "five_hour", "seven_day", or a model window's key. */
+  key: string;
+  /** A model's name, for a model's own limit (an Antigravity model). */
+  label?: string;
+  usedPercent: number;
+  resetsAt?: string;
+  /** A model's own limit: only requests for that model stop when it is spent. */
+  model: boolean;
+}
+
+/**
+ * The limit that stops the account first, as its one figure. For Claude and Codex the fuller of the
+ * five-hour and weekly windows (the five hours on a tie, since they end first). For usage made only of
+ * model limits (`modelOnlyUsage`) the fullest model, so a spent model is never hidden behind the
+ * roomiest one. A window whose reset has passed counts as empty. Undefined without a reading.
+ */
+export function limitHeadline(
+  u: Pick<AccountUsage, "fiveHour" | "sevenDay" | "modelWindows"> | undefined,
+  now: number,
+): LimitHeadline | undefined {
+  const candidates: LimitHeadline[] = modelOnlyUsage(u)
+    ? (u?.modelWindows ?? []).map((w) => ({ key: w.key, label: w.label, usedPercent: usedAt(w, now), resetsAt: w.resetsAt, model: true }))
+    : [
+        ...(u?.fiveHour ? [{ key: "five_hour", usedPercent: usedAt(u.fiveHour, now), resetsAt: u.fiveHour.resetsAt, model: false }] : []),
+        ...(u?.sevenDay ? [{ key: "seven_day", usedPercent: usedAt(u.sevenDay, now), resetsAt: u.sevenDay.resetsAt, model: false }] : []),
+      ];
+  const resetMs = (h: LimitHeadline) => {
+    const ms = Date.parse(h.resetsAt ?? "");
+    return Number.isFinite(ms) ? ms : Infinity;
+  };
+  return candidates.sort((a, b) => b.usedPercent - a.usedPercent || resetMs(a) - resetMs(b))[0];
+}

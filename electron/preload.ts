@@ -110,6 +110,7 @@ const api: RelayAPI = {
   desktopHistorySummary: (id) =>
     ipcRenderer.invoke("relay:desktop-history-summary", id),
   openDesktop: () => ipcRenderer.invoke("relay:open-desktop"),
+  openAntigravity: () => ipcRenderer.invoke("relay:open-antigravity"),
   openCodeTab: () => ipcRenderer.invoke("relay:open-code-tab"),
   armAutoCapture: (id) => ipcRenderer.invoke("relay:arm-auto-capture", id),
   disarmAutoCapture: (id) => ipcRenderer.invoke("relay:disarm-auto-capture", id),
