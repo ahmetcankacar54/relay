@@ -24,7 +24,7 @@ import {
 
 const t = (tr: string, en: string) => en;
 
-test("Linux looks in the browsers with a Linux build only, under XDG_CONFIG_HOME", () => {
+test("Linux looks in the browsers with a Linux build only, under XDG_CONFIG_HOME", { skip: process.platform === "win32" && "Linux and macOS paths: the code joins them with the host's path module" }, () => {
   const apps = browserApps("linux");
   assert.deepEqual([...apps], ["chrome", "brave", "edge", "chromium", "vivaldi", "chrome-beta", "chrome-dev"]);
   assert.equal(browserApps("darwin").length, 11);
@@ -82,7 +82,7 @@ const fakeSystem = (over: Partial<BrowserSystem>): BrowserSystem =>
     ...over,
   }) as BrowserSystem;
 
-test("on Linux a browser runs by its live lock, another machine's lock, or its executable", async () => {
+test("on Linux a browser runs by its live lock, another machine's lock, or its executable", { skip: process.platform === "win32" && "Linux and macOS paths: the code joins them with the host's path module" }, async () => {
   const lockAt = (target: string) => (file: string) =>
     file === "/cfg/google-chrome/SingletonLock" ? target : undefined;
   assert.equal(await browserRunning(fakeSystem({ readLink: lockAt("here-42"), alive: (pid) => pid === 42 }), "chrome"), true);
@@ -115,7 +115,7 @@ test("the Linux quit signals the browser's main process, never a helper or a str
   assert.deepEqual(linuxMainPids("brave", undefined, "host", procs), []);
 });
 
-test("a browser's launcher is the first command found on PATH", () => {
+test("a browser's launcher is the first command found on PATH", { skip: process.platform === "win32" && "Linux and macOS paths: the code joins them with the host's path module" }, () => {
   const present = new Set(["/usr/bin/google-chrome", "/opt/bin/google-chrome-stable"]);
   const has = (file: string) => present.has(file);
   assert.equal(findCommand(["google-chrome-stable", "google-chrome"], ["/usr/bin", "/opt/bin"], has), "/opt/bin/google-chrome-stable");

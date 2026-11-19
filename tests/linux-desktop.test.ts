@@ -26,7 +26,7 @@ test("Linux ps rows: pid, parent, the command as executable, kernel threads kept
   assert.equal(rows.length, 3);
 });
 
-test("the official package: the main Claude, its helpers and a window are told apart by app and parent", () => {
+test("the official package: the main Claude, its helpers and a window are told apart by app and parent", { skip: process.platform === "win32" && "Linux and macOS paths: the code joins them with the host's path module" }, () => {
   const rows = linuxProcessRows(
     listing([
       [4100, 1, EXE],
@@ -169,7 +169,7 @@ test("the Electron version of a Linux Claude comes from the version file beside 
   assert.equal(linuxElectronVersion(EXE, files({}, { "/usr/bin/version": "hello" })), undefined);
 });
 
-test("Claude's log: Library/Logs on macOS, the data folder's logs on Linux, unknown on Windows", () => {
+test("Claude's log: Library/Logs on macOS, the data folder's logs on Linux, unknown on Windows", { skip: process.platform === "win32" && "Linux and macOS paths: the code joins them with the host's path module" }, () => {
   assert.deepEqual(claudeLog("/Users/me", "darwin", {}), {
     current: "/Users/me/Library/Logs/Claude/main.log",
     rotated: "/Users/me/Library/Logs/Claude/main1.log",

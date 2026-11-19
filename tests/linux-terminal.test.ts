@@ -36,7 +36,7 @@ test("the Linux ports are the plain claude's, on Linux only", (t) => {
   assert.ok(linuxTerminalPorts(home, "linux"));
 });
 
-test("the credentials file is read, written privately and atomically, and removed", async (t) => {
+test("the credentials file is read, written privately and atomically, and removed", { skip: process.platform === "win32" && "POSIX file modes: Windows reports 0o666" }, async (t) => {
   const home = tempHome(t);
   const dir = path.join(home, ".claude");
   const file = path.join(dir, ".credentials.json");
@@ -72,7 +72,7 @@ test("a link or folder where the credentials file belongs is refused, never foll
   assert.equal(fs.readFileSync(target, "utf8"), "{}");
 });
 
-test("a switch through the Linux ports keeps MCP sign-ins and other keys, and the config's other keys", async (t) => {
+test("a switch through the Linux ports keeps MCP sign-ins and other keys, and the config's other keys", { skip: process.platform === "win32" && "POSIX file modes: Windows reports 0o666" }, async (t) => {
   const home = tempHome(t);
   const dir = path.join(home, ".claude");
   fs.mkdirSync(dir, { mode: 0o700 });
