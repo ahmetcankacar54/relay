@@ -62,7 +62,9 @@ export function reconnectIssues(
     }
     const reported = cliNeedsReconnect(account, u);
     const mismatch = !reported && desktopCliMismatch(account);
-    const issue = mismatch ? "identity-mismatch" : (displayedIssue(u) ?? "");
+    const issue = mismatch
+      ? "identity-mismatch"
+      : (displayedIssue(u) ?? (u?.cliSignInEnded ? "expired" : ""));
     const action =
       reported || mismatch
         ? "login"
@@ -89,7 +91,7 @@ export function reconnectCause(
   if (!account.auth?.loggedIn) return t("giriş yapılmamış", "not signed in");
   const another = () =>
     t("giriş başka bir hesaba ait", "the sign-in belongs to another account");
-  switch (usage?.issue) {
+  switch (usage?.issue ?? (usage?.cliSignInEnded ? "expired" : undefined)) {
     case "expired":
       return t("girişin süresi doldu", "the sign-in expired");
     case "credentials-missing":

@@ -500,6 +500,7 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
             </SettingGroup>
             <SettingGroup id="settings-troubleshooting" title={t("Sorun giderme", "Troubleshooting")}>
               <ClaudeLaunchRow api={api} action={action} data={data} t={t} />
+              <ClaudeAppAccessRow api={api} t={t} />
             </SettingGroup>
             <SettingGroup id="settings-experimental" title={t("Deneysel", "Experimental")}>
               <p className="py-2 text-xs text-muted-foreground">
@@ -524,6 +525,59 @@ export function Settings({ tab: initialTab }: { tab?: SettingsTab }) {
         </TabsContent>
       </Tabs>
     </PageFrame>
+  );
+}
+
+/**
+ * Whether Relay may read the Claude app's sign-in ("Claude Safe Storage"): with it Relay reads
+ * limits through the app when a Claude Code sign-in ended and renews those sign-ins by itself.
+ */
+export function ClaudeAppAccessRow({
+  api,
+  t,
+}: Pick<ReturnType<typeof useRelay>, "api"> & { t: ReturnType<typeof useI18n>["t"] }) {
+  const [state, setState] = useState<{ supported: boolean; allowed: boolean }>();
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    let live = true;
+    // A bridge without it (an older window) leaves the row out.
+    void Promise.resolve()
+      .then(() => api.claudeAppAccess())
+      .then((s) => live && setState(s))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [api]);
+  if (!state?.supported) return null;
+  return (
+    <SettingRow
+      label={t("Claude uygulaması erişimi", "Claude app access")}
+      description={t(
+        "Claude Code girişleri yaklaşık 30 günde biter. Bu izinle Relay onları Claude uygulamasındaki oturumla kendiliğinden yeniler ve o arada limitleri uygulamadan okur. macOS sorduğunda “Her Zaman İzin Ver”i seç.",
+        "Claude Code sign-ins end after about 30 days. With this, Relay renews them by itself from the Claude app’s session and reads the limits through the app meanwhile. When macOS asks, select “Always Allow”.",
+      )}
+    >
+      {state.allowed ? (
+        <Status ok>{t("İzin verildi", "Allowed")}</Status>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={asking}
+          onClick={() => {
+            setAsking(true);
+            void api
+              .claudeAppAccess(true)
+              .then(setState)
+              .catch(() => {})
+              .finally(() => setAsking(false));
+          }}
+        >
+          {t("İzin ver", "Allow")}
+        </Button>
+      )}
+    </SettingRow>
   );
 }
 

@@ -29,6 +29,8 @@ export function readsThroughApp(account: Account, usage?: AccountUsage) {
 export function cliNeedsReconnect(account: Account, usage?: AccountUsage) {
   return (
     (!account.auth?.loggedIn && !readsThroughApp(account, usage)) ||
+    // Ended, with the limits read through the Claude app meanwhile: still needs a new sign-in.
+    (!!account.auth?.loggedIn && usage?.cliSignInEnded === true) ||
     ["expired", "credentials-missing", "scope", "identity-mismatch"].includes(
       usage?.issue ?? "",
     )

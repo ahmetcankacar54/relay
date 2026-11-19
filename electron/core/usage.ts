@@ -7,7 +7,8 @@ import type {
 } from "../../shared/types";
 import { Store } from "./store";
 import { UsageError, type UsageCredential } from "./usage-credentials";
-import type { RefreshUsageCredential } from "./usage-refresh";
+import { SIGN_IN_ENDED, type RefreshUsageCredential } from "./usage-refresh";
+import { desktopCliMismatch } from "../../shared/account-state";
 import type { ProviderUsageResult } from "./provider-usage";
 
 type Json = Record<string, any>;
@@ -542,7 +543,8 @@ export class UsageManager {
         allowPrompt &&
         this.now() >= (this.serverRetryUntil.get(id) ?? 0) &&
         (previous.connectionRenewalRequired === true ||
-          ["keychain-locked", "renewal-required"].includes(
+          // "expired": the user asks to read through the Claude app, which may ask the Keychain.
+          ["keychain-locked", "renewal-required", "expired"].includes(
             previous.issue ?? "",
           ))
       )
@@ -691,7 +693,12 @@ export class UsageManager {
       const latest = this.store.account(account.id);
       if (identityKey(latest) !== identityKey(account))
         throw new UsageError("identity-mismatch");
-      this.succeed(latest, limits, "cli", renewalRequired);
+      this.succeed(latest, limits, "cli", renewalRequired, {
+        ...(credential.refreshTokenExpiresAt !== undefined &&
+        Number.isFinite(credential.refreshTokenExpiresAt)
+          ? { cliSignInEndsAt: new Date(credential.refreshTokenExpiresAt).toISOString() }
+          : {}),
+      });
       const repair = missingIdentity(latest, profile);
       if (repair) {
         this.store.update((state) => {
@@ -712,6 +719,18 @@ export class UsageManager {
       if (!current()) return this.view(this.store.account(account.id));
       const error =
         e instanceof UsageError ? e : new UsageError("unavailable", undefined, networkDetail(e));
+      // The Claude Code sign-in ended (each lasts about 30 days, whatever its renewals). The
+      // Claude app's own sign-in for the same account still reads the limits; the account keeps
+      // asking for a new Claude Code sign-in beside them. Only that end counts: any other
+      // "expired" (a missing scope, a refused token) is the sign-in's own problem.
+      const ended = error.issue === "expired" && error.detail === SIGN_IN_ENDED;
+      if (
+        ended &&
+        this.source(account) === "cli" &&
+        (account.provider ?? "claude") === "claude" &&
+        (await this.readThroughApp(account, previous, allowPrompt, current, error))
+      )
+        return this.view(this.store.account(account.id));
       const failures = (this.failures.get(account.id) ?? 0) + 1;
       this.failures.set(account.id, failures);
       const retryAt =
@@ -734,6 +753,9 @@ export class UsageManager {
         stale: !!("checkedAt" in retained && retained.checkedAt),
         issue: error.issue,
         retryAt: new Date(retryAt).toISOString(),
+        // Said even when the Claude app could not read the limits either: renewal and notice
+        // follow the end, not the read.
+        ...(ended ? { cliSignInEnded: true } : {}),
         ...(this.source(account) ? { source: this.source(account) } : {}),
       });
       // Only a change is worth a log line: a failing poll repeats every few minutes.
@@ -751,11 +773,40 @@ export class UsageManager {
     }
     return this.view(this.store.account(account.id));
   }
+  /**
+   * After the Claude Code sign-in of `account` ended: reads its limits through its Claude app
+   * sign-in. True when that answered; any failure of its own leaves the ended sign-in to report.
+   */
+  private async readThroughApp(
+    account: Account,
+    previous: AccountUsage,
+    allowPrompt: boolean,
+    current: () => boolean,
+    ended: UsageError,
+  ): Promise<boolean> {
+    if (!this.desktopUsage?.usable(account) || desktopCliMismatch(account)) return false;
+    try {
+      const raw = await this.desktopUsage.read(account, allowPrompt);
+      if (!current()) return true;
+      const limits = parseUsage(raw);
+      const latest = this.store.account(account.id);
+      if (identityKey(latest) !== identityKey(account)) return false;
+      this.succeed(latest, limits, "desktop", false, { cliSignInEnded: true });
+      if (!previous.cliSignInEnded)
+        try {
+          this.onIssue?.(account, "expired", `${ended.detail ?? "sign-in ended"}; limits read through the Claude app`);
+        } catch {}
+      return true;
+    } catch {
+      return false;
+    }
+  }
   private succeed(
     account: Account,
     limits: ReturnType<typeof parseUsage>,
     source: NonNullable<AccountUsage["source"]>,
     renewalRequired: boolean,
+    signIn: Pick<AccountUsage, "cliSignInEndsAt" | "cliSignInEnded"> = {},
   ) {
     this.failures.delete(account.id);
     this.serverRetryUntil.delete(account.id);
@@ -767,6 +818,7 @@ export class UsageManager {
       checkedAt: new Date(this.now()).toISOString(),
       source,
       ...(renewalRequired ? { connectionRenewalRequired: true } : {}),
+      ...signIn,
       ...limits,
     });
     // History is optional: failed local persistence must not turn a verified
