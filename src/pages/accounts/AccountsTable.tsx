@@ -60,6 +60,7 @@ import type { TerminalStatus } from "../../../shared/terminal-identity";
 import type { ExtensionStatus } from "../../../shared/types";
 import { accountPlan, avatarClass, planTitle, providerLabel } from "./accountLabels";
 import { isClaudeAccount } from "@/lib/account-health";
+import { limitHeadline, modelOnlyUsage } from "../../../shared/quota-windows";
 
 /**
  * A connection icon's three states: green when ready, amber with a dot when it needs a step (a
@@ -73,15 +74,19 @@ const toneText = {
 } as const;
 
 /** A limit in a table cell: a small ring and the percent beside it. */
-function CellMeter({ percent, label }: { percent?: number; label: string }) {
+function CellMeter({ percent, label, note }: { percent?: number; label: string; note?: string }) {
   const { language } = useI18n();
   if (percent === undefined) return <span className="text-muted-foreground">—</span>;
   const value = Math.max(0, Math.min(100, percent));
   const text = formatPercent(percentUsed(value), language);
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" title={note}>
       <UsageRing outer={value} size={22} label={`${label} ${text}`} />
-      <span className="text-xs font-semibold tabular-nums">{text}</span>
+      <span className="grid min-w-0 leading-tight">
+        <span className="text-xs font-semibold tabular-nums">{text}</span>
+        {/* A model's own limit (Antigravity) says which model it is. */}
+        {note && <span className="max-w-24 truncate text-2xs text-muted-foreground">{note}</span>}
+      </span>
     </div>
   );
 }
@@ -558,8 +563,10 @@ export function AccountsTable({
             suggested &&
             !inWindows.has(a.id) &&
             actions.find((x) => x.key === "switch");
-          const five = usage?.fiveHour?.usedPercent;
-          const week = usage?.sevenDay?.usedPercent;
+          // An Antigravity account's limits are per model: its column shows the fullest model, named.
+          const head = modelOnlyUsage(usage) ? limitHeadline(usage, now) : undefined;
+          const five = head ? head.usedPercent : usage?.fiveHour?.usedPercent;
+          const week = head ? undefined : usage?.sevenDay?.usedPercent;
           return (
             <TableRow
               key={a.id}
@@ -586,9 +593,10 @@ export function AccountsTable({
                   >
                     {a.name.slice(0, 1).toLocaleUpperCase(language)}
                   </span>
-                  <div className="min-w-0">
+                  {/* The name has its own line so badges never cut it; provider, plan and e-mail go under it. */}
+                  <div className="grid min-w-0 gap-0.5">
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate font-semibold">{a.name}</span>
+                      <span className="truncate font-semibold" title={a.name}>{a.name}</span>
                       {inWindows.has(a.id) && (
                         <WindowBadge t={t} compact />
                       )}
@@ -597,23 +605,26 @@ export function AccountsTable({
                           {t("önerilen", "suggested")}
                         </span>
                       )}
+                    </div>
+                    <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
                       <ProviderBadge provider={a.provider} className="shrink-0 px-1.5" />
                       {plan && (
                         <Badge
                           variant="secondary"
-                          className="shrink-0 px-1.5 text-2xs"
+                          // A long plan ("Google AI Ultra") narrows and is cut, never spills into the next column.
+                          className="block min-w-0 max-w-full shrink overflow-hidden px-1.5 text-2xs text-ellipsis"
                           title={planTitle(a, plan, t)}
                         >
                           {plan.label}
                         </Badge>
                       )}
-                    </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {a.desktop?.email ?? a.auth?.email ? (
-                        <Private>{a.desktop?.email ?? a.auth?.email}</Private>
-                      ) : (
-                        t("Henüz giriş yok", "No sign-in yet")
-                      )}
+                      <span className="min-w-0 truncate">
+                        {a.desktop?.email ?? a.auth?.email ? (
+                          <Private>{a.desktop?.email ?? a.auth?.email}</Private>
+                        ) : (
+                          t("Henüz giriş yok", "No sign-in yet")
+                        )}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -692,7 +703,7 @@ export function AccountsTable({
                 </div>
               </TableCell>
               <TableCell>
-                <CellMeter percent={five} label={t("5 saat", "5 hours")} />
+                <CellMeter percent={five} label={head?.label ?? t("5 saat", "5 hours")} note={head?.label} />
               </TableCell>
               <TableCell className="@max-3xl:hidden">
                 <CellMeter percent={week} label={t("Hafta", "Week")} />

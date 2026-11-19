@@ -1,6 +1,6 @@
 import type { AccountUsage, ModelWindow, UsageWindow } from "../../shared/types";
 import { UsageError } from "./usage-credentials";
-import { retryTime } from "./usage";
+import { networkDetail, retryTime } from "./usage";
 
 /**
  * Usage limits of the providers other than Claude, read through each account's own sign-in and
@@ -272,6 +272,18 @@ export async function readAntigravityTier(
 }
 
 /**
+ * Why the sidecar gave no answer, for the usage issue log: the bridge's own messages name the step
+ * (its local service refused, no saved credential, it did not start) and carry no secret; anything
+ * else is described by its kind only (`networkDetail`).
+ */
+function sidecarDetail(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  return /^(?:Antigravity OAuth service returned \d{3}|No Antigravity credential in the sidecar|CLIProxyAPI [\w /.-]{1,80})$/.test(message)
+    ? `no answer: ${message}`
+    : networkDetail(error);
+}
+
+/**
  * Reads an Antigravity account's model quotas through its CLIProxyAPI sidecar, which holds the
  * Google sign-in and renews it: Relay never handles the token itself.
  */
@@ -286,8 +298,8 @@ export async function readAntigravityUsage(
     let response: FetchedResponse;
     try {
       response = await call({ url, body });
-    } catch {
-      last = new UsageError("unavailable", undefined, "antigravity quota: no answer");
+    } catch (error) {
+      last = new UsageError("unavailable", undefined, `antigravity quota: ${sidecarDetail(error)}`);
       continue;
     }
     // A refusal of the sign-in is the same on both hosts; only an outage is worth a second try.

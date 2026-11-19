@@ -870,3 +870,36 @@ test("an overview row opens its account in a separate window, then brings it for
     dom.uninstall();
   }
 });
+
+test("an Antigravity app on a spent model leads the overview with a banner, and its row walks through the sign-in", () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const google = (id: string, name: string): Account => ({
+    id, name, kind: "personal", group: "personal", color: "blue", createdAt: iso(NOW), provider: "antigravity",
+    auth: { loggedIn: true, email: `${id}@example.com`, checkedAt: iso(NOW) },
+  });
+  const g1 = google("g1", "Google · Antigravity");
+  const g2 = google("g2", "Google · Antigravity 2");
+  const models = (carbon: number): AccountUsage => ({
+    accountId: "", status: "ready", stale: false, checkedAt: iso(NOW - 60_000),
+    fiveHour: { usedPercent: 0, resetsAt: iso(NOW + 5 * 3_600_000) },
+    modelWindows: [
+      { key: "antigravity_gemini_4_carbon_high", label: "Gemini 4 Carbon (High)", usedPercent: carbon, resetsAt: iso(NOW + 25 * 60_000) },
+      { key: "antigravity_gemini_4_argon", label: "Gemini 4 Argon", usedPercent: 0, resetsAt: iso(NOW + 5 * 3_600_000) },
+    ],
+  });
+  const relay = relayFor(active, [active, g1, g2], { active: use("active", 10, 10), g1: models(100), g2: models(6) });
+  relay.data = { ...relay.data!, antigravity: { installed: true, canOpen: true, accountId: "g1" } };
+  const html = render(relay);
+  const banner = html.slice(html.indexOf('data-slot="tool-banner"'), html.indexOf("</span>", html.indexOf('data-slot="tool-banner"')));
+  assert.match(banner, /Antigravity limitte\./);
+  assert.match(banner, /Gemini 4 Carbon \(High\) dolu · 25 dk sonra açılır · Google · Antigravity 2 hazır\./);
+  const row = /<div data-slot="tool-row" data-tool="antigravity"[\s\S]*?(?=<div data-slot="tool-row"|$)/.exec(html)?.[0] ?? "";
+  assert.match(row, />Google · Antigravity</);
+  assert.match(row, /Google · Antigravity 2 hazır: bu model %94 boş/);
+  assert.match(row, /<button[^>]*aria-expanded="false"[^>]*>Nasıl geçilir<\/button>/);
+  // The ring is the spent model, never the roomiest one the gateway keeps as the five hours.
+  assert.match(row, /role="img" aria-label="Antigravity · Google · Antigravity · Gemini 4 Carbon \(High\) %100 kullanıldı"/);
+  // Without other tools, no tool list and no banner.
+  const plain = render(relayFor(active, [active], { active: use("active", 10, 10) }));
+  assert.doesNotMatch(plain, /data-slot="tool-(list|banner)"/);
+});

@@ -15,6 +15,7 @@ import { PanelDrafts } from "./PanelDrafts";
 import { PanelUpdate } from "./PanelUpdate";
 import { PanelExtension } from "./PanelExtension";
 import { PanelSidebar } from "./PanelSidebar";
+import { PanelTools } from "./PanelTools";
 import { panelHead } from "./panel-head";
 
 /** The menu bar popover: active account, other accounts, automation. */
@@ -111,6 +112,7 @@ export function Panel({
         </div>
         <PanelUpdate />
         <PanelActiveCard now={now} />
+        <PanelTools now={now} />
         <PanelDrafts />
         <PanelExtension />
         <PanelSidebar />

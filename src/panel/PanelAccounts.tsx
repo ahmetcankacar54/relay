@@ -165,7 +165,9 @@ export function PanelAccounts({
           }
           pick={(row, e) => {
             const { canSwitch, reason } = panelRowState(row, relay);
-            if (reason === "not-linked") return void relay.api.openPage("hesaplar");
+            // A Codex or Antigravity account opens in Relay: there is no Claude app switch to it.
+            if (reason === "not-linked" || (row.account.provider ?? "claude") !== "claude")
+              return void relay.api.openPage("hesaplar");
             if (reason === "window")
               return void relay.action(`window:${row.account.id}`, () =>
                 relay.api.openWindow(row.account.id),

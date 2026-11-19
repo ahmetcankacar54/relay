@@ -1,6 +1,6 @@
 import type { Account, AccountUsage, AuthFlow, DesktopState, ModelWindow, RelaySettings, Snapshot } from "../../shared/types";
 import { freshUsage, quotaWindows } from "../../shared/usage";
-import { spentModelWindows } from "../../shared/quota-windows";
+import { modelOnlyUsage, spentModelWindows } from "../../shared/quota-windows";
 import { rankContinuationTargets } from "../../shared/continuation-target-ranking";
 import { tempoAt } from "../../shared/tempo";
 import { clientHost } from "../lib/proxy-ui";
@@ -83,7 +83,8 @@ export function overviewAccounts(
     else if (full) {
       state = "exhausted";
       availableAt = full.availableAt;
-    } else if (u.fiveHour?.resetsAt && Date.parse(u.fiveHour.resetsAt) > now) state = "window-open";
+      // Antigravity has no five-hour period: its five-hour window is only its roomiest model.
+    } else if (!modelOnlyUsage(u) && u.fiveHour?.resetsAt && Date.parse(u.fiveHour.resetsAt) > now) state = "window-open";
     else state = "ready";
     return { account, usage: u, state, availableAt, recommended: false };
   });
@@ -149,9 +150,12 @@ function modelRowLabel(w: ModelWindow): { tr: string; en: string } {
 export function usageWindowRows(usage?: AccountUsage): UsageWindowRow[] {
   if (!usage) return [];
   const rows: UsageWindowRow[] = [];
-  if (usage.fiveHour)
+  // Usage made only of model limits (Antigravity) lists its models: its five-hour or weekly
+  // window is only the roomiest of them.
+  const own = !modelOnlyUsage(usage);
+  if (own && usage.fiveHour)
     rows.push({ key: "five_hour", label: { tr: "5 saatlik dönem", en: "5-hour period" }, period: "five_hour", ...usage.fiveHour });
-  if (usage.sevenDay)
+  if (own && usage.sevenDay)
     rows.push({ key: "seven_day", label: { tr: "Haftalık · tüm modeller", en: "Weekly · all models" }, period: "seven_day", ...usage.sevenDay });
   const models = [...(usage.modelWindows ?? [])].sort(
     (a, b) => b.usedPercent - a.usedPercent || a.key.localeCompare(b.key),
