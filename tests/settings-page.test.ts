@@ -1,16 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { act, createElement, Fragment } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { moveItem, dropIndex } from "../src/pages/settings/MenuBarItems";
 import { PlanningPage, PrivacyNotes, Settings, SwitchingPage } from "../src/pages/Settings";
 import { SETTINGS_TABS } from "../src/app/routes";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 
-/** Every Settings tab, one after another: the page shows one at a time. */
+/** Every Settings tab, one after another: the page shows one at a time. The shell provides tooltips (the ⓘ notes). */
 const AllSettings = () =>
   createElement(
-    Fragment,
+    TooltipProvider,
     null,
     ...SETTINGS_TABS.map((tab) => createElement(Settings, { key: tab, tab })),
     createElement(SwitchingPage, { key: "gecis" }),
@@ -20,6 +21,10 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type RelaySettings, type Snapshot } from "../shared/types";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
+
+/** Static markup inside the app's tooltip provider: the pages' ⓘ tips need one, as in the shell. */
+const renderToStaticMarkup = (node: Parameters<typeof renderMarkup>[0]) => renderMarkup(createElement(TooltipProvider, null, node));
+
 
 const settings = { ...DEFAULT_SETTINGS, usageRefreshMinutes: 0 as const };
 
@@ -283,9 +288,13 @@ test("Settings → Switching holds the warnings and their threshold; General the
     await act(async () =>
       root.render(
         createElement(
-          I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(SwitchingPage)),
+          TooltipProvider,
+          null,
+          createElement(
+            I18nContext.Provider,
+            { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+            createElement(RelayContext.Provider, { value: relay }, createElement(SwitchingPage)),
+          ),
         ),
       ),
     );

@@ -3,7 +3,11 @@ import { localDate } from "../../../shared/planning";
 import type { Account } from "../../../shared/types";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
 import type { TokenUsageView } from "../../../shared/token-usage-view";
+import { Bar, CartesianGrid, ComposedChart, Scatter, XAxis, YAxis } from "recharts";
 import { Card } from "@/components/ui/card";
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { AccountDot, accountColor } from "@/components/AccountDot";
+import { PageSection } from "@/components/PageSection";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useI18n, type Language, type T } from "@/data/i18n";
 import { cn } from "@/lib/utils";
@@ -193,42 +197,10 @@ export function DailyChart({
       : measure === "tokens"
         ? `${formatTokens(value, language)} ${t("token", value === 1 ? "token" : "tokens")}`
         : formatPeriods(value, language, t);
-  const max = Math.max(0, ...days.map((d) => d.total));
-  const scale = max > 0 ? (BASE - TOP) / max : 0;
-  const guides = measure === "cost" ? costGuides(max) : undefined;
-  // The $ chart labels its guides; the others the top and the middle.
-  const marks: { y: number; label: string }[] =
-    max <= 0
-      ? []
-      : guides
-        ? guides.map((value) => ({
-            y: BASE - value * scale,
-            label: guideLabel(value, language),
-          }))
-        : measure === "cost"
-          ? []
-          : [
-              { y: TOP, label: format(max) },
-              { y: (TOP + BASE) / 2, label: format(max / 2) },
-            ];
-  // The gutter grows with the longest y label ("12.345").
-  const left = Math.max(
-    MIN_LEFT,
-    Math.ceil(Math.max(0, ...marks.map((m) => m.label.length)) * LABEL_CHAR) +
-      8,
-  );
-  const step = (WIDTH - left) / Math.max(1, days.length);
-  const bar = Math.max(1, step * 0.72);
-  const mark = Math.min(bar, MARK);
   const busiest = days.reduce<Day | undefined>(
     (best, day) => (day.total > (best?.total ?? 0) ? day : best),
     undefined,
   );
-  const ticks = days.length
-    ? [0, Math.floor((days.length - 1) / 2), days.length - 1]
-    : [];
-  const hover = useDayHover({ width: WIDTH, left, step, count: days.length });
-  const shown = hover.active === undefined ? undefined : days[hover.active];
   const approx = (day: Day) => (day.parts.some((p) => p.estimated) ? "≈" : "");
   const total = days.reduce((sum, day) => sum + day.total, 0);
   const estimatedRange = days.some((day) => approx(day));
@@ -255,224 +227,101 @@ export function DailyChart({
             `${view.range} günde API karşılığı ${estimatedRange ? "≈" : ""}${spoken(total)}. En yüksek gün ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
             `API value over ${view.range} days: ${estimatedRange ? "≈" : ""}${spoken(total)}. Highest day ${formatDay(busiest.date, language)}: ${format(busiest.total)}.`,
           );
+  // Each series in its account's own colour (the dot's), the rows that are no account in grey.
+  const colorOf = (s: Series) =>
+    s.muted ? "var(--account-none)" : accountColor(accounts.find((a) => a.id === s.key)?.color);
+  const config: ChartConfig = Object.fromEntries(series.map((s) => [s.key, { label: s.name, color: colorOf(s) }]));
+  const data = days.map((day) => ({
+    date: day.date,
+    total: day.total,
+    // ▲ sits on top of a day with a limit hit.
+    hit: hitDays.has(day.date) && day.total > 0 ? day.total : undefined,
+    ...Object.fromEntries(day.parts.map((part) => [part.key, part.value])),
+  }));
+  const hitLabel = t("limite takıldı", "limit hit");
   return (
-    <Card className="gap-0 px-4 py-3.5">
-      <div className="mb-2 grid gap-1">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <h3 className="font-display text-sm font-semibold">
-            {t("Günlük kullanım", "Daily usage")}
-          </h3>
-          {tokens && (
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              size="sm"
-              aria-label={t("Ölçü", "Measure")}
-              value={measure}
-              onValueChange={(v) => v && setChosen(v as DailyMeasure)}
-            >
-              {MEASURES.map((m) => (
-                <ToggleGroupItem
-                  key={m}
-                  value={m}
-                  aria-label={
-                    m === "cost" ? t("API karşılığı", "API value") : undefined
+    <PageSection
+      title={t("Günlük", "Daily")}
+      slot="daily-chart"
+      aside={
+        tokens && (
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            aria-label={t("Ölçü", "Measure")}
+            value={measure}
+            onValueChange={(v) => v && setChosen(v as DailyMeasure)}
+          >
+            {MEASURES.map((m) => (
+              <ToggleGroupItem key={m} value={m} aria-label={m === "cost" ? t("API karşılığı", "API value") : undefined}>
+                {labels[m]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        )
+      }
+    >
+      <Card className="gap-2 px-4 py-3.5">
+        <ChartContainer config={config} className="aspect-auto h-48 w-full">
+          <ComposedChart data={data} margin={{ top: 14, right: 4, bottom: 0, left: 0 }} barCategoryGap="18%" accessibilityLayer>
+            <CartesianGrid vertical={false} />
+            <XAxis
+              dataKey="date"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={6}
+              minTickGap={28}
+              tickFormatter={(d: string) => formatDay(d, language)}
+            />
+            <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => (measure === "cost" ? guideLabel(v, language) : format(v))} />
+            <ChartTooltip
+              cursor={false}
+              content={
+                <ChartTooltipContent
+                  labelFormatter={(_, payload) => {
+                    const row = payload?.[0]?.payload as { date: string; hit?: number } | undefined;
+                    return row ? `${formatDayLong(row.date, language)}${row.hit ? ` · ▲ ${hitLabel}` : ""}` : "";
+                  }}
+                  formatter={(value, name, item) =>
+                    name === "hit" ? null : (
+                      <div className="flex w-full items-center gap-2">
+                        <span className="size-2 shrink-0 rounded-[2px]" style={{ background: item.color }} />
+                        <span className="text-muted-foreground">{config[String(name)]?.label}</span>
+                        <span className="ml-auto font-medium tabular-nums">{format(Number(value))}</span>
+                      </div>
+                    )
                   }
-                >
-                  {labels[m]}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          )}
-        </div>
-        <ul className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-          {series.map((s) => (
-            <li key={s.key} className="flex items-center gap-1">
-              <Swatch tone={s.tone} muted={s.muted} />
-              {s.name}
+                />
+              }
+            />
+            {series.map((s, i) => (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                stackId="day"
+                fill={`var(--color-${s.key})`}
+                // A 2 px surface gap between stacked parts; the top part gets the rounded end.
+                stroke="var(--card)"
+                strokeWidth={1}
+                radius={i === series.length - 1 ? [3, 3, 0, 0] : 0}
+                isAnimationActive={false}
+              />
+            ))}
+            <Scatter dataKey="hit" fill="var(--crit)" shape="triangle" legendType="none" tooltipType="none" isAnimationActive={false} />
+            {series.length > 1 && <ChartLegend content={<ChartLegendContent />} />}
+          </ComposedChart>
+        </ChartContainer>
+        <p className="text-xs text-muted-foreground">{footer}</p>
+        {/* The same days as a list, for screen readers and as the chart's table view. */}
+        <ul className="sr-only" aria-label={t("Günlük değerler", "Daily values")}>
+          {days.map((day) => (
+            <li key={day.date}>
+              {`${formatDayLong(day.date, language)}: ${approx(day)}${spoken(day.total)}${hitDays.has(day.date) ? t(", limite takıldı", ", limit hit") : ""}`}
             </li>
           ))}
         </ul>
-      </div>
-      <div className="relative">
-        <svg
-          {...hover.chart}
-          viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          className="h-auto w-full rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          role="group"
-          aria-label={t(
-            "Günlük kullanım grafiği; günler arasında ok tuşlarıyla gezilir",
-            "Daily usage chart. Arrow keys move between days.",
-          )}
-        >
-          <g aria-hidden className="stroke-border" strokeWidth={1}>
-            {(measure === "cost" ? [BASE] : [TOP, (TOP + BASE) / 2, BASE]).map(
-              (y) => (
-                <line key={y} x1={left} x2={WIDTH} y1={y} y2={y} />
-              ),
-            )}
-          </g>
-          {guides && (
-            <g
-              aria-hidden
-              data-slot="cost-guides"
-              className="stroke-muted-foreground/50"
-              strokeWidth={1}
-              strokeDasharray="3 3"
-            >
-              {marks.map((m) => (
-                <line
-                  key={m.label}
-                  x1={left}
-                  x2={WIDTH}
-                  y1={r2(m.y)}
-                  y2={r2(m.y)}
-                />
-              ))}
-            </g>
-          )}
-          {marks.length > 0 && (
-            <g
-              aria-hidden
-              className="fill-muted-foreground"
-              fontSize={9}
-              textAnchor="end"
-            >
-              {marks.map((m) => (
-                <text key={m.label} x={left - 4} y={r2(m.y + 3)}>
-                  {m.label}
-                </text>
-              ))}
-            </g>
-          )}
-          {days.map((day, i) => {
-            const x = left + i * step + (step - bar) / 2;
-            const hit = hitDays.has(day.date);
-            const label = formatDay(day.date, language);
-            let y = BASE;
-            return (
-              <g
-                key={day.date}
-                role="img"
-                aria-label={`${label}: ${approx(day)}${spoken(day.total)}${hit ? t(", limite takıldı", ", limit hit") : ""}`}
-                className={cn(
-                  "transition-opacity duration-100",
-                  hover.active !== undefined &&
-                    hover.active !== i &&
-                    "opacity-40",
-                )}
-              >
-                {hover.active === i && (
-                  <rect
-                    className="fill-muted"
-                    x={left + i * step}
-                    y={TOP}
-                    width={step}
-                    height={BASE - TOP}
-                  />
-                )}
-                {day.parts.map((part) => {
-                  const h = part.value * scale;
-                  y -= h;
-                  return (
-                    <rect
-                      key={part.key}
-                      x={x}
-                      y={y}
-                      width={bar}
-                      height={h}
-                      rx={Math.min(1.5, bar / 3)}
-                      {...(part.tone === undefined
-                        ? { className: cn("fill-muted-foreground", part.muted) }
-                        : { fill: toneFill(part.tone) })}
-                    />
-                  );
-                })}
-                {hit && (
-                  <path
-                    d={triangle(x + bar / 2, Math.max(TOP - 2, y - 2), mark)}
-                    fill="var(--muted-foreground)"
-                  />
-                )}
-              </g>
-            );
-          })}
-          <g
-            aria-hidden
-            className="fill-muted-foreground"
-            fontSize={9}
-            textAnchor="middle"
-          >
-            {ticks.map((i) => (
-              <text
-                key={i}
-                x={Math.min(
-                  WIDTH - 14,
-                  Math.max(left + 14, left + i * step + step / 2),
-                )}
-                y={HEIGHT - 4}
-              >
-                {formatDay(days[i].date, language)}
-              </text>
-            ))}
-          </g>
-        </svg>
-        <DayTooltip at={hover.at}>
-          {shown && (
-            <>
-              <div className="font-semibold">
-                {formatDayLong(shown.date, language)}
-              </div>
-              <div className="mt-0.5 flex items-baseline justify-between gap-4 border-b pb-1">
-                <span className="text-muted-foreground">
-                  {measure === "limit"
-                    ? t("Dolu dönem", "Full periods")
-                    : measure === "tokens"
-                      ? t("Token", "Tokens")
-                      : t("API karşılığı", "API value")}
-                </span>
-                <b className="tabular-nums">
-                  {approx(shown)}
-                  {format(shown.total)}
-                </b>
-              </div>
-              {shown.total > 0 ? (
-                <ul className="mt-1.5 grid gap-1">
-                  {shown.parts.map((part) => (
-                    <DayTipRow
-                      key={part.key}
-                      tone={part.tone}
-                      muted={part.muted}
-                      name={part.name}
-                      value={`${part.estimated ? "≈" : ""}${format(part.value)}`}
-                    />
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-1.5 text-muted-foreground">
-                  {measure === "limit"
-                    ? t("Bu gün kullanım yok.", "No usage on this day.")
-                    : t("Bu gün token yok.", "No tokens on this day.")}
-                </p>
-              )}
-              {hitDays.has(shown.date) && (
-                <p className="mt-1.5 font-medium text-crit">
-                  {t("▲ Limite takıldı", "▲ Limit hit")}
-                </p>
-              )}
-            </>
-          )}
-        </DayTooltip>
-      </div>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {footer}{" "}
-        {t(
-          "▲ limite takılan günleri gösterir.",
-          "▲ marks days with a limit hit.",
-        )}
-        {estimatedRange &&
-          ` ${t("≈ hesap ya da tutar tahmin edildi.", "≈ account or amount estimated.")}`}
-      </p>
-    </Card>
+      </Card>
+    </PageSection>
   );
 }

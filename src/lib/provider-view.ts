@@ -58,3 +58,6 @@ export function providerViews(input: {
     ];
   });
 }
+
+/** The accounts in use now, one per provider at most: the Claude app's, the gateway's, the Antigravity app's. */
+export const inUseIds = (views: ProviderView[]) => new Set(views.flatMap((v) => (v.current ? [v.current.id] : [])));

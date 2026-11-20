@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Overview } from "../src/pages/Overview";
-import { AutomationCard } from "../src/pages/overview/AutomationCard";
-import { AccountsCard } from "../src/pages/overview/AccountsCard";
+import { AccountsBoard } from "../src/pages/overview/AccountsBoard";
+import { ActiveAccountCard } from "../src/pages/overview/ActiveAccountCard";
+import { TodayCard } from "../src/pages/overview/TodayCard";
+import { ProviderPane, relayProviders } from "../src/features/Providers";
+import { suggestedAccount } from "../shared/usage";
 import { DesktopActionBody } from "../src/app/DesktopActionDialog";
 import type { PageId } from "../src/app/routes";
 import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
@@ -66,48 +69,39 @@ test("overview shows the active account, limits, accounts, today and automation"
     vertex: use("vertex", 12, 31),
   };
   const html = render(relayFor(active, [active, vertex], usage, { suggestion: vertex }));
-  assert.match(html, /Claude uygulamasında açık/);
+  // The card of the account in the Claude app is named for screen readers, not by a heading.
+  assert.match(html, /<section aria-label="Claude uygulamasında açık"/);
   assert.match(html, /Kişisel · Max/);
-  assert.match(html, /Max 5×/);
-  assert.match(html, /Çalışıyor/);
-  // The hero is a grouped box: the account, then one bar per limit with its percent.
+  // One chip: the provider and the plan.
+  assert.match(html, /data-provider="claude" title="Planlama için seçildi">[\s\S]*?Claude<span[^>]*>· Max 5×<\/span>/);
+  assert.deepEqual(heroStatus(html), { tone: "ok", title: "Açık", text: "Açık" });
+  // The hero is a grouped box: the account, then one line per limit with its percent.
   assert.match(html, /data-slot="active-account"/);
-  assert.match(html, /role="meter" aria-label="5 saatlik dönem"[^>]*aria-valuenow="38"/);
-  assert.match(html, /role="meter" aria-label="Haftalık · tüm modeller"[^>]*aria-valuenow="78"/);
-  assert.match(html, /Haftalık · tüm modeller/);
+  assert.match(html, /role="meter" aria-label="5 saat %38"[^>]*aria-valuenow="38"/);
+  assert.match(html, /role="meter" aria-label="Hafta %78"[^>]*aria-valuenow="78"/);
   assert.match(html, /Opus · haftalık/);
-  // No suggestion band: the hero says the limit is near and offers the suggested account, and the
-  // suggestion leads the accounts list.
+  // No suggestion band: the hero's "Sıradaki" line names the suggested account, its five hours,
+  // and offers the switch as the filled button.
   assert.doesNotMatch(html, /uyarı eşiğini geçti|Önerilen:/);
   const hint = suggestionBlock(html);
-  assert.match(hint, />Limit dolmak üzere</);
-  assert.match(hint, /En uygun hesap <b>Vertex<\/b>: %12 kullanıldı\./);
-  assert.match(hint, /<button[^>]*>Vertex hesabına geç<\/button>/);
-  assert.doesNotMatch(html, /Önerilen üstte|en uygunu üstte/);
-  // The suggested row carries a small "önerilen" by its name, and the row links to the account's page.
+  assert.match(hint, />Sıradaki</);
+  assert.match(hint, />Vertex<\/span>/);
+  assert.match(hint, />5 saat %12 kullanıldı</);
+  assert.match(hint, /<button[^>]*data-variant="default"[^>]*aria-label="Vertex hesabına geç">Geç<\/button>/);
+  assert.doesNotMatch(html, /Önerilen üstte|en uygunu üstte|Geçişi incele/);
+  // Every other account is a row of the board that opens the account's page: its 5 hours and its week.
   const row = rowFor(html, "Vertex");
-  assert.match(row, /<a href="#\/hesaplar\/vertex"/);
-  assert.match(row, />Vertex<\/span><span[^>]*>önerilen<\/span>/);
-  // One bar and one figure: the limit that stops it first (its week, %31).
-  assert.match(row, /role="meter" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
-  assert.match(row, />önerilen<\/span><span[^>]*>%31<\/span>/);
-  assert.doesNotMatch(html, /Geçişi incele/);
-  // The suggested row's "Geç" is the filled one.
-  assert.match(row, /<button[^>]*aria-label="Vertex hesabına geç"[^>]*class="[^"]*bg-primary[^"]*"[^>]*>Geç<\/button>/);
-  // The list ends in "Hesap ekle"; with bars instead of rings there is no key to read.
-  assert.match(listOf(html), /<button[^>]*>(?:(?!<\/button>)[\s\S])*?Hesap ekle(?:(?!<\/button>)[\s\S])*?<\/button>/);
-  assert.doesNotMatch(html, /border border-muted-foreground"><\/span>hafta</);
+  assert.match(row, /^ data-account="vertex" role="button" tabindex="0" aria-label="Vertex"/);
+  assert.match(row, /role="meter" aria-label="5 saat %12"/);
+  assert.match(row, /role="meter" aria-label="Hafta %31"/);
+  assert.doesNotMatch(row, /<button/);
+  // The account in the Claude app is the card above, not a row again; the aside counts the usable ones.
+  assert.equal(rowsOf(html).length, 1);
+  assert.match(listOf(html), /<h2[^>]*>Tüm hesaplar<\/h2>[\s\S]*?>2\/2 kullanılabilir</);
   assert.match(html, /Bugün/);
-  assert.match(html, /(?:Çalışma 09:00–18:00|Bugün çalışma yok) · önceden başlatma kapalı/);
-  assert.doesNotMatch(html, /Otomatik başlatma/);
-  // Automation is a group of rows, each saying how a setting stands.
-  const automation = automationRows(html);
-  assert.equal(automation.length, 2);
-  assert.match(automation[0], />Otomatik geçiş</);
-  assert.match(automation[0], /Kapalı\. Limit dolunca başka hesaba sen geçersin\./);
-  assert.match(automation[1], />Önceden başlatma</);
-  assert.match(automation[1], />Kapalı</);
-  assert.doesNotMatch(html, /Claude uygulaması kapanınca hazırla/);
+  // Today's line says the day, how switching runs and early start: there is no automation card.
+  assert.match(html, />(?:Çalışma 09:00–18:00|Bugün çalışma yok) · otomatik geçiş kapalı · önceden başlatma kapalı</);
+  assert.doesNotMatch(html, />Otomasyon<\/h2>|Otomatik başlatma|Claude uygulaması kapanınca hazırla/);
   // Refresh and bring-to-front live in the page header.
   assert.match(html, /<button[^>]*aria-label="Limitleri yenile"/);
   assert.match(html, /<button[^>]*>Claude uygulamasını aç<\/button>/);
@@ -124,57 +118,81 @@ test("overview without an active account offers onboarding", () => {
   assert.doesNotMatch(emptyHtml, /CLAUDE UYGULAMASINDA AÇIK/);
 });
 
-test("unlinked accounts lead to their page instead of offering a switch", () => {
+test("unlinked accounts lead to their page instead of offering a switch", async () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const other = acct("other", "Studio", "pro", false);
-  const html = render(relayFor(active, [active, other], { active: use("active", 10, 10) }));
+  const relay = relayFor(active, [active, other], { active: use("active", 10, 10) });
+  const html = render(relay);
   const row = rowFor(html, "Studio");
-  // The row says the sign-in is not saved; the full reason rides on its title.
-  assert.match(row, />Pro · giriş kaydedilmedi</);
-  assert.match(row, /<a href="#\/hesaplar\/other" title="Claude uygulaması girişi yok"/);
-  // No switch: the row ends in a chevron and opens the account, whose page saves the sign-in.
-  assert.doesNotMatch(row, />Geç</);
-  assert.doesNotMatch(html, />önerilen</);
+  // The row opens like a link and offers no switch; nothing is suggested.
+  assert.match(row, /^ data-account="other" role="button" tabindex="0" aria-label="Studio"/);
+  assert.doesNotMatch(row, /<button/);
+  assert.equal(switchButtons(html).length, 0);
+  assert.equal(suggestionBlock(html), "");
+  // Choosing it opens the account's page, where its sign-in is saved.
+  assert.equal(await openRow(relay, "other"), "#/hesaplar/other");
 });
 
-/** The other-accounts list, up to the end of its section. */
+/** The board of every other account, up to the end of its section. */
 const listOf = (html: string) => {
-  const start = html.indexOf('data-slot="account-list"');
+  const start = html.indexOf('data-slot="accounts-board"');
   return start < 0 ? "" : html.slice(start, html.indexOf("</section>", start));
 };
-const rowsOf = (html: string) => listOf(html).split('data-slot="account-row"').slice(1);
+const rowsOf = (html: string) => listOf(html).split('data-slot="list-row"').slice(1);
 const rowFor = (html: string, name: string) => rowsOf(html).find((r) => r.includes(`>${name}<`)) ?? "";
-/** The hero's "limit is near" block. */
+/** The hero's "Sıradaki" line: the suggested account and its switch. */
 const suggestionBlock = (html: string) => {
   const start = html.indexOf('data-slot="suggestion"');
-  return start < 0 ? "" : html.slice(start, html.indexOf("</button>", start) + "</button>".length);
+  return start < 0 ? "" : html.slice(start, html.indexOf("</section>", start));
 };
-/** The Overview automation group's rows. */
-const automationRows = (html: string) => {
-  const start = html.indexOf(">Otomasyon</h2>");
-  if (start < 0) return [];
-  return html.slice(start, html.indexOf("</section>", start)).match(/<button[^>]*>[\s\S]*?<\/button>/g) ?? [];
+/** Every "Geç" on the page. */
+const switchButtons = (html: string) => html.match(/<button[^>]*>Geç<\/button>/g) ?? [];
+/** The status of the account in the Claude app: its tone, the reason on its title and its words. */
+const heroStatus = (html: string) => {
+  const hero = html.slice(html.indexOf('data-slot="active-account"'));
+  const found = /data-slot="status-label" data-tone="(\w+)" title="([^"]*)"[^>]*>[\s\S]*?<span class="truncate">([^<]*)<\/span>/.exec(hero);
+  return found ? { tone: found[1], title: found[2], text: found[3] } : undefined;
 };
-/** The small "önerilen" next to the suggested account's name. */
-const suggested = />önerilen</;
-const switchButtons = (html: string) =>
-  (listOf(html).match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Geç<\/button>/g) ?? []);
+/** Clicks an account's row on the board and returns where it led. */
+async function openRow(relay: Relay, id: string): Promise<string> {
+  const dom = fakeDom();
+  dom.install();
+  const location = { hash: "#/genel" };
+  Object.assign(globalThis.window, { location });
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+          createElement(RelayContext.Provider, { value: relay }, createElement(AccountsBoard, { now: NOW })),
+        ),
+      ),
+    );
+    const row = find(dom.container as unknown as Fake, (n) => (n as { attributes?: Map<string, string> }).attributes?.get?.("data-account") === id);
+    assert.ok(row, id);
+    await act(async () => dom.dispatch(row as never, "click", { detail: 1 }));
+    await act(async () => root.unmount());
+    return location.hash;
+  } finally {
+    dom.uninstall();
+  }
+}
 
-test("the Overview automation rows open their pages instead of setting the choice inline", async () => {
+test("the Overview says how switching runs and leaves the choice to its page, and Today opens Planning", async () => {
   const active = acct("active", "Kişisel · Max", "max5");
-  // The automation card needs two connected accounts.
   const accounts = [active, acct("other", "Vertex", "pro")];
-  // The choice and its lock while a handoff runs live in Settings → Switching; Overview only shows rows.
+  // The choice and its lock while a handoff runs live in Settings → Switching; the Overview only says it.
   for (const status of ["switching", "continuing", "watching"] as const) {
     const relay = relayFor(active, accounts, { active: use("active", 10, 10) });
     (relay.data as Snapshot).fleet = { enabled: true, status, sourceId: "active", targetId: "active" };
     const html = render(relay);
-    assert.doesNotMatch(html, /id="automation-mode"|role="switch"/, status);
-    const rows = automationRows(html);
-    assert.equal(rows.length, 2, status);
-    for (const row of rows) assert.doesNotMatch(row, /disabled=""/, status);
+    assert.doesNotMatch(html, /id="automation-mode"|role="switch"|role="radio"/, status);
+    assert.match(html, / · geçiş: limit dolunca · /, status);
   }
-  // Each row opens its page.
+  // Today's link opens its page.
   const opened: PageId[] = [];
   const dom = fakeDom();
   dom.install();
@@ -189,41 +207,38 @@ test("the Overview automation rows open their pages instead of setting the choic
           { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
           createElement(
             RelayContext.Provider,
-            {
-              // Outside macOS the extension row is not drawn.
-              value: relayFor(active, accounts, { active: use("active", 10, 10) }, {
-                api: { extensionStatus: async () => null } as unknown as Relay["api"],
-              }),
-            },
-            createElement(AutomationCard, { go: (page: string) => void opened.push(page as PageId), now: NOW }),
+            { value: relayFor(active, accounts, { active: use("active", 10, 10) }) },
+            createElement(TodayCard, { go: (page: string) => void opened.push(page as PageId), now: NOW }),
           ),
         ),
       ),
     );
-    const container = dom.container as unknown as Fake;
-    for (const name of ["Otomatik geçiş", "Önceden başlatma"]) {
-      const row = find(container, (n) => n.tagName === "button" && textOf(n).startsWith(name));
-      assert.ok(row, name);
-      await act(async () => dom.dispatch(row, "click", { detail: 1 }));
-    }
-    assert.deepEqual(opened, ["gecis", "planlama"]);
+    const link = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && textOf(n).startsWith("Planlama"));
+    assert.ok(link);
+    await act(async () => dom.dispatch(link, "click", { detail: 1 }));
+    assert.deepEqual(opened, ["planlama"]);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
   }
 });
 
-test("the suggested account is marked even when ranking prefers another", () => {
+test("the hero names the suggested account even when the board lists another first", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const x = acct("x", "Xeno", "max5");
   const y = acct("y", "Yarn", "pro");
   const usage = { active: use("active", 90, 90), x: use("x", 5, 5), y: use("y", 30, 40) };
   const base = render(relayFor(active, [active, x, y], usage));
-  const ranked = suggested.test(rowFor(base, "Xeno")) ? "Xeno" : "Yarn";
-  const other = ranked === "Xeno" ? y : x;
+  // No suggestion, no "Sıradaki" line.
+  assert.equal(suggestionBlock(base), "");
+  const first = /data-account="(\w+)"/.exec(listOf(base))?.[1];
+  const leading = first === "x" ? x : y;
+  const other = first === "x" ? y : x;
   const html = render(relayFor(active, [active, x, y], usage, { suggestion: other }));
-  assert.match(rowFor(html, other.name), suggested);
-  assert.doesNotMatch(rowFor(html, ranked), suggested);
+  assert.match(suggestionBlock(html), new RegExp(`>${other.name}</span>`));
+  assert.doesNotMatch(suggestionBlock(html), new RegExp(`>${leading.name}<`));
+  // The board keeps its own order.
+  assert.equal(/data-account="(\w+)"/.exec(listOf(html))?.[1], first);
 });
 
 test("switch actions are withheld or disabled while Desktop is busy, pending or needs recovery", () => {
@@ -231,11 +246,10 @@ test("switch actions are withheld or disabled while Desktop is busy, pending or 
   const other = acct("other", "Vertex", "pro");
   const accounts = [active, other];
   const usage = { active: use("active", 10, 10), other: use("other", 10, 10) };
-  const idle = switchButtons(render(relayFor(active, accounts, usage)));
-  assert.equal(idle.length, 1);
-  assert.doesNotMatch(idle[0], /disabled=""/);
+  // The board offers no switch of its own: its row opens the account.
+  assert.equal(switchButtons(render(relayFor(active, accounts, usage))).length, 0);
   /** The hero's switch to the suggested account. */
-  const hero = (html: string) => /<button[^>]*>Vertex hesabına geç<\/button>/.exec(suggestionBlock(html))?.[0] ?? "";
+  const hero = (html: string) => /<button[^>]*aria-label="Vertex hesabına geç">Geç<\/button>/.exec(suggestionBlock(html))?.[0] ?? "";
   const offered = hero(render(relayFor(active, accounts, usage, { suggestion: other })));
   assert.ok(offered);
   assert.doesNotMatch(offered, /disabled=""/);
@@ -246,10 +260,7 @@ test("switch actions are withheld or disabled while Desktop is busy, pending or 
   ];
   for (const extra of cases) {
     const label = JSON.stringify(Object.keys(extra));
-    const html = render(relayFor(active, accounts, usage, extra));
-    // The row drops its "Geç" and says why on its title.
-    assert.equal(switchButtons(html).length, 0, label);
-    assert.match(rowFor(html, "Vertex"), /title="[^"]*Şu an geçilemez"/, label);
+    assert.equal(switchButtons(render(relayFor(active, accounts, usage, extra))).length, 0, label);
     // The hero's switch to the suggestion is disabled.
     const offer = hero(render(relayFor(active, accounts, usage, { ...extra, suggestion: other })));
     assert.ok(offer, label);
@@ -261,52 +272,50 @@ test("stale and unlinked accounts are never recommended", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const stale = acct("stale", "Stale", "pro");
   const unlinked = acct("unlinked", "Loose", "pro", false);
-  const html = render(
-    relayFor(active, [active, stale, unlinked], {
-      active: use("active", 10, 10),
-      stale: { ...use("stale", 0, 0), checkedAt: iso(NOW - 3_600_000) },
-      unlinked: use("unlinked", 0, 0),
-    }),
-  );
+  // The account in use is past the warning threshold, so the app looks for another.
+  const usage = {
+    active: use("active", 95, 40),
+    stale: { ...use("stale", 0, 0), checkedAt: iso(NOW - 3_600_000) },
+    unlinked: use("unlinked", 0, 0),
+  };
+  // The suggestion the hero shows (useRelay's) passes over both; a fresh, linked account would be the one.
+  assert.equal(suggestedAccount(active, [active, stale, unlinked], usage, DEFAULT_SETTINGS, NOW), undefined);
+  const fresh = acct("fresh", "Fresh", "pro");
+  assert.equal(suggestedAccount(active, [active, stale, unlinked, fresh], { ...usage, fresh: use("fresh", 0, 0) }, DEFAULT_SETTINGS, NOW)?.id, "fresh");
+  const html = render(relayFor(active, [active, stale, unlinked], usage));
   assert.equal(rowsOf(html).length, 2);
-  assert.doesNotMatch(html, suggested);
-  // The stale account can still be switched to, quietly; the unlinked one cannot.
-  assert.equal(switchButtons(html).length, 1);
-  assert.match(rowFor(html, "Stale"), /aria-label="Stale hesabına geç"[^>]*class="[^"]*border bg-card/);
-  assert.doesNotMatch(rowFor(html, "Loose"), />Geç</);
-  // Without a suggestion the heading holds only the rings' key.
-  assert.doesNotMatch(html, /en uygunu üstte|Önerilen üstte/);
-  assert.doesNotMatch(html, /dolmak üzere/);
-  assert.match(rowFor(html, "Stale"), /Limit verisi eski/);
+  assert.equal(suggestionBlock(html), "");
+  assert.equal(switchButtons(html).length, 0);
+  // The stale account's figures are faded: an old reading.
+  assert.match(rowFor(html, "Stale"), /data-slot="limit-line" class="[^"]*opacity-60/);
+  assert.doesNotMatch(rowFor(html, "Loose"), /opacity-60/);
 });
 
-test("overview rows show the account's status where something is wrong, and stale healthy rows keep theirs", () => {
+test("the hero shows the account's status where something is wrong, in a few words with the reason on its title", () => {
   const active = acct("active", "Kişisel · Max", "max5");
-  const other = acct("other", "Vertex", "pro");
-  const failed = (issue: UsageIssue): AccountUsage => ({ accountId: "other", status: "error", stale: true, issue });
-  const stale = { ...use("other", 1, 1), checkedAt: iso(NOW - 3_600_000) };
-  /** The row's one status line and, on its title, the full status. */
-  const status = (account: Account, usage: AccountUsage) => {
-    const row = rowFor(render(relayFor(active, [active, account], { active: use("active", 10, 10), other: usage })), "Vertex");
-    return [
-      /<span class="block truncate text-muted-foreground text-xs">([^<]*)<\/span>/.exec(row)?.[1],
-      /<a [^>]*title="([^"]*)"/.exec(row)?.[1],
-    ];
+  const failed = (issue: UsageIssue): AccountUsage => ({ accountId: "active", status: "error", stale: true, issue });
+  const stale = { ...use("active", 1, 1), checkedAt: iso(NOW - 3_600_000) };
+  const status = (account: Account, usage: AccountUsage, extra: Partial<Relay> = {}) => {
+    const found = heroStatus(render(relayFor(account, [account], { active: usage }, extra)));
+    return [found?.text, found?.title];
   };
-  // The line leads with the plan; the title is the status alone.
-  assert.deepEqual(status(other, failed("expired")), ["Pro · limit okuma girişi gerekli", "Limit okuma girişi gerekli"]);
-  assert.deepEqual(status(other, failed("keychain-locked")), ["Pro · anahtarlık izni gerekli", "Anahtarlık izni gerekli"]);
-  assert.deepEqual(status(other, failed("renewal-required")), ["Pro · bağlantı yenilenmeli", "Bağlantı yenilenmeli"]);
-  assert.deepEqual(status(other, { ...use("other", 1, 1), connectionRenewalRequired: true }), ["Pro · bağlantı yenilenmeli", "Bağlantı yenilenmeli"]);
-  assert.deepEqual(status({ ...other, auth: undefined }, stale), ["Pro · limit okuma girişi yok", "Limit okuma girişi yok"]);
+  assert.deepEqual(status(active, failed("expired")), ["Giriş gerekli", "Limit okuma girişi gerekli"]);
+  assert.deepEqual(status(active, failed("keychain-locked")), ["Anahtarlık izni", "Anahtarlık izni gerekli"]);
+  assert.deepEqual(status(active, failed("renewal-required")), ["Yenilenmeli", "Bağlantı yenilenmeli"]);
+  assert.deepEqual(status(active, { ...use("active", 1, 1), connectionRenewalRequired: true }), ["Yenilenmeli", "Bağlantı yenilenmeli"]);
+  assert.deepEqual(status({ ...active, auth: undefined }, stale), ["Limit girişi yok", "Limit okuma girişi yok"]);
   // A browser approval in progress for that account.
-  const flows = { authFlows: [{ id: "f", accountId: "other", status: "waiting" }] as unknown as AuthFlow[] };
-  const waiting = relayFor(active, [active, other], { active: use("active", 10, 10), other: stale });
-  Object.assign(waiting.data as Snapshot, flows);
-  assert.match(rowFor(render(waiting), "Vertex"), /Tarayıcıda onayla/);
-  // Stale but healthy: the line says how old the reading is.
-  assert.deepEqual(status(other, stale), ["Pro · limit verisi 1 sa önce okundu", "Limit verisi eski"]);
-  assert.deepEqual(status(other, use("other", 1, 1)), ["Pro · hazır", "Hazır · dönem başlamadı"]);
+  const waiting = relayFor(active, [active], { active: stale });
+  Object.assign(waiting.data as Snapshot, { authFlows: [{ id: "f", accountId: "active", status: "waiting" }] as unknown as AuthFlow[] });
+  assert.equal(heroStatus(render(waiting))?.text, "Tarayıcıda onayla");
+  // Stale but healthy: an old reading, quiet; fresh and healthy: in use.
+  assert.deepEqual(heroStatus(render(relayFor(active, [active], { active: stale }))), { tone: "off", title: "Eski okuma", text: "Eski okuma" });
+  assert.deepEqual(status(active, use("active", 1, 1)), ["Açık", "Açık"]);
+  // Another account's problem is on its own page: its board row has no figure to show and opens it.
+  const other = acct("other", "Vertex", "pro");
+  const row = rowFor(render(relayFor(active, [active, other], { active: use("active", 10, 10), other: { ...failed("expired"), accountId: "other" } })), "Vertex");
+  assert.match(row, /^ data-account="other" role="button"/);
+  assert.equal(row.match(/>—<\/span>/g)?.length, 2);
 });
 
 test("onboarding with saved accounts but none open looks out instead of greeting", () => {
@@ -349,13 +358,14 @@ test("today's card names the day's work hours and early start, with an hour axis
   };
   // A Friday noon in Istanbul: the weekday's hours.
   const friday = Date.parse("2026-10-23T09:00:00Z");
-  assert.match(at(friday), />Çalışma 09:00–17:00 · önceden başlatma kapalı</);
+  // How switching runs sits between the day and early start.
+  assert.match(at(friday), />Çalışma 09:00–17:00 · otomatik geçiş kapalı · önceden başlatma kapalı</);
   // Saturday: the weekend's hours, off by default.
   const saturday = Date.parse("2026-10-24T09:00:00Z");
-  assert.match(at(saturday), />Bugün çalışma yok · önceden başlatma kapalı</);
+  assert.match(at(saturday), />Bugün çalışma yok · otomatik geçiş kapalı · önceden başlatma kapalı</);
   assert.match(
     at(saturday, { weekend: { enabled: true, start: "11:00", end: "15:00" } }),
-    />Çalışma 11:00–15:00 · önceden başlatma kapalı</,
+    />Çalışma 11:00–15:00 · otomatik geçiş kapalı · önceden başlatma kapalı</,
   );
   // The axis: 00 06 12 18 24, at the day's quarters, the ends inside the track.
   const axis = [...at(friday).matchAll(/<span class="absolute top-0([^"]*)" style="left:([\d.]+)%">(\d\d)<\/span>/g)].map(
@@ -399,9 +409,8 @@ test("today's card calls automatic start early start in both languages", () => {
   });
   const html = render(relay);
   assert.match(html, / · sonraki başlatma \d\d:\d\d Vertex/);
-  // The automation card names the next start's day, as Planning does.
-  assert.match(html, />Sonraki başlatma<\/span>/);
-  assert.match(html, /Vertex (bugün|yarın) \d\d:\d\d</);
+  // With no automation card, Today's line is where the next start is said.
+  assert.doesNotMatch(html, />Sonraki başlatma<\/span>|>Otomasyon<\/h2>/);
   assert.doesNotMatch(html, /Otomatik başlatma/);
   const en = renderToStaticMarkup(
     createElement(
@@ -420,7 +429,7 @@ test("today's card calls automatic start early start in both languages", () => {
       ),
     ),
   );
-  assert.match(en, /(?:Work 09:00–18:00|No work today) · next start/);
+  assert.match(en, /(?:Work 09:00–18:00|No work today) · automatic switching off · next start \d\d:\d\d Vertex/);
   assert.doesNotMatch(en, /Automatic start/);
   const off = render(
     relayFor(active, [active], { active: use("active", 10, 10) }),
@@ -443,12 +452,11 @@ test("the onboarding and the today lookout pandas are playful, the welcome and t
   assert.doesNotMatch(render(relayFor(active, [active], usage)), /data-playful/);
 });
 
-test("the automation card's status lines are set in text-xs, not 11 px", () => {
+test("Today's line, which says how switching runs, is set in text-xs, and nothing on the Overview in 11 px", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const html = render(relayFor(active, [active, acct("other", "Vertex", "pro")], { active: use("active", 10, 10) }));
-  const [switching] = automationRows(html);
-  assert.match(switching, /<span class="block truncate text-xs text-muted-foreground">[^<]*Kapalı\. Limit dolunca başka hesaba sen geçersin\.<\/span>/);
-  assert.doesNotMatch(html.slice(html.indexOf(">Otomasyon</h2>")), /text-\[11px\]/);
+  assert.match(html, /<div class="[^"]*\btext-xs\b[^"]*"><span>[^<]* · otomatik geçiş kapalı · [^<]*<\/span>/);
+  assert.doesNotMatch(html, /text-\[11px\]/);
 });
 
 // A friend's first minutes: no Claude app or CLI found yet, Code never opened, no account.
@@ -604,17 +612,20 @@ test("with no account, the overview offers the first one once and hides Today an
   assert.equal(en.match(/>Add account<\/button>/g)?.length, 1);
 });
 
-test("Today shows from one connected account, automation from two", () => {
+test("Today shows from one connected account and says how switching runs; there is no automation card", () => {
   const one = acct("one", "Kişisel", "pro");
   const loose = acct("loose", "Studio", "pro", false);
   const two = acct("two", "Vertex", "pro");
   const usage = { one: use("one", 10, 10) };
   const single = render(relayFor(one, [one, loose], usage));
-  assert.match(single, /Planlama →/);
-  assert.doesNotMatch(single, /Otomatik geçiş/);
   const pair = render(relayFor(one, [one, two], usage));
-  assert.match(pair, /Planlama →/);
-  assert.match(pair, /Otomatik geçiş/);
+  for (const html of [single, pair]) {
+    assert.match(html, /Planlama →/);
+    assert.match(html, / · otomatik geçiş kapalı · /);
+    assert.doesNotMatch(html, />Otomasyon<\/h2>|>Otomatik geçiş</);
+  }
+  // Without a Claude app sign-in there is no day to plan.
+  assert.doesNotMatch(render(relayFor(loose, [loose], {})), /Planlama →/);
 });
 
 test("the welcome says what to do first, in both languages", () => {
@@ -654,42 +665,27 @@ test("with no profile yet, an unlinked Claude sign-in is added, not linked", () 
   assert.doesNotMatch(html, /Hesabı eşleştir/);
 });
 
-test("every account that can be switched to has its own Geç, filled only for the suggested one", () => {
+test("the Overview's one Geç is the suggestion's, filled, and every other account's row opens its page", async () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const vertex = acct("vertex", "Vertex", "pro");
   const alto = acct("alto", "Alto", "pro");
   const studio = acct("studio", "Studio", "pro", false);
-  const html = render(
-    relayFor(active, [active, vertex, alto, studio], {
-      active: use("active", 90, 40),
-      vertex: use("vertex", 0, 10),
-      alto: use("alto", 30, 24),
-    }, { suggestion: vertex }),
-  );
-  const geç = (name: string) => /<button[^>]*aria-label="([^"]*) hesabına geç"[^>]*class="([^"]*)"[^>]*>Geç<\/button>/.exec(rowFor(html, name));
-  assert.match(geç("Vertex")?.[2] ?? "", /bg-primary/);
-  assert.match(geç("Alto")?.[2] ?? "", /border bg-card/);
-  assert.doesNotMatch(geç("Alto")?.[2] ?? "", /bg-primary/);
-  // Without a Claude app sign-in there is nothing to switch to: the row opens the account.
-  assert.equal(geç("Studio"), null);
-  assert.equal(switchButtons(html).length, 2);
-});
-
-test("a full account keeps its switch on the Overview, tinted, and the review says when it opens", async () => {
-  const active = acct("active", "Kişisel · Max", "max5");
-  const full = acct("full", "Dolu", "pro");
-  const usage = { active: use("active", 10, 10), full: use("full", 100, 40, NOW + 90 * 60_000) };
+  const usage = { active: use("active", 90, 40), vertex: use("vertex", 0, 10), alto: use("alto", 30, 24) };
   const requested: string[] = [];
-  const relay = relayFor(active, [active, full], usage, {
+  const relay = relayFor(active, [active, vertex, alto, studio], usage, {
+    suggestion: vertex,
     requestDesktop: (account: Account, kind: string) => void requested.push(`${account.id}:${kind}`),
   });
-  const row = rowFor(render(relay), "Dolu");
-  // Not dimmed: its switch is there, amber instead of the quiet outline, and says why.
-  assert.doesNotMatch(row, /opacity-60/);
-  const [button = ""] = switchButtons(render(relay));
-  assert.match(button, /aria-label="Dolu hesabına geç · Limit dolu · [^"]+ açılır \(1 sa 30 dk\)"/);
-  assert.match(button, /class="[^"]*border-warn\/40 bg-warn\/10 text-warn-foreground/);
-  // Clicking it opens the same review as any switch.
+  const html = render(relay);
+  const buttons = switchButtons(html);
+  assert.equal(buttons.length, 1);
+  assert.match(buttons[0], /data-variant="default"[^>]*class="[^"]*bg-primary[^"]*"[^>]*aria-label="Vertex hesabına geç"/);
+  // The rows, linked or not, open the account; none of them switches.
+  for (const [name, id] of [["Vertex", "vertex"], ["Alto", "alto"], ["Studio", "studio"]]) {
+    assert.match(rowFor(html, name), new RegExp(`^ data-account="${id}" role="button"`), name);
+    assert.doesNotMatch(rowFor(html, name), /<button/, name);
+  }
+  // The hero's Geç asks for the switch, as every switch does.
   const dom = fakeDom();
   dom.install();
   try {
@@ -700,19 +696,32 @@ test("a full account keeps its switch on the Overview, tinted, and the review sa
         createElement(
           I18nContext.Provider,
           { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(AccountsCard, { go: () => {}, now: NOW })),
+          createElement(RelayContext.Provider, { value: relay }, createElement(ActiveAccountCard, { go: () => {}, now: NOW })),
         ),
       ),
     );
     const label = (n: Fake) => (n as { attributes?: Map<string, string> }).attributes?.get("aria-label") ?? "";
-    const target = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && label(n).startsWith("Dolu hesabına geç"));
-    assert.ok(target);
-    await act(async () => dom.dispatch(target as never, "click", { detail: 1 }));
-    assert.deepEqual(requested, ["full:switch"]);
+    const go = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && label(n) === "Vertex hesabına geç");
+    assert.ok(go);
+    await act(async () => dom.dispatch(go as never, "click", { detail: 1 }));
+    assert.deepEqual(requested, ["vertex:switch"]);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
   }
+});
+
+test("a full account's row says when its limit opens and leads to its page, and the review says when it opens", async () => {
+  const active = acct("active", "Kişisel · Max", "max5");
+  const full = acct("full", "Dolu", "pro");
+  const usage = { active: use("active", 10, 10), full: use("full", 100, 40, NOW + 90 * 60_000) };
+  const relay = relayFor(active, [active, full], usage);
+  const row = rowFor(render(relay), "Dolu");
+  // Not dimmed: its five hours say it is full, in red, and when it opens.
+  assert.doesNotMatch(row, /opacity-60/);
+  assert.match(row, /text-crit">Dolu · 1 sa 30 dk<\/span>/);
+  // Its row leads to its page, whose switch says when the limit opens (the Accounts tests check it).
+  assert.equal(await openRow(relay, "full"), "#/hesaplar/full");
   // The review before the switch says the limit is full and when it opens.
   const review = renderToStaticMarkup(
     createElement(
@@ -740,7 +749,7 @@ test("a full account keeps its switch on the Overview, tinted, and the review sa
   assert.doesNotMatch(plain, /switch-full-limit/);
 });
 
-test("Overview rows show the limit that stops each account first, and fade an old reading", () => {
+test("Overview rows show each account's five hours and week, fade an old reading, and say when a full one opens", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const fresh = acct("fresh", "Fresh", "pro");
   const old = acct("old", "Old", "pro");
@@ -753,35 +762,38 @@ test("Overview rows show the limit that stops each account first, and fade an ol
     full: use("full", 100, 30, NOW + 3_600_000),
   };
   const html = render(relayFor(active, [active, fresh, old, none, full], usage));
+  assert.match(rowFor(html, "Fresh"), /role="meter" aria-label="5 saat %20"/);
   assert.match(rowFor(html, "Fresh"), />%30<\/span>/);
   assert.doesNotMatch(rowFor(html, "Fresh"), /opacity-60/);
-  // An old reading keeps its figure and bar, faded, and its line says how old it is.
-  assert.match(rowFor(html, "Old"), /class="[^"]*opacity-60[^"]*">%30<\/span>/);
-  assert.match(rowFor(html, "Old"), /aria-label="Old · 5 saat %20 kullanıldı · hafta %30 kullanıldı · limit verisi eski"/);
-  assert.match(rowFor(html, "Old"), />Pro · limit verisi 2 sa önce okundu</);
-  // Never read: an empty bar and a dash.
-  assert.match(rowFor(html, "None"), />—<\/span>/);
+  // An old reading keeps its figures and bars, faded.
+  assert.equal(rowFor(html, "Old").match(/data-slot="limit-line" class="[^"]*opacity-60/g)?.length, 2);
+  assert.match(rowFor(html, "Old"), />%30<\/span>/);
+  // Never read: a dash in each column.
+  assert.equal(rowFor(html, "None").match(/>—<\/span>/g)?.length, 2);
   // A full limit says so in red, with when it opens.
-  assert.match(rowFor(html, "Full"), /text-crit[^"]*">Dolu · 1 sa<\/span>/);
+  assert.match(rowFor(html, "Full"), /text-crit">Dolu · 1 sa<\/span>/);
+  // Room first, the full one after, the unread one last.
+  assert.deepEqual([...listOf(html).matchAll(/data-account="(\w+)"/g)].map((m) => m[1]), ["fresh", "old", "full", "none"]);
 });
 
-test("the hero shows the plan, else the subscription, and a hollow dot while Claude is closed", () => {
+test("the hero shows the plan, else the subscription, and says when Claude is closed", () => {
   const active = acct("active", "Kişisel", "max5");
   const usage = { active: use("active", 10, 10) };
-  assert.match(render(relayFor(active, [active], usage)), /<span data-slot="badge"[^>]*>Max 5×<\/span>/);
+  // One chip: the provider, then the plan.
+  assert.match(render(relayFor(active, [active], usage)), /data-provider="claude" title="Planlama için seçildi">[\s\S]*?Claude<span[^>]*>· Max 5×<\/span>/);
   const subscribed: Account = { ...active, planning: undefined, auth: { ...active.auth!, subscription: "team" } };
   const html = render(relayFor(subscribed, [subscribed], usage));
-  assert.match(html, /<span data-slot="badge"[^>]*title="Abonelik · planlama için plan seçilmedi"[^>]*>Team<\/span>/);
-  // Running is a filled dot; closed is a ring.
-  assert.match(html, /<span aria-hidden="true" class="[^"]*bg-ok[^"]*"><\/span>Çalışıyor/);
+  assert.match(html, /data-provider="claude" title="Abonelik · planlama için plan seçilmedi">[\s\S]*?Claude<span[^>]*>· Team<\/span>/);
+  // Running, the account is in use: a green dot; closed, the status says so in grey.
+  assert.match(html, /data-slot="status-label" data-tone="ok"[^>]*><span aria-hidden="true" class="[^"]*bg-ok[^"]*"><\/span><span class="truncate">Açık<\/span>/);
   const closed = render(relayFor(active, [active], usage, {
     desktop: { available: true, running: false, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0, activeProfileId: "active" },
   }));
-  assert.match(closed, /<span aria-hidden="true" class="[^"]*border-\[1\.5px\] border-muted-foreground\/60[^"]*"><\/span>Kapalı/);
-  // A used-up limit draws the hero's bars red; nothing else in the box is coloured.
+  assert.match(closed, /data-slot="status-label" data-tone="off"[^>]*><span aria-hidden="true" class="[^"]*bg-muted-foreground\/40[^"]*"><\/span><span class="truncate">Claude kapalı<\/span>/);
+  // A used-up limit draws its line red and the status says the account is full.
   const exhausted = render(relayFor(active, [active], { active: use("active", 100, 40, NOW + 3_600_000) }));
-  assert.match(exhausted, /role="meter" aria-label="5 saatlik dönem"[^>]*><div class="h-full rounded-full bg-crit"/);
-  assert.match(exhausted, /role="meter" aria-label="Haftalık · tüm modeller"[^>]*><div class="h-full rounded-full bg-crit"/);
+  assert.match(exhausted, /role="meter" aria-label="5 saat %100"[^>]*><div class="h-full rounded-full bg-crit"/);
+  assert.deepEqual(heroStatus(exhausted), { tone: "crit", title: "Açık · Dolu", text: "Açık · Dolu" });
 });
 
 test("the hero says why its switch to the suggestion is disabled", () => {
@@ -800,74 +812,12 @@ test("the hero says why its switch to the suggestion is disabled", () => {
     [{ pendingDesktop: other }, "Önce devam eden Claude uygulaması girişini tamamla veya iptal et."],
     [{ desktop: recovery }, "Önce Claude uygulaması yedeğini geri yükle."],
   ] as [Partial<Relay>, string][]) {
-    assert.match(block(extra), new RegExp(`disabled=""[^>]*>Vertex hesabına geç</button><p data-slot="switch-reason" class="[^"]*">${reason}</p>`), reason);
+    // Disabled, with the reason on its title and under it.
+    assert.match(block(extra), new RegExp(`disabled="" title="${reason}" aria-label="Vertex hesabına geç">Geç</button><p data-slot="switch-reason" class="[^"]*">${reason}</p>`), reason);
   }
 });
 
-test("an overview row opens its account in a separate window, then brings it forward or closes it instead of switching", async () => {
-  const active = acct("active", "Kişisel · Max", "max5");
-  const vertex = acct("vertex", "Vertex", "pro");
-  const usage = { active: use("active", 38, 78), vertex: use("vertex", 12, 31) };
-  const card = (relay: Relay) =>
-    renderToStaticMarkup(
-      createElement(
-        I18nContext.Provider,
-        { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-        createElement(RelayContext.Provider, { value: relay }, createElement(AccountsCard, { go: () => {}, now: NOW })),
-      ),
-    );
-  const withWindows = (open: string[], enabled = true) =>
-    relayFor(active, [active, vertex], usage, {
-      data: {
-        settings: DEFAULT_SETTINGS, usage, accounts: [active, vertex], authFlows: [],
-        windows: { supported: true, enabled, open: open.map((accountId) => ({ accountId })), others: 0 },
-      } as unknown as Snapshot,
-    });
-  // Off and closed: nothing new on the row.
-  assert.doesNotMatch(card(withWindows([], false)), /ayrı pencerede aç/);
-  const closed = card(withWindows([]));
-  assert.match(closed, /aria-label="Vertex hesabını ayrı pencerede aç"/);
-  assert.match(closed, /Vertex hesabına geç/);
-  const open = card(withWindows(["vertex"]));
-  assert.match(open, /aria-label="Vertex penceresini öne getir"/);
-  assert.match(open, /aria-label="Vertex penceresini kapat"/);
-  assert.match(open, /Ayrı pencerede açık · /);
-  assert.doesNotMatch(open, /Vertex hesabına geç/);
-  // Turned off with the window open: it can still be closed.
-  assert.match(card(withWindows(["vertex"], false)), /aria-label="Vertex penceresini kapat"/);
-  // The buttons call the window API.
-  const calls: string[] = [];
-  const dom = fakeDom();
-  dom.install();
-  try {
-    const relay = withWindows(["vertex"]);
-    (relay as any).action = async (_key: string, fn: () => Promise<unknown>) => fn();
-    (relay as any).api = { openWindow: async (id: string) => void calls.push(`open:${id}`), closeWindow: async (id: string) => void calls.push(`close:${id}`) };
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () =>
-      root.render(
-        createElement(
-          I18nContext.Provider,
-          { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(AccountsCard, { go: () => {}, now: NOW })),
-        ),
-      ),
-    );
-    const label = (n: Fake) => (n as { attributes?: Map<string, string> }).attributes?.get("aria-label") ?? "";
-    for (const name of ["Vertex penceresini öne getir", "Vertex penceresini kapat"]) {
-      const button = find(dom.container as unknown as Fake, (n) => n.tagName === "button" && label(n) === name);
-      assert.ok(button, name);
-      await act(async () => dom.dispatch(button as never, "click", { detail: 1 }));
-    }
-    assert.deepEqual(calls, ["open:vertex", "close:vertex"]);
-    await act(async () => root.unmount());
-  } finally {
-    dom.uninstall();
-  }
-});
-
-test("the Overview shows Antigravity as its own card: the account the app uses, its models, and the move to another", () => {
+test("the Overview lists Antigravity's accounts on the board: the account the app uses, its pools, and the move to another", () => {
   const active = acct("active", "Kişisel · Max", "max5");
   const google = (id: string, name: string): Account => ({
     id, name, kind: "personal", group: "personal", color: "blue", createdAt: iso(NOW), provider: "antigravity",
@@ -889,32 +839,51 @@ test("the Overview shows Antigravity as its own card: the account the app uses, 
     relay.data = { ...relay.data!, antigravity };
     return relay;
   };
-  // The pane's markup, with the apostrophes renderToStaticMarkup escapes put back.
-  const card = (html: string) =>
-    (/data-slot="provider-pane" data-provider="antigravity"[\s\S]*?(?=data-slot="provider-pane"|<\/section>)/.exec(html)?.[0] ?? "").replaceAll("&#x27;", "'");
-  // Not on macOS: the card says where the app is and walks through the sign-in by hand.
-  const plain = card(render(withApp({ installed: true, canOpen: false, accountId: "g1" })));
-  assert.match(plain, />AG 1<[\s\S]*Uygulamada açık/);
-  // Its models are lines, the spent one first and red with when it opens; never the roomiest one as "%0".
-  assert.match(plain, /Gemini 4 Carbon \(High\)[\s\S]*?Dolu · 25 dk/);
+  // The board's Antigravity group, with the apostrophes renderToStaticMarkup escapes put back.
+  const group = (html: string) => {
+    const board = listOf(html).replaceAll("&#x27;", "'");
+    const start = board.indexOf('data-slot="list-group" data-provider="antigravity"');
+    return start < 0 ? "" : board.slice(start);
+  };
+  const plainRelay = withApp({ installed: true, canOpen: false, accountId: "g1" });
+  const plain = group(render(plainRelay));
+  // The account the app uses is marked; its spent pool leads, red, with when it opens; the other pool beside it.
+  assert.match(plain, /data-account="g1"[\s\S]*?>AG 1<\/span><span[^>]*>açık<\/span>/);
+  assert.match(plain, /data-account="g1"[\s\S]*?Gemini 4 Carbon \(High\)[\s\S]*?text-crit">Dolu · 25 dk</);
+  assert.match(plain, /data-account="g1"[\s\S]*?data-slot="other-limit"[^>]*><span[^>]*>Gemini 4 Argon %0</);
+  // Never the roomiest pool as "%0" for the other account: its own figure.
   assert.match(plain, /data-account="g2"[\s\S]*?>%6</);
-  assert.match(plain, /Antigravity'de hesap menüsünden çıkış yap/);
-  // The Antigravity accounts are not in the Claude list.
-  assert.doesNotMatch(rowFor(render(withApp({ installed: true, canOpen: false, accountId: "g1" })), "AG 2"), /account-row/);
-  // On macOS with both sign-ins kept: the roomy account's one button moves the app there.
-  const saved = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"] })));
-  assert.match(saved, /<button[^>]*aria-label="Antigravity'yi AG 2 hesabına geçir"[^>]*>Geç<\/button>/);
+  // Not on macOS Relay cannot move the app: no button on the board. The tray's pane walks through it by hand.
+  assert.doesNotMatch(plain, /<button/);
+  const pane = renderToStaticMarkup(
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
+      createElement(
+        RelayContext.Provider,
+        { value: plainRelay },
+        createElement(ProviderPane, { view: relayProviders(plainRelay, NOW).find((v) => v.id === "antigravity")!, now: NOW }),
+      ),
+    ),
+  ).replaceAll("&#x27;", "'");
+  assert.match(pane, /Antigravity'de hesap menüsünden çıkış yap/);
+  // The Antigravity accounts are not in the Claude group.
+  const claude = listOf(render(plainRelay)).slice(0, listOf(render(plainRelay)).indexOf('data-provider="antigravity"'));
+  assert.doesNotMatch(claude, /data-account="g\d"/);
+  // On macOS with both sign-ins kept: the other account's one button moves the app there.
+  const saved = group(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"] })));
+  assert.match(saved, /<button[^>]*aria-label="Antigravity'yi AG 2 hesabına geçir">Geç<\/button>/);
   assert.doesNotMatch(saved, /hesap menüsünden çıkış yap/);
-  const unsaved = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1"] })));
+  const unsaved = group(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1"] })));
   assert.match(unsaved, />Girişi kaydet<\/button>/);
-  const done = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g2", saved: ["g1", "g2"], result: { kind: "switched", accountId: "g2", agyRunning: 1, at: NOW - 1000 } })));
+  const done = group(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g2", saved: ["g1", "g2"], result: { kind: "switched", accountId: "g2", agyRunning: 1, at: NOW - 1000 } })));
   assert.match(done, /data-slot="antigravity-result"[^>]*>AG 2 hesabına geçildi · açık 1 agy eski hesapta, yeniden başlat/);
-  const failed = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"], result: { kind: "failed", accountId: "g2", reason: "still-running", at: NOW - 1000 } })));
+  const failed = group(render(withApp({ installed: true, canOpen: true, canSwitch: true, accountId: "g1", saved: ["g1", "g2"], result: { kind: "failed", accountId: "g2", reason: "still-running", at: NOW - 1000 } })));
   assert.match(failed, /Antigravity kapanmadı/);
-  const waiting = card(render(withApp({ installed: true, canOpen: true, canSwitch: true, saved: ["g1"], busy: "signing-in", signInFor: "g2" })));
+  const waiting = group(render(withApp({ installed: true, canOpen: true, canSwitch: true, saved: ["g1"], busy: "signing-in", signInFor: "g2" })));
   assert.match(waiting, /data-slot="antigravity-sign-in"[\s\S]*Antigravity'de <b>AG 2<\/b>/);
-  // Without Antigravity accounts there is no card.
-  assert.doesNotMatch(render(relayFor(active, [active], { active: use("active", 10, 10) })), /data-slot="provider-cards"/);
+  // Without Antigravity accounts there is no Antigravity group.
+  assert.doesNotMatch(render(relayFor(active, [active], { active: use("active", 10, 10) })), /data-provider="antigravity"/);
 });
 
 test("on macOS an Antigravity account's button asks first, and the confirmation switches", async () => {
@@ -937,14 +906,14 @@ test("on macOS an Antigravity account's button asks first, and the confirmation 
   readableText();
   try {
     const { createRoot } = await import("react-dom/client");
-    const { ProviderCards } = await import("../src/features/Providers");
+    const { AccountsBoard } = await import("../src/pages/overview/AccountsBoard");
     const root = createRoot(dom.container as unknown as Element);
     await act(async () =>
       root.render(
         createElement(
           I18nContext.Provider,
           { value: { language: "tr", setLanguage() {}, t: (tr: string) => tr } },
-          createElement(RelayContext.Provider, { value: relay }, createElement(ProviderCards, { now: NOW })),
+          createElement(RelayContext.Provider, { value: relay }, createElement(AccountsBoard, { now: NOW })),
         ),
       ),
     );

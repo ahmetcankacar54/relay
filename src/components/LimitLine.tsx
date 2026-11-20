@@ -3,23 +3,9 @@ import type { T } from "@/data/i18n";
 import { windowElapsed, type UsageWindowRow } from "@/data/selectors";
 import { meterFill } from "@/lib/meter";
 import { cn } from "@/lib/utils";
+import { countdown } from "@/lib/time";
 
-/**
- * Time to a reset, short: "25 dk", "1 sa 50 dk", "3 gün". A day or more reads in days, as the
- * reference monitors do; the clock time is in the meter's title.
- */
-export function countdown(at: string | undefined, now: number, t: T): string | undefined {
-  const ms = at ? Date.parse(at) - now : NaN;
-  if (!Number.isFinite(ms) || ms <= 0) return undefined;
-  if (ms >= 86_400_000) {
-    const days = Math.round(ms / 86_400_000);
-    return t(`${days} gün`, `${days} d`);
-  }
-  const minutes = Math.ceil(ms / 60_000);
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return h ? t(`${h} sa${m ? ` ${m} dk` : ""}`, `${h} h${m ? ` ${m} min` : ""}`) : t(`${m} dk`, `${m} min`);
-}
+export { countdown };
 
 const track = cva("relative overflow-hidden rounded-full bg-track", {
   variants: { size: { sm: "h-1.5", md: "h-2" } },
@@ -45,6 +31,8 @@ export function LimitLine({
   size = "sm",
   faded,
   title,
+  showReset = true,
+  ariaLabel,
 }: {
   label: string;
   usedPercent: number;
@@ -57,17 +45,22 @@ export function LimitLine({
   /** An old reading: shown, but quieter. */
   faded?: boolean;
   title?: string;
+  /** Off in a narrow list column: the figure alone; the reset is in the title. */
+  showReset?: boolean;
+  /** The meter's name when the label is empty (a list column names it). */
+  ariaLabel?: string;
 }) {
   const reset = Date.parse(resetsAt ?? "");
   // A window whose reset has passed is empty again, whatever the reading says.
   const used = Number.isFinite(reset) && reset <= now ? 0 : Math.min(100, Math.max(0, usedPercent));
   const full = used >= 100;
-  const left = countdown(resetsAt, now, t);
+  const left = showReset ? countdown(resetsAt, now, t) : undefined;
   const elapsed = windowElapsed({ period, resetsAt }, now);
   const ahead = elapsed !== undefined && used / 100 > elapsed + 0.05;
-  const percent = `%${Math.round(used)}`;
+  // "%45" in Turkish, "45%" in English, as every other percentage in the app.
+  const percent = t(`%${Math.round(used)}`, `${Math.round(used)}%`);
   return (
-    <div data-slot="limit-line" className={cn("grid min-w-0 gap-1", faded && "opacity-60")} title={title}>
+    <div data-slot="limit-line" className={cn("grid min-w-0 gap-1", faded && "opacity-60")} title={title ?? (showReset ? undefined : countdown(resetsAt, now, t))}>
       <div className={head({ size })}>
         <span className="truncate text-muted-foreground">{label}</span>
         <span className="shrink-0 tabular-nums">
@@ -86,7 +79,7 @@ export function LimitLine({
       <div
         className={track({ size })}
         role="meter"
-        aria-label={`${label} ${percent}`}
+        aria-label={`${ariaLabel ?? label} ${percent}`}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(used)}

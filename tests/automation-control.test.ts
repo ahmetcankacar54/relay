@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { createElement, Fragment, type ReactElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import { applyAutomationMode } from "../src/features/automation-actions";
 import { afterExitChips } from "../src/features/AutomationControl";
 import { ExperimentalSwitchRows, SwitchingTab } from "../src/pages/settings/SwitchingTabs";
@@ -23,6 +24,10 @@ import {
   type RelaySettings,
   type Snapshot,
 } from "../shared/types";
+
+/** Static markup inside the app's tooltip provider: the pages' ⓘ tips need one, as in the shell. */
+const renderToStaticMarkup = (node: Parameters<typeof renderMarkup>[0]) => renderMarkup(createElement(TooltipProvider, null, node));
+
 
 type AutomationApi = Pick<
   RelayAPI,
@@ -272,7 +277,7 @@ const render = (
   );
 /** The choice cards: each card's title, and whether it is the chosen one (the threshold below is a radio group too). */
 const radios = (page: string) =>
-  [...(page.includes('id="gecis-birlikte"') ? page.slice(0, page.indexOf('id="gecis-birlikte"')) : page).matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g)].map(([tag, inner]) => ({
+  [...(page.includes('data-slot="gecis-birlikte"') ? page.slice(0, page.indexOf('data-slot="gecis-birlikte"')) : page).matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g)].map(([tag, inner]) => ({
     label: (/<span class="text-sm font-semibold">(.*?)<\/span>/.exec(inner)?.[1] ?? "").replace(/&#x27;/g, "'"),
     checked: tag.includes('aria-checked="true"'),
   }));
@@ -422,21 +427,21 @@ const SWITCH_NOW = "Şimdi Kişisel · İkinci’ye geç";
 const count = (html: string, text: string) => html.split(text).length - 1;
 const overview = createElement(Overview, { go() {}, now: NOW });
 
-test("Switching and Overview show the offer inline, not in the page banner", () => {
+test("Switching shows the offer inline; the Overview, like the other pages, shows it in the page banner", () => {
   const relay = relayFor({ fleet: otherWork, usage: fullUsage });
+  const switching = render(relay, createElement(Switching));
+  assert.doesNotMatch(switching, /Otomatik geçiş ·/);
+  assert.equal(count(switching, SWITCH_NOW), 1);
+  assert.equal(count(switching, "2 konuşma limit dolduğu için durdu."), 1);
+  // The Overview has no automation card of its own any more: the banner carries the offer, once, as on Usage.
   for (const [label, element] of [
-    ["Switching", createElement(Switching)],
     ["Overview", overview],
+    ["Usage", createElement(Usage)],
   ] as const) {
     const html = render(relay, element);
-    assert.doesNotMatch(html, /Otomatik geçiş ·/, label);
+    assert.match(html, /Otomatik geçiş ·/, label);
     assert.equal(count(html, SWITCH_NOW), 1, label);
-    assert.equal(count(html, "2 konuşma limit dolduğu için durdu."), 1, label);
   }
-  // Pages without the inline status keep the banner.
-  const planning = render(relay, createElement(Usage));
-  assert.match(planning, /Otomatik geçiş ·/);
-  assert.equal(count(planning, SWITCH_NOW), 1);
 });
 
 test("Overview has no suggestion band: automation's switch-now stays its one offer and the suggestion leads the accounts", () => {
@@ -447,8 +452,8 @@ test("Overview has no suggestion band: automation's switch-now stays its one off
   assert.doesNotMatch(offered, /uyarı eşiğini geçti/);
   assert.doesNotMatch(offered, /Geçişi incele/);
   assert.equal(count(offered, SWITCH_NOW), 1);
-  // Without an automation offer there is still no band: the accounts card's heading names the
-  // near limit and puts the suggestion first, and nothing offers a switch-now.
+  // Without an automation offer there is still no band: the active account's card names the
+  // suggestion on its "Sıradaki" line with its own Geç, and nothing offers a switch-now.
   const suggested = render(
     {
       ...relayFor({ usage: { a: usage("a", 90), b: usage("b", 10) } }),
@@ -458,7 +463,7 @@ test("Overview has no suggestion band: automation's switch-now stays its one off
   );
   assert.doesNotMatch(suggested, /uyarı eşiğini geçti/);
   assert.doesNotMatch(suggested, /Önerilen üstte|en uygunu üstte/);
-  assert.match(suggested, />önerilen</);
+  assert.match(suggested, /data-slot="suggestion"[^>]*>(?:(?!<\/button>)[\s\S])*?Sıradaki(?:(?!<\/button>)[\s\S])*?>Kişisel · İkinci<\/span>(?:(?!<\/button>)[\s\S])*?aria-label="Kişisel · İkinci hesabına geç">Geç<\/button>/);
   assert.doesNotMatch(suggested, /Geçişi incele/);
   assert.equal(count(suggested, SWITCH_NOW), 0);
 });
@@ -516,7 +521,8 @@ test("the menu bar panel does not bundle the Switching card", () => {
 
 test("Switching shows the extension, terminal and draft steps on macOS only", () => {
   const mac = render(relayFor({ fleet: otherWork, usage: fullUsage }));
-  assert.match(mac, /Eklenti ve terminal isteğe bağlıdır/);
+  // That the extension and the terminal are optional is said behind the section's ⓘ.
+  assert.match(mac, /data-slot="gecis-birlikte"[\s\S]*?aria-label="Nasıl çalışır"/);
   assert.match(mac, /id="gecis-eklenti"/);
   assert.match(mac, /id="gecis-terminal"/);
   assert.match(mac, /id="gecis-taslak"/);
@@ -525,8 +531,8 @@ test("Switching shows the extension, terminal and draft steps on macOS only", ()
   const windows = render(
     relayFor({ fleet: otherWork, usage: fullUsage, diagnostics: { platform: "win32" } } as never),
   );
-  assert.match(windows, /Code geçmişin de gelebilir/);
-  assert.doesNotMatch(windows, /Eklenti ve terminal/);
+  // Code history alone comes along there: its row, and no extension or terminal row.
+  assert.match(windows, /id="gecis-gecmis"/);
   assert.doesNotMatch(windows, /Tarayıcı eklentisi/);
   assert.doesNotMatch(windows, /Kurtarılan taslaklar/);
   for (const id of ["gecis-eklenti", "gecis-terminal", "gecis-taslak", "draft-retype"])
@@ -537,7 +543,6 @@ test("Switching shows the extension, terminal and draft steps on macOS only", ()
   );
   assert.doesNotMatch(linux, /id="draft-retype"/);
   // The extension and the terminal come along on Linux as on macOS.
-  assert.match(linux, /Eklenti ve terminal isteğe bağlıdır/);
   assert.match(linux, /id="gecis-eklenti"/);
   assert.match(linux, /id="gecis-terminal"/);
 });

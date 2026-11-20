@@ -125,7 +125,7 @@ test("banners read an injected relay and offer reconnect for expired usage sign-
   assert.match(html, /Limit okuma girişini yenile/);
 });
 
-test("sidebar buttons override the legacy centred button style and the summary card shows a small five-hour ring", () => {
+test("sidebar buttons override the legacy centred button style and the summary card shows a five-hour bar", () => {
   const sidebar = (running: boolean) =>
     renderToStaticMarkup(
       createElement(Sidebar, {
@@ -149,12 +149,15 @@ test("sidebar buttons override the legacy centred button style and the summary c
   const pages = buttons.filter((b) => !b.includes("Kişisel · Max"));
   assert.equal(pages.length, 9);
   for (const b of pages) assert.match(b, /class="[^"]*justify-start[^"]*text-left/);
-  // The summary card: a single 32 px ring for the five hours and its percent, inside the card's button.
+  // The summary card: the name, the percent line, then the same bar as every limit in Relay, inside
+  // the card's button. The ring is gone.
   const summary = buttons.find((b) => b.includes("Kişisel · Max")) ?? "";
-  assert.match(summary, /<div role="img" aria-label="5 saatlik dönem %94 kullanıldı"[^>]*style="width:32px;height:32px"/);
+  assert.match(summary, /Kişisel · Max<\/b><\/span><span[^>]*>%94<\/span><div[^>]*role="meter" aria-label="5 saatlik dönem %94 kullanıldı"[^>]*aria-valuenow="94"><div[^>]*style="width:94%"/);
+  assert.doesNotMatch(summary, /role="img"|style="width:32px;height:32px"/);
   // Without a relay to read the reset from, the line is the percent alone.
   assert.match(summary, />%94</);
-  assert.doesNotMatch(html, /role="meter"/);
+  // One meter in the whole sidebar: the card's.
+  assert.equal(html.match(/role="meter"/g)?.length, 1);
   // With Claude closed, the line says so after the percent.
   assert.match(sidebar(false), />%94 · Claude kapalı</);
 });
@@ -214,28 +217,25 @@ test("the summary card gives the five-hour window's time left after its percent"
   assert.match(withRelay(sidebarRelay(new Date(Date.now() - 60_000).toISOString()), "genel"), />%94</);
 });
 
-test("on the Accounts page the sidebar lists the accounts under Hesaplar, each with its dot and page", () => {
+test("the sidebar lists no accounts under Hesaplar, on the Accounts page or an account's page", () => {
   const relay = sidebarRelay(new Date(Date.now() + 3_600_000).toISOString());
-  assert.doesNotMatch(withRelay(relay, "genel"), /href="#\/hesaplar\//);
-  assert.doesNotMatch(withRelay(relay, "hesaplar", true, true), /href="#\/hesaplar\//);
+  // The accounts are the Accounts page's list; the sidebar keeps its pages only.
+  for (const html of [withRelay(relay, "genel"), withRelay(relay, "hesaplar"), withRelay(relay, "hesaplar", true, true)]) {
+    assert.doesNotMatch(html, /href="#\/hesaplar\//);
+    assert.doesNotMatch(html, /aria-label="Hesap listesi"/);
+  }
+  // Hesaplar is followed by the next page, with nothing in between; the usage page is "Limit geçmişi".
   const html = withRelay(relay, "hesaplar");
-  const links = html.match(/<a [^>]*href="#\/hesaplar\/[^"]*"[\s\S]*?<\/a>/g) ?? [];
-  assert.equal(links.length, 2);
-  // It sits right under the Hesaplar item.
-  assert.ok(html.indexOf("Hesaplar</span>") < html.indexOf('href="#/hesaplar/a"'));
-  assert.ok(html.indexOf('href="#/hesaplar/b"') < html.indexOf("Kullanım"));
-  // Green when ready (here: running), grey otherwise; the status is said in words too.
-  assert.match(links[0], /href="#\/hesaplar\/a"[\s\S]*bg-ok[\s\S]*Kişisel · Max[\s\S]*· Çalışıyor/);
-  assert.match(links[1], /href="#\/hesaplar\/b"[\s\S]*bg-muted-foreground\/40[\s\S]*Studio[\s\S]*· Claude uygulaması girişi yok/);
-  assert.doesNotMatch(html, /aria-current="true"/);
-  // The open account is marked.
+  assert.ok(html.indexOf("Hesaplar</span>") < html.indexOf("Limit geçmişi</span>"));
+  assert.doesNotMatch(html, /Studio|· Claude uygulaması girişi yok/);
+  // An open account's page marks nothing in the sidebar but the Hesaplar item.
   const g = globalThis as { window?: unknown };
   const saved = g.window;
   g.window = { location: { hash: "#/hesaplar/b" }, addEventListener() {}, removeEventListener() {} };
   try {
     const open = withRelay(relay, "hesaplar");
-    assert.match(open, /<a [^>]*href="#\/hesaplar\/b"[^>]*aria-current="true"/);
-    assert.doesNotMatch(open, /<a [^>]*href="#\/hesaplar\/a"[^>]*aria-current/);
+    assert.doesNotMatch(open, /<a [^>]*aria-current/);
+    assert.match(open, /<button[^>]*aria-current="page"[^>]*>[\s\S]*?Hesaplar<\/span>/);
   } finally {
     g.window = saved;
   }

@@ -30,6 +30,7 @@ import {
   filterAccounts,
   providerCounts,
   providerLabel,
+  providerShortLabel,
   type AccountFilter,
   type ProviderFilter,
 } from "./accounts/accountLabels";
@@ -241,10 +242,7 @@ export function Accounts() {
   return (
     <PageFrame
       title={t("Hesaplar", "Accounts")}
-      description={t(
-        `${accounts.length} hesap · ${linked} hesapta Claude uygulaması girişi kayıtlı`,
-        `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"} · ${linked} with a saved Claude app sign-in`,
-      )}
+      description={t(`${accounts.length} hesap`, `${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}`)}
       actions={
         <>
           {/* Linking needs a profile; with none, adding one links it in the dialog. */}
@@ -278,77 +276,80 @@ export function Accounts() {
         </>
       }
     >
-      <div className="@container grid gap-3 px-5 pb-5">
-        <div className="flex flex-wrap gap-2">
-          <div className="relative min-w-48 flex-1">
-            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={search}
-              aria-label={t("Hesap ara", "Search accounts")}
-              placeholder={t(
-                "Hesap, e-posta veya grup ara…",
-                "Search accounts, email or group…",
-              )}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="pr-12 pl-8"
-            />
-            <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-xs text-muted-foreground">
-              ⌘K
-            </kbd>
-          </div>
-          <Select
-            value={filter}
-            onValueChange={(v) => setFilter(v as AccountFilter)}
-          >
-            <SelectTrigger
-              aria-label={t("Hesap filtresi", "Filter accounts")}
-              className="w-40"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("Tümü", "All accounts")}</SelectItem>
-              <SelectItem value="connected">
-                {t("Claude uygulaması girişi kayıtlı", "Claude app sign-in saved")}
-              </SelectItem>
-              <SelectItem value="personal">
-                {t("Kişisel", "Personal")}
-              </SelectItem>
-              <SelectItem value="work">{t("Şirket", "Work")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="grid gap-4 px-5 pb-5">
+        {/* One toolbar: the provider filter on the left, search and the group filter on the right. */}
+        <div className="flex flex-wrap items-center gap-2">
         {/* Only once accounts of more than one provider exist: a Claude-only list needs no filter. */}
-        {Object.values(counts).filter(Boolean).length > 1 && (
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            aria-label={t("Sağlayıcıya göre filtrele", "Filter by provider")}
-            data-slot="provider-filter"
-            className="flex-wrap"
-            value={provider}
-            onValueChange={(v) => v && setProvider(v as ProviderFilter)}
-          >
-            {(
-              [
-                ["all", t("Tümü", "All"), accounts.length],
-                ["claude", providerLabel("claude"), counts.claude],
-                ["codex", providerLabel("codex"), counts.codex],
-                ["antigravity", providerLabel("antigravity"), counts.antigravity],
-              ] as const
-            )
-              .filter(([id, , count]) => id === "all" || count > 0)
-              .map(([id, label, count]) => (
-                <ToggleGroupItem key={id} value={id}>
-                  {id !== "all" && <ProviderLogo provider={id} size="sm" />}
-                  {label}
-                  <span className="tabular-nums text-muted-foreground">({count})</span>
-                </ToggleGroupItem>
-              ))}
-          </ToggleGroup>
-        )}
+          {Object.values(counts).filter(Boolean).length > 1 && (
+            <ToggleGroup
+              type="single"
+              variant="outline"
+              size="sm"
+              aria-label={t("Sağlayıcıya göre filtrele", "Filter by provider")}
+              data-slot="provider-filter"
+              className="flex-wrap"
+              value={provider}
+              onValueChange={(v) => v && setProvider(v as ProviderFilter)}
+            >
+              {(
+                [
+                  ["all", t("Tümü", "All"), accounts.length],
+                  ["claude", providerShortLabel("claude"), counts.claude],
+                  ["codex", providerShortLabel("codex"), counts.codex],
+                  ["antigravity", providerShortLabel("antigravity"), counts.antigravity],
+                ] as const
+              )
+                .filter(([id, , count]) => id === "all" || count > 0)
+                .map(([id, label, count]) => (
+                  <ToggleGroupItem key={id} value={id}>
+                    {id !== "all" && <ProviderLogo provider={id} size="sm" />}
+                    {label}
+                    <span className="tabular-nums text-muted-foreground">{count}</span>
+                  </ToggleGroupItem>
+                ))}
+            </ToggleGroup>
+          )}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="relative w-40 max-w-full">
+              <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={search}
+                aria-label={t("Hesap ara", "Search accounts")}
+                placeholder={t(
+                  "Ara…",
+                  "Search…",
+                )}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pr-12 pl-8"
+              />
+              <kbd className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-xs text-muted-foreground">
+                ⌘K
+              </kbd>
+            </div>
+          <Select
+              value={filter}
+              onValueChange={(v) => setFilter(v as AccountFilter)}
+            >
+              <SelectTrigger
+                aria-label={t("Hesap filtresi", "Filter accounts")}
+                className="w-28"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t("Tümü", "All accounts")}</SelectItem>
+                <SelectItem value="connected">
+                  {t("Claude uygulaması girişi kayıtlı", "Claude app sign-in saved")}
+                </SelectItem>
+                <SelectItem value="personal">
+                  {t("Kişisel", "Personal")}
+                </SelectItem>
+                <SelectItem value="work">{t("Şirket", "Work")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         {visible.length ? (
           <AccountsTable
             accounts={visible}

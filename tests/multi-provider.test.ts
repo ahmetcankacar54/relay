@@ -156,56 +156,65 @@ test("only Claude accounts are switched to in the Claude app; the others have no
   assert.ok(keys({ ...claude, id: "c2" }).includes("switch"));
 });
 
-test("the table badges every account's provider and shows Codex and Antigravity as gateway accounts", () => {
+/** A status label's tone, title and words. */
+const statusOf = (html: string) =>
+  /data-slot="status-label" data-tone="(\w+)" title="([^"]*)"[^>]*><span[^>]*><\/span><span[^>]*>([^<]*)<\/span>/.exec(html)?.slice(1);
+/** The list's rows, in order. */
+const listRows = (html: string) => html.split('data-slot="list-row"').slice(1);
+
+test("the list groups every account under its provider and shows Codex and Antigravity as gateway accounts", () => {
   const html = render(relayFor(), createElement(AccountsTable, { accounts, open() {}, link() {} }));
-  for (const [name, provider, label] of [
-    ["Kişisel · Max", "claude", "Claude"],
-    ["OpenAI · Codex", "codex", "Codex"],
-    ["Google · Antigravity", "antigravity", "Antigravity"],
-  ] as const)
-    // The name has its own line; the provider badge leads the line under it.
-    assert.match(html, new RegExp(`>${name}</span></div><div[^>]*><span[^>]*data-provider="${provider}"[^>]*><svg[^>]*data-provider="${provider}"[\\s\\S]*?</svg>${label}</span>`));
-  // The legacy account has no provider field and reads as Claude.
-  assert.match(html, />Eski hesap<\/span><\/div><div[^>]*><span[^>]*data-provider="claude"/);
-  // Their connection cell is the gateway's icon (and Antigravity's app, where Relay can move it); Claude's keeps its icons.
-  assert.equal([...html.matchAll(/data-icon="gateway"[^>]*/g)].length, 2);
-  assert.equal([...html.matchAll(/title="Ağ geçidi: havuzda"/g)].length, 2);
-  assert.equal([...html.matchAll(/data-provider="codex"[^>]*>\s*<span[^>]*title="OpenAI \/ Codex/g)].length >= 0, true);
-  assert.doesNotMatch(html, /OpenAI \/ Codex: giriş yok/);
-  assert.equal([...html.matchAll(/data-slot="connection-icons"/g)].length, 4);
-  // Not one non-Claude row asks for the Claude app.
-  const rows = html.split("<tr").slice(1);
+  // Each provider's rows sit under its logo, short name and count; the legacy account has no provider field and reads as Claude.
+  const groups = [...html.matchAll(/data-slot="list-group" data-provider="(\w+)"[^>]*><svg[^>]*data-provider="(\w+)"[\s\S]*?<\/svg>(\w+)<span[^>]*>(\d+)<\/span>/g)].map((m) => m.slice(1));
+  assert.deepEqual(groups, [
+    ["claude", "claude", "Claude", "2"],
+    ["codex", "codex", "Codex", "1"],
+    ["antigravity", "antigravity", "Antigravity", "1"],
+  ]);
+  assert.match(
+    html,
+    /data-slot="list-group" data-provider="claude"[\s\S]*?data-account="cl"[\s\S]*?data-account="lg"[\s\S]*?data-slot="list-group" data-provider="codex"[\s\S]*?data-account="cx"[\s\S]*?data-slot="list-group" data-provider="antigravity"[\s\S]*?data-account="ag"/,
+  );
+  // Not one non-Claude row asks for the Claude app; the legacy Claude profile does.
+  const rows = listRows(html);
   for (const row of rows.filter((r) => /OpenAI · Codex|Google · Antigravity/.test(r)))
-    assert.doesNotMatch(row, /Claude uygulaması girişi yok|Claude uygulaması: kayıtlı değil/);
+    assert.doesNotMatch(row, /Uygulama girişi yok|Claude uygulaması girişi/);
+  assert.match(rows.find((r) => r.includes('data-account="lg"')) ?? "", />Uygulama girişi yok<\/span>/);
+  // A gateway account without a sign-in says so, quietly; the gateway cannot use it.
   const signed = render(relayFor({}, [signedOut]), createElement(AccountsTable, { accounts: [signedOut], open() {}, link() {} }));
-  assert.match(signed, /Giriş yok/);
-  assert.match(signed, /title="Ağ geçidi: giriş yok"/);
+  assert.deepEqual(statusOf(signed), ["off", "Giriş yok", "Giriş yok"]);
+  assert.doesNotMatch(signed, /Claude uygulaması/);
 });
 
-test("an account the gateway is serving says so on its gateway icon", () => {
+test("an account the gateway is serving says so in its status", () => {
+  const fresh = (id: string): AccountUsage => ({ ...ready(id), checkedAt: new Date(Date.now() - 60_000).toISOString() });
   const relay = relayFor({
     desktop: {
       available: true, running: true, organizations: [], busy: false, recoveryRequired: false, errorRevision: 0,
       proxyStatus: { running: true, port: 8317, host: "127.0.0.1", stats: { totalRequests: 1, activeRequests: 0, promptCacheHits: 0, cacheHitRate: 0 }, accounts: [{ id: "cx", name: "x", active: true }] },
     } as never,
+    data: { settings: DEFAULT_SETTINGS, usage: { cx: fresh("cx"), ag: fresh("ag") }, accounts, authFlows: [], diagnostics: { platform: "linux" } } as unknown as Snapshot,
   });
-  const html = render(relay, createElement(AccountsTable, { accounts: [codex, antigravity], open() {}, link() {} }), en);
-  assert.equal([...html.matchAll(/title="Gateway: using this account now"/g)].length, 1);
-  assert.equal([...html.matchAll(/title="Gateway: in the pool"/g)].length, 1);
+  const [served, pooled] = listRows(render(relay, createElement(AccountsTable, { accounts: [codex, antigravity], open() {}, link() {} }), en));
+  assert.deepEqual(statusOf(served), ["ok", "In use", "In use"]);
+  assert.deepEqual(statusOf(pooled), ["ok", "Ready", "Ready"]);
 });
 
 test("the Accounts page offers a provider filter with counts once more than one provider is used", () => {
   const html = render(relayFor(), createElement(Accounts));
   const group = /data-slot="provider-filter"[\s\S]*?<\/div>/.exec(html)?.[0] ?? "";
   const items = [...group.matchAll(/<button[^>]*data-state="(on|off)"[^>]*>([\s\S]*?)<\/button>/g)].map(
-    (m) => [m[1], m[2].replace(/<[^>]+>/g, "")],
+    (m) => [m[1], m[2].replace(/<svg[\s\S]*?<\/svg>/g, "").replace(/<[^>]+>/g, " ").trim().replace(/\s+/g, " ")],
   );
+  // The short names, each with its logo and its count.
   assert.deepEqual(items, [
-    ["on", "Tümü(4)"],
-    ["off", "Claude(2)"],
-    ["off", "OpenAI / Codex(1)"],
-    ["off", "Antigravity(1)"],
+    ["on", "Tümü 4"],
+    ["off", "Claude 2"],
+    ["off", "Codex 1"],
+    ["off", "Antigravity 1"],
   ]);
+  for (const provider of ["claude", "codex", "antigravity"])
+    assert.match(group, new RegExp(`<svg[^>]*data-provider="${provider}"`));
   assert.match(html, /aria-label="Sağlayıcıya göre filtrele"/);
   // A list of Claude accounts only has nothing to filter by provider.
   const claudeOnly = render(relayFor({}, [claude]), createElement(Accounts));
@@ -213,13 +222,14 @@ test("the Accounts page offers a provider filter with counts once more than one 
   // Every account shows with its provider while All is chosen.
   for (const name of ["Kişisel · Max", "Eski hesap", "OpenAI · Codex", "Google · Antigravity"]) assert.match(html, new RegExp(name));
   const english = render(relayFor(), createElement(Accounts), en);
-  assert.match(english, /All<span[^>]*>\(4\)/);
+  assert.match(english, />All<span[^>]*>4<\/span>/);
 });
 
 test("a Codex account's page shows its provider, its sign-in and the gateway, not the Claude app", () => {
   const html = render(relayFor(), createElement(AccountDetailBody, { account: codex, now: NOW }));
   assert.match(html, /Sağlayıcı<\/dt><dd[^>]*>OpenAI \/ Codex</);
-  assert.match(html, /Ağ geçidi girişi[\s\S]*Ağ geçidi bu girişle istek gönderir/);
+  // What each connection is for is its name's title, so the row stays one line.
+  assert.match(html, /title="Ağ geçidi bu girişle istek gönderir\.">Ağ geçidi girişi</);
   assert.doesNotMatch(html, /Girişi doğrula/, "the Claude CLI cannot check a Codex sign-in");
   assert.match(html, />Ağ geçidi</);
   assert.match(html, /Proxy kapalı/);

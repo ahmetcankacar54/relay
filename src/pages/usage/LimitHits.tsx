@@ -2,12 +2,13 @@ import { useState } from "react";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageSection } from "@/components/PageSection";
 import { useI18n } from "@/data/i18n";
 import { formatClock } from "@/lib/time";
 import { formatDuration, locale, rowName } from "./format";
 
 /** Hits shown before "Show all". */
-const VISIBLE = 8;
+const VISIBLE = 5;
 
 export function LimitHits({
   view,
@@ -28,12 +29,8 @@ export function LimitHits({
     timeZone: zone,
   });
   return (
+    <PageSection title={t("Limite takılmalar", "Limit hits")} slot="limit-hits">
     <Card className="gap-0 px-4 py-3.5">
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h3 className="font-display text-sm font-semibold">
-          {t("Limite takılmalar", "Limit hits")}
-        </h3>
-      </div>
       {hits.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           {t("Bu aralıkta limite takılma yok.", "No limit hits in this range.")}
@@ -84,5 +81,6 @@ export function LimitHits({
         </Button>
       )}
     </Card>
+    </PageSection>
   );
 }

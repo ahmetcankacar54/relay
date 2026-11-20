@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { act, createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Usage } from "../src/pages/Usage";
-import { DayTable, TokenUsage, TokenUsageCard, tokenColumns } from "../src/pages/usage/TokenUsage";
+import { DayDetail, DayTable, TokenUsage, TokenUsageCard, chartDays, todaySeries, tokenColumns, tokenNotes } from "../src/pages/usage/TokenUsage";
 import { CostBreakdown } from "../src/pages/usage/CostBreakdown";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import { TOKEN_SCAN_POLL_MS } from "../src/pages/usage/useTokenUsage";
 import { formatTokens } from "../src/pages/usage/format";
 import { RelayContext, type Relay } from "../src/data/relay-context";
@@ -93,9 +94,13 @@ const i18n = (language: Language) => ({
 });
 const tree = (child: ReactElement, language: Language = "tr", relay: Relay = relayFor()) =>
   createElement(
-    I18nContext.Provider,
-    { value: i18n(language) },
-    createElement(RelayContext.Provider, { value: relay }, child),
+    TooltipProvider,
+    null,
+    createElement(
+      I18nContext.Provider,
+      { value: i18n(language) },
+      createElement(RelayContext.Provider, { value: relay }, child),
+    ),
   );
 // Compact units come with a no-break space ("1,2 Mn"); the assertions below read it as a plain one.
 const plainSpaces = (html: string) => html.replace(/\u00a0/g, " ");
@@ -123,27 +128,27 @@ test("formatTokens is compact, with the language's own units", () => {
   assert.equal(formatTokens(0, "en"), "0");
 });
 
-test("the card names itself, totals the range and splits it into four tiles", () => {
+test("the summary is three tiles: today, the range's total split by kind, and its API value", () => {
   const html = shown();
-  const plain = text(html);
-  assert.match(plain, /Token kullanımı/);
-  assert.match(plain, /Toplam 3,2 Mn/);
+  assert.match(html, /aria-label="Token kullanımı"/);
   const tiles = [...html.matchAll(/data-slot="token-tile"[^>]*><div[^>]*>([^<]+)<\/div><div[^>]*>([^<]+)<\/div>/g)].map((m) => [m[1], m[2]]);
   assert.deepEqual(tiles, [
-    ["Girdi", "2 Mn"],
-    ["Çıktı", "326 B"],
-    ["Önbellek yazma", "50 B"],
-    ["Önbellek okuma", "808 B"],
+    ["Bugün", "2,2 Mn"],
+    ["Toplam · 7 gün", "3,2 Mn"],
     ["API karşılığı", "$1.234,50"],
   ]);
+  const plain = text(html);
+  // The range's split by kind is one quiet line under its total, and the API value says it per day.
+  assert.match(plain, /3,2 MnGirdi 2 Mn · Çıktı 326 B · Önbellek 858 B/);
+  assert.match(plain, /günde \$176,36/);
   // The exact count stays one hover away.
-  assert.match(html, /title="2\.047\.000"/);
+  assert.match(html, /title="3\.231\.000"/);
 
-  const en = text(shown("en"));
-  assert.match(en, /Token usage/);
-  assert.match(en, /Total 3\.2m/);
-  for (const label of ["Input", "Output", "Cache write", "Cache read", "API value"]) assert.match(en, new RegExp(label));
-  assert.doesNotMatch(en, /Girdi|Çıktı|Önbellek/);
+  const en = shown("en");
+  assert.match(en, /aria-label="Token usage"/);
+  assert.match(text(en), /Total · 7 days/);
+  for (const label of ["Input", "Output", "Cache", "API value"]) assert.match(text(en), new RegExp(label));
+  assert.doesNotMatch(text(en), /Girdi|Çıktı|Önbellek/);
 });
 
 test("the metric toggle offers total, input, output, cache and the API value, total first", () => {
@@ -158,52 +163,63 @@ test("the metric toggle offers total, input, output, cache and the API value, to
   );
 });
 
-test("the chart stacks one coloured segment per account and day with tokens", () => {
-  const html = shown();
-  const segments = html.match(/<rect[^>]*data-slot="token-segment"[^>]*>/g) ?? [];
+test("the chart stacks one part per row and day with tokens, each in its account's own colour", () => {
+  const columns = tokenColumns(view, accounts, (tr) => tr);
+  const days = chartDays(view, columns, "total" as never);
   // 14th: a and b; 13th: a; 12th: unknown and terminal; 11th: former.
-  assert.equal(segments.length, 6);
-  assert.equal((html.match(/<g[^>]*role="img"[^>]*aria-label="[^"]+: [^"]+"/g) ?? []).length, 7);
-  // Accounts take their position's tone; the former row comes after every account.
-  assert.match(html, /fill="var\(--tone-1\)"/);
-  assert.match(html, /fill="var\(--tone-2\)"/);
-  assert.match(html, /fill="var\(--tone-3\)"/);
-  assert.doesNotMatch(html, /fill="var\(--tone-4\)"/);
-  // Terminal and unknown are muted.
-  assert.equal((html.match(/<rect[^>]*data-slot="token-segment"[^>]*class="[^"]*fill-muted-foreground[^"]*"/g) ?? []).length, 2);
+  assert.equal(days.reduce((sum, day) => sum + day.parts.length, 0), 6);
+  assert.deepEqual(days.at(-1)!.parts.map((p) => p.column.key), ["a", "b"]);
+  // Colour follows the account (both fixture accounts are olive), never its place in the list.
+  assert.deepEqual(
+    columns.map((c) => [c.key, c.color]),
+    [
+      ["a", "var(--account-olive)"],
+      ["b", "var(--account-olive)"],
+      ["former", "var(--account-none)"],
+      ["unknown", "var(--muted-foreground)"],
+      ["terminal", "var(--account-none)"],
+    ],
+  );
+  // The days are also a list for screen readers, one item each.
+  const html = shown();
+  const list = html.slice(html.indexOf('data-slot="token-days"'));
+  assert.equal((list.slice(0, list.indexOf("</ul>")).match(/<li>/g) ?? []).length, 7);
   // The legend names every row.
-  const legend = text(html.slice(html.indexOf("<ul"), html.indexOf("</ul>")));
+  const legend = text(html.slice(html.indexOf('data-slot="token-legend"'), html.indexOf("</ul>", html.indexOf('data-slot="token-legend"'))));
   for (const name of ["Kişisel · Max", "Vertex", "Eski hesap", "Hesabı bilinmeyen", "Relay dışı terminal"])
     assert.match(legend, new RegExp(name));
 });
 
-test("a segment's height follows the day's share of the busiest day", () => {
-  const heights = (html: string) =>
-    [...html.matchAll(/<rect[^>]*data-slot="token-segment"[^>]*height="([\d.]+)"/g)].map((m) => Number(m[1]));
-  const all = heights(shown());
-  assert.equal(all.length, 6);
-  const plot = 114;
-  const near = (expected: number) => all.some((h) => Math.abs(h - expected) < 0.01);
-  // The 14th is the busiest day (2.175 million) and fills the whole plot: a holds 2.05, b 0.125 of it.
-  assert.ok(near((2_050_000 / 2_175_000) * plot));
-  assert.ok(near((125_000 / 2_175_000) * plot));
-  // The 13th's 1 million is a bit under half of it.
-  assert.ok(near((1_000_000 / 2_175_000) * plot));
+test("each day adds up its rows; the busiest day sets the chart's top", () => {
+  const days = chartDays(view, tokenColumns(view, accounts, (tr) => tr), "total" as never);
+  const total = (date: string) => days.find((d) => d.date === date)!.total;
+  // The 14th is the busiest day (2.175 million): a holds 2.05 of it, b 0.125.
+  assert.equal(total("2026-10-14"), 2_175_000);
+  assert.deepEqual(days.at(-1)!.parts.map((p) => p.value), [2_050_000, 125_000]);
+  // The 13th's 1 million is a bit under half of it, and estimated.
+  assert.equal(total("2026-10-13"), 1_000_000);
+  assert.equal(days.find((d) => d.date === "2026-10-13")!.parts[0].estimated, true);
+  assert.equal(total("2026-10-08"), 0);
 });
 
 test("the legend sums each row over the range, ≈ when any of its days was estimated", () => {
   const html = shown();
-  const legend = text(html.slice(html.indexOf("<ul"), html.indexOf("</ul>")));
+  const at = html.indexOf('data-slot="token-legend"');
+  const legend = text(html.slice(at, html.indexOf("</ul>", at)));
   assert.match(legend, /Kişisel · Max≈3,1 Mn/);
   assert.match(legend, /Vertex125 B/);
   assert.match(legend, /Hesabı bilinmeyen45 B/);
   assert.match(legend, /Relay dışı terminal3 B/);
 });
 
-test("the range's model mix sits under the chart, and the day table is folded", () => {
+test("the range's model mix and the price list are behind the chart's ⓘ, and the day table is folded", () => {
+  const tr = (a: string) => a;
+  const en = (_: string, e: string) => e;
+  assert.match(tokenNotes(view, "total" as never, tr, "tr").join(" "), /Aralıktaki modeller: claude-opus-4 %80 · claude-sonnet-4 %20/);
+  assert.match(tokenNotes(view, "total" as never, en, "en").join(" "), /Models in this range: claude-opus-4 80% · claude-sonnet-4 20%/);
   const plain = text(shown());
-  assert.match(plain, /Aralıktaki modeller: claude-opus-4 %80 · claude-sonnet-4 %20/);
-  assert.match(text(shown("en")), /Models in this range: claude-opus-4 80% · claude-sonnet-4 20%/);
+  assert.doesNotMatch(plain, /Aralıktaki modeller/);
+  assert.match(shown(), /data-slot="token-chart"[\s\S]*?aria-label="Nasıl çalışır"/);
   // The table is one click away, under its own heading.
   assert.match(plain, /Gün gün tablo/);
   assert.match(shown(), /aria-expanded="false"/);
@@ -250,23 +266,25 @@ test("estimated cells and chart days tell screen readers they are estimated, not
   assert.match(dayTable("en"), /<span aria-hidden="true">≈<\/span><span class="sr-only">estimated <\/span>1m<\/td>/);
   // Exact cells say nothing of the kind.
   assert.equal(html.split('class="sr-only"').length - 1, 2);
-  // Each chart day names its rows, the estimated ones as such.
+  // Each chart day names its rows in the spoken list, the estimated ones as such.
   const chart = shown();
-  assert.match(chart, /<g[^>]*role="img"[^>]*aria-label="13 Eki: 1 Mn; Kişisel · Max tahmini 1 Mn"/);
-  assert.match(chart, /<g[^>]*role="img"[^>]*aria-label="14 Eki: 2,2 Mn; Kişisel · Max 2,1 Mn; Vertex 125 B"/);
-  assert.match(chart, /<g[^>]*role="img"[^>]*aria-label="8 Eki: 0"/);
-  assert.match(shown("en"), /aria-label="13 Oct: 1m; Kişisel · Max estimated 1m"/);
+  assert.match(chart, /<li>13 Eki: 1 Mn; Kişisel · Max tahmini 1 Mn<\/li>/);
+  assert.match(chart, /<li>14 Eki: 2,2 Mn; Kişisel · Max 2,1 Mn; Vertex 125 B<\/li>/);
+  assert.match(chart, /<li>8 Eki: 0<\/li>/);
+  assert.match(shown("en"), /<li>13 Oct: 1m; Kişisel · Max estimated 1m<\/li>/);
 });
 
 test("the coverage note says since when accounts match exactly, in both languages", () => {
+  const tr = (a: string) => a;
+  const en = (_: string, e: string) => e;
   assert.match(
-    text(shown()),
+    tokenNotes(view, "total" as never, tr, "tr").join(" "),
     /Hesap eşleşmesi 12 Eki tarihinden beri kesin\. Önceki günler limit ölçümlerinden tahmin edildi\./,
   );
-  const en = shown("en");
-  assert.doesNotMatch(en, /Relay's/);
-  assert.match(text(en), /Account matches are exact from 12 Oct\. Earlier days are estimated from limit samples\./);
-  assert.doesNotMatch(text(card({ view: { ...view, exactSince: undefined }, loading: false })), /Hesap eşleşmesi/);
+  const english = tokenNotes(view, "total" as never, en, "en").join(" ");
+  assert.doesNotMatch(english, /Relay's/);
+  assert.match(english, /Account matches are exact from 12 Oct\. Earlier days are estimated from limit samples\./);
+  assert.doesNotMatch(tokenNotes({ ...view, exactSince: undefined }, "total" as never, tr, "tr").join(" "), /Hesap eşleşmesi/);
 });
 
 test("the progress note shows while the scan is incomplete, and only then", () => {
@@ -282,7 +300,7 @@ test("a range without tokens shows the empty state instead of the chart and tabl
     exactSince: undefined,
   };
   const html = card({ view: empty, loading: false });
-  assert.match(text(html), /Token kullanımı/);
+  assert.match(html, /aria-label="Token kullanımı"/);
   assert.match(text(html), /Bu aralıkta token kaydı yok\./);
   assert.doesNotMatch(html, /<svg|<table/);
   assert.match(text(card({ view: empty, loading: false }, "en")), /No token records in this range\./);
@@ -316,7 +334,7 @@ test("a ledger that cannot be saved says so, in both languages", () => {
 });
 
 test("the card shows loading and failure states, and keeps the last view under a failed refresh", () => {
-  assert.match(text(card({ loading: true })), /Token kullanımı[\s\S]*Token kaydı yükleniyor/);
+  assert.match(card({ loading: true }), /aria-label="Token kullanımı"[\s\S]*Token kaydı yükleniyor/);
   assert.match(text(card({ loading: true }, "en")), /Relay loads the token usage…/);
   const failed = card({ loading: false, error: "boom" });
   assert.match(failed, /role="alert"/);
@@ -336,10 +354,10 @@ test("rows that are not accounts take their labels from the shared label table",
 });
 
 test("Usage keeps the token card on its own page, not on the limits page", () => {
-  assert.doesNotMatch(text(render(createElement(Usage))), /Token kullanımı/);
-  const tokens = text(render(createElement(Usage, { section: "tokens" })));
-  assert.match(tokens, /Token ve ücret/);
-  assert.match(tokens, /Token kullanımı/);
+  assert.doesNotMatch(render(createElement(Usage)), /Token kullanımı/);
+  const tokens = render(createElement(Usage, { section: "tokens" }));
+  assert.match(text(tokens), /Token ve ücret/);
+  assert.match(tokens, /aria-label="Token kullanımı"/);
 });
 
 // The hook, mounted in a fake browser.
@@ -379,7 +397,7 @@ test("TokenUsage loads on mount, on a new range or account, and follows its Rela
     assert.match(textOf(dom.container), /Token kaydı yükleniyor/);
     assert.ok(stub.listening());
     await act(async () => stub.calls[0].resolve(view));
-    assert.match(textOf(dom.container), /Toplam 3,2 Mn/);
+    assert.match(textOf(dom.container), /Toplam · \d+ gün3,2 Mn/);
     await mount(7, "b");
     assert.deepEqual(stub.calls.map((c) => c.input), [{ range: 30 }, { range: 7, accountId: "b" }]);
     // The stale answer of the earlier request is dropped; the view stays.
@@ -452,41 +470,19 @@ test("choosing a metric redraws the chart and the table for it; cache is write p
   }
 });
 
-test("pointing at a day details it beside the bar: each row's value and share, and only that day stays lit", async () => {
-  const dom = fakeDom();
-  dom.install();
-  readableText();
-  try {
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
-    const container = dom.container as unknown as Fake;
-    const svg = chartOf(container) as Fake & { box: { left: number; top: number; width: number; height: number } };
-    // The chart is drawn 1:1 with its 640-unit viewBox.
-    svg.box = { left: 0, top: 0, width: 640, height: 146 };
-    // Days drawn faint while another one is detailed.
-    const dimmed = (node: Fake = container): number =>
-      ((node as { attributes?: Map<string, string> }).attributes?.get?.("class")?.includes("opacity-40") ? 1 : 0) +
-      (node.childNodes ?? []).reduce((sum, child) => sum + dimmed(child), 0);
-    assert.equal(dayTip(container), undefined);
-    // The right edge is the last day, the 14th (a Wednesday).
-    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 639, clientY: 60 }));
-    assert.equal(dayTip(container), "14 Ekim ÇarşambaToplam2,2 MnKişisel · Max2,1 Mn%94Vertex125 B%6");
-    assert.equal(dimmed(), 6);
-    // Left of the first bar is no day.
-    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 2, clientY: 60 }));
-    assert.equal(dayTip(container), undefined);
-    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 639, clientY: 60 }));
-    await act(async () => dom.dispatch(svg, "pointerout", { relatedTarget: null }));
-    assert.equal(dayTip(container), undefined);
-    assert.equal(dimmed(), 0);
-    await act(async () => root.unmount());
-  } finally {
-    dom.uninstall();
-  }
+test("a day's detail names each row with its value and share; an estimated day and an empty day say so", () => {
+  const columns = tokenColumns(view, accounts, (tr) => tr);
+  const days = chartDays(view, columns, "total" as never);
+  const detail = (date: string, language: Language = "tr") =>
+    text(render(createElement(DayDetail, { day: days.find((d) => d.date === date)!, metric: "total" as never, metricLabel: language === "tr" ? "Toplam" : "Total" }), language));
+  // The 14th (a Wednesday): the total, then each row with its share of the day.
+  assert.equal(detail("2026-10-14"), "14 Ekim ÇarşambaToplam2,2 MnKişisel · Max2,1 Mn%94Vertex125 B%6");
+  assert.equal(detail("2026-10-13"), "13 Ekim SalıToplam≈1 MnKişisel · Max≈1 Mn%100≈ Limit ölçümlerinden tahmin edildi");
+  assert.equal(detail("2026-10-08"), "8 Ekim PerşembeToplam0Bu gün token yok.");
+  assert.match(detail("2026-10-14", "en"), /^Wednesday 14 OctoberTotal2\.2m/);
 });
 
-test("the arrow keys walk the days, the detail marks estimates and empty days, and Escape lets go", async () => {
+test("Escape on the chart only puts the panda's day back; one a menu already handled leaves it", async () => {
   const dom = fakeDom();
   dom.install();
   readableText();
@@ -495,25 +491,29 @@ test("the arrow keys walk the days, the detail marks estimates and empty days, a
     const root = createRoot(dom.container as unknown as Element);
     await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
     const container = dom.container as unknown as Fake;
-    const svg = chartOf(container);
-    assert.equal((svg as unknown as { attributes: Map<string, string> }).attributes.get("tabindex"), "0");
-    const tip = () => dayTip(container);
-    const key = (k: string) => act(async () => dom.dispatch(svg, "keydown", { key: k }));
-    // From nothing, ← starts at the newest day.
-    await key("ArrowLeft");
-    assert.match(tip() ?? "", /^14 Ekim Çarşamba/);
-    await key("ArrowLeft");
-    assert.equal(tip(), "13 Ekim SalıToplam≈1 MnKişisel · Max≈1 Mn%100≈ Limit ölçümlerinden tahmin edildi");
-    await key("Home");
-    assert.equal(tip(), "8 Ekim PerşembeToplam0Bu gün token yok.");
-    await key("ArrowLeft");
-    assert.match(tip() ?? "", /^8 Ekim/);
-    await key("End");
-    assert.match(tip() ?? "", /^14 Ekim/);
-    await key("ArrowRight");
-    assert.match(tip() ?? "", /^14 Ekim/);
-    await key("Escape");
-    assert.equal(tip(), undefined);
+    const attr = (n: Fake, name: string) => (n as { attributes?: Map<string, string> }).attributes?.get?.(name);
+    const slot = (name: string) => find(container, (n) => attr(n, "data-slot") === name);
+    const panda = () => {
+      const button = find(container, (n) => n.tagName === "button" && textOf(n) === "Panda anlatsın");
+      assert.ok(button);
+      return act(async () => dom.dispatch(button, "click", { detail: 1 }));
+    };
+    await panda();
+    assert.ok(slot("panda-bench"));
+    await act(async () => dom.dispatch(slot("token-chart-box")!, "keydown", { key: "Escape" }));
+    assert.equal(slot("panda-bench"), undefined);
+    assert.equal(attr(slot("token-chart-box")!, "data-taken"), undefined);
+    // An Escape a menu already handled leaves the bench open; a plain one closes it.
+    await panda();
+    const escape = (handled: boolean) => {
+      const event = Object.assign(new Event("keydown", { cancelable: true }), { key: "Escape" });
+      if (handled) event.preventDefault();
+      return act(async () => void (globalThis.document as unknown as EventTarget).dispatchEvent(event));
+    };
+    await escape(true);
+    assert.ok(slot("panda-bench"));
+    await escape(false);
+    assert.equal(slot("panda-bench"), undefined);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
@@ -553,8 +553,8 @@ test("the panda takes the busiest day apart: its parts and its lines one by one,
     assert.match(line(), /^Claude bugün ≈ 340 sayfa yazdı; .+ kadar\.$/);
     // Screen readers hear the day and the line once, when asked.
     assert.equal(textOf(slot("panda-say")), `14 Ekim Çarşamba: ${line()}`);
-    // The day stays lit and the other six fade, as on hover; the bar itself does not move.
-    assert.equal(classed("opacity-40"), 6);
+    // That day stays lit on the chart and the others fade; the bar itself does not move.
+    assert.equal(attr(slot("token-chart-box")!, "data-taken"), "2026-10-14");
     assert.equal(classed("token-taken"), 0);
     await click("Bir daha");
     assert.equal(line(), "Claude bugün 2 milyon token okudu; bir insan durmadan okusa 4 gün sürerdi.");
@@ -567,73 +567,34 @@ test("the panda takes the busiest day apart: its parts and its lines one by one,
     await click("Kapat");
     assert.equal(slot("panda-bench"), undefined);
     assert.equal(textOf(slot("panda-say")), "");
-    assert.equal(classed("opacity-40"), 0);
+    assert.equal(attr(slot("token-chart-box")!, "data-taken"), undefined);
     await act(async () => root.unmount());
   } finally {
     dom.uninstall();
   }
 });
 
-test("clicking a bar or pressing Enter on it explains that day, and Escape puts it back", async () => {
-  const dom = fakeDom();
-  dom.install();
-  readableText();
-  try {
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(tree(createElement(TokenUsageCard, { state: { view, loading: false }, accounts }))));
-    const container = dom.container as unknown as Fake;
-    const attr = (n: Fake, name: string) => (n as { attributes?: Map<string, string> }).attributes?.get?.(name);
-    const slot = (name: string) => find(container, (n) => attr(n, "data-slot") === name);
-    const svg = chartOf(container) as Fake & { box: { left: number; top: number; width: number; height: number } };
-    svg.box = { left: 0, top: 0, width: 640, height: 146 };
-    // The 13th, estimated, is the second bar from the right.
-    await act(async () => dom.dispatch(svg, "keydown", { key: "End" }));
-    await act(async () => dom.dispatch(svg, "keydown", { key: "ArrowLeft" }));
-    await act(async () => dom.dispatch(svg, "keydown", { key: "Enter" }));
-    assert.match(textOf(slot("panda-bench")), /^13 Ekim SalıToplam ≈tahmini 1 Mn/);
-    assert.match(textOf(slot("panda-line")), /^Claude bu gün ≈ 150 sayfa yazdı/);
-    // The hover box waits while the workbench is open.
-    assert.equal(dayTip(container), undefined);
-    // Escape on the chart only closes the bench: the 13th stays the active day, and its hover box comes back.
-    await act(async () => dom.dispatch(svg, "keydown", { key: "Escape" }));
-    assert.equal(slot("panda-bench"), undefined);
-    assert.match(dayTip(container) ?? "", /^13 Ekim Salı/);
-    // An Escape a menu already handled leaves the bench open; a plain one closes it.
-    await act(async () => dom.dispatch(svg, "keydown", { key: "Enter" }));
-    const escape = (handled: boolean) => {
-      const event = Object.assign(new Event("keydown", { cancelable: true }), { key: "Escape" });
-      if (handled) event.preventDefault();
-      return act(async () => void (globalThis.document as unknown as EventTarget).dispatchEvent(event));
-    };
-    await escape(true);
-    assert.ok(slot("panda-bench"));
-    await escape(false);
-    assert.equal(slot("panda-bench"), undefined);
-    // A click on the empty 8th: the panda only dozes, with nothing more to say.
-    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 60, clientY: 60 }));
-    await act(async () => dom.dispatch(svg, "click", { clientX: 60, clientY: 60, detail: 1 }));
-    assert.equal(textOf(slot("panda-line")), "Bu gün boş. Ben de biraz kestirdim.");
-    assert.equal(find(container, (n) => n.tagName === "button" && textOf(n) === "Bir daha"), undefined);
-    await act(async () => root.unmount());
-  } finally {
-    dom.uninstall();
-  }
+test("asked about an empty day, the panda only dozes, with nothing more to say", () => {
+  const columns = tokenColumns(view, accounts, (tr) => tr);
+  // The 8th has no tokens: its detail says so, and the panda's lines for it are the one doze.
+  const empty = chartDays(view, columns, "total" as never).find((d) => d.date === "2026-10-08")!;
+  assert.equal(empty.total, 0);
+  assert.equal(text(render(createElement(DayDetail, { day: empty, metric: "total" as never, metricLabel: "Toplam" }))), "8 Ekim PerşembeToplam0Bu gün token yok.");
 });
 
-test("the Bugün card shows today's tokens, their API value, the change and the line up to now", () => {
+test("the Bugün tile shows today's tokens, their API value, the change and the line up to now", () => {
   const html = shown();
   const today = html.slice(html.indexOf('data-slot="token-today"'));
   const plain = text(today);
   assert.match(plain, /Bugün/);
   assert.match(plain, /Girdi\s*1,1 Mn/);
   assert.match(plain, /Önbellek\s*855 B/);
-  assert.match(html, /data-slot="token-today-cost"[^>]*>\$444,56</);
-  assert.match(html, /data-slot="token-today-change"[^>]*>\+%57,2</);
+  assert.match(html, /data-slot="token-today-cost"[^>]*>(<!-- -->)?\$444,56</);
+  assert.match(html, /data-slot="token-today-change"[^>]*>▲ (<!-- -->)?\+%57,2</);
   assert.match(html, /data-slot="token-today-yesterday"/);
-  // The line stops at the current quarter hour: 53 points, the first a move.
-  const d = /data-slot="token-today-line"[^>]*d="([^"]+)"/.exec(html)?.[1] ?? "";
-  assert.equal(d.match(/[ML]/g)?.length, 53);
+  // The line stops at the current quarter hour: 53 points.
+  assert.equal(todaySeries(view.today).length, 53);
+  assert.match(plain, /53 çeyrek; en yüksek \$3,00; dünkü ortalama \$1,50/);
   const en = text(shown("en"));
   assert.match(en, /Today/);
   assert.match(en, /\$444\.56/);
@@ -660,7 +621,7 @@ test("the API value metric shows dollars in the legend and table, and the price 
     loading: false,
   });
   const plain = text(html);
-  assert.match(plain, /Fiyatlar: Anthropic API liste fiyatları, 22 Eki 2026\./);
+  assert.match(tokenNotes(view, "cost" as never, (tr) => tr, "tr").join(" "), /Fiyatlar: Anthropic API liste fiyatları, 22 Eki 2026\./);
   assert.match(plain, /1,5 B token, fiyatı bilinmeyen modellerden geldi; tutara katılmadı \(mystery\)\./);
   assert.match(
     text(card({ view: { ...view, unpricedModels: ["mystery"], totals: { ...view.totals, unpriced: 1500 } }, loading: false }, "en")),
@@ -697,11 +658,12 @@ test("the cost card splits the API value by account and by model, largest first,
   assert.match(plain, /Aboneliğinin ücreti değildir/);
   assert.match(plain, /Hesaba göre.*Kişisel · Max%90≈\$90,00.*Vertex%10\$10,00/);
   assert.match(plain, /Modele göre.*claude-opus-4%75\$75,00.*claude-sonnet-4%25\$25,00/);
-  assert.match(plain, /günde \$14,29/);
+  // The total and its daily average are the summary's tile, not repeated here.
+  assert.doesNotMatch(plain, /günde \$/);
   assert.doesNotMatch(plain, /son 7 gün/);
   const english = text(render(createElement(CostBreakdown, { view: priced, accounts }), "en"));
   assert.match(english, /API value.*By account.*By model/);
-  assert.match(english, /It is not your subscription price\..*\$14\.29 per day/);
+  assert.match(english, /It is not your subscription price\./);
 });
 
 test("the cost card stays out when nothing in the range was priced", () => {

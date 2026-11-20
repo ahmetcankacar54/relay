@@ -1,6 +1,7 @@
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
 import type { PlanningHours } from "../../../shared/types";
 import { Card } from "@/components/ui/card";
+import { PageSection } from "@/components/PageSection";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatPercent } from "@/lib/meter";
@@ -55,11 +56,18 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
   const relative = (value: number) =>
     max > 0 ? formatPercent(Math.round((value / max) * 100), language) : formatPercent(0, language);
   return (
-    <Card className="gap-3 px-4 py-3.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 className="font-display text-sm font-semibold">
-          {t("Ne zaman çalışıyorum?", "When do I work?")}
-        </h3>
+    <PageSection
+      title={t("Çalışma saatleri", "Working hours")}
+      slot="usage-heatmap"
+      info={
+        window && share !== undefined && hours
+          ? t(
+              `En yoğun saatler ${hourRange(window.start, window.end)}; kullanımın ${formatPercent(share, "tr")} kadarı çalışma saatlerinde (${hours}).`,
+              `Busiest hours ${hourRange(window.start, window.end)}; ${formatPercent(share, "en")} of use falls in work hours (${hours}).`,
+            )
+          : undefined
+      }
+      aside={
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground" aria-hidden="true">
           {t("az", "less")}
           {STEP_OPACITY.slice(1).map((opacity) => (
@@ -67,7 +75,8 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
           ))}
           {t("çok", "more")}
         </span>
-      </div>
+      }>
+    <Card className="gap-3 px-4 py-3.5">
       <div
         role="img"
         aria-label={
@@ -130,25 +139,8 @@ export function UsageHeatmap({ view }: { view: UsageStatisticsView }) {
         ))}
         <span />
       </div>
-      {window ? (
-        <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <dt className="whitespace-nowrap text-muted-foreground">{t("En yoğun saatler", "Busiest hours")}</dt>
-            <dd className="font-semibold tabular-nums">{hourRange(window.start, window.end)}</dd>
-          </div>
-          {share !== undefined && hours && (
-            <div className="flex flex-wrap items-baseline gap-x-2">
-              <dt className="whitespace-nowrap text-muted-foreground">{t("Çalışma saatlerinde", "In work hours")}</dt>
-              <dd className="font-semibold tabular-nums">
-                {formatPercent(share, language)}{" "}
-                <span className="font-normal text-muted-foreground">{hours}</span>
-              </dd>
-            </div>
-          )}
-        </dl>
-      ) : (
-        <p className="text-sm text-muted-foreground">{t("Bu aralıkta kullanım yok.", "No usage in this range.")}</p>
-      )}
+      {!window && <p className="text-sm text-muted-foreground">{t("Bu aralıkta kullanım yok.", "No usage in this range.")}</p>}
     </Card>
+    </PageSection>
   );
 }

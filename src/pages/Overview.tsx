@@ -1,5 +1,4 @@
 import { LoaderCircle } from "lucide-react";
-import { ProviderCards } from "../features/Providers";
 import { RefreshIcon } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/data/i18n";
@@ -10,9 +9,8 @@ import { PageFrame } from "@/app/PageFrame";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import type { Destination } from "@/app/routes";
 import { ActiveAccountCard } from "./overview/ActiveAccountCard";
-import { AccountsCard } from "./overview/AccountsCard";
+import { AccountsBoard } from "./overview/AccountsBoard";
 import { TodayCard } from "./overview/TodayCard";
-import { AutomationCard } from "./overview/AutomationCard";
 import { SetupChecklist } from "./overview/SetupChecklist";
 
 export function Overview({
@@ -50,7 +48,6 @@ export function Overview({
   const cards = overviewCards(accounts);
   return (
     <PageFrame
-      automationInline
       title={t("Genel bakış", "Overview")}
       description={description}
       actions={
@@ -81,24 +78,13 @@ export function Overview({
         </>
       }
     >
-      <div className="grid gap-4 px-5 pb-5">
+      <div className="grid gap-5 px-5 pb-5">
+        {/* Now: the account in the Claude app, then every other account in one board, then today. */}
         <ActiveAccountCard go={go} now={now} />
-        {/* Codex and Antigravity: the account each uses, its limits, and the move to another. */}
-        <ProviderCards now={now} />
         {/* Before the first account the checklist is the next step; after, the accounts come first. */}
         {accounts.length === 0 && <SetupChecklist go={go} />}
-        {cards.today ? (
-          <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-            <AccountsCard go={go} now={now} />
-            <div className="grid content-start gap-4">
-              <TodayCard go={go} now={now} />
-              {cards.automation && <AutomationCard go={go} now={now} />}
-            </div>
-          </div>
-        ) : (
-          // With no account yet, the card above already offers the first one.
-          accounts.length > 0 && <AccountsCard go={go} now={now} />
-        )}
+        <AccountsBoard now={now} />
+        {cards.today && <TodayCard go={go} now={now} />}
         {accounts.length > 0 && <SetupChecklist go={go} />}
       </div>
     </PageFrame>

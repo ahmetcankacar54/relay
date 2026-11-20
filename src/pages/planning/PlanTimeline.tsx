@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type {
   Account,
@@ -8,9 +8,9 @@ import type {
 import type { Forecast } from "../../../shared/capacity-plan";
 import type { Tempo } from "../../../shared/tempo";
 import {
+  accountTone,
   dayTimeline,
   switchTimes,
-  windowTone,
   type TimelineAdaptation,
 } from "@/lib/day-timeline";
 import { forecastSummary } from "@/lib/forecast-text";
@@ -18,6 +18,7 @@ import { formatClock } from "@/lib/time";
 import { parseLanguage } from "@/data/language";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AccountDot } from "@/components/AccountDot";
 import { cn } from "@/lib/utils";
 
 type T = (tr: string, en: string) => string;
@@ -32,6 +33,51 @@ const NAMED_WIDTH = 8;
 const hasGap = (forecast: Forecast) =>
   forecast.segments.some((s) => !s.accountId);
 
+
+/** What comes next today, beside the plan's summary: the page's own words. */
+export interface NextStat {
+  value: string;
+  /** One quiet line under it (today's live forecast). */
+  note?: ReactNode;
+  /** Chips that only show while the day is adapted. */
+  chips?: ReactNode;
+}
+
+/** One figure under the timeline: a small label, the value, a quiet line. */
+function Stat({
+  label,
+  value,
+  valueTitle,
+  note,
+  noteTitle,
+  crit,
+  chips,
+  slot,
+}: {
+  label: string;
+  value: string;
+  valueTitle?: string;
+  note?: ReactNode;
+  noteTitle?: string;
+  crit?: boolean;
+  chips?: ReactNode;
+  slot: string;
+}) {
+  return (
+    <div data-slot={slot} className="grid min-w-0 content-start gap-0.5">
+      <span className={noteClass}>{label}</span>
+      <strong className={cn("text-sm font-semibold", crit && "text-crit")} title={valueTitle}>
+        {value}
+      </strong>
+      {note && (
+        <span className={noteClass} title={noteTitle}>
+          {note}
+        </span>
+      )}
+      {chips}
+    </div>
+  );
+}
 /** The day's work, usage forecast and five-hour windows, one day at a time. */
 export function PlanTimeline({
   settings,
@@ -41,6 +87,7 @@ export function PlanTimeline({
   tempo,
   activeId,
   adaptation,
+  next,
   t,
 }: {
   settings: PlanningSettings;
@@ -53,6 +100,8 @@ export function PlanTimeline({
   activeId?: string;
   /** Today's pace and adopted starts from the keeper. */
   adaptation?: TimelineAdaptation;
+  /** Today's next start and live forecast, beside the plan's summary (today only). */
+  next?: NextStat;
   t: T;
 }) {
   const [offset, setOffset] = useState(0);
@@ -114,7 +163,7 @@ export function PlanTimeline({
     {
       label: t("Tahmin", "Forecast"),
       swatch: (
-        <i aria-hidden="true" className={cn("h-2.5 w-4 rounded-sm opacity-50 dark:opacity-65", windowTone(0))} />
+        <i aria-hidden="true" className="h-2.5 w-4 rounded-sm bg-meter opacity-50 dark:opacity-65" />
       ),
     },
     {
@@ -131,18 +180,19 @@ export function PlanTimeline({
       swatch: <i aria-hidden="true" className="h-3 w-0.5 rounded-[1px] bg-foreground/55" />,
     },
   ];
-  const comparison = compare && [
-    {
-      title: t("Bu plan", "This plan"),
-      forecast: compare.plan,
-      warmUps: warmUpLine(compare.warmUps.accountIds, compare.warmUps.plan),
-    },
-    {
-      title: t("Eşit aralıklı dağıtım", "Even spread"),
-      forecast: compare.even,
-      warmUps: warmUpLine(compare.warmUps.accountIds, compare.warmUps.even),
-    },
-  ];
+  // Under the lanes: this plan against an even spread (who warms up when is in the titles), and
+  // what comes next today.
+  const planStat = compare && {
+    value: forecastSummary(compare.plan, t, clock),
+    valueTitle: warmUpLine(compare.warmUps.accountIds, compare.warmUps.plan),
+    crit: hasGap(compare.plan),
+    note: t(
+      `Eşit dağıtımda: ${forecastSummary(compare.even, t, clock)}`,
+      `Spread evenly: ${forecastSummary(compare.even, t, clock)}`,
+    ),
+    noteTitle: warmUpLine(compare.warmUps.accountIds, compare.warmUps.even),
+  };
+  const nextStat = offset === 0 ? next : undefined;
   return (
     <Card className="@container gap-0 px-4 py-3.5">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -255,7 +305,7 @@ export function PlanTimeline({
                   <span
                     className={cn(
                       "absolute inset-0",
-                      index < 0 ? "bg-crit/25" : windowTone(index),
+                      index < 0 ? "bg-crit/25" : accountTone(rows[index].account),
                       !segment.live && "opacity-50 dark:opacity-65",
                     )}
                     aria-hidden="true"
@@ -283,16 +333,10 @@ export function PlanTimeline({
             {nowLine}
           </div>
         </div>
-        {rows.map(({ account, windows }, index) => (
+        {rows.map(({ account, windows }) => (
           <div className={rowClass} key={account.id}>
             <span className="flex min-w-0 items-center gap-1.5 pr-2.5">
-              <i
-                className={cn(
-                  "size-2 shrink-0 rounded-full",
-                  windowTone(index),
-                )}
-                aria-hidden="true"
-              />
+              <AccountDot color={account.color} />
               <span className="truncate">{account.name}</span>
             </span>
             <div className="relative h-[18px] rounded-md bg-track">
@@ -301,7 +345,7 @@ export function PlanTimeline({
                   key={w.start}
                   className={cn(
                     "absolute inset-y-0.5 rounded-[5px]",
-                    windowTone(index),
+                    accountTone(account),
                   )}
                   title={`${clock(w.start)}–${clock(w.end)}`}
                   style={position(w.start, w.end)}
@@ -328,30 +372,10 @@ export function PlanTimeline({
           </li>
         ))}
       </ul>
-      {comparison && (
-        <div className="mt-2.5 grid gap-2.5 @xl:grid-cols-2">
-          {comparison.map(({ title, forecast, warmUps }) => (
-            <div
-              key={title}
-              className="min-w-0 rounded-[10px] border px-2.5 py-2"
-            >
-              <span className={noteClass}>{title}</span>
-              <strong
-                className={cn(
-                  "block text-sm font-semibold",
-                  hasGap(forecast) && "text-crit",
-                )}
-              >
-                {forecastSummary(forecast, t, clock)}
-              </strong>
-              <small
-                className={cn(noteClass, "block truncate")}
-                title={warmUps}
-              >
-                {warmUps}
-              </small>
-            </div>
-          ))}
+      {(planStat || nextStat) && (
+        <div className="mt-3 grid gap-3 border-t pt-3 @xl:grid-cols-2">
+          {planStat && <Stat slot="plan-stat" label={t("Bu plan", "This plan")} {...planStat} />}
+          {nextStat && <Stat slot="next-stat" label={t("Sıradaki", "Next")} {...nextStat} />}
         </div>
       )}
     </Card>

@@ -1,4 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { PageSection } from "@/components/PageSection";
+import { AccountLimits } from "@/features/Providers";
+import { AccountDot } from "@/components/AccountDot";
+import { StatusLabel } from "@/components/StatusLabel";
+import { relayProviders } from "@/features/Providers";
+import { accountStatus } from "@/lib/account-status";
+import { inUseIds } from "@/lib/provider-view";
 import { AntigravityAction, AntigravityPrompt, antigravityAccountState, type AntigravityAsk } from "@/features/AntigravityAccount";
 import { Private } from "@/components/Private";
 import { AppWindow, Check, CircleAlert, Link2, Globe2, KeyRound, LoaderCircle, Monitor, MoreHorizontal, Network, SquareTerminal } from "lucide-react";
@@ -38,8 +45,6 @@ import { cn } from "@/lib/utils";
 import { localizeError } from "@/messages";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
 import { UsageCard } from "../../features/UsageCard";
-import { LimitBars } from "@/components/LimitBars";
-import { ringState } from "@/lib/account-row";
 import { freshUsage } from "../../../shared/usage";
 import { formatRelative } from "@/lib/time";
 import { HistorySummary } from "../../features/HistorySummary";
@@ -106,6 +111,8 @@ export function AccountDetail({
     t,
   );
   const inWindow = windowAccounts(relay.data).has(a.id);
+  const now = Date.now();
+  const status = accountStatus({ account: a, usage, health, inUse: inUseIds(relayProviders(relay, now)).has(a.id), now, t });
   // One primary action: the fix, else the switch (which the active account does not have), or
   // its window while it has one open.
   const primary = actions.find(
@@ -115,40 +122,14 @@ export function AccountDetail({
     <PageFrame
       title={a.name}
       account={a.id}
-      description={
-        email || a.auth?.orgName ? (
-          <Private>{[email, a.auth?.orgName].filter(Boolean).join(" · ")}</Private>
-        ) : undefined
-      }
+      description={<StatusLabel status={status.reason ? { ...status, text: status.reason } : status} />}
       cliFlowInline={relay.flow?.accountId === a.id}
-      leading={
-        <span
-          aria-hidden="true"
-          className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold",
-            avatarClass[a.color] ?? "bg-muted text-muted-foreground",
-          )}
-        >
-          {a.name.slice(0, 1).toLocaleUpperCase(language)}
-        </span>
-      }
+      leading={<AccountDot color={a.color} size="md" />}
       badge={
         <>
-          <ProviderBadge provider={a.provider} full />
-          {plan && (
-            <Badge variant="secondary" title={planTitle(a, plan, t)}>
-              {plan.label}
-            </Badge>
-          )}
+          {/* One chip: the provider's mark, its name and the plan. */}
+          <ProviderBadge provider={a.provider} detail={plan?.label} title={plan ? planTitle(a, plan, t) : undefined} />
           {inWindow && <WindowBadge t={t} />}
-          <span
-            data-slot="account-health"
-            title={health.detail}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium"
-          >
-            <StatusDot tone={health.tone} />
-            {health.label}
-          </span>
         </>
       }
       back={
@@ -159,31 +140,11 @@ export function AccountDetail({
       }
       actions={
         <>
-          {/* A full account's switch is tinted, and says when the limit opens beside it. */}
-          {primary?.tone === "warn" && primary.note && (
-            <span
-              data-slot="switch-note"
-              className="max-w-56 self-center text-xs text-warn-foreground"
-            >
-              {primary.note}
-            </span>
-          )}
-          {!isClaudeAccount(a) && (
-            <Button variant="outline" asChild>
-              <a href={routeHash("proxy")}>
-                <Network />
-                {t("Proxy & Gateway", "Proxy & Gateway")}
-              </a>
-            </Button>
-          )}
+          {/* The page's one primary action; a switch to a full account is quieter and says why on hover. */}
           {primary && (
             <Button
               disabled={primary.disabled}
               variant={primary.tone === "warn" ? "outline" : "default"}
-              className={cn(
-                primary.tone === "warn" &&
-                  "border-warn/40 bg-warn/10 text-warn-foreground hover:bg-warn/20 hover:text-warn-foreground dark:bg-warn/10 dark:hover:bg-warn/20",
-              )}
               title={primary.note}
               onClick={(e) =>
                 primary.key === "switch"
@@ -310,7 +271,7 @@ function ConnectionRow({
   purpose: string;
   status: string;
   /** Where the connection lives (a browser profile), muted beside the status. */
-  where?: string;
+  where?: ReactNode;
   tone: "ok" | "warn" | "crit" | "off";
   /** An icon button that reads the connection again; it sits just left of the action. */
   refresh?: ReactNode;
@@ -334,12 +295,11 @@ function ConnectionRow({
       </span>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span className="text-sm font-semibold">{title}</span>
-          {optional && (
-            <Badge variant="outline" className="text-muted-foreground">
-              {t("İsteğe bağlı", "Optional")}
-            </Badge>
-          )}
+          {/* What the connection is for, on hover: the row stays one line. */}
+          <span className="text-sm font-semibold" title={purpose}>
+            {title}
+          </span>
+          {optional && <span className="text-2xs text-muted-foreground">{t("isteğe bağlı", "optional")}</span>}
           <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <StatusDot tone={tone} />
             <span className="min-w-0 break-words">{status}</span>
@@ -350,7 +310,6 @@ function ConnectionRow({
             </span>
           )}
         </div>
-        <p className="text-xs text-muted-foreground">{purpose}</p>
       </div>
       <div data-slot="connection-refresh" className="flex items-center self-center">
         {refresh}
@@ -360,10 +319,13 @@ function ConnectionRow({
       </div>
       {(steps || detail || children) && (
         <div className="col-span-3 col-start-2 grid gap-2">
-          {steps && <Steps steps={steps} />}
-          {detail && (
-            <Disclosure title={t("Nasıl çalışır?", "How it works")}>
-              <p className="text-xs text-muted-foreground">{detail}</p>
+          {/* The steps and the explanation wait behind one closed line, so the list stays short. */}
+          {(steps || detail) && (
+            <Disclosure title={steps ? t("Nasıl bağlanır?", "How to connect") : t("Nasıl çalışır?", "How it works")}>
+              <div className="grid gap-2">
+                {steps && <Steps steps={steps} />}
+                {detail && <p className="text-xs text-muted-foreground">{detail}</p>}
+              </div>
             </Disclosure>
           )}
           {children}
@@ -440,7 +402,7 @@ function ExtensionConnection({
         ) : guide.action === "check" ? (
           <Button
             size="sm"
-            variant={guide.steps ? "default" : "outline"}
+            variant="outline"
             disabled={checking}
             onClick={() => void check()}
           >
@@ -528,6 +490,7 @@ function TerminalConnection({
           ) : (
             <Button
               size="sm"
+              variant="outline"
               disabled={!!relay.busy}
               onClick={() => void relay.action("terminal-link", () => relay.api.linkTerminal(a.id))}
             >
@@ -621,23 +584,6 @@ export function AccountDetailBody({
   return (
     <div className="@container grid gap-3 px-5 pb-6">
       <RelayErrorAlert />
-      {/* The header says the status; a problem also says what is wrong, here. */}
-      {(health.tone === "warn" || health.tone === "crit") && (
-        <div
-          data-slot="account-status"
-          className={cn(
-            "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-4 py-2.5 text-sm",
-            health.tone === "crit" && "border-crit/40 bg-crit/5",
-            health.tone === "warn" && "border-warn/40 bg-warn/5",
-          )}
-        >
-          <span className="inline-flex items-center gap-2 font-semibold">
-            <StatusDot tone={health.tone} />
-            {health.label}
-          </span>
-          <span className="text-xs text-muted-foreground">{health.detail}</span>
-        </div>
-      )}
       {duplicate && (
         <p
           role="status"
@@ -686,13 +632,8 @@ export function AccountDetailBody({
               )}
         </p>
       )}
-      <div className="grid items-start gap-3 @3xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="grid gap-3">
-          <Card className={cardClass}>
-            <CardTitle
-              title={t("Limitler", "Limits")}
-              aside={
-                freshUsage(usage, now ?? Date.now()) && usage?.checkedAt ? (
+      <div className="grid gap-5">
+        <PageSection title={t("Limitler", "Limits")} aside={freshUsage(usage, now ?? Date.now()) && usage?.checkedAt ? (
                   <span className="flex items-center gap-1">
                     {t(
                       `${formatRelative(usage.checkedAt, now ?? Date.now(), language)} güncellendi`,
@@ -708,21 +649,13 @@ export function AccountDetailBody({
                       <RefreshIcon className={usageBusy.has(a.id) ? "animate-spin" : undefined} />
                     </Button>
                   </span>
-                ) : undefined
-              }
-            />
+                ) : undefined}>
+          <Card className={cardClass}>
             {freshUsage(usage, now ?? Date.now()) ? (
-              <div className="mt-2">
-                <LimitBars
-                  usage={usage}
-                  now={now ?? Date.now()}
-                  zone={settings.planning.timeZone}
-                  state={ringState(usage, now ?? Date.now())}
-                />
-              </div>
+              <AccountLimits usage={usage} now={now ?? Date.now()} max={8} layout="grid" />
             ) : !claude ? (
               // No Claude sign-in to offer: Relay has no limit reader for this provider yet.
-              <p data-slot="no-limit-reader" className="mt-2 text-xs text-muted-foreground">
+              <p data-slot="no-limit-reader" className="text-xs text-muted-foreground">
                 {t(
                   `Relay ${providerLabel(a.provider)} hesaplarının limitini okuyamıyor; ağ geçidi bu hesabı limit bilgisi olmadan kullanır.`,
                   `Relay cannot read ${providerLabel(a.provider)} limits; the gateway uses this account without them.`,
@@ -744,14 +677,12 @@ export function AccountDetailBody({
             />
             )}
           </Card>
-          <Card className={cardClass} data-slot="connections">
-            <CardTitle
-              title={t("Bağlantılar", "Connections")}
-              aside={t(
+        </PageSection>
+        <PageSection title={t("Bağlantılar", "Connections")} aside={<span className="text-xs text-muted-foreground">{t(
                 `${ready} / ${connections.length} hazır`,
                 `${ready} / ${connections.length} ready`,
-              )}
-            />
+              )}</span>}>
+          <Card className={cardClass} data-slot="connections">
             <ConnectionList>
             {!claude && (
               <>
@@ -782,11 +713,8 @@ export function AccountDetailBody({
                   title={t("Ağ geçidi girişi", "Gateway sign-in")}
                   purpose={t("Ağ geçidi bu girişle istek gönderir.", "The gateway sends requests with it.")}
                   tone={signedIn ? "ok" : "warn"}
-                  status={
-                    signedIn
-                      ? t(`Kayıtlı${a.auth?.email ? ` · ${a.auth.email}` : ""}`, `Saved${a.auth?.email ? ` · ${a.auth.email}` : ""}`)
-                      : t("Giriş yok: hesabı yeniden ekle", "Not signed in: add the account again")
-                  }
+                  status={signedIn ? t("Kayıtlı", "Saved") : t("Giriş yok: hesabı yeniden ekle", "Not signed in: add the account again")}
+                  where={signedIn && a.auth?.email ? <Private>{a.auth.email}</Private> : undefined}
                 />
                 <ConnectionRow
                   icon={<Network />}
@@ -877,7 +805,7 @@ export function AccountDetailBody({
               action={
                 <Button
                   size="sm"
-                  variant={a.auth?.email ? "outline" : "default"}
+                  variant="outline"
                   disabled={!!busy || waiting}
                   onClick={() => void relay.startCli(a)}
                 >
@@ -924,9 +852,9 @@ export function AccountDetailBody({
               {/* The renewal Relay runs by itself near a sign-in's end, started now. */}
               {data?.diagnostics?.platform === "darwin" && a.desktop && a.auth?.loggedIn && (
                 <Button
-                  size="sm"
-                  variant="link"
-                  className="h-auto justify-self-start px-0 text-xs"
+                  size="xs"
+                  variant="ghost"
+                  className="justify-self-start"
                   disabled={!!busy || waiting}
                   onClick={() =>
                     void action(`renew-quiet:${a.id}`, async () => {
@@ -962,6 +890,39 @@ export function AccountDetailBody({
             )}
             </ConnectionList>
           </Card>
+        </PageSection>
+        <PageSection title={t("Hesap", "Account")}>
+          <Card className={cardClass}>
+            <dl className="-mx-1 grid text-sm @xl:grid-cols-2 @xl:gap-x-8">
+              {([
+                [t("Sağlayıcı", "Provider"), providerLabel(a.provider)],
+                [t("E-posta", "Email"), (a.desktop?.email ?? a.auth?.email) ? <Private>{a.desktop?.email ?? a.auth?.email}</Private> : "—"],
+                [t("Kuruluş", "Organization"), a.auth?.orgName ? <Private>{a.auth.orgName}</Private> : "—"],
+                [
+                  t("Tür · grup", "Type · group"),
+                  (a.kind === "personal" ? t("Kişisel", "Personal") : t("Şirket", "Work")) +
+                    (a.kind === "work" ? ` · ${groupName(a, t)}` : ""),
+                ],
+                ...(plan ? [[t("Abonelik", "Subscription"), plan.label]] : []),
+                // The plan is set on the Planning page; here it only says whether the account is in it.
+                ...(claude
+                  ? [[
+                      t("Planda", "In the plan"),
+                      <a key="plan" href={routeHash("planlama")} className="text-primary hover:underline">
+                        {a.planning?.plan ? t("Evet · Planlama ›", "Yes · Planning ›") : t("Hayır · Planlama ›", "No · Planning ›")}
+                      </a>,
+                    ]]
+                  : []),
+              ] as [string, ReactNode][]).map(([label, value]) => (
+                <div key={label} className="flex min-w-0 items-baseline justify-between gap-3 border-t px-1 py-2 first:border-0 @xl:[&:nth-child(2)]:border-0">
+                  <dt className="shrink-0 text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 truncate text-right" title={typeof value === "string" ? value : undefined}>
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Card>
           {a.desktop && (
             <Card className={cardClass}>
               <Disclosure
@@ -978,47 +939,7 @@ export function AccountDetailBody({
               </Disclosure>
             </Card>
           )}
-        </div>
-        <div className="grid gap-3">
-          <Card className={cardClass}>
-            <CardTitle title={t("Hesap", "Account")} />
-            <dl className="-mx-1 grid text-sm">
-              {([
-                [t("Sağlayıcı", "Provider"), providerLabel(a.provider)],
-                [t("E-posta", "Email"), (a.desktop?.email ?? a.auth?.email) ? <Private>{a.desktop?.email ?? a.auth?.email}</Private> : "—"],
-                [t("Kuruluş", "Organization"), a.auth?.orgName ? <Private>{a.auth.orgName}</Private> : "—"],
-                [
-                  t("Tür · grup", "Type · group"),
-                  (a.kind === "personal" ? t("Kişisel", "Personal") : t("Şirket", "Work")) +
-                    (a.kind === "work" ? ` · ${groupName(a, t)}` : ""),
-                ],
-                ...(plan ? [[t("Abonelik", "Subscription"), plan.label]] : []),
-              ] as [string, ReactNode][]).map(([label, value]) => (
-                <div key={label} className="flex min-w-0 items-baseline justify-between gap-3 border-t px-1 py-2 first:border-0">
-                  <dt className="shrink-0 text-muted-foreground">{label}</dt>
-                  <dd className="min-w-0 truncate text-right" title={typeof value === "string" ? value : undefined}>
-                    {value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </Card>
-          {claude && (
-            <Card className={cardClass}>
-              <CardTitle title={t("Planlama", "Planning")} />
-              <PlanEditor
-                account={a}
-                disabled={!!busy}
-                t={t}
-                update={(input) =>
-                  void action(`plan:${a.id}`, () =>
-                    api.updateAccountPlanning(a.id, input),
-                  )
-                }
-              />
-            </Card>
-          )}
-        </div>
+        </PageSection>
       </div>
     </div>
   );

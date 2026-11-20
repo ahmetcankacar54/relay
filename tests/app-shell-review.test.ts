@@ -12,7 +12,7 @@ import { shortcutPage } from "../src/app/routes";
 import { AddAccountSteps } from "../src/pages/accounts/AddAccountDialog";
 import { AccountDetailBody } from "../src/pages/accounts/AccountDetail";
 import { AccountsTable } from "../src/pages/accounts/AccountsTable";
-import { AccountsCard } from "../src/pages/overview/AccountsCard";
+import { AccountsBoard } from "../src/pages/overview/AccountsBoard";
 import { forgetSetupOnLeave } from "../src/pages/Accounts";
 import { LimitMeter } from "../src/components/LimitMeter";
 import { RelayContext, type Relay } from "../src/data/relay-context";
@@ -183,16 +183,16 @@ test("leaving the accounts page forgets the setup target", () => {
   assert.deepEqual(calls, [undefined]);
 });
 
-// 5 + 6. Overview accounts card: no Desktop setup from Overview, and suffix-free reopening time.
+// 5 + 6. Overview's accounts board: no Desktop setup from the Overview, and a spent limit says when it opens.
 test("the overview never starts a Desktop setup itself: an unlinked account's row leads to its page", () => {
   const usage: Record<string, AccountUsage> = { a: { accountId: "a", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 10 }, sevenDay: { usedPercent: 10 } } };
   const row = (extra: Partial<Relay>) => {
-    const html = wrap(relayFor(extra, usage), createElement(AccountsCard, { go() {}, now: NOW }));
-    const at = html.indexOf('<a href="#/hesaplar/b"');
-    return at < 0 ? "" : html.slice(html.lastIndexOf('data-slot="account-row"', at), html.indexOf("</a>", at) + 4);
+    const html = wrap(relayFor(extra, usage), createElement(AccountsBoard, { now: NOW }));
+    const at = html.indexOf('data-account="b"');
+    return at < 0 ? "" : html.slice(html.lastIndexOf("<div", at), html.indexOf('data-slot="list-row"', at + 1) > 0 ? html.indexOf('data-slot="list-row"', at + 1) : undefined);
   };
-  // Whatever state Desktop is in, the row is a link to the account (whose page gates the setup),
-  // not a button that could start one while Desktop cannot.
+  // Whatever state Desktop is in, the row opens the account (whose page gates the setup) and holds
+  // no button that could start one while Desktop cannot.
   for (const extra of [
     {},
     { desktopBusy: true },
@@ -202,14 +202,13 @@ test("the overview never starts a Desktop setup itself: an unlinked account's ro
   ] as Partial<Relay>[]) {
     const label = JSON.stringify(extra);
     const studio = row(extra);
-    assert.match(studio, /<a href="#\/hesaplar\/b" title="Claude uygulaması girişi yok"/, label);
-    assert.match(studio, />Giriş kaydedilmedi</, label);
+    assert.match(studio, /role="button"[^>]*aria-label="Studio"|aria-label="Studio"[^>]*role="button"/, label);
     assert.doesNotMatch(studio, /<button/, label);
     assert.doesNotMatch(studio, /Girişi kaydet|Geç</, label);
   }
 });
 
-test("an exhausted account says when it reopens, with the suffix its time is read with", () => {
+test("a spent limit on the board says it is full and how long until it opens", () => {
   const other: Account = { ...a, id: "o", name: "Other" };
   const reset = iso(NOW + 2 * 3_600_000);
   const usage: Record<string, AccountUsage> = {
@@ -217,13 +216,8 @@ test("an exhausted account says when it reopens, with the suffix its time is rea
     o: { accountId: "o", status: "ready", stale: false, checkedAt: iso(NOW), fiveHour: { usedPercent: 100, resetsAt: reset }, sevenDay: { usedPercent: 10 } },
   };
   const relay = relayFor({ accounts: [a, other] }, usage);
-  const tr = wrap(relay, createElement(AccountsCard, { go() {}, now: NOW }));
-  const at = /(\d\d:\d\d)’(da|de|ta|te) açılır/.exec(tr);
-  assert.ok(at, tr);
-  assert.equal(clockLocative(at[1]), `${at[1]}’${at[2]}`);
-  assert.doesNotMatch(tr, /Açılış|&#x27;te açılır/);
-  const en = wrap(relay, createElement(AccountsCard, { go() {}, now: NOW }), "en");
-  assert.match(en, /Opens \d\d:\d\d/);
+  assert.match(wrap(relay, createElement(AccountsBoard, { now: NOW })), />Dolu · 2 sa</);
+  assert.match(wrap(relay, createElement(AccountsBoard, { now: NOW }), "en"), />Full · 2 h</);
 });
 
 // 7 + 8. Theme: native controls follow the scheme and small success text has a readable token.
@@ -255,7 +249,8 @@ test("only the shell provides tooltips", () => {
   const files = fs.readdirSync(dir, { recursive: true, encoding: "utf8" })
     .filter((f) => f.endsWith(".tsx") && !f.includes(`components${path.sep}ui`));
   const users = files.filter((f) => /<TooltipProvider/.test(fs.readFileSync(path.join(dir, f), "utf8")));
-  assert.deepEqual(users, [path.join("app", "Shell.tsx")]);
+  // A section's ⓘ (InfoTip) brings its own, so it explains itself in the tray and in tests too.
+  assert.deepEqual(users.sort(), [path.join("app", "Shell.tsx"), path.join("components", "PageSection.tsx")].sort());
 });
 
 // 11. Percent formatting follows the language, and every limit percentage is what is used, as on Claude's usage page.
@@ -278,8 +273,9 @@ test("limit percentages read %45 kullanıldı in Turkish and 45% used in English
     wrap(relayFor({}, usage), createElement(AccountsTable, { accounts, open() {}, link() {} }), language);
   assert.match(table("tr"), />%38<.*>%78</);
   assert.match(table("en"), />38%<.*>78%</);
-  assert.match(table("tr"), /<th[^>]*>5 saat<\/th><th[^>]*>Hafta<\/th>/);
-  assert.match(table("en"), /<th[^>]*>5 hours<\/th><th[^>]*>Week<\/th>/);
+  // The list's header names the two columns.
+  assert.match(table("tr"), /data-slot="list-head"[^>]*>.*<span>5 saat<\/span><span[^>]*>Hafta<\/span>/);
+  assert.match(table("en"), /data-slot="list-head"[^>]*>.*<span>5 hours<\/span><span[^>]*>Week<\/span>/);
 });
 
 test("the medium meter names its number with a word, the small one shows the number alone", () => {

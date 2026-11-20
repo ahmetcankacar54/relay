@@ -24,7 +24,6 @@ import { useTokenUsage } from "./usage/useTokenUsage";
 import { TokenUsage } from "./usage/TokenUsage";
 import { LostFound } from "./usage/LostFound";
 import { UsageHeatmap } from "./usage/UsageHeatmap";
-import { LimitsNow } from "./usage/LimitsNow";
 import {
   useUsageStatistics,
   type UsageStatisticsState,
@@ -159,23 +158,14 @@ function StatisticsContent({
       />
     );
   return (
-    <div className="grid gap-3" aria-busy={loading || undefined}>
+    <div className="grid gap-5" aria-busy={loading || undefined}>
       <SummaryTiles view={view} />
-      <UsageHeatmap view={view} />
       <DailyChart view={view} accounts={accounts} zone={zone} />
-      <AccountBalance view={view} accounts={accounts} />
-      <LimitHits view={view} zone={zone} />
-      <details className="px-1">
-        <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
-          {t("Bu sayılar nasıl hesaplanıyor?", "How Relay calculates these numbers")}
-        </summary>
-        <Note className="mt-1 text-xs">
-          {t(
-            "Bu sayılar Relay’in okuduğu limit yüzdelerinden gelir; token, mesaj ya da maliyet saymaz. Dolu dönem, bir hesabın 5 saatlik limitinin tamamıdır. Hesap payları plana göre ağırlıklıdır: Pro 1, Max 5× 5, Max 20× 20, Team için girdiğin ağırlık. Token ve API karşılığı “Token ve ücret” sayfasındadır.",
-            "These numbers come from the limit percentages that Relay reads. They do not count tokens, messages or cost. A full period is all of one 5-hour limit. Account shares use plan weights: Pro 1, Max 5× 5, Max 20× 20, Team as you set it. Tokens and API value are on the “Tokens and cost” page.",
-          )}
-        </Note>
-      </details>
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        <AccountBalance view={view} accounts={accounts} />
+        <LimitHits view={view} zone={zone} />
+      </div>
+      <UsageHeatmap view={view} />
     </div>
   );
 }
@@ -278,7 +268,7 @@ export function Usage({ section = "limits" }: { section?: UsageSection }) {
       ? t("Token ve ücret", "Tokens and cost")
       : section === "lost"
         ? t("Rozetler", "Pins")
-        : t("Limitler", "Limits");
+        : t("Limit geçmişi", "Limit history");
   return (
     <PageFrame
       title={title}
@@ -295,8 +285,7 @@ export function Usage({ section = "limits" }: { section?: UsageSection }) {
       }
     >
       <div className="grid gap-4 px-5 pb-5">
-        {/* Today's limits of every account first; the statistics below are history. */}
-        {section === "limits" && <LimitsNow />}
+        {/* History only: today's limits of every account are on the Overview. */}
         {section === "limits" && (
           <LimitsPage
             accounts={accounts}

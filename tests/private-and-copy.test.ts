@@ -71,10 +71,10 @@ test("turned off in Settings, details show plainly", async () => {
 
 test("the places that show an account's e-mail blur it", () => {
   const read = (path: string) => fs.readFileSync(new URL(`../src/${path}`, import.meta.url), "utf8");
+  // The accounts list and the Overview's card show no e-mail any more; the account page does.
   for (const [path, pattern] of [
-    ["pages/accounts/AccountsTable.tsx", /<Private>\{a\.desktop\?\.email \?\? a\.auth\?\.email\}<\/Private>/],
-    ["pages/accounts/AccountDetail.tsx", /<Private>\{\[email, a\.auth\?\.orgName\]/],
-    ["pages/overview/ActiveAccountCard.tsx", /<Private>\{identity\}<\/Private>/],
+    ["pages/accounts/AccountDetail.tsx", /<Private>\{a\.desktop\?\.email \?\? a\.auth\?\.email\}<\/Private>/],
+    ["pages/accounts/AccountDetail.tsx", /<Private>\{a\.auth\.orgName\}<\/Private>/],
     ["pages/Proxy.tsx", /<Private>\{account\.email\}<\/Private>/],
     ["app/ConnectionPanels.tsx", /<Private>\{flowAccount\.auth\.email\}<\/Private>/],
   ] as const)

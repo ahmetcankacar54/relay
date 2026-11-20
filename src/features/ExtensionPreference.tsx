@@ -6,7 +6,7 @@ import type { ExtensionMode, ExtensionStatus } from "../../shared/types";
 import { extensionLine } from "../../shared/extension-text";
 import { Button } from "@/components/ui/button";
 import { Disclosure } from "@/components/Disclosure";
-import { Note, OptionSelect, SectionHeading, SettingRow } from "@/components/SettingRow";
+import { Note, OptionSelect, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { useExtensionStatus } from "@/data/useExtension";
@@ -131,9 +131,8 @@ export function ExtensionPreference({
         : (currentLine ?? t("Eklenti kontrol ediliyor…", "Extension check in progress…"));
   return (
     <div className="grid gap-1">
-      <SectionHeading title={t("Claude tarayıcı eklentisi", "Claude browser extension")} />
       <SettingRow
-        label={t("Geçişte", "At a switch")}
+        label={<span className="font-medium">{t("Claude tarayıcı eklentisi", "Claude browser extension")}</span>}
         htmlFor="extension-mode"
         description={
           !status.instances.length && status.denied?.length ? (

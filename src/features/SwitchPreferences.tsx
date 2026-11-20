@@ -12,7 +12,7 @@ import {
   SettingRow,
 } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
-import { Disclosure } from "@/components/Disclosure";
+import { InfoTip } from "@/components/PageSection";
 
 type T = (tr: string, en: string) => string;
 
@@ -232,46 +232,69 @@ export function SharedHistoryPreferences({
   const sources = active ? historySources(active, accounts, value) : [];
   // "Paylaşma": nothing is shared, so nothing may say it is.
   const off = value.desktopHistoryTransfer === "off";
+  const where = off
+    ? t("Code konuşmaların her hesapta ayrı kalır.", "Your Code conversations stay separate in each account.")
+    : value.desktopHistoryTransfer === "all"
+      ? t(
+          "Geçişten sonra Code konuşmaların bağlı her hesapta görünür.",
+          "After a switch, your Code conversations appear in every connected account.",
+        )
+      : value.desktopHistoryTransfer === "selected"
+        ? t(
+            "Geçişten sonra Code konuşmaların seçtiğin hesaplarda görünür.",
+            "After a switch, your Code conversations appear in the accounts you selected.",
+          )
+        : t(
+            "Geçişten sonra Code konuşmaların aynı gruptaki hesaplarda görünür.",
+            "After a switch, your Code conversations appear in the accounts of the same group.",
+          );
+  // What the merge would do, on the button's title: the row keeps one line.
+  const merge = active
+    ? sources.length
+      ? t(
+          `${sources.length} hesabın geçmişi ${active.name} hesabında birleştirilir.`,
+          `Relay merges the history of ${sources.length} ${sources.length === 1 ? "account" : "accounts"} into ${active.name}.`,
+        )
+      : t(`${active.name} için paylaşılacak hesap seçili değil.`, `No accounts are selected to share with ${active.name}.`)
+    : t("Önce Claude uygulamasında açık hesabın girişini kaydet.", "First, save the Claude app sign-in of the open account.");
   return (
     <div className="grid gap-1">
-      <SectionHeading
-        title={t("Ortak Code geçmişi", "Shared Code history")}
-        description={
-          off
-            ? t(
-                "Code konuşmaların her hesapta ayrı kalır.",
-                "Your Code conversations stay separate in each account.",
-              )
-            : value.desktopHistoryTransfer === "all"
-              ? t(
-                  "Geçişten sonra Code konuşmaların bağlı her hesapta görünür.",
-                  "After a switch, your Code conversations appear in every connected account.",
-                )
-              : value.desktopHistoryTransfer === "selected"
-                ? t(
-                    "Geçişten sonra Code konuşmaların seçtiğin hesaplarda görünür.",
-                    "After a switch, your Code conversations appear in the accounts you selected.",
-                  )
-                : t(
-                    "Geçişten sonra Code konuşmaların aynı gruptaki hesaplarda görünür.",
-                    "After a switch, your Code conversations appear in the accounts of the same group.",
-                  )
-        }
-      />
       <SettingRow
-        label={t("Geçmişi paylaş", "Share history")}
+        label={<span className="font-medium">{t("Ortak Code geçmişi", "Shared Code history")}</span>}
         htmlFor="history-transfer"
+        description={
+          <span className="inline-flex items-center gap-1">
+            {where}
+            {/* Which accounts share, and that only local Code history does: behind the ⓘ. */}
+            {!off && <InfoTip>{historyScopeNote(value.desktopHistoryTransfer, t)}</InfoTip>}
+          </span>
+        }
       >
-        <OptionSelect
-          id="history-transfer"
-          value={value.desktopHistoryTransfer}
-          disabled={disabled}
-          onChange={(desktopHistoryTransfer) =>
-            update({ desktopHistoryTransfer })
-          }
-          options={historyTransferOptions(t)}
-        />
+        <span className="flex gap-1">
+          <OptionSelect
+            id="history-transfer"
+            value={value.desktopHistoryTransfer}
+            disabled={disabled}
+            onChange={(desktopHistoryTransfer) => update({ desktopHistoryTransfer })}
+            options={historyTransferOptions(t)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            title={merge}
+            disabled={syncDisabled || disabled || !active || !sources.length}
+            onClick={sync}
+          >
+            {t("Açık hesapla birleştir…", "Merge into the open account…")}
+          </Button>
+        </span>
       </SettingRow>
+      {/* A disabled button shows no title: say why it cannot merge, under the row. */}
+      {(!active || !sources.length) && !off && (
+        <p data-slot="merge-reason" className="text-right text-xs text-muted-foreground">
+          {merge}
+        </p>
+      )}
       {value.desktopHistoryTransfer === "selected" && (
         <AccountSelection
           accounts={accounts}
@@ -281,38 +304,6 @@ export function SharedHistoryPreferences({
           label={t("Geçmişi paylaşan hesaplar", "Accounts that share history")}
           t={t}
         />
-      )}
-      <div className="mt-1 flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
-        <p className="text-sm">
-          {active
-            ? sources.length
-              ? t(
-                  `${sources.length} hesabın geçmişi ${active.name} hesabında birleştirilir.`,
-                  `Relay merges the history of ${sources.length} ${sources.length === 1 ? "account" : "accounts"} into ${active.name}.`,
-                )
-              : t(
-                  `${active.name} için paylaşılacak hesap seçili değil.`,
-                  `No accounts are selected to share with ${active.name}.`,
-                )
-            : t(
-                "Önce Claude uygulamasında açık hesabın girişini kaydet.",
-                "First, save the Claude app sign-in of the open account.",
-              )}
-        </p>
-        <Button
-          type="button"
-          variant="outline"
-          className="shrink-0"
-          disabled={syncDisabled || disabled || !active || !sources.length}
-          onClick={sync}
-        >
-          {t("Açık hesapla birleştir…", "Merge into the open account…")}
-        </Button>
-      </div>
-      {!off && (
-        <Disclosure title={t("Ayrıntılar", "Details")}>
-          <Note>{historyScopeNote(value.desktopHistoryTransfer, t)}</Note>
-        </Disclosure>
       )}
     </div>
   );

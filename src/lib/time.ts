@@ -1,4 +1,4 @@
-import type { Language } from "@/data/i18n";
+import type { Language, T } from "@/data/i18n";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -87,4 +87,21 @@ export function formatRelative(
   }
   const n = Math.floor(diff / DAY);
   return tr ? `${n} gün önce` : `${n} ${n === 1 ? "day" : "days"} ago`;
+}
+
+/**
+ * Time to a reset, short: "25 dk", "1 sa 50 dk", "3 gün". A day or more reads in days, as the
+ * reference monitors do; the clock time is in the meter's title.
+ */
+export function countdown(at: string | undefined, now: number, t: T): string | undefined {
+  const ms = at ? Date.parse(at) - now : NaN;
+  if (!Number.isFinite(ms) || ms <= 0) return undefined;
+  if (ms >= 86_400_000) {
+    const days = Math.round(ms / 86_400_000);
+    return t(`${days} gün`, `${days} d`);
+  }
+  const minutes = Math.ceil(ms / 60_000);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? t(`${h} sa${m ? ` ${m} dk` : ""}`, `${h} h${m ? ` ${m} min` : ""}`) : t(`${m} dk`, `${m} min`);
 }

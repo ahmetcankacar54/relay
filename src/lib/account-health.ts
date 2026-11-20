@@ -19,6 +19,10 @@ export type AccountFix = "desktop-link" | "cli" | "renew";
 export interface AccountHealth {
   tone: "ok" | "warn" | "crit" | "off";
   label: string;
+  /** The same state in at most three words, for a list's status column (`accountStatus`). */
+  short: string;
+  /** The status is a model's own limit used up, not a sign-in: `accountStatus` words it from the limits. */
+  limit?: boolean;
   /** Names both sign-ins and their states. */
   detail: string;
   fix?: AccountFix;
@@ -33,6 +37,20 @@ type Words = readonly [tr: string, en: string];
 const NO_USAGE_DATA: Words = ["Limit verisi yok", "No usage data yet"];
 /** A browser approval in progress for the usage sign-in. */
 const APPROVE: Words = ["Tarayıcıda onayla", "Approve in the browser"];
+
+/** Each status's short form, keyed by its full Turkish words; a status not listed is short already. */
+const SHORT: Record<string, Words> = {
+  "Limit verisi yok": ["Okunmadı", "Not read yet"],
+  "Claude uygulaması girişi yok": ["Uygulama girişi yok", "No app sign-in"],
+  "Limit okuma girişi gerekli": ["Giriş gerekli", "Sign-in needed"],
+  "Anahtarlık izni gerekli": ["Anahtarlık izni", "Keychain access"],
+  "Anahtar deposu izni gerekli": ["Anahtar deposu izni", "Keyring access"],
+  "Bağlantı yenilenmeli": ["Yenilenmeli", "Needs renewing"],
+  "Limit okuma girişi yok": ["Limit girişi yok", "No usage sign-in"],
+  "Limit verisi eski": ["Eski okuma", "Old reading"],
+  "Bekleme süresinde": ["Beklemede", "Cooling down"],
+};
+const shortOf = ([tr, en]: Words): Words => SHORT[tr] ?? [tr, en];
 
 /** Where the status is read: `now` and the planning time zone default to the clock and the system zone. */
 type HealthContext = {
@@ -174,9 +192,10 @@ function otherProviderHealth(
   const detail = signedIn
     ? t("Ağ geçidi bu hesabı kullanabilir", "The gateway can use this account")
     : t("Ağ geçidi bu hesabı kullanamaz: giriş yok", "The gateway cannot use this account: no sign-in");
-  const result = (tone: AccountHealth["tone"], [tr, en]: Words): AccountHealth => ({
+  const result = (tone: AccountHealth["tone"], words: Words): AccountHealth => ({
     tone,
-    label: t(tr, en),
+    label: t(...words),
+    short: t(...shortOf(words)),
     detail,
   });
   if (context.waiting) return result("warn", APPROVE);
@@ -188,7 +207,7 @@ function otherProviderHealth(
   if (usage && usage.issue !== "unsupported" && (usage.stale || usage.status === "error"))
     return result("warn", ["Limit verisi eski", "Usage data is out of date"]);
   const spent = modelLimitWords(modelLimitFull(usage, now), now, context.zone);
-  if (spent) return result("warn", spent);
+  if (spent) return { ...result("warn", spent), limit: true };
   return result("ok", ["Hazır", "Ready"]);
 }
 
@@ -223,9 +242,9 @@ export function accountHealth(
   );
   const result = (
     tone: AccountHealth["tone"],
-    [tr, en]: Words,
+    words: Words,
     fix?: AccountFix,
-  ): AccountHealth => ({ tone, label: t(tr, en), detail, fix });
+  ): AccountHealth => ({ tone, label: t(...words), short: t(...shortOf(words)), detail, fix });
 
   if (context.waiting) return result("warn", APPROVE);
   // Without a saved Claude app sign-in the row action is "save", never "reconnect".
@@ -269,6 +288,6 @@ export function accountHealth(
   // Fable's week spent is not "Ready": the account answers other models only, so the status says so.
   const now = context.now ?? Date.now();
   const spent = modelLimitWords(modelLimitFull(usage, now), now, context.zone);
-  if (spent) return result("warn", spent);
+  if (spent) return { ...result("warn", spent), limit: true };
   return result("ok", running ? ["Çalışıyor", "Running"] : ["Hazır", "Ready"]);
 }

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
 import { Card } from "@/components/ui/card";
+import { PageSection } from "@/components/PageSection";
 import { useI18n } from "@/data/i18n";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
@@ -60,8 +61,23 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
   const hits = totals.hits.fiveHour + totals.hits.weekly;
   const window = totals.busiestWindow;
   return (
+    <PageSection
+      title={t("Özet", "Summary")}
+      slot="summary-tiles"
+      info={
+        <>
+          {t(
+          `Bu aralığın ${formatPercent(view.coveragePercent, "tr")} kadarında Relay limitleri okuyabildi; kapalı olduğu ya da okuyamadığı süre sayılara girmedi.`,
+          `Relay could read the limits for ${formatPercent(view.coveragePercent, "en")} of this range; time it was closed or could not read is not in these numbers.`,
+        )} {t(
+            "Sayılar Relay’in okuduğu limit yüzdelerinden gelir; token, mesaj ya da maliyet saymaz. Dolu dönem, bir hesabın 5 saatlik limitinin tamamıdır.",
+            "The numbers come from the limit percentages Relay reads; they count no tokens, messages or cost. A full period is all of one account’s 5-hour limit.",
+          )}
+        </>
+      }
+    >
     <Card className="gap-3 px-4 py-3.5">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Tile
           label={t("Kullanılan", "Used")}
           value={
@@ -100,12 +116,7 @@ export function SummaryTiles({ view }: { view: UsageStatisticsView }) {
           }
         />
       </div>
-      <p className="text-xs text-muted-foreground">
-        {t(
-          `Bu aralığın ${formatPercent(view.coveragePercent, "tr")} kadarında Relay limitleri okuyabildi; kapalı olduğu ya da okuyamadığı süre sayılara girmedi.`,
-          `Relay could read the limits for ${formatPercent(view.coveragePercent, "en")} of this range; time it was closed or could not read is not in these numbers.`,
-        )}
-      </p>
     </Card>
+    </PageSection>
   );
 }

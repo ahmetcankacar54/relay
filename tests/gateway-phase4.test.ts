@@ -4,6 +4,7 @@ import http from "node:http";
 import type net from "node:net";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import { ProxyRouter } from "../electron/core/proxy/proxy-router";
 import { ProxySessionCache } from "../electron/core/proxy/proxy-session-cache";
 import { ProxyServer } from "../electron/core/proxy/proxy-server";
@@ -202,7 +203,11 @@ const render = (proxy: ProxyStatus, initialTab: "canli" | "kurallar") =>
     createElement(
       I18nContext.Provider,
       { value: { language: "tr", setLanguage() {}, t: tr } },
-      createElement(RelayContext.Provider, { value: relayFor(proxy) }, createElement(ProxyPage, { initialTab })),
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(RelayContext.Provider, { value: relayFor(proxy) }, createElement(ProxyPage, { initialTab })),
+      ),
     ),
   );
 const proxy = (over: Partial<ProxyStatus> = {}): ProxyStatus => ({

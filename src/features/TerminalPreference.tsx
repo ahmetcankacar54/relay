@@ -12,7 +12,6 @@ import { Disclosure } from "@/components/Disclosure";
 import {
   Note,
   OptionSelect,
-  SectionHeading,
   SettingRow,
 } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
@@ -128,17 +127,8 @@ export function TerminalPreference({
     });
   return (
     <div className="grid gap-1">
-      <SectionHeading title={t("Terminaldeki Claude Code", "Claude Code in the terminal")} />
-      {status.viaGateway && (
-        <Note>
-          {t(
-            "Claude Code ağ geçidine bağlı: istekleri, ağ geçidinin her istek için seçtiği hesaptan gider (Proxy sayfası). Buradaki giriş yalnızca Relay kapalıyken kullanılır; geçişte yine hesabı izler.",
-            "Claude Code is connected to the gateway: its requests use the account the gateway picks for each one (Proxy page). The sign-in here is used only while Relay is not running; it still follows the account at a switch.",
-          )}
-        </Note>
-      )}
       <SettingRow
-        label={t("Geçişte", "At a switch")}
+        label={<span className="font-medium">{t("Terminaldeki Claude Code", "Claude Code in the terminal")}</span>}
         htmlFor="terminal-mode"
         description={
           mode === "off"
@@ -166,6 +156,14 @@ export function TerminalPreference({
         </span>
       </SettingRow>
       <Disclosure title={t("Ayrıntılar", "Details")} defaultOpen={openDetails}>
+        {status.viaGateway && (
+          <Note>
+            {t(
+              "Claude Code ağ geçidine bağlı: istekleri, ağ geçidinin her istek için seçtiği hesaptan gider (Proxy sayfası). Buradaki giriş yalnızca Relay kapalıyken kullanılır; geçişte yine hesabı izler.",
+              "Claude Code is connected to the gateway: its requests use the account the gateway picks for each one (Proxy page). The sign-in here is used only while Relay is not running; it still follows the account at a switch.",
+            )}
+          </Note>
+        )}
         <Note>
           {t(
             "Relay geçişte yeni hesabın terminal girişini yerine koyar; tanımadığı bir girişe dokunmaz.",

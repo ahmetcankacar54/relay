@@ -132,6 +132,27 @@ export function quotaAtRisk(account: {
   return { percent: left, minutes: weeklyResetMinutes };
 }
 
+/**
+ * Moves `id` past the next account of its own provider, up (-1) or down (+1): the pool shows each
+ * provider on its own, so a move never jumps over another provider's accounts it cannot see. The
+ * same order when it cannot move.
+ */
+export function moveWithinProvider(
+  accounts: readonly { id: string; provider?: string }[],
+  id: string,
+  by: -1 | 1,
+): string[] {
+  const order = accounts.map((a) => a.id);
+  const provider = accounts.find((a) => a.id === id)?.provider ?? "claude";
+  const same = accounts.filter((a) => (a.provider ?? "claude") === provider).map((a) => a.id);
+  const other = same[same.indexOf(id) + by];
+  if (!same.includes(id) || !other) return order;
+  const i = order.indexOf(id);
+  const j = order.indexOf(other);
+  [order[i], order[j]] = [order[j], order[i]];
+  return order;
+}
+
 /** Moves `id` one place up (-1) or down (+1) in `order`; the same order when it cannot move. */
 export function moveInOrder(order: readonly string[], id: string, by: -1 | 1): string[] {
   const next = [...order];

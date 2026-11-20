@@ -122,11 +122,14 @@ export function AccountLimits({
   size = "sm",
   max = 4,
   note = true,
+  layout = "stack",
 }: {
   usage: AccountUsage | undefined;
   now: number;
   size?: "sm" | "md";
   max?: number;
+  /** `grid` on a wide page: the lines side by side (pools in pairs, Claude's limits in threes). */
+  layout?: "stack" | "grid";
   /** Says when an old reading was made (off where the caller says it). */
   note?: boolean;
 }) {
@@ -136,7 +139,16 @@ export function AccountLimits({
   const faded = !freshUsage(usage, now);
   const readAt = usage?.checkedAt;
   return (
-    <div className={cn("grid", size === "sm" ? "gap-2" : "gap-3")}>
+    <div
+      className={cn(
+        "grid",
+        layout === "grid"
+          ? cn("gap-x-6 gap-y-3 sm:grid-cols-2", rows.length % 2 === 1 && "md:grid-cols-3")
+          : size === "sm"
+            ? "gap-2"
+            : "gap-3",
+      )}
+    >
       {rows.map((row) => (
         <LimitLine
           key={row.key}
@@ -257,24 +269,3 @@ export function ProviderPane({ view, now, size = "md" }: { view: ProviderView; n
     </div>
   );
 }
-
-/** The non-Claude providers as cards side by side (the Overview's), each its own pane. */
-export function ProviderCards({ now }: { now: number }) {
-  const relay = useRelay();
-  const views = relayProviders(relay, now).filter((v) => v.id !== "claude");
-  if (!views.length) return null;
-  return (
-    <section data-slot="provider-cards" className="grid gap-3 md:grid-cols-2">
-      {views.map((view) => (
-        <div key={view.id} className="grid content-start gap-1.5">
-          <h2 className="flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
-            <ProviderLogo provider={view.id} />
-            {PROVIDER_NAMES[view.id]}
-          </h2>
-          <ProviderPane view={view} now={now} />
-        </div>
-      ))}
-    </section>
-  );
-}
-
