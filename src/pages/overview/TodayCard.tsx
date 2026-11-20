@@ -13,7 +13,6 @@ import {
   nextPlannedWindow,
   plannedSettings,
   todayLookout,
-  windowTone,
   accountTone,
 } from "@/lib/day-timeline";
 import { formatClock } from "@/lib/time";

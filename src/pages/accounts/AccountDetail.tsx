@@ -17,7 +17,6 @@ import {
   duplicateCliAccount,
 } from "../../../shared/account-state";
 import { historySources } from "../../../shared/history-policy";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -49,9 +48,8 @@ import { freshUsage } from "../../../shared/usage";
 import { formatRelative } from "@/lib/time";
 import { HistorySummary } from "../../features/HistorySummary";
 import { DesktopSetup } from "../../features/DesktopSetup";
-import { PlanEditor } from "../../features/PlanEditor";
 import { RowActionItems, rowActions, WindowBadge } from "./AccountsTable";
-import { accountPlan, avatarClass, groupName, planTitle, providerLabel } from "./accountLabels";
+import { accountPlan, groupName, planTitle, providerLabel } from "./accountLabels";
 
 /** `#/hesaplar/<id>`: an account's own page, in place of the list. */
 export const accountHash = (id: string) =>
@@ -84,7 +82,6 @@ export function AccountDetail({
   const prank = usePrank();
   const { t, language } = useI18n();
   const plan = accountPlan(a);
-  const email = a.desktop?.email ?? a.auth?.email;
   const actions = rowActions(
     a,
     relay,
@@ -196,15 +193,6 @@ export function historyLine(
   return transfer === "same-group"
     ? t(`aynı gruptaki ${sources} hesapla paylaşılıyor`, `shared with ${sources} ${sources === 1 ? "account" : "accounts"} in the same group`)
     : t(`${sources} hesapla paylaşılıyor`, `shared with ${sources} ${sources === 1 ? "account" : "accounts"}`);
-}
-
-function CardTitle({ title, aside }: { title: string; aside?: ReactNode }) {
-  return (
-    <div className="mb-3 flex items-baseline justify-between gap-2">
-      <h2 className="font-semibold">{title}</h2>
-      {aside && <span className="text-xs text-muted-foreground">{aside}</span>}
-    </div>
-  );
 }
 
 /** A connection's leading mark: a check when it is ready, a mark when it needs a step, its kind when absent. */
@@ -548,17 +536,6 @@ export function AccountDetailBody({
   const waiting = pendingFlow(authFlow);
   const mismatch = desktopCliMismatch(a);
   const duplicate = duplicateCliAccount(a, accounts);
-  const health = accountHealth(
-    a,
-    usage,
-    {
-      active: a.id === relay.active?.id,
-      desktopRunning: !!desktop?.running,
-      waiting,
-      platform: data?.diagnostics?.platform,
-    },
-    t,
-  );
   const signIn = usageSignInStatus(a, usage, waiting, t, data?.diagnostics?.platform);
   // The header badge's name, never the raw word ("plus", "Antigravity OAuth").
   const plan = accountPlan(a);

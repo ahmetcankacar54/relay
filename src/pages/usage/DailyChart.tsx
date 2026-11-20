@@ -3,15 +3,12 @@ import { localDate } from "../../../shared/planning";
 import type { Account } from "../../../shared/types";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
 import type { TokenUsageView } from "../../../shared/token-usage-view";
-import { Bar, CartesianGrid, ComposedChart, Scatter, XAxis, YAxis } from "recharts";
 import { Card } from "@/components/ui/card";
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { AccountDot, accountColor } from "@/components/AccountDot";
+import { DailyTrend } from "./DailyTrend";
+import { accountColor } from "@/components/AccountDot";
 import { PageSection } from "@/components/PageSection";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useI18n, type Language, type T } from "@/data/i18n";
-import { cn } from "@/lib/utils";
-import { DayTipRow, DayTooltip, Swatch, useDayHover } from "./DayHover";
 import {
   formatCost,
   formatDay,
@@ -22,27 +19,10 @@ import {
   locale,
   rowKey,
   rowName,
-  toneFill,
   toneIndex,
 } from "./format";
 import { tokenColumns } from "./TokenUsage";
 
-// viewBox units; the chart scales with the card width (about 420–700 px), so
-// its 9-unit labels stay readable at both ends.
-const WIDTH = 440;
-const TOP = 14;
-const BASE = 128;
-const HEIGHT = 146;
-/** Narrowest y-label gutter, and the width a 9-unit label character takes. */
-const MIN_LEFT = 28;
-const LABEL_CHAR = 5.5;
-/** Hit markers are as wide as their bar, at most this wide. */
-const MARK = 6;
-
-const r2 = (v: number) => Math.round(v * 100) / 100;
-/** An upward triangle `width` wide, centred on `cx`, standing on `base`. */
-const triangle = (cx: number, base: number, width: number) =>
-  `M ${r2(cx - width / 2)} ${r2(base)} L ${r2(cx + width / 2)} ${r2(base)} L ${r2(cx)} ${r2(base - width * 0.85)} Z`;
 
 /** What the bars count: Pro units from the limit history, or the token ledger's tokens or API value. */
 export type DailyMeasure = "limit" | "tokens" | "cost";
@@ -230,14 +210,17 @@ export function DailyChart({
   // Each series in its account's own colour (the dot's), the rows that are no account in grey.
   const colorOf = (s: Series) =>
     s.muted ? "var(--account-none)" : accountColor(accounts.find((a) => a.id === s.key)?.color);
-  const config: ChartConfig = Object.fromEntries(series.map((s) => [s.key, { label: s.name, color: colorOf(s) }]));
-  const data = days.map((day) => ({
+  const trendDays = days.map((day) => ({
     date: day.date,
     total: day.total,
-    // ▲ sits on top of a day with a limit hit.
-    hit: hitDays.has(day.date) && day.total > 0 ? day.total : undefined,
-    ...Object.fromEntries(day.parts.map((part) => [part.key, part.value])),
+    hit: hitDays.has(day.date) && day.total > 0,
+    values: Object.fromEntries(day.parts.map((part) => [part.key, part.value])),
   }));
+  const trendSeries = series.map((s) => {
+    const sum = days.reduce((acc, day) => acc + (day.parts.find((p) => p.key === s.key)?.value ?? 0), 0);
+    const estimated = days.some((day) => day.parts.some((p) => p.key === s.key && p.estimated));
+    return { key: s.key, name: s.name, color: colorOf(s), total: `${estimated ? "≈" : ""}${format(sum)}` };
+  });
   const hitLabel = t("limite takıldı", "limit hit");
   return (
     <PageSection
@@ -263,55 +246,41 @@ export function DailyChart({
       }
     >
       <Card className="gap-2 px-4 py-3.5">
-        <ChartContainer config={config} className="aspect-auto h-48 w-full">
-          <ComposedChart data={data} margin={{ top: 14, right: 4, bottom: 0, left: 0 }} barCategoryGap="18%" accessibilityLayer>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={6}
-              minTickGap={28}
-              tickFormatter={(d: string) => formatDay(d, language)}
-            />
-            <YAxis tickLine={false} axisLine={false} width={44} tickFormatter={(v: number) => (measure === "cost" ? guideLabel(v, language) : format(v))} />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(_, payload) => {
-                    const row = payload?.[0]?.payload as { date: string; hit?: number } | undefined;
-                    return row ? `${formatDayLong(row.date, language)}${row.hit ? ` · ▲ ${hitLabel}` : ""}` : "";
-                  }}
-                  formatter={(value, name, item) =>
-                    name === "hit" ? null : (
-                      <div className="flex w-full items-center gap-2">
-                        <span className="size-2 shrink-0 rounded-[2px]" style={{ background: item.color }} />
-                        <span className="text-muted-foreground">{config[String(name)]?.label}</span>
-                        <span className="ml-auto font-medium tabular-nums">{format(Number(value))}</span>
-                      </div>
-                    )
-                  }
-                />
-              }
-            />
-            {series.map((s, i) => (
-              <Bar
-                key={s.key}
-                dataKey={s.key}
-                stackId="day"
-                fill={`var(--color-${s.key})`}
-                // A 2 px surface gap between stacked parts; the top part gets the rounded end.
-                stroke="var(--card)"
-                strokeWidth={1}
-                radius={i === series.length - 1 ? [3, 3, 0, 0] : 0}
-                isAnimationActive={false}
-              />
-            ))}
-            <Scatter dataKey="hit" fill="var(--crit)" shape="triangle" legendType="none" tooltipType="none" isAnimationActive={false} />
-            {series.length > 1 && <ChartLegend content={<ChartLegendContent />} />}
-          </ComposedChart>
-        </ChartContainer>
+        <DailyTrend
+          slot="daily-trend"
+          days={trendDays}
+          series={trendSeries}
+          totalLabel={labels[measure]}
+          tickDay={(d) => formatDay(d, language)}
+          tickValue={(v) => (measure === "cost" ? guideLabel(v, language) : format(v))}
+          axisWidth={44}
+          tooltip={(date) => {
+            const day = days.find((d) => d.date === date);
+            if (!day) return null;
+            const hit = hitDays.has(day.date);
+            return (
+              <div className="grid min-w-44 gap-1 rounded-lg border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
+                <div className="font-semibold">
+                  {formatDayLong(day.date, language)}
+                  {hit && <span className="font-normal text-crit"> · ▲ {hitLabel}</span>}
+                </div>
+                <div className="flex items-baseline justify-between gap-4 border-b pb-1">
+                  <span className="text-muted-foreground">{t("Toplam", "Total")}</span>
+                  <b className="tabular-nums">{approx(day)}{format(day.total)}</b>
+                </div>
+                <ul className="grid gap-1">
+                  {day.parts.map((part) => (
+                    <li key={part.key} className="flex items-center gap-2">
+                      <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ background: colorOf(part) }} />
+                      <span className="min-w-0 flex-1 truncate text-muted-foreground">{part.name}</span>
+                      <span className="tabular-nums">{part.estimated ? "≈" : ""}{format(part.value)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          }}
+        />
         <p className="text-xs text-muted-foreground">{footer}</p>
         {/* The same days as a list, for screen readers and as the chart's table view. */}
         <ul className="sr-only" aria-label={t("Günlük değerler", "Daily values")}>

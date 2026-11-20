@@ -7,9 +7,8 @@ import { Banner } from "@/components/Banner";
 import { PageFrame } from "@/app/PageFrame";
 import { Card } from "@/components/ui/card";
 import { Panda } from "@/components/Panda";
-import { Switch } from "@/components/ui/switch";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Note, SectionHeading, SettingRow } from "@/components/SettingRow";
+import { SectionHeading } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { formatPercent } from "@/lib/meter";
@@ -106,7 +105,7 @@ function StatisticsContent({
   cost,
   tokens,
 }: SectionProps) {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const { view, loading } = state;
   const selected = accounts.find((a) => a.id === accountId);
   if (selected && !historyIdentity(selected))

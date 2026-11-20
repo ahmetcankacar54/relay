@@ -1,9 +1,7 @@
 import {
   Fragment,
   useContext,
-  useEffect,
   useRef,
-  useState,
   type ComponentType,
   type KeyboardEvent,
   type PointerEvent,
@@ -31,12 +29,10 @@ import {
 import { StatusDot } from "@/components/StatusDot";
 import { MiniMeter } from "@/components/LimitLine";
 import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
-import { accountHealth } from "@/lib/account-health";
 import { timeLeft } from "@/lib/account-row";
 import type { T } from "@/data/i18n";
-import { RelayContext, type Relay } from "@/data/relay-context";
-import { pendingFlow, type sidebarStatus } from "@/data/selectors";
-import { accountFromHash, accountHash } from "@/pages/accounts/AccountDetail";
+import { RelayContext } from "@/data/relay-context";
+import { type sidebarStatus } from "@/data/selectors";
 import type { PageId } from "./routes";
 import { SidebarUpdate } from "./SidebarUpdate";
 import { SIDEBAR, dragSidebar, keySidebar, type SidebarSize } from "./useSidebarSize";

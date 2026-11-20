@@ -184,8 +184,9 @@ test("the chart stacks one part per row and day with tokens, each in its account
   const html = shown();
   const list = html.slice(html.indexOf('data-slot="token-days"'));
   assert.equal((list.slice(0, list.indexOf("</ul>")).match(/<li>/g) ?? []).length, 7);
-  // The legend names every row.
-  const legend = text(html.slice(html.indexOf('data-slot="token-legend"'), html.indexOf("</ul>", html.indexOf('data-slot="token-legend"'))));
+  // The rows under the total name every row (each with its own small curve).
+  // The small curves' own <style> blocks carry no words.
+  const legend = text(html.slice(html.indexOf('data-slot="trend-series"'), html.indexOf("</ul>", html.indexOf('data-slot="trend-series"'))).replace(/<style[\s\S]*?<\/style>/g, ""));
   for (const name of ["Kişisel · Max", "Vertex", "Eski hesap", "Hesabı bilinmeyen", "Relay dışı terminal"])
     assert.match(legend, new RegExp(name));
 });
@@ -202,10 +203,10 @@ test("each day adds up its rows; the busiest day sets the chart's top", () => {
   assert.equal(total("2026-10-08"), 0);
 });
 
-test("the legend sums each row over the range, ≈ when any of its days was estimated", () => {
+test("each row under the total sums it over the range, ≈ when any of its days was estimated", () => {
   const html = shown();
-  const at = html.indexOf('data-slot="token-legend"');
-  const legend = text(html.slice(at, html.indexOf("</ul>", at)));
+  const at = html.indexOf('data-slot="trend-series"');
+  const legend = text(html.slice(at, html.indexOf("</ul>", at)).replace(/<style[\s\S]*?<\/style>/g, ""));
   assert.match(legend, /Kişisel · Max≈3,1 Mn/);
   assert.match(legend, /Vertex125 B/);
   assert.match(legend, /Hesabı bilinmeyen45 B/);

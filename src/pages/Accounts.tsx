@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ProviderLogo } from "@/components/ProviderLogo";
-import { Link2, Search } from "lucide-react";
+import { Link2 } from "lucide-react";
 import { PlusIcon, SearchIcon } from "@/components/icons";
 import { Panda } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,6 @@ import { EditAccountDialog } from "./accounts/EditAccountDialog";
 import {
   filterAccounts,
   providerCounts,
-  providerLabel,
   providerShortLabel,
   type AccountFilter,
   type ProviderFilter,
@@ -184,7 +183,6 @@ export function Accounts() {
   };
   const visible = filterAccounts(accounts, query, filter, language, provider);
   const counts = providerCounts(accounts);
-  const linked = accounts.filter((a) => a.desktop).length;
   const account = accounts.find((a) => a.id === selected);
   const dialogs = (
     <>

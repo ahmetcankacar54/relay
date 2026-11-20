@@ -2,10 +2,6 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type Reac
 import {
   Area,
   AreaChart,
-  Bar,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
   ReferenceLine,
   XAxis,
   YAxis,
@@ -25,7 +21,7 @@ import type { StatisticsRange } from "../../../shared/usage-statistics-view";
 import { AccountDot, accountColor } from "@/components/AccountDot";
 import { Banner } from "@/components/Banner";
 import { Disclosure } from "@/components/Disclosure";
-import { InfoTip, PageSection } from "@/components/PageSection";
+import { PageSection } from "@/components/PageSection";
 import { Note } from "@/components/SettingRow";
 import { PandaRig } from "@/components/Panda";
 import { Button } from "@/components/ui/button";
@@ -45,6 +41,7 @@ import { useRelay } from "@/data/relay-context";
 import { formatPercent } from "@/lib/meter";
 import { CostBreakdown } from "./CostBreakdown";
 import { PandaBench } from "./PandaBench";
+import { DailyTrend } from "./DailyTrend";
 import { busiestDay, pandaLines, type PandaLine } from "./panda-facts";
 import {
   formatChange,
@@ -102,8 +99,6 @@ const MUTED_OPACITY: Partial<Record<TokenRow["kind"], string>> = {
   terminal: "opacity-60",
   unknown: "opacity-35",
 };
-/** The fainter share of the unknown row, as the chart's fill opacity. */
-const UNKNOWN_FILL = 0.45;
 
 /** The model mix names at most this many models. */
 const MIX_MODELS = 3;
@@ -336,42 +331,6 @@ function shareOf(value: number, total: number, language: Language) {
   return formatPercent(percent, language);
 }
 
-/** Each row's tokens over the range under `metric`, ≈ when any of its days was estimated. */
-function Legend({
-  view,
-  columns,
-  metric,
-}: {
-  view: TokenUsageView;
-  columns: Column[];
-  metric: Metric;
-}) {
-  const { t, language } = useI18n();
-  return (
-    <ul data-slot="token-legend" aria-label={t("Satırlar", "Rows")} className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-      {columns.map((column) => {
-        let value = 0;
-        let estimated = false;
-        for (const day of view.days) {
-          const cell = day.byRow[column.key];
-          const part = cell ? metricValue(cell, metric) : 0;
-          value += part;
-          estimated ||= part > 0 && isEstimated(cell, metric);
-        }
-        return (
-          <li key={column.key} className="flex items-center gap-1.5">
-            <RowDot column={column} />
-            <span className="text-muted-foreground">{column.name}</span>
-            <span className="font-medium tabular-nums">
-              {estimated ? "≈" : ""}
-              {formatValue(value, metric, language)}
-            </span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
 
 /** The day the panda took out of the chart, and which of its lines it is saying. */
 interface Explained {
@@ -501,17 +460,13 @@ function TokenChart({
   const active = useRef<string | undefined>(undefined);
   const days = chartDays(view, columns, metric);
   const takenAt = explained ? days.findIndex((day) => day.date === explained.date) : -1;
-  /** A day's bar centre as a share of the chart's width, for the panda's bench. */
+  /** A day's point on the curve as a share of the chart's width, for the panda's bench. */
   const at = (index: number) => {
     const g = geometry.current;
-    if (!g || g.width <= 0 || !days.length) return (index + 0.5) / Math.max(1, days.length);
-    return (g.plotX + ((index + 0.5) * g.plotWidth) / days.length) / g.width;
+    const step = days.length > 1 ? index / (days.length - 1) : 0.5;
+    if (!g || g.width <= 0 || !days.length) return step;
+    return (g.plotX + step * g.plotWidth) / g.width;
   };
-  const config: ChartConfig = Object.fromEntries(columns.map((c) => [c.key, { label: c.name, color: c.color }]));
-  const data = days.map((day) => ({
-    date: day.date,
-    ...Object.fromEntries(day.parts.map((part) => [part.column.key, part.value])),
-  }));
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if ((event.key === "Enter" || event.key === " ") && active.current) {
       event.preventDefault();
@@ -525,56 +480,42 @@ function TokenChart({
   const dayOf = (label: unknown) => days.find((day) => day.date === String(label));
   return (
     <div ref={box} data-slot="token-chart-box" data-taken={takenAt >= 0 ? explained?.date : undefined} className="@container relative min-w-0" onKeyDown={onKeyDown}>
-      <ChartContainer config={config} className="aspect-auto h-48 w-full">
-        <ComposedChart
-          data={data}
-          margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
-          barCategoryGap="18%"
-          accessibilityLayer
-          onClick={(state) => {
-            const day = dayOf(state?.activeLabel);
-            if (day) onPick(day.date, box.current);
-          }}
-        >
-          <CartesianGrid vertical={false} />
-          <XAxis
-            dataKey="date"
-            tickLine={false}
-            axisLine={false}
-            tickMargin={6}
-            minTickGap={28}
-            tickFormatter={(d: string) => formatDay(d, language)}
-          />
-          <YAxis tickLine={false} axisLine={false} width={AXIS_WIDTH} tickFormatter={(v: number) => formatValue(v, metric, language)} />
-          <ChartTooltip
-            cursor={{ fill: "var(--muted)" }}
-            // The bench says more than the hover box; the box waits until it closes.
-            {...(takenAt >= 0 ? { active: false } : {})}
-            content={({ active: shown, label }) => {
-              const day = shown ? dayOf(label) : undefined;
-              return day ? <DayDetail day={day} metric={metric} metricLabel={metricLabel} /> : null;
-            }}
-          />
-          {columns.map((column, i) => (
-            <Bar
-              key={column.key}
-              dataKey={column.key}
-              stackId="day"
-              fill={`var(--color-${column.key})`}
-              fillOpacity={column.kind === "unknown" ? UNKNOWN_FILL : 1}
-              // A 2 px surface gap between stacked parts; the top part gets the rounded end.
-              stroke="var(--card)"
-              strokeWidth={1}
-              radius={i === columns.length - 1 ? [3, 3, 0, 0] : 0}
-              isAnimationActive={false}
-            >
-              {/* The day the panda explains stays lit; the others step back. */}
-              {takenAt >= 0 && data.map((day, d) => <Cell key={day.date} opacity={d === takenAt ? 1 : 0.4} />)}
-            </Bar>
-          ))}
-          <ChartWatch onGeometry={(g) => (geometry.current = g)} onActive={(date) => (active.current = date)} />
-        </ComposedChart>
-      </ChartContainer>
+      <DailyTrend
+        slot="token-trend"
+        days={days.map((day) => ({ date: day.date, total: day.total, values: Object.fromEntries(day.parts.map((p) => [p.column.key, p.value])) }))}
+        series={columns.map((column) => {
+          let value = 0;
+          let estimated = false;
+          for (const day of days) {
+            const part = day.parts.find((p) => p.column.key === column.key);
+            value += part?.value ?? 0;
+            estimated ||= !!part?.estimated;
+          }
+          return {
+            key: column.key,
+            name: column.name,
+            color: column.color,
+            total: `${estimated ? "≈" : ""}${formatValue(value, metric, language)}`,
+            dot: <RowDot column={column} />,
+          };
+        })}
+        totalLabel={metricLabel}
+        tickDay={(d) => formatDay(d, language)}
+        tickValue={(v) => formatValue(v, metric, language)}
+        axisWidth={AXIS_WIDTH}
+        // The bench says more than the hover box; the box waits until it closes.
+        tooltip={(date) => {
+          const day = takenAt >= 0 ? undefined : dayOf(date);
+          return day ? <DayDetail day={day} metric={metric} metricLabel={metricLabel} /> : null;
+        }}
+        onPick={(date) => {
+          const day = dayOf(date);
+          if (day) onPick(day.date, box.current);
+        }}
+        marked={takenAt >= 0 ? explained?.date : undefined}
+      >
+        <ChartWatch onGeometry={(g) => (geometry.current = g)} onActive={(date) => (active.current = date)} />
+      </DailyTrend>
       {takenAt >= 0 && explained && line && (
         <PandaBench
           // A new day is taken apart afresh: the panda peeks and the parts are laid out again.
@@ -859,7 +800,6 @@ function Content({
                   (opener.current as HTMLElement | null)?.focus?.()
                 }
               />
-              <Legend view={view} columns={columns} metric={metric} />
               <Disclosure title={t("Gün gün tablo", "Day-by-day table")}>
                 <DayTable view={view} columns={columns} metric={metric} />
               </Disclosure>

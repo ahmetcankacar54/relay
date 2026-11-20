@@ -1,6 +1,5 @@
 import { Fragment, useState, type MouseEvent } from "react";
-import { AntigravityAction, AntigravityPrompt, antigravityAccountState, type AntigravityAsk } from "@/features/AntigravityAccount";
-import { Private } from "@/components/Private";
+import { AntigravityAction, AntigravityPrompt, type AntigravityAsk } from "@/features/AntigravityAccount";
 import {
   AppWindow,
   ArrowLeftRight,
@@ -10,10 +9,8 @@ import {
   KeyRound,
   Monitor,
   MoreHorizontal,
-  Network,
   Pencil,
   RefreshCw,
-  SquareTerminal,
   Trash2,
   X,
 } from "lucide-react";
@@ -28,16 +25,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { StatusDot } from "@/components/StatusDot";
-import { ProviderBadge } from "@/components/ProviderBadge";
 import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { keychainWords } from "@/data/platform";
@@ -47,19 +34,11 @@ import { cn } from "@/lib/utils";
 import {
   accountHealth,
   renewalIssue,
-  usageSignInStatus,
-} from "@/lib/account-health";
+  } from "@/lib/account-health";
 import { fullLimitNote } from "@/lib/account-row";
-import { extensionGuide } from "@/lib/extension-ui";
-import { formatPercent, percentUsed } from "@/lib/meter";
-import { formatRelative } from "@/lib/time";
-import { MiniMeter } from "@/components/LimitLine";
 import { useExtensionStatus } from "@/data/useExtension";
 import { useTerminalStatus } from "@/data/useTerminal";
-import { terminalGuide } from "@/lib/terminal-ui";
-import type { TerminalStatus } from "../../../shared/terminal-identity";
-import type { ExtensionStatus } from "../../../shared/types";
-import { accountPlan, planTitle, providerLabel, providerShortLabel } from "./accountLabels";
+import { accountPlan, planTitle, providerShortLabel } from "./accountLabels";
 import { isClaudeAccount } from "@/lib/account-health";
 import { fullestByPeriod, limitHeadline, modelOnlyUsage } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
