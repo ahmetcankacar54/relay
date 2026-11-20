@@ -1,9 +1,7 @@
 import {
   Fragment,
   useContext,
-  useEffect,
   useRef,
-  useState,
   type ComponentType,
   type KeyboardEvent,
   type PointerEvent,
@@ -29,14 +27,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { StatusDot } from "@/components/StatusDot";
-import { UsageRing } from "@/components/UsageRing";
+import { MiniMeter } from "@/components/LimitLine";
 import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
-import { accountHealth } from "@/lib/account-health";
 import { timeLeft } from "@/lib/account-row";
 import type { T } from "@/data/i18n";
-import { RelayContext, type Relay } from "@/data/relay-context";
-import { pendingFlow, type sidebarStatus } from "@/data/selectors";
-import { accountFromHash, accountHash } from "@/pages/accounts/AccountDetail";
+import { RelayContext } from "@/data/relay-context";
+import { type sidebarStatus } from "@/data/selectors";
 import type { PageId } from "./routes";
 import { SidebarUpdate } from "./SidebarUpdate";
 import { SIDEBAR, dragSidebar, keySidebar, type SidebarSize } from "./useSidebarSize";
@@ -141,76 +137,6 @@ function NavItem({
   );
 }
 
-/** The account open on the Accounts page (`#/hesaplar/<id>`), following the hash. */
-function useOpenAccount(): string | undefined {
-  const read = () => accountFromHash(globalThis.window?.location?.hash ?? "");
-  const [id, setId] = useState(read);
-  useEffect(() => {
-    const update = () => setId(read());
-    window.addEventListener("hashchange", update);
-    return () => window.removeEventListener("hashchange", update);
-  }, []);
-  return id;
-}
-
-/**
- * The accounts under Hesaplar while the Accounts page or an account's page is open: each links to its
- * page with a dot, green when it is ready (or running) and grey otherwise; the open one is marked.
- */
-function AccountLinks({
-  relay,
-  open,
-  t,
-  onPick,
-}: {
-  relay: Relay;
-  open?: string;
-  t: T;
-  onPick(): void;
-}) {
-  return (
-    <ul
-      aria-label={t("Hesap listesi", "Account list")}
-      className="ml-5 grid min-h-0 gap-px overflow-y-auto py-0.5 pl-2"
-    >
-      {relay.accounts.map((a) => {
-        const health = accountHealth(
-          a,
-          relay.data?.usage[a.id],
-          {
-            active: a.id === relay.active?.id,
-            desktopRunning: !!relay.desktop?.running,
-            waiting: pendingFlow(
-              relay.data?.authFlows.find((f) => f.accountId === a.id),
-            ),
-            platform: relay.data?.diagnostics?.platform,
-          },
-          t,
-        );
-        const current = a.id === open;
-        return (
-          <li key={a.id} className="min-w-0">
-            <a
-              href={accountHash(a.id)}
-              onClick={onPick}
-              aria-current={current ? "true" : undefined}
-              title={`${a.name} · ${health.label}`}
-              className={cn(
-                "flex h-7 min-w-0 items-center gap-2 rounded-md px-2 text-xs text-sidebar-muted hover:text-sidebar-foreground [-webkit-app-region:no-drag]",
-                current && "bg-sidebar-accent text-sidebar-foreground",
-              )}
-            >
-              <StatusDot tone={health.tone === "ok" ? "ok" : "off"} />
-              <span className="truncate">{a.name}</span>
-              <span className="sr-only">{` · ${health.label}`}</span>
-            </a>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 /**
  * The sidebar's edge: drag it to set the width, past `SIDEBAR.collapseBelow` to fold it into the
  * rail; double-click for the initial width. With the keyboard: ←/→ move it 16 px (⇧ 48 px), → opens
@@ -289,8 +215,6 @@ export function Sidebar({
   };
   // Read here rather than passed in, so the shell's props stay as they are; tests may render without it.
   const relay = useContext(RelayContext);
-  const openAccount = useOpenAccount();
-  const listAccounts = page === "hesaplar" && !compact && !!relay?.accounts.length;
   // The five-hour window's time left, as the Overview's rings say it.
   const left =
     summary?.fiveHour !== undefined && relay?.active
@@ -336,7 +260,7 @@ export function Sidebar({
   };
   // Usage is three pages, grouped under one heading.
   const usage: Item[] = [
-    { id: "kullanim", icon: UsageIcon, label: t("Limitler", "Limits") },
+    { id: "kullanim", icon: UsageIcon, label: t("Limit geçmişi", "Limit history") },
     { id: "tokenlar", icon: TokensIcon, label: t("Token ve ücret", "Tokens and cost") },
     { id: "rozetler", icon: PinsIcon, label: t("Rozetler", "Pins") },
   ];
@@ -387,14 +311,6 @@ export function Sidebar({
               compact={compact}
               go={goFrom("above")}
             />
-            {item.id === "hesaplar" && listAccounts && relay && (
-              <AccountLinks
-                relay={relay}
-                open={openAccount}
-                t={t}
-                onPick={() => onPoke?.("above")}
-              />
-            )}
           </Fragment>
         ))}
         <div
@@ -437,16 +353,7 @@ export function Sidebar({
             onClick={() => goFrom("below")("genel")}
             className="flex w-full items-center gap-2.5 rounded-md text-left whitespace-normal"
           >
-            <UsageRing
-              outer={summary.fiveHour}
-              size={32}
-              label={
-                summary.fiveHour === undefined
-                  ? t("5 saatlik dönem bilinmiyor", "5-hour period unknown")
-                  : t(`5 saatlik dönem ${formatUsed(summary.fiveHour, "tr")}`, `5-hour period ${formatUsed(summary.fiveHour, "en")}`)
-              }
-            />
-            <span className="grid min-w-0 gap-0.5">
+            <span className="grid min-w-0 flex-1 gap-1">
               <span className="flex min-w-0 items-center gap-1.5">
                 <StatusDot tone={summary.running ? "ok" : "off"} />
                 <b className="truncate font-semibold">{summary.name}</b>
@@ -461,6 +368,13 @@ export function Sidebar({
                       `${formatPercent(percentUsed(summary.fiveHour), "en")}${left ? ` · ${left}` : ""}${summary.running ? "" : " · Claude closed"}`,
                     )}
               </span>
+              {/* The same bar as every limit in Relay: the active account's five hours. */}
+              {summary.fiveHour !== undefined && (
+                <MiniMeter
+                  usedPercent={summary.fiveHour}
+                  label={t(`5 saatlik dönem ${formatUsed(summary.fiveHour, "tr")}`, `5-hour period ${formatUsed(summary.fiveHour, "en")}`)}
+                />
+              )}
             </span>
           </button>
         </div>

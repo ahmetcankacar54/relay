@@ -1,4 +1,5 @@
-import { ArrowDown, ArrowUp, CalendarClock, Play } from "lucide-react";
+import { useState } from "react";
+import { ArrowDown, ArrowUp } from "lucide-react";
 import { routineFailure } from "../../shared/routine-failure";
 import { clockLocative } from "../../shared/tr-dative";
 import type {
@@ -29,17 +30,22 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { SettingGroup } from "@/components/SettingRow";
-import { Disclosure } from "@/components/Disclosure";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { AccountDot } from "@/components/AccountDot";
+import { ListCard, ListFoot, ListHead, ListRow, narrowHidden } from "@/components/ListCard";
+import { InfoTip, PageSection } from "@/components/PageSection";
+import { StatusDot } from "@/components/StatusDot";
+import { StatusLabel } from "@/components/StatusLabel";
+import type { AccountStatus } from "@/lib/account-status";
+import { forecastSummary } from "@/lib/forecast-text";
 import { cn } from "@/lib/utils";
 import { macWording } from "@/data/platform";
 import { TimePicker } from "./TimePicker";
 import { TimeZonePicker } from "./TimeZonePicker";
 import { PlanEditor } from "./PlanEditor";
-import { PlanTimeline } from "../pages/planning/PlanTimeline";
+import { PlanTimeline, type NextStat } from "../pages/planning/PlanTimeline";
 import { TempoRow } from "../pages/planning/TempoRow";
 import { AdaptiveRow } from "../pages/planning/AdaptiveRow";
-import { ForecastBadges } from "../pages/planning/ForecastBadges";
 import { AccountWindowLine } from "../pages/planning/AccountWindowLine";
 
 type T = (tr: string, en: string) => string;
@@ -174,19 +180,46 @@ function span(hours: PlanningHours, t: T) {
 }
 
 const cardClass = "gap-0 px-4 py-3.5";
-/** Account row: narrow = switch · name · order, editors below; wide (@xl) = one row. */
-const accountRowClass =
-  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-2 border-t py-3 first:border-t-0 @xl:grid-cols-[auto_minmax(0,1.3fr)_160px_minmax(0,1.1fr)_28px]";
-const wideCell = "col-start-2 col-end-4 min-w-0 @xl:col-auto";
 const noteClass = "text-xs text-muted-foreground";
 
-/** Account status colour by keeper state. */
-const stateTone: Partial<Record<KeeperAccountStatus["state"], string>> = {
-  active: "text-ok-foreground",
-  waiting: "text-warn-foreground",
-  due: "text-warn-foreground",
-  blocked: "text-crit",
-};
+/**
+ * An account's planning status in at most four words, for the list's status column; the keeper's
+ * full sentence (`statusText`) is its title.
+ */
+export function planStatus(
+  status: KeeperAccountStatus | undefined,
+  lastFailure: string | undefined,
+  zone: string,
+  t: T,
+): AccountStatus {
+  const reason = statusText(status, lastFailure, zone, t);
+  const say = (tone: AccountStatus["tone"], text: string): AccountStatus => ({ tone, text, reason });
+  if (!status) return say("off", t("Durum yok", "No status"));
+  switch (status.state) {
+    case "off":
+      return say("off", t("Başlatma kapalı", "Early start off"));
+    case "outside":
+      return status.nextStartAt
+        ? say("ok", t(`Sonraki ${clock(status.nextStartAt, zone)}`, `Next ${clock(status.nextStartAt, zone)}`))
+        : say("off", t("Başlatma yok", "No start"));
+    case "active":
+      return say("ok", t(`Dönem açık · ${clock(status.resetsAt!, zone)}`, `Open · ${clock(status.resetsAt!, zone)}`));
+    case "due":
+      return say("warn", t("Başlatılıyor", "Starting"));
+    case "waiting":
+      if (status.reason === "adapted")
+        return say("warn", t(`Uyarlandı · ${clock(status.nextStartAt!, zone)}`, `Adapted · ${clock(status.nextStartAt!, zone)}`));
+      if (status.reason === "cooldown") return say("warn", t("Yeniden denenecek", "Retrying soon"));
+      if (status.reason === "in-use") return say("off", t("Oturum açık", "Session running"));
+      if (status.reason === "relay-busy") return say("off", t("Sırada", "Queued"));
+      return say("off", t("Yenileniyor", "Refreshing"));
+    case "blocked":
+      if (stopReason(status)) return say("crit", t("Durdu", "Stopped"));
+      if (status.reason === "weekly-limit") return say("crit", t("Hafta dolu", "Week full"));
+      if (status.reason === "daily-limit") return say("warn", t("Deneme sınırı", "Attempt limit"));
+      return say("crit", t("Giriş gerekli", "Sign-in needed"));
+  }
+}
 
 function HoursRow({
   id,
@@ -252,19 +285,7 @@ function HoursRow({
   );
 }
 
-export function PlanningPanel({
-  settings,
-  keeper,
-  accounts,
-  usage,
-  activeId,
-  disabled,
-  t,
-  now = Date.now(),
-  update,
-  updateAccount,
-  platform,
-}: {
+export interface PlanningPanelProps {
   settings: PlanningSettings;
   keeper?: KeeperSnapshot;
   accounts: Account[];
@@ -278,9 +299,25 @@ export function PlanningPanel({
   updateAccount: (id: string, planning: AccountPlanning) => void;
   /** Relay's platform (`diagnostics.platform`): "Mac" or "computer" in the notes. */
   platform?: string;
-}) {
+  /** The "Plan ayarları" sheet, opened from the page header. */
+  settingsOpen?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
+}
+
+/**
+ * What the page reads from the settings, the keeper and the clock: the planned accounts, the
+ * tempo, today's lane, the forecast and the next start. The header's line and the page share it.
+ */
+export function planningModel({
+  settings,
+  keeper,
+  accounts,
+  usage,
+  activeId,
+  t,
+  now = Date.now(),
+}: Pick<PlanningPanelProps, "settings" | "keeper" | "accounts" | "usage" | "activeId" | "t" | "now">) {
   const zone = settings.timeZone;
-  const mac = macWording(platform);
   const today = localDate(now, zone);
   const included = settings.accounts.filter(({ id }) =>
     accounts.some((a) => a.id === id),
@@ -326,15 +363,15 @@ export function PlanningPanel({
     activeId,
     adaptation,
   });
-  // Today the hero reads the lane's live forecast: of the whole day before
-  // work, of the rest while work runs. A later day has its plan's forecast.
+  // Today the forecast is the lane's live one: of the whole day before work,
+  // of the rest while work runs. A later day has its plan's forecast.
   const interval = reference?.interval;
   const live =
     reference === plans[0] && todayView.live?.date === reference.date
       ? todayView.live.forecast
       : undefined;
   const forecast = live ?? reference?.forecast;
-  // The pill names its day unless it is today's.
+  // The forecast names its day unless it is today's.
   const forecastDay = !reference
     ? ""
     : reference.date === today
@@ -349,17 +386,10 @@ export function PlanningPanel({
   const weekend = !!interval?.weekend;
   const rate = tempo.rate[weekend ? "weekend" : "weekday"];
   const todayRate = rate * (adaptation?.factor ?? 1);
-  const zoneClock = (time: number) => clock(time, zone);
   const excluded = accounts.filter(
     (a) => !settings.accounts.some((p) => p.id === a.id),
   );
   const name = (id?: string) => accounts.find((a) => a.id === id)?.name ?? "—";
-  const move = (index: number, delta: number) => {
-    const next = [...included];
-    const [item] = next.splice(index, 1);
-    next.splice(index + delta, 0, item);
-    update({ accounts: next });
-  };
   // Today's count is drawn from the plan so edits show at once; the next start
   // prefers the keeper's live view (actual resets) when it has one.
   const plannedToday = plans[0].accounts.reduce(
@@ -367,6 +397,93 @@ export function PlanningPanel({
     0,
   );
   const upcoming = nextPlannedWindow(settings, accounts, keeper, now);
+  const language = t("tr", "en") as Language;
+  const nextStart =
+    settings.autoStart && included.length && upcoming
+      ? nextStartLabel(name(upcoming.accountId), upcoming.at, now, zone, language)
+      : undefined;
+  return {
+    zone,
+    included,
+    planned,
+    choice,
+    tempo,
+    adaptation,
+    reference,
+    todayView,
+    forecast,
+    forecastDay,
+    weekend,
+    rate,
+    todayRate,
+    excluded,
+    plannedToday,
+    nextStart,
+    name,
+    clock: (time: number) => clock(time, zone),
+  };
+}
+
+export type PlanningModel = ReturnType<typeof planningModel>;
+
+/** The page header's line: how many accounts the plan uses and how the day goes. */
+export function planningHeadline(model: PlanningModel, t: T): string {
+  const n = model.included.length;
+  if (!n) return t("Plan yok", "No plan");
+  const accounts = t(`${n} hesap`, `${n} ${n === 1 ? "account" : "accounts"}`);
+  return model.forecast
+    ? `${accounts} · ${model.forecastDay}${forecastSummary(model.forecast, t, model.clock)}`
+    : accounts;
+}
+
+/** A group of the settings sheet: a small heading (an ⓘ for its note) and its rows. */
+function SheetGroup({
+  id,
+  title,
+  info,
+  children,
+}: {
+  id: string;
+  title: string;
+  info?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className="@container grid gap-1">
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+        {title}
+        {info && <InfoTip>{info}</InfoTip>}
+      </h3>
+      <div className="grid">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * The "Plan ayarları" sheet: early start, work hours, tempo and adapting, and the time zone. Each
+ * row is a label and one short line; what a setting does is behind its ⓘ.
+ */
+export function PlanSettings({
+  settings,
+  model,
+  accounts,
+  disabled,
+  update,
+  t,
+  platform,
+  now = Date.now(),
+}: {
+  settings: PlanningSettings;
+  model: PlanningModel;
+  accounts: Account[];
+  disabled: boolean;
+  update: (patch: Partial<PlanningSettings>) => void;
+  t: T;
+  platform?: string;
+  now?: number;
+}) {
+  const mac = macWording(platform);
+  const { included, plannedToday, nextStart, tempo, choice, rate, weekend } = model;
   const summary = !settings.autoStart
     ? t(
         "Açınca dönemler planlanan saatlerde başlar.",
@@ -381,90 +498,36 @@ export function PlanningPanel({
           `Bugün ${plannedToday} başlatma planlı`,
           `${plannedToday} ${plannedToday === 1 ? "start" : "starts"} planned today`,
         );
-  // The next start has its own row under the switch, in the shared wording.
-  const language = t("tr", "en") as Language;
-  const nextStart =
-    settings.autoStart && included.length && upcoming
-      ? nextStartLabel(
-          name(upcoming.accountId),
-          upcoming.at,
-          now,
-          zone,
-          language,
-        )
-      : undefined;
   return (
-    <div className="grid gap-4">
-      <PlanTimeline
-        settings={planned}
-        accounts={accounts}
-        usage={usage}
-        now={now}
-        tempo={tempo}
-        activeId={activeId}
-        adaptation={adaptation}
-        t={t}
-      />
-
-      <SettingGroup
+    <div className="grid gap-5">
+      <SheetGroup
         id="planning-early"
         title={t("Önceden başlatma", "Early start")}
-        className={cn("@container", settings.autoStart && "border-primary/40")}
+        info={
+          mac
+            ? t(
+                "Relay açık, Mac uyanık olmalı. Her başlatma küçük bir istek harcar; limitleri okumak dönem başlatmaz.",
+                "Relay must be open and the Mac awake. Each start uses a small request; reading the limits never starts a period.",
+              )
+            : t(
+                "Relay açık, bilgisayar uyanık olmalı. Her başlatma küçük bir istek harcar; limitleri okumak dönem başlatmaz.",
+                "Relay must be open and the computer awake. Each start uses a small request; reading the limits never starts a period.",
+              )
+        }
       >
-        <div className="flex items-center gap-3.5 py-3.5">
-          <span
-            className={cn(
-              "hidden size-9 shrink-0 place-items-center rounded-lg @lg:grid",
-              settings.autoStart
-                ? "bg-accent text-accent-foreground"
-                : "bg-muted text-muted-foreground",
-            )}
-            aria-hidden="true"
-          >
-            <Play className="size-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <strong className="font-display text-sm font-semibold">
-              {t(
-                "Limit dönemlerini önceden başlat",
-                "Start limit periods early",
-              )}
-            </strong>
-            <p className="mt-0.5 text-sm">{summary}</p>
-            {settings.autoStart && forecast && (
-              <ForecastBadges
-                forecast={forecast}
-                day={forecastDay}
-                source={tempo.source}
-                factor={adaptation?.factor}
-                adapted={
-                  !!adaptation && Object.keys(adaptation.schedule).length > 0
-                }
-                clock={zoneClock}
-                t={t}
-              />
-            )}
-            <small className={cn(noteClass, "mt-0.5 block")}>
-              {mac
-                ? t(
-                    "Relay açık, Mac uyanık olmalı. Her başlatma küçük bir istek harcar; limitleri okumak dönem başlatmaz.",
-                    "Relay must be open and the Mac awake. Each start uses a small request; reading the limits never starts a period.",
-                  )
-                : t(
-                    "Relay açık, bilgisayar uyanık olmalı. Her başlatma küçük bir istek harcar; limitleri okumak dönem başlatmaz.",
-                    "Relay must be open and the computer awake. Each start uses a small request; reading the limits never starts a period.",
-                  )}
-            </small>
-          </div>
+        <div className="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-x-3 py-2.5">
           <Switch
             checked={settings.autoStart}
             disabled={disabled}
-            aria-label={t(
-              "Limit dönemlerini önceden başlat",
-              "Start limit periods early",
-            )}
+            aria-label={t("Limit dönemlerini önceden başlat", "Start limit periods early")}
             onCheckedChange={(autoStart) => update({ autoStart })}
           />
+          <span className="grid min-w-0">
+            <strong className="text-sm font-semibold">
+              {t("Limit dönemlerini önceden başlat", "Start limit periods early")}
+            </strong>
+            <small className={noteClass}>{summary}</small>
+          </span>
         </div>
         {nextStart && (
           <div
@@ -477,276 +540,332 @@ export function PlanningPanel({
             </span>
           </div>
         )}
-      </SettingGroup>
+      </SheetGroup>
 
-      <SettingGroup
+      <SheetGroup
         id="planning-hours"
         title={t("Çalışma saatleri ve tempo", "Work hours and tempo")}
-        className="@container"
+        info={t(
+          "Bitiş başlangıçtan önceyse aralık ertesi güne uzar.",
+          "An end before the start runs into the next day.",
+        )}
       >
-        <div className="grid">
-          <HoursRow
-            id="weekday"
-            label={t("Hafta içi", "Weekdays")}
-            days={t("Pzt–Cum", "Mon–Fri")}
-            value={settings.weekday}
-            disabled={disabled}
-            onChange={(weekday) => update({ weekday })}
-            t={t}
-          />
-          <HoursRow
-            id="weekend"
-            label={t("Hafta sonu", "Weekend")}
-            days={t("Cmt–Paz", "Sat–Sun")}
-            value={settings.weekend}
-            disabled={disabled}
-            onChange={(weekend) => update({ weekend })}
-            t={t}
-          />
-          <TempoRow
-            tempo={tempo}
-            choice={choice}
-            rate={rate}
-            weekend={weekend}
-            accounts={included.map(({ id }) =>
-              accounts.find((a) => a.id === id)!,
-            )}
-            disabled={disabled}
-            onChange={(tempo) => update({ tempo })}
-            t={t}
-          />
-          <AdaptiveRow
-            settings={settings}
-            disabled={disabled}
-            update={update}
-            t={t}
-          />
-        </div>
-        <div className="grid gap-2.5 border-t py-3">
-          <div className="max-w-[420px]">
-            <TimeZonePicker
-              id="planning-zone"
-              label={t("Saat dilimi", "Time zone")}
-              value={zone}
-              disabled={disabled}
-              onChange={(timeZone) => update({ timeZone })}
-              t={t}
-              now={now}
-            />
-          </div>
-          <p className={noteClass}>
-            {t(
-              "Bitiş başlangıçtan önceyse aralık ertesi güne uzar.",
-              "An end before the start runs into the next day.",
-            )}
-          </p>
-        </div>
-      </SettingGroup>
+        <HoursRow
+          id="weekday"
+          label={t("Hafta içi", "Weekdays")}
+          days={t("Pzt–Cum", "Mon–Fri")}
+          value={settings.weekday}
+          disabled={disabled}
+          onChange={(weekday) => update({ weekday })}
+          t={t}
+        />
+        <HoursRow
+          id="weekend"
+          label={t("Hafta sonu", "Weekend")}
+          days={t("Cmt–Paz", "Sat–Sun")}
+          value={settings.weekend}
+          disabled={disabled}
+          onChange={(weekend) => update({ weekend })}
+          t={t}
+        />
+        <TempoRow
+          tempo={tempo}
+          choice={choice}
+          rate={rate}
+          weekend={weekend}
+          accounts={included.map(({ id }) => accounts.find((a) => a.id === id)!)}
+          disabled={disabled}
+          onChange={(tempo) => update({ tempo })}
+          t={t}
+        />
+        <AdaptiveRow settings={settings} disabled={disabled} update={update} t={t} />
+      </SheetGroup>
 
-      <SettingGroup
-        id="planning-accounts"
-        title={t("Hesaplar", "Accounts")}
-        className="@container"
+      <SheetGroup id="planning-zone-group" title={t("Saat dilimi", "Time zone")}>
+        <TimeZonePicker
+          id="planning-zone"
+          label={t("Saat dilimi", "Time zone")}
+          value={settings.timeZone}
+          disabled={disabled}
+          onChange={(timeZone) => update({ timeZone })}
+          t={t}
+          now={now}
+        />
+      </SheetGroup>
+    </div>
+  );
+}
+
+/** Nothing in the plan yet: what the plan is for, and the way to choose its accounts. */
+function EmptyPlan({ onPick, t }: { onPick: () => void; t: T }) {
+  return (
+    <Card data-slot="planning-empty" className="grid justify-items-center gap-2 px-4 py-7 text-center">
+      <strong className="text-sm font-semibold">
+        {t("Hangi hesaplar sırayla kullanılsın?", "Which accounts take turns?")}
+      </strong>
+      <p className={cn(noteClass, "max-w-sm")}>
+        {t(
+          "Seçtiğin hesapların dönemleri çalışma saatlerine göre sıraya dizilir; biri dolmadan diğeri hazır olur.",
+          "The chosen accounts' periods line up with your work hours, so the next is ready before one runs out.",
+        )}
+      </p>
+      <Button size="sm" onClick={onPick}>
+        {t("Hesap seç", "Choose accounts")}
+      </Button>
+    </Card>
+  );
+}
+
+export function PlanningPanel(props: PlanningPanelProps) {
+  const {
+    settings,
+    keeper,
+    accounts,
+    usage,
+    activeId,
+    disabled,
+    t,
+    now = Date.now(),
+    update,
+    updateAccount,
+    platform,
+    settingsOpen = false,
+    onSettingsOpenChange,
+  } = props;
+  const model = planningModel({ settings, keeper, accounts, usage, activeId, t, now });
+  const { zone, included, planned, tempo, adaptation, reference, todayView, forecast, forecastDay, todayRate, excluded, nextStart } = model;
+  // The accounts outside the plan wait behind one line until asked for.
+  const [showExcluded, setShowExcluded] = useState(false);
+  const move = (index: number, delta: number) => {
+    const next = [...included];
+    const [item] = next.splice(index, 1);
+    next.splice(index + delta, 0, item);
+    update({ accounts: next });
+  };
+  const pace = new Intl.NumberFormat(t("tr-TR", "en-GB"), {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(adaptation?.factor ?? 1);
+  const adapted = !!adaptation && Object.keys(adaptation.schedule).length > 0;
+  const gap = !!forecast?.segments.some((s) => !s.accountId);
+  // Beside the plan's summary: the next start, today's live forecast under it, and while the
+  // keeper adapts the day, its pace and that the plan moved.
+  const next: NextStat = {
+    value:
+      nextStart ??
+      (settings.autoStart
+        ? t("Planlı başlatma yok", "No planned start")
+        : t("Önceden başlatma kapalı", "Early start is off")),
+    note:
+      settings.autoStart && forecast ? (
+        <span data-slot="live-forecast" className="inline-flex items-center gap-1.5">
+          <StatusDot tone={gap ? "warn" : "ok"} />
+          {forecastDay + forecastSummary(forecast, t, model.clock)}
+        </span>
+      ) : settings.autoStart ? undefined : (
+        t("Plan ayarlarından açılır", "Turn it on in plan settings")
+      ),
+    chips:
+      (adaptation?.factor ?? 1) > 1 || adapted ? (
+        <span className="mt-1 flex flex-wrap gap-1.5">
+          {(adaptation?.factor ?? 1) > 1 && (
+            <Badge variant="warn">
+              {t(`Bugün plandan ${pace} kat hızlısın`, `Today: ${pace}× the planned pace`)}
+            </Badge>
+          )}
+          {adapted && <Badge variant="warn">{t("Plan uyarlandı", "Plan adapted")}</Badge>}
+        </span>
+      ) : undefined,
+  };
+  const head = (
+    <ListHead columns="plan">
+      <span />
+      <span>{t("Hesap", "Account")}</span>
+      <span>{t("Plan", "Plan")}</span>
+      <span>{t("İlk başlangıç", "First start")}</span>
+      <span className={narrowHidden}>{t("Durum", "Status")}</span>
+    </ListHead>
+  );
+  return (
+    <div className="grid gap-5">
+      {included.length ? (
+        <PlanTimeline
+          settings={planned}
+          accounts={accounts}
+          usage={usage}
+          now={now}
+          tempo={tempo}
+          activeId={activeId}
+          adaptation={adaptation}
+          next={next}
+          t={t}
+        />
+      ) : (
+        <EmptyPlan onPick={() => setShowExcluded(true)} t={t} />
+      )}
+
+      <PageSection
+        slot="planning-accounts"
+        title={t("Plandaki hesaplar", "Accounts in the plan")}
+        info={t(
+          "Relay başlatma saatlerini kapasiteye ve tempoya göre belirler. Sıra yalnızca eşitlikte öncelik verir.",
+          "Relay sets the start times from capacity and tempo. The order applies only to ties.",
+        )}
+        aside={
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {included.length} / {accounts.length}
+          </span>
+        }
       >
-        {included.map((entry, index) => {
-          const account = accounts.find((a) => a.id === entry.id)!;
-          const automatic = reference?.accounts.find(
-            (a) => a.accountId === entry.id,
-          );
-          const first =
-            entry.firstStart ??
-            (automatic ? clock(automatic.firstStart, zone) : "09:00");
-          const status = shownStatus(
-            keeper?.accounts.find((s) => s.accountId === entry.id),
-            adaptation,
-          );
-          const lastFailure = keeper?.attempts.find(
-            (a) => a.accountId === entry.id && a.status === "failed",
-          )?.reason;
-          return (
-            <div className={accountRowClass} key={entry.id}>
-              <Switch
-                checked
-                disabled={disabled}
-                aria-label={t(
-                  `${account.name} plana dahil`,
-                  `${account.name} in the plan`,
-                )}
-                onCheckedChange={() =>
-                  update({
-                    accounts: included.filter((a) => a.id !== entry.id),
-                  })
-                }
-              />
-              <span className="grid min-w-0 justify-items-start gap-0.5">
-                <strong className="text-sm font-semibold">
-                  {account.name}
-                </strong>
-                <small
-                  className={cn(
-                    "text-xs text-muted-foreground",
-                    status && stateTone[status.state],
-                  )}
-                >
-                  {statusText(status, lastFailure, zone, t)}
-                </small>
-                {stopReason(status) && (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="h-auto px-0 text-xs"
-                    disabled={disabled}
-                    onClick={() => update({})}
-                  >
-                    {t("Yeniden dene", "Try again")}
-                  </Button>
-                )}
-                <AccountWindowLine
-                  account={account}
-                  rate={todayRate}
-                  lane={todayView.lane}
-                  clock={zoneClock}
-                  t={t}
+        <ListCard label={t("Plandaki hesaplar", "Accounts in the plan")} slot="plan-accounts">
+          {(included.length > 0 || showExcluded) && head}
+          {included.map((entry, index) => {
+            const account = accounts.find((a) => a.id === entry.id)!;
+            const automatic = reference?.accounts.find((a) => a.accountId === entry.id);
+            const first = entry.firstStart ?? (automatic ? clock(automatic.firstStart, zone) : "09:00");
+            const status = shownStatus(
+              keeper?.accounts.find((s) => s.accountId === entry.id),
+              adaptation,
+            );
+            const lastFailure = keeper?.attempts.find(
+              (a) => a.accountId === entry.id && a.status === "failed",
+            )?.reason;
+            return (
+              <ListRow key={entry.id} columns="plan" data={{ "data-account": entry.id }}>
+                <Switch
+                  checked
+                  disabled={disabled}
+                  aria-label={t(`${account.name} plana dahil`, `${account.name} in the plan`)}
+                  onCheckedChange={() => update({ accounts: included.filter((a) => a.id !== entry.id) })}
                 />
-              </span>
-              <div className={wideCell}>
+                <div className="grid min-w-0 gap-0.5">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <AccountDot color={account.color} />
+                    <strong className="truncate text-sm font-semibold" title={account.name}>
+                      {account.name}
+                    </strong>
+                    <span className="ml-auto flex shrink-0">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={t(`${account.name} hesabını yukarı taşı`, `Move ${account.name} up`)}
+                        disabled={disabled || index === 0}
+                        onClick={() => move(index, -1)}
+                      >
+                        <ArrowUp />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={t(`${account.name} hesabını aşağı taşı`, `Move ${account.name} down`)}
+                        disabled={disabled || index === included.length - 1}
+                        onClick={() => move(index, 1)}
+                      >
+                        <ArrowDown />
+                      </Button>
+                    </span>
+                  </div>
+                </div>
                 <PlanEditor
                   account={account}
                   disabled={disabled}
                   update={(planning) => updateAccount(account.id, planning)}
                   t={t}
+                  compact
                 />
-              </div>
-              <div className={cn(wideCell, "grid min-w-0 gap-1")}>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <CalendarClock className="size-3.5" aria-hidden="true" />
-                  {t("İlk başlangıç", "First start")}
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "ml-auto rounded-md",
-                      entry.firstStart
-                        ? "bg-warn/15 text-foreground"
-                        : "bg-ok/15 text-foreground",
-                    )}
-                  >
-                    {entry.firstStart
-                      ? t("Elle", "Manual")
-                      : t("Otomatik", "Automatic")}
-                  </Badge>
-                </span>
-                <TimePicker
-                  id={`first-${entry.id}`}
-                  label={t(
-                    `${account.name} ilk başlangıç`,
-                    `${account.name} first start`,
-                  )}
-                  value={first}
-                  disabled={disabled}
-                  onChange={(firstStart) =>
-                    update({
-                      accounts: included.map((a) =>
-                        a.id === entry.id ? { ...a, firstStart } : a,
-                      ),
-                    })
-                  }
-                  t={t}
-                />
-                {entry.firstStart && (
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    className="h-auto justify-self-start px-0 text-xs"
+                <div className="grid min-w-0 justify-items-start gap-0.5">
+                  <TimePicker
+                    id={`first-${entry.id}`}
+                    label={t(`${account.name} ilk başlangıç`, `${account.name} first start`)}
+                    value={first}
                     disabled={disabled}
-                    onClick={() =>
+                    onChange={(firstStart) =>
                       update({
-                        accounts: included.map((a) =>
-                          a.id === entry.id ? { id: a.id } : a,
-                        ),
+                        accounts: included.map((a) => (a.id === entry.id ? { ...a, firstStart } : a)),
                       })
                     }
-                  >
-                    {t("Otomatiğe dön", "Back to automatic")}
-                  </Button>
-                )}
-              </div>
-              <div className="col-start-3 row-start-1 flex gap-0.5 @xl:col-start-5 @xl:flex-col">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="h-6 w-7"
-                  aria-label={t(
-                    `${account.name} hesabını yukarı taşı`,
-                    `Move ${account.name} up`,
+                    t={t}
+                  />
+                  {entry.firstStart && (
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="xs"
+                      className="h-auto px-0"
+                      title={t("Elle seçildi", "Set by hand")}
+                      disabled={disabled}
+                      onClick={() =>
+                        update({
+                          accounts: included.map((a) => (a.id === entry.id ? { id: a.id } : a)),
+                        })
+                      }
+                    >
+                      {t("Otomatiğe dön", "Back to automatic")}
+                    </Button>
                   )}
-                  disabled={disabled || index === 0}
-                  onClick={() => move(index, -1)}
-                >
-                  <ArrowUp className="size-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="h-6 w-7"
-                  aria-label={t(
-                    `${account.name} hesabını aşağı taşı`,
-                    `Move ${account.name} down`,
+                </div>
+                <div className={cn(narrowHidden, "flex min-w-0 flex-wrap items-center gap-x-2")}>
+                  <StatusLabel status={planStatus(status, lastFailure, zone, t)} />
+                  {stopReason(status) && (
+                    <Button type="button" variant="ghost" size="xs" disabled={disabled} onClick={() => update({})}>
+                      {t("Yeniden dene", "Try again")}
+                    </Button>
                   )}
-                  disabled={disabled || index === included.length - 1}
-                  onClick={() => move(index, 1)}
-                >
-                  <ArrowDown className="size-3.5" />
+                </div>
+                {/* How long a window lasts and when it works today: a quiet second line the whole row wide. */}
+                <span data-slot="window-line" className="col-start-2 col-span-4 flex min-w-0 items-center gap-2 @max-2xl:col-span-3 [&>small]:truncate">
+                  <AccountWindowLine account={account} rate={todayRate} lane={todayView.lane} clock={model.clock} t={t} />
+                  {/* A narrow list drops the status column; its retry moves here. */}
+                  {stopReason(status) && (
+                    <Button type="button" variant="ghost" size="xs" className="@2xl:hidden" disabled={disabled} onClick={() => update({})}>
+                      {t("Yeniden dene", "Try again")}
+                    </Button>
+                  )}
+                </span>
+              </ListRow>
+            );
+          })}
+          {showExcluded &&
+            excluded.map((account) => (
+              <ListRow key={account.id} columns="plan" data={{ "data-account": account.id }}>
+                <Switch
+                  checked={false}
+                  disabled={disabled}
+                  aria-label={t(`${account.name} plana dahil`, `${account.name} in the plan`)}
+                  onCheckedChange={() => update({ accounts: [...included, { id: account.id }] })}
+                />
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <AccountDot color={account.color} />
+                  <strong className="truncate text-sm font-semibold text-muted-foreground" title={account.name}>
+                    {account.name}
+                  </strong>
+                </div>
+                <PlanEditor
+                  account={account}
+                  disabled={disabled}
+                  update={(planning) => updateAccount(account.id, planning)}
+                  t={t}
+                  compact
+                />
+                <span />
+                <span className={cn(narrowHidden, noteClass)}>{t("Plana dahil değil", "Not in the plan")}</span>
+              </ListRow>
+            ))}
+          {excluded.length > 0 && (
+            <ListFoot
+              action={
+                <Button type="button" variant="ghost" size="xs" onClick={() => setShowExcluded(!showExcluded)}>
+                  {showExcluded ? t("Gizle", "Hide") : t("Göster", "Show")}
                 </Button>
-              </div>
-            </div>
-          );
-        })}
-        {excluded.map((account) => (
-          <div className={accountRowClass} key={account.id}>
-            <Switch
-              checked={false}
-              disabled={disabled}
-              aria-label={t(
-                `${account.name} plana dahil`,
-                `${account.name} in the plan`,
-              )}
-              onCheckedChange={() =>
-                update({ accounts: [...included, { id: account.id }] })
               }
-            />
-            <span className="grid min-w-0 gap-0.5">
-              <strong className="text-sm font-semibold text-muted-foreground">
-                {account.name}
-              </strong>
-              <small className={noteClass}>
-                {t("Plana dahil değil", "Not in the plan")}
-              </small>
-            </span>
-            <div className={wideCell}>
-              <PlanEditor
-                account={account}
-                disabled={disabled}
-                update={(planning) => updateAccount(account.id, planning)}
-                t={t}
-              />
-            </div>
-          </div>
-        ))}
-        <div className="border-t py-2">
-          <Disclosure title={t("Nasıl çalışır?", "How does it work?")}>
-            <p className={noteClass}>
-              {t(
-                "Relay başlatma saatlerini kapasiteye ve tempoya göre belirler. Sıra yalnızca eşitlikte öncelik verir.",
-                "Relay sets the start times from capacity and tempo. The order applies only to ties.",
-              )}
-            </p>
-          </Disclosure>
-        </div>
-      </SettingGroup>
+            >
+              {t(`Plana dahil olmayan ${excluded.length} hesap`, `${excluded.length} ${excluded.length === 1 ? "account" : "accounts"} not in the plan`)}
+            </ListFoot>
+          )}
+        </ListCard>
+      </PageSection>
 
       {!!keeper?.attempts.length && (
         <Card className={cn(cardClass, "@container")}>
@@ -766,7 +885,7 @@ export function PlanningPanel({
                   <time className="text-muted-foreground tabular-nums">
                     {clock(attempt.at, zone)}
                   </time>
-                  <span className="truncate">{name(attempt.accountId)}</span>
+                  <span className="truncate">{model.name(attempt.accountId)}</span>
                   <small
                     className={cn(
                       "col-start-2 text-xs @xl:col-start-3",
@@ -791,6 +910,29 @@ export function PlanningPanel({
           </details>
         </Card>
       )}
+
+      <Sheet open={settingsOpen} onOpenChange={onSettingsOpenChange}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <SheetHeader>
+            <SheetTitle>{t("Plan ayarları", "Plan settings")}</SheetTitle>
+            <SheetDescription>
+              {t("Çalışma saatleri, tempo ve önceden başlatma", "Work hours, tempo and early start")}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="px-4 pb-6">
+            <PlanSettings
+              settings={settings}
+              model={model}
+              accounts={accounts}
+              disabled={disabled}
+              update={update}
+              t={t}
+              platform={platform}
+              now={now}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

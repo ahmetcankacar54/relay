@@ -9,9 +9,11 @@ import { networkDetail, retryTime } from "./usage";
  * - Codex (a ChatGPT sign-in): `chatgpt.com/backend-api/wham/usage`, the request the Codex CLI's
  *   `/status` makes. Its primary window is the five-hour one, its secondary the weekly one. An
  *   OpenAI API key has no such limits.
- * - Antigravity: Google's Code Assist `fetchAvailableModels`, which states each model's remaining
- *   share and when it resets. There is no account-wide window, so the headline is the model with
- *   the most room left; each model's own share is a model window.
+ * - Antigravity: Code Assist's `retrieveUserQuotaSummary`, the call Antigravity 2.x shows its
+ *   limits from: a few pools (Gemini; Claude & GPT shared), each with a five-hour and a weekly
+ *   window. Accounts it refuses (the free tier) fall back to `fetchAvailableModels`, whose per-model
+ *   shares are folded into the same pools. There is no account-wide window, so the headline is the
+ *   pool with the most room left; each pool window is a model window.
  */
 
 export type ProviderLimits = Pick<
@@ -158,7 +160,101 @@ export async function readCodexUsage(
 /** Models a Code Assist answer lists that are not ones a user picks (tab completion, internal). */
 const HIDDEN_MODEL = /^(?:tab_|chat_|rev\d|internal)/i;
 
-/** The limits in a `fetchAvailableModels` answer. */
+const slug = (s: string) => s.replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "").toLowerCase();
+
+/** A pool's name as Antigravity shows it: "Gemini Models" → "Gemini", "Claude and GPT models" → "Claude & GPT". */
+export function poolName(raw: string): string {
+  return raw.trim().replace(/\s+models?$/i, "").replace(/\s+and\s+/gi, " & ").slice(0, 40) || raw.trim().slice(0, 40);
+}
+
+/** The pool a model's quota is counted in: Google shares one among the Gemini models, one among Claude and GPT. */
+function modelPool(id: string, label: string): string {
+  const name = `${id} ${label}`;
+  if (/gemini/i.test(name)) return "Gemini";
+  if (/claude|gpt/i.test(name)) return "Claude & GPT";
+  return label;
+}
+
+/**
+ * The headline of pool windows: the pool with the most room (judged on its fuller window), as its
+ * fuller window. The account still answers while that pool has room.
+ */
+function poolHeadline(windows: ModelWindow[]): Pick<ProviderLimits, "fiveHour" | "sevenDay"> {
+  const pools = new Map<string, ModelWindow>();
+  for (const w of windows) {
+    const seen = pools.get(w.label);
+    if (!seen || w.usedPercent > seen.usedPercent) pools.set(w.label, w);
+  }
+  const best = [...pools.values()].sort((a, b) => a.usedPercent - b.usedPercent)[0];
+  const headline: UsageWindow = { usedPercent: best.usedPercent, ...(best.resetsAt ? { resetsAt: best.resetsAt } : {}) };
+  const weekly =
+    best.period === "seven_day" ||
+    (!best.period && !!best.resetsAt && Date.parse(best.resetsAt) - Date.now() > 24 * HOUR * 1000);
+  return weekly ? { sevenDay: headline } : { fiveHour: headline };
+}
+
+/** A summary bucket's window: its `window` cadence ("5h", "weekly"), else its id's or name's. */
+function bucketPeriod(bucket: Json): ModelWindow["period"] {
+  const window = typeof bucket.window === "string" ? bucket.window.trim().toLowerCase() : "";
+  if (/^(?:5h|5-hour|five[_ -]?hours?)$/.test(window)) return "five_hour";
+  if (/^(?:weekly|week|7d|seven[_ -]?days?)$/.test(window)) return "seven_day";
+  const id = typeof bucket.bucketId === "string" ? bucket.bucketId.toLowerCase() : "";
+  if (/[-_]5h$/.test(id)) return "five_hour";
+  if (/[-_](?:weekly|7d)$/.test(id)) return "seven_day";
+  const name = typeof bucket.displayName === "string" ? bucket.displayName.toLowerCase() : "";
+  if (/\b5[ -]?(?:h\b|hour)/.test(name)) return "five_hour";
+  if (/week/.test(name)) return "seven_day";
+  return undefined;
+}
+
+/**
+ * The limits in a `retrieveUserQuotaSummary` answer: each pool's five-hour and weekly window, in
+ * the order Antigravity lists them (Gemini first), five hours before the week. A disabled bucket
+ * (a pool the plan lacks, or the five hours while the week is spent) is left out; a bucket without
+ * a fraction but with a reset is spent (proto3 drops a zero). Undefined when the answer has no
+ * usable bucket, so the caller falls back to the model list.
+ */
+export function parseAntigravitySummary(value: unknown, now = Date.now()): ProviderUsageResult | undefined {
+  const groups = (value as Json | null)?.groups;
+  if (!Array.isArray(groups)) return undefined;
+  const windows: ModelWindow[] = [];
+  const order = (w: ModelWindow) => (w.period === "five_hour" ? 0 : w.period === "seven_day" ? 1 : 2);
+  for (const group of groups) {
+    if (!group || typeof group !== "object" || !Array.isArray(group.buckets)) continue;
+    const pool = typeof group.displayName === "string" && group.displayName.trim() ? poolName(group.displayName) : undefined;
+    const own: ModelWindow[] = [];
+    for (const bucket of group.buckets as Json[]) {
+      if (!bucket || typeof bucket !== "object" || bucket.disabled === true) continue;
+      const resetsAt = resetIso(typeof bucket.resetTime === "string" && !bucket.resetTime.trim() ? undefined : bucket.resetTime, now);
+      const raw = bucket.remainingFraction ?? bucket.remaining?.remainingFraction;
+      const remaining =
+        typeof raw === "number" && Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : resetsAt ? 0 : undefined;
+      if (remaining === undefined) continue;
+      const period = bucketPeriod(bucket);
+      const name = typeof bucket.displayName === "string" && bucket.displayName.trim() ? bucket.displayName.trim().slice(0, 40) : undefined;
+      const label = pool ?? name ?? "Antigravity";
+      const id = typeof bucket.bucketId === "string" && slug(bucket.bucketId) ? slug(bucket.bucketId) : `${slug(label)}_${period ?? own.length}`;
+      const key = `antigravity_${id}`;
+      if (windows.some((w) => w.key === key) || own.some((w) => w.key === key)) continue;
+      own.push({
+        key,
+        label,
+        usedPercent: Math.round((1 - remaining) * 1000) / 10,
+        ...(resetsAt ? { resetsAt } : {}),
+        ...(period ? { period } : {}),
+      });
+    }
+    windows.push(...own.sort((a, b) => order(a) - order(b)));
+  }
+  if (!windows.length) return undefined;
+  return { limits: { ...poolHeadline(windows), modelWindows: windows } };
+}
+
+/**
+ * The limits in a `fetchAvailableModels` answer, the fallback for accounts the summary refuses:
+ * each model's share folded into its pool (Gemini; Claude & GPT), the fullest model standing for
+ * the pool. Its windows have no known length.
+ */
 export function parseAntigravityQuota(value: unknown): ProviderUsageResult {
   const models = (value as Json | null)?.models;
   if (!models || typeof models !== "object")
@@ -193,26 +289,33 @@ export function parseAntigravityQuota(value: unknown): ProviderUsageResult {
     });
   }
   if (!entries.length) throw new UsageError("unsupported", undefined, "antigravity quota: no model quotas");
-  // Several model ids share one display name (a model's variants): one line each, the fullest.
-  const byLabel = new Map<string, (typeof entries)[number]>();
-  for (const entry of entries) {
-    const seen = byLabel.get(entry.label);
-    if (!seen || entry.usedPercent > seen.usedPercent) byLabel.set(entry.label, entry);
+  // The models of one pool share its quota: one line per pool, its fullest model.
+  const byPool = new Map<string, ModelWindow>();
+  for (const { id, label, usedPercent, resetsAt } of entries) {
+    const pool = modelPool(id, label);
+    const seen = byPool.get(pool);
+    if (!seen || usedPercent > seen.usedPercent)
+      byPool.set(pool, { key: `antigravity_${slug(pool)}`, label: pool, usedPercent, ...(resetsAt ? { resetsAt } : {}) });
   }
-  const modelWindows: ModelWindow[] = [...byLabel.values()]
-    .map(({ id, ...rest }) => ({ key: `antigravity_${id.replace(/[^a-z0-9]+/gi, "_").toLowerCase()}`, ...rest }))
-    .sort((a, b) => a.key.localeCompare(b.key));
-  // The account still works while any model has room: that one is the headline.
-  const best = [...modelWindows].sort((a, b) => a.usedPercent - b.usedPercent)[0];
-  const headline: UsageWindow = { usedPercent: best.usedPercent, ...(best.resetsAt ? { resetsAt: best.resetsAt } : {}) };
-  const window =
-    best.resetsAt && Date.parse(best.resetsAt) - Date.now() > 24 * HOUR * 1000
-      ? { sevenDay: headline }
-      : { fiveHour: headline };
-  // No `otherLimitReached`: an exhausted model leaves the others usable, and that flag would call
-  // the whole account full. The model windows show which ones are out.
-  return { limits: { ...window, modelWindows } };
+  const modelWindows = [...byPool.values()].sort(
+    (a, b) => Number(b.label === "Gemini") - Number(a.label === "Gemini") || a.label.localeCompare(b.label),
+  );
+  // No `otherLimitReached`: a spent pool leaves the others usable, and that flag would call the
+  // whole account full. The pool windows show which one is out.
+  return { limits: { ...poolHeadline(modelWindows), modelWindows } };
 }
+
+/**
+ * Antigravity 2.x's quota summary, the daily host first: it is the one the app and agy are metered
+ * on, while the prod host can keep a "no window open" five hours (100% left) whatever is used.
+ */
+export const ANTIGRAVITY_SUMMARY_URLS = [
+  "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+  "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+];
+
+/** The summary answers only a 2.x Antigravity client; others are checked for a Code Assist license. */
+export const ANTIGRAVITY_SUMMARY_AGENT = "antigravity/2.24.0 Darwin/arm64";
 
 /** Code Assist's hosts, the one CLIProxyAPI uses first. */
 export const ANTIGRAVITY_QUOTA_URLS = [
@@ -288,11 +391,29 @@ function sidecarDetail(error: unknown): string {
  * Google sign-in and renews it: Relay never handles the token itself.
  */
 export async function readAntigravityUsage(
-  call: (request: { url: string; body: string }) => Promise<FetchedResponse>,
+  call: (request: { url: string; body: string; userAgent?: string }) => Promise<FetchedResponse>,
   projectId: string | undefined,
   now: () => number = Date.now,
 ): Promise<ProviderUsageResult> {
   const body = JSON.stringify(projectId ? { project: projectId } : {});
+  // The pools Antigravity shows. A refused sign-in stops here; anything else (the free tier's 403,
+  // an outage, an answer without buckets) moves on, and in the end to the model list.
+  for (const url of ANTIGRAVITY_SUMMARY_URLS) {
+    let response: FetchedResponse;
+    try {
+      response = await call({ url, body, userAgent: ANTIGRAVITY_SUMMARY_AGENT });
+    } catch {
+      continue;
+    }
+    if (response.status === 401) throw refusal(401, response.retryAfter, "antigravity quota summary", now());
+    if (response.status !== 200 || response.body.length > MAX_BODY) continue;
+    try {
+      const summary = parseAntigravitySummary(JSON.parse(response.body), now());
+      if (summary) return summary;
+    } catch {
+      // Not JSON: the model list may still answer.
+    }
+  }
   let last: UsageError | undefined;
   for (const url of ANTIGRAVITY_QUOTA_URLS) {
     let response: FetchedResponse;

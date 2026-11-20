@@ -8,6 +8,7 @@ import {
 } from "@/lib/sidebar-recipe";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { PageSection } from "@/components/PageSection";
 import { Switch } from "@/components/ui/switch";
 import { Note, OptionSelect, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { useI18n } from "@/data/i18n";
@@ -26,6 +27,8 @@ import type { RelaySettings } from "../../../shared/types";
 
 
 const cardClass = "gap-0 px-4 py-3.5";
+/** A row of the "what switches along" card: the card draws the line between rows. */
+const partClass = "border-t py-2 first:border-t-0 first:pt-0 last:pb-0";
 /** A part inside Advanced → Experimental's group, divided from the one above it. */
 const rowClass = "border-t py-3 first:border-t-0";
 
@@ -41,18 +44,6 @@ function useSwitching() {
   const update = (patch: Partial<typeof relay.settings>) =>
     void action("settings", () => api.updateSettings(patch));
   return { relay, disabled, macOS, browserSteps, update };
-}
-
-/** A section's title on the Switching tab: a plain heading with one line under it. */
-function TabSection({ id, title, description }: { id: string; title: string; description: string }) {
-  return (
-    <div className="grid gap-0.5 px-1 pt-2">
-      <h2 id={id} className="text-sm font-semibold">
-        {title}
-      </h2>
-      <p className="text-xs text-muted-foreground">{description}</p>
-    </div>
-  );
 }
 
 /**
@@ -166,10 +157,10 @@ export function SwitchingTab() {
             )}
           </Card>
         )}
-        <TabSection
-          id="gecis-birlikte"
+        <PageSection
+          slot="gecis-birlikte"
           title={t("Geçişte birlikte değişenler", "What switches along")}
-          description={
+          info={
             browserSteps
               ? t(
                   "Claude uygulaması hesap değiştirince bunlar da değişebilir. Eklenti ve terminal isteğe bağlıdır.",
@@ -180,40 +171,43 @@ export function SwitchingTab() {
                   "When the Claude app changes account, your Code history can come along.",
                 )
           }
-        />
-        <Card id="gecis-gecmis" className={cardClass}>
-          <SharedHistoryPreferences
-            value={settings}
-            accounts={accounts}
-            active={active}
-            update={update}
-            disabled={disabled}
-            syncDisabled={
-              !!desktopBusy || !!pendingDesktop || !!desktop?.recoveryRequired
-            }
-            sync={() => relay.requestDesktop(active, "history")}
-            t={t}
-          />
-        </Card>
-        {/* macOS and Linux: elsewhere these steps do not run, and their cards would stand empty. */}
-        {browserSteps && (
-          <>
-            <Card id="gecis-eklenti" className={cardClass}>
-              <ExtensionPreference />
-            </Card>
-            <Card id="gecis-terminal" className={cardClass}>
-              <TerminalPreference />
-            </Card>
-          </>
-        )}
-        <TabSection
-          id="gecis-limit"
+        >
+          {/* One card, one row each: the name, where it stands now, its choice and its check. */}
+          <Card className={cardClass} data-slot="switch-along">
+            <div id="gecis-gecmis" className={partClass}>
+              <SharedHistoryPreferences
+                value={settings}
+                accounts={accounts}
+                active={active}
+                update={update}
+                disabled={disabled}
+                syncDisabled={
+                  !!desktopBusy || !!pendingDesktop || !!desktop?.recoveryRequired
+                }
+                sync={() => relay.requestDesktop(active, "history")}
+                t={t}
+              />
+            </div>
+            {/* macOS and Linux: elsewhere these steps do not run, and their rows would stand empty. */}
+            {browserSteps && (
+              <>
+                <div id="gecis-eklenti" className={partClass}>
+                  <ExtensionPreference />
+                </div>
+                <div id="gecis-terminal" className={partClass}>
+                  <TerminalPreference />
+                </div>
+              </>
+            )}
+          </Card>
+        </PageSection>
+        <PageSection
           title={t("Limite yaklaşınca", "Near the limit")}
-          description={t(
+          info={t(
             "Relay limite yaklaşan hesabı işaretler ve istersen geçilecek hesabı önerir.",
             "Relay marks accounts near their limit and, if you want, suggests one to switch to.",
           )}
-        />
+        >
         <Card id="gecis-oneri" className={cardClass}>
           <SettingRow
             label={t("Limite yaklaşan hesabı işaretle", "Mark accounts near their limit")}
@@ -258,6 +252,7 @@ export function SwitchingTab() {
             />
           </SettingRow>
         </Card>
+        </PageSection>
     </div>
   );
 }

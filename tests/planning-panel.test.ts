@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { createElement, isValidElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { randomUUID } from "node:crypto";
-import { PlanningPanel } from "../src/features/PlanningPanel";
+import { readFileSync } from "node:fs";
+import { PlanSettings, PlanningPanel, planningModel, type PlanningPanelProps } from "../src/features/PlanningPanel";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import { AdaptiveRow } from "../src/pages/planning/AdaptiveRow";
 import { Switch } from "../src/components/ui/switch";
 import { wallTime } from "../shared/planning";
@@ -61,62 +63,87 @@ const nextStartRow = (value: string) =>
   new RegExp(
     `data-slot="next-start"[^>]*><span>Sonraki başlatma</span><span[^>]*>${value}</span>`,
   );
-/** Badges with exactly this text (the tempo toggle also reads "Otomatik"). */
-const badges = (html: string, text: string) =>
-  html.match(new RegExp(`data-slot="badge"[^>]*>${text}<`, "g"))?.length ?? 0;
 /** The hh:mm shown in an account's first-start field, found by its label. */
 const firstStart = (html: string, account: string) =>
   new RegExp(
     `>${account} ilk başlangıç</label>.*?role="spinbutton".*?\\svalue="(\\d\\d:\\d\\d)"`,
   ).exec(html)?.[1];
+/** The page, inside the shell's tooltip provider (the ⓘ notes need it). */
+const page = (props: PlanningPanelProps) =>
+  renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PlanningPanel, props)));
+/** The "Plan ayarları" sheet's content for the same props (the sheet itself opens only in a browser). */
+const sheetProps = (props: PlanningPanelProps) => ({
+  settings: props.settings,
+  model: planningModel(props),
+  accounts: props.accounts,
+  disabled: props.disabled,
+  update: props.update,
+  t: props.t,
+  now: props.now,
+});
+const sheet = (props: PlanningPanelProps) =>
+  renderToStaticMarkup(createElement(TooltipProvider, null, createElement(PlanSettings, sheetProps(props))));
+const panelProps = (settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot): PlanningPanelProps => ({
+  settings: panelSettings(settings),
+  keeper,
+  accounts: [a, b],
+  usage: {},
+  disabled: false,
+  t: (tr: string) => tr,
+  now: NOW,
+  update: () => {},
+  updateAccount: () => {},
+});
 function render(settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot) {
-  return renderToStaticMarkup(
-    createElement(PlanningPanel, {
-      settings: panelSettings(settings),
-      keeper,
-      accounts: [a, b],
-      usage: {},
-      disabled: false,
-      t: (tr: string) => tr,
-      now: NOW,
-      update: () => {},
-      updateAccount: () => {},
-    }),
-  );
+  return page(panelProps(settings, keeper));
 }
+function renderSheet(settings: Partial<PlanningSettings>, keeper?: KeeperSnapshot) {
+  return sheet(panelProps(settings, keeper));
+}
+/** An account's status in the plan's list: its tone, its few words and its full sentence (the title). */
+const statusOf = (html: string, sentence: string) =>
+  html.match(new RegExp(`data-tone="(\\w+)" title="${sentence}"[^>]*>.*?<span class="truncate">([^<]*)</span>`))?.slice(1, 3);
+/** Today's live forecast under "Sıradaki": its dot's tone and its text. */
+const nextForecast = (html: string) =>
+  html.match(/data-slot="live-forecast"[^>]*><span[^>]*class="[^"]*bg-(ok|warn)[^"]*"><\/span>([^<]*)</)?.slice(1, 3);
 
-test("the panel shows the switch, both hour rows and automatic first starts", () => {
+test("the sheet holds the switch and both hour rows; the page shows automatic first starts", () => {
   const accounts = [{ id: a.id }, { id: b.id }];
   const html = render({ accounts });
-  assert.match(html, /Limit dönemlerini önceden başlat/);
-  assert.match(html, /Hafta içi/);
-  assert.match(html, /Hafta sonu/);
+  const settings = renderSheet({ accounts });
+  assert.match(settings, /Limit dönemlerini önceden başlat/);
+  assert.match(settings, /Hafta içi/);
+  assert.match(settings, /Hafta sonu/);
   const [first, second] = todayPlan({ accounts }).accounts;
   assert.equal(firstStart(html, "Kişisel - Max"), clock(first.firstStart));
   assert.equal(firstStart(html, "Vertex"), clock(second.firstStart));
-  assert.equal(badges(html, "Otomatik"), 2);
-  assert.doesNotMatch(html, />Elle</);
+  // An automatic start needs no word; only a manual one offers the way back.
+  assert.doesNotMatch(html, /Otomatiğe dön/);
 });
 
-test("today's plan comes first, above the early-start card", () => {
+test("the page is the plan: today first, then the plan's accounts; the settings are in the sheet", () => {
   const html = render({ accounts: [{ id: a.id }, { id: b.id }] });
   const today = html.indexOf(">Bugün<");
-  const early = html.indexOf("Limit dönemlerini önceden başlat");
-  const hours = html.indexOf("Hafta içi");
+  const list = html.indexOf(">Plandaki hesaplar<");
   const accountRows = html.indexOf("ilk başlangıç</label>");
   assert.ok(today >= 0, "Bugün is drawn");
-  assert.ok(today < early, "Bugün before the early-start card");
-  assert.ok(early < hours, "early start before the working hours");
-  assert.ok(hours < accountRows, "working hours before the accounts");
+  assert.ok(today < list, "Bugün before the plan's accounts");
+  assert.ok(list < accountRows, "the list heading before its rows");
+  assert.doesNotMatch(html, /Limit dönemlerini önceden başlat|Hafta içi|Saat dilimi/);
+  // The sheet: early start, then the hours and tempo, then the time zone.
+  const settings = renderSheet({ accounts: [{ id: a.id }, { id: b.id }] });
+  const early = settings.indexOf("Limit dönemlerini önceden başlat");
+  const hours = settings.indexOf("Hafta içi");
+  const zone = settings.indexOf("Saat dilimi");
+  assert.ok(early >= 0 && early < hours && hours < zone);
 });
 
 test("a manual first start is marked and can return to automatic", () => {
   const accounts = [{ id: a.id, firstStart: "07:00" }, { id: b.id }];
   const html = render({ accounts });
   assert.equal(firstStart(html, "Kişisel - Max"), "07:00");
-  assert.match(html, />Elle</);
-  assert.equal(badges(html, "Otomatik"), 1);
-  assert.match(html, /Otomatiğe dön/);
+  // The manual time offers the way back, once; its title says it was set by hand.
+  assert.equal(html.match(/title="Elle seçildi"[^>]*>Otomatiğe dön</g)?.length, 1);
   const automatic = todayPlan({ accounts }).accounts[1];
   assert.equal(automatic.manual, false);
   assert.equal(firstStart(html, "Vertex"), clock(automatic.firstStart));
@@ -146,14 +173,18 @@ test("keeper status, an empty plan and deleted accounts render safely", () => {
     { autoStart: true, accounts: [{ id: a.id }, { id: randomUUID() }] },
     keeper,
   );
-  assert.match(html, /Dönem açık · 15:15’te yenilenir/);
-  assert.match(html, /text-ok-foreground/);
+  assert.deepEqual(statusOf(html, "Dönem açık · 15:15’te yenilenir"), ["ok", "Dönem açık · 15:15"]);
   // Today's count comes from the plan itself; the next start comes from the
   // keeper's live view. The deleted account takes no slot: the plan is the one
   // of the single remaining account.
+  const settings = renderSheet(
+    { autoStart: true, accounts: [{ id: a.id }, { id: randomUUID() }] },
+    keeper,
+  );
   const [alone] = todayPlan({ accounts: [{ id: a.id }] }).accounts;
-  assert.ok(html.includes(`>Bugün ${alone.windows.length} başlatma planlı<`));
-  assert.match(html, nextStartRow("Vertex bugün 17:45"));
+  assert.ok(settings.includes(`>Bugün ${alone.windows.length} başlatma planlı<`));
+  assert.match(settings, nextStartRow("Vertex bugün 17:45"));
+  assert.match(html, /data-slot="next-stat"[\s\S]*?>Vertex bugün 17:45</);
   assert.equal(firstStart(html, "Kişisel - Max"), clock(alone.firstStart));
   const empty = render({
     accounts: [{ id: a.id }],
@@ -171,15 +202,16 @@ test("an account the keeper has switched off says early start is off", () => {
     accounts: [{ accountId: a.id, state: "off" }],
   };
   const html = render({ autoStart: false, accounts: [{ id: a.id }] }, keeper);
-  assert.match(html, />Önceden başlatma kapalı</);
+  assert.deepEqual(statusOf(html, "Önceden başlatma kapalı"), ["off", "Başlatma kapalı"]);
+  assert.match(html, /data-slot="next-stat"[\s\S]*?>Önceden başlatma kapalı</);
   assert.doesNotMatch(html, /Otomatik başlatma/);
-  // Switched off, the group has no next start row.
-  assert.doesNotMatch(html, /data-slot="next-start"/);
+  // Switched off, the sheet has no next start row.
+  assert.doesNotMatch(renderSheet({ autoStart: false, accounts: [{ id: a.id }] }, keeper), /data-slot="next-start"/);
 });
 
 test("without a keeper view the summary is drawn from the plan", () => {
   const accounts = [{ id: a.id }, { id: b.id }];
-  const html = render({ autoStart: true, accounts });
+  const html = renderSheet({ autoStart: true, accounts });
   const plan = todayPlan({ accounts });
   const count = plan.accounts.reduce((n, p) => n + p.windows.length, 0);
   const next = plan.accounts
@@ -195,22 +227,20 @@ test("without a keeper view the summary is drawn from the plan", () => {
 
 test("a day whose midnight is skipped by DST renders", () => {
   const zone = "Africa/Cairo";
-  const html = renderToStaticMarkup(
-    createElement(PlanningPanel, {
-      settings: {
-        ...DEFAULT_PLANNING,
-        timeZone: zone,
-        accounts: [{ id: a.id }],
-      },
-      accounts: [a, b],
-      usage: {},
-      disabled: false,
-      t: (tr: string) => tr,
-      now: wallTime("2026-04-24", "12:00", zone)!,
-      update: () => {},
-      updateAccount: () => {},
-    }),
-  );
+  const html = page({
+    settings: {
+      ...DEFAULT_PLANNING,
+      timeZone: zone,
+      accounts: [{ id: a.id }],
+    },
+    accounts: [a, b],
+    usage: {},
+    disabled: false,
+    t: (tr: string) => tr,
+    now: wallTime("2026-04-24", "12:00", zone)!,
+    update: () => {},
+    updateAccount: () => {},
+  });
   assert.match(html, /Bugün/);
 });
 
@@ -231,8 +261,8 @@ test("a stopped account says why and offers to try again", () => {
       ],
     },
   );
-  assert.match(html, /Durdu: yönetici politikası/);
-  assert.match(html, /Yeniden dene/);
+  assert.deepEqual(statusOf(html, "Durdu: yönetici politikası[^\"]*"), ["crit", "Durdu"]);
+  assert.match(html, />Yeniden dene</);
 });
 
 // The capacity scenario (Max 5×, Team weight 2, Pro) on a busy Wednesday,
@@ -283,34 +313,41 @@ const evenByHand = [
   { id: team.id, firstStart: "06:30" },
   { id: pro.id, firstStart: "08:10" },
 ];
-function renderScenario(
+const scenarioProps = (
   accounts: PlanningSettings["accounts"],
   now: number,
   activeId = a.id,
   usage: Record<string, AccountUsage> = {},
-) {
-  return renderToStaticMarkup(
-    createElement(PlanningPanel, {
-      settings: scenarioSettings(accounts),
-      keeper: {
-        enabled: true,
-        running: false,
-        plannedToday: 0,
-        attempts: [],
-        accounts: [],
-        tempo: busyTempo,
-      },
-      accounts: scenarioAccounts,
-      usage,
-      activeId,
-      disabled: false,
-      t: tr,
-      now,
-      update: () => {},
-      updateAccount: () => {},
-    }),
-  );
+): PlanningPanelProps => ({
+  settings: scenarioSettings(accounts),
+  keeper: {
+    enabled: true,
+    running: false,
+    plannedToday: 0,
+    attempts: [],
+    accounts: [],
+    tempo: busyTempo,
+  },
+  accounts: scenarioAccounts,
+  usage,
+  activeId,
+  disabled: false,
+  t: tr,
+  now,
+  update: () => {},
+  updateAccount: () => {},
+});
+function renderScenario(...args: Parameters<typeof scenarioProps>) {
+  return page(scenarioProps(...args));
 }
+function renderScenarioSheet(...args: Parameters<typeof scenarioProps>) {
+  return sheet(scenarioProps(...args));
+}
+/** The "Bu plan" stat: its value's title (who warms up when), its value, its note and the note's title. */
+const planStat = (html: string) =>
+  html.match(
+    /data-slot="plan-stat"[^>]*>.*?<strong class="([^"]*)" title="([^"]*)">([^<]*)<\/strong><span class="[^"]*" title="([^"]*)">([^<]*)</,
+  )?.slice(1, 6);
 /** The lane block with this label: its fill's classes and its name, if shown. */
 function laneBlock(html: string, label: string) {
   const block = html.match(
@@ -365,7 +402,8 @@ test("the usage lane shows who works when, with switches and the comparison", ()
   // tone in both themes and ellipsized from the end; a block under 8% of the
   // day has no name. The live forecast from now is not dimmed.
   const morning = laneBlock(html, "Kişisel - Max 09:00–11:09")!;
-  assert.match(morning.fill, /bg-tone-1/);
+  // Each account works in its own colour, the dot's token.
+  assert.match(morning.fill, /bg-account-olive/);
   assert.match(morning.fill, /opacity-50 dark:opacity-65/);
   assert.equal(morning.name, "Kişisel - Max");
   assert.match(morning.nameClass, /min-w-0 truncate/);
@@ -385,37 +423,24 @@ test("the usage lane shows who works when, with switches and the comparison", ()
   // vertex by plan, then (the seam at now is none) pro, vertex and, after the
   // gap, max again.
   assert.equal(count(html, /-ml-px w-0\.5 rounded-\[1px\] bg-foreground\/55/g), 5);
-  // The comparison: this plan against the even spread, which has a gap.
+  // The comparison: this plan, and under it the even spread, which has a gap.
   assert.match(html, />Bu plan</);
-  assert.match(html, />Eşit aralıklı dağıtım</);
   assert.equal(
     forecastSummary(view.compare!.plan, tr, clock),
     "Kesintisiz · 3 geçiş",
   );
-  assert.match(html, /class="block [^"]*font-semibold">Kesintisiz · 3 geçiş</);
   assert.equal(
     forecastSummary(view.compare!.even, tr, clock),
     "14:18–14:50 limit dolu · 5 geçiş",
   );
-  assert.match(
-    html,
-    /class="[^"]*text-crit[^"]*">14:18–14:50 limit dolu · 5 geçiş</,
-  );
-  // Each box says when its automatic accounts warm up, by name in planned
-  // order, on one line.
-  const warmUps = (text: string) =>
-    new RegExp(
-      `geçiş</strong><small class="[^"]*text-xs text-muted-foreground[^"]*block truncate[^"]*" title="${text}">${text}</small>`,
-    );
-  assert.match(
-    html,
-    warmUps("Önceden başlatma: Kişisel - Max 06:15 · Vertex Team 08:15 · Pro 06:30"),
-  );
-  assert.match(
-    html,
-    warmUps("Önceden başlatma: Kişisel - Max 04:50 · Vertex Team 06:30 · Pro 08:10"),
-  );
-  assert.doesNotMatch(html, warmUps("Önceden başlatma kapalı"));
+  // Who warms up when, by name in planned order, is each line's title: never a cut sentence.
+  const [valueClass, planWarmUps, value, evenWarmUps, note] = planStat(html)!;
+  assert.equal(value, "Kesintisiz · 3 geçiş");
+  assert.doesNotMatch(valueClass, /text-crit/);
+  assert.equal(planWarmUps, "Önceden başlatma: Kişisel - Max 06:15 · Vertex Team 08:15 · Pro 06:30");
+  assert.equal(note, "Eşit dağıtımda: 14:18–14:50 limit dolu · 5 geçiş");
+  assert.equal(evenWarmUps, "Önceden başlatma: Kişisel - Max 04:50 · Vertex Team 06:30 · Pro 08:10");
+  assert.doesNotMatch(html, /truncate[^"]*" title="Önceden başlatma/);
 });
 
 test("with automatic start off the comparison says nothing is warmed up", () => {
@@ -426,9 +451,11 @@ test("with automatic start off the comparison says nothing is warmed up", () => 
     settings: { autoStart: false },
   });
   assert.match(html, />Bu plan</);
-  assert.match(html, /class="block [^"]*font-semibold">Kesintisiz · 3 geçiş</);
-  assert.match(html, />14:18–14:50 limit dolu · 5 geçiş</);
-  assert.equal(count(html, />Önceden başlatma kapalı</g), 2);
+  const [, planWarmUps, value, evenWarmUps, note] = planStat(html)!;
+  assert.equal(value, "Kesintisiz · 3 geçiş");
+  assert.equal(note, "Eşit dağıtımda: 14:18–14:50 limit dolu · 5 geçiş");
+  assert.deepEqual([planWarmUps, evenWarmUps], ["Önceden başlatma kapalı", "Önceden başlatma kapalı"]);
+  assert.match(html, /data-slot="next-stat"[\s\S]*?>Önceden başlatma kapalı</);
   assert.doesNotMatch(html, /Önceden başlatma: /);
   assert.doesNotMatch(html, /Otomatik başlatma/);
 });
@@ -447,7 +474,7 @@ test("an all-manual plan shows its gap on the lane and no comparison", () => {
   assert.equal(plan.forecast!.outageMinutes, 32);
   // With the windows as planned the live forecast is the plan's, switches and all.
   assert.equal(count(html, /-ml-px w-0\.5 rounded-\[1px\] bg-foreground\/55/g), plan.forecast!.switches);
-  assert.doesNotMatch(html, /Bu plan|Eşit aralıklı dağıtım/);
+  assert.doesNotMatch(html, /data-slot="plan-stat"|Eşit dağıtımda/);
 });
 
 // Tempo, forecast pill and per-account window lines.
@@ -472,38 +499,47 @@ function renderPlanning({
   settings?: Partial<PlanningSettings>;
   t?: (tr: string, en: string) => string;
 }) {
-  return renderToStaticMarkup(
-    createElement(PlanningPanel, {
-      settings: {
-        ...scenarioSettings(planned.map(({ id }) => ({ id }))),
-        ...(choice ? { tempo: choice } : {}),
-        ...settings,
-      },
-      keeper: {
-        enabled: true,
-        running: false,
-        plannedToday: 0,
-        attempts: [],
-        accounts: [],
-        ...(tempo ? { tempo } : {}),
-      },
-      accounts: [a, b, team, pro, unknownPlan, noPlan],
-      usage: {},
-      activeId: a.id,
-      disabled: false,
-      t,
-      now,
-      update: () => {},
-      updateAccount: () => {},
-    }),
-  );
+  return page(planningProps({ planned, now, tempo, choice, settings, t }));
 }
+function planningProps({
+  planned,
+  now = wednesday("08:00"),
+  tempo,
+  choice,
+  settings,
+  t = tr,
+}: Parameters<typeof renderPlanning>[0]): PlanningPanelProps {
+  return {
+    settings: {
+      ...scenarioSettings(planned.map(({ id }) => ({ id }))),
+      ...(choice ? { tempo: choice } : {}),
+      ...settings,
+    },
+    keeper: {
+      enabled: true,
+      running: false,
+      plannedToday: 0,
+      attempts: [],
+      accounts: [],
+      ...(tempo ? { tempo } : {}),
+    },
+    accounts: [a, b, team, pro, unknownPlan, noPlan],
+    usage: {},
+    activeId: a.id,
+    disabled: false,
+    t,
+    now,
+    update: () => {},
+    updateAccount: () => {},
+  };
+}
+const renderPlanningSheet = (options: Parameters<typeof renderPlanning>[0]) => sheet(planningProps(options));
 /** The tempo toggle item with this label (its whole button). */
 const toggleItem = (html: string, label: string) =>
   html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0] ?? "";
 
-test("the hours card shows the learned tempo and how long a window lasts at it", () => {
-  const html = renderPlanning({ planned: [a, b, pro], tempo: busyTempo });
+test("the sheet's tempo row shows the learned tempo and how long a window lasts at it", () => {
+  const html = renderPlanningSheet({ planned: [a, b, pro], tempo: busyTempo });
   assert.match(html, />Çalışma saatleri ve tempo</);
   assert.match(html, />Tempo</);
   assert.match(html, />ne hızla tüketiyorsun</);
@@ -521,14 +557,14 @@ test("the hours card shows the learned tempo and how long a window lasts at it",
     ),
   );
   assert.ok(
-    renderScenario(automatic, wednesday("08:00")).includes(
+    renderScenarioSheet(automatic, wednesday("08:00")).includes(
       "Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk, Team · 2 ~1 sa, Pro ~30 dk yeter.",
     ),
   );
 });
 
 test("the default and a fixed tempo say so, and the toggle shows the choice", () => {
-  const fallback = renderPlanning({ planned: [a, pro] });
+  const fallback = renderPlanningSheet({ planned: [a, pro] });
   assert.ok(
     fallback.includes("Veri birikene kadar orta tempo ≈ 50 Pro birimi/sa"),
   );
@@ -538,7 +574,7 @@ test("the default and a fixed tempo say so, and the toggle shows the choice", ()
       "Bu tempoyla bir dönem: Max 5× ~10 sa, Pro ~2 sa yeter.",
     ),
   );
-  const heavy = renderPlanning({ planned: [a, pro], choice: "heavy" });
+  const heavy = renderPlanningSheet({ planned: [a, pro], choice: "heavy" });
   assert.ok(heavy.includes("Sabit tempo ≈ 120 Pro birimi/sa"));
   assert.doesNotMatch(heavy, /Sabit tempo ≈ 120 Pro birimi\/sa ·/);
   assert.match(toggleItem(heavy, "Yoğun"), /data-state="on"/);
@@ -550,13 +586,9 @@ test("the default and a fixed tempo say so, and the toggle shows the choice", ()
   );
 });
 
-test("the hero forecasts the day before work and the rest of it during work", () => {
+test("the next stat forecasts the day before work and the rest of it during work", () => {
   const before = renderScenario(automatic, wednesday("08:00"));
-  assert.match(
-    before,
-    /<i class="[^"]*bg-ok[^"]*"[^>]*><\/i>Tahmin: Kesintisiz · 3 geçiş</,
-  );
-  assert.match(before, />Yoğun gün temposuyla</);
+  assert.deepEqual(nextForecast(before), ["ok", "Tahmin: Kesintisiz · 3 geçiş"]);
   // During work: the live forecast from now, as the lane shows it.
   const now = wednesday("12:00");
   const settings = scenarioSettings(automatic);
@@ -574,29 +606,20 @@ test("the hero forecasts the day before work and the rest of it during work", ()
     "16:02–16:15 limit dolu · 3 geçiş",
   );
   const during = renderScenario(automatic, now);
-  assert.match(
-    during,
-    /<i class="[^"]*bg-warn[^"]*"[^>]*><\/i>Bugün kalan: 16:02–16:15 limit dolu · 3 geçiş</,
-  );
+  assert.deepEqual(nextForecast(during), ["warn", "Bugün kalan: 16:02–16:15 limit dolu · 3 geçiş"]);
   assert.doesNotMatch(during, /Tahmin: /);
-  // The tempo chip names the tempo's source.
-  assert.match(
-    renderPlanning({ planned: [a], choice: "heavy" }),
-    />Sabit tempoyla</,
-  );
-  assert.match(renderPlanning({ planned: [a] }), />Varsayılan tempoyla</);
-  // Nothing planned, or automatic start off: neither pill.
-  assert.doesNotMatch(
-    renderPlanning({ planned: [] }),
-    /Tahmin: |Bugün kalan: |tempoyla</,
-  );
-  const off = renderPlanning({
-    planned: scenarioAccounts,
-    tempo: busyTempo,
-    settings: { autoStart: false },
-  });
-  assert.match(off, />Açınca dönemler planlanan saatlerde başlar\.</);
-  assert.doesNotMatch(off, /Tahmin: |Bugün kalan: |tempoyla</);
+  // The tempo's source is the sheet's to say, not the page's.
+  assert.doesNotMatch(during, /tempoyla</);
+  assert.ok(renderPlanningSheet({ planned: [a], choice: "heavy" }).includes("Sabit tempo ≈ 120 Pro birimi/sa"));
+  assert.ok(renderPlanningSheet({ planned: [a] }).includes("Veri birikene kadar orta tempo"));
+  // Nothing planned: no forecast, the empty state asks for accounts.
+  const empty = renderPlanning({ planned: [] });
+  assert.doesNotMatch(empty, /Tahmin: |Bugün kalan: /);
+  assert.match(empty, /data-slot="planning-empty"[\s\S]*Hangi hesaplar sırayla kullanılsın\?[\s\S]*>Hesap seç</);
+  // Automatic start off: no forecast; the sheet says what turning it on does.
+  const offOptions = { planned: scenarioAccounts, tempo: busyTempo, settings: { autoStart: false } };
+  assert.doesNotMatch(renderPlanning(offOptions), /Tahmin: |Bugün kalan: /);
+  assert.match(renderPlanningSheet(offOptions), />Açınca dönemler planlanan saatlerde başlar\.</);
 });
 
 test("before work the pill forecasts the day as the lane does", () => {
@@ -632,10 +655,7 @@ test("before work the pill forecasts the day as the lane does", () => {
   const summary = forecastSummary(view.live!.forecast, tr, clock);
   assert.equal(summary, "2 aralıkta limit dolu, ilki 12:52–13:00 · 5 geçiş");
   const html = renderScenario(automatic, now, team.id, usage);
-  assert.match(
-    html,
-    new RegExp(`<i class="[^"]*bg-warn[^"]*"[^>]*></i>Tahmin: ${summary}<`),
-  );
+  assert.deepEqual(nextForecast(html), ["warn", `Tahmin: ${summary}`]);
   assert.doesNotMatch(html, /Tahmin: Kesintisiz|Bugün kalan: /);
 });
 
@@ -673,13 +693,18 @@ test("each planned account says how long its window lasts and when it works toda
   assert.equal(count(unknown, />Bir dönem ~/g), 1);
 });
 
-test("the notes explain the order and the warm-ups", () => {
+test("the notes wait behind an ⓘ: the order in the list, the overnight hours in the sheet", () => {
   const html = renderScenario(automatic, wednesday("08:00"));
-  // The order note waits under “Nasıl çalışır?”; the time-zone note is one line.
-  assert.match(html, /id="planning-accounts"[\s\S]*>Nasıl çalışır\?</);
+  assert.match(html, /data-slot="planning-accounts"[\s\S]*?aria-label="Nasıl çalışır"/);
   assert.doesNotMatch(html, /Sıra yalnızca eşitlikte öncelik verir/);
   assert.doesNotMatch(html, /Sıra, otomatik saatlerin dağıtım sırasıdır/);
-  assert.ok(html.includes("Bitiş başlangıçtan önceyse aralık ertesi güne uzar."));
+  const settings = renderScenarioSheet(automatic, wednesday("08:00"));
+  assert.match(settings, /id="planning-hours"[\s\S]*?aria-label="Nasıl çalışır"/);
+  assert.doesNotMatch(settings, /Bitiş başlangıçtan önceyse aralık ertesi güne uzar\./);
+  // The notes' words are the tooltips'.
+  const source = readFileSync(new URL("../src/features/PlanningPanel.tsx", import.meta.url), "utf8");
+  assert.ok(source.includes("Sıra yalnızca eşitlikte öncelik verir"));
+  assert.ok(source.includes("Bitiş başlangıçtan önceyse aralık ertesi güne uzar."));
 });
 
 // Saturday work with a learned weekend rate well below the weekday one.
@@ -695,28 +720,30 @@ const weekendHours: Partial<PlanningSettings> = {
 };
 
 test("on a weekend work day the tempo row and the account rows use the weekend rate", () => {
-  const html = renderPlanning({
+  const options = {
     planned: [a, pro],
     tempo: weekendTempo,
     now: wallTime(SATURDAY, "08:00", ZONE)!,
     settings: weekendHours,
-  });
+  };
+  const html = renderPlanning(options);
+  const settings = renderPlanningSheet(options);
   assert.ok(
-    html.includes(
+    settings.includes(
       "Hafta sonu yoğun gün ≈ 60 Pro birimi/sa, son 4 haftanın 21 iş gününden",
     ),
   );
   assert.ok(
-    html.includes(
+    settings.includes(
       "Bu tempoyla bir dönem: Max 5× ~8 sa 20 dk, Pro ~1 sa 40 dk yeter.",
     ),
   );
   assert.ok(html.includes("Bir dönem ~8 sa 20 dk yeter · bugün 11:00–17:00"));
   assert.ok(html.includes(">Bir dönem ~1 sa 40 dk yeter<"));
-  assert.doesNotMatch(html, /205 Pro birimi|~2 sa 25 dk/);
+  assert.doesNotMatch(html + settings, /205 Pro birimi|~2 sa 25 dk/);
   // A weekend that learned no rate of its own reads as the busy day.
   assert.ok(
-    renderPlanning({
+    renderPlanningSheet({
       planned: [a, pro],
       tempo: busyTempo,
       now: wallTime(SATURDAY, "08:00", ZONE)!,
@@ -737,19 +764,20 @@ test("after work the pill and the rows describe the next work day", () => {
     forecastSummary(saturday.forecast!, tr, clock),
     "Kesintisiz · geçiş yok",
   );
-  const html = renderPlanning({
+  const options = {
     planned: scenarioAccounts,
     tempo: weekendTempo,
     now,
     settings: weekendHours,
-  });
-  assert.match(html, /><\/i>Yarın tahmini: Kesintisiz · geçiş yok</);
+  };
+  const html = renderPlanning(options);
+  assert.equal(nextForecast(html)?.[1], "Yarın tahmini: Kesintisiz · geçiş yok");
   assert.doesNotMatch(html, /Tahmin: /);
   assert.equal(
     firstStart(html, "Kişisel - Max"),
     clock(saturday.accounts[0].firstStart),
   );
-  assert.ok(html.includes("Hafta sonu yoğun gün ≈ 60 Pro birimi/sa"));
+  assert.ok(renderPlanningSheet(options).includes("Hafta sonu yoğun gün ≈ 60 Pro birimi/sa"));
   // The window lasts as on Saturday; today's ranges are still today's.
   assert.ok(
     html.includes(
@@ -760,20 +788,17 @@ test("after work the pill and the rows describe the next work day", () => {
 
 test("a fixed tempo applies at once, before the keeper reports it", () => {
   // The keeper snapshot still carries the learned tempo.
-  const html = renderPlanning({
-    planned: [a, pro],
-    tempo: busyTempo,
-    choice: "heavy",
-  });
-  assert.ok(html.includes("Sabit tempo ≈ 120 Pro birimi/sa"));
+  const options = { planned: [a, pro], tempo: busyTempo, choice: "heavy" as const };
+  const html = renderPlanning(options);
+  const sheetHtml = renderPlanningSheet(options);
+  assert.ok(sheetHtml.includes("Sabit tempo ≈ 120 Pro birimi/sa"));
   assert.ok(
-    html.includes(
+    sheetHtml.includes(
       "Bu tempoyla bir dönem: Max 5× ~4 sa 10 dk, Pro ~50 dk yeter.",
     ),
   );
   assert.match(html, />Bir dönem ~4 sa 10 dk yeter/);
-  assert.match(html, />Sabit tempoyla</);
-  assert.doesNotMatch(html, /Yoğun gün|~2 sa 25 dk/);
+  assert.doesNotMatch(html + sheetHtml, /Yoğun gün|~2 sa 25 dk/);
   const settings = scenarioSettings([{ id: a.id }, { id: pro.id }]);
   const view = dayTimeline({
     settings,
@@ -802,7 +827,7 @@ test("a pill for a later day says which day it forecasts", () => {
       settings: weekendHours,
       t: en,
     }),
-    /><\/i>Tomorrow: No gaps · no switches</,
+    /<\/span>Tomorrow: No gaps · no switches</,
   );
   // Without weekend work Monday is next: its weekday name.
   const monday = dayPlan(
@@ -817,7 +842,7 @@ test("a pill for a later day says which day it forecasts", () => {
     tempo: busyTempo,
     now: friday,
   });
-  assert.match(html, new RegExp(`></i>Pazartesi tahmini: ${summary}<`));
+  assert.equal(nextForecast(html)?.[1], `Pazartesi tahmini: ${summary}`);
   assert.doesNotMatch(html, /Tahmin: |Yarın tahmini: /);
   assert.match(
     renderPlanning({
@@ -826,7 +851,7 @@ test("a pill for a later day says which day it forecasts", () => {
       now: friday,
       t: en,
     }),
-    /><\/i>Monday: No gaps · 3 switches</,
+    /<\/span>Monday: No gaps · 3 switches</,
   );
 });
 
@@ -886,7 +911,9 @@ const adaptedProps = ({
   updateAccount: () => {},
 });
 const renderAdapted = (options?: Parameters<typeof adaptedProps>[0]) =>
-  renderToStaticMarkup(createElement(PlanningPanel, adaptedProps(options)));
+  page(adaptedProps(options) as PlanningPanelProps);
+const renderAdaptedSheet = (options?: Parameters<typeof adaptedProps>[0]) =>
+  sheet(adaptedProps(options) as PlanningPanelProps);
 /** A badge's classes by its exact text. */
 const badgeClass = (html: string, text: string) =>
   html.match(
@@ -918,15 +945,16 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
     scenarioAccounts.map((x) => [x.id, planningUsage(x, now)]),
   );
   const html = renderAdapted({ usage });
-  // The hours card: the switch under the tempo row, on.
-  assert.match(html, />Uyarla</);
-  assert.match(html, />Gün içinde hızına göre planı güncelle</);
-  const toggle = switchTag(html, "Uyarla");
+  // The sheet: the switch under the tempo row, on.
+  const settings = renderAdaptedSheet({ usage });
+  assert.match(settings, />Uyarla</);
+  assert.match(settings, />Gün içinde hızına göre planı güncelle</);
+  const toggle = switchTag(settings, "Uyarla");
   assert.match(toggle, /aria-checked="true"/);
   assert.doesNotMatch(toggle, / disabled=""/);
-  assert.ok(html.indexOf(">ne hızla tüketiyorsun<") < html.indexOf(">Uyarla<"));
-  assert.ok(html.indexOf(">Uyarla<") < html.indexOf("Saat dilimi"));
-  // The hero: today's pace and the adapted plan, in the warning tone.
+  assert.ok(settings.indexOf(">ne hızla tüketiyorsun<") < settings.indexOf(">Uyarla<"));
+  assert.ok(settings.indexOf(">Uyarla<") < settings.indexOf("Saat dilimi"));
+  // The next stat: today's pace and the adapted plan, in the warning tone.
   for (const text of ["Bugün plandan 1,6 kat hızlısın", "Plan uyarlandı"]) {
     const classes = badgeClass(html, text);
     assert.ok(classes, text);
@@ -946,7 +974,7 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
   });
   const summary = forecastSummary(view.live!.forecast, tr, clock);
   assert.equal(summary, "14:48–17:00 limit dolu · 3 geçiş");
-  assert.ok(html.includes(`></i>Bugün kalan: ${summary}<`));
+  assert.equal(nextForecast(html)?.[1], `Bugün kalan: ${summary}`);
   assert.ok(laneBlock(html, "Limit dolu 14:48–17:00"));
   assert.doesNotMatch(html, /16:02–17:00/);
   // Pro's window row: its planned window is closed by now (only the past
@@ -955,24 +983,21 @@ test("an adapted day shows the pace, the adapted forecast and the deferred start
   assert.match(html, /title="13:30–18:30"/);
   assert.doesNotMatch(html, /title="11:30–16:30"/);
   // Pro's row: the adopted start, in the warning tone.
-  assert.match(
-    html,
-    /<small class="[^"]*text-warn-foreground[^"]*">Plan uyarlandı · 13:30’da başlatılacak<\/small>/,
-  );
+  assert.deepEqual(statusOf(html, "Plan uyarlandı · 13:30’da başlatılacak"), ["warn", "Uyarlandı · 13:30"]);
   // Each window lasts as long as it does at today's pace (1.6 × 205 an
   // hour); the tempo row keeps the plan's own.
   assert.match(html, />Bir dönem ~1 sa 30 dk yeter · bugün /);
   assert.match(html, />Bir dönem ~35 dk yeter/);
   assert.match(html, />Bir dönem ~20 dk yeter/);
   assert.match(
-    html,
+    settings,
     /Bu tempoyla bir dönem: Max 5× ~2 sa 25 dk, Team · 2 ~1 sa, Pro ~30 dk yeter\./,
   );
 });
 
 test("the adapt switch follows the setting, needs automatic start and sends the change", () => {
   // Its note describes it.
-  const html = renderAdapted();
+  const html = renderAdaptedSheet();
   const described = switchTag(html, "Uyarla").match(
     /aria-describedby="([^"]+)"/,
   )?.[1];
@@ -984,18 +1009,18 @@ test("the adapt switch follows the setting, needs automatic start and sends the 
     ),
   );
   assert.match(
-    switchTag(renderAdapted({ settings: { adaptive: false } }), "Uyarla"),
+    switchTag(renderAdaptedSheet({ settings: { adaptive: false } }), "Uyarla"),
     /aria-checked="false"/,
   );
   const off = switchTag(
-    renderAdapted({ settings: { autoStart: false } }),
+    renderAdaptedSheet({ settings: { autoStart: false } }),
     "Uyarla",
   );
   assert.match(off, / disabled=""/);
   // Turning it off sends just that.
   const patches: Partial<PlanningSettings>[] = [];
-  const panel = PlanningPanel(
-    adaptedProps({ update: (patch) => patches.push(patch) }),
+  const panel = PlanSettings(
+    sheetProps(adaptedProps({ update: (patch) => patches.push(patch) }) as PlanningPanelProps),
   );
   const row = findElement(panel, AdaptiveRow)!;
   assert.ok(row);
@@ -1028,12 +1053,9 @@ test("a start deferred before the account's active range shows the adopted time"
       },
     ],
   });
-  assert.match(
-    html,
-    /<small class="[^"]*text-warn-foreground[^"]*">Plan uyarlandı · 09:30’da başlatılacak<\/small>/,
-  );
+  assert.deepEqual(statusOf(html, "Plan uyarlandı · 09:30’da başlatılacak"), ["warn", "Uyarlandı · 09:30"]);
   assert.doesNotMatch(html, /Sonraki başlatma 06:30/);
-  assert.match(html, />Sonraki başlatma 08:15</);
+  assert.deepEqual(statusOf(html, "Sonraki başlatma 08:15"), ["ok", "Sonraki 08:15"]);
 });
 
 test("only what was adapted shows, and nothing once adaptation is off", () => {
@@ -1049,13 +1071,10 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   assert.doesNotMatch(off, /hızlısın|Plan uyarlandı|Uyarlandı/);
   // Pro's adapted wait reads as a plain next start, and windows last as at
   // the plan's tempo.
-  assert.match(
-    off,
-    /<small class="text-xs text-muted-foreground">Sonraki başlatma 13:30</,
-  );
+  assert.deepEqual(statusOf(off, "Sonraki başlatma 13:30"), ["ok", "Sonraki 13:30"]);
   assert.match(off, />Bir dönem ~30 dk yeter/);
   assert.doesNotMatch(off, />Bir dönem ~20 dk yeter/);
-  assert.match(off, /><\/i>Bugün kalan: 16:02–16:15 limit dolu · 3 geçiş</);
+  assert.equal(nextForecast(off)?.[1], "Bugün kalan: 16:02–16:15 limit dolu · 3 geçiş");
   assert.doesNotMatch(
     renderScenario(automatic, wednesday("12:00")),
     /hızlısın|Plan uyarlandı|Uyarlandı/,
@@ -1067,9 +1086,10 @@ test("only what was adapted shows, and nothing once adaptation is off", () => {
   });
   assert.ok(badgeClass(en, "Today: 2.0× the planned pace"));
   assert.ok(badgeClass(en, "Plan adapted"));
-  assert.match(en, />Plan adapted · starts at 13:30</);
-  assert.match(en, />Adapt</);
-  assert.match(en, />Update the plan for today’s pace</);
+  assert.deepEqual(statusOf(en, "Plan adapted · starts at 13:30"), ["warn", "Adapted · 13:30"]);
+  const enSheet = renderAdaptedSheet({ adaptation: adapted(2, [[pro, "13:30"]]), t: (_, text) => text });
+  assert.match(enSheet, />Adapt</);
+  assert.match(enSheet, />Update the plan for today’s pace</);
 });
 
 test("an unreadable adopted time is left out", () => {
@@ -1090,5 +1110,5 @@ test("an unreadable adopted time is left out", () => {
     ],
   });
   assert.doesNotMatch(html, /Plan uyarlandı|Uyarlandı/);
-  assert.match(html, />Sonraki başlatma 06:30</);
+  assert.deepEqual(statusOf(html, "Sonraki başlatma 06:30"), ["ok", "Sonraki 06:30"]);
 });

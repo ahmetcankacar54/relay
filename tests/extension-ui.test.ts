@@ -17,7 +17,7 @@ import { extensionLine } from "../shared/extension-text";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext } from "../src/data/i18n";
 import { FOCUS_CHECK_MS, focusChecks, useExtensionStatus } from "../src/data/useExtension";
-import { fakeDom } from "./fake-dom";
+import { fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
 import { BROWSER_APPS, BROWSERS, chooseInstance, type ExtensionOutcome, type ExtensionStatus } from "../shared/browser-extension";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 
@@ -234,7 +234,7 @@ const render = (relay: Relay, child: ReturnType<typeof createElement>, language:
     ),
   );
 
-test("the account row shows the state and its steps, and no browser profile picker is left", () => {
+test("the account row shows the state and its steps, and no browser profile picker is left", async () => {
   const html = render(
     relayFor("darwin", [vertex, alto]),
     createElement(ExtensionRow, { account: vertex, initialStatus: status() }),
@@ -242,17 +242,48 @@ test("the account row shows the state and its steps, and no browser profile pick
   assert.match(html, /Tarayıcı eklentisi/);
   assert.match(html, />Bağlı<\/span>.*Nasıl çalışır\?/);
   assert.doesNotMatch(html, /Tarayıcı profili|Şimdi aç|Open now/);
+  const signedOut = status({ current: { state: "signed-out", at: NOW } });
   const none = render(
     relayFor("darwin", [vertex, altoLinked]),
-    createElement(ExtensionRow, {
-      account: altoLinked,
-      initialStatus: status({ current: { state: "signed-out", at: NOW } }),
-    }),
+    createElement(ExtensionRow, { account: altoLinked, initialStatus: signedOut }),
     "en",
   );
   assert.match(none, /The extension is signed out/);
-  assert.match(none, /<ol[^>]*>.*Sign in with alto@example\.com\./);
   assert.match(none, />Check<\/button>/);
+  // The steps wait behind one closed line, so the row stays one line.
+  assert.match(none, /<button[^>]*aria-expanded="false"[^>]*><span[^>]*>How to connect<\/span>/);
+  assert.doesNotMatch(none, /<ol/);
+  // Opening it shows them.
+  const dom = fakeDom();
+  dom.install();
+  readableText();
+  try {
+    const { createRoot } = await import("react-dom/client");
+    const root = createRoot(dom.container as unknown as Element);
+    await act(async () =>
+      root.render(
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "en", setLanguage() {}, t: en } },
+          createElement(
+            RelayContext.Provider,
+            { value: relayFor("darwin", [vertex, altoLinked]) },
+            createElement(ExtensionRow, { account: altoLinked, initialStatus: signedOut }),
+          ),
+        ),
+      ),
+    );
+    const container = dom.container as unknown as Fake;
+    const disclosure = find(container, (n) => n.tagName === "button" && textOf(n) === "How to connect");
+    assert.ok(disclosure, "the closed steps line is drawn");
+    await act(async () => dom.dispatch(disclosure, "click", { detail: 1 }));
+    const steps = find(container, (n) => n.tagName === "ol");
+    assert.ok(steps, "the steps open under it");
+    assert.match(textOf(steps), /Sign in with alto@example\.com\./);
+    await act(async () => root.unmount());
+  } finally {
+    dom.uninstall();
+  }
 });
 
 test("the sheet shows the row on macOS only", () => {
@@ -289,7 +320,8 @@ test("the settings card shows the mode with its sentence, the instance, the star
     relayFor("darwin", [vertex], { mode: "restart" }),
     createElement(ExtensionPreference, { initialStatus: status() }),
   );
-  assert.match(closed, />Geçişte</);
+  // The row is named by the extension itself, one line under it says where it stands.
+  assert.match(closed, />Claude tarayıcı eklentisi</);
   assert.match(closed, />Ayrıntılar</);
   assert.doesNotMatch(closed, /Şimdi eşitle|Açık tarayıcı kısa süre kapanıp/);
   assert.match(html, /Açık tarayıcı kısa süre kapanıp sekmeleriyle yeniden açılır/);

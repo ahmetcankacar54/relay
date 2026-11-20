@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createElement, Fragment } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup as renderMarkup } from "react-dom/server";
+import { TooltipProvider } from "../src/components/ui/tooltip";
 import { ExperimentalSwitchRows, SwitchingTab } from "../src/pages/settings/SwitchingTabs";
 
 /** Settings' Switching tab, then the switch's rows under Advanced → Experimental. */
@@ -11,6 +12,10 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { historyScopeNote } from "../src/features/SwitchPreferences";
 import { I18nContext } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type ExtensionStatus, type Snapshot } from "../shared/types";
+
+/** Static markup inside the app's tooltip provider: the pages' ⓘ tips need one, as in the shell. */
+const renderToStaticMarkup = (node: Parameters<typeof renderMarkup>[0]) => renderMarkup(createElement(TooltipProvider, null, node));
+
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -123,7 +128,7 @@ test("Switching is when to switch, what switches along and near the limit; prefe
   assert.doesNotMatch(html, /Bu konuşmayı izle/);
 });
 
-test("the history scope and its local-only limit are one note, under Ayrıntılar", () => {
+test("the history scope and its local-only limit are one note, behind the row's ⓘ", () => {
   const tr = (text: string) => text;
   const local =
     "Yalnızca yerel Code geçmişi paylaşılır; Chat ve bulut oturumları eşitlenmez.";
@@ -137,9 +142,10 @@ test("the history scope and its local-only limit are one note, under Ayrıntıla
   );
   assert.equal(historyScopeNote("same-group", tr), local);
   assert.equal(historyScopeNote("off", tr), "");
-  // Closed by default: the card shows the select and the merge, the note waits under Ayrıntılar.
+  // One row: the select and the merge; the note waits behind the ⓘ beside where history appears.
   const html = render(relayFor());
-  assert.match(html.slice(html.indexOf('id="gecis-gecmis"')), /Açık hesapla birleştir[\s\S]*>Ayrıntılar</);
+  const history = html.slice(html.indexOf('id="gecis-gecmis"'), html.indexOf('id="gecis-eklenti"'));
+  assert.match(history, /aria-label="Nasıl çalışır"[\s\S]*Açık hesapla birleştir/);
   assert.doesNotMatch(html, /Yalnızca yerel Code geçmişi/);
 });
 
@@ -261,7 +267,7 @@ test("the single-conversation watch card appears only while a legacy watch needs
 test("with Continue at quota and prepare-on-quit both on, the choice reads Limit dolunca", () => {
   // The mode cards only: the warning threshold below is a radio group too.
   const page = render(relayFor({}, { autoSwitchMode: "after-exit" }));
-  const html = page.slice(0, page.indexOf('id="gecis-birlikte"'));
+  const html = page.slice(0, page.indexOf('data-slot="gecis-birlikte"'));
   const checked = [
     ...html.matchAll(/<button[^>]*role="radio"[^>]*>(.*?)<\/button>/g),
   ]

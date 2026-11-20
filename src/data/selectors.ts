@@ -127,16 +127,19 @@ export interface UsageWindowRow {
   model?: boolean;
 }
 
-/** The kind of window a key names: `seven_day_fable` is weekly, `antigravity_*` has no fixed length. */
-const periodOf = (key: string): WindowPeriod | undefined =>
-  key.startsWith("seven_day") ? "seven_day" : key.startsWith("five_hour") ? "five_hour" : undefined;
+/**
+ * A model window's kind: its own `period` (an Antigravity pool's), else the key's (`seven_day_fable`
+ * is weekly). An Antigravity window without one has no known length.
+ */
+const periodOf = (w: Pick<ModelWindow, "key" | "period">): WindowPeriod | undefined =>
+  w.period ?? (w.key.startsWith("seven_day") ? "seven_day" : w.key.startsWith("five_hour") ? "five_hour" : undefined);
 
 /**
- * A model window's name: the model first, then its period ("Fable · haftalık", "Opus · 5 saat"). An
- * Antigravity model's window is not a five-hour or weekly one, so it is the model's name alone.
+ * A model window's name: the model or pool first, then its period ("Fable · haftalık", "Gemini ·
+ * 5 saat"). A window of unknown length is the name alone.
  */
 function modelRowLabel(w: ModelWindow): { tr: string; en: string } {
-  const period = periodOf(w.key);
+  const period = periodOf(w);
   if (!period) return { tr: w.label, en: w.label };
   return period === "seven_day"
     ? { tr: `${w.label} · haftalık`, en: `${w.label} · weekly` }
@@ -157,16 +160,18 @@ export function usageWindowRows(usage?: AccountUsage): UsageWindowRow[] {
     rows.push({ key: "five_hour", label: { tr: "5 saatlik dönem", en: "5-hour period" }, period: "five_hour", ...usage.fiveHour });
   if (own && usage.sevenDay)
     rows.push({ key: "seven_day", label: { tr: "Haftalık · tüm modeller", en: "Weekly · all models" }, period: "seven_day", ...usage.sevenDay });
-  const models = [...(usage.modelWindows ?? [])].sort(
-    (a, b) => b.usedPercent - a.usedPercent || a.key.localeCompare(b.key),
-  );
+  // Antigravity's pools keep the reader's order (as the app lists them: Gemini first, five hours
+  // before the week), so a line never moves; other model limits read fullest first.
+  const models = own
+    ? [...(usage.modelWindows ?? [])].sort((a, b) => b.usedPercent - a.usedPercent || a.key.localeCompare(b.key))
+    : [...(usage.modelWindows ?? [])];
   for (const w of models)
     rows.push({
       key: w.key,
       label: modelRowLabel(w),
       usedPercent: w.usedPercent,
       resetsAt: w.resetsAt,
-      period: periodOf(w.key),
+      period: periodOf(w),
       model: true,
     });
   return rows;

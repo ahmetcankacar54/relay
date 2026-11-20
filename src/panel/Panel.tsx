@@ -15,7 +15,7 @@ import { PanelDrafts } from "./PanelDrafts";
 import { PanelUpdate } from "./PanelUpdate";
 import { PanelExtension } from "./PanelExtension";
 import { PanelSidebar } from "./PanelSidebar";
-import { PanelTools } from "./PanelTools";
+import { PanelProviders } from "./PanelProviders";
 import { panelHead } from "./panel-head";
 
 /** The menu bar popover: active account, other accounts, automation. */
@@ -111,15 +111,21 @@ export function Panel({
           <RelayErrorAlert />
         </div>
         <PanelUpdate />
-        <PanelActiveCard now={now} />
-        <PanelTools now={now} />
-        <PanelDrafts />
-        <PanelExtension />
-        <PanelSidebar />
-        <PanelAccounts
+        <PanelProviders
           now={now}
-          confirmId={confirmId}
-          onConfirmChange={setConfirmId}
+          claude={
+            <>
+              <PanelActiveCard now={now} />
+              <PanelDrafts />
+              <PanelExtension />
+              <PanelSidebar />
+              <PanelAccounts
+                now={now}
+                confirmId={confirmId}
+                onConfirmChange={setConfirmId}
+              />
+            </>
+          }
         />
         <PanelAutomation now={now} />
         <footer className="mt-1.5 flex items-center justify-between gap-2 border-t px-3 pt-1.5 pb-2 text-muted-foreground">

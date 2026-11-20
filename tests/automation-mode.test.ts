@@ -58,12 +58,12 @@ test("every mode has a Turkish and English label and description", () => {
     "Relay does not switch accounts automatically.",
   ]);
   assert.deepEqual(afterExit.description, [
-    "Limit dolunca, Claude uygulamasını kapattığında sıradaki hesabı hazırlar.",
-    "At the limit, Relay prepares the next account when you quit the Claude app.",
+    "Limit dolunca, kapattığında sıradaki hesabı hazırlar.",
+    "At the limit, prepares the next account when you quit.",
   ]);
   assert.deepEqual(quota.description, [
-    "Limit dolunca Claude uygulamasını sıradaki hesapla açar ve duran konuşmaları sürdürür.",
-    "At the limit, Relay opens the Claude app on the next account and continues stopped conversations.",
+    "Sıradaki hesapla açar, duran konuşmaları sürdürür.",
+    "Opens the next account and continues stopped conversations.",
   ]);
 });
 

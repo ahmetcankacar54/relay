@@ -4,7 +4,7 @@ import type { AccountUsage } from "../../shared/types";
 import { freshUsage, lastKnownUsage, windowHolds } from "../../shared/usage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LimitRings } from "@/components/LimitRings";
+import { AccountLimits } from "../features/Providers";
 import { StatusDot } from "@/components/StatusDot";
 import { useI18n } from "@/data/i18n";
 import { useRelay, type Relay } from "@/data/relay-context";
@@ -121,35 +121,24 @@ export function PanelActiveCard({ now }: { now: number }) {
             </Button>
           </div>
         ) : fresh ? (
-          <LimitRings
-            usage={usage}
-            now={now}
-            zone={relay.settings.planning.timeZone}
-            size={72}
-            aside={title}
-          />
+          <div className="grid gap-2">
+            {title}
+            <AccountLimits usage={usage} now={now} size="sm" />
+          </div>
         ) : lastKnown ? (
-          <LimitRings
-            usage={usage}
-            now={now}
-            zone={relay.settings.planning.timeZone}
-            size={72}
-            state="stale"
-            aside={
-              <>
-                {title}
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  {waiting && health
-                    ? health.label
-                    : t(
-                        `Limit verisi eski · ${formatRelative(readAt!, now, language)} okundu`,
-                        `Usage data is out of date · read ${formatRelative(readAt!, now, language)}`,
-                      )}{" "}
-                  · {usageButton}
-                </div>
-              </>
-            }
-          />
+          <div className="grid gap-2">
+            {title}
+            <AccountLimits usage={usage} now={now} size="sm" note={false} />
+            <div className="flex items-center gap-1 text-2xs text-muted-foreground">
+              {waiting && health
+                ? health.label
+                : t(
+                    `Limit verisi eski · ${formatRelative(readAt!, now, language)} okundu`,
+                    `Usage data is out of date · read ${formatRelative(readAt!, now, language)}`,
+                  )}{" "}
+              · {usageButton}
+            </div>
+          </div>
         ) : (
           <>
             {title}

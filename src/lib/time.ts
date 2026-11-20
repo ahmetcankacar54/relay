@@ -1,4 +1,4 @@
-import type { Language } from "@/data/i18n";
+import type { Language, T } from "@/data/i18n";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -87,4 +87,23 @@ export function formatRelative(
   }
   const n = Math.floor(diff / DAY);
   return tr ? `${n} gün önce` : `${n} ${n === 1 ? "day" : "days"} ago`;
+}
+
+/**
+ * Time to a reset, short: "25 dk", "1 sa 50 dk", "1 gün 13 sa", "3 gün". Two days or more read in
+ * whole days, rounded down so it never says more time than is left; the clock time is in the title.
+ */
+export function countdown(at: string | undefined, now: number, t: T): string | undefined {
+  const ms = at ? Date.parse(at) - now : NaN;
+  if (!Number.isFinite(ms) || ms <= 0) return undefined;
+  if (ms >= 86_400_000) {
+    // Whole days rounded down, never more than is left; under two days the hours still matter.
+    const days = Math.floor(ms / 86_400_000);
+    const hours = Math.floor((ms % 86_400_000) / 3_600_000);
+    return days < 2 && hours ? t(`${days} gün ${hours} sa`, `${days} d ${hours} h`) : t(`${days} gün`, `${days} d`);
+  }
+  const minutes = Math.ceil(ms / 60_000);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? t(`${h} sa${m ? ` ${m} dk` : ""}`, `${h} h${m ? ` ${m} min` : ""}`) : t(`${m} dk`, `${m} min`);
 }

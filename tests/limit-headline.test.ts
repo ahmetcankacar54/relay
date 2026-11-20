@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { limitHeadline, modelOnlyUsage } from "../shared/quota-windows";
+import { fullestByPeriod, limitHeadline, modelOnlyUsage } from "../shared/quota-windows";
 import { overviewAccounts, usageWindowRows } from "../src/data/selectors";
 import { panelRowLine, panelRowState, ringState } from "../src/lib/account-row";
 import type { Account, AccountUsage } from "../shared/types";
@@ -77,3 +77,36 @@ test("the panel never offers the Claude app switch on a Codex or Antigravity row
     assert.deepEqual(state, { canSwitch: false });
   }
 });
+
+test("Antigravity pools: the table's columns take the fullest five hours and the fullest week, named", () => {
+  const usage: AccountUsage = {
+    accountId: "g",
+    status: "ready",
+    stale: false,
+    checkedAt: at(-1),
+    sevenDay: { usedPercent: 40, resetsAt: at(3 * 24 * 60) },
+    modelWindows: [
+      { key: "antigravity_gemini_5h", label: "Gemini", period: "five_hour", usedPercent: 20, resetsAt: at(100) },
+      { key: "antigravity_gemini_weekly", label: "Gemini", period: "seven_day", usedPercent: 98, resetsAt: at(4 * 24 * 60) },
+      { key: "antigravity_3p_5h", label: "Claude & GPT", period: "five_hour", usedPercent: 100, resetsAt: at(-5) },
+      { key: "antigravity_3p_weekly", label: "Claude & GPT", period: "seven_day", usedPercent: 40, resetsAt: at(3 * 24 * 60) },
+    ],
+  };
+  const cols = fullestByPeriod(usage, NOW);
+  // Claude & GPT's five hours have reset: empty again, so Gemini's are the fuller.
+  assert.deepEqual([cols.five_hour?.label, cols.five_hour?.usedPercent], ["Gemini", 20]);
+  assert.deepEqual([cols.seven_day?.label, cols.seven_day?.usedPercent], ["Gemini", 98]);
+  // Rows read in the reader's order, each with its length.
+  assert.deepEqual(
+    usageWindowRows(usage).map((r) => [r.label.tr, r.period]),
+    [
+      ["Gemini · 5 saat", "five_hour"],
+      ["Gemini · haftalık", "seven_day"],
+      ["Claude & GPT · 5 saat", "five_hour"],
+      ["Claude & GPT · haftalık", "seven_day"],
+    ],
+  );
+  // Windows of unknown length (an older reading) give no column.
+  assert.deepEqual(fullestByPeriod({ modelWindows: [{ key: "antigravity_gemini", label: "Gemini", usedPercent: 50 }] }, NOW), {});
+});
+

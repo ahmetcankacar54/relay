@@ -201,6 +201,29 @@ export interface AntigravityAppState {
   accountId?: string;
   /** Signed in with a Google account that is not one of Relay's. */
   otherSignIn?: boolean;
+  /** Relay can move it (and `agy`) to another saved account: macOS, where its sign-in is a Keychain item. */
+  canSwitch?: boolean;
+  /** The Antigravity accounts whose app sign-in Relay keeps. */
+  saved?: string[];
+  /** A switch under way, or a sign-in Relay waits for in the app. */
+  busy?: "switching" | "signing-in";
+  /** The account a sign-in is awaited for. */
+  signInFor?: string;
+  result?: AntigravityAppResult;
+}
+/** How the last Antigravity switch or sign-in ended. */
+export interface AntigravityAppResult {
+  /**
+   * `switched`: on `accountId` now. `saved`: its sign-in is kept. `saved-other`: the user signed in
+   * with another Relay account, kept for that one (`accountId`). `other`: signed in with a Google
+   * account Relay does not have. `cancelled`: the earlier sign-in is back.
+   */
+  kind: "switched" | "saved" | "saved-other" | "other" | "cancelled" | "failed";
+  accountId: string;
+  reason?: "not-saved" | "still-running" | "keychain" | "verify-failed" | "busy" | "timeout" | "save" | "launch" | "cancelled" | "unexpected";
+  /** `agy` sessions still running on the earlier account. */
+  agyRunning?: number;
+  at: number;
 }
 /**
  * Separate Claude windows: an account opened in its own Claude, on a data folder of its own,
@@ -688,6 +711,11 @@ export interface RelayAPI {
   openDesktop(): Promise<void>;
   /** Brings the Antigravity app forward, or starts it (macOS). */
   openAntigravity(): Promise<void>;
+  /** Moves the Antigravity app and `agy` to an account whose app sign-in Relay keeps (macOS). */
+  switchAntigravity(accountId: string): Promise<AntigravityAppResult>;
+  /** Opens the Antigravity app on its sign-in screen and keeps the sign-in made there (macOS). */
+  saveAntigravitySignIn(accountId: string): Promise<void>;
+  cancelAntigravitySignIn(): Promise<void>;
   /** Opens Claude on Code's new-session screen, which creates the account's Code workspace. */
   openCodeTab(): Promise<void>;
   /** Saves this profile's Claude app sign-in by itself once it is complete (see AutoCaptureState). */
@@ -956,6 +984,11 @@ export interface ModelWindow {
   model?: string;
   /** The most of the weekly limit this model may take, in percent (Fable: 50). */
   weeklyShare?: number;
+  /**
+   * The window's length when the key does not say it: an Antigravity pool's five hours or week
+   * (`antigravity_gemini_5h`). Undefined for a window of unknown length.
+   */
+  period?: "five_hour" | "seven_day";
 }
 export interface AccountUsage {
   accountId: string;

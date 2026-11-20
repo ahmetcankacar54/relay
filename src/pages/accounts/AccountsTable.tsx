@@ -1,5 +1,5 @@
-import { Fragment, type MouseEvent } from "react";
-import { Private } from "@/components/Private";
+import { Fragment, useState, type MouseEvent } from "react";
+import { AntigravityAction, AntigravityPrompt, type AntigravityAsk } from "@/features/AntigravityAccount";
 import {
   AppWindow,
   ArrowLeftRight,
@@ -9,14 +9,12 @@ import {
   KeyRound,
   Monitor,
   MoreHorizontal,
-  Network,
   Pencil,
   RefreshCw,
-  SquareTerminal,
   Trash2,
   X,
 } from "lucide-react";
-import type { Account } from "../../../shared/types";
+import type { Account, AccountProvider } from "../../../shared/types";
 import type { Relay } from "@/data/relay-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,16 +25,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { StatusDot } from "@/components/StatusDot";
-import { ProviderBadge } from "@/components/ProviderBadge";
 import { useI18n, type Language } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
 import { keychainWords } from "@/data/platform";
@@ -46,161 +34,21 @@ import { cn } from "@/lib/utils";
 import {
   accountHealth,
   renewalIssue,
-  usageSignInStatus,
-} from "@/lib/account-health";
+  } from "@/lib/account-health";
 import { fullLimitNote } from "@/lib/account-row";
-import { extensionGuide } from "@/lib/extension-ui";
-import { formatPercent, percentUsed } from "@/lib/meter";
-import { formatRelative } from "@/lib/time";
-import { UsageRing } from "@/components/UsageRing";
 import { useExtensionStatus } from "@/data/useExtension";
 import { useTerminalStatus } from "@/data/useTerminal";
-import { terminalGuide } from "@/lib/terminal-ui";
-import type { TerminalStatus } from "../../../shared/terminal-identity";
-import type { ExtensionStatus } from "../../../shared/types";
-import { accountPlan, avatarClass, planTitle, providerLabel } from "./accountLabels";
+import { accountPlan, planTitle, providerShortLabel } from "./accountLabels";
 import { isClaudeAccount } from "@/lib/account-health";
-import { limitHeadline, modelOnlyUsage } from "../../../shared/quota-windows";
-
-/**
- * A connection icon's three states: green when ready, amber with a dot when it needs a step (a
- * sign-in to renew reads the same; the Durum column says how bad), grey when absent.
- */
-const toneText = {
-  ok: "text-ok",
-  warn: "text-warn-foreground",
-  crit: "text-warn-foreground",
-  off: "text-muted-foreground/40",
-} as const;
-
-/** A limit in a table cell: a small ring and the percent beside it. */
-function CellMeter({ percent, label, note }: { percent?: number; label: string; note?: string }) {
-  const { language } = useI18n();
-  if (percent === undefined) return <span className="text-muted-foreground">—</span>;
-  const value = Math.max(0, Math.min(100, percent));
-  const text = formatPercent(percentUsed(value), language);
-  return (
-    <div className="flex items-center gap-2" title={note}>
-      <UsageRing outer={value} size={22} label={`${label} ${text}`} />
-      <span className="grid min-w-0 leading-tight">
-        <span className="text-xs font-semibold tabular-nums">{text}</span>
-        {/* A model's own limit (Antigravity) says which model it is. */}
-        {note && <span className="max-w-24 truncate text-2xs text-muted-foreground">{note}</span>}
-      </span>
-    </div>
-  );
-}
-
-/** The connections as icons, each in its state's colour, with what it is in its title. */
-function ConnectionIcons({
-  account,
-  usage,
-  waiting,
-  extension,
-  terminal,
-}: {
-  account: Account;
-  usage: Parameters<typeof usageSignInStatus>[1];
-  waiting: boolean;
-  extension: ExtensionStatus | null | undefined;
-  terminal?: TerminalStatus | null;
-}) {
-  const relay = useRelay();
-  const { t, language } = useI18n();
-  // Codex and Antigravity have no Claude app, extension or terminal: one badge says they feed the gateway.
-  if (!isClaudeAccount(account)) {
-    const inPool = account.auth?.loggedIn === true;
-    const title = t(
-      `${providerLabel(account.provider)}: ${inPool ? "bağlı · proxy havuzunda" : "giriş yok"}`,
-      `${providerLabel(account.provider)}: ${inPool ? "connected · in the gateway pool" : "not signed in"}`,
-    );
-    return (
-      <div className="flex items-center gap-2" data-slot="connection-icons" data-provider={account.provider}>
-        <span
-          role="img"
-          title={title}
-          aria-label={title}
-          className={cn("inline-flex items-center gap-1 text-xs", toneText[inPool ? "ok" : "off"])}
-        >
-          <Network className="size-4" />
-          {inPool ? t("Bağlı · Gateway", "Connected · Gateway") : t("Giriş yok", "Not signed in")}
-        </span>
-      </div>
-    );
-  }
-  const signIn = usageSignInStatus(account, usage, waiting, t, relay.data?.diagnostics?.platform);
-  const ext =
-    extension &&
-    extensionGuide(account, extension, relay.accounts, t, language, undefined, relay.data?.diagnostics?.platform);
-  const term =
-    terminal && terminal.mode !== "off" ? terminalGuide(account, terminal, t, language) : undefined;
-  const items: { key: string; icon: LucideIcon; tone: keyof typeof toneText; title: string }[] = [
-    {
-      key: "desktop",
-      icon: Monitor,
-      tone: account.desktop ? "ok" : "off",
-      title: t(
-        `Claude uygulaması: ${account.desktop ? "kayıtlı" : "kayıtlı değil"}`,
-        `Claude app: ${account.desktop ? "saved" : "not saved"}`,
-      ),
-    },
-    {
-      key: "usage",
-      icon: Globe2,
-      tone: signIn.tone,
-      title: t(`Limit okuma girişi: ${signIn.label}`, `Usage sign-in: ${signIn.label}`),
-    },
-    ...(ext
-      ? [
-          {
-            key: "extension",
-            icon: AppWindow,
-            tone: ext.tone,
-            title: t(
-              `Tarayıcı eklentisi (isteğe bağlı): ${ext.label}`,
-              `Browser extension (optional): ${ext.label}`,
-            ),
-          },
-        ]
-      : []),
-    ...(term
-      ? [
-          {
-            key: "terminal",
-            icon: SquareTerminal,
-            tone: term.tone,
-            title: t(
-              `Terminal (isteğe bağlı): ${term.label}`,
-              `Terminal (optional): ${term.label}`,
-            ),
-          },
-        ]
-      : []),
-  ];
-  return (
-    <div className="flex items-center gap-2" data-slot="connection-icons">
-      {items.map(({ key, icon: Icon, tone, title }) => {
-        const step = tone === "warn" || tone === "crit";
-        return (
-          <span
-            key={key}
-            title={title}
-            aria-label={title}
-            role="img"
-            data-step={step || undefined}
-            className={cn("relative", toneText[tone])}
-          >
-            <Icon className="size-4" />
-            {/* The dot marks a step to take; its title and label say which. */}
-            {step && (
-              <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-warn ring-2 ring-card" />
-            )}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
+import { limitColumns } from "../../../shared/quota-windows";
+import { freshUsage } from "../../../shared/usage";
+import { AccountDot } from "@/components/AccountDot";
+import { LimitLine } from "@/components/LimitLine";
+import { ListCard, ListGroup, ListHead, ListRow, narrowHidden } from "@/components/ListCard";
+import { StatusLabel } from "@/components/StatusLabel";
+import { relayProviders } from "@/features/Providers";
+import { accountStatus } from "@/lib/account-status";
+import { inUseIds } from "@/lib/provider-view";
 
 /**
  * Says an account runs in its own Claude window, beside the main Claude. `compact`, in the table,
@@ -515,279 +363,151 @@ export function AccountsTable({
   const { t, language } = useI18n();
   const { data, desktop, active } = relay;
   // Opening the list also checks the extension, so an account signed in to it gets linked.
-  const extension = useExtensionStatus({ check: true }).status;
-  const terminal = useTerminalStatus({ check: true }).status;
-  const browserSteps = ["darwin", "preview", "linux"].includes(data?.diagnostics?.platform ?? "");
+  useExtensionStatus({ check: true });
+  useTerminalStatus({ check: true });
+  // An Antigravity row's switch or sign-in, confirmed under that row.
+  const [antigravityAsk, setAntigravityAsk] = useState<AntigravityAsk>();
+  const antigravityApp = data?.antigravity;
+  const promptOn = (id: string) =>
+    antigravityAsk
+      ? antigravityAsk.accountId === id
+      : antigravityApp?.busy
+        ? antigravityApp.signInFor === id || (antigravityApp.busy === "switching" && antigravityApp.result?.accountId === id)
+        : antigravityApp?.result?.accountId === id;
   const now = Date.now();
+  const inUse = inUseIds(relayProviders(relay, now));
+  const inWindows = windowAccounts(relay.data);
+  const groups = PROVIDER_ORDER.flatMap((provider) => {
+    const own = accounts.filter((a) => (a.provider ?? "claude") === provider);
+    return own.length ? [{ provider, own }] : [];
+  });
   return (
-    <>
-    <div className="overflow-hidden rounded-lg border bg-card">
-    <Table>
-      <TableHeader>
-        <TableRow className="hover:bg-transparent">
-          <TableHead>{t("Hesap", "Account")}</TableHead>
-          <TableHead>{t("Durum", "Status")}</TableHead>
-          <TableHead>{t("5 saat", "5 hours")}</TableHead>
-          {/* A narrow page drops the week; the account page and the Overview still show it. */}
-          <TableHead className="@max-3xl:hidden">{t("Hafta", "Week")}</TableHead>
-          <TableHead>{t("Bağlantılar", "Connections")}</TableHead>
-          <TableHead className="w-10">
-            <span className="sr-only">{t("İşlemler", "Actions")}</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {accounts.map((a) => {
-          const inWindows = windowAccounts(relay.data);
-          const isActive = a.id === active?.id;
-          const usage = data?.usage[a.id];
-          const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
-          const waiting = pendingFlow(authFlow);
-          const plan = accountPlan(a);
-          const health = accountHealth(
-            a,
-            usage,
-            { active: isActive, desktopRunning: !!desktop?.running, waiting, platform: data?.diagnostics?.platform },
-            t,
-          );
-          const actions = rowActions(a, relay, t, link, { remove, edit, language, now });
-          // The inline fix is the matching ⋯ menu item: same label, same handler.
-          const fix = health.fix && actions.find((x) => x.key === health.fix);
-          // "Limit verisi eski" is the one warning without a fix: a refresh is its step.
-          const stale =
-            !waiting && !health.fix && !!usage && (usage.stale || usage.status === "error");
-          const refresh = stale && actions.find((x) => x.key === "refresh");
-          const suggested = relay.suggestion?.id === a.id;
-          // An account in its own window is not switched to from here.
-          const switchTo =
-            suggested &&
-            !inWindows.has(a.id) &&
-            actions.find((x) => x.key === "switch");
-          // An Antigravity account's limits are per model: its column shows the fullest model, named.
-          const head = modelOnlyUsage(usage) ? limitHeadline(usage, now) : undefined;
-          const five = head ? head.usedPercent : usage?.fiveHour?.usedPercent;
-          const week = head ? undefined : usage?.sevenDay?.usedPercent;
-          return (
-            <TableRow
-              key={a.id}
-              tabIndex={0}
-              data-state={selected === a.id ? "selected" : undefined}
-              className="cursor-pointer"
-              onClick={() => open(a.id)}
-              onKeyDown={(e) => {
-                if (e.target !== e.currentTarget) return;
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  open(a.id);
-                }
-              }}
-            >
-              <TableCell className="max-w-0 w-[38%]">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      "grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold",
-                      avatarClass[a.color] ?? "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {a.name.slice(0, 1).toLocaleUpperCase(language)}
-                  </span>
-                  {/* The name has its own line so badges never cut it; provider, plan and e-mail go under it. */}
-                  <div className="grid min-w-0 gap-0.5">
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate font-semibold" title={a.name}>{a.name}</span>
-                      {inWindows.has(a.id) && (
-                        <WindowBadge t={t} compact />
-                      )}
-                      {suggested && (
-                        <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-2xs font-semibold text-accent-foreground">
-                          {t("önerilen", "suggested")}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      <ProviderBadge provider={a.provider} className="shrink-0 px-1.5" />
-                      {plan && (
-                        <Badge
-                          variant="secondary"
-                          // A long plan ("Google AI Ultra") narrows and is cut, never spills into the next column.
-                          className="block min-w-0 max-w-full shrink overflow-hidden px-1.5 text-2xs text-ellipsis"
-                          title={planTitle(a, plan, t)}
-                        >
-                          {plan.label}
-                        </Badge>
-                      )}
-                      <span className="min-w-0 truncate">
-                        {a.desktop?.email ?? a.auth?.email ? (
-                          <Private>{a.desktop?.email ?? a.auth?.email}</Private>
-                        ) : (
-                          t("Henüz giriş yok", "No sign-in yet")
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="whitespace-normal">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span
-                    title={health.detail}
-                    className="inline-flex items-center gap-1.5"
-                  >
-                    <StatusDot tone={health.tone} />
-                    {health.label}
-                  </span>
-                  {!isClaudeAccount(a) && a.auth?.loggedIn && (
-                    <Badge variant="outline" data-slot="gateway-pool" className="shrink-0 gap-1">
-                      <Network />
-                      {relay.desktop?.proxyStatus?.accounts.some((p) => p.id === a.id && p.active)
-                        ? t("Proxy'de aktif", "Active in Proxy")
-                        : t("Gateway havuzu", "Gateway pool")}
-                    </Badge>
-                  )}
-                  {stale && usage?.checkedAt && (
-                    <span
-                      data-slot="data-age"
-                      className="shrink-0 rounded-full border px-1.5 py-px text-2xs text-muted-foreground"
-                    >
-                      {t(
-                        `${formatRelative(usage.checkedAt, now, language)} okundu`,
-                        `Read ${formatRelative(usage.checkedAt, now, language)}`,
-                      )}
-                    </span>
-                  )}
-                  {refresh && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      aria-label={`${t("Yenile", "Refresh")} · ${a.name}`}
-                      title={refresh.label}
-                      disabled={refresh.disabled}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        refresh.run();
-                      }}
-                    >
-                      {t("Yenile", "Refresh")}
-                    </Button>
-                  )}
-                  {/* The suggested account's switch is the ⋯ menu's own: the same review, the same prank after it. */}
-                  {switchTo && !(health.tone !== "ok" && fix) && (
-                    <Button
-                      size="xs"
-                      aria-label={`${switchTo.label} · ${a.name}`}
-                      disabled={switchTo.disabled}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        itemHandlers(switchTo, prank).onClick?.(e);
-                      }}
-                    >
-                      {switchTo.label}
-                    </Button>
-                  )}
-                  {health.tone !== "ok" && fix && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      aria-label={`${fix.label} · ${a.name}`}
-                      disabled={fix.disabled}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        fix.run();
-                      }}
-                    >
-                      {fix.label}
-                    </Button>
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>
-                <CellMeter percent={five} label={head?.label ?? t("5 saat", "5 hours")} note={head?.label} />
-              </TableCell>
-              <TableCell className="@max-3xl:hidden">
-                <CellMeter percent={week} label={t("Hafta", "Week")} />
-              </TableCell>
-              <TableCell>
-                <ConnectionIcons
-                  account={a}
-                  usage={usage}
-                  waiting={waiting}
-                  extension={browserSteps ? extension : null}
-                  terminal={browserSteps ? terminal : null}
+    <ListCard label={t("Hesaplar", "Accounts")} slot="accounts-list">
+      <ListHead columns="accounts">
+        <span />
+        <span>{t("Hesap", "Account")}</span>
+        <span>{t("Durum", "Status")}</span>
+        <span>{t("5 saat", "5 hours")}</span>
+        <span className={narrowHidden}>{t("Hafta", "Week")}</span>
+        <span />
+        <span />
+      </ListHead>
+      {groups.map(({ provider, own }) => (
+        <Fragment key={provider}>
+          <ListGroup provider={provider} name={providerShortLabel(provider)} count={own.length} />
+          {own.map((a) => {
+            const isActive = a.id === active?.id;
+            const usage = data?.usage[a.id];
+            const authFlow = data?.authFlows.find((f) => f.accountId === a.id);
+            const waiting = pendingFlow(authFlow);
+            const plan = accountPlan(a);
+            const health = accountHealth(
+              a,
+              usage,
+              { active: isActive, desktopRunning: !!desktop?.running, waiting, platform: data?.diagnostics?.platform },
+              t,
+            );
+            const status = accountStatus({ account: a, usage, health, inUse: inUse.has(a.id), now, t });
+            const actions = rowActions(a, relay, t, link, { remove, edit, language, now });
+            // The one visible step: what fixes the account first, then a refresh of an old reading,
+            // then the suggested switch. Everything else is in the ⋯ menu.
+            const fix = health.tone !== "ok" && !health.limit && health.fix ? actions.find((x) => x.key === health.fix) : undefined;
+            const stale = !waiting && !health.fix && !!usage && (usage.stale || usage.status === "error");
+            const refresh = stale ? actions.find((x) => x.key === "refresh") : undefined;
+            const suggested = relay.suggestion?.id === a.id;
+            const switchTo = suggested && !inWindows.has(a.id) ? actions.find((x) => x.key === "switch") : undefined;
+            const step = fix ?? refresh;
+            // The two columns as every list fills them: Antigravity's from its pools (`limitColumns`).
+            const { five, week, pooled } = limitColumns(usage, now);
+            const faded = !!usage && !freshUsage(usage, now);
+            const cell = (window: typeof five, name: string) =>
+              window ? (
+                <LimitLine
+                  label=""
+                  ariaLabel={pooled ? `${name} · ${(window as { label?: string }).label ?? ""}` : name}
+                  usedPercent={window.usedPercent}
+                  resetsAt={window.resetsAt}
+                  now={now}
+                  t={t}
+                  faded={faded}
+                  showReset={false}
                 />
-              </TableCell>
-              <TableCell className="text-right">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t(`${a.name} işlemleri`, `${a.name} actions`)}
-                      onClick={(e) => e.stopPropagation()}
-                      onKeyDown={(e) => e.stopPropagation()}
-                    >
-                      <MoreHorizontal />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  {/* Portaled, but React events still bubble to the row. */}
-                  <DropdownMenuContent
-                    align="end"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                  >
-                    <RowActionItems actions={actions} prank={prank} />
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
-    </div>
-    <ConnectionLegend />
-    </>
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              );
+            const stop = (e: MouseEvent) => e.stopPropagation();
+            return (
+              <Fragment key={a.id}>
+                <ListRow
+                  columns="accounts"
+                  onOpen={() => open(a.id)}
+                  selected={selected === a.id}
+                  label={a.name}
+                  data={{ "data-account": a.id }}
+                >
+                  <AccountDot color={a.color} />
+                  <div className="flex min-w-0 items-baseline gap-1.5">
+                    <span className="truncate text-sm font-semibold" title={a.name}>
+                      {a.name}
+                    </span>
+                    {plan && (
+                      <span className={cn("shrink-0 text-2xs text-muted-foreground", narrowHidden)} title={planTitle(a, plan, t)}>
+                        {plan.short}
+                      </span>
+                    )}
+                    {inWindows.has(a.id) && <WindowBadge t={t} compact />}
+                  </div>
+                  <StatusLabel status={status} />
+                  {cell(five, t("5 saat", "5 hours"))}
+                  <div className={narrowHidden}>{cell(week, t("Hafta", "Week"))}</div>
+                  <div className="flex justify-end" onClick={stop}>
+                    {a.provider === "antigravity" && !step ? (
+                      <AntigravityAction account={a} onAsk={setAntigravityAsk} primary={suggested} />
+                    ) : step ? (
+                      <Button size="xs" variant="outline" aria-label={`${step.label} · ${a.name}`} title={step.label} disabled={step.disabled} onClick={() => step.run()}>
+                        {step === refresh ? t("Yenile", "Refresh") : shortFix(step.key, t) ?? step.label}
+                      </Button>
+                    ) : switchTo ? (
+                      <Button size="xs" aria-label={`${switchTo.label} · ${a.name}`} disabled={switchTo.disabled} onClick={(e) => itemHandlers(switchTo, prank).onClick?.(e)}>
+                        {t("Geç", "Switch")}
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm" aria-label={t(`${a.name} işlemleri`, `${a.name} actions`)}>
+                          <MoreHorizontal />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      {/* Portaled, but React events still bubble to the row. */}
+                      <DropdownMenuContent align="end" onClick={stop} onKeyDown={(e) => e.stopPropagation()}>
+                        <RowActionItems actions={actions} prank={prank} />
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </ListRow>
+                {a.provider === "antigravity" && promptOn(a.id) && (
+                  <div className="border-b px-4 py-2 last:border-b-0">
+                    <AntigravityPrompt ask={antigravityAsk} onClose={() => setAntigravityAsk(undefined)} now={now} size="sm" />
+                  </div>
+                )}
+              </Fragment>
+            );
+          })}
+        </Fragment>
+      ))}
+    </ListCard>
   );
 }
 
-/** What each connection icon is, and what its colours and dot mean, under the table. */
-function ConnectionLegend() {
-  const { t } = useI18n();
-  const icons: [LucideIcon, string][] = [
-    [Monitor, t("Claude uygulaması", "Claude app")],
-    [Globe2, t("Limit okuma girişi", "Usage sign-in")],
-    [AppWindow, t("Eklenti (isteğe bağlı)", "Extension (optional)")],
-    [SquareTerminal, t("Terminal (isteğe bağlı)", "Terminal (optional)")],
-  ];
-  return (
-    <p
-      data-slot="connection-legend"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-2xs text-muted-foreground"
-    >
-      {icons.map(([Icon, name]) => (
-        <span key={name} className="inline-flex items-center gap-1">
-          <Icon aria-hidden="true" className="size-3" />
-          {name}
-        </span>
-      ))}
-      <span aria-hidden="true" className="text-muted-foreground/40">
-        |
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-ok" />
-        {t("hazır", "ready")}
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="relative size-1.5 rounded-full bg-warn">
-          <span className="absolute -top-1 -right-1 size-1 rounded-full bg-warn ring-1 ring-background" />
-        </span>
-        {t("adım gerekiyor", "step needed")}
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground/40" />
-        {t("yok", "none")}
-      </span>
-    </p>
-  );
+/** The providers' order in a list: Claude first, then the gateway's. */
+const PROVIDER_ORDER: AccountProvider[] = ["claude", "codex", "antigravity", "gemini"];
+
+/** A fix's button in a narrow column: one or two words; the menu item keeps the full label. */
+function shortFix(key: string, t: (tr: string, en: string) => string): string | undefined {
+  if (key === "desktop-link") return t("Kaydet", "Save");
+  if (key === "cli") return t("Bağla", "Connect");
+  if (key === "renew") return t("Yenile", "Renew");
+  return undefined;
 }

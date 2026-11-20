@@ -26,7 +26,7 @@ import { chooseClaudeApp } from "../features/ClaudeAppSetup";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { routeHash, settingsTab, SETTINGS_TABS, type SettingsTab } from "@/app/routes";
 import { ExperimentalSwitchRows, RefreshIntervalRow, SwitchingTab } from "./settings/SwitchingTabs";
-import { PlanningTab } from "./Planning";
+import { PlanningScreen } from "./Planning";
 import { macWording, usePlatform } from "@/data/platform";
 
 /** Shows the diagnosis logs in Finder; main picks the files, the page passes no path. */
@@ -251,14 +251,7 @@ export function SwitchingPage() {
 
 /** Planning as its own page in the sidebar. */
 export function PlanningPage() {
-  const { t } = useI18n();
-  return (
-    <PageFrame title={t("Planlama", "Planning")}>
-      <div className="grid gap-4 px-5 pb-6">
-        <PlanningTab />
-      </div>
-    </PageFrame>
-  );
+  return <PlanningScreen />;
 }
 
 /**

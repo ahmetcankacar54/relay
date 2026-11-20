@@ -116,6 +116,13 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     getBoundingClientRect() {
       return { ...this.box };
     }
+    /** Descendants carrying a class, as charts look up their own layers. */
+    getElementsByClassName(name: string): FakeElement[] {
+      return this.childNodes.flatMap((child) => [
+        ...((child.attributes.get("class") ?? "").split(/\s+/).includes(name) ? [child] : []),
+        ...child.getElementsByClassName(name),
+      ]);
+    }
     addEventListener(type: string, listener: Listener, options?: AddEventListenerOptions | boolean) {
       const capture = typeof options === "object" ? options.capture === true : options === true;
       this.listeners.push({ type, listener, capture });
@@ -152,7 +159,14 @@ export function fakeDom(options: { localStorage?: () => unknown; reducedMotion?:
     HTMLFormElement: class {},
     setTimeout: (handler: () => void, ms?: number) => globalThis.setTimeout(handler, ms),
     clearTimeout: (id?: ReturnType<typeof setTimeout>) => globalThis.clearTimeout(id),
-    matchMedia: (query: string) => ({ matches: options.reducedMotion === true && query.includes("reduce") }),
+    // Charts read an element's style for their size and text; nothing is laid out here.
+    getComputedStyle: () => ({ getPropertyValue: () => "" }),
+    // A media query list as charts listen to it (Recharts follows reduced motion); nothing ever changes.
+    matchMedia: (query: string) => ({
+      matches: options.reducedMotion === true && query.includes("reduce"),
+      addEventListener() {},
+      removeEventListener() {},
+    }),
     addEventListener: windowEvents.addEventListener,
     removeEventListener: windowEvents.removeEventListener,
     dispatchEvent: windowEvents.dispatchEvent,

@@ -1,6 +1,7 @@
 import { cva } from "class-variance-authority";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ProviderLogo } from "@/components/ProviderLogo";
 import type { AccountProvider } from "../../shared/types";
 import { providerLabel, providerShortLabel } from "@/pages/accounts/accountLabels";
 
@@ -24,17 +25,24 @@ const providerBadge = cva("", {
 export function ProviderBadge({
   provider,
   full,
+  detail,
+  title,
   className,
 }: {
   provider: AccountProvider | undefined;
   /** `OpenAI / Codex` instead of `Codex`. */
   full?: boolean;
+  /** After the name: the account's plan ("Claude · Max"), so one chip says both. */
+  detail?: string;
+  title?: string;
   className?: string;
 }) {
   const value = provider ?? "claude";
   return (
-    <Badge variant="outline" data-provider={value} className={cn(providerBadge({ provider: value }), className)}>
+    <Badge variant="outline" data-provider={value} title={title} className={cn(providerBadge({ provider: value }), className)}>
+      <ProviderLogo provider={value} size="sm" />
       {full ? providerLabel(provider) : providerShortLabel(provider)}
+      {detail && <span className="font-normal opacity-80">· {detail}</span>}
     </Badge>
   );
 }

@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { boardOrder, limitStanding, LimitsNow } from "../src/pages/usage/LimitsNow";
+import { boardOrder, limitStanding } from "../src/lib/limit-standing";
+import { AccountsBoard } from "../src/pages/overview/AccountsBoard";
 import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type T } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type AccountUsage, type Snapshot } from "../shared/types";
@@ -42,16 +43,20 @@ test("the board puts an expiring week first, open ones by their week's end, full
   assert.deepEqual(limitStanding(undefined, NOW), { kind: "unread" });
 });
 
-test("the board shows each account's plan, its windows and Fable's own limit", () => {
+test("the Overview's board groups accounts by provider, lists an expiring week first, and shows each one's windows and Fable's own limit", () => {
   const accounts = [
+    account("alto", { name: "Alto" }),
     account("vertex", { name: "Vertex", auth: { loggedIn: true, checkedAt: at(0), plan: "max20" }, planning: { plan: "max20", capacityWeight: 20 } }),
     account("codex", { name: "Codex", provider: "codex", auth: { loggedIn: true, checkedAt: at(0), subscription: "plus" } }),
+    account("full", { name: "Full" }),
   ];
   const usage: Record<string, AccountUsage> = {
+    alto: ready("alto", 81, 27, 124),
     vertex: ready("vertex", 18, 80, 29.5, {
       modelWindows: [{ key: "seven_day_fable", label: "Fable", model: "fable", usedPercent: 100, resetsAt: at(29.5) }],
     }),
     codex: ready("codex", 27, 20, 140),
+    full: ready("full", 100, 50, 60),
   };
   const relay = {
     accounts,
@@ -63,14 +68,23 @@ test("the board shows each account's plan, its windows and Fable's own limit", (
     createElement(
       I18nContext.Provider,
       { value: { t: tr, language: "tr", setLanguage: () => {} } as never },
-      createElement(RelayContext.Provider, { value: relay }, createElement(LimitsNow, { now: NOW })),
+      createElement(RelayContext.Provider, { value: relay }, createElement(AccountsBoard, { now: NOW })),
     ),
   );
-  assert.match(html, /data-slot="limits-now"/);
-  assert.match(html, /1\/2|2\/2/);
-  assert.match(html, /Max 20×/);
-  assert.match(html, /Plus/);
-  assert.match(html, /Fable · haftalık %100/);
-  assert.match(html, /kullanılmazsa silinir/);
-  assert.ok(html.indexOf("Vertex") < html.indexOf("Codex"), "the expiring week first");
+  assert.match(html, /data-slot="accounts-board"/);
+  // Usable: a read account with room in its five hours and week.
+  assert.match(html, />3\/4 kullanılabilir</);
+  // Claude's accounts, then Codex's, each under its name and count; within a provider the
+  // expiring week first, then the open one, the full one after.
+  const order = [...html.matchAll(/data-slot="list-group" data-provider="(\w+)"|data-account="(\w+)"/g)].map((m) => m[1] ?? m[2]);
+  assert.deepEqual(order, ["claude", "vertex", "alto", "full", "codex", "codex"]);
+  // Each row's five hours and week, with what is used.
+  const row = (id: string) => html.slice(html.indexOf(`data-account="${id}"`)).split('data-slot="list-row"')[0];
+  assert.match(row("vertex"), /role="meter" aria-label="5 saat %18"/);
+  assert.match(row("vertex"), /role="meter" aria-label="Hafta %80"/);
+  assert.match(row("codex"), /role="meter" aria-label="Hafta %20"/);
+  // Fable's own limit, spent, in the model-limit column, red.
+  assert.match(row("vertex"), /data-slot="other-limit"[^>]*><span class="[^"]*text-crit[^"]*">Fable dolu<\/span>/);
+  // A full limit says when it opens.
+  assert.match(row("full"), />Dolu · 2 sa</);
 });

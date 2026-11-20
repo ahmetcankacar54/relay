@@ -16,8 +16,18 @@ import {
 } from "../pages/accounts/accountLabels";
 type T = (tr: string, en: string) => string;
 
-/** A plan Relay read from the account: shown, never asked. */
-function ReadPlan({ plan, t }: { plan?: AccountPlanInfo; t: T }) {
+/** A plan Relay read from the account: shown, never asked. In a list, its label alone. */
+function ReadPlan({ plan, t, compact }: { plan?: AccountPlanInfo; t: T; compact?: boolean }) {
+  if (compact)
+    return (
+      <span
+        data-slot="plan"
+        className="truncate text-xs text-muted-foreground"
+        title={plan ? t(`${plan.label} · hesaptan algılandı`, `${plan.label} · detected`) : undefined}
+      >
+        {plan?.label ?? t("Plan okunmadı", "Plan not read")}
+      </span>
+    );
   if (!plan)
     return (
       <p data-slot="plan" className="text-sm text-muted-foreground">
@@ -41,11 +51,17 @@ export function PlanEditor({
   disabled,
   update,
   t,
+  compact = false,
 }: {
   account: Account;
   disabled: boolean;
   update: (input: AccountPlanning) => void;
   t: T;
+  /**
+   * A list cell (the plan's accounts): a small select, and the relative capacity as a number beside
+   * it, named by its label rather than a caption.
+   */
+  compact?: boolean;
 }) {
   const current = account.planning ?? { plan: "unknown", capacityWeight: 1 };
   const [weight, setWeight] = useState(String(current.capacityWeight));
@@ -56,7 +72,7 @@ export function PlanEditor({
   // Codex and Antigravity name their own plan (ChatGPT Plus, Google AI Pro); Claude's plans and
   // its relative capacity do not apply to them.
   if (accountProvider(account) !== "claude")
-    return <ReadPlan plan={accountPlan(account)} t={t} />;
+    return <ReadPlan plan={accountPlan(account)} t={t} compact={compact} />;
   const plans: { value: AccountPlanning["plan"]; label: string }[] = [
     { value: "unknown", label: t("Plan seç", "Select plan") },
     { value: "pro", label: "Pro · 1×" },
@@ -67,6 +83,55 @@ export function PlanEditor({
   const capacityId = `capacity-${account.id}`;
   // A plan read from the sign-in is not a choice: it is shown, and follows the account.
   const detected = detectedClaudePlan(account);
+  const capacityShown = (detected ?? current.plan) === "unknown" || (detected ?? current.plan) === "team";
+  const commitWeight = () => {
+    const n = Number(weight);
+    if (Number.isFinite(n) && n >= 1 && n <= 100) {
+      if (n !== current.capacityWeight) update({ ...current, capacityWeight: n });
+    } else setWeight(String(current.capacityWeight));
+  };
+  const capacityInput = (className: string) => (
+    <Input
+      id={capacityId}
+      aria-label={t(`${account.name} göreli kapasitesi`, `${account.name} relative capacity`)}
+      title={compact ? t("Göreli kapasite", "Relative capacity") : undefined}
+      className={className}
+      type="number"
+      min={1}
+      max={100}
+      step={1}
+      value={weight}
+      disabled={disabled}
+      onChange={(e) => setWeight(e.target.value)}
+      onBlur={commitWeight}
+    />
+  );
+  if (compact)
+    return (
+      <div className="flex min-w-0 items-center gap-1.5">
+        {detected ? (
+          <ReadPlan plan={accountPlan(account)} t={t} compact />
+        ) : (
+          <Select
+            value={current.plan}
+            disabled={disabled}
+            onValueChange={(plan) => update({ ...current, plan: plan as AccountPlanning["plan"] })}
+          >
+            <SelectTrigger size="sm" aria-label={t(`${account.name} planı`, `${account.name} plan`)} className="min-w-0 flex-1">
+              <SelectValue>{plans.find((p) => p.value === current.plan)?.label}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {plans.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {capacityShown && capacityInput("h-7 w-12 shrink-0 px-1.5 text-xs tabular-nums")}
+      </div>
+    );
   return (
     <div className="grid min-w-0 gap-1.5">
       {detected ? (
@@ -97,7 +162,7 @@ export function PlanEditor({
         </SelectContent>
       </Select>
       )}
-      {((detected ?? current.plan) === "unknown" || (detected ?? current.plan) === "team") && (
+      {capacityShown && (
         <div className="flex items-center justify-between gap-2">
           <label
             htmlFor={capacityId}
@@ -105,28 +170,7 @@ export function PlanEditor({
           >
             {t("Göreli kapasite", "Relative capacity")}
           </label>
-          <Input
-            id={capacityId}
-            aria-label={t(
-              `${account.name} göreli kapasitesi`,
-              `${account.name} relative capacity`,
-            )}
-            className="h-8 w-16 px-2 tabular-nums"
-            type="number"
-            min={1}
-            max={100}
-            step={1}
-            value={weight}
-            disabled={disabled}
-            onChange={(e) => setWeight(e.target.value)}
-            onBlur={() => {
-              const n = Number(weight);
-              if (Number.isFinite(n) && n >= 1 && n <= 100) {
-                if (n !== current.capacityWeight)
-                  update({ ...current, capacityWeight: n });
-              } else setWeight(String(current.capacityWeight));
-            }}
-          />
+          {capacityInput("h-8 w-16 px-2 tabular-nums")}
         </div>
       )}
     </div>

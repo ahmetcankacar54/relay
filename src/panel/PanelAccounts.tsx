@@ -16,6 +16,7 @@ import {
   fullLimitNote,
   panelRowLine,
   panelRowState,
+  rowProblem,
   type PanelRowBlock,
 } from "@/lib/account-row";
 import { offerAfter, usePrank } from "@/pranks/PrankStage";
@@ -44,7 +45,8 @@ export function blockWords(reason: PanelRowBlock, t: T): string {
 export function panelRows(relay: Relay, now: number): OverviewRow[] {
   return overviewAccounts(
     relay.active,
-    relay.accounts,
+    // Codex and Antigravity accounts have their own tabs.
+    relay.accounts.filter((a) => (a.provider ?? "claude") === "claude"),
     relay.data?.usage ?? {},
     now,
     tempoRateNow(relay.data, relay.settings, now),
@@ -114,18 +116,6 @@ export function PanelAccounts({
         ) : (
           <span>{t("Diğer hesaplar", "Other accounts")}</span>
         )}
-        {rows.length > 0 && (
-          <span className="flex items-center gap-2" aria-hidden="true">
-            <span className="flex items-center gap-1">
-              <span className="size-1.5 rounded-full bg-foreground/70" />
-              {t("5 sa", "5 h")}
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="size-1.5 rounded-full border border-foreground/70" />
-              {t("hafta", "week")}
-            </span>
-          </span>
-        )}
       </div>
       {rows.length === 0 ? (
         <div className={`${panelCard} text-muted-foreground`}>
@@ -153,6 +143,7 @@ export function PanelAccounts({
           selected={confirmId}
           switching={switching}
           line={(row) => panelRowLine(row, t, language, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
+          problem={(row) => rowProblem(row, t, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
           title={(row) => accountRowSubtitle(row, t, language, zone, now, waiting(row), relay.data?.diagnostics?.platform)}
           blocked={(row) => {
             const { reason } = panelRowState(row, relay);
@@ -165,9 +156,7 @@ export function PanelAccounts({
           }
           pick={(row, e) => {
             const { canSwitch, reason } = panelRowState(row, relay);
-            // A Codex or Antigravity account opens in Relay: there is no Claude app switch to it.
-            if (reason === "not-linked" || (row.account.provider ?? "claude") !== "claude")
-              return void relay.api.openPage("hesaplar");
+            if (reason === "not-linked") return void relay.api.openPage("hesaplar");
             if (reason === "window")
               return void relay.action(`window:${row.account.id}`, () =>
                 relay.api.openWindow(row.account.id),

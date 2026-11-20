@@ -3,8 +3,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LimitBars } from "../src/components/LimitBars";
-import { LimitRings } from "../src/components/LimitRings";
 import { UsageCard } from "../src/features/UsageCard";
 import { I18nContext } from "../src/data/i18n";
 import {
@@ -121,40 +119,6 @@ test("an account with Fable spent is recommended only when no other is clear", (
   ]);
   const alone = overviewAccounts(active, [active, spent], usage, NOW);
   assert.deepEqual(alone.map((r) => [r.account.id, r.recommended]), [["spent", true]]);
-});
-
-test("limit bars fit the model's name and mark how much of the period has passed", () => {
-  const usage = use("a", 62, 30, [fable(80), { key: "antigravity_gemini", label: "Gemini 3 Pro", usedPercent: 10 }]);
-  const html = withI18n("tr", createElement(LimitBars, { usage, now: NOW }));
-  // The name is never cut: no truncate on it, and the columns size to the longest name.
-  assert.match(html, /<span class="text-xs leading-tight text-muted-foreground" title="Fable · haftalık">Fable · haftalık<\/span>/);
-  assert.match(html, /grid-cols-\[auto_minmax\(3rem,1fr\)_auto\]/);
-  // Five hours: 2 of 5 hours have passed; the week: half.
-  const ticks = html.match(/data-slot="pace"[^>]*style="left:([\d.]+)%"/g) ?? [];
-  assert.equal(ticks.length, 3, "the five hours, the week and Fable's week; not the Antigravity model");
-  assert.match(html, /role="meter" aria-label="5 saatlik dönem"[^>]*aria-valuetext="%62 kullanıldı · Dönemden geçen süre %40; çubuk çizgiyi geçtiyse eşit hızdan hızlı kullanıyorsun"/);
-  assert.match(html, /data-slot="pace"[^>]*style="left:40%"/);
-  assert.match(html, /data-slot="pace"[^>]*style="left:50%"/);
-  // Fable's bar is amber at 80 %, the five hours (62 %) in the calm meter tone.
-  assert.match(html, /aria-label="Fable · haftalık"[^>]*><div class="h-full rounded-full bg-warn"/);
-  assert.match(html, /aria-label="5 saatlik dönem"[^>]*><div class="h-full rounded-full bg-meter"/);
-  // An unknown reading draws neither fill nor tick.
-  assert.doesNotMatch(withI18n("en", createElement(LimitBars, { usage, now: NOW, state: "unknown" })), /data-slot="pace"/);
-});
-
-test("the panel's rings list a model limit with a bar in its tone, its percent and when it renews", () => {
-  const usage = use("a", 20, 40, [fable(100), { key: "five_hour_opus", label: "Opus", model: "opus", usedPercent: 30, resetsAt: iso(NOW + 2 * HOUR) }]);
-  const html = withI18n("tr", createElement(LimitRings, { usage, now: NOW, zone: "UTC" }));
-  const lines = html.match(/<span data-slot="model-limit".*?<\/span><\/span><\/div>/g) ?? [];
-  assert.equal(lines.length, 2);
-  assert.match(lines[0], /bg-crit/);
-  assert.match(lines[0], /Fable · haftalık <b[^>]*>%100<\/b> · Pazartesi 05:00 · 2 gün/);
-  assert.match(lines[1], /bg-meter/);
-  assert.match(lines[1], /Opus · 5 saat <b[^>]*>%30<\/b> · 2 sa kaldı/);
-  // The ring itself says only the five hours and the week.
-  assert.match(html, /role="img" aria-label="5 saatlik dönem %20 · Haftalık · tüm modeller %40"/);
-  const stale = withI18n("tr", createElement(LimitRings, { usage, now: NOW, state: "stale" }));
-  assert.match(stale, /data-slot="model-limit"[^>]*><span[^>]*><span class="block h-full rounded-full bg-crit opacity-45"/);
 });
 
 test("an old reading keeps a model's own limit, faded like the others", () => {

@@ -54,9 +54,13 @@ function relayFor(proxy: ProxyStatus | undefined, api: object = {}, known: Accou
 }
 const provide = (relay: Relay, node: Parameters<typeof createElement>[0], translate: T = t) =>
   createElement(
-    I18nContext.Provider,
-    { value: { language: "tr", setLanguage() {}, t: translate } },
-    createElement(RelayContext.Provider, { value: relay }, createElement(node as never)),
+    TooltipProvider,
+    null,
+    createElement(
+      I18nContext.Provider,
+      { value: { language: "tr", setLanguage() {}, t: translate } },
+      createElement(RelayContext.Provider, { value: relay }, createElement(node as never)),
+    ),
   );
 
 test("the page's helpers: endpoint, Codex and cURL snippets, quota tone, reset words", () => {
@@ -79,9 +83,13 @@ test("the page's helpers: endpoint, Codex and cURL snippets, quota tone, reset w
 const tab = (relay: Relay, initialTab: "canli" | "araclar" | "kurallar", translate: T = t) =>
   renderToStaticMarkup(
     createElement(
-      I18nContext.Provider,
-      { value: { language: translate === en ? "en" : "tr", setLanguage() {}, t: translate } },
-      createElement(RelayContext.Provider, { value: relay }, createElement(ProxyPage, { initialTab })),
+      TooltipProvider,
+      null,
+      createElement(
+        I18nContext.Provider,
+        { value: { language: translate === en ? "en" : "tr", setLanguage() {}, t: translate } },
+        createElement(RelayContext.Provider, { value: relay }, createElement(ProxyPage, { initialTab })),
+      ),
     ),
   );
 
@@ -122,9 +130,13 @@ test("the Live tab lists the pool in order with both limit windows, and the late
   );
   const rows = [...html.matchAll(/data-account="(\w+)" data-in-pool="(\w+)"/g)].map((m) => `${m[1]}:${m[2]}`);
   assert.deepEqual(rows, ["c1:true", "c2:false", "x1:true", "g1:true"]);
-  assert.match(html, /Hesaplar bu sırayla kullanılır/);
-  // Both windows, with their resets, and what the account served.
-  assert.match(html, /5 saat[\s\S]*?%30 · 1 sa 30 dk[\s\S]*?Hafta[\s\S]*?%50 · 10 sa/);
+  // How the order works is behind the pool's ⓘ, not a sentence on the page.
+  assert.match(html, /data-slot="pool"[\s\S]*?aria-label="Nasıl çalışır"/);
+  assert.doesNotMatch(html, /Hesaplar bu sırayla kullanılır/);
+  // Providers are grouped under their names; both windows show with their resets, and what the account served.
+  assert.match(html, /data-slot="list-group" data-provider="claude"[\s\S]*?data-account="c1"[\s\S]*?data-slot="list-group" data-provider="codex"/);
+  const text = html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  assert.match(text, /5 saat[\s\S]*?%30 · 1 sa 30 dk[\s\S]*?%50 · 10 sa/);
   assert.match(html, /7 istek · önbellek 412K/);
   // Half the week is left and it resets in 10 hours: that room is about to be lost.
   assert.match(html, /data-slot="at-risk"[^>]*>%50 yanacak/);
@@ -242,9 +254,13 @@ test("turning on, reordering, leaving out, connecting a tool and regenerating th
     const root = createRoot(dom.container as unknown as Element);
     const page = (initialTab: "canli" | "araclar" | "kurallar") =>
       createElement(
-        I18nContext.Provider,
-        { value: { language: "tr", setLanguage() {}, t } },
-        createElement(RelayContext.Provider, { value: relayFor(current, api) }, createElement(ProxyPage, { initialTab })),
+        TooltipProvider,
+        null,
+        createElement(
+          I18nContext.Provider,
+          { value: { language: "tr", setLanguage() {}, t } },
+          createElement(RelayContext.Provider, { value: relayFor(current, api) }, createElement(ProxyPage, { initialTab })),
+        ),
       );
     await act(async () => root.render(page("canli")));
     const container = dom.container as unknown as Fake;
@@ -296,7 +312,8 @@ test("the sidebar lists Proxy & Gateway after the usage pages, with a green dot 
       createElement(TooltipProvider, null, createElement(Sidebar, { page: "proxy", go: () => {}, t, compact, status: status as never })),
     );
   const off = render({ accounts: 2, planning: false, switching: false, proxyRunning: false });
-  assert.match(off, /Hesaplar[\s\S]*Limitler[\s\S]*Rozetler[\s\S]*Proxy &amp; Gateway/);
+  // The usage pages are "Limit geçmişi", tokens and pins; the gateway comes after them.
+  assert.match(off, /Hesaplar[\s\S]*Limit geçmişi[\s\S]*Rozetler[\s\S]*Proxy &amp; Gateway/);
   assert.match(off, /aria-current="page"[^>]*>[\s\S]*?Proxy &amp; Gateway/);
   assert.equal(off.match(/data-status="on"/g)?.length ?? 0, 0);
   const on = render({ accounts: 2, planning: false, switching: false, proxyRunning: true, proxyAddress: "127.0.0.1:8317" });

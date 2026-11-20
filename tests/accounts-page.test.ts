@@ -82,32 +82,44 @@ test("planLabel and groupName describe an account", () => {
   assert.equal(groupName({ ...w, group: "work:w" }, t), "Ayrı çalışma alanı");
 });
 
-test("the accounts page lists accounts with their connection states", () => {
-  const html = wrap(relayFor(), createElement(Accounts));
+/** The list's rows, in order: each starts at its `data-slot="list-row"`. */
+const listRows = (html: string) => html.split('data-slot="list-row"').slice(1);
+/** The list's column names, read from its header row. */
+const listHead = (html: string) => {
+  const from = html.indexOf('data-slot="list-head"');
+  const head = html.slice(from, html.indexOf("</div>", from));
+  return [...head.matchAll(/<span[^>]*>([^<]*)<\/span>/g)].map((m) => m[1]);
+};
+/** A reading taken a minute ago, so the account reads as fresh against the clock the list uses. */
+const readNow = (value: AccountUsage): AccountUsage => ({ ...value, checkedAt: new Date(Date.now() - 60_000).toISOString() });
+
+test("the accounts page lists accounts with their status and limits", () => {
+  const html = wrap(relayFor({ data: { settings: DEFAULT_SETTINGS, usage: { ...usage, a: readNow(usage.a) }, accounts, authFlows: [] } as unknown as Snapshot }), createElement(Accounts));
   assert.match(html, /<h1[^>]*>Hesaplar/);
-  assert.match(html, /3 hesap · 1 hesapta Claude uygulaması girişi kayıtlı/);
+  // The description is the count alone; which accounts are linked is each row's status.
+  assert.match(html, /<p[^>]*>3 hesap<\/p>/);
+  assert.doesNotMatch(html, /hesapta Claude uygulaması girişi kayıtlı/);
   assert.match(html, /Hesap ekle/);
-  assert.match(html, /placeholder="Hesap, e-posta veya grup ara…"/);
+  assert.match(html, /placeholder="Ara…"/);
   for (const name of ["Kişisel · Max", "Studio", "Şirket"]) assert.match(html, new RegExp(name));
   assert.match(html, /Max 5×/);
-  assert.match(html, /<th[^>]*>Durum<\/th>/);
-  assert.doesNotMatch(html, /<th[^>]*>(Claude uygulaması|Limit okuma)<\/th>/);
-  assert.match(html, /Çalışıyor/);
-  assert.match(html, /Claude uygulaması girişi yok/);
+  // One Durum column, then a column per limit; no column per sign-in.
+  assert.deepEqual(listHead(html), ["", "Hesap", "Durum", "5 saat", "Hafta", "", ""]);
+  const [active, studio, work] = listRows(html);
+  assert.match(active, /data-slot="status-label" data-tone="ok"[^>]*>.*>Açık<\/span>/);
+  assert.match(studio, /data-slot="status-label" data-tone="off" title="Claude uygulaması girişi yok"[^>]*>.*>Uygulama girişi yok<\/span>/);
+  assert.match(work, />Uygulama girişi yok<\/span>/);
   assert.doesNotMatch(html, /Bağlı değil|Süresi doldu/);
-  // Each limit has its own column, a percent with a short bar under it.
-  assert.match(html, /<th[^>]*>5 saat<\/th>/);
-  assert.match(html, /<th[^>]*>Hafta<\/th>/);
-  assert.match(html, />%38</);
-  assert.match(html, />%78</);
-  // The three connections read at a glance.
-  assert.match(html, /<th[^>]*>Bağlantılar<\/th>/);
-  assert.match(html, /aria-label="Claude uygulaması: kayıtlı"/);
-  assert.match(html, /aria-label="Limit okuma girişi: Bağlı"/);
+  // Each limit is a percent with a short bar under it.
+  assert.match(active, />%38<.*role="meter" aria-label="5 saat %38"/);
+  assert.match(active, />%78<.*role="meter" aria-label="Hafta %78"/);
+  // The connections and the e-mails are on the account's page, not in the list.
+  assert.doesNotMatch(html, /Bağlantılar|aria-label="Claude uygulaması: kayıtlı"|aria-label="Limit okuma girişi: Bağlı"|data-slot="connection-legend"/);
+  assert.doesNotMatch(html, /a@example\.com|deniz\.kaya@vertex\.com/);
   assert.match(html, /aria-label="Studio işlemleri"/);
 });
 
-test("the accounts table has one Durum column with a fix button only where something is wrong", () => {
+test("the accounts list has one Durum column with a fix button only where something is wrong", () => {
   const critical: Account = { ...a, id: "k", name: "Yenilenecek" };
   const table = (list: Account[], language: "tr" | "en" = "tr", relay: Partial<Relay> = {}) =>
     renderToStaticMarkup(
@@ -120,7 +132,7 @@ test("the accounts table has one Durum column with a fix button only where somet
             value: relayFor({
               data: {
                 settings: DEFAULT_SETTINGS,
-                usage: { ...usage, k: { accountId: "k", status: "error", issue: "expired", stale: true } },
+                usage: { ...usage, a: readNow(usage.a), k: { accountId: "k", status: "error", issue: "expired", stale: true } },
                 accounts: list,
                 authFlows: [],
               } as unknown as Snapshot,
@@ -132,31 +144,30 @@ test("the accounts table has one Durum column with a fix button only where somet
       ),
     );
   const html = table([a, critical, b]);
-  assert.equal(html.match(/<th[ >]/g)?.length, 6);
-  assert.match(html, /<th[^>]*>Durum<\/th>/);
-  assert.doesNotMatch(html, /<th[^>]*>(Limit okuma|Claude uygulaması)<\/th>/);
-  assert.match(table([a], "en"), /<th[^>]*>Status<\/th>/);
-  const rows = html.split("<tr").slice(2);
-  const [okRow, critRow, offRow] = rows;
-  // An ok row shows its label and no inline button; only the ⋯ menu button is there.
-  assert.match(okRow, /Çalışıyor/);
+  assert.deepEqual(listHead(html), ["", "Hesap", "Durum", "5 saat", "Hafta", "", ""]);
+  assert.deepEqual(listHead(table([a], "en")), ["", "Account", "Status", "5 hours", "Week", "", ""]);
+  const [okRow, critRow, offRow] = listRows(html);
+  // An ok row shows its status and no inline button; only the ⋯ menu button is there.
+  assert.match(okRow, />Açık<\/span>/);
   assert.doesNotMatch(okRow, /data-size="xs"/);
-  assert.match(okRow, /title="Claude uygulaması girişi: Çalışıyor · Limit okuma girişi: Bağlı"/);
-  // A crit row shows its label and the matching row action's label as a small ghost button.
-  assert.match(critRow, /Limit okuma girişi gerekli/);
-  assert.match(critRow, /title="Claude uygulaması girişi: Kayıtlı · Limit okuma girişi: Gerekli"/);
-  assert.match(critRow, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*>Limit okuma girişini yenile<\/button>/);
-  // The button's name starts with its visible label and says which account it is for.
-  assert.match(critRow, /<button[^>]*aria-label="Limit okuma girişini yenile · Yenilenecek"[^>]*>Limit okuma girişini yenile<\/button>/);
+  // A crit row says it in a few words, the full reason in the title, and offers the fix in one word.
+  assert.match(critRow, /data-slot="status-label" data-tone="crit" title="Limit okuma girişi gerekli"[^>]*>.*>Giriş gerekli<\/span>/);
+  // The button's name is the menu item's label and says which account it is for.
+  assert.match(
+    critRow,
+    /<button[^>]*data-variant="outline"[^>]*data-size="xs"[^>]*aria-label="Limit okuma girişini yenile · Yenilenecek" title="Limit okuma girişini yenile">Bağla<\/button>/,
+  );
   // An off row offers to save the Claude app sign-in.
-  assert.match(offRow, /Claude uygulaması girişi yok/);
-  assert.match(offRow, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*>Claude uygulaması girişini kaydet<\/button>/);
+  assert.match(offRow, />Uygulama girişi yok<\/span>/);
+  assert.match(offRow, /<button[^>]*data-size="xs"[^>]*aria-label="Claude uygulaması girişini kaydet · Studio"[^>]*>Kaydet<\/button>/);
+  // At most one visible step per row.
+  for (const row of [critRow, offRow]) assert.equal(row.match(/data-size="xs"/g)?.length, 1);
   // The inline button takes the row action's disabled state.
   const locked = table([critical], "tr", { busy: "x" });
   assert.match(locked, /<button[^>]*disabled=""[^>]*data-size="xs"|<button[^>]*data-size="xs"[^>]*disabled=""/);
-  // The labels follow the language.
-  assert.match(table([critical], "en"), /Usage sign-in needed/);
-  assert.match(table([critical], "en"), /data-size="xs"[^>]*>Renew usage sign-in<\/button>/);
+  // The words follow the language.
+  assert.match(table([critical], "en"), /title="Usage sign-in needed"[^>]*>.*>Sign-in needed<\/span>/);
+  assert.match(table([critical], "en"), /data-size="xs"[^>]*aria-label="Renew usage sign-in · Yenilenecek"[^>]*>Connect<\/button>/);
 });
 
 /** An account's usage, as the relay's snapshot reports it. */
@@ -218,16 +229,17 @@ test("a row with a locked Keychain or a connection to renew offers that renewal 
         ),
       ),
     );
+  // The status is short, its reason the title; the button is one word, named in full for assistive technology.
   const keychain = row(usageOf("a", "keychain-locked"));
-  assert.match(keychain, /Anahtarlık izni gerekli/);
+  assert.match(keychain, /data-slot="status-label"[^>]*title="Anahtarlık izni gerekli"[^>]*>.*>Anahtarlık izni<\/span>/);
   assert.match(
     keychain,
-    /<button[^>]*data-size="xs"[^>]*aria-label="Anahtarlık erişimine izin ver · Kişisel · Max"[^>]*>Anahtarlık erişimine izin ver<\/button>/,
+    /<button[^>]*data-size="xs"[^>]*aria-label="Anahtarlık erişimine izin ver · Kişisel · Max" title="Anahtarlık erişimine izin ver">Yenile<\/button>/,
   );
   const renewing = row(usageOf("a", "renewal-required"));
-  assert.match(renewing, /Bağlantı yenilenmeli/);
-  assert.match(renewing, /aria-label="Yenilemeye izin ver · Kişisel · Max"[^>]*>Yenilemeye izin ver<\/button>/);
-  assert.match(row(usageOf("a", undefined, { connectionRenewalRequired: true }), "en"), /aria-label="Allow renewal · Kişisel · Max"[^>]*>Allow renewal<\/button>/);
+  assert.match(renewing, /title="Bağlantı yenilenmeli"[^>]*>.*>Yenilenmeli<\/span>/);
+  assert.match(renewing, /aria-label="Yenilemeye izin ver · Kişisel · Max"[^>]*>Yenile<\/button>/);
+  assert.match(row(usageOf("a", undefined, { connectionRenewalRequired: true }), "en"), /aria-label="Allow renewal · Kişisel · Max"[^>]*>Renew<\/button>/);
 });
 
 /** The drawn tree, read from the fake DOM. */
@@ -276,7 +288,7 @@ test("the inline fix button runs its action and does not also open the sheet", a
     assert.deepEqual(started, ["k"], "it runs the row action");
     assert.deepEqual(opened, [], "and the click stops at the button");
     // The same click on the row itself opens the sheet, so the check above is not vacuous.
-    const row = all.find((n) => n.tagName === "tr" && n.attributes.has("tabindex"));
+    const row = all.find((n) => n.attributes?.get("data-slot") === "list-row");
     assert.ok(row, "the row is drawn");
     await act(async () => dom.dispatch(row, "click", { detail: 1 }));
     assert.deepEqual(opened, ["k"]);
@@ -311,7 +323,7 @@ test("accountPlan names a Claude account's tier, else its subscription, else not
   assert.equal(accountPlan({ ...a, planning: undefined, auth: undefined }), undefined);
 });
 
-test("an account without a plan shows its subscription as a badge that says so, or nothing", () => {
+test("an account without a plan shows its subscription beside its name, saying so, or nothing", () => {
   const noPlan: Account = { ...b, planning: undefined };
   const subscribed: Account = { ...w, id: "s", planning: undefined, auth: { ...w.auth!, subscription: "team" } };
   const html = (language: "tr" | "en") =>
@@ -328,14 +340,14 @@ test("an account without a plan shows its subscription as a badge that says so, 
     );
   const tr = html("tr");
   assert.doesNotMatch(tr, /Plan yok|No plan/);
-  // The plan sits beside the name; an account with neither shows none.
-  // (the provider badge is its own outline badge, not a plan)
-  assert.equal(tr.split("<tr").slice(2)[0].match(/data-slot="badge" data-variant="secondary"/g), null);
-  assert.match(tr, /data-slot="badge"[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
+  // The short plan sits beside the name, its source in the title; an account with neither shows none.
+  const [none, team, chosen] = listRows(tr);
+  assert.match(none, /title="Studio">Studio<\/span><\/div>/);
+  assert.match(team, /title="Şirket">Şirket<\/span><span[^>]*title="Abonelik · planlama için plan seçilmedi">Team<\/span>/);
   assert.doesNotMatch(tr, /Plan seç/);
   assert.match(html("en"), /title="Subscription · no plan selected for planning">Team<\/span>/);
-  // A chosen plan is still a badge.
-  assert.match(tr, /data-slot="badge"[^>]*>Max 5×/);
+  // A chosen plan says so.
+  assert.match(chosen, /<span[^>]*title="Planlama için seçildi">Max 5×<\/span>/);
 });
 
 test("the accounts page shows the empty state", () => {
@@ -375,22 +387,26 @@ test("each connection keeps its refresh button left of its action, in shared col
 test("the account page shows identity, usage, the connections and a closed history", () => {
   const html = wrap(relayFor(), createElement(AccountDetailBody, { account: a, now: NOW }));
   assert.match(html, /a@example.com/);
-  assert.match(html, /5 saatlik/);
-  assert.match(html, /<h2[^>]*>Limitler<\/h2>/);
-  assert.match(html, /<h2[^>]*>Bağlantılar<\/h2>/);
-  assert.match(html, /<h2[^>]*>Hesap<\/h2>/);
-  assert.match(html, /<h2[^>]*>Planlama<\/h2>/);
-  // The connections are always shown, each with what it is for and its action.
-  assert.match(html, /Claude uygulaması<\/span>/);
-  assert.match(html, /Claude uygulamasını bu hesapla açar\./);
+  // Three sections, each titled above its card; the plan is set on the Planning page, not here.
+  assert.deepEqual([...html.matchAll(/<h2[^>]*>([^<]*)<\/h2>/g)].map((m) => m[1]), ["Limitler", "Bağlantılar", "Hesap"]);
+  assert.doesNotMatch(html, /<h2[^>]*>Planlama<\/h2>/);
+  assert.match(html, /<dt[^>]*>Planda<\/dt><dd[^>]*><a href="#\/planlama"[^>]*>Evet · Planlama ›<\/a>/);
+  // The limits read as lines: name, percent and a meter.
+  assert.match(html, /role="meter" aria-label="5 saat %38"/);
+  assert.match(html, /role="meter" aria-label="Hafta %78"/);
+  // The connections are always shown, each one line: its name (what it is for on hover), state and action.
+  assert.match(html, /data-slot="connections"/);
+  assert.match(html, /<span[^>]*title="Claude uygulamasını bu hesapla açar\.">Claude uygulaması<\/span>/);
   assert.match(html, />Yenile…<\/button>/);
-  assert.match(html, /Limit okuma girişi<\/span>/);
+  assert.match(html, /<span[^>]*title="Limitleri okur\.">Limit okuma girişi<\/span>/);
   assert.match(html, /aria-label="Limit okuma girişini doğrula"/);
-  assert.match(html, /<h2[^>]*>Bağlantılar<\/h2><span[^>]*>2 \/ 2 hazır<\/span>/);
+  // Secondary buttons are outline.
+  assert.match(html, /<button[^>]*data-variant="outline"[^>]*>Yenile…<\/button>/);
+  assert.match(html, /<h2[^>]*>Bağlantılar<\/h2><div[^>]*><span[^>]*>2 \/ 2 hazır<\/span>/);
   // History is a disclosure that starts closed, saying whether it is shared.
   assert.equal(disclosureState(html, "Code geçmişi"), "false");
   assert.match(html, /data-slot="disclosure-summary"[^>]*>paylaşılmıyor</);
-  // A healthy account has no status strip: the header says it.
+  // There is no status strip: the header says it.
   assert.doesNotMatch(html, /data-slot="account-status"/);
   assert.doesNotMatch(html, /Desktop girişi|tarayıcı girişi|Tarayıcı girişi/);
 });
@@ -422,46 +438,54 @@ const disclosureState = (html: string, title: string) =>
   new RegExp(`<button[^>]*aria-expanded="(true|false)"[^>]*><span[^>]*>${title}</span>`).exec(html)?.[1];
 const expiredC: Record<string, AccountUsage> = { c: { accountId: "c", status: "error", issue: "expired", stale: true } };
 
-test("the page header shows the health and one primary action, with the rest in its menu", () => {
-  // A fix wins: the fix's row-action label.
+/** A status label's tone, title and words. */
+const statusOf = (html: string) =>
+  /data-slot="status-label" data-tone="(\w+)" title="([^"]*)"[^>]*><span[^>]*><\/span><span[^>]*>([^<]*)<\/span>/.exec(html)?.slice(1);
+
+test("the page header shows the status and one primary action, with the rest in its menu", () => {
+  // A fix wins: the fix's row-action label. The page header has room, so it says the reason itself
+  // (the list says the few words, the reason as their title), in the same tone.
   const crit = headerOf(c, {}, expiredC);
-  assert.match(crit, /data-slot="account-health"[^>]*>.*Limit okuma girişi gerekli/);
+  assert.deepEqual(statusOf(crit), ["crit", "Limit okuma girişi gerekli", "Limit okuma girişi gerekli"]);
   assert.equal(primaryButtons(crit).length, 1);
   assert.match(primaryButtons(crit)[0], />Limit okuma girişini yenile<\/button>$/);
   assert.match(crit, /aria-label="Üçüncü işlemleri"/);
   assert.match(crit, />Hesaplar<\/button>/);
+  // The header shows the account's dot, not a letter avatar, and one chip with the provider and plan.
+  assert.match(crit, /<span aria-hidden="true" class="[^"]*rounded-full[^"]*bg-account-olive/);
+  assert.match(crit, /data-slot="badge"[^>]*data-provider="claude"[^>]*>.*Claude<span[^>]*>· Max 5×<\/span><\/span>/);
+  // No Proxy button in the header.
+  assert.doesNotMatch(crit, />Proxy</);
   const unlinked = headerOf(b);
-  assert.match(unlinked, /Claude uygulaması girişi yok/);
+  assert.deepEqual(statusOf(unlinked), ["off", "Claude uygulaması girişi yok", "Claude uygulaması girişi yok"]);
   assert.match(primaryButtons(unlinked)[0], />Claude uygulaması girişini kaydet<\/button>$/);
   // No fix and not the active account: switch.
-  const ready = headerOf(c, {}, { c: { ...usage.a, accountId: "c" } });
-  assert.match(ready, /Hazır/);
+  const ready = headerOf(c, {}, { c: readNow({ ...usage.a, accountId: "c" }) });
+  assert.deepEqual(statusOf(ready), ["ok", "Hazır", "Hazır"]);
   assert.equal(primaryButtons(ready).length, 1);
   assert.match(primaryButtons(ready)[0], />Geç<\/button>$/);
   // A pending approval has no fix either, so it offers the switch.
   const waiting = headerOf(c, {}, {}, [{ accountId: "c", status: "waiting" }]);
   assert.match(waiting, /Tarayıcıda onayla/);
   assert.match(primaryButtons(waiting)[0], />Geç<\/button>$/);
-  // No fix and the active account: nothing to do.
-  const active = headerOf(a);
-  assert.match(active, /Çalışıyor/);
+  // No fix and the account in use: nothing to do.
+  const active = headerOf(a, {}, { a: readNow(usage.a) });
+  assert.deepEqual(statusOf(active), ["ok", "Açık", "Açık"]);
   assert.equal(primaryButtons(active).length, 0);
-  // The same single status the table shows, in the pill's title.
-  assert.match(active, /title="Claude uygulaması girişi: Çalışıyor · Limit okuma girişi: Bağlı"/);
+  // The same status the list shows for the account.
+  const listed = wrap(relayOf({}, expiredC), createElement(AccountsTable, { accounts: [c], open() {}, link() {} }));
+  assert.deepEqual(statusOf(listed), ["crit", "Limit okuma girişi gerekli", "Giriş gerekli"]);
 });
 
-test("a problem also shows a strip that says what is wrong; the usage row agrees with it", () => {
-  const strip = (html: string) => {
-    const from = html.indexOf('data-slot="account-status"');
-    return from < 0 ? "" : html.slice(from, html.indexOf("</div>", from));
-  };
+test("a problem is said by the header's status; the usage row agrees with it, and there is no strip", () => {
+  const header = (usageFor: Record<string, AccountUsage>) => statusOf(headerOf(c, {}, usageFor));
   const keychain = sheetFor(c, {}, { c: usageOf("c", "keychain-locked") });
-  assert.match(strip(keychain), /Anahtarlık izni gerekli/);
+  assert.deepEqual(header({ c: usageOf("c", "keychain-locked") }), ["warn", "Anahtarlık izni gerekli", "Anahtarlık izni gerekli"]);
   const renewing = sheetFor(c, {}, { c: usageOf("c", "renewal-required") });
-  assert.match(strip(renewing), /Bağlantı yenilenmeli/);
-  assert.match(strip(sheetFor(c, {}, expiredC)), /Limit okuma girişi gerekli/);
-  // No Claude app sign-in is not a problem to shout about: the header and the row say it.
-  assert.equal(strip(sheetFor(b)), "");
+  assert.deepEqual(header({ c: usageOf("c", "renewal-required") })?.slice(1), ["Bağlantı yenilenmeli", "Bağlantı yenilenmeli"]);
+  assert.deepEqual(header(expiredC)?.slice(1), ["Limit okuma girişi gerekli", "Limit okuma girişi gerekli"]);
+  // The strip under the header is gone: the header says it once.
+  for (const html of [keychain, renewing, sheetFor(c, {}, expiredC), sheetFor(b)]) assert.doesNotMatch(html, /data-slot="account-status"/);
   // The usage row says what the header says, not "Bağlı" under a green dot.
   const usageRow = (html: string) =>
     /Limit okuma girişi<\/span><span[^>]*><span[^>]*class="[^"]*(bg-\w+)[^"]*"[^>]*><\/span><span[^>]*>([^<]*)/.exec(html);
@@ -508,9 +532,8 @@ test("sign-ins of two different accounts are said on the page and fixed from its
     /Claude uygulaması girişi ile limit okuma girişi farklı hesaplara ait\. Limit okuma girişini bu profilin hesabıyla yenile\./,
   );
   const head = headerOf(mismatched);
-  assert.match(head, /Limit okuma girişi gerekli/);
+  assert.deepEqual(statusOf(head), ["crit", "Limit okuma girişi gerekli", "Limit okuma girişi gerekli"]);
   assert.match(primaryButtons(head)[0], />Limit okuma girişi yap<\/button>$/);
-  assert.match(head, /Limit okuma girişi: Gerekli/);
 });
 
 test("a table row whose sign-ins belong to different accounts needs the usage sign-in", () => {
@@ -519,8 +542,8 @@ test("a table row whose sign-ins belong to different accounts needs the usage si
     relayFor({ accounts: [mismatched], data: { settings: DEFAULT_SETTINGS, usage: { c: { ...usage.a, accountId: "c" } }, accounts: [mismatched], authFlows: [] } as unknown as Snapshot }),
     createElement(AccountsTable, { accounts: [mismatched], open() {}, link() {} }),
   );
-  assert.match(html, /Limit okuma girişi gerekli/);
-  assert.match(html, /aria-label="Limit okuma girişini yenile · Üçüncü"[^>]*>Limit okuma girişini yenile<\/button>/);
+  assert.deepEqual(statusOf(html), ["crit", "Limit okuma girişi gerekli", "Giriş gerekli"]);
+  assert.match(html, /aria-label="Limit okuma girişini yenile · Üçüncü"[^>]*>Bağla<\/button>/);
 });
 
 test("row actions follow the Desktop link state and the switch lock", () => {
@@ -728,7 +751,7 @@ test("the connections count only what a switch needs; the extension and the term
       }),
       createElement(AccountDetailBody, { account: a, now: NOW, extensionStatus, terminalStatus }),
     );
-  const count = (html: string) => /<h2[^>]*>Bağlantılar<\/h2><span[^>]*>([^<]*)<\/span>/.exec(html)?.[1];
+  const count = (html: string) => /<h2[^>]*>Bağlantılar<\/h2><div[^>]*><span[^>]*>([^<]*)<\/span>/.exec(html)?.[1];
   // The Claude app sign-in and the usage sign-in: the same count with or without the optional rows.
   assert.equal(count(mac(extension())), "2 / 2 hazır");
   assert.equal(count(mac(extension({ saved: [] }))), "2 / 2 hazır");
@@ -737,13 +760,16 @@ test("the connections count only what a switch needs; the extension and the term
   assert.equal(count(mac(extension(), "win32")), "2 / 2 hazır");
   const saved = { mode: "follow", saved: [{ accountUuid: desktop.accountUuid, orgId: desktop.orgId, savedAt: iso(NOW), parked: true }] } as TerminalStatus;
   assert.equal(count(mac(extension(), "darwin", saved)), "2 / 2 hazır");
-  // The optional rows say so, and still show their own steps.
+  // The optional rows say so, and keep their own steps behind a closed "how to connect" line.
   const missing = mac(extension(), "darwin", { mode: "follow", saved: [] });
   assert.equal(count(missing), "2 / 2 hazır");
-  assert.equal(missing.match(/>İsteğe bağlı</g)?.length, 2);
-  assert.match(missing, /“Bağla”ya bas; tarayıcıda açılan sayfada/);
-  assert.match(missing, />Bağla</);
-  assert.doesNotMatch(mac(extension(), "win32"), />İsteğe bağlı</);
+  assert.equal(missing.match(/>isteğe bağlı</g)?.length, 2);
+  const terminal = missing.slice(missing.lastIndexOf('data-slot="connection"'));
+  assert.match(terminal, /title="Bu hesaba o da geçer\.">Terminal<\/span><span[^>]*>isteğe bağlı<\/span>/);
+  assert.equal(disclosureState(terminal, "Nasıl bağlanır\\?"), "false");
+  assert.doesNotMatch(terminal, /“Bağla”ya bas/);
+  assert.match(terminal, /<button[^>]*data-variant="outline"[^>]*>.*Bağla<\/button>/);
+  assert.doesNotMatch(mac(extension(), "win32"), />isteğe bağlı</);
 });
 
 test("the closed Code history row says whether, and with how many accounts, it is shared", () => {
@@ -768,40 +794,41 @@ const suggestedTable = (extra: Partial<Relay> = {}, usageFor: Record<string, Acc
       { value: { language, setLanguage() {}, t: (tr: string, en: string) => (language === "tr" ? tr : en) } },
       createElement(
         RelayContext.Provider,
-        { value: relayOf({ suggestion: c, ...extra }, { c: { ...usage.a, accountId: "c" }, ...usageFor }) },
+        { value: relayOf({ suggestion: c, ...extra }, { a: readNow(usage.a), c: readNow({ ...usage.a, accountId: "c" }), ...usageFor }) },
         createElement(AccountsTable, { accounts: [a, c, b], open() {}, link() {} }),
       ),
     ),
   );
-const rowsOf = (html: string) => html.split("<tr").slice(2);
+const rowsOf = listRows;
 
-test("the suggested account's row is marked and offers its switch inline", () => {
+test("the suggested account's row offers its switch inline, filled", () => {
   const [activeRow, suggestedRow, otherRow] = rowsOf(suggestedTable());
-  assert.match(suggestedRow, /Üçüncü<\/span><span[^>]*>önerilen<\/span>/);
+  // The filled Geç is the mark: there is no "önerilen" chip any more.
   assert.match(suggestedRow, /<button[^>]*data-variant="default"[^>]*data-size="xs"[^>]*aria-label="Geç · Üçüncü"[^>]*>Geç<\/button>/);
-  for (const row of [activeRow, otherRow]) {
-    assert.doesNotMatch(row, /önerilen/);
-    assert.doesNotMatch(row, />Geç<\/button>/);
-  }
-  // No suggestion, no mark and no inline switch.
+  assert.match(suggestedRow, />Hazır<\/span>/);
+  assert.doesNotMatch(suggestedTable(), /önerilen/);
+  for (const row of [activeRow, otherRow]) assert.doesNotMatch(row, />Geç<\/button>/);
+  // No suggestion, no inline switch.
   const plain = suggestedTable({ suggestion: undefined });
-  assert.doesNotMatch(plain, /önerilen|>Geç<\/button>/);
+  assert.doesNotMatch(plain, />Geç<\/button>/);
   // It takes the switch lock.
   assert.match(rowsOf(suggestedTable({ desktopBusy: true }))[1], /<button[^>]*disabled=""[^>]*>Geç<\/button>/);
-  assert.match(rowsOf(suggestedTable({}, {}, "en"))[1], /suggested<\/span>.*aria-label="Switch · Üçüncü"[^>]*>Switch<\/button>/);
+  assert.match(rowsOf(suggestedTable({}, {}, "en"))[1], /aria-label="Switch · Üçüncü"[^>]*>Switch<\/button>/);
 });
 
-test("a stale row shows the age of its data and a Refresh button", () => {
+test("a stale row says its reading is old, fades its limits and offers a Refresh button", () => {
   const checkedAt = new Date(Date.now() - 2 * 3_600_000 - 60_000).toISOString();
   const stale = { c: { accountId: "c", status: "ready", stale: true, checkedAt, fiveHour: { usedPercent: 20 } } as AccountUsage };
   const row = rowsOf(suggestedTable({ suggestion: undefined }, stale))[1];
-  assert.match(row, /Limit verisi eski/);
-  assert.match(row, /data-slot="data-age"[^>]*>2 sa önce okundu<\/span>/);
-  assert.match(row, /<button[^>]*data-variant="ghost"[^>]*data-size="xs"[^>]*aria-label="Yenile · Üçüncü"[^>]*>Yenile<\/button>/);
-  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], />Read 2 h ago<\/span>.*>Refresh<\/button>/);
+  // A quiet status, the longer reason on hover; the age chip is gone from the list.
+  assert.deepEqual(statusOf(row), ["off", "Limit verisi eski", "Eski okuma"]);
+  assert.doesNotMatch(row, /data-slot="data-age"/);
+  assert.match(row, /data-slot="limit-line" class="[^"]*opacity-60/);
+  assert.match(row, /<button[^>]*data-variant="outline"[^>]*data-size="xs"[^>]*aria-label="Limitleri yenile · Üçüncü" title="Limitleri yenile">Yenile<\/button>/);
+  assert.match(rowsOf(suggestedTable({ suggestion: undefined }, stale, "en"))[1], />Old reading<\/span>.*aria-label="Refresh limits · Üçüncü"[^>]*>Refresh<\/button>/);
   // A fresh row has neither.
   const fresh = rowsOf(suggestedTable({ suggestion: undefined }))[1];
-  assert.doesNotMatch(fresh, /data-age|>Yenile<\/button>/);
+  assert.doesNotMatch(fresh, /Eski okuma|opacity-60|>Yenile<\/button>/);
   // It takes Refresh limits' busy state.
   assert.match(rowsOf(suggestedTable({ suggestion: undefined, usageBusy: new Set(["c"]) }, stale))[1], /<button[^>]*disabled=""[^>]*>Yenile<\/button>/);
 });
@@ -843,7 +870,7 @@ test("the inline switch and refresh run the ⋯ menu's own actions, without open
     );
     const by = (label: string) => buttons.find((n) => n.attributes.get("aria-label") === label);
     const go = by("Geç · Üçüncü");
-    const refresh = by("Yenile · Studio");
+    const refresh = by("Limitleri yenile · Studio");
     assert.ok(go && refresh, "both inline buttons are drawn");
     await act(async () => dom.dispatch(go, "click", { detail: 1 }));
     await act(async () => dom.dispatch(refresh, "click", { detail: 1 }));
@@ -856,19 +883,24 @@ test("the inline switch and refresh run the ⋯ menu's own actions, without open
   }
 });
 
-test("connection icons that need a step carry a dot, and a short key under the table names the colours", () => {
+test("a row that needs a step says so in its status and offers that step; the connection icons and their key are gone", () => {
   const html = suggestedTable();
   const [activeRow, , unlinkedRow] = rowsOf(html);
-  // `b` has no usage sign-in: a step, so amber with a dot; no Claude app sign-in: grey, no dot.
-  assert.match(unlinkedRow, /aria-label="Limit okuma girişi: Yok" role="img" data-step="true" class="relative text-warn-foreground"/);
-  assert.match(unlinkedRow, /aria-label="Claude uygulaması: kayıtlı değil" role="img" class="relative text-muted-foreground\/40"/);
-  assert.doesNotMatch(activeRow, /data-step/);
-  // A sign-in to renew is a step too, in the same amber.
+  // `b` has no Claude app sign-in: a quiet status and the one step that fixes it.
+  assert.deepEqual(statusOf(unlinkedRow), ["off", "Claude uygulaması girişi yok", "Uygulama girişi yok"]);
+  assert.match(unlinkedRow, /aria-label="Claude uygulaması girişini kaydet · Studio"[^>]*>Kaydet<\/button>/);
+  assert.doesNotMatch(activeRow, /data-size="xs"/);
+  // A sign-in to renew is a step too, in red, with its own button.
   const critical = rowsOf(suggestedTable({}, { c: { accountId: "c", status: "error", issue: "expired", stale: true } }))[1];
-  assert.match(critical, /aria-label="Limit okuma girişi: Gerekli" role="img" data-step="true" class="relative text-warn-foreground"/);
-  assert.match(html, /data-slot="connection-legend".*hazır.*adım gerekiyor.*yok/);
-  assert.match(suggestedTable({}, {}, "en"), /aria-label="Usage sign-in: None" role="img" data-step="true"/);
-  assert.match(suggestedTable({}, {}, "en"), /data-slot="connection-legend".*ready.*step needed.*none/);
+  assert.deepEqual(statusOf(critical), ["crit", "Limit okuma girişi gerekli", "Giriş gerekli"]);
+  assert.match(critical, /aria-label="Limit okuma girişini yenile · Üçüncü"[^>]*>Bağla<\/button>/);
+  // The fix wins over the suggested switch: one visible action per row.
+  assert.doesNotMatch(critical, />Geç<\/button>/);
+  // The icons and their key live on the account's page now.
+  assert.doesNotMatch(html, /data-slot="connection-legend"|data-step=|role="img"/);
+  const en = suggestedTable({}, {}, "en");
+  assert.match(rowsOf(en)[2], />No app sign-in<\/span>.*>Save<\/button>/);
+  assert.doesNotMatch(en, /data-slot="connection-legend"/);
 });
 
 test("a search that matches nothing is named and can be cleared", () => {
@@ -988,7 +1020,7 @@ test("the remove dialog says what goes and what stays, and removes only on confi
   assert.equal(removedNotice("C", {}, (_, en) => en), "Removed C.");
 });
 
-test("a full account keeps its switch, tinted amber, saying when its limit opens", () => {
+test("a full account keeps its switch, quieter, saying when its limit opens", () => {
   const t = (tr: string) => tr;
   const full = (now: number): Record<string, AccountUsage> => ({
     c: {
@@ -1007,13 +1039,20 @@ test("a full account keeps its switch, tinted amber, saying when its limit opens
   const plain = rowActions(c, relayOf(), t, undefined, { now: NOW }).find((x) => x.key === "switch")!;
   assert.equal(plain.tone, undefined);
   assert.equal(plain.note, undefined);
-  // The account's page: the switch is its primary action, tinted, with the note beside it.
+  // The account's page: the switch is still its primary action, quieter (outline), the note in its title.
   const header = headerOf(c, {}, full(Date.now()));
   const [primary] = primaryButtons(header);
-  assert.match(primary, /class="[^"]*bg-warn\/10[^"]*text-warn-foreground/);
+  assert.match(primary, /^<button[^>]*data-variant="outline"/);
   assert.match(primary, /title="Limit dolu · [^"]+ açılır \([^"]+\)"/);
   assert.match(primary, />Geç<\/button>$/);
-  assert.match(header, /data-slot="switch-note"[^>]*>Limit dolu · /);
+  assert.doesNotMatch(header, /data-slot="switch-note"/);
+  // The header's status says the limit is full and when it opens.
+  assert.deepEqual(statusOf(header)?.slice(0, 1), ["crit"]);
+  assert.match(statusOf(header)?.[2] ?? "", /^Dolu · 1 sa (29|30) dk$/);
+  // An account with room keeps the filled switch, without a title.
+  const [roomy] = primaryButtons(headerOf(c, {}, { c: readNow({ ...usage.a, accountId: "c" }) }));
+  assert.match(roomy, /^<button[^>]*data-variant="default"/);
+  assert.doesNotMatch(roomy, /title=/);
 });
 
 test("separate windows: the menu opens one, then offers it forward or closed, and holds the switch", () => {

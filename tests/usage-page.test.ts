@@ -23,7 +23,8 @@ import { RelayContext, type Relay } from "../src/data/relay-context";
 import { I18nContext, type Language } from "../src/data/i18n";
 import { DEFAULT_SETTINGS, type Account, type Snapshot } from "../shared/types";
 import type { UsageStatisticsView } from "../shared/usage-statistics-view";
-import { dayTip, fakeDom, find, readableText, textOf, type Fake } from "./fake-dom";
+import { TooltipProvider } from "../src/components/ui/tooltip";
+import { fakeDom, readableText, textOf, type Fake } from "./fake-dom";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const ZONE = "Europe/Istanbul";
@@ -114,11 +115,16 @@ const i18n = (language: Language) => ({
   setLanguage() {},
   t: (tr: string, en: string) => (language === "tr" ? tr : en),
 });
+/** The page inside the shell's providers: the sections' ⓘ tips need the tooltip provider, as in the shell. */
 const tree = (child: ReactElement, language: Language = "tr") =>
   createElement(
-    I18nContext.Provider,
-    { value: i18n(language) },
-    createElement(RelayContext.Provider, { value: relayFor() }, child),
+    TooltipProvider,
+    null,
+    createElement(
+      I18nContext.Provider,
+      { value: i18n(language) },
+      createElement(RelayContext.Provider, { value: relayFor() }, child),
+    ),
   );
 const render = (child: ReactElement, language: Language = "tr") => renderToStaticMarkup(tree(child, language));
 const text = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&#x27;/g, "’");
@@ -154,8 +160,11 @@ test("summary tiles speak only of limits: full periods, periods started, hits an
   assert.match(html, /Başlayan dönem96günde ortalama 3,2/);
   assert.match(html, /Limite takılma76 beş saatlik, 1 haftalık/);
   assert.match(html, /En yoğun saatler13:00–16:00çalışma saatlerinde %71/);
-  assert.match(html, /Bu aralığın %83 kadarında Relay limitleri okuyabildi/);
   assert.doesNotMatch(html, /Pro birimi|API karşılığı|token/);
+  // How much of the range Relay could read, and what the numbers count, is behind the section's ⓘ, not on the page.
+  const markup = render(createElement(SummaryTiles, { view }));
+  assert.match(markup, /data-slot="summary-tiles"[\s\S]*?<h2[^>]*>Özet<\/h2>[\s\S]*?aria-label="Nasıl çalışır"/);
+  assert.doesNotMatch(html, /Bu aralığın %83 kadarında/);
   // The unit stays on one line in smaller type beside the large number.
   assert.match(render(createElement(SummaryTiles, { view })), /18 <span class="[^"]*whitespace-nowrap[^"]*">dolu dönem<\/span>/);
   const en = text(render(createElement(SummaryTiles, { view }), "en"));
@@ -187,56 +196,55 @@ test("account balance is a table: share, average fill and idle days under their 
   assert.match(plain, /Eski hesap%15—1 gün/);
   assert.match(plain, /Vertex \(Team\) dönemlerinin ortalama yalnızca %9 kadarını dolduruyor\./);
   assert.doesNotMatch(plain, / · doluluk|boşta \d/);
-  // Share bars use the account tones; former rows after every account.
-  assert.match(html, /bg-tone-1[^"]*" style="width:58%"/);
-  assert.match(html, /bg-tone-2[^"]*" style="width:27%"/);
-  assert.match(html, /bg-tone-4[^"]*" style="width:15%"/);
+  // Share bars take each account's own colour, as its dot (both fixture accounts are olive); a former account is grey.
+  assert.match(html, /bg-account-olive[^"]*" style="width:58%"/);
+  assert.match(html, /bg-account-olive[^"]*" style="width:27%"/);
+  assert.match(html, /bg-account-none[^"]*" style="width:15%"/);
   const en = text(render(createElement(AccountBalance, { view, accounts }), "en"));
   assert.match(en, /Former account/);
   assert.match(en, /2 days/);
   assert.match(en, /1 day(?!s)/);
 });
 
-test("pointing at a day of the daily chart details each account and a limit hit", async () => {
-  const dom = fakeDom();
-  dom.install();
-  readableText();
-  try {
-    const { createRoot } = await import("react-dom/client");
-    const root = createRoot(dom.container as unknown as Element);
-    await act(async () => root.render(tree(createElement(DailyChart, { view, accounts, zone: ZONE }))));
-    const container = dom.container as unknown as Fake;
-    const svg = find(container, (n) => n.tagName === "svg") as Fake & { box: { left: number; top: number; width: number; height: number } };
-    svg.box = { left: 0, top: 0, width: 440, height: 146 };
-    // The right edge is the newest day, the 14th, which hit a limit.
-    await act(async () => dom.dispatch(svg, "pointermove", { clientX: 439, clientY: 60 }));
-    assert.equal(dayTip(container), "14 Ekim ÇarşambaDolu dönem120Kişisel · Max80Vertex40▲ Limite takıldı");
-    await act(async () => dom.dispatch(svg, "keydown", { key: "Home" }));
-    assert.equal(dayTip(container), "15 Eylül SalıDolu dönem0Bu gün kullanım yok.");
-    await act(async () => dom.dispatch(svg, "pointerout", { relatedTarget: null }));
-    assert.equal(dayTip(container), undefined);
-    await act(async () => root.unmount());
-  } finally {
-    dom.uninstall();
-  }
+/** The daily chart's days as its screen-reader list ("Günlük değerler", "Daily values") says them, one line each. */
+const dayLines = (html: string) => {
+  const list = html.slice(html.search(/aria-label="(Günlük değerler|Daily values)"/));
+  return [...list.slice(0, list.indexOf("</ul>")).matchAll(/<li>([^<]*)<\/li>/g)].map((m) => m[1]);
+};
+
+test("the daily chart's series are the accounts in their own colours, and each day says its total and a limit hit", () => {
+  // Recharts draws the bars and the pointer's day detail in the browser only; the page's markup carries the
+  // series' colours and, for screen readers and as the chart's table, every day with its total and its hit.
+  const html = render(createElement(DailyChart, { view, accounts, zone: ZONE }));
+  assert.match(html, /--color-a: var\(--account-olive\)/);
+  assert.match(html, /--color-b: var\(--account-olive\)/);
+  assert.match(html, /--color-former: var\(--account-none\)/);
+  const days = dayLines(html);
+  assert.equal(days.at(-1), "14 Ekim Çarşamba: 120 dolu dönem, limite takıldı");
+  assert.equal(days[0], "15 Eylül Salı: 0 dolu dönem");
+  assert.equal(dayLines(render(createElement(DailyChart, { view, accounts, zone: ZONE }), "en")).at(-1), "Wednesday 14 October: 120 full periods, limit hit");
 });
 
 test("the daily chart draws one labelled bar group per day, in full periods, and marks hit days", () => {
   const html = render(createElement(DailyChart, { view, accounts, zone: ZONE }));
-  const groups = html.match(/<g[^>]*aria-label="[^"]+: [\d.,]+ dolu dönem[^"]*"/g) ?? [];
-  assert.equal(groups.length, 30);
-  assert.match(html, /aria-label="14 Eki: 120 dolu dönem, limite takıldı"/);
-  assert.match(html, /aria-label="15 Eyl: 0 dolu dönem"/);
-  assert.equal((html.match(/<path d="[^"]+" fill="var\(--muted-foreground\)"/g) ?? []).length, 3);
-  assert.match(html, /fill="var\(--tone-1\)"/);
-  assert.match(html, /fill="var\(--tone-4\)"/);
+  // One line per day in the chart's list, each in full periods.
+  const days = dayLines(html);
+  assert.equal(days.length, 30);
+  for (const day of days) assert.match(day, /^[^:]+: [\d.,]+ dolu dönem(, limite takıldı)?$/);
+  // The 9th, the 12th and the 14th had a limit hit.
+  assert.deepEqual(days.filter((day) => day.endsWith(", limite takıldı")).map((day) => day.split(":")[0]), [
+    "9 Ekim Cuma",
+    "12 Ekim Pazartesi",
+    "14 Ekim Çarşamba",
+  ]);
+  assert.match(html, /<section data-slot="daily-chart"[^>]*>[\s\S]*?<h2[^>]*>Günlük<\/h2>/);
   assert.doesNotMatch(html, /<title>/);
   // On the Limits tab the chart has no unit switch.
   assert.doesNotMatch(html, /data-slot="toggle-group"/);
   const plain = text(html);
   assert.match(plain, /30 günde [\d.,]+ dolu dönem\. En yoğun gün 9 Eki: 240\./);
-  const en = render(createElement(DailyChart, { view, accounts, zone: ZONE }), "en");
-  assert.match(en, /aria-label="14 Oct: 120 full periods, limit hit"/);
+  const en = dayLines(render(createElement(DailyChart, { view, accounts, zone: ZONE }), "en"));
+  assert.ok(en.includes("Wednesday 14 October: 120 full periods, limit hit"), en.join("\n"));
 });
 
 test("the daily chart's $ guides sit at round values from the data's scale", () => {
@@ -254,8 +262,12 @@ test("the daily chart's $ guides sit at round values from the data's scale", () 
 
 test("given a token view the daily chart still switches to tokens and the API value", () => {
   const html = render(createElement(DailyChart, { view, tokens: tokenView, accounts, zone: ZONE }));
-  assert.match(html, /data-slot="toggle-group"[^>]*aria-label="Ölçü"/);
-  assert.match(html, /aria-label="14 Eki: 120 dolu dönem, limite takıldı"/);
+  // The measure switch sits beside the section's title, the API value named for screen readers.
+  const toggle = /<h2[^>]*>Günlük<\/h2>[\s\S]*?(<div[^>]*data-slot="toggle-group"[^>]*>)/.exec(html)?.[1] ?? "";
+  assert.match(toggle, /aria-label="Ölçü"/);
+  assert.match(html, /aria-label="API karşılığı"/);
+  // It starts on the limits, in full periods.
+  assert.equal(dayLines(html).at(-1), "14 Ekim Çarşamba: 120 dolu dönem, limite takıldı");
 });
 
 test("the heatmap has 7 × 24 cells in five even steps, day and hour totals, and the busiest hours", () => {
@@ -264,10 +276,14 @@ test("the heatmap has 7 × 24 cells in five even steps, day and hour totals, and
   assert.match(html, /role="img" aria-label="Gün ve saate göre kullanım\. En yoğun saatler 13:00–16:00\."/);
   assert.match(html, /data-step="5"[^>]*title="Sal 14:00 · en yoğun saate göre %100"|title="Sal 14:00 · en yoğun saate göre %100"[^>]*data-step="5"/);
   assert.match(html, /title="Pzt 03:00 · kullanım yok"/);
+  assert.match(html, /data-slot="usage-heatmap"[^>]*>[\s\S]*?<h2[^>]*>Çalışma saatleri<\/h2>/);
   const plain = text(html);
-  assert.match(plain, /En yoğun saatler13:00–16:00/);
-  assert.match(plain, /Çalışma saatlerinde%71 Pzt–Cum 09:00–18:00/);
+  // The busiest hours and the share in work hours are the summary's tile, not a list under the grid.
+  assert.doesNotMatch(html, /<dl/);
+  assert.doesNotMatch(plain, /Çalışma saatlerinde%/);
   assert.doesNotMatch(plain, /Pro birimi|10–18/);
+  // A range without use says so under the grid.
+  assert.match(text(render(createElement(UsageHeatmap, { view: emptyView("available") }))), /Bu aralıkta kullanım yok\./);
 });
 
 test("limit hits are a table, newest first, with how long each stayed full", () => {
@@ -285,15 +301,17 @@ test("limit hits are a table, newest first, with how long each stayed full", () 
   assert.match(quiet, /Bu aralıkta limite takılma yok/);
 });
 
-test("the statistics section is limits only, with the explanation behind a disclosure", () => {
+test("the statistics section is limits only, in its order, with the explanation behind the summary's ⓘ", () => {
   const html = render(
     createElement(UsageStatisticsSection, { state: { view, loading: false }, accounts, zone: ZONE }),
   );
-  const plain = text(html);
-  for (const part of ["Kullanılan", "Ne zaman çalışıyorum?", "Günlük kullanım", "Hesap dengesi", "Limite takılmalar"])
-    assert.match(plain, new RegExp(part.replace("?", "\\?")));
-  assert.ok(plain.indexOf("Ne zaman çalışıyorum?") < plain.indexOf("Günlük kullanım"));
-  assert.match(html, /<details[^>]*><summary[^>]*>Bu sayılar nasıl hesaplanıyor\?<\/summary>/);
+  // The summary, the days, the balance beside the hits, then the working hours: each a titled section.
+  const titles = [...html.matchAll(/<h2[^>]*>([^<]+)<\/h2>/g)].map((m) => m[1]);
+  assert.deepEqual(titles, ["Özet", "Günlük", "Hesap dengesi", "Limite takılmalar", "Çalışma saatleri"]);
+  assert.match(text(html), /Kullanılan/);
+  // How the numbers are made is the summary's ⓘ, not a disclosure at the bottom.
+  assert.match(html, /data-slot="summary-tiles"[\s\S]*?aria-label="Nasıl çalışır"/);
+  assert.doesNotMatch(html, /<details|Bu sayılar nasıl hesaplanıyor/);
   // Tokens and the API value live on their own tab, even when a token view is given.
   const withTokens = render(
     createElement(UsageStatisticsSection, { state: { view, loading: false }, accounts, zone: ZONE, tokens: tokenView }),
@@ -350,9 +368,13 @@ test("the header offers 7/30/90 days and an account filter", () => {
 });
 
 test("Usage's limits page has the range and account filter, and no tabs", () => {
-  const html = text(render(createElement(Usage)));
-  assert.match(html, /Limitler/);
-  assert.doesNotMatch(html, /role="tab"|Token ve ücretRozetler/);
+  const markup = render(createElement(Usage));
+  const html = text(markup);
+  assert.match(markup, /<h1[^>]*>Limit geçmişi<\/h1>/);
+  assert.doesNotMatch(markup, /role="tab"/);
+  assert.doesNotMatch(html, /Token ve ücretRozetler/);
+  // History only: today's limits of every account are on the Overview, not a board here.
+  assert.doesNotMatch(markup, /data-slot="limits-now"|>Şu an</);
   // The warnings moved to Settings → Notifications.
   assert.doesNotMatch(html, /Uyarılar/);
   assert.match(html, /30 gün/);
@@ -360,14 +382,15 @@ test("Usage's limits page has the range and account filter, and no tabs", () => 
   assert.match(html, /İstatistikler yükleniyor/);
   // Only the page's own section is drawn.
   assert.doesNotMatch(html, /Token kullanımı|Kayıp Eşya Bürosu|Limit uyarıları/);
-  assert.match(text(render(createElement(Usage), "en")), /Limits/);
+  assert.match(render(createElement(Usage), "en"), /<h1[^>]*>Limit history<\/h1>/);
 });
 
 test("each Usage page draws its own section, and the range and account filter only with limits and tokens", async () => {
   for (const [section, shows, hides] of [
     ["limits", /İstatistikler yükleniyor/, /Token kullanımı|Rozet koleksiyonu/],
     ["lost", /Rozet koleksiyonu/, /30 gün|Tüm hesaplar/],
-    ["tokens", /Token kullanımı.*/, /İstatistikler yükleniyor/],
+    // The token page names itself to assistive tech; on screen its loading line is what shows first.
+    ["tokens", /Token kaydı yükleniyor/, /İstatistikler yükleniyor/],
   ] as const) {
     const dom = fakeDom({ localStorage: () => ({ getItem: () => null, setItem() {} }) });
     dom.install();
@@ -468,23 +491,20 @@ const ninety: UsageStatisticsView = {
   })),
 };
 
-test("hit markers on a 90-day chart fit their day and never overlap", () => {
-  const html = render(createElement(DailyChart, { view: ninety, accounts, zone: ZONE }));
-  const marks = [...html.matchAll(/<path d="M ([\d.]+) [\d.]+ L ([\d.]+) /g)].map((m) => [Number(m[1]), Number(m[2])]);
-  assert.equal(marks.length, 3);
-  for (const [left, right] of marks) assert.ok(right - left > 0 && right - left <= 4, `${left}–${right}`);
-  for (let i = 1; i < marks.length; i++) assert.ok(marks[i][0] > marks[i - 1][1], JSON.stringify(marks));
-  const month = render(createElement(DailyChart, { view, accounts, zone: ZONE }));
-  for (const m of month.matchAll(/<path d="M ([\d.]+) [\d.]+ L ([\d.]+) /g))
-    assert.ok(Number(m[2]) - Number(m[1]) <= 6);
+test("on a 90-day chart each hit day is marked on its own day, adjacent ones too", () => {
+  // Recharts places the ▲ on its day's bar in the browser; the days list marks the same days, one each.
+  const days = dayLines(render(createElement(DailyChart, { view: ninety, accounts, zone: ZONE })));
+  assert.equal(days.length, 90);
+  const hit = days.flatMap((day, i) => (day.endsWith(", limite takıldı") ? [i] : []));
+  assert.deepEqual(hit.map((i) => days[i].split(":")[0]), ["10 Ekim Cumartesi", "11 Ekim Pazar", "12 Ekim Pazartesi"]);
+  assert.deepEqual(hit, [hit[0], hit[0] + 1, hit[0] + 2]);
 });
 
-test("the daily chart's y labels fit five-digit maxima", () => {
+test("the daily chart writes five-digit days in full, with the thousands separator", () => {
+  // The y labels are Recharts' (drawn in the browser) and use the same number format as these lines.
   const html = render(createElement(DailyChart, { view: ninety, accounts, zone: ZONE }));
-  const label = html.match(/<text x="([\d.]+)"[^>]*>12\.265<\/text>/);
-  assert.ok(label, html.slice(0, 600));
-  // End-anchored at x: six characters of about 5 units each fit left of it.
-  assert.ok(Number(label[1]) >= 6 * 5, label[1]);
+  assert.ok(dayLines(html).includes("5 Ekim Pazartesi: 12.265 dolu dönem"), dayLines(html).slice(78, 82).join("\n"));
+  assert.match(text(html), /En yoğun gün 5 Eki: 12\.265\./);
 });
 
 test("statistics cards reuse their number and date formatters", (t) => {

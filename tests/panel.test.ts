@@ -142,10 +142,9 @@ test("panel rows show the account's status when something is wrong", () => {
       relayFor(active, [active, other], { active: use("active", 10, 10), other: { ...r.usage!, accountId: "other" } }),
       createElement(PanelAccounts, { now: NOW }),
     );
-    // The row's one line names the problem first, then the percents of any reading; its tooltip names it alone.
+    // A row with a problem has one line, the problem; its tooltip names it too. The figures are on its bar.
     assert.match(html, new RegExp(`title="${label}"`), name);
-    const reading = r.usage?.checkedAt ? " · %1 · %1" : "";
-    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-2xs">${label}${reading}</span>`), name);
+    assert.match(html, new RegExp(`<span class="block truncate text-muted-foreground text-2xs">${label}</span>`), name);
     assert.doesNotMatch(html, /Limit verisi eski|Hazır · dönem başlamadı/, name);
   }
   // A browser approval in progress for that account.
@@ -235,21 +234,23 @@ test("panel shows the active account, suggestion, accounts, automation and foote
   assert.match(html, /Max 5×/);
   assert.match(html, />Max 5×<\/span><span[^>]*title="Claude uygulamasında açık hesap"><span[^>]*bg-ok[^>]*><\/span>Claude açık</);
   assert.doesNotMatch(html, /Çalışıyor/);
-  assert.match(html, /5 saatlik dönem/);
+  // The active account's limits are lines: the five hours, the week, each model's own.
+  assert.match(html, /data-slot="limit-line"[\s\S]*?>5 saat<[\s\S]*?aria-label="5 saat %38"/);
+  assert.match(html, /aria-label="Hafta %78"/);
   assert.match(html, /Opus · haftalık/);
   // No suggestion strip: the accounts heading says the limit is near and the suggestion leads.
   assert.match(html, />Limit dolmak üzere</);
   assert.doesNotMatch(html, /Önerilen:/);
   assert.equal((html.match(/Limit dolmak üzere/g) ?? []).length, 1);
-  // The rings' key sits by the heading: the filled dot is the five hours, the hollow one the week.
-  assert.match(html, /<span[^>]*rounded-full bg-foreground\/70[^>]*><\/span>5 sa<\/span><span[^>]*><span[^>]*rounded-full border border-foreground\/70[^>]*><\/span>hafta</);
-  // The suggested row is the switch: its ring, the name with a small "önerilen", its line and Geç.
+  // No rings, so no key for them.
+  assert.doesNotMatch(html, /data-slot="limit-rings"/);
+  // The suggested row is the switch: the name with a small "önerilen", its figure, its bar and Geç.
   const suggestedRow = panelRows(html).find((r) => r.includes(">Vertex<")) ?? "";
   assert.match(suggestedRow, /^<button type="button" aria-pressed="false" aria-label="Vertex hesabına geç · Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı" title="Hazır · dönem başlamadı"/);
-  // Its two limits are the ring's, used percent per window.
-  assert.match(suggestedRow, /<div role="img" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
-  // Its line starts with the two percents.
-  assert.match(suggestedRow, />Vertex<\/span><span[^>]*>önerilen<\/span><\/span><span[^>]*>Hazır · %12 · %31<\/span><\/span><span[^>]*>Geç<\/span><\/button>/);
+  // One bar and one figure: the limit that stops it first (its week, %31); nothing wrong, so no line.
+  assert.match(suggestedRow, /<div[^>]*role="meter" aria-label="Vertex · 5 saat %12 kullanıldı · hafta %31 kullanıldı"/);
+  assert.match(suggestedRow, />Vertex<\/span><span[^>]*>önerilen<\/span><span[^>]*>%31<\/span>/);
+  assert.doesNotMatch(suggestedRow, /Hazır · %12/);
   assert.match(html, />Otomasyon</);
   // Automation reads as rows: the setting's name and its state, each opening its page.
   assert.match(html, /<button type="button" title="Kişisel · Max %78 kullanıldı · Kapalı\. Limit dolunca başka hesaba sen geçersin\."[^>]*>.*?>Otomatik geçiş<\/span><span[^>]*>Kapalı<\/span>/);
@@ -292,13 +293,12 @@ test("with no account yet, the panel offers adding one in the main window", asyn
 test("stale usage on the active card says so, and keeps its last rings faded", () => {
   const html = render(relayFor(active, [active], { active: { ...use("active", 1, 1), checkedAt: iso(NOW - 3_600_000) } }));
   assert.match(html, /Limit verisi eski · 1 sa önce okundu ·/);
-  // The last known rings stay, on the stale ring's dashed track.
-  assert.match(html, /data-slot="limit-rings"/);
-  assert.match(html, /data-state="stale"/);
+  // The last known limits stay, faded.
+  assert.match(html, /data-slot="limit-line" class="[^"]*opacity-60"/);
 });
 
 test("the active card keeps the last rings while the service cannot be reached, not after a sign-in problem", () => {
-  const rings = (usage: AccountUsage) => /data-slot="limit-rings"[^>]*>(?:(?!<\/section)[\s\S])*data-state="stale"/.test(activeCard(usage));
+  const rings = (usage: AccountUsage) => /data-slot="limit-line" class="[^"]*opacity-60"/.test(activeCard(usage));
   for (const issue of ["unavailable", "rate-limited"] as const) {
     const kept: AccountUsage = { ...use("active", 40, 20, NOW + 3_600_000), status: "error", stale: true, issue };
     const html = activeCard(kept);

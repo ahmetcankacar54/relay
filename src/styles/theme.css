@@ -60,6 +60,15 @@
   --tone-2: #2563eb;
   --tone-3: #0d9488;
   --tone-4: #a8a29e;
+  /*
+   * An account's own colour (its dot, its series in a chart), the same on every page. One set for
+   * both themes: it passes the colour-vision checks on every pair (dataviz validator, all pairs).
+   */
+  --account-terra: #d95926;
+  --account-olive: #199e70;
+  --account-blue: #0284c7;
+  --account-plum: #d946ef;
+  --account-none: #a8a29e;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -100,6 +109,7 @@
     --tone-2: #7c9cff;
     --tone-3: #2dd4bf;
     --tone-4: #78716c;
+    --account-none: #78716c;
   }
 }
 /*
@@ -182,6 +192,11 @@
   --color-tone-2: var(--tone-2);
   --color-tone-3: var(--tone-3);
   --color-tone-4: var(--tone-4);
+  --color-account-terra: var(--account-terra);
+  --color-account-olive: var(--account-olive);
+  --color-account-blue: var(--account-blue);
+  --color-account-plum: var(--account-plum);
+  --color-account-none: var(--account-none);
 }
 /* The Electron main window on macOS shows the system sidebar material (electron/main.ts). */
 @custom-variant vibrant (&:where([data-vibrancy] *));

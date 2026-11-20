@@ -6,7 +6,9 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  ANTIGRAVITY_SUMMARY_AGENT,
   parseAntigravityQuota,
+  parseAntigravitySummary,
   parseCodexUsage,
   readAntigravityUsage,
   readCodexUsage,
@@ -66,38 +68,103 @@ test("Codex usage: an API key is never sent, and a refused token is an expired s
   assert.equal(headers["ChatGPT-Account-Id"], "acct-1");
 });
 
-test("Antigravity quota: model shares, the roomiest model as the headline, variants folded", () => {
+test("Antigravity quota fallback: model shares folded into their pools, the roomiest pool as the headline", () => {
   const soon = new Date(Date.now() + 3 * 3_600_000).toISOString();
   const nextWeek = new Date(Date.now() + 6 * 86_400_000).toISOString();
   const result = parseAntigravityQuota({
     models: {
       "gemini-3-flash": { displayName: "Gemini 3 Flash", quotaInfo: { remainingFraction: 0.8, resetTime: soon } },
+      "gemini-3-pro-high": { displayName: "Gemini 3 Pro (High)", quotaInfo: { remainingFraction: 0.6, resetTime: soon } },
       "claude-opus-high": { displayName: "Claude Opus", quotaInfo: { resetTime: nextWeek } },
-      "claude-opus-low": { displayName: "Claude Opus", quotaInfo: { remainingFraction: 0.5, resetTime: nextWeek } },
+      "gpt-oss-120b": { displayName: "GPT-OSS 120B", quotaInfo: { remainingFraction: 0.5, resetTime: nextWeek } },
       "tab_flash_lite": { quotaInfo: { remainingFraction: 1 } },
       "no-quota": { displayName: "No quota" },
     },
   });
   assert.deepEqual(
-    result.limits.modelWindows?.map((w) => [w.label, w.usedPercent]),
-    [["Claude Opus", 100], ["Gemini 3 Flash", 20]],
+    result.limits.modelWindows?.map((w) => [w.key, w.label, w.usedPercent, w.period]),
+    [
+      ["antigravity_gemini", "Gemini", 40, undefined],
+      ["antigravity_claude_gpt", "Claude & GPT", 100, undefined],
+    ],
   );
-  assert.equal(result.limits.fiveHour?.usedPercent, 20);
+  assert.equal(result.limits.fiveHour?.usedPercent, 40);
   assert.equal(result.limits.sevenDay, undefined);
-  // One exhausted model leaves the account usable.
+  // One spent pool leaves the account usable.
   assert.equal(result.limits.otherLimitReached, undefined);
 });
 
-test("Antigravity quota: an outage tries the second host, a refusal does not", async () => {
-  const body = JSON.stringify({ models: { m: { displayName: "M", quotaInfo: { remainingFraction: 1 } } } });
+const summary = (now: number) => ({
+  groups: [
+    {
+      displayName: "Gemini Models",
+      buckets: [
+        { bucketId: "gemini-weekly", displayName: "Weekly", window: "weekly", remainingFraction: 0.02, resetTime: new Date(now + 4 * 86_400_000).toISOString() },
+        { bucketId: "gemini-5h", displayName: "5-hour", window: "5h", remainingFraction: 1, resetTime: new Date(now + 5 * 3_600_000).toISOString() },
+      ],
+    },
+    {
+      displayName: "Claude and GPT models",
+      buckets: [
+        { bucketId: "3p-5h", window: "5h", resetTime: new Date(now + 2 * 3_600_000).toISOString() },
+        { bucketId: "3p-weekly", window: "weekly", remainingFraction: 0.75, resetTime: new Date(now + 6 * 86_400_000).toISOString() },
+        { bucketId: "3p-extra", window: "weekly", disabled: true, remainingFraction: 0 },
+        { bucketId: "3p-unread", window: "weekly" },
+      ],
+    },
+  ],
+});
+
+test("Antigravity quota summary: one line per pool and window, in the app's order, five hours first", () => {
+  const now = Date.now();
+  const result = parseAntigravitySummary(summary(now), now)!;
+  assert.deepEqual(
+    result.limits.modelWindows?.map((w) => [w.key, w.label, w.period, w.usedPercent]),
+    [
+      ["antigravity_gemini_5h", "Gemini", "five_hour", 0],
+      ["antigravity_gemini_weekly", "Gemini", "seven_day", 98],
+      // No fraction but a reset: spent (proto3 leaves a zero out). Disabled and unread buckets are left out.
+      ["antigravity_3p_5h", "Claude & GPT", "five_hour", 100],
+      ["antigravity_3p_weekly", "Claude & GPT", "seven_day", 25],
+    ],
+  );
+  // Gemini binds at 98%, Claude & GPT at 100%: Gemini's week is the headline the gateway reads.
+  assert.equal(result.limits.sevenDay?.usedPercent, 98);
+  assert.equal(result.limits.fiveHour, undefined);
+  assert.equal(parseAntigravitySummary({ groups: [] }, now), undefined);
+  assert.equal(parseAntigravitySummary({ models: {} }, now), undefined);
+  // The cadence can come from the bucket id or name alone.
+  const named = parseAntigravitySummary({ groups: [{ displayName: "Gemini", buckets: [{ displayName: "Weekly limit", remainingFraction: 0.5 }, { bucketId: "x-5h", remainingFraction: 0.5 }] }] }, now)!;
+  assert.deepEqual(named.limits.modelWindows?.map((w) => w.period), ["five_hour", "seven_day"]);
+});
+
+test("Antigravity quota: the summary on the daily host first, then prod, then the model list", async () => {
+  const now = Date.now();
+  const models = JSON.stringify({ models: { m: { displayName: "Gemini 3", quotaInfo: { remainingFraction: 1 } } } });
   const asked: string[] = [];
-  const ok = await readAntigravityUsage(async ({ url, body: sent }) => {
-    asked.push(url);
+  const agents: (string | undefined)[] = [];
+  const ok = await readAntigravityUsage(async ({ url, body: sent, userAgent }) => {
+    asked.push(url.replace(/^https:\/\/|\.googleapis\.com\/v1internal/g, ""));
+    agents.push(userAgent);
     assert.deepEqual(JSON.parse(sent), { project: "proj-1" });
-    return asked.length === 1 ? { status: 503, retryAfter: null, body: "" } : { status: 200, retryAfter: null, body };
+    if (url.includes("retrieveUserQuotaSummary"))
+      return url.includes("daily") ? { status: 403, retryAfter: null, body: "" } : { status: 200, retryAfter: null, body: JSON.stringify({ groups: [] }) };
+    return asked.length === 3 ? { status: 503, retryAfter: null, body: "" } : { status: 200, retryAfter: null, body: models };
   }, "proj-1");
-  assert.equal(asked.length, 2);
-  assert.equal(ok.limits.fiveHour?.usedPercent, 0);
+  assert.deepEqual(asked, [
+    "daily-cloudcode-pa:retrieveUserQuotaSummary",
+    "cloudcode-pa:retrieveUserQuotaSummary",
+    "daily-cloudcode-pa:fetchAvailableModels",
+    "cloudcode-pa:fetchAvailableModels",
+  ]);
+  assert.deepEqual(agents.slice(0, 2), [ANTIGRAVITY_SUMMARY_AGENT, ANTIGRAVITY_SUMMARY_AGENT]);
+  assert.equal(ok.limits.modelWindows?.[0].label, "Gemini");
+  // A daily summary with buckets is the answer: nothing else is asked.
+  const one: string[] = [];
+  const pools = await readAntigravityUsage(async ({ url }) => (one.push(url), { status: 200, retryAfter: null, body: JSON.stringify(summary(now)) }), undefined);
+  assert.equal(one.length, 1);
+  assert.equal(pools.limits.modelWindows?.length, 4);
+  // A refused sign-in stops at the first call.
   let calls = 0;
   await assert.rejects(
     readAntigravityUsage(async () => (calls++, { status: 401, retryAfter: null, body: "" }), undefined),

@@ -12,7 +12,8 @@ test("no legacy stylesheets or hard-coded light colours remain in components", (
   for (const name of ["styles.css", "modern.css", "planning.css", "continuation-settings.css"])
     assert.equal(fs.existsSync(path.join("src", name)), false, name);
   const offenders = files("src")
-    .filter((f) => /\.tsx$/.test(f) && !f.includes(`${path.sep}components${path.sep}ui${path.sep}`))
+    // The providers' marks keep their owners' colours in both themes.
+    .filter((f) => /\.tsx$/.test(f) && !f.includes(`${path.sep}components${path.sep}ui${path.sep}`) && !f.endsWith(`${path.sep}ProviderLogo.tsx`))
     .filter((f) => /#[0-9a-fA-F]{3,8}\b|\bbg-white\b|\btext-black\b/.test(fs.readFileSync(f, "utf8")));
   assert.deepEqual(offenders, []);
 });

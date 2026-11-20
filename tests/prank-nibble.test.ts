@@ -1269,7 +1269,6 @@ test("the nibble's slides, flight and transition animate only with motion on", (
 test("every nibble trigger goes through offerAfter, so the button's own action runs first", () => {
   const files = [
     "src/panel/PanelAccounts.tsx",
-    "src/pages/overview/AccountsCard.tsx",
     "src/pages/overview/ActiveAccountCard.tsx",
     "src/pages/accounts/AccountsTable.tsx",
   ];
@@ -1295,11 +1294,6 @@ test("each trigger still runs its own action, and the Accounts menu's items keep
   // The panel has no suggestion strip: the suggested row is its switch offer (the mounted Panel
   // test below drives it), so the panel itself offers no nibble.
   assert.doesNotMatch(readFileSync("src/panel/Panel.tsx", "utf8"), /nibble-cursor/);
-  const card = readFileSync("src/pages/overview/AccountsCard.tsx", "utf8");
-  assert.match(
-    card,
-    /offerAfter\(prank, "nibble-cursor", e, \(\) =>\s*relay\.requestDesktop\(row\.account, "switch"\),?\s*\)/,
-  );
   // The Overview hero's "limit is near" block switches to the suggestion the same way.
   assert.match(
     readFileSync("src/pages/overview/ActiveAccountCard.tsx", "utf8"),
@@ -1637,7 +1631,6 @@ test("only a switch request nibbles: no confirmation button offers it", () => {
   assert.ok(!panelAccounts.slice(call - 300, call + 300).includes("nibble"));
   assert.equal(panelAccounts.match(/"nibble-cursor"/g)?.length, 1);
   for (const file of [
-    "src/pages/overview/AccountsCard.tsx",
     "src/pages/overview/ActiveAccountCard.tsx",
     "src/pages/accounts/AccountsTable.tsx",
   ])

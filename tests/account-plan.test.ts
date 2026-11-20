@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PlanEditor } from "../src/features/PlanEditor";
 import { AccountsTable } from "../src/pages/accounts/AccountsTable";
+import { AccountDetail } from "../src/pages/accounts/AccountDetail";
 import { ProviderForm } from "../src/pages/accounts/AddAccountProviders";
 import { accountPlan, planLabel, planTitle, providerPlan } from "../src/pages/accounts/accountLabels";
 import { accountTileLine } from "../src/lib/account-row";
@@ -121,12 +122,18 @@ const wrap = (relay: Relay, child: ReturnType<typeof createElement>) =>
     ),
   );
 
-test("the Accounts table and the Overview line name the plan the same way", () => {
+test("the Accounts list, the account page and the Overview line name the plan the same way", () => {
   const codex = account("codex", { auth: signedIn("plus") });
   const google = account("antigravity", { auth: signedIn("Antigravity OAuth") });
   const html = wrap(relayFor([codex, google]), createElement(AccountsTable, { accounts: [codex, google], open() {}, link() {} }));
-  assert.match(html, /data-slot="badge"[^>]*title="Hesaptan algılandı"[^>]*>ChatGPT Plus<\/span>/);
-  assert.doesNotMatch(html, />(Oauth|Plus)</);
+  // The list names it short beside the name, under the provider's group; where it came from is the title.
+  assert.equal(accountPlan(codex)?.short, "Plus");
+  assert.match(html, /data-slot="list-group" data-provider="codex"[\s\S]*?title="Hesap codex">Hesap codex<\/span><span[^>]*title="Hesaptan algılandı">Plus<\/span>/);
+  // A placeholder plan word is never shown.
+  assert.doesNotMatch(html, />(Oauth|OAuth|Antigravity OAuth)</);
+  // The account page's chip names it in full beside the provider.
+  const page = wrap(relayFor([codex, google]), createElement(AccountDetail, { account: codex, back() {} }));
+  assert.match(page, /data-slot="badge"[^>]*data-provider="codex"[^>]*title="Hesaptan algılandı"[^>]*>.*Codex<span[^>]*>· ChatGPT Plus<\/span>/);
   const row = { account: codex, state: "ready", recommended: false } as const;
   assert.equal(accountTileLine(row, tr, "tr", "UTC", NOW).split(" · ")[0], "ChatGPT Plus");
 });

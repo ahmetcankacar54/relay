@@ -2,8 +2,9 @@ import type { Account } from "../../../shared/types";
 import type { UsageStatisticsView } from "../../../shared/usage-statistics-view";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { PageSection } from "@/components/PageSection";
 import { useI18n } from "@/data/i18n";
-import { windowTone } from "@/lib/day-timeline";
+import { windowTone, accountTone } from "@/lib/day-timeline";
 import { formatPercent } from "@/lib/meter";
 import { cn } from "@/lib/utils";
 import { rowKey, rowName, toneIndex, type StatisticsRow } from "./format";
@@ -32,10 +33,8 @@ export function AccountBalance({
   const percent = (value: number | undefined) => formatPercent(value, language);
   const head = "text-xs font-normal text-muted-foreground";
   return (
+    <PageSection title={t("Hesap dengesi", "Account balance")} slot="account-balance">
     <Card className="gap-0 px-4 py-3.5">
-      <h3 className="mb-2 font-display text-sm font-semibold">
-        {t("Hesap dengesi", "Account balance")}
-      </h3>
       {/* Rows share these columns (subgrid), so every share bar ends at the same x. */}
       <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-4 sm:grid-cols-[minmax(0,12rem)_1fr_auto_auto_auto]">
         <div className="col-span-full grid grid-cols-subgrid pb-1.5">
@@ -61,7 +60,7 @@ export function AccountBalance({
               </div>
               <div aria-hidden className="hidden h-2.5 overflow-hidden rounded-full bg-track sm:block">
                 <div
-                  className={cn("h-full rounded-full", windowTone(toneIndex(row, accounts)))}
+                  className={cn("h-full rounded-full", accountTone(accounts.find((a) => a.id === row.accountId)))}
                   style={{ width: `${share}%` }}
                 />
               </div>
@@ -80,5 +79,6 @@ export function AccountBalance({
         </p>
       )}
     </Card>
+    </PageSection>
   );
 }

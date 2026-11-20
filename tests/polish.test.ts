@@ -39,10 +39,14 @@ test("reduce motion stops animations and transitions, but spinners keep turning"
   assert.match(block, /\.animate-spin,\s*\[data-spinner\] \{\s*animation-duration: 1s !important;\s*animation-iteration-count: infinite !important;/);
 });
 
-test("dialogs and sheets scroll instead of running off a short window; status cells wrap", () => {
+test("dialogs and sheets scroll instead of running off a short window; a status stays one line with its reason in the title", () => {
   assert.match(read("../src/components/ui/dialog.tsx"), /max-h-\[calc\(100dvh-2rem\)\][^"]*overflow-y-auto/);
   assert.match(read("../src/components/ui/sheet.tsx"), /max-h-dvh[^"]*overflow-y-auto/);
-  assert.match(read("../src/pages/accounts/AccountsTable.tsx"), /<TableCell className="whitespace-normal">/);
+  // The list's status column is a StatusLabel: cut short rather than wrapped, the full reason on hover.
+  assert.match(read("../src/pages/accounts/AccountsTable.tsx"), /<StatusLabel status=\{status\} \/>/);
+  const label = read("../src/components/StatusLabel.tsx");
+  assert.match(label, /title=\{status\.reason \?\? status\.text\}/);
+  assert.match(label, /<span className="truncate">\{status\.text\}<\/span>/);
 });
 
 test("brand-coloured text uses the primary colour, which reads at 4.5:1", () => {

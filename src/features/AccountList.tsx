@@ -1,12 +1,13 @@
 import type { MouseEvent, ReactNode } from "react";
 import { ChevronRight, LoaderCircle } from "lucide-react";
-import { UsageRing } from "@/components/UsageRing";
-import { ProviderBadge } from "@/components/ProviderBadge";
+import { MiniMeter } from "@/components/LimitLine";
+import { headlineFigure } from "./Providers";
 import { useI18n } from "@/data/i18n";
 import { ringState } from "@/lib/account-row";
 import type { OverviewRow } from "@/data/selectors";
-import { formatPercent, formatUsed, percentUsed } from "@/lib/meter";
+import { formatUsed } from "@/lib/meter";
 import { cn } from "@/lib/utils";
+import { AccountDot } from "@/components/AccountDot";
 import { limitHeadline, modelOnlyUsage } from "../../shared/quota-windows";
 
 /**
@@ -34,6 +35,7 @@ export function AccountList({
   footer,
   canSwitch,
   actions,
+  problem,
 }: {
   rows: OverviewRow[];
   now: number;
@@ -60,6 +62,11 @@ export function AccountList({
   canSwitch?: (row: OverviewRow) => boolean;
   /** In the app: more buttons before the row's switch, such as its separate window's. */
   actions?: (row: OverviewRow) => ReactNode;
+  /**
+   * In the panel: what is wrong with a row, its only line; a row without a problem is its name, its
+   * bar and its figure.
+   */
+  problem?: (row: OverviewRow) => string | undefined;
 }) {
   const { t, language } = useI18n();
   const panel = variant === "panel";
@@ -93,43 +100,36 @@ export function AccountList({
         const tooltip = [title?.(row) ?? line(row), why ?? caution].filter(Boolean).join(" · ");
         // Amber, never the suggested blue: switching there works, but the limit is used up.
         const tinted = "border border-warn/40 bg-warn/10 text-warn-foreground";
+        // One bar and one figure per account (variant A): the limit that stops it first.
+        const figure = headlineFigure(usage, now, t);
+        const note = busy ? t("Geçiliyor…", "Switch in progress…") : panel ? (problem?.(row) ?? why) : line(row);
         const body = (
-          <>
-            <UsageRing outer={five} inner={week ?? null} size={32} label={said} state={ring} />
-            <span className="min-w-0 flex-1">
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-sm font-semibold">
-                  {account.name}
+          <span className="grid min-w-0 flex-1 gap-1">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <AccountDot color={account.color} />
+              <span className="truncate text-sm font-semibold">{account.name}</span>
+              {row.recommended && (
+                <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-2xs font-semibold text-accent-foreground">
+                  {t("önerilen", "suggested")}
                 </span>
-                {row.recommended && (
-                  <span className="shrink-0 rounded-full bg-accent px-1.5 py-px text-2xs font-semibold text-accent-foreground">
-                    {t("önerilen", "suggested")}
-                  </span>
+              )}
+              <span
+                className={cn(
+                  "ml-auto shrink-0 text-2xs tabular-nums",
+                  figure.full ? "font-semibold text-crit" : "text-muted-foreground",
+                  ring === "stale" && "opacity-60",
                 )}
-                {(!panel || account.provider !== undefined && account.provider !== "claude") && (
-                  <ProviderBadge provider={account.provider} className="shrink-0 px-1.5" />
-                )}
-              </span>
-              <span className={cn("block truncate text-muted-foreground", panel ? "text-2xs" : "text-xs")}>
-                {busy ? t("Geçiliyor…", "Switch in progress…") : line(row)}
+              >
+                {figure.text}
               </span>
             </span>
-            {!panel && head && (
-              <span className="flex min-w-0 max-w-40 shrink-0 items-baseline gap-1 text-xs tabular-nums" title={head.label}>
-                <b className="font-semibold">{formatPercent(percentUsed(head.usedPercent), language)}</b>
-                <span className="truncate text-muted-foreground">{head.label}</span>
-              </span>
+            <span className={cn(ring === "stale" && "opacity-60")}>
+              <MiniMeter usedPercent={ring === "unknown" ? undefined : figure.used} label={said} />
+            </span>
+            {note && (
+              <span className={cn("block truncate text-muted-foreground", panel ? "text-2xs" : "text-xs")}>{note}</span>
             )}
-            {!panel && !head && (
-              <span className="shrink-0 text-xs tabular-nums">
-                <b className="font-semibold">{five === undefined ? "—" : formatPercent(percentUsed(five), language)}</b>
-                <span className="text-muted-foreground">
-                  {" / "}
-                  {week === undefined ? "—" : formatPercent(percentUsed(week), language)}
-                </span>
-              </span>
-            )}
-          </>
+          </span>
         );
         const trailing = busy ? (
           <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin text-muted-foreground" />

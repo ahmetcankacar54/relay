@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { Private } from "@/components/Private";
 import {
   AlertTriangle,
@@ -17,9 +17,12 @@ import {
 import { PageFrame } from "@/app/PageFrame";
 import { addAccountHash, intentHash } from "@/app/routes";
 import { Disclosure } from "@/components/Disclosure";
-import { ProviderBadge } from "@/components/ProviderBadge";
 import { Note, OptionSelect, SectionHeading, SettingRow } from "@/components/SettingRow";
 import { StatusDot } from "@/components/StatusDot";
+import { AccountDot } from "@/components/AccountDot";
+import { LimitLine } from "@/components/LimitLine";
+import { ListCard, ListGroup, ListHead, ListRow, narrowHidden } from "@/components/ListCard";
+import { PageSection } from "@/components/PageSection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,7 +31,6 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n, type T } from "@/data/i18n";
 import { useRelay } from "@/data/relay-context";
-import { meterFill } from "@/lib/meter";
 import {
   agoLabel,
   antigravitySnippet,
@@ -40,7 +42,7 @@ import {
   gatewayUrl,
   isLoopbackHost,
   maskKey,
-  moveInOrder,
+  moveWithinProvider,
   openAiSnippet,
   pickLine,
   pickReasonLabel,
@@ -60,6 +62,7 @@ import type {
   ProxyStatus,
 } from "../../shared/types";
 import { DEFAULT_PROXY_CONFIG } from "../../shared/proxy-types";
+import { limitColumns, modelOnlyUsage } from "../../shared/quota-windows";
 
 type Strategy = NonNullable<ProxyStatus["routingStrategy"]>;
 type Patch = Parameters<ReturnType<typeof useRelay>["api"]["proxyConfigure"]>[0];
@@ -346,60 +349,6 @@ function Attention({ tone, children, action }: { tone: "warn" | "crit"; children
   );
 }
 
-/** A limit window as a thin bar with its percent and reset; a dash while unknown. */
-function WindowMeter({
-  label,
-  percent,
-  minutes,
-  fullAt,
-}: {
-  label: string;
-  percent?: number;
-  minutes?: number;
-  /** When the window fills at the recent pace, if before it resets. */
-  fullAt?: number;
-}) {
-  const { t, language } = useI18n();
-  const clock = fullAt
-    ? new Date(fullAt).toLocaleTimeString(language === "tr" ? "tr-TR" : "en-US", { hour: "2-digit", minute: "2-digit" })
-    : undefined;
-  return (
-    <div className="grid min-w-0 gap-1">
-      <div className="flex items-baseline justify-between gap-2 text-2xs text-muted-foreground">
-        <span>{label}</span>
-        <span className="tabular-nums">
-          {percent === undefined ? "—" : t(`%${percent}`, `${percent}%`)}
-          {minutes !== undefined && ` · ${resetLabel(minutes, t)}`}
-          {clock && (
-            <span
-              data-slot="full-at"
-              className="text-warn-foreground"
-              title={t(
-                "Son yarım saatin hızıyla bu dönem sıfırlanmadan dolar.",
-                "At the last half hour's pace this window fills before it resets.",
-              )}
-            >
-              {t(` · ${clock} gibi dolar`, ` · full by ${clock}`)}
-            </span>
-          )}
-        </span>
-      </div>
-      <div
-        role="meter"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent ?? 0}
-        className="h-1.5 w-full overflow-hidden rounded-full bg-track"
-      >
-        {percent !== undefined && (
-          <div className={cn("h-full rounded-full", meterFill(percent))} style={{ width: `${percent}%` }} />
-        )}
-      </div>
-    </div>
-  );
-}
-
 /** The wall-clock time a wait of `minutes` ends at. */
 function untilClock(minutes: number, language: string): string {
   return new Date(Date.now() + minutes * 60_000).toLocaleTimeString(language === "tr" ? "tr-TR" : "en-US", {
@@ -426,37 +375,46 @@ function waitingTitle(reason: "limit" | "auth" | "transient", t: (tr: string, en
   );
 }
 
-/** What an account's state needs said: last served, out of the pool, no sign-in, full, about to lose quota. */
-function AccountState({ account }: { account: ProxyAccountStatus }) {
+/**
+ * What an account's state needs said, as a short quiet note beside its name: out of the pool, no
+ * sign-in, the gateway unable to read it, billed, waiting, full, about to lose quota, last served.
+ * The colour is on the dot; the reason is the title.
+ */
+function PoolNote({ account }: { account: ProxyAccountStatus }) {
   const { t, language } = useI18n();
   const mac = macWording(usePlatform());
   const risk = quotaAtRisk(account);
-  if (!account.inPool) return <Badge variant="secondary">{t("Havuz dışı", "Out of pool")}</Badge>;
-  if (!account.signedIn) return <Badge variant="destructive">{t("Giriş yok", "Not signed in")}</Badge>;
+  const note = (tone: "ok" | "warn" | "crit" | "off", text: string, extra: { slot?: string; title?: string } = {}) => (
+    <span className="flex min-w-0 shrink items-center gap-1 text-2xs text-muted-foreground">
+      <StatusDot tone={tone} />
+      <span data-slot={extra.slot} title={extra.title} className="truncate">
+        {text}
+      </span>
+    </span>
+  );
+  if (!account.inPool) return note("off", t("Havuz dışı", "Out of pool"));
+  if (!account.signedIn) return note("crit", t("Giriş yok", "Not signed in"));
   // Saved, but the gateway could not read it: the page must not call the account ready.
   if (account.gatewaySignIn === "missing")
     return (
-      <a href={`#/hesaplar/${account.id}`} data-slot="gateway-sign-in">
-        <Badge
-          variant="destructive"
-          title={
-            mac
-              ? t(
-                  "Ağ geçidi bu hesabın girişini okuyamadı (Keychain'de yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
-                  "The gateway could not read this account's sign-in (not in the Keychain); requests go to other accounts. Renew its usage sign-in on the account's page.",
-                )
-              : t(
-                  "Ağ geçidi bu hesabın girişini okuyamadı (kayıtlı giriş yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
-                  "The gateway could not read this account's sign-in (no saved sign-in); requests go to other accounts. Renew its usage sign-in on the account's page.",
-                )
-          }
-        >
-          {t("Ağ geçidi girişi okuyamıyor", "Gateway can't read sign-in")}
-        </Badge>
+      <a href={`#/hesaplar/${account.id}`} data-slot="gateway-sign-in" className="flex min-w-0 shrink items-center gap-1 text-2xs text-crit underline-offset-2 hover:underline"
+        title={
+          mac
+            ? t(
+                "Ağ geçidi bu hesabın girişini okuyamadı (Keychain'de yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
+                "The gateway could not read this account's sign-in (not in the Keychain); requests go to other accounts. Renew its usage sign-in on the account's page.",
+              )
+            : t(
+                "Ağ geçidi bu hesabın girişini okuyamadı (kayıtlı giriş yok); istekler başka hesaplara gidiyor. Hesabın sayfasında limit okuma girişini yenile.",
+                "The gateway could not read this account's sign-in (no saved sign-in); requests go to other accounts. Renew its usage sign-in on the account's page.",
+              )
+        }
+      >
+        <StatusDot tone="crit" />
+        <span className="truncate">{t("Ağ geçidi girişi okuyamıyor", "Gateway can't read sign-in")}</span>
       </a>
     );
-  if (account.extraUsage?.kind === "billed")
-    return <Badge variant="destructive">{t("Ekstra kullanım", "Extra usage")}</Badge>;
+  if (account.extraUsage?.kind === "billed") return note("crit", t("Ekstra kullanım", "Extra usage"));
   if (account.waiting) {
     const when = resetLabel(account.waiting.minutes, t);
     const label =
@@ -465,60 +423,52 @@ function AccountState({ account }: { account: ProxyAccountStatus }) {
         : account.waiting.reason === "transient"
           ? t(`Kısa ara · ${when}`, `Short pause · ${when}`)
           : t(`Limitte · ${when}`, `At its limit · ${when}`);
-    return (
-      <Badge
-        variant="secondary"
-        data-slot="waiting"
-        title={`${waitingTitle(account.waiting.reason, t)} ${t(
-          `Bitiş: ${untilClock(account.waiting.minutes, language)}.`,
-          `Until ${untilClock(account.waiting.minutes, language)}.`,
-        )}`}
-      >
-        {label}
-      </Badge>
-    );
+    return note("warn", label, {
+      slot: "waiting",
+      title: `${waitingTitle(account.waiting.reason, t)} ${t(
+        `Bitiş: ${untilClock(account.waiting.minutes, language)}.`,
+        `Until ${untilClock(account.waiting.minutes, language)}.`,
+      )}`,
+    });
   }
-  if ((account.quotaPercent ?? 0) >= 100) return <Badge variant="secondary">{t("Dolu", "Full")}</Badge>;
+  if ((account.quotaPercent ?? 0) >= 100) return note("crit", t("Dolu", "Full"));
   if (risk)
-    return (
-      <Badge
-        variant="outline"
-        className="border-warn/50 text-warn-foreground"
-        data-slot="at-risk"
-        title={t(
-          `Haftalık limit ${resetLabel(risk.minutes, t)} içinde sıfırlanıyor; kalan %${risk.percent} o zamana kadar kullanılmazsa boşa gider.`,
-          `The weekly limit resets in ${resetLabel(risk.minutes, t)}; the ${risk.percent}% left is lost unless it is used by then.`,
-        )}
-      >
-        {t(`%${risk.percent} yanacak`, `${risk.percent}% expiring`)}
-      </Badge>
-    );
+    return note("warn", t(`%${risk.percent} yanacak`, `${risk.percent}% expiring`), {
+      slot: "at-risk",
+      title: t(
+        `Haftalık limit ${resetLabel(risk.minutes, t)} içinde sıfırlanıyor; kalan %${risk.percent} o zamana kadar kullanılmazsa boşa gider.`,
+        `The weekly limit resets in ${resetLabel(risk.minutes, t)}; the ${risk.percent}% left is lost unless it is used by then.`,
+      ),
+    });
   if (account.gatewaySignIn === "expired")
-    return (
-      <Badge
-        variant="secondary"
-        data-slot="gateway-sign-in"
-        title={t(
-          "Girişinin süresi doldu; Relay limit okurken yeniliyor. O zamana kadar istekler başka hesaplara gider.",
-          "Its sign-in expired; Relay renews it when it reads the limits. Until then requests go to other accounts.",
-        )}
-      >
-        {t("Giriş yenileniyor", "Renewing sign-in")}
-      </Badge>
-    );
-  if (account.active)
-    return (
-      <Badge variant="outline" className="text-ok-foreground">
-        <StatusDot tone="ok" />
-        {t("Son istek", "Last request")}
-      </Badge>
-    );
+    return note("warn", t("Giriş yenileniyor", "Renewing sign-in"), {
+      slot: "gateway-sign-in",
+      title: t(
+        "Girişinin süresi doldu; Relay limit okurken yeniliyor. O zamana kadar istekler başka hesaplara gider.",
+        "Its sign-in expired; Relay renews it when it reads the limits. Until then requests go to other accounts.",
+      ),
+    });
+  if (account.active) return note("ok", t("Son istek", "Last request"));
   return null;
 }
 
+/** The pool's providers in the order every list shows them. */
+const POOL_PROVIDERS = ["claude", "codex", "antigravity", "gemini"] as const;
+const POOL_PROVIDER_NAMES: Record<(typeof POOL_PROVIDERS)[number], string> = {
+  claude: "Claude",
+  codex: "Codex",
+  antigravity: "Antigravity",
+  gemini: "Gemini",
+};
+
+/** A window the gateway reports in minutes, as the time it resets. */
+const resetAt = (minutes: number | undefined, now: number) =>
+  minutes === undefined ? undefined : new Date(now + minutes * 60_000).toISOString();
+
 /**
- * The pool: every account in the order the gateway uses them, with both limit windows, what it
- * served, and a switch that takes it out of the pool without removing it from Relay.
+ * The pool: every account under its provider, in the order the gateway uses them, with both limit
+ * windows and a switch that takes it out of the pool without removing it from Relay. What it served
+ * and why it is left out are one quiet line; the details are the name's title.
  */
 function PoolCard({
   status,
@@ -530,195 +480,243 @@ function PoolCard({
   onConfigure: (patch: Patch) => Promise<boolean>;
 }) {
   const { t, language } = useI18n();
+  const relay = useRelay();
   const locale = language === "tr" ? "tr-TR" : "en-US";
   const accounts = status.accounts;
-  const order = accounts.map((a) => a.id);
   const excluded = accounts.filter((a) => !a.inPool).map((a) => a.id);
   const strict = status.routingStrategy === "strict-priority";
-  const move = (id: string, by: -1 | 1) => void onConfigure({ accountOrder: moveInOrder(order, id, by) });
+  const now = Date.now();
+  const move = (id: string, by: -1 | 1) => void onConfigure({ accountOrder: moveWithinProvider(accounts, id, by) });
   const setInPool = (id: string, on: boolean) =>
     void onConfigure({
       excludedAccountIds: on ? excluded.filter((x) => x !== id) : [...excluded, id],
     });
+  const groups = POOL_PROVIDERS.flatMap((provider) => {
+    const own = accounts.filter((a) => (a.provider ?? "claude") === provider);
+    return own.length ? [{ provider, own }] : [];
+  });
   return (
-    <Card className={cardClass} data-slot="pool">
-      <SectionHeading
-        title={t("Havuz", "Pool")}
-        description={
-          strict
-            ? t(
-                "Hesaplar bu sırayla kullanılır; biri dolunca sıradaki başlar. Okla sırala, anahtarla havuzdan çıkar.",
-                "Accounts are used in this order; the next starts when one is full. Reorder with the arrows; the switch takes one out.",
-              )
-            : t(
-                "Her istek kendi sağlayıcısının hesaplarından birine gider. Anahtar hesabı silmeden havuzdan çıkarır.",
-                "Each request goes to an account of its own provider. The switch takes an account out without removing it.",
-              )
-        }
-      />
-      {status.nextPick && (
-        <p data-slot="next-pick" className="pt-1 text-2xs text-muted-foreground">
-          {Object.entries(status.nextPick).map(([provider, pick], index, all) => {
-            const nameOf = (id: string) => accounts.find((a) => a.id === id)?.name ?? "?";
-            const skipped = pick.nearlyFull?.length
-              ? t(
-                  `; ${pick.nearlyFull.map(nameOf).join(", ")} limite yakın, atlanıyor`,
-                  `; ${pick.nearlyFull.map(nameOf).join(", ")} near the limit, passed over`,
-                )
-              : "";
-            const who = all.length > 1 ? `${provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : "Antigravity"}: ` : "";
-            return (
-              <span key={provider} className="block">
-                {who}
-                {t("Yeni oturum şimdi → ", "A new session now → ")}
-                <span className="font-medium text-foreground">{nameOf(pick.accountId)}</span>
-                {` (${pickReasonLabel(pick.reason, t)})${skipped}`}
-                {pick.byModel?.map((scoped) => (
-                  <span key={scoped.model} className="block">
-                    {t(`${scoped.label} oturumu → `, `A ${scoped.label} session → `)}
-                    <span className="font-medium text-foreground">
-                      {scoped.accountId ? nameOf(scoped.accountId) : t("hiçbiri (her hesapta limit dolu)", "none (its limit is spent everywhere)")}
-                    </span>
-                  </span>
-                ))}
-              </span>
-            );
-          })}
-        </p>
-      )}
-      {accounts.length ? (
-        <ul aria-label={t("Havuzdaki hesaplar", "Accounts in the pool")} className="grid pt-1">
-          {accounts.map((account, index) => {
-            const provider = account.provider ?? "claude";
-            const quiet = !account.inPool;
-            const cache = account.tokens ? account.tokens.cacheRead : undefined;
-            return (
-              <li
-                key={account.id}
-                data-account={account.id}
-                data-in-pool={String(account.inPool)}
-                data-active={account.active || undefined}
-                className={cn(
-                  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 border-t py-2.5 first:border-t-0",
-                  quiet && "opacity-60",
-                )}
-              >
-                <span className="row-span-2 flex flex-col self-start">
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={disabled || index === 0}
-                    aria-label={t(`${account.name} yukarı`, `Move ${account.name} up`)}
-                    onClick={() => move(account.id, -1)}
-                  >
-                    <ArrowUp />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={disabled || index === accounts.length - 1}
-                    aria-label={t(`${account.name} aşağı`, `Move ${account.name} down`)}
-                    onClick={() => move(account.id, 1)}
-                  >
-                    <ArrowDown />
-                  </Button>
-                </span>
-                <div className="grid min-w-0 gap-0.5">
-                  <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <ProviderBadge provider={provider} />
-                    <span className="min-w-0 truncate text-sm font-medium">{account.name}</span>
-                    <AccountState account={account} />
-                  </span>
-                  <span
-                    className="truncate text-2xs text-muted-foreground tabular-nums"
-                    title={
-                      [
-                        account.live
-                          ? t(
-                              "Yüzdeler bu hesabın son yanıtındaki limit başlıklarından okundu.",
-                              "The percents are from the limit headers of this account's last answer.",
-                            )
-                          : undefined,
-                        account.percentCost
-                          ? t(
-                              `5 saatlik limitin %1'i son 7 günde ${account.percentCost.windows} dönemde ortalama ${usd(account.percentCost.dollars, locale)} tuttu (Claude Code kullanımı, API fiyatıyla). claude.ai sohbetleri bu hesapta yoksa oran daha güvenilirdir.`,
-                              `1% of the 5-hour limit took ${usd(account.percentCost.dollars, locale)} on average over ${account.percentCost.windows} windows in the last 7 days (Claude Code use, at API prices). It is more reliable when the account is not also used for claude.ai chats.`,
-                            )
-                          : undefined,
-                      ]
-                        .filter(Boolean)
-                        .join(" ") || undefined
-                    }
-                  >
-                    {account.email && <Private>{account.email}</Private>}
-                    {account.email && (account.requests || cache || account.live || account.percentCost) ? " · " : ""}
-                    {[
-                      account.requests
-                        ? t(`${account.requests} istek`, `${account.requests} requests`)
-                        : undefined,
-                      cache
-                        ? t(`önbellek ${compactCount(cache, locale)}`, `cache ${compactCount(cache, locale)}`)
-                        : undefined,
-                      account.live ? t("canlı", "live") : undefined,
-                      account.percentCost
-                        ? t(`%1 ≈ ${usd(account.percentCost.dollars, locale)}`, `1% ≈ ${usd(account.percentCost.dollars, locale)}`)
-                        : undefined,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </div>
-                <Switch
-                  className="self-start"
-                  checked={account.inPool}
-                  disabled={disabled}
-                  aria-label={t(`${account.name} havuzda`, `${account.name} in the pool`)}
-                  onCheckedChange={(on) => setInPool(account.id, on)}
-                />
-                <div className="col-span-2 col-start-2 grid grid-cols-2 gap-4">
-                  {account.fiveHourPercent === undefined && account.weeklyPercent === undefined ? (
-                    <span className="col-span-2 text-2xs text-muted-foreground">
-                      {provider === "claude"
-                        ? t("Limitler henüz okunmadı", "Limits not read yet")
-                        : t("Relay bu sağlayıcının limitini okuyamıyor", "Relay cannot read this provider's limits")}
-                    </span>
-                  ) : (
-                    <>
-                      <WindowMeter
-                        label={t("5 saat", "5 hours")}
-                        percent={account.fiveHourPercent}
-                        minutes={account.fiveHourResetMinutes}
-                        fullAt={account.fullAt}
+    <PageSection
+      slot="pool"
+      title={t("Havuz", "Pool")}
+      info={
+        strict
+          ? t(
+              "Hesaplar bu sırayla kullanılır; biri dolunca sıradaki başlar. Okla sırala, anahtarla havuzdan çıkar.",
+              "Accounts are used in this order; the next starts when one is full. Reorder with the arrows; the switch takes one out.",
+            )
+          : t(
+              "Her istek kendi sağlayıcısının hesaplarından birine gider. Anahtar hesabı silmeden havuzdan çıkarır.",
+              "Each request goes to an account of its own provider. The switch takes an account out without removing it.",
+            )
+      }
+    >
+      <ListCard label={t("Havuzdaki hesaplar", "Accounts in the pool")}>
+        {accounts.length ? (
+          <>
+            <ListHead columns="pool">
+              <span />
+              <span>{t("Hesap", "Account")}</span>
+              <span>{t("5 saat", "5 hours")}</span>
+              <span className={narrowHidden}>{t("Hafta", "Week")}</span>
+              <span className="text-right">{t("Havuzda", "In pool")}</span>
+            </ListHead>
+            {groups.map(({ provider, own }) => (
+              <Fragment key={provider}>
+                <ListGroup provider={provider} name={POOL_PROVIDER_NAMES[provider]} count={own.length} />
+                {own.map((account, index) => {
+                  const quiet = !account.inPool;
+                  const cache = account.tokens ? account.tokens.cacheRead : undefined;
+                  const known = relay.accounts.find((a) => a.id === account.id);
+                  const usage = relay.data?.usage[account.id];
+                  // An Antigravity account's limits are its pools: each column the fullest of its length.
+                  const pools = modelOnlyUsage(usage) ? limitColumns(usage, now) : undefined;
+                  const five = pools
+                    ? pools.five
+                    : account.fiveHourPercent === undefined
+                      ? undefined
+                      : { usedPercent: account.fiveHourPercent, resetsAt: resetAt(account.fiveHourResetMinutes, now) };
+                  const week = pools
+                    ? pools.week
+                    : account.weeklyPercent === undefined
+                      ? undefined
+                      : { usedPercent: account.weeklyPercent, resetsAt: resetAt(account.weeklyResetMinutes, now) };
+                  const clock = account.fullAt
+                    ? new Date(account.fullAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
+                    : undefined;
+                  const served = [
+                    account.requests ? t(`${account.requests} istek`, `${account.requests} requests`) : undefined,
+                    cache ? t(`önbellek ${compactCount(cache, locale)}`, `cache ${compactCount(cache, locale)}`) : undefined,
+                    account.live ? t("canlı", "live") : undefined,
+                    account.percentCost
+                      ? t(`%1 ≈ ${usd(account.percentCost.dollars, locale)}`, `1% ≈ ${usd(account.percentCost.dollars, locale)}`)
+                      : undefined,
+                  ].filter(Boolean);
+                  const details = [
+                    account.live
+                      ? t(
+                          "Yüzdeler bu hesabın son yanıtındaki limit başlıklarından okundu.",
+                          "The percents are from the limit headers of this account's last answer.",
+                        )
+                      : undefined,
+                    account.percentCost
+                      ? t(
+                          `5 saatlik limitin %1'i son 7 günde ${account.percentCost.windows} dönemde ortalama ${usd(account.percentCost.dollars, locale)} tuttu (Claude Code kullanımı, API fiyatıyla). claude.ai sohbetleri bu hesapta yoksa oran daha güvenilirdir.`,
+                          `1% of the 5-hour limit took ${usd(account.percentCost.dollars, locale)} on average over ${account.percentCost.windows} windows in the last 7 days (Claude Code use, at API prices). It is more reliable when the account is not also used for claude.ai chats.`,
+                        )
+                      : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+                  const cell = (window: { usedPercent: number; resetsAt?: string; label?: string } | undefined, name: string) =>
+                    window ? (
+                      <LimitLine
+                        label={pools ? (window.label ?? "") : ""}
+                        ariaLabel={name}
+                        usedPercent={window.usedPercent}
+                        resetsAt={window.resetsAt}
+                        period={pools ? undefined : name === t("Hafta", "Week") ? "seven_day" : "five_hour"}
+                        now={now}
+                        t={t}
                       />
-                      <WindowMeter
-                        label={t("Hafta", "Week")}
-                        percent={account.weeklyPercent}
-                        minutes={account.weeklyResetMinutes}
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    );
+                  const unread = !five && !week;
+                  return (
+                    <ListRow
+                      key={account.id}
+                      columns="pool"
+                      data={{
+                        "data-account": account.id,
+                        "data-in-pool": String(account.inPool),
+                        ...(account.active ? { "data-active": "true" } : {}),
+                      }}
+                    >
+                      <span className="flex flex-col">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={disabled || index === 0}
+                          aria-label={t(`${account.name} yukarı`, `Move ${account.name} up`)}
+                          onClick={() => move(account.id, -1)}
+                        >
+                          <ArrowUp />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          disabled={disabled || index === own.length - 1}
+                          aria-label={t(`${account.name} aşağı`, `Move ${account.name} down`)}
+                          onClick={() => move(account.id, 1)}
+                        >
+                          <ArrowDown />
+                        </Button>
+                      </span>
+                      <div className={cn("grid min-w-0 gap-0.5", quiet && "opacity-60")} title={details || undefined}>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <AccountDot color={known?.color} />
+                          <span className="min-w-0 truncate text-sm font-medium">{account.name}</span>
+                          <PoolNote account={account} />
+                        </span>
+                        {(served.length > 0 || account.email || clock) && (
+                          <span className="truncate text-2xs text-muted-foreground tabular-nums">
+                            {account.email && <Private>{account.email}</Private>}
+                            {account.email && served.length ? " · " : ""}
+                            {served.join(" · ")}
+                            {clock && (
+                              <span
+                                data-slot="full-at"
+                                className="text-warn-foreground"
+                                title={t(
+                                  "Son yarım saatin hızıyla bu dönem sıfırlanmadan dolar.",
+                                  "At the last half hour's pace this window fills before it resets.",
+                                )}
+                              >
+                                {t(` · ${clock} gibi dolar`, ` · full by ${clock}`)}
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      {unread ? (
+                        <span
+                          className="text-2xs text-muted-foreground"
+                          title={
+                            account.provider === undefined || account.provider === "claude"
+                              ? t("Limitler henüz okunmadı", "Limits not read yet")
+                              : t("Relay bu sağlayıcının limitini okuyamıyor", "Relay cannot read this provider's limits")
+                          }
+                        >
+                          {account.provider === undefined || account.provider === "claude"
+                            ? t("Henüz okunmadı", "Not read yet")
+                            : t("Okunamıyor", "Not readable")}
+                        </span>
+                      ) : (
+                        <div className={cn("min-w-0", quiet && "opacity-60")}>{cell(five, t("5 saat", "5 hours"))}</div>
+                      )}
+                      <div className={cn("min-w-0", narrowHidden, quiet && "opacity-60")}>{unread ? null : cell(week, t("Hafta", "Week"))}</div>
+                      <Switch
+                        className="justify-self-end"
+                        checked={account.inPool}
+                        disabled={disabled}
+                        aria-label={t(`${account.name} havuzda`, `${account.name} in the pool`)}
+                        onCheckedChange={(on) => setInPool(account.id, on)}
                       />
-                    </>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      ) : (
-        <div className="grid justify-items-start gap-2 pt-2">
-          <p className="text-sm text-muted-foreground">
-            {t(
-              "Havuz boş. Bir hesap ekle; ağ geçidi istekleri onunla karşılar.",
-              "The pool is empty. Add an account and the gateway answers with it.",
+                    </ListRow>
+                  );
+                })}
+              </Fragment>
+            ))}
+            {status.nextPick && (
+              <p data-slot="next-pick" className="border-t px-4 py-2 text-2xs text-muted-foreground">
+                {Object.entries(status.nextPick).map(([provider, pick], index, all) => {
+                  const nameOf = (id: string) => accounts.find((a) => a.id === id)?.name ?? "?";
+                  const skipped = pick.nearlyFull?.length
+                    ? t(
+                        `; ${pick.nearlyFull.map(nameOf).join(", ")} limite yakın, atlanıyor`,
+                        `; ${pick.nearlyFull.map(nameOf).join(", ")} near the limit, passed over`,
+                      )
+                    : "";
+                  const who = all.length > 1 ? `${provider === "claude" ? "Claude" : provider === "codex" ? "Codex" : "Antigravity"}: ` : "";
+                  return (
+                    <span key={provider} className="block">
+                      {who}
+                      {t("Yeni oturum şimdi → ", "A new session now → ")}
+                      <span className="font-medium text-foreground">{nameOf(pick.accountId)}</span>
+                      {` (${pickReasonLabel(pick.reason, t)})${skipped}`}
+                      {pick.byModel?.map((scoped) => (
+                        <span key={scoped.model} className="block">
+                          {t(`${scoped.label} oturumu → `, `A ${scoped.label} session → `)}
+                          <span className="font-medium text-foreground">
+                            {scoped.accountId ? nameOf(scoped.accountId) : t("hiçbiri (her hesapta limit dolu)", "none (its limit is spent everywhere)")}
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  );
+                })}
+              </p>
             )}
-          </p>
-          <Button asChild size="sm">
-            <a href={intentHash("hesaplar", "ekle")}>
-              <Plus />
-              {t("Hesap ekle", "Add account")}
-            </a>
-          </Button>
-        </div>
-      )}
-    </Card>
+          </>
+        ) : (
+          <div className="grid justify-items-start gap-2 px-4 py-3">
+            <p className="text-sm text-muted-foreground">
+              {t(
+                "Havuz boş. Bir hesap ekle; ağ geçidi istekleri onunla karşılar.",
+                "The pool is empty. Add an account and the gateway answers with it.",
+              )}
+            </p>
+            <Button asChild size="sm">
+              <a href={intentHash("hesaplar", "ekle")}>
+                <Plus />
+                {t("Hesap ekle", "Add account")}
+              </a>
+            </Button>
+          </div>
+        )}
+      </ListCard>
+    </PageSection>
   );
 }
 
@@ -742,38 +740,40 @@ function SessionsCard({ status }: { status: ProxyStatus }) {
   const now = Date.now();
   const name = (id: string) => status.accounts.find((a) => a.id === id)?.name ?? "—";
   return (
-    <Card className={cardClass} data-slot="sessions">
-      <SectionHeading
-        title={t("Oturumlar", "Sessions")}
-        description={t(
-          "Oturumun önbelleği hesabındadır. Sıcakken dönmek ucuzdur; soğuyunca ya da hesap değişince bütün istem yeniden yazılır.",
-          "A session's cache lives on its account. Coming back while it is warm is cheap; once cold, or on another account, the whole prompt is written again.",
-        )}
-      />
-      <ol aria-label={t("Oturumlar", "Sessions")} className="grid pt-1">
-        {(status.sessions ?? []).map((session) => {
-          const line = sessionCacheLine(session, now, t, locale);
-          return (
-            <li
-              key={session.id}
-              data-warm={line.warm}
-              className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 border-t py-1.5 text-xs first:border-t-0"
-            >
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="font-mono text-2xs text-muted-foreground">{session.id}</span>
-                <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-                <span className="truncate">{name(session.accountId)}</span>
-              </span>
-              <span className="flex items-center gap-1.5 tabular-nums">
-                <StatusDot tone={line.warm ? "ok" : "off"} hollow={!line.warm} />
-                {line.state}
-              </span>
-              <span className="col-span-2 truncate text-2xs text-muted-foreground tabular-nums">{line.detail}</span>
-            </li>
-          );
-        })}
-      </ol>
-    </Card>
+    <PageSection
+      slot="sessions"
+      title={t("Oturumlar", "Sessions")}
+      info={t(
+        "Oturumun önbelleği hesabındadır. Sıcakken dönmek ucuzdur; soğuyunca ya da hesap değişince bütün istem yeniden yazılır.",
+        "A session's cache lives on its account. Coming back while it is warm is cheap; once cold, or on another account, the whole prompt is written again.",
+      )}
+    >
+      <Card className={cardClass}>
+        <ol aria-label={t("Oturumlar", "Sessions")} className="grid">
+          {(status.sessions ?? []).map((session) => {
+            const line = sessionCacheLine(session, now, t, locale);
+            return (
+              <li
+                key={session.id}
+                data-warm={line.warm}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 border-t py-1.5 text-xs first:border-t-0"
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="font-mono text-2xs text-muted-foreground">{session.id}</span>
+                  <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{name(session.accountId)}</span>
+                </span>
+                <span className="flex items-center gap-1.5 tabular-nums">
+                  <StatusDot tone={line.warm ? "ok" : "off"} hollow={!line.warm} />
+                  {line.state}
+                </span>
+                <span className="col-span-2 truncate text-2xs text-muted-foreground tabular-nums">{line.detail}</span>
+              </li>
+            );
+          })}
+        </ol>
+      </Card>
+    </PageSection>
   );
 }
 
@@ -786,102 +786,104 @@ function RequestFeed({ status }: { status: ProxyStatus }) {
   const ratio = status.stats.cacheHitRate.toLocaleString(locale, { maximumFractionDigits: 1 });
   const now = Date.now();
   return (
-    <Card className={cardClass} data-slot="request-feed">
-      <SectionHeading
-        title={t("Son istekler", "Recent requests")}
-        description={t(
-          "Limit dolarsa aynı istek sıradaki hesapla denenir; aynı oturum, önbellek korunsun diye hesabında kalır.",
-          "When a limit is hit, the same request goes to the next account; a session stays on its account to keep the cache.",
-        )}
-      />
-      <dl className="grid grid-cols-3 gap-2 py-2">
-        {[
-          [t("İstek", "Requests"), status.stats.totalRequests.toLocaleString(locale)],
-          [t("Şu an", "Now"), status.stats.activeRequests.toLocaleString(locale)],
-          [t("Önbellek", "Cache"), t(`%${ratio}`, `${ratio}%`)],
-        ].map(([label, value]) => (
-          <div key={label} className="grid gap-0.5 rounded-md bg-muted/40 px-2.5 py-1.5">
-            <dt className="text-2xs text-muted-foreground">{label}</dt>
-            <dd className="font-display text-sm font-semibold tabular-nums">{value}</dd>
-          </div>
-        ))}
-      </dl>
-      {status.classShare?.length ? (
-        <p data-slot="class-share" className="pb-2 text-2xs text-muted-foreground tabular-nums">
-          {classShareLine(status.classShare, t)}
-        </p>
-      ) : null}
-      {recent.length ? (
-        <ol aria-label={t("Son istekler", "Recent requests")} className="grid">
-          {recent.slice(0, 12).map((entry, index) => {
-            const { tone, word } = statusTone(entry);
-            const to = name(entry.accountId);
-            const why = pickLine(entry.pick, name, t);
-            const detail = requestDetail(
-              entry,
-              t,
-              locale,
-              status.accounts.find((a) => a.id === entry.accountId)?.percentCost?.dollars,
-            );
-            return (
-              <li
-                key={`${entry.at}-${index}`}
-                data-status={entry.status}
-                title={
-                  [entry.error ? t(`Yanıt: ${entry.error}`, `Answer: ${entry.error}`) : "", why]
-                    .filter(Boolean)
-                    .join("\n") || undefined
-                }
-                className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 border-t py-1.5 text-xs first:border-t-0"
-              >
-                <span className="text-2xs text-muted-foreground tabular-nums">{agoLabel(entry.at, now, t)}</span>
-                <span className="flex min-w-0 items-center gap-1 truncate">
-                  <span className="truncate font-mono text-2xs">{entry.model || entry.provider || "—"}</span>
-                  <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
-                  <span className="truncate">
-                    {to ??
-                      (entry.note === "no-account"
-                        ? t("hesap yok", "no account")
-                        : entry.note === "all-limited"
-                          ? t("hepsi limitte", "all limited")
-                          : entry.note === "sign-in"
-                            ? t("giriş kullanılamıyor", "no usable sign-in")
-                            : "—")}
-                  </span>
-                  {entry.affinity && (
-                    <span className="sr-only">{t("oturum hesabında kaldı", "session kept its account")}</span>
-                  )}
-                </span>
-                <span className="flex items-center gap-1.5 tabular-nums">
-                  <StatusDot tone={tone} />
-                  {t(...word)}
-                </span>
-                {detail && (
-                  <span data-slot="request-detail" className="col-span-2 col-start-2 truncate text-2xs text-muted-foreground tabular-nums">
-                    {detail}
-                  </span>
-                )}
-                {why && (
-                  <span data-slot="request-pick" className="col-span-2 col-start-2 truncate text-2xs text-muted-foreground">
-                    {t("Neden bu hesap: ", "Why this account: ")}
-                    {why}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      ) : (
-        <Note>
-          {status.running
-            ? t(
-                "Henüz istek yok. Araçlar sekmesinden Claude Code ya da Codex’i bağla.",
-                "No requests yet. Connect Claude Code or Codex on the Tools tab.",
-              )
-            : t("Ağ geçidi kapalı: istekler açıkken burada akar.", "The gateway is off: requests show here while it runs.")}
-        </Note>
+    <PageSection
+      slot="request-feed"
+      title={t("Son istekler", "Recent requests")}
+      info={t(
+        "Limit dolarsa aynı istek sıradaki hesapla denenir; aynı oturum, önbellek korunsun diye hesabında kalır.",
+        "When a limit is hit, the same request goes to the next account; a session stays on its account to keep the cache.",
       )}
-    </Card>
+    >
+      <Card className={cardClass}>
+        <dl className="grid grid-cols-3 gap-2 pb-2">
+          {[
+            [t("İstek", "Requests"), status.stats.totalRequests.toLocaleString(locale)],
+            [t("Şu an", "Now"), status.stats.activeRequests.toLocaleString(locale)],
+            [t("Önbellek", "Cache"), t(`%${ratio}`, `${ratio}%`)],
+          ].map(([label, value]) => (
+            <div key={label} className="grid gap-0.5 rounded-md bg-muted/40 px-2.5 py-1.5">
+              <dt className="text-2xs text-muted-foreground">{label}</dt>
+              <dd className="font-display text-sm font-semibold tabular-nums">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        {status.classShare?.length ? (
+          <p data-slot="class-share" className="pb-2 text-2xs text-muted-foreground tabular-nums">
+            {classShareLine(status.classShare, t)}
+          </p>
+        ) : null}
+        {recent.length ? (
+          <ol aria-label={t("Son istekler", "Recent requests")} className="grid">
+            {recent.slice(0, 12).map((entry, index) => {
+              const { tone, word } = statusTone(entry);
+              const to = name(entry.accountId);
+              const why = pickLine(entry.pick, name, t);
+              const detail = requestDetail(
+                entry,
+                t,
+                locale,
+                status.accounts.find((a) => a.id === entry.accountId)?.percentCost?.dollars,
+              );
+              return (
+                <li
+                  key={`${entry.at}-${index}`}
+                  data-status={entry.status}
+                  title={
+                    [entry.error ? t(`Yanıt: ${entry.error}`, `Answer: ${entry.error}`) : "", why]
+                      .filter(Boolean)
+                      .join("\n") || undefined
+                  }
+                  className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-0.5 border-t py-1.5 text-xs first:border-t-0"
+                >
+                  <span className="text-2xs text-muted-foreground tabular-nums">{agoLabel(entry.at, now, t)}</span>
+                  <span className="flex min-w-0 items-center gap-1 truncate">
+                    <span className="truncate font-mono text-2xs">{entry.model || entry.provider || "—"}</span>
+                    <ArrowRight aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
+                    <span className="truncate">
+                      {to ??
+                        (entry.note === "no-account"
+                          ? t("hesap yok", "no account")
+                          : entry.note === "all-limited"
+                            ? t("hepsi limitte", "all limited")
+                            : entry.note === "sign-in"
+                              ? t("giriş kullanılamıyor", "no usable sign-in")
+                              : "—")}
+                    </span>
+                    {entry.affinity && (
+                      <span className="sr-only">{t("oturum hesabında kaldı", "session kept its account")}</span>
+                    )}
+                  </span>
+                  <span className="flex items-center gap-1.5 tabular-nums">
+                    <StatusDot tone={tone} />
+                    {t(...word)}
+                  </span>
+                  {detail && (
+                    <span data-slot="request-detail" className="col-span-2 col-start-2 truncate text-2xs text-muted-foreground tabular-nums">
+                      {detail}
+                    </span>
+                  )}
+                  {why && (
+                    <span data-slot="request-pick" className="col-span-2 col-start-2 truncate text-2xs text-muted-foreground">
+                      {t("Neden bu hesap: ", "Why this account: ")}
+                      {why}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        ) : (
+          <Note>
+            {status.running
+              ? t(
+                  "Henüz istek yok. Araçlar sekmesinden Claude Code ya da Codex’i bağla.",
+                  "No requests yet. Connect Claude Code or Codex on the Tools tab.",
+                )
+              : t("Ağ geçidi kapalı: istekler açıkken burada akar.", "The gateway is off: requests show here while it runs.")}
+          </Note>
+        )}
+      </Card>
+    </PageSection>
   );
 }
 
@@ -1336,10 +1338,7 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
     <PageFrame
       automationInline
       title={t("Proxy & Gateway", "Proxy & Gateway")}
-      description={t(
-        "Claude Code ve Codex tek bir adrese bağlanır; ağ geçidi isteği limiti en uygun hesaba gönderir.",
-        "Claude Code and Codex connect to one address; the gateway sends each request to the account with the best room.",
-      )}
+      description={t("Tek adres; her istek en uygun hesaba gider", "One address; each request goes to the account with room")}
       actions={
         <Button asChild variant="outline" size="sm">
           <a href={intentHash("hesaplar", "ekle")}>

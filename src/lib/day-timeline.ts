@@ -1,3 +1,4 @@
+import { accountFill } from "./account-color";
 // Pure day-timeline maths shared by the Planning page and the Overview "Bugün" card.
 import type {
   Account,
@@ -400,3 +401,6 @@ export const WINDOW_TONES = [
 ] as const;
 export const windowTone = (index: number) =>
   WINDOW_TONES[index % WINDOW_TONES.length];
+
+/** An account's own colour as a fill class: the same as its dot and its chart series. */
+export const accountTone = (account: { color?: string } | undefined) => accountFill(account?.color);

@@ -1,4 +1,5 @@
 import { dayPlan, planContext } from "../../../shared/day-plan";
+import { automationModeCopy, useAutomation } from "../../features/useAutomation";
 import { localDate, wallTime } from "../../../shared/planning";
 import { isWeekend } from "../../../shared/work-hours";
 import { fallbackTempo } from "../../../shared/tempo";
@@ -12,7 +13,7 @@ import {
   nextPlannedWindow,
   plannedSettings,
   todayLookout,
-  windowTone,
+  accountTone,
 } from "@/lib/day-timeline";
 import { formatClock } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -73,7 +74,11 @@ export function TodayCard({
             `bugün ${plannedToday} başlatma planlı`,
             `${plannedToday} ${plannedToday === 1 ? "start" : "starts"} planned today`,
           );
-  const summary = `${work} · ${early}`;
+  // The Automation card's place: how switching runs, in the same line as the day.
+  const automation = useAutomation(now);
+  const mode = automationModeCopy(automation.mode).label;
+  const switching = automation.mode === "off" ? t("otomatik geçiş kapalı", "automatic switching off") : t(`geçiş: ${mode[0].charAt(0).toLocaleLowerCase("tr")}${mode[0].slice(1)}`, `switching: ${mode[1].charAt(0).toLowerCase()}${mode[1].slice(1)}`);
+  const summary = `${work} · ${switching} · ${early}`;
   // The hour axis under the rows; 24 is the day's end, wherever DST puts it.
   const ticks = ["00", "06", "12", "18", "24"].map((hour) => ({
     hour,
@@ -93,12 +98,10 @@ export function TodayCard({
     <Card className="gap-0 px-4 py-3.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">{t("Bugün", "Today")}</span>
-        <Button
-          variant="link"
-          size="sm"
-          className="h-auto px-0"
-          onClick={() => go("planlama")}
-        >
+        <Button variant="ghost" size="xs" className="ml-auto" onClick={() => go("gecis")}>
+          {t("Geçiş →", "Switching →")}
+        </Button>
+        <Button variant="ghost" size="xs" onClick={() => go("planlama")}>
           {t("Planlama →", "Planning →")}
         </Button>
       </div>
@@ -134,7 +137,7 @@ export function TodayCard({
                 <div
                   key={w.start}
                   title={`${clock(w.start)}–${clock(w.end)}`}
-                  className={`absolute inset-y-0.5 rounded ${windowTone(index)}`}
+                  className={`absolute inset-y-0.5 rounded ${accountTone(account)}`}
                   style={span(w.start, w.end)}
                 />
               ))}
