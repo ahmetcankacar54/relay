@@ -290,7 +290,8 @@ test("omp: one click writes models.yml, the next takes it away, leaving no file 
   assert.deepEqual(saved, { created: "1" });
   const text = readOmp(dir);
   assert.equal(text, [START, "providers:", ...RELAY_ENTRIES("  "), END, ""].join("\n"));
-  assert.equal((fs.statSync(ompFile(dir)).mode & 0o777).toString(8), "600");
+  // Windows has no Unix modes: it reports 0666 whatever was asked.
+  if (process.platform !== "win32") assert.equal((fs.statSync(ompFile(dir)).mode & 0o777).toString(8), "600");
   assert.deepEqual([ompStatus(dir).installed, ompStatus(dir).bound, ompStatus(dir).stale], [true, true, false]);
   const moved = ompStatus(dir, true, { ...target, key: "relay-sec-other" });
   assert.deepEqual([moved.bound, moved.stale], [false, true]);
