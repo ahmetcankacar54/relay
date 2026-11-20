@@ -134,21 +134,28 @@ accounts.push(
   { id: otherIds.ag2, name: "Google · Antigravity 2", kind: "personal", group: "personal", color: "plum", provider: "antigravity", createdAt: new Date().toISOString(), auth: signedIn("google2@example.test", "ultra") },
 );
 const minutes = (n: number) => new Date(Date.now() + n * 60_000).toISOString();
-/** Antigravity's limits are per model; its five-hour window is the roomiest model, as the reader keeps it. */
-const antigravityUsage = (id: string, models: [string, string, number, number][]) => {
-  const modelWindows = models.map(([key, label, usedPercent, resetIn]) => ({
+/**
+ * Antigravity's limits are pools (Gemini; Claude & GPT shared), each a five-hour and a weekly
+ * window, as its quota summary gives them; the headline is the roomiest pool, as the reader keeps it.
+ */
+const antigravityUsage = (id: string, windows: [string, string, "five_hour" | "seven_day", number, number][]) => {
+  const modelWindows = windows.map(([key, label, period, usedPercent, resetIn]) => ({
     key: `antigravity_${key}`,
     label,
+    period,
     usedPercent,
     resetsAt: minutes(resetIn),
   }));
-  const roomiest = [...modelWindows].sort((a, b) => a.usedPercent - b.usedPercent)[0];
+  const pools = new Map<string, (typeof modelWindows)[number]>();
+  for (const w of modelWindows) if (!pools.has(w.label) || w.usedPercent > pools.get(w.label)!.usedPercent) pools.set(w.label, w);
+  const roomiest = [...pools.values()].sort((a, b) => a.usedPercent - b.usedPercent)[0];
+  const head = { usedPercent: roomiest.usedPercent, resetsAt: roomiest.resetsAt };
   return {
     accountId: id,
     status: "ready" as const,
     stale: false,
     checkedAt: minutes(-1),
-    fiveHour: { usedPercent: roomiest.usedPercent, resetsAt: roomiest.resetsAt },
+    ...(roomiest.period === "seven_day" ? { sevenDay: head } : { fiveHour: head }),
     modelWindows,
   };
 };
@@ -162,14 +169,16 @@ const previewProviderUsage: Record<string, Snapshot["usage"][string]> = {
     sevenDay: { usedPercent: 100, resetsAt: minutes(4 * 24 * 60 + 5) },
   },
   [otherIds.ag1]: antigravityUsage(otherIds.ag1, [
-    ["gemini_4_carbon_high", "Gemini 4 Carbon (High)", 100, 25],
-    ["claude_opus_5_5", "Claude Opus 5.5", 62, 190],
-    ["gemini_4_argon", "Gemini 4 Argon", 18, 299],
+    ["gemini_5h", "Gemini", "five_hour", 100, 25],
+    ["gemini_weekly", "Gemini", "seven_day", 71, 4 * 24 * 60 + 17 * 60],
+    ["3p_5h", "Claude & GPT", "five_hour", 62, 190],
+    ["3p_weekly", "Claude & GPT", "seven_day", 30, 5 * 24 * 60],
   ]),
   [otherIds.ag2]: antigravityUsage(otherIds.ag2, [
-    ["gemini_4_carbon_high", "Gemini 4 Carbon (High)", 6, 299],
-    ["claude_opus_5_5", "Claude Opus 5.5", 0, 300],
-    ["gemini_4_argon", "Gemini 4 Argon", 0, 300],
+    ["gemini_5h", "Gemini", "five_hour", 6, 299],
+    ["gemini_weekly", "Gemini", "seven_day", 12, 6 * 24 * 60],
+    ["3p_5h", "Claude & GPT", "five_hour", 0, 300],
+    ["3p_weekly", "Claude & GPT", "seven_day", 0, 7 * 24 * 60],
   ]),
 };
 if (new URLSearchParams(location.search).get("demo") === "50") {

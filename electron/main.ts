@@ -1021,7 +1021,7 @@ else {
             const bridge = antigravityBridge(account.id);
             if (!(await bridge.hasCredential()))
               throw new UsageError("expired", undefined, "antigravity: no saved Google sign-in");
-            const call = (request: { url: string; body: string }) => bridge.googleCall(request);
+            const call = (request: { url: string; body: string; userAgent?: string }) => bridge.googleCall(request);
             const project = await bridge.projectId();
             const result = await readAntigravityUsage(call, project);
             // The Google plan (AI Pro, Ultra, free) changes rarely: read with the limits at most

@@ -984,6 +984,11 @@ export interface ModelWindow {
   model?: string;
   /** The most of the weekly limit this model may take, in percent (Fable: 50). */
   weeklyShare?: number;
+  /**
+   * The window's length when the key does not say it: an Antigravity pool's five hours or week
+   * (`antigravity_gemini_5h`). Undefined for a window of unknown length.
+   */
+  period?: "five_hour" | "seven_day";
 }
 export interface AccountUsage {
   accountId: string;

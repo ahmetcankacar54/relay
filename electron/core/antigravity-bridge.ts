@@ -275,7 +275,7 @@ export class AntigravityBridge {
    * One POST to Google with the saved sign-in, sent by CLIProxyAPI's management `api-call` so the
    * token is put in (and renewed) by the sidecar. Only Code Assist's own hosts are asked.
    */
-  async googleCall(request: { url: string; body: string }): Promise<{ status: number; retryAfter: string | null; body: string }> {
+  async googleCall(request: { url: string; body: string; userAgent?: string }): Promise<{ status: number; retryAfter: string | null; body: string }> {
     const url = new URL(request.url);
     if (url.protocol !== "https:" || !/^(?:daily-)?cloudcode-pa\.googleapis\.com$/.test(url.hostname))
       throw new Error("Not a Code Assist address");
@@ -292,7 +292,8 @@ export class AntigravityBridge {
       header: {
         Authorization: "Bearer $TOKEN$",
         "Content-Type": "application/json",
-        "User-Agent": "antigravity/1.11.5 darwin/arm64",
+        // An Antigravity client string, the caller's when it names one (the quota summary wants 2.x).
+        "User-Agent": request.userAgent && /^antigravity\/[\w./ -]{1,60}$/.test(request.userAgent) ? request.userAgent : "antigravity/1.11.5 darwin/arm64",
       },
       data: request.body,
     };
