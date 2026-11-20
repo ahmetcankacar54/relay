@@ -61,7 +61,7 @@ import type { TerminalStatus } from "../../../shared/terminal-identity";
 import type { ExtensionStatus } from "../../../shared/types";
 import { accountPlan, avatarClass, planTitle, providerLabel } from "./accountLabels";
 import { isClaudeAccount } from "@/lib/account-health";
-import { limitHeadline, modelOnlyUsage } from "../../../shared/quota-windows";
+import { fullestByPeriod, limitHeadline, modelOnlyUsage } from "../../../shared/quota-windows";
 
 /**
  * A connection icon's three states: green when ready, amber with a dot when it needs a step (a
@@ -599,10 +599,14 @@ export function AccountsTable({
             suggested &&
             !inWindows.has(a.id) &&
             actions.find((x) => x.key === "switch");
-          // An Antigravity account's limits are per model: its column shows the fullest model, named.
-          const head = modelOnlyUsage(usage) ? limitHeadline(usage, now) : undefined;
-          const five = head ? head.usedPercent : usage?.fiveHour?.usedPercent;
-          const week = head ? undefined : usage?.sevenDay?.usedPercent;
+          // An Antigravity account's limits are its pools: each column shows the fullest pool of that
+          // length, named. Windows of unknown length (an older reading) show the fullest in the first.
+          const pooled = modelOnlyUsage(usage);
+          const byPeriod = pooled ? fullestByPeriod(usage, now) : {};
+          const head = pooled ? (byPeriod.five_hour ?? (byPeriod.seven_day ? undefined : limitHeadline(usage, now))) : undefined;
+          const weekHead = byPeriod.seven_day;
+          const five = pooled ? head?.usedPercent : usage?.fiveHour?.usedPercent;
+          const week = pooled ? weekHead?.usedPercent : usage?.sevenDay?.usedPercent;
           return (
             <TableRow
               key={a.id}
@@ -745,7 +749,7 @@ export function AccountsTable({
                 <CellMeter percent={five} label={head?.label ?? t("5 saat", "5 hours")} note={head?.label} />
               </TableCell>
               <TableCell className="@max-3xl:hidden">
-                <CellMeter percent={week} label={t("Hafta", "Week")} />
+                <CellMeter percent={week} label={weekHead?.label ?? t("Hafta", "Week")} note={weekHead?.label} />
               </TableCell>
               <TableCell>
                 <ConnectionIcons

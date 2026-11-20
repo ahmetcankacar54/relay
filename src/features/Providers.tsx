@@ -10,6 +10,7 @@ import { providerViews, type ProviderId, type ProviderView } from "@/lib/provide
 import { formatRelative } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { AccountDot } from "@/components/AccountDot";
+import { ProviderLogo } from "@/components/ProviderLogo";
 import { limitHeadline } from "../../shared/quota-windows";
 import { freshUsage } from "../../shared/usage";
 import type { Account, AccountUsage } from "../../shared/types";
@@ -70,7 +71,10 @@ export function ProviderTabs({
             className={tab({ selected: view.id === value, size })}
             onClick={() => onChange(view.id)}
           >
-            <span className="truncate">{PROVIDER_NAMES[view.id]}</span>
+            <span className="flex min-w-0 items-center justify-center gap-1.5">
+              <ProviderLogo provider={view.id} size={size === "sm" ? "sm" : "md"} />
+              <span className="truncate">{PROVIDER_NAMES[view.id]}</span>
+            </span>
             <span aria-hidden="true" className="h-0.5 overflow-hidden rounded-full bg-track">
               {used !== undefined && view.tone !== "none" && (
                 <span className={cn("block h-full rounded-full", meterFill(used))} style={{ width: `${Math.min(100, used)}%` }} />
@@ -263,7 +267,10 @@ export function ProviderCards({ now }: { now: number }) {
     <section data-slot="provider-cards" className="grid gap-3 md:grid-cols-2">
       {views.map((view) => (
         <div key={view.id} className="grid content-start gap-1.5">
-          <h2 className="px-1 text-xs font-medium text-muted-foreground">{PROVIDER_NAMES[view.id]}</h2>
+          <h2 className="flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+            <ProviderLogo provider={view.id} />
+            {PROVIDER_NAMES[view.id]}
+          </h2>
           <ProviderPane view={view} now={now} />
         </div>
       ))}

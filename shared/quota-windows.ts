@@ -80,3 +80,22 @@ export function limitHeadline(
   };
   return candidates.sort((a, b) => b.usedPercent - a.usedPercent || resetMs(a) - resetMs(b))[0];
 }
+
+/**
+ * The fullest model window of each length: an Antigravity account's pools as its five hours and its
+ * week, for a table's two columns. Windows of unknown length are left out; a passed reset is empty.
+ */
+export function fullestByPeriod(
+  u: Pick<AccountUsage, "modelWindows"> | undefined,
+  now: number,
+): Partial<Record<"five_hour" | "seven_day", LimitHeadline>> {
+  const out: Partial<Record<"five_hour" | "seven_day", LimitHeadline>> = {};
+  for (const w of u?.modelWindows ?? []) {
+    if (!w.period) continue;
+    const used = usedAt(w, now);
+    const seen = out[w.period];
+    if (!seen || used > seen.usedPercent)
+      out[w.period] = { key: w.key, label: w.label, usedPercent: used, ...(w.resetsAt ? { resetsAt: w.resetsAt } : {}), model: true };
+  }
+  return out;
+}

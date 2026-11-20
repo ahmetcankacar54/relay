@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ProviderLogo } from "@/components/ProviderLogo";
 import { Link2, Search } from "lucide-react";
 import { PlusIcon, SearchIcon } from "@/components/icons";
 import { Panda } from "@/components/Panda";
@@ -341,6 +342,7 @@ export function Accounts() {
               .filter(([id, , count]) => id === "all" || count > 0)
               .map(([id, label, count]) => (
                 <ToggleGroupItem key={id} value={id}>
+                  {id !== "all" && <ProviderLogo provider={id} size="sm" />}
                   {label}
                   <span className="tabular-nums text-muted-foreground">({count})</span>
                 </ToggleGroupItem>

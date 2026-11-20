@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { LimitLine, countdown } from "@/components/LimitLine";
 import { AntigravityAction, AntigravityPrompt, type AntigravityAsk } from "@/features/AntigravityAccount";
 import { PROVIDER_NAMES, relayProviders } from "@/features/Providers";
+import { ProviderLogo } from "@/components/ProviderLogo";
 import { PROVIDERS, type ProviderId } from "@/lib/provider-view";
 import { SectionHeading } from "@/components/SettingRow";
 import { useI18n, type T } from "@/data/i18n";
@@ -138,7 +139,14 @@ export function LimitsNow({ now = Date.now() }: { now?: number }) {
           <div role="group" aria-label={t("Sağlayıcı", "Provider")} className="flex gap-1" data-slot="limits-filter">
             {(["all", ...providers] as const).map((p) => (
               <Button key={p} size="xs" variant={provider === p ? "secondary" : "ghost"} aria-pressed={provider === p} onClick={() => setProvider(p)}>
-                {p === "all" ? t("Hepsi", "All") : PROVIDER_NAMES[p]}
+                {p === "all" ? (
+                  t("Hepsi", "All")
+                ) : (
+                  <>
+                    <ProviderLogo provider={p} size="sm" />
+                    {PROVIDER_NAMES[p]}
+                  </>
+                )}
               </Button>
             ))}
           </div>

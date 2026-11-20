@@ -108,10 +108,12 @@ test("the provider badge names the provider in its own tint", () => {
     createElement(ProviderBadge, { provider: "antigravity", full: true }),
     createElement(ProviderBadge, { provider: "codex", full: true }),
   ));
-  assert.match(html, /data-provider="claude"[^>]*>Claude</);
-  assert.match(html, /data-provider="codex"[^>]*>Codex</);
-  assert.match(html, /data-provider="antigravity"[^>]*>Antigravity</);
-  assert.match(html, /data-provider="codex"[^>]*>OpenAI \/ Codex</);
+  // The badge is the provider's mark, then its name.
+  const mark = (p: string) => `data-provider="${p}"[^>]*><svg[^>]*data-slot="provider-logo" data-provider="${p}"[\\s\\S]*?</svg>`;
+  assert.match(html, new RegExp(`${mark("claude")}Claude<`));
+  assert.match(html, new RegExp(`${mark("codex")}Codex<`));
+  assert.match(html, new RegExp(`${mark("antigravity")}Antigravity<`));
+  assert.match(html, new RegExp(`${mark("codex")}OpenAI / Codex<`));
   assert.match(html, /emerald/);
   assert.match(html, /indigo/);
 });
@@ -162,7 +164,7 @@ test("the table badges every account's provider and shows Codex and Antigravity 
     ["Google · Antigravity", "antigravity", "Antigravity"],
   ] as const)
     // The name has its own line; the provider badge leads the line under it.
-    assert.match(html, new RegExp(`>${name}</span></div><div[^>]*><span[^>]*data-provider="${provider}"[^>]*>${label}</span>`));
+    assert.match(html, new RegExp(`>${name}</span></div><div[^>]*><span[^>]*data-provider="${provider}"[^>]*><svg[^>]*data-provider="${provider}"[\\s\\S]*?</svg>${label}</span>`));
   // The legacy account has no provider field and reads as Claude.
   assert.match(html, />Eski hesap<\/span><\/div><div[^>]*><span[^>]*data-provider="claude"/);
   // Their connection cell is the gateway's icon (and Antigravity's app, where Relay can move it); Claude's keeps its icons.
