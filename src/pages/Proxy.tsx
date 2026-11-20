@@ -62,7 +62,7 @@ import type {
   ProxyStatus,
 } from "../../shared/types";
 import { DEFAULT_PROXY_CONFIG } from "../../shared/proxy-types";
-import { fullestByPeriod, limitHeadline, modelOnlyUsage } from "../../shared/quota-windows";
+import { limitColumns, modelOnlyUsage } from "../../shared/quota-windows";
 
 type Strategy = NonNullable<ProxyStatus["routingStrategy"]>;
 type Patch = Parameters<ReturnType<typeof useRelay>["api"]["proxyConfigure"]>[0];
@@ -530,14 +530,14 @@ function PoolCard({
                   const known = relay.accounts.find((a) => a.id === account.id);
                   const usage = relay.data?.usage[account.id];
                   // An Antigravity account's limits are its pools: each column the fullest of its length.
-                  const pools = modelOnlyUsage(usage) ? fullestByPeriod(usage, now) : undefined;
+                  const pools = modelOnlyUsage(usage) ? limitColumns(usage, now) : undefined;
                   const five = pools
-                    ? (pools.five_hour ?? (pools.seven_day ? undefined : limitHeadline(usage, now)))
+                    ? pools.five
                     : account.fiveHourPercent === undefined
                       ? undefined
                       : { usedPercent: account.fiveHourPercent, resetsAt: resetAt(account.fiveHourResetMinutes, now) };
                   const week = pools
-                    ? pools.seven_day
+                    ? pools.week
                     : account.weeklyPercent === undefined
                       ? undefined
                       : { usedPercent: account.weeklyPercent, resetsAt: resetAt(account.weeklyResetMinutes, now) };

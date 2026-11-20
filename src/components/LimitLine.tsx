@@ -4,6 +4,7 @@ import { windowElapsed, type UsageWindowRow } from "@/data/selectors";
 import { meterFill } from "@/lib/meter";
 import { cn } from "@/lib/utils";
 import { countdown } from "@/lib/time";
+import { usedAt } from "../../shared/quota-windows";
 
 export { countdown };
 
@@ -50,9 +51,8 @@ export function LimitLine({
   /** The meter's name when the label is empty (a list column names it). */
   ariaLabel?: string;
 }) {
-  const reset = Date.parse(resetsAt ?? "");
   // A window whose reset has passed is empty again, whatever the reading says.
-  const used = Number.isFinite(reset) && reset <= now ? 0 : Math.min(100, Math.max(0, usedPercent));
+  const used = Math.min(100, Math.max(0, usedAt({ usedPercent, resetsAt }, now)));
   const full = used >= 100;
   const left = showReset ? countdown(resetsAt, now, t) : undefined;
   const elapsed = windowElapsed({ period, resetsAt }, now);

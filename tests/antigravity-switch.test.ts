@@ -178,7 +178,9 @@ test("a sign-in of a Google account Relay does not have is kept aside before a s
     const switcher = new AntigravitySwitcher(ports, vault, () => accounts);
     assert.deepEqual(await switcher.current(), { other: true });
     assert.equal((await switcher.switchTo(G2)).kind, "switched");
-    const other = JSON.parse(fs.readFileSync(path.join(dir, "antigravity-app", "other.bin"), "utf8"));
+    // Its own slot, named by its e-mail's hash.
+    const [slot] = fs.readdirSync(path.join(dir, "antigravity-app")).filter((n) => n.startsWith("other-"));
+    const other = JSON.parse(fs.readFileSync(path.join(dir, "antigravity-app", slot), "utf8"));
     assert.equal(other.raw, signIn("stranger@example.test"));
   });
 });
@@ -371,5 +373,123 @@ test("a background reading that began before a switch does not save over what th
     release();
     await peek;
     assert.equal((await vault.load(G1))?.raw, signIn("one@example.test", "r1", "new"));
+  });
+});
+
+test("removing an account from Relay deletes its saved app sign-in", async () => {
+  await withDir(async (dir) => {
+    const { ports } = fakes({ item: signIn("one@example.test") });
+    const vault = vaultIn(dir);
+    const switcher = new AntigravitySwitcher(ports, vault, () => accounts);
+    await switcher.current();
+    assert.ok(await vault.load(G1));
+    await switcher.forget(G1);
+    assert.equal(await vault.load(G1), undefined);
+    assert.deepEqual((await switcher.state()).saved, []);
+  });
+});
+
+test("two Google accounts Relay does not have keep a sign-in each; the second never overwrites the first", async () => {
+  await withDir(async (dir) => {
+    const vault = vaultIn(dir);
+    await vault.saveOther(signIn("first@example.test"));
+    await vault.saveOther(signIn("second@example.test"));
+    await vault.saveOther(signIn("first@example.test", "r-newer"));
+    const others = fs.readdirSync(path.join(dir, "antigravity-app")).filter((n) => n.startsWith("other-"));
+    assert.equal(others.length, 2);
+    // Still no account slot: list() names Relay accounts only.
+    assert.deepEqual(await vault.list(), []);
+  });
+});
+
+test("a sign-in that cannot be put back keeps its copy on disk, and the next start puts it back", async () => {
+  await withDir(async (dir) => {
+    const { world, ports } = fakes({ item: signIn("one@example.test") });
+    let writable = true;
+    const failing: AntigravitySwitchPorts = {
+      ...ports,
+      keychain: {
+        ...ports.keychain,
+        write: async (text) => {
+          if (!writable) throw new Error("locked");
+          await ports.keychain.write(text);
+        },
+      },
+      // The app will not open on its sign-in screen: the step fails after the item was taken off.
+      launch: async () => {
+        throw new Error("no app");
+      },
+    };
+    const vault = vaultIn(dir);
+    const switcher = new AntigravitySwitcher(failing, vault, () => accounts);
+    writable = false;
+    await switcher.beginSignIn(G2);
+    assert.equal(world.item, undefined);
+    assert.equal(await vault.loadPending(), signIn("one@example.test"));
+    assert.equal((await switcher.state()).result?.kind, "failed");
+    // Next start, the Keychain works again: the sign-in goes back and its copy goes.
+    writable = true;
+    await new AntigravitySwitcher(failing, vault, () => accounts).recover();
+    assert.equal(world.item, signIn("one@example.test"));
+    assert.equal(await vault.loadPending(), undefined);
+  });
+});
+
+test("a background reading that crossed a switch neither saves its older sign-in nor stands as current", async () => {
+  await withDir(async (dir) => {
+    const { world, ports } = fakes({ item: signIn("one@example.test", "r-old") });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let first = true;
+    const gated: AntigravitySwitchPorts = {
+      ...ports,
+      keychain: {
+        ...ports.keychain,
+        read: async () => {
+          if (!first) return ports.keychain.read();
+          first = false;
+          const seen = world.item;
+          await gate;
+          return seen;
+        },
+      },
+    };
+    const vault = vaultIn(dir);
+    await vault.save(G2, { email: "two@example.test", raw: signIn("two@example.test") });
+    const switcher = new AntigravitySwitcher(gated, vault, () => accounts);
+    const peek = switcher.current();
+    // Meanwhile the app renewed its token, and the user switches to the other account.
+    world.item = signIn("one@example.test", "r-new");
+    assert.equal((await switcher.switchTo(G2)).kind, "switched");
+    release();
+    await peek;
+    assert.equal((await vault.load(G1))?.raw, signIn("one@example.test", "r-new"));
+    assert.deepEqual(await switcher.current(), { accountId: G2 });
+  });
+});
+
+test("an app that is asked to quit but does not close in time is opened again", async () => {
+  await withDir(async (dir) => {
+    const { world, ports, log } = fakes({ item: signIn("one@example.test") });
+    world.stuck = true;
+    const vault = vaultIn(dir);
+    await vault.save(G2, { email: "two@example.test", raw: signIn("two@example.test") });
+    const result = await new AntigravitySwitcher(ports, vault, () => accounts).switchTo(G2);
+    assert.equal(result.reason, "still-running");
+    assert.deepEqual(log.filter((l) => l === "quit" || l === "launch"), ["quit", "launch"]);
+    // Nothing was written: the sign-in in use stays.
+    assert.equal(world.item, signIn("one@example.test"));
+  });
+});
+
+test("a failure that is not the Keychain's is not called one", async () => {
+  await withDir(async (dir) => {
+    const { ports } = fakes({ item: signIn("one@example.test") });
+    const broken: AntigravitySwitchPorts = { ...ports, processes: async () => Promise.reject(new Error("ps timed out")) };
+    const vault = vaultIn(dir);
+    await vault.save(G2, { email: "two@example.test", raw: signIn("two@example.test") });
+    const result = await new AntigravitySwitcher(broken, vault, () => accounts).switchTo(G2);
+    assert.equal(result.kind, "failed");
+    assert.equal(result.reason, "unexpected");
   });
 });

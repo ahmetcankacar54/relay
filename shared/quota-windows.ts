@@ -41,7 +41,7 @@ export function modelOnlyUsage(u: Pick<AccountUsage, "modelWindows"> | undefined
 }
 
 /** How full a window is now: one whose reset has passed is empty again, whatever an old reading says. */
-function usedAt(window: UsageWindow, now: number): number {
+export function usedAt(window: UsageWindow, now: number): number {
   const reset = window.resetsAt ? Date.parse(window.resetsAt) : NaN;
   return Number.isFinite(reset) && reset <= now ? 0 : window.usedPercent;
 }
@@ -98,4 +98,29 @@ export function fullestByPeriod(
       out[w.period] = { key: w.key, label: w.label, usedPercent: used, ...(w.resetsAt ? { resetsAt: w.resetsAt } : {}), model: true };
   }
   return out;
+}
+
+/** A window as a list column shows it: its share, its reset and, for a pool, the pool's name. */
+export interface ColumnWindow {
+  usedPercent: number;
+  resetsAt?: string;
+  label?: string;
+}
+
+/**
+ * An account's two list columns, its five hours and its week, the same in every list. For usage made
+ * of pools (Antigravity) each column is its fullest pool of that length; pools of unknown length (an
+ * older reading) fill the first with the fullest.
+ */
+export function limitColumns(
+  u: Pick<AccountUsage, "fiveHour" | "sevenDay" | "modelWindows"> | undefined,
+  now: number,
+): { five?: ColumnWindow; week?: ColumnWindow; pooled: boolean } {
+  if (!modelOnlyUsage(u)) return { five: u?.fiveHour, week: u?.sevenDay, pooled: false };
+  const byPeriod = fullestByPeriod(u, now);
+  return {
+    five: byPeriod.five_hour ?? (byPeriod.seven_day ? undefined : limitHeadline(u, now)),
+    week: byPeriod.seven_day,
+    pooled: true,
+  };
 }

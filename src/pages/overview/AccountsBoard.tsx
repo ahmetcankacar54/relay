@@ -11,24 +11,13 @@ import { inUseIds } from "@/lib/provider-view";
 import { boardOrder, limitStanding } from "@/lib/limit-standing";
 import { accountHash } from "../accounts/AccountDetail";
 import { providerShortLabel } from "../accounts/accountLabels";
-import { fullestByPeriod, limitHeadline, modelOnlyUsage, spentModelWindows } from "../../../shared/quota-windows";
+import { limitColumns, spentModelWindows, usedAt, limitHeadline, type ColumnWindow } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
 import type { Account, AccountProvider, AccountUsage } from "../../../shared/types";
 
 const ORDER: AccountProvider[] = ["claude", "codex", "antigravity", "gemini"];
 
-type Window = { usedPercent: number; resetsAt?: string; label?: string };
-
-/** An account's two columns: Claude's and Codex's five hours and week, Antigravity's fullest pool of each. */
-function columns(usage: AccountUsage | undefined, now: number): { five?: Window; week?: Window; pooled: boolean } {
-  if (!modelOnlyUsage(usage)) return { five: usage?.fiveHour, week: usage?.sevenDay, pooled: false };
-  const byPeriod = fullestByPeriod(usage, now);
-  return {
-    five: byPeriod.five_hour ?? (byPeriod.seven_day ? undefined : limitHeadline(usage, now)),
-    week: byPeriod.seven_day,
-    pooled: true,
-  };
-}
+type Window = ColumnWindow;
 
 /**
  * The fifth column: what the two columns leave out. A spent model ("Fable dolu"), else the fullest
@@ -37,9 +26,7 @@ function columns(usage: AccountUsage | undefined, now: number): { five?: Window;
 function otherLimit(usage: AccountUsage | undefined, shown: Window[], now: number, t: T): { text: string; full: boolean } | undefined {
   const spent = spentModelWindows(usage, now)[0];
   if (spent && !shown.some((w) => w.label === spent.label)) return { text: t(`${spent.label} dolu`, `${spent.label} full`), full: true };
-  // A window whose reset has passed is empty again.
-  const used = (w: { usedPercent: number; resetsAt?: string }) =>
-    w.resetsAt && Date.parse(w.resetsAt) <= now ? 0 : w.usedPercent;
+  const used = (w: { usedPercent: number; resetsAt?: string }) => usedAt(w, now);
   const rest = (usage?.modelWindows ?? []).filter((w) => !shown.some((s) => s.label === w.label));
   const top = rest.sort((a, b) => used(b) - used(a))[0];
   if (!top) return undefined;
@@ -104,7 +91,7 @@ export function AccountsBoard({ now }: { now: number }) {
     );
   const row = (a: Account) => {
     const u = usage[a.id];
-    const { five, week, pooled } = columns(u, now);
+    const { five, week, pooled } = limitColumns(u, now);
     const faded = !!u && !freshUsage(u, now);
     const other = otherLimit(u, [five, week].filter((w): w is Window => !!w), now, t);
     return (

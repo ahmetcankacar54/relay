@@ -44,6 +44,9 @@ test("a reset reads as a short countdown, a day or more in days", () => {
   assert.equal(countdown(iso(NOW + 25 * 60_000), NOW, t), "25 dk");
   assert.equal(countdown(iso(NOW + 110 * 60_000), NOW, t), "1 sa 50 dk");
   assert.equal(countdown(iso(NOW + 3 * 86_400_000 + 3_600_000), NOW, t), "3 gün");
+  // Under two days the hours still count; days round down, never saying more time than is left.
+  assert.equal(countdown(iso(NOW + 37 * 3_600_000), NOW, t), "1 gün 13 sa");
+  assert.equal(countdown(iso(NOW + 4 * 86_400_000 + 17 * 3_600_000), NOW, t), "4 gün");
   assert.equal(countdown(iso(NOW - 1), NOW, t), undefined);
   assert.equal(countdown(undefined, NOW, t), undefined);
 });

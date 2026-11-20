@@ -1,5 +1,5 @@
 import type { Account, AccountUsage } from "../../shared/types";
-import { fullestByPeriod, limitHeadline, modelOnlyUsage, spentModelWindows } from "../../shared/quota-windows";
+import { fullestByPeriod, limitHeadline, modelOnlyUsage, spentModelWindows, usedAt } from "../../shared/quota-windows";
 import { freshUsage } from "../../shared/usage";
 import type { T } from "@/data/i18n";
 import type { AccountHealth } from "./account-health";
@@ -13,12 +13,8 @@ export interface AccountStatus {
   reason?: string;
 }
 
-/** A window's share used now: one whose reset has passed is empty again. */
-function usedNow(window: { usedPercent: number; resetsAt?: string } | undefined, now: number): number {
-  if (!window) return 0;
-  const reset = Date.parse(window.resetsAt ?? "");
-  return Number.isFinite(reset) && reset <= now ? 0 : window.usedPercent;
-}
+/** A window's share used now (a passed reset counts as empty); none counts as zero. */
+const usedNow = (window: { usedPercent: number; resetsAt?: string } | undefined, now: number) => (window ? usedAt(window, now) : 0);
 
 /** "Dolu · 25 dk", or just "Dolu" without a reset ahead. */
 const withLeft = (words: string, resetsAt: string | undefined, now: number, t: T) => {

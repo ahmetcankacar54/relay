@@ -90,15 +90,17 @@ export function formatRelative(
 }
 
 /**
- * Time to a reset, short: "25 dk", "1 sa 50 dk", "3 gün". A day or more reads in days, as the
- * reference monitors do; the clock time is in the meter's title.
+ * Time to a reset, short: "25 dk", "1 sa 50 dk", "1 gün 13 sa", "3 gün". Two days or more read in
+ * whole days, rounded down so it never says more time than is left; the clock time is in the title.
  */
 export function countdown(at: string | undefined, now: number, t: T): string | undefined {
   const ms = at ? Date.parse(at) - now : NaN;
   if (!Number.isFinite(ms) || ms <= 0) return undefined;
   if (ms >= 86_400_000) {
-    const days = Math.round(ms / 86_400_000);
-    return t(`${days} gün`, `${days} d`);
+    // Whole days rounded down, never more than is left; under two days the hours still matter.
+    const days = Math.floor(ms / 86_400_000);
+    const hours = Math.floor((ms % 86_400_000) / 3_600_000);
+    return days < 2 && hours ? t(`${days} gün ${hours} sa`, `${days} d ${hours} h`) : t(`${days} gün`, `${days} d`);
   }
   const minutes = Math.ceil(ms / 60_000);
   const h = Math.floor(minutes / 60);

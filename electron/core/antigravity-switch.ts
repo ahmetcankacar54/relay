@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { readBytes, writeBytes } from "./desktop-files";
@@ -89,10 +90,16 @@ export class AntigravityVault {
     }
   }
 
-  /** The last sign-in of a Google account Relay does not have (or cannot read), kept so a switch never loses it. */
+  /**
+   * The last sign-in of a Google account Relay does not have (or cannot read), kept so a switch never
+   * loses it: one slot per such account (named by a hash of its e-mail, or of the item when it names
+   * none), so a second one never overwrites the first.
+   */
   async saveOther(raw: string): Promise<void> {
-    const saved = { email: parseSignIn(raw).email, raw, savedAt: new Date(this.now()).toISOString() };
-    await writeBytes(this.vault, path.join(DIR, "other.bin"), this.seal(JSON.stringify(saved)));
+    const email = parseSignIn(raw).email;
+    const key = createHash("sha256").update(email ?? raw).digest("hex").slice(0, 16);
+    const saved = { email, raw, savedAt: new Date(this.now()).toISOString() };
+    await writeBytes(this.vault, path.join(DIR, `other-${key}.bin`), this.seal(JSON.stringify(saved)));
   }
 
   /** The sign-in taken off this Mac while a new one is awaited, kept until it is back or replaced. */
@@ -147,7 +154,9 @@ export type AntigravitySwitchReason =
   | "timeout"
   | "save"
   | "launch"
-  | "cancelled";
+  | "cancelled"
+  /** Anything else (the process list could not be read): not a Keychain write. */
+  | "unexpected";
 
 export class AntigravitySwitchError extends Error {
   constructor(readonly reason: AntigravitySwitchReason) {
@@ -205,6 +214,13 @@ export class AntigravitySwitcher {
     };
   }
 
+  /** An account removed from Relay: its saved app sign-in goes with it (the Mac's own item stays). */
+  async forget(accountId: string): Promise<void> {
+    await this.vault.remove(accountId);
+    this.saved?.delete(accountId);
+    this.onChange();
+  }
+
   private matchEmail(email: string | undefined) {
     if (!email) return undefined;
     return this.accounts().find((a) => a.provider === "antigravity" && a.auth?.email?.toLowerCase() === email);
@@ -231,10 +247,11 @@ export class AntigravitySwitcher {
     const generation = this.generation;
     try {
       const { current } = await this.capture(generation);
-      this.peeked = { at: this.now(), current };
+      // An operation started or ended meanwhile: this reading is from before it, so it is not kept.
+      if (generation === this.generation) this.peeked = { at: this.now(), current };
       return current;
     } catch {
-      this.retryAt = this.now() + 60_000;
+      if (generation === this.generation) this.retryAt = this.now() + 60_000;
       return this.peeked?.current ?? {};
     }
   }
@@ -255,15 +272,18 @@ export class AntigravitySwitcher {
     if (raw === undefined) return { current: { signedOut: true } };
     const sign = parseSignIn(raw);
     const account = sign.valid ? this.matchEmail(sign.email) : undefined;
-    const stale = generation !== undefined && generation !== this.generation;
+    // A background reading saves only while no operation has started or ended since it began; asked
+    // again after every wait, since one can start during the reads below.
+    const stale = () => generation !== undefined && generation !== this.generation;
     try {
       if (!account) {
         if (generation === undefined) await this.vault.saveOther(raw);
         return { current: { other: true }, raw };
       }
-      const before = stale ? undefined : await this.vault.load(account.id);
-      if (!stale && before?.raw !== raw) {
+      const before = stale() ? undefined : await this.vault.load(account.id);
+      if (!stale() && before?.raw !== raw) {
         const onboarding = await this.onboarding(sign.email!);
+        if (stale()) return { current: { accountId: account.id }, raw };
         await this.vault.save(account.id, {
           email: sign.email!,
           raw,
@@ -309,10 +329,14 @@ export class AntigravitySwitcher {
     this.retryAt = 0;
   }
 
-  /** Closes the app and waits until every one of its processes is gone. Whether it was open. */
-  private async closeApp(): Promise<boolean> {
+  /**
+   * Closes the app and waits until every one of its processes is gone. Whether it was open. `asked`
+   * turns true once the quit is asked, so a caller whose close timed out still reopens the app.
+   */
+  private async closeApp(asked?: { value: boolean }): Promise<boolean> {
     if (!(await this.ports.processes()).app) return false;
     await this.ports.quit();
+    if (asked) asked.value = true;
     for (let waited = 0; waited < QUIT_WAIT_MS; waited += POLL_MS) {
       await this.ports.sleep(POLL_MS);
       if (!(await this.ports.processes()).app) return true;
@@ -345,6 +369,7 @@ export class AntigravitySwitcher {
   switchTo(accountId: string): Promise<AntigravityAppResult> {
     return this.exclusive("switching", async () => {
       let wasOpen = false;
+      const asked = { value: false };
       let moved = false;
       try {
         const target = await this.vault.load(accountId);
@@ -355,7 +380,7 @@ export class AntigravitySwitcher {
           this.finish({ kind: "switched", accountId });
           return this.result!;
         }
-        wasOpen = await this.closeApp();
+        wasOpen = await this.closeApp(asked);
         // The app may have written its sign-in on the way out: keep that one, not the earlier copy.
         await this.capture();
         await this.put(target.raw);
@@ -364,7 +389,7 @@ export class AntigravitySwitcher {
       } catch (error) {
         this.finish({ kind: "failed", accountId, reason: reasonOf(error) });
       }
-      if (wasOpen) {
+      if (wasOpen || asked.value) {
         try {
           await this.ports.launch();
         } catch {
@@ -396,10 +421,11 @@ export class AntigravitySwitcher {
       this.cancelRequested = false;
       let previous: string | undefined;
       let wasOpen = false;
+      const asked = { value: false };
       let removed = false;
       try {
         previous = (await this.capture()).raw;
-        wasOpen = await this.closeApp();
+        wasOpen = await this.closeApp(asked);
         previous = (await this.capture()).raw ?? previous;
         if (previous) {
           try {
@@ -418,9 +444,12 @@ export class AntigravitySwitcher {
         if (this.cancelRequested) throw new AntigravitySwitchError("cancelled");
         await this.ports.launch();
       } catch (error) {
-        if (removed && previous) await this.ports.keychain.write(previous).catch(() => undefined);
-        if (wasOpen || removed) await this.ports.launch().catch(() => undefined);
-        await this.vault.clearPending().catch(() => undefined);
+        // The earlier sign-in goes back and is checked; only once it is back does its copy on disk go,
+        // so a failed put-back is tried again at the next start (`recover`).
+        let back = !removed || !previous;
+        if (removed && previous) back = await this.put(previous).then(() => true, () => false);
+        if (wasOpen || asked.value || removed) await this.ports.launch().catch(() => undefined);
+        if (back) await this.vault.clearPending().catch(() => undefined);
         const cancelled = this.cancelRequested;
         this.end();
         this.finish(cancelled ? { kind: "cancelled", accountId } : { kind: "failed", accountId, reason: reasonOf(error) });
@@ -432,8 +461,9 @@ export class AntigravitySwitcher {
   }
 
   private async waitForSignIn(accountId: string, previous: string | undefined) {
-    const done = async (result: Omit<AntigravityAppResult, "at">) => {
-      await this.vault.clearPending().catch(() => undefined);
+    const done = async (result: Omit<AntigravityAppResult, "at">, keepPending = false) => {
+      // The copy on disk stays while the earlier sign-in is not back, for `recover` to retry.
+      if (!keepPending) await this.vault.clearPending().catch(() => undefined);
       this.end();
       this.finish(result);
       this.onChange();
@@ -455,7 +485,7 @@ export class AntigravitySwitcher {
       try {
         if (previous) await this.put(previous);
       } catch (error) {
-        return done({ kind: "failed", accountId, reason: reasonOf(error) });
+        return done({ kind: "failed", accountId, reason: reasonOf(error) }, true);
       }
       try {
         if (await this.closeApp()) await this.ports.launch();
@@ -494,7 +524,7 @@ export class AntigravitySwitcher {
 }
 
 function reasonOf(error: unknown): AntigravitySwitchReason {
-  return error instanceof AntigravitySwitchError ? error.reason : "keychain";
+  return error instanceof AntigravitySwitchError ? error.reason : "unexpected";
 }
 
 // --- macOS ----------------------------------------------------------------------------------------

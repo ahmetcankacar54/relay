@@ -220,7 +220,7 @@ export interface AntigravityAppResult {
    */
   kind: "switched" | "saved" | "saved-other" | "other" | "cancelled" | "failed";
   accountId: string;
-  reason?: "not-saved" | "still-running" | "keychain" | "verify-failed" | "busy" | "timeout" | "save" | "launch" | "cancelled";
+  reason?: "not-saved" | "still-running" | "keychain" | "verify-failed" | "busy" | "timeout" | "save" | "launch" | "cancelled" | "unexpected";
   /** `agy` sessions still running on the earlier account. */
   agyRunning?: number;
   at: number;

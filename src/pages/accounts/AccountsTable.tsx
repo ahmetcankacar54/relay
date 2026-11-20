@@ -40,7 +40,7 @@ import { useExtensionStatus } from "@/data/useExtension";
 import { useTerminalStatus } from "@/data/useTerminal";
 import { accountPlan, planTitle, providerShortLabel } from "./accountLabels";
 import { isClaudeAccount } from "@/lib/account-health";
-import { fullestByPeriod, limitHeadline, modelOnlyUsage } from "../../../shared/quota-windows";
+import { limitColumns } from "../../../shared/quota-windows";
 import { freshUsage } from "../../../shared/usage";
 import { AccountDot } from "@/components/AccountDot";
 import { LimitLine } from "@/components/LimitLine";
@@ -417,14 +417,8 @@ export function AccountsTable({
             const suggested = relay.suggestion?.id === a.id;
             const switchTo = suggested && !inWindows.has(a.id) ? actions.find((x) => x.key === "switch") : undefined;
             const step = fix ?? refresh;
-            // An Antigravity account's limits are its pools: each column shows the fullest pool of that
-            // length, named. Windows of unknown length (an older reading) show the fullest in the first.
-            const pooled = modelOnlyUsage(usage);
-            const byPeriod = pooled ? fullestByPeriod(usage, now) : {};
-            const head = pooled ? (byPeriod.five_hour ?? (byPeriod.seven_day ? undefined : limitHeadline(usage, now))) : undefined;
-            const weekHead = byPeriod.seven_day;
-            const five = pooled ? head : usage?.fiveHour;
-            const week = pooled ? weekHead : usage?.sevenDay;
+            // The two columns as every list fills them: Antigravity's from its pools (`limitColumns`).
+            const { five, week, pooled } = limitColumns(usage, now);
             const faded = !!usage && !freshUsage(usage, now);
             const cell = (window: typeof five, name: string) =>
               window ? (

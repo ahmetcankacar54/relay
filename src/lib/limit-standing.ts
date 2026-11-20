@@ -1,5 +1,5 @@
 import type { Account, AccountUsage } from "../../shared/types";
-import { modelOnlyUsage } from "../../shared/quota-windows";
+import { modelOnlyUsage, usedAt } from "../../shared/quota-windows";
 
 const HOUR = 3_600_000;
 /** A week ending this soon with this much left: what is left may be lost at the reset. */
@@ -22,7 +22,7 @@ export function limitStanding(usage: AccountUsage | undefined, now: number): Lim
   // An old reading still says how the account stood; the row says it is old.
   if (!usage || (!usage.fiveHour && !usage.sevenDay)) return { kind: "unread" };
   // A window whose reset has passed is empty again, as everywhere else, until it is read anew.
-  const full = [usage.fiveHour, usage.sevenDay].filter((w) => !!w && w.usedPercent >= 100 && !(w.resetsAt && Date.parse(w.resetsAt) <= now));
+  const full = [usage.fiveHour, usage.sevenDay].filter((w) => !!w && usedAt(w, now) >= 100);
   if (full.length)
     return {
       kind: "full",

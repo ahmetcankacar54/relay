@@ -3486,6 +3486,8 @@ function bindIPC() {
           desktop: () => desktop.snapshot(),
         });
         usage.forget(account);
+        // Its Antigravity app sign-in kept in the vault goes with it, like every other sign-in Relay keeps.
+        await antigravitySwitcher?.forget(account).catch(() => {});
         void forgetSignInSession(account).catch(() => {});
         keeper.resume();
         void keeper.tick();

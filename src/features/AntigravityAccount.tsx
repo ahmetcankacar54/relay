@@ -114,8 +114,9 @@ export function antigravityResultText(
         save: ["Mevcut giriş kaydedilemedi; bir şey değişmedi", "The current sign-in could not be saved; nothing changed"],
         launch: ["Giriş değişti ama Antigravity açılamadı; kendin aç", "The sign-in moved but Antigravity did not open; open it yourself"],
         cancelled: ["Vazgeçildi", "Cancelled"],
+        unexpected: ["Geçiş tamamlanamadı; Antigravity'yi kontrol et", "The switch did not finish; check Antigravity"],
       };
-      return { text: t(...why[result.reason ?? "keychain"]), bad: true };
+      return { text: t(...why[result.reason ?? "unexpected"]), bad: true };
     }
   }
 }
