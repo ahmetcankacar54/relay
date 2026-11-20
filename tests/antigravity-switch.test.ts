@@ -88,6 +88,12 @@ function vaultIn(dir: string) {
   return new AntigravityVault(dir, (text) => Buffer.from(text), (data) => data.toString("utf8"));
 }
 
+/** Waits, up to five seconds, until the switcher's background wait is over: a slow runner needs more turns than a fast one. */
+async function idle(switcher: AntigravitySwitcher) {
+  const until = Date.now() + 5_000;
+  while ((await switcher.state()).busy && Date.now() < until) await new Promise((r) => setTimeout(r, 5));
+}
+
 async function withDir(fn: (dir: string) => Promise<void>) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-switch-"));
   try {
@@ -195,7 +201,7 @@ test("saving another account's sign-in takes the current one off this Mac withou
     await switcher.beginSignIn(G2);
     assert.deepEqual(log.slice(0, 3), ["quit", "remove", "launch"]);
     // The wait runs on after the call returns.
-    for (let i = 0; i < 500 && (await switcher.state()).busy; i++) await new Promise((r) => setImmediate(r));
+    await idle(switcher);
     const state = await switcher.state();
     assert.equal(state.busy, undefined);
     assert.equal(state.result?.kind, "saved");
@@ -215,7 +221,7 @@ test("cancelling a sign-in puts the earlier one back and opens the app on it", a
     assert.equal(world.item, undefined);
     assert.equal((await switcher.state()).busy, "signing-in");
     switcher.cancelSignIn();
-    for (let i = 0; i < 500 && (await switcher.state()).busy; i++) await new Promise((r) => setImmediate(r));
+    await idle(switcher);
     assert.equal((await switcher.state()).result?.kind, "cancelled");
     assert.equal(world.item, signIn("one@example.test"));
     assert.equal(world.open, true);
@@ -255,9 +261,12 @@ test("the app's settings file keeps every other key, and only terms keys are wri
     fs.writeFileSync(file, JSON.stringify({ keep: "1", "agy.onboarding.lastLoginUsername": "one@example.test" }), { mode: 0o600 });
     await writeAntigravitySettings(file, { "agy.onboarding.lastLoginUsername": "two@example.test", other: "no" });
     assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), { keep: "1", "agy.onboarding.lastLoginUsername": "two@example.test" });
-    assert.equal(fs.statSync(file).mode & 0o777, 0o600);
-    fs.symlinkSync(file, path.join(dir, "link.json"));
-    await assert.rejects(writeAntigravitySettings(path.join(dir, "link.json"), {}));
+    // Windows has no Unix modes and needs rights for a symlink; the app this writes for is macOS-only.
+    if (process.platform !== "win32") {
+      assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+      fs.symlinkSync(file, path.join(dir, "link.json"));
+      await assert.rejects(writeAntigravitySettings(path.join(dir, "link.json"), {}));
+    }
   });
 });
 
@@ -329,7 +338,7 @@ test("a cancel puts the earlier sign-in back even when the app will not close, a
     await switcher.beginSignIn(G2);
     world.stuck = true;
     switcher.cancelSignIn();
-    for (let i = 0; i < 500 && (await switcher.state()).busy; i++) await new Promise((r) => setImmediate(r));
+    await idle(switcher);
     assert.equal((await switcher.state()).result?.kind, "cancelled");
     assert.equal(world.item, signIn("one@example.test"));
     assert.equal(await vault.loadPending(), undefined);
