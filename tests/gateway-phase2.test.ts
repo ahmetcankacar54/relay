@@ -349,6 +349,11 @@ test("the Overview says which tools go through the gateway and where the last re
     tone: "crit",
     text: "Claude Code and Codex CLI are bound to the gateway, but it is off: requests fail.",
   });
+  const all = [claude, { id: "codex", bound: true }, { id: "omp", bound: true }];
+  assert.equal(
+    gatewayLine({ running: false, clients: all, accounts }, en, now)?.text,
+    "Claude Code, Codex CLI and omp are bound to the gateway, but it is off: requests fail.",
+  );
   assert.equal(gatewayLine({ running: false, clients: [{ id: "codex", bound: false }], accounts }, en, now), undefined);
   assert.equal(gatewayLine({ running: true, clients: [], accounts }, en, now), undefined);
   assert.equal(gatewayLine(undefined, en, now), undefined);

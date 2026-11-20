@@ -50,6 +50,7 @@ export const proxyExtrasSchema = z.object({
     .object({
       "claude-code": z.record(z.string(), z.string().nullable()).optional(),
       codex: z.record(z.string(), z.string().nullable()).optional(),
+      omp: z.record(z.string(), z.string().nullable()).optional(),
     })
     .optional(),
 });

@@ -237,3 +237,242 @@ test("quota at risk: a weekly window resetting within two days with a quarter or
   assert.equal(compactCount(412_000, "tr-TR"), "412K");
   assert.equal(compactCount(1_250_000, "tr-TR"), "1,3M");
 });
+
+const ompDir = (dir: string) => path.join(dir, ".omp", "agent");
+const ompFile = (dir: string, name = "models.yml") => path.join(ompDir(dir), name);
+const writeOmp = (dir: string, text: string, name = "models.yml") => {
+  fs.mkdirSync(ompDir(dir), { recursive: true });
+  fs.writeFileSync(ompFile(dir, name), text);
+};
+const readOmp = (dir: string, name = "models.yml") => fs.readFileSync(ompFile(dir, name), "utf8");
+const ompStatus = (dir: string, bound = true, to = target) =>
+  clientStatuses(to, { clientBindings: bound ? { omp: {} } : {} }, dir).find((c) => c.id === "omp")!;
+const START = "# >>> relay gateway (written by Relay; remove it from Relay's Proxy page)";
+const END = "# <<< relay gateway";
+const RELAY_ENTRIES = (pad: string) => [
+  `${pad}anthropic:`,
+  `${pad}${pad}baseUrl: "http://127.0.0.1:8317"`,
+  `${pad}${pad}apiKey: "sk-ant-oat01-relay-gateway"`,
+  `${pad}${pad}headers:`,
+  `${pad}${pad}${pad}x-relay-key: "relay-sec-test-key"`,
+  `${pad}openai-codex:`,
+  `${pad}${pad}baseUrl: "http://127.0.0.1:8317"`,
+  `${pad}${pad}apiKey: "relay-gateway"`,
+  `${pad}${pad}headers:`,
+  `${pad}${pad}${pad}x-relay-key: "relay-sec-test-key"`,
+];
+
+/** Binds, checks the bound text, then checks that unbinding and quitting both give `before` back. */
+async function roundTrip(before: string, bound: (text: string) => void) {
+  const dir = home();
+  writeOmp(dir, before);
+  const saved = await bindClient("omp", target, undefined, dir);
+  assert.deepEqual(saved, { created: null });
+  bound(readOmp(dir));
+  assert.equal(ompStatus(dir).bound, true);
+  // Binding again, under another key and back, parks nothing twice and stacks no blocks.
+  const once = readOmp(dir);
+  await bindClient("omp", { ...target, key: "relay-sec-new" }, saved, dir);
+  await bindClient("omp", target, saved, dir);
+  assert.equal(readOmp(dir), once);
+  await unbindClient("omp", saved, dir);
+  assert.equal(readOmp(dir), before);
+  await bindClient("omp", target, saved, dir);
+  releaseClientSync("omp", saved, dir);
+  assert.equal(readOmp(dir), before);
+}
+
+test("omp: one click writes models.yml, the next takes it away, leaving no file Relay made", async () => {
+  const dir = home();
+  fs.mkdirSync(ompDir(dir), { recursive: true });
+  assert.equal(ompStatus(dir, false).bound, false);
+  const saved = await bindClient("omp", target, undefined, dir);
+  assert.deepEqual(saved, { created: "1" });
+  const text = readOmp(dir);
+  assert.equal(text, [START, "providers:", ...RELAY_ENTRIES("  "), END, ""].join("\n"));
+  // Windows has no Unix modes: it reports 0666 whatever was asked.
+  if (process.platform !== "win32") assert.equal((fs.statSync(ompFile(dir)).mode & 0o777).toString(8), "600");
+  assert.deepEqual([ompStatus(dir).installed, ompStatus(dir).bound, ompStatus(dir).stale], [true, true, false]);
+  const moved = ompStatus(dir, true, { ...target, key: "relay-sec-other" });
+  assert.deepEqual([moved.bound, moved.stale], [false, true]);
+  assert.deepEqual(await bindClient("omp", target, saved, dir), saved);
+  assert.equal(readOmp(dir), text);
+  await unbindClient("omp", saved, dir);
+  assert.equal(fs.existsSync(ompFile(dir)), false);
+  // Quitting Relay takes it away the same way; the next start writes it again.
+  await bindClient("omp", target, saved, dir);
+  releaseClientSync("omp", saved, dir);
+  assert.equal(fs.existsSync(ompFile(dir)), false);
+  // Disconnecting a binding Relay has no record of still removes a file that is only Relay's.
+  await bindClient("omp", target, undefined, dir);
+  await unbindClient("omp", undefined, dir);
+  assert.equal(fs.existsSync(ompFile(dir)), false);
+});
+
+test("omp: the user's own anthropic and openai-codex entries are parked while bound and come back byte for byte", async () => {
+  await roundTrip(
+    [
+      "# my models",
+      "providers:",
+      "    ollama:",
+      "        baseUrl: http://127.0.0.1:11434",
+      "        models:",
+      "            - id: anthropic",
+      "    anthropic:",
+      "        baseUrl: https://proxy.example",
+      "        # a note inside",
+      "",
+      "        modelOverrides:",
+      "            claude-opus-5: { name: Opus }",
+      "    # a comment between entries",
+      "",
+      "    'openai-codex': { baseUrl: https://other.example }",
+      "# other settings",
+      "equivalence:",
+      "    anthropic: x",
+      "",
+    ].join("\n"),
+    (text) =>
+      assert.deepEqual(text.split("\n").slice(1, 30), [
+        "providers:",
+        START,
+        ...RELAY_ENTRIES("    "),
+        END,
+        "    ollama:",
+        "        baseUrl: http://127.0.0.1:11434",
+        "        models:",
+        "            - id: anthropic",
+        "    # relay-disabled: anthropic:",
+        "    # relay-disabled:     baseUrl: https://proxy.example",
+        "    # relay-disabled:     # a note inside",
+        "",
+        "    # relay-disabled:     modelOverrides:",
+        "    # relay-disabled:         claude-opus-5: { name: Opus }",
+        "    # a comment between entries",
+        "",
+        "    # relay-disabled: 'openai-codex': { baseUrl: https://other.example }",
+        "# other settings",
+        "equivalence:",
+        "    anthropic: x",
+      ]),
+  );
+});
+
+test("omp: a comment less indented than the entry ends it and is never parked", async () => {
+  await roundTrip("providers:\n  anthropic:\n    baseUrl: x\n# other settings\nretry: 3\n", (text) =>
+    assert.ok(text.includes("  # relay-disabled:   baseUrl: x\n# other settings\nretry: 3\n")),
+  );
+  await roundTrip("providers:\n    anthropic:\n        baseUrl: x\n  # c\n    ollama: {}\n", (text) =>
+    assert.ok(text.includes("    # relay-disabled:     baseUrl: x\n  # c\n    ollama: {}\n")),
+  );
+});
+
+test("omp: CRLF, a missing last newline, trailing blank lines and an empty file all come back as they were", async () => {
+  await roundTrip("retry: 3\r\nproviders:\r\n  anthropic:\r\n    baseUrl: x\r\n", (text) => {
+    assert.ok(text.includes(`providers:\r\n${START}\r\n  anthropic:\r\n`));
+    assert.ok(text.includes("  # relay-disabled:   baseUrl: x\r\n"));
+  });
+  await roundTrip("retry: 3", (text) => assert.ok(text.startsWith(`retry: 3\n${START}\nproviders:\n`)));
+  await roundTrip("retry: 3\n\n\n", (text) => assert.ok(text.startsWith(`retry: 3\n\n\n${START}\n`) && text.endsWith(`${END}\n`)));
+  // An empty file of the user's stays, empty, after Disconnect.
+  await roundTrip("", (text) => assert.ok(text.startsWith(START)));
+});
+
+test("omp: an empty inline providers map is parked; layouts Relay cannot edit safely block it", async () => {
+  await roundTrip("providers: {}\nretry: 3\n", (text) =>
+    assert.ok(text.startsWith(`# relay-disabled: providers: {}\nretry: 3\n${START}\nproviders:\n`)),
+  );
+  for (const [text, reason] of [
+    ["providers: { anthropic: { baseUrl: x } }\n", "inline-providers"],
+    ["providers: ~\n", "inline-providers"],
+    ['"providers": {a: 1}\n', "inline-providers"],
+    ["providers:\n  - x\n", "unsupported-layout"],
+    ["providers:\n  anthropic: {\n    baseUrl: x\n  }\n", "unsupported-layout"],
+    ["providers:\n  ollama: {}\n...\n", "unsupported-layout"],
+    ["---\nretry: 1\n---\nretry: 2\n", "unsupported-layout"],
+    ["providers:\n  a: {}\n'providers':\n  b: {}\n", "unsupported-layout"],
+    ["a: 1\n---\nretry: 3\n", "unsupported-layout"],
+    ["providers:\n  ? anthropic\n  : { baseUrl: x }\n", "unsupported-layout"],
+    ["providers:\n  anthropic: &a\n    baseUrl: x\n  other: *a\n", "unsupported-layout"],
+  ] as const) {
+    const dir = home();
+    writeOmp(dir, text);
+    assert.equal(ompStatus(dir, false).blocked, reason, text);
+    await assert.rejects(bindClient("omp", target, undefined, dir));
+    assert.equal(readOmp(dir), text);
+  }
+  // A quoted key is still the providers key: Relay's entries go under it, not a second one.
+  await roundTrip("'providers':\n  ollama: {}\n", (text) => assert.ok(text.startsWith(`'providers':\n${START}\n  anthropic:`)));
+  // Brackets inside quotes are no unclosed map; a byte order mark does not hide the key.
+  await roundTrip('providers:\n  anthropic: { name: "a{b" }\n', (text) =>
+    assert.ok(text.includes('  # relay-disabled: anthropic: { name: "a{b" }')),
+  );
+  await roundTrip("\uFEFFproviders:\n  ollama: {}\n", (text) => assert.ok(text.startsWith(`\uFEFFproviders:\n${START}\n`)));
+  // A single leading document marker is fine.
+  await roundTrip("---\nretry: 1\n", (text) => assert.ok(text.startsWith(`---\nretry: 1\n${START}`)));
+});
+
+test("omp: a blocked file that still holds Relay's block can be disconnected", async () => {
+  const dir = home();
+  writeOmp(dir, "retry: 3\n");
+  const saved = await bindClient("omp", target, undefined, dir);
+  fs.appendFileSync(ompFile(dir), "providers: { mine: {} }\n");
+  const status = ompStatus(dir);
+  assert.deepEqual([status.bound, status.stale, status.blocked], [true, false, "inline-providers"]);
+  await unbindClient("omp", saved, dir);
+  assert.equal(readOmp(dir), "retry: 3\nproviders: { mine: {} }\n");
+});
+
+test("omp: models.yaml is written when omp reads it, a models.json omp has not moved blocks, a symlink stays a link", async () => {
+  const yaml = home();
+  writeOmp(yaml, "retry: 3\n", "models.yaml");
+  const saved = await bindClient("omp", target, undefined, yaml);
+  assert.equal(ompStatus(yaml).file, ompFile(yaml, "models.yaml"));
+  assert.equal(ompStatus(yaml).bound, true);
+  assert.equal(fs.existsSync(ompFile(yaml)), false);
+  await unbindClient("omp", saved, yaml);
+  assert.equal(readOmp(yaml, "models.yaml"), "retry: 3\n");
+
+  const legacy = home();
+  writeOmp(legacy, '{"providers":{}}', "models.json");
+  assert.equal(ompStatus(legacy, false).blocked, "legacy-json");
+  await assert.rejects(bindClient("omp", target, undefined, legacy));
+  assert.equal(fs.existsSync(ompFile(legacy)), false);
+
+  const linked = home();
+  const real = path.join(linked, "dotfiles", "models.yml");
+  fs.mkdirSync(path.dirname(real), { recursive: true });
+  fs.writeFileSync(real, "retry: 3\n");
+  fs.mkdirSync(ompDir(linked), { recursive: true });
+  fs.symlinkSync(real, ompFile(linked));
+  const kept = await bindClient("omp", target, undefined, linked);
+  assert.ok(fs.lstatSync(ompFile(linked)).isSymbolicLink());
+  assert.ok(fs.readFileSync(real, "utf8").includes(START));
+  assert.equal(ompStatus(linked).bound, true);
+  await unbindClient("omp", kept, linked);
+  assert.ok(fs.lstatSync(ompFile(linked)).isSymbolicLink());
+  assert.equal(fs.readFileSync(real, "utf8"), "retry: 3\n");
+});
+
+test("omp: a Relay block with only one provider is stale, and binding it again makes the file Relay's own", async () => {
+  const dir = home();
+  writeOmp(dir, [START, "providers:", ...RELAY_ENTRIES("  ").slice(0, 5), END, ""].join("\n"));
+  assert.deepEqual([ompStatus(dir, false).bound, ompStatus(dir, false).stale], [false, true]);
+  const saved = await bindClient("omp", target, undefined, dir);
+  assert.deepEqual(saved, { created: "1" });
+  assert.equal(ompStatus(dir).bound, true);
+  await unbindClient("omp", saved, dir);
+  assert.equal(fs.existsSync(ompFile(dir)), false);
+});
+
+test("omp: a file of the user's that Relay found gone and wrote again on a start is removed on disconnect", async () => {
+  const dir = home();
+  writeOmp(dir, "retry: 3\n");
+  const first = await bindClient("omp", target, undefined, dir);
+  assert.deepEqual(first, { created: null });
+  fs.rmSync(ompFile(dir));
+  const again = await bindClient("omp", target, first, dir);
+  assert.deepEqual(again, { created: "1" });
+  await unbindClient("omp", again, dir);
+  assert.equal(fs.existsSync(ompFile(dir)), false);
+});

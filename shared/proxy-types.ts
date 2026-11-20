@@ -34,7 +34,7 @@ export interface ProxyConfig {
 }
 
 /** The clients Relay can point at the gateway by writing their settings. */
-export type ProxyClientId = "claude-code" | "codex";
+export type ProxyClientId = "claude-code" | "codex" | "omp";
 
 /** One request the gateway answered (or passed on), newest first in the status. */
 export interface ProxyRequestLog {

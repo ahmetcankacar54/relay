@@ -75,17 +75,33 @@ const COPIED_MS = 1_500;
 const AFFINITY_SECONDS = [300, 900, 3_600] as const;
 const TAB_KEY = "relay.proxy.tab";
 
-const CLIENT_NAMES: Record<ProxyClientId, string> = { "claude-code": "Claude Code", codex: "Codex CLI" };
+const CLIENT_NAMES: Record<ProxyClientId, string> = { "claude-code": "Claude Code", codex: "Codex CLI", omp: "omp" };
 /** The provider whose accounts answer a client's requests. */
-const CLIENT_PROVIDER: Record<ProxyClientId, "claude" | "codex"> = { "claude-code": "claude", codex: "codex" };
+const CLIENT_PROVIDERS: Record<ProxyClientId, readonly ("claude" | "codex")[]> = {
+  "claude-code": ["claude"],
+  codex: ["codex"],
+  omp: ["claude", "codex"],
+};
 const PROVIDER_NAMES: Record<"claude" | "codex", string> = { claude: "Claude", codex: "Codex" };
+/** The provider an "add an account" link opens for a client: its first. */
+const CLIENT_PROVIDER = (id: ProxyClientId) => CLIENT_PROVIDERS[id][0];
+/** "Claude" or "Claude / Codex": whose accounts answer the client. */
+const providerName = (id: ProxyClientId) => CLIENT_PROVIDERS[id].map((p) => PROVIDER_NAMES[p]).join(" / ");
 
 /**
  * How many accounts could answer this client now: in the pool, signed in, of its provider.
  * A client bound with none would only get "no account" errors.
  */
 export const usableFor = (accounts: readonly ProxyAccountStatus[], id: ProxyClientId) =>
-  accounts.filter((a) => a.inPool && a.signedIn && (a.provider ?? "claude") === CLIENT_PROVIDER[id]).length;
+  accounts.filter((a) => a.inPool && a.signedIn && CLIENT_PROVIDERS[id].includes((a.provider ?? "claude") as "claude" | "codex")).length;
+
+/** "A, B and C". */
+const listNames = (names: string[], and: string) =>
+  names.length > 1 ? `${names.slice(0, -1).join(", ")}${and}${names[names.length - 1]}` : names.join("");
+
+/** The providers of a client with no usable account: its requests to them fail (omp has two). */
+const missingFor = (accounts: readonly ProxyAccountStatus[], id: ProxyClientId) =>
+  CLIENT_PROVIDERS[id].filter((p) => !accounts.some((a) => a.inPool && a.signedIn && (a.provider ?? "claude") === p));
 
 /** The gateway's state, read on mount, after every Relay change, and every few seconds. */
 function useProxyStatus() {
@@ -923,6 +939,15 @@ function CodeBlock({
 
 /** A client's state in a word. */
 function clientWord(client: ProxyClientStatus, t: T, mac: boolean): { tone: "ok" | "warn" | "off"; text: string } {
+  if (client.blocked === "legacy-json")
+    return {
+      tone: "warn",
+      text: t("Önce omp’yi bir kez aç: models.json’u models.yml’e taşır", "Open omp once first: it moves models.json to models.yml"),
+    };
+  if (client.blocked === "unsupported-layout")
+    return { tone: "warn", text: t("models.yml’nin düzeni elle düzenleme istiyor", "models.yml's layout needs a manual edit") };
+  if (client.blocked === "inline-providers")
+    return { tone: "warn", text: t("models.yml’deki providers satır içi yazılmış", "models.yml writes providers inline") };
   if (client.blocked) return { tone: "warn", text: t("Ayar dosyası okunamadı", "Cannot read its settings") };
   if (client.bound) return { tone: "ok", text: t("Bağlı", "Connected") };
   if (client.stale) return { tone: "warn", text: t("Eski adres ya da anahtar", "Old address or key") };
@@ -965,6 +990,10 @@ function ToolsTab({
       "Codex’in config.toml dosyasına Relay sağlayıcısı eklenir; varsa önceki sağlayıcı satırı yorum olarak saklanır.",
       "Relay adds its provider to Codex's config.toml; a provider line already there is kept as a comment.",
     ),
+    omp: t(
+      "omp kendi Claude ve Codex modelleriyle çalışır; istekleri ağ geçidinden geçer ve hesabı havuz seçer, omp’de giriş yapman gerekmez. Relay models.yml’e kendi bloğunu yazar; senin anthropic ya da openai-codex ayarın varsa yorum olarak saklanır. Ayır deyince dosya eski haline döner.",
+      "omp keeps its own Claude and Codex models; their requests go through the gateway, the pool picks the account, and omp needs no sign-in of its own. Relay writes its own block into models.yml; your own anthropic or openai-codex entry is kept as a comment. Disconnect puts the file back as it was.",
+    ),
   };
   return (
     <div className="grid gap-4">
@@ -979,13 +1008,21 @@ function ToolsTab({
         <ul className="grid pt-1">
           {(status.clients ?? []).map((client) => {
             const usable = usableFor(status.accounts, client.id);
-            const provider = PROVIDER_NAMES[CLIENT_PROVIDER[client.id]];
+            const provider = providerName(client.id);
             const word: ReturnType<typeof clientWord> =
               usable === 0 && !client.blocked
                 ? client.bound
                   ? { tone: "warn", text: t(`Bağlı · kullanılabilir ${provider} hesabı yok`, `Connected · no usable ${provider} account`) }
                   : { tone: "off", text: t(`Havuzda ${provider} hesabı yok`, `No ${provider} account in the pool`) }
-                : clientWord(client, t, mac);
+                : client.bound && missingFor(status.accounts, client.id).length
+                  ? (() => {
+                      const missing = missingFor(status.accounts, client.id).map((p) => PROVIDER_NAMES[p]).join(" / ");
+                      return {
+                        tone: "warn" as const,
+                        text: t(`Bağlı · kullanılabilir ${missing} hesabı yok`, `Connected · no usable ${missing} account`),
+                      };
+                    })()
+                  : clientWord(client, t, mac);
             return (
               <li
                 key={client.id}
@@ -1009,15 +1046,15 @@ function ToolsTab({
                   <StatusDot tone={word.tone} hollow={word.tone === "off"} />
                   {word.text}
                 </span>
-                {!client.bound && usable === 0 ? (
+                {!client.bound && !(client.blocked && client.stale) && usable === 0 ? (
                   // Bound with no account, every request would fail: the account comes first.
                   <Button asChild size="sm" variant="outline">
-                    <a href={addAccountHash(CLIENT_PROVIDER[client.id])} data-slot="add-first">
+                    <a href={addAccountHash(CLIENT_PROVIDER(client.id))} data-slot="add-first">
                       <Plus />
                       {t(`Önce ${provider} hesabı ekle`, `Add a ${provider} account first`)}
                     </a>
                   </Button>
-                ) : client.bound ? (
+                ) : client.bound || (client.blocked && client.stale) ? (
                   <Button variant="outline" size="sm" disabled={disabled} onClick={() => onUnbind(client.id)}>
                     <Unlink />
                     {t("Ayır", "Disconnect")}
@@ -1363,8 +1400,8 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             action={
               <span className="flex flex-wrap gap-2">
                 <Button asChild size="sm">
-                  <a href={addAccountHash(CLIENT_PROVIDER[client.id])}>
-                    {t(`${PROVIDER_NAMES[CLIENT_PROVIDER[client.id]]} hesabı ekle`, `Add a ${PROVIDER_NAMES[CLIENT_PROVIDER[client.id]]} account`)}
+                  <a href={addAccountHash(CLIENT_PROVIDER(client.id))}>
+                    {t(`${providerName(client.id)} hesabı ekle`, `Add a ${providerName(client.id)} account`)}
                   </a>
                 </Button>
                 <Button size="sm" variant="outline" disabled={disabled} onClick={() => unbind(client.id)}>
@@ -1374,8 +1411,8 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             }
           >
             {t(
-              `${CLIENT_NAMES[client.id]} bu geçide bağlı ama havuzda kullanılabilir ${PROVIDER_NAMES[CLIENT_PROVIDER[client.id]]} hesabı yok: istekleri başarısız olur.`,
-              `${CLIENT_NAMES[client.id]} is connected to this gateway, but the pool has no usable ${PROVIDER_NAMES[CLIENT_PROVIDER[client.id]]} account: its requests fail.`,
+              `${CLIENT_NAMES[client.id]} bu geçide bağlı ama havuzda kullanılabilir ${providerName(client.id)} hesabı yok: istekleri başarısız olur.`,
+              `${CLIENT_NAMES[client.id]} is connected to this gateway, but the pool has no usable ${providerName(client.id)} account: its requests fail.`,
             )}
           </Attention>
         ))}
@@ -1389,8 +1426,8 @@ export function ProxyPage({ initialTab }: { initialTab?: ProxyTab }) {
             }
           >
             {t(
-              `${boundOff.map((c) => CLIENT_NAMES[c.id]).join(" ve ")} bu geçide bağlı ama geçit kapalı: istek gönderemez.`,
-              `${boundOff.map((c) => CLIENT_NAMES[c.id]).join(" and ")} ${boundOff.length > 1 ? "are" : "is"} connected to this gateway, but it is off: no requests go through.`,
+              `${listNames(boundOff.map((c) => CLIENT_NAMES[c.id]), " ve ")} bu geçide bağlı ama geçit kapalı: istek gönderemez.`,
+              `${listNames(boundOff.map((c) => CLIENT_NAMES[c.id]), " and ")} ${boundOff.length > 1 ? "are" : "is"} connected to this gateway, but it is off: no requests go through.`,
             )}
           </Attention>
         )}

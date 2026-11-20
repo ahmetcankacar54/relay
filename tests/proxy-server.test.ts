@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
 import type net from "node:net";
-import { ProxyServer } from "../electron/core/proxy/proxy-server";
+import { ProxyServer, aliasCodexPath } from "../electron/core/proxy/proxy-server";
 import type { Account, AccountUsage } from "../shared/types";
 
 const makeAccount = (id: string, name: string): Account => ({
@@ -367,18 +367,24 @@ test("ProxyServer sends Codex requests under the upstream's path and reads Respo
     codexUrl: `${upstream.url}/backend-api/codex`,
   });
   try {
-    for (const path of ["/v1/responses", "/responses"]) {
+    // omp dials ChatGPT's own paths, `/codex/responses` and its compaction, under its base URL.
+    for (const path of ["/v1/responses", "/responses", "/codex/responses", "/codex/responses/compact"]) {
       const res = await request(port, { method: "POST", path }, "{}");
       assert.equal(res.status, 200);
     }
     assert.deepEqual(
       upstream.seen.map((s) => s.url),
-      ["/backend-api/codex/responses", "/backend-api/codex/responses"],
+      [
+        "/backend-api/codex/responses",
+        "/backend-api/codex/responses",
+        "/backend-api/codex/responses",
+        "/backend-api/codex/responses/compact",
+      ],
     );
     assert.deepEqual(server.getMetrics().tokensByAccount["acc-1"], {
-      input: 80,
-      output: 14,
-      cacheRead: 120,
+      input: 160,
+      output: 28,
+      cacheRead: 240,
       cacheWrite: 0,
     });
   } finally {
@@ -1056,5 +1062,23 @@ test("a request that needs extra usage moves to another account without benching
     assert.equal(pool.server.getMetrics().extraUsage?.a.kind, "required");
   } finally {
     await pool.close();
+  }
+});
+
+test("aliasCodexPath maps ChatGPT's /codex/responses to /responses and leaves other paths", () => {
+  const cases: Array<[string, string]> = [
+    ["/codex/responses", "/responses"],
+    ["/codex/responses/", "/responses"],
+    ["/codex/responses?stream=true", "/responses?stream=true"],
+    ["/codex/responses/compact", "/responses/compact"],
+    ["/codex/responses/compact?x=1", "/responses/compact?x=1"],
+    ["/codex/responses/compactx", "/codex/responses/compactx"],
+    ["/codex/responsesx", "/codex/responsesx"],
+    ["/v1/responses", "/v1/responses"],
+  ];
+  for (const [from, to] of cases) {
+    const req = { url: from } as http.IncomingMessage;
+    aliasCodexPath(req);
+    assert.equal(req.url, to);
   }
 });

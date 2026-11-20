@@ -3026,7 +3026,7 @@ function bindIPC() {
   });
   handle("proxy-bind-client", (input) =>
     serializeProxy(async () => {
-      const clientId = z.enum(["claude-code", "codex"]).parse(input);
+      const clientId = z.enum(["claude-code", "codex", "omp"]).parse(input);
       let config = proxySettings();
       if (!config.apiKey) {
         config = { ...config, apiKey: generateProxyKey() };
@@ -3040,7 +3040,7 @@ function bindIPC() {
   );
   handle("proxy-unbind-client", (input) =>
     serializeProxy(async () => {
-      const clientId = z.enum(["claude-code", "codex"]).parse(input);
+      const clientId = z.enum(["claude-code", "codex", "omp"]).parse(input);
       const config = proxySettings();
       await unbindClient(clientId, config.clientBindings?.[clientId]);
       const bindings = { ...config.clientBindings };

@@ -4,6 +4,17 @@ import path from "node:path";
 import type { ProxyClientId, ProxyConfig } from "../../../shared/proxy-types";
 import type { ProxyClientStatus } from "../../../shared/types";
 import { isTailscaleIPv4 } from "../../../shared/proxy-url";
+import {
+  ompAgentDir,
+  ompBlocked,
+  ompBound,
+  ompBoundTo,
+  ompLegacyJson,
+  ompMarked,
+  ompModelsFile,
+  ompRelayOnly,
+  ompUnbound,
+} from "./omp-models";
 
 /**
  * Points Claude Code and Codex at the gateway by writing their own settings, and takes it back.
@@ -12,10 +23,12 @@ import { isTailscaleIPv4 } from "../../../shared/proxy-url";
  * values are added only when the user has not set them (CLAUDE_EXTRAS). Codex: a provider
  * table and a top-level `model_provider` in ~/.codex/config.toml, each between Relay's marker
  * lines; an existing top-level `model_provider` is commented out with Relay's prefix and
- * restored on unbind.
+ * restored on unbind. omp: its own `anthropic` and `openai-codex` providers in
+ * ~/.omp/agent/models.yml get the gateway's address and key, between Relay's marker lines (see
+ * omp-models.ts); a file Relay created is removed again on unbind.
  */
 
-export const PROXY_CLIENTS: readonly ProxyClientId[] = ["claude-code", "codex"];
+export const PROXY_CLIENTS: readonly ProxyClientId[] = ["claude-code", "codex", "omp"];
 
 const CLAUDE_KEYS = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN"] as const;
 /**
@@ -46,7 +59,9 @@ const codexDir = (home: string) => path.join(home, ".codex");
 const codexFile = (home: string) => path.join(codexDir(home), "config.toml");
 
 export const clientFile = (id: ProxyClientId, home = os.homedir()) =>
-  id === "claude-code" ? claudeFile(home) : codexFile(home);
+  id === "claude-code" ? claudeFile(home) : id === "omp" ? ompModelsFile(home) : codexFile(home);
+const clientDir = (id: ProxyClientId, home: string) =>
+  id === "claude-code" ? claudeDir(home) : id === "omp" ? ompAgentDir(home) : codexDir(home);
 
 const exists = (file: string) => {
   try {
@@ -134,7 +149,7 @@ export function clientStatuses(
 ): ProxyClientStatus[] {
   return PROXY_CLIENTS.map((id) => {
     const file = clientFile(id, home);
-    const installed = exists(id === "claude-code" ? claudeDir(home) : codexDir(home));
+    const installed = exists(clientDir(id, home));
     const relayBound = !!config.clientBindings?.[id];
     try {
       if (id === "claude-code") {
@@ -145,6 +160,15 @@ export function clientStatuses(
         const current = Object.keys(CLAUDE_EXTRAS).every((name) => typeof env[name] === "string");
         const bound = !!target && url === target.url && key === target.key && current;
         return { id, installed, file, bound, stale: relayBound && !bound };
+      }
+      if (id === "omp") {
+        const text = readText(file) ?? "";
+        const bound = !!target && ompBoundTo(text, target);
+        const stale = (relayBound || ompMarked(text)) && !bound;
+        // Also while bound: an edit since can leave a file omp cannot read. A binding that cannot
+        // be written again can still be taken away.
+        const blocked = ompLegacyJson(home) ? "legacy-json" : ompBlocked(text);
+        return { id, installed, file, bound, stale, ...(blocked ? { blocked } : {}) };
       }
       const text = readText(file) ?? "";
       const values = codexRelayValues(text);
@@ -202,6 +226,19 @@ export async function bindClient(
     if (next !== text) await writeAtomic(claudeFile(home), next);
     return saved;
   }
+  if (id === "omp") {
+    if (ompLegacyJson(home)) throw new Error("omp has not moved its models.json to models.yml yet");
+    const file = ompTarget(home);
+    const text = readText(file);
+    const blocked = ompBlocked(text ?? "");
+    if (blocked) throw new Error(`Relay cannot add its providers to omp's ${path.basename(file)} (${blocked})`);
+    // Read again at every bind (a start rebinds too): a file that is not there, or holds only
+    // Relay's block, is Relay's, and unbinding removes it. A file of the user's stays.
+    const created = text === undefined || ompRelayOnly(text) ? "1" : null;
+    const next = ompBound(text ?? "", target);
+    if (next !== text) await writeAtomic(file, next);
+    return { ...previous, created };
+  }
   const lines = withoutRelayBlocks(readText(codexFile(home)) ?? "");
   const top = firstTable(lines);
   // Another provider chosen at the top level would clash with Relay's: it waits, commented out.
@@ -235,6 +272,14 @@ export async function unbindClient(
     await writeAtomic(claudeFile(home), claudeUnbound(home, previous));
     return;
   }
+  if (id === "omp") {
+    const file = ompTarget(home);
+    const text = readText(file);
+    if (text === undefined) return;
+    if (ompRemovable(text, previous)) await fs.promises.rm(file, { force: true });
+    else if (ompUnbound(text) !== text) await writeAtomic(file, ompUnbound(text));
+    return;
+  }
   const text = readText(codexFile(home));
   if (text === undefined) return;
   await writeAtomic(codexFile(home), codexUnbound(text));
@@ -248,6 +293,26 @@ function codexUnbound(text: string): string {
   while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
   return lines.length ? `${lines.join("\n")}\n` : "";
 }
+
+/**
+ * The file to write for omp: where a symlinked models.yml points (dotfiles setups), so writing
+ * through a temporary file keeps the link instead of replacing it with a copy.
+ */
+function ompTarget(home: string): string {
+  const file = ompModelsFile(home);
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return file;
+  }
+}
+
+/**
+ * Whether unbinding removes omp's file: it holds only Relay's block, and Relay did not find it
+ * there as the user's own (empty) file. A binding with nothing saved counts as Relay's.
+ */
+const ompRemovable = (text: string, previous: Record<string, string | null> | undefined) =>
+  ompRelayOnly(text) && previous?.created !== null;
 
 /** A value only Relay writes: the gateway's own address or a Relay client key. */
 function isRelayValue(name: string, value: string, target: ClientTarget): boolean {
@@ -287,6 +352,14 @@ export function releaseClientSync(
     if (id === "claude-code") {
       if (!exists(claudeFile(home))) return;
       writeAtomicSync(claudeFile(home), claudeUnbound(home, previous));
+      return;
+    }
+    if (id === "omp") {
+      const file = ompTarget(home);
+      const text = readText(file);
+      if (text === undefined) return;
+      if (ompRemovable(text, previous)) fs.rmSync(file, { force: true });
+      else if (ompUnbound(text) !== text) writeAtomicSync(file, ompUnbound(text));
       return;
     }
     const text = readText(codexFile(home));

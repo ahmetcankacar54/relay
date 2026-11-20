@@ -167,6 +167,7 @@ const CLIENT_LABELS: Record<string, string> = {
   "claude-code": "Claude Code",
   "agent-sdk": "Agent SDK",
   codex: "Codex",
+  omp: "omp",
 };
 const CLASS_LABELS: Record<string, [string, string]> = {
   main: ["ana konuşma", "main"],
@@ -396,7 +397,7 @@ export function sessionCacheLine(
   };
 }
 
-const BOUND_NAMES: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex CLI" };
+const BOUND_NAMES: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex CLI", omp: "omp" };
 
 /**
  * The Overview's line about the gateway: which tools go through it and where its last request
@@ -417,7 +418,8 @@ export function gatewayLine(
 ): { tone: "ok" | "crit"; text: string } | undefined {
   if (!status) return undefined;
   const bound = (status.clients ?? []).filter((c) => c.bound).map((c) => BOUND_NAMES[c.id] ?? c.id);
-  const names = (and: string) => bound.join(and);
+  // "A, B and C": commas, and the word only before the last name.
+  const names = (and: string) => (bound.length > 1 ? `${bound.slice(0, -1).join(", ")}${and}${bound[bound.length - 1]}` : bound.join(""));
   if (!status.running)
     return bound.length
       ? {
