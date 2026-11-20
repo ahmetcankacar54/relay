@@ -838,12 +838,13 @@ const previewProxyStatus = (): ProxyStatus => ({
       }
     : {}),
   tailscaleAddress: "100.101.12.34",
-  clients: (["claude-code", "codex"] as const).map((id) => ({
+  clients: (["claude-code", "codex", "omp"] as const).map((id) => ({
     id,
     installed: true,
     bound: !!previewProxy.bound[id],
     stale: false,
-    file: id === "claude-code" ? "~/.claude/settings.json" : "~/.codex/config.toml",
+    file:
+      id === "claude-code" ? "~/.claude/settings.json" : id === "omp" ? "~/.omp/agent/models.yml" : "~/.codex/config.toml",
   })),
 });
 

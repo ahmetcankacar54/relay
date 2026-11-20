@@ -88,6 +88,20 @@ const RETRYABLE = new Set([401, 403, 429, 503, 529]);
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 const CODEX_WS_URL = "wss://chatgpt.com/backend-api/codex/responses";
 
+/**
+ * Clients that speak ChatGPT's own Codex paths (omp appends `/codex/responses` to its base URL)
+ * reach the same Responses routes: `/codex/responses` and `/codex/responses/compact` are
+ * rewritten to `/responses` and `/responses/compact`, query kept.
+ */
+export function aliasCodexPath(req: http.IncomingMessage): void {
+  const url = req.url ?? "";
+  const match = /^\/codex\/responses(\/compact)?\/?(?=\?|$)/.exec(url);
+  if (match) req.url = `/responses${match[1] ?? ""}${url.slice(match[0].length)}`;
+}
+
+/** The Responses API, and its remote compaction, which a Codex ChatGPT sign-in also answers. */
+const RESPONSES_PATHS = new Set(["/v1/responses", "/responses", "/v1/responses/compact", "/responses/compact"]);
+
 const urlHost = (host: string) =>
   host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 
@@ -392,6 +406,7 @@ export class ProxyServer {
     req: http.IncomingMessage,
     res: http.ServerResponse,
   ): Promise<void> {
+    aliasCodexPath(req);
     let pathname: string;
     try {
       pathname = parseRequestUrl(req.url).pathname;
@@ -494,6 +509,8 @@ export class ProxyServer {
       "/v1/messages",
       "/v1/responses",
       "/responses",
+      "/v1/responses/compact",
+      "/responses/compact",
       "/v1/chat/completions",
       "/chat/completions",
       "/v1/models",
@@ -943,7 +960,7 @@ export class ProxyServer {
    */
   private servesRoute(account: Account, pathname: string): boolean {
     if (account.provider !== "codex" || !account.auth?.accountUuid) return true;
-    return pathname === "/v1/responses" || pathname === "/responses";
+    return RESPONSES_PATHS.has(pathname);
   }
 
   /**
@@ -971,8 +988,7 @@ export class ProxyServer {
     if (
       provider === "codex" &&
       !apiKey &&
-      pathname !== "/v1/responses" &&
-      pathname !== "/responses"
+      !RESPONSES_PATHS.has(pathname)
     ) {
       sendJsonError(res, 501, "unsupported_endpoint", "Codex OAuth accounts support the Responses API only");
       return undefined;
@@ -1109,6 +1125,7 @@ export class ProxyServer {
       return;
     }
 
+    aliasCodexPath(req);
     try {
       const { pathname } = parseRequestUrl(req.url);
       if (pathname !== "/responses" && pathname !== "/v1/responses") {
