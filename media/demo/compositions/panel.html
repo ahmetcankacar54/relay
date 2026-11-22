@@ -1,0 +1,143 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: "Inter", sans-serif;
+    }
+    /* The menu-bar panel at 2x its real 360 px width, hanging from the top edge. */
+    #pn-shadow,
+    #pn-panel {
+      position: absolute;
+      left: 1080px;
+      top: 64px;
+      width: 720px;
+      height: 1144px;
+      border-radius: 24px;
+    }
+    #pn-shadow {
+      box-shadow:
+        0 30px 80px rgba(28, 25, 23, 0.16),
+        0 4px 14px rgba(28, 25, 23, 0.08);
+    }
+    #pn-panel {
+      overflow: hidden;
+      background: #f5f4f2;
+    }
+    #pn-panel img {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 720px;
+      height: 1144px;
+    }
+    #pn-edge {
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      box-shadow: inset 0 0 0 2px rgba(28, 25, 23, 0.1);
+    }
+    /* The Switch button of the suggested account (panel.png.json: 274.8, 281, 60.2 x 24 CSS px). */
+    #pn-press {
+      position: absolute;
+      left: 549.6px;
+      top: 562px;
+      width: 120.4px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.16);
+    }
+    #pn-time {
+      position: absolute;
+      left: 150px;
+      top: 318px;
+      font-size: 128px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    #pn-time .roll {
+      display: inline-block;
+      height: 128px;
+      overflow: hidden;
+      vertical-align: top;
+    }
+    #pn-time .col,
+    #pn-time .col span {
+      display: block;
+      line-height: 128px;
+      height: 128px;
+    }
+    #pn-time .stat {
+      display: inline-block;
+      vertical-align: top;
+      line-height: 128px;
+    }
+    #pn-line {
+      position: absolute;
+      left: 154px;
+      top: 478px;
+      font-size: 52px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      color: var(--quiet);
+      white-space: nowrap;
+    }
+    #pn-line span {
+      display: inline-block;
+    }
+  </style>
+  <div id="root" data-composition-id="panel" data-width="1920" data-height="1080">
+    <div id="pn-shadow"></div>
+    <div id="pn-panel">
+      <img id="pn-before" src="assets/ui/panel-before.png" alt="Relay's menu-bar panel: Personal · Max at 97 % of its 5-hour limit" />
+      <img id="pn-full" src="assets/ui/panel.png" alt="Relay's menu-bar panel: Personal · Max Full, Personal · Backup suggested with a Switch button" />
+      <img id="pn-hover" src="assets/ui/panel-hover.png" alt="" />
+      <div id="pn-press"></div>
+      <div id="pn-edge"></div>
+    </div>
+    <div id="pn-copy" class="clip" data-start="0" data-duration="3.7" data-beat="hook">
+      <div id="pn-time">
+        <span class="stat">4:4</span><span class="roll"><span class="col"><span>6</span><span>7</span></span></span><span class="stat">&nbsp;PM</span>
+      </div>
+      <div id="pn-line">
+        <span>Personal</span> <span>·</span> <span>Max</span> <span>is</span> <span>full</span>
+      </div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    // Start states come from fromTo, which renders them at frame 0 and on every seek back.
+    // f15: the minute turns; f17: the 5-hour row reads Full.
+    tl.fromTo("#pn-time .col", { y: 0 }, { y: -128, duration: 0.13, ease: "power2.inOut" }, 0.5);
+    tl.fromTo("#pn-full", { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power1.inOut" }, 0.56);
+
+    // f27: the line, word by word.
+    tl.fromTo(
+      "#pn-line span",
+      { opacity: 0, filter: "blur(8px)" },
+      { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power2.out", stagger: 0.07 },
+      0.9,
+    );
+
+    // f78: the pointer arrives on Switch, which takes its hover colour; f90: the press.
+    tl.fromTo("#pn-hover", { opacity: 0 }, { opacity: 1, duration: 0.06, ease: "none" }, 2.6);
+    tl.fromTo("#pn-press", { opacity: 0 }, { opacity: 1, duration: 0.05, ease: "none" }, 3.0);
+    tl.to("#pn-press", { opacity: 0, duration: 0.08, ease: "none" }, 3.12);
+
+    // f92-101: the panel closes into the switch window's card, opened where the panel was.
+    tl.to(["#pn-time", "#pn-line"], { opacity: 0, filter: "blur(8px)", duration: 0.2, ease: "power3.in" }, 3.05);
+    tl.to("#pn-panel img, #pn-edge", { opacity: 0, filter: "blur(6px)", duration: 0.2, ease: "power2.in" }, 3.12);
+    tl.to("#pn-shadow", { opacity: 0, duration: 0.24, ease: "power2.in" }, 3.08);
+    tl.fromTo(
+      "#pn-panel",
+      { clipPath: "inset(0px 0px 0px 0px round 24px)", backgroundColor: "#f5f4f2" },
+      { clipPath: "inset(0px 120px 844px 120px round 32px)", backgroundColor: "#fefefe", duration: 0.3, ease: "power3.inOut" },
+      3.08,
+    );
+    window.__timelines["panel"] = tl;
+  </script>
+</template>

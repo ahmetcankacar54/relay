@@ -547,7 +547,7 @@ if (scenario === "first-run" || scenario === "first-run-no-claude") {
       "Claude Code bulunamadı. Claude uygulamasında Code’u bir kez aç (Claude Code’u kendisi indirir) veya Ayarlar → Gelişmiş → Claude Code CLI → Dosyayı seç ile dosyasını göster.",
   };
 }
-if (scenario === "planning") {
+if (scenario === "planning" || scenario === "film-planning") {
   accounts[0].planning = { plan: "max5", capacityWeight: 5 };
   accounts[1].planning = { plan: "pro", capacityWeight: 1 };
   accounts[2].planning = { plan: "team", capacityWeight: 2 };
@@ -627,6 +627,42 @@ if (scenario === "planning") {
       since: new Date().toISOString(),
     },
   };
+}
+// The launch film (media/demo): Personal · Max is full and the panel suggests Personal · Backup;
+// `film-before` is the minute before it fills, `film-switched` the same afternoon after Switch,
+// `film-planning` adds the planning setup.
+const film = ["film", "film-before", "film-switched", "film-planning"].includes(scenario ?? "");
+if (film) {
+  state.diagnostics.platform = "darwin";
+  state.usage[ids[0]].fiveHour!.usedPercent = scenario === "film-before" ? 97 : 100;
+  state.usage[ids[1]] = {
+    ...state.usage[ids[1]],
+    fiveHour: { usedPercent: 22, resetsAt: minutes(110) },
+    modelWindows: [{ ...state.usage[ids[1]].modelWindows![0], usedPercent: 41 }],
+  };
+  state.usage[ids[2]] = {
+    ...state.usage[ids[2]],
+    status: "ready",
+    stale: false,
+    checkedAt: minutes(-1),
+    issue: undefined,
+    retryAt: undefined,
+  };
+  if (scenario === "film-switched" || scenario === "film-planning") {
+    desktop.activeProfileId = ids[1];
+    desktop.currentAccountUuid = ids[1];
+  }
+  // The afternoon at the planned pace, with every window open since the switch.
+  if (scenario === "film-planning" && state.planning) {
+    delete state.planning.adaptation;
+    const tempo = state.planning.tempo!;
+    tempo.weekday = tempo.weekday.map((rate) => Math.round(rate * 0.7));
+    state.planning.accounts = ids.slice(0, 3).map((accountId, i) => ({
+      accountId,
+      state: "active" as const,
+      resetsAt: minutes([110, 110, 146][i]),
+    }));
+  }
 }
 if (scenario === "auto-waiting" || scenario === "auto-prepared") {
   state.settings.desktopHistoryTransfer = "selected";

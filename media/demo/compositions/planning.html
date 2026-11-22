@@ -1,0 +1,120 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+      font-family: "Inter", sans-serif;
+    }
+    #pl-win {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1280px;
+      height: 800px;
+      border-radius: 12px;
+      transform-origin: 0 0;
+      overflow: hidden;
+      background: #f5f4f2;
+      box-shadow:
+        0 0 0 1px rgba(28, 25, 23, 0.12),
+        0 30px 80px rgba(28, 25, 23, 0.16),
+        0 4px 14px rgba(28, 25, 23, 0.08);
+    }
+    #pl-win > img {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1280px;
+      height: 800px;
+    }
+    #pl-win .lights i {
+      position: absolute;
+      top: 19px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.14);
+    }
+    /* One strip per timeline row of the Today chart, cut from planning.png
+       (planning-bare.png eval: the rows' tracks start at x 398 and are 845 px wide). */
+    #pl-win .strip {
+      position: absolute;
+      left: 398px;
+      width: 845px;
+      background-image: url("assets/ui/planning.png");
+      background-size: 1280px 800px;
+      background-repeat: no-repeat;
+    }
+    #pl-title {
+      position: absolute;
+      left: 112px;
+      top: 372px;
+      width: 460px;
+      color: var(--ink);
+    }
+    #pl-title h2 {
+      font-size: 60px;
+      font-weight: 700;
+      line-height: 1.04;
+      letter-spacing: -0.02em;
+    }
+    #pl-title p {
+      margin-top: 22px;
+      font-size: 32px;
+      font-weight: 400;
+      line-height: 1.3;
+      letter-spacing: -0.005em;
+      color: var(--quiet);
+    }
+    #pl-title span {
+      display: inline-block;
+    }
+  </style>
+  <div id="root" data-composition-id="planning" data-width="1920" data-height="1080">
+    <div id="pl-win">
+      <img src="assets/ui/planning-bare.png" alt="Relay's Planning page: today's chart with Personal · Max, Personal · Backup and Studio, and This plan: No gaps · 2 switches" />
+      <div id="pl-row-forecast" class="strip" style="top: 165px; height: 26px; background-position: -398px -165px"></div>
+      <div id="pl-row-max" class="strip" style="top: 196px; height: 18px; background-position: -398px -196px"></div>
+      <div id="pl-row-backup" class="strip" style="top: 223px; height: 18px; background-position: -398px -223px"></div>
+      <div id="pl-row-studio" class="strip" style="top: 250px; height: 18px; background-position: -398px -250px"></div>
+      <div class="lights">
+        <i style="left: 16px; background: #ff5f57"></i>
+        <i style="left: 36px; background: #febc2e"></i>
+        <i style="left: 56px; background: #28c840"></i>
+      </div>
+    </div>
+    <div id="pl-title" class="clip" data-start="0" data-duration="5.4" data-beat="plan">
+      <div id="pl-title-in">
+        <h2><span>A</span> <span>plan</span> <span>for</span><br /><span>your</span> <span>day</span></h2>
+        <p><span>5-hour</span> <span>windows</span> <span>across</span><br /><span>your</span> <span>work</span> <span>hours</span></p>
+      </div>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    const cam = (s, fx, fy) => ({ scale: s, x: 960 - fx * s, y: 540 - fy * s });
+    const home = cam(0.96, 375, 400);
+    const chart = cam(1.65, 806, 327); // the Today chart and "This plan: No gaps · 2 switches"
+    const words = { opacity: 1, filter: "blur(0px)", duration: 0.16, ease: "power2.out", stagger: 0.07 };
+    const hidden = { opacity: 0, filter: "blur(8px)" };
+
+    tl.fromTo("#pl-title h2 span", hidden, words, 0.15);
+    tl.fromTo("#pl-title p span", hidden, words, 0.55);
+    // Each account's 5-hour windows draw across the day, then the forecast that strings them together.
+    const rows = ["#pl-row-max", "#pl-row-backup", "#pl-row-studio", "#pl-row-forecast"];
+    rows.forEach((row, i) =>
+      tl.fromTo(
+        row,
+        { clipPath: "inset(0px 100% 0px 0px)" },
+        { clipPath: "inset(0px 0% 0px 0px)", duration: 0.9, ease: "power2.inOut" },
+        i < 3 ? 0.35 + i * 0.15 : 0.95,
+      ),
+    );
+
+    tl.to("#pl-title-in", { opacity: 0, filter: "blur(8px)", duration: 0.18, ease: "power3.in" }, 2.5);
+    // The camera waits at the home stage, pushes in on the chart, and comes back for the sidebar.
+    tl.fromTo("#pl-win", home, { ...chart, duration: 0.6, ease: "power2.inOut" }, 2.6);
+    tl.to("#pl-win", { ...home, duration: 0.6, ease: "power2.inOut" }, 4.2);
+    window.__timelines["planning"] = tl;
+  </script>
+</template>

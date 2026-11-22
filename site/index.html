@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; media-src 'self'; connect-src https://api.github.com; base-uri 'self'; form-action 'none'">
+  <title>Relay: every Claude account, one menu-bar app</title>
+  <meta name="description" content="Free, open-source menu-bar app that switches Claude Desktop between accounts, keeps your Claude Code history on all of them and shows every 5-hour and weekly limit.">
+  <link rel="canonical" href="https://ahmetcankacar54.github.io/relay/">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f1e9">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#100f0e">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Relay">
+  <meta property="og:title" content="Relay: every Claude account, one menu-bar app">
+  <meta property="og:description" content="Switch Claude Desktop between accounts, keep your Claude Code history on all of them, see every 5-hour and weekly limit at a glance, and let a local gateway spread the work.">
+  <meta property="og:url" content="https://ahmetcankacar54.github.io/relay/">
+  <meta property="og:image" content="https://ahmetcankacar54.github.io/relay/assets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta property="og:image:alt" content="Relay: every Claude account, one menu-bar app. The Overview window beside the Relay icon.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Relay: every Claude account, one menu-bar app">
+  <meta name="twitter:description" content="Switch Claude Desktop between accounts, keep your Claude Code history, see every 5-hour and weekly limit at a glance.">
+  <meta name="twitter:image" content="https://ahmetcankacar54.github.io/relay/assets/social-preview.png">
+  <meta name="twitter:image:alt" content="Relay: every Claude account, one menu-bar app. The Overview window beside the Relay icon.">
+
+  <link rel="icon" href="favicon.ico" sizes="32x32">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="manifest" href="site.webmanifest">
+
+  <link rel="preload" href="assets/fonts/young-serif-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/hanken-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/relay-demo-poster.webp" as="image" type="image/webp" fetchpriority="high">
+  <link rel="stylesheet" href="assets/site.css">
+  <script src="assets/site.js" defer></script>
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Relay",
+    "description": "A menu-bar app that switches Claude Desktop between accounts, keeps your Claude Code history on all of them, shows every 5-hour and weekly limit for Claude, Codex and Antigravity accounts, and runs a local gateway for Claude Code, Codex CLI and omp.",
+    "operatingSystem": "macOS 13+, Windows 10/11, Linux",
+    "applicationCategory": "UtilitiesApplication",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "license": "https://opensource.org/licenses/MIT",
+    "url": "https://ahmetcankacar54.github.io/relay/",
+    "downloadUrl": "https://github.com/ahmetcankacar54/relay/releases/latest",
+    "image": "https://ahmetcankacar54.github.io/relay/assets/social-preview.png",
+    "author": { "@type": "Person", "name": "Ahmet Can Kaçar" },
+    "sameAs": "https://github.com/ahmetcankacar54/relay"
+  }
+  </script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="masthead">
+    <div class="wrap masthead__row">
+      <a class="brand" href="./" aria-label="Relay, home">
+        <img src="assets/icons/app-112.webp" width="36" height="36" alt="">
+        <span>Relay</span>
+      </a>
+      <nav class="masthead__nav" aria-label="Sections">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="masthead__gh" href="https://github.com/ahmetcankacar54/relay">GitHub<span class="visually-hidden"> repository</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap hero__grid">
+        <p class="hero__meta">
+          <span>Free and open source</span>
+          <a class="tag" href="https://github.com/ahmetcankacar54/relay/releases/latest" data-release-link>
+            <span class="visually-hidden">Latest release: </span><span data-version>v0.26.0</span>
+          </a>
+        </p>
+        <h1 id="hero-title" class="hero__title">Every Claude account, one menu&#8209;bar app.</h1>
+        <p class="hero__lead">Switch Claude Desktop between accounts, keep your Claude Code history on all of them, see every 5-hour and weekly limit at a glance, and let a local gateway spread the work.</p>
+        <div class="hero__actions">
+          <div class="cta">
+            <a class="button button--primary" href="https://github.com/ahmetcankacar54/relay/releases/latest" data-download="mac">
+              <svg aria-hidden="true" viewBox="0 0 20 20" width="20" height="20"><path d="M10 3.5v9m0 0-3.5-3.5M10 12.5l3.5-3.5M4 15.5h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Download for macOS
+            </a>
+            <a class="button button--quiet" href="https://github.com/ahmetcankacar54/relay">View on GitHub</a>
+          </div>
+          <p class="cta__note">
+            <span>Apple silicon, macOS 13 or later.</span>
+            <span>Also for
+              <a href="https://github.com/ahmetcankacar54/relay/releases/latest" data-download="win" aria-label="Download for Windows">Windows</a> ·
+              <a href="https://github.com/ahmetcankacar54/relay/releases/latest" data-download="linux" aria-label="Download for Linux">Linux</a> ·
+              <a href="#install-cli">the CLI</a></span>
+          </p>
+        </div>
+      </div>
+
+      <figure class="wrap film">
+        <img class="film__panda" src="assets/img/panda-peek.svg" width="304" height="274" alt="">
+        <div class="film__frame">
+          <video class="film__video" controls muted loop playsinline preload="metadata"
+                 poster="assets/relay-demo-poster.webp" width="1920" height="1080"
+                 aria-describedby="film-caption">
+            <source src="assets/relay-demo.mp4" type="video/mp4">
+            <p>Your browser cannot play this film. <a href="assets/relay-demo.mp4">Download it</a> instead.</p>
+          </video>
+        </div>
+        <figcaption id="film-caption" class="film__caption">Relay with sample accounts. The film is silent; it plays on its own unless you have asked your system for reduced motion.</figcaption>
+      </figure>
+    </section>
+
+    <!-- Why -->
+    <section class="why" id="why" aria-labelledby="why-title">
+      <div class="wrap why__grid">
+        <h2 id="why-title" class="why__title">Several Claude plans. One Claude&nbsp;app.</h2>
+        <div class="why__body">
+          <p class="why__setup">A personal Pro or Max and a company Team or Enterprise seat, say. The Claude app only knows one of them at a time, and signing out and back in:</p>
+          <ul class="why__costs">
+            <li>costs minutes,</li>
+            <li>loses your Code tab’s conversations,</li>
+            <li>and never tells you which account still has room.</li>
+          </ul>
+          <p class="why__fix">Relay fixes that, from the menu bar. It runs entirely on your Mac and sends nothing to anyone but the services you already use.</p>
+        </div>
+      </div>
+    </section>
+
+    <div id="features">
+      <!-- Switching -->
+      <section class="feature feature--switch" id="switching" aria-labelledby="switch-title">
+        <div class="wrap">
+          <p class="kicker"><span>Switching</span></p>
+          <div class="split split--text-first">
+            <div class="split__text">
+              <h2 id="switch-title">One-click switch. Your Code history comes&nbsp;along.</h2>
+              <p class="lede">Relay quits the Claude app, puts the other account’s saved sign-in back and reopens it. Nothing to retype, no browser dance.</p>
+              <ul class="points">
+                <li><strong>Switch from anywhere:</strong> the menu bar, the window, the widget or the CLI. It is a clean restart of the Claude app, after an encrypted backup of the files it changes.</li>
+                <li><strong>Shared Code history.</strong> Conversations and local projects of the accounts you pick are merged at every switch, so the same conversation is there after every switch, with its permission mode. Deleted conversations stay deleted; the Bypass permission mode never travels.</li>
+                <li><strong>Automatic switching</strong> (optional): when you quit the Claude app, Relay picks the account with the most usable room and switches once.</li>
+              </ul>
+            </div>
+            <div class="split__media">
+              <picture>
+                <source media="(prefers-color-scheme: dark)" srcset="assets/img/accounts-dark-1080.webp 1080w, assets/img/accounts-dark.webp 1920w" sizes="(min-width: 1100px) 720px, 92vw">
+                <img class="shot" src="assets/img/accounts-light.webp" srcset="assets/img/accounts-light-1080.webp 1080w, assets/img/accounts-light.webp 1920w" sizes="(min-width: 1100px) 720px, 92vw" width="1920" height="1200" loading="lazy" decoding="async" alt="The Accounts page grouped by provider and work group, with each account’s status, 5-hour and weekly use and its next action">
+              </picture>
+              <p class="aside">Claude, OpenAI Codex and Google Antigravity accounts in one list, grouped by provider and work group. One status per account and at most one action: switch, refresh or reconnect.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Limits -->
+      <section class="feature feature--limits" id="limits" aria-labelledby="limits-title">
+        <div class="wrap">
+          <p class="kicker"><span>Limits</span></p>
+          <div class="limits__head">
+            <h2 id="limits-title">Every limit, every account.</h2>
+            <p class="lede">5-hour, weekly and per-model limits (Opus, Fable) with reset times, for <span class="providers">Claude, OpenAI Codex and Google Antigravity</span> accounts, refreshed in the background.</p>
+          </div>
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="assets/img/limits-dark-1080.webp 1080w, assets/img/limits-dark.webp 1920w" sizes="(min-width: 1300px) 1180px, 92vw">
+            <img class="shot shot--wide" src="assets/img/limits-light.webp" srcset="assets/img/limits-light-1080.webp 1080w, assets/img/limits-light.webp 1920w" sizes="(min-width: 1300px) 1180px, 92vw" width="1920" height="1200" loading="lazy" decoding="async" alt="Limit history: full periods used, periods started, limit hits and busiest hours, a daily trend per account, account balance and recent limit hits">
+          </picture>
+          <dl class="spec">
+            <div>
+              <dt>Limits</dt>
+              <dd>5-hour and weekly use with reset times, per-model limits, plans (Pro, Max 5×, Max 20×, Team, Enterprise, ChatGPT Plus, Google AI Pro), and a pace mark on every bar.</dd>
+            </div>
+            <div>
+              <dt>Limit history</dt>
+              <dd>Full periods used, limit hits, when you work and how evenly your accounts share the load.</dd>
+            </div>
+            <div>
+              <dt>Tokens and cost</dt>
+              <dd>Claude Code tokens per day, model and account, priced at API list prices.</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- Planner -->
+      <section class="feature feature--plan" id="planner" aria-labelledby="plan-title">
+        <div class="wrap">
+          <p class="kicker"><span>Planning</span></p>
+          <div class="split split--media-first">
+            <div class="split__media">
+              <picture>
+                <source media="(prefers-color-scheme: dark)" srcset="assets/img/planning-dark-1080.webp 1080w, assets/img/planning-dark.webp 1920w" sizes="(min-width: 1100px) 720px, 92vw">
+                <img class="shot" src="assets/img/planning-light.webp" srcset="assets/img/planning-light-1080.webp 1080w, assets/img/planning-light.webp 1920w" sizes="(min-width: 1100px) 720px, 92vw" width="1920" height="1200" loading="lazy" decoding="async" alt="Planning: today’s work hours, the usage forecast and each planned account’s 5-hour windows, with early-start times and the plan’s status">
+              </picture>
+            </div>
+            <div class="split__text">
+              <h2 id="plan-title">A plan for your&nbsp;day.</h2>
+              <p class="lede">Relay staggers each account’s 5-hour windows across your work hours, so the next account is ready before the current one runs out.</p>
+              <ol class="steps-plain">
+                <li>It simulates your day from your learned pace and each plan’s size (a Max 20× counts 20 times a Pro), then picks start times that leave the fewest gaps with the fewest switches.</li>
+                <li><strong>Early start</strong> (optional, macOS and Linux) opens each account’s window ahead of work, so it resets when you need it.</li>
+                <li>The plan adapts during the day when you work faster or slower than usual, and knows when an account’s week runs out.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Gateway -->
+      <section class="feature feature--gateway" id="gateway" aria-labelledby="gateway-title">
+        <div class="wrap">
+          <p class="kicker"><span>Gateway</span></p>
+          <div class="gateway__head">
+            <h2 id="gateway-title">A gateway that spends the right&nbsp;account.</h2>
+            <p class="lede">Point Claude Code, Codex CLI or omp at one local address. Each request goes to the account with room, keeping sessions and caches on their account.</p>
+          </div>
+          <img class="shot shot--wide shot--on-dark" src="assets/img/proxy-dark.webp" srcset="assets/img/proxy-dark-1080.webp 1080w, assets/img/proxy-dark.webp 1920w" sizes="(min-width: 1300px) 1180px, 92vw" width="1920" height="1200" loading="lazy" decoding="async" alt="Proxy and Gateway: the gateway address and key, the account pool with each account’s room, and recent requests">
+          <div class="gateway__notes">
+            <p>A local, key-protected endpoint. Requests go to the account whose week ends first and that still has room, compared in real capacity: a Max 20× at 85&nbsp;% still has more room than a fresh Pro.</p>
+            <p>Sessions stay on their account and its prompt cache. A busy account is drained at the start of a prompt, not in the middle.</p>
+            <p>Listens only on this Mac, or on your Tailscale network if you choose.</p>
+            <p class="gateway__warn"><strong>Off until you turn it on.</strong> It is the part of Relay furthest from ordinary use; read <a href="#terms">Terms &amp; risk</a> first.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Menu bar, widget, CLI -->
+      <section class="feature feature--menubar" id="menubar" aria-labelledby="menubar-title">
+        <div class="wrap menubar">
+          <div class="menubar__panel">
+            <picture>
+              <source media="(prefers-color-scheme: dark)" srcset="assets/img/panel-dark.webp">
+              <img class="shot shot--panel" src="assets/img/panel-light.webp" width="720" height="1224" loading="lazy" decoding="async" alt="Relay’s menu-bar panel: the account in use with its limits, accounts near the limit with a suggested switch, and automation status">
+            </picture>
+          </div>
+          <div class="menubar__text">
+            <p class="kicker kicker--short"><span>Menu bar, widget and CLI</span></p>
+            <h2 id="menubar-title">Lives in the menu&nbsp;bar.</h2>
+            <div class="menubar__items">
+              <div>
+                <h3>Menu-bar panel</h3>
+                <p>The account in use, its limits, the suggested next account and a one-click switch. Choose what the menu-bar title shows: 5-hour use, time left, tokens or API value today.</p>
+              </div>
+              <div>
+                <h3>Desktop widgets <span class="muted">macOS</span></h3>
+                <p>Your account, all accounts, today and the last 7 days.</p>
+              </div>
+              <div class="menubar__cli" id="cli">
+                <h3>The <code>relay</code> CLI</h3>
+                <p>Status, switching, usage and the gateway from a terminal. <code>--json</code> for scripts.</p>
+                <pre class="term" tabindex="0" translate="no"><code><span class="term__c">relay status</span>
+<span class="term__c">relay switch work</span>
+<span class="term__c">relay usage</span>
+<span class="term__c">relay run work</span>      <span class="term__note"># Claude Code as that account</span>
+<span class="term__c">relay tokens</span>
+<span class="term__c">relay proxy start</span></code></pre>
+              </div>
+            </div>
+            <p class="keys">Keyboard friendly: <kbd>⌘1</kbd>–<kbd>⌘8</kbd> for pages, <kbd>⌘K</kbd> to search accounts, arrow keys through lists.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Languages -->
+      <section class="feature feature--lang" id="languages" aria-labelledby="lang-title">
+        <div class="wrap">
+          <p class="kicker"><span>Languages</span></p>
+          <h2 id="lang-title" class="visually-hidden">15 languages</h2>
+          <ul class="langwall">
+            <li lang="en">English</li>
+            <li lang="tr">Türkçe</li>
+            <li lang="de">Deutsch</li>
+            <li lang="fr">Français</li>
+            <li lang="es">Español</li>
+            <li lang="pt-BR">Português (Brasil)</li>
+            <li lang="it">Italiano</li>
+            <li lang="ja">日本語</li>
+            <li lang="ko">한국어</li>
+            <li lang="zh-Hans">简体中文</li>
+            <li lang="zh-Hant">繁體中文</li>
+            <li lang="ru">Русский</li>
+            <li lang="uk">Українська</li>
+            <li lang="pl">Polski</li>
+            <li lang="nl">Nederlands</li>
+          </ul>
+          <p class="lede lang__foot"><strong>15 languages</strong> in the app, the menu bar, the widget and the CLI. Relay follows your system language until you pick one in <b>Settings&nbsp;→&nbsp;General</b>.</p>
+          <img class="shot shot--wide" src="assets/img/languages.webp" srcset="assets/img/languages-1080.webp 1080w, assets/img/languages.webp 1920w" sizes="(min-width: 1300px) 1180px, 92vw" width="1920" height="1207" loading="lazy" decoding="async" alt="The Overview in German, Japanese, Simplified Chinese and Russian">
+        </div>
+      </section>
+    </div>
+
+    <!-- Install -->
+    <section class="install" id="install" aria-labelledby="install-title">
+      <div class="wrap">
+        <div class="install__head">
+          <h2 id="install-title">Install</h2>
+          <p class="lede">Latest release <a href="https://github.com/ahmetcankacar54/relay/releases/latest" data-release-link><span data-version>v0.26.0</span></a>. Every release carries a <code>SHA256SUMS.txt</code> and updates itself from GitHub Releases.</p>
+        </div>
+
+        <div class="table-scroll" role="region" aria-labelledby="dl-caption" tabindex="0">
+          <table class="downloads">
+            <caption id="dl-caption" class="visually-hidden">Downloads per platform</caption>
+            <thead>
+              <tr><th scope="col">Platform</th><th scope="col">Download</th><th scope="col">Notes</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">macOS 13+ <span class="muted">Apple silicon</span></th>
+                <td><a class="file" href="https://github.com/ahmetcankacar54/relay/releases/latest" data-download="mac" data-filename>Relay-&lt;version&gt;-arm64.dmg</a></td>
+                <td>The main platform: menu-bar panel, widget, automatic switching.</td>
+              </tr>
+              <tr>
+                <th scope="row">Windows 10/11 <span class="muted">x64</span></th>
+                <td><a class="file" href="https://github.com/ahmetcankacar54/relay/releases/latest" data-download="win" data-filename>Relay-Setup-&lt;version&gt;-x64.exe</a></td>
+                <td>Switching by hand, limits, accounts, gateway. Not tested on a real machine yet; reports are welcome.</td>
+              </tr>
+              <tr>
+                <th scope="row">Linux <span class="muted">x64</span></th>
+                <td><a class="file" href="https://github.com/ahmetcankacar54/relay/releases/latest" data-download="linux" data-filename>Relay-&lt;version&gt;-x86_64.AppImage</a></td>
+                <td>Works with the official Claude Desktop for Linux.</td>
+              </tr>
+              <tr id="install-cli">
+                <th scope="row">CLI <span class="muted">macOS</span></th>
+                <td>
+                  <span class="cmd" translate="no"><code id="npm-cmd" tabindex="0">npm i -g @ahmetcankacar/relay</code><button class="copy" type="button" data-copy="npm-cmd" translate="yes">Copy<span class="visually-hidden"> the install command</span></button></span>
+                </td>
+                <td><code>relay switch</code>, <code>relay usage</code>, <code>relay run</code> … see the <a href="https://github.com/ahmetcankacar54/relay/blob/main/cli/README.md">CLI guide</a>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="gatekeeper" id="first-launch">
+          <div class="gatekeeper__intro">
+            <h3>Opening it the first time on macOS</h3>
+            <p>Relay is signed with the author’s own certificate but is <strong>not notarized by Apple</strong>. The first time you open it, macOS blocks it once.</p>
+          </div>
+          <ol class="gatekeeper__steps">
+            <li>Drag <b>Relay</b> from the DMG into <b>Applications</b> and open it from there.</li>
+            <li>When macOS says it cannot verify Relay, click <b>Done</b>.</li>
+            <li>Open <b>System Settings → Privacy &amp; Security</b>, find “Relay was blocked” and click <b>Open Anyway</b>.</li>
+          </ol>
+          <div class="gatekeeper__after">
+            <p>That is needed once per version. If macOS keeps asking, run:</p>
+            <span class="cmd" translate="no"><code id="xattr-cmd" tabindex="0">xattr -dr com.apple.quarantine /Applications/Relay.app</code><button class="copy" type="button" data-copy="xattr-cmd" translate="yes">Copy<span class="visually-hidden"> the xattr command</span></button></span>
+            <p>The full walkthrough is in <a href="https://github.com/ahmetcankacar54/relay/blob/main/docs/share/install-notes.md">INSTALL.txt</a>.</p>
+          </div>
+        </div>
+
+        <p class="next-step">Then open <b>Accounts → Add account</b>. Relay saves the Claude app’s current sign-in and finds Codex CLI sign-ins on this Mac too.</p>
+
+        <details class="matrix">
+          <summary>What works on which platform</summary>
+          <div class="table-scroll" role="region" aria-label="Features per platform" tabindex="0">
+            <table>
+              <thead>
+                <tr><th scope="col"><span class="visually-hidden">Feature</span></th><th scope="col">macOS</th><th scope="col">Windows</th><th scope="col">Linux</th></tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">Switch the Claude app between accounts</th><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td></tr>
+                <tr><th scope="row">Shared Claude Code history</th><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td></tr>
+                <tr><th scope="row">Limits, history, tokens and cost</th><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td></tr>
+                <tr><th scope="row">Gateway for Claude Code / Codex CLI / omp</th><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td></tr>
+                <tr><th scope="row">Planner</th><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td><td><span class="yes">Yes</span></td></tr>
+                <tr><th scope="row">Early start of 5-hour windows</th><td><span class="yes">Yes</span></td><td><span class="no">No</span></td><td><span class="yes">Yes</span></td></tr>
+                <tr><th scope="row">Automatic switch when you quit the Claude app</th><td><span class="yes">Yes</span></td><td><span class="no">No</span></td><td><span class="yes">Yes</span></td></tr>
+                <tr><th scope="row">Switch and continue at the limit (experimental)</th><td><span class="yes">Yes</span></td><td><span class="no">No</span></td><td><span class="no">No</span></td></tr>
+                <tr><th scope="row">Menu-bar panel, widget, <code>relay</code> CLI</th><td><span class="yes">Yes</span></td><td><span class="no">No</span></td><td><span class="no">No</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- Privacy -->
+    <section class="privacy" id="privacy" aria-labelledby="privacy-title">
+      <div class="wrap privacy__grid">
+        <div class="privacy__lead">
+          <p class="kicker kicker--short"><span>Privacy &amp; security</span></p>
+          <h2 id="privacy-title">Local only.</h2>
+          <p class="lede">No account, no server and <strong>no telemetry or analytics</strong>. Relay’s data lives in <code>~/Library/Application&nbsp;Support/Relay</code> on macOS and <code>~/.config/Relay</code> on Linux.</p>
+        </div>
+        <dl class="facts">
+          <div>
+            <dt>Who it talks to</dt>
+            <dd>
+              <p>The services your accounts already use, and GitHub for its own updates:</p>
+              <ul class="hosts" translate="no">
+                <li><code>claude.ai</code></li>
+                <li><code>api.anthropic.com</code> <span class="muted">usage and profile</span></li>
+                <li><code>chatgpt.com</code> / <code>api.openai.com</code> <span class="muted">Codex</span></li>
+                <li><code>cloudcode-pa.googleapis.com</code> <span class="muted">Antigravity</span></li>
+                <li><code>api.github.com</code> <span class="muted">updates</span></li>
+              </ul>
+            </dd>
+          </div>
+          <div>
+            <dt>Credentials</dt>
+            <dd>Never reach the UI. Saved Claude app sign-ins are encrypted with a key kept in the macOS Keychain (Secret Service or KWallet on Linux). Files that hold the gateway key are readable by you only.</dd>
+          </div>
+          <div>
+            <dt>The Claude app’s files</dt>
+            <dd>Changed only while it is closed, after an encrypted backup and a write journal.</dd>
+          </div>
+          <div>
+            <dt>Hardened app</dt>
+            <dd>Sandboxed renderer windows, no developer tools in releases, only Relay’s own pages can call into the app, and a strict content security policy.</dd>
+          </div>
+          <div>
+            <dt>Found a problem?</dt>
+            <dd>Please report it privately; see <a href="https://github.com/ahmetcankacar54/relay/blob/main/SECURITY.md">SECURITY.md</a>.</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="wrap terms" id="terms">
+        <h2 class="terms__title">Terms &amp; risk</h2>
+        <div class="terms__body">
+          <p>Relay is unofficial, and some of what it does is not how Anthropic wants third-party tools to use Claude sign-ins. The <a href="https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use">Claude Code legal and compliance page</a> says subscription sign-ins are for ordinary use of Claude Code and Anthropic’s own apps, and that third-party tools should not store, route or intermediate them.</p>
+          <p>Relay keeps your accounts’ sign-ins on your computer, encrypted, so it can switch the Claude app and read limits. The gateway goes further: it sends Claude Code requests to your accounts with those sign-ins. Anthropic can block such requests, or limit or suspend an account that uses them. Relay cannot prevent that, and you use it at your own risk.</p>
+          <p>Switching the Claude app and reading limits stay closest to ordinary use; the gateway is further, and omp through a Claude account is the furthest. A Team or Enterprise seat is also governed by your company’s agreement with Anthropic: ask your admin first, and use only accounts that are yours. <a href="https://github.com/ahmetcankacar54/relay#terms--risk">Read the full terms &amp; risk</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section class="faq" id="faq" aria-labelledby="faq-title">
+      <div class="wrap faq__grid">
+        <h2 id="faq-title">Questions</h2>
+        <div class="faq__list">
+          <details>
+            <summary>Does Relay pool or extend my quota?</summary>
+            <p>No. Each account keeps its own limits; Relay only switches which account the Claude app (or a request through the gateway) uses, and helps you use each one’s time well. Use only accounts you are allowed to use, and read <a href="#terms">Terms &amp; risk</a> first.</p>
+          </details>
+          <details>
+            <summary>Is Relay made by Anthropic?</summary>
+            <p>No. Relay is an independent, unofficial tool. It is not affiliated with, endorsed by or sponsored by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic.</p>
+          </details>
+          <details>
+            <summary>Will switching interrupt a running reply?</summary>
+            <p>A switch restarts the Claude app, so a reply or subagent that is still running stops. Relay asks first, and automatic switching only acts when nothing is running. Conversations themselves are kept and continue after the switch.</p>
+          </details>
+          <details>
+            <summary>Why does macOS say it cannot verify Relay?</summary>
+            <p>Relay is not notarized by Apple yet. Follow the <a href="#first-launch">three steps</a> once per version. Updates are checked against Relay’s own certificate, so a tampered update is refused.</p>
+          </details>
+          <details>
+            <summary>Can a Claude app update break Relay?</summary>
+            <p>It can: Relay reads the Claude app’s local files and, for automatic continuation, its accessibility tree. Relay checks what it finds before it changes anything, keeps a backup, and an interrupted switch can be restored from the app.</p>
+          </details>
+          <details>
+            <summary>How do I uninstall it?</summary>
+            <p>Quit Relay from the menu bar, move <code>Relay.app</code> to the Trash, and delete <code>~/Library/Application&nbsp;Support/Relay</code> if you also want your saved sign-ins gone. The Claude app keeps the account it was last switched to.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer__grid">
+      <img class="footer__panda" src="assets/img/panda-curl.svg" width="360" height="340" alt="" loading="lazy">
+      <div class="footer__main">
+        <p class="footer__brand"><img src="assets/icons/app-112.webp" width="28" height="28" alt=""> Relay</p>
+        <p>Free and open source under the <a href="https://github.com/ahmetcankacar54/relay/blob/main/LICENSE">MIT license</a>. © Ahmet Can Kaçar.</p>
+        <p class="muted">Relay is an independent project and is not affiliated with Anthropic, OpenAI or Google. Claude is a trademark of Anthropic.</p>
+      </div>
+      <nav class="footer__links" aria-label="Project links">
+        <ul>
+          <li><a href="https://github.com/ahmetcankacar54/relay">Source on GitHub</a></li>
+          <li><a href="https://github.com/ahmetcankacar54/relay/releases">All releases</a></li>
+          <li><a href="https://github.com/ahmetcankacar54/relay/blob/main/cli/README.md">CLI guide</a></li>
+          <li><a href="https://github.com/ahmetcankacar54/relay/blob/main/SECURITY.md">Security</a></li>
+          <li><a href="https://github.com/ahmetcankacar54/relay/issues">Report a bug</a></li>
+          <li><a href="https://github.com/ahmetcankacar54/relay/blob/main/README.tr.md" lang="tr" hreflang="tr">Türkçe</a></li>
+        </ul>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

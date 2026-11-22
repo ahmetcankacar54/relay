@@ -1,0 +1,17 @@
+[
+ {"url":"http://127.0.0.1:5173/panel.html?screenshot&scenario=film-before","out":"assets/ui/panel-before.png","width":360,"height":572,"dpr":4},
+ {"url":"http://127.0.0.1:5173/panel.html?screenshot&scenario=film","out":"assets/ui/panel.png","width":360,"height":572,"dpr":4,
+  "boxes":{"switch":"text:Switch","full":"text:Full · 1 h 50 min","active":"text:Personal · Max"}},
+ {"url":"http://127.0.0.1:5173/panel.html?screenshot&scenario=film","out":"assets/ui/panel-hover.png","width":360,"height":572,"dpr":4,"hover":"text:Switch"},
+ {"url":"http://127.0.0.1:5173/?screenshot&scenario=film-switched#/genel","out":"assets/ui/overview.png","width":1280,"height":800,"dpr":3,
+  "boxes":{"inUse":"text:In use","allAccounts":"text:All accounts","sidePlanning":"text:Planning","sideProxy":"text:Proxy & Gateway"}},
+ {"url":"http://127.0.0.1:5173/?screenshot&scenario=film-planning#/planlama","out":"assets/ui/planning.png","width":1280,"height":800,"dpr":3,
+  "boxes":{"forecast":"text:forecast","noGaps":"text:No gaps · 2 switches","h00":"text:00","h24":"text:24"}},
+ {"url":"http://127.0.0.1:5173/?screenshot&scenario=film-planning#/planlama","out":"assets/ui/planning-bare.png","width":1280,"height":800,"dpr":3,
+  "eval":"(() => { const card = __find('text:forecast').closest('[class*=\"@container\"]'); let hidden = 0; const tracks = [...card.querySelectorAll('.bg-track')]; const rows = tracks.map(t => { const r = t.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]; }); for (const t of tracks) { if (t.querySelector('[class*=\"bg-brand/20\"]')) continue; for (const c of t.children) { const cls = String(c.className); if (/(^|\\s)bg-foreground(\\s|$)/.test(cls)) continue; c.style.visibility = 'hidden'; hidden++; } } return { hidden, rows }; })()"},
+ {"url":"http://127.0.0.1:5173/?screenshot&scenario=film-switched#/proxy","out":"assets/ui/proxy-off.png","width":1280,"height":800,"dpr":3,
+  "boxes":{"toggle":"[role=switch]","recent":"text:Recent requests"}},
+ {"url":"http://127.0.0.1:5173/?screenshot&scenario=film-switched#/proxy","out":"assets/ui/proxy-on.png","width":1280,"height":800,"dpr":3,
+  "eval":"document.querySelector('[role=switch]').click()","after":1500,
+  "boxes":{"toggle":"[role=switch]","recent":"text:Recent requests","requests":"text:Requests"}}
+]

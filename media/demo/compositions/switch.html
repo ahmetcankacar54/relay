@@ -1,0 +1,58 @@
+<template>
+  <style>
+    #root {
+      position: absolute;
+      inset: 0;
+    }
+    /* Relay's switch window (240 x 150 CSS px), rendered frame by frame from SwitchStage at 4x. */
+    #sw-card {
+      position: absolute;
+      left: 480px;
+      top: 240px;
+      width: 960px;
+      height: 600px;
+      border-radius: 64px;
+      overflow: hidden;
+    }
+    #sw-video {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 960px;
+      height: 600px;
+    }
+  </style>
+  <div id="root" data-composition-id="switch" data-width="1920" data-height="1080">
+    <div id="sw-card">
+      <video
+        id="sw-video"
+        class="clip"
+        src="assets/switch-stage.mp4"
+        data-start="0"
+        data-duration="5.1"
+        data-track-index="0"
+        data-beat="switch"
+        muted
+        playsinline
+      ></video>
+    </div>
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    // The card opens at the panel's place at the panel's 2x scale (centre 1440, 214), then the camera
+    // pushes in to 4x, centred. Offsets are from the centred position.
+    tl.fromTo("#sw-card", { opacity: 0 }, { opacity: 1, duration: 0.12, ease: "none" }, 0);
+    tl.fromTo(
+      "#sw-card",
+      { x: 480, y: -326, scale: 0.5 },
+      { x: 0, y: 0, scale: 1, duration: 0.7, ease: "power2.inOut" },
+      0.06,
+    );
+    // The story plays: leaving 0-1.2 s, waiting 1.2-1.7 s, returning 1.7-4.2 s (the video holds after).
+    // 4.35 s: carried into the Overview's account card (centre 904, 185 at the Overview's 1.7x).
+    tl.to("#sw-card", { x: -56, y: -355, scale: 0.42, duration: 0.42, ease: "power3.inOut" }, 4.35);
+    tl.fromTo("#sw-card", { filter: "blur(0px)" }, { filter: "blur(6px)", duration: 0.2, ease: "power2.in" }, 4.4);
+    tl.to("#sw-card", { opacity: 0, duration: 0.18, ease: "power2.in" }, 4.6);
+    window.__timelines["switch"] = tl;
+  </script>
+</template>
