@@ -16,9 +16,9 @@ her 5 saatlik ve haftalık limiti tek bakışta gör, işi yerel bir ağ geçidi
 [![15 dil](https://img.shields.io/badge/dil-15-6b645e?style=flat-square)](#15-dil)
 [![MIT](https://img.shields.io/badge/lisans-MIT-6b645e?style=flat-square)](LICENSE)
 
-[English](README.md) · **Türkçe**
+[English](README.md) · **Türkçe** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md) · [Español](README.es.md)
 
-[İndir](#kurulum) · [Özellikler](#özellikler) · [Gizlilik](#gizlilik-ve-güvenlik) · [SSS](#sss) · [CLI](cli/README.tr.md)
+[İndir](#kurulum) · [Özellikler](#özellikler) · [Gizlilik](#gizlilik-ve-güvenlik) · [Koşullar ve risk](#koşullar-ve-risk) · [SSS](#sss) · [CLI](cli/README.tr.md)
 
 <br>
 
@@ -39,7 +39,7 @@ Relay bunu menü çubuğundan çözer:
 - **Code geçmişin seninle gelir.** Seçtiğin hesapların Claude Code sohbetleri ve projeleri birleştirilir; her geçişten sonra aynı sohbet, izin moduyla birlikte orada olur.
 - **Her hesabın her limiti.** Claude, OpenAI Codex ve Google Antigravity hesapları için 5 saatlik, haftalık ve modele özel (Opus, Fable) limitler, yenilenme zamanlarıyla, arka planda güncellenir.
 - **Günün için bir plan.** Relay her hesabın 5 saatlik dönemlerini çalışma saatlerine yayar; biri dolmadan sıradaki hazır olur.
-- **Doğru hesabı harcayan bir ağ geçidi.** Claude Code, Codex CLI veya omp'yi tek bir yerel adrese yönlendir; her istek yeri olan hesaba gider, oturumlar ve önbellekler kendi hesabında kalır.
+- **Doğru hesabı harcayan bir ağ geçidi.** Claude Code, Codex CLI veya omp'yi tek bir yerel adrese yönlendir; her istek yeri olan hesaba gider, oturumlar ve önbellekler kendi hesabında kalır. Varsayılan olarak kapalıdır; açmadan önce [Koşullar ve risk](#koşullar-ve-risk) bölümünü oku.
 
 Relay ücretsizdir, açık kaynaktır (MIT), tamamen Mac'inde çalışır ve zaten kullandığın servisler dışında kimseye bir şey göndermez.
 
@@ -124,6 +124,7 @@ Her sürümde bir `SHA256SUMS.txt` vardır; Relay kendini GitHub Releases'tan g�
 - Claude Code, Codex CLI ve omp için yerel, anahtarla korunan tek bir uç nokta. İstekler haftası önce biten ve hâlâ yeri olan hesaba gider; yer gerçek kapasiteyle karşılaştırılır (%85 dolu bir Max 20×'in yeni bir Pro'dan daha çok yeri vardır).
 - Oturumlar kendi hesabında ve istem önbelleğinde kalır; dolan bir hesap bir istemin ortasında değil başında boşaltılır.
 - Yalnızca bu Mac'i ya da seçersen Tailscale ağını dinler.
+- Sen açana kadar kapalıdır. Relay'in olağan kullanımdan en uzak parçası budur; bkz. [Koşullar ve risk](#koşullar-ve-risk).
 
 ### Menü çubuğu, widget ve CLI
 
@@ -168,12 +169,24 @@ Ana platform macOS'tur. Windows sürümü henüz gerçek bir makinede denenmedi;
 
 Bir sorun mu buldun? Lütfen gizlice bildir — bkz. [SECURITY.md](SECURITY.md).
 
+## Koşullar ve risk
+
+Relay resmi değil ve yaptığı işlerin bir kısmı, Anthropic'in üçüncü taraf araçlardan Claude oturumlarını kullanma beklentisine uymuyor. Ona güvenmeden önce lütfen bunu oku.
+
+- **Anthropic'in koşulları ne diyor?** [Claude Code yasal ve uyum sayfası](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use), abonelik oturumlarının (Free, Pro, Max, Ultra) Claude Code'un ve Anthropic'in kendi uygulamalarının olağan kullanımı için olduğunu; üçüncü taraf araçların bu oturumları saklamaması, yönlendirmemesi ve aracılık etmemesi gerektiğini; duyurulan limitlerin olağan, bireysel kullanıma göre olduğunu söyler. Anthropic bunu haber vermeden uygulayabileceğini belirtir.
+- **Relay ne yapıyor?** Relay, Claude uygulamasını hesaplar arasında geçirebilmek ve limitleri okuyabilmek için hesaplarının oturumlarını bilgisayarında, şifreli olarak saklar. Ağ geçidi bir adım daha ileri gider: Claude Code isteklerini bu oturumlarla hesaplarına gönderir; omp bağlıysa omp'nin istekleri de Claude'a Claude Code'unkilerle aynı biçimde ulaşır.
+- **Ne olabilir?** Anthropic bu istekleri engelleyebilir ya da bunları kullanan bir hesabı kısıtlayabilir veya askıya alabilir. Relay bunu önleyemez; riski sen üstlenirsin (bkz. [lisans](LICENSE)).
+- **Risk nerede?** Claude uygulamasını geçirmek ve limitleri okumak olağan kullanıma en yakın kısımdır. Ağ geçidi bundan daha uzaktır; omp'yi bir Claude hesabıyla kullanmak ise en uzağıdır. Ağ geçidi sen açana kadar kapalıdır; bu riski almak istemiyorsan kapalı bırak.
+- **İş hesapları.** Team veya Enterprise koltukları şirketinin Anthropic ile yaptığı sözleşmeye de tabidir. Eklemeden önce yöneticine sor ve yalnızca sana ait hesapları kullan.
+
+Codex ve Antigravity hesapları da aynı şekilde OpenAI'nin ve Google'ın koşullarına tabidir.
+
 ## SSS
 
 <details>
 <summary><b>Relay kotamı birleştirir ya da artırır mı?</b></summary>
 
-Hayır. Her hesap kendi limitlerini korur; Relay yalnızca Claude uygulamasının (ya da ağ geçidinden geçen bir isteğin) hangi hesabı kullandığını değiştirir ve her birinin zamanını iyi kullanmana yardım eder. Yalnızca kullanma iznin olan hesapları kullan.
+Hayır. Her hesap kendi limitlerini korur; Relay yalnızca Claude uygulamasının (ya da ağ geçidinden geçen bir isteğin) hangi hesabı kullandığını değiştirir ve her birinin zamanını iyi kullanmana yardım eder. Yalnızca kullanma iznin olan hesapları kullan ve önce [Koşullar ve risk](#koşullar-ve-risk) bölümünü oku.
 </details>
 
 <details>

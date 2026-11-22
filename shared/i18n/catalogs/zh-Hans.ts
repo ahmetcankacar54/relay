@@ -1134,6 +1134,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "首次启动时生成",
   "gatewayHeader.regenerateKey": "重新生成密钥",
   "gatewayHeader.showKey": "显示密钥",
+  "gatewayHeader.termsLink": "Anthropic 的条款",
+  "gatewayHeader.termsNote": "Relay 并非官方工具。Anthropic 的条款不允许第三方工具转发 Claude 订阅的登录凭据，Anthropic 可能会限制或暂停使用网关的账户。",
   "gatewayHeader.theOldKeyStopsWorkingAt": "旧密钥会立即失效。{clients} 会自动获取新密钥；其他工具需要手动输入。",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "旧密钥会立即失效。你需要在工具中输入新密钥。",
   "gatewayHeader.turnTheGatewayOnOrOff": "打开或关闭网关",

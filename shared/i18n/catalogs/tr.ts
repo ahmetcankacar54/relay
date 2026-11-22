@@ -1128,6 +1128,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "açılınca oluşur",
   "gatewayHeader.regenerateKey": "Anahtarı yenile",
   "gatewayHeader.showKey": "Anahtarı göster",
+  "gatewayHeader.termsLink": "Anthropic'in koşulları",
+  "gatewayHeader.termsNote": "Relay resmi değil. Anthropic'in koşulları, üçüncü taraf araçların Claude abonelik oturumlarını yönlendirmesine izin vermez; Anthropic ağ geçidini kullanan bir hesabı kısıtlayabilir veya askıya alabilir.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "Eski anahtar hemen çalışmaz olur. {clients} yeni anahtarı kendiliğinden alır; diğer araçlara elle girmen gerekir.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "Eski anahtar hemen çalışmaz olur. Araçlara yenisini girmen gerekir.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Ağ geçidini aç veya kapat",

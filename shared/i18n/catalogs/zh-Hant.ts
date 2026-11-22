@@ -1135,6 +1135,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "首次啟動時建立",
   "gatewayHeader.regenerateKey": "重新產生金鑰",
   "gatewayHeader.showKey": "顯示金鑰",
+  "gatewayHeader.termsLink": "Anthropic 的條款",
+  "gatewayHeader.termsNote": "Relay 並非官方工具。Anthropic 的條款不允許第三方工具轉送 Claude 訂閱的登入憑證，Anthropic 可能會限制或停用使用閘道的帳號。",
   "gatewayHeader.theOldKeyStopsWorkingAt": "舊金鑰會立即失效。{clients} 會自動取得新金鑰；其他工具需要手動輸入。",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "舊金鑰會立即失效。你需要在工具中輸入新金鑰。",
   "gatewayHeader.turnTheGatewayOnOrOff": "開啟或關閉閘道",

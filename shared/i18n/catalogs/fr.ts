@@ -1135,6 +1135,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "créée au premier démarrage",
   "gatewayHeader.regenerateKey": "Régénérer la clé",
   "gatewayHeader.showKey": "Afficher la clé",
+  "gatewayHeader.termsLink": "Conditions d'Anthropic",
+  "gatewayHeader.termsNote": "Relay n'est pas officiel. Les conditions d'Anthropic n'autorisent pas les outils tiers à faire transiter les connexions d'abonnement Claude, et Anthropic peut restreindre ou suspendre un compte qui utilise la passerelle.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "L’ancienne clé cesse aussitôt de fonctionner. {clients} reçoivent la nouvelle d’eux-mêmes\u00a0; les autres outils doivent la saisir à la main.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "L’ancienne clé cesse aussitôt de fonctionner. Vous devrez saisir la nouvelle dans vos outils.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Activer ou désactiver la passerelle",

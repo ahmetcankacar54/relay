@@ -1136,6 +1136,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "beim ersten Start erzeugt",
   "gatewayHeader.regenerateKey": "Schlüssel neu erzeugen",
   "gatewayHeader.showKey": "Schlüssel anzeigen",
+  "gatewayHeader.termsLink": "Bedingungen von Anthropic",
+  "gatewayHeader.termsNote": "Relay ist inoffiziell. Die Bedingungen von Anthropic erlauben Drittanbieter-Tools nicht, Anmeldungen von Claude-Abos weiterzuleiten, und Anthropic kann ein Konto, das das Gateway nutzt, einschränken oder sperren.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "Der alte Schlüssel funktioniert sofort nicht mehr. {clients} erhalten den neuen selbst; andere Tools brauchen ihn per Hand eingetragen.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "Der alte Schlüssel funktioniert sofort nicht mehr. Du musst den neuen in deinen Tools eintragen.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Gateway ein- oder ausschalten",

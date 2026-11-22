@@ -1133,6 +1133,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "初回起動時に作成",
   "gatewayHeader.regenerateKey": "キーを再生成",
   "gatewayHeader.showKey": "キーを表示",
+  "gatewayHeader.termsLink": "Anthropic の規約",
+  "gatewayHeader.termsNote": "Relay は非公式です。Anthropic の規約はサードパーティ製ツールが Claude サブスクリプションのサインインを中継することを認めておらず、ゲートウェイを使うアカウントは制限または停止される場合があります。",
   "gatewayHeader.theOldKeyStopsWorkingAt": "古いキーはすぐに使えなくなります。{clients} は新しいキーを自動で取得します。ほかのツールでは手動で入力する必要があります。",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "古いキーはすぐに使えなくなります。ツールに新しいキーを入力する必要があります。",
   "gatewayHeader.turnTheGatewayOnOrOff": "ゲートウェイをオン/オフ",

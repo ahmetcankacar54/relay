@@ -1135,6 +1135,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "utworzony przy pierwszym uruchomieniu",
   "gatewayHeader.regenerateKey": "Wygeneruj klucz ponownie",
   "gatewayHeader.showKey": "Pokaż klucz",
+  "gatewayHeader.termsLink": "Warunki Anthropic",
+  "gatewayHeader.termsNote": "Relay nie jest oficjalny. Warunki Anthropic nie pozwalają narzędziom firm trzecich przekazywać logowań z subskrypcji Claude, a Anthropic może ograniczyć lub zawiesić konto korzystające z bramy.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "Stary klucz natychmiast przestanie działać. {clients} same dostaną nowy; w innych narzędziach trzeba go wpisać ręcznie.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "Stary klucz natychmiast przestanie działać. Nowy trzeba będzie wpisać w swoich narzędziach.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Włącz lub wyłącz bramę",

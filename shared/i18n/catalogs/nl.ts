@@ -1134,6 +1134,8 @@ export default {
   "gatewayHeader.madeOnFirstStart": "gemaakt bij de eerste start",
   "gatewayHeader.regenerateKey": "Sleutel opnieuw maken",
   "gatewayHeader.showKey": "Sleutel tonen",
+  "gatewayHeader.termsLink": "Voorwaarden van Anthropic",
+  "gatewayHeader.termsNote": "Relay is onofficieel. De voorwaarden van Anthropic staan niet toe dat tools van derden aanmeldingen van Claude-abonnementen doorsturen, en Anthropic kan een account dat de gateway gebruikt beperken of opschorten.",
   "gatewayHeader.theOldKeyStopsWorkingAt": "De oude sleutel werkt meteen niet meer. {clients} krijgen de nieuwe vanzelf; andere tools moeten hem handmatig invoeren.",
   "gatewayHeader.theOldKeyStopsWorkingAt2": "De oude sleutel werkt meteen niet meer. Je moet de nieuwe in je tools invoeren.",
   "gatewayHeader.turnTheGatewayOnOrOff": "Gateway aan- of uitzetten",

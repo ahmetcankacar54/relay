@@ -5,6 +5,8 @@
 export const EXTERNAL_LINKS = {
   claudeDownload: "https://claude.ai/download",
   cliSetup: "https://docs.anthropic.com/en/docs/claude-code/setup",
+  /** Anthropic's rules for Claude sign-ins in other tools, linked from the gateway's note. */
+  claudeTerms: "https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use",
   /** System Settings › Privacy & Security › Full Disk Access, on macOS. */
   fullDiskAccess: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
 } as const;
